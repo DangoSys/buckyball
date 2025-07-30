@@ -1,0 +1,15 @@
+[submodule "thirdparty/chipyard"]
+	path = thirdparty/chipyard
+	url = https://github.com/ucb-bar/chipyard.git
+[submodule "compiler/buddy-mlir"]
+	path = compiler/buddy-mlir
+	url = https://github.com/SEU-ACAL/tapeout-Compiler.git
+[submodule "bb-test"]
+	path = bb-test
+	url = https://github.com/BuckyBallSys/bb-test.git
+[submodule "tools/vistools"]
+	path = tools/vistools
+	url = https://github.com/BuckyBallSys/bb-vistools.git
+[submodule "sim"]
+	path = sim
+	url = https://github.com/BuckyBallSys/bb-sim.git
