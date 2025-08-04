@@ -4,9 +4,12 @@
 [submodule "compiler/buddy-mlir"]
 	path = compiler/buddy-mlir
 	url = https://github.com/SEU-ACAL/tapeout-Compiler.git
-[submodule "tools/vistools"]
-	path = tools/vistools
-	url = https://github.com/BuckyBallSys/bb-vistools.git
 [submodule "sim"]
 	path = sim
 	url = https://github.com/BuckyBallSys/bb-sim.git
+[submodule "tools/vistools"]
+	path = tools/vistools
+	url = https://github.com/BuckyBallSys/bb-vistools.git
+[submodule "tools/motia"]
+	path = tools/motia
+	url = https://github.com/MotiaDev/motia.git
