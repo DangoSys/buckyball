@@ -13,3 +13,6 @@
 [submodule "tools/motia"]
 	path = tools/motia
 	url = https://github.com/MotiaDev/motia.git
+[submodule "thirdparty/circt"]
+	path = thirdparty/circt
+	url = https://github.com/llvm/circt.git
