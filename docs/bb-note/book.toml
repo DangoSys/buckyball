@@ -1,0 +1,9 @@
+[book]
+authors = ["Dango"]
+language = "en"
+src = "src"
+title = "Buckyball Technical Documentation"
+
+[preprocessor.toc]
+command = 'mdbook-toc'
+renderer=["html"]
