@@ -1,9 +1,6 @@
 [submodule "thirdparty/chipyard"]
 	path = thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
-[submodule "compiler/buddy-mlir"]
-	path = compiler/buddy-mlir
-	url = https://github.com/SEU-ACAL/tapeout-Compiler.git
 [submodule "sim"]
 	path = sim
 	url = https://github.com/BuckyBallSys/bb-sim.git
