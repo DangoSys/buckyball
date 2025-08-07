@@ -1,9 +1,6 @@
 [submodule "thirdparty/chipyard"]
 	path = thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
-[submodule "sim"]
-	path = sim
-	url = https://github.com/BuckyBallSys/bb-sim.git
 [submodule "tools/vistools"]
 	path = tools/vistools
 	url = https://github.com/BuckyBallSys/bb-vistools.git
