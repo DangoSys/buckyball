@@ -1,0 +1,20 @@
+services:
+  buckyball:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bb-dev
+    volumes:
+      - ..:/buckyball
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - PYTHONPATH=/buckyball
+    working_dir: /buckyball
+    stdin_open: true
+    tty: true
+    command: /bin/bash 
+    image: buckyball:latest
