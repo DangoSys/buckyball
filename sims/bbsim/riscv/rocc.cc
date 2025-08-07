@@ -1,0 +1,48 @@
+// See LICENSE for license details.
+
+#define DECODE_MACRO_USAGE_LOGGED 1
+#include "decode_macros.h"
+#include "rocc.h"
+#include "trap.h"
+#include <cstdlib>
+
+#define customX(n) \
+  static reg_t c##n(processor_t* p, insn_t insn, reg_t pc) \
+  { \
+    rocc_t* rocc = static_cast<rocc_t*>(p->get_extension()); \
+    rocc_insn_union_t u; \
+    u.i = insn; \
+    reg_t xs1 = u.r.xs1 ? RS1 : -1; \
+    reg_t xs2 = u.r.xs2 ? RS2 : -1; \
+    reg_t xd = rocc->custom##n(p, u.r, xs1, xs2); \
+    if (u.r.xd) \
+      WRITE_RD(xd); \
+    return pc+4; \
+  } \
+  \
+  reg_t rocc_t::custom##n(processor_t *p, rocc_insn_t UNUSED insn, reg_t UNUSED xs1, reg_t UNUSED xs2) \
+  { \
+    illegal_instruction(*p); \
+    return 0; \
+  }
+
+customX(0)
+customX(1)
+customX(2)
+customX(3)
+
+std::vector<insn_desc_t> rocc_t::get_instructions(const processor_t &)
+{
+  std::vector<insn_desc_t> insns = {
+    {0x0b, 0x7f, &::illegal_instruction, c0, &::illegal_instruction, c0, &::illegal_instruction, c0, &::illegal_instruction, c0},
+    {0x2b, 0x7f, &::illegal_instruction, c1, &::illegal_instruction, c1, &::illegal_instruction, c1, &::illegal_instruction, c1},
+    {0x5b, 0x7f, &::illegal_instruction, c2, &::illegal_instruction, c2, &::illegal_instruction, c2, &::illegal_instruction, c2},
+    {0x7b, 0x7f, &::illegal_instruction, c3, &::illegal_instruction, c3, &::illegal_instruction, c0, &::illegal_instruction, c3}};
+  return insns;
+}
+
+std::vector<disasm_insn_t *> rocc_t::get_disasms(const processor_t *)
+{
+  std::vector<disasm_insn_t*> insns;
+  return insns;
+}
