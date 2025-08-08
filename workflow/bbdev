@@ -1,0 +1,194 @@
+#! /usr/bin/env python3
+
+import sys
+import shutil
+import argparse
+import subprocess
+import os
+import time
+import socket
+import signal
+import threading
+import http.server
+import socketserver
+from typing import Optional
+
+workflow_dir = os.path.dirname(os.path.abspath(__file__))
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+  parser = argparse.ArgumentParser(
+    prog="bbdev",
+    description="POST to local endpoint via curl",
+    formatter_class=argparse.RawTextHelpFormatter,
+  )
+  parser.add_argument(
+    "api",
+    help=(
+      "api supported are below: \n\n"
+      "build-setup\n"
+      "build-as-admin\n"
+    ),
+  )
+  parser.add_argument("--port", type=int, default=5000, help="Port for localhost (default: 5000)")
+  return parser.parse_args(argv)
+
+def port_busy(port: int) -> bool:
+  with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.settimeout(0.2)
+    return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def start_server(port: int, env: Optional[dict] = None) -> subprocess.Popen | None:
+  # start only if port is free; otherwise reuse existing server silently
+  if port_busy(port):
+    return None
+  try:
+    # start background process in its own process group for group-level signals
+    proc = subprocess.Popen(
+      ["npx", "motia", "dev", "--port", str(port)],
+      cwd=workflow_dir,
+      preexec_fn=os.setsid,
+      env=(env if env is not None else os.environ.copy()),
+    )
+    # wait until the port becomes available or the process exits
+    ready_timeout = 60
+    deadline = time.monotonic() + ready_timeout
+    while time.monotonic() < deadline:
+      if proc.poll() is not None:
+        raise RuntimeError(f"Dev server exited early with code {proc.returncode}")
+      if port_busy(port):
+        return proc
+      time.sleep(0.2)
+    raise TimeoutError("Dev server did not become ready within 60s")
+  except Exception as e:
+    print(f"Error: failed to start dev server: {e}", file=sys.stderr)
+    raise
+
+# func: run_request
+# desc: send curl request to local endpoint
+# args:
+#   api: api to run
+#   port: port to run on
+# return:
+#   0: success
+#   1: error
+def run_request(api: str, port: int) -> int:
+  if shutil.which("curl") is None:
+    print("Error: 'curl' not found in PATH", file=sys.stderr)
+    return 127
+
+  api = api.lstrip("/")
+  url = f"http://localhost:{port}/{api}"
+
+  try:
+    result = subprocess.run(
+      ["curl", "-sS", "-X", "POST", url],
+      check=False,
+    )
+  except Exception as e:
+    print(f"Error: failed to run curl: {e}", file=sys.stderr)
+    return 1
+
+  if result.returncode != 0:
+    print(f"Error: curl exited with code {result.returncode} for {url}", file=sys.stderr)
+  return result.returncode
+
+def stop_server(proc: subprocess.Popen) -> None:
+  try:
+    os.killpg(proc.pid, signal.SIGTERM)
+  except Exception as e:
+    print(f"Error: failed to send SIGTERM to dev server: {e}")
+    return
+
+  try:
+    proc.wait(timeout=10)
+  except subprocess.TimeoutExpired:
+    print("Dev server did not exit in time, sending SIGKILL…")
+    try:
+      os.killpg(proc.pid, signal.SIGKILL)
+    except Exception as e:
+      print(f"Error: failed to SIGKILL dev server: {e}")
+
+
+def wait_server(proc: subprocess.Popen) -> None:
+  try:
+    proc.wait()
+  except KeyboardInterrupt:
+    # user requested to stop; gracefully terminate the server we started
+    stop_server(proc)
+
+
+def make_done_server() -> tuple[socketserver.TCPServer, str, threading.Event]:
+  done_event = threading.Event()
+
+  class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+      if self.path.startswith("/bbdev/done"):
+        done_event.set()
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+      else:
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+      return
+
+  srv = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+  host, port = srv.server_address
+  url = f"http://{host}:{port}/bbdev/done"
+  return srv, url, done_event
+
+
+
+def main() -> None:
+  args = parse_args(sys.argv[1:])
+  
+  # start server only if port is free
+  proc: Optional[subprocess.Popen] = None
+  done_srv: Optional[socketserver.TCPServer] = None
+  done_evt: Optional[threading.Event] = None
+  done_thread: Optional[threading.Thread] = None
+
+  if not port_busy(args.port):
+    # create done server and pass URL to dev server via env for cloud auto-exit
+    done_srv, done_url, done_evt = make_done_server()
+    done_thread = threading.Thread(target=done_srv.serve_forever, daemon=True)
+    done_thread.start()
+    child_env = os.environ.copy()
+    child_env["BBDEV_DONE_URL"] = done_url
+    proc = start_server(args.port, env=child_env)
+  else:
+    print(f"Error: port {args.port} is busy", file=sys.stderr)
+    sys.exit(1)
+
+  # send api request
+  code = run_request(args.api, args.port)
+  if code != 0:
+    sys.exit(code)
+
+  # stop server only if we started it
+  if proc is not None:
+    try:
+      if done_evt is not None:
+        # wait until step signals done or the server exits
+        while not done_evt.wait(timeout=0.2):
+          if proc.poll() is not None:
+            break
+        # if server still running, stop it
+        if proc.poll() is None:
+          stop_server(proc)
+      else:
+        wait_server(proc)
+    except KeyboardInterrupt:
+      stop_server(proc)
+    finally:
+      if done_srv is not None:
+        try:
+          done_srv.shutdown()
+        except Exception:
+          pass
+
+if __name__ == "__main__":
+  main()

@@ -7,12 +7,12 @@ import { Button } from '@motiadev/ui'
  */
 export const Node: React.FC<NoopNodeProps> = (data) => {
   const start = () => {
-    fetch('/demo', { method: 'POST', body: JSON.stringify({ message: 'test' }) })
+    fetch('/build-setup', { method: 'POST', body: JSON.stringify({ message: 'test' }) })
   }
 
   return (
-    <BaseNode title="Start" variant="noop" {...data} disableTargetHandle>
-      <Button variant="accent" data-testid="start-flow-button" onClick={start}>Start Flow</Button>
+    <BaseNode title="Build Setup" variant="noop" {...data} disableTargetHandle>
+      <Button variant="accent" data-testid="start-flow-button" onClick={start}>Start Build Setup</Button>
     </BaseNode>
   )
 }
