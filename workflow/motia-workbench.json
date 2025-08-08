@@ -46,5 +46,51 @@
         "y": 0
       }
     }
+  },
+  {
+    "id": "test",
+    "config": {
+      "steps/test/13_check_state_change_step.py": {
+        "x": 22,
+        "y": 685
+      },
+      "steps/test/12_test_state_step.py": {
+        "x": 0,
+        "y": 490
+      },
+      "steps/test/11_api_step.py": {
+        "x": 49,
+        "y": 227
+      },
+      "steps/test/10_noop_step.py": {
+        "x": 60,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "build-setup",
+    "config": {
+      "steps/build-setup/99_bbdev_done_event_step.py": {
+        "x": 0,
+        "y": 0
+      },
+      "steps/build-setup/10_install_chipyard_step.py": {
+        "x": 71,
+        "y": 526
+      },
+      "steps/build-setup/01_build_setup_api_step.py": {
+        "x": 0,
+        "y": 263
+      },
+      "steps/build-setup/00_build_setup_noop_step.py": {
+        "x": 8,
+        "y": 18
+      },
+      "steps/build-setup/98_bbdev_done_event_step.py": {
+        "x": 631,
+        "y": 24
+      }
+    }
   }
 ]

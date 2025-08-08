@@ -12,12 +12,8 @@ declare module 'motia' {
   }
 
   interface Handlers {
-    'CheckStateChange': EventHandler<{ key?: string; expected?: string }, never>
-    'SetStateChange': EventHandler<{ message?: string }, { topic: 'check-state-change'; data: { key?: string; expected?: string } }>
-    'ApiTrigger': ApiRouteHandler<{ name?: string }, ApiResponse<200, { traceId?: string; message?: string }>, { topic: 'test-state'; data: { message?: string } }>
-    'MonitorInit': EventHandler<{}, never>
-    'RunInit': EventHandler<{}, { topic: 'install-monitor'; data: {} }>
-    'InstallAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'install-start'; data: {} }>
-    'Init Chipyard': ApiRouteHandler<{ skip_setup?: boolean }, ApiResponse<200, { traceId?: string; message?: string; output?: string }>, never>
+    'bbdevDoneEvent': EventHandler<{}, never>
+    'InstallChipyard': EventHandler<{}, { topic: 'install-chipyard-finished'; data: {} }>
+    'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build-setup'; data: {} }>
   }
 }

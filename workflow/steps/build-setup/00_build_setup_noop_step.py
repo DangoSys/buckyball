@@ -7,8 +7,8 @@ config = {
   "virtualSubscribes": [],
 
   # Used mostly to connect nodes that subscribes to this
-  "virtualEmits": ["/install"],
+  "virtualEmits": ["/build-setup"],
 
   # The flows this step belongs to, will be available in Workbench
-  "flows": ["install"],
+  "flows": ["build-setup"],
 }
