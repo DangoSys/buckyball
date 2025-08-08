@@ -1,9 +1,8 @@
-__pycache__/
+node_modules
+python_modules
+.venv
+venv
+.motia
+.mermaid
+dist
 *.pyc
-*.pyo
-*.pyd
-*.pyw
-*.pyz
-*.pywz
-*.pyzw
-*.pyzwz

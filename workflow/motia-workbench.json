@@ -1,0 +1,50 @@
+[
+  {
+    "id": "default",
+    "config": {
+      "steps/00_noop_step.py": {
+        "x": -507,
+        "y": 111,
+        "sourceHandlePosition": "right"
+      },
+      "steps/01_api_step.py": {
+        "x": -281,
+        "y": 94,
+        "sourceHandlePosition": "right",
+        "targetHandlePosition": "left"
+      },
+      "steps/02_test_state_step.py": {
+        "x": 60,
+        "y": 36,
+        "sourceHandlePosition": "bottom",
+        "targetHandlePosition": "left"
+      },
+      "steps/03_check_state_change_step.py": {
+        "x": 78,
+        "y": 199,
+        "targetHandlePosition": "top"
+      }
+    }
+  },
+  {
+    "id": "demo",
+    "config": {
+      "steps/demo/03_check_state_change_step.py": {
+        "x": 22,
+        "y": 688
+      },
+      "steps/demo/02_test_state_step.py": {
+        "x": 0,
+        "y": 492
+      },
+      "steps/demo/01_api_step.py": {
+        "x": 49,
+        "y": 228
+      },
+      "steps/demo/00_noop_step.py": {
+        "x": 60,
+        "y": 0
+      }
+    }
+  }
+]
