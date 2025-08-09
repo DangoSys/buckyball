@@ -12,7 +12,7 @@ declare module 'motia' {
   }
 
   interface Handlers {
-    'bbdevDoneEvent': EventHandler<{}, never>
+    'FinalEvent': EventHandler<{}, never>
     'InstallChipyard': EventHandler<{}, { topic: 'install-chipyard-finished'; data: {} }>
     'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build-setup'; data: {} }>
   }

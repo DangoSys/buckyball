@@ -71,25 +71,21 @@
   {
     "id": "build-setup",
     "config": {
-      "steps/build-setup/99_bbdev_done_event_step.py": {
-        "x": 0,
-        "y": 0
+      "steps/build-setup/99_final_event_step.py": {
+        "x": 301,
+        "y": 771
       },
       "steps/build-setup/10_install_chipyard_step.py": {
-        "x": 71,
-        "y": 526
+        "x": 6,
+        "y": 534
       },
       "steps/build-setup/01_build_setup_api_step.py": {
         "x": 0,
         "y": 263
       },
       "steps/build-setup/00_build_setup_noop_step.py": {
-        "x": 8,
-        "y": 18
-      },
-      "steps/build-setup/98_bbdev_done_event_step.py": {
-        "x": 631,
-        "y": 24
+        "x": -364,
+        "y": 265
       }
     }
   }
