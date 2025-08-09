@@ -4,7 +4,7 @@ import urllib.request
 
 config = {
   "type": "event",
-  "name": "bbdevDoneEvent",
+  "name": "FinalEvent",
   "description": "shutdown bbdev via BBDEV_DONE_URL when flow finishes",
   "subscribes": ["install-chipyard-finished"],
   "emits": [],

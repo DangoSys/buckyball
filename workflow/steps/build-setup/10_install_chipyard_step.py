@@ -31,7 +31,7 @@ async def handler(input, context):
   try:
     proc = await asyncio.create_subprocess_exec(
       '/bin/bash',
-      '-lc',
+      '-lic',
       f'bash "{pwd_path}/install-chipyard.sh"',
       stdout=asyncio.subprocess.PIPE,
       stderr=asyncio.subprocess.PIPE,
