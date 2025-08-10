@@ -14,6 +14,10 @@ declare module 'motia' {
   interface Handlers {
     'FinalEvent': EventHandler<{}, never>
     'InstallChipyard': EventHandler<{}, { topic: 'install-chipyard-finished'; data: {} }>
-    'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build-setup'; data: {} }>
+    'CreateCondaEnv': EventHandler<{}, { topic: 'create-conda-env-finished'; data: {} }>
+    'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'start'; data: {} }>
+    'InstallXXTool': EventHandler<{}, never>
+    'InstallAnaconda': EventHandler<{}, never>
+    'option-installAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'option-install'; data: {} }>
   }
 }
