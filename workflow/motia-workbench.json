@@ -72,20 +72,40 @@
     "id": "build-setup",
     "config": {
       "steps/build-setup/99_final_event_step.py": {
-        "x": 301,
-        "y": 771
+        "x": 1339,
+        "y": 915
       },
-      "steps/build-setup/10_install_chipyard_step.py": {
-        "x": 6,
-        "y": 534
+      "steps/build-setup/20_install_chipyard_step.py": {
+        "x": 847,
+        "y": 898
       },
       "steps/build-setup/01_build_setup_api_step.py": {
-        "x": 0,
-        "y": 263
+        "x": -80,
+        "y": 903
       },
-      "steps/build-setup/00_build_setup_noop_step.py": {
-        "x": -364,
-        "y": 265
+      "steps/build-setup/00_start_node_noop_step.py": {
+        "x": -439,
+        "y": 904
+      },
+      "steps/build-setup/tools/11_install_xx_tool_step.py": {
+        "x": 675,
+        "y": 506
+      },
+      "steps/build-setup/tools/10_install_anaconda_step.py": {
+        "x": 15,
+        "y": 509
+      },
+      "steps/build-setup/tools/02_option_install_api_step.py": {
+        "x": 336,
+        "y": 233
+      },
+      "steps/build-setup/tools/00_install_tools_noop_step.py": {
+        "x": 399,
+        "y": -46
+      },
+      "steps/build-setup/10_create_conda_env_step.py": {
+        "x": 0,
+        "y": 0
       }
     }
   }
