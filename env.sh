@@ -11,7 +11,6 @@ if ! type conda >& /dev/null; then
     return 1  # don't want to exit here because this file is sourced
 fi
 
-
 source $(conda info --base)/etc/profile.d/conda.sh
 conda activate buckyball
 source /home/mio/Code/buckyball/thirdparty/chipyard/scripts/fix-open-files.sh

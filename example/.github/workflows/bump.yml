@@ -1,0 +1,25 @@
+name: Check Compile
+on: [push, pull_request]
+jobs:
+  nix:
+    if: github.repository == 'chipsalliance/playground'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+          fetch-depth: '0'
+      - name: work around https://github.com/actions/checkout/issues/760
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: cachix/install-nix-action@v19
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.13.3/install
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Init
+        run: nix develop -c make init
+      - name: Patch
+        run: |
+            nix develop -c make update-patches
+            nix develop -c make patch
+      - name: Check Mill Compile
+        run: nix develop -c make compile

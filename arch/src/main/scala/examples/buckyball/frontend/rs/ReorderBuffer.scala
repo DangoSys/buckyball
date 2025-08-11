@@ -5,7 +5,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import buckyball.BuckyBallConfig
 import buckyball.util.Util._
-import freechips.rocketchip.buckyball.RoCCResponseBB
+import framework.ballcore.ballcore.RoCCResponseBB
 
 
 
