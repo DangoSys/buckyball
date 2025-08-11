@@ -14,8 +14,8 @@ import BBISA._
 import mem.{Scratchpad, SimpleStreamReader, SimpleStreamWriter}
 import frontend.{FrontendTLB, Decoder}
 import frontend.rs.ReservationStation
-import freechips.rocketchip.buckyball._
-import freechips.rocketchip.buckyball.LazyRoCCBB
+import framework.ballcore.ballcore._
+import framework.ballcore.ballcore.LazyRoCCBB
 import buckyball.load.MemLoader
 import buckyball.store.MemStorer
 import buckyball.exec.ExecuteController

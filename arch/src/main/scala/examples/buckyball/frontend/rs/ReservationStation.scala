@@ -8,7 +8,7 @@ import buckyball.BBISA._
 import buckyball.util.Util._
 import buckyball.BuckyBallConfig
 import buckyball.frontend.{PostDecodeCmd, BuckyBallRawCmd}
-import freechips.rocketchip.buckyball.RoCCResponseBB
+import framework.ballcore.ballcore.RoCCResponseBB
 
 
 

@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import buckyball.BuckyBallConfig
-import freechips.rocketchip.buckyball.RoCCCommandBB
+import framework.ballcore.ballcore.RoCCCommandBB
 import buckyball.BBISA._
 import buckyball.mem.LocalAddr
 

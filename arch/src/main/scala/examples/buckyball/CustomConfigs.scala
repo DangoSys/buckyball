@@ -5,7 +5,8 @@ import chisel3._
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.SystemBusKey
 // import freechips.rocketchip.tile.{BuildRoCC, OpcodeSet}
-import freechips.rocketchip.buckyball._
+import framework.ballcore.ballcore._
+import framework.ballcore._
 
 
 
@@ -25,3 +26,10 @@ class BuckyBallCustomConfig(
     }
   )
 })
+
+class BuckyBallRocketConfig extends Config(
+  new buckyball.BuckyBallCustomConfig ++
+  new freechips.rocketchip.rocket.WithNHugeCores(1) ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.config.AbstractConfig
+)

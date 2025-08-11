@@ -1,21 +1,66 @@
 // See README.md for license details.
+import Tests._
 
-name := "buckyball"
+val chisel6Version = "6.5.0"
+val chiselTestVersion = "6.0.0"
+val scalaVersionFromChisel = "2.13.12"
 
-version := "3.1.0"
+val chisel3Version = "3.6.1"
 
-scalaVersion := "2.13.10"
+// Fix for scalafix undefined setting
+ThisBuild / scalafixScalaBinaryVersion := scalaBinaryVersion.value
 
-libraryDependencies ++= Seq(
-  "edu.berkeley.cs" %% "chisel3" % "3.6.0",
-  "edu.berkeley.cs" %% "rocketchip" % "1.2.+",
-  "org.scalanlp" %% "breeze" % "1.1")
+// ------------------------------------------------------------------------------
+// Chisel Version Config 
+// ------------------------------------------------------------------------------
 
-resolvers ++= Seq(
-  Resolver.sonatypeRepo("snapshots"),
-  Resolver.sonatypeRepo("releases"),
-  Resolver.mavenLocal)
+lazy val chisel6Settings = Seq(
+  libraryDependencies ++= Seq("org.chipsalliance" %% "chisel" % chisel6Version),
+  addCompilerPlugin("org.chipsalliance" % "chisel-plugin" % chisel6Version cross CrossVersion.full)
+)
 
-// specified commit BEFORE scala bump to 2.13 for compatibility
-// need this version for MulRecFN and fast divider
-// lazy val newHardfloat = RootProject(uri("https://github.com/ucb-bar/berkeley-hardfloat.git#74cc28"))
+lazy val chiselSettings = chisel6Settings ++ Seq(
+  libraryDependencies ++= Seq(
+    "org.apache.commons" % "commons-lang3" % "3.12.0",
+    "org.apache.commons" % "commons-text" % "1.9"
+  )
+)
+
+lazy val scalaTestSettings =  Seq(
+  libraryDependencies ++= Seq(
+    "org.scalatest" %% "scalatest" % "3.2.+" % "test"
+  )
+)
+
+// ------------------------------------------------------------------------------
+// Dependencies 
+// ------------------------------------------------------------------------------
+lazy val chipyard = ProjectRef(file("../thirdparty/chipyard"), "chipyard")
+
+// ------------------------------------------------------------------------------
+// Project Settings 
+// ------------------------------------------------------------------------------
+lazy val root = (project in file("."))
+  .dependsOn(chipyard)  
+  .settings(
+    name := "buckyball-arch",
+    organization := "com.buckyball",
+    version := "1.0.0",
+    scalaVersion := scalaVersionFromChisel,
+    scalacOptions ++= Seq(
+      "-deprecation",
+      "-unchecked",
+      "-Ymacro-annotations"
+    ),
+    resolvers ++= Seq(
+      Resolver.sonatypeRepo("snapshots"),
+      Resolver.sonatypeRepo("releases")
+    ),
+    chisel6Settings ++
+    scalaTestSettings ++
+    Seq(
+      libraryDependencies ++= Seq(
+        "edu.berkeley.cs" %% "rocketchip" % "1.6"
+      )
+    )
+  )
