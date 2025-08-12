@@ -3,16 +3,21 @@ import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Parameters
 
-
-import buckyball.BuckyBall
-import buckyball.BuckyBallConfigs
+// import chipyard.harness.TestHarness
+import freechips.rocketchip.diplomacy.LazyModule
+import buckyball.{BuckyBall, BuckyBallRocketConfig}
+import chipyard.ChipTop
 
 object Elaborate extends App {
-  // Create a BuckyBall instance with default configuration
-  val buckyball = new BuckyBall(BuckyBallConfigs.defaultConfig)(Parameters.empty)
+  // Use the proper Chipyard configuration that includes BuckyBall
+  val config = new BuckyBallRocketConfig
+  val params = config.toInstance
+  val lazyModule = LazyModule(new ChipTop()(params))
   
+  // Use ChiselStage with proper elaboration context
   ChiselStage.emitSystemVerilogFile(
-    buckyball.module,
-    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info", "-default-layer-specialization=enable")
+    // new chipyard.harness.TestHarness()(config.toInstance),
+    lazyModule.module,
+    firtoolOpts = Array("--disable-annotation-unknown", "-strip-debug-info")
   )
 }       

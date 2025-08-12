@@ -22,8 +22,8 @@ object main extends SbtModule { m =>
   
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
-    chipyardModule,
-    chipyardGeneratorsModule
+    chipyard,
+    chipyardGenerators
   )
   
   override def ivyDeps = Agg(
@@ -43,8 +43,10 @@ object main extends SbtModule { m =>
     // ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
   
-  object test extends SbtTests with TestModule.ScalaTest {
-    override def ivyDeps = m.ivyDeps() ++ Agg(
+  object test extends ScalaModule with TestModule.ScalaTest {
+    override def scalaVersion = T("2.13.12")
+    override def moduleDeps = Seq(m)
+    override def ivyDeps = Agg(
       ivy"org.scalatest::scalatest::3.2.19"
       // ivy"org.scalatest::scalatest:3.2.16"
     )
@@ -52,7 +54,7 @@ object main extends SbtModule { m =>
 }
 
 // Define cde module - must be compiled first
-object cdeModule extends SbtModule {
+object cde extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "cde"
   override def scalaVersion = "2.13.12"
   
@@ -71,13 +73,13 @@ object cdeModule extends SbtModule {
 }
 
 // Define hardfloat module - depends on cde
-object hardfloatModule extends SbtModule {
+object hardfloat extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "hardfloat"
   override def scalaVersion = "2.13.12"
   
   // Add cde dependency
   override def moduleDeps = Seq(
-    cdeModule
+    cde
   )
   
   // Override sources to match build.sbt behavior
@@ -95,7 +97,7 @@ object hardfloatModule extends SbtModule {
 }
 
 // Define midas_target_utils module
-object midasTargetUtilsModule extends SbtModule {
+object midasTargetUtils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "sims" / "firesim" / "sim" / "midas" / "targetutils"
   override def scalaVersion = "2.13.12"
   
@@ -109,13 +111,13 @@ object midasTargetUtilsModule extends SbtModule {
 }
 
 // Define diplomacy module - depends on cde
-object diplomacyModule extends SbtModule {
+object diplomacy extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "diplomacy" / "diplomacy"
   override def scalaVersion = "2.13.12"
   
   // Add cde dependency first
   override def moduleDeps = Seq(
-    cdeModule
+    cde
   )
   
   // Override sources to match freshProject behavior
@@ -134,16 +136,16 @@ object diplomacyModule extends SbtModule {
 }
 
 // Define rocket-chip module with proper dependencies
-object rocketChipModule extends SbtModule {
+object rocketChip extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip"
   override def scalaVersion = "2.13.12"
   
   // Add required dependencies for rocket-chip
   override def moduleDeps = Seq(
-    diplomacyModule,
-    cdeModule,
-    hardfloatModule,
-    midasTargetUtilsModule
+    diplomacy,
+    cde,
+    hardfloat,
+    midasTargetUtils
   )
   
   override def ivyDeps = Agg(
@@ -159,46 +161,47 @@ object rocketChipModule extends SbtModule {
 }
 
 // Define chipyard module
-object chipyardModule extends SbtModule {
+object chipyard extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard"
   override def scalaVersion = "2.13.12"
   
-  // Override sources to include tools/stage and generators/chipyard directories (as per build.sbt)
+  // Override sources to include tools/stage, generators/chipyard, and harness directories (as per build.sbt)
   override def sources = T.sources {
     super.sources() ++ Seq(
       PathRef(millSourcePath / "tools" / "stage" / "src" / "main" / "scala"),
-      PathRef(millSourcePath / "generators" / "chipyard" / "src" / "main" / "scala")
+      PathRef(millSourcePath / "generators" / "chipyard" / "src" / "main" / "scala"),
+      PathRef(millSourcePath / "generators" / "chipyard" / "src" / "main" / "scala" / "harness")
     )
   }
   
   // Add all required dependencies as per build.sbt
   override def moduleDeps = Seq(
-    testchipipModule,
-    rocketChipModule,
-    boomModule,
-    rocketChipBlocksModule,
-    rocketchipInclusiveCacheModule,
-    dsptoolsModule,
-    rocketDspUtilsModule,
-    gemminiModule,
-    icenetModule,
-    tracegenModule,
-    cva6Module,
-    nvdlaModule,
-    sodorModule,
-    ibexModule,
-    fftgeneratorModule,
-    constellationModule,
-    mempressModule,
-    barfModule,
-    shuttleModule,
-    caliptraAesModule,
-    reroccModule,
-    compressaccModule,
-    saturnModule,
-    araModule,
-    firrtl2BridgeModule,
-    vexiiriscvModule
+    testchipip,
+    rocketChip,
+    boom,
+    rocketChipBlocks,
+    rocketchipInclusiveCache,
+    dsptools,
+    rocketDspUtils,
+    gemmini,
+    icenet,
+    tracegen,
+    cva6,
+    nvdla,
+    sodor,
+    ibex,
+    fftgenerator,
+    constellation,
+    mempress,
+    barf,
+    shuttle,
+    caliptraAes,
+    rerocc,
+    compressacc,
+    saturn,
+    ara,
+    firrtl2Bridge,
+    vexiiriscv
   )
   
   override def ivyDeps = Agg(
@@ -212,37 +215,37 @@ object chipyardModule extends SbtModule {
 }
 
 // Define chipyard generators module
-object chipyardGeneratorsModule extends SbtModule {
+object chipyardGenerators extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "chipyard"
   override def scalaVersion = "2.13.12"
   
   // Add chipyard, testchipip, and other required modules as dependencies
   override def moduleDeps = Seq(
-    chipyardModule,
-    testchipipModule,
-    icenetModule,
-    nvdlaModule,
-    fftgeneratorModule,
-    constellationModule,
-    reroccModule,
-    rocketDspUtilsModule,
-    dsptoolsModule,
-    fixedpointModule,
-    tracegenModule,
-    boomModule,
-    shuttleModule,
-    araModule,
-    saturnModule,
-    gemminiModule,
-    sodorModule,
-    compressaccModule,
-    mempressModule,
-    barfModule,
-    caliptraAesModule,
-    roccAccUtilsModule,
-    vexiiriscvModule,
-    ibexModule,
-    cva6Module
+    chipyard,
+    testchipip,
+    icenet,
+    nvdla,
+    fftgenerator,
+    constellation,
+    rerocc,
+    rocketDspUtils,
+    dsptools,
+    fixedpoint,
+    tracegen,
+    boom,
+    shuttle,
+    ara,
+    saturn,
+    gemmini,
+    sodor,
+    compressacc,
+    mempress,
+    barf,
+    caliptraAes,
+    roccAccUtils,
+    vexiiriscv,
+    ibex,
+    cva6
   )
   
   override def ivyDeps = Agg(
@@ -256,14 +259,14 @@ object chipyardGeneratorsModule extends SbtModule {
 }
 
 // Define testchipip module
-object testchipipModule extends SbtModule {
+object testchipip extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "testchipip"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and rocket-chip-blocks as dependencies
   override def moduleDeps = Seq(
-    rocketChipModule,
-    rocketChipBlocksModule
+    rocketChip,
+    rocketChipBlocks
   )
   
   override def ivyDeps = Agg(
@@ -276,13 +279,13 @@ object testchipipModule extends SbtModule {
 }
 
 // Define rocket-chip-blocks module (contains sifive package)
-object rocketChipBlocksModule extends SbtModule {
+object rocketChipBlocks extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip-blocks"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -295,13 +298,13 @@ object rocketChipBlocksModule extends SbtModule {
 }
 
 // Define icenet module
-object icenetModule extends SbtModule {
+object icenet extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "icenet"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -314,13 +317,13 @@ object icenetModule extends SbtModule {
 }
 
 // Define nvdla module
-object nvdlaModule extends SbtModule {
+object nvdla extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "nvdla"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -333,14 +336,14 @@ object nvdlaModule extends SbtModule {
 }
 
 // Define fftgenerator module
-object fftgeneratorModule extends SbtModule {
+object fftgenerator extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "fft-generator"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and rocket-dsp-utils as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    rocketDspUtilsModule
+    rocketChip,
+    rocketDspUtils
   )
   
   override def ivyDeps = Agg(
@@ -353,13 +356,13 @@ object fftgeneratorModule extends SbtModule {
 }
 
 // Define constellation module
-object constellationModule extends SbtModule {
+object constellation extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "constellation"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -372,13 +375,13 @@ object constellationModule extends SbtModule {
 }
 
 // Define boom module
-object boomModule extends SbtModule {
+object boom extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "boom"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -391,16 +394,16 @@ object boomModule extends SbtModule {
 }
 
 // Define tracegen module
-object tracegenModule extends SbtModule {
+object tracegen extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "tracegen"
   override def scalaVersion = "2.13.12"
   
   // Add testchipip, rocket-chip, rocketchip_inclusive_cache, and boom as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    testchipipModule,
-    rocketChipModule,
-    rocketchipInclusiveCacheModule,
-    boomModule
+    testchipip,
+    rocketChip,
+    rocketchipInclusiveCache,
+    boom
   )
   
   override def ivyDeps = Agg(
@@ -413,13 +416,13 @@ object tracegenModule extends SbtModule {
 }
 
 // Define shuttle module
-object shuttleModule extends SbtModule {
+object shuttle extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "shuttle"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -432,7 +435,7 @@ object shuttleModule extends SbtModule {
 }
 
 // Define rocketchip_inclusive_cache module
-object rocketchipInclusiveCacheModule extends SbtModule {
+object rocketchipInclusiveCache extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip-inclusive-cache"
   override def scalaVersion = "2.13.12"
   
@@ -443,7 +446,7 @@ object rocketchipInclusiveCacheModule extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -456,14 +459,14 @@ object rocketchipInclusiveCacheModule extends SbtModule {
 }
 
 // Define saturn module
-object saturnModule extends SbtModule {
+object saturn extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "saturn"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    shuttleModule
+    rocketChip,
+    shuttle
   )
   
   override def ivyDeps = Agg(
@@ -476,13 +479,13 @@ object saturnModule extends SbtModule {
 }
 
 // Define gemmini module
-object gemminiModule extends SbtModule {
+object gemmini extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "gemmini"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -495,13 +498,13 @@ object gemminiModule extends SbtModule {
 }
 
 // Define sodor module
-object sodorModule extends SbtModule {
+object sodor extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "riscv-sodor"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -514,13 +517,13 @@ object sodorModule extends SbtModule {
 }
 
 // Define vexiiriscv module
-object vexiiriscvModule extends SbtModule {
+object vexiiriscv extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "vexiiriscv"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -533,13 +536,13 @@ object vexiiriscvModule extends SbtModule {
 }
 
 // Define ibex module
-object ibexModule extends SbtModule {
+object ibex extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "ibex"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -552,13 +555,13 @@ object ibexModule extends SbtModule {
 }
 
 // Define cva6 module
-object cva6Module extends SbtModule {
+object cva6 extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "cva6"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -571,14 +574,14 @@ object cva6Module extends SbtModule {
 }
 
 // Define ara module
-object araModule extends SbtModule {
+object ara extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "ara"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    shuttleModule
+    rocketChip,
+    shuttle
   )
   
   override def ivyDeps = Agg(
@@ -591,16 +594,16 @@ object araModule extends SbtModule {
 }
 
 // Define rerocc module
-object reroccModule extends SbtModule {
+object rerocc extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rerocc"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip, constellation, boom, and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    constellationModule,
-    boomModule,
-    shuttleModule
+    rocketChip,
+    constellation,
+    boom,
+    shuttle
   )
   
   override def ivyDeps = Agg(
@@ -613,15 +616,15 @@ object reroccModule extends SbtModule {
 }
 
 // Define rocket-dsp-utils module
-object rocketDspUtilsModule extends SbtModule {
+object rocketDspUtils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "rocket-dsp-utils"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip, cde, and dsptools as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    cdeModule,
-    dsptoolsModule
+    rocketChip,
+    cde,
+    dsptools
   )
   
   override def ivyDeps = Agg(
@@ -634,14 +637,14 @@ object rocketDspUtilsModule extends SbtModule {
 }
 
 // Define dsptools module
-object dsptoolsModule extends SbtModule {
+object dsptools extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "dsptools"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and fixedpoint as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    fixedpointModule
+    rocketChip,
+    fixedpoint
   )
   
   override def ivyDeps = Agg(
@@ -657,13 +660,13 @@ object dsptoolsModule extends SbtModule {
 }
 
 // Define fixedpoint module
-object fixedpointModule extends SbtModule {
+object fixedpoint extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "fixedpoint"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -676,13 +679,13 @@ object fixedpointModule extends SbtModule {
 }
 
 // Define compressacc module
-object compressaccModule extends SbtModule {
+object compressacc extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "compress-acc"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -695,13 +698,13 @@ object compressaccModule extends SbtModule {
 }
 
 // Define mempress module
-object mempressModule extends SbtModule {
+object mempress extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "mempress"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -714,13 +717,13 @@ object mempressModule extends SbtModule {
 }
 
 // Define barf module
-object barfModule extends SbtModule {
+object barf extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "bar-fetchers"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -733,15 +736,15 @@ object barfModule extends SbtModule {
 }
 
 // Define caliptra_aes module
-object caliptraAesModule extends SbtModule {
+object caliptraAes extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "caliptra-aes-acc"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip, rocc_acc_utils, and testchipip as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChipModule,
-    roccAccUtilsModule,
-    testchipipModule
+    rocketChip,
+    roccAccUtils,
+    testchipip
   )
   
   override def ivyDeps = Agg(
@@ -754,13 +757,13 @@ object caliptraAesModule extends SbtModule {
 }
 
 // Define rocc_acc_utils module
-object roccAccUtilsModule extends SbtModule {
+object roccAccUtils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocc-acc-utils"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChipModule
+    rocketChip
   )
   
   override def ivyDeps = Agg(
@@ -773,7 +776,7 @@ object roccAccUtilsModule extends SbtModule {
 }
 
 // Define firrtl2 module
-object firrtl2Module extends SbtModule {
+object firrtl2 extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "firrtl2"
   override def scalaVersion = "2.13.12"
   
@@ -813,13 +816,13 @@ object firrtl2Module extends SbtModule {
 }
 
 // Define firrtl2_bridge module
-object firrtl2BridgeModule extends SbtModule {
+object firrtl2Bridge extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "firrtl2" / "bridge"
   override def scalaVersion = "2.13.12"
   
   // Add firrtl2 as a dependency
   override def moduleDeps = Seq(
-    firrtl2Module
+    firrtl2
   )
   
   override def ivyDeps = Agg(
