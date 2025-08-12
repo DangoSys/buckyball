@@ -1,4 +1,8 @@
-BUILD_DIR = $(abspath ./build)
+BBDIR = $(shell git rev-parse --show-toplevel)
+ARCHDIR = $(BBDIR)/arch
+
+
+BUILD_DIR = $(ARCHDIR)/build
 
 export PATH := $(PATH):$(abspath ./utils)
 
@@ -6,8 +10,8 @@ export PATH := $(PATH):$(abspath ./utils)
 NUM_JOBs = 256
 
 # ========= verilator ==============
-TOPNAME = top
-INC_PATH ?= ${PWD}/src/csrc/include \
+TOPNAME = ChipTop
+INC_PATH ?= ${ARCHDIR}/src/csrc/include \
 			/usr/lib/llvm-11/include # for disasm 
 
 VERILATOR = verilator
@@ -15,15 +19,15 @@ VERILATOR_CFLAGS += -MMD --build -cc  --trace \
 				-O3 --x-assign fast --x-initial fast --noassert \
 				-Wno-fatal \
 				-j ${NUM_JOBs}
-#  --cc 参数告诉 Verilator 转换为 C++。 Verilator 还支持转换为 SystemC，这可以通过使用 --sc 来完成，但我们暂时不会使用此功能。
+# --cc 参数告诉 Verilator 转换为 C++。 Verilator 还支持转换为 SystemC，这可以通过使用 --sc 来完成，但我们暂时不会使用此功能。
 # -Wall - 打开所有 C++ 警告。不是必需的，但在您刚开始时很有用
 # --trace - 启用波形跟踪	
 OBJ_DIR = $(BUILD_DIR)/obj_dir
 BIN = $(OBJ_DIR)/V$(TOPNAME) # 可执行文件在这
 
 # project source
-VSRCS = $(shell find $(abspath ./build) -name "*.v")
-CSRCS = $(shell find $(abspath ./src/csrc) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
+VSRCS = $(shell find $(abspath $(BUILD_DIR)) -name "*.v" -or -name "*.sv")
+CSRCS = $(shell find $(abspath $(ARCHDIR)/src/csrc) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
 
 # rules for verilator
 INCFLAGS = $(addprefix -I, $(INC_PATH))
@@ -51,8 +55,14 @@ test:
 
 verilog:
 	$(shell mkdir -p $(BUILD_DIR))
-#	JAVA_OPTS="-Xmx64g" 	
-	mill -i __.test.runMain Elaborate -td $(BUILD_DIR) -X mverilog -ll debug --jobs ${NUM_JOBs}
+#	JAVA_OPTS="-Xmx64g" -td $(BUILD_DIR)	-ll debug --jobs ${NUM_JOBs}  --output-file $(TOPNAME).sv
+	mill -i __.test.runMain Elaborate  \
+		--disable-annotation-unknown \
+		-O=debug \
+		-strip-debug-info \
+		--split-verilog \
+		-o=$(BUILD_DIR)
+
 # mill -i __.test.runMain Elaborate -td /home/shiroha/Code/Backend/ml-accelerator/build -X mverilog -ll debug
 
 # -X mverilog

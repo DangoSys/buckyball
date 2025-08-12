@@ -5,6 +5,7 @@ import chisel3._
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.SystemBusKey
 // import freechips.rocketchip.tile.{BuildRoCC, OpcodeSet}
+import freechips.rocketchip.tile._  
 import framework.ballcore.ballcore._
 import framework.ballcore._
 
@@ -18,7 +19,7 @@ object BuckyBallCustomConfigs {
 class BuckyBallCustomConfig(
   buckyballConfig: BuckyBallConfig = BuckyBallCustomConfigs.customConfig
 ) extends Config((site, here, up) => {
-  case BuildRoCCBB => up(BuildRoCCBB) ++ Seq(
+  case BuildRoCC => up(BuildRoCC) ++ Seq(
     (p: Parameters) => {
       implicit val q = p
       val buckyball = LazyModule(new BuckyBall(buckyballConfig))
