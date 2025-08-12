@@ -5,13 +5,14 @@ import chisel3.util._
 import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import buckyball.BuckyBallConfig
-import framework.ballcore.ballcore.RoCCCommandBB
+// import framework.ballcore.ballcore.RoCCCommandBB
+import freechips.rocketchip.tile._  
 import buckyball.BBISA._
 import buckyball.mem.LocalAddr
 
 
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommandBB
+  val cmd = new RoCCCommand
 }
 
 // default values
@@ -93,7 +94,7 @@ class Decoder(implicit bbconfig: BuckyBallConfig, p: Parameters) extends Module 
 
   val io = IO(new Bundle {
     val id_i = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB
+      val cmd = new RoCCCommand
     }))
     val id_rs = Decoupled(new PostDecodeCmd)
   })

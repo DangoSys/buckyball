@@ -18,6 +18,18 @@ object Elaborate extends App {
   ChiselStage.emitSystemVerilogFile(
     // new chipyard.harness.TestHarness()(config.toInstance),
     lazyModule.module,
-    firtoolOpts = Array("--disable-annotation-unknown", "-strip-debug-info")
+    firtoolOpts = args,
+    args = Array.empty  // 直接传递命令行参数
   )
 }       
+
+      // os.proc("firtool",
+      //   generator.chirrtl().path,
+      //   s"--annotation-file=${generator.chiselAnno().path}",
+      //   "--disable-annotation-unknown",
+      //   "-dedup",
+      //   "-O=debug",
+      //   "--split-verilog",
+      //   "--preserve-values=named",
+      //   "--output-annotation-file=mfc.anno.json",
+      //   s"-o=${T.dest}"

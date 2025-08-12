@@ -3,10 +3,12 @@ package buckyball
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import framework.ballcore.ballcore.RoCCCommandBB
+// import framework.ballcore.ballcore.RoCCCommandBB
+import freechips.rocketchip.tile._  
+
 
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommandBB
+  val cmd = new RoCCCommand
 }
 
 object BBISA {

@@ -15,14 +15,14 @@ import mem.{Scratchpad, SimpleStreamReader, SimpleStreamWriter}
 import frontend.{FrontendTLB, Decoder}
 import frontend.rs.ReservationStation
 import framework.ballcore.ballcore._
-import framework.ballcore.ballcore.LazyRoCCBB
+// import framework.ballcore.ballcore.LazyRoCCBB
 import buckyball.load.MemLoader
 import buckyball.store.MemStorer
 import buckyball.exec.ExecuteController
 
 
 class BuckyBall(val bbconfig: BuckyBallConfig)(implicit p: Parameters)
-  extends LazyRoCCBB (opcodes = bbconfig.opcodes, nPTWPorts = 2) {
+  extends LazyRoCC (opcodes = bbconfig.opcodes, nPTWPorts = 2) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
   
@@ -49,7 +49,7 @@ class BuckyBall(val bbconfig: BuckyBallConfig)(implicit p: Parameters)
   val node = tlNode 
 }
 
-class BuckyBallModule(outer: BuckyBall) extends LazyRoCCModuleImpBB(outer) 
+class BuckyBallModule(outer: BuckyBall) extends LazyRoCCModuleImp(outer) 
   with HasCoreParameters {
   import outer.bbconfig._
   
