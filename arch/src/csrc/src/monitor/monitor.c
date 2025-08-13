@@ -1,12 +1,14 @@
 #include "tet.h"
 #include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "utils/macro.h"
 #include "utils/debug.h"
 
 
 static void welcome() {
   	Log("Build time: %s, %s", __TIME__, __DATE__);
-  	printf("Welcome to %s!\n", ASNI_FMT(str(TET), ASNI_FG_YELLOW ASNI_BG_RED));
+  	printf("Welcome to %s!\n", ASNI_FMT(str(BuckyBall), ASNI_FG_YELLOW ASNI_BG_RED));
   	printf("For help, type \"help\"\n");
 }
 

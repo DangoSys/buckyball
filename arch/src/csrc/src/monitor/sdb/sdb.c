@@ -14,7 +14,7 @@ static char* rl_gets() {
 		free(line_read);
 		line_read = NULL;
     }
-    line_read = readline("(TET) "); 
+    line_read = readline("(bdb) "); 
 
     if (line_read && *line_read) {
       	add_history(line_read);

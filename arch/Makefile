@@ -7,8 +7,9 @@ BUILD_DIR = $(ARCHDIR)/build
 export PATH := $(PATH):$(abspath ./utils)
 
 # ARGS
-NUM_JOBs = 256
+NUM_JOBs = 16
 
+# ARGS += +max_core_cycles=0 +uart_tx=1 +uart_tx_printf=0 +custom_boot_pin=0 +jtag_rbb_enable=0 
 # ========= verilator ==============
 TOPNAME = ChipTop
 INC_PATH ?= ${ARCHDIR}/src/csrc/include \
@@ -26,8 +27,8 @@ OBJ_DIR = $(BUILD_DIR)/obj_dir
 BIN = $(OBJ_DIR)/V$(TOPNAME) # 可执行文件在这
 
 # project source
-VSRCS = $(shell find $(abspath $(BUILD_DIR)) -name "*.v" -or -name "*.sv")
-CSRCS = $(shell find $(abspath $(ARCHDIR)/src/csrc) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
+VSRCS = $(shell find $(BUILD_DIR) -name "*.v" -or -name "*.sv")
+CSRCS = $(shell find $(ARCHDIR)/src/csrc -name "*.c" -or -name "*.cc" -or -name "*.cpp")
 
 # rules for verilator
 INCFLAGS = $(addprefix -I, $(INC_PATH))
@@ -38,12 +39,11 @@ LDFLAGS += -lreadline
 
 $(BIN): ${VSRCS} ${CSRCS} 
 	@rm -rf $(OBJ_DIR)
-# $(call git_commit, "sim RTL") # DO NOT REMOVE THIS LINE!!!
 	verilator $(VERILATOR_CFLAGS) +incdir+$(BUILD_DIR)\
 		--top $(TOPNAME) $^\
 		$(addprefix -CFLAGS , $(CFLAGS)) $(addprefix -LDFLAGS , $(LDFLAGS)) \
 		--Mdir $(OBJ_DIR) --exe 
-	$(MAKE) -C ${OBJ_DIR} -f V$(TOPNAME).mk V$(TOPNAME) 
+	$(MAKE) -C ${OBJ_DIR} -f V$(TOPNAME).mk $(OBJ_DIR)/V$(TOPNAME) 
 
 .PHONY: run test verilog help compile bsp reformat checkformat clean sim wave
 
@@ -72,7 +72,6 @@ verilog:
 
 sim:
 	$(BIN) $(ARGS)
-	  @$^
 
 help:
 	mill -i __.test.runMain Elaborate --help
