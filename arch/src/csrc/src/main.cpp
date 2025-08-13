@@ -7,7 +7,7 @@ vluint64_t sim_time = 0;
 
 VerilatedContext* contextp = NULL;
 VerilatedVcdC* tfp = NULL;
-static Vtop* top;
+static VChipTop* top;
 
 int tet_step = 1; // 记录一共走了多少步，出错时抛出，方便单步调试到周围 
 
@@ -19,23 +19,24 @@ void step_and_dump_wave() {
     sim_time++;
 }
 
-void sim_init() {
+void sim_init(int argc, char** argv) {
     contextp = new VerilatedContext;
+    contextp->commandArgs(argc, argv);
     tfp = new VerilatedVcdC;
-    top = new Vtb;
+    top = new VChipTop{contextp};
 
     contextp->traceEverOn(true);
     top->trace(tfp, 0);
     tfp->open("dump.vcd");
 
-    top->reset = 1; top->clock = 0; step_and_dump_wave();
-    top->reset = 1; top->clock = 1; step_and_dump_wave();
-    top->reset = 0; top->clock = 0; step_and_dump_wave();   
+    top->reset_io = 1; top->clock_uncore = 0; step_and_dump_wave();
+    top->reset_io = 1; top->clock_uncore = 1; step_and_dump_wave();
+    top->reset_io = 0; top->clock_uncore = 0; step_and_dump_wave();   
 } // 低电平复位
 
 void tet_exec_once() {
-    top->clock ^= 1; step_and_dump_wave();
-    top->clock ^= 1; step_and_dump_wave();
+    top->clock_uncore ^= 1; step_and_dump_wave();
+    top->clock_uncore ^= 1; step_and_dump_wave();
     // dump_gpr(); 
     // npc_step++;
 } // 翻转两次走一条指令
@@ -61,7 +62,7 @@ extern fp16_t softmax_input_fp16[datain_lines][datain_bandwidth];
 
 //================ main =====================//
 int main(int argc, char *argv[]) {
-    sim_init();
+    sim_init(argc, argv);
 
     init_monitor(argc, argv);
 

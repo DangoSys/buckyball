@@ -8,7 +8,7 @@
 // verilator
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vtop.h"
+#include "VChipTop.h"
 
 
 // ================ DataType ====================
