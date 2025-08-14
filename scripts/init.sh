@@ -85,11 +85,15 @@ if run_step "1"; then
   ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
   cp ${BBDIR}/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
   conda create -n ${CONDA_ENV_NAME} python=3.11 -y 
+  replace_content ${BBDIR}/env.sh build-setup-conda "source $(conda info --base)/etc/profile.d/conda.sh
+    source ~/.${SHELL##*/}rc
+    conda activate ${CONDA_ENV_NAME}
+    source /home/mio/Code/buckyball/thirdparty/chipyard/scripts/fix-open-files.sh"
   replace_content ${BBDIR}/env.sh bb-dir-helper "BB_DIR=${BBDIR}"
 fi
 
 if run_step "2"; then
   begin_step "2" "Compiler (buddy-mlir) pre-compile sources"
   cd ${BBDIR}
-  ./scripts/install-compiler.sh
+  ${SHELL} ./scripts/install-compiler.sh
 fi

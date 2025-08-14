@@ -7,19 +7,26 @@ BUILD_DIR = $(ARCHDIR)/build
 export PATH := $(PATH):$(abspath ./utils)
 
 # ARGS
-NUM_JOBs = 16
+NUM_JOBs = 32
 
 # ARGS += +max_core_cycles=0 +uart_tx=1 +uart_tx_printf=0 +custom_boot_pin=0 +jtag_rbb_enable=0 
+ARGS += +permissive +loadmem=/home/mio/Code/buckyball/arch/workload/hello +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off /home/mio/Code/buckyball/arch/workload/hello
 # ========= verilator ==============
-TOPNAME = ChipTop
+TOPNAME = TestHarness
 INC_PATH ?= ${ARCHDIR}/src/csrc/include \
-			/usr/lib/llvm-11/include # for disasm 
+			/usr/lib/llvm-11/include \
+			$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim \
+			$(BBDIR)/thirdparty/chipyard/tools/DRAMSim2 \
+			${ARCHDIR}/build \
+# /home/mio/waste/anaconda3/envs/buckyball/share/verilator/include
+# $(shell dirname $(shell which verilator))/../../share/verilator/include
 
 VERILATOR = verilator
 VERILATOR_CFLAGS += -MMD --build -cc  --trace \
 				-O3 --x-assign fast --x-initial fast --noassert \
 				-Wno-fatal \
-				-j ${NUM_JOBs}
+				-j ${NUM_JOBs} \
+				--timing
 # --cc 参数告诉 Verilator 转换为 C++。 Verilator 还支持转换为 SystemC，这可以通过使用 --sc 来完成，但我们暂时不会使用此功能。
 # -Wall - 打开所有 C++ 警告。不是必需的，但在您刚开始时很有用
 # --trace - 启用波形跟踪	
@@ -28,12 +35,15 @@ BIN = $(OBJ_DIR)/V$(TOPNAME) # 可执行文件在这
 
 # project source
 VSRCS = $(shell find $(BUILD_DIR) -name "*.v" -or -name "*.sv")
-CSRCS = $(shell find $(ARCHDIR)/src/csrc -name "*.c" -or -name "*.cc" -or -name "*.cpp")
+CSRCS = $(shell find $(ARCHDIR)/src/csrc $(BUILD_DIR) -name "*.c" -or -name "*.cc" -or -name "*.cpp") \
 
 # rules for verilator
 INCFLAGS = $(addprefix -I, $(INC_PATH))
-CFLAGS  += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" #-Og -ggdb3 # -Og -ggdb3为添加gdb调试
-LDFLAGS += -lreadline
+CFLAGS  += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" -std=c++17 #-Og -ggdb3 # -Og -ggdb3为添加gdb调试
+LDFLAGS += -lreadline -ldramsim -lfesvr  \
+			-L$(BBDIR)/thirdparty/chipyard/tools/DRAMSim2 \
+			-L$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build \
+			-L$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib 
 # 使用readline函数的是否需要链接-lreadline
 # ====================================
 
@@ -71,7 +81,7 @@ verilog:
 
 
 sim:
-	$(BIN) $(ARGS)
+	LD_LIBRARY_PATH="/home/mio/Code/buckyball/thirdparty/chipyard/tools/DRAMSim2:$LD_LIBRARY_PATH"  && $(BIN) $(ARGS)
 
 help:
 	mill -i __.test.runMain Elaborate --help

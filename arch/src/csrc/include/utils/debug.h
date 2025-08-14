@@ -11,14 +11,14 @@
 // #define BLUE(a) COLOR(a, 34)
 
 // Printf的参数，方便使用 默认为FG了
-#define BLACK           "\33[1;30m"
-#define RED             "\33[1;31m"
-#define GREEN           "\33[1;32m"
-#define YELLOW          "\33[1;33m"
-#define BLUE            "\33[1;34m"
-#define MAGENTA         "\33[1;35m"
-#define CYAN            "\33[1;36m"
-#define WHITE           "\33[1;37m"
+#define BLACK       "\33[1;30m"
+#define RED         "\33[1;31m"
+#define GREEN       "\33[1;32m"
+#define YELLOW      "\33[1;33m"
+#define BLUE        "\33[1;34m"
+#define MAGENTA     "\33[1;35m"
+#define CYAN        "\33[1;36m"
+#define WHITE       "\33[1;37m"
 
 // 对接 原版Debug
 #define ASNI_FG_BLACK   "\33[1;30m" // 前面的颜色
@@ -44,59 +44,59 @@
 
 #define log_write(...) IFDEF(CONFIG_TARGET_NATIVE_ELF, \
   do { \
-    extern FILE* log_fp; \
-    extern bool log_enable(); \
-    if (log_enable()) { \
-      fprintf(log_fp, __VA_ARGS__); \
-      fflush(log_fp); \
-    } \
+  extern FILE* log_fp; \
+  extern bool log_enable(); \
+  if (log_enable()) { \
+    fprintf(log_fp, __VA_ARGS__); \
+    fflush(log_fp); \
+  } \
   } while (0) \
 )
 
 #define _Log(...) \
   do { \
-    printf(__VA_ARGS__); \
-    log_write(__VA_ARGS__); \
+  printf(__VA_ARGS__); \
+  log_write(__VA_ARGS__); \
   } while (0)
 
 #define Log(format, ...) \
-    _Log(ASNI_FMT("[%s:%d %s] " format, ASNI_FG_BLUE) "\n", \
-        __FILE__, __LINE__, __func__, ## __VA_ARGS__)
+  _Log(ASNI_FMT("[%s:%d %s] " format, ASNI_FG_BLUE) "\n", \
+    __FILE__, __LINE__, __func__, ## __VA_ARGS__)
 
 // Printf使用说明，第一个参数为颜色，之后（若有）参数则往后一次排列
 #define Printf(format, color,...) \
-    _Log(ASNI_FMT(format, color), ## __VA_ARGS__)
+  _Log(ASNI_FMT(format, color), ## __VA_ARGS__)
 
 
 // #define assert(cond) \
-//     do { \
-//         if (!(cond)) { \
-//             printf("Assertion fail at %s:%d\n", __FILE__, __LINE__); \
-//             halt(0); \
-//         } \
-//     } while (0)
+//   do { \
+//     if (!(cond)) { \
+//       printf("Assertion fail at %s:%d\n", __FILE__, __LINE__); \
+//       halt(0); \
+//     } \
+//   } while (0)
 
 #define Assert(cond, format, ...) \
-    do { \
-        if (!(cond)) { \
-            fflush(stdout), \
-            fprintf(stderr, ASNI_FMT(format, ASNI_FG_RED) "\n", ##  __VA_ARGS__); \
-        } \
-    } while (0)
+  do { \
+    if (!(cond)) { \
+      fflush(stdout), \
+      fprintf(stderr, ASNI_FMT(format, ASNI_FG_RED) "\n", ##  __VA_ARGS__); \
+    } \
+  } while (0)
 
 // #define Assert(cond, format, ...) \
 //   do { \
 //     if (!(cond)) { \
-//         printf(ASNI_FMT(format, ASNI_FG_RED) "\n", ## __VA_ARGS__), \
-//         fflush(stdout), fprintf(stderr, ASNI_FMT(format, ASNI_FG_RED) "\n", ##  __VA_ARGS__); \
-//         extern FILE* log_fp; fflush(log_fp); \
-//         extern void assert_fail_msg(); \
-//         assert_fail_msg(); \
-//         assert(cond); \
+//       printf(ASNI_FMT(format, ASNI_FG_RED) "\n", ## __VA_ARGS__), \
+//       fflush(stdout), fprintf(stderr, ASNI_FMT(format, ASNI_FG_RED) "\n", ##  __VA_ARGS__); \
+//       extern FILE* log_fp; fflush(log_fp); \
+//       extern void assert_fail_msg(); \
+//       assert_fail_msg(); \
+//       assert(cond); \
 //     } \
 //   } while (0)
 
-// #define panic(format, ...) Assert(0, format, ## __VA_ARGS__)
+#define panic(format, ...) Assert(0, format, ## __VA_ARGS__)
 
 #endif
 

@@ -86,18 +86,18 @@
 // // for AM IOE
 // #define io_read(reg) \
 //   ({ reg##_T __io_param; \
-//     ioe_read(reg, &__io_param); \
-//     __io_param; })
+//   ioe_read(reg, &__io_param); \
+//   __io_param; })
 
 // #define io_write(reg, ...) \
 //   ({ reg##_T __io_param = (reg##_T) { __VA_ARGS__ }; \
-//     ioe_write(reg, &__io_param); })
+//   ioe_write(reg, &__io_param); })
 
 
 // 自定义宏
 #define MUX(v, p, a, b) v == p ? a : b
 // value, p可能值, 则为a, 否则为b
 #define SWAP(a, b) a ^= b; \
-                b ^= a; \
-                a ^= b; 
+        b ^= a; \
+        a ^= b; 
 #endif
