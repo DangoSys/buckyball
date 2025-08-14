@@ -23,7 +23,7 @@ object main extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    chipyardGenerators
+    chipyard_generators
   )
   
   override def ivyDeps = Agg(
@@ -97,7 +97,7 @@ object hardfloat extends SbtModule {
 }
 
 // Define midas_target_utils module
-object midasTargetUtils extends SbtModule {
+object midas_target_utils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "sims" / "firesim" / "sim" / "midas" / "targetutils"
   override def scalaVersion = "2.13.12"
   
@@ -136,7 +136,7 @@ object diplomacy extends SbtModule {
 }
 
 // Define rocket-chip module with proper dependencies
-object rocketChip extends SbtModule {
+object rocketchip extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip"
   override def scalaVersion = "2.13.12"
   
@@ -145,7 +145,7 @@ object rocketChip extends SbtModule {
     diplomacy,
     cde,
     hardfloat,
-    midasTargetUtils
+    midas_target_utils
   )
   
   override def ivyDeps = Agg(
@@ -177,12 +177,12 @@ object chipyard extends SbtModule {
   // Add all required dependencies as per build.sbt
   override def moduleDeps = Seq(
     testchipip,
-    rocketChip,
+    rocketchip,
     boom,
-    rocketChipBlocks,
-    rocketchipInclusiveCache,
+    rocket_chip_blocks,
+    rocketchip_inclusive_cache,
     dsptools,
-    rocketDspUtils,
+    rocket_dsp_utils,
     gemmini,
     icenet,
     tracegen,
@@ -190,17 +190,17 @@ object chipyard extends SbtModule {
     nvdla,
     sodor,
     ibex,
-    fftgenerator,
+    fft_generator,
     constellation,
     mempress,
     barf,
     shuttle,
-    caliptraAes,
+    caliptra_aes,
     rerocc,
     compressacc,
     saturn,
     ara,
-    firrtl2Bridge,
+    firrtl2_bridge,
     vexiiriscv
   )
   
@@ -215,7 +215,7 @@ object chipyard extends SbtModule {
 }
 
 // Define chipyard generators module
-object chipyardGenerators extends SbtModule {
+object chipyard_generators extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "chipyard"
   override def scalaVersion = "2.13.12"
   
@@ -225,10 +225,10 @@ object chipyardGenerators extends SbtModule {
     testchipip,
     icenet,
     nvdla,
-    fftgenerator,
+    fft_generator,
     constellation,
     rerocc,
-    rocketDspUtils,
+    rocket_dsp_utils,
     dsptools,
     fixedpoint,
     tracegen,
@@ -241,8 +241,8 @@ object chipyardGenerators extends SbtModule {
     compressacc,
     mempress,
     barf,
-    caliptraAes,
-    roccAccUtils,
+    caliptra_aes,
+    rocc_acc_utils,
     vexiiriscv,
     ibex,
     cva6
@@ -265,8 +265,8 @@ object testchipip extends SbtModule {
   
   // Add rocket-chip and rocket-chip-blocks as dependencies
   override def moduleDeps = Seq(
-    rocketChip,
-    rocketChipBlocks
+    rocketchip,
+    rocket_chip_blocks
   )
   
   override def ivyDeps = Agg(
@@ -279,13 +279,13 @@ object testchipip extends SbtModule {
 }
 
 // Define rocket-chip-blocks module (contains sifive package)
-object rocketChipBlocks extends SbtModule {
+object rocket_chip_blocks extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip-blocks"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -304,7 +304,7 @@ object icenet extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -323,7 +323,7 @@ object nvdla extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -335,15 +335,15 @@ object nvdla extends SbtModule {
   )
 }
 
-// Define fftgenerator module
-object fftgenerator extends SbtModule {
+// Define fft_generator module
+object fft_generator extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "fft-generator"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip and rocket-dsp-utils as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
-    rocketDspUtils
+    rocketchip,
+    rocket_dsp_utils
   )
   
   override def ivyDeps = Agg(
@@ -362,7 +362,7 @@ object constellation extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -381,7 +381,7 @@ object boom extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -401,8 +401,8 @@ object tracegen extends SbtModule {
   // Add testchipip, rocket-chip, rocketchip_inclusive_cache, and boom as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     testchipip,
-    rocketChip,
-    rocketchipInclusiveCache,
+    rocketchip,
+    rocketchip_inclusive_cache,
     boom
   )
   
@@ -422,7 +422,7 @@ object shuttle extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -435,7 +435,7 @@ object shuttle extends SbtModule {
 }
 
 // Define rocketchip_inclusive_cache module
-object rocketchipInclusiveCache extends SbtModule {
+object rocketchip_inclusive_cache extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocket-chip-inclusive-cache"
   override def scalaVersion = "2.13.12"
   
@@ -446,7 +446,7 @@ object rocketchipInclusiveCache extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -465,7 +465,7 @@ object saturn extends SbtModule {
   
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
+    rocketchip,
     shuttle
   )
   
@@ -485,7 +485,7 @@ object gemmini extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -504,7 +504,7 @@ object sodor extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -523,7 +523,7 @@ object vexiiriscv extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -542,7 +542,7 @@ object ibex extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -561,7 +561,7 @@ object cva6 extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -580,7 +580,7 @@ object ara extends SbtModule {
   
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
+    rocketchip,
     shuttle
   )
   
@@ -600,7 +600,7 @@ object rerocc extends SbtModule {
   
   // Add rocket-chip, constellation, boom, and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
+    rocketchip,
     constellation,
     boom,
     shuttle
@@ -616,13 +616,13 @@ object rerocc extends SbtModule {
 }
 
 // Define rocket-dsp-utils module
-object rocketDspUtils extends SbtModule {
+object rocket_dsp_utils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "rocket-dsp-utils"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip, cde, and dsptools as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
+    rocketchip,
     cde,
     dsptools
   )
@@ -643,7 +643,7 @@ object dsptools extends SbtModule {
   
   // Add rocket-chip and fixedpoint as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
+    rocketchip,
     fixedpoint
   )
   
@@ -666,7 +666,7 @@ object fixedpoint extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -685,7 +685,7 @@ object compressacc extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -704,7 +704,7 @@ object mempress extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -723,7 +723,7 @@ object barf extends SbtModule {
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -736,14 +736,14 @@ object barf extends SbtModule {
 }
 
 // Define caliptra_aes module
-object caliptraAes extends SbtModule {
+object caliptra_aes extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "caliptra-aes-acc"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip, rocc_acc_utils, and testchipip as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
-    rocketChip,
-    roccAccUtils,
+    rocketchip,
+    rocc_acc_utils,
     testchipip
   )
   
@@ -757,13 +757,13 @@ object caliptraAes extends SbtModule {
 }
 
 // Define rocc_acc_utils module
-object roccAccUtils extends SbtModule {
+object rocc_acc_utils extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "generators" / "rocc-acc-utils"
   override def scalaVersion = "2.13.12"
   
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
-    rocketChip
+    rocketchip
   )
   
   override def ivyDeps = Agg(
@@ -816,7 +816,7 @@ object firrtl2 extends SbtModule {
 }
 
 // Define firrtl2_bridge module
-object firrtl2Bridge extends SbtModule {
+object firrtl2_bridge extends SbtModule {
   override def millSourcePath = os.pwd / os.up / "thirdparty" / "chipyard" / "tools" / "firrtl2" / "bridge"
   override def scalaVersion = "2.13.12"
   

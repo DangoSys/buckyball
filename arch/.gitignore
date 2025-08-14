@@ -8,3 +8,6 @@ out/
 build/
 
 *.vcd
+*.fst
+*.log
+.bsp/
