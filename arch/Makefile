@@ -7,17 +7,17 @@ BUILD_DIR = $(ARCHDIR)/build
 export PATH := $(PATH):$(abspath ./utils)
 
 # ARGS
-NUM_JOBs = 32
+NUM_JOBs = 16
 
 # ARGS += +max_core_cycles=0 +uart_tx=1 +uart_tx_printf=0 +custom_boot_pin=0 +jtag_rbb_enable=0 
-ARGS += +permissive +loadmem=/home/mio/Code/buckyball/arch/workload/hello +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off /home/mio/Code/buckyball/arch/workload/hello
+ARGS += +permissive +loadmem=/home/mio/Code/buckyball/bb-tests/workloads/build/src/CTest/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off /home/mio/Code/buckyball/bb-tests/workloads/build/src/CTest/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal -b
 # ========= verilator ==============
 TOPNAME = TestHarness
 INC_PATH ?= ${ARCHDIR}/src/csrc/include \
 			/usr/lib/llvm-11/include \
 			$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim \
 			$(BBDIR)/thirdparty/chipyard/tools/DRAMSim2 \
-			${ARCHDIR}/build \
+			${ARCHDIR}/build 
 # /home/mio/waste/anaconda3/envs/buckyball/share/verilator/include
 # $(shell dirname $(shell which verilator))/../../share/verilator/include
 
@@ -68,10 +68,12 @@ verilog:
 #	JAVA_OPTS="-Xmx64g" -td $(BUILD_DIR)	-ll debug --jobs ${NUM_JOBs}  --output-file $(TOPNAME).sv
 	mill -i __.test.runMain Elaborate  \
 		--disable-annotation-unknown \
-		-O=debug \
 		-strip-debug-info \
+		-O=debug \
 		--split-verilog \
 		-o=$(BUILD_DIR)
+	rm $(ARCHDIR)/$(TOPNAME).sv 
+# I dont know why, but it will generate a V$(TOPNAME).sv file in the arch directory, which will cause the verilog file to be generated in the arch directory
 
 # mill -i __.test.runMain Elaborate -td /home/shiroha/Code/Backend/ml-accelerator/build -X mverilog -ll debug
 
@@ -79,9 +81,12 @@ verilog:
 # mill -i __.test.runMain Elaborate -td $(BUILD_DIR) 
 # -X mverilog 生成verilog取消优化
 
+LOG_DIR=$(ARCHDIR)/log
 
 sim:
-	LD_LIBRARY_PATH="/home/mio/Code/buckyball/thirdparty/chipyard/tools/DRAMSim2:$LD_LIBRARY_PATH"  && $(BIN) $(ARGS)
+# LD_LIBRARY_PATH="/home/mio/Code/buckyball/thirdparty/chipyard/tools/DRAMSim2:$LD_LIBRARY_PATH"  && 
+	mkdir -p $(LOG_DIR)
+	$(BIN) $(ARGS) 
 
 help:
 	mill -i __.test.runMain Elaborate --help
