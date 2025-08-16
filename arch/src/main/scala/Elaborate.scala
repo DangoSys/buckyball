@@ -5,13 +5,13 @@ import org.chipsalliance.cde.config.Parameters
 
 // import chipyard.harness.TestHarness
 import freechips.rocketchip.diplomacy.LazyModule
-import buckyball.{BuckyBall, BuckyBallRocketConfig}
+import examples.toy.{ToyBuckyBall, BuckyBallToyConfig}
 // import chipyard.ChipTop
 import freechips.rocketchip.system.TestHarness
 
 object Elaborate extends App {
   // Use the proper Chipyard configuration that includes BuckyBall
-  val config = new BuckyBallRocketConfig
+  val config = new BuckyBallToyConfig
   val params = config.toInstance
   
   // Use ChiselStage with proper elaboration context
