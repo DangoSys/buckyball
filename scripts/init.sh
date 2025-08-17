@@ -76,24 +76,26 @@ function begin_step
   echo " ========== BEGINNING STEP $thisStepNum: $thisStepDesc =========="
 }
 
-
+if run_step "1"; then
+  begin_step "1" "submodules init"
+  git submodule update --init 
+fi
 
 # setup and install chipyard environment
-if run_step "1"; then
-  begin_step "1" "Chipyard environment setup"
-  cd ${BBDIR}/thirdparty/chipyard
-  ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
-  cp ${BBDIR}/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
-  conda create -n ${CONDA_ENV_NAME} python=3.11 -y 
+if run_step "2"; then
+  begin_step "2" "Chipyard environment setup"
+  cd ${BBDIR}/arch/thirdparty/chipyard && ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
+  cp ${BBDIR}/arch/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
+  conda create -n ${CONDA_ENV_NAME} python=3.10 -y 
   replace_content ${BBDIR}/env.sh build-setup-conda "source $(conda info --base)/etc/profile.d/conda.sh
     source ~/.${SHELL##*/}rc
     conda activate ${CONDA_ENV_NAME}
-    source /home/mio/Code/buckyball/thirdparty/chipyard/scripts/fix-open-files.sh"
+    source /home/mio/Code/buckyball/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
   replace_content ${BBDIR}/env.sh bb-dir-helper "BB_DIR=${BBDIR}"
 fi
 
-if run_step "2"; then
-  begin_step "2" "Compiler (buddy-mlir) pre-compile sources"
+if run_step "3"; then
+  begin_step "3" "Compiler (buddy-mlir) pre-compile sources"
   cd ${BBDIR}
   ${SHELL} ./scripts/install-compiler.sh
 fi
