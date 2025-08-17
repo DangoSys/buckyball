@@ -3,7 +3,11 @@ A Scaling Framework for Domain Specific Architecture
 
 # Quick Start
 
-从docker直接启动
+1. build from source code (take about 3 hours) 
+
+
+
+2. 从docker直接启动
 
 ```
 docker pull ghcr.io/dangosys/buckyball:latest

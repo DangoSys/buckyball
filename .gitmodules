@@ -1,9 +1,3 @@
-[submodule "thirdparty/chipyard"]
-	path = thirdparty/chipyard
-	url = https://github.com/ucb-bar/chipyard.git
-[submodule "tools/vistools"]
-	path = tools/vistools
-	url = https://github.com/BuckyBallSys/bb-vistools.git
 [submodule "tools/motia"]
 	path = tools/motia
 	url = https://github.com/MotiaDev/motia.git
@@ -12,7 +6,7 @@
 	url = https://github.com/llvm/circt.git
 [submodule "compiler"]
 	path = compiler
-	url = https://github.com/BuckyBallSys/bb-compiler
+	url = https://github.com/DangoSys/bb-compiler
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
