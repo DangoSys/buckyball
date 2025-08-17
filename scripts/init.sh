@@ -73,7 +73,17 @@ function begin_step
 {
   thisStepNum=$1;
   thisStepDesc=$2;
-  echo " ========== BEGINNING STEP $thisStepNum: $thisStepDesc =========="
+  
+  # Color codes
+  local BLUE='\033[0;34m'
+  local GREEN='\033[0;32m'
+  local YELLOW='\033[1;33m'
+  local NC='\033[0m' # No Color
+  
+  echo -e "${BLUE} ========================================================================="
+  echo -e "${GREEN} ==== BUCKYBALL SETUP STEP ${YELLOW}$thisStepNum${GREEN}: ${YELLOW}$thisStepDesc${GREEN} "
+  echo -e "${BLUE} ========================================================================="
+  echo -e "${NC}"
 }
 
 if run_step "1"; then
@@ -86,16 +96,42 @@ if run_step "2"; then
   begin_step "2" "Chipyard environment setup"
   cd ${BBDIR}/arch/thirdparty/chipyard && ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
   cp ${BBDIR}/arch/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
-  conda create -n ${CONDA_ENV_NAME} python=3.10 -y 
   replace_content ${BBDIR}/env.sh build-setup-conda "source $(conda info --base)/etc/profile.d/conda.sh
-    source ~/.${SHELL##*/}rc
-    conda activate ${CONDA_ENV_NAME}
-    source /home/mio/Code/buckyball/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
+conda activate ${CONDA_ENV_NAME}
+source /home/mio/Code/buckyball/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
   replace_content ${BBDIR}/env.sh bb-dir-helper "BB_DIR=${BBDIR}"
 fi
 
 if run_step "3"; then
   begin_step "3" "Compiler (buddy-mlir) pre-compile sources"
   cd ${BBDIR}
-  ${SHELL} ./scripts/install-compiler.sh
+  source ${BBDIR}/env.sh
+  ./scripts/install-compiler.sh
+fi
+
+if run_step "4"; then
+  begin_step "4" "bb-tests (workloads) pre-compile sources"
+  cd ${BBDIR}/bb-tests/workloads/
+  mkdir -p build && cd build
+  cmake .. 
+  make -j$(nproc)
+fi
+
+if run_step "5"; then
+  begin_step "5" "Install requirements for sardine" 
+  source ${BBDIR}/env.sh
+  pip install -r ${BBDIR}/bb-tests/sardine/requirements.txt
+  npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline 
+fi
+
+
+if run_step "6"; then
+  begin_step "6" "Install document management system" 
+  ${BBDIR}/scripts/install-doc.sh
+fi
+
+if run_step "7"; then
+  begin_step "7" "Init workflow management system"
+  # cd ${BBDIR}
+  # ./scripts/init-workflow.sh
 fi

@@ -3,3 +3,9 @@ authors = ["Dango"]
 language = "en"
 src = "src"
 title = "Buckyball Technical Documentation"
+
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
+marker = "[[_TOC_]]"
+max-level = 4
