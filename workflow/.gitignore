@@ -6,3 +6,7 @@ venv
 .mermaid
 dist
 *.pyc
+motia-workbench.json
+package-lock.json
+package.json
+types.d.ts

@@ -3,9 +3,11 @@ import os
 import sys
 
 # Add the utils directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if utils_path not in sys.path:
+  sys.path.insert(0, utils_path)
 
-from utils import run
+from utils.run import run
 
 config = {
   "type": "event",
