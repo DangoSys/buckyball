@@ -5,8 +5,8 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
-import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete, ExBuckyBallCmd}
-import framework.builtin.mem.{SramReadIO, SramWriteIO}
+import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
+import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import Util.Pipeline
 import org.yaml.snakeyaml.events.Event.ID

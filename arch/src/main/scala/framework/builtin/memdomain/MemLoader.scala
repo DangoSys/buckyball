@@ -1,12 +1,12 @@
-package framework.builtin.load
+package framework.builtin.memdomain
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.memdomain.{MemReservationStationIssue, MemReservationStationComplete, MemBuckyBallCmd}
-import framework.builtin.mem.{SimpleReadRequest, SimpleReadResponse, SramWriteIO}
-import framework.builtin.frontend.FrontendTLBIO
+import framework.builtin.memdomain.{MemReservationStationIssue, MemReservationStationComplete, MemBuckyBallCmd}
+import framework.builtin.memdomain.mem.SramWriteIO
+import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, LocalAddr}
 import freechips.rocketchip.rocket.MStatus
 
 class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -18,8 +18,8 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     // 发送给ReservationStation的完成信号
     val cmdResp = Decoupled(new MemReservationStationComplete)
     // 直接连接DMA读取接口
-    val dmaReq = Decoupled(new SimpleReadRequest())
-    val dmaResp = Flipped(Decoupled(new SimpleReadResponse(b.spad_w)))
+    val dmaReq = Decoupled(new BBReadRequest())
+    val dmaResp = Flipped(Decoupled(new BBReadResponse(b.spad_w)))
     // 连接到Scratchpad的SRAM写入接口
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))

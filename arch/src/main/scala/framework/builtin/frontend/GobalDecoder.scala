@@ -5,10 +5,8 @@ import chisel3.util._
 import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-// import framework.ballcore.ballcore.RoCCCommandBB
 import freechips.rocketchip.tile._  
-import examples.toy.BBISA._
-import framework.builtin.mem.LocalAddr
+import framework.builtin.memdomain.DISA._
 
 
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
@@ -17,7 +15,7 @@ class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
 
 
 
-class PostDecodeCmd(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class PostDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   // 指令类型判断
   val is_ex         = Bool()  // EX指令(包括FENCE)
   val is_mem        = Bool()  // 内存指令(load/store)
@@ -26,7 +24,7 @@ class PostDecodeCmd(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) ext
   val raw_cmd       = new RoCCCommand
 }
 
-class GlobalDecoder(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val id_i = Flipped(Decoupled(new Bundle {
       val cmd = new RoCCCommand

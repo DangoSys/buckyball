@@ -16,7 +16,7 @@
 //   val sComplete = Value   // 执行完成，等待提交
 // }
 
-// class RoBEntry(implicit bbconfig: CustomBuckyBallConfig) extends Bundle {
+// class RoBEntry(implicit b: CustomBuckyBallConfig) extends Bundle {
 //   val state    = RoBState()  // 声明类型而不是赋予默认值
 //   val cmd      = new BuckyBallCmd
 //   val cmd_type = UInt(3.W)
@@ -32,15 +32,15 @@
 // // 如果RoB内顺序为Ex -> Ex -> Store，则这条Store指令不会发射，
 // // 等后续流水线指令设计完成才可以发射整条流水线
 // // 最终也只能顺序提交
-// class ReorderBuffer(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
-//   val rob_entries = bbconfig.rob_entries
-//   val rob_id_width = log2Up(bbconfig.rob_entries)
+// class ReorderBuffer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+//   val rob_entries = b.rob_entries
+//   val rob_id_width = log2Up(b.rob_entries)
 //   val cmd_t = new BuckyBallCmd
   
 //   val io = IO(new Bundle {
 //     val post_indexed_cmd_i = new Bundle {
 //       val cmd          = Flipped(Decoupled(new BuckyBallCmd))
-//       val new_head_ptr = Input(UInt(log2Up(bbconfig.rob_entries).W))
+//       val new_head_ptr = Input(UInt(log2Up(b.rob_entries).W))
 //     }
 //     val issue_o        = Decoupled(new BuckyBallCmd)  // 按顺序发射到ISSQueue
 //     val commit_i       = Flipped(Valid(UInt(rob_id_width.W)))
@@ -50,7 +50,7 @@
 //       val busy        = Output(Bool())  // 是否有指令在ROB中等待提交
 //     }
 //     // to ROBCounter
-//     val rob_robcnt_o  = Decoupled(UInt(log2Up(bbconfig.rob_entries).W))
+//     val rob_robcnt_o  = Decoupled(UInt(log2Up(b.rob_entries).W))
 //   })
 
 //   // ROB条目数组

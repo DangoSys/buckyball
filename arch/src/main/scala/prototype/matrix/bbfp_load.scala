@@ -6,17 +6,16 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
-import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete, ExBuckyBallCmd}
-import framework.builtin.mem.{SramReadIO, SramWriteIO, SramReadReq}
+import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
-class BBFP_LoadUnit(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
-    val rob_id_width = log2Up(bbconfig.rob_entries)
-    val spad_w = bbconfig.veclane * bbconfig.inputType.getWidth
-    val io = IO(new Bundle {
-        val sramReadReq = Vec(bbconfig.sp_banks,Decoupled(new SramReadReq(bbconfig.spad_bank_entries)))
-        val id_lu_i = Flipped(Decoupled(new id_lu_req))
-        val lu_ex_o = Decoupled(new lu_ex_req)
+class BBFP_LoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  val rob_id_width = log2Up(b.rob_entries)
+  val spad_w = b.veclane * b.inputType.getWidth
+  val io = IO(new Bundle {
+    val sramReadReq = Vec(b.sp_banks,Decoupled(new SramReadReq(b.spad_bank_entries)))
+    val id_lu_i = Flipped(Decoupled(new id_lu_req))
+    val lu_ex_o = Decoupled(new lu_ex_req)
   })
 
   val op1_bank = io.id_lu_i.bits.op1_bank
@@ -27,21 +26,21 @@ class BBFP_LoadUnit(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) ext
   val wr_bank_addr = io.id_lu_i.bits.wr_bank_addr
   
   //每个bank读请求默认赋值
-  for(i <- 0 until bbconfig.sp_banks){
-      io.sramReadReq(i).valid := false.B
-      io.sramReadReq(i).bits.fromDMA := false.B
-      io.sramReadReq(i).bits.addr := 0.U
+  for(i <- 0 until b.sp_banks){
+    io.sramReadReq(i).valid := false.B
+    io.sramReadReq(i).bits.fromDMA := false.B
+    io.sramReadReq(i).bits.addr := 0.U
   }
 
   //根据ID_LU的输入生成SRAM读请求
   when(io.id_lu_i.valid){
-      io.sramReadReq(op1_bank).valid := true.B
-      io.sramReadReq(op1_bank).bits.fromDMA := false.B
-      io.sramReadReq(op1_bank).bits.addr := op1_bank_addr
+    io.sramReadReq(op1_bank).valid := true.B
+    io.sramReadReq(op1_bank).bits.fromDMA := false.B
+    io.sramReadReq(op1_bank).bits.addr := op1_bank_addr
 
-      io.sramReadReq(op2_bank).valid := true.B
-      io.sramReadReq(op2_bank).bits.fromDMA := false.B
-      io.sramReadReq(op2_bank).bits.addr := op2_bank_addr
+    io.sramReadReq(op2_bank).valid := true.B
+    io.sramReadReq(op2_bank).bits.fromDMA := false.B
+    io.sramReadReq(op2_bank).bits.addr := op2_bank_addr
   }
 
   //生成LU_EX请求
@@ -56,5 +55,5 @@ class BBFP_LoadUnit(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) ext
 
   io.id_lu_i.ready := io.lu_ex_o.ready
 
-    
+  
 }

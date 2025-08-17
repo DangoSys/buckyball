@@ -9,21 +9,21 @@ import framework.builtin.util.Util._
 import freechips.rocketchip.tile._
 
 // EX域的发射接口
-class ExReservationStationIssue(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+class ExReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+  val rob_id_width = log2Up(b.rob_entries)
   val cmd = Output(new ExBuckyBallCmd)
   val rob_id = Output(UInt(rob_id_width.W))
 }
 
 // EX域的完成接口
-class ExReservationStationComplete(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+class ExReservationStationComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+  val rob_id_width = log2Up(b.rob_entries)
   val rob_id = UInt(rob_id_width.W)
 }
 
-class ExReservationStation(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
+class ExReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val queue_entries = 32
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+  val rob_id_width = log2Up(b.rob_entries)
 
   val io = IO(new Bundle {
     // EX Domain Decoder -> ExReservationStation

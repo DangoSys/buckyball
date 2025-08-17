@@ -1,4 +1,4 @@
-package examples.toy.memdomain
+package framework.builtin.memdomain
 
 import chisel3._
 import chisel3.util._
@@ -9,33 +9,33 @@ import framework.builtin.util.Util._
 import freechips.rocketchip.tile._
 
 // Mem域的发射接口
-class MemReservationStationIssue(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+class MemReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+  val rob_id_width = log2Up(b.rob_entries)
   val cmd = Output(new MemBuckyBallCmd)
   val rob_id = Output(UInt(rob_id_width.W))
 }
 
 // Mem域的完成接口
-class MemReservationStationComplete(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+class MemReservationStationComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+  val rob_id_width = log2Up(b.rob_entries)
   val rob_id = UInt(rob_id_width.W)
 }
 
 // Mem域发射接口组合 (Load + Store)
-class MemIssueInterface(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val ld = Decoupled(new MemReservationStationIssue)
   val st = Decoupled(new MemReservationStationIssue)
 }
 
 // Mem域完成接口组合 (Load + Store)
-class MemCommitInterface(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val ld = Flipped(Decoupled(new MemReservationStationComplete))
   val st = Flipped(Decoupled(new MemReservationStationComplete))
 }
 
-class MemReservationStation(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val queue_entries = 32
-  val rob_id_width = log2Up(bbconfig.rob_entries)
+  val rob_id_width = log2Up(b.rob_entries)
 
   val io = IO(new Bundle {
     // Mem Domain Decoder -> MemReservationStation

@@ -34,10 +34,10 @@
 //   val ex = Flipped(Decoupled(new ReservationStationComplete(id_width)))
 // }
 
-// class ReservationStation(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
+// class ReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 //   val queue_entries = 32
 //   val cmd_t = new BuckyBallCmd
-//   val rob_id_width = log2Up(bbconfig.rob_entries)
+//   val rob_id_width = log2Up(b.rob_entries)
 
 //   val io = IO(new Bundle {
 //     // RAW CMD -> PostDecodeCmd -> BuckyBallCmd

@@ -5,9 +5,9 @@
 // import examples.BuckyBallConfigs.CustomBuckyBallConfig
 // import framework.builtin.util.Util._
 
-// class IssueQueue(queue_entries: Int = 4)(implicit bbconfig: CustomBuckyBallConfig) extends Module {
+// class IssueQueue(queue_entries: Int = 4)(implicit b: CustomBuckyBallConfig) extends Module {
 //   val cmd_t = new BuckyBallCmd
-//   val rob_id_width = log2Up(bbconfig.rob_entries)
+//   val rob_id_width = log2Up(b.rob_entries)
   
 //   val io = IO(new Bundle {
 //     val rob_issue_i = Flipped(Decoupled(new BuckyBallCmd))  // 来自ROB的指令

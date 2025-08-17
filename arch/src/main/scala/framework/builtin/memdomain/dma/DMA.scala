@@ -1,4 +1,4 @@
-package framework.builtin.mem
+package framework.builtin.memdomain.dma
 
 import chisel3._
 import chisel3.util._
@@ -12,22 +12,22 @@ import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
 import framework.builtin.util.Util._
 import framework.builtin.frontend.FrontendTLBIO
-import framework.builtin.mem.LocalAddr
+import framework.builtin.memdomain.dma.LocalAddr
 
 
-class SimpleReadRequest()(implicit p: Parameters) extends CoreBundle {
+class BBReadRequest()(implicit p: Parameters) extends CoreBundle {
   val vaddr = UInt(coreMaxAddrBits.W)
   val len = UInt(16.W) // 读取长度（字节）
   val status = new MStatus
 }
 
-class SimpleReadResponse(dataWidth: Int) extends Bundle {
+class BBReadResponse(dataWidth: Int) extends Bundle {
   val data = UInt(dataWidth.W)
   val last = Bool()
   val addrcounter = UInt(10.W)
 }
 
-class SimpleWriteRequest(dataWidth: Int)(implicit p: Parameters) extends CoreBundle {
+class BBWriteRequest(dataWidth: Int)(implicit p: Parameters) extends CoreBundle {
   val vaddr = UInt(coreMaxAddrBits.W)
   val data = UInt(dataWidth.W)
   val len = UInt(16.W) // 写入长度（字节）
@@ -35,11 +35,11 @@ class SimpleWriteRequest(dataWidth: Int)(implicit p: Parameters) extends CoreBun
   val status = new MStatus
 }
 
-class SimpleWriteResponse extends Bundle {
+class BBWriteResponse extends Bundle {
   val done = Bool()
 }
 
-class SimpleStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
+class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
                         (implicit p: Parameters) extends LazyModule {
   val node = TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
     name = "buckyball-stream-reader", sourceId = IdRange(0, nXacts))))))
@@ -50,8 +50,8 @@ class SimpleStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: I
     val beatBytes = beatBits / 8
 
     val io = IO(new Bundle {
-      val req = Flipped(Decoupled(new SimpleReadRequest()))
-      val resp = Decoupled(new SimpleReadResponse(dataWidth))
+      val req = Flipped(Decoupled(new BBReadRequest()))
+      val resp = Decoupled(new BBReadResponse(dataWidth))
       val tlb = new FrontendTLBIO
       val busy = Output(Bool())
       val flush = Input(Bool())
@@ -60,7 +60,7 @@ class SimpleStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: I
     val s_idle :: s_req_new_block :: Nil = Enum(2)
     val state = RegInit(s_idle)
 
-    val req = Reg(new SimpleReadRequest())
+    val req = Reg(new BBReadRequest())
     val bytesRequested = Reg(UInt(16.W))  // 已发出请求的字节数
     val bytesReceived = Reg(UInt(16.W))   // 已接收响应的字节数
     val bytesLeft = req.len - bytesRequested
@@ -175,7 +175,7 @@ class SimpleStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: I
 }
 
 // 约定：数据已经对齐并带有mask
-class SimpleStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
+class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
                         (implicit p: Parameters) extends LazyModule {
   val node = TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
     name = "buckyball-stream-writer", sourceId = IdRange(0, nXacts))))))
@@ -186,8 +186,8 @@ class SimpleStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: I
     val beatBytes = beatBits / 8
 
     val io = IO(new Bundle {
-      val req = Flipped(Decoupled(new SimpleWriteRequest(dataWidth)))
-      val resp = Decoupled(new SimpleWriteResponse)
+      val req = Flipped(Decoupled(new BBWriteRequest(dataWidth)))
+      val resp = Decoupled(new BBWriteResponse)
       val tlb = new FrontendTLBIO
       val busy = Output(Bool())
       val flush = Input(Bool())
@@ -196,7 +196,7 @@ class SimpleStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: I
     val s_idle :: s_writing :: Nil = Enum(2)
     val state = RegInit(s_idle)
 
-    val req = Reg(new SimpleWriteRequest(dataWidth))
+    val req = Reg(new BBWriteRequest(dataWidth))
 
     val xactBusy = RegInit(0.U(nXacts.W))
     val xactOnehot = PriorityEncoderOH(~xactBusy)
