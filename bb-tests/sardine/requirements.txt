@@ -1,0 +1,11 @@
+# Core testing dependencies
+pytest>=6.0.0
+pytest-html>=3.0.0
+pytest-xdist>=2.0.0
+pytest-cov>=3.0.0
+
+# Allure reporting
+allure-pytest>=2.13.0
+
+# Logging and utilities
+colorlog>=6.0.0 

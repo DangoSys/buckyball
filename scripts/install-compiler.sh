@@ -25,8 +25,6 @@ cmake -G Ninja ../llvm \
     -DPython3_EXECUTABLE=$(which python3)
 ninja #check-mlir check-clang
 
-echo $(which python3)
-
 cd ${BBDIR}/compiler
 mkdir -p build && cd build
 cmake -G Ninja .. \
@@ -35,7 +33,8 @@ cmake -G Ninja .. \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
-    -DPython3_EXECUTABLE=$(which python3)
+    -DPython3_EXECUTABLE=$(which python3) \
+    -DPython_EXECUTABLE=$(which python3)
 ninja
 #ninja check-buddy
 
