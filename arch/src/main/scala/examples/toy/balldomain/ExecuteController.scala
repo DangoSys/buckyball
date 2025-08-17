@@ -8,23 +8,21 @@ import prototype.matrix._
 import prototype.vector._
 import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete, ExBuckyBallCmd}
 // import framework.builtin.frontend.rs.{ReservationStationIssue, ReservationStationComplete, BuckyBallCmd}
-import framework.builtin.mem.{SramReadIO, SramWriteIO}
+import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
-  val spad_w = b.veclane * b.inputType.getWidth
   
   val io = IO(new Bundle {
-    val cmdReq = Flipped(Decoupled(new ExReservationStationIssue))
+    val cmdReq  = Flipped(Decoupled(new ExReservationStationIssue))
     val cmdResp = Decoupled(new ExReservationStationComplete)
     
-    // 连接到Scratchpad的SRAM读写接口
-    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
-    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
-    // 连接到Accumulator的读写接口
-    val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
-    val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    // 连接到Scratchpad 和 Accumulator 的SRAM读写接口
+    val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
+    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    val accRead   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
   val BBFP_Control = Module(new BBFP_Control)
@@ -180,14 +178,14 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   when (real_sel === vec_unit) {
     for (i <- 0 until b.sp_banks) {
       // sramRead(i).req
-      io.sramRead(i).req.valid         := VecUnit.io.sramRead(i).req.valid
-      io.sramRead(i).req.bits          := VecUnit.io.sramRead(i).req.bits
-      VecUnit.io.sramRead(i).req.ready := io.sramRead(i).req.ready
+      io.sramRead(i).req.valid          := VecUnit.io.sramRead(i).req.valid
+      io.sramRead(i).req.bits           := VecUnit.io.sramRead(i).req.bits
+      VecUnit.io.sramRead(i).req.ready  := io.sramRead(i).req.ready
 
       // sramRead(i).resp
-      VecUnit.io.sramRead(i).resp.valid      := io.sramRead(i).resp.valid
-      VecUnit.io.sramRead(i).resp.bits       := io.sramRead(i).resp.bits
-      io.sramRead(i).resp.ready              := VecUnit.io.sramRead(i).resp.ready
+      VecUnit.io.sramRead(i).resp.valid := io.sramRead(i).resp.valid
+      VecUnit.io.sramRead(i).resp.bits  := io.sramRead(i).resp.bits
+      io.sramRead(i).resp.ready         := VecUnit.io.sramRead(i).resp.ready
 
       // sramWrite(i)
       io.sramWrite(i).req.valid     := VecUnit.io.sramWrite(i).req.valid
@@ -204,9 +202,9 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
       VecUnit.io.accRead(i).req.ready      := io.accRead(i).req.ready
 
       // accRead(i).resp
-      VecUnit.io.accRead(i).resp.valid      := io.accRead(i).resp.valid
-      VecUnit.io.accRead(i).resp.bits       := io.accRead(i).resp.bits
-      io.accRead(i).resp.ready              := VecUnit.io.accRead(i).resp.ready
+      VecUnit.io.accRead(i).resp.valid     := io.accRead(i).resp.valid
+      VecUnit.io.accRead(i).resp.bits      := io.accRead(i).resp.bits
+      io.accRead(i).resp.ready             := VecUnit.io.accRead(i).resp.ready
 
       // accWrite(i)
       io.accWrite(i).req.valid     := VecUnit.io.accWrite(i).req.valid

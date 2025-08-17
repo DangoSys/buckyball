@@ -6,8 +6,8 @@
 // import framework.builtin.util.Util._
 
 
-// class CommitQueue(queue_entries: Int = 4)(implicit bbconfig: CustomBuckyBallConfig) extends Module {
-//   val rob_id_width = log2Up(bbconfig.rob_entries)
+// class CommitQueue(queue_entries: Int = 4)(implicit b: CustomBuckyBallConfig) extends Module {
+//   val rob_id_width = log2Up(b.rob_entries)
 //   val cmd_t = new BuckyBallCmd
   
 //   val io = IO(new Bundle {

@@ -10,34 +10,30 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tile._
 import freechips.rocketchip.util.ClockGate
 import freechips.rocketchip.tilelink._
-import BBISA._
-import framework.builtin.mem.{Scratchpad, SimpleStreamReader, SimpleStreamWriter}
+
 import framework.builtin.frontend.{FrontendTLB, GlobalDecoder}
-// import framework.builtin.frontend.rs.ReservationStation
-import framework.ballcore.ballcore._
-// import framework.ballcore.ballcore.LazyRoCCBB
-import framework.builtin.load.MemLoader
-import framework.builtin.store.MemStorer
-import examples.toy.balldomain.ExecuteController 
+import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
+import framework.builtin.memdomain.MemDomain
+import examples.toy.balldomain.BallDomain
 import examples.BuckyBallConfigs.CustomBuckyBallConfig 
 
 
-class ToyBuckyBall(val bbconfig: CustomBuckyBallConfig)(implicit p: Parameters)
-  extends LazyRoCC (opcodes = bbconfig.opcodes, nPTWPorts = 2) {
+class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
+  extends LazyRoCC (opcodes = b.opcodes, nPTWPorts = 2) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
   
-  // DMA组件现在在BuckyBall层面
+  // DMA组件现在在BuckyBall层面, 后面移到MemDomain内部
   val id_node = TLIdentityNode()
   val xbar_node = TLXbar()
   
-  val spad_w = bbconfig.inputType.getWidth * bbconfig.veclane
-  val reader = LazyModule(new SimpleStreamReader(bbconfig.max_in_flight_mem_reqs, bbconfig.dma_buswidth, bbconfig.dma_maxbytes, spad_w))
-  val writer = LazyModule(new SimpleStreamWriter(bbconfig.max_in_flight_mem_reqs, bbconfig.dma_buswidth, bbconfig.dma_maxbytes, spad_w))
+  val spad_w = b.inputType.getWidth * b.veclane
+  val reader = LazyModule(new BBStreamReader(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
+  val writer = LazyModule(new BBStreamWriter(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
 
   xbar_node := TLBuffer() := reader.node
   xbar_node := TLBuffer() := writer.node
-  id_node := TLWidthWidget(bbconfig.dma_buswidth/8) := TLBuffer() := xbar_node
+  id_node := TLWidthWidget(b.dma_buswidth/8) := TLBuffer() := xbar_node
 
   override lazy val module = new ToyBuckyBallModule(this)
 
@@ -52,7 +48,7 @@ class ToyBuckyBall(val bbconfig: CustomBuckyBallConfig)(implicit p: Parameters)
 
 class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer) 
   with HasCoreParameters {
-  import outer.bbconfig._
+  import outer.b._
   
   val tagWidth = 32
 
@@ -72,108 +68,70 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
   outer.writer.module.io.flush := tlb.io.exp.map(_.flush()).reduce(_ || _)
 
 // -----------------------------------------------------------------------------
-// Memory: Scratchpad (纯粹的SRAM banks)
+// Frontend: Global Decode Dispatch commands to BallDomain and MemDomain
 // -----------------------------------------------------------------------------
-  val spad = Module(new Scratchpad(outer.bbconfig))
-
-// -----------------------------------------------------------------------------
-// Frontend: Global Decode and Command Processing
-// -----------------------------------------------------------------------------
-  implicit val bbconfig: CustomBuckyBallConfig = outer.bbconfig
+  implicit val b: CustomBuckyBallConfig = outer.b
   val globalDecoder = Module(new GlobalDecoder)
   globalDecoder.io.id_i.valid    := io.cmd.valid
   globalDecoder.io.id_i.bits.cmd := io.cmd.bits
   io.cmd.ready                   := globalDecoder.io.id_i.ready
 
 // -----------------------------------------------------------------------------
-// Frontend: Domain Decoders
+// Backend: Ball Domain
 // -----------------------------------------------------------------------------
-  val exDecoder = Module(new examples.toy.balldomain.ExDomainDecoder)
-  val memDecoder = Module(new examples.toy.memdomain.MemDomainDecoder)
+  val ballDomain = Module(new BallDomain)
   
-  // 连接GlobalDecoder到ExDecoder
-  exDecoder.io.post_decode_cmd_i.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_ex
-  exDecoder.io.post_decode_cmd_i.bits := globalDecoder.io.id_rs.bits
+  // GlobalDecoder->BallDomain 
+  ballDomain.io.globalDecoderIn.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_ex
+  ballDomain.io.globalDecoderIn.bits := globalDecoder.io.id_rs.bits
+
+// -----------------------------------------------------------------------------
+// Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
+// -----------------------------------------------------------------------------
+  val memDomain = Module(new MemDomain)
   
-  // 连接GlobalDecoder到MemDecoder  
-  memDecoder.io.post_decode_cmd_i.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_mem
-  memDecoder.io.post_decode_cmd_i.bits := globalDecoder.io.id_rs.bits
+  // GlobalDecoder->MemDomain 
+  memDomain.io.globalDecoderIn.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_mem
+  memDomain.io.globalDecoderIn.bits := globalDecoder.io.id_rs.bits
   
-  // 全局ready信号：只有相应的domain decoder ready，globalDecoder才ready
+  // 全局ready信号：只有相应的域ready，globalDecoder才ready
   globalDecoder.io.id_rs.ready := Mux(globalDecoder.io.id_rs.bits.is_ex, 
-    exDecoder.io.post_decode_cmd_i.ready,
-    memDecoder.io.post_decode_cmd_i.ready)
+    ballDomain.io.globalDecoderIn.ready,
+    memDomain.io.globalDecoderIn.ready)
 
 // -----------------------------------------------------------------------------
-// Frontend: Domain-specific Reservation Stations
+// Backend: MemDomain Connections
 // -----------------------------------------------------------------------------
-  // EX域专用保留栈
-  val exReservationStation = Module(new examples.toy.balldomain.ExReservationStation)
-  exReservationStation.io.ex_decode_cmd_i <> exDecoder.io.ex_decode_cmd_o
+  // MemDomain->DMA
+  memDomain.io.dma.read.req <> outer.reader.module.io.req
+  outer.reader.module.io.resp <> memDomain.io.dma.read.resp
+  memDomain.io.dma.write.req <> outer.writer.module.io.req
+  outer.writer.module.io.resp <> memDomain.io.dma.write.resp
   
-  // Mem域专用保留栈
-  val memReservationStation = Module(new examples.toy.memdomain.MemReservationStation)
-  memReservationStation.io.mem_decode_cmd_i <> memDecoder.io.mem_decode_cmd_o
-
-// -----------------------------------------------------------------------------
-// Backend: Load Controller
-// -----------------------------------------------------------------------------
-  val memLoader = Module(new MemLoader)
-  memLoader.io.cmdReq <> memReservationStation.io.issue_o.ld
-  memReservationStation.io.commit_i.ld <> memLoader.io.cmdResp
-  
-  // 连接MemLoader直接到SimpleStreamReader
-  memLoader.io.dmaReq <> outer.reader.module.io.req
-  outer.reader.module.io.resp <> memLoader.io.dmaResp
-  
-  // 连接DMA Reader的TLB到TLB (client 1) - DMA内部做地址翻译
+  // DMA->TLB
   outer.reader.module.io.tlb <> tlb.io.clients(1)
-  
-  // 连接MemLoader到Scratchpad SRAM写入接口
-  memLoader.io.sramWrite <> spad.io.dma.sramwrite
-  memLoader.io.accWrite <> spad.io.dma.accwrite
-
-// -----------------------------------------------------------------------------
-// Backend: Store Controller
-// -----------------------------------------------------------------------------
-  val memStorer = Module(new MemStorer)
-  memStorer.io.cmdReq <> memReservationStation.io.issue_o.st
-  memReservationStation.io.commit_i.st <> memStorer.io.cmdResp
-  
-  // 连接MemStorer直接到SimpleStreamWriter
-  memStorer.io.dmaReq <> outer.writer.module.io.req
-  outer.writer.module.io.resp <> memStorer.io.dmaResp
-  
-  // 连接DMA Writer的TLB到TLB (client 0) - DMA内部做地址翻译
   outer.writer.module.io.tlb <> tlb.io.clients(0)
   
-  // 连接MemStorer到Scratchpad SRAM读取接口
-  memStorer.io.sramRead <> spad.io.dma.sramread
-  memStorer.io.accRead  <> spad.io.dma.accread
+  // 连接MemDomain的TLB接口 (暂时使用DontCare，后续可以连接)
+  // memDomain.io.tlb := DontCare  
 
 // -----------------------------------------------------------------------------
-// Backend: Execute Controller
+// Backend: Domain Bridge: BallDomain->MemDomain
 // -----------------------------------------------------------------------------
-  val exec = Module(new ExecuteController)
-  exec.io.cmdReq <> exReservationStation.io.issue_o
-  exReservationStation.io.commit_i <> exec.io.cmdResp
-  
-  // 连接ExecuteController到Scratchpad的专用执行接口
-  exec.io.sramRead <> spad.io.exec.sramread
-  exec.io.sramWrite <> spad.io.exec.sramwrite
-  exec.io.accRead <> spad.io.exec.accread
-  exec.io.accWrite <> spad.io.exec.accwrite
+  ballDomain.io.sramRead  <> memDomain.io.ballDomain.sramRead
+  ballDomain.io.sramWrite <> memDomain.io.ballDomain.sramWrite
+  ballDomain.io.accRead   <> memDomain.io.ballDomain.accRead
+  ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
-//---------------------------------------------------------------------------
-// 返回RoCC接口连接 - 合并两个保留栈的响应
-//---------------------------------------------------------------------------
-  // 优先级仲裁：EX域优先级高于Mem域
+// ---------------------------------------------------------------------------
+// 返回RoCC接口连接 - 合并BallDomain和MemDomain的响应
+// ---------------------------------------------------------------------------
+  // 优先级仲裁：BallDomain优先级高于MemDomain
   val respArb = Module(new Arbiter(new RoCCResponse()(p), 2))
-  respArb.io.in(0) <> exReservationStation.io.rs_rocc_o.resp
-  respArb.io.in(1) <> memReservationStation.io.rs_rocc_o.resp
+  respArb.io.in(0) <> ballDomain.io.roccResp
+  respArb.io.in(1) <> memDomain.io.roccResp
   io.resp <> respArb.io.out
   
-  // 只要任一保留栈忙碌，整个系统就忙碌
-  io.busy := exReservationStation.io.rs_rocc_o.busy || memReservationStation.io.rs_rocc_o.busy
-
+  // 只要任一域忙碌，整个系统就忙碌
+  io.busy := ballDomain.io.busy || memDomain.io.busy
 }

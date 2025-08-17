@@ -1,4 +1,4 @@
-package framework.builtin.mem
+package framework.builtin.memdomain.mem
 
 import chisel3._
 import chisel3.util._
@@ -8,7 +8,7 @@ import freechips.rocketchip.tile._
 import framework.builtin.util.Util._
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
-import framework.builtin.mem.AccWriteIO
+import framework.builtin.memdomain.mem.AccWriteIO
 
 
 class Scratchpad(config: CustomBuckyBallConfig)(implicit val p: Parameters) extends Module with HasCoreParameters {

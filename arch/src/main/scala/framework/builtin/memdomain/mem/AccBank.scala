@@ -1,4 +1,4 @@
-package framework.builtin.mem
+package framework.builtin.memdomain.mem
 
 import chisel3._
 import chisel3.util._

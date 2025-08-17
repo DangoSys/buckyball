@@ -6,14 +6,14 @@
 // import framework.builtin.frontend.PostDecodeCmd
 // import org.chipsalliance.cde.config.Parameters
 
-// class BuckyBallCmd(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+// class BuckyBallCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
 //   val post_decode_cmd = new PostDecodeCmd
-//   val rob_id          = UInt(log2Up(bbconfig.rob_entries).W)
+//   val rob_id          = UInt(log2Up(b.rob_entries).W)
 //   val cmd_type        = UInt(3.W) // 01: Load, 10: Store, 11: Ex, 100: Fence
 // }
 
-// class NextROBIdCounter(implicit bbconfig: CustomBuckyBallConfig, p: Parameters) extends Module {
-//   val rob_entries = bbconfig.rob_entries
+// class NextROBIdCounter(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+//   val rob_entries = b.rob_entries
   
 //   val io = IO(new Bundle {
 //     val post_decode_cmd_i = Flipped(Decoupled(new PostDecodeCmd))

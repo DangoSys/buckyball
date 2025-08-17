@@ -13,3 +13,6 @@
 [submodule "compiler"]
 	path = compiler
 	url = https://github.com/BuckyBallSys/bb-compiler
+[submodule "arch/thirdparty/chipyard"]
+	path = arch/thirdparty/chipyard
+	url = https://github.com/ucb-bar/chipyard.git
