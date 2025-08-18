@@ -4,6 +4,9 @@ ARCHDIR = $(BBDIR)/arch
 
 BUILD_DIR = $(ARCHDIR)/build
 
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
 # export PATH := $(PATH):$(abspath ./utils)
 export PATH := $(PATH):$(abspath $(BBDIR)/tools/mill)
 
@@ -84,7 +87,7 @@ verilog:
 
 LOG_DIR=$(ARCHDIR)/log
 
-sim:
+sim: 
 # LD_LIBRARY_PATH="/home/mio/Code/buckyball/thirdparty/chipyard/tools/DRAMSim2:$LD_LIBRARY_PATH"  && 
 	mkdir -p $(LOG_DIR)
 	$(BIN) $(ARGS) 
