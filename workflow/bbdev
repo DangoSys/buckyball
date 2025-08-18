@@ -25,8 +25,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     "api",
     help=(
       "api supported are below: \n\n"
-      "build-setup\n"
-      "build-as-admin\n"
+      "build-workload\n"
+      "build-compiler\n"
+      "build-spike\n"
+      "build-verilator\n"
+      "build-vcs\n"
+      "run-spike\n"
+      "run-verilator\n"
+      "run-vcs\n"
+      "run-sardine\n"
     ),
   )
   parser.add_argument("--port", type=int, default=5000, help="Port for localhost (default: 5000)")
