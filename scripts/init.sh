@@ -136,3 +136,10 @@ if run_step "7"; then
   source ${BBDIR}/env.sh
   ./scripts/install-workflow.sh
 fi
+
+if run_step "8"; then
+  begin_step "8" "Install mill"
+  source ${BBDIR}/env.sh
+  cd ${BBDIR}/tools/mill
+  ./install-mill.sh
+fi

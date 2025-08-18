@@ -4,7 +4,8 @@ ARCHDIR = $(BBDIR)/arch
 
 BUILD_DIR = $(ARCHDIR)/build
 
-export PATH := $(PATH):$(abspath ./utils)
+# export PATH := $(PATH):$(abspath ./utils)
+export PATH := $(PATH):$(abspath $(BBDIR)/tools/mill)
 
 # ARGS
 NUM_JOBs = 16
