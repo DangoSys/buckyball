@@ -89,6 +89,7 @@ function begin_step
 if run_step "0"; then
   begin_step "0" "init env.sh"
   replace_content ${BBDIR}/env.sh base-conda-setup "source $(conda info --base)/etc/profile.d/conda.sh"
+  replace_content ${BBDIR}/arch/thirdparty/chipyard/env.sh base-conda-setup "source $(conda info --base)/etc/profile.d/conda.sh"
 fi
 
 if run_step "1"; then
@@ -99,7 +100,7 @@ fi
 # setup and install chipyard environment
 if run_step "2"; then
   begin_step "2" "Chipyard environment setup"
-  cd ${BBDIR}/arch/thirdparty/chipyard && ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
+  cd ${BBDIR}/arch/thirdparty/chipyard && ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME} -s 1 -s 2 -s 3 -s 4 -s 5 -s 6 
   cp ${BBDIR}/arch/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
   replace_content ${BBDIR}/env.sh build-setup-conda "conda activate ${CONDA_ENV_NAME}
 source /home/mio/Code/buckyball/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
