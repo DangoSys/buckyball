@@ -1,0 +1,65 @@
+import os
+import subprocess
+import glob
+import sys
+
+# Add the utils directory to the Python path
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if utils_path not in sys.path:
+  sys.path.insert(0, utils_path)
+
+from utils.path import get_buckyball_path
+
+config = {
+  "type": "event",
+  "name": "verilator",
+  "description": "build verilator executable", 
+  "subscribes": ["build.verilator"],
+  "emits": ["build.sim", "build.error"],
+  "flows": ["verilator"],
+}
+
+async def handler(data, context):
+  bbdir = get_buckyball_path()
+  arch_dir = f"{bbdir}/arch"
+  build_dir = f"{arch_dir}/build"
+  
+  # Find sources
+  vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(f"{build_dir}/**/*.sv", recursive=True)
+  csrcs = (glob.glob(f"{arch_dir}/src/csrc/**/*.c", recursive=True) + 
+           glob.glob(f"{arch_dir}/src/csrc/**/*.cc", recursive=True) +
+           glob.glob(f"{arch_dir}/src/csrc/**/*.cpp", recursive=True) +
+           glob.glob(f"{build_dir}/**/*.c", recursive=True) +
+           glob.glob(f"{build_dir}/**/*.cc", recursive=True) +
+           glob.glob(f"{build_dir}/**/*.cpp", recursive=True))
+  
+  # Setup paths
+  inc_paths = [
+    os.environ.get('RISCV', '') + '/include' if os.environ.get('RISCV') else '',
+    f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2",
+    build_dir,
+    f"{arch_dir}/src/csrc/include"
+  ]
+  inc_flags = ' '.join([f"-I{p}" for p in inc_paths if p])
+  
+  cflags = f"{inc_flags} -DTOP_NAME='\"VTestHarness\"' -std=c++17"
+  ldflags = (f"-lreadline -ldramsim -lfesvr "
+             f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
+             f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
+             f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib")
+  
+  obj_dir = f"{build_dir}/obj_dir"
+  subprocess.run(f"rm -rf {obj_dir}", shell=True)
+  
+  sources = ' '.join(vsrcs + csrcs)
+  jobs = data.get("jobs", 16)
+  
+  verilator_cmd = (f"verilator -MMD --build -cc --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
+                   f"--timing -j {jobs} +incdir+{build_dir} --top TestHarness {sources} "
+                   f"-CFLAGS '{cflags}' -LDFLAGS '{ldflags}' --Mdir {obj_dir} --exe")
+  
+  subprocess.run(verilator_cmd, shell=True, check=True)
+  subprocess.run(f"make -C {obj_dir} -f VTestHarness.mk {obj_dir}/VTestHarness", shell=True, check=True)
+  
+  if data.get("target") in ["run", "sim"]:
+    await context.emit({"topic": "build.sim", "data": data})

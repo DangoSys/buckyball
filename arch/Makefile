@@ -3,37 +3,40 @@ ARCHDIR = $(BBDIR)/arch
 
 
 BUILD_DIR = $(ARCHDIR)/build
-
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# export PATH := $(PATH):$(abspath ./utils)
-export PATH := $(PATH):$(abspath $(BBDIR)/tools/mill)
+WAVEFORM_DIR = $(ARCHDIR)/waveform
+$(WAVEFORM_DIR):
+	mkdir -p $(WAVEFORM_DIR)
+
+LOG_DIR = $(ARCHDIR)/log
+$(LOG_DIR):
+	mkdir -p $(LOG_DIR)
 
 # ARGS
 NUM_JOBs = 16
 
+# Default binary path, can be overridden with BINARY=xxx
+BINARY ?= 
+
 # ARGS += +max_core_cycles=0 +uart_tx=1 +uart_tx_printf=0 +custom_boot_pin=0 +jtag_rbb_enable=0 
-ARGS += +permissive +loadmem=/home/mio/Code/buckyball/bb-tests/workloads/build/src/CTest/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off /home/mio/Code/buckyball/bb-tests/workloads/build/src/CTest/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal -b
+ARGS += +permissive +loadmem=$(BINARY) +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off $(BINARY) -b
 # ========= verilator ==============
 TOPNAME = TestHarness
-INC_PATH ?= ${ARCHDIR}/src/csrc/include \
-			/usr/lib/llvm-11/include \
-			$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim \
-			$(BBDIR)/thirdparty/chipyard/tools/DRAMSim2 \
-			${ARCHDIR}/build 
+INC_PATH ?= $(RISCV)/include \
+			$(ARCHDIR)/thirdparty/chipyard/tools/DRAMSim2 \
+			${ARCHDIR}/build \
+			${ARCHDIR}/src/csrc/include 
 # /home/mio/waste/anaconda3/envs/buckyball/share/verilator/include
 # $(shell dirname $(shell which verilator))/../../share/verilator/include
 
 VERILATOR = verilator
-VERILATOR_CFLAGS += -MMD --build -cc  --trace \
+VERILATOR_CFLAGS += -MMD --build -cc --trace \
 				-O3 --x-assign fast --x-initial fast --noassert \
-				-Wno-fatal \
-				-j ${NUM_JOBs} \
-				--timing
-# --cc 参数告诉 Verilator 转换为 C++。 Verilator 还支持转换为 SystemC，这可以通过使用 --sc 来完成，但我们暂时不会使用此功能。
-# -Wall - 打开所有 C++ 警告。不是必需的，但在您刚开始时很有用
-# --trace - 启用波形跟踪	
+				-Wno-fatal --timing \
+				-j ${NUM_JOBs} 
+
 OBJ_DIR = $(BUILD_DIR)/obj_dir
 BIN = $(OBJ_DIR)/V$(TOPNAME) # 可执行文件在这
 
@@ -45,10 +48,10 @@ CSRCS = $(shell find $(ARCHDIR)/src/csrc $(BUILD_DIR) -name "*.c" -or -name "*.c
 INCFLAGS = $(addprefix -I, $(INC_PATH))
 CFLAGS  += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" -std=c++17 #-Og -ggdb3 # -Og -ggdb3为添加gdb调试
 LDFLAGS += -lreadline -ldramsim -lfesvr  \
-			-L$(BBDIR)/thirdparty/chipyard/tools/DRAMSim2 \
-			-L$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build \
-			-L$(BBDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib 
-# 使用readline函数的是否需要链接-lreadline
+		   		 -L$(ARCHDIR)/thirdparty/chipyard/tools/DRAMSim2 \
+		   		 -L$(ARCHDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build \
+		   		 -L$(ARCHDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib 
+# -lreadline is need by buckyball debuger
 # ====================================
 
 $(BIN): ${VSRCS} ${CSRCS} 
@@ -77,15 +80,7 @@ verilog:
 		--split-verilog \
 		-o=$(BUILD_DIR)
 	rm $(ARCHDIR)/$(TOPNAME).sv 
-# I dont know why, but it will generate a V$(TOPNAME).sv file in the arch directory, which will cause the verilog file to be generated in the arch directory
 
-# mill -i __.test.runMain Elaborate -td /home/shiroha/Code/Backend/ml-accelerator/build -X mverilog -ll debug
-
-# -X mverilog
-# mill -i __.test.runMain Elaborate -td $(BUILD_DIR) 
-# -X mverilog 生成verilog取消优化
-
-LOG_DIR=$(ARCHDIR)/log
 
 sim: 
 # LD_LIBRARY_PATH="/home/mio/Code/buckyball/thirdparty/chipyard/tools/DRAMSim2:$LD_LIBRARY_PATH"  && 

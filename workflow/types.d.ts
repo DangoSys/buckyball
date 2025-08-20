@@ -12,6 +12,11 @@ declare module 'motia' {
   }
 
   interface Handlers {
+    'build-sim': EventHandler<never, never>
+    'verilator': EventHandler<never, { topic: 'build.sim'; data: never }>
+    'build-verilog': EventHandler<never, { topic: 'build.verilator'; data: never }>
+    'build-clean': EventHandler<never, { topic: 'build.verilog'; data: never }>
+    'verilator-api': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build.start'; data: never }>
     'FinalEvent': EventHandler<{}, never>
     'InstallChipyard': EventHandler<{}, { topic: 'install-chipyard-finished'; data: {} }>
     'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'start'; data: {} }>
