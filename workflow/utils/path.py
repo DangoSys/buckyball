@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-def get_buckyball_path(context):
+def get_buckyball_path():
   current_dir = os.path.dirname(__file__)
-  root_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-  return os.path.join(root_dir, 'tools', 'buckyball')
+  return os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))

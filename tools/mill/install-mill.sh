@@ -11,7 +11,7 @@ curl -L https://raw.githubusercontent.com/lefou/millw/0.4.11/millw > $MILL_DIR/m
 # Add Mill to PATH
 source $BBDIR/scripts/utils.sh
 
-export PATH="${BBDIR}/tools/mill:$PATH"
+export PATH="${BBDIR}/tools/mill:\$PATH"
 replace_content $BBDIR/env.sh "install-mill.sh" "export PATH=\"\${BBDIR}/tools/mill\:$PATH\""
 # echo "#mill path" >> ~/.${SHELL##*/}rc
 # echo "export PATH=\"${BBDIR}/tools/mill:\$PATH\"" >> ~/.${SHELL##*/}rc

@@ -10,3 +10,6 @@
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
+[submodule "tools/deepwiki"]
+	path = tools/deepwiki
+	url = https://github.com/AIDotNet/OpenDeepWiki.git
