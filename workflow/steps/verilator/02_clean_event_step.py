@@ -11,21 +11,21 @@ from utils.path import get_buckyball_path
 
 config = {
   "type": "event", 
-  "name": "build-clean",
+  "name": "make clean",
   "description": "clean build directory",
-  "subscribes": ["build.start"],
-  "emits": ["build.verilog", "build.error"],
+  "subscribes": ["verilator.run", "verilator.clean"],
+  "emits": ["verilator.verilog", "verilator.complete", "verilator.error"],
   "flows": ["verilator"],
 }
 
 async def handler(data, context):
-  if not data.get("clean"):
-    await context.emit({"topic": "build.verilog", "data": data})
-    return
-  
   bbdir = get_buckyball_path()
   build_dir = f"{bbdir}/arch/build"
-  
   subprocess.run(f"rm -rf {build_dir}", shell=True, check=True)
   
-  await context.emit({"topic": "build.verilog", "data": data})
+  # For run workflow, continue to verilog; for standalone clean, complete
+  if data.get("from_run_workflow"):
+    await context.emit({"topic": "verilator.verilog", "data": data})
+  else:
+    await context.emit({"topic": "verilator.complete", "data": {**data, "task": "clean"}})
+  

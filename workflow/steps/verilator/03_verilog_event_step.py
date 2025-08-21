@@ -11,10 +11,10 @@ from utils.path import get_buckyball_path
 
 config = {
   "type": "event",
-  "name": "build-verilog", 
+  "name": "make verilog", 
   "description": "generate verilog code",
-  "subscribes": ["build.verilog"],
-  "emits": ["build.verilator", "build.error"],
+  "subscribes": ["verilator.verilog"],
+  "emits": ["verilator.build", "verilator.complete", "verilator.error"],
   "flows": ["verilator"],
 }
 
@@ -34,5 +34,8 @@ async def handler(data, context):
   if os.path.exists(topname_file):
     os.remove(topname_file)
   
-  if data.get("target") in ["run", "sim"]:
-    await context.emit({"topic": "build.verilator", "data": data})
+  # For run workflow, continue to build; for standalone verilog, complete
+  if data.get("from_run_workflow"):
+    await context.emit({"topic": "verilator.build", "data": data})
+  else:
+    await context.emit({"topic": "verilator.complete", "data": {**data, "task": "verilog"}})

@@ -12,10 +12,10 @@ from utils.path import get_buckyball_path
 
 config = {
   "type": "event",
-  "name": "verilator",
+  "name": "make build",
   "description": "build verilator executable", 
-  "subscribes": ["build.verilator"],
-  "emits": ["build.sim", "build.error"],
+  "subscribes": ["verilator.build"],
+  "emits": ["verilator.sim", "verilator.complete", "verilator.error"],
   "flows": ["verilator"],
 }
 
@@ -61,5 +61,8 @@ async def handler(data, context):
   subprocess.run(verilator_cmd, shell=True, check=True)
   subprocess.run(f"make -C {obj_dir} -f VTestHarness.mk {obj_dir}/VTestHarness", shell=True, check=True)
   
-  if data.get("target") in ["run", "sim"]:
-    await context.emit({"topic": "build.sim", "data": data})
+  # For run workflow, continue to sim; for standalone build, complete
+  if data.get("from_run_workflow"):
+    await context.emit({"topic": "verilator.sim", "data": data})
+  else:
+    await context.emit({"topic": "verilator.complete", "data": {**data, "task": "build"}})
