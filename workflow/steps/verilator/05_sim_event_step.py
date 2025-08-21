@@ -11,10 +11,10 @@ from utils.path import get_buckyball_path
 
 config = {
   "type": "event",
-  "name": "build-sim",
+  "name": "make sim",
   "description": "run simulation",
-  "subscribes": ["build.sim"],
-  "emits": ["build.complete", "build.error"],
+  "subscribes": ["verilator.sim"],
+  "emits": ["verilator.complete", "verilator.error"],
   "flows": ["verilator"],
 }
 
@@ -35,4 +35,4 @@ async def handler(data, context):
   
   subprocess.run(f"{bin_path} {args}", shell=True, check=True)
   
-  await context.emit({"topic": "build.complete", "data": data})
+  await context.emit({"topic": "verilator.complete", "data": {**data, "task": "simulation"}})

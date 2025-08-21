@@ -12,10 +12,16 @@ declare module 'motia' {
   }
 
   interface Handlers {
-    'build-sim': EventHandler<never, never>
-    'verilator': EventHandler<never, { topic: 'build.sim'; data: never }>
-    'build-verilog': EventHandler<never, { topic: 'build.verilator'; data: never }>
-    'build-clean': EventHandler<never, { topic: 'build.verilog'; data: never }>
-    'verilator-api': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build.start'; data: never }>
+    'verilator error': EventHandler<never, never>
+    'verilator complete': EventHandler<never, never>
+    'make sim': EventHandler<never, { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
+    'make build': EventHandler<never, { topic: 'verilator.sim'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
+    'make verilog': EventHandler<never, { topic: 'verilator.build'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
+    'make clean': EventHandler<never, { topic: 'verilator.verilog'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
+    'Verilator Complete Workflow': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.run'; data: never }>
+    'Verilator Clean': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.clean'; data: never }>
+    'Verilator Verilog': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.verilog'; data: never }>
+    'Verilator Build': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.build'; data: never }>
+    'Verilator Sim': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.sim'; data: never }>
   }
 }

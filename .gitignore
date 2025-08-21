@@ -9,3 +9,7 @@ node_modules/
 env.sh
 mill.*
 index.html
+
+*.vcd
+*.fst
+*.log
