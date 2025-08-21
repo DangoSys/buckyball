@@ -17,11 +17,5 @@ declare module 'motia' {
     'build-verilog': EventHandler<never, { topic: 'build.verilator'; data: never }>
     'build-clean': EventHandler<never, { topic: 'build.verilog'; data: never }>
     'verilator-api': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'build.start'; data: never }>
-    'FinalEvent': EventHandler<{}, never>
-    'InstallChipyard': EventHandler<{}, { topic: 'install-chipyard-finished'; data: {} }>
-    'build-setupAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'start'; data: {} }>
-    'InstallXXTool': EventHandler<{}, never>
-    'InstallAnaconda': EventHandler<{}, never>
-    'option-installAPI': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'option-install'; data: {} }>
   }
 }

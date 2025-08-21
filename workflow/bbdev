@@ -25,15 +25,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     "api",
     help=(
       "api supported are below: \n\n"
-      "build-workload\n"
-      "build-compiler\n"
-      "build-spike\n"
-      "build-verilator\n"
-      "build-vcs\n"
-      "run-spike\n"
-      "run-verilator\n"
-      "run-vcs\n"
-      "run-sardine\n"
+      "workload\n"
+      "compiler\n"
+      "spike\n"
+      "verilator.clean (clean verilator build directory)\n"
+      "verilator.verilog (generate verilog files from chisel source code)\n"
+      "verilator.build (build verilator simulation executable)\n"
+      "verilator.sim --binary --batch/-b (run verilator simulation on built verilator executable)\n"
+      "verilator.run --binary (command that integrates Verilog build, sim, and run)\n"
+      "vcs\n"
+      "sardine\n"
     ),
   )
   parser.add_argument("--port", type=int, default=5000, help="Port for localhost (default: 5000)")
