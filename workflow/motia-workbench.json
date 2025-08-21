@@ -25,5 +25,71 @@
         "targetHandlePosition": "top"
       }
     }
+  },
+  {
+    "id": "build-setup",
+    "config": {
+      "steps/build-setup/99_final_event_step.py": {
+        "x": 0,
+        "y": 729
+      },
+      "steps/build-setup/20_install_chipyard_step.py": {
+        "x": 71,
+        "y": 534
+      },
+      "steps/build-setup/01_build_setup_api_step.py": {
+        "x": 67,
+        "y": 271
+      },
+      "steps/build-setup/00_start_node_noop_step.py": {
+        "x": 74,
+        "y": 22
+      },
+      "steps/build-setup/tools/11_install_xx_tool_step.py": {
+        "x": 355,
+        "y": 534
+      },
+      "steps/build-setup/tools/10_install_anaconda_step.py": {
+        "x": 685,
+        "y": 534
+      },
+      "steps/build-setup/tools/02_option_install_api_step.py": {
+        "x": 507,
+        "y": 271
+      },
+      "steps/build-setup/tools/00_install_tools_noop_step.py": {
+        "x": 570,
+        "y": 0
+      }
+    }
+  },
+  {
+    "id": "verilator",
+    "config": {
+      "steps/verilator/05_sim_event_step.py": {
+        "x": 29,
+        "y": 848
+      },
+      "steps/verilator/04_build_event_step.py": {
+        "x": 0,
+        "y": 653
+      },
+      "steps/verilator/03_verilog_event_step.py": {
+        "x": 12,
+        "y": 458
+      },
+      "steps/verilator/02_clean_event_step.py": {
+        "x": 16,
+        "y": 263
+      },
+      "steps/verilator/01_build_verilator_api_step.py": {
+        "x": 16,
+        "y": 0
+      },
+      "steps/verilator/00_start_node_noop_step.py": {
+        "x": 268,
+        "y": 33
+      }
+    }
   }
 ]

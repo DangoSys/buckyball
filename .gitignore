@@ -8,3 +8,4 @@ CLAUDE.local.md
 node_modules/
 env.sh
 mill.*
+index.html
