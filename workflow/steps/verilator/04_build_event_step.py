@@ -23,6 +23,8 @@ async def handler(data, context):
   bbdir = get_buckyball_path()
   arch_dir = f"{bbdir}/arch"
   build_dir = f"{arch_dir}/build"
+  waveform_dir = f"{arch_dir}/waveform"
+  log_dir = f"{arch_dir}/log"
   
   # Find sources
   vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(f"{build_dir}/**/*.sv", recursive=True)
@@ -42,7 +44,11 @@ async def handler(data, context):
   ]
   inc_flags = ' '.join([f"-I{p}" for p in inc_paths if p])
   
-  cflags = f"{inc_flags} -DTOP_NAME='\"VTestHarness\"' -std=c++17"
+  topname = "TestHarness"
+  vcd_path = f"{waveform_dir}/waveform.vcd"
+  log_path = f"{log_dir}/bdb.log"
+
+  cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 -DCONFIG_VCD_PATH=\"{vcd_path}\" -DCONFIG_LOG_PATH=\"{log_path}\" "
   ldflags = (f"-lreadline -ldramsim -lfesvr "
              f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
              f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
@@ -55,14 +61,15 @@ async def handler(data, context):
   jobs = data.get("jobs", 16)
   
   verilator_cmd = (f"verilator -MMD --build -cc --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
-                   f"--timing -j {jobs} +incdir+{build_dir} --top TestHarness {sources} "
+                   f"--timing -j {jobs} +incdir+{build_dir} --top {topname} {sources} "
                    f"-CFLAGS '{cflags}' -LDFLAGS '{ldflags}' --Mdir {obj_dir} --exe")
   
   subprocess.run(verilator_cmd, shell=True, check=True)
-  subprocess.run(f"make -C {obj_dir} -f VTestHarness.mk {obj_dir}/VTestHarness", shell=True, check=True)
+  subprocess.run(f"make -C {obj_dir} -f V{topname}.mk {obj_dir}/V{topname}", shell=True, check=True)
   
   # For run workflow, continue to sim; for standalone build, complete
   if data.get("from_run_workflow"):
     await context.emit({"topic": "verilator.sim", "data": data})
   else:
     await context.emit({"topic": "verilator.complete", "data": {**data, "task": "build"}})
+    

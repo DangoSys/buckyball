@@ -8,12 +8,6 @@
 #include "utils/welcome.cc"
 #include "ioe/mem.cc"
 
-// static void welcome() {
-//     Log("Build time: %s, %s", __TIME__, __DATE__);
-//     printf("Welcome to %s!\n", ASNI_FMT(str(BuckyBall), ASNI_FG_YELLOW ASNI_BG_RED));
-//     printf("For help, type \"help\"\n");
-// }
-
 static int parse_args(int argc, char *argv[]) {
   const struct option table[] = {
     {"batch"  , no_argument    , NULL, 'b'},
@@ -46,7 +40,7 @@ static void init_log(const char *log_file) {
 
 void init_monitor(int argc, char *argv[]) {
   parse_args(argc, argv);
-  init_log("./bdb.log");
+  init_log(TOSTRING(CONFIG_LOG_PATH));
   // long img_size = load_image("/home/mio/Code/buckyball/arch/hello-baremetal");
   welcome();
 }

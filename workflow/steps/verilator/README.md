@@ -13,12 +13,12 @@ Verilator 工具相关的工作流
 
 - **`jobs`** - 并行编译任务数
   - 默认值: `16`
-- **`binary`** - 测试二进制文件路径
+- **`binary`** [必选] - 测试二进制文件路径
   - 默认值: `""`
 
 **示例**:
 ```bash
-curl -X POST http://localhost:5000/verilator -d '{"jobs": 8, "binary": "/home/user/test.elf"}'
+curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"jobs": 8, "binary": "/home/user/test.elf"}'
 ```
 
 
@@ -41,10 +41,7 @@ curl -X POST http://localhost:5000/verilator/clean
 
 **功能**: 仅生成Verilog代码，不进行编译和仿真
 
-**参数**:
-
-- **`jobs`** - 并行编译任务数
-  - 默认值: `16`
+**参数**: 无
 
 **示例**:
 ```bash
@@ -79,7 +76,9 @@ curl -X POST http://localhost:5000/verilator/build -d '{"jobs": 16}'
 
 **示例**:
 ```bash
-curl -X POST http://localhost:5000/verilator/sim -d '{"binary": "/home/user/test_program.elf"}'
+curl -X POST http://localhost:5000/verilator/sim \
+  -H "Content-Type: application/json" \
+  -d '{"binary": "/home/user/test_program.elf"}'
 ```
 
 
