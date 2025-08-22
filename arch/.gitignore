@@ -11,3 +11,5 @@ build/
 *.fst
 *.log
 .bsp/
+
+log/

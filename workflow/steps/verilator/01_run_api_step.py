@@ -2,7 +2,7 @@ config = {
   "type": "api",
   "name": "Verilator Complete Workflow", 
   "description": "trigger complete verilator workflow",
-  "path": "/verilator",
+  "path": "/verilator/run",
   "method": "POST",
   "emits": ["verilator.run"],
   "flows": ["verilator"],
