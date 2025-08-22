@@ -100,4 +100,9 @@
 #define SWAP(a, b) a ^= b; \
         b ^= a; \
         a ^= b; 
+        
+// 将x转换为字符串
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
 #endif

@@ -11,6 +11,16 @@ import framework.builtin.BaseConfig
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import examples.CustomBuckyBallConfig
 
+import freechips.rocketchip.devices.tilelink.{BootROMParams, BootROMLocated}
+import freechips.rocketchip.subsystem.InSubsystem
+
+// 自定义BootROM配置，指向正确的资源路径
+class WithCustomBootROM extends Config((site, here, up) => {
+  case BootROMLocated(InSubsystem) => Some(BootROMParams(
+    contentFileName = "src/main/resources/bootrom/bootrom.rv64.img"
+  ))
+})
+
 object BuckyBallToyConfig {
   val defaultConfig = new BaseConfig(
     inputType = UInt(8.W),
@@ -31,6 +41,7 @@ class BuckyBallCustomConfig(
 })
 
 class BuckyBallToyConfig extends Config(
+  new WithCustomBootROM ++
   new BuckyBallCustomConfig ++
   new freechips.rocketchip.rocket.WithNHugeCores(1) ++
   new chipyard.config.WithSystemBusWidth(128) ++

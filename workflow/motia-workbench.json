@@ -82,13 +82,17 @@
         "x": 849,
         "y": 724
       },
-      "steps/verilator/03_verilog_event_step.py": {
-        "x": 215,
-        "y": 472
-      },
       "steps/verilator/02_clean_event_step.py": {
         "x": -301,
         "y": 455
+      },
+      "steps/verilator/01_verilog_api_step.py": {
+        "x": 0,
+        "y": 0
+      },
+      "steps/verilator/01_sim_api_step.py": {
+        "x": 0,
+        "y": 0
       },
       "steps/verilator/01_run_api_step.py": {
         "x": 477,
@@ -98,15 +102,11 @@
         "x": 0,
         "y": 0
       },
-      "steps/verilator/01_verilog_api_step.py": {
-        "x": 0,
-        "y": 0
-      },
       "steps/verilator/01_build_api_step.py": {
         "x": 0,
         "y": 0
       },
-      "steps/verilator/01_sim_api_step.py": {
+      "steps/verilator/03_verilog_event_step.py": {
         "x": 0,
         "y": 0
       }

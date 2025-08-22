@@ -26,8 +26,8 @@ async def handler(data, context):
   os.makedirs(build_dir, exist_ok=True)
   subprocess.run(f"source {bbdir}/env.sh", shell=True, check=True)
   subprocess.run(f"cd {arch_dir} && mill -i __.test.runMain Elaborate " 
-                 f"--disable-annotation-unknown -strip-debug-info -O=debug --split-verilog -o={build_dir}", 
-                 shell=True, check=True)
+                 f"--disable-annotation-unknown -strip-debug-info -O=debug "
+                 f"--split-verilog -o={build_dir}", shell=True, check=True)
   
   # Remove unwanted file  
   topname_file = f"{arch_dir}/TestHarness.sv"

@@ -20,9 +20,12 @@ NUM_JOBs = 16
 # Default binary path, can be overridden with BINARY=xxx
 BINARY ?= 
 
+# Default VCD path, can be overridden with VCD_PATH=xxx
+VCD_PATH ?= $(WAVEFORM_DIR)/dump.vcd
+
 # ARGS += +max_core_cycles=0 +uart_tx=1 +uart_tx_printf=0 +custom_boot_pin=0 +jtag_rbb_enable=0 
-ARGS += +permissive +loadmem=$(BINARY) +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off $(BINARY) -b
-# ========= verilator ==============
+ARGS += +permissive +verbose=0 +loadmem=$(BINARY) +loadmem_addr=80000000 +custom_boot_pin=1 +permissive-off $(BINARY)
+# ========= verilator =============
 TOPNAME = TestHarness
 INC_PATH ?= $(RISCV)/include \
 			$(ARCHDIR)/thirdparty/chipyard/tools/DRAMSim2 \
@@ -46,7 +49,7 @@ CSRCS = $(shell find $(ARCHDIR)/src/csrc $(BUILD_DIR) -name "*.c" -or -name "*.c
 
 # rules for verilator
 INCFLAGS = $(addprefix -I, $(INC_PATH))
-CFLAGS  += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" -std=c++17 #-Og -ggdb3 # -Og -ggdb3为添加gdb调试
+CFLAGS  += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" -std=c++17 -DCONFIG_VCD_PATH='"$(VCD_PATH)"' -DCONFIG_LOG_PATH='"$(LOG_PATH)"' #-Og -ggdb3 # -Og -ggdb3为添加gdb调试
 LDFLAGS += -lreadline -ldramsim -lfesvr  \
 		   		 -L$(ARCHDIR)/thirdparty/chipyard/tools/DRAMSim2 \
 		   		 -L$(ARCHDIR)/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build \
@@ -62,7 +65,7 @@ $(BIN): ${VSRCS} ${CSRCS}
 		--Mdir $(OBJ_DIR) --exe 
 	$(MAKE) -C ${OBJ_DIR} -f V$(TOPNAME).mk $(OBJ_DIR)/V$(TOPNAME) 
 
-.PHONY: run test verilog help compile bsp reformat checkformat clean sim wave
+.PHONY: run test verilog debug help compile bsp reformat checkformat clean sim wave
 
 run: verilog $(BIN) sim
 # 生成verilog代码->构建bin->仿真
