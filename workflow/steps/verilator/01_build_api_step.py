@@ -12,7 +12,7 @@ async def handler(req, context):
   body = req.get("body") or {}
   
   data = {
-    "jobs": body.get("jobs", 16)
+    "jobs": body.get("jobs", "")
   }
   
   await context.emit({"topic": "verilator.build", "data": data})

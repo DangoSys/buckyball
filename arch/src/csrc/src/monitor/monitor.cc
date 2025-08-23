@@ -5,6 +5,9 @@
 #include "utils/macro.h"
 #include "utils/debug.h"
 
+#include <termios.h>
+#include <unistd.h>
+
 #include "utils/welcome.cc"
 #include "ioe/mem.cc"
 
@@ -38,9 +41,26 @@ static void init_log(const char *log_file) {
 }
 
 
+static void init_io() {
+  // 强制刷新所有输出缓冲
+  fflush(stdout);
+  fflush(stderr);
+  
+  // 恢复终端回显功能
+  struct termios tty;
+  if (tcgetattr(STDIN_FILENO, &tty) == 0) {
+    tty.c_lflag |= ECHO;      // 启用回显
+    tty.c_lflag |= ICANON;    // 启用行缓冲模式
+    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+    Log("Terminal echo restored");
+  }
+  
+}
+
 void init_monitor(int argc, char *argv[]) {
   parse_args(argc, argv);
   init_log(TOSTRING(CONFIG_LOG_PATH));
+  init_io();
   // long img_size = load_image("/home/mio/Code/buckyball/arch/hello-baremetal");
   welcome();
 }
