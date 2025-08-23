@@ -1,6 +1,3 @@
 #!/bin/bash
 
-/home/mio/Code/buckyball/arch/build/obj_dir/VTestHarness \                                                                                                                    [0]
-    +permissive +loadmem=/home/mio/Code/buckyball/arch/workload/hello \
-    +loadmem_addr=800000000  \
-    +permissive-off /home/mio/Code/buckyball/arch/workload/hello 
+$1 +permissive +loadmem=$2 +loadmem_addr=800000000 +permissive-off $2 > >(tee $3) 2> >(spike-dasm > $4)
