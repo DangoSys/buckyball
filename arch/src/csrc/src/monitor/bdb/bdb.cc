@@ -3,6 +3,9 @@
 #include "utils/debug.h"
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 extern int bb_step;
 
@@ -36,8 +39,8 @@ static struct {
 } cmd_table [] = {
   { "help", "Display informations about all supported commands", cmd_help },
   { "c", "Continue the execution of the program", cmd_c },
-  { "q", "Exit NPC", cmd_q },
-  { "si", "Execute the program in n steps\n\t\t-n nsteps(1~10000)", cmd_si },
+  { "q", "Exit Simulation", cmd_q },
+  { "si", "Execute the program in n steps\n\t\t-n nsteps(1~1000000)", cmd_si },
   // {"x", "scan the rom", cmd_x }
 };
 
@@ -94,7 +97,7 @@ static int cmd_si(char *args) {
     printf("Too Many Parameters.\n");
     return 0;
   }
-  if (step <= 0 || step > 100000) {
+  if (step <= 0 || step > 1000000) {
     printf("Parameter Out of Range.\n");
     return 0;
   }

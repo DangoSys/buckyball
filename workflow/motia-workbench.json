@@ -67,46 +67,46 @@
     "id": "verilator",
     "config": {
       "steps/verilator/99_error_event_step.py": {
-        "x": 283,
-        "y": 1222
+        "x": -610,
+        "y": 1382
       },
       "steps/verilator/99_complete_event_step.py": {
-        "x": -122,
-        "y": 1025
-      },
-      "steps/verilator/05_sim_event_step.py": {
-        "x": 1284,
-        "y": 902
+        "x": -628,
+        "y": 1383
       },
       "steps/verilator/04_build_event_step.py": {
-        "x": 849,
-        "y": 724
-      },
-      "steps/verilator/02_clean_event_step.py": {
-        "x": -301,
-        "y": 455
-      },
-      "steps/verilator/01_verilog_api_step.py": {
-        "x": 0,
-        "y": 0
-      },
-      "steps/verilator/01_sim_api_step.py": {
-        "x": 0,
-        "y": 0
-      },
-      "steps/verilator/01_run_api_step.py": {
-        "x": 477,
-        "y": -101
-      },
-      "steps/verilator/01_clean_api_step.py": {
-        "x": 0,
-        "y": 0
-      },
-      "steps/verilator/01_build_api_step.py": {
-        "x": 0,
-        "y": 0
+        "x": 227,
+        "y": 940
       },
       "steps/verilator/03_verilog_event_step.py": {
+        "x": -226,
+        "y": 684
+      },
+      "steps/verilator/02_clean_event_step.py": {
+        "x": -570,
+        "y": 444
+      },
+      "steps/verilator/01_verilog_api_step.py": {
+        "x": -250,
+        "y": 263
+      },
+      "steps/verilator/01_sim_api_step.py": {
+        "x": 882,
+        "y": 537
+      },
+      "steps/verilator/01_run_api_step.py": {
+        "x": -1130,
+        "y": 67
+      },
+      "steps/verilator/01_clean_api_step.py": {
+        "x": -590,
+        "y": 104
+      },
+      "steps/verilator/01_build_api_step.py": {
+        "x": 223,
+        "y": 357
+      },
+      "steps/verilator/05_sim_event_step.py": {
         "x": 0,
         "y": 0
       }
