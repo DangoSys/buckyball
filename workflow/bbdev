@@ -152,7 +152,7 @@ if __name__ == "__main__":
     api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
     json_data = json.dumps(cmd_info['args'])
     subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
-    print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
+    # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
   else:
     print(f"Unknown command: {cmd_info['command']}")
     print("Available commands: start, stop, verilator, vcs")
