@@ -11,193 +11,151 @@ import signal
 import threading
 import http.server
 import socketserver
-from typing import Optional
+import shlex
+from typing import Optional, List, Dict
+import json
 
 workflow_dir = os.path.dirname(os.path.abspath(__file__))
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
   parser = argparse.ArgumentParser(
     prog="bbdev",
-    description="POST to local endpoint via curl",
+    description="Development tool for buckyball project",
     formatter_class=argparse.RawTextHelpFormatter,
   )
-  parser.add_argument(
-    "api",
-    help=(
-      "api supported are below: \n"
-      "========== verilator ==========\n"
-      "verilator.clean (clean verilator build directory)\n"
-      "verilator.verilog (generate verilog files from chisel source code)\n"
-      "verilator.build (build verilator simulation executable)\n"
-      "verilator.sim --binary --batch/-b (run verilator simulation on built verilator executable)\n"
-      "verilator.run --binary (command that integrates Verilog build, sim, and run)\n"
-      "========== workload ==========\n"
-      "========== compiler ==========\n"
-      "========== spike ==========\n"
-      "========== vcs ==========\n"
-      "========== sardine ==========\n"
-    ),
-  )
-  parser.add_argument("--port", type=int, default=5000, help="Port for localhost (default: 5000)")
+  
+  parser.add_argument("--port", type=int, default=5000, help="Port for dev server (default: 5000)")
+  # 子命令解析器
+  subparsers = parser.add_subparsers(dest="command", help="Available commands")
+  # ===== start 子命令 ==============================================================================
+  start_parser = subparsers.add_parser("start", help="Start dev server")
+  
+  # ===== stop 子命令 ==============================================================================
+  stop_parser = subparsers.add_parser("stop", help="Stop dev server")
+  
+  # ===== verilator 子命令 =========================================================================
+  verilator_parser = subparsers.add_parser("verilator", help="Verilator operations")
+  # verilator 的互斥选项组 - 只能选择一个操作
+  verilator_group = verilator_parser.add_mutually_exclusive_group(required=True)
+  verilator_group.add_argument("--clean", action="store_true", help="Clean verilator build directory")
+  verilator_group.add_argument("--verilog", action="store_true", help="Generate verilog files from chisel")
+  verilator_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS", 
+                              help="Build verilator simulation executable. Args: \"[--job <num>]\"")
+  verilator_group.add_argument("--sim", type=str, nargs="?", const="", metavar="ARGS",
+                              help="Run verilator simulation. Args: \"--binary <path> [--batch]\"")
+  verilator_group.add_argument("--run", type=str, nargs="?", const="", metavar="ARGS",
+                              help="Integrated build+sim+run. Args: \"--binary <path> [--batch] [--job <num>]\"")
+  
+  # ===== vcs 子命令 =========================================================================
+  vcs_parser = subparsers.add_parser("vcs", help="vcs operations")
+  # vcs 的互斥选项组 - 只能选择一个操作
+  vcs_group = vcs_parser.add_mutually_exclusive_group(required=True)
+  vcs_group.add_argument("--clean", action="store_true", help="Clean vcs build directory")
+  vcs_group.add_argument("--verilog", action="store_true", help="Generate verilog files")
+  vcs_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS", 
+                            help="Build vcs simulation executable. Args: \"[--job <num>]\"")
+  vcs_group.add_argument("--sim", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Run vcs simulation. Args: \"--binary <path> [--batch]\"")
+  vcs_group.add_argument("--run", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Integrated build+sim+run. Args: \"--binary <path> [--batch] [--job <num>]\"")
+  
+  # ===== sardine 子命令 =========================================================================
+  sardine_parser = subparsers.add_parser("sardine", help="sardine operations")
+
+
   return parser.parse_args(argv)
 
-def port_busy(port: int) -> bool:
-  with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.settimeout(0.2)
-    return s.connect_ex(("127.0.0.1", port)) == 0
 
-
-def start_server(port: int, env: Optional[dict] = None) -> subprocess.Popen | None:
-  # start only if port is free; otherwise reuse existing server silently
-  if port_busy(port):
-    return None
-  try:
-    # start background process in its own process group for group-level signals
-    proc = subprocess.Popen(
-      ["npx", "motia", "dev", "--port", str(port)],
-      cwd=workflow_dir,
-      preexec_fn=os.setsid,
-      env=(env if env is not None else os.environ.copy()),
-    )
-    # wait until the port becomes available or the process exits
-    ready_timeout = 60
-    deadline = time.monotonic() + ready_timeout
-    while time.monotonic() < deadline:
-      if proc.poll() is not None:
-        raise RuntimeError(f"Dev server exited early with code {proc.returncode}")
-      if port_busy(port):
-        return proc
-      time.sleep(0.2)
-    raise TimeoutError("Dev server did not become ready within 60s")
-  except Exception as e:
-    print(f"Error: failed to start dev server: {e}", file=sys.stderr)
-    raise
-
-# func: run_request
-# desc: send curl request to local endpoint
-# args:
-#   api: api to run
-#   port: port to run on
-# return:
-#   0: success
-#   1: error
-def run_request(api: str, port: int) -> int:
-  if shutil.which("curl") is None:
-    print("Error: 'curl' not found in PATH", file=sys.stderr)
-    return 127
-
-  api = api.lstrip("/")
-  url = f"http://localhost:{port}/{api}"
-
-  try:
-    result = subprocess.run(
-      ["curl", "-sS", "-X", "POST", url],
-      check=False,
-    )
-  except Exception as e:
-    print(f"Error: failed to run curl: {e}", file=sys.stderr)
-    return 1
-
-  if result.returncode != 0:
-    print(f"Error: curl exited with code {result.returncode} for {url}", file=sys.stderr)
-  return result.returncode
-
-def stop_server(proc: subprocess.Popen) -> None:
-  try:
-    os.killpg(proc.pid, signal.SIGTERM)
-  except Exception as e:
-    print(f"Error: failed to send SIGTERM to dev server: {e}")
-    return
-
-  try:
-    proc.wait(timeout=10)
-  except subprocess.TimeoutExpired:
-    print("Dev server did not exit in time, sending SIGKILL…")
-    try:
-      os.killpg(proc.pid, signal.SIGKILL)
-    except Exception as e:
-      print(f"Error: failed to SIGKILL dev server: {e}")
-
-
-def wait_server(proc: subprocess.Popen) -> None:
-  try:
-    proc.wait()
-  except KeyboardInterrupt:
-    # user requested to stop; gracefully terminate the server we started
-    stop_server(proc)
-
-
-def make_done_server() -> tuple[socketserver.TCPServer, str, threading.Event]:
-  done_event = threading.Event()
-
-  class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-      if self.path.startswith("/bbdev/done"):
-        done_event.set()
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"ok")
-      else:
-        self.send_response(404)
-        self.end_headers()
-
-    def log_message(self, format, *args):
-      return
-
-  srv = socketserver.TCPServer(("127.0.0.1", 0), Handler)
-  host, port = srv.server_address
-  url = f"http://{host}:{port}/bbdev/done"
-  return srv, url, done_event
-
-
-
-def main() -> None:
-  args = parse_args(sys.argv[1:])
+def extract_command_info(args):
+  """通用的命令信息提取器，适用于所有命令"""
+  # 基础返回结构
+  result = {
+    "command": getattr(args, 'command', None),
+    "operation": None,
+    "args": {}
+  }
   
-  # start server only if port is free
-  proc: Optional[subprocess.Popen] = None
-  done_srv: Optional[socketserver.TCPServer] = None
-  done_evt: Optional[threading.Event] = None
-  done_thread: Optional[threading.Thread] = None
-
-  if not port_busy(args.port):
-    # create done server and pass URL to dev server via env for cloud auto-exit
-    done_srv, done_url, done_evt = make_done_server()
-    done_thread = threading.Thread(target=done_srv.serve_forever, daemon=True)
-    done_thread.start()
-    child_env = os.environ.copy()
-    child_env["BBDEV_DONE_URL"] = done_url
-    proc = start_server(args.port, env=child_env)
-  else:
-    print(f"Error: port {args.port} is busy", file=sys.stderr)
-    sys.exit(1)
-
-  # send api request
-  code = run_request(args.api, args.port)
-  if code != 0:
-    sys.exit(code)
-
-  # stop server only if we started it
-  if proc is not None:
-    try:
-      if done_evt is not None:
-        # wait until step signals done or the server exits
-        while not done_evt.wait(timeout=0.2):
-          if proc.poll() is not None:
-            break
-        # if server still running, stop it
-        if proc.poll() is None:
-          stop_server(proc)
+  # 动态提取操作类型（遍历args的所有属性）
+  for attr_name in dir(args):
+    # 跳过内置属性和已知的非操作属性
+    if attr_name.startswith('_') or attr_name in ['command', 'port']:
+      continue
+    
+    attr_value = getattr(args, attr_name)
+    # 找到值为True或非空字符串的属性（跳过None和False）
+    if attr_value is not None and attr_value is not False:
+      result["operation"] = attr_name
+      if attr_value is True:
+        # 布尔操作，如 --clean, --verilog
+        result["args"] = {}
       else:
-        wait_server(proc)
-    except KeyboardInterrupt:
-      stop_server(proc)
-    finally:
-      if done_srv is not None:
-        try:
-          done_srv.shutdown()
-        except Exception:
-          pass
+        # 带参数的操作，如 --sim "arg_string"
+        # 解析参数字符串
+        args_dict = {}
+        if attr_value:
+          try:
+            # use shlex to parse args
+            arg_tokens = shlex.split(attr_value)
+            i = 0
+            while i < len(arg_tokens):
+              token = arg_tokens[i]
+              if token.startswith('--'):
+                # long option
+                option_name = token[2:]  # remove --
+                if i + 1 < len(arg_tokens) and not arg_tokens[i + 1].startswith('-'):
+                  # next token is value
+                  args_dict[option_name] = arg_tokens[i + 1]
+                  i += 2
+                else:
+                  # boolean flag
+                  args_dict[option_name] = True
+                  i += 1
+              elif token.startswith('-') and len(token) == 2:
+                # short option
+                option_name = token[1:]  # remove -
+                if i + 1 < len(arg_tokens) and not arg_tokens[i + 1].startswith('-'):
+                  # next token is value
+                  args_dict[option_name] = arg_tokens[i + 1]
+                  i += 2
+                else:
+                  # boolean flag
+                  args_dict[option_name] = True
+                  i += 1
+              else:
+                # position argument, skip
+                i += 1
+          except ValueError as e:
+            print(f"Error parsing arguments: {e}")
+        result["args"] = args_dict
+      break
+  
+  return result
+
 
 if __name__ == "__main__":
-  main()
+  args = parse_args(sys.argv[1:])
+  cmd_info = extract_command_info(args)
+  
+  # print(f"Command: {cmd_info['command']}")
+  # print(f"Operation: {cmd_info['operation']}")
+  # print(f"Arguments: {cmd_info['args']}")
+  
+  if cmd_info['command'] == "start":
+    print(f"Starting dev server on port {args.port}")
+    subprocess.run(["npx", "motia", "dev", "--port", str(args.port)], cwd=workflow_dir, check=True)
+    
+  elif cmd_info['command'] == "stop":
+    print(f"Stopping dev server on port {args.port}")
+    subprocess.run(["pkill", "-f", f"motia.*dev.*--port.*{args.port}"], check=False)
+    
+  elif cmd_info['command'] in ["verilator", "vcs"]:
+    api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
+    json_data = json.dumps(cmd_info['args'])
+    subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
+    print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
+  else:
+    print(f"Unknown command: {cmd_info['command']}")
+    print("Available commands: start, stop, verilator, vcs")
+    sys.exit(1)
+
+  

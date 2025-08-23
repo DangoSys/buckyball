@@ -14,6 +14,7 @@ declare module 'motia' {
   interface Handlers {
     'verilator error': EventHandler<never, never>
     'verilator complete': EventHandler<never, never>
+    'make sim': EventHandler<never, { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'make build': EventHandler<never, { topic: 'verilator.sim'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'make verilog': EventHandler<never, { topic: 'verilator.build'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'make clean': EventHandler<never, { topic: 'verilator.verilog'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
@@ -22,6 +23,5 @@ declare module 'motia' {
     'Verilator Complete Workflow': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.run'; data: never }>
     'Verilator Clean': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.clean'; data: never }>
     'Verilator Build': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.build'; data: never }>
-    'make sim': EventHandler<never, { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
   }
 }
