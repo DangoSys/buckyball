@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime
+from unittest import result
 
 # Add the utils directory to the Python path
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -10,6 +11,7 @@ if utils_path not in sys.path:
   sys.path.insert(0, utils_path)
 
 from utils.path import get_buckyball_path
+from utils.run import run 
 
 config = {
   "type": "event",
@@ -42,10 +44,11 @@ async def handler(data, context):
   
   args = ""
   if binary:
-    args = f"+permissive +loadmem={binary} +loadmem_addr=80000000 -b +permissive-off {binary} "
+    args = f"+permissive +loadmem={binary} +loadmem_addr=80000000 +permissive-off {binary} "
   
-  redirect = f"> >(tee {log_dir}/stdout.log) " \
-             f"2> >(spike-dasm > {log_dir}/disasm.log)"
+  # redirect = f"2> >(spike-dasm > {log_dir}/disasm.log)"
 
-  subprocess.run(f"{bin_path} {args} {redirect}", shell=True, check=True, executable="/bin/bash")
-  await context.emit({"topic": "verilator.complete", "data": {**data, "task": "simulation"}})
+  subprocess.run(f"{bin_path} {args}", shell=True, check=True, text=True)
+  # subprocess.run(f"cd {os.path.abspath(os.path.join(os.path.dirname(__file__)))} && ./scripts/sim.sh {bin_path} {args}", shell=True, check=True, text=True)
+
+  await context.emit({"topic": "verilator.complete", "data": {**data, "task": "sim"}})

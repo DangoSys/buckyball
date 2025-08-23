@@ -58,7 +58,7 @@ async def handler(data, context):
   subprocess.run(f"rm -rf {obj_dir}", shell=True)
   
   sources = ' '.join(vsrcs + csrcs)
-  jobs = data.get("jobs", 16)
+  jobs = data.get("jobs", "")
   
   verilator_cmd = (f"verilator -MMD --build -cc --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
                    f"--timing -j {jobs} +incdir+{build_dir} --top {topname} {sources} "
