@@ -1,5 +1,6 @@
 from contextlib import redirect_stdout
 import os
+from re import T
 import subprocess
 import sys
 from datetime import datetime
@@ -47,11 +48,15 @@ async def handler(data, context):
 
   batch = data.get("batch", False)
   
-  subprocess.run(f"rm {waveform_dir}/waveform.vcd {waveform_dir}/waveform.fst ", shell=True, check=True)
-  subprocess.run(f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch}", cwd=os.path.dirname(__file__), shell=True, check=True, text=True)
+  subprocess.run(f"rm -f {waveform_dir}/waveform.vcd {waveform_dir}/waveform.fst ", shell=True, check=True)
+  # we dont check the return code of simulation, to keep it going on to record waveform.fst
+  result = subprocess.run(f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch}", cwd=os.path.dirname(__file__), shell=True, text=True)
   
-  # if assert failed, vcd2fst will not be executed, and waveform.fst will not be generated
   os.makedirs(waveform_fst_dir, exist_ok=True)
   subprocess.run(f"vcd2fst -v {waveform_dir}/waveform.vcd -f {waveform_fst_dir}/waveform.fst", cwd=arch_dir, shell=True, check=True, text=True)
+  
+  if result.returncode != 0:
+    await context.emit({"topic": "verilator.error", "data": {**data, "task": "sim", "error": "simulation failed"}})
+    return
 
   await context.emit({"topic": "verilator.complete", "data": {**data, "task": "sim"}})
