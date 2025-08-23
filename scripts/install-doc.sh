@@ -18,6 +18,6 @@ cargo install mdbook-pdf
 cargo install mdbook-toc
 cargo install mdbook-mermaid
 
- mdbook-mermaid install ${BBDIR}/docs/bb-note/
+mdbook-mermaid install ${BBDIR}/docs/bb-note/
 
 #  mdbook serve --open -p 3001

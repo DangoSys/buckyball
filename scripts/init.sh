@@ -137,9 +137,8 @@ fi
 
 if run_step "7"; then
   begin_step "7" "Init workflow management system"
-  cd ${BBDIR}
   source ${BBDIR}/env.sh
-  ./scripts/install-workflow.sh
+  ${BBDIR}/scripts/install-workflow.sh
 fi
 
 if run_step "8"; then

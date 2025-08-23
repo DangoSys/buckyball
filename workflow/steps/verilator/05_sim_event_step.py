@@ -48,7 +48,8 @@ async def handler(data, context):
   
   # redirect = f"2> >(spike-dasm > {log_dir}/disasm.log)"
 
-  subprocess.run(f"{bin_path} {args}", shell=True, check=True, text=True)
-  # subprocess.run(f"cd {os.path.abspath(os.path.join(os.path.dirname(__file__)))} && ./scripts/sim.sh {bin_path} {args}", shell=True, check=True, text=True)
+  # subprocess.run(f"{bin_path} {args}", shell=True, check=True, text=True)
+  # subprocess.run(f"{bin_path} {args}", check=True, text=True)
+  subprocess.run(f"source {bbdir}/env.sh && ./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log", cwd=os.path.dirname(__file__), shell=True, check=True, text=True)
 
   await context.emit({"topic": "verilator.complete", "data": {**data, "task": "sim"}})

@@ -14,7 +14,7 @@
     "motia"
   ],
   "dependencies": {
-    "motia": "^0.5.9-beta.117",
+    "motia": "^0.5.12-beta.121",
     "zod": "^3.24.4"
   },
   "devDependencies": {
