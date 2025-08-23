@@ -4,6 +4,9 @@ Verilator 工具相关的工作流
 
 ## 一、bbdev封装后API使用说明
 
+```
+bbdev verilator --sim "--jobs 256 --binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
+```
 
 ## 二、原始API使用说明
 

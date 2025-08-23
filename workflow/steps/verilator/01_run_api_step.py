@@ -13,12 +13,12 @@ async def handler(req, context):
   
   config = {
     "binary": body.get("binary", ""),
-    "jobs": body.get("jobs", 16),
+    "jobs": body.get("jobs", "16"),
+    "batch": body.get("batch", False),
     "from_run_workflow": True
   }
   
   await context.emit({"topic": "verilator.run", "data": config})
   
-  return {"status": 200, "body": { "message": "verilator complete workflow started", "trace_id": context.trace_id}
-  }
+  return {"status": 200, "body": { "message": "verilator complete workflow started", "trace_id": context.trace_id}}
 

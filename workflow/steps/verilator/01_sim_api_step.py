@@ -18,7 +18,8 @@ async def handler(req, context):
       "body": {"error": "binary parameter is required"}
     }
   
-  data = {"binary": binary}
+  batch = body.get("batch", False)
+  data = {"binary": binary, "batch": batch}
   
   await context.emit({"topic": "verilator.sim", "data": data})
   

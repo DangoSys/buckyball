@@ -30,6 +30,7 @@ void sim_init(int argc, char** argv) {
   contextp->traceEverOn(true);
   top->trace(tfp, 0);
   tfp->open(TOSTRING(CONFIG_VCD_PATH)); // 编译参数指定
+  Log("The waveform will be saved to the VCD file: %s", TOSTRING(CONFIG_VCD_PATH));
 
   top->reset = 1; top->clock = 0; step_and_dump_wave();
   top->reset = 1; top->clock = 1; step_and_dump_wave();
@@ -39,25 +40,26 @@ void sim_init(int argc, char** argv) {
   // top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg = 0x80000000ULL;
 } // 低电平复位
 
+void sim_exit() {
+  contextp->timeInc(1);
+  tfp->dump(contextp->time());
+  tfp->close();
+  printf("The wave data has been saved to the VCD file: %s\n", TOSTRING(CONFIG_VCD_PATH));
+  exit(0);
+}
+
 void ball_exec_once() {
   top->clock ^= 1; step_and_dump_wave();
   top->clock ^= 1; step_and_dump_wave();
   // top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg = 0x80000000ULL;
   if (top->io_success == 1) {
     printf("simulation success\n");
-    exit(0);
+    sim_exit();
   }
   // dump_gpr(); 
   // npc_step++;
   // printf("bootAddrReg = 0x%x\n", top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg);
 } // 翻转两次走一条指令
-
-void sim_exit() {
-  contextp->timeInc(1);
-  tfp->dump(contextp->time());
-  tfp->close();
-  printf("The wave data has been saved to the VCD file: %s\n", TOSTRING(CONFIG_VCD_PATH));
-}
 
 // void init_tet() {
 //   while (cpu_npc.pc != MEM_BASE) { 
