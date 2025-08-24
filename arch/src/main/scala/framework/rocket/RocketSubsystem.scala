@@ -13,6 +13,7 @@ import freechips.rocketchip.util.HasCoreMonitorBundles
 
 import framework.rocket._
 
+// currently, this RocketCrossingParamsBB is not used, we use the default RocketCrossingParams
 case class RocketCrossingParamsBB(
   crossingType: ClockCrossingType = SynchronousCrossing(),
   master: HierarchicalElementPortParamsLike = HierarchicalElementMasterPortParams(),
@@ -24,13 +25,13 @@ case class RocketCrossingParamsBB(
 
 case class RocketTileAttachParams(
   tileParams: RocketTileParams,
-  crossingParams: RocketCrossingParamsBB
+  crossingParams: RocketCrossingParams
 ) extends CanAttachTile { type TileType = RocketTile }
 
 
 case class RocketTileAttachParamsBB(
   tileParams: RocketTileParamsBB,
-  crossingParams: RocketCrossingParamsBB
+  crossingParams: RocketCrossingParams
 ) extends CanAttachTile { type TileType = RocketTileBB }
 
 trait HasRocketTiles {
@@ -61,4 +62,5 @@ class RocketSubsystemModuleImp[+L <: RocketSubsystem](_outer: L) extends BaseSub
     with HasHierarchicalElementsRootContextModuleImp {
   override lazy val outer = _outer
 }
+
 

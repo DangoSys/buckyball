@@ -95,10 +95,10 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   memDomain.io.globalDecoderIn.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_mem
   memDomain.io.globalDecoderIn.bits := globalDecoder.io.id_rs.bits
   
-  // 全局ready信号：只有相应的域ready，globalDecoder才ready
-  globalDecoder.io.id_rs.ready := Mux(globalDecoder.io.id_rs.bits.is_ex, 
-    ballDomain.io.globalDecoderIn.ready,
-    memDomain.io.globalDecoderIn.ready)
+  // 全局ready信号：只有对应的域ready时，globalDecoder才ready
+  globalDecoder.io.id_rs.ready := 
+    (globalDecoder.io.id_rs.bits.is_ex && ballDomain.io.globalDecoderIn.ready) ||
+    (globalDecoder.io.id_rs.bits.is_mem && memDomain.io.globalDecoderIn.ready)
 
 // -----------------------------------------------------------------------------
 // Backend: MemDomain Connections

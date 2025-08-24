@@ -2,10 +2,10 @@
     <img src="docs/img/buckyball.png" width = "100%" height = "70%">
 </p>
 
-<div align="center">
+<div align="center" style="margin-top: -10pt;">
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DangoSys/buckyball)
-[![Ask Zread](https://deepwiki.com/badge.svg)](https://zread.ai/DangoSys/buckyball)
+[![Ask Zread](https://img.shields.io/badge/Ask_Zread-8A2BE2)](https://zread.ai/DangoSys/buckyball)
 
 </div>
 

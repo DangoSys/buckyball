@@ -17,28 +17,22 @@ import framework.rocket.{RocketTileParamsBB, RocketCrossingParamsBB}
 class WithNBuckyBallCores(
   n: Int,
   location: HierarchicalLocation,
-  crossing: RocketCrossingParamsBB,
-  nMSHRs: Int,
+  crossing: RocketCrossingParams,
 ) extends Config((site, here, up) => {
   case TilesLocated(`location`) => {
     val prev = up(TilesLocated(`location`), site)
     val idOffset = up(NumTiles)
     val big = RocketTileParamsBB(
-      core   = RocketCoreParams(fpu = None),
+      core   = RocketCoreParams(
+        mulDiv = Some(MulDivParams(
+          mulUnroll = 8,
+          mulEarlyOut = true,
+          divEarlyOut = true))),
       dcache = Some(DCacheParams(
         rowBits = site(SystemBusKey).beatBits,
-        nSets = 64,
-        nWays = 1,
-        nTLBSets = 1,
-        nTLBWays = 4,
-        nMSHRs = 0,
         blockBytes = site(CacheBlockBytes))),
       icache = Some(ICacheParams(
         rowBits = site(SystemBusKey).beatBits,
-        nSets = 64,
-        nWays = 1,
-        nTLBSets = 1,
-        nTLBWays = 4,
         blockBytes = site(CacheBlockBytes))))
     List.tabulate(n)(i => RocketTileAttachParamsBB(
       big.copy(tileId = i + idOffset),
@@ -47,15 +41,14 @@ class WithNBuckyBallCores(
   }
   case NumTiles => up(NumTiles) + n
 }) {
-  def this(n: Int, location: HierarchicalLocation = InSubsystem, nMSHRs: Int = 0) = this(n, location, RocketCrossingParamsBB(
+  def this(n: Int, location: HierarchicalLocation = InSubsystem) = this(n, location, RocketCrossingParams(
     master = HierarchicalElementMasterPortParams.locationDefault(location),
     slave = HierarchicalElementSlavePortParams.locationDefault(location),
     mmioBaseAddressPrefixWhere = location match {
       case InSubsystem => CBUS
       case InCluster(clusterId) => CCBUS(clusterId)
     }
-  ), 
-  nMSHRs) // if the nMSHRs is not specified, it is 0 by default
+  )) 
 }
 
 class RocketTileAttachConfig(f: RocketTileAttachParams => RocketTileAttachParams) extends TileAttachConfig[RocketTileAttachParams](f)
