@@ -12,6 +12,7 @@ import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 import scala.collection.mutable.ArrayBuffer
 import freechips.rocketchip.rocket._
+import framework.rocket.RoCCCoreIOBB
 
 
 trait HasRocketCoreIOBB extends HasRocketCoreParameters {
@@ -25,7 +26,7 @@ trait HasRocketCoreIOBB extends HasRocketCoreParameters {
     val dmem = new HellaCacheIO
     val ptw = Flipped(new DatapathPTWIO())
     val fpu = Flipped(new FPUCoreIO())
-    val rocc = Flipped(new RoCCCoreIO(nTotalRoCCCSRs))
+    val rocc = Flipped(new RoCCCoreIOBB(nTotalRoCCCSRs))
     val trace = Output(new TraceBundle)
     val bpwatch = Output(Vec(coreParams.nBreakpoints, new BPWatch(coreParams.retireWidth)))
     val cease = Output(Bool())

@@ -86,7 +86,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
   io.commit_i.ld.ready := true.B
   io.commit_i.st.ready := true.B
   
-  val respArb = Module(new Arbiter(new RoCCResponse()(p), 2))
+  val respArb = Module(new Arbiter(new RoCCResponseBB()(p), 2))
   respArb.io.in(0).valid := io.commit_i.ld.valid
   respArb.io.in(1).valid := io.commit_i.st.valid
   respArb.io.in(0).bits := DontCare

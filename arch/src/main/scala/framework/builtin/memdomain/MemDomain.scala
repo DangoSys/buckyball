@@ -10,6 +10,7 @@ import framework.builtin.frontend.FrontendTLBIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.memdomain.{MemLoader, MemStorer, MemController}
+import framework.rocket.RoCCResponseBB
 
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
@@ -40,7 +41,7 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     // val tlb = new FrontendTLBIO()(p)
     
     // RoCC响应接口
-    val roccResp = Decoupled(new RoCCResponse()(p))
+    val roccResp = Decoupled(new RoCCResponseBB()(p))
     val busy = Output(Bool())
   })
 
