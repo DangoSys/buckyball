@@ -7,6 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.util.Util._
 import freechips.rocketchip.tile._
+import framework.rocket.RoCCResponseBB
 
 // Mem域的发射接口
 class MemReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -41,7 +42,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
     // Mem Domain Decoder -> MemReservationStation
     val mem_decode_cmd_i = Flipped(Decoupled(new MemDecodeCmd))
     val rs_rocc_o = new Bundle {      
-      val resp = Decoupled(new RoCCResponse()(p))
+      val resp = Decoupled(new RoCCResponseBB()(p))
       val busy = Output(Bool())
     }
     // MemReservationStation -> MemLoader/MemStorer

@@ -14,6 +14,8 @@ import examples.CustomBuckyBallConfig
 import freechips.rocketchip.devices.tilelink.{BootROMParams, BootROMLocated}
 import freechips.rocketchip.subsystem.InSubsystem
 
+import framework.rocket.BuildRoCCBB
+
 // 自定义BootROM配置，指向正确的资源路径
 class WithCustomBootROM extends Config((site, here, up) => {
   case BootROMLocated(InSubsystem) => Some(BootROMParams(
@@ -31,7 +33,7 @@ object BuckyBallToyConfig {
 class BuckyBallCustomConfig(
   buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
 ) extends Config((site, here, up) => {
-  case BuildRoCC => up(BuildRoCC) ++ Seq(
+  case BuildRoCCBB => up(BuildRoCCBB) ++ Seq(
     (p: Parameters) => {
       implicit val q = p
       val buckyball = LazyModule(new ToyBuckyBall(buckyballConfig))

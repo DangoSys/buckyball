@@ -9,7 +9,7 @@ import mill.bsp._
 
 
 
-object main extends SbtModule { m =>
+object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion = "2.13.12"
   override def scalacOptions = Seq(

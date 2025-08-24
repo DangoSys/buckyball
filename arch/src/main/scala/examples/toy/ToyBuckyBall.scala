@@ -6,11 +6,12 @@ import java.nio.file.{Files, Paths}
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import freechips.rocketchip.diplomacy._
+
+import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.tile._
-import freechips.rocketchip.util.ClockGate
 import freechips.rocketchip.tilelink._
 
+import framework.rocket.{LazyRoCCBB, LazyRoCCModuleImpBB, RoCCResponseBB}
 import framework.builtin.frontend.{FrontendTLB, GlobalDecoder}
 import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
@@ -19,7 +20,7 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
-  extends LazyRoCC (opcodes = b.opcodes, nPTWPorts = 2) {
+  extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 2) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
   
@@ -46,7 +47,7 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   val node = tlNode 
 }
 
-class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer) 
+class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer) 
   with HasCoreParameters {
   import outer.b._
   
@@ -127,7 +128,7 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
 // 返回RoCC接口连接 - 合并BallDomain和MemDomain的响应
 // ---------------------------------------------------------------------------
   // 优先级仲裁：BallDomain优先级高于MemDomain
-  val respArb = Module(new Arbiter(new RoCCResponse()(p), 2))
+  val respArb = Module(new Arbiter(new RoCCResponseBB()(p), 2))
   respArb.io.in(0) <> ballDomain.io.roccResp
   respArb.io.in(1) <> memDomain.io.roccResp
   io.resp <> respArb.io.out

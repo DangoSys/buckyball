@@ -7,10 +7,10 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import freechips.rocketchip.tile._  
 import framework.builtin.memdomain.DISA._
-
+import framework.rocket.RoCCCommandBB
 
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommand
+  val cmd = new RoCCCommandBB
 }
 
 
@@ -21,13 +21,13 @@ class PostDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
   val is_mem        = Bool()  // 内存指令(load/store)
   
   // 原始指令信息，传递给对应的domain decoder
-  val raw_cmd       = new RoCCCommand
+  val raw_cmd       = new RoCCCommandBB
 }
 
 class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val id_i = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommand
+      val cmd = new RoCCCommandBB
     }))
     val id_rs = Decoupled(new PostDecodeCmd)
   })
