@@ -114,14 +114,14 @@
 //   val current_cmd_type = RobEntries(issue_ptr).cmd_type
 //   val is_load = current_cmd_type === 1.U
 //   val is_store = current_cmd_type === 2.U
-//   val is_ex = current_cmd_type === 3.U
+//   val is_ball = current_cmd_type === 3.U
   
 //   // 检查Load/Store互斥约束
 //   val load_blocked = is_load && store_in_flight  // Load被正在执行的Store阻塞
 //   val store_blocked = is_store && load_in_flight // Store被正在执行的Load阻塞
   
 //   // 检查Ex指令延迟约束
-//   val ex_delay_blocked = is_ex && last_issued_was_ex && (ex_delay_counter < 150.U)
+//   val ex_delay_blocked = is_ball && last_issued_was_ex && (ex_delay_counter < 150.U)
   
 //   val basic_can_issue = RobEntries(issue_ptr).state === RoBState.sWaiting && RobEntries(issue_ptr).ready
 //   val can_issue = basic_can_issue && !load_blocked && !store_blocked && !ex_delay_blocked
@@ -142,7 +142,7 @@
 //     }
     
 //     // 更新Ex指令延迟跟踪
-//     when(is_ex) {
+//     when(is_ball) {
 //       last_issued_was_ex := true.B
 //       ex_delay_counter := 0.U  // 重置计数器
 //     }.otherwise {

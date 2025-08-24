@@ -5,14 +5,14 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.builtin.frontend.PostDecodeCmd
+import framework.builtin.frontend.PostGDCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.rocket.RoCCResponseBB
 
 // Ball Domain的输入输出接口
 class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   // 来自GlobalDecoder的命令分发接口
-  val globalDecoderIn = Flipped(Decoupled(new PostDecodeCmd))
+  val gDecoderIn = Flipped(Decoupled(new PostGDCmd))
   
   // 连接到Scratchpad的执行接口  
   val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
@@ -30,24 +30,24 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   val io = IO(new BallDomainIO)
   
 //---------------------------------------------------------------------------
-// Decoder -> ExReservationStation
+// Decoder -> BallReservationStation
 //---------------------------------------------------------------------------
-  val ballDecoder = Module(new ExDomainDecoder)
-  ballDecoder.io.post_decode_cmd_i <> io.globalDecoderIn
+  val ballDecoder = Module(new BallDomainDecoder)
+  ballDecoder.io.raw_cmd_i <> io.gDecoderIn
   
 //---------------------------------------------------------------------------
-// Decoder -> ExReservationStation
+// Decoder -> BallReservationStation
 //---------------------------------------------------------------------------
-  val ballReservationStation = Module(new ExReservationStation)
-  ballReservationStation.io.ex_decode_cmd_i <> ballDecoder.io.ex_decode_cmd_o
+  val ballRs = Module(new BallReservationStation)
+  ballRs.io.ball_decode_cmd_i <> ballDecoder.io.ball_decode_cmd_o
 
 //---------------------------------------------------------------------------
-// ExReservationStation -> ExecuteController
+// BallReservationStation -> ExecuteController
 //---------------------------------------------------------------------------
   val ballController = Module(new ExecuteController)
 
-  ballController.io.cmdReq <> ballReservationStation.io.issue_o
-  ballReservationStation.io.commit_i <> ballController.io.cmdResp
+  ballController.io.cmdReq <> ballRs.io.issue_o
+  ballRs.io.commit_i <> ballController.io.cmdResp
   
 //---------------------------------------------------------------------------
 // ExecuteController -> Mem Domain
@@ -60,6 +60,6 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
 //---------------------------------------------------------------------------
 // ExecuteController -> RoCC
 //---------------------------------------------------------------------------
-  io.roccResp <> ballReservationStation.io.rs_rocc_o.resp
-  io.busy := ballReservationStation.io.rs_rocc_o.busy
+  io.roccResp <> ballRs.io.rs_rocc_o.resp
+  io.busy := ballRs.io.rs_rocc_o.busy
 }
