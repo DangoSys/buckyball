@@ -36,11 +36,6 @@ class ExDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bund
   val wr_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
   val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries + b.acc_bank_entries).W)
   val is_acc        = Bool() // 是否是acc bank的操作    
-
-  // 流水线控制
-  val pid           = UInt(8.W)   // 流水线ID
-  val pstart        = Bool()      // 流水线的开始
-  val pend          = Bool()      // 流水线的结束
 }
 
 // EX域专用的BuckyBallCmd
@@ -52,15 +47,7 @@ class ExBuckyBallCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends B
 // EX decode fields
 object EXDecodeFields extends Enumeration {
   type Field = Value
-  val PID, PSTART, PEND, // PID大于1表示是流水线指令 
-      OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD, OP1_SPADDR, OP2_SPADDR, WR_SPADDR,
-      ITER = Value
-}
-
-object FENCEDecodeFields extends Enumeration {
-  type Field = Value
-  val PID, PSTART, PEND,
-      FN_EN = Value
+  val OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD, FENCE_EN, OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER = Value
 }
 
 // Default constants for EX decoder
@@ -90,43 +77,34 @@ class ExDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends 
 
   // EX指令解码
   import EXDecodeFields._
-  val ex_default_decode = List(N,N,N,N,N,N,N,N,DADDR,DADDR,DADDR,DITER)
+  val ex_default_decode = List(N,N,N,N,N,N,N,N,N,DADDR,DADDR,DADDR,DITER)
   val ex_decode_list = ListLookup(func7, ex_default_decode, Array(
-    MATMUL_WARP16_BITPAT -> List(N,N,N,Y,Y,Y,Y,Y,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen)),
-    BB_BBFP_MUL          -> List(N,N,N,Y,Y,Y,Y,Y,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen)),
-    MATMUL_WS            -> List(N,N,N,Y,Y,Y,Y,Y,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen))
-  ))
-
-  // FENCE指令解码
-  import FENCEDecodeFields._
-  val fence_default_decode = List(N,N,N,N)
-  val fence_decode_list = ListLookup(func7, fence_default_decode, Array(
-    FENCE  -> List(N,N,N,Y)
+    MATMUL_WARP16_BITPAT -> List(N,N,N,Y,Y,Y,Y,Y,N,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen)),
+    BB_BBFP_MUL          -> List(N,N,N,Y,Y,Y,Y,Y,N,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen)),
+    MATMUL_WS            -> List(N,N,N,Y,Y,Y,Y,Y,N,rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen)),
+    FENCE                -> List(N,N,N,N,N,N,N,N,Y,             DADDR,                          DADDR,              DADDR,                    1.U(10.W))
   ))
 
   // 输出赋值
   io.ex_decode_cmd_o.valid := io.post_decode_cmd_i.valid && io.post_decode_cmd_i.bits.is_ex
   
-  io.ex_decode_cmd_o.bits.is_fence      := fence_decode_list(3).asBool
+  io.ex_decode_cmd_o.bits.is_fence      := ex_decode_list(EXDecodeFields.FENCE_EN.id).asBool
   io.ex_decode_cmd_o.bits.is_vec        := func7 === MATMUL_WARP16_BITPAT
   io.ex_decode_cmd_o.bits.is_bbfp       := func7 === BB_BBFP_MUL || func7 === MATMUL_WS
   io.ex_decode_cmd_o.bits.is_matmul_ws  := func7 === MATMUL_WS
   
-  io.ex_decode_cmd_o.bits.iter          := ex_decode_list(11).asUInt
-  io.ex_decode_cmd_o.bits.pid           := ex_decode_list(0).asUInt
-  io.ex_decode_cmd_o.bits.pstart        := ex_decode_list(1).asBool
-  io.ex_decode_cmd_o.bits.pend          := ex_decode_list(2).asBool
+  io.ex_decode_cmd_o.bits.iter          := ex_decode_list(EXDecodeFields.ITER.id).asUInt
 
-  io.ex_decode_cmd_o.bits.op1_en        := ex_decode_list(3).asBool
-  io.ex_decode_cmd_o.bits.op2_en        := ex_decode_list(4).asBool
-  io.ex_decode_cmd_o.bits.wr_spad_en    := ex_decode_list(5).asBool
-  io.ex_decode_cmd_o.bits.op1_from_spad := ex_decode_list(6).asBool
-  io.ex_decode_cmd_o.bits.op2_from_spad := ex_decode_list(7).asBool
+  io.ex_decode_cmd_o.bits.op1_en        := ex_decode_list(EXDecodeFields.OP1_EN.id).asBool
+  io.ex_decode_cmd_o.bits.op2_en        := ex_decode_list(EXDecodeFields.OP2_EN.id).asBool
+  io.ex_decode_cmd_o.bits.wr_spad_en    := ex_decode_list(EXDecodeFields.WR_SPAD.id).asBool
+  io.ex_decode_cmd_o.bits.op1_from_spad := ex_decode_list(EXDecodeFields.OP1_FROM_SPAD.id).asBool
+  io.ex_decode_cmd_o.bits.op2_from_spad := ex_decode_list(EXDecodeFields.OP2_FROM_SPAD.id).asBool
 
   // 地址解析
-  val op1_spaddr = ex_decode_list(8).asUInt
-  val op2_spaddr = ex_decode_list(9).asUInt  
-  val wr_spaddr = ex_decode_list(10).asUInt
+  val op1_spaddr = ex_decode_list(EXDecodeFields.OP1_SPADDR.id).asUInt
+  val op2_spaddr = ex_decode_list(EXDecodeFields.OP2_SPADDR.id).asUInt  
+  val wr_spaddr = ex_decode_list(EXDecodeFields.WR_SPADDR.id).asUInt
   
   val op1_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, op1_spaddr)
   val op2_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, op2_spaddr)

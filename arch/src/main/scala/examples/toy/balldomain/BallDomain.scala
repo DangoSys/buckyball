@@ -7,6 +7,7 @@ import freechips.rocketchip.tile._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.PostDecodeCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import framework.rocket.RoCCResponseBB
 
 // Ball Domain的输入输出接口
 class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -20,7 +21,7 @@ class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bun
   val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   
   // RoCC响应接口
-  val roccResp = Decoupled(new RoCCResponse()(p))
+  val roccResp = Decoupled(new RoCCResponseBB()(p))
   val busy = Output(Bool())
 }
 
