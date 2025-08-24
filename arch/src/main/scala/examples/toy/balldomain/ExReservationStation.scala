@@ -10,45 +10,45 @@ import freechips.rocketchip.tile._
 import framework.rocket.RoCCResponseBB
 
 // EX域的发射接口
-class ExReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val rob_id_width = log2Up(b.rob_entries)
   val cmd = Output(new ExBuckyBallCmd)
   val rob_id = Output(UInt(rob_id_width.W))
 }
 
 // EX域的完成接口
-class ExReservationStationComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallReservationStationComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val rob_id_width = log2Up(b.rob_entries)
   val rob_id = UInt(rob_id_width.W)
 }
 
-class ExReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class BallReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val queue_entries = 32
   val rob_id_width = log2Up(b.rob_entries)
 
   val io = IO(new Bundle {
-    // EX Domain Decoder -> ExReservationStation
-    val ex_decode_cmd_i = Flipped(Decoupled(new ExDecodeCmd))
+    // EX Domain Decoder -> BallReservationStation
+    val ball_decode_cmd_i = Flipped(Decoupled(new BallDecodeCmd))
     val rs_rocc_o = new Bundle {      
       val resp = Decoupled(new RoCCResponseBB()(p))
       val busy = Output(Bool())
     }
-    // ExReservationStation -> ExecuteController (使用ExBuckyBallCmd)
-    val issue_o = Decoupled(new ExReservationStationIssue)
-    val commit_i = Flipped(Decoupled(new ExReservationStationComplete))
+    // BallReservationStation -> ExecuteController (使用ExBuckyBallCmd)
+    val issue_o = Decoupled(new BallReservationStationIssue)
+    val commit_i = Flipped(Decoupled(new BallReservationStationComplete))
   })
 
   // 简单的ROB和发射队列实现
-  val cmdQueue = Module(new Queue(new ExDecodeCmd, queue_entries))
+  val cmdQueue = Module(new Queue(new BallDecodeCmd, queue_entries))
   val robIdCounter = RegInit(0.U(rob_id_width.W))
   
   // 指令入队
-  cmdQueue.io.enq <> io.ex_decode_cmd_i
+  cmdQueue.io.enq <> io.ball_decode_cmd_i
   
   // 指令发射
   io.issue_o.valid := cmdQueue.io.deq.valid
   cmdQueue.io.deq.ready := io.issue_o.ready
-  io.issue_o.bits.cmd.ex_decode_cmd := cmdQueue.io.deq.bits
+  io.issue_o.bits.cmd.ball_decode_cmd := cmdQueue.io.deq.bits
   io.issue_o.bits.cmd.rob_id := robIdCounter
   io.issue_o.bits.rob_id := robIdCounter
   

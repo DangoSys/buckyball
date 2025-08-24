@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadResp}
-import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete}
+import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import warp.VecBall
 

@@ -6,7 +6,7 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import prototype.vector._
-import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete, ExBuckyBallCmd}
+import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete, ExBuckyBallCmd}
 // import framework.builtin.frontend.rs.{ReservationStationIssue, ReservationStationComplete, BuckyBallCmd}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
@@ -15,8 +15,8 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val rob_id_width = log2Up(b.rob_entries)
   
   val io = IO(new Bundle {
-    val cmdReq  = Flipped(Decoupled(new ExReservationStationIssue))
-    val cmdResp = Decoupled(new ExReservationStationComplete)
+    val cmdReq  = Flipped(Decoupled(new BallReservationStationIssue))
+    val cmdResp = Decoupled(new BallReservationStationComplete)
     
     // 连接到Scratchpad 和 Accumulator 的SRAM读写接口
     val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
@@ -39,7 +39,7 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val real_sel = WireInit(vec_unit)
 
   when (io.cmdReq.valid) {
-    sel := (!io.cmdReq.bits.cmd.ex_decode_cmd.is_vec) && io.cmdReq.bits.cmd.ex_decode_cmd.is_bbfp
+    sel := (!io.cmdReq.bits.cmd.ball_decode_cmd.is_vec) && io.cmdReq.bits.cmd.ball_decode_cmd.is_bbfp
   }
 
   when (io.cmdReq.fire) {
@@ -115,9 +115,9 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val reg_is_matmul_ws  = RegInit(false.B)
   
   when (io.cmdReq.valid) {
-    reg_is_matmul_ws := io.cmdReq.bits.cmd.ex_decode_cmd.is_matmul_ws
+    reg_is_matmul_ws := io.cmdReq.bits.cmd.ball_decode_cmd.is_matmul_ws
   }
-  real_is_matmul_ws := Mux(io.cmdReq.valid, io.cmdReq.bits.cmd.ex_decode_cmd.is_matmul_ws, reg_is_matmul_ws)
+  real_is_matmul_ws := Mux(io.cmdReq.valid, io.cmdReq.bits.cmd.ball_decode_cmd.is_matmul_ws, reg_is_matmul_ws)
 
   BBFP_Control.io.is_matmul_ws := real_is_matmul_ws
   

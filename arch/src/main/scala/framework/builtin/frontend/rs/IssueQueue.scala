@@ -27,7 +27,7 @@
 //   // 根据指令类型决定发送到哪个队列
 //   val is_load = io.rob_issue_i.bits.cmd_type === 1.U
 //   val is_store = io.rob_issue_i.bits.cmd_type === 2.U
-//   val is_ex = io.rob_issue_i.bits.cmd_type === 3.U
+//   val is_ball = io.rob_issue_i.bits.cmd_type === 3.U
   
 //   // 连接到对应的队列
 //   ld_queue.io.enq.valid := io.rob_issue_i.valid && is_load
@@ -36,13 +36,13 @@
 //   st_queue.io.enq.valid := io.rob_issue_i.valid && is_store
 //   st_queue.io.enq.bits := issue_req
   
-//   ex_queue.io.enq.valid := io.rob_issue_i.valid && is_ex
+//   ex_queue.io.enq.valid := io.rob_issue_i.valid && is_ball
 //   ex_queue.io.enq.bits := issue_req
   
 //   // ROB ready 当至少有一个队列可以接收时
 //   io.rob_issue_i.ready := (is_load && ld_queue.io.enq.ready) || 
 //                           (is_store && st_queue.io.enq.ready) || 
-//                           (is_ex && ex_queue.io.enq.ready)
+//                           (is_ball && ex_queue.io.enq.ready)
   
 //   // 将队列的输出直接连接到issue接口
 //   io.issue_o.ld <> ld_queue.io.deq

@@ -9,15 +9,15 @@ import prototype.matrix._
 import org.yaml.snakeyaml.events.Event.ID
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.balldomain.{ExReservationStationIssue, ExReservationStationComplete}
+import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
 
 class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
   val spad_w = b.veclane * b.inputType.getWidth
   
   val io = IO(new Bundle {
-    val cmdReq = Flipped(Decoupled(new ExReservationStationIssue))
-    val cmdResp = Decoupled(new ExReservationStationComplete)
+    val cmdReq = Flipped(Decoupled(new BallReservationStationIssue))
+    val cmdResp = Decoupled(new BallReservationStationComplete)
     val is_matmul_ws = Input(Bool())
     // 连接到Scratchpad的SRAM读写接口
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))

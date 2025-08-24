@@ -3,11 +3,11 @@
 // import chisel3._
 // import chisel3.util._
 // import examples.BuckyBallConfigs.CustomBuckyBallConfig
-// import framework.builtin.frontend.PostDecodeCmd
+// import framework.builtin.frontend.PostGDCmd
 // import org.chipsalliance.cde.config.Parameters
 
 // class BuckyBallCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-//   val post_decode_cmd = new PostDecodeCmd
+//   val post_decode_cmd = new PostGDCmd
 //   val rob_id          = UInt(log2Up(b.rob_entries).W)
 //   val cmd_type        = UInt(3.W) // 01: Load, 10: Store, 11: Ex, 100: Fence
 // }
@@ -16,7 +16,7 @@
 //   val rob_entries = b.rob_entries
   
 //   val io = IO(new Bundle {
-//     val post_decode_cmd_i = Flipped(Decoupled(new PostDecodeCmd))
+//     val post_decode_cmd_i = Flipped(Decoupled(new PostGDCmd))
 //     val post_index_cmd_o = new Bundle {
 //       val cmd          = Decoupled(new BuckyBallCmd)
 //       val new_head_ptr = Output(UInt(log2Up(rob_entries).W))
@@ -43,7 +43,7 @@
 //     io.post_index_cmd_o.cmd.bits.rob_id          := tail_ptr
 //     io.post_index_cmd_o.cmd.bits.cmd_type        := Mux(io.post_decode_cmd_i.bits.is_load, 1.U, 
 //                                                      Mux(io.post_decode_cmd_i.bits.is_store, 2.U, 
-//                                                        Mux(io.post_decode_cmd_i.bits.is_ex, 3.U, 
+//                                                        Mux(io.post_decode_cmd_i.bits.is_ball, 3.U, 
 //                                                        Mux(io.post_decode_cmd_i.bits.is_fence, 4.U,0.U))))
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd := io.post_decode_cmd_i.bits
 //     io.post_index_cmd_o.new_head_ptr             := head_ptr
@@ -53,7 +53,7 @@
 //     io.post_index_cmd_o.cmd.bits.cmd_type                      := 0.U
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd.is_load       := false.B
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd.is_store      := false.B
-//     io.post_index_cmd_o.cmd.bits.post_decode_cmd.is_ex         := false.B
+//     io.post_index_cmd_o.cmd.bits.post_decode_cmd.is_ball         := false.B
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd.is_fence      := false.B
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd.mem_addr      := 0.U
 //     io.post_index_cmd_o.cmd.bits.post_decode_cmd.iter          := 0.U

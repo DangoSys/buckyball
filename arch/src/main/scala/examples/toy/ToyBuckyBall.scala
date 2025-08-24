@@ -72,10 +72,10 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // Frontend: Global Decode Dispatch commands to BallDomain and MemDomain
 // -----------------------------------------------------------------------------
   implicit val b: CustomBuckyBallConfig = outer.b
-  val globalDecoder = Module(new GlobalDecoder)
-  globalDecoder.io.id_i.valid    := io.cmd.valid
-  globalDecoder.io.id_i.bits.cmd := io.cmd.bits
-  io.cmd.ready                   := globalDecoder.io.id_i.ready
+  val gDecoder = Module(new GlobalDecoder)
+  gDecoder.io.id_i.valid    := io.cmd.valid
+  gDecoder.io.id_i.bits.cmd := io.cmd.bits
+  io.cmd.ready                   := gDecoder.io.id_i.ready
 
 // -----------------------------------------------------------------------------
 // Backend: Ball Domain
@@ -83,8 +83,8 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   val ballDomain = Module(new BallDomain)
   
   // GlobalDecoder->BallDomain 
-  ballDomain.io.globalDecoderIn.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_ex
-  ballDomain.io.globalDecoderIn.bits := globalDecoder.io.id_rs.bits
+  ballDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_ball
+  ballDomain.io.gDecoderIn.bits  := Mux(ballDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
 
 // -----------------------------------------------------------------------------
 // Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
@@ -92,13 +92,13 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   val memDomain = Module(new MemDomain)
   
   // GlobalDecoder->MemDomain 
-  memDomain.io.globalDecoderIn.valid := globalDecoder.io.id_rs.valid && globalDecoder.io.id_rs.bits.is_mem
-  memDomain.io.globalDecoderIn.bits := globalDecoder.io.id_rs.bits
+  memDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_mem
+  memDomain.io.gDecoderIn.bits  := Mux(memDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
   
-  // 全局ready信号：只有对应的域ready时，globalDecoder才ready
-  globalDecoder.io.id_rs.ready := 
-    (globalDecoder.io.id_rs.bits.is_ex && ballDomain.io.globalDecoderIn.ready) ||
-    (globalDecoder.io.id_rs.bits.is_mem && memDomain.io.globalDecoderIn.ready)
+  // 全局ready信号：只有对应的域ready时，gDecoder才ready
+  gDecoder.io.id_o.ready := 
+    (gDecoder.io.id_o.bits.is_ball && ballDomain.io.gDecoderIn.ready) ||
+    (gDecoder.io.id_o.bits.is_mem && memDomain.io.gDecoderIn.ready)
 
 // -----------------------------------------------------------------------------
 // Backend: MemDomain Connections
