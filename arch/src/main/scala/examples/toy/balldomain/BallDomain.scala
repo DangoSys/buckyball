@@ -34,14 +34,12 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
 //---------------------------------------------------------------------------
   val ballDecoder = Module(new ExDomainDecoder)
   ballDecoder.io.post_decode_cmd_i <> io.globalDecoderIn
-  io.globalDecoderIn.ready := ballDecoder.io.post_decode_cmd_i.ready
   
 //---------------------------------------------------------------------------
 // Decoder -> ExReservationStation
 //---------------------------------------------------------------------------
   val ballReservationStation = Module(new ExReservationStation)
   ballReservationStation.io.ex_decode_cmd_i <> ballDecoder.io.ex_decode_cmd_o
-  io.globalDecoderIn.ready := ballDecoder.io.post_decode_cmd_i.ready
 
 //---------------------------------------------------------------------------
 // ExReservationStation -> ExecuteController
