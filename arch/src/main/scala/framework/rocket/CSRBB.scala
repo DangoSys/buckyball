@@ -1,7 +1,7 @@
 // See LICENSE.SiFive for license details.
 // See LICENSE.Berkeley for license details.
 
-package framework.ballcore.ballcore
+package framework.rocket
 
 import chisel3._
 import chisel3.util.{BitPat, Cat, Fill, Mux1H, PopCount, PriorityMux, RegEnable, UIntToOH, Valid, log2Ceil, log2Up}

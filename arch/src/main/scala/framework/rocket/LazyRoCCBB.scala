@@ -1,7 +1,7 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package framework.ballcore.ballcore
+package framework.rocket
 
 import chisel3._
 import chisel3.util._

@@ -7,6 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.util.Util._
 import freechips.rocketchip.tile._
+import framework.rocket.RoCCResponseBB
 
 // EX域的发射接口
 class ExReservationStationIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -29,7 +30,7 @@ class ExReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ext
     // EX Domain Decoder -> ExReservationStation
     val ex_decode_cmd_i = Flipped(Decoupled(new ExDecodeCmd))
     val rs_rocc_o = new Bundle {      
-      val resp = Decoupled(new RoCCResponse()(p))
+      val resp = Decoupled(new RoCCResponseBB()(p))
       val busy = Output(Bool())
     }
     // ExReservationStation -> ExecuteController (使用ExBuckyBallCmd)

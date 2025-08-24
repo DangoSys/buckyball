@@ -1,6 +1,15 @@
-# buckyball
+<p align="center">
+    <img src="docs/img/buckyball.png" width = "100%" height = "70%">
+</p>
+
+<div align="center">
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DangoSys/buckyball)
 [![Ask Zread](https://deepwiki.com/badge.svg)](https://zread.ai/DangoSys/buckyball)
+
+</div>
+
+# buckyball
 
 A Scaling Framework for Domain Specific Architecture
 
