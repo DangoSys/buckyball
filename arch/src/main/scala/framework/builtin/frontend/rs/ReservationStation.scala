@@ -6,7 +6,7 @@
 // import org.chipsalliance.cde.config.Parameters
 // import examples.BuckyBallConfigs.CustomBuckyBallConfig
 // import framework.builtin.util.Util._
-// import framework.builtin.frontend.{PostDecodeCmd, BuckyBallRawCmd}
+// import framework.builtin.frontend.{PostGDCmd, BuckyBallRawCmd}
 // // import framework.builtin.frontend.rs.RoCCResponseBB
 // import freechips.rocketchip.tile._  
 
@@ -40,9 +40,9 @@
 //   val rob_id_width = log2Up(b.rob_entries)
 
 //   val io = IO(new Bundle {
-//     // RAW CMD -> PostDecodeCmd -> BuckyBallCmd
+//     // RAW CMD -> PostGDCmd -> BuckyBallCmd
 //     // ================================ 连接前端    
-//     val id_i = Flipped(Decoupled(new PostDecodeCmd))
+//     val id_i = Flipped(Decoupled(new PostGDCmd))
 //     val rs_rocc_o = new Bundle {      
 //       val resp      = Decoupled(new RoCCResponse()(p))
 //       val busy      = Output(Bool())  // 是否有指令在ROB中等待提交

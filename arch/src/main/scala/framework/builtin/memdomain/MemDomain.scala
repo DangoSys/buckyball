@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import framework.builtin.frontend.PostDecodeCmd
+import framework.builtin.frontend.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.builtin.frontend.FrontendTLBIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
@@ -15,7 +15,7 @@ import framework.rocket.RoCCResponseBB
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // 来自GlobalDecoder的输入
-    val globalDecoderIn = Flipped(Decoupled(new PostDecodeCmd))
+    val gDecoderIn = Flipped(Decoupled(new PostGDCmd))
     
     // 与Ball Domain交互的SRAM接口
     val ballDomain = new Bundle {
@@ -47,7 +47,7 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
 
   // 内部组件实例化
   val memDecoder = Module(new MemDomainDecoder)
-  val memReservationStation = Module(new MemReservationStation)
+  val memRs = Module(new MemReservationStation)
   val memLoader = Module(new MemLoader)
   val memStorer = Module(new MemStorer)
   
@@ -55,16 +55,16 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val memController = Module(new MemController)
 
   // 连接GlobalDecoder到MemDecoder
-  memDecoder.io.post_decode_cmd_i <> io.globalDecoderIn
+  memDecoder.io.raw_cmd_i <> io.gDecoderIn
   
   // 连接MemDecoder到ReservationStation
-  memReservationStation.io.mem_decode_cmd_i <> memDecoder.io.mem_decode_cmd_o
+  memRs.io.mem_decode_cmd_i <> memDecoder.io.mem_decode_cmd_o
   
   // 连接ReservationStation到MemLoader和MemStorer
-  memLoader.io.cmdReq <> memReservationStation.io.issue_o.ld
-  memStorer.io.cmdReq <> memReservationStation.io.issue_o.st
-  memReservationStation.io.commit_i.ld <> memLoader.io.cmdResp
-  memReservationStation.io.commit_i.st <> memStorer.io.cmdResp
+  memLoader.io.cmdReq <> memRs.io.issue_o.ld
+  memStorer.io.cmdReq <> memRs.io.issue_o.st
+  memRs.io.commit_i.ld <> memLoader.io.cmdResp
+  memRs.io.commit_i.st <> memStorer.io.cmdResp
   
   // 连接MemLoader和MemStorer到DMA
   memLoader.io.dmaReq <> io.dma.read.req
@@ -89,8 +89,8 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   io.ballDomain.accWrite <> memController.io.ballDomain.accWrite
   
   // RoCC响应直接连接
-  io.roccResp <> memReservationStation.io.rs_rocc_o.resp
+  io.roccResp <> memRs.io.rs_rocc_o.resp
   
   // 忙碌信号
-  io.busy := memReservationStation.io.rs_rocc_o.busy
+  io.busy := memRs.io.rs_rocc_o.busy
 }

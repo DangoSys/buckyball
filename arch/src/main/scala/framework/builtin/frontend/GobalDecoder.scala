@@ -15,9 +15,9 @@ class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
 
 
 
-class PostDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   // 指令类型判断
-  val is_ex         = Bool()  // EX指令(包括FENCE)
+  val is_ball       = Bool()  // Ball指令(包括FENCE)
   val is_mem        = Bool()  // 内存指令(load/store)
   
   // 原始指令信息，传递给对应的domain decoder
@@ -29,22 +29,22 @@ class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
     val id_i = Flipped(Decoupled(new Bundle {
       val cmd = new RoCCCommandBB
     }))
-    val id_rs = Decoupled(new PostDecodeCmd)
+    val id_o = Decoupled(new PostGDCmd)
   })
 
-  io.id_i.ready := io.id_rs.ready // 如果保留站阻塞了，id_i也阻塞
+  io.id_i.ready := io.id_o.ready // 如果保留站阻塞了，id_i也阻塞
 
   val func7 = io.id_i.bits.cmd.inst.funct
 
   // 指令类型判断：只区分EX指令和Mem指令
   val is_mem_instr = (func7 === MVIN_BITPAT) || (func7 === MVOUT_BITPAT)
-  val is_ex_instr = !is_mem_instr  // EX指令包含所有非内存指令(包括FENCE)
+  val is_ball_instr = !is_mem_instr  // Ball指令包含所有非内存指令(包括FENCE)
 
   // 输出控制
-  io.id_rs.valid := io.id_i.valid
-  io.id_rs.bits.is_ex := is_ex_instr
-  io.id_rs.bits.is_mem := is_mem_instr
-  io.id_rs.bits.raw_cmd := io.id_i.bits.cmd
+  io.id_o.valid        := io.id_i.valid
+  io.id_o.bits.is_ball   := is_ball_instr
+  io.id_o.bits.is_mem  := is_mem_instr
+  io.id_o.bits.raw_cmd := io.id_i.bits.cmd
 }
 
 

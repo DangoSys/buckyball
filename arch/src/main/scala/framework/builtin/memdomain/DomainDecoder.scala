@@ -2,7 +2,7 @@ package framework.builtin.memdomain
 
 import chisel3._
 import chisel3.util._
-import framework.builtin.frontend.PostDecodeCmd
+import framework.builtin.frontend.PostGDCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.memdomain.DISA._
 import framework.builtin.memdomain.dma.LocalAddr
@@ -34,7 +34,7 @@ class MemBuckyBallCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends 
 // LS decode fields
 object LSDecodeFields extends Enumeration {
   type Field = Value
-  val LD_EN, ST_EN, MEMADDR, SPADDR, ITER = Value
+  val LD_EN, ST_EN, MEMADDR, SPADDR, ITER, VALID = Value
 }
 
 // Default constants for Mem decoder
@@ -49,7 +49,7 @@ class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends
   import MemDefaultConstants._
   
   val io = IO(new Bundle {
-    val post_decode_cmd_i = Flipped(Decoupled(new PostDecodeCmd))
+    val raw_cmd_i = Flipped(Decoupled(new PostGDCmd))
     val mem_decode_cmd_o = Decoupled(new MemDecodeCmd)
   })
 
@@ -57,33 +57,38 @@ class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends
   val memAddrLen = b.memAddrLen
 
   // 只处理Mem指令
-  io.post_decode_cmd_i.ready := io.mem_decode_cmd_o.ready && io.post_decode_cmd_i.bits.is_mem
+  io.raw_cmd_i.ready := io.mem_decode_cmd_o.ready
 
-  val func7 = io.post_decode_cmd_i.bits.raw_cmd.inst.funct
-  val rs1   = io.post_decode_cmd_i.bits.raw_cmd.rs1
-  val rs2   = io.post_decode_cmd_i.bits.raw_cmd.rs2
+  val func7 = io.raw_cmd_i.bits.raw_cmd.inst.funct
+  val rs1   = io.raw_cmd_i.bits.raw_cmd.rs1
+  val rs2   = io.raw_cmd_i.bits.raw_cmd.rs2
 
   // Load/Store指令解码
   import LSDecodeFields._
-  val ls_default_decode = List(N,N,N,N,N,DADDR,DADDR,DITER)
+  val ls_default_decode = List(N,N,DADDR,DADDR,DITER,N)
   val ls_decode_list = ListLookup(func7, ls_default_decode, Array(
-    MVIN_BITPAT  -> List(N,N,N,Y,N,rs1(memAddrLen-1,0),rs2(spAddrLen-1,0),rs2(spAddrLen+9,spAddrLen)), // mvin
-    MVOUT_BITPAT -> List(N,N,N,N,Y,rs1(memAddrLen-1,0),rs2(spAddrLen-1,0),rs2(spAddrLen+9,spAddrLen))  // mvout
+    MVIN_BITPAT        -> List(Y,N,rs1(memAddrLen-1,0),rs2(spAddrLen-1,0),rs2(spAddrLen+9,spAddrLen),Y), // mvin
+    MVOUT_BITPAT       -> List(N,Y,rs1(memAddrLen-1,0),rs2(spAddrLen-1,0),rs2(spAddrLen+9,spAddrLen),Y)  // mvout
   ))
 
-  // 输出赋值
-  io.mem_decode_cmd_o.valid := io.post_decode_cmd_i.valid && io.post_decode_cmd_i.bits.is_mem
+  assert(!(io.raw_cmd_i.fire && !ls_decode_list(LSDecodeFields.VALID.id).asBool), 
+    s"MemDomainDecoder: Invalid command opcode, func7 = 0x%x\n", func7)
+
+// -----------------------------------------------------------------------------
+// 输出赋值
+// -----------------------------------------------------------------------------
+  io.mem_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_mem
   
-  io.mem_decode_cmd_o.bits.is_load  := ls_decode_list(LSDecodeFields.LD_EN.id).asBool
-  io.mem_decode_cmd_o.bits.is_store := ls_decode_list(LSDecodeFields.ST_EN.id).asBool
-  io.mem_decode_cmd_o.bits.mem_addr := ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt
-  io.mem_decode_cmd_o.bits.iter     := ls_decode_list(LSDecodeFields.ITER.id).asUInt
+  io.mem_decode_cmd_o.bits.is_load  := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.LD_EN.id).asBool, false.B)
+  io.mem_decode_cmd_o.bits.is_store := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ST_EN.id).asBool, false.B)
+  io.mem_decode_cmd_o.bits.mem_addr := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt, 0.U(b.memAddrLen.W))
+  io.mem_decode_cmd_o.bits.iter     := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ITER.id).asUInt, 0.U(10.W))
 
 
   // 地址解析
   val ls_spaddr = ls_decode_list(LSDecodeFields.SPADDR.id).asUInt
   val ls_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, ls_spaddr)
   
-  io.mem_decode_cmd_o.bits.sp_bank := ls_laddr.mem_bank()
-  io.mem_decode_cmd_o.bits.sp_bank_addr := ls_laddr.mem_row()
+  io.mem_decode_cmd_o.bits.sp_bank       := Mux(io.mem_decode_cmd_o.valid, ls_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
+  io.mem_decode_cmd_o.bits.sp_bank_addr  := Mux(io.mem_decode_cmd_o.valid, ls_laddr.mem_row(), 0.U(log2Up(b.spad_bank_entries + b.acc_bank_entries).W))
 }
