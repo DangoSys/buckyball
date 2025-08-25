@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
+import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -15,8 +15,8 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle{
-    val cmdReq = Flipped(Decoupled(new BallReservationStationIssue))
-    val cmdResp = Decoupled(new BallReservationStationComplete)
+    val cmdReq = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp = Decoupled(new BallRsComplete)
     val is_matmul_ws  = Output(Bool())
     val id_lu_o = Decoupled(new id_lu_req)
   })
@@ -35,35 +35,36 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val wr_bank_addr = RegInit(0.U(12.W))
   val is_matmul_ws = RegInit(false.B)
   io.is_matmul_ws := false.B
+  
   switch(state) {
     is(idle) {
-      when(io.cmdReq.valid && io.cmdReq.bits.cmd.ball_decode_cmd.is_bbfp) {
-        iteration := io.cmdReq.bits.cmd.ball_decode_cmd.iter
+      when(io.cmdReq.valid && io.cmdReq.bits.cmd.is_bbfp) {
+        iteration         := io.cmdReq.bits.cmd.iter
         iteration_counter := 0.U
-        is_matmul_ws := false.B
-        rob_id_reg := io.cmdReq.bits.rob_id
-        op1_bank := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank
-        op1_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank_addr
-        op2_bank := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank
-        op2_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank_addr
-        wr_bank := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank
-        wr_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank_addr
-        state := busy
-        io.is_matmul_ws := false.B
+        is_matmul_ws      := false.B
+        rob_id_reg        := io.cmdReq.bits.rob_id
+        op1_bank          := io.cmdReq.bits.cmd.op1_bank
+        op1_bank_addr     := io.cmdReq.bits.cmd.op1_bank_addr
+        op2_bank          := io.cmdReq.bits.cmd.op2_bank
+        op2_bank_addr     := io.cmdReq.bits.cmd.op2_bank_addr
+        wr_bank           := io.cmdReq.bits.cmd.wr_bank
+        wr_bank_addr      := io.cmdReq.bits.cmd.wr_bank_addr
+        state             := busy
+        io.is_matmul_ws   := false.B
       }
-      when(io.cmdReq.valid && io.cmdReq.bits.cmd.ball_decode_cmd.is_matmul_ws){
-        iteration := io.cmdReq.bits.cmd.ball_decode_cmd.iter 
+      when(io.cmdReq.valid && io.cmdReq.bits.cmd.is_matmul_ws){
+        iteration         := io.cmdReq.bits.cmd.iter 
         iteration_counter := 0.U
-        rob_id_reg := io.cmdReq.bits.rob_id
-        op1_bank := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank
-        op1_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank_addr
-        op2_bank := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank
-        op2_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank_addr
-        wr_bank := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank
-        wr_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank_addr
-        state := busy
-        io.is_matmul_ws := true.B
-        is_matmul_ws := true.B
+        is_matmul_ws      := true.B
+        rob_id_reg        := io.cmdReq.bits.rob_id
+        op1_bank          := io.cmdReq.bits.cmd.op1_bank
+        op1_bank_addr     := io.cmdReq.bits.cmd.op1_bank_addr
+        op2_bank          := io.cmdReq.bits.cmd.op2_bank
+        op2_bank_addr     := io.cmdReq.bits.cmd.op2_bank_addr
+        wr_bank           := io.cmdReq.bits.cmd.wr_bank
+        wr_bank_addr      := io.cmdReq.bits.cmd.wr_bank_addr
+        state             := busy
+        io.is_matmul_ws   := true.B
       }
     }
     is(busy) {
@@ -75,16 +76,16 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
   }
   //生成ID_LU请求
-  io.id_lu_o.valid := state === busy
-  io.id_lu_o.bits.op1_bank := op1_bank
+  io.id_lu_o.valid              := state === busy
+  io.id_lu_o.bits.op1_bank      := op1_bank
   io.id_lu_o.bits.op1_bank_addr := op1_bank_addr + iteration_counter
-  io.id_lu_o.bits.op2_bank := op2_bank
+  io.id_lu_o.bits.op2_bank      := op2_bank
   io.id_lu_o.bits.op2_bank_addr := op2_bank_addr + iteration_counter
-  io.id_lu_o.bits.wr_bank := wr_bank
-  io.id_lu_o.bits.wr_bank_addr := wr_bank_addr + iteration_counter
-  io.id_lu_o.bits.opcode := 1.U
-  io.id_lu_o.bits.iter := iteration
-  io.id_lu_o.bits.thread_id := iteration_counter
+  io.id_lu_o.bits.wr_bank       := wr_bank
+  io.id_lu_o.bits.wr_bank_addr  := wr_bank_addr + iteration_counter
+  io.id_lu_o.bits.opcode        := 1.U
+  io.id_lu_o.bits.iter          := iteration
+  io.id_lu_o.bits.thread_id     := iteration_counter
 
   io.cmdReq.ready := io.id_lu_o.ready
 

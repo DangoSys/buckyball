@@ -6,18 +6,16 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
+import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import Util.Pipeline
-import org.yaml.snakeyaml.events.Event.ID
+
 
 class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  val rob_id_width = log2Up(b.rob_entries)
   val spad_w = b.veclane * b.inputType.getWidth
   
   val io = IO(new Bundle {
-    val cmdReq = Flipped(Decoupled(new BallReservationStationIssue))
-    val cmdResp = Decoupled(new BallReservationStationComplete)
+    val cmdReq = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp = Decoupled(new BallRsComplete)
     
     // 连接到Scratchpad的SRAM读写接口
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
@@ -26,14 +24,13 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
+
 // -----------------------------------------------------------------------------
 // VECCTRLUNIT
 // -----------------------------------------------------------------------------
   val VecCtrlUnit = Module(new VecCtrlUnit)
   VecCtrlUnit.io.cmdReq <> io.cmdReq
   io.cmdResp <> VecCtrlUnit.io.cmdResp_o
-
-
 
 // -----------------------------------------------------------------------------
 // VECLOADUNIT

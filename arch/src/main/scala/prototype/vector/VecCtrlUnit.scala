@@ -7,15 +7,13 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
+import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  val rob_id_width = log2Up(b.rob_entries)
-
   val io = IO(new Bundle{
-    val cmdReq = Flipped(Decoupled(new BallReservationStationIssue))
-    val cmdResp_o = Decoupled(new BallReservationStationComplete)
+    val cmdReq = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp_o = Decoupled(new BallRsComplete)
     
     val ctrl_ld_o = Decoupled(new ctrl_ld_req)
     val ctrl_st_o = Decoupled(new ctrl_st_req)
@@ -24,7 +22,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     val cmdResp_i = Flipped(Valid(new Bundle {val commit = Bool()})) // from store unit
   })
   
-  val rob_id_reg    = RegInit(0.U(rob_id_width.W))
+  val rob_id_reg    = RegInit(0.U(log2Up(b.rob_entries).W))
   val iter          = RegInit(0.U(10.W))
   val op1_bank      = RegInit(0.U(2.W))
   val op1_bank_addr = RegInit(0.U(12.W))
@@ -43,15 +41,15 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 // -----------------------------------------------------------------------------
 
   when(io.cmdReq.fire) {
-    iter          := io.cmdReq.bits.cmd.ball_decode_cmd.iter
+    iter          := io.cmdReq.bits.cmd.iter
     rob_id_reg    := io.cmdReq.bits.rob_id
-    op1_bank      := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank
-    op1_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op1_bank_addr
-    op2_bank      := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank
-    op2_bank_addr := io.cmdReq.bits.cmd.ball_decode_cmd.op2_bank_addr
-    wr_bank       := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank
-    wr_bank_addr  := io.cmdReq.bits.cmd.ball_decode_cmd.wr_bank_addr
-    is_acc        := io.cmdReq.bits.cmd.ball_decode_cmd.is_acc
+    op1_bank      := io.cmdReq.bits.cmd.op1_bank
+    op1_bank_addr := io.cmdReq.bits.cmd.op1_bank_addr
+    op2_bank      := io.cmdReq.bits.cmd.op2_bank
+    op2_bank_addr := io.cmdReq.bits.cmd.op2_bank_addr
+    wr_bank       := io.cmdReq.bits.cmd.wr_bank
+    wr_bank_addr  := io.cmdReq.bits.cmd.wr_bank_addr
+    is_acc        := io.cmdReq.bits.cmd.is_acc
     
     state         := busy
   }

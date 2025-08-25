@@ -217,7 +217,6 @@ class RocketTileModuleImpBB(outer: RocketTileBB) extends BaseTileModuleImp(outer
   core.io.ptw <> ptw.io.dpath
 
   // Connect the coprocessor interfaces
-  printf("DEBUG: usingRoCC = %d\n", usingRoCC.B)
   if (outer.roccs.size > 0) {
     cmdRouter.get.io.in <> core.io.rocc.cmd
     outer.roccs.foreach{ lm =>
