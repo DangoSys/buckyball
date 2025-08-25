@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import framework.builtin.memdomain.{MemReservationStationIssue, MemReservationStationComplete, MemBuckyBallCmd}
+import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
 import framework.builtin.memdomain.mem.SramWriteIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, LocalAddr}
 import freechips.rocketchip.rocket.MStatus
@@ -14,9 +14,9 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   
   val io = IO(new Bundle {
     // 来自ReservationStation的load指令
-    val cmdReq = Flipped(Decoupled(new MemReservationStationIssue))
+    val cmdReq = Flipped(Decoupled(new MemRsIssue))
     // 发送给ReservationStation的完成信号
-    val cmdResp = Decoupled(new MemReservationStationComplete)
+    val cmdResp = Decoupled(new MemRsComplete)
     // 直接连接DMA读取接口
     val dmaReq = Decoupled(new BBReadRequest())
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.spad_w)))
@@ -41,14 +41,14 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   // 接收load指令
   io.cmdReq.ready := state === s_idle
   
-  when (io.cmdReq.fire && io.cmdReq.bits.cmd.mem_decode_cmd.is_load) {
+  when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
     state              := s_dma_req
     rob_id_reg         := io.cmdReq.bits.rob_id
-    mem_addr_reg       := io.cmdReq.bits.cmd.mem_decode_cmd.mem_addr
-    iter_reg           := io.cmdReq.bits.cmd.mem_decode_cmd.iter
-    wr_bank_reg        := io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank
-    wr_bank_addr_reg   := io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank_addr
-    is_acc_reg         := (io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
+    mem_addr_reg       := io.cmdReq.bits.cmd.mem_addr
+    iter_reg           := io.cmdReq.bits.cmd.iter
+    wr_bank_reg        := io.cmdReq.bits.cmd.sp_bank
+    wr_bank_addr_reg   := io.cmdReq.bits.cmd.sp_bank_addr
+    is_acc_reg         := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
     resp_count         := 0.U
   }
 

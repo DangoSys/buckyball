@@ -25,11 +25,6 @@ class MemDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bun
   val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries + b.acc_bank_entries).W)
 }
 
-// Mem域专用的BuckyBallCmd
-class MemBuckyBallCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val mem_decode_cmd = new MemDecodeCmd
-  val rob_id = UInt(log2Up(b.rob_entries).W)
-}
 
 // LS decode fields
 object LSDecodeFields extends Enumeration {

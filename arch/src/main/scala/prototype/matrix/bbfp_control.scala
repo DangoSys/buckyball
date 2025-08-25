@@ -9,19 +9,16 @@ import prototype.matrix._
 import org.yaml.snakeyaml.events.Event.ID
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete}
+import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 
 class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  val rob_id_width = log2Up(b.rob_entries)
-  val spad_w = b.veclane * b.inputType.getWidth
-  
   val io = IO(new Bundle {
-    val cmdReq = Flipped(Decoupled(new BallReservationStationIssue))
-    val cmdResp = Decoupled(new BallReservationStationComplete)
+    val cmdReq  = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp = Decoupled(new BallRsComplete)
     val is_matmul_ws = Input(Bool())
     // 连接到Scratchpad的SRAM读写接口
-    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
-    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
+    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
+    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
 
      // 连接到Accumulator的读写接口
     val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))

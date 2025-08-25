@@ -6,17 +6,16 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import prototype.vector._
-import examples.toy.balldomain.{BallReservationStationIssue, BallReservationStationComplete, ExBuckyBallCmd}
+import examples.toy.balldomain.rs.{BallIssueInterface, BallCommitInterface}
 // import framework.builtin.frontend.rs.{ReservationStationIssue, ReservationStationComplete, BuckyBallCmd}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
-class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  val rob_id_width = log2Up(b.rob_entries)
+class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   
   val io = IO(new Bundle {
-    val cmdReq  = Flipped(Decoupled(new BallReservationStationIssue))
-    val cmdResp = Decoupled(new BallReservationStationComplete)
+    val cmdReq  = Flipped(new BallIssueInterface)
+    val cmdResp = Flipped(new BallCommitInterface)
     
     // 连接到Scratchpad 和 Accumulator 的SRAM读写接口
     val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
@@ -32,31 +31,34 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 // Input Selector
 // -----------------------------------------------------------------------------
 
-  val sel               = WireInit(false.B)
-  val sel_reg           = RegInit(false.B)
+  val sel      = WireInit(false.B)
+  val sel_reg  = RegInit(false.B)
 
   val vec_unit :: bbfp_unit :: Nil = Enum(2)
   val real_sel = WireInit(vec_unit)
 
-  when (io.cmdReq.valid) {
-    sel := (!io.cmdReq.bits.cmd.ball_decode_cmd.is_vec) && io.cmdReq.bits.cmd.ball_decode_cmd.is_bbfp
+  // ball1 (VecUnit) 和 ball2 (BBFP) 的选择逻辑
+  val ball1_valid = io.cmdReq.ball1.valid
+  val ball2_valid = io.cmdReq.ball2.valid
+  
+  when (ball1_valid || ball2_valid) {
+    sel := ball2_valid  // ball2是BBFP
   }
 
-  when (io.cmdReq.fire) {
+  when (ball1_valid || ball2_valid) {
     sel_reg := sel
   }.otherwise {
     sel_reg := sel_reg
   }
-  real_sel := Mux(io.cmdReq.valid, sel, sel_reg)
+  real_sel := Mux(ball1_valid || ball2_valid, sel, sel_reg)
 
-  // 直接连接到选择的单元
-  BBFP_Control.io.cmdReq.valid := io.cmdReq.valid && (real_sel === bbfp_unit)
-  VecUnit.io.cmdReq.valid := io.cmdReq.valid && (real_sel === vec_unit)
+  VecUnit.io.cmdReq.valid := io.cmdReq.ball1.valid
+  VecUnit.io.cmdReq.bits := io.cmdReq.ball1.bits
+  io.cmdReq.ball1.ready := VecUnit.io.cmdReq.ready
   
-  BBFP_Control.io.cmdReq.bits := io.cmdReq.bits
-  VecUnit.io.cmdReq.bits := io.cmdReq.bits
-  
-  io.cmdReq.ready := Mux(real_sel === vec_unit, VecUnit.io.cmdReq.ready, BBFP_Control.io.cmdReq.ready)
+  BBFP_Control.io.cmdReq.valid := io.cmdReq.ball2.valid  
+  BBFP_Control.io.cmdReq.bits := io.cmdReq.ball2.bits
+  io.cmdReq.ball2.ready := BBFP_Control.io.cmdReq.ready
 
 // -----------------------------------------------------------------------------
 // 默认赋值, sb chisel 识别不出来两种情况全覆盖了，故手动赋值
@@ -107,17 +109,15 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 // BBFP_Control
 // -----------------------------------------------------------------------------
 
-  // cmdReq输入分发
-  BBFP_Control.io.cmdReq.valid := io.cmdReq.valid && real_sel === bbfp_unit
-  BBFP_Control.io.cmdReq.bits  := io.cmdReq.bits
+  // cmdReq输入分发已在上面处理
 
   val real_is_matmul_ws = WireInit(false.B)
   val reg_is_matmul_ws  = RegInit(false.B)
   
-  when (io.cmdReq.valid) {
-    reg_is_matmul_ws := io.cmdReq.bits.cmd.ball_decode_cmd.is_matmul_ws
+  when (io.cmdReq.ball2.valid) {
+    reg_is_matmul_ws := io.cmdReq.ball2.bits.cmd.is_matmul_ws
   }
-  real_is_matmul_ws := Mux(io.cmdReq.valid, io.cmdReq.bits.cmd.ball_decode_cmd.is_matmul_ws, reg_is_matmul_ws)
+  real_is_matmul_ws := Mux(io.cmdReq.ball2.valid, io.cmdReq.ball2.bits.cmd.is_matmul_ws, reg_is_matmul_ws)
 
   BBFP_Control.io.is_matmul_ws := real_is_matmul_ws
   
@@ -163,15 +163,11 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 
   }
 
-
-
-
 // -----------------------------------------------------------------------------
 // VecUnit
 // -----------------------------------------------------------------------------
 
-  VecUnit.io.cmdReq.valid      := io.cmdReq.valid && real_sel === vec_unit
-  VecUnit.io.cmdReq.bits       := io.cmdReq.bits
+  // VecUnit cmdReq连接已在上面处理
 
 
     // 连接到Scratchpad的SRAM读写接口
@@ -218,8 +214,11 @@ class ExecuteController(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 // Output Selector
 // -----------------------------------------------------------------------------
   // cmdResp输出分发
-  io.cmdResp.valid := Mux(real_sel === bbfp_unit, BBFP_Control.io.cmdResp.valid, VecUnit.io.cmdResp.valid)// only valid need
-  io.cmdResp.bits  := Mux(real_sel === bbfp_unit, BBFP_Control.io.cmdResp.bits, VecUnit.io.cmdResp.bits)
-  BBFP_Control.io.cmdResp.ready := io.cmdResp.ready && real_sel === bbfp_unit
-  VecUnit.io.cmdResp.ready      := io.cmdResp.ready && real_sel === vec_unit
+  io.cmdResp.ball1.valid   := VecUnit.io.cmdResp.valid
+  io.cmdResp.ball1.bits    := VecUnit.io.cmdResp.bits
+  VecUnit.io.cmdResp.ready := io.cmdResp.ball1.ready
+  
+  io.cmdResp.ball2.valid        := BBFP_Control.io.cmdResp.valid
+  io.cmdResp.ball2.bits         := BBFP_Control.io.cmdResp.bits  
+  BBFP_Control.io.cmdResp.ready := io.cmdResp.ball2.ready
 }

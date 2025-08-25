@@ -8,6 +8,7 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.PostGDCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.rocket.RoCCResponseBB
+import examples.toy.balldomain.rs.BallReservationStation
 
 // Ball Domain的输入输出接口
 class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -23,6 +24,9 @@ class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bun
   // RoCC响应接口
   val roccResp = Decoupled(new RoCCResponseBB()(p))
   val busy = Output(Bool())
+  
+  // fence信号
+  val fence_o = Output(Bool())
 }
 
 // Ball Domain 顶层
@@ -35,6 +39,9 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   val ballDecoder = Module(new BallDomainDecoder)
   ballDecoder.io.raw_cmd_i <> io.gDecoderIn
   
+  // fence信号连接
+  io.fence_o := ballDecoder.io.fence_o
+  
 //---------------------------------------------------------------------------
 // Decoder -> BallReservationStation
 //---------------------------------------------------------------------------
@@ -42,15 +49,15 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   ballRs.io.ball_decode_cmd_i <> ballDecoder.io.ball_decode_cmd_o
 
 //---------------------------------------------------------------------------
-// BallReservationStation -> ExecuteController
+// BallReservationStation -> BallController
 //---------------------------------------------------------------------------
-  val ballController = Module(new ExecuteController)
+  val ballController = Module(new BallController)
 
   ballController.io.cmdReq <> ballRs.io.issue_o
   ballRs.io.commit_i <> ballController.io.cmdResp
   
 //---------------------------------------------------------------------------
-// ExecuteController -> Mem Domain
+// BallController -> Mem Domain
 //---------------------------------------------------------------------------
   ballController.io.sramRead  <> io.sramRead
   ballController.io.sramWrite <> io.sramWrite
@@ -58,7 +65,7 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   ballController.io.accWrite  <> io.accWrite
   
 //---------------------------------------------------------------------------
-// ExecuteController -> RoCC
+// BallController -> RoCC
 //---------------------------------------------------------------------------
   io.roccResp <> ballRs.io.rs_rocc_o.resp
   io.busy := ballRs.io.rs_rocc_o.busy
