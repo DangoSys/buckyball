@@ -20,7 +20,7 @@ class MemController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
       val accWrite  = Vec(b.acc_banks, new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len))
     }
     
-    // Ball Domain接口 - 用于ExecuteController访问
+    // Ball Domain接口 - 用于BallController访问
     val ballDomain = new Bundle {
       val sramRead  = Vec(b.sp_banks, new SramReadIO(b.spad_bank_entries, b.spad_w))
       val sramWrite = Vec(b.sp_banks, new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len))

@@ -16,7 +16,8 @@ import framework.builtin.frontend.{FrontendTLB, GlobalDecoder}
 import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
-import examples.BuckyBallConfigs.CustomBuckyBallConfig 
+import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.toy.FenceCSR 
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
@@ -75,7 +76,9 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   val gDecoder = Module(new GlobalDecoder)
   gDecoder.io.id_i.valid    := io.cmd.valid
   gDecoder.io.id_i.bits.cmd := io.cmd.bits
-  io.cmd.ready                   := gDecoder.io.id_i.ready
+  io.cmd.ready              := gDecoder.io.id_i.ready
+
+
 
 // -----------------------------------------------------------------------------
 // Backend: Ball Domain
@@ -85,6 +88,8 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   // GlobalDecoder->BallDomain 
   ballDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_ball
   ballDomain.io.gDecoderIn.bits  := Mux(ballDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
+  
+  // fence信号连接
 
 // -----------------------------------------------------------------------------
 // Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
@@ -132,7 +137,19 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   respArb.io.in(0) <> ballDomain.io.roccResp
   respArb.io.in(1) <> memDomain.io.roccResp
   io.resp <> respArb.io.out
-  
-  // 只要任一域忙碌，整个系统就忙碌
-  io.busy := ballDomain.io.busy || memDomain.io.busy
+
+
+// ---------------------------------------------------------------------------
+// CSR 寄存器处理
+// ---------------------------------------------------------------------------
+  val fenceCSR = FenceCSR()
+  val fenceSet = ballDomain.io.fence_o
+  when (fenceSet) {
+    fenceCSR := 1.U
+  }
+  val allDomainsIdle = !ballDomain.io.busy && !memDomain.io.busy
+  when (fenceCSR =/= 0.U && allDomainsIdle) {
+    fenceCSR := 0.U
+  }
+  io.busy := fenceCSR =/= 0.U
 }

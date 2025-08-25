@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import framework.builtin.memdomain.{MemReservationStationIssue, MemReservationStationComplete, MemBuckyBallCmd}
+import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
 import framework.builtin.frontend.FrontendTLBIO
 import freechips.rocketchip.rocket.MStatus
 import framework.builtin.memdomain.mem.SramReadIO
@@ -17,9 +17,9 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   
   val io = IO(new Bundle {
     // 来自ReservationStation的store指令
-    val cmdReq = Flipped(Decoupled(new MemReservationStationIssue))
+    val cmdReq = Flipped(Decoupled(new MemRsIssue))
     // 发送给ReservationStation的完成信号
-    val cmdResp = Decoupled(new MemReservationStationComplete)
+    val cmdResp = Decoupled(new MemRsComplete)
     // 直接连接DMA写入接口
     val dmaReq = Decoupled(new BBWriteRequest(b.spad_w))
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
@@ -49,15 +49,15 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   // 接收store指令
   io.cmdReq.ready := state === s_idle
   
-  when (io.cmdReq.fire && io.cmdReq.bits.cmd.mem_decode_cmd.is_store) {
-    state := s_sram_req
-    rob_id_reg := io.cmdReq.bits.rob_id
-    mem_addr_reg := io.cmdReq.bits.cmd.mem_decode_cmd.mem_addr
-    iter_reg := io.cmdReq.bits.cmd.mem_decode_cmd.iter
-    rd_bank_reg := io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank
-    rd_bank_addr_reg := io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank_addr
-    sram_count := 0.U
-    acc_reg := (io.cmdReq.bits.cmd.mem_decode_cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
+  when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
+    state         := s_sram_req
+    rob_id_reg    := io.cmdReq.bits.rob_id
+    mem_addr_reg  := io.cmdReq.bits.cmd.mem_addr
+    iter_reg      := io.cmdReq.bits.cmd.iter
+    rd_bank_reg   := io.cmdReq.bits.cmd.sp_bank
+    rd_bank_addr_reg := io.cmdReq.bits.cmd.sp_bank_addr
+    sram_count    := 0.U
+    acc_reg       := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
     
     // 初始化缓存状态
     buffer_valid_bytes := 0.U
@@ -257,7 +257,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
 
   // 修复完成信号逻辑 - 只有在真正完成所有数据传输后才发出完成信号
   val task_complete = RegInit(false.B)
-  when (io.cmdReq.fire && io.cmdReq.bits.cmd.mem_decode_cmd.is_store) {
+  when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
     task_complete := false.B
   }.elsewhen (io.dmaReq.fire && (final_send || all_data_sent)) {
     task_complete := true.B

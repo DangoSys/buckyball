@@ -10,6 +10,7 @@ import framework.builtin.frontend.FrontendTLBIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.memdomain.{MemLoader, MemStorer, MemController}
+import framework.builtin.memdomain.rs.MemReservationStation
 import framework.rocket.RoCCResponseBB
 
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -45,22 +46,27 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     val busy = Output(Bool())
   })
 
-  // 内部组件实例化
   val memDecoder = Module(new MemDomainDecoder)
-  val memRs = Module(new MemReservationStation)
-  val memLoader = Module(new MemLoader)
-  val memStorer = Module(new MemStorer)
+  val memRs      = Module(new MemReservationStation)
+  val memLoader  = Module(new MemLoader)
+  val memStorer  = Module(new MemStorer)
   
   // 内部MemController (封装了spad和acc)
   val memController = Module(new MemController)
 
-  // 连接GlobalDecoder到MemDecoder
+// -----------------------------------------------------------------------------
+// GlobalDecoder -> MemDecoder
+// -----------------------------------------------------------------------------
   memDecoder.io.raw_cmd_i <> io.gDecoderIn
   
-  // 连接MemDecoder到ReservationStation
+// -----------------------------------------------------------------------------
+// MemDecoder -> MemReservationStation
+// -----------------------------------------------------------------------------
   memRs.io.mem_decode_cmd_i <> memDecoder.io.mem_decode_cmd_o
   
-  // 连接ReservationStation到MemLoader和MemStorer
+// -----------------------------------------------------------------------------
+// MemReservationStation -> MemLoader/MemStorer
+// -----------------------------------------------------------------------------
   memLoader.io.cmdReq <> memRs.io.issue_o.ld
   memStorer.io.cmdReq <> memRs.io.issue_o.st
   memRs.io.commit_i.ld <> memLoader.io.cmdResp
@@ -92,5 +98,5 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   io.roccResp <> memRs.io.rs_rocc_o.resp
   
   // 忙碌信号
-  io.busy := memRs.io.rs_rocc_o.busy
+  io.busy := memRs.io.rs_rocc_o.busy // 没用的信号
 }
