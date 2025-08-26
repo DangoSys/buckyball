@@ -9,6 +9,7 @@ build/
 
 *.vcd
 *.fst
+*.hier
 *.log
 .bsp/
 

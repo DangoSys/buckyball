@@ -1,9 +1,9 @@
-name: Document Implementation
-run-name: ${{ github.actor }} is running Document Implementation 🚀
+name: Document Deployment
+run-name: ${{ github.actor }} is running Document Deployment 🚀
 on:
   push:
     branches:
-      - null
+      - dev
 
 jobs:
   Doc-Pull:
