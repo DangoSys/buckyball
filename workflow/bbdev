@@ -35,7 +35,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   
   # ===== stop 子命令 ==============================================================================
   stop_parser = subparsers.add_parser("stop", help="Stop dev server")
-  stop_group = stop_parser.add_mutually_exclusive_group(required=True)
+  stop_group = stop_parser.add_mutually_exclusive_group(required=False)
   stop_group.add_argument("--all", action="store_true", help="Stop all servers")
   
   # ===== verilator 子命令 =========================================================================
@@ -76,16 +76,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   agent_group.add_argument("--chat", type=str, nargs="?", const="", metavar="ARGS",
                             help="Run agent. Args: \"--message <message>\", \"--model <model>\"")
 
+  # ===== workload 子命令 =========================================================================
+  workload_parser = subparsers.add_parser("workload", help="workload operations")
+  workload_group = workload_parser.add_mutually_exclusive_group(required=True)
+  workload_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Build workload. ")
+
   # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
   args, unknown = parser.parse_known_args(argv)
   
   # 如果 --port 在未知参数中，手动处理
-  if unknown and len(unknown) >= 2 and unknown[0] == "--port":
-    try:
-      args.port = int(unknown[1])
-      unknown = unknown[2:]  # 移除已处理的参数
-    except ValueError:
-      pass
+  for i in range(len(unknown)):
+    if unknown[i] == "--port":
+      try:
+        args.port = int(unknown[i+1])
+        unknown = unknown[i+2:]  # 移除已处理的参数
+        break
+      except ValueError:
+        pass
   
   # 如果有其他未知参数，报错
   if unknown:
@@ -180,14 +188,14 @@ if __name__ == "__main__":
       print(f"Stopping server on port {args.port}")
       subprocess.run(f"kill -TERM $(lsof -t -i :{args.port})", shell=True, check=False, text=True)
 
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent"]:
+  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload"]:
     api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
     json_data = json.dumps(cmd_info['args'])
     subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
     # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
   else:
     print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent")
+    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload")
     sys.exit(1)
 
   

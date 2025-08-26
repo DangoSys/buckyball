@@ -19,7 +19,7 @@ config = {
   "name": "running sardine",
   "description": "running sardine",
   "subscribes": ["sardine.run"],
-  "emits": ["sardine.complete", "sardine.error"],
+  "emits": [],
   "flows": ["sardine"],
 }
 
@@ -27,26 +27,11 @@ async def handler(data, context):
   bbdir = get_buckyball_path()
 
   sardine_dir = f"{bbdir}/bb-tests/sardine"
-  time.sleep(20)
-  # result = subprocess.run(f"python run_tests.py --allure -m \"({data.get('workload', '')})\"", cwd=sardine_dir, shell=True)
   
   command = f"source {bbdir}/env.sh && python run_tests.py --allure -m \"({data.get('workload', '')})\""  
   context.logger.info('Executing sardine command', {  
     'command': command,  
     'cwd': sardine_dir  
   })  
+  subprocess.run(command, cwd=sardine_dir, shell=True)  
   
-  result = subprocess.run(command, cwd=sardine_dir, shell=True)  
-  
-  command = f"source {bbdir}/env.sh && bbdev stop --port {data.get('port', 5400)}"  
-  context.logger.info('Executing sardine command', {  
-    'command': command,  
-    'cwd': sardine_dir  
-  }) 
-  
-  # if result.returncode != 0:
-  #   await context.emit({"topic": "sardine.error", "data": {**data, "task": "run", "error": "sardine failed"}})
-  #   subprocess.run(f"source {bbdir}/env.sh && bbdev stop --port 5100", shell=True)
-  # else:
-  #   await context.emit({"topic": "sardine.complete", "data": {**data, "task": "run"}})
-  #   subprocess.run(f"source {bbdir}/env.sh && bbdev stop --port 5100", shell=True)
