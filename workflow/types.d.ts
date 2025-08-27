@@ -12,6 +12,7 @@ declare module 'motia' {
   }
 
   interface Handlers {
+    'build workload': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'workload.build'; data: never }>
     'verilator error': EventHandler<never, never>
     'verilator complete': EventHandler<never, never>
     'Verilator Complete Workflow': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.run'; data: never }>
