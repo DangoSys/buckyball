@@ -40,7 +40,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   // 初始化完成状态表
   for (i <- 0 until b.rob_entries) {
     when(reset.asBool) {
-      robTable(i) := false.B
+      robTable(i) := true.B
     }
   }
 
@@ -80,7 +80,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 // -----------------------------------------------------------------------------
 // 状态信号
 // -----------------------------------------------------------------------------
-  val isEmpty = !robFifo.io.deq.valid
+  val isEmpty = robTable.reduce(_ && _)
   val isFull = !robFifo.io.enq.ready
   
   io.empty := isEmpty
