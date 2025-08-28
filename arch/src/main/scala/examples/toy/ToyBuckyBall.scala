@@ -144,12 +144,17 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // ---------------------------------------------------------------------------
   val fenceCSR = FenceCSR()
   val fenceSet = ballDomain.io.fence_o
+  val allDomainsIdle = !ballDomain.io.busy && !memDomain.io.busy
   when (fenceSet) {
     fenceCSR := 1.U
+    io.cmd.ready :=allDomainsIdle
   }
-  val allDomainsIdle = !ballDomain.io.busy && !memDomain.io.busy
-  when (fenceCSR =/= 0.U && allDomainsIdle) {
-    fenceCSR := 0.U
+  when (fenceCSR =/= 0.U) {
+    when(allDomainsIdle) {
+      fenceCSR := 0.U
+    }.otherwise{
+      io.cmd.ready := false.B
+    }
   }
   io.busy := fenceCSR =/= 0.U
 }
