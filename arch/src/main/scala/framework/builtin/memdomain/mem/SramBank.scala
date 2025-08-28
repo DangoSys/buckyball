@@ -56,10 +56,7 @@ class SramBank(n: Int, w: Int, aligned_to: Int, single_ported: Boolean) extends 
   io.write.req.ready := !io.read.req.valid
 
   when (io.write.req.valid) {
-    if (aligned_to >= w)
       mem.write(io.write.req.bits.addr, io.write.req.bits.data.asTypeOf(Vec(mask_len, mask_elem)), VecInit((~(0.U(mask_len.W))).asBools))
-    else
-      mem.write(io.write.req.bits.addr, io.write.req.bits.data.asTypeOf(Vec(mask_len, mask_elem)), io.write.req.bits.mask)
   }
 
 // -----------------------------------------------------------------------------
