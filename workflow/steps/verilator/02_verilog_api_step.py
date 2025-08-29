@@ -16,7 +16,7 @@ async def handler(req, context):
   await context.emit({"topic": "verilator.verilog", "data": data})
 
 # ==================================================================================
-#  等待verilog生成结果
+#  等待仿真结果
 # 
 #  期望返回结果是：
 #  {
@@ -29,6 +29,11 @@ async def handler(req, context):
 #      其余字段
 #    }
 #  }
+#  
+#  由于Motia框架会把数据包装在data字段中，所以需要解包
+#       if isinstance(result, dict) and 'data' in result:
+#          return result['data']
+#       return result
 # ==================================================================================
   while True:
     # 检查成功结果
@@ -39,11 +44,19 @@ async def handler(req, context):
         await context.state.delete(context.trace_id, 'success')
         await asyncio.sleep(1)
         continue
-      context.logger.info('verilog success')
-      return success_result  
+      context.logger.info('仿真执行完成')
+
+      if isinstance(success_result, dict) and 'data' in success_result:
+        return success_result['data']
+      return success_result
     
     # 检查错误状态
     failure_result = await context.state.get(context.trace_id, 'failure')
     if failure_result:
-      context.logger.error('verilog failed', failure_result)
-      return failure_result  
+      context.logger.error('仿真执行失败', failure_result)
+
+      if isinstance(failure_result, dict) and 'data' in failure_result:
+        return failure_result['data']
+      return failure_result
+      
+    await asyncio.sleep(1)
