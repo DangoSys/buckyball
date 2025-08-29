@@ -84,9 +84,8 @@ async def handler(data, context):
 # ==================================================================================
 # 返回仿真结果
 # ==================================================================================
-  if data.get("from_run_workflow"):
-    await context.state.set(context.trace_id, 'processing', True)
-  elif result.returncode != 0:
+  # 此处为run workflow的终点，status状态不再继续设为processing
+  if result.returncode != 0:
     failure_result = {
       "status": 500,
       "body": {
@@ -94,8 +93,8 @@ async def handler(data, context):
         "failure": True,
         "returncode": result.returncode,
         "binary": binary,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        # "stdout": result.stdout,
+        # "stderr": result.stderr,
         "log_dir": log_dir,
         "waveform_dir": waveform_fst_dir,
         "timestamp": timestamp,
@@ -113,8 +112,8 @@ async def handler(data, context):
         "waveform_dir": waveform_fst_dir,
         "binary": binary,
         "timestamp": timestamp,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        # "stdout": result.stdout,
+        # "stderr": result.stderr,
       }
     }
     await context.state.set(context.trace_id, 'success', success_result)
