@@ -2,12 +2,6 @@
 
 Verilator 工具相关的工作流
 
-## 一、bbdev封装后API使用说明
-
-```
-bbdev verilator --sim "--jobs 256 --binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
-```
-
 ## 二、原始API使用说明
 
 #### `run` 
@@ -24,6 +18,10 @@ bbdev verilator --sim "--jobs 256 --binary ${buckyball}/bb-tests/workloads/build
 
 **示例**:
 ```bash
+# bbdev封装
+bbdev verilator --run "jobs 256 --binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
+
+# 原始命令
 curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"jobs": 8, "binary": "/home/user/test.elf"}'
 ```
 

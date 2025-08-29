@@ -99,11 +99,6 @@ class RocketTileBB private(
 
   nDCachePorts += 1 /*core */ + (dtim_adapter.isDefined).toInt + rocketParams.core.vector.map(_.useDCache.toInt).getOrElse(0)
   
-  // 重写dcacheArbPorts以包含BuckyBall RoCC
-  // override def dcacheArbPorts = 1 + usingVM.toInt + usingDataScratchpad.toInt + p(BuildRoCC).size + p(BuildRoCCBB).size + (tileParams.core.useVector && tileParams.core.vectorUseDCache).toInt
-  // // 重写usingRoCC以包含BuckyBall RoCC  
-  // override def usingRoCC: Boolean = !p(BuildRoCC).isEmpty || !p(BuildRoCCBB).isEmpty
-
   val dtimProperty = dtim_adapter.map(d => Map(
     "sifive,dtim" -> d.device.asProperty)).getOrElse(Nil)
 

@@ -1,12 +1,6 @@
 import os
 import sys
-
-# 添加当前目录到路径
-# current_dir = os.path.dirname(__file__)
-# if current_dir not in sys.path:
-#   sys.path.insert(0, current_dir)
-
-from scripts.sim_runner import run_simulation
+import asyncio
 
 config = {
   "type": "api",
@@ -14,41 +8,47 @@ config = {
   "description": "run verilator simulation",
   "path": "/verilator/sim",
   "method": "POST",
-  "emits": [""],
+  "emits": ["verilator.sim"],
   "flows": ["verilator"],
 }
 
 async def handler(req, context):
   body = req.get("body") or {}
-  
   binary = body.get("binary", "")
-  if not binary:
-    return {"status": 400, "body": {"error": "binary parameter is required"}}
-  
   batch = body.get("batch", False)
-  
-  # context.logger.info('开始同步执行仿真', {"binary": binary, "batch": batch})
-  
-  # 同步函数
-  result = run_simulation(binary, batch, context.logger)
-  
-  # context.logger.info('仿真执行完毕', {"result": result})
-  
-  if result["success"]:
-    return {
-      "status": 200,
-      "body": {
-        "message": "simulation completed successfully",
-        "trace_id": context.trace_id,
-        "result": result
-      }
-    }
-  else:
-    return {
-      "status": 500,
-      "body": {
-        "error": "simulation failed",
-        "trace_id": context.trace_id,
-        "details": result
-      }
-    }
+  if not binary:
+    return {"status": 400, "body": {"success": False, "failure": True, "returncode": 400, "message": "binary parameter is required"}}
+
+  await context.emit({"topic": "verilator.sim", "data": {**body, "task": "sim"}})  
+# ==================================================================================
+#  等待仿真结果
+# 
+#  期望返回结果是：
+#  {
+#    "status": 200/400/500,
+#    "body": {
+#      "success": true/false,
+#      "failure": true/false,
+#      "processing": true/false,
+#      "return_code": 0,
+#      其余字段
+#    }
+#  }
+# ==================================================================================
+  while True:
+    # 检查成功结果
+    success_result = await context.state.get(context.trace_id, 'success')
+    if success_result:
+      # 过滤无效的null状态
+      if success_result == {"data": None} or (isinstance(success_result, dict) and success_result.get('data') is None and len(success_result) == 1):
+        await context.state.delete(context.trace_id, 'success')
+        await asyncio.sleep(1)
+        continue
+      context.logger.info('仿真执行完成')
+      return success_result  # Event step保证返回标准HTTP格式
+    
+    # 检查错误状态
+    failure_result = await context.state.get(context.trace_id, 'failure')
+    if failure_result:
+      context.logger.error('仿真执行失败', failure_result)
+      return failure_result  # Event step保证返回标准HTTP格式
