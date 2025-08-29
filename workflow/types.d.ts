@@ -17,7 +17,7 @@ declare module 'motia' {
     'verilator complete': EventHandler<never, never>
     'Verilator Complete Workflow': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.run'; data: never }>
     'make sim': EventHandler<never, { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
-    'Verilator Sim': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'Verilator Sim': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.sim'; data: never }>
     'make build': EventHandler<never, { topic: 'verilator.sim'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'Verilator Build': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.build'; data: never }>
     'make verilog': EventHandler<never, { topic: 'verilator.build'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
@@ -25,9 +25,8 @@ declare module 'motia' {
     'make clean': EventHandler<never, { topic: 'verilator.verilog'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'Verilator Clean': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.clean'; data: never }>
     'running sardine': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'sardine.run'; data: never }>
-    'later stop': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'later_stop.later_later_stop'; data: never }>
-    'later later stop': EventHandler<never, never>
-    'kill': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'running doc deploy': EventHandler<never, never>
+    'GitHub Doc Webhook': ApiRouteHandler<Record<string, unknown>, unknown, never>
     'agent': ApiRouteHandler<{ message: string; model?: string }, ApiResponse<200, { traceId?: string; status?: string }>, { topic: 'agent.prompt'; data: { message?: string; model?: string; traceId?: string } }>
   }
 }
