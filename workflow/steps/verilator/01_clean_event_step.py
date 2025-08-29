@@ -41,8 +41,8 @@ async def handler(data, context):
         "failure": True,
         "processing": False,
         "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        # "stdout": result.stdout,
+        # "stderr": result.stderr,
       }
     }
     await context.state.set(context.trace_id, 'failure', failure_result)
@@ -54,8 +54,8 @@ async def handler(data, context):
         "failure": False,
         "processing": False,
         "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        # "stdout": result.stdout,
+        # "stderr": result.stderr,
       }
     }
     await context.state.set(context.trace_id, 'success', success_result)
