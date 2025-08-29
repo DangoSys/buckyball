@@ -14,9 +14,9 @@
 
 A Scaling Framework for Domain Specific Architecture
 
-# Quick Start
+## Quick Start
 
-## 一. build from source code (take about 3 hours) 
+### 一. build from source code (take about 3 hours) 
 
 1. 安装 anaconda
 https://www.anaconda.com/download/
@@ -29,7 +29,7 @@ $ cd buckyball
 $./scripts/init.sh
 ```
 
-## 二. 从docker直接启动 (很久没更新了)
+### 二. 从docker直接启动 (很久没更新了)
 
 ```
 $ docker pull ghcr.io/dangosys/buckyball:latest
@@ -37,6 +37,6 @@ $ docker pull ghcr.io/dangosys/buckyball:latest
 
 Then you can start your simulation using ``bbdev`` follow this document.
 
-# 其他
+## 其他
 
 You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
