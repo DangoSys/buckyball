@@ -18,8 +18,17 @@ A Scaling Framework for Domain Specific Architecture
 
 ### 一. build from source code (take about 3 hours) 
 
-1. 安装 anaconda
+1. 准备工作
+
+- 安装 anaconda
 https://www.anaconda.com/download/
+
+- 如果安装firesim，请设置系统免密 (可以自行跳过该步骤)
+
+在sudoers文件中添加
+```
+user_name  ALL=(ALL)  NOPASSWD:ALL
+```
 
 2. 安装仓库
 ```
