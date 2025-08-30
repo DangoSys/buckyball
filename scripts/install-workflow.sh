@@ -14,10 +14,18 @@ replace_content ${BBDIR}/env.sh install-workflow "export PATH=${BBDIR}/workflow:
 source ${BBDIR}/env.sh
 
 # lower node veersion is not supported for motia
-conda install -c conda-forge nodejs=20 -y
+# conda install -c conda-forge nodejs=20 -y
 
+
+cd ${BBDIR}/workflow 
+ln -s ${CONDA_PREFIX} ./python_modules
+
+cd ${BBDIR}
 npx motia@latest create -n workflow -t python -y
-${BBDIR}/workflow/python_modules/bin/python -m pip install python-dotenv
+
+pip install python-dotenv
+pip install httpx
+
 cd ${BBDIR}/workflow/steps && rm *.{tsx,py,json}
 cd ${BBDIR}/workflow/steps && rm -r services/
 # cd ${BBDIR}/workflow && npx motia dev -p 5000 
