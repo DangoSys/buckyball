@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # exit script if any command fails
-set -e
-set -o pipefail
+# set -e
+# set -o pipefail
 
 BBDIR=$(git rev-parse --show-toplevel)
 
@@ -49,6 +49,7 @@ export HTTPS_PROXY="${ORIGINAL_HTTPS_PROXY}"
 export ALL_PROXY="${ORIGINAL_ALL_PROXY}"
 #============================================================
 
-# npx motia@latest create -n workflow -t python -y
-cd ${BBDIR}/workflow/steps && rm *.{tsx,py} && rm -r services/
+npx motia@latest create -n workflow -t python -y
+cd ${BBDIR}/workflow/steps && rm *.{tsx,py,json}
+cd ${BBDIR}/workflow/steps && rm -r services/
 # cd ${BBDIR}/workflow && npx motia dev -p 5000 
