@@ -47,6 +47,8 @@ export all_proxy="${ORIGINAL_ALL_PROXY}"
 export HTTP_PROXY="${ORIGINAL_HTTP_PROXY}"
 export HTTPS_PROXY="${ORIGINAL_HTTPS_PROXY}"
 export ALL_PROXY="${ORIGINAL_ALL_PROXY}"
+
+${BBDIR}/workflow/python_modules/bin/python -m pip install python-dotenv
 #============================================================
 
 npx motia@latest create -n workflow -t python -y
