@@ -12,7 +12,7 @@ if utils_path not in sys.path:
 
 
 from utils.path import get_buckyball_path
-
+from utils.stream_run import stream_run_logger
 
 config = {
   "type": "event",
@@ -33,5 +33,35 @@ async def handler(data, context):
     'command': command,  
     'cwd': sardine_dir  
   })  
-  subprocess.run(command, cwd=sardine_dir, shell=True)  
-  
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=sardine_dir)
+
+# ==================================================================================
+# 返回仿真结果
+# ==================================================================================
+  if result.returncode != 0:
+    failure_result = {
+      "status": 500,
+      "body": {
+        "success": False,
+        "failure": True,
+        "processing": False,
+        "returncode": result.returncode,
+      }
+    }
+    await context.state.set(context.trace_id, 'failure', failure_result)
+  else:
+    success_result = {
+      "status": 200,
+      "body": {
+        "success": True,
+        "failure": False,
+        "processing": False,
+        "returncode": result.returncode,
+      }
+    }
+    await context.state.set(context.trace_id, 'success', success_result)
+
+# ==================================================================================
+#  finish workflow
+# ==================================================================================
+  return

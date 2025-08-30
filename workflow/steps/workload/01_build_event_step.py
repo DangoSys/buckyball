@@ -12,7 +12,7 @@ if utils_path not in sys.path:
 
 
 from utils.path import get_buckyball_path
-
+from utils.stream_run import stream_run_logger
 
 config = {
   "type": "event",
@@ -25,31 +25,43 @@ config = {
 
 async def handler(data, context):
   bbdir = get_buckyball_path()
-
-  workload_dir = f"{bbdir}/bb-tests/workloads"
+  workload_dir = f"{bbdir}/bb-tests/workloads" 
   
   command = f"source {bbdir}/env.sh && cd {workload_dir}/build && cmake ../ && make build-all"  
   context.logger.info('Executing workload command', {  
     'command': command,  
     'cwd': workload_dir  
   })  
-  result = subprocess.run(command, cwd=workload_dir, shell=True)  
-  
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=workload_dir)
+
+# ==================================================================================
+# 返回仿真结果
+# ==================================================================================
+  # 此处为run workflow的终点，status状态不再继续设为processing
   if result.returncode != 0:
-    context.logger.error('Workload build failed', {  
-      'command': command,  
-      'cwd': workload_dir  
-    })
-  else:
-    context.logger.info('Workload build completed', {  
-      'command': command,  
-      'cwd': workload_dir  
-    })
-  
-  return {
-    "status": 200,
-    "body": {
-      "message": "workload build completed",
-      "trace_id": context.trace_id
+    failure_result = {
+      "status": 500,
+      "body": {
+        "success": False,
+        "failure": True,
+        "processing": False,
+        "returncode": result.returncode,
+      }
     }
-  }
+    await context.state.set(context.trace_id, 'failure', failure_result)
+  else:
+    success_result = {
+      "status": 200, 
+      "body": {
+        "success": True,
+        "failure": False,
+        "processing": False,
+        "returncode": result.returncode,
+      }
+    }
+    await context.state.set(context.trace_id, 'success', success_result)
+
+# ==================================================================================
+#  finish workflow
+# ==================================================================================
+  return

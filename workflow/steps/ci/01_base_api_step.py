@@ -1,11 +1,11 @@
 config = {
   "type": "api",
-  "name": "Verilator Complete Workflow", 
-  "description": "trigger complete verilator workflow",
-  "path": "/verilator/run",
+  "name": "CI Base Workflow", 
+  "description": "trigger ci base workflow",
+  "path": "/ci/base",
   "method": "POST",
-  "emits": ["verilator.run"],
-  "flows": ["verilator"],
+  "emits": ["ci.base"],
+  "flows": ["ci"],
 }
 
 async def handler(req, context):
@@ -18,7 +18,7 @@ async def handler(req, context):
     "from_run_workflow": True
   }
   
-  await context.emit({"topic": "verilator.run", "data": config})
+  await context.emit({"topic": "ci.base", "data": config})
   
-  return {"status": 200, "body": { "message": "verilator complete workflow started", "trace_id": context.trace_id}}
+  return {"status": 200, "body": { "message": "ci base workflow started", "trace_id": context.trace_id}}
 

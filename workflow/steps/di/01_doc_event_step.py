@@ -12,7 +12,7 @@ if utils_path not in sys.path:
 
 
 from utils.path import get_buckyball_path
-
+from utils.stream_run import stream_run_logger
 
 config = {
   "type": "event",
@@ -25,31 +25,46 @@ config = {
 
 async def handler(data, context):
   bbdir = get_buckyball_path()
-
   doc_dir = f"{bbdir}/docs/bb-note"
   
-  command = f"source {bbdir}/env.sh && mdbook serve --open -p 3001"  
-  context.logger.info('Executing doc deploy command', {  
-    'command': command,  
-    'cwd': doc_dir  
-  })  
-  result = subprocess.run(command, cwd=doc_dir, shell=True)  
+  command = f"source {bbdir}/env.sh && mdbook serve --open -p 5501"  
+  context.logger.info('Executing doc deploy command', {'command': command, 'cwd': doc_dir})  
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=doc_dir)
   
+  
+# ==================================================================================
+# 返回仿真结果
+# ==================================================================================
   if result.returncode != 0:
-    context.logger.error('Doc deploy failed', {  
-      'command': command,  
-      'cwd': doc_dir  
-    })
-  else:
-    context.logger.info('Doc deploy completed', {  
-      'command': command,  
-      'cwd': doc_dir  
-    })
-  
-  return {
-    "status": 200,
-    "body": {
-      "message": "document deploy completed",
-      "trace_id": context.trace_id
+    failure_result = {
+      "status": 500,
+      "body": {
+        "success": False,
+        "failure": True,
+        "processing": False,
+        "returncode": result.returncode,
+      }
     }
-  }
+    await context.state.set(context.trace_id, 'failure', failure_result)
+  else:
+    success_result = {
+      "status": 200,
+      "body": {
+        "success": True,
+        "failure": False,
+        "processing": False,
+        "returncode": result.returncode,
+      }
+    }
+    await context.state.set(context.trace_id, 'success', success_result)
+
+# ==================================================================================
+#  finish workflow
+# ==================================================================================
+  return
+  
+  
+  
+  
+  
+  
