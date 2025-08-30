@@ -113,7 +113,7 @@ def test_ctest_workload_debug(script_runner, caplog, workload_path, workload_id,
   logging.info(f"Running command: {command}")
   
   # 使用 Popen 进行实时流式输出
-  process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1, universal_newlines=True)
+  process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1, universal_newlines=True, executable='bash')
   
   stdout_lines = []
   # 实时读取并输出
