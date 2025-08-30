@@ -13,3 +13,5 @@ index.html
 *.vcd
 *.fst
 *.log
+
+package-lock.json

@@ -116,6 +116,7 @@ fi
 
 if run_step "4"; then
   begin_step "4" "bb-tests (workloads) pre-compile sources"
+  source ${BBDIR}/env.sh
   cd ${BBDIR}/bb-tests/workloads/
   mkdir -p build && cd build
   cmake .. 
@@ -132,6 +133,7 @@ fi
 
 if run_step "6"; then
   begin_step "6" "Install document management system" 
+  source ${BBDIR}/env.sh
   ${BBDIR}/scripts/install-doc.sh
 fi
 

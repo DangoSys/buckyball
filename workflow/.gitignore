@@ -11,3 +11,6 @@ motia-workbench.json
 package-lock.json
 package.json
 types.d.ts
+
+services/
+*.log
