@@ -237,15 +237,18 @@ else: # script mode
     max_retries = 30
     for i in range(max_retries):
       try:
-        response = requests.get(f"http://localhost:{available_port}", timeout=1)
+          # 禁用代理，直接连接localhost
+        # response = requests.get(f"http://localhost:{available_port}", timeout=1)
+        response = requests.get(f"http://localhost:{available_port}", timeout=1, proxies={'http': None, 'https': None, 'all': None})
         if response.status_code == 200:
           print(f"Server is ready on port {available_port}")
           break
       except requests.exceptions.RequestException:
         pass
-      time.sleep(1)
+      time.sleep(3)
     else:
       print("Server failed to start within 30 seconds")
+      subprocess.run(f"kill -TERM $(lsof -t -i :{available_port})", shell=True, check=False, text=True)
       proc.terminate()
       proc.wait()
       sys.exit(1)
@@ -254,7 +257,8 @@ else: # script mode
     api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
     json_data = json.dumps(cmd_info['args'])
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
-    subprocess.run(["curl", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
+      # 禁用代理，直接连接localhost
+    subprocess.run(["curl", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
     
     # 3.关闭服务 ================================
     print(f"\nTask completed. Command running on http://localhost:{available_port} is finished")
