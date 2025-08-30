@@ -44,7 +44,7 @@ async def handler(req, context):
         await context.state.delete(context.trace_id, 'success')
         await asyncio.sleep(1)
         continue
-      context.logger.info('仿真执行完成')
+      context.logger.info('verilog generated successfully')
 
       if isinstance(success_result, dict) and 'data' in success_result:
         return success_result['data']
@@ -53,7 +53,7 @@ async def handler(req, context):
     # 检查错误状态
     failure_result = await context.state.get(context.trace_id, 'failure')
     if failure_result:
-      context.logger.error('仿真执行失败', failure_result)
+      context.logger.error('verilog generation failed', failure_result)
 
       if isinstance(failure_result, dict) and 'data' in failure_result:
         return failure_result['data']
