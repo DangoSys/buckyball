@@ -18,7 +18,7 @@ A Scaling Framework for Domain Specific Architecture
 
 ### 一. build from source code (take about 3 hours) 
 
-1. 准备工作
+1. Dependency
 
 - 安装 anaconda
 https://www.anaconda.com/download/
@@ -28,6 +28,11 @@ https://www.anaconda.com/download/
 在sudoers文件中添加
 ```
 user_name  ALL=(ALL)  NOPASSWD:ALL
+```
+
+- 安装Ninja，npm
+```
+sudo apt install ninja-build 
 ```
 
 2. 安装仓库
