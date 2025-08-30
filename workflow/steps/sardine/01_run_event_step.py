@@ -33,7 +33,7 @@ async def handler(data, context):
     'command': command,  
     'cwd': sardine_dir  
   })  
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=sardine_dir)
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=sardine_dir, executable='bash')
 
 # ==================================================================================
 # 返回仿真结果

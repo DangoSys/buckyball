@@ -32,7 +32,7 @@ async def handler(data, context):
     'command': command,  
     'cwd': workload_dir  
   })  
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=workload_dir)
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=workload_dir, executable='bash')
 
 # ==================================================================================
 # 返回仿真结果
