@@ -1,12 +1,12 @@
 <p align="center">
-    <img src="docs/img/buckyball.png" width = "100%" height = "70%">
+    <img src="https://github.com/DangoSys/buckyball/raw/main/docs/img/buckyball.png" width = "100%" height = "70%">
 </p>
 
 <div align="center" style="margin-top: -10pt;">
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DangoSys/buckyball)
 [![Ask Zread](https://img.shields.io/badge/Ask_Zread-8A2BE2)](https://zread.ai/DangoSys/buckyball)
-[![CI-test](https://github.com/DangoSys/buckybal/actions/workflows/github_actions.yml/badge.svg)](https://github.com/DangoSys/buckybal/actions/workflows/github_actions.yml)
+[![Document](https://github.com/DangoSys/buckyball/actions/workflows/doc.yml/badge.svg?branch=main)](https://dangosys.github.io/buckyball)
 
 </div>
 
