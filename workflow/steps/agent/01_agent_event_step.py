@@ -2,6 +2,13 @@ import httpx
 import json  
 import os
 from dotenv import load_dotenv
+import sys
+
+utils_path = f"{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}/utils"
+if utils_path not in sys.path:
+  sys.path.insert(0, utils_path)
+  
+from utils.stream_run import stream_run_logger
 
 load_dotenv()
 
@@ -97,6 +104,17 @@ async def handler(input_data, context):
           "response_length": len(full_response),  
           "traceId": trace_id  
         })  
+
+    success_result = {
+      "status": 200,
+      "body": {
+        "success": True,
+        "failure": False,
+        "processing": False,
+        "returncode": 0,
+      }
+    }
+    await context.state.set(context.trace_id, 'success', success_result)
           
   except Exception as e:  
     context.logger.error(f"agent API调用失败: {str(e)}")  
@@ -108,3 +126,19 @@ async def handler(input_data, context):
         "traceId": trace_id  
       }  
     })
+
+    failure_result = {
+      "status": 500,
+      "body": {
+        "success": False,
+        "failure": True,
+        "processing": False,
+        "returncode": 1,
+      }
+    }
+    await context.state.set(context.trace_id, 'failure', failure_result)
+
+# ==================================================================================
+#  finish workflow
+# ==================================================================================
+  return

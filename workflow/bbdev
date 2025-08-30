@@ -23,7 +23,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   )
   
   # 全局参数
-  parser.add_argument("--port", type=int, default=5000, help="Port for dev server (default: 5000)")
+  parser.add_argument("--port", type=int, default=None, help="Port for dev server (default: None)")
   parser.add_argument("--server", action="store_true", help="server mode")
   
   # 子命令解析器
@@ -90,19 +90,25 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
   args, unknown = parser.parse_known_args(argv)
   
-  # 如果 --port 在未知参数中，手动处理
-  for i in range(len(unknown)):
-    if unknown[i] == "--port":
-      try:
-        args.port = int(unknown[i+1])
-        unknown = unknown[i+2:]  # 移除已处理的参数
-        continue
-      except ValueError:
-        pass
-    if unknown[i] == "--server":
-      args.server = True
-      unknown = unknown[i+1:]
-      continue
+  # 如果 --port 和 --server 在未知参数中，手动处理
+  while unknown:
+    found = False
+    for i in range(len(unknown)):
+      if unknown[i] == "--port":
+        try:
+          args.port = int(unknown[i+1])
+          unknown = unknown[i+2:]  # 移除已处理的参数
+          found = True
+          break
+        except (ValueError, IndexError):
+          break
+      if unknown[i] == "--server":
+        args.server = True
+        unknown = unknown[i+1:]  # 移除已处理的参数
+        found = True
+        break
+    if not found:
+      break
   # 如果有其他未知参数，报错
   if unknown:
     parser.error(f"unrecognized arguments: {' '.join(unknown)}")
@@ -219,7 +225,11 @@ else: # script mode
     print(f" 'stop' do nothing in script mode")
   elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc"]:
     # 1.启动服务在后台 ================================
-    available_port = find_available_port(start_port=5100, end_port=5500)
+    # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
+    if args.port:
+      available_port = args.port
+    else:
+      available_port = find_available_port(start_port=5100, end_port=5500)
     print(f"Starting server on port {available_port}...")
     proc = subprocess.Popen(["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir)
     

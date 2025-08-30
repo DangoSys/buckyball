@@ -91,6 +91,7 @@ async def handler(data, context):
       "body": {
         "success": False,
         "failure": True,
+        "processing": False,
         "returncode": result.returncode,
         "binary": binary,
         # "stdout": result.stdout,
@@ -107,6 +108,7 @@ async def handler(data, context):
       "body": {
         "success": True,
         "failure": False,
+        "processing": False,
         "returncode": result.returncode,
         "log_dir": log_dir,
         "waveform_dir": waveform_fst_dir,

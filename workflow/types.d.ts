@@ -27,6 +27,7 @@ declare module 'motia' {
     'running sardine': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'sardine.run'; data: never }>
     'running doc deploy': EventHandler<never, never>
     'GitHub Doc Webhook': ApiRouteHandler<Record<string, unknown>, unknown, never>
+    'CI Base Workflow': ApiRouteHandler<Record<string, unknown>, unknown, never>
     'agent': ApiRouteHandler<{ message: string; model?: string }, ApiResponse<200, { traceId?: string; status?: string }>, { topic: 'agent.prompt'; data: { message?: string; model?: string; traceId?: string } }>
   }
 }

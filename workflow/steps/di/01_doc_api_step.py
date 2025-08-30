@@ -23,47 +23,38 @@ config = {
 }  
   
 async def handler(req, context):  
+  bbdir = get_buckyball_path()
   context.logger.info('GitHub webhook received, starting doc deploy', {  
     'body': req.get('body'),  
     'trace_id': context.trace_id  
   })  
-  
-  bbdir = get_buckyball_path()
 
-  doc_dir = f"{bbdir}/docs/bb-note"
-  
-  command = f"source {bbdir}/env.sh && mdbook serve --open -p 3001"  
-  
-  process = await asyncio.create_subprocess_exec(  
-    command,  
-    stdout=asyncio.subprocess.PIPE,  
-    stderr=asyncio.subprocess.PIPE,  
-    cwd=doc_dir  
-  )  
-      
-  if process.returncode == 0:  
-    context.logger.info('Doc deploy completed successfully', {  
-      'command': command,  
-      'cwd': doc_dir  
-    })  
+  await context.emit({"topic": "doc.deploy", "data": {}})
+# ==================================================================================
+# 等待执行结果
+# ==================================================================================
+  while True:
+    # 检查成功结果
+    success_result = await context.state.get(context.trace_id, 'success')
+    if success_result:
+      # 过滤无效的null状态
+      if success_result == {"data": None} or (isinstance(success_result, dict) and success_result.get('data') is None and len(success_result) == 1):
+        await context.state.delete(context.trace_id, 'success')
+        await asyncio.sleep(1)
+        continue
+      context.logger.info('simulation completed')
 
-    return {  
-      'status': 200,  
-      'body': {  
-        'message': 'Document deploy completed successfully',  
-        'trace_id': context.trace_id  
-      }  
-    }  
-  else:  
-    context.logger.error('Doc deploy failed', {  
-      'command': command,  
-      'cwd': doc_dir  
-    })  
-    return {  
-      'status': 500,  
-      'body': {  
-        'message': 'Document deploy failed',  
-        'trace_id': context.trace_id  
-      }  
-    }  
-  
+      if isinstance(success_result, dict) and 'data' in success_result:
+        return success_result['data']
+      return success_result
+    
+    # 检查错误状态
+    failure_result = await context.state.get(context.trace_id, 'failure')
+    if failure_result:
+      context.logger.error('simulation failed', failure_result)
+
+      if isinstance(failure_result, dict) and 'data' in failure_result:
+        return failure_result['data']
+      return failure_result
+
+    await asyncio.sleep(1)
