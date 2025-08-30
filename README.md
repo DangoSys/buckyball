@@ -30,9 +30,10 @@ https://www.anaconda.com/download/
 user_name  ALL=(ALL)  NOPASSWD:ALL
 ```
 
-- 安装Ninja，npm
+- 安装Ninja，gtkwave
 ```
 sudo apt install ninja-build 
+sudo apt-get install gtkwave
 ```
 
 2. 安装仓库
@@ -40,7 +41,13 @@ sudo apt install ninja-build
 $ git clone https://github.com/DangoSys/buckyball.git
 
 $ cd buckyball
-$./scripts/init.sh
+$ ./scripts/init.sh
+```
+
+3. smoke test in verilator
+```
+$ source buckyball/env.sh
+$ bbdev verilator --run '--jobs 16 --binary /home/mio/Code/buckyball/bb-tests/workloads/output/workloads/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch'
 ```
 
 ### 二. 从docker直接启动 (很久没更新了)

@@ -15,6 +15,7 @@ def stream_run(
   cmd: str,
   cwd: Optional[str] = None,
   shell: bool = True,
+  executable: Optional[str] = None,
   timeout: Optional[float] = None,
   on_stdout: Optional[Callable[[str], None]] = None,
   on_stderr: Optional[Callable[[str], None]] = None,
@@ -72,7 +73,8 @@ def stream_run(
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     text=True,
-    bufsize=1
+    bufsize=1,
+    executable=executable
   )
   
   stdout_lines = []
@@ -115,6 +117,7 @@ def stream_run_logger(
   logger,
   cwd: Optional[str] = None,
   shell: bool = True,
+  executable: Optional[str] = None,
   timeout: Optional[float] = None,
   stdout_prefix: str = "STDOUT",
   stderr_prefix: str = "STDERR"
@@ -145,6 +148,7 @@ def stream_run_logger(
     cmd=cmd,
     cwd=cwd,
     shell=shell,
+    executable=executable,
     timeout=timeout,
     on_stdout=log_stdout,
     on_stderr=log_stderr,
