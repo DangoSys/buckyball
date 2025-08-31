@@ -1,8 +1,8 @@
 # Summary
 
-- [Buckyball](../../../README.md)
-- [BuckyballNote说明](./BuckyballNote.md)
-- [项目目录说明](./项目目录说明.md)
-- [Workflow](./workflow/steps/verilator/README.md)
-- [端口分配说明](./port.md)
+- [buckyball](./README.md)
 
+- [overview](./overview/overview.md)
+- [buckyball architecture](./arch/arch.md)
+- [buckyball development](./workflow/bbdev/port.md)
+	- [workflow](./workflow/steps/verilator/README.md)

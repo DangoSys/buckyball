@@ -12,6 +12,7 @@ from datetime import datetime
 import select
 import threading
 import time
+import re
 
 class FlushFileHandler(logging.FileHandler):
   def emit(self, record):
@@ -117,6 +118,141 @@ def script_runner():
   return _run_script
 
 
+@pytest.fixture
+def command_run():
+  """Execute shell command with real-time output and early termination detection."""
+  def _run_command(command, early_exit_pattern=None, timeout=None):
+    """
+    Run shell command with real-time output.
+    
+    Args:
+      command: Shell command to execute
+      timeout: Optional timeout in seconds (None for no timeout)
+      early_exit_pattern: Optional regex pattern to detect early completion
+    
+    Returns:
+      Dict with returncode, stdout, stderr
+    """
+    logger = logging.getLogger()
+    logger.info(f"Running command: {command}")
+    
+    try:
+      # 使用 shell=True 执行命令
+      process = subprocess.Popen(
+        command, 
+        shell=True, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE, 
+        text=True, 
+        bufsize=0, 
+        universal_newlines=True, 
+        executable='bash'
+      )
+      
+      # 设置非阻塞模式
+      import fcntl
+      fcntl.fcntl(process.stdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+      fcntl.fcntl(process.stderr.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+      
+      stdout_lines = []
+      stderr_lines = []
+      start_time = time.time()
+      last_output_time = start_time
+      
+      # 实时读取输出
+      while True:
+        current_time = time.time()
+        
+        # 检查超时
+        if timeout and timeout > 0 and (current_time - start_time) > timeout:
+          logger.error(f"Process killed due to timeout ({timeout}s)")
+          process.kill()
+          break
+        
+        # 使用select检查是否有数据可读
+        ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
+        
+        if ready:
+          last_output_time = current_time
+        else:
+          # 如果5秒没有输出，检查进程是否结束
+          if (current_time - last_output_time) > 5:
+            if process.poll() is not None:
+              logger.info("Process finished naturally")
+              break
+        
+        for stream in ready:
+          try:
+            if stream == process.stdout:
+              data = stream.read()
+              if data:
+                for line in data.splitlines():
+                  if line.strip():
+                    line_text = line.strip()
+                    print(line_text)  # 实时输出到控制台
+                    stdout_lines.append(line_text)
+                    logger.info(f"STDOUT: {line_text}")
+                    
+                    # 检测提前退出模式
+                    if early_exit_pattern and re.search(early_exit_pattern, line_text):
+                      logger.info(f"Detected early exit pattern, terminating process")
+                      process.terminate()
+                      # 等待进程结束
+                      try:
+                        process.wait(timeout=5)
+                      except subprocess.TimeoutExpired:
+                        process.kill()
+                      return {
+                        "returncode": 0,
+                        "stdout": "\n".join(stdout_lines),
+                        "stderr": "\n".join(stderr_lines)
+                      }
+            elif stream == process.stderr:
+              data = stream.read()
+              if data:
+                for line in data.splitlines():
+                  if line.strip():
+                    line_text = line.strip()
+                    stderr_lines.append(line_text)
+                    logger.warning(f"STDERR: {line_text}")
+          except:
+            # 非阻塞读取可能会抛出异常，忽略
+            pass
+      
+      # 等待进程结束并读取剩余输出
+      try:
+        remaining_stdout, remaining_stderr = process.communicate(timeout=5)
+        if remaining_stdout:
+          for line in remaining_stdout.splitlines():
+            if line.strip():
+              stdout_lines.append(line)
+              logger.info(f"STDOUT: {line}")
+        if remaining_stderr:
+          for line in remaining_stderr.splitlines():
+            if line.strip():
+              stderr_lines.append(line)
+              logger.warning(f"STDERR: {line}")
+      except subprocess.TimeoutExpired:
+        process.kill()
+        logger.error("Process killed after timeout waiting for final output")
+      
+      return {
+        "returncode": process.returncode,
+        "stdout": "\n".join(stdout_lines),
+        "stderr": "\n".join(stderr_lines)
+      }
+      
+    except Exception as e:
+      logger.error(f"Command execution failed: {str(e)}")
+      return {
+        "returncode": -1,
+        "stdout": "",
+        "stderr": str(e)
+      }
+  
+  return _run_command
+
+
 def pytest_runtest_setup(item):
   """Before each test runs."""
   logger = logging.getLogger()
@@ -183,4 +319,3 @@ def pytest_sessionfinish(session, exitstatus):
   logger.info(f"Test reports saved to: {reports_dir}")
   logger.info(f"Individual test logs saved to: {logs_dir}/[marker_name]/")
   logger.info(f"=== Sardine Test Framework Finished (exit: {exitstatus}) ===") 
-  
