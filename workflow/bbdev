@@ -258,7 +258,7 @@ else: # script mode
     json_data = json.dumps(cmd_info['args'])
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
       # 禁用代理，直接连接localhost
-    subprocess.run(["curl", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
+    subprocess.run(["curl", "-sS", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
     
     # 3.关闭服务 ================================
     # print("Press Ctrl+C to stop the server and exit...")
