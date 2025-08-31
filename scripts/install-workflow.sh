@@ -14,7 +14,7 @@ replace_content ${BBDIR}/env.sh install-workflow "export PATH=${BBDIR}/workflow:
 source ${BBDIR}/env.sh
 
 # lower node veersion is not supported for motia
-# conda install -c conda-forge nodejs=20 -y
+conda install -c conda-forge nodejs=20 -y
 
 
 cd ${BBDIR}/workflow 
