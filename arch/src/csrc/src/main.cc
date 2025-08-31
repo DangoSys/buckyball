@@ -11,7 +11,7 @@ VerilatedContext* contextp = NULL;
 VerilatedVcdC* tfp = NULL;
 static VTestHarness* top;
 
-int bb_step = 1; // 记录一共走了多少步，出错时抛出，方便单步调试到周围 
+int bb_step = 1; // 记录一共走了多少步，出错时抛出，方便单步调试到周围
 
 //================ SIM FUNCTION =====================//
 void step_and_dump_wave() {
@@ -29,13 +29,13 @@ void sim_init(int argc, char** argv) {
 
   contextp->traceEverOn(true);
   top->trace(tfp, 0);
-  tfp->open(TOSTRING(CONFIG_VCD_PATH)); // 编译参数指定
-  Log("The waveform will be saved to the VCD file: %s", TOSTRING(CONFIG_VCD_PATH));
+  
+  tfp->open(vcd_path);
+  Log("The waveform will be saved to the VCD file: %s", vcd_path);
 
   top->reset = 1; top->clock = 0; step_and_dump_wave();
   top->reset = 1; top->clock = 1; step_and_dump_wave();
   top->reset = 0; top->clock = 0; step_and_dump_wave();   
-
 
   // top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg = 0x80000000ULL;
 } // 低电平复位
@@ -44,7 +44,7 @@ void sim_exit() {
   contextp->timeInc(1);
   tfp->dump(contextp->time());
   tfp->close();
-  printf("The wave data has been saved to the VCD file: %s\n", TOSTRING(CONFIG_VCD_PATH));
+  printf("The wave data has been saved to the VCD file: %s\n", vcd_path);
   exit(0);
 }
 
@@ -73,8 +73,8 @@ void ball_exec_once() {
 
 //================ main =====================//
 int main(int argc, char *argv[]) {
+  init_monitor(argc, argv);  // 在这里解析参数，包括VCD路径
   sim_init(argc, argv);
-  init_monitor(argc, argv);
   bdb_mainloop();
   sim_exit();
 } 
