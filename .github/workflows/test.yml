@@ -10,6 +10,10 @@ jobs:
     name: Code Pull
     runs-on: cpu-server
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Print information
         run: |
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -20,8 +24,8 @@ jobs:
           source ~/.zshrc
           buckyball_exec
           setproxy
-          git reset --hard origin/${{ github.ref }}
-          git pull origin ${{ github.ref }}
+          git reset --hard origin/${{ github.ref_name }}
+          git pull origin ${{ github.ref_name }}
       - run: echo "🍏 pull from repository ${{ job.status }}."
 
   Build-Workloads:
@@ -46,7 +50,7 @@ jobs:
           buckyball_exec
           setproxy
           git reset --hard HEAD~1
-          git push --force origin ${{ github.ref }}
+          git push --force origin ${{ github.ref_name }}
 
   Build-Verilator:
     name: Build Verilator
@@ -59,7 +63,8 @@ jobs:
           source ~/.zshrc
           buckyball_exec
           bbdev verilator --clean
-          bbdev verilator --build
+          bbdev verilator --verilog 
+          bbdev verilator --build '--jobs 16'
       # 如果检查失败，强制回退分支
       - name: Revert Bad Commit
         if: failure()
@@ -69,7 +74,7 @@ jobs:
           buckyball_exec
           setproxy
           git reset --hard HEAD~1
-          git push --force origin ${{ github.ref }}
+          git push --force origin ${{ github.ref_name }}
 
   # Smoke-Test:
   #   name: Smoke Test
