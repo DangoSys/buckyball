@@ -37,6 +37,8 @@ sudo apt install ninja-build
 sudo apt-get install gtkwave
 ```
 
+- 安装有bash环境(可以不使用bash作为shell，但需要本身有)
+
 2. 安装仓库
 ```
 $ git clone https://github.com/DangoSys/buckyball.git

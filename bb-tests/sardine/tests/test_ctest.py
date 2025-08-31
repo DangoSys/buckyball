@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 
 
+
 # ctest_workload_dir = Path("") // absolute path
 sardine_dir = Path(__file__).parent.parent
 ctest_workload_dir = sardine_dir / "workloads" / "CTest"
@@ -99,11 +100,10 @@ base_port = 5500
 
 @pytest.mark.verilator
 @pytest.mark.ctest
-@pytest.mark.debug
 @pytest.mark.parametrize("workload_path, workload_id, test_index", 
                          [(path, id, idx) for idx, (path, id) in enumerate(ctest_workloads)], 
                          ids=[w[1] for w in ctest_workloads])
-def test_ctest_workload_debug(script_runner, caplog, workload_path, workload_id, test_index):
+def test_ctest_workload_debug(command_run, caplog, workload_path, workload_id, test_index):
   caplog.set_level(logging.INFO)
   
   port = base_port + test_index
@@ -112,44 +112,23 @@ def test_ctest_workload_debug(script_runner, caplog, workload_path, workload_id,
   command = f"source {sardine_dir}/../../env.sh && bbdev verilator --sim \"--binary {workload_path} --batch\" --port {port}"
   logging.info(f"Running command: {command}")
   
-  # 使用 Popen 进行实时流式输出
-  process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1, universal_newlines=True, executable='bash')
-  
-  stdout_lines = []
-  # 实时读取并输出
-  try:
-    while True:
-      output = process.stdout.readline()
-      if output == '' and process.poll() is not None:
-        break
-      if output:
-        output = output.strip()
-        print(output)  # 实时输出到控制台
-        logging.info(output)  # 同时记录到日志
-        stdout_lines.append(output)
-    # 等待进程完成，设置超时
-    return_code = process.wait(timeout=60000)
-  except subprocess.TimeoutExpired:
-    process.kill()
-    logging.error("Process timed out after 60000 seconds")
-    raise
+  # 使用 command_run 执行命令，带提前退出检测
+  early_exit_pattern = r'Task completed\. Command running on http://localhost:\d+ is finished'
+  result = command_run(command, early_exit_pattern=early_exit_pattern, timeout=1200) # 20 minutes
   execution_time = time.time() - start_time
-  
-  # 合并所有输出
-  stdout_content = '\n'.join(stdout_lines)
   
   logging.info(f"Workload: {workload_id}")
   logging.info(f"Workload path: {workload_path}")
   logging.info(f"Test index: {test_index}")
   logging.info(f"Execution time: {execution_time:.2f} seconds")
-  logging.info(f"Return code: {return_code}")
+  logging.info(f"Return code: {result['returncode']}")
   logging.info("Script output completed")
 
   min_execution_time = 5.0
   assert execution_time >= min_execution_time, f"Script executed too quickly: {execution_time:.2f}s < {min_execution_time}s"
-  assert return_code in [0, 1], f"Script failed with unexpected return code: {return_code}"
+  assert result['returncode'] in [0, 1], f"Script failed with unexpected return code: {result['returncode']}"
   
-  if f'"success":true,"failure":false,' not in stdout_content:
-    assert False, f"Script failed: {stdout_content}"
+  if f'"success":true,"failure":false,' not in result['stdout']:
+    assert False, f"Script failed: {result['stdout']}"
 
   logging.info("test completed")
