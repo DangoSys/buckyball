@@ -16,7 +16,7 @@ A Scaling Framework for Domain Specific Architecture
 
 ## Quick Start
 
-### 一. build from source code (take about 3 hours) 
+### 一. build from source code (take about 2 hours) 
 
 1. Dependency
 

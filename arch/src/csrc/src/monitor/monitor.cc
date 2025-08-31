@@ -11,21 +11,49 @@
 #include "utils/welcome.cc"
 #include "ioe/mem.cc"
 
+// 定义全局VCD路径变量
+const char* vcd_path = nullptr;
+
+// 定义全局日志路径变量
+const char* log_path = nullptr;
+
 static int parse_args(int argc, char *argv[]) {
-  const struct option table[] = {
-    {"batch"  , no_argument    , NULL, 'b'},
-    {"help"   , no_argument    , NULL, 'h'},
-  };
-  int o;
-  while ( (o = getopt_long(argc, argv, "b", table, NULL)) != -1) {
-    switch (o) {
-    case 'b': bdb_set_batch_mode(); break;
-    default:
-      printf("\t-b,--batch        run with batch mode\n");
+  // const struct option table[] = {
+  //   {"batch"  , no_argument      , NULL, 'b'},
+  //   {"vcd"    , required_argument, NULL, 'v'},
+  //   {"log"    , required_argument, NULL, 'l'},
+  //   {"help"   , no_argument      , NULL, 'h'},
+  // };
+  // int o;
+  // while ( (o = getopt_long(argc, argv, "bv:l:", table, NULL)) != -1) {
+  //   switch (o) {
+  //   case 'b': bdb_set_batch_mode(); break;
+  //   case 'v': vcd_path = optarg; break;
+  //   case 'l': log_path = optarg; break;
+  //   default:
+  //     printf("\t-b,--batch        run with batch mode\n");
+  //     printf("\t-v,--vcd <path>   specify VCD file path\n");
+  //     printf("\t-l,--log <path>   specify log file path\n");
+  
+  // 手动解析Verilator风格的参数 (+vcd=path, +log=path)
+  for (int i = 1; i < argc; i++) {
+    if (strncmp(argv[i], "+vcd=", 5) == 0) {
+      vcd_path = argv[i] + 5;  // 跳过 "+vcd="
+    } else if (strncmp(argv[i], "+log=", 5) == 0) {
+      log_path = argv[i] + 5;  // 跳过 "+log="
+    } else if (strcmp(argv[i], "+batch") == 0) {
+      bdb_set_batch_mode();
+    } else if (strcmp(argv[i], "+help") == 0) {
+      printf("\t+batch            run with batch mode\n");
+      printf("\t+vcd=<path>       specify VCD file path\n");
+      printf("\t+log=<path>       specify log file path\n");
       printf("\n");
       exit(0);
     }
   }
+  
+	Assert(vcd_path, "VCD file path is required. Use +vcd=<path> to specify.");
+	Assert(log_path, "Log file path is required. Use +log=<path> to specify.");
   return 0;
 }
 
@@ -59,7 +87,7 @@ static void init_io() {
 
 void init_monitor(int argc, char *argv[]) {
   parse_args(argc, argv);
-  init_log(TOSTRING(CONFIG_LOG_PATH));
+  init_log(log_path);
   init_io();
   // long img_size = load_image("/home/mio/Code/buckyball/arch/hello-baremetal");
   welcome();
