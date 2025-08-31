@@ -54,8 +54,7 @@ async def handler(data, context):
   
   # 创建带时间戳和binary名字的日志目录
   log_dir = f"{arch_dir}/log/{timestamp}-{binary_name}"
-  waveform_dir = f"{arch_dir}/waveform"
-  waveform_fst_dir = f"{arch_dir}/waveform/{timestamp}-{binary_name}"
+  waveform_dir = f"{arch_dir}/waveform/{timestamp}-{binary_name}"
   topname = "TestHarness"
 
   os.makedirs(log_dir, exist_ok=True)
@@ -64,22 +63,26 @@ async def handler(data, context):
   bin_path = f"{build_dir}/obj_dir/V{topname}"
   batch = data.get("batch", False)
   
-  # 清理旧的波形文件
-  subprocess.run(f"rm -f {waveform_dir}/waveform.vcd {waveform_dir}/waveform.fst ", shell=True, check=True)
+  # 动态生成VCD文件路径
+  vcd_path = f"{waveform_dir}/waveform.vcd"
+  log_path = f"{log_dir}/bdb.log"
   
+
+    # 清理旧的波形文件
+  subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
 # ==================================================================================
 # 执行仿真脚本，实现流式输出
 # ==================================================================================
   batch_param = "True" if batch else "False"
-  sim_cmd = f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch_param}"
+  sim_cmd = f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
   script_dir = os.path.dirname(__file__)
-  
   
   result = stream_run_logger(cmd=sim_cmd, logger=context.logger, cwd=script_dir)
 
-  os.makedirs(waveform_fst_dir, exist_ok=True)
-  vcd2fst_cmd = f"vcd2fst -v {waveform_dir}/waveform.vcd -f {waveform_fst_dir}/waveform.fst"
+  vcd2fst_cmd = f"vcd2fst -v {waveform_dir}/waveform.vcd -f {waveform_dir}/waveform.fst"
   subprocess.run(vcd2fst_cmd, cwd=arch_dir, shell=True, check=True, text=True)
+  # 清理旧的波形文件
+  subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
   
 # ==================================================================================
 # 返回仿真结果
@@ -97,7 +100,7 @@ async def handler(data, context):
         # "stdout": result.stdout,
         # "stderr": result.stderr,
         "log_dir": log_dir,
-        "waveform_dir": waveform_fst_dir,
+        "waveform_dir": waveform_dir,
         "timestamp": timestamp,
       }
     }
@@ -111,7 +114,7 @@ async def handler(data, context):
         "processing": False,
         "returncode": result.returncode,
         "log_dir": log_dir,
-        "waveform_dir": waveform_fst_dir,
+        "waveform_dir": waveform_dir,
         "binary": binary,
         "timestamp": timestamp,
         # "stdout": result.stdout,

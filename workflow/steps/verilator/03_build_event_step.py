@@ -49,10 +49,8 @@ async def handler(data, context):
   inc_flags = ' '.join([f"-I{p}" for p in inc_paths if p])
   
   topname = "TestHarness"
-  vcd_path = f"{waveform_dir}/waveform.vcd"
-  log_path = f"{log_dir}/bdb.log"
 
-  cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 -DCONFIG_VCD_PATH=\"{vcd_path}\" -DCONFIG_LOG_PATH=\"{log_path}\" "
+  cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 "
   ldflags = (f"-lreadline -ldramsim -lfesvr "
              f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
              f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
