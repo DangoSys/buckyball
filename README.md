@@ -7,6 +7,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DangoSys/buckyball)
 [![Ask Zread](https://img.shields.io/badge/Ask_Zread-8A2BE2)](https://zread.ai/DangoSys/buckyball)
 [![Document](https://github.com/DangoSys/buckyball/actions/workflows/doc.yml/badge.svg?branch=main)](https://dangosys.github.io/buckyball)
+[![Buckyball CI](https://github.com/DangoSys/buckyball/actions/workflows/test.yml/badge.svg)](https://github.com/DangoSys/buckyball/actions/workflows/test.yml)
 
 </div>
 
