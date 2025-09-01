@@ -13,21 +13,21 @@ ctest_workload_dir = sardine_dir / "workloads" / "CTest"
 
 # Define all ctest workloads with absolute paths and corresponding IDs
 ctest_workloads = [
-  # (f"{ctest_workload_dir}/ctest_mvin_mvout_acc_test_singlecore-baremetal", "ctest_mvin_mvout_acc_test_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_mvin_mvout_acc_test_singlecore-baremetal", "ctest_mvin_mvout_acc_test_singlecore-baremetal"),
   (f"{ctest_workload_dir}/ctest_mvin_mvout_alternate_test_singlecore-baremetal", "ctest_mvin_mvout_alternate_test_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_ones_singlecore-baremetal", "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal"),     
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random1_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random1_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random2_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random2_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random3_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random3_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal", "ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_col_row_vector_singlecore-baremetal", "ctest_vecunit_matmul_col_row_vector_singlecore-baremetal"),   
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_identity_random_singlecore-baremetal", "ctest_vecunit_matmul_identity_random_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_ones_singlecore-baremetal", "ctest_vecunit_matmul_ones_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_random1_singlecore-baremetal", "ctest_vecunit_matmul_random1_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_random2_singlecore-baremetal", "ctest_vecunit_matmul_random2_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_random3_singlecore-baremetal", "ctest_vecunit_matmul_random3_singlecore-baremetal"), 
-  # (f"{ctest_workload_dir}/ctest_vecunit_matmul_zero_random_singlecore-baremetal", "ctest_vecunit_matmul_zero_random_singlecore-baremetal"),
-  # (f"{ctest_workload_dir}/ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal", "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_ones_singlecore-baremetal", "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal"),     
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random1_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random1_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random2_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random2_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random3_singlecore-baremetal", "ctest_vecunit_matmul_16xn_random3_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal", "ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_col_row_vector_singlecore-baremetal", "ctest_vecunit_matmul_col_row_vector_singlecore-baremetal"),   
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_identity_random_singlecore-baremetal", "ctest_vecunit_matmul_identity_random_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_ones_singlecore-baremetal", "ctest_vecunit_matmul_ones_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_random1_singlecore-baremetal", "ctest_vecunit_matmul_random1_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_random2_singlecore-baremetal", "ctest_vecunit_matmul_random2_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_random3_singlecore-baremetal", "ctest_vecunit_matmul_random3_singlecore-baremetal"), 
+  (f"{ctest_workload_dir}/ctest_vecunit_matmul_zero_random_singlecore-baremetal", "ctest_vecunit_matmul_zero_random_singlecore-baremetal"),
+  (f"{ctest_workload_dir}/ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal", "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal"),
 ]
 
 # @pytest.fixture(scope="session", autouse=True)
@@ -122,13 +122,10 @@ def test_ctest_workload_debug(command_run, caplog, workload_path, workload_id, t
   logging.info("Script output completed")
 
   min_execution_time = 5.0
-  # assert execution_time >= min_execution_time, f"Script executed too quickly: {execution_time:.2f}s < {min_execution_time}s"
-  # assert result['returncode'] in [0, 1], f"Script failed with unexpected return code: {result['returncode']}"
-  # if result['returncode'] != 0:
-  #   exit(1)
-  # if f'"success":true,"failure":false,' not in result['stdout']:
-  #   exit(1)
-  # if f'"success":true,"failure":false,' not in result['stdout']:
-  #   assert False, f"Script failed: {result['stdout']}"
+  assert execution_time >= min_execution_time, f"Script executed too quickly: {execution_time:.2f}s < {min_execution_time}s"
+  assert result['returncode'] in [0, 1], f"Script failed with unexpected return code: {result['returncode']}"
+
+  if f'"success":true,"failure":false,' not in result['stdout']:
+    assert False, f"Script failed: {result['stdout']}"
 
   logging.info("test completed")
