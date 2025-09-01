@@ -43,7 +43,8 @@ async def handler(req, context):
   while True:
     # 检查成功结果
     success_result = await context.state.get(context.trace_id, 'success')
-    if success_result:
+    if success_result and success_result.get('data'):
+      # print(f"DEBUG: API found success state: {success_result}")
       # 过滤无效的null状态
       if success_result == {"data": None} or (isinstance(success_result, dict) and success_result.get('data') is None and len(success_result) == 1):
         await context.state.delete(context.trace_id, 'success')
@@ -57,7 +58,8 @@ async def handler(req, context):
     
     # 检查错误状态
     failure_result = await context.state.get(context.trace_id, 'failure')
-    if failure_result:
+    if failure_result and failure_result.get('data'):
+      # print(f"DEBUG: API found failure state: {failure_result}")
       context.logger.error('simulation failed', failure_result)
 
       if isinstance(failure_result, dict) and 'data' in failure_result:
