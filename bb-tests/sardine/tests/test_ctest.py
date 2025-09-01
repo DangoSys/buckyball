@@ -104,7 +104,7 @@ ctest_workloads = [
 def test_ctest_workload_debug(command_run, caplog, workload_path, workload_id, test_index):
   caplog.set_level(logging.INFO)
   
-  time.sleep(test_index)
+  time.sleep(test_index * 10)
   start_time = time.time()
   command = f"source {sardine_dir}/../../env.sh && bbdev verilator --sim \"--binary {workload_path} --batch\""
   logging.info(f"Running command: {command}")
