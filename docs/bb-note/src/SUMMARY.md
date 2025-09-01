@@ -1,14 +1,20 @@
 # Summary
 
-- [buckyball](./README.md)
+- [overview](./README.md)
+	- [repository](./overview/overview.md)
 
-- [overview](./overview/overview.md)
-- [buckyball architecture](./arch/arch.md)
-	- [framework]
-		- [builtin]
-			- [memdomain]
-				-[mem](./arch/src/main/scala/framework/builtin/memdomain/mem/README.md)
-				-[dma](./arch/src/main/scala/framework/builtin/memdomain/dma/README.md)
+# Architecture
+- [overview](./arch/arch.md)
+- [framework](./arch/framework.md)
+	- [builtin](./arch/framework/builtin.md)
+		- [memdomain](./arch/framework/memdomain.md)
+			- [mem](./arch/src/main/scala/framework/builtin/memdomain/mem/README.md)
+			- [dma](./arch/src/main/scala/framework/builtin/memdomain/dma/README.md)
+
+# bbdev
 - [buckyball development](./workflow/bbdev/port.md)
 	- [workflow](./workflow/steps/verilator/README.md)
-	
+
+---
+
+[Contributors](misc/contributors.md)
