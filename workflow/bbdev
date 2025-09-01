@@ -258,27 +258,18 @@ else: # script mode
     json_data = json.dumps(cmd_info['args'])
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
       # 禁用代理，直接连接localhost
-    subprocess.run(["curl", "-sS", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
-    
+    result = subprocess.run(["curl", "-sS", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
+
     # 3.关闭服务 ================================
     # print("Press Ctrl+C to stop the server and exit...")
     proc.terminate()
     proc.wait()
     print(f"\nTask completed. Command running on http://localhost:{available_port} is finished")
+
+    if result.returncode != 0:
+      print(f"Error: {result.stderr}")
+      sys.exit(1)
     
-    # def signal_handler(sig, frame):
-    #   print(f"\nStopping server on port {available_port}...")
-    #   proc.terminate()
-    #   proc.wait()
-    #   print("Server stopped")
-    #   sys.exit(0)
-    
-    # signal.signal(signal.SIGINT, signal_handler)
-    
-    # try:
-    #   proc.wait()  # 等待进程结束（用户可以通过Ctrl+C中断）
-    # except KeyboardInterrupt:
-    #   signal_handler(signal.SIGINT, None)
   else:
     print(f"Unknown command: {cmd_info['command']}")
     print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc")
