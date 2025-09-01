@@ -8,7 +8,7 @@ title = "Buckyball Technical Documentation"
 command = "mdbook-toc"
 renderer = ["html"]
 marker = "[[_TOC_]]"
-max-level = 4
+max-level = 5
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
