@@ -58,6 +58,7 @@ async def handler(data, context):
   
   obj_dir = f"{build_dir}/obj_dir"
   subprocess.run(f"rm -rf {obj_dir}", shell=True)
+  os.makedirs(obj_dir, exist_ok=True)
   
   sources = ' '.join(vsrcs + csrcs)
   jobs = data.get("jobs", "")
