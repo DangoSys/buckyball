@@ -103,7 +103,7 @@ if run_step "2"; then
   cd ${BBDIR}/arch/thirdparty/chipyard && ./build-setup.sh --conda-env-name ${CONDA_ENV_NAME}
   cp ${BBDIR}/arch/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
   replace_content ${BBDIR}/env.sh build-setup-conda "conda activate ${CONDA_ENV_NAME}
-source /home/mio/Code/buckyball/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
+source ${BBDIR}/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
   replace_content ${BBDIR}/env.sh bb-dir-helper "BB_DIR=${BBDIR}"
 fi
 
