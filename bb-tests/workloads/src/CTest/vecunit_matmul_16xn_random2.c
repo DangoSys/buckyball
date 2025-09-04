@@ -39,8 +39,8 @@ int run_test(const char* test_name, elem_t* a, elem_t* b, int size) {
 }
 
 int test_random2() {
-    init_random_matrix(input_matrix_a, DIM, 64, 111);
-    init_random_matrix(input_matrix_b, 64, DIM, 222);
+    init_u8_random_matrix(input_matrix_a, DIM, 64, 111);
+    init_u8_random_matrix(input_matrix_b, 64, DIM, 222);
     return run_test("Random matrices 2", input_matrix_a, input_matrix_b, 64);
 }
 

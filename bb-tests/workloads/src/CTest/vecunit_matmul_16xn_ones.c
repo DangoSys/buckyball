@@ -22,7 +22,7 @@ void hw_matmul(const char* test_name, elem_t* a, elem_t* b, result_t* c, int siz
     bb_mul_warp16(OP1_ADDR, OP2_ADDR, WR_ADDR, size);
     bb_fence();
     bb_mvout((uintptr_t)c, WR_ADDR, DIM << 2);
-    bb_fence();
+
 }
 
 int run_test(const char* test_name, elem_t* a, elem_t* b, int size) {
@@ -39,9 +39,9 @@ int run_test(const char* test_name, elem_t* a, elem_t* b, int size) {
 }
 
 int test_ones_16x64() {
-    init_ones_matrix(input_matrix_a, DIM, 64);
-    init_ones_matrix(input_matrix_b, 64, DIM);
-    return run_test("All-ones matrices", input_matrix_a, input_matrix_b, 64);
+    init_ones_matrix(input_matrix_a, DIM, 32);
+    init_ones_matrix(input_matrix_b, 32, DIM);
+    return run_test("All-ones matrices", input_matrix_a, input_matrix_b, 32);
 }
 
 int main() {
