@@ -157,4 +157,11 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
     }
   }
   io.busy := fenceCSR =/= 0.U
+// ---------------------------------------------------------------------------
+// busy计数器，防止仿真长时间停顿
+// ---------------------------------------------------------------------------
+  val busy_counter = RegInit(0.U(32.W))
+  busy_counter := Mux(io.busy, busy_counter + 1.U, 0.U)
+  assert(busy_counter < 10000.U, "ToyBuckyBall: busy for too long!")
+
 }
