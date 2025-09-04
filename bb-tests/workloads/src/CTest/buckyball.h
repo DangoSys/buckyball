@@ -28,6 +28,7 @@
 #define BB_MVOUT_FUNCT 25        // 0x19 - Move out function code  
 #define BB_FENCE_FUNCT 31        // 0x1F - Fence function code
 #define BB_MUL_FUNCT 32          // 0x20 - Matrix multiply function code
+#define BB_IM2COL_FUNCT 33          // 0x21 - Matrix im2col function code
 #define BB_FLUSH_FUNCT 7         // 0x07 - Flush function code
 #define BB_BBFP_MUL_FUNCT 26     // 0x1A - BBFP matrix multiply function code
 #define BB_MATMUL_WS_FUNCT 27    // 0x1B - Matrix multiply with warp16 function code
@@ -102,6 +103,13 @@ do { \
     BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_MATMUL_WS_FUNCT); \
 } while(0)
 
+#define bb_im2col(op1_addr, wr_addr, klen, iter) \
+do { \
+    uint64_t rs1_val = ((wr_addr) << SPAD_ADDR_LEN) | ((op1_addr) & ((1UL << SPAD_ADDR_LEN) - 1)); \
+    uint64_t rs2_val = ((iter) << SPAD_ADDR_LEN) | ((klen) & ((1UL << SPAD_ADDR_LEN) - 1)); \
+    BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_IM2COL_FUNCT); \
+} while(0)
+
 // Flush accelerator
 #define bb_flush() \
     BUCKYBALL_INSTRUCTION_FLUSH(BB_FLUSH_FUNCT)
@@ -144,6 +152,7 @@ void init_row_vector(elem_t* matrix, int cols, elem_t value);
 void init_col_vector(elem_t* matrix, int rows, elem_t value);
 void init_random_matrix(elem_t* matrix, int rows, int cols, int seed);
 void init_bbfp_random_matrix(elem_t* matrix, int rows, int cols, int seed);
+void init_sequence_matrix(elem_t* matrix, int rows, int cols);
 
 /* 矩阵运算函数 */
 void transpose_u8_matrix(elem_t* src, elem_t* dst, int rows, int cols);

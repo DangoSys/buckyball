@@ -45,6 +45,8 @@ add_executable(ctest_vecunit_matmul_16xn_zero_random-linux ${CTEST_WORKLOAD_DIR}
 target_link_libraries(ctest_vecunit_matmul_16xn_zero_random-linux buckyball-lib)
 add_executable(ctest_vecunit_simple_nn_forward_pass_test-linux ${CTEST_WORKLOAD_DIR}/vecunit_simple_nn_forward_pass_test.c)
 target_link_libraries(ctest_vecunit_simple_nn_forward_pass_test-linux buckyball-lib)
+add_executable(ctest_im2col_test-linux ${CTEST_WORKLOAD_DIR}/im2col_test.c)
+target_link_libraries(ctest_im2col_test-linux buckyball-lib)
 
 add_custom_target(buckyball-CTest-linux ALL DEPENDS
   ctest_mvin_mvout_acc_test-linux
@@ -63,6 +65,7 @@ add_custom_target(buckyball-CTest-linux ALL DEPENDS
   ctest_vecunit_matmul_16xn_random3-linux
   ctest_vecunit_matmul_16xn_zero_random-linux
   ctest_vecunit_simple_nn_forward_pass_test-linux
+  ctest_im2col_test-linux
   COMMENT "Building linux workloads for Buckyball"
   VERBATIM)
 
@@ -140,6 +143,10 @@ add_custom_target(buckyball-CTest-multicore-baremetal ALL
     -DMULTICORE=3
     ${CTEST_WORKLOAD_DIR}/vecunit_simple_nn_forward_pass_test.c
     ${CTEST_WORKLOAD_DIR}/buckyball.c
+  COMMAND ${ELF_CC} ${C_FLAGS} -o ctest_im2col_test_multicore-baremetal ${CTEST_WORKLOAD_DIR}/start.S
+    -DMULTICORE=3
+    ${CTEST_WORKLOAD_DIR}/im2col_test.c
+    ${CTEST_WORKLOAD_DIR}/buckyball.c
   COMMAND ${ELF_CC} ${C_FLAGS} -o ctest_bbfp_matmul_test_multicore-baremetal ${CTEST_WORKLOAD_DIR}/start.S
     -DMULTICORE=3
     ${CTEST_WORKLOAD_DIR}/bbfpmatmul.c
@@ -172,6 +179,7 @@ add_custom_target(buckyball-CTest-multicore-baremetal ALL
     ${CTEST_WORKLOAD_DIR}/vecunit_matmul_16xn_random3.c
     ${CTEST_WORKLOAD_DIR}/vecunit_matmul_16xn_zero_random.c
     ${CTEST_WORKLOAD_DIR}/vecunit_simple_nn_forward_pass_test.c
+    ${CTEST_WORKLOAD_DIR}/im2col_test.c
     ${CTEST_WORKLOAD_DIR}/bbfpmatmul.c
     ${CTEST_WORKLOAD_DIR}/bbfp_matmul_random1.c
     ${CTEST_WORKLOAD_DIR}/bbfp_matmul_random2.c
@@ -230,6 +238,9 @@ add_custom_target(buckyball-CTest-singlecore-baremetal ALL
   COMMAND ${ELF_CC} ${C_FLAGS} -o ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal 
     ${CTEST_WORKLOAD_DIR}/vecunit_simple_nn_forward_pass_test.c
     ${CTEST_WORKLOAD_DIR}/buckyball.c
+  COMMAND ${ELF_CC} ${C_FLAGS} -o ctest_im2col_test_singlecore-baremetal 
+    ${CTEST_WORKLOAD_DIR}/im2col_test.c
+    ${CTEST_WORKLOAD_DIR}/buckyball.c
   DEPENDS ${CTEST_WORKLOAD_DIR}/mvin_mvout_acc_test.c
     ${CTEST_WORKLOAD_DIR}/mvin_mvout_alternate_test.c
     ${CTEST_WORKLOAD_DIR}/vecunit_matmul_ones.c
@@ -246,6 +257,7 @@ add_custom_target(buckyball-CTest-singlecore-baremetal ALL
     ${CTEST_WORKLOAD_DIR}/vecunit_matmul_16xn_random3.c
     ${CTEST_WORKLOAD_DIR}/vecunit_matmul_16xn_zero_random.c
     ${CTEST_WORKLOAD_DIR}/vecunit_simple_nn_forward_pass_test.c
+    ${CTEST_WORKLOAD_DIR}/im2col_test.c
     ${CTEST_WORKLOAD_DIR}/buckyball.c
   COMMENT "Building baremetal workloads for Buckyball"
   VERBATIM)

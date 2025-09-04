@@ -14,6 +14,7 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
   val is_matmul_ws  = Bool()
   val is_vec        = Bool()
   val is_bbfp       = Bool()
+  val is_im2col     = Bool()
   
   // 迭代次数
   val iter          = UInt(10.W)
@@ -24,6 +25,7 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
   val wr_spad_en    = Bool()
   val op1_from_spad = Bool()
   val op2_from_spad = Bool()
+  val klen          = UInt(log2Up(b.veclane).W) //卷积核的宽度
   
   // Ball的操作数地址
   val op1_bank      = UInt(log2Up(b.sp_banks).W)
@@ -85,6 +87,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
     MATMUL_WARP16_BITPAT -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),Y),
     BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),Y),
     MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),Y),
+    IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),Y)
   ))
 
   import CtrlDecodeFields._
@@ -105,9 +108,11 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.is_vec        := Mux(io.ball_decode_cmd_o.valid, func7 === MATMUL_WARP16_BITPAT,                        false.B)
   io.ball_decode_cmd_o.bits.is_bbfp       := Mux(io.ball_decode_cmd_o.valid, func7 === BB_BBFP_MUL || func7 === MATMUL_WS,          false.B)
   io.ball_decode_cmd_o.bits.is_matmul_ws  := Mux(io.ball_decode_cmd_o.valid, func7 === MATMUL_WS,                                   false.B)
+  io.ball_decode_cmd_o.bits.is_im2col     := Mux(io.ball_decode_cmd_o.valid, func7 === IM2COL,                                      false.B)
   
   io.ball_decode_cmd_o.bits.iter          := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.ITER.id).asUInt, 0.U(10.W))
-
+  io.ball_decode_cmd_o.bits.klen          := Mux(io.ball_decode_cmd_o.valid && io.ball_decode_cmd_o.bits.is_im2col , rs2(spAddrLen - 1, 0), 0.U(log2Up(b.veclane).W))
+  // 地址解析
   io.ball_decode_cmd_o.bits.op1_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP1_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.op2_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP2_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.wr_spad_en    := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.WR_SPAD.id).asBool,       false.B)
@@ -135,7 +140,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   // 断言：执行指令中OpA和OpB必须访问不同的bank
   assert(!(io.ball_decode_cmd_o.valid && io.ball_decode_cmd_o.bits.op1_en && io.ball_decode_cmd_o.bits.op2_en && 
            io.ball_decode_cmd_o.bits.op1_bank === io.ball_decode_cmd_o.bits.op2_bank), 
-    "BallDomainDecoder: Ball instruction OpA and OpB cannot access the same bank")
+  "BallDomainDecoder: Ball instruction OpA and OpB cannot access the same bank")
 
 // -----------------------------------------------------------------------------
 // 控制信号不进入ROB
