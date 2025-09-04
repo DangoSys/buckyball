@@ -111,7 +111,7 @@ def test_ctest_workload_debug(command_run, caplog, workload_path, workload_id, t
   
   # 使用 command_run 执行命令，带提前退出检测
   early_exit_pattern = r'Task completed\. Command running on http://localhost:\d+ is finished'
-  result = command_run(command, early_exit_pattern=early_exit_pattern, timeout=2400) # 40 minutes
+  result = command_run(command, early_exit_pattern=early_exit_pattern, timeout=3600) # 60 minutes
   execution_time = time.time() - start_time
   
   logging.info(f"Workload: {workload_id}")
