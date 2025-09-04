@@ -54,20 +54,21 @@ class BallReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) e
 // -----------------------------------------------------------------------------
 // 出站 - 指令发射 (根据指令类型分发到ball1和ball2)
 // -----------------------------------------------------------------------------
-  // ball1 (VecUnit): is_vec指令
-  io.issue_o.ball1.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_vec
+  // ball1 (VecUnit)
+  io.issue_o.ball1.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.bid === 1.U
   io.issue_o.ball1.bits  := rob.io.issue.bits
   
-  // ball2 (BBFP): is_bbfp指令  
-  io.issue_o.ball2.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_bbfp
+  // ball2 (BBFP)
+  io.issue_o.ball2.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.bid === 2.U
   io.issue_o.ball2.bits  := rob.io.issue.bits
 
-  io.issue_o.ball3.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_im2col
+  // ball3 (im2col)
+  io.issue_o.ball3.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.bid === 3.U
   io.issue_o.ball3.bits  := rob.io.issue.bits
 
-  rob.io.issue.ready := (rob.io.issue.bits.cmd.is_vec && io.issue_o.ball1.ready) || 
-                        (rob.io.issue.bits.cmd.is_bbfp && io.issue_o.ball2.ready) ||
-                        (rob.io.issue.bits.cmd.is_im2col && io.issue_o.ball3.ready)
+  rob.io.issue.ready := (rob.io.issue.bits.cmd.bid === 1.U && io.issue_o.ball1.ready) || 
+                        (rob.io.issue.bits.cmd.bid === 2.U && io.issue_o.ball2.ready) ||
+                        (rob.io.issue.bits.cmd.bid === 3.U && io.issue_o.ball3.ready)
   
 // -----------------------------------------------------------------------------
 // 完成信号处理
