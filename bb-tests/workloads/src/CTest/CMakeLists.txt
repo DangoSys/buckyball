@@ -73,7 +73,7 @@ add_custom_target(buckyball-CTest-linux ALL DEPENDS
 # build baremetal version workload
 #-------------------------------------------------------------------------------
 
-set(C_FLAGS -std=gnu11 -g -DCHECK=1 -fno-common -O2 -static 
+set(C_FLAGS -std=gnu11 -g -fno-common -O2 -static 
   -fno-builtin-printf -specs=htif_nano.specs -I${CTEST_WORKLOAD_DIR})
 
 set(ELF_CC "riscv64-unknown-elf-gcc")
