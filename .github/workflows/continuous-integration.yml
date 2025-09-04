@@ -1,0 +1,57 @@
+# This file describes the GitHub Actions workflow for continuous integration of Spike.
+#
+# See
+# https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions
+# for API reference documentation on this file format.
+
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+
+jobs:
+  test:
+    name: Test Spike build (Ubuntu)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # checkout full tree
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: sudo xargs apt-get install -y < .github/workflows/apt-packages.txt
+
+      - run: |
+          for commit in $(git rev-list origin/master..HEAD | tac); do
+            git checkout $commit
+            echo "Checking commit $commit"
+            ci-tests/build-spike
+            ci-tests/test-spike
+          done
+
+  test-macos:
+    name: Test Spike build (MacOS)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          # checkout full tree
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: xargs brew install --overwrite < .github/workflows/brew-packages.txt
+
+      - run: |
+          for commit in $(git rev-list origin/master..HEAD | tail -r); do
+            git checkout $commit
+            echo "Checking commit $commit"
+            ci-tests/build-spike
+            ci-tests/test-spike
+          done
