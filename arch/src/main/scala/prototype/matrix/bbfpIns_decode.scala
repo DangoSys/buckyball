@@ -38,7 +38,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   
   switch(state) {
     is(idle) {
-      when(io.cmdReq.valid && io.cmdReq.bits.cmd.is_bbfp) {
+      when(io.cmdReq.valid && io.cmdReq.bits.cmd.bid === 2.U) {
         iteration         := io.cmdReq.bits.cmd.iter
         iteration_counter := 0.U
         is_matmul_ws      := false.B
