@@ -1,0 +1,23 @@
+# Hardware config database for FireSim Simulation Manager
+# See https://docs.fires.im/en/stable/Advanced-Usage/Manager/Manager-Configuration-Files.html for documentation of all of these params.
+
+# ------------------------------------------------------------
+# Attention! This is the example on the Local U280 Machine
+# Remember to modify this file use in the same way of firesim
+# ------------------------------------------------------------
+
+# Hardware configs represent a combination of:
+#   - an agfi/bitstream_tar with the bitstream for an fpga
+#   - (optional) a deployquintuplet override
+#   - (optional) a deploy_makefrag_override
+#   - (optional) a custom_runtime_config
+
+# The HWDBs (and their AGFI's/bitstream_tar's) provided below are public and available to all users.
+
+# DOCREF START: Example HWDB Entry
+midasexamples_gcd:
+    bitstream_tar: https://raw.githubusercontent.com/invalid/address.tar.gz
+    deploy_quintuplet_override: null
+    deploy_makefrag_override: null
+    custom_runtime_config: null
+# DOCREF END: Example HWDB Entry

@@ -58,10 +58,6 @@ class WithMultiRoCCToyBuckyBall(harts: Int*)(
 
 
 class BuckyBallToyConfig extends Config(
-  
-  // new framework.rocket.WithNBuckyBallCores(1) ++
-  // new framework.rocket.WithMultiRoCCBB ++
-  // new WithMultiRoCCToyBuckyBall(0)(CustomBuckyBallConfig()) ++
   new framework.rocket.WithNBuckyBallCores(1) ++
   new BuckyBallCustomConfig(CustomBuckyBallConfig()) ++
   

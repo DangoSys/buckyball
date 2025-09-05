@@ -1,0 +1,48 @@
+# Build-time build recipe configuration for the FireSim Simulation Manager
+# See https://docs.fires.im/en/stable/Advanced-Usage/Manager/Manager-Configuration-Files.html for documentation of all of these params.
+
+# this file contains sections that describe hardware designs that /can/ be built.
+# edit config_build.yaml to actually "turn on" a config to be built when you run
+# buildbitstream
+
+# ------------------------------------------------------------
+# Attention! This is the example on the Local U280 Machine
+# Remember to modify this file use in the same way of firesim
+# ------------------------------------------------------------
+
+###########
+# Schema:
+###########
+# <NAME>:
+#    PLATFORM: <string>
+#    TARGET_PROJECT: <string>
+#    TARGET_PROJECT_MAKEFRAG: <string | null>
+#    DESIGN: <string>
+#    TARGET_CONFIG: <string>
+#    PLATFORM_CONFIG: <string>
+#    deploy_quintuplet: <string | null>
+#    platform_config_args:
+#       fpga_frequency: <int>
+#       build_strategy: <string>
+#    post_build_hook: <string | null>
+#    metasim_customruntimeconfig: <string | null>
+#    bit_builder_recipe: <string>
+#    # OPTIONAL: overrides for bit builder recipe
+#    # Arg structure should be identical to the args given
+#    # in the base_recipe.
+#    #bit_builder_arg_overrides:
+#    #  <ARG>: <OVERRIDE>
+
+alveo_u280_firesim_GemminiRocketConfig_no_nic:
+    PLATFORM: xilinx_alveo_u280
+    TARGET_PROJECT: firesim
+    DESIGN: FireSim
+    TARGET_CONFIG: FireSimGemminiRocketConfig
+    PLATFORM_CONFIG: BaseXilinxAlveoU280Config
+    deploy_quintuplet: null
+    platform_config_args:
+        fpga_frequency: 30
+        build_strategy: TIMING
+    post_build_hook: null
+    metasim_customruntimeconfig: null
+    bit_builder_recipe: bit-builder-recipes/xilinx_alveo_u280.yaml
