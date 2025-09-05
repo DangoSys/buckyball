@@ -5,7 +5,6 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
-import framework.builtin.frontend.FrontendTLBIO
 import freechips.rocketchip.rocket.MStatus
 import framework.builtin.memdomain.mem.SramReadIO
 import framework.builtin.memdomain.dma.{BBWriteRequest, BBWriteResponse, LocalAddr}

@@ -11,7 +11,7 @@ import freechips.rocketchip.rocket.MStatus
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
 import framework.builtin.util.Util._
-import framework.builtin.frontend.FrontendTLBIO
+import framework.builtin.memdomain.tlb.BBTLBIO
 import framework.builtin.memdomain.dma.LocalAddr
 
 
@@ -52,7 +52,7 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val io = IO(new Bundle {
       val req = Flipped(Decoupled(new BBReadRequest()))
       val resp = Decoupled(new BBReadResponse(dataWidth))
-      val tlb = new FrontendTLBIO
+      val tlb = new BBTLBIO
       val busy = Output(Bool())
       val flush = Input(Bool())
     })
@@ -188,7 +188,7 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val io = IO(new Bundle {
       val req = Flipped(Decoupled(new BBWriteRequest(dataWidth)))
       val resp = Decoupled(new BBWriteResponse)
-      val tlb = new FrontendTLBIO
+      val tlb = new BBTLBIO
       val busy = Output(Bool())
       val flush = Input(Bool())
     })

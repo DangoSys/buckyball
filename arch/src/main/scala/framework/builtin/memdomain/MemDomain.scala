@@ -6,14 +6,16 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.PostGDCmd
 import freechips.rocketchip.tile._
-import framework.builtin.frontend.FrontendTLBIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.memdomain.{MemLoader, MemStorer, MemController}
 import framework.builtin.memdomain.rs.MemReservationStation
+import framework.builtin.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
+import freechips.rocketchip.tilelink.TLEdgeOut
+import freechips.rocketchip.rocket.TLBPTWIO
 import framework.rocket.RoCCResponseBB
 
-class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
     // 来自GlobalDecoder的输入
     val gDecoderIn = Flipped(Decoupled(new PostGDCmd))
@@ -38,8 +40,14 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
       }
     }
     
-    // TLB接口
-    // val tlb = new FrontendTLBIO()(p)
+    // TLB接口 - 对外暴露给DMA使用
+    val tlb = Vec(2, Flipped(new BBTLBIO))
+    
+    // PTW接口 - 需要连接到上层的PTW
+    val ptw = Vec(2, new TLBPTWIO)
+    
+    // TLB异常接口 - 暴露给上层处理flush等
+    val tlbExp = Vec(2, new BBTLBExceptionIO)
     
     // RoCC响应接口
     val roccResp = Decoupled(new RoCCResponseBB()(p))
@@ -53,6 +61,9 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   
   // 内部MemController (封装了spad和acc)
   val memController = Module(new MemController)
+  
+  // TLB集群
+  val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes))
 
 // -----------------------------------------------------------------------------
 // GlobalDecoder -> MemDecoder
@@ -78,9 +89,12 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   memStorer.io.dmaReq <> io.dma.write.req
   io.dma.write.resp <> memStorer.io.dmaResp
   
-  // 连接TLB (这里需要根据实际的TLB接口连接，暂时注释)
-  // memLoader.io.tlb <> io.tlb
-  // memStorer.io.tlb <> io.tlb
+  // 连接TLB - 现在使用内部的BBTLBCluster
+  io.tlb <> tlbCluster.io.clients
+  io.ptw <> tlbCluster.io.ptw
+  
+  // 连接异常接口 - 注意方向：内部TLB的exp是Output，外部接口是Input
+  tlbCluster.io.exp <> io.tlbExp
   
   // 连接MemLoader和MemStorer到MemController的DMA接口
   memLoader.io.sramWrite <> memController.io.dma.sramWrite
