@@ -25,6 +25,11 @@ declare module 'motia' {
     'make clean': EventHandler<never, { topic: 'verilator.verilog'; data: never } | { topic: 'verilator.complete'; data: never } | { topic: 'verilator.error'; data: never }>
     'Verilator Clean': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'verilator.clean'; data: never }>
     'running sardine': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'sardine.run'; data: never }>
+    'Marshal Launch': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'marshal.launch'; data: never }>
+    'Marshal Build': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'marshal.build'; data: never }>
+    'Firesim Runworkload': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.runworkload'; data: never }>
+    'Firesim Infrasetup': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.infrasetup'; data: never }>
+    'Firesim Buildbitstream': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.buildbitstream'; data: never }>
     'agent': ApiRouteHandler<{ message: string; model?: string }, ApiResponse<200, { traceId?: string; status?: string }>, { topic: 'agent.prompt'; data: { message?: string; model?: string; traceId?: string } }>
   }
 }
