@@ -46,3 +46,18 @@ alveo_u280_firesim_GemminiRocketConfig_no_nic:
     post_build_hook: null
     metasim_customruntimeconfig: null
     bit_builder_recipe: bit-builder-recipes/xilinx_alveo_u280.yaml
+
+alveo_u280_firesim_BuckyballToyConfig_no_nic:
+    PLATFORM: xilinx_alveo_u280
+    TARGET_PROJECT: firesim
+    TARGET_PROJECT_MAKEFRAG: ../makefrag/firesim
+    DESIGN: FireSim
+    TARGET_CONFIG: FireSimBuckyballToyConfig
+    PLATFORM_CONFIG: BaseXilinxAlveoU280Config
+    deploy_quintuplet: null
+    platform_config_args:
+        fpga_frequency: 30
+        build_strategy: TIMING
+    post_build_hook: null
+    metasim_customruntimeconfig: null
+    bit_builder_recipe: bit-builder-recipes/xilinx_alveo_u280.yaml
