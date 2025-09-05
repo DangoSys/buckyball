@@ -23,7 +23,7 @@ object buckyball extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    chipyard_generators
+    firechip
   )
   
   override def ivyDeps = Agg(
@@ -202,50 +202,6 @@ object chipyard extends SbtModule {
     ara,
     firrtl2_bridge,
     vexiiriscv
-  )
-  
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.5.0",
-    ivy"org.reflections:reflections:0.10.2"
-  )
-  
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-  )
-}
-
-// Define chipyard generators module
-object chipyard_generators extends SbtModule {
-  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "chipyard"
-  override def scalaVersion = "2.13.12"
-  
-  // Add chipyard, testchipip, and other required modules as dependencies
-  override def moduleDeps = Seq(
-    chipyard,
-    testchipip,
-    icenet,
-    nvdla,
-    fft_generator,
-    constellation,
-    rerocc,
-    rocket_dsp_utils,
-    dsptools,
-    fixedpoint,
-    tracegen,
-    boom,
-    shuttle,
-    ara,
-    saturn,
-    gemmini,
-    sodor,
-    compressacc,
-    mempress,
-    barf,
-    caliptra_aes,
-    rocc_acc_utils,
-    vexiiriscv,
-    ibex,
-    cva6
   )
   
   override def ivyDeps = Agg(
@@ -833,3 +789,83 @@ object firrtl2_bridge extends SbtModule {
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
 }
+
+
+object firesim_lib extends SbtModule {
+  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "sims" / "firesim" / "sim" / "firesim-lib"
+  override def scalaVersion = "2.13.12"
+  
+  // Add midas_target_utils as a dependency
+  override def moduleDeps = Seq(
+    midas_target_utils
+  )
+  
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+  
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+}
+
+// Interfaces for target-specific bridges shared with FireSim.
+// Minimal in scope (should only depend on Chisel/Firrtl).
+// This is copied to FireSim's GoldenGate compiler.
+object firechip_bridgeinterfaces extends SbtModule {
+  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "bridgeinterfaces"
+  override def scalaVersion = "2.13.12"
+  
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+  
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+}
+
+// Target-side bridge definitions, CC files, etc used for FireSim.
+// This only compiled with Chipyard.
+object firechip_bridgestubs extends SbtModule {
+  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "bridgestubs"
+  override def scalaVersion = "2.13.12"
+  
+  // Add chipyard, firesim_lib, and firechip_bridgeinterfaces as dependencies
+  override def moduleDeps = Seq(
+    chipyard,
+    firesim_lib,
+    firechip_bridgeinterfaces
+  )
+  
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+  
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+} 
+
+// FireSim top-level project that includes the FireSim harness, CC files, etc needed for FireSim.
+object firechip extends SbtModule {
+  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "chip"
+  override def scalaVersion = "2.13.12"
+  
+  // Add chipyard, firesim_lib, firechip_bridgestubs, and firechip_bridgeinterfaces as dependencies
+  override def moduleDeps = Seq(
+    chipyard,
+    firesim_lib,
+    firechip_bridgestubs,
+    firechip_bridgeinterfaces
+  )
+  
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+  
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+}
+
