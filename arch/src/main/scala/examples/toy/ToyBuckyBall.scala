@@ -12,7 +12,7 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.tilelink._
 
 import framework.rocket.{LazyRoCCBB, LazyRoCCModuleImpBB, RoCCResponseBB}
-import framework.builtin.frontend.{FrontendTLB, GlobalDecoder}
+import framework.builtin.frontend.GlobalDecoder
 import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
@@ -25,7 +25,6 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
   
-  // DMA组件现在在BuckyBall层面, 后面移到MemDomain内部
   val id_node = TLIdentityNode()
   val xbar_node = TLXbar()
   
@@ -55,19 +54,9 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   val tagWidth = 32
 
 // -----------------------------------------------------------------------------
-// Frontend: TLB
+// Frontend: TLB 移至MemDomain内部
 // -----------------------------------------------------------------------------
   implicit val edge: TLEdgeOut = outer.id_node.edges.out.head
-  val tlb = Module(new FrontendTLB(2, tlb_size, dma_maxbytes))
-
-  tlb.io.exp.foreach(_.flush_skip := false.B)
-  tlb.io.exp.foreach(_.flush_retry := false.B)
-
-  io.ptw <> tlb.io.ptw
-
-  // Flush信号给DMA组件
-  outer.reader.module.io.flush := tlb.io.exp.map(_.flush()).reduce(_ || _)
-  outer.writer.module.io.flush := tlb.io.exp.map(_.flush()).reduce(_ || _)
 
 // -----------------------------------------------------------------------------
 // Frontend: Global Decode Dispatch commands to BallDomain and MemDomain
@@ -114,12 +103,23 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   memDomain.io.dma.write.req <> outer.writer.module.io.req
   outer.writer.module.io.resp <> memDomain.io.dma.write.resp
   
-  // DMA->TLB
-  outer.reader.module.io.tlb <> tlb.io.clients(1)
-  outer.writer.module.io.tlb <> tlb.io.clients(0)
+  // DMA->TLB (现在通过MemDomain)
+  outer.reader.module.io.tlb <> memDomain.io.tlb(1)
+  outer.writer.module.io.tlb <> memDomain.io.tlb(0)
   
-  // 连接MemDomain的TLB接口 (暂时使用DontCare，后续可以连接)
-  // memDomain.io.tlb := DontCare  
+  // PTW连接到MemDomain的TLB
+  io.ptw <> memDomain.io.ptw
+  
+  // TLB异常处理 - 现在MemDomain的tlbExp是Output，所以我们从它读取信号
+  // 设置flush输入信号
+  memDomain.io.tlbExp.foreach { exp =>
+    exp.flush_skip := false.B
+    exp.flush_retry := false.B
+  }
+  
+  // Flush信号给DMA组件 (从MemDomain的TLB异常获取)
+  outer.reader.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
+  outer.writer.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)  
 
 // -----------------------------------------------------------------------------
 // Backend: Domain Bridge: BallDomain->MemDomain
