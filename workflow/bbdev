@@ -86,6 +86,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   doc_group = doc_parser.add_mutually_exclusive_group(required=True)
   doc_group.add_argument("--deploy", action="store_true", help="Deploy doc. ")
 
+  # ===== marshal 子命令 =========================================================================
+  marshal_parser = subparsers.add_parser("marshal", help="marshal operations")
+  marshal_group = marshal_parser.add_mutually_exclusive_group(required=True)
+  marshal_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Build marshal. ")
+  marshal_group.add_argument("--launch", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Launch marshal. ")
+
+  # ===== firesim 子命令 =========================================================================
+  firesim_parser = subparsers.add_parser("firesim", help="firesim operations")
+  firesim_group = firesim_parser.add_mutually_exclusive_group(required=True)
+  firesim_group.add_argument("--buildbitstream", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Build bitstream. ")
+  firesim_group.add_argument("--infrasetup", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Infrasetup. ")
+  firesim_group.add_argument("--runworkload", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Run workload. ")
 
   # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
   args, unknown = parser.parse_known_args(argv)
@@ -209,21 +226,21 @@ if args.server:
       print(f"Stopping server on port {args.port}")
       subprocess.run(f"kill -TERM $(lsof -t -i :{args.port})", shell=True, check=False, text=True)
 
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc"]:
+  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim"]:
     api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
     json_data = json.dumps(cmd_info['args'])
     subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
     # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
   else:
     print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc")
+    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim")
     sys.exit(1)
 else: # script mode
   if cmd_info['command'] == "start":
     print(f" 'start' do nothing in script mode")
   elif cmd_info['command'] == "stop":
     print(f" 'stop' do nothing in script mode")
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc"]:
+  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim"]:
     # 1.启动服务在后台 ================================
     # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
     if args.port:
@@ -272,6 +289,6 @@ else: # script mode
     
   else:
     print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc")
+    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim")
     sys.exit(1)
   

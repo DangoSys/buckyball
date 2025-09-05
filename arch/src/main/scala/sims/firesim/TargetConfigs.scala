@@ -12,3 +12,7 @@ class FireSimGemminiRocketConfig extends Config(
   new firechip.chip.WithFireSimConfigTweaks ++
   new chipyard.GemminiRocketConfig)
 
+class FireSimBuckyballToyConfig extends Config(
+  new firechip.chip.WithDefaultFireSimBridges ++
+  new firechip.chip.WithFireSimConfigTweaks ++
+  new examples.toy.BuckyBallToyConfig)
