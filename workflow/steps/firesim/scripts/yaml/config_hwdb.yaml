@@ -21,3 +21,9 @@ midasexamples_gcd:
     deploy_makefrag_override: null
     custom_runtime_config: null
 # DOCREF END: Example HWDB Entry
+
+alveo_u280_firesim_GemminiRocketConfig_no_nic:
+    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-05--07-09-54-alveo_u280_firesim_GemminiRocketConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-FireSimGemminiRocketConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+    deploy_quintuplet_override: null
+    custom_runtime_config: null
+    

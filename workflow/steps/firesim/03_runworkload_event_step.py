@@ -22,14 +22,15 @@ config = {
 async def handler(data, context):
   bbdir = get_buckyball_path()
   script_dir = f"{bbdir}/workflow/steps/firesim/scripts"
+  yaml_dir = f"{script_dir}/yaml"
 # ==================================================================================
 # 执行操作
 # ==================================================================================  
   command = f"source {bbdir}/env.sh && firesim runworkload " 
-  command += f" -a {script_dir}/config_hwdb.yaml"
-  command += f" -b {script_dir}/config_build.yaml"
-  command += f" -r {script_dir}/config_build_recipes.yaml"
-  command += f" -c {script_dir}/config_runtime.yaml"
+  command += f" -a {yaml_dir}/config_hwdb.yaml"
+  command += f" -b {yaml_dir}/config_build.yaml"
+  command += f" -r {yaml_dir}/config_build_recipes.yaml"
+  command += f" -c {yaml_dir}/config_runtime.yaml"
   result = stream_run_logger(cmd=command, logger=context.logger)
   
 # ==================================================================================

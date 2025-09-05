@@ -1,11 +1,8 @@
 // See README.md for license details.
-import Tests._
 
 val chisel6Version = "6.5.0"
 val chiselTestVersion = "6.0.0"
 val scalaVersionFromChisel = "2.13.12"
-
-val chisel3Version = "3.6.1"
 
 // Fix for scalafix undefined setting
 ThisBuild / scalafixScalaBinaryVersion := scalaBinaryVersion.value
@@ -35,15 +32,16 @@ lazy val scalaTestSettings =  Seq(
 // ------------------------------------------------------------------------------
 // Dependencies 
 // ------------------------------------------------------------------------------
-lazy val chipyard = ProjectRef(file("../thirdparty/chipyard"), "chipyard")
+lazy val chipyard = ProjectRef(file("thirdparty/chipyard"), "chipyard")
+lazy val firechip = ProjectRef(file("thirdparty/chipyard"), "firechip")
 
 // ------------------------------------------------------------------------------
 // Project Settings 
 // ------------------------------------------------------------------------------
-lazy val root = (project in file("."))
-  .dependsOn(chipyard)  
+lazy val buckyball = (project in file("."))
+  .dependsOn(chipyard, firechip)  
   .settings(
-    name := "buckyball-arch",
+    name := "buckyball",
     organization := "com.buckyball",
     version := "1.0.0",
     scalaVersion := scalaVersionFromChisel,
