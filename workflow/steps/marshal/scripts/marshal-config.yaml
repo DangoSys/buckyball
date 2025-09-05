@@ -1,0 +1,2 @@
+firesim-dir: '../../../../arch/thirdparty/chipyard/sims/firesim'
+# board-dir:   '../../../../arch/thirdparty/chipyard/software/firemarshal/boards/prototype'
