@@ -104,6 +104,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
   firesim_group.add_argument("--runworkload", type=str, nargs="?", const="", metavar="ARGS",
                             help="Run workload. ")
 
+  # ===== compiler 子命令 =========================================================================
+  compiler_parser = subparsers.add_parser("compiler", help="compiler operations")
+  compiler_group = compiler_parser.add_mutually_exclusive_group(required=True)
+  compiler_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
+                            help="Build compiler. ")
+
   # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
   args, unknown = parser.parse_known_args(argv)
   
@@ -226,21 +232,21 @@ if args.server:
       print(f"Stopping server on port {args.port}")
       subprocess.run(f"kill -TERM $(lsof -t -i :{args.port})", shell=True, check=False, text=True)
 
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim"]:
+  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim", "compiler"]:
     api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
     json_data = json.dumps(cmd_info['args'])
     subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
     # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
   else:
     print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim")
+    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler")
     sys.exit(1)
 else: # script mode
   if cmd_info['command'] == "start":
     print(f" 'start' do nothing in script mode")
   elif cmd_info['command'] == "stop":
     print(f" 'stop' do nothing in script mode")
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim"]:
+  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim", "compiler"]:
     # 1.启动服务在后台 ================================
     # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
     if args.port:
@@ -289,6 +295,6 @@ else: # script mode
     
   else:
     print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim")
+    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler")
     sys.exit(1)
   
