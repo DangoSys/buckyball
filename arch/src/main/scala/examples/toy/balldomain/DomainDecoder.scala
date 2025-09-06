@@ -27,7 +27,7 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
   val wr_spad_en    = Bool()
   val op1_from_spad = Bool()
   val op2_from_spad = Bool()
-  val klen          = UInt(log2Up(b.veclane).W) //卷积核的宽度
+  val special       = UInt(40.W) // 指令专用子段
   
   // Ball的操作数地址
   val op1_bank      = UInt(log2Up(b.sp_banks).W)
@@ -49,7 +49,7 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
 object BallDecodeFields extends Enumeration {
   type Field = Value
   val OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD, 
-      OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, VALID = Value
+      OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, SPECIAL, VALID = Value
 }
 
 object CtrlDecodeFields extends Enumeration {
@@ -65,6 +65,7 @@ object BallDefaultConstants {
   val DADDR = 0.U(14.W)
   val DITER = 0.U(10.W)
   val DBID = 0.U(4.W)
+  val DSPECIAL = 0.U(40.W)
 }
 
 class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -88,12 +89,12 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 
   // ball指令解码
   import BallDecodeFields._
-  val ball_default_decode = List(N,N,N,N,N,DADDR,DADDR,DADDR,DITER,DBID,N)
+  val ball_default_decode = List(N,N,N,N,N,DADDR,DADDR,DADDR,DITER,DBID,DSPECIAL,N)
   val ball_decode_list = ListLookup(func7, ball_default_decode, Array(
-    MATMUL_WARP16_BITPAT -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,Y),
-    BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,Y),
-    MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,Y),
-    IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,Y)
+    MATMUL_WARP16_BITPAT -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
+    BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10),Y),
+    MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10),Y),
+    IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10),Y)
   ))
 
   import CtrlDecodeFields._
@@ -118,8 +119,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
   io.ball_decode_cmd_o.bits.iter          := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.ITER.id).asUInt, 0.U(10.W))
-  io.ball_decode_cmd_o.bits.klen          := Mux(io.ball_decode_cmd_o.valid && (io.ball_decode_cmd_o.bits.bid === 3.U), rs2(spAddrLen - 1, 0), 0.U(log2Up(b.veclane).W))
-  // 地址解析
+  io.ball_decode_cmd_o.bits.special       := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.SPECIAL.id).asUInt, DSPECIAL)
   io.ball_decode_cmd_o.bits.op1_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP1_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.op2_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP2_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.wr_spad_en    := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.WR_SPAD.id).asBool,       false.B)

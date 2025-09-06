@@ -28,9 +28,9 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val state = RegInit(idle)                         // 当前状态寄存器
   val ConvertBuffer = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))))) //转换缓冲区
   val rowptr = RegInit(0.U(10.W))                   // 标志卷积窗口左上角的行指针
-  val colptr = RegInit(0.U(10.W))                   // 标志卷积窗口左上角的列指针
-  val reqcounter = RegInit(0.U(10.W))               // read状态下的请求计数器
-  val respcounter = RegInit(0.U(10.W))              // read状态下的响应计数器
+  val colptr = RegInit(0.U(5.W))                    // 标志卷积窗口左上角的列指针
+  val reqcounter = RegInit(0.U(5.W))                // read状态下的请求计数器
+  val respcounter = RegInit(0.U(5.W))               // read状态下的响应计数器
   val robid_reg = RegInit(0.U(10.W))                // 保存当前指令的RoB ID
   val klen_reg = RegInit(0.U(log2Up(b.veclane).W))  // 保存卷积核的大小
   val waddr_reg = RegInit(0.U(10.W))                // 保存写入的起始地址
@@ -64,8 +64,8 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         rowptr     := 0.U
         colptr     := 0.U
         rowptr     := 0.U
-        reqcounter := 0. U
-        klen_reg   := io.cmdReq.bits.cmd.klen
+        reqcounter := 0.U
+        klen_reg   := io.cmdReq.bits.cmd.special(5,0) // 卷积核大小
         robid_reg  := io.cmdReq.bits.rob_id
         waddr_reg  := io.cmdReq.bits.cmd.op2_bank_addr
         wbank_reg  := io.cmdReq.bits.cmd.op2_bank
