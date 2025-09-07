@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(BuckyballTest)
+project(BuckyballTest C CXX)
 
 # get the root directory of the project
 # execute_process(
@@ -13,10 +13,23 @@ set(WORKLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(WORKLOAD_SRC_DIR ${WORKLOAD_DIR}/src)
 set(WORKLOAD_LIB_DIR ${WORKLOAD_DIR}/lib)
 
+set(RISCV_GNU_TOOLCHAIN $ENV{RISCV})
+set(BUDDY_MLIR_BIN_DIR $ENV{BUDDY_MLIR_BUILD_DIR}/bin)
+set(BUDDY_OPT ${BUDDY_MLIR_BIN_DIR}/buddy-opt)
+set(BUDDY_TRANSLATE ${BUDDY_MLIR_BIN_DIR}/buddy-translate)
+set(BUDDY_LLC ${BUDDY_MLIR_BIN_DIR}/buddy-llc)
+
+
+# 为 Linux 平台的代码
+set(CMAKE_C_COMPILER_LINUX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
+set(CMAKE_CXX_COMPILER_LINUX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
+
+# 为 baremetal 平台的代码
+set(CMAKE_C_COMPILER_BAREMETAL ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
+set(CMAKE_CXX_COMPILER_BAREMETAL ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
+
 set(BUILD_BIN_DIR "${WORKLOAD_DIR}/build")
 set(OUTPUT_BIN_DIR "${WORKLOAD_DIR}/output/workloads")
-
-
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------
@@ -58,6 +71,7 @@ add_custom_target(sync-bin
 add_dependencies(sync-bin 
   tutorial-build
 	buckyball-CTest-build
+	OpTest-all
 	)
   
 add_custom_target(build-all ALL 
