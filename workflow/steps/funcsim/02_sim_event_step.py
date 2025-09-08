@@ -18,15 +18,16 @@ from utils.search_workload import search_workload
 
 config = {
   "type": "event",
-  "name": "run functional simulator",
-  "description": "run functional simulator",
-  "subscribes": ["funcsim.run"],
+  "name": "functional simulation",
+  "description": "functional simulation",
+  "subscribes": ["funcsim.sim"],
   "emits": [""],
   "flows": ["funcsim"],
 }
 
 async def handler(data, context):
   bbdir = get_buckyball_path()
+  extension = data.get("ext", "")
 
   binary_name = data.get("binary", "")
   binary_path = search_workload(f"{bbdir}/bb-tests/workloads/output/workloads/src", binary_name)
@@ -38,12 +39,12 @@ async def handler(data, context):
 
   os.makedirs(log_dir, exist_ok=True)
 
-  command = f"source {bbdir}/env.sh && cd {funcsim_dir} && spike -l --ic=64:4:64 --dc=64:4:64 --l2=2048:8:128 --log-cache-miss {binary_path} > {log_dir}/stdout.log 2> {log_dir}/stderr.log"
+  command = f"source {bbdir}/env.sh && cd {funcsim_dir} && spike --extension={extension} -l --ic=64:4:64 --dc=64:4:64 --l2=1024:8:128 --log-cache-miss {binary_path} 2> {log_dir}/stderr.log | tee {log_dir}/stdout.log"
   context.logger.info('Executing funcsim command', {  
     'command': command,  
     'cwd': funcsim_dir  
   })  
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=funcsim_dir, executable='bash', stdout_prefix="funcsim run", stderr_prefix="funcsim run")
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=funcsim_dir, executable='bash', stdout_prefix="funcsim sim", stderr_prefix="funcsim sim")
 
 # ==================================================================================
 # 返回仿真结果
