@@ -77,7 +77,7 @@ async def handler(data, context):
   sim_cmd = f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
   script_dir = os.path.dirname(__file__)
   
-  result = stream_run_logger(cmd=sim_cmd, logger=context.logger, cwd=script_dir)
+  result = stream_run_logger(cmd=sim_cmd, logger=context.logger, cwd=script_dir, stdout_prefix="verilator sim", stderr_prefix="verilator sim")
 
   vcd2fst_cmd = f"vcd2fst -v {waveform_dir}/waveform.vcd -f {waveform_dir}/waveform.fst"
   subprocess.run(vcd2fst_cmd, cwd=arch_dir, shell=True, check=True, text=True)

@@ -26,7 +26,7 @@ async def handler(data, context):
 # 执行操作
 # ==================================================================================
   command = f"rm -rf {build_dir}"
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=bbdir)
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=bbdir, stdout_prefix="verilator clean", stderr_prefix="verilator clean")
 
 # ==================================================================================
 # 向API返回结果
