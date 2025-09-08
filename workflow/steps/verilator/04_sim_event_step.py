@@ -10,6 +10,7 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger 
+from utils.search_workload import search_workload
 
 config = {
   "type": "event",
@@ -50,7 +51,23 @@ async def handler(data, context):
     await context.emit({"topic": "verilator.error", "data": {**data, "task": "sim", "result": failure_result}})
     return
     
-  binary_name = os.path.basename(binary) if binary else "no_binary"
+  binary_name = data.get("binary", "")
+  binary_path = search_workload(f"{bbdir}/bb-tests/workloads/output/workloads/src", binary_name)
+  if not binary_path:
+    failure_result = {
+      "status": 400,
+      "body": {
+        "success": False,
+        "failure": True,
+        "returncode": 400,
+        "message": "binary not found",
+        "binary": binary_name,
+      }
+    }
+    context.logger.error('binary参数缺失', failure_result)
+    await context.state.set(context.trace_id, 'failure', failure_result)
+    await context.emit({"topic": "verilator.error", "data": {**data, "task": "sim", "result": failure_result}})
+    return
   
   # 创建带时间戳和binary名字的日志目录
   log_dir = f"{arch_dir}/log/{timestamp}-{binary_name}"
@@ -74,7 +91,7 @@ async def handler(data, context):
 # 执行仿真脚本，实现流式输出
 # ==================================================================================
   batch_param = "True" if batch else "False"
-  sim_cmd = f"./scripts/sim.sh {bin_path} {binary} {log_dir}/stdout.log {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
+  sim_cmd = f"./scripts/sim.sh {bin_path} {binary_path} {log_dir}/stdout.log {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
   script_dir = os.path.dirname(__file__)
   
   result = stream_run_logger(cmd=sim_cmd, logger=context.logger, cwd=script_dir, stdout_prefix="verilator sim", stderr_prefix="verilator sim")
