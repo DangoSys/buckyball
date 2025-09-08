@@ -27,7 +27,7 @@ async def handler(data, context):
 # 执行操作
 # ==================================================================================
   command = f"source {bbdir}/env.sh && mkdir -p {bbdir}/compiler/build && cd {bbdir}/compiler/build && ninja -j{os.cpu_count()}"
-  result = stream_run_logger(cmd=command, logger=context.logger)
+  result = stream_run_logger(cmd=command, logger=context.logger, stdout_prefix="compiler build", stderr_prefix="compiler build")
   
 # ==================================================================================
 # 向API返回结果

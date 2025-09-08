@@ -27,9 +27,11 @@ declare module 'motia' {
     'running sardine': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'sardine.run'; data: never }>
     'Marshal Launch': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'marshal.launch'; data: never }>
     'Marshal Build': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'marshal.build'; data: never }>
+    'build functional simulator': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'funcsim.build'; data: never }>
     'Firesim Runworkload': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.runworkload'; data: never }>
     'Firesim Infrasetup': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.infrasetup'; data: never }>
     'Firesim Buildbitstream': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'firesim.buildbitstream'; data: never }>
+    'Build Compiler': ApiRouteHandler<Record<string, unknown>, unknown, { topic: 'compiler.build'; data: never }>
     'agent': ApiRouteHandler<{ message: string; model?: string }, ApiResponse<200, { traceId?: string; status?: string }>, { topic: 'agent.prompt'; data: { message?: string; model?: string; traceId?: string } }>
   }
 }

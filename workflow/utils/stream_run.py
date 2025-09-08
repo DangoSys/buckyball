@@ -1,4 +1,5 @@
 import subprocess
+from tabnanny import verbose
 import threading
 from typing import Optional, List, Callable
 
@@ -9,6 +10,8 @@ class StreamResult:
     self.returncode = returncode
     self.stdout = stdout
     self.stderr = stderr
+
+
 
 
 def stream_run(
@@ -120,7 +123,8 @@ def stream_run_logger(
   executable: Optional[str] = None,
   timeout: Optional[float] = None,
   stdout_prefix: str = "STDOUT",
-  stderr_prefix: str = "STDERR"
+  stderr_prefix: str = "STDERR",
+  verbose: bool = False
 ) -> StreamResult:
   """
   使用logger进行流式输出的便捷函数
@@ -133,16 +137,27 @@ def stream_run_logger(
     timeout: 超时时间（秒）
     stdout_prefix: stdout输出前缀
     stderr_prefix: stderr输出前缀
+    verbose: 是否详细输出模式（verbose模式使用logger带时间戳，非verbose模式直接打印）
   
   Returns:
     StreamResult: 包含returncode, stdout, stderr的结果对象
   """
   
   def log_stdout(line):
-    logger.info(f'[{stdout_prefix}] {line}')
+    if verbose:
+      # verbose模式：使用logger.info，会包含时间戳和任务ID
+      logger.info(f'[{stdout_prefix}] {line}')
+    else:
+      # 非verbose模式：直接打印，使用绿色标识STDOUT
+      print(f'\033[32m[{stdout_prefix}]\033[0m {line}')
   
   def log_stderr(line):
-    logger.info(f'[{stderr_prefix}] {line}')
+    if verbose:
+      # verbose模式：使用logger.info，会包含时间戳和任务ID
+      logger.info(f'[{stderr_prefix}] {line}')
+    else:
+      # 非verbose模式：直接打印，使用红色标识STDERR
+      print(f'\033[31m[{stderr_prefix}]\033[0m {line}')
   
   return stream_run(
     cmd=cmd,
