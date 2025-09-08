@@ -13,22 +13,28 @@ config = {
   "type": "api",
   "name": "run functional simulator",
   "description": "run functional simulator",
-  "path": "/funcsim/run",
+  "path": "/funcsim/sim",
   "method": "POST",
-  "emits": ["funcsim.run"],
+  "emits": ["funcsim.sim"],
   "flows": ["funcsim"],
 }
 
 async def handler(req, context):
   bbdir = get_buckyball_path()
   body = req.get("body") or {}
-  funcsim_dir = f"{bbdir}/sims/func-sim"
   data = {
     "funcsim": body.get("funcsim", ""),
     "binary": body.get("binary", ""),
+    "ext": body.get("ext", ""),
   }
-  funcsim_dir = f"{bbdir}/sims/func-sim"
-  await context.emit({"topic": "funcsim.run", "data": data})
+  if not data.get("binary"):
+    context.logger.error('binary parameter is missing in event data', {'data': data})
+    return
+  if not data.get("ext"):
+    context.logger.error('ext parameter is missing in event data', {'data': data, 'ext': data.get("ext")})
+    return
+
+  await context.emit({"topic": "funcsim.sim", "data": data})
 
 # ==================================================================================
 #  等待仿真结果
