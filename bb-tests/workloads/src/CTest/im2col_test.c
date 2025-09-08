@@ -14,7 +14,13 @@ static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
 void hw_im2col(const char* test_name, elem_t* a, elem_t* b, int size) {
     bb_mvin((uintptr_t)a, OP1_ADDR, size);
     bb_fence();
-    bb_im2col(OP1_ADDR, OP2_ADDR, 2, size);
+    uint64_t krow = 4;
+    uint64_t kcol = 1;
+    uint64_t inrow = 16;
+    uint64_t incol = 16;
+    uint64_t startrow = 1;
+    uint64_t startcol = 1;
+    bb_im2col(OP1_ADDR, OP2_ADDR, krow, kcol, inrow, incol, startrow, startcol);
     bb_fence();
 }
 
