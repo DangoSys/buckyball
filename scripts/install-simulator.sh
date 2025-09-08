@@ -3,6 +3,7 @@
 BB_DIR=$(git rev-parse --show-toplevel)
 RISCV_DIR=$RISCV
 
+source $BB_DIR/scripts/utils.sh
 source $BB_DIR/scripts/env-exit.sh
 
 # -------------------- func-sim --------------------
@@ -14,5 +15,7 @@ cd build
 make -j$(nproc)
 make install
 
-ln -s spike bspike
+# cd $RISCV_DIR/bin
+# ln -s spike bspike
+
 # -------------------- func-sim --------------------
