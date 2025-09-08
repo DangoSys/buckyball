@@ -103,10 +103,10 @@ do { \
     BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_MATMUL_WS_FUNCT); \
 } while(0)
 
-#define bb_im2col(op1_addr, wr_addr, klen, iter) \
+#define bb_im2col(op1_addr, wr_addr, krow, kcol, inrow, incol, startrow, startcol) \
 do { \
     uint64_t rs1_val = ((wr_addr) << SPAD_ADDR_LEN) | ((op1_addr) & ((1UL << SPAD_ADDR_LEN) - 1)); \
-    uint64_t rs2_val = ( (klen) << (SPAD_ADDR_LEN + 10) | (iter) << SPAD_ADDR_LEN) ; \
+    uint64_t rs2_val = ( ((startrow) << (SPAD_ADDR_LEN + 38)) | ((startcol) << (SPAD_ADDR_LEN + 33)) | ((inrow) << (SPAD_ADDR_LEN + 23)) | ((incol) << (SPAD_ADDR_LEN + 18)) | ((krow) << (SPAD_ADDR_LEN + 14)) | ((kcol) << (SPAD_ADDR_LEN + 10))); \
     BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_IM2COL_FUNCT); \
 } while(0)
 

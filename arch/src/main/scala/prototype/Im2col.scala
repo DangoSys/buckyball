@@ -8,6 +8,7 @@ import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import firrtl2.passes.CheckTypes.st
 
 
 class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -32,12 +33,17 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val reqcounter = RegInit(0.U(5.W))                // read状态下的请求计数器
   val respcounter = RegInit(0.U(5.W))               // read状态下的响应计数器
   val robid_reg = RegInit(0.U(10.W))                // 保存当前指令的RoB ID
-  val klen_reg = RegInit(0.U(log2Up(b.veclane).W))  // 保存卷积核的大小
+  val krow_reg = RegInit(0.U(log2Up(b.veclane).W))  // 保存卷积核的行数
+  val kcol_reg = RegInit(0.U(log2Up(b.veclane).W))  // 保存卷积核的列数
+  val inrow_reg = RegInit(0.U(10.W))                // 保存输入矩阵的行数
+  val incol_reg = RegInit(0.U((log2Up(b.veclane) + 1).W)) // 保存输入矩阵的列数
+  val startcol_reg = RegInit(0.U((log2Up(b.veclane) + 1).W)) // 保存起始列号
+  val startrow_reg = RegInit(0.U(10.W))             // 保存起始行号
   val waddr_reg = RegInit(0.U(10.W))                // 保存写入的起始地址
   val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))// 保存写入的bank
   val raddr_reg = RegInit(0.U(10.W))                // 保存读取的起始地址
-  val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))// 保存读取的bank
-  val iter_reg = RegInit(0.U(10.W))                 // 保存迭代次数即被转换矩阵的行数
+  val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))// 保存读取`的bank
+
 
   //SRAM默认赋值
   for(i <- 0 until b.sp_banks) {
@@ -55,32 +61,41 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   io.cmdResp.valid := false.B
   io.cmdResp.bits.rob_id := 0.U
 
+  val rowcnt = rowptr - startrow_reg
+  val colcnt = colptr - startcol_reg
+  val rowmax = inrow_reg - krow_reg
+  val colmax = incol_reg - kcol_reg
+
   switch(state) {
     // 空闲状态，等待指令
     is(idle) {
       //指令到达，初始化各个寄存器
       when(io.cmdReq.fire) {
         state      := read
-        rowptr     := 0.U
-        colptr     := 0.U
-        rowptr     := 0.U
+        rowptr     := io.cmdReq.bits.cmd.special(37,28)
+        colptr     := io.cmdReq.bits.cmd.special(27,23)
         reqcounter := 0.U
-        klen_reg   := io.cmdReq.bits.cmd.special(5,0) // 卷积核大小
+        respcounter:= 0.U
+        kcol_reg   := io.cmdReq.bits.cmd.special(3,0) // 卷积核列数
+        krow_reg   := io.cmdReq.bits.cmd.special(7,4) // 卷积核行数
+        incol_reg  := io.cmdReq.bits.cmd.special(12,8) // 输入矩阵列数
+        inrow_reg  := io.cmdReq.bits.cmd.special(22,13) // 输入矩阵行数
+        startcol_reg := io.cmdReq.bits.cmd.special(27,23) // 起始列号
+        startrow_reg := io.cmdReq.bits.cmd.special(37,28) // 起始行号
         robid_reg  := io.cmdReq.bits.rob_id
         waddr_reg  := io.cmdReq.bits.cmd.op2_bank_addr
         wbank_reg  := io.cmdReq.bits.cmd.op2_bank
         raddr_reg  := io.cmdReq.bits.cmd.op1_bank_addr
         rbank_reg  := io.cmdReq.bits.cmd.op1_bank
-        iter_reg   := io.cmdReq.bits.cmd.iter
       }
     } 
     //读取一部分数据，填充ConvertBuffer
     is(read) {
       //发送读请求
-      when(reqcounter < klen_reg) {
+      when(reqcounter < krow_reg) {
         reqcounter                           := reqcounter + 1.U
         io.sramRead(rbank_reg).req.valid     := true.B
-        io.sramRead(rbank_reg).req.bits.addr := raddr_reg + reqcounter
+        io.sramRead(rbank_reg).req.bits.addr := raddr_reg + reqcounter + startrow_reg
       }
       //处理读响应并存储在ConvertBuffer中
       when(io.sramRead(rbank_reg).resp.fire) {
@@ -88,16 +103,16 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         respcounter                          := respcounter + 1.U
       }
       // 判断是否跳转状态
-      state := Mux(respcounter === klen_reg, read_and_convert, read)
+      state := Mux(respcounter === krow_reg, read_and_convert, read)
 
     }
     // 转换数据并读取剩余数据，写回spad
     is(read_and_convert) {
       // 移动指针
-      when(colptr <= b.veclane.U - klen_reg && rowptr <= b.veclane.U - klen_reg) {
-        colptr := Mux(colptr === b.veclane.U - klen_reg, 0.U, colptr + 1.U)
+      when(colptr <= colmax && rowptr <= rowmax) {
+        colptr := Mux(colptr === colmax, startcol_reg, colptr + 1.U)
         io.sramWrite(wbank_reg).req.valid     := true.B
-        io.sramWrite(wbank_reg).req.bits.addr := waddr_reg + rowptr * (b.veclane.U - klen_reg + 1.U) + colptr
+        io.sramWrite(wbank_reg).req.bits.addr := waddr_reg + rowcnt * (colmax + 1.U - startcol_reg) + colcnt
         io.sramWrite(wbank_reg).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(~0.U(1.W)))
         io.sramWrite(wbank_reg).req.bits.data := {
           
@@ -108,12 +123,12 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
           // 填充窗口数据
           for (i <- 0 until 4; j <- 0 until 4) {
-            when(i.U < klen_reg && j.U < klen_reg) {
-              val bufferRow = (rowptr + i.U) % klen_reg
-              val bufferCol = (colptr + j.U)(log2Up(b.veclane)-1, 0) 
-              window((i.U * klen_reg) + j.U) := ConvertBuffer(bufferRow)(bufferCol)
+            when(i.U < krow_reg && j.U < kcol_reg) {
+              val bufferRow = (rowcnt + i.U) % krow_reg
+              val bufferCol = (colptr + j.U) % incol_reg
+              window((i.U * kcol_reg) + j.U) := ConvertBuffer(bufferRow)(bufferCol)
             }.otherwise {
-              window((i.U * klen_reg) + j.U) := 0.U
+              window((i.U * kcol_reg) + j.U) := 0.U
             }
           }
           
@@ -123,17 +138,17 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         }
       }
       //提前发送读请求
-      when(colptr === b.veclane.U - klen_reg - 1.U){
+      when(colptr === colmax - 1.U){
         io.sramRead(rbank_reg).req.valid     := true.B
-        io.sramRead(rbank_reg).req.bits.addr := raddr_reg + klen_reg + rowptr
+        io.sramRead(rbank_reg).req.bits.addr := raddr_reg + krow_reg + rowptr
       }
       //处理读响应并存储在ConvertBuffer中
       when(io.sramRead(rbank_reg).resp.fire){
-        ConvertBuffer(rowptr % klen_reg)     := io.sramRead(rbank_reg).resp.bits.data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
+        ConvertBuffer(rowcnt % krow_reg)     := io.sramRead(rbank_reg).resp.bits.data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
         rowptr                               := rowptr + 1.U
       }
       // 判断是否跳转状态
-      state := Mux(rowptr === iter_reg - klen_reg && colptr === b.veclane.U - klen_reg, complete, read_and_convert)
+      state := Mux(rowptr === rowmax && colptr === colmax, complete, read_and_convert)
     }
     // 完成状态，发送完成信号
     is(complete) {
