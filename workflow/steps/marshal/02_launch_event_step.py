@@ -26,7 +26,7 @@ async def handler(data, context):
 # 执行操作
 # ==================================================================================  
   command = f"source {bbdir}/env.sh && ./marshal -v launch interactive.json" 
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=script_dir)
+  result = stream_run_logger(cmd=command, logger=context.logger, cwd=script_dir, stdout_prefix="marshal launch", stderr_prefix="marshal launch")
   
 # ==================================================================================
 # 向API返回结果

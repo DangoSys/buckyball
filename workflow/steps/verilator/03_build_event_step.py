@@ -67,8 +67,8 @@ async def handler(data, context):
                    f"--timing -j {jobs} +incdir+{build_dir} --top {topname} {sources} "
                    f"-CFLAGS '{cflags}' -LDFLAGS '{ldflags}' --Mdir {obj_dir} --exe")
   
-  result = stream_run_logger(cmd=verilator_cmd, logger=context.logger, cwd=bbdir)
-  result = stream_run_logger(cmd=f"make -C {obj_dir} -f V{topname}.mk {obj_dir}/V{topname}", logger=context.logger, cwd=bbdir)
+  result = stream_run_logger(cmd=verilator_cmd, logger=context.logger, cwd=bbdir, stdout_prefix="verilator build", stderr_prefix="verilator build")
+  result = stream_run_logger(cmd=f"make -C {obj_dir} -f V{topname}.mk {obj_dir}/V{topname}", logger=context.logger, cwd=bbdir, stdout_prefix="verilator build", stderr_prefix="verilator build")
 
 # ==================================================================================
 # 向API返回结果

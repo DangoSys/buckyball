@@ -31,7 +31,7 @@ async def handler(data, context):
   command += f" -b {yaml_dir}/config_build.yaml"
   command += f" -r {yaml_dir}/config_build_recipes.yaml"
   command += f" -c {yaml_dir}/config_runtime.yaml"
-  result = stream_run_logger(cmd=command, logger=context.logger)
+  result = stream_run_logger(cmd=command, logger=context.logger, stdout_prefix="firesim infrasetup", stderr_prefix="firesim infrasetup")
   
 # ==================================================================================
 # 向API返回结果
