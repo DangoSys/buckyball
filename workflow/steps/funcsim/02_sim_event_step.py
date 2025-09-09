@@ -39,7 +39,7 @@ async def handler(data, context):
 
   os.makedirs(log_dir, exist_ok=True)
 
-  command = f"source {bbdir}/env.sh && cd {funcsim_dir} && spike --extension={extension} -l --ic=64:4:64 --dc=64:4:64 --l2=1024:8:128 --log-cache-miss {binary_path} 2> {log_dir}/stderr.log | tee {log_dir}/stdout.log"
+  command = f"source {bbdir}/env.sh && cd {funcsim_dir} && spike --extension={extension} -l --ic=64:4:64 --dc=64:4:64 --l2=256:8:128 --log-cache-miss {binary_path} 2> {log_dir}/stderr.log | tee {log_dir}/stdout.log"
   context.logger.info('Executing funcsim command', {  
     'command': command,  
     'cwd': funcsim_dir  
