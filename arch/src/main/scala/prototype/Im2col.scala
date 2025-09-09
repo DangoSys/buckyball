@@ -13,18 +13,18 @@ import firrtl2.passes.CheckTypes.st
 
 class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
-  
+
   val io = IO(new Bundle {
     // cmd接口
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
-    
+
     // 连接到Scratchpad的SRAM读写接口
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
-  
+
   })
- 
+
   val idle :: read :: read_and_convert :: complete :: Nil = Enum(4) // 状态定义
   val state = RegInit(idle)                         // 当前状态寄存器
   val ConvertBuffer = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))))) //转换缓冲区
@@ -88,7 +88,7 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         raddr_reg  := io.cmdReq.bits.cmd.op1_bank_addr
         rbank_reg  := io.cmdReq.bits.cmd.op1_bank
       }
-    } 
+    }
     //读取一部分数据，填充ConvertBuffer
     is(read) {
       //发送读请求
@@ -115,7 +115,7 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         io.sramWrite(wbank_reg).req.bits.addr := waddr_reg + rowcnt * (colmax + 1.U - startcol_reg) + colcnt
         io.sramWrite(wbank_reg).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(~0.U(1.W)))
         io.sramWrite(wbank_reg).req.bits.data := {
-          
+
           val window = Wire(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
           for (i <- 0 until b.veclane) {
               window(i) := 0.U  // 先全部初始化为0
@@ -131,7 +131,7 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
               window((i.U * kcol_reg) + j.U) := 0.U
             }
           }
-          
+
           // 重新排列数据
           // 例如，对于klen_reg=3，将(00)(01)(02)(10)(11)(12)(20)(21)(22)组合
           Cat((0 until b.veclane).map(i => window(i)).reverse)
