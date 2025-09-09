@@ -1,8 +1,10 @@
 set(CTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/CTest)
+set(SPARSE_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/sparse)
 set(MODELTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/ModelTest)
 set(OPTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/OpTest)
 set(TUTORIAL_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/tutorial)
 
+add_subdirectory(sparse)
 add_subdirectory(CTest)
 add_subdirectory(ModelTest)
 add_subdirectory(OpTest)

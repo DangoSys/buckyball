@@ -21,7 +21,8 @@ usage() {
   echo "   6. Install Chipyard and Firesim"
   echo "   7. Buckyball pre-compile sources"
   echo "   8. Setup document management system"
-  echo "   9. Runs repository clean-up"
+  echo "   9. Install func-sim"
+  echo "   10. Runs repository clean-up"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -57,7 +58,7 @@ do
       shift
       CONDA_ENV_NAME=${1} ;;
     * )
-      error "invalid option $1"
+      echo "Error: invalid option $1" >&2
       usage 1 ;;
   esac
   shift
@@ -73,13 +74,13 @@ function begin_step
 {
   thisStepNum=$1;
   thisStepDesc=$2;
-  
+
   # Color codes
   local BLUE='\033[0;34m'
   local GREEN='\033[0;32m'
   local YELLOW='\033[1;33m'
   local NC='\033[0m' # No Color
-  
+
   echo -e "${BLUE} ========================================================================="
   echo -e "${GREEN} ==== BUCKYBALL SETUP STEP ${YELLOW}$thisStepNum${GREEN}: ${YELLOW}$thisStepDesc${GREEN} "
   echo -e "${BLUE} ========================================================================="
@@ -93,7 +94,7 @@ fi
 
 if run_step "1"; then
   begin_step "1" "submodules init"
-  git submodule update --init 
+  git submodule update --init
   replace_content ${BBDIR}/arch/thirdparty/chipyard/env.sh base-conda-setup "source $(conda info --base)/etc/profile.d/conda.sh"
 fi
 
@@ -119,20 +120,20 @@ if run_step "4"; then
   source ${BBDIR}/env.sh
   cd ${BBDIR}/bb-tests/workloads/
   mkdir -p build && cd build
-  cmake .. 
+  cmake ..
   make -j$(nproc)
 fi
 
 if run_step "5"; then
-  begin_step "5" "Install requirements for sardine" 
+  begin_step "5" "Install requirements for sardine"
   source ${BBDIR}/env.sh
   pip install -r ${BBDIR}/bb-tests/sardine/requirements.txt
-  npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline 
+  npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline
 fi
 
 
 if run_step "6"; then
-  begin_step "6" "Install document management system" 
+  begin_step "6" "Install document management system"
   source ${BBDIR}/env.sh
   ${BBDIR}/scripts/install-doc.sh
 fi
@@ -148,4 +149,18 @@ if run_step "8"; then
   source ${BBDIR}/env.sh
   cd ${BBDIR}/tools/mill
   ./install-mill.sh
+fi
+
+if run_step "9"; then
+  begin_step "9" "Install simulator"
+  source ${BBDIR}/env.sh
+  ${BBDIR}/scripts/install-simulator.sh
+fi
+
+if run_step "10"; then
+  begin_step "10" "Install pre-commit"
+  source ${BBDIR}/env.sh
+  pip install pre-commit
+  cd ${BBDIR}
+  pre-commit install
 fi
