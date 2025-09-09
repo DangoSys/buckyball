@@ -1,5 +1,5 @@
-#ifndef BUCKYBALL_PARAMS_H
-#define BUCKYBALL_PARAMS_H
+#ifndef TOY_PARAMS_H
+#define TOY_PARAMS_H
 
 #include <stdint.h>
 #include <limits.h>
@@ -17,4 +17,4 @@ static const elem_t elem_t_min = -128;
 
 #define row_align(blocks) __attribute__((aligned(blocks*DIM*sizeof(elem_t))))
 
-#endif // BUCKYBALL_PARAMS_H
+#endif // TOY_PARAMS_H

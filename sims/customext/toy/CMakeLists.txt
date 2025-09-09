@@ -17,7 +17,7 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Create shared library
 add_library(toy SHARED
-  buckyball.cc
+  toy.cc
 )
 
 # Add include directories (modern CMake approach)
