@@ -1,10 +1,10 @@
-#ifndef _BUCKYBALL_H
-#define _BUCKYBALL_H
+#ifndef _TOY_H
+#define _TOY_H
 
-#include <riscv/extension.h>
+// #include <riscv/extension.h>
 #include <riscv/rocc.h>
 #include <vector>
-#include "buckyball_params.h"
+#include "toy_params.h"
 
 static const uint32_t sp_matrices = (BANK_NUM * BANK_ROWS) / DIM;
 static const uint64_t spAddrLen = SPAD_ADDR_LEN;
@@ -13,7 +13,7 @@ static const uint64_t memAddrLen = MEM_ADDR_LEN;
 #define MAKECUSTOMFN(opcode) custom ## opcode
 #define CUSTOMFN(opcode) MAKECUSTOMFN(opcode)
 
-struct buckyball_state_t {
+struct toy_state_t {
   void reset();
 
   bool enable;
@@ -27,8 +27,11 @@ public:
   toy_t() {}
   const char* name() const { return "toy"; }
 
-  reg_t custom3(processor_t *p, rocc_insn_t insn, reg_t xs1, reg_t xs2);
+  reg_t custom3(rocc_insn_t insn, reg_t xs1, reg_t xs2);
   void set_processor(processor_t* p) { this->p = p; }
+  
+  std::vector<insn_desc_t> get_instructions(const processor_t &proc);
+  std::vector<disasm_insn_t*> get_disasms(const processor_t *proc);
 
   void mvin(reg_t dram_addr, reg_t sp_addr);
   void mvout(reg_t dram_addr, reg_t sp_addr);
@@ -36,7 +39,7 @@ public:
   void bbfp_mul(reg_t rs1, reg_t rs2);
 
 private:
-  buckyball_state_t buckyball_state;
+  toy_state_t toy_state;
   processor_t* p;
 
   const unsigned mvin_funct = 24;   // func7: 0010000
@@ -52,4 +55,4 @@ private:
   void write_to_dram(reg_t addr, T data);
 };
 
-#endif
+#endif // _TOY_H

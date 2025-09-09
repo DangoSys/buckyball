@@ -52,6 +52,7 @@ async def handler(data, context):
       }
     }
     await context.state.set(context.trace_id, 'failure', failure_result)
+    exit(1)
 
 
 # ==================================================================================
@@ -60,7 +61,7 @@ async def handler(data, context):
   build_dir = f"{funcsim_dir}/build"
   subprocess.run(f"rm -rf {build_dir} && mkdir -p {build_dir}", shell=True)
   riscv_dir = os.environ.get('RISCV')
-  command = f"source {bbdir}/scripts/env-exit.sh && cd {build_dir} && ../configure --prefix={riscv_dir} && make -j$(nproc) && make install"
+  command = f"source {bbdir}/scripts/env-exit.sh && cd {build_dir} && ../configure --prefix={riscv_dir} --enable-misaligned && make -j$(nproc) && make install"
   context.logger.info('Executing funcsim command', {  
     'command': command,  
     'cwd': funcsim_dir  
