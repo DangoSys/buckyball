@@ -64,15 +64,13 @@ add_custom_target(sync-bin
   COMMENT "Syncing binary files to output directory"
 )
 
-# 设置执行顺序：build-compiler 必须先于 buckyball-OpTest 完成，sync-bin 必须最后执行
-# add_dependencies(gemmini-native create-dirs)
-# add_dependencies(buckyball-OpTest build-compiler) # 属于 npu-build 的子目录，由于依赖需要直接指定
 
 add_dependencies(sync-bin
   tutorial-build
 	buckyball-CTest-build
 	OpTest-all
   sparse-build
+  # ModelTest
 	)
 
 add_custom_target(build-all ALL

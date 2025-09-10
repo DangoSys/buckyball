@@ -14,19 +14,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "include/testutils.h"
 #include <buddy/Core/Container.h>
 #include <buddy/DIP/ImgContainer.h>
-#include "include/gemmini_testutils.h"
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <string>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 constexpr size_t ParamsSize = 44426;
 const std::string ImgName = "8.bmp";
@@ -101,7 +101,7 @@ int main() {
   intptr_t sizesOutput[2] = {1, 10};
 
   // Create input and output containers for the image and model output.
-  std::string lenetDir = getenv("BUDDYGEMMINI_EXAMPLE_PATH");
+  std::string lenetDir = getenv("LENET_DIR");
   std::string imgPath = lenetDir + "/images/" + ImgName;
   dip::Image<float, 4> input(imgPath, dip::DIP_GRAYSCALE, true /* norm */);
   MemRef<float, 2> output(sizesOutput);
@@ -120,7 +120,7 @@ int main() {
   auto out = output.getData();
   softmax(out, 10);
   // gemmini profiling
-  std::cout << "Inference Cycles taken: " << end-start << std::endl;
+  std::cout << "Inference Cycles taken: " << end - start << std::endl;
 
   // Find the classification and print the result.
   float maxVal = 0;
