@@ -34,11 +34,11 @@ from buddy.compiler.ops import tosa
 from model import LeNet
 
 # Retrieve the LeNet model path from environment variables.
-model_path = os.environ.get("BUDDYGEMMINI_EXAMPLE_PATH")
+model_path = os.environ.get("LENET_DIR")
 if model_path is None:
-  raise EnvironmentError(
-    "The environment variable 'LENET_MODEL_PATH' is not set or is invalid."
-  )
+    raise EnvironmentError(
+        "The environment variable 'LENET_MODEL_PATH' is not set or is invalid."
+    )
 
 model = LeNet()
 model = torch.load(model_path + "/lenet-model.pth")
@@ -46,14 +46,14 @@ model = model.eval()
 
 # Initialize Dynamo Compiler with specific configurations as an importer.
 dynamo_compiler = DynamoCompiler(
-  primary_registry=tosa.ops_registry,
-  aot_autograd_decomposition=inductor_decomp,
+    primary_registry=tosa.ops_registry,
+    aot_autograd_decomposition=inductor_decomp,
 )
 
 data = torch.randn([1, 1, 28, 28])
 # Import the model into MLIR module and parameters.
 with torch.no_grad():
-  graphs = dynamo_compiler.importer(model, data)
+    graphs = dynamo_compiler.importer(model, data)
 
 
 assert len(graphs) == 1
@@ -65,15 +65,15 @@ driver = GraphDriver(graphs[0])
 driver.subgraphs[0].lower_to_top_level_ir()
 path_prefix = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(path_prefix, "subgraph0.mlir"), "w") as module_file:
-  print(driver.subgraphs[0]._imported_module, file=module_file)
+    print(driver.subgraphs[0]._imported_module, file=module_file)
 with open(os.path.join(path_prefix, "forward.mlir"), "w") as module_file:
-  print(driver.construct_main_graph(True), file=module_file)
+    print(driver.construct_main_graph(True), file=module_file)
 
 params = dynamo_compiler.imported_params[graph]
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 float32_param = np.concatenate(
-  [param.detach().numpy().reshape([-1]) for param in params]
+    [param.detach().numpy().reshape([-1]) for param in params]
 )
 
 float32_param.tofile(Path(current_path) / "arg0.data")

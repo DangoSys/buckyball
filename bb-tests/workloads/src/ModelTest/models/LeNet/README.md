@@ -1,31 +1,31 @@
 # BuddyGemmini LeNet E2E deployment on Firesim
 
 ## Overview
-This guide provides an example of end-to-end deployment of a DNN (LeNet) inference to a DSA backend (Gemmini) using the Buddy Compiler. 
+This guide provides an example of end-to-end deployment of a DNN (LeNet) inference to a DSA backend (Gemmini) using the Buddy Compiler.
 
 We use FireSim, a platform for FPGA-accelerated cycle-accurate simulation, to run end-to-end DNN workloads that would take too long to run on Verilator/VCS. FireSim also allows users to check that their Gemmini hardware/software will work when running in a Linux environment. The FireSim used in this guide is installed locally on a Xilinx VCU118.
 
 ## Preparation
 Before proceed any further make sure that you installed dependencies below
 1. Installation of [Buddy-mlir basic environment and cross-compilation toolchain](https://github.com/buddy-compiler/buddy-mlir/blob/main/docs/RVVEnvironment.md)
-   
+
 2. Environment installation for [Chipyard](https://chipyard.readthedocs.io/en/1.11.0/) and [Firesim](https://docs.fires.im/en/1.18.0/). The environment for this guide is based on a local acceleration card, the Xilinx Alveo U280, with configuration versions Chipyard 1.11.0 and FireSim 1.18.0. We recommend installing these versions (install firesim as a submodule of chipyard) and completing all the content in the FireSim documentation's [Getting Started Guide](https://docs.fires.im/en/1.18.0/Getting-Started-Guides/On-Premises-FPGA-Getting-Started/Repo-Setup/Xilinx-Alveo-U280.html).
-   
+
 3. Complete the build of [gemmini](https://github.com/ucb-bar/gemmini), and building a complete bitstream file based on the default Gemmini configuration using the firesim buildbitstream command.
 
 ## Cross-compilation
 1. Activate your python environment.
-   
+
 2. Set the environment variable.
-    
-Make sure you are in the BuddyGemmini directory. 
+
+Make sure you are in the BuddyGemmini directory.
 
 ```
 export BUDDYGEMMINI_EXAMPLE_PATH=$PWD
 ```
 
 3. Build buddy-gemmini-lenet-run
-   
+
 ```
 $ mkdir build && cd build
 $ cmake .. -DBUDDY_MLIR_DIR=/path/to/buddy-mlir/ # replace with your buddy-mlir directory path
@@ -35,7 +35,7 @@ $ make buddy-gemmini-lenet-run
 ## Deployment to FireSim
 1. Copy the executable files (located in the `BuddyGemmini/build/`) and the required data files to Gemmini's software path
 ```
-$ cd chipyard # go to your chipyard root directory 
+$ cd chipyard # go to your chipyard root directory
 $ mkdir ./generators/gemmini/software/overlay/root/BuddyGemmini/
 $ cp ${BUDDYGEMMINI_EXAMPLE_PATH}/build/buddy-gemmini-lenet-run  ./generators/gemmini/software/overlay/root/BuddyGemmini/
 $ cp ${BUDDYGEMMINI_EXAMPLE_PATH}/arg0.data  ./generators/gemmini/software/overlay/root/BuddyGemmini/
@@ -49,7 +49,7 @@ $ ./sims/firesim/sw/firesim-software/marshal -v build ./generators/gemmini/softw
 
 3. Activate your Firesim environment.
 ```
-$ cd chipyard/sim/firesim 
+$ cd chipyard/sim/firesim
 $ source ./sourceme-manager.sh --skip-ssh-setup
 ```
 
@@ -74,7 +74,7 @@ $ firesim runworkload
 ```
 
 7. SSH connect to `BUILD_FARM_IP`, open a new terminal connection to the screen created by Run Farm Machines (please refer to the FireSim documentation to confirm you can correctly connect to Run Farm Machines).
-   
+
 ```
 $ ssh BUILD_FARM_IP
 $ screen -r fsim0
