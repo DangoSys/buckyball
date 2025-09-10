@@ -48,11 +48,11 @@ image = Image.open(image_path).convert("L")
 #      making the network training process more stable and faster by
 #      standardizing the range of input values.
 transform = transforms.Compose(
-  [
-    transforms.Resize((28, 28)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,)),
-  ]
+    [
+        transforms.Resize((28, 28)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
 )
 # Add batch dimension: [CHW] -> [NCHW]
 image = transform(image).unsqueeze(0)
@@ -60,7 +60,7 @@ image = transform(image).unsqueeze(0)
 # Perform inference
 # No gradient tracking in this block
 with torch.no_grad():
-  output = model(image)
-  prediction = output.argmax()
+    output = model(image)
+    prediction = output.argmax()
 
 print(f"Classification: {prediction.item()}")
