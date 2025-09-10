@@ -57,9 +57,9 @@ add_custom_target(create-dirs
 # )
 
 add_custom_target(sync-bin
-  COMMAND rsync -av --exclude="CMakeFiles" 
-          --include="*/" --include="*-baremetal" --include="*-linux" 
-          --exclude="*" 
+  COMMAND rsync -av --exclude="CMakeFiles"
+          --include="*/" --include="*-baremetal" --include="*-linux"
+          --exclude="*"
           ${BUILD_BIN_DIR}/ ${OUTPUT_BIN_DIR}/
   COMMENT "Syncing binary files to output directory"
 )
@@ -68,13 +68,14 @@ add_custom_target(sync-bin
 # add_dependencies(gemmini-native create-dirs)
 # add_dependencies(buckyball-OpTest build-compiler) # 属于 npu-build 的子目录，由于依赖需要直接指定
 
-add_dependencies(sync-bin 
+add_dependencies(sync-bin
   tutorial-build
 	buckyball-CTest-build
 	OpTest-all
+  sparse-build
 	)
-  
-add_custom_target(build-all ALL 
+
+add_custom_target(build-all ALL
   DEPENDS sync-bin
 )
 
