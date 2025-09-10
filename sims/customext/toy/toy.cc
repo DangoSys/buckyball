@@ -1,42 +1,44 @@
 #include "toy.h"
 #include "toy_params.h"
+#include <cassert>
 #include <cstdio>
 #include <riscv/mmu.h>
 #include <riscv/trap.h>
-#include <cassert>
 
 using namespace std;
 
 REGISTER_EXTENSION(toy, []() { return new toy_t; })
 
-#define dprintf(...) { if (p->get_log_commits_enabled()) printf(__VA_ARGS__); }
+#define dprintf(...)                                                           \
+  {                                                                            \
+    if (p->get_log_commits_enabled())                                          \
+      printf(__VA_ARGS__);                                                     \
+  }
 
 void toy_state_t::reset() {
   enable = true;
-  
+
   spad.clear();
-  spad.resize(sp_matrices*DIM, std::vector<elem_t>(DIM, 0));
-  
+  spad.resize(sp_matrices * DIM, std::vector<elem_t>(DIM, 0));
+
   resetted = true;
-  
+
   // printf("toy extension configured with:\n");
   // printf("    dim = %u\n", DIM);
 }
 
-
-template <class T>
-T toy_t::read_from_dram(reg_t addr) {
+template <class T> T toy_t::read_from_dram(reg_t addr) {
   T value = 0;
   for (size_t byte_idx = 0; byte_idx < sizeof(T); ++byte_idx) {
-    value |= p->get_mmu()->load<uint8_t>(addr + byte_idx) << (byte_idx*8);
+    value |= p->get_mmu()->load<uint8_t>(addr + byte_idx) << (byte_idx * 8);
   }
   return value;
 }
 
-template <class T>
-void toy_t::write_to_dram(reg_t addr, T data) {
+template <class T> void toy_t::write_to_dram(reg_t addr, T data) {
   for (size_t byte_idx = 0; byte_idx < sizeof(T); ++byte_idx) {
-    p->get_mmu()->store<uint8_t>(addr + byte_idx, (data >> (byte_idx*8)) & 0xFF);
+    p->get_mmu()->store<uint8_t>(addr + byte_idx,
+                                 (data >> (byte_idx * 8)) & 0xFF);
   }
 }
 
@@ -44,20 +46,23 @@ void toy_t::write_to_dram(reg_t addr, T data) {
 // rs1: mem_addr, rs2: sp_addr[spAddrLen-1:0] | rows[spAddrLen+9:spAddrLen]
 // 每次都搬运完整的行(DIM个元素)
 void toy_t::mvin(reg_t rs1, reg_t rs2) {
-  auto const base_dram_addr = rs1 & ((1UL << memAddrLen) - 1); // rs1 memddrLen-1:0
-  auto const base_sp_addr = rs2 & ((1UL << spAddrLen) - 1);  // rs2[spAddrLen-1:0]
-  auto const rows = (rs2 >> spAddrLen) & 0x3FF;  // rs2[spAddrLen+9:spAddrLen], 10 bits
-  
+  auto const base_dram_addr =
+      rs1 & ((1UL << memAddrLen) - 1); // rs1 memddrLen-1:0
+  auto const base_sp_addr =
+      rs2 & ((1UL << spAddrLen) - 1); // rs2[spAddrLen-1:0]
+  auto const rows =
+      (rs2 >> spAddrLen) & 0x3FF; // rs2[spAddrLen+9:spAddrLen], 10 bits
+
   dprintf("TOY: mvin - rs1=%lx, rs2=%lx\n", rs1, rs2);
-  dprintf("TOY: mvin - 0x%02lx rows from mem 0x%08lx to spad 0x%08lx\n", 
-          rows, base_dram_addr, base_sp_addr);
-  
+  dprintf("TOY: mvin - 0x%02lx rows from mem 0x%08lx to spad 0x%08lx\n", rows,
+          base_dram_addr, base_sp_addr);
+
   for (size_t i = 0; i < rows; ++i) {
-    auto const dram_row_addr = base_dram_addr + i*DIM*sizeof(elem_t);
+    auto const dram_row_addr = base_dram_addr + i * DIM * sizeof(elem_t);
     const size_t spad_row = base_sp_addr + i;
 
     for (size_t j = 0; j < DIM; ++j) {
-      auto const dram_byte_addr = dram_row_addr + j*sizeof(elem_t);
+      auto const dram_byte_addr = dram_row_addr + j * sizeof(elem_t);
       elem_t value = read_from_dram<elem_t>(dram_byte_addr);
       toy_state.spad.at(spad_row).at(j) = value;
       // dprintf("%d ", value);
@@ -66,24 +71,27 @@ void toy_t::mvin(reg_t rs1, reg_t rs2) {
   }
 }
 
-// Move data from scratchpad to DRAM  
+// Move data from scratchpad to DRAM
 // rs1: mem_addr, rs2: sp_addr[spAddrLen-1:0] | rows[spAddrLen+9:spAddrLen]
 // 每次都搬运完整的行(DIM个元素)
 void toy_t::mvout(reg_t rs1, reg_t rs2) {
-  auto const base_dram_addr = rs1 & ((1UL << memAddrLen) - 1); // rs1 memddrLen-1:0
-  auto const base_sp_addr = rs2 & ((1UL << spAddrLen) - 1);  // rs2[spAddrLen-1:0]
-  auto const rows = (rs2 >> spAddrLen) & 0x3FF;  // rs2[spAddrLen+9:spAddrLen], 10 bits
+  auto const base_dram_addr =
+      rs1 & ((1UL << memAddrLen) - 1); // rs1 memddrLen-1:0
+  auto const base_sp_addr =
+      rs2 & ((1UL << spAddrLen) - 1); // rs2[spAddrLen-1:0]
+  auto const rows =
+      (rs2 >> spAddrLen) & 0x3FF; // rs2[spAddrLen+9:spAddrLen], 10 bits
 
   dprintf("TOY: mvout - rs1=%lx, rs2=%lx\n", rs1, rs2);
-  dprintf("TOY: mvout - 0x%02lx rows from spad 0x%08lx to mem 0x%08lx\n", 
-          rows, base_sp_addr, base_dram_addr);
+  dprintf("TOY: mvout - 0x%02lx rows from spad 0x%08lx to mem 0x%08lx\n", rows,
+          base_sp_addr, base_dram_addr);
 
   for (size_t i = 0; i < rows; ++i) {
-    auto const dram_row_addr = base_dram_addr + i*DIM*sizeof(elem_t);
+    auto const dram_row_addr = base_dram_addr + i * DIM * sizeof(elem_t);
     const size_t spad_row = base_sp_addr + i;
 
     for (size_t j = 0; j < DIM; ++j) {
-      auto const dram_byte_addr = dram_row_addr + j*sizeof(elem_t);
+      auto const dram_byte_addr = dram_row_addr + j * sizeof(elem_t);
       elem_t value = toy_state.spad.at(spad_row).at(j);
       write_to_dram<elem_t>(dram_byte_addr, value);
       // dprintf("%d ", value);
@@ -94,15 +102,19 @@ void toy_t::mvout(reg_t rs1, reg_t rs2) {
 
 // Matrix multiplication using warp16 pattern
 void toy_t::mul_warp16(reg_t rs1, reg_t rs2) {
-  auto const op1_spaddr = rs1 & ((1UL << spAddrLen) - 1);  // rs1[spAddrLen-1:0]
-  auto const op2_spaddr = (rs1 >> spAddrLen) & ((1UL << spAddrLen) - 1);  // rs1[2*spAddrLen-1:spAddrLen]
-  auto const wr_spaddr = rs2 & ((1UL << spAddrLen) - 1);   // rs2[spAddrLen-1:0]  
-  auto const iter = (rs2 >> spAddrLen) & 0x3FF;  // rs2[spAddrLen+9:spAddrLen], 10 bits
+  auto const op1_spaddr = rs1 & ((1UL << spAddrLen) - 1); // rs1[spAddrLen-1:0]
+  auto const op2_spaddr =
+      (rs1 >> spAddrLen) &
+      ((1UL << spAddrLen) - 1); // rs1[2*spAddrLen-1:spAddrLen]
+  auto const wr_spaddr = rs2 & ((1UL << spAddrLen) - 1); // rs2[spAddrLen-1:0]
+  auto const iter =
+      (rs2 >> spAddrLen) & 0x3FF; // rs2[spAddrLen+9:spAddrLen], 10 bits
 
   // TODO:加个assert，op1_spaddr和op2_spaddr不能属于同一个bank
 
   dprintf("TOY: mul_warp16 - rs1=0x%08lx, rs2=0x%08lx\n", rs1, rs2);
-  dprintf("TOY: mul_warp16 - op1_spaddr=0x%08lx, op2_spaddr=0x%08lx, wr_spaddr=0x%08lx, iter=0x%02lx\n", 
+  dprintf("TOY: mul_warp16 - op1_spaddr=0x%08lx, op2_spaddr=0x%08lx, "
+          "wr_spaddr=0x%08lx, iter=0x%02lx\n",
           op1_spaddr, op2_spaddr, wr_spaddr, iter);
 
   // Perform matrix multiplication for specified iterations
@@ -110,12 +122,12 @@ void toy_t::mul_warp16(reg_t rs1, reg_t rs2) {
     // For each iteration, compute one row of result matrix
     const size_t result_row = wr_spaddr + i;
     const size_t op1_row = op1_spaddr + i;
-    
+
     // Initialize result row to zero
     for (size_t col = 0; col < DIM; ++col) {
       toy_state.spad.at(result_row).at(col) = 0;
     }
-    
+
     // Compute dot product for each column of result
     for (size_t col = 0; col < DIM; ++col) {
       elem_t sum = 0;
@@ -132,10 +144,13 @@ void toy_t::mul_warp16(reg_t rs1, reg_t rs2) {
 
 // Matrix multiplication using warp16 pattern
 void toy_t::bbfp_mul(reg_t rs1, reg_t rs2) {
-  auto const op1_spaddr = rs1 & ((1UL << spAddrLen) - 1);  // rs1[spAddrLen-1:0]
-  auto const op2_spaddr = (rs1 >> spAddrLen) & ((1UL << spAddrLen) - 1);  // rs1[2*spAddrLen-1:spAddrLen]
-  auto const wr_spaddr = rs2 & ((1UL << spAddrLen) - 1);   // rs2[spAddrLen-1:0]  
-  auto const iter = (rs2 >> spAddrLen) & 0x3FF;  // rs2[spAddrLen+9:spAddrLen], 10 bits
+  auto const op1_spaddr = rs1 & ((1UL << spAddrLen) - 1); // rs1[spAddrLen-1:0]
+  auto const op2_spaddr =
+      (rs1 >> spAddrLen) &
+      ((1UL << spAddrLen) - 1); // rs1[2*spAddrLen-1:spAddrLen]
+  auto const wr_spaddr = rs2 & ((1UL << spAddrLen) - 1); // rs2[spAddrLen-1:0]
+  auto const iter =
+      (rs2 >> spAddrLen) & 0x3FF; // rs2[spAddrLen+9:spAddrLen], 10 bits
   // scratchpad 行数
   // size_t spad_rows = buckyball_state.spad.size();
 
@@ -147,7 +162,8 @@ void toy_t::bbfp_mul(reg_t rs1, reg_t rs2) {
   // TODO:加个assert，op1_spaddr和op2_spaddr不能属于同一个bank
 
   dprintf("TOY: bbfp_mul - rs1=0x%08lx, rs2=0x%08lx\n", rs1, rs2);
-  dprintf("TOY: bbfp_mul - op1_spaddr=0x%08lx, op2_spaddr=0x%08lx, wr_spaddr=0x%08lx, iter=0x%02lx\n", 
+  dprintf("TOY: bbfp_mul - op1_spaddr=0x%08lx, op2_spaddr=0x%08lx, "
+          "wr_spaddr=0x%08lx, iter=0x%02lx\n",
           op1_spaddr, op2_spaddr, wr_spaddr, iter);
   dprintf("BBFP_MUl_Test\n");
 
@@ -163,7 +179,7 @@ void toy_t::bbfp_mul(reg_t rs1, reg_t rs2) {
     for (size_t col = 0; col < DIM; ++col) {
       toy_state.spad.at(result_row).at(col) = 0;
     }
-    
+
     elem_t sum_exp = share_exp_a + share_exp_b;
     toy_state.spad.at(result_row).at(0) = sum_exp;
     // Compute dot product for each column of result
@@ -180,10 +196,86 @@ void toy_t::bbfp_mul(reg_t rs1, reg_t rs2) {
   }
 }
 
+// Scatter move in for indices (load indices to register file)
+// rs1: mem_addr, rs2: count[31:1] | rf_bank[0:0]
+void toy_t::scatter_mvin(reg_t rs1, reg_t rs2) {
+  scatter_mvin_rs1_t rs1_fields(rs1);
+  scatter_mvin_rs2_t rs2_fields(rs2);
+
+  auto const base_dram_addr = rs1_fields.base_dram_addr();
+  auto const rf_bank = rs2_fields.rf_bank();
+  auto const count = rs2_fields.count();
+
+  dprintf("TOY: scatter_mvin - rs1=%lx, rs2=%lx\n", rs1, rs2);
+  dprintf("TOY: scatter_mvin - %d indices from mem 0x%08x to RF bank %d\n",
+          count, base_dram_addr, rf_bank);
+
+  for (size_t i = 0; i < count; ++i) {
+    auto const dram_byte_addr = base_dram_addr + i * sizeof(int32_t);
+    int32_t value = read_from_dram<int32_t>(dram_byte_addr);
+    toy_state.rf.at(rf_bank).at(i) = value;
+    // dprintf("RF[%d][%ld] = %d\n", rf_bank, i, value);
+  }
+}
+
+// Sparse matrix multiplication
+// rs1: A_addr[spAddrLen-1:0] | B_addr[2*spAddrLen-1:spAddrLen]
+// rs2: row_rf_bank[0] | col_rf_bank[1] | C_addr[spAddrLen+1:2] | nnz[27:16]
+void toy_t::sparse_mul(reg_t rs1, reg_t rs2) {
+  sparse_mul_rs1_t rs1_fields(rs1);
+  sparse_mul_rs2_t rs2_fields(rs2);
+
+  auto const A_addr = rs1_fields.A_addr();
+  auto const B_addr = rs1_fields.B_addr();
+  auto const row_rf_bank = rs2_fields.row_rf_bank();
+  auto const col_rf_bank = rs2_fields.col_rf_bank();
+  auto const C_addr = rs2_fields.C_addr();
+  auto const nnz = rs2_fields.nnz();
+
+  dprintf("TOY: sparse_mul - rs1=0x%08lx, rs2=0x%08lx\n", rs1, rs2);
+  dprintf("TOY: sparse_mul - A_addr=0x%08x, B_addr=0x%08x, C_addr=0x%08x, "
+          "row_rf=%d, col_rf=%d, nnz=%d\n",
+          A_addr, B_addr, C_addr, row_rf_bank, col_rf_bank, nnz);
+
+  // Note: Do NOT initialize C to zero here - this function performs C += A * B
+  // The caller is responsible for clearing C if needed
+
+  // Get register file data
+  auto &row_indices = toy_state.rf.at(row_rf_bank);
+  auto &col_ptrs = toy_state.rf.at(col_rf_bank);
+
+  // Process CSC sparse matrix multiplication: C = A_sparse * B
+  // CSC format: values are stored row by row, column pointers indicate start of
+  // each column
+  for (size_t col = 0; col < DIM; col++) {
+    int col_start = col_ptrs.at(col);
+    int col_end = col_ptrs.at(col + 1);
+
+    for (int nz_idx = col_start; nz_idx < col_end && nz_idx < nnz; nz_idx++) {
+      int row = row_indices.at(nz_idx);
+
+      if (row >= 0 && row < DIM && col >= 0 && col < DIM) {
+        // Access sparse A value from scratchpad
+        // Values are stored linearly in scratchpad, packed by rows
+        // nz_idx corresponds to the position in the values array
+        size_t val_row = A_addr + (nz_idx / DIM);
+        size_t val_col = nz_idx % DIM;
+        elem_t a_val = toy_state.spad.at(val_row).at(val_col);
+
+        // Perform: C[row, :] += a_val * B[col, :]
+        for (size_t j = 0; j < DIM; j++) {
+          toy_state.spad.at(C_addr + row).at(j) +=
+              a_val * toy_state.spad.at(B_addr + col).at(j);
+        }
+      }
+    }
+  }
+}
 
 reg_t toy_t::custom3(rocc_insn_t insn, reg_t xs1, reg_t xs2) {
-  // Note: processor pointer is set by set_processor() method before calling this
-  
+  // Note: processor pointer is set by set_processor() method before calling
+  // this
+
   if (!toy_state.resetted) {
     toy_state.reset();
   }
@@ -198,94 +290,102 @@ reg_t toy_t::custom3(rocc_insn_t insn, reg_t xs1, reg_t xs2) {
     dprintf("TOY: flush\n");
   } else if (insn.funct == bbfp_mul_funct) {
     bbfp_mul(xs1, xs2);
-  } 
-  else {
-    dprintf("TOY: encountered unknown instruction with funct: %d\n", insn.funct);
+  } else if (insn.funct == scatter_mvin_funct) {
+    scatter_mvin(xs1, xs2);
+  } else if (insn.funct == sparse_mul_funct) {
+    sparse_mul(xs1, xs2);
+  } else {
+    dprintf("TOY: encountered unknown instruction with funct: %d\n",
+            insn.funct);
     illegal_instruction(*this->p);
   }
-  
+
   return 0;
 }
 
 // 覆写custom3函数，因为custom3函数需要processor_t指针，而rocc_t没有这个指针
-static reg_t toy_custom3(processor_t* p, insn_t insn, reg_t pc) {
-  toy_t* rocc = static_cast<toy_t*>(p->get_extension("toy"));
+static reg_t toy_custom3(processor_t *p, insn_t insn, reg_t pc) {
+  toy_t *rocc = static_cast<toy_t *>(p->get_extension("toy"));
   rocc_insn_union_t u;
-  state_t* state = p->get_state();
+  state_t *state = p->get_state();
   u.i = insn;
   reg_t xs1 = u.r.xs1 ? state->XPR[insn.rs1()] : -1;
   reg_t xs2 = u.r.xs2 ? state->XPR[insn.rs2()] : -1;
-  
+
   // Set processor pointer before calling custom3
   rocc->set_processor(p);
   reg_t xd = rocc->custom3(u.r, xs1, xs2);
-  
+
   if (u.r.xd) {
     state->log_reg_write[insn.rd() << 4] = {xd, 0};
     state->XPR.write(insn.rd(), xd);
   }
-  return pc+4;
+  return pc + 4;
 }
 
 std::vector<insn_desc_t> toy_t::get_instructions(const processor_t &proc) {
   std::vector<insn_desc_t> insns;
-  push_custom_insn(insns, ROCC_OPCODE3, ROCC_OPCODE_MASK, ILLEGAL_INSN_FUNC, toy_custom3);
+  push_custom_insn(insns, ROCC_OPCODE3, ROCC_OPCODE_MASK, ILLEGAL_INSN_FUNC,
+                   toy_custom3);
   return insns;
 }
 
-std::vector<disasm_insn_t*> toy_t::get_disasms(const processor_t *proc) {
-  std::vector<disasm_insn_t*> insns;
-  
+std::vector<disasm_insn_t *> toy_t::get_disasms(const processor_t *proc) {
+  std::vector<disasm_insn_t *> insns;
+
   // Define argument types for toy instructions
   struct : public arg_t {
     std::string to_string(insn_t insn) const {
       return "x" + std::to_string(insn.rs1());
     }
   } static toy_rs1;
-  
+
   struct : public arg_t {
     std::string to_string(insn_t insn) const {
       return "x" + std::to_string(insn.rs2());
     }
   } static toy_rs2;
-  
+
   // Custom-3 opcode is ROCC_OPCODE3 (0111 1011)
   // MVIN instruction (funct = 24)
-  insns.push_back(new disasm_insn_t("toy_mvin", 
-    ROCC_OPCODE3 | (24 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {&toy_rs1, &toy_rs2}));
-  
+  insns.push_back(new disasm_insn_t("toy_mvin", ROCC_OPCODE3 | (24 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
+
   // MVOUT instruction (funct = 25)
-  insns.push_back(new disasm_insn_t("toy_mvout", 
-    ROCC_OPCODE3 | (25 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {&toy_rs1, &toy_rs2}));
-  
+  insns.push_back(new disasm_insn_t("toy_mvout", ROCC_OPCODE3 | (25 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
+
   // MATMUL instruction (funct = 32)
-  insns.push_back(new disasm_insn_t("toy_mul_warp16", 
-    ROCC_OPCODE3 | (32 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {&toy_rs1, &toy_rs2}));
+  insns.push_back(new disasm_insn_t("toy_mul_warp16", ROCC_OPCODE3 | (32 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
 
   // BBFP_MATMUL instruction (funct = 26)
 
-  insns.push_back(new disasm_insn_t("toy_bbfp_mul", 
-    ROCC_OPCODE3 | (26 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {&toy_rs1, &toy_rs2}));
+  insns.push_back(new disasm_insn_t("toy_bbfp_mul", ROCC_OPCODE3 | (26 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
 
   // MATMUL_WS instruction (funct = 27)
-  insns.push_back(new disasm_insn_t("toy_matmul_ws", 
-    ROCC_OPCODE3 | (27 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {&toy_rs1, &toy_rs2}));
+  insns.push_back(new disasm_insn_t("toy_matmul_ws", ROCC_OPCODE3 | (27 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
+
+  // SCATTER_MVIN instruction (funct = 34)
+  insns.push_back(
+      new disasm_insn_t("toy_scatter_mvin", ROCC_OPCODE3 | (34 << 25),
+                        ROCC_OPCODE_MASK | (0x7F << 25), {&toy_rs1, &toy_rs2}));
+
+  // SPARSE_MUL instruction (funct = 33)
+  insns.push_back(new disasm_insn_t("toy_sparse_mul", ROCC_OPCODE3 | (33 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
 
   // FENCE instruction (funct = 31) - no operands needed
-  insns.push_back(new disasm_insn_t("toy_fence", 
-    ROCC_OPCODE3 | (31 << 25), 
-    ROCC_OPCODE_MASK | (0x7F << 25), 
-    {}));
-  
+  insns.push_back(new disasm_insn_t("toy_fence", ROCC_OPCODE3 | (31 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25), {}));
+
   return insns;
 }
