@@ -35,6 +35,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val iter_reg = Reg(UInt(10.W))
   val sram_count = Reg(UInt(10.W))
   val acc_reg = RegInit(false.B)  // 是否是acc bank的操作
+  val acc_flip_reg = RegInit(false.B) // 用于交替读取两个acc bank
   
   // 缓存解码好的bank信息
   val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks).W))
@@ -57,7 +58,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     rd_bank_addr_reg := io.cmdReq.bits.cmd.sp_bank_addr
     sram_count    := 0.U
     acc_reg       := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
-    
+    acc_flip_reg  := true.B // 重置交替寄存器
     // 初始化缓存状态
     buffer_valid_bytes := 0.U
   }
@@ -73,11 +74,26 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     io.sramRead(i).req.bits.addr := target_row
     io.sramRead(i).req.bits.fromDMA := true.B
   }
-
-  for(i <- 0 until b.acc_banks){
-    io.accRead(i).req.valid := (state === s_sram_req) && acc_reg && (i.U === target_row(log2Ceil(b.acc_banks) - 1, 0))
-    io.accRead(i).req.bits.addr := rd_bank_addr_reg + (sram_count >> log2Ceil(b.acc_banks))
+  
+  //默认赋值
+  for(i <- 0 until b.acc_banks) {
+    io.accRead(i).req.valid := false.B
+    io.accRead(i).req.bits.addr := 0.U
     io.accRead(i).req.bits.fromDMA := true.B
+  }
+
+  for(i <- 0 until b.acc_banks/2){
+    when((state === s_sram_req) && acc_reg){
+      when(sram_count(2) === 0.U){
+        io.accRead(i).req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
+        io.accRead(i).req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accRead(i).req.bits.fromDMA := true.B
+      }.otherwise{
+        io.accRead(i + b.acc_banks/2).req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
+        io.accRead(i + b.acc_banks/2).req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accRead(i + b.acc_banks/2).req.bits.fromDMA := true.B
+      }
+    }
   }
 
   // SRAM响应处理

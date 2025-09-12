@@ -40,8 +40,6 @@ class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
 
   val idle :: busy :: Nil = Enum(2)
   val state = RegInit(idle)
-  val ready_reg = RegInit(false.B)
-  ready_reg := !ready_reg
 
 // -----------------------------------------------------------------------------
 // Ctrl指令到来设置寄存器
@@ -59,38 +57,53 @@ class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
 // -----------------------------------------------------------------------------
 // 接受来自EX单元的计算结果，进行写回
 // -----------------------------------------------------------------------------
-	io.ex_st_i.ready := state === busy && !ready_reg 
+	io.ex_st_i.ready := state === busy
   // for(i <- 0 until b.sp_banks) {
   //   io.sramWrite(i).en := false.B
   //   io.sramWrite(i).addr := 0.U
   //   io.sramWrite(i).data := 0.U
   //   io.sramWrite(i).mask := VecInit(Seq.fill(spad_w / 8)(false.B))
   // }
-	when(io.ex_st_i.fire) {
-		for(i <- 0 until b.acc_banks) {
-			io.accWrite(i).req.valid := true.B
-			io.accWrite(i).req.bits.addr := wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
-
-			// 每个accumulator bank存储 veclane/acc_banks 个元素
-			val elementsPerBank = b.veclane / b.acc_banks  // 16/4 = 4个元素
-			val startIdx = i * elementsPerBank
-			val endIdx = startIdx + elementsPerBank - 1
-
-			// 将对应的元素打包成一个UInt
-			val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
-			io.accWrite(i).req.bits.data := bankData
-
-			io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
-		}
-		iter_counter := iter_counter + 1.U
-		//assert(io.ex_st_i.bits.iter === iter_counter, "[VecEX -> VecStore] iteration mismatch %d %d", io.ex_st_i.bits.iter, iter_counter)
-	}.otherwise {
-    io.accWrite.foreach { acc =>
+io.accWrite.foreach { acc =>
       acc.req.valid := false.B
       acc.req.bits.addr := 0.U
       acc.req.bits.data := Cat(Seq.fill(b.acc_w / 8)(0.U(8.W)))
       acc.req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(false.B))
     }
+val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
+	when(io.ex_st_i.fire) {
+		for(i <- 0 until b.acc_banks/2) {
+      when(waddr(0) === 0.U){
+        io.accWrite(i).req.valid := true.B
+			  io.accWrite(i).req.bits.addr :=  wr_bank_addr + (iter_counter(log2Ceil(b.veclane) - 1, 0) >> 1.U)
+
+        // 每个accumulator bank存储 veclane/acc_banks 个元素
+        val elementsPerBank = b.veclane / b.acc_banks * 2 // 16/4 = 4个元素
+        val startIdx = i * elementsPerBank
+        val endIdx = startIdx + elementsPerBank - 1
+
+        // 将对应的元素打包成一个UInt
+        val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
+        io.accWrite(i).req.bits.data := bankData
+
+        io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+		  }.otherwise{
+        io.accWrite(i + b.acc_banks/2).req.valid := true.B
+			  io.accWrite(i + b.acc_banks/2).req.bits.addr := wr_bank_addr + (iter_counter(log2Ceil(b.veclane) - 1, 0) >> 1.U)
+
+        // 每个accumulator bank存储 veclane/acc_banks 个元素
+        val elementsPerBank = b.veclane / b.acc_banks * 2  // 16/4 = 4个元素
+        val startIdx = i * elementsPerBank
+        val endIdx = startIdx + elementsPerBank - 1
+
+        // 将对应的元素打包成一个UInt
+        val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
+        io.accWrite(i + b.acc_banks/2).req.bits.data := bankData
+
+        io.accWrite(i + b.acc_banks/2).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+      }
+    }	
+    iter_counter := iter_counter + 1.U
 	}
 
 // -----------------------------------------------------------------------------

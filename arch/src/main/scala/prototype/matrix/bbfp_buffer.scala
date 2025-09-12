@@ -19,6 +19,7 @@ class id_lu_req(implicit b: CustomBuckyBallConfig) extends Bundle {
   val opcode        = UInt(3.W)
   val iter          = UInt(10.W) 
   val thread_id     = UInt(10.W)
+  val rob_id        = UInt(log2Up(b.rob_entries).W)
 }
 
 class lu_ex_req(implicit b: CustomBuckyBallConfig) extends Bundle {
@@ -29,6 +30,7 @@ class lu_ex_req(implicit b: CustomBuckyBallConfig) extends Bundle {
   val opcode				= UInt(3.W)
   val iter  				= UInt(10.W)
   val thread_id   	= UInt(10.W)
+  val rob_id        = UInt(log2Up(b.rob_entries).W)
 }
 
 class ID_LU(implicit b: CustomBuckyBallConfig) extends Module{
