@@ -15,3 +15,5 @@ index.html
 *.log
 
 package-lock.json
+
+.clangd

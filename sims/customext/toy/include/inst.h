@@ -1,25 +1,9 @@
-#ifndef TOY_PARAMS_H
-#define TOY_PARAMS_H
+#ifndef _INST_H
+#define _INST_H
 
-#include <limits.h>
-#include <stdint.h>
+#include <cstdint>
 
-#define XCUSTOM_ACC 3
-#define DIM 16
-#define MEM_ADDR_LEN 32
-#define SPAD_ADDR_LEN 14
-#define BANK_NUM 4
-#define BANK_ROWS 4096
-
-typedef int8_t elem_t;
-static const elem_t elem_t_max = 127;
-static const elem_t elem_t_min = -128;
-
-#define row_align(blocks)                                                      \
-  __attribute__((aligned(blocks * DIM * sizeof(elem_t))))
-
-// ----------------------- NVR --------------------------------------
-
+// ----------------------------- mvin --------------------------------------
 struct mvin_rs1_t {
   uint64_t value;
   explicit mvin_rs1_t(uint64_t val) : value(val) {}
@@ -35,6 +19,7 @@ struct mvin_rs2_t {
   uint32_t rows() const { return (value >> 14) & 0x3FF; }
 };
 
+// ----------------------------- mvout --------------------------------------
 struct mvout_rs1_t {
   uint64_t value;
   explicit mvout_rs1_t(uint64_t val) : value(val) {}
@@ -50,22 +35,26 @@ struct mvout_rs2_t {
   uint32_t rows() const { return (value >> 14) & 0x3FF; }
 };
 
+// ----------------------------- mul_warp16
+// --------------------------------------
 struct mul_warp16_rs1_t {
   uint64_t value;
   explicit mul_warp16_rs1_t(uint64_t val) : value(val) {}
 
-  uint32_t op1_addr() const { return (value >> 0) & 0x3FFF; }
-  uint32_t op2_addr() const { return (value >> 14) & 0x3FFF; }
+  uint32_t op1_spaddr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t op2_spaddr() const { return (value >> 14) & 0x3FFF; }
 };
 
 struct mul_warp16_rs2_t {
   uint64_t value;
   explicit mul_warp16_rs2_t(uint64_t val) : value(val) {}
 
-  uint32_t wr_addr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t wr_spaddr() const { return (value >> 0) & 0x3FFF; }
   uint32_t iter() const { return (value >> 14) & 0x3FF; }
 };
 
+// ----------------------------- scatter_mvin
+// --------------------------------------
 struct scatter_mvin_rs1_t {
   uint64_t value;
   explicit scatter_mvin_rs1_t(uint64_t val) : value(val) {}
@@ -81,6 +70,8 @@ struct scatter_mvin_rs2_t {
   uint32_t count() const { return (value >> 1) & 0x7FFFFFFF; }
 };
 
+// ----------------------------- sparse_mul
+// --------------------------------------
 struct sparse_mul_rs1_t {
   uint64_t value;
   explicit sparse_mul_rs1_t(uint64_t val) : value(val) {}
@@ -99,6 +90,21 @@ struct sparse_mul_rs2_t {
   uint32_t nnz() const { return (value >> 16) & 0xFFF; }
 };
 
-// ------------------------------------------------------------------
+// ----------------------------- bbfp_mul --------------------------------------
+struct bbfp_mul_rs1_t {
+  uint64_t value;
+  explicit bbfp_mul_rs1_t(uint64_t val) : value(val) {}
 
-#endif // TOY_PARAMS_H
+  uint32_t op1_spaddr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t op2_spaddr() const { return (value >> 14) & 0x3FFF; }
+};
+
+struct bbfp_mul_rs2_t {
+  uint64_t value;
+  explicit bbfp_mul_rs2_t(uint64_t val) : value(val) {}
+
+  uint32_t wr_spaddr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t iter() const { return (value >> 14) & 0x3FF; }
+};
+
+#endif // _INST_H

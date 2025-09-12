@@ -18,12 +18,20 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 # Create shared library
 add_library(toy SHARED
   toy.cc
+  diff/ref.cc
+  inst/24_mvin.cc
+  inst/25_mvout.cc
+  inst/26_bbfp_mul.cc
+  inst/32_mul_warp16.cc
+  inst/33_sparse_mul.cc
+  inst/34_scatter_mvin.cc
 )
 
 # Add include directories (modern CMake approach)
 target_include_directories(toy PRIVATE
   "$ENV{RISCV}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # Link against required libraries
