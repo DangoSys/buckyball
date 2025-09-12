@@ -52,7 +52,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         state             := busy
         io.is_matmul_ws   := false.B
       }
-      when(io.cmdReq.valid && io.cmdReq.bits.cmd.is_matmul_ws){
+      when(io.cmdReq.valid && io.cmdReq.bits.cmd.special(0)){
         iteration         := io.cmdReq.bits.cmd.iter 
         iteration_counter := 0.U
         is_matmul_ws      := true.B

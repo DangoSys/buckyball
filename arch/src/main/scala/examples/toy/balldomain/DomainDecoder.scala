@@ -11,7 +11,6 @@ import org.chipsalliance.cde.config.Parameters
 
 // Ball域的详细解码输出
 class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val is_matmul_ws  = Bool()
   // val is_vec        = Bool()
   // val is_bbfp       = Bool()
   // val is_im2col     = Bool()
@@ -114,7 +113,6 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   
   // io.ball_decode_cmd_o.bits.is_vec        := Mux(io.ball_decode_cmd_o.valid, func7 === MATMUL_WARP16_BITPAT,                        false.B)
   // io.ball_decode_cmd_o.bits.is_bbfp       := Mux(io.ball_decode_cmd_o.valid, func7 === BB_BBFP_MUL || func7 === MATMUL_WS,          false.B)
-  io.ball_decode_cmd_o.bits.is_matmul_ws  := Mux(io.ball_decode_cmd_o.valid, func7 === MATMUL_WS,                                   false.B)
   // io.ball_decode_cmd_o.bits.is_im2col     := Mux(io.ball_decode_cmd_o.valid, func7 === IM2COL,                                      false.B)
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
