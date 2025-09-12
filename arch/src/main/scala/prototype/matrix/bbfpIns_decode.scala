@@ -16,7 +16,6 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
   val io = IO(new Bundle{
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
-    val cmdResp = Decoupled(new BallRsComplete)
     val is_matmul_ws  = Output(Bool())
     val id_lu_o = Decoupled(new id_lu_req)
   })
@@ -86,11 +85,12 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   io.id_lu_o.bits.opcode        := 1.U
   io.id_lu_o.bits.iter          := iteration
   io.id_lu_o.bits.thread_id     := iteration_counter
+  io.id_lu_o.bits.rob_id        := rob_id_reg
 
   io.cmdReq.ready := io.id_lu_o.ready
 
   //指令完成信号
-  val complete = (iteration_counter === iteration - 1.U) && (state === busy) 
+  
   
   // 将complete信号打10拍
   // val complete_delay = RegInit(VecInit(Seq.fill(10)(false.B)))
@@ -100,7 +100,5 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   // }
   // val complete_10clk = complete_delay(9)
   
-  io.cmdResp.bits.rob_id := rob_id_reg
-  io.cmdResp.valid := complete
 
 }

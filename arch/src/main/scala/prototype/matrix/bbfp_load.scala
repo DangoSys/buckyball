@@ -52,6 +52,7 @@ class BBFP_LoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
   io.lu_ex_o.bits.opcode := io.id_lu_i.bits.opcode
   io.lu_ex_o.bits.iter := io.id_lu_i.bits.iter
   io.lu_ex_o.bits.thread_id := io.id_lu_i.bits.thread_id
+  io.lu_ex_o.bits.rob_id := io.id_lu_i.bits.rob_id
 
   io.id_lu_i.ready := io.lu_ex_o.ready
 
