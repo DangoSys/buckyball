@@ -2,7 +2,7 @@
 #include "utils/macro.h"
 #include "utils/debug.h"
 
-#include "../build/obj_dir/VTestHarness___024root.h"
+// #include "../build/obj_dir/VTestHarness___024root.h"
 
 // #define MAX_SIM_TIME 50 最大仿真周期
 vluint64_t sim_time = 0;

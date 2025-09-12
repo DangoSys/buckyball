@@ -1,0 +1,44 @@
+#include "common.h"
+#include "inst.h"
+#include "toy.h"
+
+// Matrix multiplication using warp16 pattern
+void toy_t::mul_warp16(reg_t rs1, reg_t rs2) {
+  mul_warp16_rs1_t rs1_fields(rs1);
+  mul_warp16_rs2_t rs2_fields(rs2);
+
+  auto const op1_spaddr = rs1_fields.op1_spaddr();
+  auto const op2_spaddr = rs1_fields.op2_spaddr();
+  auto const wr_spaddr = rs2_fields.wr_spaddr();
+  auto const iter = rs2_fields.iter();
+
+  dprintf(p, "TOY: mul_warp16 - rs1=0x%08lx, rs2=0x%08lx\n", rs1, rs2);
+  dprintf(p,
+          "TOY: mul_warp16 - op1_spaddr=0x%08lx, op2_spaddr=0x%08lx, "
+          "wr_spaddr=0x%08lx, iter=0x%02lx\n",
+          op1_spaddr, op2_spaddr, wr_spaddr, iter);
+
+  // Perform matrix multiplication for specified iterations
+  for (size_t i = 0; i < iter; ++i) {
+    // For each iteration, compute one row of result matrix
+    const size_t result_row = wr_spaddr + i;
+    const size_t op1_row = op1_spaddr + i;
+
+    // Initialize result row to zero
+    for (size_t col = 0; col < DIM; ++col) {
+      toy_state.spad.at(result_row).at(col) = 0;
+    }
+
+    // Compute dot product for each column of result
+    for (size_t col = 0; col < DIM; ++col) {
+      elem_t sum = 0;
+      for (size_t k = 0; k < DIM; ++k) {
+        // op1[i][k] * op2[k][col]
+        elem_t a = toy_state.spad.at(op1_row).at(k);
+        elem_t b = toy_state.spad.at(op2_spaddr + k).at(col);
+        sum += a * b;
+      }
+      toy_state.spad.at(result_row).at(col) = sum;
+    }
+  }
+}
