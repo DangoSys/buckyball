@@ -14,294 +14,484 @@ from utils import find_available_port
 workflow_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
-  parser = argparse.ArgumentParser(
-    prog="bbdev",
-    description="Development tool for buckyball project",
-    formatter_class=argparse.RawTextHelpFormatter,
-  )
-  
-  # 全局参数
-  parser.add_argument("--port", type=int, default=None, help="Port for dev server (default: None)")
-  parser.add_argument("--server", action="store_true", help="server mode")
-  
-  # 子命令解析器
-  subparsers = parser.add_subparsers(dest="command", help="Available commands")
-  
-  # ===== start 子命令 ==============================================================================
-  start_parser = subparsers.add_parser("start", help="Start dev server")
-  
-  # ===== stop 子命令 ==============================================================================
-  stop_parser = subparsers.add_parser("stop", help="Stop dev server")
-  stop_group = stop_parser.add_mutually_exclusive_group(required=False)
-  stop_group.add_argument("--all", action="store_true", help="Stop all servers")
-  
-  # ===== verilator 子命令 =========================================================================
-  verilator_parser = subparsers.add_parser("verilator", help="Verilator operations")
-  # verilator 的互斥选项组 - 只能选择一个操作
-  verilator_group = verilator_parser.add_mutually_exclusive_group(required=True)
-  verilator_group.add_argument("--clean", action="store_true", help="Clean verilator build directory")
-  verilator_group.add_argument("--verilog", action="store_true", help="Generate verilog files from chisel")
-  verilator_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS", 
-                              help="Build verilator simulation executable. Args: \"[--job <num>]\"")
-  verilator_group.add_argument("--sim", type=str, nargs="?", const="", metavar="ARGS",
-                              help="Run verilator simulation. Args: \"--binary <path> [--batch]\"")
-  verilator_group.add_argument("--run", type=str, nargs="?", const="", metavar="ARGS",
-                              help="Integrated build+sim+run. Args: \"--binary <path> [--batch] [--job <num>]\"")
-  
-  # ===== vcs 子命令 =========================================================================
-  vcs_parser = subparsers.add_parser("vcs", help="vcs operations")
-  # vcs 的互斥选项组 - 只能选择一个操作
-  vcs_group = vcs_parser.add_mutually_exclusive_group(required=True)
-  vcs_group.add_argument("--clean", action="store_true", help="Clean vcs build directory")
-  vcs_group.add_argument("--verilog", action="store_true", help="Generate verilog files")
-  vcs_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS", 
-                            help="Build vcs simulation executable. Args: \"[--job <num>]\"")
-  vcs_group.add_argument("--sim", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Run vcs simulation. Args: \"--binary <path> [--batch]\"")
-  vcs_group.add_argument("--run", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Integrated build+sim+run. Args: \"--binary <path> [--batch] [--job <num>]\"")
-  
-  # ===== sardine 子命令 =========================================================================
-  sardine_parser = subparsers.add_parser("sardine", help="sardine operations")
-  sardine_group = sardine_parser.add_mutually_exclusive_group(required=True)
-  sardine_group.add_argument("--run", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Run sardine. Args: \"--workload <path>\"")
+    parser = argparse.ArgumentParser(
+        prog="bbdev",
+        description="Development tool for buckyball project",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
 
-  # ===== agent 子命令 =========================================================================
-  agent_parser = subparsers.add_parser("agent", help="agent operations")
-  agent_group = agent_parser.add_mutually_exclusive_group(required=True)
-  agent_group.add_argument("--chat", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Run agent. Args: \"--message <message>\", \"--model <model>\"")
+    # 全局参数
+    parser.add_argument(
+        "--port", type=int, default=None, help="Port for dev server (default: None)"
+    )
+    parser.add_argument("--server", action="store_true", help="server mode")
 
-  # ===== workload 子命令 =========================================================================
-  workload_parser = subparsers.add_parser("workload", help="workload operations")
-  workload_group = workload_parser.add_mutually_exclusive_group(required=True)
-  workload_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Build workload. ")
-  
-  # ===== doc 子命令 =========================================================================
-  doc_parser = subparsers.add_parser("doc", help="doc operations")
-  doc_group = doc_parser.add_mutually_exclusive_group(required=True)
-  doc_group.add_argument("--deploy", action="store_true", help="Deploy doc. ")
+    # 子命令解析器
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-  # ===== marshal 子命令 =========================================================================
-  marshal_parser = subparsers.add_parser("marshal", help="marshal operations")
-  marshal_group = marshal_parser.add_mutually_exclusive_group(required=True)
-  marshal_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Build marshal. ")
-  marshal_group.add_argument("--launch", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Launch marshal. ")
+    # ===== start 子命令 ==============================================================================
+    start_parser = subparsers.add_parser("start", help="Start dev server")
 
-  # ===== firesim 子命令 =========================================================================
-  firesim_parser = subparsers.add_parser("firesim", help="firesim operations")
-  firesim_group = firesim_parser.add_mutually_exclusive_group(required=True)
-  firesim_group.add_argument("--buildbitstream", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Build bitstream. ")
-  firesim_group.add_argument("--infrasetup", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Infrasetup. ")
-  firesim_group.add_argument("--runworkload", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Run workload. ")
+    # ===== stop 子命令 ==============================================================================
+    stop_parser = subparsers.add_parser("stop", help="Stop dev server")
+    stop_group = stop_parser.add_mutually_exclusive_group(required=False)
+    stop_group.add_argument("--all", action="store_true", help="Stop all servers")
 
-  # ===== compiler 子命令 =========================================================================
-  compiler_parser = subparsers.add_parser("compiler", help="compiler operations")
-  compiler_group = compiler_parser.add_mutually_exclusive_group(required=True)
-  compiler_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Build compiler. ")
+    # ===== verilator 子命令 =========================================================================
+    verilator_parser = subparsers.add_parser("verilator", help="Verilator operations")
+    # verilator 的互斥选项组 - 只能选择一个操作
+    verilator_group = verilator_parser.add_mutually_exclusive_group(required=True)
+    verilator_group.add_argument(
+        "--clean", action="store_true", help="Clean verilator build directory"
+    )
+    verilator_group.add_argument(
+        "--verilog", action="store_true", help="Generate verilog files from chisel"
+    )
+    verilator_group.add_argument(
+        "--build",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Build verilator simulation executable. Args: "[--job <num>]"',
+    )
+    verilator_group.add_argument(
+        "--sim",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run verilator simulation. Args: "--binary <path> [--batch]"',
+    )
+    verilator_group.add_argument(
+        "--run",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+    )
 
-  # ===== funcsim 子命令 =========================================================================
-  funcsim_parser = subparsers.add_parser("funcsim", help="funcsim operations")
-  funcsim_group = funcsim_parser.add_mutually_exclusive_group(required=True)
-  funcsim_group.add_argument("--build", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Build funcsim. ")
-  funcsim_group.add_argument("--sim", type=str, nargs="?", const="", metavar="ARGS",
-                            help="Sim funcsim. ")
-  # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
-  args, unknown = parser.parse_known_args(argv)
-  
-  # 如果 --port 和 --server 在未知参数中，手动处理
-  while unknown:
-    found = False
-    for i in range(len(unknown)):
-      if unknown[i] == "--port":
-        try:
-          args.port = int(unknown[i+1])
-          unknown = unknown[i+2:]  # 移除已处理的参数
-          found = True
-          break
-        except (ValueError, IndexError):
-          break
-      if unknown[i] == "--server":
-        args.server = True
-        unknown = unknown[i+1:]  # 移除已处理的参数
-        found = True
-        break
-    if not found:
-      break
-  # 如果有其他未知参数，报错
-  if unknown:
-    parser.error(f"unrecognized arguments: {' '.join(unknown)}")
-  
-  return args
+    # ===== vcs 子命令 =========================================================================
+    vcs_parser = subparsers.add_parser("vcs", help="vcs operations")
+    # vcs 的互斥选项组 - 只能选择一个操作
+    vcs_group = vcs_parser.add_mutually_exclusive_group(required=True)
+    vcs_group.add_argument(
+        "--clean", action="store_true", help="Clean vcs build directory"
+    )
+    vcs_group.add_argument(
+        "--verilog", action="store_true", help="Generate verilog files"
+    )
+    vcs_group.add_argument(
+        "--build",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Build vcs simulation executable. Args: "[--job <num>]"',
+    )
+    vcs_group.add_argument(
+        "--sim",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run vcs simulation. Args: "--binary <path> [--batch]"',
+    )
+    vcs_group.add_argument(
+        "--run",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+    )
+
+    # ===== sardine 子命令 =========================================================================
+    sardine_parser = subparsers.add_parser("sardine", help="sardine operations")
+    sardine_group = sardine_parser.add_mutually_exclusive_group(required=True)
+    sardine_group.add_argument(
+        "--run",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run sardine. Args: "--workload <path>"',
+    )
+
+    # ===== agent 子命令 =========================================================================
+    agent_parser = subparsers.add_parser("agent", help="agent operations")
+    agent_group = agent_parser.add_mutually_exclusive_group(required=True)
+    agent_group.add_argument(
+        "--chat",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run agent. Args: "--message <message>", "--model <model>"',
+    )
+
+    # ===== workload 子命令 =========================================================================
+    workload_parser = subparsers.add_parser("workload", help="workload operations")
+    workload_group = workload_parser.add_mutually_exclusive_group(required=True)
+    workload_group.add_argument(
+        "--build",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Build workload. ",
+    )
+
+    # ===== doc 子命令 =========================================================================
+    doc_parser = subparsers.add_parser("doc", help="doc operations")
+    doc_group = doc_parser.add_mutually_exclusive_group(required=True)
+    doc_group.add_argument("--deploy", action="store_true", help="Deploy doc. ")
+
+    # ===== marshal 子命令 =========================================================================
+    marshal_parser = subparsers.add_parser("marshal", help="marshal operations")
+    marshal_group = marshal_parser.add_mutually_exclusive_group(required=True)
+    marshal_group.add_argument(
+        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build marshal. "
+    )
+    marshal_group.add_argument(
+        "--launch",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Launch marshal. ",
+    )
+
+    # ===== firesim 子命令 =========================================================================
+    firesim_parser = subparsers.add_parser("firesim", help="firesim operations")
+    firesim_group = firesim_parser.add_mutually_exclusive_group(required=True)
+    firesim_group.add_argument(
+        "--buildbitstream",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Build bitstream. ",
+    )
+    firesim_group.add_argument(
+        "--infrasetup",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Infrasetup. ",
+    )
+    firesim_group.add_argument(
+        "--runworkload",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Run workload. ",
+    )
+
+    # ===== compiler 子命令 =========================================================================
+    compiler_parser = subparsers.add_parser("compiler", help="compiler operations")
+    compiler_group = compiler_parser.add_mutually_exclusive_group(required=True)
+    compiler_group.add_argument(
+        "--build",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help="Build compiler. ",
+    )
+
+    # ===== funcsim 子命令 =========================================================================
+    funcsim_parser = subparsers.add_parser("funcsim", help="funcsim operations")
+    funcsim_group = funcsim_parser.add_mutually_exclusive_group(required=True)
+    funcsim_group.add_argument(
+        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build funcsim. "
+    )
+    funcsim_group.add_argument(
+        "--sim", type=str, nargs="?", const="", metavar="ARGS", help="Sim funcsim. "
+    )
+
+    # ===== uvm 子命令 =========================================================================
+    uvm_parser = subparsers.add_parser("uvm", help="uvm operations")
+    uvm_group = uvm_parser.add_mutually_exclusive_group(required=True)
+    uvm_group.add_argument(
+        "--builddut", type=str, nargs="?", const="", metavar="ARGS", help="Build dut. "
+    )
+    uvm_group.add_argument(
+        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build uvm. "
+    )
+
+    # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
+    args, unknown = parser.parse_known_args(argv)
+
+    # 如果 --port 和 --server 在未知参数中，手动处理
+    while unknown:
+        found = False
+        for i in range(len(unknown)):
+            if unknown[i] == "--port":
+                try:
+                    args.port = int(unknown[i + 1])
+                    unknown = unknown[i + 2 :]  # 移除已处理的参数
+                    found = True
+                    break
+                except (ValueError, IndexError):
+                    break
+            if unknown[i] == "--server":
+                args.server = True
+                unknown = unknown[i + 1 :]  # 移除已处理的参数
+                found = True
+                break
+        if not found:
+            break
+    # 如果有其他未知参数，报错
+    if unknown:
+        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
+
+    return args
 
 
 def extract_command_info(args):
-  """通用的命令信息提取器，适用于所有命令"""
-  # 基础返回结构
-  result = {
-    "command": getattr(args, 'command', None),
-    "operation": None,
-    "args": {}
-  }
-  
-  # 动态提取操作类型（遍历args的所有属性）
-  for attr_name in dir(args):
-    # 跳过内置属性和已知的非操作属性
-    if attr_name.startswith('_') or attr_name in ['command', 'port']:
-      continue
-    
-    attr_value = getattr(args, attr_name)
-    # 找到值为True或非空字符串的属性（跳过None和False）
-    if attr_value is not None and attr_value is not False:
-      result["operation"] = attr_name
-      if attr_value is True:
-        # 布尔操作，如 --clean, --verilog
-        result["args"] = {}
-      else:
-        # 带参数的操作，如 --sim "arg_string"
-        # 解析参数字符串
-        args_dict = {}
-        if attr_value:
-          try:
-            # use shlex to parse args
-            arg_tokens = shlex.split(attr_value)
-            i = 0
-            while i < len(arg_tokens):
-              token = arg_tokens[i]
-              if token.startswith('--'):
-                # long option
-                option_name = token[2:]  # remove --
-                if i + 1 < len(arg_tokens) and not arg_tokens[i + 1].startswith('-'):
-                  # next token is value
-                  args_dict[option_name] = arg_tokens[i + 1]
-                  i += 2
-                else:
-                  # boolean flag
-                  args_dict[option_name] = True
-                  i += 1
-              elif token.startswith('-') and len(token) == 2:
-                # short option
-                option_name = token[1:]  # remove -
-                if i + 1 < len(arg_tokens) and not arg_tokens[i + 1].startswith('-'):
-                  # next token is value
-                  args_dict[option_name] = arg_tokens[i + 1]
-                  i += 2
-                else:
-                  # boolean flag
-                  args_dict[option_name] = True
-                  i += 1
-              else:
-                # position argument, skip
-                i += 1
-          except ValueError as e:
-            print(f"Error parsing arguments: {e}")
-        result["args"] = args_dict
-      break
-  
-  return result
+    """通用的命令信息提取器，适用于所有命令"""
+    # 基础返回结构
+    result = {"command": getattr(args, "command", None), "operation": None, "args": {}}
+
+    # 动态提取操作类型（遍历args的所有属性）
+    for attr_name in dir(args):
+        # 跳过内置属性和已知的非操作属性
+        if attr_name.startswith("_") or attr_name in ["command", "port"]:
+            continue
+
+        attr_value = getattr(args, attr_name)
+        # 找到值为True或非空字符串的属性（跳过None和False）
+        if attr_value is not None and attr_value is not False:
+            result["operation"] = attr_name
+            if attr_value is True:
+                # 布尔操作，如 --clean, --verilog
+                result["args"] = {}
+            else:
+                # 带参数的操作，如 --sim "arg_string"
+                # 解析参数字符串
+                args_dict = {}
+                if attr_value:
+                    try:
+                        # use shlex to parse args
+                        arg_tokens = shlex.split(attr_value)
+                        i = 0
+                        while i < len(arg_tokens):
+                            token = arg_tokens[i]
+                            if token.startswith("--"):
+                                # long option
+                                option_name = token[2:]  # remove --
+                                if i + 1 < len(arg_tokens) and not arg_tokens[
+                                    i + 1
+                                ].startswith("-"):
+                                    # next token is value
+                                    args_dict[option_name] = arg_tokens[i + 1]
+                                    i += 2
+                                else:
+                                    # boolean flag
+                                    args_dict[option_name] = True
+                                    i += 1
+                            elif token.startswith("-") and len(token) == 2:
+                                # short option
+                                option_name = token[1:]  # remove -
+                                if i + 1 < len(arg_tokens) and not arg_tokens[
+                                    i + 1
+                                ].startswith("-"):
+                                    # next token is value
+                                    args_dict[option_name] = arg_tokens[i + 1]
+                                    i += 2
+                                else:
+                                    # boolean flag
+                                    args_dict[option_name] = True
+                                    i += 1
+                            else:
+                                # position argument, skip
+                                i += 1
+                    except ValueError as e:
+                        print(f"Error parsing arguments: {e}")
+                result["args"] = args_dict
+            break
+
+    return result
 
 
 if __name__ == "__main__":
-  args = parse_args(sys.argv[1:])
-  cmd_info = extract_command_info(args)
-  
-  # print(f"Command: {cmd_info['command']}")
-  # print(f"Operation: {cmd_info['operation']}")
-  # print(f"Arguments: {cmd_info['args']}")
+    args = parse_args(sys.argv[1:])
+    cmd_info = extract_command_info(args)
+
+    # print(f"Command: {cmd_info['command']}")
+    # print(f"Operation: {cmd_info['operation']}")
+    # print(f"Arguments: {cmd_info['args']}")
 
 # ==================================================================================
 # 两种模式 server mode 和 script mode
-# 
+#
 # server mode: 手动启动/关闭 server，可以通过浏览器可视化访问对应的工作流
 # script mode: 自动分配port，任务开始时自动开启服务，结束时自动关闭服务
 # ==================================================================================
 if args.server:
-  if cmd_info['command'] == "start":
-    print(f"Starting dev server on port {args.port}")
-    subprocess.run(["npx", "motia", "dev", "--port", str(args.port)], cwd=workflow_dir, check=True)
-    
-  elif cmd_info['command'] == "stop":
-    if cmd_info['operation'] == "all":
-      print("Stopping all servers")
-      subprocess.run("kill -9 $(ps aux | grep \'[m]otia\' | awk \'{print $2}\')", shell=True, check=False, text=True)
+    if cmd_info["command"] == "start":
+        print(f"Starting dev server on port {args.port}")
+        subprocess.run(
+            ["npx", "motia", "dev", "--port", str(args.port)],
+            cwd=workflow_dir,
+            check=True,
+        )
+
+    elif cmd_info["command"] == "stop":
+        if cmd_info["operation"] == "all":
+            print("Stopping all servers")
+            subprocess.run(
+                "kill -9 $(ps aux | grep '[m]otia' | awk '{print $2}')",
+                shell=True,
+                check=False,
+                text=True,
+            )
+        else:
+            print(f"Stopping server on port {args.port}")
+            subprocess.run(
+                f"kill -TERM $(lsof -t -i :{args.port})",
+                shell=True,
+                check=False,
+                text=True,
+            )
+
+    elif cmd_info["command"] in [
+        "verilator",
+        "vcs",
+        "sardine",
+        "agent",
+        "workload",
+        "doc",
+        "marshal",
+        "firesim",
+        "compiler",
+        "funcsim",
+        "uvm",
+    ]:
+        api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
+        json_data = json.dumps(cmd_info["args"])
+        subprocess.run(
+            [
+                "curl",
+                "-X",
+                "POST",
+                f"http://localhost:{args.port}{api_path}",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json_data,
+            ],
+            cwd=workflow_dir,
+            check=True,
+        )
+        # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
     else:
-      print(f"Stopping server on port {args.port}")
-      subprocess.run(f"kill -TERM $(lsof -t -i :{args.port})", shell=True, check=False, text=True)
+        print(f"Unknown command: {cmd_info['command']}")
+        print(
+            "Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim, uvm"
+        )
+        sys.exit(1)
+else:  # script mode
+    if cmd_info["command"] == "start":
+        print(f" 'start' do nothing in script mode")
+    elif cmd_info["command"] == "stop":
+        print(f" 'stop' do nothing in script mode")
+    elif cmd_info["command"] in [
+        "verilator",
+        "vcs",
+        "sardine",
+        "agent",
+        "workload",
+        "doc",
+        "marshal",
+        "firesim",
+        "compiler",
+        "funcsim",
+        "uvm",
+    ]:
+        # 1.启动服务在后台 ================================
+        # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
+        if args.port:
+            available_port = args.port
+        else:
+            available_port = find_available_port(start_port=5100, end_port=5500)
+        print(f"Starting server on port {available_port}...")
+        proc = subprocess.Popen(
+            ["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir
+        )
 
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim", "compiler", "funcsim"]:
-    api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-    json_data = json.dumps(cmd_info['args'])
-    subprocess.run(["curl", "-X", "POST", f"http://localhost:{args.port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
-    # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
-  else:
-    print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim")
-    sys.exit(1)
-else: # script mode
-  if cmd_info['command'] == "start":
-    print(f" 'start' do nothing in script mode")
-  elif cmd_info['command'] == "stop":
-    print(f" 'stop' do nothing in script mode")
-  elif cmd_info['command'] in ["verilator", "vcs", "sardine", "agent", "workload", "doc", "marshal", "firesim", "compiler", "funcsim"]:
-    # 1.启动服务在后台 ================================
-    # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
-    if args.port:
-      available_port = args.port
+        # 等待服务启动完成
+        max_retries = 30
+        for i in range(max_retries):
+            try:
+                # 禁用代理，直接连接localhost
+                # response = requests.get(f"http://localhost:{available_port}", timeout=1)
+                response = requests.get(
+                    f"http://localhost:{available_port}",
+                    timeout=1,
+                    proxies={"http": None, "https": None, "all": None},
+                )
+                if response.status_code == 200:
+                    print(f"Server is ready on port {available_port}")
+                    break
+            except requests.exceptions.RequestException:
+                pass
+            time.sleep(3)
+        else:
+            print("Server failed to start within 30 seconds")
+            subprocess.run(
+                f"kill -TERM $(lsof -t -i :{available_port})",
+                shell=True,
+                check=False,
+                text=True,
+            )
+            proc.terminate()
+            proc.wait()
+            sys.exit(1)
+
+        # 2. 执行API调用 ================================
+        api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
+        json_data = json.dumps(cmd_info["args"])
+        print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
+        # 禁用代理，直接连接localhost
+        result = subprocess.run(
+            [
+                "curl",
+                "-sS",
+                "--noproxy",
+                "localhost",
+                "-X",
+                "POST",
+                f"http://localhost:{available_port}{api_path}",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json_data,
+            ],
+            cwd=workflow_dir,
+            check=True,
+        )
+
+        # 3.关闭服务 ================================
+        # print("Press Ctrl+C to stop the server and exit...")
+        proc.terminate()
+        proc.wait()
+        print(
+            f"\nTask completed. Command running on http://localhost:{available_port} is finished"
+        )
+
+        if result.returncode != 0:
+            print(f"Error: {result.stderr}")
+            sys.exit(1)
+
     else:
-      available_port = find_available_port(start_port=5100, end_port=5500)
-    print(f"Starting server on port {available_port}...")
-    proc = subprocess.Popen(["npx", "motia", "dev", "--port",  str(available_port)], cwd=workflow_dir)
-    
-    # 等待服务启动完成
-    max_retries = 30
-    for i in range(max_retries):
-      try:
-          # 禁用代理，直接连接localhost
-        # response = requests.get(f"http://localhost:{available_port}", timeout=1)
-        response = requests.get(f"http://localhost:{available_port}", timeout=1, proxies={'http': None, 'https': None, 'all': None})
-        if response.status_code == 200:
-          print(f"Server is ready on port {available_port}")
-          break
-      except requests.exceptions.RequestException:
-        pass
-      time.sleep(3)
-    else:
-      print("Server failed to start within 30 seconds")
-      subprocess.run(f"kill -TERM $(lsof -t -i :{available_port})", shell=True, check=False, text=True)
-      proc.terminate()
-      proc.wait()
-      sys.exit(1)
-
-    # 2. 执行API调用 ================================
-    api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-    json_data = json.dumps(cmd_info['args'])
-    print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
-      # 禁用代理，直接连接localhost
-    result = subprocess.run(["curl", "-sS", "--noproxy", "localhost", "-X", "POST", f"http://localhost:{available_port}{api_path}", "-H", "Content-Type: application/json", "-d", json_data], cwd=workflow_dir, check=True)
-
-    # 3.关闭服务 ================================
-    # print("Press Ctrl+C to stop the server and exit...")
-    proc.terminate()
-    proc.wait()
-    print(f"\nTask completed. Command running on http://localhost:{available_port} is finished")
-
-    if result.returncode != 0:
-      print(f"Error: {result.stderr}")
-      sys.exit(1)
-    
-  else:
-    print(f"Unknown command: {cmd_info['command']}")
-    print("Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim")
-    sys.exit(1)
-  
+        print(f"Unknown command: {cmd_info['command']}")
+        print(
+            "Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim, uvm"
+        )
+        sys.exit(1)
