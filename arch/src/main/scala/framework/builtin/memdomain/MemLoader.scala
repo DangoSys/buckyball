@@ -86,11 +86,28 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     io.sramWrite(i).req.bits.data := io.dmaResp.bits.data
     io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(true.B))
   }
-  for (i <- 0 until b.acc_banks) {
-    io.accWrite(i).req.valid     := io.dmaResp.fire && is_acc_reg && (target_row(log2Ceil(b.acc_banks) - 1, 0) === i.U)
-    io.accWrite(i).req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >> log2Ceil(b.acc_banks))
-    io.accWrite(i).req.bits.data := io.dmaResp.bits.data
-    io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+  //默认赋值
+  for(i <- 0 until b.acc_banks) {
+    io.accWrite(i).req.valid := false.B
+    io.accWrite(i).req.bits.addr := 0.U
+    io.accWrite(i).req.bits.data := 0.U
+    io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(false.B))
+  }
+
+  for (i <- 0 until b.acc_banks/2) {
+    when(io.dmaResp.fire && is_acc_reg){
+      when(io.dmaResp.bits.addrcounter(2)){
+        io.accWrite(i).req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
+        io.accWrite(i).req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accWrite(i).req.bits.data := io.dmaResp.bits.data
+        io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+      }.otherwise{
+        io.accWrite(i + b.acc_banks/2).req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
+        io.accWrite(i + b.acc_banks/2).req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >>  (log2Ceil(b.acc_banks/2) + 1))
+        io.accWrite(i + b.acc_banks/2).req.bits.data := io.dmaResp.bits.data
+        io.accWrite(i + b.acc_banks/2).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+      }
+    }
   }
 
   // 发送完成信号 - 只有收到最后一个响应时才发送

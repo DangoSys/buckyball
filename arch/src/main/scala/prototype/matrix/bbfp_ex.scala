@@ -8,6 +8,7 @@ import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import framework.builtin.memdomain.mem.{SramWriteIO, SramReadIO, SramReadResp}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
 
 class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
@@ -19,6 +20,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val sramReadResp = Vec(b.sp_banks, Flipped(Decoupled(new SramReadResp(spad_w))))
     val is_matmul_ws = Input(Bool())
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    val cmdResp = Decoupled(new BallRsComplete)
   })
 
      for(i <- 0 until b.sp_banks) {
@@ -34,6 +36,10 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     io.accWrite(i).req.bits.data := DontCare
     io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
   }
+
+  io.cmdResp.valid := false.B
+  io.cmdResp.bits.rob_id := 0.U
+  
   val idle::weight_load::data_compute::Nil = Enum(3)
   val weight_cycles = RegInit(0.U(10.W))
   val act_cycles = RegInit(0.U(10.W))
@@ -138,26 +144,39 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   when(writing_output) {
     when(write_cycles < 16.U) {
     // 将一个4x32位数据拼接成128位宽的数据写入SRAM
-     
-    
-     for(i <- 0 until b.acc_banks) {
-    io.accWrite(i).req.valid := true.B
-    io.accWrite(i).req.bits.addr := (wr_bank_addr_base >> log2Ceil(b.acc_banks)) + write_cycles
-    val idx = (write_cycles * 4.U + i.U)(5,0) // 6 bits for 64 elements
-    io.accWrite(i).req.bits.data := Cat(
-      output_buffer(idx)(3),
-      output_buffer(idx)(2),
-      output_buffer(idx)(1),
-      output_buffer(idx)(0)
-    )
-    io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
-  }
+     for(i <- 0 until b.acc_banks/2) {
+      when((wr_bank_addr_base + write_cycles)(0) === 0.U){
+        io.accWrite(i).req.valid := true.B
+        io.accWrite(i).req.bits.addr := wr_bank_addr_base + (write_cycles >> 1.U)
+        val idx = (write_cycles * 4.U + i.U)(5,0) // 6 bits for 64 elements
+        io.accWrite(i).req.bits.data := Cat(
+          output_buffer(idx)(3),
+          output_buffer(idx)(2),
+          output_buffer(idx)(1),
+          output_buffer(idx)(0)
+        )
+        io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+      }.otherwise{
+        io.accWrite(i + b.acc_banks/2).req.valid := true.B
+        io.accWrite(i + b.acc_banks/2).req.bits.addr := wr_bank_addr_base + (write_cycles >> 1.U)
+        val idx = (write_cycles * 4.U + i.U)(5,0) // 6 bits for 64 elements
+        io.accWrite(i + b.acc_banks/2).req.bits.data := Cat(
+          output_buffer(idx)(3),
+          output_buffer(idx)(2),
+          output_buffer(idx)(1),
+          output_buffer(idx)(0)
+        )
+        io.accWrite(i + b.acc_banks/2).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+      }
+    }
     write_cycles := write_cycles + 1.U
     }.otherwise {                                                              
     // 写入完成
-    writing_output := false.B
-    output_ready := false.B
-    addr_base_captured:=false.B
+      writing_output := false.B
+      output_ready := false.B
+      addr_base_captured:=false.B
+      io.cmdResp.bits.rob_id := io.lu_ex_i.bits.rob_id
+      io.cmdResp.valid := true.B
     }
   }
 

@@ -29,7 +29,7 @@ case class BaseConfig(
   dma_buswidth: Int = 128,
   
   sp_banks: Int = 2,
-  acc_banks: Int = 4,
+  acc_banks: Int = 8,
   
   sp_singleported: Boolean = true,
   
