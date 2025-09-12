@@ -126,9 +126,9 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   val reg_is_matmul_ws  = RegInit(false.B)
   
   when (io.cmdReq.ball2.valid) {
-    reg_is_matmul_ws := io.cmdReq.ball2.bits.cmd.is_matmul_ws
+    reg_is_matmul_ws := io.cmdReq.ball2.bits.cmd.special(0)
   }
-  real_is_matmul_ws := Mux(io.cmdReq.ball2.valid, io.cmdReq.ball2.bits.cmd.is_matmul_ws, reg_is_matmul_ws)
+  real_is_matmul_ws := Mux(io.cmdReq.ball2.valid, io.cmdReq.ball2.bits.cmd.special(0), reg_is_matmul_ws)
 
   BBFP_Control.io.is_matmul_ws := real_is_matmul_ws
   
