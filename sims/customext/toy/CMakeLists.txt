@@ -23,8 +23,8 @@ add_library(toy SHARED
   inst/25_mvout.cc
   inst/26_bbfp_mul.cc
   inst/32_mul_warp16.cc
-  inst/33_sparse_mul.cc
-  inst/34_scatter_mvin.cc
+  inst/33_im2col.cc
+  inst/34_transpose.cc
 )
 
 # Add include directories (modern CMake approach)
@@ -32,6 +32,8 @@ target_include_directories(toy PRIVATE
   "$ENV{RISCV}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/diff"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../../bb-tests/workloads/lib"
 )
 
 # Link against required libraries
@@ -39,6 +41,8 @@ target_link_libraries(toy PRIVATE
   riscv
   disasm
   softfloat
+  dl
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../../bb-tests/workloads/build/lib/libbbhw-x86.a"
 )
 
 # Set output name to match Makefile

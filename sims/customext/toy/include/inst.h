@@ -16,7 +16,7 @@ struct mvin_rs2_t {
   explicit mvin_rs2_t(uint64_t val) : value(val) {}
 
   uint32_t base_sp_addr() const { return (value >> 0) & 0x3FFF; }
-  uint32_t rows() const { return (value >> 14) & 0x3FF; }
+  uint32_t iter() const { return (value >> 14) & 0x3FF; }
 };
 
 // ----------------------------- mvout --------------------------------------
@@ -32,7 +32,7 @@ struct mvout_rs2_t {
   explicit mvout_rs2_t(uint64_t val) : value(val) {}
 
   uint32_t base_sp_addr() const { return (value >> 0) & 0x3FFF; }
-  uint32_t rows() const { return (value >> 14) & 0x3FF; }
+  uint32_t iter() const { return (value >> 14) & 0x3FF; }
 };
 
 // ----------------------------- mul_warp16
@@ -53,44 +53,44 @@ struct mul_warp16_rs2_t {
   uint32_t iter() const { return (value >> 14) & 0x3FF; }
 };
 
-// ----------------------------- scatter_mvin
-// --------------------------------------
-struct scatter_mvin_rs1_t {
+// ----------------------------- transpose ---------------------------------
+struct transpose_rs1_t {
   uint64_t value;
-  explicit scatter_mvin_rs1_t(uint64_t val) : value(val) {}
+  explicit transpose_rs1_t(uint64_t val) : value(val) {}
 
-  uint32_t base_dram_addr() const { return (value >> 0) & 0xFFFFFFFF; }
+  uint32_t op_spaddr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t wr_spaddr() const { return (value >> 14) & 0x3FFF; }
 };
 
-struct scatter_mvin_rs2_t {
+struct transpose_rs2_t {
   uint64_t value;
-  explicit scatter_mvin_rs2_t(uint64_t val) : value(val) {}
+  explicit transpose_rs2_t(uint64_t val) : value(val) {}
 
-  uint32_t rf_bank() const { return (value >> 0) & 0x1; }
-  uint32_t count() const { return (value >> 1) & 0x7FFFFFFF; }
+  uint32_t iter() const { return (value >> 14) & 0x7FFFFFFF; }
 };
 
-// ----------------------------- sparse_mul
-// --------------------------------------
-struct sparse_mul_rs1_t {
+// ----------------------------- im2col ------------------------------------
+struct im2col_rs1_t {
   uint64_t value;
-  explicit sparse_mul_rs1_t(uint64_t val) : value(val) {}
+  explicit im2col_rs1_t(uint64_t val) : value(val) {}
 
-  uint32_t A_addr() const { return (value >> 0) & 0x3FFF; }
-  uint32_t B_addr() const { return (value >> 14) & 0x3FFF; }
+  uint32_t op_spaddr() const { return (value >> 0) & 0x3FFF; }
+  uint32_t wr_spaddr() const { return (value >> 14) & 0x3FFF; }
 };
 
-struct sparse_mul_rs2_t {
+struct im2col_rs2_t {
   uint64_t value;
-  explicit sparse_mul_rs2_t(uint64_t val) : value(val) {}
+  explicit im2col_rs2_t(uint64_t val) : value(val) {}
 
-  uint32_t row_rf_bank() const { return (value >> 0) & 0x1; }
-  uint32_t col_rf_bank() const { return (value >> 1) & 0x1; }
-  uint32_t C_addr() const { return (value >> 2) & 0x3FFF; }
-  uint32_t nnz() const { return (value >> 16) & 0xFFF; }
+  uint32_t kcol() const { return (value >> 23) & 0x1; }       // 23:27
+  uint32_t krow() const { return (value >> 27) & 0x1; }       // 27:31
+  uint32_t inrow() const { return (value >> 31) & 0x3FFF; }   // 31:36
+  uint32_t incol() const { return (value >> 36) & 0xFFF; }    // 36:46
+  uint32_t startrow() const { return (value >> 46) & 0xFFF; } // 46:51
+  uint32_t startcol() const { return (value >> 51) & 0xFFF; } // 51:61
 };
 
-// ----------------------------- bbfp_mul --------------------------------------
+// ----------------------------- bbfp_mul -----------------------------------
 struct bbfp_mul_rs1_t {
   uint64_t value;
   explicit bbfp_mul_rs1_t(uint64_t val) : value(val) {}

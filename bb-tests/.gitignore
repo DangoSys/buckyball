@@ -2,3 +2,4 @@ build/
 output/
 package-lock.json
 package.json
+.cache/
