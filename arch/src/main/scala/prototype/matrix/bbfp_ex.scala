@@ -46,25 +46,28 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val weight_expreg=RegInit(0.U(32.W))
   val act_expreg=RegInit(0.U(32.W))
   // 提取流水线前端的信号
-  val op1_bank  = Reg(UInt(io.lu_ex_i.bits.op1_bank.getWidth.W))
-  val op2_bank  = Reg(UInt(io.lu_ex_i.bits.op2_bank.getWidth.W))
+  val op1_bank_reg  = Reg(UInt(io.lu_ex_i.bits.op1_bank.getWidth.W))
+  val op2_bank_reg  = Reg(UInt(io.lu_ex_i.bits.op2_bank.getWidth.W))
   val wr_bank   = Reg(UInt(io.lu_ex_i.bits.wr_bank.getWidth.W))
   val opcode    = Reg(UInt(io.lu_ex_i.bits.opcode.getWidth.W))
  
   
   val act_shift_reg = Reg(Vec(16, Vec(16, UInt(7.W))))
-  val row_enable = RegInit(VecInit(Seq.fill(16)(false.B)))
+  val col_enable = RegInit(VecInit(Seq.fill(16)(false.B)))
   val input_cycle = RegInit(0.U(5.W))
   val act_data_ready = RegInit(false.B)
 
 
   when(io.lu_ex_i.valid) {
-    op1_bank  := io.lu_ex_i.bits.op1_bank
-    op2_bank  := io.lu_ex_i.bits.op2_bank
+    op1_bank_reg  := io.lu_ex_i.bits.op1_bank
+    op2_bank_reg  := io.lu_ex_i.bits.op2_bank
     wr_bank   := io.lu_ex_i.bits.wr_bank
     opcode  := io.lu_ex_i.bits.opcode
   }
 
+  val op1_bank = Mux(io.lu_ex_i.valid, io.lu_ex_i.bits.op1_bank, op1_bank_reg)
+  val op2_bank = Mux(io.lu_ex_i.valid, io.lu_ex_i.bits.op2_bank, op2_bank_reg)
+  
   val state = RegInit(idle)
   val pe_array = Module(new BBFP_PE_Array16x16)
 
@@ -195,7 +198,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
     is(weight_load) {
     // 加载16周期权重
-    when(weight_cycles <= 16.U) {
+    when(weight_cycles < 16.U) {
       pe_array.io.in_d := weight_reg
       pe_array.io.in_control.foreach(_.propagate := 1.U)
       pe_array.io.in_valid.foreach(_ := true.B)
@@ -213,38 +216,39 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     // 在计算阶段，启动移位寄存器的平行四边形输入模式
     when(act_cycles < 31.U) {
       // 每个周期逐行使能更多行进行移位
-      for(row <- 0 until 16) {
-      when(row.U <= act_cycles && row.U < 16.U) {
-        row_enable(row) := true.B
+      for(col <- 0 until 16) {
+      when(col.U <= act_cycles && col.U < 16.U) {
+        col_enable(col) := true.B
       }.otherwise {
-        row_enable(row) := false.B
+        col_enable(col) := false.B
       }
       }
     
       // 移位寄存器操作：使能的行向右移位
-      for(row <- 0 until 16) {
-      when(row_enable(row)) {
-        for(col <- 15 to 1 by -1) {
-        act_shift_reg(row)(col) := act_shift_reg(row)(col-1)
+      for(col <- 0 until 16) {
+      when(col_enable(col)) {
+        for(row <- 0 until 15) {
+        act_shift_reg(row)(col) := act_shift_reg(row + 1)(col)
         }
         // 左侧补0（因为是计算阶段，不再输入新数据）
-        act_shift_reg(row)(0) := 0.U(7.W)
+        act_shift_reg(15)(col) := 0.U(7.W)
       }
       }
          
       // 将每行的最右侧元素（第15列）输入到PE阵列
       val current_input = WireDefault(VecInit(Seq.fill(16)(0.U(7.W))))
-      for(row <- 0 until 16) {
-      when(row_enable(row)) {
-        current_input(row) := act_shift_reg(row)(15)
+      for(col <- 0 until 16) {
+      when(col_enable(col)) {
+        current_input(col) := act_shift_reg(0)(col)
       }.otherwise {
-        current_input(row) := 0.U(7.W)
+        current_input(col) := 0.U(7.W)
       }
       }
       pe_array.io.in_a := current_input
       pe_array.io.in_b.foreach(_ := 0.U)
     }
     // 从第16个周期开始接收输出，到第47个周期结束
+
     when(act_cycles > 16.U && act_cycles <= 48.U) {
       output_buffer_parallelogram(output_ptr) := pe_array.io.out_b
       output_ptr := output_ptr + 1.U
@@ -274,7 +278,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       act_reg_ptr := 0.U
       output_ptr := 0.U
       // 重置所有行使能信号
-      row_enable := VecInit(Seq.fill(16)(false.B))
+      col_enable := VecInit(Seq.fill(16)(false.B))
       state := idle
     }
     }
