@@ -112,6 +112,8 @@ add_cross_platform_test_target(ctest_bbfp_matmul_test bbfpmatmul.c)
 add_cross_platform_test_target(ctest_bbfp_matmul_random1 bbfp_matmul_random1.c)
 add_cross_platform_test_target(ctest_bbfp_matmul_random2 bbfp_matmul_random2.c)
 add_cross_platform_test_target(ctest_bbfp_matmul_random3 bbfp_matmul_random3.c)
+add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
+
 
 # 创建总的构建目标
 add_custom_target(buckyball-CTest-build ALL DEPENDS
@@ -136,5 +138,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_bbfp_matmul_random1
   ctest_bbfp_matmul_random2
   ctest_bbfp_matmul_random3
+  ctest_transpose_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

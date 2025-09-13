@@ -29,6 +29,7 @@
 #define BB_FENCE_FUNCT 31        // 0x1F - Fence function code
 #define BB_MUL_FUNCT 32          // 0x20 - Matrix multiply function code
 #define BB_IM2COL_FUNCT 33          // 0x21 - Matrix im2col function code
+#define BB_TRANSPOSE_FUNCT 34      // 0x22 - Matrix transpose function code
 #define BB_FLUSH_FUNCT 7         // 0x07 - Flush function code
 #define BB_BBFP_MUL_FUNCT 26     // 0x1A - BBFP matrix multiply function code
 #define BB_MATMUL_WS_FUNCT 27    // 0x1B - Matrix multiply with warp16 function code
@@ -109,6 +110,13 @@ do { \
     uint64_t rs2_val = ( ((startrow) << (SPAD_ADDR_LEN + 38)) | ((startcol) << (SPAD_ADDR_LEN + 33)) | \
     ((inrow) << (SPAD_ADDR_LEN + 23)) | ((incol) << (SPAD_ADDR_LEN + 18)) | ((krow) << (SPAD_ADDR_LEN + 14)) | ((kcol) << (SPAD_ADDR_LEN + 10))); \
     BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_IM2COL_FUNCT); \
+} while(0)
+
+#define bb_transpose(op1_addr, wr_addr, iter) \
+do { \
+    uint64_t rs1_val = ((wr_addr) << SPAD_ADDR_LEN) | ((op1_addr) & ((1UL << SPAD_ADDR_LEN) - 1)); \
+    uint64_t rs2_val = ((iter) << SPAD_ADDR_LEN); \
+    BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, BB_TRANSPOSE_FUNCT); \
 } while(0)
 
 // Flush accelerator

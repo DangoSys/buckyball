@@ -17,5 +17,6 @@ object DISA {
   val FENCE                = BitPat("b0011111") // 31 
   val MATMUL_WARP16_BITPAT = BitPat("b0100000") // 32
   val IM2COL               = BitPat("b0100001") // 33
+  val TRANSPOSE            = BitPat("b0100010") // 34
 }
   

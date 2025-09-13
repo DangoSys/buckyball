@@ -11,6 +11,7 @@ import examples.toy.balldomain.rs.{BallIssueInterface, BallCommitInterface}
 // import framework.builtin.frontend.rs.{ReservationStationIssue, ReservationStationComplete, BuckyBallCmd}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import prototype.transpose.PipelinedTransposer
 
 class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   
@@ -28,7 +29,7 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   val BBFP_Control = Module(new BBFP_Control)
   val VecUnit = Module(new VecUnit)
   val Im2col = Module(new Im2col)
-
+  val Transpose = Module(new PipelinedTransposer)
 // -----------------------------------------------------------------------------
 // Input Selector
 // -----------------------------------------------------------------------------
@@ -36,22 +37,23 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   val sel      = WireInit(0.U(2.W))
   val sel_reg  = RegInit(0.U(2.W))
 
-  val im2col :: vec_unit :: bbfp_unit :: Nil = Enum(3)
+  val transpose :: im2col :: vec_unit :: bbfp_unit :: Nil = Enum(4)
   val real_sel = WireInit(vec_unit)
 
   // ball1 (VecUnit) 和 ball2 (BBFP) 的选择逻辑
   val ball1_valid = io.cmdReq.ball1.valid
   val ball2_valid = io.cmdReq.ball2.valid
   val ball3_valid = io.cmdReq.ball3.valid
+  val ball4_valid = io.cmdReq.ball4.valid
 
-  sel := Mux(ball1_valid, vec_unit, Mux(ball2_valid, bbfp_unit, Mux(ball3_valid, im2col, 0.U)))
+  sel := Mux(ball1_valid, vec_unit, Mux(ball2_valid, bbfp_unit, Mux(ball3_valid, im2col, Mux(ball4_valid, transpose, 0.U))))
 
-  when (ball1_valid || ball2_valid || ball3_valid) {
+  when (ball1_valid || ball2_valid || ball3_valid || ball4_valid) {
     sel_reg := sel
   }.otherwise {
     sel_reg := sel_reg
   }
-  real_sel := Mux(ball1_valid || ball2_valid || ball3_valid, sel, sel_reg)
+  real_sel := Mux(ball1_valid || ball2_valid || ball3_valid || ball4_valid, sel, sel_reg)
 
   VecUnit.io.cmdReq.valid := io.cmdReq.ball1.valid
   VecUnit.io.cmdReq.bits := io.cmdReq.ball1.bits
@@ -64,6 +66,10 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   Im2col.io.cmdReq.valid := io.cmdReq.ball3.valid
   Im2col.io.cmdReq.bits := io.cmdReq.ball3.bits
   io.cmdReq.ball3.ready := Im2col.io.cmdReq.ready
+
+  Transpose.io.cmdReq.valid := io.cmdReq.ball4.valid
+  Transpose.io.cmdReq.bits := io.cmdReq.ball4.bits
+  io.cmdReq.ball4.ready := Transpose.io.cmdReq.ready
 
 // -----------------------------------------------------------------------------
 // 默认赋值, sb chisel 识别不出来两种情况全覆盖了，故手动赋值
@@ -115,6 +121,12 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   Im2col.io.sramRead.foreach(_.resp.bits.data := 0.U)
   Im2col.io.sramRead.foreach(_.resp.bits.fromDMA := false.B)
   Im2col.io.sramWrite.foreach(_.req.ready := false.B)
+
+  Transpose.io.sramRead.foreach(_.req.ready := false.B)
+  Transpose.io.sramRead.foreach(_.resp.valid := false.B)
+  Transpose.io.sramRead.foreach(_.resp.bits.data := 0.U)
+  Transpose.io.sramRead.foreach(_.resp.bits.fromDMA := false.B)
+  Transpose.io.sramWrite.foreach(_.req.ready := false.B)
 
 // -----------------------------------------------------------------------------
 // BBFP_Control
@@ -245,6 +257,29 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
       }
     }
   
+  // -----------------------------------------------------------------------------
+// Transpose
+// -----------------------------------------------------------------------------
+  when (real_sel === transpose) {
+    // 连接到Scratchpad的SRAM读写接口
+      for (i <- 0 until b.sp_banks) {
+        // sramRead(i).req
+        io.sramRead(i).req.valid          := Transpose.io.sramRead(i).req.valid
+        io.sramRead(i).req.bits           := Transpose.io.sramRead(i).req.bits
+        Transpose.io.sramRead(i).req.ready  := io.sramRead(i).req.ready
+
+        // sramRead(i).resp
+        Transpose.io.sramRead(i).resp.valid := io.sramRead(i).resp.valid
+        Transpose.io.sramRead(i).resp.bits  := io.sramRead(i).resp.bits
+        io.sramRead(i).resp.ready         := Transpose.io.sramRead(i).resp.ready
+
+        // sramWrite(i)
+        io.sramWrite(i).req.valid     := Transpose.io.sramWrite(i).req.valid
+        io.sramWrite(i).req.bits.addr := Transpose.io.sramWrite(i).req.bits.addr
+        io.sramWrite(i).req.bits.data := Transpose.io.sramWrite(i).req.bits.data
+        io.sramWrite(i).req.bits.mask := Transpose.io.sramWrite(i).req.bits.mask
+      }
+    }
 
 // -----------------------------------------------------------------------------
 // Output Selector
@@ -261,4 +296,8 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   io.cmdResp.ball3.valid      := Im2col.io.cmdResp.valid
   io.cmdResp.ball3.bits       := Im2col.io.cmdResp.bits
   Im2col.io.cmdResp.ready    := io.cmdResp.ball3.ready
+
+  io.cmdResp.ball4.valid      := Transpose.io.cmdResp.valid
+  io.cmdResp.ball4.bits       := Transpose.io.cmdResp.bits
+  Transpose.io.cmdResp.ready  := io.cmdResp.ball4.ready
 }
