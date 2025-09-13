@@ -77,7 +77,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   //生成ID_LU请求
   io.id_lu_o.valid              := state === busy
   io.id_lu_o.bits.op1_bank      := op1_bank
-  io.id_lu_o.bits.op1_bank_addr := op1_bank_addr + iteration_counter
+  io.id_lu_o.bits.op1_bank_addr := op1_bank_addr + b.veclane.U - iteration_counter - 1.U
   io.id_lu_o.bits.op2_bank      := op2_bank
   io.id_lu_o.bits.op2_bank_addr := op2_bank_addr + iteration_counter
   io.id_lu_o.bits.wr_bank       := wr_bank
