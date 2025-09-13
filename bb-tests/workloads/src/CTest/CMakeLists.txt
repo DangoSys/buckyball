@@ -1,8 +1,6 @@
-set(RISCV_GNU_TOOLCHAIN ${RISCV})
 set(ELF_CC "riscv64-unknown-elf-gcc")
 set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 
-set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-g++") 
 
 #-------------------------------------------------------------------------------
 # 定义公共的编译步骤函数
@@ -11,31 +9,41 @@ set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-g++")
 #-------------------------------------------------------------------------------
 # 生成不同平台的可执行文件
 #-------------------------------------------------------------------------------
+set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
+set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-g++")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=rv64gc")
 # 生成Linux版本的可执行文件
 function(add_linux_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}-linux")
-  
+
   add_executable(${EXECUTABLE} ${CTEST_WORKLOAD_DIR}/${SOURCE_FILE})
-  target_link_libraries(${EXECUTABLE} buckyball-lib)
+  target_link_libraries(${EXECUTABLE} buckyball-lib bbhw-linux)
+  target_include_directories(${EXECUTABLE} PRIVATE
+    ${WORKLOAD_LIB_DIR}
+  )
 endfunction()
 
 # 生成multicore baremetal版本的可执行文件
 function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_multicore-baremetal")
-  
+
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${C_FLAGS} -o ${EXECUTABLE} ${CTEST_WORKLOAD_DIR}/start.S
       -DMULTICORE=3
       ${CTEST_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_WORKLOAD_DIR}/buckyball.c
+      -I${WORKLOAD_LIB_DIR}
+      -L${CMAKE_BINARY_DIR}/lib -lbbhw-baremetal
     DEPENDS ${CTEST_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_WORKLOAD_DIR}/start.S
       ${CTEST_WORKLOAD_DIR}/buckyball.c
+      bbhw-baremetal
     COMMENT "Building multicore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
-  
+
   add_custom_target(${TEST_NAME}_multicore_baremetal
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
   )
@@ -44,18 +52,21 @@ endfunction()
 # 生成singlecore baremetal版本的可执行文件
 function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_singlecore-baremetal")
-  
+
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${C_FLAGS} -o ${EXECUTABLE}
       ${CTEST_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_WORKLOAD_DIR}/buckyball.c
+      -I${WORKLOAD_LIB_DIR}
+      -L${CMAKE_BINARY_DIR}/lib -lbbhw-baremetal
     DEPENDS ${CTEST_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_WORKLOAD_DIR}/buckyball.c
+      bbhw-baremetal
     COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
-  
+
   add_custom_target(${TEST_NAME}_singlecore_baremetal
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
   )
@@ -66,7 +77,7 @@ function(add_cross_platform_test_target TEST_NAME SOURCE_FILE)
   add_linux_test_target(${TEST_NAME} ${SOURCE_FILE})
   add_multicore_baremetal_test_target(${TEST_NAME} ${SOURCE_FILE})
   add_singlecore_baremetal_test_target(${TEST_NAME} ${SOURCE_FILE})
-  
+
   # 创建一个总目标，同时构建所有平台
   add_custom_target(${TEST_NAME}
     DEPENDS ${TEST_NAME}-linux ${TEST_NAME}_multicore_baremetal ${TEST_NAME}_singlecore_baremetal
@@ -81,11 +92,12 @@ set(LINK_FLAGS "-static -Wl,--no-dynamic-linker")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_FLAGS}")
 
 add_library(buckyball-lib STATIC ${CTEST_WORKLOAD_DIR}/buckyball.c)
+target_link_libraries(buckyball-lib PRIVATE bbhw-linux)
 
 #-------------------------------------------------------------------------------
 # 设置baremetal编译标志
 #-------------------------------------------------------------------------------
-set(C_FLAGS -std=gnu11 -g -fno-common -O2 -static 
+set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc
   -fno-builtin-printf -specs=htif_nano.specs -I${CTEST_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------

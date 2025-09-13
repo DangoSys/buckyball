@@ -1,7 +1,6 @@
 #ifndef _COMMON_H
 #define _COMMON_H
 
-#include "params.h"
 #include <cassert>
 #include <cstdio>
 #include <riscv/mmu.h>

@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 project(BuckyballTest C CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # get the root directory of the project
 # execute_process(
@@ -19,12 +20,6 @@ set(BUDDY_OPT ${BUDDY_MLIR_BIN_DIR}/buddy-opt)
 set(BUDDY_TRANSLATE ${BUDDY_MLIR_BIN_DIR}/buddy-translate)
 set(BUDDY_LLC ${BUDDY_MLIR_BIN_DIR}/buddy-llc)
 
-# set(CMAKE_C_COMPILER_LINUX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
-# set(CMAKE_CXX_COMPILER_LINUX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
-
-# set(CMAKE_C_COMPILER_BAREMETAL ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
-# set(CMAKE_CXX_COMPILER_BAREMETAL ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
-
 set(ELF_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
 set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 
@@ -33,7 +28,7 @@ set(OUTPUT_BIN_DIR "${WORKLOAD_DIR}/output/workloads")
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------
-# add_subdirectory(lib)
+add_subdirectory(lib)
 add_subdirectory(src)
 
 #-------------------------------------------------------------------------------
@@ -69,7 +64,7 @@ add_dependencies(sync-bin
   tutorial-build
 	buckyball-CTest-build
 	OpTest-all
-  sparse-build
+  # sparse-build
   # ModelTest
 	)
 

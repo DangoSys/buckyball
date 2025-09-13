@@ -1,4 +1,5 @@
 project(customext)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Check if RISCV environment variable is set
 if(NOT DEFINED ENV{RISCV})

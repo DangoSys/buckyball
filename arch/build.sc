@@ -19,13 +19,13 @@ object buckyball extends SbtModule { m =>
     "-Xcheckinit",
     "-Ymacro-annotations"
   )
-  
+
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
     firechip
   )
-  
+
   override def ivyDeps = Agg(
     // ivy"org.chipsalliance::chisel:6.5.0",
     ivy"org.chipsalliance::chisel:6.5.0",
@@ -36,13 +36,13 @@ object buckyball extends SbtModule { m =>
     ivy"org.yaml:snakeyaml:2.0",
     ivy"com.lihaoyi::sourcecode:0.3.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
     // ivy"org.chipsalliance:::chisel-plugin:7.0.0-RC1",
     // ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
-  
+
   object test extends ScalaModule with TestModule.ScalaTest {
     override def scalaVersion = T("2.13.12")
     override def moduleDeps = Seq(m)
@@ -57,16 +57,16 @@ object buckyball extends SbtModule { m =>
 object cde extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "cde"
   override def scalaVersion = "2.13.12"
-  
+
   // Override sources to match freshProject behavior
   override def sources = T.sources {
     super.sources() ++ Seq(PathRef(millSourcePath / "cde" / "src" / "chipsalliance"))
   }
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -76,21 +76,21 @@ object cde extends SbtModule {
 object hardfloat extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "hardfloat"
   override def scalaVersion = "2.13.12"
-  
+
   // Add cde dependency
   override def moduleDeps = Seq(
     cde
   )
-  
+
   // Override sources to match build.sbt behavior
   override def sources = T.sources {
     super.sources() ++ Seq(PathRef(millSourcePath / "hardfloat" / "src" / "main" / "scala"))
   }
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -100,11 +100,11 @@ object hardfloat extends SbtModule {
 object midas_target_utils extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "sims" / "firesim" / "sim" / "midas" / "targetutils"
   override def scalaVersion = "2.13.12"
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -114,22 +114,22 @@ object midas_target_utils extends SbtModule {
 object diplomacy extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "diplomacy" / "diplomacy"
   override def scalaVersion = "2.13.12"
-  
+
   // Add cde dependency first
   override def moduleDeps = Seq(
     cde
   )
-  
+
   // Override sources to match freshProject behavior
   override def sources = T.sources {
     super.sources() ++ Seq(PathRef(millSourcePath / "src" / "diplomacy"))
   }
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0",
     ivy"com.lihaoyi::sourcecode:0.3.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -139,7 +139,7 @@ object diplomacy extends SbtModule {
 object rocketchip extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "rocket-chip"
   override def scalaVersion = "2.13.12"
-  
+
   // Add required dependencies for rocket-chip
   override def moduleDeps = Seq(
     diplomacy,
@@ -147,14 +147,14 @@ object rocketchip extends SbtModule {
     hardfloat,
     midas_target_utils
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0",
     ivy"com.lihaoyi::mainargs:0.5.0",
     ivy"org.json4s::json4s-jackson:4.0.5",
     ivy"org.scala-graph::graph-core:1.13.5"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -164,7 +164,7 @@ object rocketchip extends SbtModule {
 object chipyard extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard"
   override def scalaVersion = "2.13.12"
-  
+
   // Override sources to include tools/stage, generators/chipyard, and harness directories (as per build.sbt)
   override def sources = T.sources {
     super.sources() ++ Seq(
@@ -173,7 +173,7 @@ object chipyard extends SbtModule {
       PathRef(millSourcePath / "generators" / "chipyard" / "src" / "main" / "scala" / "harness")
     )
   }
-  
+
   // Add all required dependencies as per build.sbt
   override def moduleDeps = Seq(
     testchipip,
@@ -203,12 +203,12 @@ object chipyard extends SbtModule {
     firrtl2_bridge,
     vexiiriscv
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0",
     ivy"org.reflections:reflections:0.10.2"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -218,17 +218,17 @@ object chipyard extends SbtModule {
 object testchipip extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "testchipip"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip and rocket-chip-blocks as dependencies
   override def moduleDeps = Seq(
     rocketchip,
     rocket_chip_blocks
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -238,16 +238,16 @@ object testchipip extends SbtModule {
 object rocket_chip_blocks extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "rocket-chip-blocks"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -257,16 +257,16 @@ object rocket_chip_blocks extends SbtModule {
 object icenet extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "icenet"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -276,16 +276,16 @@ object icenet extends SbtModule {
 object nvdla extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "nvdla"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -295,17 +295,17 @@ object nvdla extends SbtModule {
 object fft_generator extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "fft-generator"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip and rocket-dsp-utils as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     rocket_dsp_utils
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -315,16 +315,16 @@ object fft_generator extends SbtModule {
 object constellation extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "constellation"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -334,16 +334,16 @@ object constellation extends SbtModule {
 object boom extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "boom"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -353,7 +353,7 @@ object boom extends SbtModule {
 object tracegen extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "tracegen"
   override def scalaVersion = "2.13.12"
-  
+
   // Add testchipip, rocket-chip, rocketchip_inclusive_cache, and boom as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     testchipip,
@@ -361,11 +361,11 @@ object tracegen extends SbtModule {
     rocketchip_inclusive_cache,
     boom
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -375,16 +375,16 @@ object tracegen extends SbtModule {
 object shuttle extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "shuttle"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -394,21 +394,21 @@ object shuttle extends SbtModule {
 object rocketchip_inclusive_cache extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "rocket-chip-inclusive-cache"
   override def scalaVersion = "2.13.12"
-  
+
   // Override sources to match build.sbt behavior - point to design/craft directory
   override def sources = T.sources {
     super.sources() ++ Seq(PathRef(millSourcePath / "design" / "craft"))
   }
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -418,17 +418,17 @@ object rocketchip_inclusive_cache extends SbtModule {
 object saturn extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "saturn"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     shuttle
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -438,16 +438,16 @@ object saturn extends SbtModule {
 object gemmini extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "gemmini"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -457,16 +457,16 @@ object gemmini extends SbtModule {
 object sodor extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "riscv-sodor"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -476,16 +476,16 @@ object sodor extends SbtModule {
 object vexiiriscv extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "vexiiriscv"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -495,16 +495,16 @@ object vexiiriscv extends SbtModule {
 object ibex extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "ibex"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -514,16 +514,16 @@ object ibex extends SbtModule {
 object cva6 extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "cva6"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -533,17 +533,17 @@ object cva6 extends SbtModule {
 object ara extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "ara"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     shuttle
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -553,7 +553,7 @@ object ara extends SbtModule {
 object rerocc extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "rerocc"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip, constellation, boom, and shuttle as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
@@ -561,11 +561,11 @@ object rerocc extends SbtModule {
     boom,
     shuttle
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -575,18 +575,18 @@ object rerocc extends SbtModule {
 object rocket_dsp_utils extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "rocket-dsp-utils"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip, cde, and dsptools as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     cde,
     dsptools
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -596,20 +596,20 @@ object rocket_dsp_utils extends SbtModule {
 object dsptools extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "dsptools"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip and fixedpoint as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     fixedpoint
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0",
     ivy"org.typelevel::spire:0.18.0",
     ivy"org.scalanlp::breeze:2.1.0",
     ivy"edu.berkeley.cs::chiseltest:6.0.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -619,16 +619,16 @@ object dsptools extends SbtModule {
 object fixedpoint extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "fixedpoint"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -638,16 +638,16 @@ object fixedpoint extends SbtModule {
 object compressacc extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "compress-acc"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -657,16 +657,16 @@ object compressacc extends SbtModule {
 object mempress extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "mempress"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -676,16 +676,16 @@ object mempress extends SbtModule {
 object barf extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "bar-fetchers"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -695,18 +695,18 @@ object barf extends SbtModule {
 object caliptra_aes extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "caliptra-aes-acc"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip, rocc_acc_utils, and testchipip as dependencies (as per build.sbt)
   override def moduleDeps = Seq(
     rocketchip,
     rocc_acc_utils,
     testchipip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -716,16 +716,16 @@ object caliptra_aes extends SbtModule {
 object rocc_acc_utils extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "rocc-acc-utils"
   override def scalaVersion = "2.13.12"
-  
+
   // Add rocket-chip as a dependency
   override def moduleDeps = Seq(
     rocketchip
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -735,7 +735,7 @@ object rocc_acc_utils extends SbtModule {
 object firrtl2 extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "firrtl2"
   override def scalaVersion = "2.13.12"
-  
+
   // Override sources to include generated ANTLR sources and BuildInfo
   override def sources = T.sources {
     val baseSources = super.sources()
@@ -747,7 +747,7 @@ object firrtl2 extends SbtModule {
       baseSources
     }
   }
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0",
     ivy"org.scalatest::scalatest:3.2.14",
@@ -759,11 +759,11 @@ object firrtl2 extends SbtModule {
     ivy"org.scala-lang.modules::scala-parallel-collections:1.0.4",
     ivy"org.antlr:antlr4-runtime:4.9.3"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
-  
+
   override def scalacOptions = Seq(
     "-language:reflectiveCalls",
     "-language:existentials",
@@ -775,16 +775,16 @@ object firrtl2 extends SbtModule {
 object firrtl2_bridge extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "firrtl2" / "bridge"
   override def scalaVersion = "2.13.12"
-  
+
   // Add firrtl2 as a dependency
   override def moduleDeps = Seq(
     firrtl2
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -794,16 +794,16 @@ object firrtl2_bridge extends SbtModule {
 object firesim_lib extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "sims" / "firesim" / "sim" / "firesim-lib"
   override def scalaVersion = "2.13.12"
-  
+
   // Add midas_target_utils as a dependency
   override def moduleDeps = Seq(
     midas_target_utils
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -815,11 +815,11 @@ object firesim_lib extends SbtModule {
 object firechip_bridgeinterfaces extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "bridgeinterfaces"
   override def scalaVersion = "2.13.12"
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
@@ -830,28 +830,28 @@ object firechip_bridgeinterfaces extends SbtModule {
 object firechip_bridgestubs extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "bridgestubs"
   override def scalaVersion = "2.13.12"
-  
+
   // Add chipyard, firesim_lib, and firechip_bridgeinterfaces as dependencies
   override def moduleDeps = Seq(
     chipyard,
     firesim_lib,
     firechip_bridgeinterfaces
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
-} 
+}
 
 // FireSim top-level project that includes the FireSim harness, CC files, etc needed for FireSim.
 object firechip extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "chip"
   override def scalaVersion = "2.13.12"
-  
+
   // Add chipyard, firesim_lib, firechip_bridgestubs, and firechip_bridgeinterfaces as dependencies
   override def moduleDeps = Seq(
     chipyard,
@@ -859,13 +859,56 @@ object firechip extends SbtModule {
     firechip_bridgestubs,
     firechip_bridgeinterfaces
   )
-  
+
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
   )
-  
+
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
 }
 
+// uvbb测试模块
+object uvbb extends ScalaModule {
+  override def millSourcePath = os.pwd / os.up / "bb-tests" / "uvbb"
+  override def scalaVersion = "2.13.12"
+
+  override def scalacOptions = Seq(
+    "-language:reflectiveCalls",
+    "-deprecation",
+    "-feature",
+    "-Xcheckinit",
+    "-Ymacro-annotations"
+  )
+
+  // 依赖buckyball模块
+  override def moduleDeps = Seq(buckyball)
+
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+
+  // 包含dut源码路径
+  override def sources = T.sources {
+    super.sources() ++ Seq(
+      PathRef(millSourcePath / "dut" / "src" / "main" / "scala")
+    )
+  }
+
+  // 包含resources路径
+  override def resources = T.sources {
+    super.resources() ++ Seq(
+      PathRef(millSourcePath / "dut" / "src" / "main" / "resources")
+    )
+  }
+
+  // 生成Verilog的任务
+  def elaborate = T {
+    runMain("uvbb.Elaborate")()
+  }
+}
