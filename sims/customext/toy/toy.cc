@@ -1,4 +1,5 @@
 #include "toy.h"
+#include "diff/difftest.h"
 #include "params.h"
 #include <cassert>
 #include <cstdio>
@@ -24,18 +25,27 @@ REGISTER_EXTENSION(toy, []() { return new toy_t; })
 void toy_state_t::reset() {
   enable = true;
 
-  spad.clear();
-  acc.clear();
+  banks.clear();
   rf.clear();
-  spad.resize(sp_matrices * DIM, std::vector<elem_t>(DIM, 0));
-  acc.resize(acc_matrices * DIM, std::vector<acc_t>(DIM, 0));
-  rf.resize(2,
-            std::vector<int32_t>(DIM * DIM, 0)); // 2 banks for register files
+
+  // 根据bank_configs初始化每个bank
+  banks.resize(BANK_NUM);
+
+  printf("toy extension configured with %d banks\n", BANK_NUM);
+
+  for (int i = 0; i < BANK_NUM; i++) {
+    uint32_t rows = bank_configs[i].row_num_;
+    uint32_t row_bytes =
+        bank_configs[i].elem_num_ * bank_configs[i].elem_width_ / 8;
+    banks[i].resize(rows, std::vector<uint8_t>(row_bytes, 0));
+
+    printf("    Bank %d (%s): %u rows x %u bytes per row\n", i,
+           bank_configs[i].name_, rows, row_bytes);
+  }
+
+  rf.resize(2, std::vector<int32_t>(DIM * DIM, 0));
 
   resetted = true;
-
-  // printf("toy extension configured with:\n");
-  // printf("    dim = %u\n", DIM);
 }
 
 reg_t toy_t::custom3(processor_t *p, rocc_insn_t insn, reg_t xs1, reg_t xs2) {
@@ -51,15 +61,17 @@ reg_t toy_t::custom3(processor_t *p, rocc_insn_t insn, reg_t xs1, reg_t xs2) {
   } else if (insn.funct == mvout_funct) {
     mvout(xs1, xs2);
   } else if (insn.funct == mul_funct) {
+    difftest_start(true);
     mul_warp16(xs1, xs2);
+    difftest_end(true);
   } else if (insn.funct == fence_funct) {
-    dprintf(p, "TOY: flush\n");
+    dprintf(p, "TOY: fence\n");
   } else if (insn.funct == bbfp_mul_funct) {
     bbfp_mul(xs1, xs2);
-  } else if (insn.funct == scatter_mvin_funct) {
-    scatter_mvin(xs1, xs2);
-  } else if (insn.funct == sparse_mul_funct) {
-    sparse_mul(xs1, xs2);
+  } else if (insn.funct == transpose_funct) {
+    transpose(xs1, xs2);
+  } else if (insn.funct == im2col_funct) {
+    im2col(xs1, xs2);
   } else {
     dprintf(p, "TOY: encountered unknown instruction with funct: %d\n",
             insn.funct);
@@ -139,16 +151,15 @@ std::vector<disasm_insn_t *> toy_t::get_disasms(const processor_t *proc) {
                                     ROCC_OPCODE_MASK | (0x7F << 25),
                                     {&toy_rs1, &toy_rs2}));
 
-  // SCATTER_MVIN instruction (funct = 34)
-  insns.push_back(
-      new disasm_insn_t("toy_scatter_mvin", ROCC_OPCODE3 | (34 << 25),
-                        ROCC_OPCODE_MASK | (0x7F << 25), {&toy_rs1, &toy_rs2}));
-
-  // SPARSE_MUL instruction (funct = 33)
-  insns.push_back(new disasm_insn_t("toy_sparse_mul", ROCC_OPCODE3 | (33 << 25),
+  // TRANSPOSE instruction (funct = 33)
+  insns.push_back(new disasm_insn_t("toy_transpose", ROCC_OPCODE3 | (33 << 25),
                                     ROCC_OPCODE_MASK | (0x7F << 25),
                                     {&toy_rs1, &toy_rs2}));
 
+  // IM2COL instruction (funct = 34)
+  insns.push_back(new disasm_insn_t("toy_im2col", ROCC_OPCODE3 | (34 << 25),
+                                    ROCC_OPCODE_MASK | (0x7F << 25),
+                                    {&toy_rs1, &toy_rs2}));
   // FENCE instruction (funct = 31) - no operands needed
   insns.push_back(new disasm_insn_t("toy_fence", ROCC_OPCODE3 | (31 << 25),
                                     ROCC_OPCODE_MASK | (0x7F << 25), {}));
