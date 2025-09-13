@@ -22,6 +22,7 @@ class BallIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) exten
   val ball1 = Decoupled(new BallRsIssue)  // VecUnit
   val ball2 = Decoupled(new BallRsIssue)  // BBFP
   val ball3 = Decoupled(new BallRsIssue)  // im2col
+  val ball4 = Decoupled(new BallRsIssue)  // transpose  
 }
 
 // Ball域完成接口
@@ -29,6 +30,7 @@ class BallCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) exte
   val ball1 = Flipped(Decoupled(new BallRsComplete))  // VecUnit
   val ball2 = Flipped(Decoupled(new BallRsComplete))  // BBFP
   val ball3 = Flipped(Decoupled(new BallRsComplete))  // im2col
+  val ball4 = Flipped(Decoupled(new BallRsComplete))  // transpose
 }
 
 class BallReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -66,26 +68,33 @@ class BallReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) e
   io.issue_o.ball3.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.bid === 3.U
   io.issue_o.ball3.bits  := rob.io.issue.bits
 
+  // ball4 (transpose)
+  io.issue_o.ball4.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.bid === 4.U
+  io.issue_o.ball4.bits  := rob.io.issue.bits 
+
   rob.io.issue.ready := (rob.io.issue.bits.cmd.bid === 1.U && io.issue_o.ball1.ready) || 
                         (rob.io.issue.bits.cmd.bid === 2.U && io.issue_o.ball2.ready) ||
-                        (rob.io.issue.bits.cmd.bid === 3.U && io.issue_o.ball3.ready)
-  
-// -----------------------------------------------------------------------------
+                        (rob.io.issue.bits.cmd.bid === 3.U && io.issue_o.ball3.ready) ||
+                        (rob.io.issue.bits.cmd.bid === 4.U && io.issue_o.ball4.ready)
+
+  // -----------------------------------------------------------------------------
 // 完成信号处理
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 3))
+  val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 4))
   completeArb.io.in(0).valid := io.commit_i.ball1.valid
   completeArb.io.in(0).bits  := io.commit_i.ball1.bits.rob_id
   completeArb.io.in(1).valid := io.commit_i.ball2.valid  
   completeArb.io.in(1).bits  := io.commit_i.ball2.bits.rob_id
   completeArb.io.in(2).valid := io.commit_i.ball3.valid  
   completeArb.io.in(2).bits  := io.commit_i.ball3.bits.rob_id
+  completeArb.io.in(3).valid := io.commit_i.ball4.valid  
+  completeArb.io.in(3).bits  := io.commit_i.ball4.bits.rob_id
 
   rob.io.complete <> completeArb.io.out
   io.commit_i.ball1.ready := completeArb.io.in(0).ready
   io.commit_i.ball2.ready := completeArb.io.in(1).ready
   io.commit_i.ball3.ready := completeArb.io.in(2).ready
-  
+  io.commit_i.ball4.ready := completeArb.io.in(3).ready
 // -----------------------------------------------------------------------------
 // 指令提交
 // -----------------------------------------------------------------------------  
