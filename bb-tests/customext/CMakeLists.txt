@@ -4,6 +4,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(TOY_EXT_DIR ${CUSTOMEXT_DIR}/toy)
 set(GEMMINI_EXT_DIR ${CUSTOMEXT_DIR}/gemmini)
+set(BSPIKE_DIR ${BB_TESTS_DIR}/../sims/func-sim/bspike)
 
 # Check if RISCV environment variable is set
 if(NOT DEFINED ENV{RISCV})

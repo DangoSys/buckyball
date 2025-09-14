@@ -11,11 +11,6 @@
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/spad.h>
 
-// static const uint32_t sp_matrices = (SPAD_BANK_NUM * SPAD_BANK_ROWS) / DIM;
-// static const uint32_t acc_matrices = (ACC_BANK_NUM * ACC_BANK_ROWS) / DIM;
-// static const uint64_t spAddrLen = SPAD_ADDR_LEN;
-// static const uint64_t memAddrLen = MEM_ADDR_LEN;
-
 #define MAKECUSTOMFN(opcode) custom##opcode
 #define CUSTOMFN(opcode) MAKECUSTOMFN(opcode)
 
@@ -65,14 +60,7 @@ private:
   // Static instance for global access
   static toy_t *instance;
 
-  // const unsigned mvin_funct = 24;  // func7: 0010000
-  // const unsigned mvout_funct = 25; // func7: 0010001
-  // const unsigned mul_funct = 32;   // func7: 0100000 (bb_mul_warp16)
-  // const unsigned fence_funct = 31;
-  // const unsigned bbfp_mul_funct = 26;  // func7: 0100001
-  // const unsigned matmul_ws_funct = 27; // func7: 0100010
-  // const unsigned transpose_funct = 33; // func7: 0100001 (bb_transpose)
-  // const unsigned im2col_funct = 34;    // func7: 0100010 (bb_im2col)
+
 };
 
 // Universal bank access functions - use bank configuration to determine element
