@@ -18,6 +18,6 @@ cd $BB_DIR/sims/func-sim/bspike/bin
 ln -s spike bspike
 cd $BB_DIR
 
-replace_content ${BB_DIR}/env.sh bspike "export PATH=$BB_DIR/sims/func-sim/bspike/bin:$PATH"
+replace_content ${BB_DIR}/env.sh bspike "export PATH=$BB_DIR/sims/func-sim/bspike/bin:\$PATH"
 
 # -------------------- func-sim --------------------

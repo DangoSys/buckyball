@@ -22,8 +22,7 @@ add_custom_command(
   COMMAND ar rcs libbbhw-linux.a temp_extract_linux/*.o
   COMMAND ranlib libbbhw-linux.a
   COMMAND ${CMAKE_COMMAND} -E remove_directory temp_extract_linux
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mem/libbbmem-linux.a
-          ${CMAKE_CURRENT_BINARY_DIR}/isa/libbbisa-linux.a
+  DEPENDS bbisa-linux-build bbmem-linux-build
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Combining RISC-V Linux version of bbhw library"
 )
@@ -47,8 +46,7 @@ add_custom_command(
   COMMAND ar rcs libbbhw-x86.a temp_extract/*.o
   COMMAND ranlib libbbhw-x86.a
   COMMAND ${CMAKE_COMMAND} -E remove_directory temp_extract
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mem/libbbmem-x86.a
-          ${CMAKE_CURRENT_BINARY_DIR}/isa/libbbisa-x86.a
+  DEPENDS bbisa-x86-build bbmem-x86-build
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Combining x86_64 version of bbhw library"
 )
@@ -68,8 +66,7 @@ add_custom_command(
   COMMAND ar rcs libbbhw-baremetal.a temp_extract_baremetal/*.o
   COMMAND ranlib libbbhw-baremetal.a
   COMMAND ${CMAKE_COMMAND} -E remove_directory temp_extract_baremetal
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mem/libbbmem-baremetal.a
-          ${CMAKE_CURRENT_BINARY_DIR}/isa/libbbisa-baremetal.a
+  DEPENDS bbisa-baremetal-build bbmem-baremetal-build
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Combining RISC-V Baremetal version of bbhw library"
 )
