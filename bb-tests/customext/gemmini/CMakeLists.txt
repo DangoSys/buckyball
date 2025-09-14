@@ -11,8 +11,8 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3")
 
 # Add library directories and rpath
-link_directories("$ENV{RISCV}/lib")
-set(CMAKE_INSTALL_RPATH "$ENV{RISCV}/lib")
+link_directories(${BSPIKE_DIR}/lib)
+set(CMAKE_INSTALL_RPATH ${BSPIKE_DIR}/lib)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Create shared library
@@ -22,7 +22,7 @@ add_library(gemmini SHARED
 
 # Add include directories (modern CMake approach)
 target_include_directories(gemmini PRIVATE
-  "$ENV{RISCV}/include"
+  ${BSPIKE_DIR}/include
   "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
@@ -38,5 +38,5 @@ set_target_properties(gemmini PROPERTIES OUTPUT_NAME "gemmini")
 
 # Install target
 install(TARGETS gemmini
-  LIBRARY DESTINATION "$ENV{RISCV}/lib"
+  LIBRARY DESTINATION CMAKE_INSTALL_RPATH
 )

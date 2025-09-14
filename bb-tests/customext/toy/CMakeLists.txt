@@ -11,8 +11,8 @@ project(toy)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3")
 
 # Add library directories and rpath
-link_directories(${RISCV_PATH}/lib)
-set(CMAKE_INSTALL_RPATH ${RISCV_PATH}/lib)
+link_directories(${BSPIKE_DIR}/lib)
+set(CMAKE_INSTALL_RPATH ${BSPIKE_DIR}/lib)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Create shared library
@@ -29,7 +29,7 @@ add_library(toy SHARED
 
 # Add include directories (modern CMake approach)
 target_include_directories(toy PRIVATE
-  ${RISCV_PATH}/include
+  ${BSPIKE_DIR}/include
   ${TOY_EXT_DIR}
   ${TOY_EXT_DIR}/include
   ${TOY_EXT_DIR}/diff
@@ -53,5 +53,5 @@ set_target_properties(toy PROPERTIES OUTPUT_NAME "toy")
 
 # Install target
 install(TARGETS toy
-  LIBRARY DESTINATION "$ENV{RISCV}/lib"
+  LIBRARY DESTINATION CMAKE_INSTALL_RPATH
 )
