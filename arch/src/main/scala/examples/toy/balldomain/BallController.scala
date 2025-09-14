@@ -6,7 +6,7 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import prototype.vector._
-import prototype.Im2col
+import prototype.im2col.Im2col
 import examples.toy.balldomain.rs.{BallIssueInterface, BallCommitInterface}
 // import framework.builtin.frontend.rs.{ReservationStationIssue, ReservationStationComplete, BuckyBallCmd}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
@@ -14,11 +14,11 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import prototype.transpose.PipelinedTransposer
 
 class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  
+
   val io = IO(new Bundle {
     val cmdReq  = Flipped(new BallIssueInterface)
     val cmdResp = Flipped(new BallCommitInterface)
-    
+
     // 连接到Scratchpad 和 Accumulator 的SRAM读写接口
     val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
@@ -58,8 +58,8 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   VecUnit.io.cmdReq.valid := io.cmdReq.ball1.valid
   VecUnit.io.cmdReq.bits := io.cmdReq.ball1.bits
   io.cmdReq.ball1.ready := VecUnit.io.cmdReq.ready
-  
-  BBFP_Control.io.cmdReq.valid := io.cmdReq.ball2.valid  
+
+  BBFP_Control.io.cmdReq.valid := io.cmdReq.ball2.valid
   BBFP_Control.io.cmdReq.bits := io.cmdReq.ball2.bits
   io.cmdReq.ball2.ready := BBFP_Control.io.cmdReq.ready
 
@@ -136,29 +136,29 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
 
   val real_is_matmul_ws = WireInit(false.B)
   val reg_is_matmul_ws  = RegInit(false.B)
-  
+
   when (io.cmdReq.ball2.valid) {
     reg_is_matmul_ws := io.cmdReq.ball2.bits.cmd.special(0)
   }
   real_is_matmul_ws := Mux(io.cmdReq.ball2.valid, io.cmdReq.ball2.bits.cmd.special(0), reg_is_matmul_ws)
 
   BBFP_Control.io.is_matmul_ws := real_is_matmul_ws
-  
+
 
   // 连接到Scratchpad的SRAM读写接口
   when (real_sel === bbfp_unit) {
     for (i <- 0 until b.sp_banks) {
-      // sramRead(i).req 
+      // sramRead(i).req
       io.sramRead(i).req.valid              := BBFP_Control.io.sramRead(i).req.valid
       io.sramRead(i).req.bits               := BBFP_Control.io.sramRead(i).req.bits
       BBFP_Control.io.sramRead(i).req.ready := io.sramRead(i).req.ready
 
-      // sramRead(i).resp 
+      // sramRead(i).resp
       BBFP_Control.io.sramRead(i).resp.valid := io.sramRead(i).resp.valid
       BBFP_Control.io.sramRead(i).resp.bits  := io.sramRead(i).resp.bits
       io.sramRead(i).resp.ready              := BBFP_Control.io.sramRead(i).resp.ready
 
-      // sramWrite(i) 
+      // sramWrite(i)
       io.sramWrite(i).req.valid     := BBFP_Control.io.sramWrite(i).req.valid
       io.sramWrite(i).req.bits.addr := BBFP_Control.io.sramWrite(i).req.bits.addr
       io.sramWrite(i).req.bits.data := BBFP_Control.io.sramWrite(i).req.bits.data
@@ -167,17 +167,17 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
 
     // 连接到Accumulator的读写接口
     for (i <- 0 until b.acc_banks) {
-      // accRead(i).req 
+      // accRead(i).req
       io.accRead(i).req.valid              := BBFP_Control.io.accRead(i).req.valid
       io.accRead(i).req.bits               := BBFP_Control.io.accRead(i).req.bits
       BBFP_Control.io.accRead(i).req.ready := io.accRead(i).req.ready
 
-      // accRead(i).resp 
-      BBFP_Control.io.accRead(i).resp.valid := io.accRead(i).resp.valid 
+      // accRead(i).resp
+      BBFP_Control.io.accRead(i).resp.valid := io.accRead(i).resp.valid
       BBFP_Control.io.accRead(i).resp.bits  := io.accRead(i).resp.bits
       io.accRead(i).resp.ready              := BBFP_Control.io.accRead(i).resp.ready
 
-      // accWrite(i) 
+      // accWrite(i)
       io.accWrite(i).req.valid     := BBFP_Control.io.accWrite(i).req.valid
       io.accWrite(i).req.bits.addr := BBFP_Control.io.accWrite(i).req.bits.addr
       io.accWrite(i).req.bits.data := BBFP_Control.io.accWrite(i).req.bits.data
@@ -256,7 +256,7 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
         io.sramWrite(i).req.bits.mask := Im2col.io.sramWrite(i).req.bits.mask
       }
     }
-  
+
   // -----------------------------------------------------------------------------
 // Transpose
 // -----------------------------------------------------------------------------
@@ -288,9 +288,9 @@ class BallController(implicit b: CustomBuckyBallConfig, p: Parameters) extends M
   io.cmdResp.ball1.valid   := VecUnit.io.cmdResp.valid
   io.cmdResp.ball1.bits    := VecUnit.io.cmdResp.bits
   VecUnit.io.cmdResp.ready := io.cmdResp.ball1.ready
-  
+
   io.cmdResp.ball2.valid        := BBFP_Control.io.cmdResp.valid
-  io.cmdResp.ball2.bits         := BBFP_Control.io.cmdResp.bits  
+  io.cmdResp.ball2.bits         := BBFP_Control.io.cmdResp.bits
   BBFP_Control.io.cmdResp.ready := io.cmdResp.ball2.ready
 
   io.cmdResp.ball3.valid      := Im2col.io.cmdResp.valid
