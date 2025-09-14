@@ -1,5 +1,4 @@
 #include "common.h"
-#include "inst.h"
 #include "toy.h"
 #include <bbhw/isa/isa.h>
 #include <cassert>
