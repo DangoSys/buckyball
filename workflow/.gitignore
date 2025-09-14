@@ -15,3 +15,10 @@ types.d.ts
 services/
 *.log
 output/
+
+package-lock.json
+package.json
+motia-workbench.json.lock
+.cursor/
+.claude/
+tsconfig.json

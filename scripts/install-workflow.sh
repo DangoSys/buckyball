@@ -17,15 +17,16 @@ source ${BBDIR}/env.sh
 conda install -c conda-forge nodejs=20 -y
 
 
-cd ${BBDIR}/workflow 
+cd ${BBDIR}/workflow
 ln -s ${CONDA_PREFIX} ./python_modules
 
 cd ${BBDIR}
-npx motia@latest create -n workflow -t python -y
+npx motia@latest create -n workflow -t python
 
 pip install python-dotenv
 pip install httpx
 
 cd ${BBDIR}/workflow/steps && rm *.{tsx,py,json}
-cd ${BBDIR}/workflow/steps && rm -r services/
-# cd ${BBDIR}/workflow && npx motia dev -p 5000 
+cd ${BBDIR}/workflow && rm -r services/
+cd ${BBDIR}/workflow && rm *.{tsx,py,md}
+# cd ${BBDIR}/workflow && npx motia dev -p 5000

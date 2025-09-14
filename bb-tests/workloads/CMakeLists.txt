@@ -23,8 +23,8 @@ set(BUDDY_LLC ${BUDDY_MLIR_BIN_DIR}/buddy-llc)
 set(ELF_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
 set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 
-set(BUILD_BIN_DIR "${WORKLOAD_DIR}/build")
-set(OUTPUT_BIN_DIR "${WORKLOAD_DIR}/output/workloads")
+set(BUILD_BIN_DIR ${BB_TESTS_DIR}/build)
+set(OUTPUT_BIN_DIR ${BB_TESTS_DIR}/output/workloads)
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------
