@@ -116,45 +116,45 @@ if run_step "3"; then
 fi
 
 if run_step "4"; then
-  begin_step "4" "bb-tests (workloads) pre-compile sources"
+  begin_step "4" "Install simulator"
   source ${BBDIR}/env.sh
-  cd ${BBDIR}/bb-tests/workloads/
-  mkdir -p build && cd build
-  cmake ..
-  make -j$(nproc)
+  ${BBDIR}/scripts/install-simulator.sh
 fi
 
 if run_step "5"; then
-  begin_step "5" "Install requirements for sardine"
+  begin_step "5" "bb-tests (workloads) pre-compile sources"
+  source ${BBDIR}/env.sh
+  cd ${BBDIR}/bb-tests
+  mkdir -p build && cd build
+  cmake -G Ninja ../
+  ninja -j$(nproc)
+fi
+
+if run_step "6"; then
+  begin_step "6" "Install requirements for sardine"
   source ${BBDIR}/env.sh
   pip install -r ${BBDIR}/bb-tests/sardine/requirements.txt
   npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline
 fi
 
 
-if run_step "6"; then
-  begin_step "6" "Install document management system"
+if run_step "7"; then
+  begin_step "7" "Install document management system"
   source ${BBDIR}/env.sh
   ${BBDIR}/scripts/install-doc.sh
 fi
 
-if run_step "7"; then
-  begin_step "7" "Init workflow management system"
+if run_step "8"; then
+  begin_step "8" "Init workflow management system"
   source ${BBDIR}/env.sh
   ${BBDIR}/scripts/install-workflow.sh
 fi
 
-if run_step "8"; then
-  begin_step "8" "Install mill"
+if run_step "9"; then
+  begin_step "9" "Install mill"
   source ${BBDIR}/env.sh
   cd ${BBDIR}/tools/mill
   ./install-mill.sh
-fi
-
-if run_step "9"; then
-  begin_step "9" "Install simulator"
-  source ${BBDIR}/env.sh
-  ${BBDIR}/scripts/install-simulator.sh
 fi
 
 if run_step "10"; then
