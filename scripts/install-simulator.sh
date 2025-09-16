@@ -15,7 +15,7 @@ make -j$(nproc)
 make install
 
 cd $BB_DIR/sims/func-sim/bspike/bin
-ln -s spike bspike
+mv spike bspike
 cd $BB_DIR
 
 replace_content ${BB_DIR}/env.sh bspike "export PATH=$BB_DIR/sims/func-sim/bspike/bin:\$PATH"
