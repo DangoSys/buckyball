@@ -15,5 +15,5 @@ else()
 endif()
 
 # Add subdirectories
-add_subdirectory(toy)
-add_subdirectory(gemmini)
+# add_subdirectory(toy)
+# add_subdirectory(gemmini)

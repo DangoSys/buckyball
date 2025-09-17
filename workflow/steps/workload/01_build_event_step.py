@@ -25,14 +25,14 @@ config = {
 
 async def handler(data, context):
   bbdir = get_buckyball_path()
-  workload_dir = f"{bbdir}/bb-tests/workloads" 
+  workload_dir = f"{bbdir}/bb-tests" 
   build_dir = f"{workload_dir}/build"
   
   # os.mkdir(f"{workload_dir}/build", exist_ok=True)
   subprocess.run(f"rm -rf {build_dir} && mkdir -p {build_dir}", shell=True)
 
   # command = f"source {bbdir}/env.sh && cd {workload_dir}/build && cmake .. && make build-all"  
-  command = f"source {bbdir}/env.sh && cd {build_dir} && cmake -G Ninja .. && ninja build-all -j{os.cpu_count()}"  
+  command = f"source {bbdir}/env.sh && cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}"  
   context.logger.info('Executing workload command', {  
     'command': command,  
     'cwd': build_dir  
