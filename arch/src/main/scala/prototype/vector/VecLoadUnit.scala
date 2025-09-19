@@ -62,7 +62,7 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     iter          := io.ctrl_ld_i.bits.iter
 		iter_counter 	:= 0.U
     state         := busy
-		assert(io.ctrl_ld_i.bits.iter > 0.U, "iter should be greater than 0")
+		assert(io.ctrl_ld_i.bits.iter  > 0.U, "iter should be greater than 0")
   }
 
 // -----------------------------------------------------------------------------
@@ -98,8 +98,8 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 		io.ld_ex_o.bits.iter := 0.U
 	}
 
-	assert((!io.sramReadResp(op1_bank).fire && !io.sramReadResp(op2_bank).fire) || 
-				 (io.sramReadResp(op1_bank).fire && io.sramReadResp(op2_bank).fire), 
+	assert((!io.sramReadResp(op1_bank).fire && !io.sramReadResp(op2_bank).fire) ||
+				 (io.sramReadResp(op1_bank).fire && io.sramReadResp(op2_bank).fire),
 				 "two sramReadResp should be fired in the same time or none of them")
 
 
@@ -111,5 +111,5 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 		state 				:= idle
 		iter_counter 	:= 0.U
 	}
-  
+
 }
