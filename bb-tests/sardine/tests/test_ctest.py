@@ -13,63 +13,63 @@ ctest_workload_dir = sardine_dir / ".." / "output" / "workloads" / "src" / "CTes
 # Define all ctest workloads with absolute paths and corresponding IDs
 ctest_workloads = [
     (
-        f"{ctest_workload_dir}/ctest_mvin_mvout_acc_test_singlecore-baremetal",
+        "ctest_mvin_mvout_acc_test_singlecore-baremetal",
         "ctest_mvin_mvout_acc_test_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_mvin_mvout_alternate_test_singlecore-baremetal",
+        "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
         "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
+        "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random1_singlecore-baremetal",
+        "ctest_vecunit_matmul_16xn_random1_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_random1_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random2_singlecore-baremetal",
+        "ctest_vecunit_matmul_16xn_random2_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_random2_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_random3_singlecore-baremetal",
+        "ctest_vecunit_matmul_16xn_random3_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_random3_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal",
+        "ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_zero_random_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_col_row_vector_singlecore-baremetal",
+        "ctest_vecunit_matmul_col_row_vector_singlecore-baremetal",
         "ctest_vecunit_matmul_col_row_vector_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_identity_random_singlecore-baremetal",
+        "ctest_vecunit_matmul_identity_random_singlecore-baremetal",
         "ctest_vecunit_matmul_identity_random_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_ones_singlecore-baremetal",
+        "ctest_vecunit_matmul_ones_singlecore-baremetal",
         "ctest_vecunit_matmul_ones_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_random1_singlecore-baremetal",
+        "ctest_vecunit_matmul_random1_singlecore-baremetal",
         "ctest_vecunit_matmul_random1_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_random2_singlecore-baremetal",
+        "ctest_vecunit_matmul_random2_singlecore-baremetal",
         "ctest_vecunit_matmul_random2_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_random3_singlecore-baremetal",
+        "ctest_vecunit_matmul_random3_singlecore-baremetal",
         "ctest_vecunit_matmul_random3_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_matmul_zero_random_singlecore-baremetal",
+        "ctest_vecunit_matmul_zero_random_singlecore-baremetal",
         "ctest_vecunit_matmul_zero_random_singlecore-baremetal",
     ),
     (
-        f"{ctest_workload_dir}/ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
+        "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
         "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
     ),
 ]
