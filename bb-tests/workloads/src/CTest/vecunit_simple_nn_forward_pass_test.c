@@ -57,7 +57,7 @@ void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
   // 移动矩阵到暂存器
   uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
   uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  uint32_t wr_addr = spad_addr(2, 0);  // acc0: 写入累加器, 偏移0
 
   bb_mvin((uintptr_t)a_transposed, op1_addr, size);
   bb_mvin((uintptr_t)b, op2_addr, size);
