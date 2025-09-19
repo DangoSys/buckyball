@@ -113,9 +113,7 @@ async def handler(data, context):
         stderr_prefix="verilator sim",
     )
 
-    vcd2fst_cmd = (
-        f"vcd2fst -v {waveform_dir}/waveform.vcd -f {waveform_dir}/waveform.fst"
-    )
+    vcd2fst_cmd = f"vcd2fst {waveform_dir}/waveform.vcd {waveform_dir}/fstwaveform.fst"
     subprocess.run(vcd2fst_cmd, cwd=arch_dir, shell=True, check=True, text=True)
     # 清理旧的波形文件
     subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
