@@ -11,55 +11,77 @@
 
 </div>
 
-# buckyball
+# BuckyBall
 
-A Scaling Framework for Domain Specific Architecture
+BuckyBall 是一个面向领域特定架构(Domain Specific Architecture)的可扩展框架，基于 RISC-V 架构构建，专为高性能计算和机器学习加速器设计而优化。
 
-## Quick Start
+## 项目概述
 
-### 一. build from source code (take about 2 hours) 
+BuckyBall 框架提供了完整的硬件设计、仿真验证和软件开发工具链，支持从 RTL 设计到系统级验证的全流程开发。框架采用模块化设计，支持灵活的配置和扩展，适用于各种专用计算场景。
 
-1. Dependency
+### 核心特性
 
-- 安装 anaconda
-https://www.anaconda.com/download/
+- **可扩展架构**: 基于 Rocket-chip 和 Chipyard 框架，支持自定义 RoCC 协处理器
+- **完整工具链**: 集成 Verilator、FireSim 等仿真工具，支持多种验证方法
+- **统一测试框架**: 提供标准化的测试环境和工作负载管理
+- **自动化工作流**: 支持 CI/CD 集成和自动化构建部署
 
-- 如果安装firesim，请设置系统免密 (可以自行跳过该步骤)
+## 快速开始
 
-在sudoers文件中添加
-```
-user_name  ALL=(ALL)  NOPASSWD:ALL
-```
+### 环境依赖
 
-- 安装Ninja，gtkwave
-```
-sudo apt install ninja-build 
-sudo apt-get install gtkwave
-```
+在开始之前，请确保系统满足以下依赖要求：
 
-- 安装有bash环境(可以不使用bash作为shell，但需要本身有)
+**必需软件**:
+- Anaconda/Miniconda (Python 环境管理)
+- Ninja Build System
+- GTKWave (波形查看器)
+- Bash Shell 环境
 
-2. 安装仓库
-```
-$ git clone https://github.com/DangoSys/buckyball.git
+**安装依赖**:
+```bash
+# 安装 Anaconda
+# 下载地址: https://www.anaconda.com/download/
 
-$ cd buckyball
-$ ./scripts/init.sh
-```
+# 安装系统工具
+sudo apt install ninja-build gtkwave
 
-3. smoke test in verilator
-```
-$ source buckyball/env.sh
-$ bbdev verilator --run '--jobs 16 --binary /home/mio/Code/buckyball/bb-tests/workloads/output/workloads/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch'
+# 可选：FireSim 免密配置
+# 在 /etc/sudoers 中添加: user_name ALL=(ALL) NOPASSWD:ALL
 ```
 
-### 二. 从docker直接启动 (很久没更新了)
+### 源码构建
 
-```
-$ docker pull ghcr.io/dangosys/buckyball:latest
+**1. 克隆仓库**
+```bash
+git clone https://github.com/DangoSys/buckyball.git
+cd buckyball
 ```
 
-Then you can start your simulation using ``bbdev`` follow this document.
+**2. 初始化环境**
+```bash
+./scripts/init.sh
+```
+*注意: 初始化过程约需 2 小时，包括依赖下载和编译*
+
+**3. 环境激活**
+```bash
+source buckyball/env.sh
+```
+
+### 验证安装
+
+运行 Verilator 仿真测试验证安装：
+```bash
+bbdev verilator --run '--jobs 16 --binary ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch'
+```
+
+### Docker 快速体验 (很久没更新了)
+
+```bash
+docker pull ghcr.io/dangosys/buckyball:latest
+```
+*注意: Docker 镜像可能不是最新版本，建议使用源码构建*
 
 ## 其他
 

@@ -1,10 +1,10 @@
-# Verilator Build Workflow
+# Verilator 仿真工作流
 
-Verilator 工具相关的工作流
+BuckyBall 框架中基于 Verilator 的硬件仿真工作流，提供从 RTL 生成到仿真执行的完整自动化流程。Verilator 是一个高性能的 Verilog 仿真器，支持快速的功能验证和性能分析。
 
 ## 二、原始API使用说明
 
-#### `run` 
+#### `run`
 **端点**: `POST /verilator/run`
 
 **功能**: 执行完整流程。清理build目录，生成Verilog，然后编译Verilator为仿真文件，并直接运行仿真
@@ -26,7 +26,7 @@ curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/j
 ```
 
 
-#### `clean` 
+#### `clean`
 
 **端点**: `POST /verilator/clean`
 
@@ -39,7 +39,7 @@ curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/j
 curl -X POST http://localhost:5000/verilator/clean
 ```
 
-#### `verilog` 
+#### `verilog`
 
 **端点**: `POST /verilator/verilog`
 
@@ -52,13 +52,13 @@ curl -X POST http://localhost:5000/verilator/clean
 curl -X POST http://localhost:5000/verilator/verilog -d '{"jobs": 8}'
 ```
 
-#### `build` 
+#### `build`
 
 **端点**: `POST /verilator/build`
 
 **功能**: 将verilog源文件和cpp源文件编译为可执行仿真文件
 
-**参数**: 
+**参数**:
 
 - **`jobs`** - 并行编译任务数
   - 默认值: `16`
@@ -68,7 +68,7 @@ curl -X POST http://localhost:5000/verilator/verilog -d '{"jobs": 8}'
 curl -X POST http://localhost:5000/verilator/build -d '{"jobs": 16}'
 ```
 
-#### `sim` 
+#### `sim`
 
 **端点**: `POST /verilator/sim`
 
@@ -163,33 +163,33 @@ steps/verilator/
 ```mermaid
 graph TD;
     API[POST /verilator<br/>完整工作流] --> RUN[verilator.run]
-    
+
     CLEAN_DIRECT[verilator.clean<br/>单步清理] --> CLEAN_STEP[02_clean_event_step]
     VERILOG_DIRECT[verilator.verilog<br/>单步生成] --> VERILOG_STEP[03_verilog_event_step]
     BUILD_DIRECT[verilator.build<br/>单步编译] --> BUILD_STEP[04_build_event_step]
     SIM_DIRECT[verilator.sim<br/>单步仿真] --> SIM_STEP[05_sim_event_step]
-    
+
     RUN --> CLEAN_STEP
     CLEAN_STEP --> |工作流模式| VERILOG_STEP
     CLEAN_STEP --> |单步模式| COMPLETE[verilator.complete]
-    
+
     VERILOG_STEP --> |工作流模式| BUILD_STEP
     VERILOG_STEP --> |单步模式| COMPLETE
-    
+
     BUILD_STEP --> |工作流模式| SIM_STEP
     BUILD_STEP --> |单步模式| COMPLETE
-    
+
     SIM_STEP --> COMPLETE
-    
+
     COMPLETE --> COMPLETE_STEP[99_complete_event_step]
-    
+
     CLEAN_STEP -.-> |错误| ERROR[verilator.error]
     VERILOG_STEP -.-> |错误| ERROR
     BUILD_STEP -.-> |错误| ERROR
     SIM_STEP -.-> |错误| ERROR
-    
+
     ERROR --> ERROR_STEP[99_error_event_step]
-    
+
     classDef apiNode fill:#e1f5fe
     classDef eventNode fill:#f3e5f5
     classDef stepNode fill:#e8f5e8
