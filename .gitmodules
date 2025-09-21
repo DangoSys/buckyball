@@ -19,3 +19,6 @@
 [submodule "sims/func-sim"]
 	path = sims/func-sim
 	url = https://github.com/DangoSys/func-sim.git
+[submodule "workflow/vscode"]
+	path = workflow/vscode
+	url = https://github.com/DangoSys/buckyball-vscode.git
