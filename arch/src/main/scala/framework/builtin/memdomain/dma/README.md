@@ -1,6 +1,6 @@
 # DMA Engine Implementation Module
 
-## 一、Overview
+## 概述
 
 该目录包含了 BuckyBall 架构中内存域(MemDomain)的DMA引擎实现，主要负责提供高性能的内存数据传输服务。该模块位于 `arch/src/main/scala/framework/builtin/memdomain/dma` 路径下，在整个系统架构中扮演内存域与外部存储器之间的数据传输桥梁角色。
 
@@ -11,7 +11,7 @@
 
 这些模块在系统中处于 `framework.builtin.memdomain` 的数据传输层，为上层的内存加载器(MemLoader)和内存存储器(MemStorer)提供底层的DMA传输服务，并通过TileLink协议与外部内存系统进行通信。
 
-## 二、代码结构
+## 代码结构
 
 ```
 dma/
@@ -44,7 +44,7 @@ dma/
                     暂存器/累加器寻址
 ```
 
-## 三、模块详细说明
+## 模块说明
 
 ### DMA.scala
 
@@ -145,12 +145,12 @@ class LocalAddr(sp_banks: Int, sp_bank_entries: Int, acc_banks: Int, acc_bank_en
 
 ```scala
 // 暂存器地址分解
-def sp_bank(dummy: Int = 0) = if (spAddrBits == spBankRowBits) 0.U 
+def sp_bank(dummy: Int = 0) = if (spAddrBits == spBankRowBits) 0.U
                              else data(spAddrBits - 1, spBankRowBits)
 def sp_row(dummy: Int = 0) = data(spBankRowBits - 1, 0)
 
 // 累加器地址分解
-def acc_bank(dummy: Int = 0) = if (accAddrBits == accBankRowBits) 0.U 
+def acc_bank(dummy: Int = 0) = if (accAddrBits == accBankRowBits) 0.U
                               else data(accAddrBits - 1, accBankRowBits)
 def acc_row(dummy: Int = 0) = data(accBankRowBits - 1, 0)
 ```
@@ -177,7 +177,7 @@ def add_with_overflow(other: UInt): Tuple2[LocalAddr, Bool] = {
 
 ```scala
 // 垃圾地址检查
-def is_garbage(dummy: Int = 0) = is_acc_addr && accumulate && read_full_acc_row && 
+def is_garbage(dummy: Int = 0) = is_acc_addr && accumulate && read_full_acc_row &&
                                 data.andR && garbage_bit.asBool
 
 // 生成垃圾地址
@@ -196,7 +196,7 @@ def make_this_garbage(dummy: Int = 0): Unit = {
 
 **依赖项**: Chisel3基础库，要求Bank entries为2的幂次
 
-## 四、附加信息
+## 使用方法
 
 ### 注意事项
 
