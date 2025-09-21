@@ -1,30 +1,68 @@
-## 项目目录说明
+# BuckyBall 项目结构概览
 
-<!-- toc -->
+BuckyBall 是一个面向领域特定架构的可扩展框架，项目采用模块化设计，各目录职责明确，支持从硬件设计到软件开发的完整工具链。
 
-### 根目录
-- `arch/` - Scala编写的架构设计文档和代码
-- `bb-test/` - 测试相关
-- `compiler/` - **subtree** MLIR-based编译器，含LLVM等submodule
-- `docs/` - 文档目录
-- `scripts/` - 初始化脚本
-- `sim/` - **submodule** RISC-V模拟器(spike)
-- `thirdparty/` - **submodules** 第三方依赖
-  - `chipyard/` - SoC设计框架
-  - `circt/` - CIRCT电路编译器
-- `tools/` - **submodules** 工具
-  - `motia/` - 后端服务框架
-  - `vistools/` - 可视化工具
-- `workflow/` - CI/CD工作流配置
+## 主要目录结构
 
-### compiler/ 内部结构
-- `llvm/` - **submodule** LLVM主项目
-- `thirdparty/` - **submodules** 编译器依赖
-  - `mimalloc/` - 内存分配器
-  - `riscv-gnu-toolchain/` - RISC-V工具链
-- `examples/` - 各种MLIR示例和模型
-- `frontend/` - 前端代码生成
-- `midend/` - 中端优化
-- `tools/` - 编译工具(buddy-opt等)
+### 核心架构模块
+- **`arch/`** - 硬件架构实现，包含 Scala/Chisel 编写的 RTL 代码
+  - 基于 Rocket-chip 和 Chipyard 框架
+  - 实现自定义 RoCC 协处理器和内存子系统
+  - 支持多种配置和扩展选项
 
-注: **submodule**需独立更新，`subtree`随主仓库同步
+### 测试验证模块
+- **`bb-tests/`** - 统一测试框架
+  - `workloads/` - 应用工作负载测试
+  - `customext/` - 自定义扩展验证
+  - `sardine/` - Sardine 测试框架
+  - `uvbb/` - 单元测试套件
+
+### 仿真环境模块
+- **`sims/`** - 仿真器和验证环境
+  - 支持 Verilator、VCS 等多种仿真器
+  - 集成 FireSim FPGA 加速仿真
+  - 提供性能分析和调试工具
+
+### 开发工具模块
+- **`scripts/`** - 构建和部署脚本
+  - 环境初始化脚本
+  - 自动化构建工具
+  - 依赖管理和配置
+
+- **`workflow/`** - 开发工作流和自动化
+  - CI/CD 流水线配置
+  - 文档生成工具
+  - 代码质量检查
+
+### 文档系统
+- **`docs/`** - 项目文档
+  - `bb-note/` - 基于 mdBook 的技术文档
+  - `img/` - 文档图片资源
+  - 支持自动生成和更新
+
+### 第三方依赖
+- **`thirdparty/`** - 外部依赖模块 (**submodules**)
+  - `chipyard/` - Berkeley Chipyard SoC 设计框架
+  - `circt/` - CIRCT 电路编译器工具链
+
+## 开发工作流
+
+1. **环境准备**: 使用 `scripts/init.sh` 初始化开发环境
+2. **架构开发**: 在 `arch/` 目录进行硬件设计和修改
+3. **测试验证**: 使用 `bb-tests/` 中的测试套件进行功能验证
+4. **仿真调试**: 通过 `sims/` 目录的仿真环境进行性能分析
+5. **文档更新**: 自动生成或手动更新 `docs/` 中的技术文档
+
+## 构建系统
+
+项目支持多种构建方式：
+- **Make**: 传统 Makefile 构建
+- **SBT**: Scala 项目构建工具
+- **CMake**: 测试框架构建系统
+- **Conda**: Python 环境和依赖管理
+
+## 版本管理说明
+
+- **Submodules**: `thirdparty/` 下的模块需要独立更新
+- **主仓库**: 核心代码和配置随主分支同步更新
+- **文档**: 支持自动生成，与代码变更保持同步

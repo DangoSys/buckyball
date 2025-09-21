@@ -1,6 +1,6 @@
 # Memory Bank Implementation Module
 
-## 一、Overview
+## 概述
 
 该目录包含了 BuckyBall 架构中内存域(MemDomain)的核心存储单元实现，主要负责提供高性能的片上存储器组件。该模块位于 `arch/src/main/scala/framework/builtin/memdomain/mem` 路径下，在整个系统架构中扮演底层硬件存储抽象的角色。
 
@@ -11,7 +11,7 @@
 
 这些模块在系统中处于 `framework.builtin.memdomain` 的底层，为上层的内存控制器(MemController)、内存加载器(MemLoader)和内存存储器(MemStorer)提供基础的存储服务。
 
-## 二、代码结构
+## 代码结构
 
 ```
 mem/
@@ -45,7 +45,7 @@ mem/
                 仲裁机制处理多路访问请求
 ```
 
-## 三、模块详细说明
+## 模块说明
 
 ### SramBank.scala
 
@@ -72,7 +72,7 @@ class SramWriteReq(val n: Int, val w: Int, val mask_len: Int) extends Bundle {
 val mem = SyncReadMem(n, Vec(mask_len, mask_elem))
 
 // 读写冲突仲裁
-assert(!(io.read.req.valid && io.write.req.valid), 
+assert(!(io.read.req.valid && io.write.req.valid),
        "SramBank: Read and write requests is not allowed at the same time")
 
 io.read.req.ready := !io.write.req.valid
@@ -97,10 +97,10 @@ io.write.req.ready := !io.read.req.valid
 when (io.write_in.is_acc || RegNext(io.write_in.is_acc)) {
   // Stage 1: 读请求
   io.read.req.valid := io.write_in.req.valid
-  
+
   // Stage 2: 累加运算
   val acc_data = data_reg + io.read.resp.bits.data
-  
+
   // Stage 3: 写回
   io.write_out.req.bits.data := acc_data
 }
@@ -158,7 +158,7 @@ val resp_to_exec = RegNext(exec_read_sel && bank.io.read.req.fire)
 
 **依赖项**: BaseConfig配置，SramBank和AccBank模块，RocketChip tile参数
 
-## 四、附加信息
+## 使用方法
 
 ### 注意事项
 
