@@ -18,6 +18,12 @@ blink/
 └── blink.scala   - Blink 协议和 nexus
 ```
 
+ball节点请求带宽需求
+bbus节点给出系统的带宽能力
+两者在blinkNode协商
+
+Ball nodes -> BlinkNode (nexus) -> BBusNode (sink)
+
 ### 文件依赖关系
 
 **blink.scala** (协议定义层)

@@ -17,20 +17,23 @@ import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.FenceCSR 
+import examples.toy.FenceCSR
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 2) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
-  
+
   val id_node = TLIdentityNode()
   val xbar_node = TLXbar()
-  
+
   val spad_w = b.inputType.getWidth * b.veclane
   val reader = LazyModule(new BBStreamReader(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
   val writer = LazyModule(new BBStreamWriter(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
+
+  // 注意：BallDomain现在是普通Module，不再是LazyModule
+  // 将在module中实例化
 
   xbar_node := TLBuffer() := reader.node
   xbar_node := TLBuffer() := writer.node
@@ -38,19 +41,19 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
 
   override lazy val module = new ToyBuckyBallModule(this)
 
-  // The LazyRoCC class contains two TLOutputNode instances, atlNode and tlNode. 
-  // atlNode connects into a tile-local arbiter along with the backside of the L1 instruction cache. 
-  // tlNode connects directly to the L1-L2 crossbar. 
+  // The LazyRoCC class contains two TLOutputNode instances, atlNode and tlNode.
+  // atlNode connects into a tile-local arbiter along with the backside of the L1 instruction cache.
+  // tlNode connects directly to the L1-L2 crossbar.
   // The corresponding Tilelink ports in the module implementation's IO bundle are atl and tl, respectively.
-  override val tlNode = id_node 
-  override val atlNode = TLIdentityNode() 
-  val node = tlNode 
+  override val tlNode = id_node
+  override val atlNode = TLIdentityNode()
+  val node = tlNode
 }
 
-class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer) 
+class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   with HasCoreParameters {
   import outer.b._
-  
+
   val tagWidth = 32
 
 // -----------------------------------------------------------------------------
@@ -72,25 +75,26 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // -----------------------------------------------------------------------------
 // Backend: Ball Domain
 // -----------------------------------------------------------------------------
-  val ballDomain = Module(new BallDomain)
-  
-  // GlobalDecoder->BallDomain 
+  // BallDomain现在是普通Module，直接实例化
+  val ballDomain = Module(new BallDomain()(b, p))
+
+  // GlobalDecoder->BallDomain
   ballDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_ball
   ballDomain.io.gDecoderIn.bits  := Mux(ballDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
-  
+
   // fence信号连接
 
 // -----------------------------------------------------------------------------
 // Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
 // -----------------------------------------------------------------------------
   val memDomain = Module(new MemDomain)
-  
-  // GlobalDecoder->MemDomain 
+
+  // GlobalDecoder->MemDomain
   memDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_mem
   memDomain.io.gDecoderIn.bits  := Mux(memDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
-  
+
   // 全局ready信号：只有对应的域ready时，gDecoder才ready
-  gDecoder.io.id_o.ready := 
+  gDecoder.io.id_o.ready :=
     (gDecoder.io.id_o.bits.is_ball && ballDomain.io.gDecoderIn.ready) ||
     (gDecoder.io.id_o.bits.is_mem && memDomain.io.gDecoderIn.ready)
 
@@ -102,24 +106,24 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   outer.reader.module.io.resp <> memDomain.io.dma.read.resp
   memDomain.io.dma.write.req <> outer.writer.module.io.req
   outer.writer.module.io.resp <> memDomain.io.dma.write.resp
-  
+
   // DMA->TLB (现在通过MemDomain)
   outer.reader.module.io.tlb <> memDomain.io.tlb(1)
   outer.writer.module.io.tlb <> memDomain.io.tlb(0)
-  
+
   // PTW连接到MemDomain的TLB
   io.ptw <> memDomain.io.ptw
-  
+
   // TLB异常处理 - 现在MemDomain的tlbExp是Output，所以我们从它读取信号
   // 设置flush输入信号
   memDomain.io.tlbExp.foreach { exp =>
     exp.flush_skip := false.B
     exp.flush_retry := false.B
   }
-  
+
   // Flush信号给DMA组件 (从MemDomain的TLB异常获取)
   outer.reader.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
-  outer.writer.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)  
+  outer.writer.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
 
 // -----------------------------------------------------------------------------
 // Backend: Domain Bridge: BallDomain->MemDomain

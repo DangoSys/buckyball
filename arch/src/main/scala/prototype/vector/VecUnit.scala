@@ -12,16 +12,16 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
-  
+
   val io = IO(new Bundle {
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
-    
+
     // 连接到Scratchpad的SRAM读写接口
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
-    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
+    // val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
     // 连接到Accumulator的读写接口
-    val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    // val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
@@ -44,7 +44,7 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
 // -----------------------------------------------------------------------------
 // VECEX
-// -----------------------------------------------------------------------------  
+// -----------------------------------------------------------------------------
 	val VecEX = Module(new VecEXUnit)
 	VecEX.io.ctrl_ex_i <> VecCtrlUnit.io.ctrl_ex_o
 	VecEX.io.ld_ex_i <> VecLoadUnit.io.ld_ex_o
@@ -65,10 +65,10 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 // -----------------------------------------------------------------------------
 // Set DontCare
 // -----------------------------------------------------------------------------
-  for (i <- 0 until b.sp_banks) {
-    io.sramWrite(i) := DontCare
-  }
-  for (i <- 0 until b.acc_banks) {
-    io.accRead(i) := DontCare
-  }
+  // for (i <- 0 until b.sp_banks) {
+  //   io.sramWrite(i) := DontCare
+  // }
+  // for (i <- 0 until b.acc_banks) {
+  //   io.accRead(i) := DontCare
+  // }
 }
