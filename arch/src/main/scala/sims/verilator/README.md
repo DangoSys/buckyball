@@ -26,3 +26,6 @@ object Elaborate extends App {
     new chipyard.harness.TestHarness()(config.toInstance),
     firtoolOpts = args,
     args = Array.empty  // 直接传递命令行
+  )
+}
+```

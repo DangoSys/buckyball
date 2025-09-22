@@ -21,7 +21,7 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
 
      // 连接到Accumulator的读写接口
-    val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    // val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 // -----------------------------------------------------------------------------
@@ -37,7 +37,7 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
 
 // -----------------------------------------------------------------------------
 // BBFP_LoadUnit
-// ----------------------------------------------------------------------------- 
+// -----------------------------------------------------------------------------
   val BBFP_LoadUnit = Module(new BBFP_LoadUnit)
   BBFP_LoadUnit.io.id_lu_i <> ID_LU.io.ld_lu_o
   for (i <- 0 until b.sp_banks) {
@@ -45,13 +45,13 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
   }
 // -----------------------------------------------------------------------------
 // LU_EX
-// -----------------------------------------------------------------------------  
+// -----------------------------------------------------------------------------
   val LU_EX = Module(new LU_EX)
   LU_EX.io.lu_ex_i <> BBFP_LoadUnit.io.lu_ex_o
-  
+
 // -----------------------------------------------------------------------------
 // BBFP_EX
-// -----------------------------------------------------------------------------  
+// -----------------------------------------------------------------------------
   val BBFP_EX = Module(new BBFP_EX)
   BBFP_EX.io.lu_ex_i <> LU_EX.io.lu_ex_o
   for (i <- 0 until b.sp_banks) {
@@ -61,7 +61,7 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
   BBFP_EX.io.is_matmul_ws := io.is_matmul_ws
   for (i <- 0 until b.acc_banks) {
     io.accWrite(i) <> BBFP_EX.io.accWrite(i)
-    io.accRead(i) := DontCare
+    // io.accRead(i) := DontCare
   }
   io.cmdResp <> BBFP_EX.io.cmdResp
 
