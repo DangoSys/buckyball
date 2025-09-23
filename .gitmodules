@@ -13,9 +13,6 @@
 [submodule "tools/deepwiki"]
 	path = tools/deepwiki
 	url = https://github.com/AIDotNet/OpenDeepWiki.git
-[submodule "sims/arch-sim"]
-	path = sims/arch-sim
-	url = https://github.com/DangoSys/arch-sim.git
 [submodule "sims/func-sim"]
 	path = sims/func-sim
 	url = https://github.com/DangoSys/func-sim.git
