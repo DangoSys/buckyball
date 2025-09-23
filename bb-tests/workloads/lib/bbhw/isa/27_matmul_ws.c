@@ -1,7 +1,7 @@
 #include "isa.h"
 
 // MATMUL_WS指令配置
-extern "C" const InstructionConfig matmul_ws_config = {
+const InstructionConfig matmul_ws_config = {
     .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 13},
                                      {"op2_spaddr", 14, 27},
                                      {NULL, 0, 0}},

@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
+import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 
 /**
  * 命令响应路由器 - 仲裁多个Ball的响应输出，并输出到BBus

@@ -4,9 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/* Pure C implementation - no C++ linkage needed */
 
 // Data type for matrix elements
 typedef int8_t elem_t;
@@ -113,8 +111,6 @@ void bb_flush(void);
 // 通过func7获取指令配置
 const InstructionConfig *config(InstructionType func7);
 
-#ifdef __cplusplus
-}
-#endif
+/* End of pure C header */
 
 #endif // BUCKYBALL_ISA_H

@@ -3,9 +3,7 @@
 
 #include <stdint.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/* Pure C implementation - no C++ linkage needed */
 
 typedef struct {
   const char *name_;
@@ -52,8 +50,6 @@ static inline uint32_t bank_addr(const BankConfig *config, uint32_t row) {
 
 extern const BankConfig bank_configs[BANK_NUM];
 
-#ifdef __cplusplus
-}
-#endif
+/* End of pure C header */
 
 #endif // _BANK_H_
