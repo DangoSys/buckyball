@@ -9,7 +9,7 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.PostGDCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.rocket.RoCCResponseBB
-import examples.toy.balldomain.rs.BallReservationStation
+import examples.toy.balldomain.rs.BallRSModule
 import examples.toy.balldomain.bbus.BBusModule
 
 // Ball Domain的输入输出接口
@@ -51,35 +51,14 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
 //---------------------------------------------------------------------------
 // Decoder -> BallReservationStation
 //---------------------------------------------------------------------------
-  val ballRs = Module(new BallReservationStation)
+  val ballRs = Module(new BallRSModule)
   ballRs.io.ball_decode_cmd_i <> ballDecoder.io.ball_decode_cmd_o
 
 //---------------------------------------------------------------------------
-// BallReservationStation -> BBus (使用新的简化BBus)
+// BallReservationStation -> BBus 
 //---------------------------------------------------------------------------
-  // 创建命令请求仲裁器，将4个Ball的请求合并
-  val cmdReqArbiter = Module(new RRArbiter(new examples.toy.balldomain.rs.BallRsIssue, 4))
-  cmdReqArbiter.io.in(0) <> ballRs.io.issue_o.ball1
-  cmdReqArbiter.io.in(1) <> ballRs.io.issue_o.ball2
-  cmdReqArbiter.io.in(2) <> ballRs.io.issue_o.ball3
-  cmdReqArbiter.io.in(3) <> ballRs.io.issue_o.ball4
-  bbus.io.cmdReq <> cmdReqArbiter.io.out
-
-  // 创建响应分发器，将BBus的响应广播给4个Ball
-  ballRs.io.commit_i.ball1.valid := bbus.io.cmdResp.valid
-  ballRs.io.commit_i.ball1.bits := bbus.io.cmdResp.bits
-  ballRs.io.commit_i.ball2.valid := bbus.io.cmdResp.valid
-  ballRs.io.commit_i.ball2.bits := bbus.io.cmdResp.bits
-  ballRs.io.commit_i.ball3.valid := bbus.io.cmdResp.valid
-  ballRs.io.commit_i.ball3.bits := bbus.io.cmdResp.bits
-  ballRs.io.commit_i.ball4.valid := bbus.io.cmdResp.valid
-  ballRs.io.commit_i.ball4.bits := bbus.io.cmdResp.bits
-
-  // ready信号汇聚
-  bbus.io.cmdResp.ready := ballRs.io.commit_i.ball1.ready ||
-                           ballRs.io.commit_i.ball2.ready ||
-                           ballRs.io.commit_i.ball3.ready ||
-                           ballRs.io.commit_i.ball4.ready
+  bbus.io.cmdReq <> ballRs.io.issue_o.balls
+  ballRs.io.commit_i.balls <> bbus.io.cmdResp
 
 //---------------------------------------------------------------------------
 // BBus -> Mem Domain

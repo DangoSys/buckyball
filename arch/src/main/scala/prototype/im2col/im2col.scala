@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
+import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import firrtl2.passes.CheckTypes.st
 

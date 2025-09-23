@@ -1,7 +1,7 @@
 #include "isa.h"
 
 // IM2COL指令配置
-extern "C" const InstructionConfig im2col_config = {
+const InstructionConfig im2col_config = {
     .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 13},
                                      {"wr_spaddr", 14, 27},
                                      {NULL, 0, 0}},

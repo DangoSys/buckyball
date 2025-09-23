@@ -64,8 +64,7 @@ InstructionBuilder create_builder(BuckyballInstruction *inst,
   return builder;
 }
 
-// 外部配置声明 - 使用 C++ linkage
-extern "C" {
+// 外部配置声明 - 纯C实现
 extern const InstructionConfig mvin_config;
 extern const InstructionConfig mvout_config;
 extern const InstructionConfig mul_warp16_config;
@@ -73,7 +72,6 @@ extern const InstructionConfig bbfp_mul_config;
 extern const InstructionConfig matmul_ws_config;
 extern const InstructionConfig im2col_config;
 extern const InstructionConfig transpose_config;
-}
 
 // 通过func7获取指令配置
 const InstructionConfig *config(InstructionType func7) {
@@ -108,56 +106,59 @@ void execute_builder(const InstructionBuilder builder) {
   uint32_t rs1_val = (uint32_t)builder.inst->rs1;
   uint32_t rs2_val = (uint32_t)builder.inst->rs2;
 
+  asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+               :
+               : "r"(rs1_val), "r"(rs2_val), "i"(builder.type));
   // 使用 switch 确保每个分支中的 func7 是编译时常量
-  switch (builder.type) {
-  case MVIN_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(MVIN_FUNC7));
-    break;
-  case MVOUT_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(MVOUT_FUNC7));
-    break;
-  case FENCE_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(FENCE_FUNC7));
-    break;
-  case MUL_WARP16_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(MUL_WARP16_FUNC7));
-    break;
-  case BBFP_MUL_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(BBFP_MUL_FUNC7));
-    break;
-  case MATMUL_WS_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(MATMUL_WS_FUNC7));
-    break;
-  case IM2COL_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(IM2COL_FUNC7));
-    break;
-  case TRANSPOSE_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(TRANSPOSE_FUNC7));
-    break;
-  case FLUSH_FUNC7:
-    asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-                 :
-                 : "r"(rs1_val), "r"(rs2_val), "i"(FLUSH_FUNC7));
-    break;
-  default:
-    // 未知指令类型，不执行
-    break;
-  }
+  // switch (builder.type) {
+  // case MVIN_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(MVIN_FUNC7));
+  //   break;
+  // case MVOUT_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(MVOUT_FUNC7));
+  //   break;
+  // case FENCE_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(FENCE_FUNC7));
+  //   break;
+  // case MUL_WARP16_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(MUL_WARP16_FUNC7));
+  //   break;
+  // case BBFP_MUL_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(BBFP_MUL_FUNC7));
+  //   break;
+  // case MATMUL_WS_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(MATMUL_WS_FUNC7));
+  //   break;
+  // case IM2COL_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(IM2COL_FUNC7));
+  //   break;
+  // case TRANSPOSE_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(TRANSPOSE_FUNC7));
+  //   break;
+  // case FLUSH_FUNC7:
+  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
+  //                :
+  //                : "r"(rs1_val), "r"(rs2_val), "i"(FLUSH_FUNC7));
+  //   break;
+  // default:
+  //   // 未知指令类型，不执行
+  //   break;
+  // }
 #endif
 }

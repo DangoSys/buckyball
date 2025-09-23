@@ -4,13 +4,13 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import framework.blink.{Blink, BallDevice}
+import framework.blink.{Blink, BallRegist}
 import prototype.im2col.Im2col
 
 /**
  * Im2colBall - 遵守Blink协议的Im2col计算Ball
  */
-class Im2colBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallDevice {
+class Im2colBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)
   val ballId = id.U
 
