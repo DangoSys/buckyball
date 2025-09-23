@@ -5,11 +5,12 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.bbus.BBus
+import examples.toy.balldomain.im2colball.Im2colBall
 
 /**
  * BBusModule - 直接继承BBus的Ball总线模块
  */
-class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus(
+class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus (
   // 定义要注册的Ball设备生成器
   Seq(
     () => new examples.toy.balldomain.vecball.VecBall(0),

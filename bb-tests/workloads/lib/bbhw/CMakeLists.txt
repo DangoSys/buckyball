@@ -1,5 +1,5 @@
-set(ELF_CC "riscv64-unknown-elf-g++")
-set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
+set(ELF_CC "riscv64-unknown-elf-gcc")
+set(LINUX_CC "riscv64-unknown-linux-gnu-gcc")
 
 #-------------------------------------------------------------------------------
 # 添加子目录，各自编译三个版本
@@ -11,7 +11,7 @@ add_subdirectory(isa)
 # 组合最终库 - 只负责链接子模块
 #-------------------------------------------------------------------------------
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
-set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-g++")
+set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-gcc")
 
 # 1. Linux版本 - 合并子模块的Linux版本
 add_custom_command(

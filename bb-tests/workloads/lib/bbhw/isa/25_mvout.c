@@ -1,7 +1,7 @@
 #include "isa.h"
 
 // MVOUT指令配置
-extern "C" const InstructionConfig mvout_config = {
+const InstructionConfig mvout_config = {
     .rs1_fields = (BitFieldConfig[]){{"base_dram_addr", 0, 31}, {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){
         {"base_sp_addr", 0, 13}, {"iter", 14, 35}, {NULL, 0, 0}}};

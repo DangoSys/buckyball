@@ -1,4 +1,4 @@
-package examples.toy.balldomain.rs
+package framework.builtin.frontend.rs
 
 import chisel3._
 import chisel3.util._

@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.balldomain.rs.{BallRsIssue, BallRsComplete}
+import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 
 // 定义标准的Ball总线事务
