@@ -84,6 +84,33 @@ InstructionBuilder set_rs1_internal(void *builder, const char *field_name,
 InstructionBuilder set_rs2_internal(void *builder, const char *field_name,
                                     uint32_t value);
 
+// 指令执行函数类型定义
+typedef void (*InstructionExecutor)(uint32_t rs1_val, uint32_t rs2_val);
+
+// 指令注册结构
+typedef struct {
+  InstructionType type;
+  InstructionExecutor executor;
+} InstructionRegistry;
+
+// 指令注册和执行函数
+void register_instruction(InstructionType type, InstructionExecutor executor);
+void execute_instruction(InstructionType type, uint32_t rs1_val, uint32_t rs2_val);
+
+// 各指令的注册函数声明
+void register_mvin_instruction(void);
+void register_mvout_instruction(void);
+void register_fence_instruction(void);
+void register_mul_warp16_instruction(void);
+void register_im2col_instruction(void);
+void register_transpose_instruction(void);
+void register_flush_instruction(void);
+void register_bbfp_mul_instruction(void);
+void register_matmul_ws_instruction(void);
+
+// 注册所有指令的便捷函数
+void register_all_instructions(void);
+
 // 指令构建和执行函数
 BuckyballInstruction build_instruction(InstructionType type);
 InstructionBuilder create_builder(BuckyballInstruction *inst,
