@@ -13,76 +13,73 @@
 
 # BuckyBall
 
-BuckyBall 是一个面向领域特定架构(Domain Specific Architecture)的可扩展框架，基于 RISC-V 架构构建，专为高性能计算和机器学习加速器设计而优化。
+BuckyBall is a scalable framework for Domain Specific Architecture, built on RISC-V architecture and optimized for high-performance computing and machine learning accelerator design.
 
-## 项目概述
+## Project Overview
 
-BuckyBall 框架提供了完整的硬件设计、仿真验证和软件开发工具链，支持从 RTL 设计到系统级验证的全流程开发。框架采用模块化设计，支持灵活的配置和扩展，适用于各种专用计算场景。
+The BuckyBall framework provides a complete hardware design, simulation verification, and software development toolchain, supporting the full development process from RTL design to system-level verification. The framework adopts a modular design that supports flexible configuration and extension, suitable for various specialized computing scenarios.
 
-### 核心特性
+## Quick Start
 
-- **可扩展架构**: 基于 Rocket-chip 和 Chipyard 框架，支持自定义 RoCC 协处理器
-- **完整工具链**: 集成 Verilator、FireSim 等仿真工具，支持多种验证方法
-- **统一测试框架**: 提供标准化的测试环境和工作负载管理
-- **自动化工作流**: 支持 CI/CD 集成和自动化构建部署
+### Environment Dependencies
 
-## 快速开始
+Before getting started, please ensure your system meets the following dependency requirements:
 
-### 环境依赖
-
-在开始之前，请确保系统满足以下依赖要求：
-
-**必需软件**:
-- Anaconda/Miniconda (Python 环境管理)
+**Required Software**:
+- Anaconda/Miniconda (Python environment management)
 - Ninja Build System
-- GTKWave (波形查看器)
-- Bash Shell 环境
+- GTKWave (waveform viewer)
+- Bash Shell environment (doesn't need to be the primary shell)
 
-**安装依赖**:
+**Installing Dependencies**:
 ```bash
-# 安装 Anaconda
-# 下载地址: https://www.anaconda.com/download/
+# Install Anaconda
+# Download from: https://www.anaconda.com/download/
 
-# 安装系统工具
+# Install system tools
 sudo apt install ninja-build gtkwave
 
-# 可选：FireSim 免密配置
-# 在 /etc/sudoers 中添加: user_name ALL=(ALL) NOPASSWD:ALL
+# Optional: FireSim passwordless configuration
+# Add to /etc/sudoers: user_name ALL=(ALL) NOPASSWD:ALL
 ```
 
-### 源码构建
+### Source Build
 
-**1. 克隆仓库**
+**1. Clone Repository**
 ```bash
 git clone https://github.com/DangoSys/buckyball.git
 cd buckyball
 ```
 
-**2. 初始化环境**
+**2. Initialize Environment**
 ```bash
 ./scripts/init.sh
 ```
-*注意: 初始化过程约需 2 小时，包括依赖下载和编译*
+*Note: Initialization takes approximately 2 hours, including dependency downloads and compilation*
 
-**3. 环境激活**
+**3. Environment Activation**
 ```bash
 source buckyball/env.sh
 ```
 
-### 验证安装
+### Verify Installation
 
-运行 Verilator 仿真测试验证安装：
+Run Verilator simulation test to verify installation:
 ```bash
 bbdev verilator --run '--jobs 16 --binary ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch'
 ```
 
-### Docker 快速体验 (很久没更新了)
+### Docker Quick Experience (Not updated for a while)
 
 ```bash
 docker pull ghcr.io/dangosys/buckyball:latest
 ```
-*注意: Docker 镜像可能不是最新版本，建议使用源码构建*
+*Note: Docker image may not be the latest version, source build is recommended*
 
-## 其他
+## Additional Resources
 
 You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
+
+## Community
+
+Join our community discussion on [Slack](https://buckyballhq.slack.com/)
