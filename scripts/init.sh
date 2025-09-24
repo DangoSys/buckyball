@@ -158,7 +158,14 @@ if run_step "9"; then
 fi
 
 if run_step "10"; then
-  begin_step "10" "Install pre-commit"
+  begin_step "10" "pre-compile buckyball arch code"
+  source ${BBDIR}/env.sh
+  cd ${BBDIR}/
+  bbdev verilator --verilog
+fi
+
+if run_step "11"; then
+  begin_step "11" "Install pre-commit"
   source ${BBDIR}/env.sh
   pip install pre-commit
   cd ${BBDIR}
