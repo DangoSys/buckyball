@@ -100,7 +100,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   import CtrlDecodeFields._
   val ctrl_default_decode = List(N,N)
   val ctrl_decode_list = ListLookup(func7, ctrl_default_decode, Array(
-    FENCE -> List(Y,N)
+    FENCE -> List(Y,Y)
   ))
 
   // 断言：解码列表中必须有VALID字段
