@@ -3,10 +3,10 @@ import sys
 import os
 import asyncio
 
-utils_path = f"{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}/utils"
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if utils_path not in sys.path:
   sys.path.insert(0, utils_path)
-
+  
 from utils.path import get_buckyball_path
 
 config = {

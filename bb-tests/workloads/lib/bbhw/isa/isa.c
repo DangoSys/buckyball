@@ -1,6 +1,52 @@
 #include "isa.h"
 #include <string.h>
 
+// 指令注册表
+#define MAX_INSTRUCTIONS 16
+static InstructionRegistry instruction_registry[MAX_INSTRUCTIONS];
+static int registry_count = 0;
+
+// 注册所有指令的便捷函数
+void register_all_instructions(void) {
+  static int initialized = 0;
+  if (initialized) return;
+  
+  // 调用各个指令文件的注册函数
+  register_mvin_instruction();
+  register_mvout_instruction();
+  register_fence_instruction();
+  register_mul_warp16_instruction();
+  register_im2col_instruction();
+  register_transpose_instruction();
+  register_flush_instruction();
+  register_bbfp_mul_instruction();
+  register_matmul_ws_instruction();
+  
+  initialized = 1;
+}
+
+// 注册指令执行函数
+void register_instruction(InstructionType type, InstructionExecutor executor) {
+  if (registry_count < MAX_INSTRUCTIONS) {
+    instruction_registry[registry_count].type = type;
+    instruction_registry[registry_count].executor = executor;
+    registry_count++;
+  }
+}
+
+// 执行指定类型的指令
+void execute_instruction(InstructionType type, uint32_t rs1_val, uint32_t rs2_val) {
+  register_all_instructions();
+  
+  for (int i = 0; i < registry_count; i++) {
+    if (instruction_registry[i].type == type) {
+      instruction_registry[i].executor(rs1_val, rs2_val);
+      return;
+    }
+  }
+  // 未找到对应的指令执行函数
+}
+
 // 通用字段操作函数
 uint32_t get_bbinst_field(uint64_t value, const char *field_name,
                           const BitFieldConfig *config) {
@@ -100,65 +146,7 @@ const InstructionConfig *config(InstructionType func7) {
 }
 
 void execute_builder(const InstructionBuilder builder) {
-#ifdef __x86_64__
-  // x86平台下不执行RISC-V指令
-#else
   uint32_t rs1_val = (uint32_t)builder.inst->rs1;
   uint32_t rs2_val = (uint32_t)builder.inst->rs2;
-
-  asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-               :
-               : "r"(rs1_val), "r"(rs2_val), "i"(builder.type));
-  // 使用 switch 确保每个分支中的 func7 是编译时常量
-  // switch (builder.type) {
-  // case MVIN_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(MVIN_FUNC7));
-  //   break;
-  // case MVOUT_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(MVOUT_FUNC7));
-  //   break;
-  // case FENCE_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(FENCE_FUNC7));
-  //   break;
-  // case MUL_WARP16_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(MUL_WARP16_FUNC7));
-  //   break;
-  // case BBFP_MUL_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(BBFP_MUL_FUNC7));
-  //   break;
-  // case MATMUL_WS_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(MATMUL_WS_FUNC7));
-  //   break;
-  // case IM2COL_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(IM2COL_FUNC7));
-  //   break;
-  // case TRANSPOSE_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(TRANSPOSE_FUNC7));
-  //   break;
-  // case FLUSH_FUNC7:
-  //   asm volatile(".insn r " STR(CUSTOM_3) ", " STR(0x3) ", %2, x0, %0, %1"
-  //                :
-  //                : "r"(rs1_val), "r"(rs2_val), "i"(FLUSH_FUNC7));
-  //   break;
-  // default:
-  //   // 未知指令类型，不执行
-  //   break;
-  // }
-#endif
+  execute_instruction(builder.type, rs1_val, rs2_val);
 }

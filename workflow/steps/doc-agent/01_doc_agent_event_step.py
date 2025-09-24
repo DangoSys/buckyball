@@ -10,10 +10,9 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 from doc_utils import detect_doc_type, load_prompt_template, prepare_update_mode_prompt
 
-utils_path = f"{os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}/utils"
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if utils_path not in sys.path:
-    sys.path.insert(0, utils_path)
-from utils.stream_run import stream_run_logger
+  sys.path.insert(0, utils_path)
 
 load_dotenv()
 
