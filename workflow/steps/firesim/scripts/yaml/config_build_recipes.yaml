@@ -33,11 +33,12 @@
 #    #bit_builder_arg_overrides:
 #    #  <ARG>: <OVERRIDE>
 
-alveo_u280_firesim_GemminiRocketConfig_no_nic:
+alveo_u280_firesim_GemminiBuckyballConfig_no_nic:
     PLATFORM: xilinx_alveo_u280
     TARGET_PROJECT: firesim
+    TARGET_PROJECT_MAKEFRAG: ../makefrag/firesim
     DESIGN: FireSim
-    TARGET_CONFIG: FireSimGemminiRocketConfig
+    TARGET_CONFIG: sims.firesim.FireSimGemminiBuckyballConfig
     PLATFORM_CONFIG: BaseXilinxAlveoU280Config
     deploy_quintuplet: null
     platform_config_args:
@@ -52,7 +53,7 @@ alveo_u280_firesim_BuckyballToyConfig_no_nic:
     TARGET_PROJECT: firesim
     TARGET_PROJECT_MAKEFRAG: ../makefrag/firesim
     DESIGN: FireSim
-    TARGET_CONFIG: FireSimBuckyballToyConfig
+    TARGET_CONFIG: sims.firesim.FireSimBuckyballToyConfig
     PLATFORM_CONFIG: BaseXilinxAlveoU280Config
     deploy_quintuplet: null
     platform_config_args:

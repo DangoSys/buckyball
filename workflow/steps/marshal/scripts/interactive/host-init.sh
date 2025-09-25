@@ -17,4 +17,4 @@ rm -rf $BBDIR/workflow/steps/marshal/output/overlay
 mkdir -p $BBDIR/workflow/steps/marshal/output/overlay/root
 
 # Copy workload binaries to /root directory
-cp -r $BBDIR/bb-tests/sardine/workloads/* $BBDIR/workflow/steps/marshal/output/overlay/root/
+cp -r $BBDIR/bb-tests/output/workloads/src/* $BBDIR/workflow/steps/marshal/output/overlay/root/

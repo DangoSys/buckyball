@@ -31,7 +31,7 @@ build_farm:
 builds_to_run:
     # this section references builds defined in config_build_recipes.yaml
     # if you add a build here, it will be built when you run buildbitstream
-    # - alveo_u280_firesim_GemminiRocketConfig_no_nic
+    # - alveo_u280_firesim_GemminiBuckyballConfig_no_nic
     - alveo_u280_firesim_BuckyballToyConfig_no_nic
 
 agfis_to_share:
