@@ -23,7 +23,7 @@ class WithBootROM extends Config((site, here, up) => {
   }
 })
 
-class FireSimGemminiRocketConfig extends Config(
+class FireSimGemminiBuckyballConfig extends Config(
   new WithBootROM ++
   new firechip.chip.WithDefaultFireSimBridges ++
   new firechip.chip.WithFireSimConfigTweaks ++

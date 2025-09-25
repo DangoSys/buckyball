@@ -1,0 +1,9 @@
+{
+  "name" : "interactive",
+  "workdir" : ".",
+  "base" : "br-base.json",
+  "overlay" : "../output/overlay",
+  "host-init" : "./interactive/host-init.sh",
+  "rootfs-size" : "16GiB",
+  "spike-args" : "--extension=gemmini"
+}
