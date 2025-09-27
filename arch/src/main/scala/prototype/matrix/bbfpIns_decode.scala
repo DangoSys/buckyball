@@ -19,8 +19,8 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val is_matmul_ws  = Output(Bool())
     val id_lu_o = Decoupled(new id_lu_req)
   })
-  
-  val busy :: idle :: Nil = Enum(2)
+
+  val idle :: busy :: Nil = Enum(2)
   //寄存器定义
   val state = RegInit(idle)
   val rob_id_reg = RegInit(0.U(rob_id_width.W))
@@ -34,10 +34,10 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val wr_bank_addr = RegInit(0.U(12.W))
   val is_matmul_ws = RegInit(false.B)
   io.is_matmul_ws := false.B
-  
+
   switch(state) {
     is(idle) {
-      when(io.cmdReq.valid && io.cmdReq.bits.cmd.bid === 2.U) {
+      when(io.cmdReq.valid && io.cmdReq.bits.cmd.bid === 1.U) {
         iteration         := io.cmdReq.bits.cmd.iter
         iteration_counter := 0.U
         is_matmul_ws      := false.B
@@ -52,7 +52,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         io.is_matmul_ws   := false.B
       }
       when(io.cmdReq.valid && io.cmdReq.bits.cmd.special(0)){
-        iteration         := io.cmdReq.bits.cmd.iter 
+        iteration         := io.cmdReq.bits.cmd.iter
         iteration_counter := 0.U
         is_matmul_ws      := true.B
         rob_id_reg        := io.cmdReq.bits.rob_id
@@ -90,8 +90,8 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   io.cmdReq.ready := io.id_lu_o.ready
 
   //指令完成信号
-  
-  
+
+
   // 将complete信号打10拍
   // val complete_delay = RegInit(VecInit(Seq.fill(10)(false.B)))
   // complete_delay(0) := complete
@@ -99,6 +99,6 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   //   complete_delay(i) := complete_delay(i-1)
   // }
   // val complete_10clk = complete_delay(9)
-  
+
 
 }
