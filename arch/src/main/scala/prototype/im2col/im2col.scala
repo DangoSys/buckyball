@@ -51,7 +51,7 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     io.sramRead(i).req.valid        := false.B
     io.sramRead(i).req.bits.addr    := 0.U
     io.sramRead(i).req.bits.fromDMA := false.B
-    io.sramRead(i).resp.ready       := true.B
+    io.sramRead(i).resp.ready       := (state === read) || (state === read_and_convert)
     io.sramWrite(i).req.valid       := false.B
     io.sramWrite(i).req.bits.addr   := 0.U
     io.sramWrite(i).req.bits.data   := 0.U
