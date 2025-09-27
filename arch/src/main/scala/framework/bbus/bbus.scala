@@ -45,9 +45,9 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
     balls(i).Blink.cmdReq.valid := cmdReqRouter.io.cmdReq_o.valid && (cmdReqRouter.io.cmdReq_o.bits.cmd.bid === i.U)
     balls(i).Blink.cmdReq.bits := cmdReqRouter.io.cmdReq_o.bits
   }
-  
+
   // ready信号：只要目标ball准备好接收，就可以ready
-  cmdReqRouter.io.cmdReq_o.ready := VecInit((0 until numBalls).map(i => 
+  cmdReqRouter.io.cmdReq_o.ready := VecInit((0 until numBalls).map(i =>
     balls(i).Blink.cmdReq.ready && (cmdReqRouter.io.cmdReq_o.bits.cmd.bid === i.U)
   )).asUInt.orR
 
@@ -73,19 +73,18 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
-  for (bank <- 0 until b.sp_banks) {
-    for (i <- 0 until numBalls) {
-      balls(i).Blink.sramRead(bank) <> io.sramRead(bank)
-      balls(i).Blink.sramWrite(bank) <> io.sramWrite(bank)
-    }
-  }
+val memoryrouter = Module(new memRouter(numBalls))
+io.sramRead <> memoryrouter.io.sramRead_o
+io.sramWrite <> memoryrouter.io.sramWrite_o
+io.accRead <> memoryrouter.io.accRead_o
+io.accWrite <> memoryrouter.io.accWrite_o
 
-  for (bank <- 0 until b.acc_banks) {
-    for (i <- 0 until numBalls) {
-      balls(i).Blink.accRead(bank) <> io.accRead(bank)
-      balls(i).Blink.accWrite(bank) <> io.accWrite(bank)
-    }
-  }
+for(i <- 0 until numBalls){
+  memoryrouter.io.sramRead_i(i) <> balls(i).Blink.sramRead
+  memoryrouter.io.sramWrite_i(i) <> balls(i).Blink.sramWrite
+  memoryrouter.io.accRead_i(i) <> balls(i).Blink.accRead
+  memoryrouter.io.accWrite_i(i) <> balls(i).Blink.accWrite
+}
 
 
   override lazy val desiredName = "BBus"

@@ -39,7 +39,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
   io.cmdResp.valid := false.B
   io.cmdResp.bits.rob_id := 0.U
-  
+
   val idle::weight_load::data_compute::Nil = Enum(3)
   val weight_cycles = RegInit(0.U(10.W))
   val act_cycles = RegInit(0.U(10.W))
@@ -50,8 +50,8 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val op2_bank_reg  = Reg(UInt(io.lu_ex_i.bits.op2_bank.getWidth.W))
   val wr_bank   = Reg(UInt(io.lu_ex_i.bits.wr_bank.getWidth.W))
   val opcode    = Reg(UInt(io.lu_ex_i.bits.opcode.getWidth.W))
- 
-  
+
+
   val act_shift_reg = Reg(Vec(16, Vec(16, UInt(7.W))))
   val col_enable = RegInit(VecInit(Seq.fill(16)(false.B)))
   val input_cycle = RegInit(0.U(5.W))
@@ -67,16 +67,16 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
   val op1_bank = Mux(io.lu_ex_i.valid, io.lu_ex_i.bits.op1_bank, op1_bank_reg)
   val op2_bank = Mux(io.lu_ex_i.valid, io.lu_ex_i.bits.op2_bank, op2_bank_reg)
-  
+
   val state = RegInit(idle)
   val pe_array = Module(new BBFP_PE_Array16x16)
 
   // 使用移位寄存器代替原来的普通寄存器
-   
+
 
   // 激活数据输入逻辑
   val act_reg_ptr = RegInit(0.U(5.W))
-  
+
   // 在idle和weight_load阶段，像普通寄存器一样存储数据
   when(io.sramReadResp(op2_bank).valid && state =/= data_compute && act_data_ready === false.B) {
     val data = io.sramReadResp(op2_bank).bits.data
@@ -89,7 +89,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     act_data_ready := true.B
   }
   val weight_reg = Reg(Vec(16, UInt(7.W)))
- 
+
   when(io.sramReadResp(op1_bank).valid && !io.is_matmul_ws) {
     val data = io.sramReadResp(op1_bank).bits.data
     for(i <- 0 until 16) {
@@ -119,7 +119,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   }
   val result_exp = weight_expreg+act_expreg
 
-   
+
 
   // PE阵列默认值赋值
   pe_array.io.in_last := VecInit(Seq.fill(16)(false.B))
@@ -173,7 +173,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       }
     }
     write_cycles := write_cycles + 1.U
-    }.otherwise {                                                              
+    }.otherwise {
     // 写入完成
       writing_output := false.B
       output_ready := false.B
@@ -223,7 +223,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         col_enable(col) := false.B
       }
       }
-    
+
       // 移位寄存器操作：使能的行向右移位
       for(col <- 0 until 16) {
       when(col_enable(col)) {
@@ -234,7 +234,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         act_shift_reg(15)(col) := 0.U(7.W)
       }
       }
-         
+
       // 将每行的最右侧元素（第15列）输入到PE阵列
       val current_input = WireDefault(VecInit(Seq.fill(16)(0.U(7.W))))
       for(col <- 0 until 16) {
@@ -253,7 +253,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       output_buffer_parallelogram(output_ptr) := pe_array.io.out_b
       output_ptr := output_ptr + 1.U
     }
-    
+
     // 第47个周期后，将平行四边形输出转换为64个4x32寄存器
     when(act_cycles === 49.U) {
       output_ready := true.B
@@ -271,7 +271,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       }
       }
     }
-    
+
     // 重置数据准备标志
     when(act_cycles === 50.U) {
       act_data_ready := false.B
@@ -286,6 +286,6 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
 
   io.sramReadResp.foreach { resp =>
-    resp.ready := true.B
+    resp.ready := state =/= idle
   }
 }
