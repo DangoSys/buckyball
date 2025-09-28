@@ -92,17 +92,23 @@ async def handler(data, context):
     batch = data.get("batch", False)
 
     # 动态生成VCD文件路径
-    vcd_path = f"{waveform_dir}/waveform.vcd"
+    # vcd_path = f"{waveform_dir}/waveform.vcd"
     log_path = f"{log_dir}/bdb.log"
-
+    fst_path = f"{waveform_dir}/waveform.fst"
     # 清理旧的波形文件
     subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
     # ==================================================================================
     # 执行仿真脚本，实现流式输出
     # ==================================================================================
-    batch_param = "True" if batch else "False"
-    sim_cmd = f"./scripts/sim.sh {bin_path} {binary_path} {log_dir}/stdout.log \
-                {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
+    # batch_param = "True" if batch else "False"
+    # sim_cmd = f"./scripts/sim.sh {bin_path} {binary_path} {log_dir}/stdout.log \
+    # {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
+    sim_cmd = (
+        f"{bin_path} +permissive +loadmem={binary_path} +loadmem_addr=800000000 "
+        f"{'+batch ' if batch else ''} "
+        f"+fst={fst_path} +log={log_path} +permissive-off "
+        f"{binary_path} > >(tee {log_dir}/stdout.log) 2> >(spike-dasm > {log_dir}/disasm.log)"
+    )
     script_dir = os.path.dirname(__file__)
 
     result = stream_run_logger(
@@ -111,12 +117,19 @@ async def handler(data, context):
         cwd=script_dir,
         stdout_prefix="verilator sim",
         stderr_prefix="verilator sim",
+        executable="bash",
     )
 
-    vcd2fst_cmd = f"vcd2fst {waveform_dir}/waveform.vcd {waveform_dir}/fstwaveform.fst"
-    subprocess.run(vcd2fst_cmd, cwd=arch_dir, shell=True, check=True, text=True)
+    # vcd2fst_cmd = f"vcd2fst {waveform_dir}/waveform.vcd {waveform_dir}/fstwaveform.fst"
+    # subprocess.run(vcd2fst_cmd, cwd=arch_dir, shell=True, check=True, text=True)
     # 清理旧的波形文件
-    subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
+    # subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
+    if os.path.exists(f"{waveform_dir}/waveform.fst.heir"):
+        subprocess.run(
+            f"gtkwave -f {waveform_dir}/waveform.fst -H {waveform_dir}/waveform.fst.heir",
+            shell=True,
+            check=True,
+        )
 
     # ==================================================================================
     # 返回仿真结果
