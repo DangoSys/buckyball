@@ -55,8 +55,10 @@ int main() {
   int passed = test_col_row_vector();
   if (passed) {
     printf("vecunit_matmul_col_row_vector test PASSED\n");
+    return 0;
   } else {
     printf("vecunit_matmul_col_row_vector test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);
