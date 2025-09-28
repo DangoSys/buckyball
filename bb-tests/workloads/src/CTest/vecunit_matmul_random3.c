@@ -53,8 +53,10 @@ int main() {
   int passed = test_random3();
   if (passed) {
     printf("vecunit_matmul_random3 test PASSED\n");
+    return 0;
   } else {
     printf("vecunit_matmul_random3 test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);
