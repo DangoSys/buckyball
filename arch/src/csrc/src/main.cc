@@ -8,7 +8,8 @@
 vluint64_t sim_time = 0;
 
 VerilatedContext *contextp = NULL;
-VerilatedVcdC *tfp = NULL;
+// VerilatedVcdC *tfp = NULL;
+VerilatedFstC *tfp = NULL;
 static VTestHarness *top;
 
 int bb_step = 1; // 记录一共走了多少步，出错时抛出，方便单步调试到周围
@@ -24,14 +25,17 @@ void step_and_dump_wave() {
 void sim_init(int argc, char **argv) {
   contextp = new VerilatedContext;
   contextp->commandArgs(argc, argv);
-  tfp = new VerilatedVcdC;
+  // tfp = new VerilatedVcdC;
+  tfp = new VerilatedFstC;
   top = new VTestHarness{contextp};
 
   contextp->traceEverOn(true);
   top->trace(tfp, 0);
 
-  tfp->open(vcd_path);
-  Log("The waveform will be saved to the VCD file: %s", vcd_path);
+  // tfp->open(vcd_path);
+  // Log("The waveform will be saved to the VCD file: %s", vcd_path);
+  tfp->open(fst_path);
+  Log("The waveform will be saved to the FST file: %s", fst_path);
 
   top->reset = 1;
   top->clock = 0;
@@ -51,7 +55,8 @@ void sim_exit() {
   contextp->timeInc(1);
   tfp->dump(contextp->time());
   tfp->close();
-  printf("The wave data has been saved to the VCD file: %s\n", vcd_path);
+  // printf("The wave data has been saved to the VCD file: %s\n", vcd_path);
+  printf("The wave data has been saved to the FST file: %s\n", fst_path);
   exit(0);
 }
 

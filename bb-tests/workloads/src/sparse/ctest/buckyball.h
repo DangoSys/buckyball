@@ -3,19 +3,9 @@
 
 #include <stdint.h>
 
-// #define DIM 16
-// #define SPAD_ADDR_LEN 14
-// #define MEM_ADDR_LEN 32
-// #define BANK_NUM 4
-// #define BANK_ROWS 4096
-// #define RF_BANKS 2
-// #define BANK_ADDR_LEN 12
-// #define BANK_SEL_LEN 2
-// #define RF_ADDR_LEN 4
-// #define XCUSTOM_ACC 3
-
 // Data type for matrix elements
 typedef int8_t elem_t;
+typedef int32_t result_t;
 
 // Utility macros
 // #define SPAD_ADDR(bank, row) (((bank) << BANK_ADDR_LEN) | (row))
