@@ -4,7 +4,7 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 #-------------------------------------------------------------------------------
 # 设置baremetal编译标志
 #-------------------------------------------------------------------------------
-set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
+set(C_FLAGS -g -fno-common -O1 -static -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=htif_nano.specs -I${CTEST_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
