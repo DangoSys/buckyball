@@ -441,7 +441,7 @@ else:  # script mode
                     break
             except requests.exceptions.RequestException:
                 pass
-            time.sleep(3)
+            time.sleep(1)
         else:
             print("Server failed to start within 30 seconds")
             subprocess.run(
