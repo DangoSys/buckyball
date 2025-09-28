@@ -138,8 +138,10 @@ int main() {
   int pass = test_neural_network();
   if (pass) {
     printf("Neural Network Test PASSED\n");
+    return 0;
   } else {
     printf("Neural Network Test FAILED\n");
+    return 1;
   }
 
 #ifdef MULTICORE

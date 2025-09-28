@@ -53,8 +53,10 @@ int main() {
   int passed = test_zero_random();
   if (passed) {
     printf("vecunit_matmul_zero_random test PASSED\n");
+    return 0;
   } else {
     printf("vecunit_matmul_zero_random test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);

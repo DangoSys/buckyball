@@ -53,8 +53,10 @@ int main() {
   int passed = test_ones();
   if (passed) {
     printf("vecunit_matmul_ones test PASSED\n");
+    return 0;
   } else {
     printf("vecunit_matmul_ones test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);

@@ -34,8 +34,10 @@ int main() {
   int passed = test_transpose();
   if (passed) {
     printf("Transpose test PASSED\n");
+    return 0;
   } else {
     printf("Transpose test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);
