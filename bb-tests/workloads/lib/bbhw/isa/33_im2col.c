@@ -1,6 +1,6 @@
 #include "isa.h"
 
-// IM2COL指令配置
+// =========================== for simulator ===========================
 const InstructionConfig im2col_config = {
     .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 13},
                                      {"wr_spaddr", 14, 27},
@@ -13,38 +13,32 @@ const InstructionConfig im2col_config = {
                                      {"startrow", 54, 58},
                                      {NULL, 0, 0}}};
 
-// IM2COL指令执行函数
-#ifndef __x86_64__
-static void execute_im2col_impl(uint32_t rs1_val, uint32_t rs2_val) {
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 33, x0, %0, %1"
-               : : "r"(rs1_val), "r"(rs2_val) : "memory");
-}
-#else
-static void execute_im2col_impl(uint32_t rs1_val, uint32_t rs2_val) {
-  // x86平台下不执行RISC-V指令
-}
-#endif
+// =========================== for CTest ===========================
+#define IM2COL_ENCODE_RS1(op_addr, wr_addr)                                    \
+  (ENCODE_FIELD(op_addr, 0, 14) | ENCODE_FIELD(wr_addr, 14, 14))
 
-// 注册IM2COL指令
-void register_im2col_instruction(void) {
-  register_instruction(IM2COL_FUNC7, execute_im2col_impl);
-}
+#define IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol)        \
+  (ENCODE_FIELD(kcol, 26, 4) | ENCODE_FIELD(krow, 30, 4) |                     \
+   ENCODE_FIELD(incol, 34, 5) | ENCODE_FIELD(inrow, 39, 5) |                   \
+   ENCODE_FIELD(startcol, 49, 5) | ENCODE_FIELD(startrow, 54, 5))
+
+// IM2COL指令低级实现
+#ifndef __x86_64__
+#define IM2COL_RAW(rs1, rs2)                                                   \
+  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 33, x0, %0, %1"                \
+               :                                                               \
+               : "r"(rs1), "r"(rs2)                                            \
+               : "memory")
+#else
+#define IM2COL_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+#endif
 
 // IM2COL指令高级API实现
 void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
                uint32_t startcol) {
-  BuckyballInstruction inst = build_instruction(IM2COL_FUNC7);
-  InstructionBuilder builder = create_builder(&inst, IM2COL_FUNC7);
-
-  builder.set.rs1(&builder, "op_spaddr", op1_addr);
-  builder.set.rs1(&builder, "wr_spaddr", wr_addr);
-  builder.set.rs2(&builder, "krow", krow);
-  builder.set.rs2(&builder, "kcol", kcol);
-  builder.set.rs2(&builder, "inrow", inrow);
-  builder.set.rs2(&builder, "incol", incol);
-  builder.set.rs2(&builder, "startrow", startrow);
-  builder.set.rs2(&builder, "startcol", startcol);
-
-  execute_builder(builder);
+  uint32_t rs1_val = IM2COL_ENCODE_RS1(op1_addr, wr_addr);
+  uint32_t rs2_val =
+      IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol);
+  IM2COL_RAW(rs1_val, rs2_val);
 }

@@ -1,40 +1,35 @@
 #include "isa.h"
 
-// BBFP_MUL指令配置
+// =========================== for simulator ===========================
 const InstructionConfig bbfp_mul_config = {
     .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 13},
                                      {"op2_spaddr", 14, 27},
                                      {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){
-        {"wr_spaddr", 0, 13}, {"iter", 14, 35}, {NULL, 0, 0}}};
+        {"wr_spaddr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
 
-// BBFP_MUL指令执行函数
+// =========================== for CTest ===========================
+#define BBFP_MUL_ENCODE_RS1(op1_addr, op2_addr)                                \
+  (ENCODE_FIELD(op1_addr, 0, 14) | ENCODE_FIELD(op2_addr, 14, 14))
+
+#define BBFP_MUL_ENCODE_RS2(wr_addr, iter)                                     \
+  (ENCODE_FIELD(wr_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+
+// BBFP_MUL指令低级实现
 #ifndef __x86_64__
-static void execute_bbfp_mul_impl(uint32_t rs1_val, uint32_t rs2_val) {
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 26, x0, %0, %1"
-               : : "r"(rs1_val), "r"(rs2_val) : "memory");
-}
+#define BBFP_MUL_RAW(rs1, rs2)                                                 \
+  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 26, x0, %0, %1"                \
+               :                                                               \
+               : "r"(rs1), "r"(rs2)                                            \
+               : "memory")
 #else
-static void execute_bbfp_mul_impl(uint32_t rs1_val, uint32_t rs2_val) {
-  // x86平台下不执行RISC-V指令
-}
+#define BBFP_MUL_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
 #endif
-
-// 注册BBFP_MUL指令
-void register_bbfp_mul_instruction(void) {
-  register_instruction(BBFP_MUL_FUNC7, execute_bbfp_mul_impl);
-}
 
 // BBFP_MUL指令高级API实现
 void bb_bbfp_mul(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                  uint32_t iter) {
-  BuckyballInstruction inst = build_instruction(BBFP_MUL_FUNC7);
-  InstructionBuilder builder = create_builder(&inst, BBFP_MUL_FUNC7);
-
-  builder.set.rs1(&builder, "op1_spaddr", op1_addr);
-  builder.set.rs1(&builder, "op2_spaddr", op2_addr);
-  builder.set.rs2(&builder, "wr_spaddr", wr_addr);
-  builder.set.rs2(&builder, "iter", iter);
-
-  execute_builder(builder);
+  uint32_t rs1_val = BBFP_MUL_ENCODE_RS1(op1_addr, op2_addr);
+  uint32_t rs2_val = BBFP_MUL_ENCODE_RS2(wr_addr, iter);
+  BBFP_MUL_RAW(rs1_val, rs2_val);
 }
