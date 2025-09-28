@@ -3,17 +3,16 @@
 #include <bbhw/mem/spad.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-static elem_t input_matrix_a[DIM * 1024] __attribute__((aligned(64)));
-static elem_t input_matrix_b[DIM * 1024] __attribute__((aligned(64)));
+static elem_t input_matrix_a[DIM * 32] __attribute__((aligned(16)));
+static elem_t input_matrix_b[32 * DIM] __attribute__((aligned(16)));
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
-static elem_t a_transposed[DIM * 1024] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
-  transpose_u8_matrix(a, a_transposed, DIM, size);
+  static elem_t a_transposed[32 * DIM] __attribute__((aligned(16)));
+  transpose_u8_matrix(a, a_transposed, DIM, 32);
   uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
   uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
   uint32_t wr_addr = spad_addr(2, 0);  // acc0: 写入累加器, 偏移0
@@ -42,9 +41,9 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 int test_zero_random() {
-  clear_u8_matrix(input_matrix_a, DIM, DIM);
-  init_random_matrix(input_matrix_b, DIM, DIM, 555);
-  return run_test("Zero × Random", input_matrix_a, input_matrix_b, DIM);
+  clear_u8_matrix(input_matrix_a, DIM, 32);
+  init_u8_random_matrix(input_matrix_b, 32, DIM, 444);
+  return run_test("Zero × Random", input_matrix_a, input_matrix_b, 32);
 }
 
 int main() {
@@ -54,8 +53,10 @@ int main() {
   int passed = test_zero_random();
   if (passed) {
     printf("vecunit_matmul_16xn_zero_random test PASSED\n");
+    return 0;
   } else {
     printf("vecunit_matmul_16xn_zero_random test FAILED\n");
+    return 1;
   }
 #ifdef MULTICORE
   exit(0);
