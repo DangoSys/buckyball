@@ -3,65 +3,69 @@ import subprocess
 import sys
 
 # Add the utils directory to the Python path
-utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
-  sys.path.insert(0, utils_path)
+    sys.path.insert(0, utils_path)
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
+from utils.event_common import check_result
 
 config = {
-  "type": "event",
-  "name": "Marshal Build", 
-  "description": "build marshal",
-  "subscribes": ["marshal.build"],
-  "emits": ["marshal.build", "marshal.complete", "marshal.error"],
-  "flows": ["marshal"],
+    "type": "event",
+    "name": "Marshal Build",
+    "description": "build marshal",
+    "subscribes": ["marshal.build"],
+    "emits": [],
+    "flows": ["marshal"],
 }
 
+
 async def handler(data, context):
-  bbdir = get_buckyball_path()
-  script_dir = f"{bbdir}/workflow/steps/marshal/scripts"
-# ==================================================================================
-# 执行操作
-# ==================================================================================
-  command = f"source {bbdir}/env.sh && ./marshal -v build interactive.json  && ./marshal -v install interactive.json" 
-  result = stream_run_logger(cmd=command, logger=context.logger, cwd=script_dir, stdout_prefix="marshal build", stderr_prefix="marshal build")
-  
-# ==================================================================================
-# 向API返回结果
-# ==================================================================================  
-  if result.returncode != 0:
-    failure_result = {
-      "status": 500,
-      "body": {
-        "success": False,
-        "failure": True,
-        "processing": False,
-        "returncode": result.returncode,
-      }
-    }
-    await context.state.set(context.trace_id, 'failure', failure_result)
-  else:
-    success_result = {
-      "status": 200, 
-      "body": {
-        "success": True,
-        "failure": False,
-        "processing": False,
-        "returncode": result.returncode,
-      }
-    }
-    await context.state.set(context.trace_id, 'success', success_result)
+    bbdir = get_buckyball_path()
+    script_dir = f"{bbdir}/workflow/steps/marshal/scripts"
+    # ==================================================================================
+    # 执行操作
+    # ==================================================================================
+    command = f"source {bbdir}/env.sh && ./marshal -v build interactive.json  && ./marshal -v install interactive.json"
+    result = stream_run_logger(
+        cmd=command,
+        logger=context.logger,
+        cwd=script_dir,
+        stdout_prefix="marshal build",
+        stderr_prefix="marshal build",
+    )
 
-# ==================================================================================
-# 继续路由
-# Routing to verilog or finish workflow
-# For run workflow, continue to verilog; for standalone clean, complete
-# ==================================================================================
-  if result.returncode == 0:
-    await context.emit({"topic": "marshal.complete", "data": {**data, "task": "marshal", "result": success_result}})
-  else:
-    await context.emit({"topic": "marshal.error", "data": {**data, "task": "marshal", "result": failure_result, "returncode": result.returncode}})
+    # ==================================================================================
+    # 向API返回结果
+    # ==================================================================================
+    success_result, failure_result = await check_result(
+        context, result.returncode, continue_run=False
+    )
 
-  return
+    # ==================================================================================
+    # 继续路由
+    # Routing to verilog or finish workflow
+    # For run workflow, continue to verilog; for standalone clean, complete
+    # ==================================================================================
+    if result.returncode == 0:
+        await context.emit(
+            {
+                "topic": "marshal.complete",
+                "data": {**data, "task": "marshal", "result": success_result},
+            }
+        )
+    else:
+        await context.emit(
+            {
+                "topic": "marshal.error",
+                "data": {
+                    **data,
+                    "task": "marshal",
+                    "result": failure_result,
+                    "returncode": result.returncode,
+                },
+            }
+        )
+
+    return
