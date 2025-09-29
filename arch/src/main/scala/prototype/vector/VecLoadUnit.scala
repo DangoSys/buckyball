@@ -66,9 +66,20 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   }
 
 // -----------------------------------------------------------------------------
+// SRAM返回数据寄存器定义（需要在使用前定义）
+// -----------------------------------------------------------------------------
+	// 使用寄存器缓冲SRAM响应数据，避免组合逻辑环路
+	val sram_data_valid = RegNext(io.sramReadResp(op1_bank).valid && io.sramReadResp(op2_bank).valid, false.B)
+	val sram_op1_data = RegEnable(io.sramReadResp(op1_bank).bits.data, io.sramReadResp(op1_bank).valid)
+	val sram_op2_data = RegEnable(io.sramReadResp(op2_bank).bits.data, io.sramReadResp(op2_bank).valid)
+	val sram_iter_data = RegEnable(iter_counter, io.sramReadResp(op1_bank).valid && io.sramReadResp(op2_bank).valid)
+
+// -----------------------------------------------------------------------------
 // 发送SRAM读请求
 // -----------------------------------------------------------------------------
-	when(state === busy && io.ld_ex_o.ready) {
+	// 只有当下游准备好接收数据且没有待处理的SRAM请求时才发送新请求
+	val can_send_req = state === busy && io.ld_ex_o.ready && !sram_data_valid
+	when(can_send_req) {
 		io.sramReadReq(op1_bank).valid        := true.B
 		io.sramReadReq(op1_bank).bits.fromDMA := false.B
 		io.sramReadReq(op1_bank).bits.addr    := op1_addr + iter_counter
@@ -76,21 +87,28 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 		io.sramReadReq(op2_bank).valid        := true.B
 		io.sramReadReq(op2_bank).bits.fromDMA := false.B
 		io.sramReadReq(op2_bank).bits.addr    := op2_addr + iter_counter
-		iter_counter 				 := iter_counter + 1.U
+
+		// 只在成功发送请求时递增计数器
+		when(io.sramReadReq(op1_bank).ready && io.sramReadReq(op2_bank).ready) {
+			iter_counter := iter_counter + 1.U
+		}
   }
 
 // -----------------------------------------------------------------------------
 // SRAM返回数据, 并传递给EX单元
 // -----------------------------------------------------------------------------
+
+	// SRAM响应总是准备好接收数据
 	io.sramReadResp.foreach { resp =>
-		resp.ready := io.ld_ex_o.ready
+		resp.ready := true.B
 	}
 
-  when(io.sramReadResp(op1_bank).valid && io.sramReadResp(op2_bank).valid) {
+	// 使用注册的数据驱动输出
+  when(sram_data_valid) {
 		io.ld_ex_o.valid 		 := true.B
-    io.ld_ex_o.bits.op1  := io.sramReadResp(op1_bank).bits.data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
-    io.ld_ex_o.bits.op2  := io.sramReadResp(op2_bank).bits.data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
-		io.ld_ex_o.bits.iter := iter_counter
+    io.ld_ex_o.bits.op1  := sram_op1_data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
+    io.ld_ex_o.bits.op2  := sram_op2_data.asTypeOf(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
+		io.ld_ex_o.bits.iter := sram_iter_data
   }.otherwise {
 		io.ld_ex_o.valid 		 := false.B
 		io.ld_ex_o.bits.op1  := VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))
@@ -107,7 +125,7 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 // iter_counter归零，回归idle状态
 // -----------------------------------------------------------------------------
 
-	when(state === busy && iter_counter === iter - 1.U && io.ld_ex_o.ready) {
+	when(state === busy && iter_counter === iter && io.ld_ex_o.fire && !sram_data_valid) {
 		state 				:= idle
 		iter_counter 	:= 0.U
 	}
