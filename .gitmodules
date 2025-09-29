@@ -22,6 +22,6 @@
 [submodule "thirdparty/picker"]
 	path = thirdparty/picker
 	url = https://github.com/XS-MLVP/picker.git
-[submodule "thirdparty/gsim"]
-	path = thirdparty/gsim
-	url = https://github.com/OpenXiangShan/gsim.git
+[submodule "tools/paladin"]
+	path = tools/paladin
+	url = https://github.com/DangoSys/awesome-paladin.git
