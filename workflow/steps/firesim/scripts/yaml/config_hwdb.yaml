@@ -28,6 +28,6 @@ alveo_u280_firesim_GemminiBuckyballConfig_no_nic:
     custom_runtime_config: null
 
 alveo_u280_firesim_BuckyballToyConfig_no_nic:
-    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-25--12-15-07-alveo_u280_firesim_BuckyballToyConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimBuckyballToyConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-29--12-53-46-alveo_u280_firesim_BuckyballToyConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimBuckyballToyConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
     deploy_quintuplet_override: null
     custom_runtime_config: null
