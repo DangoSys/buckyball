@@ -15,13 +15,14 @@ if utils_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
+from utils.event_common import check_result
 
 config = {
     "type": "event",
     "name": "functional simulation",
     "description": "functional simulation",
     "subscribes": ["funcsim.sim"],
-    "emits": [""],
+    "emits": [],
     "flows": ["funcsim"],
 }
 
@@ -57,28 +58,9 @@ async def handler(data, context):
     # 返回仿真结果
     # ==================================================================================
     # 此处为run workflow的终点，status状态不再继续设为processing
-    if result.returncode != 0:
-        failure_result = {
-            "status": 500,
-            "body": {
-                "success": False,
-                "failure": True,
-                "processing": False,
-                "returncode": result.returncode,
-            },
-        }
-        await context.state.set(context.trace_id, "failure", failure_result)
-    else:
-        success_result = {
-            "status": 200,
-            "body": {
-                "success": True,
-                "failure": False,
-                "processing": False,
-                "returncode": result.returncode,
-            },
-        }
-        await context.state.set(context.trace_id, "success", success_result)
+    success_result, failure_result = await check_result(
+        context, result.returncode, continue_run=False
+    )
 
     # ==================================================================================
     #  finish workflow

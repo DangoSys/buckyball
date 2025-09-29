@@ -10,9 +10,11 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 from doc_utils import detect_doc_type, load_prompt_template, prepare_update_mode_prompt
 
-utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
-  sys.path.insert(0, utils_path)
+    sys.path.insert(0, utils_path)
+
+from utils.event_common import check_result
 
 load_dotenv()
 
@@ -143,13 +145,11 @@ async def send_success_response(
         }
     )
 
-    success_result = {
-        "status": 200,
-        "body": {
-            "success": True,
-            "failure": False,
-            "processing": False,
-            "returncode": 0,
+    success_result, failure_result = await check_result(
+        context,
+        0,
+        continue_run=False,
+        extra_fields={
             "message": f"文档生成成功: {output_path}",
             "data": {
                 "target_path": target_path,
@@ -159,8 +159,7 @@ async def send_success_response(
                 "response_length": len(full_response),
             },
         },
-    }
-    await context.state.set(context.trace_id, "success", success_result)
+    )
 
 
 async def send_error_response(context, error_msg, target_path, mode, trace_id):
@@ -180,14 +179,11 @@ async def send_error_response(context, error_msg, target_path, mode, trace_id):
         }
     )
 
-    failure_result = {
-        "status": 500,
-        "body": {
-            "success": False,
-            "failure": True,
-            "processing": False,
-            "returncode": 1,
+    success_result, failure_result = await check_result(
+        context,
+        1,
+        continue_run=False,
+        extra_fields={
             "error": full_error_msg,
         },
-    }
-    await context.state.set(context.trace_id, "failure", failure_result)
+    )

@@ -9,13 +9,14 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
+from utils.event_common import check_result
 
 config = {
     "type": "event",
     "name": "UVM Build DUT",
     "description": "build dut",
     "subscribes": ["uvm.builddut"],
-    "emits": ["uvm.builddut", "uvm.builddut.complete", "uvm.builddut.error"],
+    "emits": [],
     "flows": ["uvm"],
 }
 
@@ -47,52 +48,14 @@ async def handler(data, context):
     # ==================================================================================
     # 向API返回结果
     # ==================================================================================
-    if result.returncode != 0:
-        failure_result = {
-            "status": 500,
-            "body": {
-                "success": False,
-                "failure": True,
-                "processing": False,
-                "returncode": result.returncode,
-                # "stdout": result.stdout,
-                # "stderr": result.stderr,
-            },
-        }
-        await context.state.set(context.trace_id, "failure", failure_result)
-    else:
-        success_result = {
-            "status": 200,
-            "body": {
-                "success": True,
-                "failure": False,
-                "processing": False,
-                "returncode": result.returncode,
-                # "stdout": result.stdout,
-                # "stderr": result.stderr,
-            },
-        }
-        await context.state.set(context.trace_id, "success", success_result)
+    success_result, failure_result = await check_result(
+        context, result.returncode, continue_run=False
+    )
 
     # ==================================================================================
     # 继续路由
     # Routing to verilog or finish workflow
     # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================
-
-    if result.returncode == 0:
-        await context.emit(
-            {
-                "topic": "uvm.builddut.complete",
-                "data": {**data, "task": "builddut", "result": success_result},
-            }
-        )
-    else:
-        await context.emit(
-            {
-                "topic": "uvm.builddut.error",
-                "data": {**data, "task": "builddut", "result": failure_result},
-            }
-        )
 
     return

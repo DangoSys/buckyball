@@ -27,11 +27,21 @@ class WithNBuckyBallCores(
         mulDiv = Some(MulDivParams(
           mulUnroll = 8,
           mulEarlyOut = true,
-          divEarlyOut = true))),
+          divEarlyOut = true,
+        )),
+        useZba = true,
+        useZbb = true,
+        useZbs = true,
+        fpu = Some(FPUParams(minFLen = 16))),
       dcache = Some(DCacheParams(
+        nSets = 64,
+        nWays = 8,
         rowBits = site(SystemBusKey).beatBits,
+        nMSHRs = 0,
         blockBytes = site(CacheBlockBytes))),
       icache = Some(ICacheParams(
+        nSets = 64,
+        nWays = 8,
         rowBits = site(SystemBusKey).beatBits,
         blockBytes = site(CacheBlockBytes))))
     List.tabulate(n)(i => RocketTileAttachParamsBB(
@@ -48,7 +58,7 @@ class WithNBuckyBallCores(
       case InSubsystem => CBUS
       case InCluster(clusterId) => CCBUS(clusterId)
     }
-  )) 
+  ))
 }
 
 class RocketTileAttachConfig(f: RocketTileAttachParams => RocketTileAttachParams) extends TileAttachConfig[RocketTileAttachParams](f)
@@ -181,4 +191,3 @@ class WithCloneRocketTiles(
   }
   case NumTiles => up(NumTiles) + n
 })
-

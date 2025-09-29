@@ -10,13 +10,14 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
+from utils.event_common import check_result
 
 config = {
     "type": "event",
     "name": "make build",
     "description": "build verilator executable",
     "subscribes": ["uvm.build"],
-    "emits": ["uvm.sim", "uvm.complete", "uvm.error"],
+    "emits": [],
     "flows": ["uvm"],
 }
 
@@ -95,55 +96,14 @@ async def handler(data, context):
     # ==================================================================================
     # 向API返回结果
     # ==================================================================================
-    if data.get("from_run_workflow"):
-        await context.state.set(context.trace_id, "processing", True)
-    elif result.returncode != 0:
-        failure_result = {
-            "status": 500,
-            "body": {
-                "success": False,
-                "failure": True,
-                "processing": False,
-                "returncode": result.returncode,
-                # "stdout": result.stdout,
-                # "stderr": result.stderr,
-            },
-        }
-        await context.state.set(context.trace_id, "failure", failure_result)
-    else:
-        success_result = {
-            "status": 200,
-            "body": {
-                "success": True,
-                "failure": False,
-                "processing": False,
-                "returncode": result.returncode,
-                # "stdout": result.stdout,
-                # "stderr": result.stderr,
-            },
-        }
-        await context.state.set(context.trace_id, "success", success_result)
+    success_result, failure_result = await check_result(
+        context, result.returncode, continue_run=data.get("from_run_workflow", False)
+    )
 
     # ==================================================================================
     # 继续路由
     # Routing to verilog or finish workflow
     # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================
-    if data.get("from_run_workflow"):
-        await context.emit({"topic": "verilator.sim", "data": {**data, "task": "run"}})
-    elif result.returncode == 0:
-        await context.emit(
-            {
-                "topic": "verilator.complete",
-                "data": {**data, "task": "build", "result": success_result},
-            }
-        )
-    else:
-        await context.emit(
-            {
-                "topic": "verilator.error",
-                "data": {**data, "task": "build", "result": failure_result},
-            }
-        )
 
     return
