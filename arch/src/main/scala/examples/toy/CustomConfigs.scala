@@ -51,6 +51,6 @@ class WithMultiRoCCToyBuckyBall(harts: Int*)(
 
 class BuckyBallToyConfig extends Config(
   new framework.rocket.WithNBuckyBallCores(1) ++
-  new BuckyBallCustomConfig(CustomBuckyBallConfig()) ++
+  new BuckyBallCustomConfig ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
