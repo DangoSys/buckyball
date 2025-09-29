@@ -2,6 +2,7 @@
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/spad.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static elem_t input_matrix_a[DIM * 64] __attribute__((aligned(16)));
 static elem_t input_matrix_b[64 * DIM] __attribute__((aligned(16)));
