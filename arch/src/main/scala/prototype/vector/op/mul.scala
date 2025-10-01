@@ -35,7 +35,7 @@ class MulOp(implicit p: Parameters) extends Module {
   }
 
   for (i <- 0 until lane) {
-    io.out.bits.out(i) := reg1(cnt) * reg2(i)
+    io.out.bits.out(i) := Mux(io.out.valid, reg1(cnt) * reg2(i), 0.U)
   }
 
 }
@@ -49,4 +49,3 @@ trait CanHaveMulOp { this: BaseThread =>
 
   def getMulOp = mulOp
 }
-

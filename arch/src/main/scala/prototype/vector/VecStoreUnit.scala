@@ -49,7 +49,7 @@ class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
   when(io.ctrl_st_i.fire) {
 		// wr_bank 			:= io.ctrl_st_i.bits.wr_bank
 		wr_bank_addr 	:= io.ctrl_st_i.bits.wr_bank_addr
-		iter          := io.ctrl_st_i.bits.iter
+    iter := (io.ctrl_st_i.bits.iter + 15.U(10.W)) & (~15.U(10.W))
 		iter_counter 	:= 0.U
     state 		    := busy
   }
@@ -102,7 +102,7 @@ val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
 
         io.accWrite(i + b.acc_banks/2).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
       }
-    }	
+    }
     iter_counter := iter_counter + 1.U
 	}
 
