@@ -34,7 +34,8 @@ cmake -G Ninja .. \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
     -DPython3_EXECUTABLE=$(which python3) \
-    -DPython_EXECUTABLE=$(which python3)
+    -DPython_EXECUTABLE=$(which python3) \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ninja
 #ninja check-buddy
 
