@@ -1,4 +1,3 @@
-set(BUDDY_BINARY_DIR ${BUDDY_MLIR_DIR}/build/bin)
 set(CMAKE_CXX_COMPILER ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
 
 set(MODEL_LENET_DIR ${MODEL_DIR}/LeNet)
@@ -40,7 +39,7 @@ add_custom_command(
           ${BUDDY_BINARY_DIR}/buddy-opt
             -eliminate-empty-tensors
             -convert-tensor-to-linalg
-            -linalg-bufferize
+            -one-shot-bufferize="bufferize-function-boundaries"
             -convert-linalg-to-gemmini
             -batchmatmul-optimize
             > subgraph0_loops.mlir
@@ -49,7 +48,7 @@ add_custom_command(
           ${BUDDY_BINARY_DIR}/buddy-opt
             -eliminate-empty-tensors
             -convert-tensor-to-linalg
-            -linalg-bufferize
+            -one-shot-bufferize="bufferize-function-boundaries"
             -convert-linalg-to-gemmini
             # -lower-gemmini
             > subgraph0_gemmini.mlir
@@ -57,18 +56,16 @@ add_custom_command(
             -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
           ${BUDDY_BINARY_DIR}/buddy-opt
             -eliminate-empty-tensors
-            -linalg-bufferize
-            -tensor-bufferize
-            -func-bufferize
+            -one-shot-bufferize="bufferize-function-boundaries"
             -convert-linalg-to-gemmini
             -expand-strided-metadata
             -convert-linalg-to-loops
             -convert-scf-to-cf
             -llvm-request-c-wrappers
             -lower-gemmini
-            -arith-bufferize
-            -buffer-deallocation
-            -finalizing-bufferize
+            -ownership-based-buffer-deallocation
+            -buffer-deallocation-simplification
+            -bufferization-lower-deallocations
             -convert-arith-to-llvm
             -convert-func-to-llvm
             -finalize-memref-to-llvm
@@ -79,18 +76,16 @@ add_custom_command(
           -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
         ${BUDDY_BINARY_DIR}/buddy-opt
           -eliminate-empty-tensors
-          -linalg-bufferize
-          -tensor-bufferize
-          -func-bufferize
+          -one-shot-bufferize="bufferize-function-boundaries"
           -convert-linalg-to-gemmini
           -expand-strided-metadata
           -convert-linalg-to-loops
           -convert-scf-to-cf
           -llvm-request-c-wrappers
           -lower-gemmini
-          -arith-bufferize
-          -buffer-deallocation
-          -finalizing-bufferize
+          -ownership-based-buffer-deallocation
+          -buffer-deallocation-simplification
+          -bufferization-lower-deallocations
           -convert-arith-to-llvm
           -convert-func-to-llvm
           -finalize-memref-to-llvm
