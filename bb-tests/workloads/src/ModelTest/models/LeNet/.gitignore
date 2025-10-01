@@ -1,4 +1,5 @@
 data/
+arg0.data
 
 *.pth
 *.mlir

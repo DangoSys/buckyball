@@ -3,9 +3,8 @@
 - [项目概览](./README.md)
 	- [项目结构](./overview/overview.md)
 
-# 架构设计
-- [架构概览](./arch/arch.md)
-- [Scala 源码](./arch/src/main/scala/README.md)
+- [架构设计](./arch/arch.md)
+  - [Scala 源码](./arch/src/main/scala/README.md)
 	- [Util](./arch/src/main/scala/Util/README.md)
 	- [framework](./arch/src/main/scala/framework/README.md)
 		- [blink](./arch/src/main/scala/framework/blink/README.md)
@@ -40,11 +39,8 @@
 	- [sims](./arch/src/main/scala/sims/README.md)
 		- [firesim](./arch/src/main/scala/sims/firesim/README.md)
 		- [verilator](./arch/src/main/scala/sims/verilator/README.md)
-
-# compiler
-- [概述](./compiler/README.md)
+- [compiler](./compiler/README.md)
   - [BuckyballDialect](./compiler/BuckyballDilact/README.md)
-# bbdev
 - [bbdev](./workflow/README.md)
   - [agent](./workflow/steps/agent/README.md)
   - [compiler](./workflow/steps/compiler/README.md)
