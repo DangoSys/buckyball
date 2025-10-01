@@ -41,17 +41,21 @@
 		- [firesim](./arch/src/main/scala/sims/firesim/README.md)
 		- [verilator](./arch/src/main/scala/sims/verilator/README.md)
 
+# compiler
+- [概述](./compiler/README.md)
+  - [BuckyballDialect](./compiler/BuckyballDilact/README.md)
 # bbdev
-- [agent](./workflow/steps/agent/README.md)
-- [compiler](./workflow/steps/compiler/README.md)
-- [doc-agent](./workflow/steps/doc-agent/README.md)
-- [firesim](./workflow/steps/firesim/README.md)
-- [funcsim](./workflow/steps/funcsim/README.md)
-- [marshal](./workflow/steps/marshal/README.md)
-- [sardine](./workflow/steps/sardine/README.md)
-- [uvm](./workflow/steps/uvm/README.md)
-- [verilator](./workflow/steps/verilator/README.md)
-- [workload](./workflow/steps/workload/README.md)
+- [bbdev](./workflow/README.md)
+  - [agent](./workflow/steps/agent/README.md)
+  - [compiler](./workflow/steps/compiler/README.md)
+  - [doc-agent](./workflow/steps/doc-agent/README.md)
+  - [firesim](./workflow/steps/firesim/README.md)
+  - [funcsim](./workflow/steps/funcsim/README.md)
+  - [marshal](./workflow/steps/marshal/README.md)
+  - [sardine](./workflow/steps/sardine/README.md)
+  - [uvm](./workflow/steps/uvm/README.md)
+  - [verilator](./workflow/steps/verilator/README.md)
+  - [workload](./workflow/steps/workload/README.md)
 
 ---
 
