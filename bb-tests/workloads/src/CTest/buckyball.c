@@ -112,7 +112,23 @@ void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
 void init_sequence_matrix(elem_t *matrix, int rows, int cols) {
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      matrix[i * cols + j] = i * cols + j;
+      matrix[i * cols + j] = 1;
+    }
+  }
+}
+// 初始化列对齐的随机矩阵和原始矩阵
+void init_col_aligned_random_matrix(elem_t *aligned_matrix, elem_t *matrix,
+                                    int align, int rows, int cols, int seed) {
+  srand(seed);
+  int aligned_cols = (cols + align - 1) / align * align;
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < aligned_cols; j++) {
+      aligned_matrix[i * aligned_cols + j] = (j < cols) ? (rand() % 128) : 0;
+    }
+  }
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < cols; j++) {
+      matrix[i * cols + j] = aligned_matrix[i * aligned_cols + j];
     }
   }
 }

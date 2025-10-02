@@ -11,7 +11,7 @@ import freechips.rocketchip.rocket.MStatus
 
 class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
-  
+
   val io = IO(new Bundle {
     // 来自ReservationStation的load指令
     val cmdReq = Flipped(Decoupled(new MemRsIssue))
@@ -27,20 +27,21 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
 
   val s_idle :: s_dma_req :: s_dma_wait :: Nil = Enum(3)
   val state = RegInit(s_idle)
-  
+
   val rob_id_reg = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg = Reg(UInt(b.memAddrLen.W))  // 缓存mem_addr
   val iter_reg = Reg(UInt(10.W))  // 缓存迭代次数
   val resp_count = Reg(UInt(log2Up(16).W))  // 计数接收到的响应数量，最多支持16个响应
-  
+
   // 缓存解码好的bank信息
   val wr_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))
   val wr_bank_addr_reg = Reg(UInt(log2Up(b.spad_bank_entries).W))
   val is_acc_reg = RegInit(false.B) // 是否是acc bank的操作
+  val stride_reg = Reg(UInt(10.W)) // 缓存stride
 
   // 接收load指令
   io.cmdReq.ready := state === s_idle
-  
+
   when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
     state              := s_dma_req
     rob_id_reg         := io.cmdReq.bits.rob_id
@@ -49,6 +50,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     wr_bank_reg        := io.cmdReq.bits.cmd.sp_bank
     wr_bank_addr_reg   := io.cmdReq.bits.cmd.sp_bank_addr
     is_acc_reg         := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
+    stride_reg         := io.cmdReq.bits.cmd.special(10,0)
     resp_count         := 0.U
   }
 
@@ -57,6 +59,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   io.dmaReq.bits.vaddr  := mem_addr_reg
   io.dmaReq.bits.len    := iter_reg * (b.veclane * b.inputType.getWidth / 8).U // iter行数据的字节数
   io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus) // 简化：使用默认状态
+  io.dmaReq.bits.stride := stride_reg
 
   when (io.dmaReq.fire) {
     state := s_dma_wait
@@ -65,7 +68,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
 
   // 等待DMA响应
   io.dmaResp.ready := state === s_dma_wait
-  
+
   when (io.dmaResp.fire) {
     resp_count := resp_count + 1.U
     // 收到最后一个响应时转回idle状态
@@ -79,7 +82,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val current_bank_addr = wr_bank_addr_reg + io.dmaResp.bits.addrcounter // 使用DMA响应中的地址计数器
   val target_bank = wr_bank_reg  // 所有响应都写入同一个bank
   val target_row = current_bank_addr
-  
+
   for (i <- 0 until b.sp_banks) {
     io.sramWrite(i).req.valid     := io.dmaResp.fire && (target_bank === i.U)
     io.sramWrite(i).req.bits.addr := target_row

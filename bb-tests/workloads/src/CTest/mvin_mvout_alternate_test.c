@@ -16,7 +16,7 @@ int alternately_mvin_mvout_pressure_test() {
   for (int i = 0; i < 4; i++) {
     init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
     uint32_t wr_addr = spad_addr(4, i);
-    bb_mvin((uintptr_t)expected_matrix, wr_addr, DIM);
+    bb_mvin((uintptr_t)expected_matrix, wr_addr, DIM, 1);
     clear_u32_matrix(output_matrix, DIM, DIM);
     bb_mvout((uintptr_t)output_matrix, wr_addr, DIM);
     bb_fence();
