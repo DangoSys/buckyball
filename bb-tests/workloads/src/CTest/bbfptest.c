@@ -57,9 +57,9 @@ int main() {
   uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
   uint32_t wr_addr = spad_addr(2, 0);  // acc0: 写入累加器, 偏移0
 
-  bb_mvin((uintptr_t)input_matrix, op1_addr, DIM);
-  bb_mvin((uintptr_t)weight_matrix, op2_addr, DIM);
-  bb_mvin((uintptr_t)output_matrix, wr_addr, DIM << 2);
+  bb_mvin((uintptr_t)input_matrix, op1_addr, DIM, 1);
+  bb_mvin((uintptr_t)weight_matrix, op2_addr, DIM, 1);
+  bb_mvin((uintptr_t)output_matrix, wr_addr, DIM << 2, 1);
   printf("Perform Matmul\n");
   bb_bbfp_mul(op1_addr, op2_addr, wr_addr, DIM);
 

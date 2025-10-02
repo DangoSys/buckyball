@@ -17,7 +17,7 @@ int acc_mvin_mvout_pressure_test() {
     init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
 
     uint32_t wr_addr = spad_addr(4, i);
-    bb_mvin((uintptr_t)expected_matrix, wr_addr, DIM << 2);
+    bb_mvin((uintptr_t)expected_matrix, wr_addr, DIM << 2, 1);
     init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
     clear_u32_matrix(output_matrix, DIM, DIM);
 

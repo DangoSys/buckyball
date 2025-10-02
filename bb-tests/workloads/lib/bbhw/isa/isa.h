@@ -56,7 +56,8 @@ void set_bbinst_field(uint64_t *value, const char *field_name,
 
 // 高级别API (for CTest)
 
-void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter);
+void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
+             uint32_t col_stride);
 void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter);
 void bb_fence(void);
 void bb_mul_warp16(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,

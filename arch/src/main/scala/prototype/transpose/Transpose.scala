@@ -41,6 +41,7 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val raddr_reg = RegInit(0.U(10.W))
   val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
   val iter_reg  = RegInit(0.U(10.W))
+  val cycle_reg = RegInit(0.U(6.W))
 
   // 预计算写入数据
   val writeDataReg = Reg(UInt(spad_w.W))
@@ -72,29 +73,39 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
         state        := sRead
         readCounter  := 0.U
         writeCounter := 0.U
-        
+
         robid_reg := io.cmdReq.bits.rob_id
         waddr_reg := io.cmdReq.bits.cmd.op2_bank_addr
         wbank_reg := io.cmdReq.bits.cmd.op2_bank
         raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr
         rbank_reg := io.cmdReq.bits.cmd.op1_bank
         iter_reg  := io.cmdReq.bits.cmd.iter
+        cycle_reg := (io.cmdReq.bits.cmd.iter +& (b.veclane.U - 1.U)) / b.veclane.U - 1.U
+      }
+
+      when (cycle_reg =/= 0.U){
+        state        := sRead
+        readCounter  := 0.U
+        writeCounter := 0.U
+        respCounter  := 0.U
+        waddr_reg    := waddr_reg + b.veclane.U
+        raddr_reg    := raddr_reg + b.veclane.U
+        cycle_reg    := cycle_reg - 1.U
       }
     }
 
     is(sRead) {
-      when(readCounter < b.veclane.U+1.U) {
+      when(readCounter < b.veclane.U) {
       // 发起读取请求
       readCounter := readCounter + 1.U
-      io.sramRead(rbank_reg).req.valid     := readCounter < iter_reg
+      io.sramRead(rbank_reg).req.valid     := true.B
       io.sramRead(rbank_reg).req.bits.addr := raddr_reg + readCounter
 
+    }
+          // 当收到响应时，存储数据并增加计数器
+      val dataWord = io.sramRead(rbank_reg).resp.bits.data
       // 准备接收响应
       io.sramRead(rbank_reg).resp.ready := true.B
-
-      // 当收到响应时，存储数据并增加计数器
-      val dataWord = io.sramRead(rbank_reg).resp.bits.data
-
       // 按行写入寄存器阵列
       when(io.sramRead(rbank_reg).resp.fire) {
           for (col <- 0 until b.veclane) {
@@ -102,12 +113,11 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
             val lo = col * b.inputType.getWidth
             regArray(respCounter)(col) := dataWord(hi, lo)
       }
-      respCounter := respCounter + 1.U
+          respCounter := respCounter + 1.U
       }
-        
-    }
+
         // 如果读取完成，转到写入状态
-        when(respCounter  === iter_reg) {
+        when(respCounter  ===  b.veclane.U) {
           state := sWrite
 
           // 预计算第一列写入数据（取转置后第0列 -> 原矩阵每行的第0个元素）
@@ -138,12 +148,11 @@ is(sWrite) {
 }
 
     is(complete) {
-      io.cmdResp.valid       := true.B
-      io.cmdResp.bits.rob_id := robid_reg
-
-      when(io.cmdResp.fire) {
-        state := idle
+      when(cycle_reg === 0.U) {
+        io.cmdResp.valid       := true.B
+        io.cmdResp.bits.rob_id := robid_reg
       }
+        state := idle
     }
   }
 
