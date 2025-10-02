@@ -3,14 +3,17 @@
 // =========================== for simulator ===========================
 const InstructionConfig mvin_config = {
     .rs1_fields = (BitFieldConfig[]){{"base_dram_addr", 0, 31}, {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){
-        {"base_sp_addr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
+    .rs2_fields = (BitFieldConfig[]){{"col_stride", 24, 33},
+                                     {"base_sp_addr", 0, 13},
+                                     {"iter", 14, 23},
+                                     {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MVIN_ENCODE_RS1(dram_addr) ENCODE_FIELD(dram_addr, 0, 32)
 
-#define MVIN_ENCODE_RS2(sp_addr, iter)                                         \
-  (ENCODE_FIELD(sp_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+#define MVIN_ENCODE_RS2(sp_addr, iter, col_stride)                             \
+  (ENCODE_FIELD(sp_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10) |                 \
+   ENCODE_FIELD(col_stride, 24, 10))
 
 // MVIN指令低级实现
 #ifndef __x86_64__
@@ -24,8 +27,9 @@ const InstructionConfig mvin_config = {
 #endif
 
 // MVIN指令高级API实现
-void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter) {
+void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
+             uint32_t col_stride) {
   uint32_t rs1_val = MVIN_ENCODE_RS1(mem_addr);
-  uint32_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter);
+  uint32_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter, col_stride);
   MVIN_RAW(rs1_val, rs2_val);
 }

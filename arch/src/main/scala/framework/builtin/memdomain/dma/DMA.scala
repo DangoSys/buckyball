@@ -19,6 +19,7 @@ class BBReadRequest()(implicit p: Parameters) extends CoreBundle {
   val vaddr = UInt(coreMaxAddrBits.W)
   val len = UInt(16.W) // 读取长度（字节）
   val status = new MStatus
+  val stride = UInt(10.W) // 步长（字节）
 }
 
 class BBReadResponse(dataWidth: Int) extends Bundle {
@@ -67,7 +68,7 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
 
     // 选择请求大小 - 简化版本，固定使用 beatBytes
     val read_size = minOf(beatBytes.U, bytesLeft)
-    val read_vaddr = req.vaddr + bytesRequested
+    val read_vaddr = req.vaddr + bytesRequested * req.stride
 
     // 为了正确计算last信号，需要跟踪每个请求对应的字节范围
     val req_byte_start = Reg(UInt(16.W))  // 当前请求的起始字节位置
@@ -144,7 +145,7 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val resp_bytes_end = bytesReceived + beatBytes.U  // 接收当前beat后的总字节数
     io.resp.bits.last := edge.last(tl.d) && (resp_bytes_end >= req.len)
     tl.d.ready := io.resp.ready
-    
+
     // 更新已接收字节数
     when (tl.d.fire) {
       bytesReceived := bytesReceived + beatBytes.U
@@ -210,14 +211,14 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     // 简化：数据已经对齐，直接构造TileLink请求
     val lg_beat_bytes = log2Ceil(beatBytes)
     val use_put_full = req.mask === ~0.U(beatBytes.W)
-    
+
     val putFull = edge.Put(
       fromSource = xactId,
       toAddress = 0.U,
       lgSize = lg_beat_bytes.U,
       data = req.data
     )._2
-    
+
     val putPartial = edge.Put(
       fromSource = xactId,
       toAddress = 0.U,
@@ -225,7 +226,7 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
       data = req.data,
       mask = req.mask
     )._2
-    
+
     val selected_put = Mux(use_put_full, putFull, putPartial)
 
     // TLB 处理管道
