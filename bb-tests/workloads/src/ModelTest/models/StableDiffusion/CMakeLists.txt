@@ -10,7 +10,7 @@ add_custom_command(
          ${MODEL_STABLEDIFFUSION_DIR}/forward_vae.mlir
          ${MODEL_STABLEDIFFUSION_DIR}/subgraph0_vae.mlir
   COMMAND ${Python3_EXECUTABLE} ${MODEL_STABLEDIFFUSION_DIR}/import-stable-diffusion.py
-  --output-dir ${MODEL_STABLEDIFFUSION_DIR}
+          --output-dir ${MODEL_STABLEDIFFUSION_DIR}
   COMMENT "Generating forward.mlir, subgraph0.mlir and parameter files"
 )
 

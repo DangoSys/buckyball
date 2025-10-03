@@ -1,7 +1,6 @@
 set(MODEL_DEEPSEEKR1_DIR ${MODEL_DIR}/DeepSeekR1)
 set(MODEL_LENET_DIR ${MODEL_DIR}/LeNet)
 set(MODEL_RESNET18_DIR ${MODEL_DIR}/ResNet18)
-set(MODEL_RESNET101_DIR ${MODEL_DIR}/ResNet101)
 set(MODEL_BERT_DIR ${MODEL_DIR}/Bert)
 set(MODEL_MOBILENETV3_DIR ${MODEL_DIR}/MobileNetV3)
 set(MODEL_WHISPER_DIR ${MODEL_DIR}/Whisper)
@@ -19,10 +18,6 @@ endif()
 
 if (MODEL_RESNET18)
   add_subdirectory(ResNet18)
-endif()
-
-if (MODEL_RESNET101)
-  add_subdirectory(ResNet101)
 endif()
 
 if (MODEL_BERT)
