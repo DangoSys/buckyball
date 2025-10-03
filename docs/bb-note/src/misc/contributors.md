@@ -39,12 +39,12 @@ BuckyBall 项目由 DangoSys 团队主导开发，致力于构建高性能的领
 
 - **GitHub**: [DangoSys/buckyball](https://github.com/DangoSys/buckyball)
 - **Issues**: 通过 GitHub Issues 报告问题
-- **Discussions**: 参与 GitHub Discussions 技术讨论
+- **Discussions**: 参与 [Slack](https://buckyballhq.slack.com/) 进行讨论
 
 ## 致谢
 
 特别感谢以下开源项目和社区：
-- Berkeley Chipyard 项目
-- RISC-V 基金会
-- Chisel/FIRRTL 开发团队
+- Buddy-Compiler 开发团队
+- Chipyard 项目
+- RISCV 基金会
 - 所有测试用户和反馈者
