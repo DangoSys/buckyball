@@ -11,7 +11,7 @@ add_subdirectory(ResNet18)
 add_subdirectory(MobileNetV3)
 add_subdirectory(Bert)
 add_subdirectory(StableDiffusion)
-add_subdirectory(Llama2)
+add_subdirectory(llama2)
 add_subdirectory(DeepSeekR1)
 
 add_custom_target(buckyball-model-build DEPENDS
