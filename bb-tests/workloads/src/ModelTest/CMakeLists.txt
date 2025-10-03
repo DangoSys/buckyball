@@ -35,6 +35,6 @@ endif()
 add_subdirectory(models)
 add_subdirectory(archs)
 
-add_custom_target(ModelTest DEPENDS
-  gemmini-model-build
-)
+# add_custom_target(ModelTest DEPENDS
+#   gemmini-model-build
+# )
