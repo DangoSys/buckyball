@@ -20,6 +20,7 @@ set(BUDDY_BINARY_DIR $ENV{BUDDY_MLIR_BUILD_DIR}/bin)
 set(BUDDY_OPT ${BUDDY_BINARY_DIR}/buddy-opt)
 set(BUDDY_TRANSLATE ${BUDDY_BINARY_DIR}/buddy-translate)
 set(BUDDY_LLC ${BUDDY_BINARY_DIR}/buddy-llc)
+set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
 set(ELF_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
 set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
@@ -65,8 +66,6 @@ add_dependencies(sync-bin
   tutorial-build
 	buckyball-CTest-build
 	OpTest-all
-  # sparse-build
-  # ModelTest
 	)
 
 add_custom_target(build-all ALL
