@@ -18,6 +18,6 @@ To enable model-level testing with specific models and architectures:
 mkdir build && cd build
 cmake -G Ninja .. \
     -DMODEL="lenet" \
-    -DARCH="gemmini"
+    -DARCH="gemmini,buckyball"
 ninja
 ```
