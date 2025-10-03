@@ -54,8 +54,41 @@ add_library(ModelTestDIP_riscv STATIC ${CMAKE_CURRENT_BINARY_DIR}/DIP_riscv.o)
 set_target_properties(ModelTestDIP_riscv PROPERTIES LINKER_LANGUAGE CXX)
 
 # ==============================================================================
+# DAP Library for RISC-V - provides audio processing operations
+# ==============================================================================
+
+set(DAP_MLIR_PATH ${BUDDY_MLIR_DIR}/frontend/Interfaces/lib/DAP.mlir)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/DAP_riscv.o
+  COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${DAP_MLIR_PATH}
+          -lower-dap
+          -arith-expand
+          -lower-affine
+          -convert-scf-to-cf
+          -convert-math-to-llvm
+          -convert-math-to-libm
+          -convert-vector-to-llvm
+          -finalize-memref-to-llvm
+          -convert-func-to-llvm
+          -convert-cf-to-llvm
+          -convert-arith-to-llvm
+          -reconcile-unrealized-casts |
+          ${BUDDY_BINARY_DIR}/buddy-translate --mlir-to-llvmir |
+          ${BUDDY_BINARY_DIR}/buddy-llc -filetype=obj -mtriple=riscv64 -O2 -mattr=+buddyext,+D -float-abi=hard
+          -o ${CMAKE_CURRENT_BINARY_DIR}/DAP_riscv.o
+  DEPENDS ${DAP_MLIR_PATH}
+  COMMENT "Building DAP library for RISC-V"
+  VERBATIM
+)
+
+add_library(ModelTestDAP_riscv STATIC ${CMAKE_CURRENT_BINARY_DIR}/DAP_riscv.o)
+set_target_properties(ModelTestDAP_riscv PROPERTIES LINKER_LANGUAGE CXX)
+
+# ==============================================================================
 # Export variables for parent CMakeLists
 # ==============================================================================
 
 set(MODELTEST_CRUNNER_UTILS_LIB ModelTestCRunnerUtils PARENT_SCOPE)
 set(MODELTEST_DIP_RISCV_LIB ModelTestDIP_riscv PARENT_SCOPE)
+set(MODELTEST_DAP_RISCV_LIB ModelTestDAP_riscv PARENT_SCOPE)
