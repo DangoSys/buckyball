@@ -39,22 +39,54 @@ parser.add_argument(
     default="./",
     help="Directory to save output files.",
 )
+parser.add_argument(
+    "--use-auth-token",
+    type=str,
+    default=None,
+    nargs="?",
+    const=True,
+    help="HuggingFace authentication token (required for Llama-2). "
+    "Can be a token string or flag. If flag only, uses cached credentials from: huggingface-cli login",
+)
 args = parser.parse_args()
 
 # Ensure the output directory exists.
 output_dir = args.output_dir
 os.makedirs(output_dir, exist_ok=True)
 
-# Retrieve the LLaMA model path from environment variables.
-model_path = os.environ.get("LLAMA_MODEL_PATH")
-if model_path is None:
-    raise EnvironmentError(
-        "The environment variable 'LLAMA_MODEL_PATH' is not set or is invalid."
-    )
+# Download Llama-2-7b-hf from HuggingFace
+model_path = "meta-llama/Llama-2-7b-hf"
+print(f"Downloading model from HuggingFace: {model_path}")
 
-# Initialize the tokenizer and model from the specified model path.
-tokenizer = LlamaTokenizer.from_pretrained(model_path, legacy=True)
-model = LlamaForCausalLM.from_pretrained(model_path, torchscript=True)
+# Determine authentication token
+auth_token = args.use_auth_token
+if auth_token:
+    if auth_token is True:
+        print("Note: Using cached HuggingFace authentication.")
+    else:
+        print("Note: Using provided HuggingFace authentication token.")
+else:
+    print("Note: If download fails, you may need to:")
+    print("  1. Request access at: https://huggingface.co/meta-llama/Llama-2-7b-hf")
+    print("  2. Login with: huggingface-cli login")
+    print("  3. Run with: --use-auth-token <token> or --use-auth-token")
+
+# Initialize the tokenizer and model.
+# If using HuggingFace, it will automatically download and cache the model.
+try:
+    tokenizer = LlamaTokenizer.from_pretrained(
+        model_path, legacy=True, use_auth_token=auth_token if auth_token else None
+    )
+    model = LlamaForCausalLM.from_pretrained(
+        model_path, torchscript=True, use_auth_token=auth_token if auth_token else None
+    )
+except Exception as e:
+    print(f"\nError loading model: {e}")
+    print("\nIf you're trying to access Llama-2 from HuggingFace:")
+    print("1. Request access at: https://huggingface.co/meta-llama/Llama-2-7b-hf")
+    print("2. Login with: huggingface-cli login")
+    print("3. Run this script with: --use-auth-token flag")
+    raise
 model.config.use_cache = False
 
 # Initialize Dynamo Compiler with specific configurations as an importer.
