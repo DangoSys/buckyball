@@ -27,6 +27,8 @@ set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 
 set(BUILD_BIN_DIR ${WORKLOAD_DIR}/../build/workloads)
 set(OUTPUT_BIN_DIR ${WORKLOAD_DIR}/../output/workloads)
+
+set(Python3_EXECUTABLE python3)
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------
