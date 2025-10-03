@@ -17,7 +17,10 @@ To enable model-level testing with specific models and architectures:
 ```bash
 mkdir build && cd build
 cmake -G Ninja .. \
-    -DMODEL="lenet" \
+    -DMODEL="lenet,resnet18,mobilenetv3,bert" \
     -DARCH="gemmini,buckyball"
 ninja
 ```
+
+注意:
+bert, llama2, DeepseekR1 模型下载需要提前配置好 huggingface 的访问
