@@ -1,6 +1,6 @@
 set(MODEL_DIR ${MODELTEST_WORKLOAD_DIR}/models)
-set(GEMMINI_DIR ${MODELTEST_WORKLOAD_DIR}/gemmini)
-set(TOY_DIR ${MODELTEST_WORKLOAD_DIR}/toy)
+set(ARCH_DIR ${MODELTEST_WORKLOAD_DIR}/archs)
+set(MODELTEST_LIB_DIR ${MODELTEST_WORKLOAD_DIR}/lib)
 
 # ============================================================================
 # Parse ARCH variable: ARCH="gemmini,other_arch,..."
@@ -28,13 +28,6 @@ if (DEFINED MODEL)
   endforeach()
 endif()
 
-# ============================================================================
-# Architecture dependencies: some architectures need specific models
-# ============================================================================
-
+add_subdirectory(lib)
 add_subdirectory(models)
 add_subdirectory(archs)
-
-# add_custom_target(ModelTest DEPENDS
-#   gemmini-model-build
-# )
