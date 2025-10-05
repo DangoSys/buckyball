@@ -15,12 +15,12 @@ add_subdirectory(StableDiffusion)
 add_subdirectory(llama2)
 add_subdirectory(DeepSeekR1)
 
-add_custom_target(gemmini-model-build DEPENDS
-  GemminiLENET
-  GemminiRESNET18
-  GemminiMOBILENETV3
-  GemminiBERT
-  GemminiSTABLEDIFFUSION
-  GemminiLLAMA2
-  GemminiDEEPSEEKR1
-)
+# add_custom_target(gemmini-model-build DEPENDS
+#   GemminiLENET
+#   GemminiRESNET18
+#   GemminiMOBILENETV3
+#   GemminiBERT
+#   GemminiSTABLEDIFFUSION
+#   GemminiLLAMA2
+#   GemminiDEEPSEEKR1
+# )

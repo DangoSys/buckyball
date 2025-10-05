@@ -37,6 +37,14 @@ add_custom_command(
             -convert-elementwise-to-linalg
             -convert-tensor-to-linalg
             -one-shot-bufferize="bufferize-function-boundaries"
+          > subgraph0_linalg.mlir
+  COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_BERT_DIR}/subgraph0.mlir
+            -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
+          ${BUDDY_BINARY_DIR}/buddy-opt
+            -eliminate-empty-tensors
+            -convert-elementwise-to-linalg
+            -convert-tensor-to-linalg
+            -one-shot-bufferize="bufferize-function-boundaries"
             -convert-linalg-to-tile
             -convert-tile-to-buckyball
           > subgraph0_buckyball.mlir

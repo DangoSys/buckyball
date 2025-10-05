@@ -1,3 +1,5 @@
+set(CMAKE_CXX_COMPILER ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
+
 set(MODEL_DEEPSEEKR1_DIR ${MODEL_DIR}/DeepSeekR1)
 set(LLVM_TOOLS_BINARY_DIR ${BUDDY_MLIR_DIR}/llvm/build/bin)
 set(BUDDY_BINARY_DIR ${BUDDY_MLIR_DIR}/build/bin)
@@ -17,14 +19,8 @@ add_custom_command(
             -batchmatmul-optimize
             -convert-linalg-to-affine-loops
             -affine-loop-fusion
-            # -affine-parallelize
             -lower-affine
-            # -convert-scf-to-openmp
-            -func-bufferize
-            -arith-bufferize
-            -tensor-bufferize
             -buffer-deallocation
-            -finalizing-bufferize
             -convert-vector-to-scf
             -expand-strided-metadata
             -convert-vector-to-llvm
@@ -34,7 +30,6 @@ add_custom_command(
             -finalize-memref-to-llvm
             -convert-scf-to-cf
             -llvm-request-c-wrappers
-            # -convert-openmp-to-llvm
             -convert-arith-to-llvm
             -convert-math-to-llvm
             -convert-math-to-libm
@@ -56,7 +51,10 @@ add_custom_command(
     COMMAND ${LLVM_TOOLS_BINARY_DIR}/mlir-opt ${MODEL_DEEPSEEKR1_DIR}/subgraph0.mlir
               -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
             ${BUDDY_BINARY_DIR}/buddy-opt
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
               -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
               -convert-linalg-to-gemmini
               -lower-gemmini
               > subgraph0_gemmini.mlir
@@ -69,39 +67,33 @@ add_custom_command(
               -one-shot-bufferize="bufferize-function-boundaries"
               -convert-linalg-to-gemmini
               -lower-gemmini
-              -func-bufferize
-              -arith-bufferize
-              -tensor-bufferize
               -buffer-deallocation
-              -finalizing-bufferize
               -expand-strided-metadata
-              -convert-scf-to-cf
               -llvm-request-c-wrappers
               > subgraph0_test.mlir
     COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_DEEPSEEKR1_DIR}/subgraph0.mlir
               -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
             ${BUDDY_BINARY_DIR}/buddy-opt
-            -eliminate-empty-tensors
-            -convert-elementwise-to-linalg
-            -convert-tensor-to-linalg
-            -one-shot-bufferize="bufferize-function-boundaries"
-            -convert-linalg-to-gemmini
-            -lower-gemmini
-            -convert-linalg-to-loops
-            -func-bufferize
-            -arith-bufferize
-            -tensor-bufferize
-            -buffer-deallocation
-            -finalizing-bufferize
-            -expand-strided-metadata
-            -convert-scf-to-cf
-            -llvm-request-c-wrappers
-            -convert-arith-to-llvm
-            -convert-math-to-llvm
-            -convert-math-to-libm
-            -convert-func-to-llvm
-            -finalize-memref-to-llvm
-            -reconcile-unrealized-casts |
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
+              -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
+              -convert-linalg-to-gemmini
+              -expand-strided-metadata
+              -convert-linalg-to-loops
+              -convert-scf-to-cf
+              -llvm-request-c-wrappers
+              -lower-gemmini
+              -ownership-based-buffer-deallocation
+              -buffer-deallocation-simplification
+              -bufferization-lower-deallocations
+              -convert-cf-to-llvm
+              -convert-arith-to-llvm
+              -convert-math-to-llvm
+              -convert-math-to-libm
+              -convert-func-to-llvm
+              -finalize-memref-to-llvm
+              -reconcile-unrealized-casts |
             ${BUDDY_BINARY_DIR}/buddy-translate --buddy-to-llvmir
             > subgraph0.ll
     COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_DEEPSEEKR1_DIR}/subgraph0.mlir
@@ -112,16 +104,15 @@ add_custom_command(
               -convert-tensor-to-linalg
               -one-shot-bufferize="bufferize-function-boundaries"
               -convert-linalg-to-gemmini
-              -lower-gemmini
-              -convert-linalg-to-loops
-              -func-bufferize
-              -arith-bufferize
-              -tensor-bufferize
-              -buffer-deallocation
-              -finalizing-bufferize
               -expand-strided-metadata
+              -convert-linalg-to-loops
               -convert-scf-to-cf
               -llvm-request-c-wrappers
+              -lower-gemmini
+              -ownership-based-buffer-deallocation
+              -buffer-deallocation-simplification
+              -bufferization-lower-deallocations
+              -convert-cf-to-llvm
               -convert-arith-to-llvm
               -convert-math-to-llvm
               -convert-math-to-libm
