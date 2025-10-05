@@ -14,12 +14,12 @@ add_subdirectory(StableDiffusion)
 add_subdirectory(llama2)
 add_subdirectory(DeepSeekR1)
 
-add_custom_target(buckyball-model-build DEPENDS
-  BuckyballLENET
-  BuckyballRESNET18
-  BuckyballMOBILENETV3
-  BuckyballBERT
-  BuckyballSTABLEDIFFUSION
-  BuckyballLLAMA2
-  BuckyballDEEPSEEKR1
-)
+# add_custom_target(buckyball-model-build DEPENDS
+#   BuckyballLENET
+#   BuckyballRESNET18
+#   BuckyballMOBILENETV3
+#   BuckyballBERT
+#   BuckyballSTABLEDIFFUSION
+#   BuckyballLLAMA2
+#   BuckyballDEEPSEEKR1
+# )
