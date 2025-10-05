@@ -16,7 +16,6 @@ add_custom_command(
             -one-shot-bufferize="bufferize-function-boundaries"
             -convert-linalg-to-tile
             -convert-tile-to-buckyball
-            -lower-buckyball
             -expand-strided-metadata
             -convert-linalg-to-loops
             -convert-scf-to-cf
@@ -42,27 +41,77 @@ add_custom_command(
     COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_LLAMA2_DIR}/subgraph0.mlir
               -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
             ${BUDDY_BINARY_DIR}/buddy-opt
-            -eliminate-empty-tensors
-            -convert-elementwise-to-linalg
-            -convert-tensor-to-linalg
-            -one-shot-bufferize="bufferize-function-boundaries"
-            -convert-linalg-to-tile
-            -convert-tile-to-buckyball
-            -lower-buckyball
-            -expand-strided-metadata
-            -convert-linalg-to-loops
-            -convert-scf-to-cf
-            -llvm-request-c-wrappers
-            -lower-buckyball
-            -ownership-based-buffer-deallocation
-            -buffer-deallocation-simplification
-            -bufferization-lower-deallocations
-            -convert-math-to-llvm
-            -convert-math-to-libm
-            -convert-arith-to-llvm
-            -convert-func-to-llvm
-            -finalize-memref-to-llvm
-            -reconcile-unrealized-casts |
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
+              -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
+              -convert-linalg-to-tile
+              -convert-tile-to-buckyball
+              > subgraph0_buckyball1.mlir
+    COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_LLAMA2_DIR}/subgraph0.mlir
+              -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
+            ${BUDDY_BINARY_DIR}/buddy-opt
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
+              -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
+              -convert-linalg-to-tile
+              -convert-tile-to-buckyball
+              -expand-strided-metadata
+              -convert-linalg-to-loops
+              -convert-scf-to-cf
+              -llvm-request-c-wrappers
+              -lower-buckyball
+              > subgraph0_buckyball2.mlir
+    COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_LLAMA2_DIR}/subgraph0.mlir
+              -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
+            ${BUDDY_BINARY_DIR}/buddy-opt
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
+              -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
+              -convert-linalg-to-tile
+              -convert-tile-to-buckyball
+              -expand-strided-metadata
+              -convert-linalg-to-loops
+              -convert-scf-to-cf
+              -llvm-request-c-wrappers
+              -lower-buckyball
+              -ownership-based-buffer-deallocation
+              -buffer-deallocation-simplification
+              -bufferization-lower-deallocations
+              -convert-cf-to-llvm
+              -convert-arith-to-llvm
+              -convert-math-to-llvm
+              -convert-math-to-libm
+              -convert-func-to-llvm
+              -finalize-memref-to-llvm
+              -reconcile-unrealized-casts |
+            ${BUDDY_BINARY_DIR}/buddy-translate --buddy-to-llvmir
+              > subgraph0.ll
+    COMMAND ${BUDDY_BINARY_DIR}/buddy-opt ${MODEL_LLAMA2_DIR}/subgraph0.mlir
+              -pass-pipeline "builtin.module(func.func(tosa-to-linalg-named, tosa-to-linalg, tosa-to-tensor, tosa-to-arith))" |
+            ${BUDDY_BINARY_DIR}/buddy-opt
+              -eliminate-empty-tensors
+              -convert-elementwise-to-linalg
+              -convert-tensor-to-linalg
+              -one-shot-bufferize="bufferize-function-boundaries"
+              -convert-linalg-to-tile
+              -convert-tile-to-buckyball
+              -expand-strided-metadata
+              -convert-linalg-to-loops
+              -convert-scf-to-cf
+              -llvm-request-c-wrappers
+              -lower-buckyball
+              -ownership-based-buffer-deallocation
+              -buffer-deallocation-simplification
+              -bufferization-lower-deallocations
+              -convert-math-to-llvm
+              -convert-math-to-libm
+              -convert-arith-to-llvm
+              -convert-func-to-llvm
+              -finalize-memref-to-llvm
+              -reconcile-unrealized-casts |
           ${BUDDY_BINARY_DIR}/buddy-translate --buddy-to-llvmir |
           ${BUDDY_BINARY_DIR}/buddy-llc -filetype=obj -mtriple=riscv64 -O2 -mattr=+buddyext,+D -float-abi=hard -o subgraph0.o
     DEPENDS ${MODEL_LLAMA2_DIR}/subgraph0.mlir
