@@ -26,8 +26,8 @@ npx motia@latest create -n workflow -t python
 pip install python-dotenv
 pip install httpx
 
-cd ${BBDIR}/workflow/steps && rm *.{py,json}
-cd ${BBDIR}/workflow/steps && rm -r services/
-cd ${BBDIR}/workflow && rm -r services/
-cd ${BBDIR}/workflow && rm *.{md,tsx}
+cd ${BBDIR}/workflow/steps && rm *.{py,json} || true
+cd ${BBDIR}/workflow/steps && rm -r services/ || true
+cd ${BBDIR}/workflow && rm -r services/ || true
+cd ${BBDIR}/workflow && rm *.{md,tsx} || true
 # cd ${BBDIR}/workflow && npx motia dev -p 5000
