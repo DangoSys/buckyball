@@ -66,7 +66,7 @@ source buckyball/env.sh
 
 Run Verilator simulation test to verify installation:
 ```bash
-bbdev verilator --run '--jobs 16 --binary ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch'
+bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
 ```
 
 ### Docker Quick Experience (Not updated for a while)
@@ -83,3 +83,10 @@ You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and 
 ## Community
 
 Join our discussion on [Slack](https://buckyballhq.slack.com/)
+
+## Contributors
+Thank you for considering contributing to Buckyball!
+
+<a href="https://github.com/DangoSys/buckyball/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=DangoSys/buckyball" />
+</a>
