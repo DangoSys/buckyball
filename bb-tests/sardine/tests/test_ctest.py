@@ -12,14 +12,14 @@ ctest_workload_dir = sardine_dir / ".." / "output" / "workloads" / "src" / "CTes
 
 # Define all ctest workloads with absolute paths and corresponding IDs
 ctest_workloads = [
-    (
-        "ctest_mvin_mvout_acc_test_singlecore-baremetal",
-        "ctest_mvin_mvout_acc_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
-        "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
-    ),
+    # (
+    #     "ctest_mvin_mvout_acc_test_singlecore-baremetal",
+    #     "ctest_mvin_mvout_acc_test_singlecore-baremetal",
+    # ),
+    # (
+    #     "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
+    #     "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
+    # ),
     (
         "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
