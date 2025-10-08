@@ -125,7 +125,7 @@ add_cross_platform_test_target(ctest_bbfp_matmul_random2 bbfp_matmul_random2.c)
 add_cross_platform_test_target(ctest_bbfp_matmul_random3 bbfp_matmul_random3.c)
 add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
-
+add_cross_platform_test_target(ctest_relu_test relu_test.c)
 
 # 创建库依赖目标，确保所有库先构建
 # add_custom_target(buckyball-libs-build
@@ -158,5 +158,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_bbfp_matmul_random3
   ctest_transpose_test
   ctest_transpose_matmul
+  ctest_relu_test  
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

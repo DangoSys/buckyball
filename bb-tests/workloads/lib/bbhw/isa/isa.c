@@ -3,9 +3,12 @@
 
 // =========================== for simulator ===========================
 uint32_t get_bbinst_field(uint64_t value, const char *field_name,
-                          const BitFieldConfig *config) {
-  for (int i = 0; config[i].name != NULL; i++) {
-    if (strcmp(config[i].name, field_name) == 0) {
+                          const BitFieldConfig *config)
+{
+  for (int i = 0; config[i].name != NULL; i++)
+  {
+    if (strcmp(config[i].name, field_name) == 0)
+    {
       uint32_t bit_width = config[i].end_bit - config[i].start_bit + 1;
       uint64_t mask = ((1ULL << bit_width) - 1);
       return (value >> config[i].start_bit) & mask;
@@ -15,9 +18,12 @@ uint32_t get_bbinst_field(uint64_t value, const char *field_name,
 }
 
 void set_bbinst_field(uint64_t *value, const char *field_name,
-                      uint32_t field_value, const BitFieldConfig *config) {
-  for (int i = 0; config[i].name != NULL; i++) {
-    if (strcmp(config[i].name, field_name) == 0) {
+                      uint32_t field_value, const BitFieldConfig *config)
+{
+  for (int i = 0; config[i].name != NULL; i++)
+  {
+    if (strcmp(config[i].name, field_name) == 0)
+    {
       uint32_t bit_width = config[i].end_bit - config[i].start_bit + 1;
       uint64_t mask = ((1ULL << bit_width) - 1);
       // 清除原有值
@@ -37,10 +43,13 @@ extern const InstructionConfig bbfp_mul_config;
 extern const InstructionConfig matmul_ws_config;
 extern const InstructionConfig im2col_config;
 extern const InstructionConfig transpose_config;
+extern const InstructionConfig relu_config;
 
 // 通过func7获取指令配置
-const InstructionConfig *config(InstructionType func7) {
-  switch (func7) {
+const InstructionConfig *config(InstructionType func7)
+{
+  switch (func7)
+  {
   case MVIN_FUNC7:
     return &mvin_config;
   case MVOUT_FUNC7:
@@ -58,7 +67,9 @@ const InstructionConfig *config(InstructionType func7) {
   case FENCE_FUNC7:
     return NULL; // FENCE指令没有参数，不需要配置
   case FLUSH_FUNC7:
-    return NULL; // FLUSH指令没有参数，不需要配置
+    return NULL;         // FLUSH指令没有参数，不需要配置
+  case RELU_FUNC7:       // by wbh
+    return &relu_config; // by wbh
   default:
     return NULL;
   }

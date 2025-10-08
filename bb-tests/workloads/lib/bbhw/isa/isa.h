@@ -39,7 +39,8 @@ typedef enum {
   TRANSPOSE_FUNC7 = 34,  // 0x22 - Matrix transpose function code
   FLUSH_FUNC7 = 7,       // 0x07 - Flush function code
   BBFP_MUL_FUNC7 = 26,   // 0x1A - BBFP matrix multiply function code
-  MATMUL_WS_FUNC7 = 27   // 0x1B - Matrix multiply with warp16 function code
+  MATMUL_WS_FUNC7 = 27,   // 0x1B - Matrix multiply with warp16 function code
+  RELU_FUNC7 = 35        // 0x23 - ReLU 指令 by-wbh
 } InstructionType;
 
 // 指令配置结构 (for simulator)
@@ -71,6 +72,7 @@ void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t startcol);
 void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_flush(void);
+void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter); //-by wbh
 
 // 通过func7获取指令配置
 const InstructionConfig *config(InstructionType func7);
