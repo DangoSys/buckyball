@@ -2,6 +2,7 @@
 
 - [项目概览](./README.md)
 	- [项目结构](./overview/overview.md)
+	- [开发流程教学](./tutorial/tutorial.md)
 
 - [架构设计](./arch/arch.md)
   - [Scala 源码](./arch/src/main/scala/README.md)
