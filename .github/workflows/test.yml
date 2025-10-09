@@ -24,8 +24,9 @@ jobs:
           source ~/.zshrc
           buckyball_exec
           setproxy
+          git fetch origin ${{ github.ref_name }}
+          git clean -fdx
           git reset --hard origin/${{ github.ref_name }}
-          git pull origin ${{ github.ref_name }}
 
       - name: Build Workloads
         shell: zsh {0}
