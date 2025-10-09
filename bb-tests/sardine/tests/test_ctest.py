@@ -117,7 +117,10 @@ def test_ctest_workload_debug(
         1,
     ], f"Script failed with unexpected return code: {result['returncode']}"
 
-    if '"success":true,"failure":false,' not in result["stdout"]:
+    # if '"success":true,"failure":false,' not in result["stdout"]:
+    # assert False, f"Script failed: {result['stdout']}"
+
+    if "test PASSED" not in result["stdout"]:
         assert False, f"Script failed: {result['stdout']}"
 
     logging.info("test completed")
