@@ -441,7 +441,7 @@ if __name__ == "__main__":
                         break
                 except requests.exceptions.RequestException:
                     pass
-                time.sleep(1)
+                time.sleep(3)
             else:
                 print("Server failed to start within 30 seconds")
                 subprocess.run(

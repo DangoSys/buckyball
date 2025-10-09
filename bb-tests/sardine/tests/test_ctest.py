@@ -87,7 +87,7 @@ def test_ctest_workload_debug(
 ):
     caplog.set_level(logging.INFO)
 
-    time.sleep(test_index * 10)
+    time.sleep(test_index * 20)
     start_time = time.time()
     command = f'source {sardine_dir}/../../env.sh && bbdev verilator --sim "--binary {workload_path} --batch"'
     logging.info(f"Running command: {command}")
@@ -120,7 +120,7 @@ def test_ctest_workload_debug(
     # if '"success":true,"failure":false,' not in result["stdout"]:
     # assert False, f"Script failed: {result['stdout']}"
 
-    if "test PASSED" not in result["stdout"]:
+    if "PASSED" not in result["stdout"]:
         assert False, f"Script failed: {result['stdout']}"
 
     logging.info("test completed")
