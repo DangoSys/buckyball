@@ -24,9 +24,9 @@ jobs:
           source ~/.zshrc
           buckyball_exec
           setproxy
-          git fetch origin ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          git fetch origin +refs/heads/*:refs/remotes/origin/* +refs/pull/*/head:refs/remotes/origin/pr/*
           git clean -fd
-          git reset --hard origin/${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          git reset --hard ${{ github.sha }}
 
       - name: Build Workloads
         shell: zsh {0}
