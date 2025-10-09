@@ -117,8 +117,9 @@ fi
 
 if run_step "4"; then
   begin_step "4" "Install simulator"
-  source ${BBDIR}/env.sh
-  ${BBDIR}/scripts/install-simulator.sh
+  # source ${BBDIR}/env.sh
+  # ${BBDIR}/scripts/install-simulator.sh
+  echo "Simulator installation is skipped"
 fi
 
 if run_step "5"; then
