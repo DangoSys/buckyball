@@ -14,7 +14,6 @@ Chisel学习资源：[binder](https://mybinder.org/v2/gh/freechipsproject/chisel
 
 ```
 cd /path/to/buckyball  
-source ~/.bashrc
 source env.sh
 // 全文所有路径都是以./buckyball为起点的相对路径
 ```
