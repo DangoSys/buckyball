@@ -137,10 +137,10 @@ int main() {
   printf("Neural Network Test Starting...\n");
   int pass = test_neural_network();
   if (pass) {
-    printf("Neural Network Test PASSED\n");
+    printf("Neural Network test PASSED\n");
     return 0;
   } else {
-    printf("Neural Network Test FAILED\n");
+    printf("Neural Network test FAILED\n");
     return 1;
   }
 

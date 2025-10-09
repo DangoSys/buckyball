@@ -4,21 +4,21 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - '*'
 
 jobs:
-  Code-Pull:
-    name: Code Pull
+  CI-Test:
+    name: CI Test
     runs-on: cpu-server
     steps:
-      # - name: Checkout repository
-      #   uses: actions/checkout@v4
-      #   with:
-      #     fetch-depth: 0
       - name: Print information
         run: |
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
           echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Pull from the repository (normal)
+
+      - name: Pull from the repository
         shell: zsh {0}
         run: |
           source ~/.zshrc
@@ -26,13 +26,7 @@ jobs:
           setproxy
           git reset --hard origin/${{ github.ref_name }}
           git pull origin ${{ github.ref_name }}
-      - run: echo "🍏 pull from repository ${{ job.status }}."
 
-  Build-Workloads:
-    name: Build Workloads
-    runs-on: cpu-server
-    needs: Code-Pull
-    steps:
       - name: Build Workloads
         shell: zsh {0}
         run: |
@@ -40,61 +34,32 @@ jobs:
           buckyball_exec
           setproxy
           bbdev workload --build
-      # 如果检查失败，强制回退分支
-      - run: echo "🍏 Workloads build is ${{ job.status }}."
-      - name: Revert Bad Commit
-        if: failure()
-        shell: zsh {0}
-        run: |
-          source ~/.zshrc
-          buckyball_exec
-          setproxy
-          git reset --hard HEAD~1
-          git push --force origin ${{ github.ref_name }}
 
-  Build-Verilator:
-    name: Build Verilator
-    runs-on: cpu-server
-    needs: Build-Workloads
-    steps:
       - name: Build Verilator
         shell: zsh {0}
         run: |
           source ~/.zshrc
           buckyball_exec
           bbdev verilator --clean
-          bbdev verilator --verilog 
+          bbdev verilator --verilog
           bbdev verilator --build '--jobs 16'
-      # 如果检查失败，强制回退分支
-      - name: Revert Bad Commit
-        if: failure()
-        shell: zsh {0}
-        run: |
-          source ~/.zshrc
-          buckyball_exec
-          setproxy
-          git reset --hard HEAD~1
-          git push --force origin ${{ github.ref_name }}
 
-  Smoke-Test:
-    name: Smoke Test
-    runs-on: cpu-server
-    needs: Build-Verilator
-    steps:
       - name: Smoke Test
         shell: zsh {0}
         run: |
           source ~/.zshrc
           buckyball_exec
           bbdev sardine --run '--workload ctest'
-      - run: echo "🍏 Smoke Test is ${{ job.status }}."
+
+      - run: echo "🍏 CI Test is ${{ job.status }}."
+
       # 如果检查失败，强制回退分支
-      - name: Revert Bad Commit
-        if: failure()
-        shell: zsh {0}
-        run: |
-          source ~/.zshrc
-          buckyball_exec
-          setproxy
-          git reset --hard HEAD~1
-          git push --force origin ${{ github.ref_name }}
+      # - name: Revert Bad Commit
+      #   if: failure()
+      #   shell: zsh {0}
+      #   run: |
+      #     source ~/.zshrc
+      #     buckyball_exec
+      #     setproxy
+      #     git reset --hard HEAD~1
+      #     git push --force origin ${{ github.ref_name }}

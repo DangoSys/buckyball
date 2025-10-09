@@ -327,171 +327,178 @@ if __name__ == "__main__":
     # print(f"Operation: {cmd_info['operation']}")
     # print(f"Arguments: {cmd_info['args']}")
 
-# ==================================================================================
-# 两种模式 server mode 和 script mode
-#
-# server mode: 手动启动/关闭 server，可以通过浏览器可视化访问对应的工作流
-# script mode: 自动分配port，任务开始时自动开启服务，结束时自动关闭服务
-# ==================================================================================
-if args.server:
-    if cmd_info["command"] == "start":
-        print(f"Starting dev server on port {args.port}")
-        subprocess.run(
-            ["npx", "motia", "dev", "--port", str(args.port)],
-            cwd=workflow_dir,
-            check=True,
-        )
-
-    elif cmd_info["command"] == "stop":
-        if cmd_info["operation"] == "all":
-            print("Stopping all servers")
+    # ==================================================================================
+    # 两种模式 server mode 和 script mode
+    #
+    # server mode: 手动启动/关闭 server，可以通过浏览器可视化访问对应的工作流
+    # script mode: 自动分配port，任务开始时自动开启服务，结束时自动关闭服务
+    # ==================================================================================
+    if args.server:
+        if cmd_info["command"] == "start":
+            print(f"Starting dev server on port {args.port}")
             subprocess.run(
-                "kill -9 $(ps aux | grep '[m]otia' | awk '{print $2}')",
-                shell=True,
-                check=False,
-                text=True,
-            )
-        else:
-            print(f"Stopping server on port {args.port}")
-            subprocess.run(
-                f"kill -TERM $(lsof -t -i :{args.port})",
-                shell=True,
-                check=False,
-                text=True,
+                ["npx", "motia", "dev", "--port", str(args.port)],
+                cwd=workflow_dir,
+                check=True,
             )
 
-    elif cmd_info["command"] in [
-        "verilator",
-        "vcs",
-        "sardine",
-        "agent",
-        "workload",
-        "doc",
-        "marshal",
-        "firesim",
-        "compiler",
-        "funcsim",
-        "uvm",
-    ]:
-        api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-        json_data = json.dumps(cmd_info["args"])
-        subprocess.run(
-            [
-                "curl",
-                "-X",
-                "POST",
-                f"http://localhost:{args.port}{api_path}",
-                "-H",
-                "Content-Type: application/json",
-                "-d",
-                json_data,
-            ],
-            cwd=workflow_dir,
-            check=True,
-        )
-        # print(f"\ncurl -X POST http://localhost:{args.port}{api_path} -H \"Content-Type: application/json\" -d '{json_data}'")
-    else:
-        print(f"Unknown command: {cmd_info['command']}")
-        print(
-            "Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim, uvm"
-        )
-        sys.exit(1)
-else:  # script mode
-    if cmd_info["command"] == "start":
-        print(f" 'start' do nothing in script mode")
-    elif cmd_info["command"] == "stop":
-        print(f" 'stop' do nothing in script mode")
-    elif cmd_info["command"] in [
-        "verilator",
-        "vcs",
-        "sardine",
-        "agent",
-        "workload",
-        "doc",
-        "marshal",
-        "firesim",
-        "compiler",
-        "funcsim",
-        "uvm",
-    ]:
-        # 1.启动服务在后台 ================================
-        # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
-        if args.port:
-            available_port = args.port
-        else:
-            available_port = find_available_port(start_port=5100, end_port=5500)
-        print(f"Starting server on port {available_port}...")
-        proc = subprocess.Popen(
-            ["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir
-        )
-
-        # 等待服务启动完成
-        max_retries = 30
-        for i in range(max_retries):
-            try:
-                # 禁用代理，直接连接localhost
-                # response = requests.get(f"http://localhost:{available_port}", timeout=1)
-                response = requests.get(
-                    f"http://localhost:{available_port}",
-                    timeout=1,
-                    proxies={"http": None, "https": None, "all": None},
+        elif cmd_info["command"] == "stop":
+            if cmd_info["operation"] == "all":
+                print("Stopping all servers")
+                subprocess.run(
+                    "kill -9 $(ps aux | grep '[m]otia' | awk '{print $2}')",
+                    shell=True,
+                    check=False,
+                    text=True,
                 )
-                if response.status_code == 200:
-                    print(f"Server is ready on port {available_port}")
-                    break
-            except requests.exceptions.RequestException:
-                pass
-            time.sleep(1)
-        else:
-            print("Server failed to start within 30 seconds")
+            else:
+                print(f"Stopping server on port {args.port}")
+                subprocess.run(
+                    f"kill -TERM $(lsof -t -i :{args.port})",
+                    shell=True,
+                    check=False,
+                    text=True,
+                )
+
+        elif cmd_info["command"] in [
+            "verilator",
+            "vcs",
+            "sardine",
+            "agent",
+            "workload",
+            "doc",
+            "marshal",
+            "firesim",
+            "compiler",
+            "funcsim",
+            "uvm",
+        ]:
+            api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
+            json_data = json.dumps(cmd_info["args"])
             subprocess.run(
-                f"kill -TERM $(lsof -t -i :{available_port})",
-                shell=True,
-                check=False,
+                [
+                    "curl",
+                    "-X",
+                    "POST",
+                    f"http://localhost:{args.port}{api_path}",
+                    "-H",
+                    "Content-Type: application/json",
+                    "-d",
+                    json_data,
+                ],
+                cwd=workflow_dir,
+                check=True,
+            )
+        else:
+            print(f"Unknown command: {cmd_info['command']}")
+            print(
+                "Available commands: start, stop, verilator, vcs, sardine, agent, \
+                workload, doc, marshal, firesim, compiler, funcsim, uvm"
+            )
+            sys.exit(1)
+    else:  # script mode
+        if cmd_info["command"] == "start":
+            print(" 'start' do nothing in script mode")
+        elif cmd_info["command"] == "stop":
+            print(" 'stop' do nothing in script mode")
+        elif cmd_info["command"] in [
+            "verilator",
+            "vcs",
+            "sardine",
+            "agent",
+            "workload",
+            "doc",
+            "marshal",
+            "firesim",
+            "compiler",
+            "funcsim",
+            "uvm",
+        ]:
+            # 1.启动服务在后台 ================================
+            # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
+            if args.port:
+                available_port = args.port
+            else:
+                available_port = find_available_port(start_port=5100, end_port=5500)
+            print(f"Starting server on port {available_port}...")
+            proc = subprocess.Popen(
+                ["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir
+            )
+
+            # 等待服务启动完成
+            max_retries = 30
+            for i in range(max_retries):
+                try:
+                    # 禁用代理，直接连接localhost
+                    # response = requests.get(f"http://localhost:{available_port}", timeout=1)
+                    response = requests.get(
+                        f"http://localhost:{available_port}",
+                        timeout=1,
+                        proxies={"http": None, "https": None, "all": None},
+                    )
+                    if response.status_code == 200:
+                        print(f"Server is ready on port {available_port}")
+                        break
+                except requests.exceptions.RequestException:
+                    pass
+                time.sleep(1)
+            else:
+                print("Server failed to start within 30 seconds")
+                subprocess.run(
+                    f"kill -TERM $(lsof -t -i :{available_port})",
+                    shell=True,
+                    check=False,
+                    text=True,
+                )
+                proc.terminate()
+                proc.wait()
+                sys.exit(1)
+
+            # 2. 执行API调用 ================================
+            api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
+            json_data = json.dumps(cmd_info["args"])
+            print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
+            # 禁用代理，直接连接localhost
+            result = subprocess.run(
+                [
+                    "curl",
+                    "-sS",
+                    "--noproxy",
+                    "localhost",
+                    "-X",
+                    "POST",
+                    f"http://localhost:{available_port}{api_path}",
+                    "-H",
+                    "Content-Type: application/json",
+                    "-d",
+                    json_data,
+                ],
+                cwd=workflow_dir,
+                capture_output=True,
                 text=True,
             )
+
+            # 3.关闭服务 ================================
             proc.terminate()
             proc.wait()
+            print(
+                f"\nTask completed. Command running on http://localhost:{available_port} is finished"
+            )
+
+            # 检查API返回的success字段
+            try:
+                response = json.loads(result.stdout)
+                if not response.get("success", False):
+                    print("Error: Task failed")
+                    sys.exit(1)
+            except Exception:
+                print("Error: Invalid API response")
+                sys.exit(1)
+
+        else:
+            print(f"Unknown command: {cmd_info['command']}")
+            print(
+                "Available commands: start, stop, verilator, vcs, sardine, agent, \
+                workload, doc, marshal, firesim, compiler, funcsim, uvm"
+            )
             sys.exit(1)
-
-        # 2. 执行API调用 ================================
-        api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-        json_data = json.dumps(cmd_info["args"])
-        print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
-        # 禁用代理，直接连接localhost
-        result = subprocess.run(
-            [
-                "curl",
-                "-sS",
-                "--noproxy",
-                "localhost",
-                "-X",
-                "POST",
-                f"http://localhost:{available_port}{api_path}",
-                "-H",
-                "Content-Type: application/json",
-                "-d",
-                json_data,
-            ],
-            cwd=workflow_dir,
-            check=True,
-        )
-
-        # 3.关闭服务 ================================
-        # print("Press Ctrl+C to stop the server and exit...")
-        proc.terminate()
-        proc.wait()
-        print(
-            f"\nTask completed. Command running on http://localhost:{available_port} is finished"
-        )
-
-        if result.returncode != 0:
-            print(f"Error: {result.stderr}")
-            sys.exit(1)
-
-    else:
-        print(f"Unknown command: {cmd_info['command']}")
-        print(
-            "Available commands: start, stop, verilator, vcs, sardine, agent, workload, doc, marshal, firesim, compiler, funcsim, uvm"
-        )
-        sys.exit(1)
