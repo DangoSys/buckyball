@@ -1,19 +1,21 @@
-name: Buckyball CI (Push)
-run-name: ${{ github.actor }} is running CI Test 🚀
+name: Buckyball CI (PR)
+run-name: ${{ github.actor }} is running PR Test 🚀
 on:
-  push:
+  pull_request:
     branches:
-      - main
+      - '*'
 
 jobs:
-  CI-Test:
-    name: CI Test
+  PR-Test:
+    name: PR Test
     runs-on: cpu-server
     steps:
       - name: Print information
         run: |
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-          echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+          echo "🔎 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+          echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
+          echo "🔎 Repository: ${{ github.repository }}"
 
       - name: Pull from the repository
         shell: zsh {0}
@@ -21,7 +23,7 @@ jobs:
           source ~/.zshrc
           buckyball_exec
           setproxy
-          git fetch origin main
+          git fetch origin +refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr/${{ github.event.pull_request.number }}
           git clean -fd
           git reset --hard ${{ github.sha }}
 
@@ -49,15 +51,4 @@ jobs:
           buckyball_exec
           bbdev sardine --run '--workload ctest'
 
-      - run: echo "🍏 CI Test is ${{ job.status }}."
-
-      # 如果检查失败，强制回退分支
-      # - name: Revert Bad Commit
-      #   if: failure()
-      #   shell: zsh {0}
-      #   run: |
-      #     source ~/.zshrc
-      #     buckyball_exec
-      #     setproxy
-      #     git reset --hard HEAD~1
-      #     git push --force origin main
+      - run: echo "🍏 PR Test is ${{ job.status }}."
