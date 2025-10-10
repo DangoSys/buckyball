@@ -9,6 +9,7 @@ import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import framework.blink.Status
 
 class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
@@ -21,6 +22,9 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
     // 连接到Scratchpad的SRAM读写接口
     val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
+
+    // Status output
+    val status = new Status
   })
 
   val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
@@ -42,6 +46,7 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
   val iter_reg  = RegInit(0.U(10.W))
   val cycle_reg = RegInit(0.U(6.W))
+  val iterCnt   = RegInit(0.U(32.W))  // 批次迭代计数器
 
   // 预计算写入数据
   val writeDataReg = Reg(UInt(spad_w.W))
@@ -151,10 +156,22 @@ is(sWrite) {
       when(cycle_reg === 0.U) {
         io.cmdResp.valid       := true.B
         io.cmdResp.bits.rob_id := robid_reg
+        when(io.cmdResp.fire) {
+          iterCnt := iterCnt + 1.U
+        }
       }
         state := idle
     }
   }
+
+  // Status signals
+  io.status.ready := io.cmdReq.ready
+  io.status.valid := io.cmdResp.valid
+  io.status.idle := (state === idle)
+  io.status.init := (state === sRead) && (respCounter < b.veclane.U)
+  io.status.running := (state === sWrite) || ((state === sRead) && (respCounter === b.veclane.U))
+  io.status.complete := (state === complete) && io.cmdResp.fire
+  io.status.iter := iterCnt
 
   // 初始化寄存器阵列
   when(reset.asBool) {

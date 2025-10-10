@@ -48,5 +48,8 @@ class VecBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends
     vecUnit.io.accWrite(i) <> io.accWrite(i)
   }
 
+  // 连接Status信号 - 直接从内部单元获取
+  io.status <> vecUnit.io.status
+
   override lazy val desiredName = "VecBall"
 }

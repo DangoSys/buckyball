@@ -9,6 +9,7 @@ import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import framework.blink.Status
 import firrtl2.passes.CheckTypes.st
 
 
@@ -24,6 +25,8 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
 
+    // Status output
+    val status = new Status
   })
 
   val idle :: read :: read_and_convert :: complete :: Nil = Enum(4) // 状态定义
@@ -44,6 +47,7 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))// 保存写入的bank
   val raddr_reg = RegInit(0.U(10.W))                // 保存读取的起始地址
   val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))// 保存读取`的bank
+  val iterCnt = RegInit(0.U(32.W))                  // 批次迭代计数器
 
 
   //SRAM默认赋值
@@ -156,6 +160,18 @@ class Im2col(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
      io.cmdResp.valid       := true.B
      io.cmdResp.bits.rob_id := robid_reg
      state                  := idle
+     when(io.cmdResp.fire) {
+       iterCnt := iterCnt + 1.U
+     }
     }
   }
+
+  // Status signals
+  io.status.ready := io.cmdReq.ready
+  io.status.valid := io.cmdResp.valid
+  io.status.idle := (state === idle)
+  io.status.init := (state === read)
+  io.status.running := (state === read_and_convert)
+  io.status.complete := (state === complete) && io.cmdResp.fire
+  io.status.iter := iterCnt
 }

@@ -49,5 +49,8 @@ class MatrixBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) exte
     matrixUnit.io.accWrite(i) <> io.accWrite(i)
   }
 
+  // 连接Status信号 - 直接从内部单元获取
+  io.status <> matrixUnit.io.status
+
   override lazy val desiredName = "MatrixBall"
 }

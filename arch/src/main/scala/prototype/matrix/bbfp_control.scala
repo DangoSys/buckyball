@@ -10,6 +10,7 @@ import org.yaml.snakeyaml.events.Event.ID
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.blink.Status
 
 class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
@@ -23,6 +24,9 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
      // 连接到Accumulator的读写接口
     // val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+
+    // Status output
+    val status = new Status
   })
 // -----------------------------------------------------------------------------
 // BBFP_ID
@@ -64,5 +68,30 @@ class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
     // io.accRead(i) := DontCare
   }
   io.cmdResp <> BBFP_EX.io.cmdResp
+
+  // Status tracking
+  val iterCnt = RegInit(0.U(32.W))
+  val hasInput = RegInit(false.B)
+  val hasOutput = RegInit(false.B)
+
+  when(io.cmdReq.fire) {
+    hasInput := true.B
+  }
+  when(io.cmdResp.fire) {
+    hasOutput := false.B
+    hasInput := false.B
+    iterCnt := iterCnt + 1.U
+  }
+  when(io.cmdResp.valid && !hasOutput) {
+    hasOutput := true.B
+  }
+
+  io.status.ready := io.cmdReq.ready
+  io.status.valid := io.cmdResp.valid
+  io.status.idle := !hasInput && !hasOutput
+  io.status.init := hasInput && !hasOutput
+  io.status.running := hasOutput
+  io.status.complete := io.cmdResp.fire
+  io.status.iter := iterCnt
 
 }
