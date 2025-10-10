@@ -1,0 +1,87 @@
+package prototype.nagisa.gelu
+
+import chisel3._
+import chisel3.util._
+import org.chipsalliance.cde.config.Parameters
+import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.blink.Status
+
+class GeluUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  val io = IO(new Bundle {
+    val cmdReq  = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp = Decoupled(new BallRsComplete)
+
+    // 连接到Scratchpad的SRAM读写接口
+    val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
+    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    // 连接到Accumulator的读写接口
+    val accRead   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+
+    // Status output
+    val status = new Status
+  })
+
+  // 实例化各个子单元
+  val ctrlUnit  = Module(new GeluCtrlUnit)
+  val loadUnit  = Module(new GeluLoadUnit)
+  val exUnit    = Module(new GeluEXUnit)
+  val storeUnit = Module(new GeluStoreUnit)
+
+  // 连接Control Unit
+  ctrlUnit.io.cmdReq <> io.cmdReq
+  io.cmdResp <> ctrlUnit.io.cmdResp_o
+
+  // 连接Load Unit
+  loadUnit.io.ctrl_ld_i <> ctrlUnit.io.ctrl_ld_o
+  for (i <- 0 until b.sp_banks) {
+    io.sramRead(i).req <> loadUnit.io.sramReadReq(i)
+    loadUnit.io.sramReadResp(i) <> io.sramRead(i).resp
+  }
+  for (i <- 0 until b.acc_banks) {
+    io.accRead(i).req <> loadUnit.io.accReadReq(i)
+    loadUnit.io.accReadResp(i) <> io.accRead(i).resp
+  }
+
+  // 连接Execute Unit
+  exUnit.io.ctrl_ex_i <> ctrlUnit.io.ctrl_ex_o
+  exUnit.io.ld_ex_i <> loadUnit.io.ld_ex_o
+
+  // 连接Store Unit
+  storeUnit.io.ctrl_st_i <> ctrlUnit.io.ctrl_st_o
+  storeUnit.io.ex_st_i <> exUnit.io.ex_st_o
+  for (i <- 0 until b.sp_banks) {
+    io.sramWrite(i) <> storeUnit.io.sramWrite(i)
+  }
+  for (i <- 0 until b.acc_banks) {
+    io.accWrite(i) <> storeUnit.io.accWrite(i)
+  }
+  ctrlUnit.io.cmdResp_i <> storeUnit.io.cmdResp_o
+
+  // Status tracking
+  val iterCnt = RegInit(0.U(32.W))
+  val hasInput = RegInit(false.B)
+  val hasOutput = RegInit(false.B)
+
+  when(io.cmdReq.fire) {
+    hasInput := true.B
+  }
+  when(io.cmdResp.fire) {
+    hasOutput := false.B
+    hasInput := false.B
+    iterCnt := iterCnt + 1.U
+  }
+  when(io.cmdResp.valid && !hasOutput) {
+    hasOutput := true.B
+  }
+
+  io.status.ready := io.cmdReq.ready
+  io.status.valid := io.cmdResp.valid
+  io.status.idle := !hasInput && !hasOutput
+  io.status.init := hasInput && !hasOutput
+  io.status.running := hasOutput
+  io.status.complete := io.cmdResp.fire
+  io.status.iter := iterCnt
+}

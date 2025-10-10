@@ -94,7 +94,8 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
     BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
     MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
     IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10),Y),
-    TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10),Y)
+    TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10),Y),
+    GELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10),Y)
   ))
 
   import CtrlDecodeFields._
@@ -112,9 +113,6 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 // -----------------------------------------------------------------------------
   io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_ball && !(ctrl_decode_list(CtrlDecodeFields.VALID.id).asBool) // 需要不是控制信号才能进rob
 
-  // io.ball_decode_cmd_o.bits.is_vec        := Mux(io.ball_decode_cmd_o.valid, func7 === MATMUL_WARP16_BITPAT,                        false.B)
-  // io.ball_decode_cmd_o.bits.is_bbfp       := Mux(io.ball_decode_cmd_o.valid, func7 === BB_BBFP_MUL || func7 === MATMUL_WS,          false.B)
-  // io.ball_decode_cmd_o.bits.is_im2col     := Mux(io.ball_decode_cmd_o.valid, func7 === IM2COL,                                      false.B)
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
   io.ball_decode_cmd_o.bits.iter          := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.ITER.id).asUInt, 0.U(10.W))

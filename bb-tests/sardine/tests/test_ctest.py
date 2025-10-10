@@ -72,6 +72,10 @@ ctest_workloads = [
         "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
         "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
     ),
+    (
+        "ctest_gelu_test_singlecore-baremetal",
+        "ctest_gelu_test_singlecore-baremetal",
+    ),
 ]
 
 

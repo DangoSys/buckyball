@@ -16,7 +16,8 @@ class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus 
     () => new examples.toy.balldomain.vecball.VecBall(0),
     () => new examples.toy.balldomain.matrixball.MatrixBall(1),
     () => new examples.toy.balldomain.im2colball.Im2colBall(2),
-    () => new examples.toy.balldomain.transposeball.TransposeBall(3)
+    () => new examples.toy.balldomain.transposeball.TransposeBall(3),
+    () => new examples.toy.balldomain.geluball.GeluBall(4)
   )
 ) {
   override lazy val desiredName = "BBusModule"
