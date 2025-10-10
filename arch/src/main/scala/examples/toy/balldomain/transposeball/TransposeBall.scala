@@ -48,5 +48,8 @@ class TransposeBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) e
     io.accWrite(i).req.bits := DontCare
   }
 
+  // 连接Status信号 - 直接从内部单元获取
+  io.status <> transposeUnit.io.status
+
   override lazy val desiredName = "TransposeBall"
 }
