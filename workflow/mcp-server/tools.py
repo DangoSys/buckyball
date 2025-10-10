@@ -451,20 +451,20 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
         arg_parts = []
 
         # Handle common arguments
+        if "job" in arguments:
+            arg_parts.append(f"--jobs {arguments['job']}")
+
         if "binary" in arguments:
             arg_parts.append(f"--binary {arguments['binary']}")
 
         if "batch" in arguments and arguments["batch"]:
             arg_parts.append("--batch")
 
-        if "job" in arguments:
-            arg_parts.append(f"--job {arguments['job']}")
-
         if "workload" in arguments:
             arg_parts.append(f"--workload {arguments['workload']}")
 
         if "message" in arguments:
-            arg_parts.append(f"--message {arguments['message']}")
+            arg_parts.append(f"--message '{arguments['message']}'")
 
         if "model" in arguments:
             arg_parts.append(f"--model {arguments['model']}")
@@ -472,6 +472,7 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
         if "args" in arguments and arguments["args"]:
             arg_parts.append(arguments["args"])
 
+        # Join all arguments into a single string and pass as one argument
         if arg_parts:
             cmd.append(" ".join(arg_parts))
 
