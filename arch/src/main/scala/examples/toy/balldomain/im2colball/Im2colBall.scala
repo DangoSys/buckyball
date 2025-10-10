@@ -48,5 +48,8 @@ class Im2colBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) exte
     io.accWrite(i).req.bits := DontCare
   }
 
+  // 连接Status信号 - 直接从内部单元获取
+  io.status <> im2colUnit.io.status
+
   override lazy val desiredName = "Im2colBall"
 }

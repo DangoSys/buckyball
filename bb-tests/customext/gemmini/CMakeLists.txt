@@ -12,8 +12,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -O3")
 
 # Add library directories and rpath
 link_directories(${BSPIKE_DIR}/lib)
-set(CMAKE_INSTALL_RPATH ${BSPIKE_DIR}/lib)
-# set(CMAKE_INSTALL_RPATH $ENV{RISCV}/lib)
+# set(CMAKE_INSTALL_RPATH ${BSPIKE_DIR}/lib)
+set(CMAKE_INSTALL_RPATH $ENV{RISCV}/lib)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Create shared library

@@ -7,11 +7,16 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 
-// 定义标准的Ball总线事务
-// class BallTransaction(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-//   val cmd = new BallRsIssue
-//   val ballId = UInt(4.W)
-// }
+// Ball device status bundle
+class Status extends Bundle {
+  val ready = Output(Bool())      // device is ready to accept new input
+  val valid = Output(Bool())      // device has valid output
+  val idle = Output(Bool())       // no input and no output
+  val init = Output(Bool())       // has input but no output
+  val running = Output(Bool())    // started producing output
+  val complete = Output(Bool())   // fully finished current batch
+  val iter = Output(UInt(32.W))  // current batch iteration
+}
 
 // Ball设备的标准接口
 class Blink(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -22,4 +27,6 @@ class Blink(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
   val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
   val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+
+  val status = new Status
 }
