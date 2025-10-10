@@ -892,11 +892,3 @@ when(geluUnit.io.status.ready && matmulUnit.io.status.complete) {
   geluUnit.io.cmdReq.valid := true.B
 }
 ```
-
-**Status信号应用场景**：
-
-1. **性能监控**: 统计各单元的利用率和空闲时间
-2. **流水线调度**: 根据status协调多个加速单元的数据流
-3. **调试分析**: 追踪指令执行进度和状态转换
-4. **功耗管理**: 在idle状态下进行时钟门控优化
-5. **错误检测**: 检测异常的状态转换或长时间停滞

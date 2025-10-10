@@ -52,10 +52,9 @@ class memRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   for (i <- 0 until numBalls) {
 
     memReq(i) := io.sramRead_i(i).map(_.req.valid).reduce(_||_) ||
-                io.sramWrite_i(i).map(_.req.valid).reduce(_||_) ||
-                io.accRead_i(i).map(_.req.valid).reduce(_||_)   ||
-                io.accWrite_i(i).map(_.req.valid).reduce(_||_)  ||
-                io.sramRead_i(i).map(_.resp.ready).reduce(_||_)
+                 io.sramWrite_i(i).map(_.req.valid).reduce(_||_) ||
+                 io.accRead_i(i).map(_.req.valid).reduce(_||_)   ||
+                 io.accWrite_i(i).map(_.req.valid).reduce(_||_)
 
     when (memReq(i)) {
       io.sramRead_o <> io.sramRead_i(i)
@@ -64,37 +63,6 @@ class memRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
       io.accWrite_o <> io.accWrite_i(i)
     }
   }
-
-  /*
-  val sramReadReq_arbiter = Module(new RRArbiter(Vec(b.sp_banks,new SramReadReq(b.spad_bank_entries)), numBalls))
-  val sramWriteReq_arbiter = Module(new RRArbiter(Vec(b.sp_banks,new SramWriteReq(b.acc_bank_entries,b.spad_w, b.spad_mask_len)), numBalls))
-  val accReadReq_arbiter = Module(new RRArbiter(Vec(b.sp_banks,new SramReadReq(b.acc_w)), numBalls))
-  val accWriteReq_arbiter = Module(new RRArbiter(Vec(b.sp_banks,new SramWriteReq(b.acc_bank_entries,b.acc_w,b.acc_mask_len)), numBalls))
-  for (i <- 0 until numBalls) {
-    sramReadReq_arbiter.io.in(i).valid :=io.sramRead_i(i).map(_.req.valid).reduce(_||_) && io.ballIdle(i)
-    sramWriteReq_arbiter.io.in(i).valid := io.sramWrite_i(i).map(_.req.valid).reduce(_||_) && io.ballIdle(i)
-    for (j <- 0 until b.sp_banks) {
-        sramReadReq_arbiter.io.in(i).bits(j) := io.sramRead_i(i)(j).req.bits
-        io.sramRead_i(i)(j).req.ready := sramReadReq_arbiter.io.in(i).ready && io.ballIdle(i)
-
-        sramWriteReq_arbiter.io.in(i).bits(j) := io.sramWrite_i(i)(j).req.bits
-        io.sramWrite_i(i)(j).req.ready := sramWriteReq_arbiter.io.in(i).ready && io.ballIdle(i)
-        io.sramWrite_o := sramWriteReq_arbiter.io.out
-    }
-  }
-
-  for (i <- 0 until numBalls) {
-    accReadReq_arbiter.io.in(i).valid := io.accRead_i(i).map(_.req.valid).reduce(_||_) && io.ballIdle(i)
-    accWriteReq_arbiter.io.in(i).valid := io.accWrite_i(i).map(_.req.valid).reduce(_||_) && io.ballIdle(i)
-    for (j <- 0 until b.acc_banks) {
-        accReadReq_arbiter.io.in(i).bits(j) := io.accRead_i(i)(j).req.bits
-        io.accRead_i(i)(j).req.ready := accReadReq_arbiter.io.in(i).ready && io.ballIdle(i)
-
-        accWriteReq_arbiter.io.in(i).bits(j) := io.accWrite_i(i)(j).req.bits
-        io.accWrite_i(i)(j).req.ready := accWriteReq_arbiter.io.in(i).ready && io.ballIdle(i)
-    }
-  }
-*/
 
   override lazy val desiredName = "MemRouter"
 }
