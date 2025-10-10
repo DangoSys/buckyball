@@ -11,3 +11,6 @@
 你可以继续向Deepwiki获取`DangoSys/buckyball`任何你想问的问题
 
 查询完成后请依据你对[gelu算子]的理解, 在[arch/src/main/scala/prototype/gelu] 目录下书写spec.md
+
+注意事项:
+1. 请注意将ISA定制化部分写在special区间

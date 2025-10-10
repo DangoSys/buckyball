@@ -37,6 +37,7 @@ typedef enum {
   MUL_WARP16_FUNC7 = 32, // 0x20 - Matrix multiply function code
   IM2COL_FUNC7 = 33,     // 0x21 - Matrix im2col function code
   TRANSPOSE_FUNC7 = 34,  // 0x22 - Matrix transpose function code
+  GELU_FUNC7 = 35,       // 0x23 - GELU activation function code
   FLUSH_FUNC7 = 7,       // 0x07 - Flush function code
   BBFP_MUL_FUNC7 = 26,   // 0x1A - BBFP matrix multiply function code
   MATMUL_WS_FUNC7 = 27   // 0x1B - Matrix multiply with warp16 function code
@@ -70,6 +71,7 @@ void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
                uint32_t startcol);
 void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+void bb_gelu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_flush(void);
 
 // 通过func7获取指令配置
