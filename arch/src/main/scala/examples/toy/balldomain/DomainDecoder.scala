@@ -11,11 +11,7 @@ import org.chipsalliance.cde.config.Parameters
 
 // Ball域的详细解码输出
 class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  // val is_vec        = Bool()
-  // val is_bbfp       = Bool()
-  // val is_im2col     = Bool()
-
-  val bid = UInt(4.W) // Ball ID
+  val bid = UInt(5.W) // Ball ID
 
   // 迭代次数
   val iter          = UInt(10.W)
@@ -63,7 +59,7 @@ object BallDefaultConstants {
   val N = false.B
   val DADDR = 0.U(14.W)
   val DITER = 0.U(10.W)
-  val DBID = 0.U(4.W)
+  val DBID = 0.U(5.W)
   val DSPECIAL = 0.U(40.W)
 }
 
@@ -115,8 +111,8 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
-  io.ball_decode_cmd_o.bits.iter          := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.ITER.id).asUInt, 0.U(10.W))
-  io.ball_decode_cmd_o.bits.special       := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.SPECIAL.id).asUInt, DSPECIAL)
+  io.ball_decode_cmd_o.bits.iter          := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.ITER.id).asUInt,        0.U(10.W))
+  io.ball_decode_cmd_o.bits.special       := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.SPECIAL.id).asUInt,      DSPECIAL)
   io.ball_decode_cmd_o.bits.op1_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP1_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.op2_en        := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP2_EN.id).asBool,        false.B)
   io.ball_decode_cmd_o.bits.wr_spad_en    := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.WR_SPAD.id).asBool,       false.B)
