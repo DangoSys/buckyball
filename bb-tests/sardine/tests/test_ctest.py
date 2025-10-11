@@ -76,6 +76,14 @@ ctest_workloads = [
         "ctest_gelu_test_singlecore-baremetal",
         "ctest_gelu_test_singlecore-baremetal",
     ),
+    (
+        "ctest_layernorm_test_singlecore-baremetal",
+        "ctest_layernorm_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_softmax_test_singlecore-baremetal",
+        "ctest_softmax_test_singlecore-baremetal",
+    ),
 ]
 
 
