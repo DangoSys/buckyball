@@ -6,11 +6,11 @@
 使用Deepwiki获取`DangoSys/buckyball`, 如何集成一个自定义的ball进去
 
 查询完成后执行以下任务，对于仓库你有任何不懂的可以直接使用ask_question问Deepwiki
-1. 请依据 [arch/src/main/scala/prototype/gelu] 目录下的spec.md，实现一个 [GELU] ball并集成进系统
+1. 请依据 [arch/src/main/scala/prototype/nagisa/layernorm] 目录下的spec.md，实现一个 [LAYERNORM] ball并集成进系统
 2. 实现对应的Ctest测试用例
 3. 使用bbdev verilator进行测试
 4. 测试通过后将该测试加入 sardine 列表
-5. 将对应设计的唯一 README.md 加入 bb-note
+5. 将对应设计的唯一 README.md, 使用相对路径软链接加入 bb-note
 
 规范：
 1. 请尽量避免生成总结文档

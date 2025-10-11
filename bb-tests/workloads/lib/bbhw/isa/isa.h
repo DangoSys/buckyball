@@ -38,6 +38,8 @@ typedef enum {
   IM2COL_FUNC7 = 33,     // 0x21 - Matrix im2col function code
   TRANSPOSE_FUNC7 = 34,  // 0x22 - Matrix transpose function code
   GELU_FUNC7 = 35,       // 0x23 - GELU activation function code
+  LAYERNORM_FUNC7 = 36,  // 0x24 - LayerNorm function code
+  SOFTMAX_FUNC7 = 37,    // 0x25 - Softmax function code
   FLUSH_FUNC7 = 7,       // 0x07 - Flush function code
   BBFP_MUL_FUNC7 = 26,   // 0x1A - BBFP matrix multiply function code
   MATMUL_WS_FUNC7 = 27   // 0x1B - Matrix multiply with warp16 function code
@@ -72,6 +74,16 @@ void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t startcol);
 void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_gelu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+void bb_layernorm_simple(uint32_t op1_bank, uint32_t op1_addr, uint32_t wr_bank,
+                         uint32_t wr_addr, uint32_t iter, uint32_t is_acc,
+                         uint32_t norm_dim);
+void bb_layernorm(uint32_t op1_bank, uint32_t op1_addr, uint32_t wr_bank,
+                  uint32_t wr_addr, uint32_t iter, uint32_t is_acc,
+                  uint32_t norm_dim, uint32_t gamma_addr, uint32_t beta_addr,
+                  uint32_t param_bank, uint32_t use_affine);
+void bb_softmax(uint32_t op1_bank, uint32_t op1_addr, uint32_t wr_bank,
+                uint32_t wr_addr, uint32_t iter, uint32_t is_acc,
+                uint32_t dim_len, uint32_t batch, uint32_t log_mode);
 void bb_flush(void);
 
 // 通过func7获取指令配置

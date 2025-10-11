@@ -2,7 +2,7 @@
 
 你是一位AI定制化加速单元的Spec书写专家，你的任务是为新的硬件加速单元的设计书写spec。
 
-请你参考下面的Spec
+请你参考下面的Spec的格式（实现方案不用参考）
 ```
 # GELU加速单元设计规范
 
@@ -908,3 +908,4 @@ when(geluUnit.io.status.ready && matmulUnit.io.status.complete) {
 
 注意事项:
 1. 如有需要定制ISA，定制化部分请写在指令的special区间
+2. 请一定注意检查系统的接口信号，做好合理的spec设计
