@@ -78,22 +78,35 @@ void compute_expected_layernorm() {
 void hw_layernorm(const char *test_name) {
   printf("Running hardware LayerNorm: %s\n", test_name);
 
-  uint32_t op1_bank = 0; // ACC bank 0 for input
-  uint32_t op1_addr = 0; // Starting address 0
-  uint32_t wr_bank = 1;  // ACC bank 1 for output
-  uint32_t wr_addr = 0;  // Starting address 0
-  uint32_t is_acc = 1;   // Use ACC mode (INT32)
+  // Use ACC bank for INT32 data
+  // bank 2 = acc0 (physical), logical bank 0 for LayerNorm
+  uint32_t op1_bank = 0; // Logical ACC bank 0
+  uint32_t wr_bank = 0;  // Logical ACC bank 0 (can use same bank)
+  uint32_t op1_addr = 0; // Offset in bank
+  uint32_t wr_addr = TEST_BATCH * NORM_DIM; // Output after input
+  uint32_t iter = TEST_BATCH;
+  uint32_t is_acc = 1; // ACC mode
 
   // Flatten input data for DMA transfer
   result_t *flat_input = (result_t *)input_data;
   result_t *flat_output = (result_t *)output_data;
 
-  // Note: In real implementation, we would use proper ACC mvin/mvout
-  // For now, assuming data is already in ACC banks
+  // Calculate physical addresses: bank 2 is acc0
+  uint32_t physical_op1_addr = spad_addr(2, op1_addr);
+  uint32_t physical_wr_addr = spad_addr(2, wr_addr);
+  uint32_t total_vecs = TEST_BATCH * NORM_DIM;
+
+  // Move input data to ACC
+  bb_mvin((uintptr_t)flat_input, physical_op1_addr, total_vecs, 1);
+  bb_fence();
 
   // Execute LayerNorm
-  bb_layernorm_simple(op1_bank, op1_addr, wr_bank, wr_addr, TEST_BATCH, is_acc,
+  bb_layernorm_simple(op1_bank, op1_addr, wr_bank, wr_addr, iter, is_acc,
                       NORM_DIM);
+  bb_fence();
+
+  // Move output data from ACC
+  bb_mvout((uintptr_t)flat_output, physical_wr_addr, total_vecs);
   bb_fence();
 
   printf("  Hardware execution completed\n");
@@ -233,12 +246,29 @@ int test_single_batch() {
   // Run hardware LayerNorm with iter=1
   uint32_t op1_bank = 0;
   uint32_t op1_addr = 0;
-  uint32_t wr_bank = 1;
-  uint32_t wr_addr = 0;
+  uint32_t wr_bank = 0;
+  uint32_t wr_addr = NORM_DIM; // Output after input
   uint32_t is_acc = 1;
 
+  // Flatten data
+  result_t *flat_input = (result_t *)input_data[0];
+  result_t *flat_output = (result_t *)output_data[0];
+
+  // Calculate physical addresses
+  uint32_t physical_op1_addr = spad_addr(2, op1_addr);
+  uint32_t physical_wr_addr = spad_addr(2, wr_addr);
+
+  // Move input to ACC
+  bb_mvin((uintptr_t)flat_input, physical_op1_addr, NORM_DIM, 1);
+  bb_fence();
+
+  // Execute LayerNorm
   bb_layernorm_simple(op1_bank, op1_addr, wr_bank, wr_addr, 1, is_acc,
                       NORM_DIM);
+  bb_fence();
+
+  // Move output from ACC
+  bb_mvout((uintptr_t)flat_output, physical_wr_addr, NORM_DIM);
   bb_fence();
 
   // Compare results

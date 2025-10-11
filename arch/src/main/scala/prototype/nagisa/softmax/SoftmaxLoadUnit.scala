@@ -37,7 +37,6 @@ class SoftmaxLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends 
   // Address generation
   val vec_cnt    = RegInit(0.U(12.W))
   val batch_cnt  = RegInit(0.U(10.W))
-  val total_vecs = iter
 
   // Accept control request
   io.ctrl_ld_i.ready := state === idle
@@ -58,94 +57,97 @@ class SoftmaxLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends 
     io.sramReadReq(i).valid := false.B
     io.sramReadReq(i).bits.addr := 0.U
     io.sramReadReq(i).bits.fromDMA := false.B
-    io.sramReadResp(i).ready := true.B
+    io.sramReadResp(i).ready := false.B
   }
   for (i <- 0 until b.acc_banks) {
     io.accReadReq(i).valid := false.B
     io.accReadReq(i).bits.addr := 0.U
     io.accReadReq(i).bits.fromDMA := false.B
-    io.accReadResp(i).ready := true.B
+    io.accReadResp(i).ready := false.B
   }
+  io.ld_findmax_o.valid := false.B
+  io.ld_findmax_o.bits.data := VecInit(Seq.fill(b.veclane)(0.S(32.W)))
+  io.ld_findmax_o.bits.vec_idx := 0.U
+  io.ld_findmax_o.bits.batch_idx := 0.U
 
   // Read state machine
-  val read_pending = RegInit(false.B)
-  val resp_pending = RegInit(false.B)
-
   when(state === loading) {
-    when(!read_pending && vec_cnt < total_vecs) {
-      // Issue read request
-      val addr = op1_bank_addr + vec_cnt
-      when(!is_acc) {
-        // SRAM read
-        io.sramReadReq(op1_bank).valid := true.B
-        io.sramReadReq(op1_bank).bits.addr := addr
-        io.sramReadReq(op1_bank).bits.fromDMA := false.B
-        when(io.sramReadReq(op1_bank).fire) {
-          read_pending := true.B
-          resp_pending := true.B
-        }
-      }.otherwise {
-        // ACC read
-        io.accReadReq(op1_bank).valid := true.B
-        io.accReadReq(op1_bank).bits.addr := addr
-        io.accReadReq(op1_bank).bits.fromDMA := false.B
-        when(io.accReadReq(op1_bank).fire) {
-          read_pending := true.B
-          resp_pending := true.B
+    val addr = op1_bank_addr + vec_cnt
+
+    when(!is_acc) {
+      // SRAM read
+      val bank_id = op1_bank
+      when(bank_id < b.sp_banks.U) {
+        io.sramReadReq(bank_id).valid := true.B
+        io.sramReadReq(bank_id).bits.addr := addr
+        io.sramReadReq(bank_id).bits.fromDMA := false.B
+
+        // Accept response
+        io.sramReadResp(bank_id).ready := io.ld_findmax_o.ready
+
+        when(io.sramReadResp(bank_id).fire) {
+          // Convert INT8 to INT32 with sign extension
+          val sram_vec = io.sramReadResp(bank_id).bits.data.asTypeOf(Vec(b.veclane, SInt(8.W)))
+          io.ld_findmax_o.valid := true.B
+          io.ld_findmax_o.bits.data := VecInit(sram_vec.map(_.asSInt))
+          io.ld_findmax_o.bits.vec_idx := vec_cnt
+          io.ld_findmax_o.bits.batch_idx := batch_cnt
+
+          when(io.ld_findmax_o.fire) {
+            vec_cnt := vec_cnt + 1.U
+
+            // Check if finished current batch
+            when(vec_cnt + 1.U >= iter) {
+              batch_cnt := batch_cnt + 1.U
+
+              // Check if all batches done
+              when(batch_cnt + 1.U >= batch) {
+                state := idle
+                vec_cnt := 0.U
+                batch_cnt := 0.U
+              }.otherwise {
+                vec_cnt := 0.U
+              }
+            }
+          }
         }
       }
-    }
-  }
+    }.otherwise {
+      // ACC read
+      val bank_id = op1_bank
+      when(bank_id < b.acc_banks.U) {
+        io.accReadReq(bank_id).valid := true.B
+        io.accReadReq(bank_id).bits.addr := addr
+        io.accReadReq(bank_id).bits.fromDMA := false.B
 
-  // Response handling
-  val resp_data = Wire(UInt(512.W))
-  val resp_valid = Wire(Bool())
+        // Accept response
+        io.accReadResp(bank_id).ready := io.ld_findmax_o.ready
 
-  when(!is_acc) {
-    resp_valid := io.sramReadResp(op1_bank).valid
-    resp_data := io.sramReadResp(op1_bank).bits.data
-  }.otherwise {
-    resp_valid := io.accReadResp(op1_bank).valid
-    resp_data := io.accReadResp(op1_bank).bits.data
-  }
+        when(io.accReadResp(bank_id).fire) {
+          // Already INT32
+          val acc_vec = io.accReadResp(bank_id).bits.data.asTypeOf(Vec(b.veclane, SInt(32.W)))
+          io.ld_findmax_o.valid := true.B
+          io.ld_findmax_o.bits.data := acc_vec
+          io.ld_findmax_o.bits.vec_idx := vec_cnt
+          io.ld_findmax_o.bits.batch_idx := batch_cnt
 
-  // Convert data to vec of INT32
-  val data_vec = Wire(Vec(b.veclane, SInt(32.W)))
-  when(!is_acc) {
-    // INT8 to INT32 conversion with sign extension
-    val sram_vec = resp_data.asTypeOf(Vec(b.veclane, SInt(8.W)))
-    for (i <- 0 until b.veclane) {
-      data_vec(i) := sram_vec(i)
-    }
-  }.otherwise {
-    // Already INT32
-    val acc_vec = resp_data.asTypeOf(Vec(b.veclane, SInt(32.W)))
-    data_vec := acc_vec
-  }
+          when(io.ld_findmax_o.fire) {
+            vec_cnt := vec_cnt + 1.U
 
-  io.ld_findmax_o.valid := false.B
-  io.ld_findmax_o.bits.data := data_vec
-  io.ld_findmax_o.bits.vec_idx := vec_cnt
-  io.ld_findmax_o.bits.batch_idx := batch_cnt
+            // Check if finished current batch
+            when(vec_cnt + 1.U >= iter) {
+              batch_cnt := batch_cnt + 1.U
 
-  when(resp_pending && resp_valid) {
-    io.ld_findmax_o.valid := true.B
-    when(io.ld_findmax_o.fire) {
-      resp_pending := false.B
-      read_pending := false.B
-      vec_cnt := vec_cnt + 1.U
-
-      // Check if finished current batch
-      when(vec_cnt + 1.U >= total_vecs) {
-        batch_cnt := batch_cnt + 1.U
-
-        // Check if all batches done
-        when(batch_cnt + 1.U >= batch) {
-          state := idle
-          vec_cnt := 0.U
-          batch_cnt := 0.U
-        }.otherwise {
-          vec_cnt := 0.U
+              // Check if all batches done
+              when(batch_cnt + 1.U >= batch) {
+                state := idle
+                vec_cnt := 0.U
+                batch_cnt := 0.U
+              }.otherwise {
+                vec_cnt := 0.U
+              }
+            }
+          }
         }
       }
     }

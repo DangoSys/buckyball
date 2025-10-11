@@ -48,13 +48,31 @@ class LayerNormUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
 
   // Connect Reduce Unit
   reduceUnit.io.ctrl_reduce_i <> ctrlUnit.io.ctrl_reduce_o
-  reduceUnit.io.ld_reduce_i <> loadUnit.io.ld_reduce_o
 
   // Connect Normalize Unit
   normalizeUnit.io.ctrl_norm_i <> ctrlUnit.io.ctrl_norm_o
-  normalizeUnit.io.ld_reduce_i <> DontCare  // Share data from load unit
   normalizeUnit.io.reduce_norm_i <> reduceUnit.io.reduce_norm_o
   normalizeUnit.io.ld_norm_param_i <> loadUnit.io.ld_norm_param_o
+
+  // Fork load unit output to both reduce and normalize units
+  // Create queues for buffering
+  val reduce_queue = Module(new Queue(new LNLdReduceReq, 4))
+  val normalize_queue = Module(new Queue(new LNLdReduceReq, 4))
+
+  // Fork logic: broadcast data to both queues
+  // Only accept from load when both queues have space
+  val both_queues_ready = reduce_queue.io.enq.ready && normalize_queue.io.enq.ready
+  loadUnit.io.ld_reduce_o.ready := both_queues_ready
+
+  // Send to both queues when load has data and both are ready
+  reduce_queue.io.enq.valid := loadUnit.io.ld_reduce_o.valid && both_queues_ready
+  reduce_queue.io.enq.bits := loadUnit.io.ld_reduce_o.bits
+  normalize_queue.io.enq.valid := loadUnit.io.ld_reduce_o.valid && both_queues_ready
+  normalize_queue.io.enq.bits := loadUnit.io.ld_reduce_o.bits
+
+  // Connect queue outputs to units
+  reduceUnit.io.ld_reduce_i <> reduce_queue.io.deq
+  normalizeUnit.io.ld_reduce_i <> normalize_queue.io.deq
 
   // Connect Store Unit
   storeUnit.io.ctrl_st_i <> ctrlUnit.io.ctrl_st_o
@@ -66,11 +84,6 @@ class LayerNormUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
     io.accWrite(i) <> storeUnit.io.accWrite(i)
   }
   ctrlUnit.io.cmdResp_i <> storeUnit.io.cmdResp_o
-
-  // Additional connection: normalize unit needs raw data from load unit
-  // Create a queue to buffer data for normalize unit
-  val data_queue = Queue(loadUnit.io.ld_reduce_o, 16)
-  normalizeUnit.io.ld_reduce_i <> data_queue
 
   // Status tracking
   val iterCnt = RegInit(0.U(32.W))
