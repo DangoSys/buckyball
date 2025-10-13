@@ -16,6 +16,8 @@ config = {
         "properties": {
             "message": {"type": "string"},
             "model": {"type": "string", "default": "deepseek-chat"},
+            "apiKey": {"type": "string"},
+            "baseUrl": {"type": "string"},
         },
         "required": ["message"],
     },
@@ -31,14 +33,23 @@ config = {
 
 async def handler(req, context):
     context.logger.info("agent API - 接收到请求", {"body": req.get("body")})
-    message = req.get("body").get("message")
-    model = req.get("body").get("model", "deepseek-chat")
+    body = req.get("body")
+    message = body.get("message")
+    model = body.get("model", "deepseek-chat")
+    api_key = body.get("apiKey")
+    base_url = body.get("baseUrl")
 
     # 发送事件到处理步骤
     await context.emit(
         {
             "topic": "agent.prompt",
-            "data": {"message": message, "model": model, "traceId": context.trace_id},
+            "data": {
+                "message": message,
+                "model": model,
+                "traceId": context.trace_id,
+                "apiKey": api_key,
+                "baseUrl": base_url,
+            },
         }
     )
 
