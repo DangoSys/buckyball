@@ -25,6 +25,8 @@ config = {
             "message": {"type": "string"},
             "model": {"type": "string"},
             "traceId": {"type": "string"},
+            "apiKey": {"type": "string"},
+            "baseUrl": {"type": "string"},
         },
     },
     "flows": ["agent"],
@@ -38,9 +40,25 @@ async def handler(input_data, context):
     model = input_data.get("model", "deepseek-chat")
     trace_id = input_data.get("traceId")
 
-    # DeepSeek API配置
-    api_key = os.getenv("API_KEY")
-    base_url = os.getenv("BASE_URL", "https://api.deepseek.com/v1")
+    # API配置：优先使用传入的参数，否则使用环境变量
+    api_key = input_data.get("apiKey") or os.getenv("API_KEY")
+    base_url = input_data.get("baseUrl") or os.getenv("BASE_URL", "https://api.deepseek.com/v1")
+
+    if not api_key:
+        error_msg = "API Key not provided"
+        context.logger.error(error_msg)
+        await context.emit(
+            {
+                "topic": "agent.error",
+                "data": {
+                    "error": error_msg,
+                    "original_message": message,
+                    "traceId": trace_id,
+                },
+            }
+        )
+        await check_result(context, 1, continue_run=False)
+        return
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
@@ -104,8 +122,9 @@ async def handler(input_data, context):
                     {"response_length": len(full_response), "traceId": trace_id},
                 )
 
+        # 将响应内容通过 extra_fields 传回 API
         success_result, failure_result = await check_result(
-            context, 0, continue_run=False
+            context, 0, continue_run=False, extra_fields={"response": full_response}
         )
 
     except Exception as e:
@@ -121,8 +140,9 @@ async def handler(input_data, context):
             }
         )
 
+        # 将错误信息通过 extra_fields 传回 API
         success_result, failure_result = await check_result(
-            context, 1, continue_run=False
+            context, 1, continue_run=False, extra_fields={"error": str(e)}
         )
 
     # ==================================================================================
