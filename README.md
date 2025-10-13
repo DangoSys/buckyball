@@ -69,12 +69,25 @@ Run Verilator simulation test to verify installation:
 bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
 ```
 
-### Docker Quick Experience (Not updated for a while)
+### Docker Quick Experience
 
+**Notice**:
+- Docker images are provided only for specific release versions.
+- Docker image may not be the latest version, source build is recommended.
+
+**Pull Docker Image**
 ```bash
 docker pull ghcr.io/dangosys/buckyball:latest
 ```
-*Note: Docker image may not be the latest version, source build is recommended*
+
+**Run Docker Container**
+```bash
+docker run -it ghcr.io/dangosys/buckyball:latest
+# Activate environment
+source buckyball/env.sh
+# Run Verilator simulation test
+bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
+```
 
 ## Additional Resources
 
