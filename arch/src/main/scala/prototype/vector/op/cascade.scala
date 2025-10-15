@@ -17,9 +17,9 @@ class CascadeOp(implicit p: Parameters) extends Module {
   val reg2       = RegInit(VecInit(Seq.fill(lane)(0.U(outputWidth.W))))
   val valid1      = RegInit(false.B)
   val valid2      = RegInit(false.B)
-  
+
   io.in.ready := io.out.ready
-  
+
   when (io.in.valid) {
     valid1 := true.B
     reg1 := io.in.bits.in1.zip(io.in.bits.in2).map { case (a, b) => a + b }
@@ -30,7 +30,7 @@ class CascadeOp(implicit p: Parameters) extends Module {
   }
 
 
-  val valid = valid1 
+  val valid = valid1
 
   when (io.out.ready && valid) {
     io.out.valid := true.B
@@ -50,4 +50,3 @@ trait CanHaveCascadeOp { this: BaseThread =>
 
   def getCascadeOp = cascadeOp
 }
-

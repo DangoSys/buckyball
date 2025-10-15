@@ -10,7 +10,7 @@ chipyard_dir := $(abspath $(makefile_dir)/../../../../../../arch/thirdparty/chip
 DESIGN_PACKAGE ?= firechip.chip
 DESIGN ?= FireSim
 
-# Override to use our custom config package  
+# Override to use our custom config package
 TARGET_CONFIG_PACKAGE ?= sims.firesim
 TARGET_CONFIG ?= FireSimBuckyballToyConfig
 

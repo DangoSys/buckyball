@@ -75,5 +75,5 @@ permission denied while trying to connect to the Docker daemon socket at unix://
 ```
 执行以下命令, 并退出终端重新登录
 ```
-sudo usermod -aG docker $USER 
+sudo usermod -aG docker $USER
 ```

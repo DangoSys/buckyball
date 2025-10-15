@@ -13,7 +13,7 @@ $(FIRRTL_FILE) $(ANNO_FILE) &: SHELL := /usr/bin/env bash # needed for running s
 $(FIRRTL_FILE) $(ANNO_FILE) &: firesim_target_symlink_hook
 	@mkdir -p $(@D)
 	@mkdir -p $(TARGET_SBT_DIR)/target/generated-src/$(long_name)
-	source $(TARGET_SBT_DIR)/../env.sh 
+	source $(TARGET_SBT_DIR)/../env.sh
 	cd $(TARGET_SBT_DIR) && \
 		pwd && \
 		${SBT} ";project $(TARGET_SBT_PROJECT); runMain chipyard.Generator \
@@ -25,7 +25,7 @@ $(FIRRTL_FILE) $(ANNO_FILE) &: firesim_target_symlink_hook
 	# Link to the generated files
 	ln -sf $(TARGET_SBT_DIR)/target/generated-src/$(long_name)/$(long_name).sfc.fir $(FIRRTL_FILE)
 	ln -sf $(TARGET_SBT_DIR)/target/generated-src/$(long_name)/$(long_name).anno.json $(ANNO_FILE)
-	# .d needed to run metasim CI tests  
+	# .d needed to run metasim CI tests
 	ln -sf $(TARGET_SBT_DIR)/target/generated-src/$(long_name)/$(long_name).d $(GENERATED_DIR)/$(long_name).d
 
 #######################################

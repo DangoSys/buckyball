@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 // import framework.ballcore.ballcore.RoCCCommandBB
-import freechips.rocketchip.tile._  
+import freechips.rocketchip.tile._
 
 
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {

@@ -11,11 +11,11 @@ class PEControl extends Bundle {
 class MacUnit extends Module {
   val io = IO(new Bundle {
   val in_a  = Input(UInt(7.W))   // 无符号输入：[6]=sign, [5]=flag, [4:0]=value
-  val in_b  = Input(UInt(7.W))   // 无符号输入：[6]=sign, [5]=flag, [4:0]=value  
+  val in_b  = Input(UInt(7.W))   // 无符号输入：[6]=sign, [5]=flag, [4:0]=value
   val in_c  = Input(UInt(32.W))  // 无符号输入：[31]=sign, [30:0]=value
   val out_d = Output(UInt(32.W)) // 有符号输出
   })
-  
+
   // 提取符号位
   val sign_a = io.in_a(6)
   val sign_b = io.in_b(6)
@@ -42,18 +42,18 @@ class MacUnit extends Module {
 
   // 将数值转换为有符号数，考虑符号位
   // 先扩展位宽避免溢出，然后根据符号位决定正负
-  val a_signed = Mux(sign_a === 1.U, 
-  -(shifted_a.zext), 
+  val a_signed = Mux(sign_a === 1.U,
+  -(shifted_a.zext),
   shifted_a.zext
   ).asSInt
-  
-  val b_signed = Mux(sign_b === 1.U, 
-  -(shifted_b.zext), 
+
+  val b_signed = Mux(sign_b === 1.U,
+  -(shifted_b.zext),
   shifted_b.zext
   ).asSInt
-  
-  val c_signed = Mux(sign_c === 1.U, 
-  -(value_c.zext), 
+
+  val c_signed = Mux(sign_c === 1.U,
+  -(value_c.zext),
   value_c.zext
   ).asSInt
 
@@ -62,7 +62,7 @@ class MacUnit extends Module {
 
   // 输出结果
   io.out_d := result.asUInt
-} 
+}
 
 
 // BBFP PE单元（仅支持Weight Stationary）
@@ -95,7 +95,7 @@ class BBFP_PE_WS(max_simultaneous_matmuls: Int = 16) extends Module {
 
   // 输入信号
   val a = io.in_a
-  val b = io.in_b  
+  val b = io.in_b
   val d = io.in_d
   val prop = io.in_control.propagate
   // val shift = io.in_control.shift // 已删除
@@ -178,13 +178,13 @@ class BBFP_PE_Array2x2 extends Module {
   // PE间连接的寄存器
   // 激活横向传播寄存器 (行方向，左->右)
   val reg_a_h = Seq.fill(2)(Reg(UInt(7.W)))  // pes(i)(0) -> pes(i)(1)
-  
-  // 权重竖向传播寄存器 (列方向，上->下)  
+
+  // 权重竖向传播寄存器 (列方向，上->下)
   val reg_d_v = Seq.fill(2)(Reg(UInt(7.W)))  // pes(0)(j) -> pes(1)(j)
-  
+
   // 部分和竖向传播寄存器 (列方向，上->下)
   val reg_b_v = Seq.fill(2)(Reg(UInt(32.W))) // pes(0)(j) -> pes(1)(j)
-  
+
   // 控制信号竖向传播寄存器 (列方向，上->下)
   val reg_ctrl_v   = Seq.fill(2)(Wire(new PEControl))
   val reg_id_v   = Seq.fill(2)(Wire(UInt(1.W)))
@@ -222,7 +222,7 @@ class BBFP_PE_Array2x2 extends Module {
   reg_id_v(0)   := pes(0)(0).io.out_id
   reg_last_v(0) := pes(0)(0).io.out_last
   reg_valid_v(0):= pes(0)(0).io.out_valid
-  
+
   pes(1)(0).io.in_d     := reg_d_v(0)
   pes(1)(0).io.in_b     := reg_b_v(0)
   pes(1)(0).io.in_control := reg_ctrl_v(0)
@@ -241,7 +241,7 @@ class BBFP_PE_Array2x2 extends Module {
   reg_id_v(1)   := pes(0)(1).io.out_id
   reg_last_v(1) := pes(0)(1).io.out_last
   reg_valid_v(1):= pes(0)(1).io.out_valid
-  
+
   pes(1)(1).io.in_d     := reg_d_v(1)
   pes(1)(1).io.in_b     := reg_b_v(1)
   pes(1)(1).io.in_control := reg_ctrl_v(1)
@@ -293,13 +293,13 @@ class BBFP_PE_Array16x16 extends Module {
   // PE间连接的寄存器
   // 激活横向传播寄存器 (行方向，左->右)
   val reg_a_h = Seq.fill(16, 15)(Reg(UInt(7.W)))  // pes(i)(j) -> pes(i)(j+1)
-  
-  // 权重竖向传播寄存器 (列方向，上->下)  
+
+  // 权重竖向传播寄存器 (列方向，上->下)
   val reg_d_v = Seq.fill(15, 16)(Reg(UInt(7.W)))  // pes(i)(j) -> pes(i+1)(j)
-  
+
   // 部分和竖向传播寄存器 (列方向，上->下)
   val reg_b_v = Seq.fill(15, 16)(Reg(UInt(32.W))) // pes(i)(j) -> pes(i+1)(j)
-  
+
   // 控制信号竖向传播寄存器 (列方向，上->下)
   val reg_ctrl_v   = Seq.fill(15, 16)(Wire(new PEControl))
   val reg_id_v   = Seq.fill(15, 16)(Wire(UInt(1.W)))
@@ -385,4 +385,4 @@ class BBFP_PE_Array16x16 extends Module {
   io.out_b := out_b_reg
   io.out_a := out_a_reg
   io.out_d := out_d_reg
-} 
+}

@@ -32,7 +32,7 @@ class SramWriteIO(val n: Int, val w: Int, val mask_len: Int) extends Bundle {
 
 class SramBank(n: Int, w: Int, aligned_to: Int, single_ported: Boolean) extends Module {
   require(w % aligned_to == 0 || w < aligned_to)
-  
+
   val mask_len = (w / (aligned_to * 8)) max 1 // How many mask bits are there?
   val mask_elem = UInt((w min (aligned_to * 8)).W) // What datatype does each mask bit correspond to?
 

@@ -33,7 +33,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
   val io = IO(new Bundle {
     // Mem Domain Decoder -> Rs
     val mem_decode_cmd_i = Flipped(new DecoupledIO(new MemDecodeCmd))
-    val rs_rocc_o = new Bundle {      
+    val rs_rocc_o = new Bundle {
       val resp  = new DecoupledIO(new RoCCResponseBB()(p))
       val busy  = Output(Bool())
     }
@@ -48,7 +48,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
 // 入站 - 指令分配
 // -----------------------------------------------------------------------------
   rob.io.alloc <> io.mem_decode_cmd_i
-  
+
 // -----------------------------------------------------------------------------
 // 出站 - 指令发射
 // -----------------------------------------------------------------------------
@@ -56,33 +56,33 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
   io.issue_o.ld.bits  := Mux(io.issue_o.ld.valid, rob.io.issue.bits, DontCare)
 
   io.issue_o.st.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_store
-  io.issue_o.st.bits  := Mux(io.issue_o.st.valid, rob.io.issue.bits, DontCare) 
-  
-  rob.io.issue.ready  := (rob.io.issue.bits.cmd.is_load && io.issue_o.ld.ready) || 
+  io.issue_o.st.bits  := Mux(io.issue_o.st.valid, rob.io.issue.bits, DontCare)
+
+  rob.io.issue.ready  := (rob.io.issue.bits.cmd.is_load && io.issue_o.ld.ready) ||
                          (rob.io.issue.bits.cmd.is_store && io.issue_o.st.ready)
-  
+
 // -----------------------------------------------------------------------------
 // 完成信号处理
 // -----------------------------------------------------------------------------
   val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 2))
   completeArb.io.in(0).valid  := io.commit_i.ld.valid
   completeArb.io.in(0).bits   := Mux(io.commit_i.ld.valid, io.commit_i.ld.bits.rob_id, DontCare)
-  completeArb.io.in(1).valid  := io.commit_i.st.valid  
+  completeArb.io.in(1).valid  := io.commit_i.st.valid
   completeArb.io.in(1).bits   := Mux(io.commit_i.st.valid, io.commit_i.st.bits.rob_id, DontCare)
-  
+
   rob.io.complete <> completeArb.io.out
   io.commit_i.ld.ready := completeArb.io.in(0).ready
   io.commit_i.st.ready := completeArb.io.in(1).ready
-  
+
 // -----------------------------------------------------------------------------
 // 指令提交
-// -----------------------------------------------------------------------------  
+// -----------------------------------------------------------------------------
   // rob.io.commit.ready := true.B
-  
+
 // -----------------------------------------------------------------------------
 // 响应生成
 // -----------------------------------------------------------------------------
-  io.rs_rocc_o.resp.valid := io.mem_decode_cmd_i.valid // 进来直接提交 
+  io.rs_rocc_o.resp.valid := io.mem_decode_cmd_i.valid // 进来直接提交
   io.rs_rocc_o.resp.bits  := DontCare
   io.rs_rocc_o.busy       := !rob.io.empty
 }

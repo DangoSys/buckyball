@@ -62,5 +62,3 @@ class RocketSubsystemModuleImp[+L <: RocketSubsystem](_outer: L) extends BaseSub
     with HasHierarchicalElementsRootContextModuleImp {
   override lazy val outer = _outer
 }
-
-

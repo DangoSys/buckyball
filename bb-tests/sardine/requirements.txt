@@ -8,4 +8,4 @@ pytest-cov>=3.0.0
 allure-pytest>=2.13.0
 
 # Logging and utilities
-colorlog>=6.0.0 
+colorlog>=6.0.0

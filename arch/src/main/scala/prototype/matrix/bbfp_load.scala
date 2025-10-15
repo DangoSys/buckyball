@@ -24,7 +24,7 @@ class BBFP_LoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
   val op2_bank_addr = io.id_lu_i.bits.op2_bank_addr
   val wr_bank = io.id_lu_i.bits.wr_bank
   val wr_bank_addr = io.id_lu_i.bits.wr_bank_addr
-  
+
   //每个bank读请求默认赋值
   for(i <- 0 until b.sp_banks){
     io.sramReadReq(i).valid := false.B
@@ -56,5 +56,5 @@ class BBFP_LoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
 
   io.id_lu_i.ready := io.lu_ex_o.ready
 
-  
+
 }

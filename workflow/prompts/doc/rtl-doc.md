@@ -32,7 +32,7 @@
 1. 替换上述prompt中的占位符为实际信息
 2. 生成完文档后通过执行下面的命令直接链接到文档管理器中(注意替换路径)
 ```shell
-cd [`your_buckyball_path`] 
+cd [`your_buckyball_path`]
 f="[`目录相对路径`]/README.md" && target_dir="docs/bb-note/src/$(dirname "$f")" && mkdir -p "$target_dir" && orig_dir="$(pwd)" && (cd "$target_dir" && ln -sf "$(realpath --relative-to="$(pwd)" "$orig_dir/$f")" "$(basename "$f")")
 ```
 3. 最后把文件路径添加到 `docs/bb-note/src/SUMMARY.md` 即可

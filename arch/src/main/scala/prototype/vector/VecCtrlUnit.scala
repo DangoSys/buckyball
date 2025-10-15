@@ -14,14 +14,14 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   val io = IO(new Bundle{
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp_o = Decoupled(new BallRsComplete)
-    
+
     val ctrl_ld_o = Decoupled(new ctrl_ld_req)
     val ctrl_st_o = Decoupled(new ctrl_st_req)
     val ctrl_ex_o = Decoupled(new ctrl_ex_req)
-    
+
     val cmdResp_i = Flipped(Valid(new Bundle {val commit = Bool()})) // from store unit
   })
-  
+
   val rob_id_reg    = RegInit(0.U(log2Up(b.rob_entries).W))
   val iter          = RegInit(0.U(10.W))
   val op1_bank      = RegInit(0.U(2.W))
@@ -30,7 +30,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   val op2_bank      = RegInit(0.U(2.W))
   val wr_bank       = RegInit(0.U(2.W))
   val wr_bank_addr  = RegInit(0.U(12.W))
-  val is_acc        = RegInit(false.B) 
+  val is_acc        = RegInit(false.B)
   val has_send      = RegInit(false.B)
 
   val idle :: busy :: Nil = Enum(2)
@@ -50,7 +50,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     wr_bank       := io.cmdReq.bits.cmd.wr_bank
     wr_bank_addr  := io.cmdReq.bits.cmd.wr_bank_addr
     is_acc        := io.cmdReq.bits.cmd.is_acc
-    
+
     state         := busy
   }
 
@@ -109,4 +109,3 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   io.cmdReq.ready := state === idle
 
 }
-

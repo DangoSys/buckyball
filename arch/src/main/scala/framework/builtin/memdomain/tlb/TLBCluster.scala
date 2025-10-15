@@ -45,7 +45,7 @@ class BBTLBCluster(nClients: Int, entries: Int, maxSize: Int)
     val tlbReqFire = tlb.io.req.fire
 
     val l0_tlb_paddr_reg = RegEnable(client.req.bits.tlb_req.vaddr, client.req.valid)
-    
+
     tlbReqValid := RegNext(client.req.valid && !l0_tlb_hit)
     tlbReq := RegNext(client.req.bits)
 
