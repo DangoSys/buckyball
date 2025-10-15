@@ -29,5 +29,3 @@ class BaseThread(implicit p: Parameters) extends Module {
   val bondParam = p(ThreadBondKey).get
   println(s"[Thread_${threadParam.threadName}] Op: ${opParam.OpType}, bond: ${bondParam.bondType}, Lanes: ${threadParam.lane}")
 }
-
-

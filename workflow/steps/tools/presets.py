@@ -2,7 +2,18 @@
 
 from typing import List
 from .base import Tool
-from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool
+from .file_tools import (
+    ReadFileTool,
+    WriteFileTool,
+    ListFilesTool,
+    MakeDirTool,
+    DeleteFileTool,
+    GetPathTool,
+    GrepFilesTool,
+)
+from .workflow_tools import WorkflowAPITool
+from .deepwiki_tools import DeepwikiAskTool, DeepwikiReadWikiTool
+from .agent_tools import CallAgentTool
 from .registry import ToolManager
 
 
@@ -12,13 +23,32 @@ def create_file_tools() -> List[Tool]:
         ReadFileTool(),
         WriteFileTool(),
         ListFilesTool(),
+        MakeDirTool(),
+        DeleteFileTool(),
+        GetPathTool(),
+        GrepFilesTool(),
     ]
 
 
 def create_code_agent_tools() -> List[Tool]:
-    """创建 Code Agent 工具集"""
-    # 目前只有文件操作工具，未来可以扩展
-    return create_file_tools()
+    """创建 Code Agent 工具集（包含所有必需工具）"""
+    return [
+        # 文件操作
+        ReadFileTool(),
+        WriteFileTool(),
+        ListFilesTool(),
+        MakeDirTool(),
+        DeleteFileTool(),
+        GetPathTool(),
+        GrepFilesTool(),
+        # Agent 协调
+        CallAgentTool(),
+        # Workflow API
+        WorkflowAPITool(),
+        # Deepwiki
+        DeepwikiAskTool(),
+        DeepwikiReadWikiTool(),
+    ]
 
 
 def create_default_manager() -> ToolManager:
@@ -40,13 +70,13 @@ PRESET_CONFIGS = {
     "file_tools": {
         "name": "File Operations",
         "description": "Basic file system operations",
-        "tools": create_file_tools
+        "tools": create_file_tools,
     },
     "code_agent": {
         "name": "Code Agent",
         "description": "Tools for code generation and manipulation",
-        "tools": create_code_agent_tools
-    }
+        "tools": create_code_agent_tools,
+    },
 }
 
 

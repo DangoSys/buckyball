@@ -42,7 +42,9 @@ async def handler(input_data, context):
 
     # API配置：优先使用传入的参数，否则使用环境变量
     api_key = input_data.get("apiKey") or os.getenv("API_KEY")
-    base_url = input_data.get("baseUrl") or os.getenv("BASE_URL", "https://api.deepseek.com/v1")
+    base_url = input_data.get("baseUrl") or os.getenv(
+        "BASE_URL", "https://api.deepseek.com/v1"
+    )
 
     if not api_key:
         error_msg = "API Key not provided"

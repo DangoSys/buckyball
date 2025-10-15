@@ -9,13 +9,11 @@ repos:
         files: \.(cpp|hpp|cc|cxx|h|c|hxx)$
         args: [--style=llvm]
 
-  - repo: https://github.com/google/yapf
-    rev: v0.40.2
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
     hooks:
-      - id: yapf
+      - id: black
         language_version: python3.10
-        args:
-          - --style={based_on_style:pep8, indent_width:4, column_limit:120}
 
   # a comprehensive tool for checking the style and quality of Python code.
   # It combines three popular Python tools:
@@ -37,7 +35,6 @@ repos:
           # E712: Comparison to True/False
           # E711: Comparison to None
           # F841: Unused variable
-          # E501: Line too long
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

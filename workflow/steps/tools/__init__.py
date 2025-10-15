@@ -30,7 +30,18 @@ result = manager.execute_tool(
 
 from .base import Tool, ToolContext
 from .registry import ToolRegistry, ToolManager
-from .file_tools import ReadFileTool, WriteFileTool, ListFilesTool
+from .file_tools import (
+    ReadFileTool,
+    WriteFileTool,
+    ListFilesTool,
+    MakeDirTool,
+    DeleteFileTool,
+    GetPathTool,
+    GrepFilesTool,
+)
+from .workflow_tools import WorkflowAPITool
+from .deepwiki_tools import DeepwikiAskTool, DeepwikiReadWikiTool
+from .agent_tools import CallAgentTool
 from .presets import (
     create_file_tools,
     create_code_agent_tools,
@@ -47,10 +58,20 @@ __all__ = [
     # 注册和管理
     "ToolRegistry",
     "ToolManager",
-    # 具体工具
+    # 文件操作工具
     "ReadFileTool",
     "WriteFileTool",
     "ListFilesTool",
+    "MakeDirTool",
+    "DeleteFileTool",
+    "GetPathTool",
+    "GrepFilesTool",
+    # Agent 协调
+    "CallAgentTool",
+    # API 工具
+    "WorkflowAPITool",
+    "DeepwikiAskTool",
+    "DeepwikiReadWikiTool",
     # 预定义工具集
     "create_file_tools",
     "create_code_agent_tools",

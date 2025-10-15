@@ -13,7 +13,7 @@ Chisel学习资源：[binder](https://mybinder.org/v2/gh/freechipsproject/chisel
 在正式开始之前，我们先启动环境：
 
 ```
-cd /path/to/buckyball  
+cd /path/to/buckyball
 source env.sh
 // 全文所有路径都是以./buckyball为起点的相对路径
 ```
@@ -39,10 +39,10 @@ add_cross_platform_test_target(ctest_relu_test relu_test.c)
 并在总构建目标中添加： CMakeLists.txt:137-162
 
 ```
-add_custom_target(buckyball-CTest-build ALL DEPENDS  
-  # ... 其他测试 ...  
-  ctest_relu_test  
-  COMMENT "Building all workloads for Buckyball"  
+add_custom_target(buckyball-CTest-build ALL DEPENDS
+  # ... 其他测试 ...
+  ctest_relu_test
+  COMMENT "Building all workloads for Buckyball"
   VERBATIM)
 ```
 
@@ -72,7 +72,7 @@ void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 
 ```
 case RELU_FUNC7:
-	return &relu_config; 
+	return &relu_config;
 ```
 
 在`isa.c:37-47`
@@ -118,7 +118,7 @@ extern const InstructionConfig relu_config;
 找到 `arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala` 文件,在解码列表中添加 ReLU 指令的解码项。参考其他指令(如 TRANSPOSE_FUNC7 = 35)的实现方式,您需要:
 
 ```
-// 在 BallDecodeFields 的 ListLookup 中添加  
+// 在 BallDecodeFields 的 ListLookup 中添加
 RELU_BITPAT -> List(Y, ...) // 根据 ReLU 指令的具体需求填写解码字段，列表参数的数量一定要一致，可以参考其他指令
 ```
 
@@ -178,9 +178,9 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters)
 ### 步骤1: 编译测试程序
 
 ```
-cd bb-tests/build  
-rm -rf * 
-cmake -G Ninja ../  
+cd bb-tests/build
+rm -rf *
+cmake -G Ninja ../
 ```
 
 **Warning**：执行`rm -rf * `之前一定要检查是否在`bb-tests/build `目录里面，否则在错误的文件夹里面强制删除重要文件将会带来灾难！
@@ -197,7 +197,7 @@ ninja sync-bin  // 同步二进制文件
 ### 步骤2: 生成Verilog
 
 ```
-cd buckyball  
+cd buckyball
 bbdev verilator --verilog
 ```
 

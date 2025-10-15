@@ -8,7 +8,7 @@ val scalaVersionFromChisel = "2.13.12"
 ThisBuild / scalafixScalaBinaryVersion := scalaBinaryVersion.value
 
 // ------------------------------------------------------------------------------
-// Chisel Version Config 
+// Chisel Version Config
 // ------------------------------------------------------------------------------
 
 lazy val chisel6Settings = Seq(
@@ -30,16 +30,16 @@ lazy val scalaTestSettings =  Seq(
 )
 
 // ------------------------------------------------------------------------------
-// Dependencies 
+// Dependencies
 // ------------------------------------------------------------------------------
 lazy val chipyard = ProjectRef(file("thirdparty/chipyard"), "chipyard")
 lazy val firechip = ProjectRef(file("thirdparty/chipyard"), "firechip")
 
 // ------------------------------------------------------------------------------
-// Project Settings 
+// Project Settings
 // ------------------------------------------------------------------------------
 lazy val buckyball = (project in file("."))
-  .dependsOn(chipyard, firechip)  
+  .dependsOn(chipyard, firechip)
   .settings(
     name := "buckyball",
     organization := "com.buckyball",

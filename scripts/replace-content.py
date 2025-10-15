@@ -11,6 +11,7 @@
 import re
 import sys
 
+
 def CY_INITIALIZE_RE_BLOCK(k):
     return (
         r"^# >>> " + f"{k}" + r" initialize >>>(?:\n|\r\n)"
@@ -18,11 +19,14 @@ def CY_INITIALIZE_RE_BLOCK(k):
         r"# <<< " + f"{k}" + r" initialize <<<(?:\n|\r\n)?"
     )
 
+
 def CY_INITIALIZE_START_TOKEN(k):
     return "# >>> " + f"{k}" + " initialize >>>"
 
+
 def CY_INITIALIZE_END_TOKEN(k):
     return "# <<< " + f"{k}" + " initialize <<<"
+
 
 # ------------------------------
 
@@ -31,11 +35,18 @@ try:
         fh_content = fh.read()
 except FileNotFoundError:
     fh_content = ""
-except:
+except Exception:
     raise
 
 initialize_comment_key = sys.argv[2]
-inner_contents = CY_INITIALIZE_START_TOKEN(initialize_comment_key) + "\n" + sys.argv[3] + "\n" + CY_INITIALIZE_END_TOKEN(initialize_comment_key) + "\n"
+inner_contents = (
+    CY_INITIALIZE_START_TOKEN(initialize_comment_key)
+    + "\n"
+    + sys.argv[3]
+    + "\n"
+    + CY_INITIALIZE_END_TOKEN(initialize_comment_key)
+    + "\n"
+)
 
 # ------------------------------
 

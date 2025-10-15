@@ -98,7 +98,7 @@ class RocketTileBB private(
   DisableMonitors { implicit p => tlSlaveXbar.node :*= slaveNode }
 
   nDCachePorts += 1 /*core */ + (dtim_adapter.isDefined).toInt + rocketParams.core.vector.map(_.useDCache.toInt).getOrElse(0)
-  
+
   val dtimProperty = dtim_adapter.map(d => Map(
     "sifive,dtim" -> d.device.asProperty)).getOrElse(Nil)
 
@@ -149,7 +149,7 @@ class RocketTileModuleImpBB(outer: RocketTileBB) extends BaseTileModuleImp(outer
   // val core = Module(new RocketBB(outer)(outer.p))
   // Create RocketBB with modified parameters that include BuildRoCCBB as BuildRoCC
   // We override the useRoCC and dcacheArbPorts to include BuildRoCCBB
-  // if we override after in RocketTileBB it will be too late 
+  // if we override after in RocketTileBB it will be too late
   // that other modules like dcache will use the original parameters
   // =================================================================================
   implicit val modifiedP: Parameters = outer.p.alterMap(Map(

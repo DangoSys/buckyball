@@ -15,18 +15,18 @@ class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle 
 
 class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    // 分配接口 
+    // 分配接口
     val alloc = Flipped(new DecoupledIO(new BallDecodeCmd))
-    
+
     // 发射接口 - 发射未完成的头部指令
     val issue = new DecoupledIO(new RobEntry)
-    
+
     // 完成接口 - 报告指令完成
     val complete = Flipped(new DecoupledIO(UInt(log2Up(b.rob_entries).W)))
-    
+
     // 提交接口 - 提交已完成的头部指令
     // val commit = new DecoupledIO(new RobEntry)
-    
+
     // 状态信号
     val empty = Output(Bool())
     val full  = Output(Bool())
@@ -36,7 +36,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val robFifo = Module(new Queue(new RobEntry, b.rob_entries))
   val robIdCounter = RegInit(0.U(log2Up(b.rob_entries).W))
   val robTable = Reg(Vec(b.rob_entries, Bool()))
-  
+
   // 初始化完成状态表
   for (i <- 0 until b.rob_entries) {
     when(reset.asBool) {
@@ -50,9 +50,9 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   robFifo.io.enq.valid       := io.alloc.valid
   robFifo.io.enq.bits.cmd    := io.alloc.bits
   robFifo.io.enq.bits.rob_id := robIdCounter
-  
+
   io.alloc.ready := robFifo.io.enq.ready
-  
+
   when(io.alloc.fire) {
     robIdCounter := robIdCounter + 1.U
     robTable(robIdCounter) := false.B
@@ -82,7 +82,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 // -----------------------------------------------------------------------------
   val isEmpty = robTable.reduce(_ && _)
   val isFull = !robFifo.io.enq.ready
-  
+
   io.empty := isEmpty
   io.full  := isFull
 }

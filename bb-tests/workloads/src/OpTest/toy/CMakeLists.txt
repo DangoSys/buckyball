@@ -7,12 +7,12 @@
 # function(add_baremetal_target TARGET_NAME MLIR_FILE)
 #   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal.o")
 #   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal")
-  
+
 #   # 编译xx.mlir到xx-baremetal.o
 #   add_custom_command(
 #     OUTPUT ${OBJ_FILE}
-#     COMMAND ${BUDDY_OPT} ${MLIR_FILE} 
-#           -lower-buckyball | 
+#     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
+#           -lower-buckyball |
 #         ${BUDDY_TRANSLATE} --buddy-to-llvmir |
 #         ${BUDDY_LLC} -filetype=obj -mtriple=riscv64
 #           -mattr=+buddyext,+D -float-abi=hard
@@ -21,17 +21,17 @@
 #     DEPENDS ${MLIR_FILE}
 #     COMMENT "Compiling ${MLIR_FILE} to object file"
 #   )
-  
+
 #   # 链接xx-baremetal.o到xx-baremetal
 #   add_custom_command(
 
 #     OUTPUT ${EXECUTABLE}
-#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs 
+#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs
 #         ${OBJ_FILE} -o ${EXECUTABLE}
 #     DEPENDS ${OBJ_FILE}
 #     COMMENT "Linking baremetal executable: ${EXECUTABLE}"
 #   )
-  
+
 #   # 创建xx-baremetal的目标
 #   add_custom_target(${TARGET_NAME}_baremetal
 #     DEPENDS ${EXECUTABLE}
@@ -42,12 +42,12 @@
 # function(add_baremetal_target TARGET_NAME MLIR_FILE)
 #   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal.o")
 #   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal")
-  
+
 #   # 编译xx.mlir到xx-baremetal.o
 #   add_custom_command(
 #     OUTPUT ${OBJ_FILE}
-#     COMMAND ${BUDDY_OPT} ${MLIR_FILE} 
-#           -lower-buckyball=hartId=3 | 
+#     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
+#           -lower-buckyball=hartId=3 |
 #         ${BUDDY_TRANSLATE} --buddy-to-llvmir |
 #         ${BUDDY_LLC} -filetype=obj -mtriple=riscv64
 #           -mattr=+buddyext,+D -float-abi=hard
@@ -56,17 +56,17 @@
 #     DEPENDS ${MLIR_FILE}
 #     COMMENT "Compiling ${MLIR_FILE} to object file"
 #   )
-  
+
 #   # 链接xx-baremetal.o到xx-baremetal
 #   add_custom_command(
 
 #     OUTPUT ${EXECUTABLE}
-#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs 
+#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs
 #         ${OBJ_FILE} -o ${EXECUTABLE}
 #     DEPENDS ${OBJ_FILE}
 #     COMMENT "Linking baremetal executable: ${EXECUTABLE}"
 #   )
-  
+
 #   # 创建xx-baremetal的目标
 #   add_custom_target(${TARGET_NAME}_baremetal
 #     DEPENDS ${EXECUTABLE}
@@ -77,12 +77,12 @@
 # function(add_linux_target TARGET_NAME MLIR_FILE)
 #   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-linux.o")
 #   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-linux")
-  
+
 #   # 编译xx.mlir到xx-linux.o
 #   add_custom_command(
 #     OUTPUT ${OBJ_FILE}
-#     COMMAND ${BUDDY_OPT} ${MLIR_FILE} 
-#           -lower-buckyball | 
+#     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
+#           -lower-buckyball |
 #         ${BUDDY_TRANSLATE} --buddy-to-llvmir |
 #         ${BUDDY_LLC} -filetype=obj -mtriple=riscv64
 #           -mattr=+buddyext,+D -float-abi=hard
@@ -90,7 +90,7 @@
 #     DEPENDS ${MLIR_FILE}
 #     COMMENT "Compiling ${MLIR_FILE} to Linux object file"
 #   )
-  
+
 #   # 链接xx-linux.o到xx-linux
 #   add_custom_command(
 #     OUTPUT ${EXECUTABLE}
@@ -98,7 +98,7 @@
 #     DEPENDS ${OBJ_FILE}
 #     COMMENT "Linking Linux executable: ${EXECUTABLE}"
 #   )
-  
+
 #   # 创建xx-linux的目标 - 使用目标名前缀避免冲突
 #   add_custom_target(${TARGET_NAME}_linux
 #     DEPENDS ${EXECUTABLE}
@@ -129,7 +129,7 @@
 # add_cross_platform_target(bb_mul_warp16 ${OPTEST_TOY_DIR}/bb_mul_warp16.mlir)
 
 # add_custom_target(OpTest-toy ALL DEPENDS
-#   bb_mvin_mvout 
+#   bb_mvin_mvout
 #   bb_dma1
 #   bb_dma2
 #   bb_dma3

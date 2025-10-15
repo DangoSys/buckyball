@@ -16,5 +16,5 @@ services:
     working_dir: /buckyball
     stdin_open: true
     tty: true
-    command: /bin/bash 
+    command: /bin/bash
     image: buckyball:latest

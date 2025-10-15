@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import freechips.rocketchip.tile._  
+import freechips.rocketchip.tile._
 import framework.builtin.memdomain.DISA._
 import framework.rocket.RoCCCommandBB
 
@@ -19,7 +19,7 @@ class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle
   // 指令类型判断
   val is_ball       = Bool()  // Ball指令(包括FENCE)
   val is_mem        = Bool()  // 内存指令(load/store)
-  
+
   // 原始指令信息，传递给对应的domain decoder
   val raw_cmd       = new RoCCCommandBB
 }
@@ -46,5 +46,3 @@ class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
   io.id_o.bits.is_mem  := is_mem_instr
   io.id_o.bits.raw_cmd := io.id_i.bits.cmd
 }
-
-

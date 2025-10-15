@@ -17,7 +17,7 @@ class id_lu_req(implicit b: CustomBuckyBallConfig) extends Bundle {
   val wr_bank       = UInt(log2Up(b.sp_banks).W)
   val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)
   val opcode        = UInt(3.W)
-  val iter          = UInt(10.W) 
+  val iter          = UInt(10.W)
   val thread_id     = UInt(10.W)
   val rob_id        = UInt(log2Up(b.rob_entries).W)
 }

@@ -77,7 +77,7 @@ import pytest
 def test_your_script(script_runner):
   """Test your script."""
   result = script_runner("your-script.sh", ["arg1", "arg2"], timeout=60)
-  
+
   # 验证结果
   assert result["success"], f"Script failed: {result['stderr']}"
   assert "expected_output" in result["stdout"]

@@ -82,7 +82,7 @@ class ToolManager:
         arguments: Any,
         work_dir: str,
         logger: Any = None,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         执行工具调用
@@ -104,11 +104,13 @@ class ToolManager:
         result = self.registry.execute(tool_name, arguments, context)
 
         # 记录执行日志
-        self._execution_log.append({
-            "tool": tool_name,
-            "arguments": arguments,
-            "result": result[:200] if len(result) > 200 else result  # 截断长结果
-        })
+        self._execution_log.append(
+            {
+                "tool": tool_name,
+                "arguments": arguments,
+                "result": result[:200] if len(result) > 200 else result,  # 截断长结果
+            }
+        )
 
         return result
 

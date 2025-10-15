@@ -6,7 +6,7 @@ import chisel3.util._
 // 算术类型类
 abstract class Arithmetic[T <: Data] {
   def add(x: T, y: T): T
-  def sub(x: T, y: T): T  
+  def sub(x: T, y: T): T
   def mul(x: T, y: T): T
   def div(x: T, y: T): T
   def gt(x: T, y: T): Bool
@@ -29,4 +29,4 @@ object ArithmeticFactory {
       case _ => throw new IllegalArgumentException(s"Unsupported data type: ${dataType.getClass}")
     }
   }
-} 
+}

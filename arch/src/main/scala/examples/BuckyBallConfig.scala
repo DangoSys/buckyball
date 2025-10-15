@@ -20,4 +20,3 @@ object CustomBuckyBallConfig {
   import BuckyBallConfigs._
   def apply(): CustomBuckyBallConfig = BuckyBallConfigs.customConfig
 }
-

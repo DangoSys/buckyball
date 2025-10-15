@@ -2,7 +2,7 @@
 // RUN:     -lower-buckyball | \
 // RUN: FileCheck %s
 
-// Spec: 
+// Spec:
 // 目的：验证dma模块快速交替读写的正确性
 // 1. 打印输入矩阵A和B
 // 2. 打印搬移前目标地址的矩阵  [CHECK1] 打印结果应为全0矩阵
@@ -19,17 +19,17 @@ func.func @main() -> i8 {
   %0 = arith.constant 0 : i8
   %spadAddr1 = arith.constant 10 : i64  // 暂存器地址1
   %spadAddr2 = arith.constant 50 : i64  // 暂存器地址2
-  
+
   %arrayA = memref.get_global @input_matrix_a : memref<2x16xi8>
   %arrayB = memref.get_global @input_matrix_b : memref<2x16xi8>
   %arrayTemp = memref.alloc() {alignment = 16} : memref<2x16xi8>
-  
+
   // 打印输入矩阵A和B
   buckyball.print %arrayA : memref<2x16xi8>
   buckyball.print %arrayB : memref<2x16xi8>
   // 打印搬移前临时矩阵 [CHECK1]
   buckyball.print %arrayTemp : memref<2x16xi8>
-  
+
   // 快速交替mvin/mvout操作序列
   // 第一步：A -> 暂存器1
   // CHECK: mvin
@@ -37,26 +37,26 @@ func.func @main() -> i8 {
   // 第二步：暂存器1 -> temp
   // CHECK: mvout
   buckyball.bb_mvout %arrayTemp %spadAddr1 : memref<2x16xi8> i64
-  
-  // 第三步：B -> 暂存器2  
+
+  // 第三步：B -> 暂存器2
   // CHECK: mvin
   buckyball.bb_mvin %arrayB %spadAddr2 : memref<2x16xi8> i64
   // 第四步：暂存器2 -> A
   // CHECK: mvout
   buckyball.bb_mvout %arrayA %spadAddr2 : memref<2x16xi8> i64
-  
+
   // 第五步：temp -> 暂存器1
   // CHECK: mvin
   buckyball.bb_mvin %arrayTemp %spadAddr1 : memref<2x16xi8> i64
   // 第六步：暂存器1 -> B
   // CHECK: mvout
   buckyball.bb_mvout %arrayB %spadAddr1 : memref<2x16xi8> i64
-  
+
   // 打印交换后的矩阵 [CHECK2]
   buckyball.print %arrayA : memref<2x16xi8>
   buckyball.print %arrayB : memref<2x16xi8>
-  
+
   // 释放分配的内存
   memref.dealloc %arrayTemp : memref<2x16xi8>
   return %0 : i8
-} 
+}
