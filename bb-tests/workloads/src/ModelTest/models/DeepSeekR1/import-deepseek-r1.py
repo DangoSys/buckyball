@@ -52,9 +52,7 @@ if model_path is None:
     model_path = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 
 # Initialize the model from the specified model path.
-model = AutoModelForCausalLM.from_pretrained(
-    model_path, torchscript=True
-).eval()
+model = AutoModelForCausalLM.from_pretrained(model_path, torchscript=True).eval()
 model.config.use_cache = False
 
 # Initialize Dynamo Compiler with specific configurations as an importer.

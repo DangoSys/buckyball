@@ -41,7 +41,7 @@ memref.global "private" @val : memref<1x1xi8> = dense<[[1]]>
 
 func.func @main() -> i8 {
   %0 = arith.constant 0 : i8
-  
+
   // Scratchpad addresses
   %spadAddr_a = arith.constant 0: i64    // Matrix A (16x16) at spad address 0-15
   %spadAddr_b = arith.constant 4096 : i64   // Matrix B (16x16) at spad address 16-31
@@ -59,7 +59,7 @@ func.func @main() -> i8 {
   buckyball.print %val : memref<1x1xi8>
   // WARP16: Matrix multiplication (16x16 * 16x16)
   // aSpAddr = 0 (Matrix A address)
-  // bSpAddr = 20 (Matrix B address)  
+  // bSpAddr = 20 (Matrix B address)
   // cSpAddr = 40 (Result C address)
   // nLen = 16 (matrix dimension)
   %nLen = arith.constant 16 : i64
@@ -67,11 +67,11 @@ func.func @main() -> i8 {
   // MVOUT: Move result from scratchpad to memory
   buckyball.print %val : memref<1x1xi8>
   buckyball.bb_mvout %arrayC %spadAddr_c : memref<16x16xi8> i64
-  
+
   // Print result matrix
   // Expected: Since A is identity matrix, result should be same as matrix B
   buckyball.print %arrayC : memref<16x16xi8>
-  
+
   memref.dealloc %arrayC : memref<16x16xi8>
   return %0 : i8
 }

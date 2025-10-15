@@ -13,7 +13,7 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
   val io = IO(new Bundle {
     val write_in  = new AccWriteIO(n, w, mask_len)           // outer —> Acc
     val read      = Flipped(new SramReadIO(n, w))            // Acc <—> SramBank
-    val write_out = Flipped(new SramWriteIO(n, w, mask_len)) // Acc —> SramBank 
+    val write_out = Flipped(new SramWriteIO(n, w, mask_len)) // Acc —> SramBank
   })
 
   // Pipeline registers
@@ -21,7 +21,7 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
   val addr_reg  = RegInit(0.U(log2Ceil(n).W))
   val data_reg  = RegInit(0.U(w.W))
   val mask_reg  = RegInit(VecInit(Seq.fill(mask_len)(false.B)))
-  
+
   when (io.write_in.is_acc || RegNext(io.write_in.is_acc)) {
 // -----------------------------------------------------------------------------
 // exec->AccPipe->SramBank
@@ -34,7 +34,7 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
     addr_reg                 := io.write_in.req.bits.addr
     data_reg                 := io.write_in.req.bits.data
     mask_reg                 := io.write_in.req.bits.mask
-    
+
     // Stage 2: Accumulate (when read data is ready)
     val acc_data = WireDefault(0.U(w.W))
     when (valid_reg && io.read.resp.valid) {
@@ -42,13 +42,13 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
     }.otherwise {
       acc_data := data_reg
     }
-    
+
     // Stage 3: Write back
     io.write_out.req.valid     := valid_reg && io.read.resp.valid
     io.write_out.req.bits.addr := addr_reg
     io.write_out.req.bits.data := acc_data
     io.write_out.req.bits.mask := mask_reg
-    
+
     // Backpressure
     io.write_in.req.ready      := io.read.req.ready
     io.read.resp.ready         := io.write_out.req.ready
@@ -64,7 +64,7 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
     io.write_out.req.bits.addr := io.write_in.req.bits.addr
     io.write_out.req.bits.data := io.write_in.req.bits.data
     io.write_out.req.bits.mask := io.write_in.req.bits.mask
-    
+
     io.write_in.req.ready      := io.write_out.req.ready
     io.read.resp.ready         := false.B
   }
@@ -86,19 +86,19 @@ class AccReadRouter(val n: Int, val w: Int) extends Module {
   req_arbiter.io.in(0) <> io.read_in2.req
   req_arbiter.io.in(1) <> io.read_in1.req
   io.read_out.req <> req_arbiter.io.out
-  
+
   // 响应分发器：记录哪个输入发起了请求
   val resp_to_in1 = RegNext(req_arbiter.io.chosen === 1.U && req_arbiter.io.out.fire, false.B)
   val resp_to_in2 = RegNext(req_arbiter.io.chosen === 0.U && req_arbiter.io.out.fire, false.B)
-  
+
   // 响应分发
   io.read_in1.resp.valid := io.read_out.resp.valid && resp_to_in1
   io.read_in1.resp.bits  := io.read_out.resp.bits
   io.read_in2.resp.valid := io.read_out.resp.valid && resp_to_in2
   io.read_in2.resp.bits  := io.read_out.resp.bits
-  
+
   // 响应的ready信号
-  io.read_out.resp.ready := 
+  io.read_out.resp.ready :=
     (resp_to_in1 && io.read_in1.resp.ready) ||
     (resp_to_in2 && io.read_in2.resp.ready)
 

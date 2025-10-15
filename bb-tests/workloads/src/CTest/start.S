@@ -4,8 +4,8 @@
 _start:
     # Get hart ID
     csrr t0, mhartid
-    
-    # Set up stack pointer for each hart  
+
+    # Set up stack pointer for each hart
     # Each hart gets 4KB stack space (0x1000 bytes)
     li sp, 0x80020000
     li t1, 0x1000
@@ -19,4 +19,3 @@ _start:
 .align 12
 stack_space:
     .space 0x8000      # 32KB 栈空间
-

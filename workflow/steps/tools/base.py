@@ -49,8 +49,8 @@ class Tool(ABC):
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.parameters
-            }
+                "parameters": self.parameters,
+            },
         }
 
     def safe_execute(self, arguments: Any, context: Any) -> str:
@@ -77,13 +77,13 @@ class Tool(ABC):
 
         except json.JSONDecodeError as e:
             error = f"Invalid JSON arguments: {str(e)}"
-            if hasattr(context, 'logger'):
+            if hasattr(context, "logger"):
                 context.logger.error(f"Tool {self.name} - {error}")
             return json.dumps({"error": error})
 
         except Exception as e:
             error = f"Tool execution failed: {str(e)}"
-            if hasattr(context, 'logger'):
+            if hasattr(context, "logger"):
                 context.logger.error(f"Tool {self.name} - {error}")
             return json.dumps({"error": error})
 

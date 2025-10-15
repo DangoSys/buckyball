@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import prototype.vector.bond.CanHaveVVVBond
-import prototype.vector.op.{CascadeOp, CanHaveCascadeOp}  
+import prototype.vector.op.{CascadeOp, CanHaveCascadeOp}
 
 class CasThread(implicit p: Parameters) extends BaseThread
   with CanHaveCascadeOp

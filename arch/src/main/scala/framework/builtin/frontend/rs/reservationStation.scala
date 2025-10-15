@@ -35,13 +35,13 @@ class BallCommitInterface(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: P
 
 class BallReservationStation(BallRsRegists: Seq[BallRsRegist])
   (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
-  
+
   val numBalls = BallRsRegists.length
-  
+
   val io = IO(new Bundle {
     // Ball Domain Decoder -> Rs
     val ball_decode_cmd_i = Flipped(new DecoupledIO(new BallDecodeCmd))
-    val rs_rocc_o = new Bundle {      
+    val rs_rocc_o = new Bundle {
       val resp  = new DecoupledIO(new RoCCResponseBB()(p))
       val busy  = Output(Bool())
     }
@@ -56,15 +56,15 @@ class BallReservationStation(BallRsRegists: Seq[BallRsRegist])
 // 入站 - 指令分配
 // -----------------------------------------------------------------------------
   rob.io.alloc <> io.ball_decode_cmd_i
-  
+
 // -----------------------------------------------------------------------------
 // 出站 - 指令发射 (根据指令类型分发到对应的Ball设备)
 // -----------------------------------------------------------------------------
   // 创建ballId到索引的映射
-  val ballIdToIndex = BallRsRegists.zipWithIndex.map { case (info, idx) => 
-    info.ballId.U -> idx.U 
+  val ballIdToIndex = BallRsRegists.zipWithIndex.map { case (info, idx) =>
+    info.ballId.U -> idx.U
   }.toMap
-  
+
   // 为每个Ball设备设置发射信号
   for (i <- 0 until numBalls) {
     val ballId = BallRsRegists(i).ballId.U
@@ -83,7 +83,7 @@ class BallReservationStation(BallRsRegists: Seq[BallRsRegist])
 // 完成信号处理
 // -----------------------------------------------------------------------------
   val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), numBalls))
-  
+
   // 连接所有Ball设备的完成信号到仲裁器
   for (i <- 0 until numBalls) {
     completeArb.io.in(i).valid := io.commit_i.balls(i).valid
@@ -94,13 +94,13 @@ class BallReservationStation(BallRsRegists: Seq[BallRsRegist])
   rob.io.complete <> completeArb.io.out
 // -----------------------------------------------------------------------------
 // 指令提交
-// -----------------------------------------------------------------------------  
+// -----------------------------------------------------------------------------
   // rob.io.commit.ready := true.B
-  
+
 // -----------------------------------------------------------------------------
 // 响应生成
 // -----------------------------------------------------------------------------
-  io.rs_rocc_o.resp.valid := io.ball_decode_cmd_i.valid // 进来直接提交 
+  io.rs_rocc_o.resp.valid := io.ball_decode_cmd_i.valid // 进来直接提交
   io.rs_rocc_o.resp.bits  := DontCare
   io.rs_rocc_o.busy       := !rob.io.empty
 }

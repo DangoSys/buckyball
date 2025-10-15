@@ -15,10 +15,10 @@ func.func @main() -> i64 {
   %arrayB = memref.get_global @gv2 : memref<4x4xi8>
   %arrayC = memref.alloc() : memref<4x4xi8>
   gemmini.print %arrayC : memref<4x4xi8>
-  // 10000000000000000000000000000000  
+  // 10000000000000000000000000000000
   %aAccAddr = arith.constant 2147483648 : i64
   // 11000000000000000000000000000000
-  %bAccAddr = arith.constant 3221225472 : i64 
+  %bAccAddr = arith.constant 3221225472 : i64
   // 10000000000000000000000000000000
   %cAccAddr = arith.constant 2147483648
   %cst4 = arith.constant 4 : i64
@@ -35,6 +35,6 @@ func.func @main() -> i64 {
   gemmini.config_st %cst4 : i64
   // CHECK: "gemmini.intr.mvout"
   gemmini.mvout %arrayC %cAccAddr : memref<4x4xi8> i64
-  gemmini.print %arrayC : memref<4x4xi8> 
+  gemmini.print %arrayC : memref<4x4xi8>
   return %cst0 : i64
 }

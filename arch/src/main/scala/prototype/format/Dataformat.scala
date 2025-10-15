@@ -17,7 +17,7 @@ class INT8Format extends DataFormat {
   override def name: String = "INT8"
 }
 
-// FP16 格式  
+// FP16 格式
 class FP16Format extends DataFormat {
   override def width: Int = 16
   override def dataType: Data = UInt(16.W) // 暂时用UInt表示，后续可扩展为Float类型
@@ -37,7 +37,7 @@ class FP32Format extends DataFormat {
 object DataFormatFactory {
   def create(formatType: String): DataFormat = formatType.toUpperCase match {
     case "INT8" => new INT8Format
-    case "FP16" => new FP16Format  
+    case "FP16" => new FP16Format
     case "FP32" => new FP32Format
     case _ => throw new IllegalArgumentException(s"Unsupported data format: $formatType")
   }

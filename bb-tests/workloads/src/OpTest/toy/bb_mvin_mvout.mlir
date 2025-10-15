@@ -2,9 +2,9 @@
 // RUN:     -lower-buckyball | \
 // RUN: FileCheck %s
 
-// Spec: 
+// Spec:
 // 目的：mvin和mvout指令的正确性
-// 1. 打印输入矩阵 
+// 1. 打印输入矩阵
 // 2. 打印搬移前目标地址的矩阵  [CHECK] 打印结果应为全0矩阵
 // 3. 使用mvin将数据从内存搬到暂存器
 // 4. 使用mvout将数据从暂存器搬回输出内存

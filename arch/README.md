@@ -26,7 +26,7 @@ BuckyBall是一个全栈开源NPU/DSA设计框架。
 ## 2. Architecture
 
 ### 2.1 ISA
-#### 2.1.1 bb_mvin 
+#### 2.1.1 bb_mvin
 
 **功能**: 将数据从主内存加载到scratchpad内存
 
@@ -78,7 +78,7 @@ rs2:
 **操作数**:
 
 - `rs1`: 主内存地址
-- `rs2[addrLen-1:0]`: scratchpad地址  
+- `rs2[addrLen-1:0]`: scratchpad地址
 - `rs2[2*addrLen+9:addrLen]`: 搬出去多少行（迭代次数）
 
 **操作**: 将scratchpad地址`rs2[addrLen-1:0]`处的数据存储到主内存地址`rs1`，执行`rs2[2*addrLen+9:addrLen]`次迭代
@@ -189,7 +189,7 @@ rs2:
 ```
 cd voyager-test
 mkdir build && cd build
-cmake .. 
+cmake ..
 make -j256
 ```
 
@@ -198,7 +198,7 @@ make -j256
 ```
 cd voyager-test
 mkdir build && cd build
-cmake .. 
+cmake ..
 make -j256
 ```
 
@@ -211,7 +211,7 @@ make -j256
 ### 5.4 Verilator
 ```
 ./voyager-test/scripts/build-verilator.sh --config BuckyBallRocketConfig --debug
-./voyager-test/scripts/run-verilator.sh --config BuckyBallRocketConfig --debug  
+./voyager-test/scripts/run-verilator.sh --config BuckyBallRocketConfig --debug
 ```
 
 
@@ -258,4 +258,3 @@ make -j256
 
 
 ## 8. Buckyball 案例分析
-

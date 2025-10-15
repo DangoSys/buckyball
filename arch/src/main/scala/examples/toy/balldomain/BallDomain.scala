@@ -55,7 +55,7 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   ballRs.io.ball_decode_cmd_i <> ballDecoder.io.ball_decode_cmd_o
 
 //---------------------------------------------------------------------------
-// BallReservationStation -> BBus 
+// BallReservationStation -> BBus
 //---------------------------------------------------------------------------
   bbus.io.cmdReq <> ballRs.io.issue_o.balls
   ballRs.io.commit_i.balls <> bbus.io.cmdResp

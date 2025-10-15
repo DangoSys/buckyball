@@ -59,8 +59,6 @@ private:
 
   // Static instance for global access
   static toy_t *instance;
-
-
 };
 
 // Universal bank access functions - use bank configuration to determine element

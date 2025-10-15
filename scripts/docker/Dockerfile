@@ -40,4 +40,4 @@ USER bb
 EXPOSE 3000 8080 8000
 
 # Set default command
-CMD ["/bin/bash"] 
+CMD ["/bin/bash"]

@@ -67,7 +67,7 @@ class MeshWarp(implicit p: Parameters) extends Module {
   }
 
   io.in.ready := mulThreads(0).vvvBond.get.in.ready
-  
+
   for (i <- 0 until 16) {
    val mulThread = mulThreads(i)
     val casThread = casThreads(i)
@@ -110,7 +110,7 @@ class MeshWarp(implicit p: Parameters) extends Module {
           }
         }
       }
- 
+
       // 只允许thread_id对应的mulOp驱动输入
       when (i.U === io.in.bits.thread_id && io.in.valid) {
         mulBond.in.valid := true.B

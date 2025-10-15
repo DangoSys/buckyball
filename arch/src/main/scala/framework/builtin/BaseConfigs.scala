@@ -15,29 +15,29 @@ case class CapacityInVectors(vectors: Int) extends BuckyBallMemCapacity
 
 case class BaseConfig(
   opcodes: OpcodeSet = OpcodeSet.custom3,
-  
+
   inputType: Data,
   accType: Data,
 
   veclane: Int = 16,
-  accveclane: Int = 4, 
+  accveclane: Int = 4,
 
   tlb_size: Int = 4,
   rob_entries: Int = 16,  // RoB条目数量
-  
+
   dma_maxbytes: Int = 64, // 未使用
   dma_buswidth: Int = 128,
-  
+
   sp_banks: Int = 2,
   acc_banks: Int = 8,
-  
+
   sp_singleported: Boolean = true,
-  
+
   sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(16),
   acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(8),
-  
+
   max_in_flight_mem_reqs: Int = 16, // 未使用
-  aligned_to: Int = 1, 
+  aligned_to: Int = 1,
   spad_read_delay: Int = 0,
 
   spAddrLen: Int = 14, // 256KB的索引长度
