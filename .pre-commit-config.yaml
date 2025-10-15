@@ -15,7 +15,7 @@ repos:
       - id: yapf
         language_version: python3.10
         args:
-          - --style={based_on_style:pep8, indent_width:2, column_limit:200}
+          - --style={based_on_style:pep8, indent_width:4, column_limit:120}
 
   # a comprehensive tool for checking the style and quality of Python code.
   # It combines three popular Python tools:
@@ -27,8 +27,8 @@ repos:
     hooks:
       - id: flake8
         args:
-          - --max-line-length=200  # Adjust as per your style guide
-          - --ignore=F821,F403,F405,F401,W503,E203,E402,E401,W605,E712,E711,F841,E501
+          - --max-line-length=120  # Adjust as per your style guide
+          - --ignore=F821,F403,F405,F401,W503,E203,E402,E401,W605,E712,E711,F841
           # W503: Line break before binary operator
           # E203: Whitespace before colon
           # E402: Module level import not at top of file
