@@ -22,3 +22,6 @@
 [submodule "tools/paladin"]
 	path = tools/paladin
 	url = https://github.com/DangoSys/awesome-paladin.git
+[submodule "sims/bebop"]
+	path = sims/bebop
+	url = https://github.com/DangoSys/bebop.git

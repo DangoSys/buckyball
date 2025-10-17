@@ -8,23 +8,23 @@
 // Test matrices
 static elem_t input_matrix_a[DIM * 1024] __attribute__((aligned(64)));
 static elem_t input_matrix_b[DIM * 1024] __attribute__((aligned(64)));
-static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
-static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
+static elem_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
+static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 static elem_t a_transposed[DIM * 1024] __attribute__((aligned(64)));
 
 int alternately_mvin_mvout_pressure_test() {
   for (int i = 0; i < 4; i++) {
-    init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
-    uint32_t wr_addr = spad_addr(4, i);
+    init_u8_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
+    uint32_t wr_addr = spad_addr(0, i);
     bb_mvin((uintptr_t)expected_matrix, wr_addr, DIM, 1);
-    clear_u32_matrix(output_matrix, DIM, DIM);
+    clear_u8_matrix(output_matrix, DIM, DIM);
     bb_mvout((uintptr_t)output_matrix, wr_addr, DIM);
     bb_fence();
-    if (!compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
-      printf("Test ACC mvin/mvout pressure %d FAILED\n", i);
+    if (!compare_u8_matrices(output_matrix, expected_matrix, DIM, DIM)) {
+      printf("Test mvin/mvout pressure %d FAILED\n", i);
       return 0;
     } else {
-      printf("Test ACC mvin/mvout pressure %d PASSED\n", i);
+      printf("Test mvin/mvout pressure %d PASSED\n", i);
     }
   }
   return 1;
