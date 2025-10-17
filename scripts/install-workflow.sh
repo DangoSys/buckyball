@@ -36,3 +36,4 @@ cd ${BBDIR}/workflow && rm *.{md,tsx} || true
 
 # install MCP
 pip install mcp
+pip install redis

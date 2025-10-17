@@ -103,7 +103,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_FLAGS}")
 # 构建列表 - 使用跨平台function生成所有测试目标
 #-------------------------------------------------------------------------------
 add_cross_platform_test_target(ctest_mvin_mvout_acc_test mvin_mvout_acc_test.c)
-add_cross_platform_test_target(ctest_mvin_mvout_alternate_test mvin_mvout_alternate_test.c)
+add_cross_platform_test_target(ctest_mvin_mvou_test mvin_mvout_test.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_ones vecunit_matmul_ones.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_identity_random vecunit_matmul_identity_random.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_row_col_vector vecunit_matmul_row_col_vector.c)
@@ -139,7 +139,7 @@ add_cross_platform_test_target(ctest_softmax_test softmax_test.c)
 # 创建总的构建目标
 add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_mvin_mvout_acc_test
-  ctest_mvin_mvout_alternate_test
+  ctest_mvin_mvou_test
   ctest_vecunit_matmul_ones
   ctest_vecunit_matmul_identity_random
   ctest_vecunit_matmul_row_col_vector
