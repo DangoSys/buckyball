@@ -21,4 +21,5 @@ object DISA {
   val GELU                 = BitPat("b0100011") // 35
   val LAYERNORM            = BitPat("b0100100") // 36
   val SOFTMAX              = BitPat("b0100101") // 37
+  val RELU                 = BitPat("b0100110") // 38
 }

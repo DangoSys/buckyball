@@ -40,6 +40,7 @@ extern const InstructionConfig transpose_config;
 extern const InstructionConfig gelu_config;
 extern const InstructionConfig layernorm_config;
 extern const InstructionConfig softmax_config;
+extern const InstructionConfig relu_config;
 
 // 通过func7获取指令配置
 const InstructionConfig *config(InstructionType func7) {
@@ -64,6 +65,8 @@ const InstructionConfig *config(InstructionType func7) {
     return &layernorm_config;
   case SOFTMAX_FUNC7:
     return &softmax_config;
+  case RELU_FUNC7:
+    return &relu_config;
   case FENCE_FUNC7:
     return NULL; // FENCE指令没有参数，不需要配置
   case FLUSH_FUNC7:
