@@ -151,6 +151,51 @@ val io = IO(new Bundle {
   - 数据元素按 `b.inputType` 进行带符号比较；
   - 写回使用全掩码（可根据需求扩展部分写）。
 
+## ISA结构
+
+本模块对应的 Ball 指令用于对 Scratchpad 中的数据进行逐元素 ReLU 并写回。
+
+**功能**: 对输入矩阵逐元素执行 ReLU（负值置 0），按行写回到目标地址。
+
+**func7**: `0100110` 38（对应 `DISA.RELU`）
+
+**格式**: `bb_relu rs1, rs2`
+
+**操作数**:
+
+- `rs1[spAddrLen-1:0]`: 源操作数的 Scratchpad 地址（op1_spaddr）
+- `rs2[spAddrLen-1:0]`: 结果写回的 Scratchpad 地址（wr_spaddr）
+- `rs2[spAddrLen+9:spAddrLen]`: 迭代次数（iter，按行计数）
+- `rs2[63:spAddrLen+10]`: special/保留字段（当前 ReLU 未使用）
+
+地址说明：`spAddrLen` 宽度的本地地址在硬件中会进一步被拆分为 bank 与 row（见 LocalAddr），无需在 ISA 层显式区分。
+
+**操作**: 从 `rs1` 指定的 Scratchpad 地址读取数据，执行逐元素 ReLU，再将结果按行写回 `rs2` 指定地址，循环 `iter` 次。
+
+rs1（输入地址）:
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   op1_spaddr                         │
+│                 (spAddrLen bits)                     │
+├──────────────────────────────────────────────────────┤
+│                 [spAddrLen-1:0]                      │
+└──────────────────────────────────────────────────────┘
+```
+
+rs2（写回地址与迭代次数）:
+
+```
+┌──────────────────────────────────┬────────────────────┐
+│        iter (rows)               │    wr_spaddr       │
+│        (10 bits)                 │ (spAddrLen bits)   │
+├──────────────────────────────────┼────────────────────┤
+│ [spAddrLen+9: spAddrLen]         │  [spAddrLen-1:0]   │
+└──────────────────────────────────┴────────────────────┘
+```
+
+备注：解码时 `op1_spaddr` 来自 `rs1`，`wr_spaddr` 与 `iter` 来自 `rs2`，其余 `special` 高位可留作扩展。
+
 ## 使用方法
 
 - 将源数据布置在 Scratchpad 指定的 `op1_bank/op1_bank_addr` 起始位置，保证每行宽度为 `veclane × inputWidth`；
