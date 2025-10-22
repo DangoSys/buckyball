@@ -61,7 +61,7 @@ void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
 
   bb_mvin((uintptr_t)a_transposed, op1_addr, size, 1);
   bb_mvin((uintptr_t)b, op2_addr, size, 1);
-
+  bb_mvin((uintptr_t)c, wr_addr, size << 2, 1);
   bb_fence();
 
   // 执行矩阵乘法

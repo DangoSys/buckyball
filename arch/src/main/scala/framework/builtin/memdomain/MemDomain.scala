@@ -11,6 +11,7 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.memdomain.{MemLoader, MemStorer, MemController}
 import framework.builtin.memdomain.rs.MemReservationStation
 import framework.builtin.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
+import framework.builtin.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
 import framework.rocket.RoCCResponseBB
@@ -82,6 +83,19 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   memStorer.io.cmdReq <> memRs.io.issue_o.st
   memRs.io.commit_i.ld <> memLoader.io.cmdResp
   memRs.io.commit_i.st <> memStorer.io.cmdResp
+
+// -----------------------------------------------------------------------------
+// PMC - Performance Monitor Counter
+// -----------------------------------------------------------------------------
+  val pmc = Module(new MemCyclePMC)
+  pmc.io.ldReq_i.valid := memRs.io.issue_o.ld.fire
+  pmc.io.ldReq_i.bits := memRs.io.issue_o.ld.bits
+  pmc.io.stReq_i.valid := memRs.io.issue_o.st.fire
+  pmc.io.stReq_i.bits := memRs.io.issue_o.st.bits
+  pmc.io.ldResp_o.valid := memLoader.io.cmdResp.fire
+  pmc.io.ldResp_o.bits := memLoader.io.cmdResp.bits
+  pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
+  pmc.io.stResp_o.bits := memStorer.io.cmdResp.bits
 
   // 连接MemLoader和MemStorer到DMA
   memLoader.io.dmaReq <> io.dma.read.req
