@@ -42,7 +42,8 @@ typedef enum {
   SOFTMAX_FUNC7 = 37,    // 0x25 - Softmax function code
   FLUSH_FUNC7 = 7,       // 0x07 - Flush function code
   BBFP_MUL_FUNC7 = 26,   // 0x1A - BBFP matrix multiply function code
-  MATMUL_WS_FUNC7 = 27   // 0x1B - Matrix multiply with warp16 function code
+  MATMUL_WS_FUNC7 = 27,  // 0x1B - Matrix multiply with warp16 function code
+  RELU_FUNC7 = 38        // 0x26 - ReLU activation function code
 } InstructionType;
 
 // 指令配置结构 (for simulator)
@@ -84,6 +85,7 @@ void bb_layernorm(uint32_t op1_bank, uint32_t op1_addr, uint32_t wr_bank,
 void bb_softmax(uint32_t op1_bank, uint32_t op1_addr, uint32_t wr_bank,
                 uint32_t wr_addr, uint32_t iter, uint32_t is_acc,
                 uint32_t dim_len, uint32_t batch, uint32_t log_mode);
+void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_flush(void);
 
 // 通过func7获取指令配置

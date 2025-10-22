@@ -128,6 +128,7 @@ add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_gelu_test gelu_test.c)
 add_cross_platform_test_target(ctest_layernorm_test layernorm_test.c)
 add_cross_platform_test_target(ctest_softmax_test softmax_test.c)
+add_cross_platform_test_target(ctest_relu_test relu_test.c)
 
 
 # 创建库依赖目标，确保所有库先构建
@@ -164,5 +165,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_gelu_test
   ctest_layernorm_test
   ctest_softmax_test
+  ctest_relu_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

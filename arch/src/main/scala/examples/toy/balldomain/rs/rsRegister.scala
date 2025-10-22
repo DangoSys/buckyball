@@ -19,6 +19,7 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bal
     BallRsRegist(ballId = 4, ballName = "GeluBall"),
     BallRsRegist(ballId = 5, ballName = "LayerNormBall"),
     BallRsRegist(ballId = 6, ballName = "SoftmaxBall"),
+    BallRsRegist(ballId = 7, ballName = "ReluBall"),
   )
 ) {
   override lazy val desiredName = "BallRSModule"
