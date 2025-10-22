@@ -1,4 +1,4 @@
-package framework.bbus
+package framework.bbus.memrouter
 
 import chisel3._
 import chisel3.util._
@@ -18,7 +18,7 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, Sr
  * 输出：
  * - ballId：目标Ball ID
  */
-class memRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val sramRead_i = Vec(numBalls, Vec(b.sp_banks, new SramReadIO(b.spad_bank_entries, b.spad_w)))
     val sramWrite_i = Vec(numBalls, Vec(b.sp_banks, new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
