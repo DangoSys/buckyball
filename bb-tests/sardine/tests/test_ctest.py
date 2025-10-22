@@ -16,10 +16,10 @@ ctest_workloads = [
     #     "ctest_mvin_mvout_acc_test_singlecore-baremetal",
     #     "ctest_mvin_mvout_acc_test_singlecore-baremetal",
     # ),
-    # (
-    #     "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
-    #     "ctest_mvin_mvout_alternate_test_singlecore-baremetal",
-    # ),
+    (
+        "ctest_mvin_mvout_test_singlecore-baremetal",
+        "ctest_mvin_mvout_test_singlecore-baremetal",
+    ),
     (
         "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
         "ctest_vecunit_matmul_16xn_ones_singlecore-baremetal",
@@ -79,6 +79,10 @@ ctest_workloads = [
     (
         "ctest_softmax_test_singlecore-baremetal",
         "ctest_softmax_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_relu_test_singlecore-baremetal",
+        "ctest_relu_test_singlecore-baremetal",
     ),
 ]
 
@@ -105,8 +109,8 @@ def test_ctest_workload_debug(
         r"Task completed\. Command running on http://localhost:\d+ is finished"
     )
     result = command_run(
-        command, early_exit_pattern=early_exit_pattern, timeout=3600
-    )  # 60 minutes
+        command, early_exit_pattern=early_exit_pattern, timeout=1200
+    )  # 20 minutes
     execution_time = time.time() - start_time
 
     logging.info(f"Workload: {workload_id}")

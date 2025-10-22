@@ -23,7 +23,6 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
     bb_mvin((uintptr_t)a + i * DIM, op2_addr + size + i * DIM, DIM, col_stride);
   }
   bb_mvin((uintptr_t)b, op2_addr, size, 1);
-  bb_mvin((uintptr_t)c, wr_addr, DIM << 2, 1);
   bb_fence();
   bb_transpose(op2_addr + size, op1_addr, size);
   bb_fence();

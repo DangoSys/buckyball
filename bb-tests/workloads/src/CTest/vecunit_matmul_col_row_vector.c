@@ -20,7 +20,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 
   bb_mvin((uintptr_t)a_transposed, op1_addr, size, 1);
   bb_mvin((uintptr_t)b, op2_addr, size, 1);
-  bb_mvin((uintptr_t)c, wr_addr, size << 2, 1);
+
   bb_fence();
   bb_mul_warp16(op1_addr, op2_addr, wr_addr, size);
   bb_fence();
