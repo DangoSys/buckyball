@@ -175,5 +175,6 @@ fi
 if run_step "12"; then
   begin_step "12" "Install verify tools"
   source ${BBDIR}/env.sh
-  ${BBDIR}/scripts/install-verify-tools.sh
+  # ${BBDIR}/scripts/install-verify-tools.sh
+  echo "veriy toolchain is not installed"
 fi

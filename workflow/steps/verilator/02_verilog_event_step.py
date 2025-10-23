@@ -31,7 +31,7 @@ async def handler(data, context):
     if data.get("balltype"):
         command = f"cd {arch_dir} && mill -i __.test.runMain sims.verify.BallTopMain {data.get('balltype')} "
     else:
-        command = f"cd {arch_dir} && mill -i __.test.runMain sims.verilator.Elaborate "
+        command = f"cd {arch_dir} && mill -i __.test.runMain sims.verilator.Elaborate {data.get('config')} "
     command += "--disable-annotation-unknown -strip-debug-info -O=debug "
     command += f"--split-verilog -o={build_dir}"
     result = stream_run_logger(
