@@ -7,7 +7,9 @@ import subprocess
 
 # ctest_workload_dir = Path("") // absolute path
 sardine_dir = Path(__file__).parent.parent
-ctest_workload_dir = sardine_dir / ".." / "output" / "workloads" / "src" / "CTest"
+ctest_workload_dir = (
+    sardine_dir / ".." / "output" / "workloads" / "src" / "CTest" / "toy"
+)
 
 
 # Define all ctest workloads with absolute paths and corresponding IDs
