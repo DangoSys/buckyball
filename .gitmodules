@@ -19,9 +19,9 @@
 [submodule "thirdparty/picker"]
 	path = thirdparty/picker
 	url = https://github.com/XS-MLVP/picker.git
-[submodule "tools/paladin"]
-	path = tools/paladin
-	url = https://github.com/DangoSys/awesome-paladin.git
 [submodule "sims/bebop"]
 	path = sims/bebop
 	url = https://github.com/DangoSys/bebop.git
+[submodule "tools/palladium"]
+	path = tools/palladium
+	url = https://github.com/DangoSys/awesome-palladium.git
