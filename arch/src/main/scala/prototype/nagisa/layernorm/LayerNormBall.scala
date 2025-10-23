@@ -1,4 +1,4 @@
-package examples.toy.balldomain.layernormball
+package prototype.nagisa.layernorm
 
 import chisel3._
 import chisel3.util._

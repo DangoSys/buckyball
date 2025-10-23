@@ -1,5 +1,0 @@
-# UVM on buckyball
-
-## Ball-Level Verfication
-
-本项目实现了一个基于Verilator和Spike的difftest仿真验证框架，采用混合仿真架构：通过Spike作为RISC-V指令集模拟器运行大部分通用代码和操作系统，当遇到特定的自定义指令（如vecUnit向量单元指令）时，动态切换到Verilator编译生成的硬件仿真库进行精确的RTL级仿真验证。整个系统以diff目录作为统一的运行框架入口，通过DPI-C接口实现Spike参考模型与Verilator DUT之间的无缝协同仿真，其中ref目录包含基于Spike扩展的参考模型实现（如toy扩展），dut目录包含用Chisel编写并通过Verilator编译为共享库的硬件设计，而difftest机制确保两个模型在执行相同指令序列时保持状态一致性，从而在保证仿真性能的同时实现对特定硬件加速器（如矩阵运算单元、向量处理器等）的精确功能验证。

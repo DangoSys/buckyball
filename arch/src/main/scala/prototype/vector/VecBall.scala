@@ -1,4 +1,4 @@
-package examples.toy.balldomain.vecball
+package prototype.vector
 
 import chisel3._
 import chisel3.util._

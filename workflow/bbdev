@@ -46,7 +46,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--clean", action="store_true", help="Clean verilator build directory"
     )
     verilator_group.add_argument(
-        "--verilog", action="store_true", help="Generate verilog files from chisel"
+        "--verilog",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Generate verilog files from chisel. Args: "[--balltype <balltype>] [--job <num>] [--batch]"',
     )
     verilator_group.add_argument(
         "--build",

@@ -1,4 +1,4 @@
-package examples.toy.balldomain.softmaxball
+package prototype.nagisa.softmax
 
 import chisel3._
 import chisel3.util._
