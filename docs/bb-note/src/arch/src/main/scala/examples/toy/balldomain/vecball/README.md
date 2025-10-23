@@ -1,1 +1,0 @@
-../../../../../../../../../../../arch/src/main/scala/examples/toy/balldomain/vecball/README.md

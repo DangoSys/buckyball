@@ -23,7 +23,7 @@ config = {
 
 async def handler(data, context):
     bbdir = get_buckyball_path()
-    build_dir = f"{bbdir}/arch/build"
+    build_dir = data.get("output_dir", f"{bbdir}/arch/build/")
     arch_dir = f"{bbdir}/arch"
     # ==================================================================================
     # 执行操作
