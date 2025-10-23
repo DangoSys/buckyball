@@ -1,4 +1,4 @@
-package examples.toy.balldomain.reluball
+package prototype.relu
 
 import chisel3._
 import chisel3.util._
