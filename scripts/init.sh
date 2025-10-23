@@ -116,10 +116,9 @@ if run_step "3"; then
 fi
 
 if run_step "4"; then
-  begin_step "4" "Install simulator"
-  # source ${BBDIR}/env.sh
-  # ${BBDIR}/scripts/install-simulator.sh
-  echo "Simulator installation is skipped"
+  begin_step "4" "Install bebop"
+  source ${BBDIR}/env.sh
+  ${BBDIR}/scripts/install-bebop.sh
 fi
 
 if run_step "5"; then
@@ -171,4 +170,10 @@ if run_step "11"; then
   pip install pre-commit
   cd ${BBDIR}
   pre-commit install
+fi
+
+if run_step "12"; then
+  begin_step "12" "Install verify tools"
+  source ${BBDIR}/env.sh
+  ${BBDIR}/scripts/install-verify-tools.sh
 fi

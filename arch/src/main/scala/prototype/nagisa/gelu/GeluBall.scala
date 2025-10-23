@@ -1,4 +1,4 @@
-package examples.toy.balldomain.geluball
+package prototype.nagisa.gelu
 
 import chisel3._
 import chisel3.util._

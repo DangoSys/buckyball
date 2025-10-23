@@ -1,4 +1,4 @@
-package examples.toy.balldomain.transposeball
+package prototype.transpose
 
 import chisel3._
 import chisel3.util._

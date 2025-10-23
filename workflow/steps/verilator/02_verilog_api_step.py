@@ -14,7 +14,7 @@ config = {
 
 async def handler(req, context):
     body = req.get("body") or {}
-    data = {"jobs": body.get("jobs", 16)}
+    data = {"balltype": body.get("balltype")}
     await context.emit({"topic": "verilator.verilog", "data": data})
 
     # ==================================================================================
