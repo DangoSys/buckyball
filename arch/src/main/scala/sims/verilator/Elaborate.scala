@@ -16,17 +16,44 @@ class WithCustomBootROM extends Config((site, here, up) => {
   ))
 })
 
+
 class BuckyBallToyVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new examples.toy.BuckyBallToyConfig)
 
+class BuckyBallGemminiVerilatorConfig extends Config(
+  new WithCustomBootROM ++
+  new examples.gemmini.BuckyBallGemminiSystemConfig)
+
 object Elaborate extends App {
-  val config = new BuckyBallToyVerilatorConfig
-  val params = config.toInstance
+  // 从命令行参数选择 Ball 类型
+  val configName = if (args.isEmpty) {
+    println("Usage: Elaborate <configName> [firtool-opts...]")
+    println("Available config types: toy, gemmini")
+    println("Using default: toy")
+    "toy"
+  } else {
+    args(0).toLowerCase match {
+      case "toy" => "toy"
+      case "gemmini" => "gemmini"
+      case other =>
+        println(s"Unknown config name: $other, using toy")
+        "toy"
+    }
+  }
+
+  // 根据配置名称选择对应的 Config
+  val config: Config = configName match {
+    case "toy" => new BuckyBallToyVerilatorConfig
+    case "gemmini" => new BuckyBallGemminiVerilatorConfig
+    case _ => new BuckyBallToyVerilatorConfig // 默认使用 toy
+  }
+
+  println(s"Elaborating with config: $configName")
 
   ChiselStage.emitSystemVerilogFile(
     new chipyard.harness.TestHarness()(config.toInstance),
-    firtoolOpts = args,
-    args = Array.empty  // directly pass command line arguments to firtool
+    firtoolOpts = args.drop(1), // 剩余参数传给 firtool
+    args = Array.empty
   )
 }
