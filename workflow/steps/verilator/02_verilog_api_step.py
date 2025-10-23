@@ -20,6 +20,7 @@ async def handler(req, context):
     bbdir = get_buckyball_path()
     body = req.get("body") or {}
     data = {
+        "config": body.get("config"),
         "balltype": body.get("balltype"),
         "output_dir": body.get("output_dir", f"{bbdir}/arch/build/"),
     }
