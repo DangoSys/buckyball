@@ -32,4 +32,5 @@ cd $BBDIR/thirdparty/picker
 make -j$(nproc) ARGS="-DCMAKE_INSTALL_PREFIX=$PREFIX"
 sudo -E make install
 
-replace_content ${BBDIR}/env.sh picker-install "export PATH=$PREFIX/bin:\$PATH"
+replace_content ${BBDIR}/env.sh picker-install "\
+export PATH=$PREFIX/bin:\$PATH"

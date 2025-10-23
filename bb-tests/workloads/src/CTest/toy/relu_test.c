@@ -6,16 +6,18 @@
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
 static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
-// static elem_t probe_matrix[DIM * DIM] __attribute__((aligned(64))); // 用于验证MVIN后SPAD中的内容
+// static elem_t probe_matrix[DIM * DIM] __attribute__((aligned(64))); //
+// 用于验证MVIN后SPAD中的内容
 
 // 预期：提供一个与 TRANSPOSE 类似的 ReLU 流程
-// 目前 bbhw/isa 尚无 bb_relu 高层 API，示例采用与 transpose 相同的搬入->执行->fence 流程。
-// 需要在 bbhw 实现中补充 bb_relu(op1_addr, wr_addr, iter) 的封装（func7=RELU_FUNC7）。
+// 目前 bbhw/isa 尚无 bb_relu 高层 API，示例采用与 transpose
+// 相同的搬入->执行->fence 流程。 需要在 bbhw 实现中补充 bb_relu(op1_addr,
+// wr_addr, iter) 的封装（func7=RELU_FUNC7）。
 
 void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   // 源操作数放在 spad bank 0，写回目标放在 spad bank 1
   uint32_t op1_addr = spad_addr(0, 0);
-  uint32_t wr_addr  = spad_addr(1, 0);
+  uint32_t wr_addr = spad_addr(1, 0);
 
   // 把输入搬入 scratchpad bank0，从偏移0开始，按行迭代 size 次
   bb_mvin((uintptr_t)a, op1_addr, size, 1);
