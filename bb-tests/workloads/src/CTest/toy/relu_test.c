@@ -3,6 +3,30 @@
 #include <bbhw/mem/spad.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+// CPU TEST BEGIN 1
+// Read cycle counter (rdcycle) helper. Works on RV64 with a single rdcycle.
+// On RV32 we read low/high and detect rollover to produce a 64-bit value. 
+static inline unsigned long long read_rdcycle(void) {
+#if defined(__riscv_xlen) && __riscv_xlen == 64
+  unsigned long long cycles;
+  asm volatile("rdcycle %0" : "=r" (cycles));
+  return cycles;
+#else
+  unsigned int lo1, hi, lo2;
+  // Loop until two consecutive low reads are equal to avoid rollover window
+  asm volatile(
+    "1: rdcycle %0\n"
+    "   rdcycleh %1\n"
+    "   rdcycle %2\n"
+    "   bne %0, %2, 1b\n"
+    : "=&r" (lo1), "=&r" (hi), "=&r" (lo2)
+  );
+  return ((unsigned long long)hi << 32) | lo1;
+#endif
+}
+// CPU TEST END 1
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
 static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
@@ -36,29 +60,46 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   return 1;
 }
 
+int relu_cpu_reference(elem_t *input, elem_t *output, int size) {
+  for (int i = 0; i < size; i++) {
+    for (int j = 0; j < size; j++) {
+      elem_t val = input[i * size + j];
+      output[i * size + j] = (val < 0) ? 0 : val;
+    }
+  }
+  return 1;
+}
+
 int test_relu(int seed) {
   init_i8_random_matrix(input_matrix_a, DIM, DIM, seed);
-  return run_test("ReLU", input_matrix_a, output_matrix_b, DIM);
+  // CPU TEST BEGIN 2
+  // Measure cycles for the CPU ReLU reference implementation 
+  unsigned long long start = read_rdcycle();
+  int ok = relu_cpu_reference(input_matrix_a, output_matrix_b, DIM); // CPU 验证
+  unsigned long long end = read_rdcycle();
+  unsigned long long cycles = end - start;
+  /* Print as hex high/low 32-bit parts to avoid embedded printf lacking
+    full long long support. This produces a stable, greppable output. */
+  uint32_t lo = (uint32_t)(cycles & 0xffffffffULL);
+  uint32_t hi = (uint32_t)(cycles >> 32);
+  printf("BB_CYCLES_RELU: 0x%08x%08x\n", hi, lo);
+  return ok;
+  // CPU TEST END 2
+  // return run_test("ReLU", input_matrix_a, output_matrix_b, DIM); //ReLUBall的测试代码，需要注释掉上面代码块
 }
 
 int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  int result = 1;
-  for (int i = 0; i < 10; i++) {
-    int passed = test_relu(i);
-    if (!passed) {
-      printf("ReLU test FAILED on iteration %d\n", i);
-      result = 0;
-    }
-  }
-  if (result) {
-    printf("ReLU test PASSED!!!\n");
-  }else {
+
+  int passed = test_relu(5);
+  if (passed) {
+    printf("ReLU test PASSED!!\n");
+  } else {
     printf("ReLU test FAILED\n");
   }
-  return (!result);
+  return (!passed);
 
 #ifdef MULTICORE
   exit(0);

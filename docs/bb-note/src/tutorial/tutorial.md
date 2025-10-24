@@ -230,11 +230,15 @@ cmake -G Ninja ../
 ```
 ninja ctest_relu_test // 软件编译
 ninja sync-bin  // 同步二进制文件
+
+cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_multicore-baremetal" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
+
+cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_singlecore-baremetal" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
+
+cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test-linux" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
 ```
 
 若`ninja ctest_relu_test`执行后报错，这是软件编译没有通过，请检查**”三、 编写测试软件“**等相关文件。
-
-此外，建议执行完这步之后检查一下是否同步成功，即检查`/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/ctest_relu_test_singlecore-baremetal`文件与`/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_singlecore-baremetal`文件是否一样。若不一样请将后者复制到前者进行覆盖。
 
 ### 步骤2: 生成Verilog
 
