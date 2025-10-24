@@ -127,11 +127,11 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters)
 
 ### 1. 创建测试文件
 
-在 `bb-tests/workloads/src/CTest/` 下创建 `relu_test.c`, 编写测试代码，代码中核心函数会执行`void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);` 下文中要注意该函数的声明和定义。
+在 `bb-tests/workloads/src/CTest/toy/` 下创建 `relu_test.c`, 编写测试代码，代码中核心函数会执行`void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);` 下文中要注意该函数的声明和定义。
 
 ### 2. 修改CMakeLists.txt
 
-在 `bb-tests/workloads/src/CTest/CMakeLists.txt` 中添加测试目标： CMakeLists.txt:120-127
+在 `bb-tests/workloads/src/CTest/toy/CMakeLists.txt` 中添加测试目标： CMakeLists.txt:120-127
 
 ```
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
@@ -234,6 +234,8 @@ ninja sync-bin  // 同步二进制文件
 
 若`ninja ctest_relu_test`执行后报错，这是软件编译没有通过，请检查**”三、 编写测试软件“**等相关文件。
 
+此外，建议执行完这步之后检查一下是否同步成功，即检查`/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/ctest_relu_test_singlecore-baremetal`文件与`/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_singlecore-baremetal`文件是否一样。若不一样请将后者复制到前者进行覆盖。
+
 ### 步骤2: 生成Verilog
 
 ```
@@ -267,3 +269,10 @@ bbdev verilator --run '--jobs 16 --binary ctest_relu_test_singlecore-baremetal -
 `TOP.TestHarness.chiptop0.system.tile_prci_domain.element_reset_domain_tile.buckyball.ballDomain.bbus.balls_4.reluUnit`该文件下的常量就是我们Relu.scala用到的所用硬件常量，双击便可查看波形！
 
 > 不同例程的一些命名可能不会完全一样，但基本相差不大
+
+## 六、性能测试
+
+### 查询所用时钟周期数量-速度性能衡量参数
+```Scala
+cat /home/MikeNotFound/code/buckyball/arch/log/2025-10-24-16-59-ctest_relu_test_singlecore-baremetal/disasm.log | grep "PMC"
+```

@@ -36,12 +36,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   return 1;
 }
 
-int test_relu() {
-  // 准备一份包含正负值的输入，便于检查 ReLU 行为
-  for (int i = 0; i < DIM * DIM; ++i) {
-    int v = (i % 11) - 5; // -5..+5
-    input_matrix_a[i] = (elem_t)v;
-  }
+int test_relu(int seed) {
+  init_i8_random_matrix(input_matrix_a, DIM, DIM, seed);
   return run_test("ReLU", input_matrix_a, output_matrix_b, DIM);
 }
 
@@ -49,14 +45,21 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  int passed = test_relu();
-  if (passed) {
-    printf("ReLU test PASSED\n");
-    return 0;
-  } else {
-    printf("ReLU test FAILED\n");
-    return 1;
+  int result = 1;
+  for (int i = 0; i < 10; i++) {
+    int passed = test_relu(i);
+    if (!passed) {
+      printf("ReLU test FAILED on iteration %d\n", i);
+      result = 0;
+    }
   }
+  if (result) {
+    printf("ReLU test PASSED!!!\n");
+  }else {
+    printf("ReLU test FAILED\n");
+  }
+  return (!result);
+
 #ifdef MULTICORE
   exit(0);
 #endif

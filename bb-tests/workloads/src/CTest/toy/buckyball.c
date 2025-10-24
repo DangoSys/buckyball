@@ -39,6 +39,39 @@ int compare_u32_matrices(result_t *a, result_t *b, int rows, int cols) {
   return 1;
 }
 
+void init_i8_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
+  srand(seed);
+  for (int i = 0; i < rows * cols; i++) {
+    /* produce values in range -128 .. 127 */
+    matrix[i] = (elem_t)((rand() % 256) - 128);
+  }
+}
+void init_i32_random_matrix(result_t *matrix, int rows, int cols, int seed) {
+  srand(seed);
+  for (int i = 0; i < rows * cols; i++) {
+    /* produce values in a reasonable 16-bit signed range -32768 .. 32767 */
+    matrix[i] = (result_t)((rand() % 65536) - 32768);
+  }
+}
+int compare_i8_matrices(elem_t *a, elem_t *b, int rows, int cols) {
+  for (int i = 0; i < rows * cols; i++) {
+    if (a[i] != b[i]) {
+      printf("Mismatch at index %d: expected %d, got %d\n", i, b[i], a[i]);
+      return 0;
+    }
+  }
+  return 1;
+}
+int compare_i32_matrices(result_t *a, result_t *b, int rows, int cols) {
+  for (int i = 0; i < rows * cols; i++) {
+    if (a[i] != b[i]) {
+      printf("Mismatch at index %d: expected %d, got %d\n", i, b[i], a[i]);
+      return 0;
+    }
+  }
+  return 1;
+}
+
 void print_u32_matrix(const char *name, result_t *matrix, int rows, int cols) {
   printf("Matrix %s:\n", name);
   for (int i = 0; i < rows; i++) {
@@ -59,12 +92,42 @@ void print_u8_matrix(const char *name, elem_t *matrix, int rows, int cols) {
   }
   printf("\n");
 }
+// Signed print variants
+void print_i32_matrix(const char *name, result_t *matrix, int rows, int cols) {
+  printf("Matrix %s:\n", name);
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < cols; j++) {
+      printf("%4d ", matrix[i * cols + j]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+void print_i8_matrix(const char *name, elem_t *matrix, int rows, int cols) {
+  printf("Matrix %s:\n", name);
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < cols; j++) {
+      /* cast to int to avoid printing as char */
+      printf("%4d ", (int)matrix[i * cols + j]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
 void clear_u32_matrix(result_t *matrix, int rows, int cols) {
   memset(matrix, 0, rows * cols * sizeof(result_t));
 }
 void clear_u8_matrix(elem_t *matrix, int rows, int cols) {
   memset(matrix, 0, rows * cols * sizeof(elem_t));
 }
+void clear_i32_matrix(result_t *matrix, int rows, int cols) {
+  memset(matrix, 0, rows * cols * sizeof(result_t));
+}
+void clear_i8_matrix(elem_t *matrix, int rows, int cols) {
+  memset(matrix, 0, rows * cols * sizeof(elem_t));
+}
+
 void init_ones_matrix(elem_t *matrix, int rows, int cols) {
   for (int i = 0; i < rows * cols; i++) {
     matrix[i] = 1;
@@ -109,6 +172,7 @@ void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
     }
   }
 }
+
 void init_sequence_matrix(elem_t *matrix, int rows, int cols) {
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {

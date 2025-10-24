@@ -86,7 +86,7 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
       when(io.cmdReq.fire) {
         state := sRead
         readCounter := 0.U
-        // respCounter := 0.U
+        respCounter := 0.U
         writeCounter := 0.U
 
         robid_reg := io.cmdReq.bits.rob_id
