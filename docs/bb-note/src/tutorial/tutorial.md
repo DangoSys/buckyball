@@ -19,8 +19,8 @@ Chisel学习资源：[binder](https://mybinder.org/v2/gh/freechipsproject/chisel
 在正式开始之前，我们先启动环境：
 
 ```
-cd /path/to/buckyball  
-source env.sh 
+cd /path/to/buckyball
+source env.sh
 // source ./env.sh 若报错试试这个
 // 全文所有路径都是以./buckyball为起点的相对路径
 ```
@@ -53,7 +53,7 @@ val RELU_BITPAT = BitPat("b0100110") // func7 = 38 = 0x23
 ```
 
 #### 2. 在 Ball 域解码器中添加 ReLU 指令
- 
+
  `arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala` 是Ball域解码器。
 作用如下：
 - 输入：来自全局解码的 PostGDCmd（已经判断这是 Ball 类别的命令）。
@@ -68,7 +68,7 @@ val RELU_BITPAT = BitPat("b0100110") // func7 = 38 = 0x23
 此文件中在解码列表中添加 ReLU 指令的解码项。参考其他指令(如 TRANSPOSE_FUNC7 = 38)的实现方式,您需要:
 
 ```
-// 在 BallDecodeFields 的 ListLookup 中添加  
+// 在 BallDecodeFields 的 ListLookup 中添加
 RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0), 0.U(spAddrLen.W), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen), 7.U, rs2(63,spAddrLen + 10), Y) // 根据 ReLU 指令的具体需求填写解码字段，列表参数的数量一定要一致，可以参考其他指令
 ```
 
