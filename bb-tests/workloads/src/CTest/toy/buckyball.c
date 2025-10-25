@@ -5,6 +5,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Read cycle counter (rdcycle) helper. Works on RV64 with a single rdcycle.
+   On RV32 we read low/high and detect rollover to produce a 64-bit value. */
+unsigned long long read_rdcycle(void) {
+#if defined(__riscv_xlen) && __riscv_xlen == 64
+  unsigned long long cycles;
+  asm volatile("rdcycle %0" : "=r"(cycles));
+  return cycles;
+#else
+  unsigned int lo1, hi, lo2;
+  /* Loop until two consecutive low reads are equal to avoid rollover window */
+  asm volatile("1: rdcycle %0\n"
+               "   rdcycleh %1\n"
+               "   rdcycle %2\n"
+               "   bne %0, %2, 1b\n"
+               : "=&r"(lo1), "=&r"(hi), "=&r"(lo2));
+  return ((unsigned long long)hi << 32) | lo1;
+#endif
+}
+
 void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
   srand(seed);
   for (int i = 0; i < rows * cols; i++) {
