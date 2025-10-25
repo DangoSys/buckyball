@@ -21,9 +21,9 @@ class BuckyBallToyVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new examples.toy.BuckyBallToyConfig)
 
-class BuckyBallGemminiVerilatorConfig extends Config(
-  new WithCustomBootROM ++
-  new examples.gemmini.BuckyBallGemminiSystemConfig)
+// class BuckyBallGemminiVerilatorConfig extends Config(
+//   new WithCustomBootROM ++
+//   new examples.gemmini.BuckyBallGemminiSystemConfig)
 
 object Elaborate extends App {
   // 从命令行参数选择 Ball 类型
@@ -45,7 +45,7 @@ object Elaborate extends App {
   // 根据配置名称选择对应的 Config
   val config: Config = configName match {
     case "toy" => new BuckyBallToyVerilatorConfig
-    case "gemmini" => new BuckyBallGemminiVerilatorConfig
+    // case "gemmini" => new BuckyBallGemminiVerilatorConfig
     case _ => new BuckyBallToyVerilatorConfig // 默认使用 toy
   }
 

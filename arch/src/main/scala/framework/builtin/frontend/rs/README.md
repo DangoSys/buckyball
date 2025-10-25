@@ -1,146 +1,384 @@
-# 前端保留站 (Frontend Reservation Station)
+# Ball域保留站 (Ball Reservation Station)
 
-## 概述
+## 核心功能
 
-该目录包含了 BuckyBall 框架前端保留站的实现代码，用于支持乱序执行和指令调度。**注意：当前所有实现文件都被注释掉，表明这是一个未完成或正在重构的模块。**
+通用的Ball域保留站实现，支持：
+- ✅ 环状ROB（循环队列）
+- ✅ 顺序发射，最多发射ROB深度一半的指令
+- ✅ 乱序完成和乱序提交
+- ✅ 可配置的顺序/乱序响应模式
+- ✅ 动态Ball设备数量支持
 
-## 二、文件结构
+## 文件结构
 
 ```
 rs/
-├── ReservationStation.scala  - 主保留站模块（已注释）
-├── ReorderBuffer.scala      - 重排序缓冲区（已注释）
-├── IssueQueue.scala         - 发射队列（已注释）
-├── CommitQueue.scala        - 提交队列（已注释）
-└── NextROBIdCounter.scala   - ROB ID 计数器（已注释）
+├── reservationStation.scala  - 保留站主模块，连接ROB和Ball设备
+├── rob.scala                 - 环状ROB实现
+└── README.md                 - 本文档
 ```
 
-## 三、设计概念
+## 架构设计
 
-### 原始设计目标
+### 整体流水线
 
-基于注释掉的代码，该模块原本设计用于：
-
-**ReservationStation - 主保留站**：
-- 连接前端指令解码和后端执行单元
-- 管理指令的分配、发射和提交流程
-- 提供 RoCC 接口支持
-
-**ReorderBuffer - 重排序缓冲区**：
-- 维护指令的程序顺序
-- 支持乱序完成但顺序提交
-- 实现 Load/Store 互斥约束
-- 支持 Fence 指令的同步语义
-
-**IssueQueue - 发射队列**：
-- 根据指令类型分发到不同执行单元
-- 支持 Load、Store、Execute 三种指令类型
-- 实现指令队列管理
-
-**CommitQueue - 提交队列**：
-- 处理多个执行单元的完成信号
-- 使用轮询仲裁器管理提交顺序
-- 向 ROB 报告指令完成状态
-
-## 四、架构特点
-
-### 指令流水线
 ```
-指令解码 → ROB分配 → 发射队列 → 执行单元 → 提交队列 → ROB提交
+Ball Decoder → ROB分配 → ROB发射 → Ball设备执行 → 完成信号 → ROB提交
+     ↓                                                        ↑
+  立即响应(可配置)                                  顺序/乱序过滤(可配置)
 ```
 
-### 指令类型支持
-- **Load指令** (cmd_type = 1): 内存读取操作
-- **Store指令** (cmd_type = 2): 内存写入操作
-- **Execute指令** (cmd_type = 3): Ball域计算操作
-- **Fence指令** (cmd_type = 4): 同步屏障操作
+### 模块职责
 
-### 约束机制
-- **Load/Store互斥**: 防止内存访问冲突
-- **Execute延迟**: Execute指令间的最小间隔约束
-- **顺序提交**: 保证程序语义的正确性
+**保留站 (BallReservationStation)**：
+- 接收Ball域解码指令
+- 管理多个Ball设备的发射和完成
+- 根据配置决定响应策略（顺序/乱序）
+- 在顺序模式下过滤非head的完成信号
 
-## 五、状态管理
+**ROB (Reorder Buffer)**：
+- 环状队列管理（循环的rob_id）
+- 顺序发射，限制inflight数量
+- 乱序提交（每周期提交所有已完成指令）
+- 暴露内部状态供保留站决策
 
-### ROB 条目状态
+## ROB实现细节
+
+### 环状队列结构
+
 ```scala
-object RoBState extends ChiselEnum {
-  val sInvalid  = Value   // 无效状态
-  val sWaiting  = Value   // 等待分发
-  val sIssued   = Value   // 已发射到执行单元
-  val sComplete = Value   // 执行完成，等待提交
+// 核心状态
+val robEntries   = Reg(Vec(b.rob_entries, new RobEntry))  // 指令存储
+val robValid     = Reg(Vec(b.rob_entries, Bool()))         // 条目有效
+val robIssued    = Reg(Vec(b.rob_entries, Bool()))         // 已发射
+val robComplete  = Reg(Vec(b.rob_entries, Bool()))         // 已完成
+
+// 循环队列指针
+val headPtr      = Reg(UInt())  // 最老的未提交指令
+val tailPtr      = Reg(UInt())  // 下一个分配位置
+val robIdCounter = Reg(UInt())  // ROB ID循环计数器（0 ~ rob_entries-1）
+
+// 发射限制
+val issuedCount  = Reg(UInt())  // 已发射未完成的指令数
+val maxIssueLimit = (b.rob_entries / 2).U  // 最多发射一半
+```
+
+### ROB ID循环
+
+```scala
+// 分配时循环递增
+when(io.alloc.fire) {
+  robIdCounter := Mux(robIdCounter === (b.rob_entries - 1).U,
+                      0.U, robIdCounter + 1.U)
 }
 ```
 
-### 执行跟踪
-- **load_in_flight**: 跟踪正在执行的Load指令
-- **store_in_flight**: 跟踪正在执行的Store指令
-- **ex_in_flight**: 跟踪正在执行的Execute指令
+### 顺序发射逻辑
 
-## 六、当前状态
+从head指针开始扫描，找到第一个未发射的指令：
 
-### 实现状态
-- ❌ **所有文件已注释**: 当前实现不可用
-- ❌ **编译状态**: 无法编译和使用
-- ❌ **功能验证**: 未经测试验证
+```scala
+// 扫描所有位置
+for (i <- 0 until b.rob_entries) {
+  val ptr = (headPtr + i.U) % b.rob_entries.U
+  scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
+}
 
-### 可能原因
-1. **架构重构**: 可能正在进行架构重新设计
-2. **功能迁移**: 功能可能已迁移到其他模块
-3. **实验性代码**: 可能是实验性实现，暂时禁用
-4. **依赖问题**: 可能存在依赖关系问题
+// 优先级编码器找到第一个
+val issuePtr = PriorityEncoder(scanValid)
 
-## 七、替代方案
+// 检查发射限制
+val canIssue = scanValid.orR && (issuedCount < maxIssueLimit)
+```
 
-### 当前可用的保留站实现
-- **Ball域保留站**: `examples/toy/balldomain/rs/` 目录下的实现
-- **简化版本**: 针对特定应用场景的简化实现
+### 乱序提交逻辑
 
-### 迁移建议
-如果需要使用保留站功能，建议：
-1. 使用 Ball 域的保留站实现
-2. 参考注释代码进行自定义实现
-3. 等待官方重新启用此模块
+每周期提交所有已完成的指令，然后更新head指针：
 
-## 八、重新启用指南
+```scala
+// 提交所有完成的指令
+for (i <- 0 until b.rob_entries) {
+  when(robValid(i.U) && robComplete(i.U)) {
+    robValid(i.U) := false.B
+    robIssued(i.U) := false.B
+    robComplete(i.U) := false.B
+  }
+}
 
-### 如果需要重新启用此模块：
+// head指针跳过所有已提交的位置，移动到第一个有效未完成的指令
+```
 
-1. **取消注释**: 移除所有文件开头的注释标记
-2. **依赖检查**: 确保所有依赖的类和包可用
-3. **接口适配**: 可能需要适配新的接口定义
-4. **测试验证**: 进行完整的功能测试
+### 暴露的状态信号
 
-### 潜在问题
-- **接口不兼容**: 可能与当前系统接口不匹配
-- **依赖缺失**: 某些依赖的类可能已被移除或重命名
-- **配置参数**: 配置参数可能需要更新
+```scala
+io.empty          // ROB是否为空
+io.full           // ROB是否已满
+io.head_ptr       // 头指针位置
+io.issued_count   // inflight指令数
+io.entry_valid    // 每个条目是否有效
+io.entry_complete // 每个条目是否完成
+```
 
-## 九、开发建议
+## 保留站实现细节
 
-### 如果要基于此代码开发：
+### 发射逻辑
 
-1. **理解设计**: 仔细研究注释掉的代码逻辑
-2. **模块化重构**: 考虑将功能分解为更小的模块
-3. **接口标准化**: 使用标准化的接口定义
-4. **测试驱动**: 采用测试驱动的开发方式
+根据指令的`bid`（Ball ID）分发到对应Ball设备：
 
-### 设计改进建议
-- **简化约束逻辑**: 当前的Load/Store互斥可能过于严格
-- **提高并行度**: 支持更多指令的并行执行
-- **动态调度**: 实现更智能的指令调度算法
+```scala
+for (i <- 0 until numBalls) {
+  val ballId = BallRsRegists(i).ballId.U
+  io.issue_o.balls(i).valid := rob.io.issue.valid &&
+                               rob.io.issue.bits.cmd.bid === ballId
+  io.issue_o.balls(i).bits  := rob.io.issue.bits
+}
 
-## 十、相关文档
+// ROB ready：只有目标Ball设备ready时才能发射
+rob.io.issue.ready := VecInit(
+  BallRsRegists.zipWithIndex.map { case (info, idx) =>
+    (rob.io.issue.bits.cmd.bid === info.ballId.U) &&
+    io.issue_o.balls(idx).ready
+  }
+).asUInt.orR
+```
 
-- [前端处理组件概览](../README.md)
-- [Ball域保留站实现](../../../examples/toy/balldomain/rs/README.md)
-- [框架核心文档](../../README.md)
-- [内置组件文档](../README.md)
+### 完成信号处理（关键）
 
-## 十一、注意事项
+**乱序模式**：接受所有完成信号
 
-⚠️ **重要提醒**：
-- 当前代码不可直接使用
-- 需要大量修改才能重新启用
-- 建议优先使用其他可用的保留站实现
-- 如有疑问，请联系项目维护者
+```scala
+if (b.rs_out_of_order_response) {
+  rob.io.complete <> completeArb.io.out
+}
+```
+
+**顺序模式**：只接受`rob_id == head_ptr`的完成信号
+
+```scala
+else {
+  val isHeadComplete = completeArb.io.out.bits === rob.io.head_ptr
+  rob.io.complete.valid := completeArb.io.out.valid && isHeadComplete
+  rob.io.complete.bits  := completeArb.io.out.bits
+  // 非head指令会被阻塞等待
+  completeArb.io.out.ready := rob.io.complete.ready && isHeadComplete
+}
+```
+
+## 配置参数
+
+### BaseConfigs.scala
+
+```scala
+case class CustomBuckyBallConfig(
+  rob_entries: Int = 16,                      // ROB条目数量
+  rs_out_of_order_response: Boolean = true,   // 乱序响应模式
+  ...
+)
+```
+
+### 参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `rob_entries` | 16 | ROB深度，影响乱序窗口大小 |
+| `rs_out_of_order_response` | true | true=乱序响应，false=顺序响应 |
+
+## 使用示例
+
+### 注册Ball设备
+
+```scala
+val ballDevices = Seq(
+  BallRsRegist(ballId = 0, ballName = "VectorUnit"),
+  BallRsRegist(ballId = 1, ballName = "MatrixUnit"),
+  BallRsRegist(ballId = 2, ballName = "LoadUnit"),
+  BallRsRegist(ballId = 3, ballName = "StoreUnit")
+)
+
+val rs = Module(new BallReservationStation(ballDevices))
+```
+
+### 连接接口
+
+```scala
+// 输入：来自Ball域解码器
+rs.io.ball_decode_cmd_i <> decoder.io.ball_cmd_o
+
+// 输出：到各个Ball设备
+rs.io.issue_o.balls(0) <> vectorUnit.io.cmd_i
+rs.io.issue_o.balls(1) <> matrixUnit.io.cmd_i
+rs.io.issue_o.balls(2) <> loadUnit.io.cmd_i
+rs.io.issue_o.balls(3) <> storeUnit.io.cmd_i
+
+// 完成信号：从各个Ball设备
+rs.io.commit_i.balls(0) <> vectorUnit.io.complete_o
+rs.io.commit_i.balls(1) <> matrixUnit.io.complete_o
+rs.io.commit_i.balls(2) <> loadUnit.io.complete_o
+rs.io.commit_i.balls(3) <> storeUnit.io.complete_o
+
+// RoCC响应
+rocc.resp <> rs.io.rs_rocc_o.resp
+rocc.busy := rs.io.rs_rocc_o.busy
+```
+
+## 性能特性
+
+### 乱序模式 (rs_out_of_order_response = true)
+
+**优点**：
+- ✅ 高吞吐量
+- ✅ Ball设备不会被阻塞
+- ✅ 充分利用ROB容量
+- ✅ 适合高性能场景
+
+**缺点**：
+- ❌ 不保证严格的指令顺序
+- ❌ 调试困难
+
+**适用场景**：
+- 独立的Ball计算任务
+- 无数据依赖的批量操作
+- 追求最大吞吐量
+
+### 顺序模式 (rs_out_of_order_response = false)
+
+**优点**：
+- ✅ 严格按程序顺序提交
+- ✅ 行为可预测
+- ✅ 便于调试
+- ✅ 支持精确异常
+
+**缺点**：
+- ❌ 吞吐量较低
+- ❌ Ball设备可能被阻塞（等待head完成）
+- ❌ ROB利用率可能较低
+
+**适用场景**：
+- 有数据依赖的操作序列
+- 需要调试和验证
+- 对顺序有严格要求
+
+### 发射限制的影响
+
+```
+最大inflight数 = rob_entries / 2
+```
+
+**ROB=16时**：
+- 最多同时发射8条指令
+- 剩余8个位置用于缓冲新指令
+- 平衡发射压力和缓冲能力
+
+## 性能调优建议
+
+### 增加ROB深度
+
+```scala
+override val rob_entries = 32  // 增加到32
+```
+- ✅ 更大的乱序窗口
+- ✅ 更多指令可并行执行
+- ❌ 面积和功耗增加
+
+### 调整发射限制
+
+如果需要修改发射比例，编辑`rob.scala`：
+
+```scala
+val maxIssueLimit = (b.rob_entries * 3 / 4).U  // 改为3/4
+```
+
+### 混合模式（未来扩展）
+
+保留站可以利用`rob.io.entry_complete`等信号实现更复杂的策略：
+
+```scala
+// 示例：根据完成情况动态调整
+val completedRatio = PopCount(rob.io.entry_complete) / rob_entries.U
+val allowResponse = (completedRatio > threshold.U) || rob.io.empty
+```
+
+## 时序图
+
+### 乱序模式执行流程
+
+```
+周期 | 动作              | headPtr | issuedCount | ROB状态
+-----|-------------------|---------|-------------|------------------
+1    | 分配指令0         | 0       | 0           | [0:未发射]
+2    | 发射指令0         | 0       | 1           | [0:已发射]
+3    | 分配指令1，发射1  | 0       | 2           | [0:已发射, 1:已发射]
+4    | 指令1完成         | 0       | 1           | [0:已发射, 1:完成]
+5    | 指令1提交         | 0       | 1           | [0:已发射, 1:空]
+6    | 指令0完成         | 0       | 0           | [0:完成, 1:空]
+7    | 指令0提交         | 2       | 0           | [0:空, 1:空]
+```
+
+### 顺序模式执行流程
+
+```
+周期 | 动作              | headPtr | 完成信号        | 提交
+-----|-------------------|---------|-----------------|----------
+1    | 分配指令0         | 0       | -               | -
+2    | 发射指令0         | 0       | -               | -
+3    | 分配指令1，发射1  | 0       | -               | -
+4    | 指令1完成         | 0       | rob_id=1 ❌阻塞 | -
+5    | 指令1继续等待     | 0       | rob_id=1 ❌阻塞 | -
+6    | 指令0完成         | 0       | rob_id=0 ✅接受 | 指令0
+7    | head移动          | 1       | -               | -
+8    | 指令1重新尝试     | 1       | rob_id=1 ✅接受 | 指令1
+```
+
+## 调试技巧
+
+### 查看ROB状态
+
+```scala
+when(rob.io.alloc.fire) {
+  printf("Alloc: rob_id=%d, bid=%d\n",
+    rob.io.alloc.bits.rob_id, rob.io.alloc.bits.cmd.bid)
+}
+
+when(rob.io.issue.fire) {
+  printf("Issue: rob_id=%d, head=%d, issued_count=%d\n",
+    rob.io.issue.bits.rob_id, rob.io.head_ptr, rob.io.issued_count)
+}
+
+when(rob.io.complete.fire) {
+  printf("Complete: rob_id=%d, head=%d\n",
+    rob.io.complete.bits, rob.io.head_ptr)
+}
+```
+
+### 常见问题排查
+
+**问题1：ROB一直满**
+- 检查Ball设备是否正常完成
+- 检查完成信号是否正确连接
+- 顺序模式下检查是否head指令卡住
+
+**问题2：指令没有发射**
+- 检查`issued_count`是否达到上限
+- 检查Ball设备的ready信号
+- 检查bid是否匹配注册的Ball设备
+
+**问题3：顺序模式下性能低**
+- 考虑切换到乱序模式
+- 增加ROB深度
+- 优化Ball设备执行延迟
+
+## 相关文档
+
+- [框架概览](../../../README.md)
+- [Ball域实现示例](../../../../examples/toy/balldomain/)
+- [BaseConfigs配置说明](../../BaseConfigs.scala)
+
+## 设计权衡
+
+| 设计选择 | 原因 |
+|---------|------|
+| ROB固定乱序提交 | 简化ROB逻辑，提高性能 |
+| 保留站控制顺序/乱序 | 策略灵活，易于扩展 |
+| 发射限制=深度/2 | 平衡并行度和缓冲能力 |
+| 暴露ROB内部状态 | 支持复杂的调度策略 |
+| 环状队列 | ROB ID可循环使用，支持长时间运行 |

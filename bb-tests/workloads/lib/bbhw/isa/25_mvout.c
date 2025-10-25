@@ -4,13 +4,13 @@
 const InstructionConfig mvout_config = {
     .rs1_fields = (BitFieldConfig[]){{"base_dram_addr", 0, 31}, {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){
-        {"base_sp_addr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
+        {"base_sp_addr", 0, 14}, {"iter", 15, 24}, {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MVOUT_ENCODE_RS1(dram_addr) ENCODE_FIELD(dram_addr, 0, 32)
 
 #define MVOUT_ENCODE_RS2(sp_addr, iter)                                        \
-  (ENCODE_FIELD(sp_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+  (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10))
 
 // MVOUT指令低级实现
 #ifndef __x86_64__

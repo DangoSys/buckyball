@@ -2,25 +2,25 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig layernorm_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op1_bank", 0, 1},
-                                     {"op1_spaddr", 2, 13},
-                                     {"wr_bank", 14, 15},
-                                     {"wr_spaddr", 16, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op1_bank", 0, 2},
+                                     {"op1_spaddr", 3, 14},
+                                     {"wr_bank", 15, 17},
+                                     {"wr_spaddr", 18, 29},
                                      {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){{"iter", 0, 9},
                                      {"is_acc", 10, 10},
                                      {"norm_dim", 11, 22},
                                      {"gamma_addr", 23, 34},
                                      {"beta_addr", 35, 46},
-                                     {"param_bank", 47, 48},
-                                     {"use_affine", 49, 49},
+                                     {"param_bank", 47, 49},
+                                     {"use_affine", 50, 50},
                                      {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
-// RS1: [op1_bank(2) | op1_addr(14) | wr_bank(2) | wr_addr(14)]
+// RS1: [op1_bank(3) | op1_addr(12) | wr_bank(3) | wr_addr(12)]
 #define LAYERNORM_ENCODE_RS1(op1_bank, op1_addr, wr_bank, wr_addr)             \
-  (ENCODE_FIELD(op1_bank, 0, 2) | ENCODE_FIELD(op1_addr, 2, 14) |              \
-   ENCODE_FIELD(wr_bank, 16, 2) | ENCODE_FIELD(wr_addr, 18, 14))
+  (ENCODE_FIELD(op1_bank, 0, 3) | ENCODE_FIELD(op1_addr, 3, 12) |              \
+   ENCODE_FIELD(wr_bank, 15, 3) | ENCODE_FIELD(wr_addr, 18, 12))
 
 // RS2: [iter(10) | is_acc(1) | norm_dim(12) | gamma_addr(12) |
 //       beta_addr(12) | param_bank(2) | use_affine(1)]

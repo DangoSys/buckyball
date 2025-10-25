@@ -2,10 +2,10 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig softmax_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op1_bank", 0, 1},
-                                     {"op1_spaddr", 2, 13},
-                                     {"wr_bank", 14, 15},
-                                     {"wr_spaddr", 16, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op1_bank", 0, 2},
+                                     {"op1_spaddr", 3, 14},
+                                     {"wr_bank", 15, 17},
+                                     {"wr_spaddr", 18, 29},
                                      {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){{"iter", 0, 9},
                                      {"is_acc", 10, 10},
@@ -15,10 +15,10 @@ const InstructionConfig softmax_config = {
                                      {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
-// RS1: [op1_bank(2) | op1_addr(14) | wr_bank(2) | wr_addr(14)]
+// RS1: [op1_bank(3) | op1_addr(12) | wr_bank(3) | wr_addr(12)]
 #define SOFTMAX_ENCODE_RS1(op1_bank, op1_addr, wr_bank, wr_addr)               \
-  (ENCODE_FIELD(op1_bank, 0, 2) | ENCODE_FIELD(op1_addr, 2, 14) |              \
-   ENCODE_FIELD(wr_bank, 16, 2) | ENCODE_FIELD(wr_addr, 18, 14))
+  (ENCODE_FIELD(op1_bank, 0, 3) | ENCODE_FIELD(op1_addr, 3, 12) |              \
+   ENCODE_FIELD(wr_bank, 15, 3) | ENCODE_FIELD(wr_addr, 18, 12))
 
 // RS2: [iter(10) | is_acc(1) | dim_len(10) | batch(10) | log_mode(1)]
 #define SOFTMAX_ENCODE_RS2(iter, is_acc, dim_len, batch, log_mode)             \

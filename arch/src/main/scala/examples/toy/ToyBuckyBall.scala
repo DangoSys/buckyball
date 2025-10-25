@@ -17,7 +17,6 @@ import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.FenceCSR
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
@@ -62,13 +61,17 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   implicit val edge: TLEdgeOut = outer.id_node.edges.out.head
 
 // -----------------------------------------------------------------------------
-// Frontend: Global Decode Dispatch commands to BallDomain and MemDomain
+// Frontend: Global Decoder -> 全局RS -> BallDomain/MemDomain
 // -----------------------------------------------------------------------------
   implicit val b: CustomBuckyBallConfig = outer.b
   val gDecoder = Module(new GlobalDecoder)
   gDecoder.io.id_i.valid    := io.cmd.valid
   gDecoder.io.id_i.bits.cmd := io.cmd.bits
   io.cmd.ready              := gDecoder.io.id_i.ready
+
+  // 全局保留站
+  val globalRs = Module(new framework.builtin.frontend.globalrs.GlobalReservationStation)
+  globalRs.io.global_decode_cmd_i <> gDecoder.io.id_o
 
 
 
@@ -78,25 +81,18 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   // BallDomain现在是普通Module，直接实例化
   val ballDomain = Module(new BallDomain()(b, p))
 
-  // GlobalDecoder->BallDomain
-  ballDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_ball
-  ballDomain.io.gDecoderIn.bits  := Mux(ballDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
-
-  // fence信号连接
+  // 全局RS->BallDomain
+  ballDomain.io.global_issue_i <> globalRs.io.ball_issue_o
+  globalRs.io.ball_complete_i <> ballDomain.io.global_complete_o
 
 // -----------------------------------------------------------------------------
 // Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
 // -----------------------------------------------------------------------------
   val memDomain = Module(new MemDomain)
 
-  // GlobalDecoder->MemDomain
-  memDomain.io.gDecoderIn.valid := gDecoder.io.id_o.valid && gDecoder.io.id_o.bits.is_mem
-  memDomain.io.gDecoderIn.bits  := Mux(memDomain.io.gDecoderIn.valid, gDecoder.io.id_o.bits, DontCare)
-
-  // 全局ready信号：只有对应的域ready时，gDecoder才ready
-  gDecoder.io.id_o.ready :=
-    (gDecoder.io.id_o.bits.is_ball && ballDomain.io.gDecoderIn.ready) ||
-    (gDecoder.io.id_o.bits.is_mem && memDomain.io.gDecoderIn.ready)
+  // 全局RS->MemDomain
+  memDomain.io.global_issue_i <> globalRs.io.mem_issue_o
+  globalRs.io.mem_complete_i <> memDomain.io.global_complete_o
 
 // -----------------------------------------------------------------------------
 // Backend: MemDomain Connections
@@ -134,33 +130,16 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
 // ---------------------------------------------------------------------------
-// 返回RoCC接口连接 - 合并BallDomain和MemDomain的响应
+// 返回RoCC接口连接 - 从全局RS获取响应
 // ---------------------------------------------------------------------------
-  // 优先级仲裁：BallDomain优先级高于MemDomain
-  val respArb = Module(new Arbiter(new RoCCResponseBB()(p), 2))
-  respArb.io.in(0) <> ballDomain.io.roccResp
-  respArb.io.in(1) <> memDomain.io.roccResp
-  io.resp <> respArb.io.out
+  io.resp <> globalRs.io.rs_rocc_o.resp
 
 
 // ---------------------------------------------------------------------------
-// CSR 寄存器处理
+// Busy信号 - 由全局RS管理
 // ---------------------------------------------------------------------------
-  val fenceCSR = FenceCSR()
-  val fenceSet = ballDomain.io.fence_o
-  val allDomainsIdle = !ballDomain.io.busy && !memDomain.io.busy
-  when (fenceSet) {
-    fenceCSR := 1.U
-    io.cmd.ready :=allDomainsIdle
-  }
-  when (fenceCSR =/= 0.U) {
-    when(allDomainsIdle) {
-      fenceCSR := 0.U
-    }.otherwise{
-      io.cmd.ready := false.B
-    }
-  }
-  io.busy := fenceCSR =/= 0.U
+  io.busy := globalRs.io.rs_rocc_o.busy
+
 // ---------------------------------------------------------------------------
 // busy计数器，防止仿真长时间停顿
 // ---------------------------------------------------------------------------

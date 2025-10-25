@@ -2,19 +2,21 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig relu_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 13}, {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){{"wr_spaddr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
+    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 14}, {NULL, 0, 0}},
+    .rs2_fields = (BitFieldConfig[]){
+        {"wr_spaddr", 0, 14}, {"iter", 15, 24}, {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
-#define RELU_ENCODE_RS1(op_addr)           (ENCODE_FIELD(op_addr, 0, 14))
-#define RELU_ENCODE_RS2(wr_addr, iter)     (ENCODE_FIELD(wr_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+#define RELU_ENCODE_RS1(op_addr) (ENCODE_FIELD(op_addr, 0, 15))
+#define RELU_ENCODE_RS2(wr_addr, iter)                                         \
+  (ENCODE_FIELD(wr_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10))
 
 // RELU指令低级实现
 #ifndef __x86_64__
-#define RELU_RAW(rs1, rs2)                                                       \
+#define RELU_RAW(rs1, rs2)                                                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 38, x0, %0, %1"                \
-               :                                                                 \
-               : "r"(rs1), "r"(rs2)                                             \
+               :                                                               \
+               : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
 #define RELU_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */

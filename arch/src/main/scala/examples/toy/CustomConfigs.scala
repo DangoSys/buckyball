@@ -19,7 +19,9 @@ import framework.rocket.MultiRoCCKeyBB
 object BuckyBallToyConfig {
   val defaultConfig = new BaseConfig(
     inputType = UInt(8.W),
-    accType = UInt(32.W)
+    accType = UInt(32.W),
+    sp_banks = 4,
+    acc_banks = 8
   )
 }
 

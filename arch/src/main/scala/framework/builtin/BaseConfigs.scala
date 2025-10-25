@@ -24,23 +24,24 @@ case class BaseConfig(
 
   tlb_size: Int = 4,
   rob_entries: Int = 16,  // RoB条目数量
+  rs_out_of_order_response: Boolean = true,  // 保留站是否乱序响应（false=等待ROB空才响应）
 
   dma_maxbytes: Int = 64, // 未使用
   dma_buswidth: Int = 128,
 
-  sp_banks: Int = 2,
+  sp_banks: Int = 4,
   acc_banks: Int = 8,
 
   sp_singleported: Boolean = true,
 
-  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(16),
-  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(8),
+  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
 
   max_in_flight_mem_reqs: Int = 16, // 未使用
   aligned_to: Int = 1,
   spad_read_delay: Int = 0,
 
-  spAddrLen: Int = 14, // 256KB的索引长度
+  spAddrLen: Int = 15, // 支持SPAD(16384行)+ACC(4096行)的索引长度
   memAddrLen: Int = 32, // 4GB的索引长度
 
   numVecPE: Int = 16, // 每个线程的向量PE数量
@@ -65,11 +66,3 @@ case class BaseConfig(
 
 
 }
-
-
-// object BuckyBallConfigs {
-//   val defaultConfig = BuckyBallConfig(
-//     inputType = UInt(8.W),
-//     accType = UInt(32.W)
-//   )
-// }

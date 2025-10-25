@@ -2,18 +2,18 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig mul_warp16_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 13},
-                                     {"op2_spaddr", 14, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 14},
+                                     {"op2_spaddr", 15, 29},
                                      {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){
-        {"wr_spaddr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
+        {"wr_spaddr", 0, 14}, {"iter", 15, 24}, {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MUL_WARP16_ENCODE_RS1(op1_addr, op2_addr)                              \
-  (ENCODE_FIELD(op1_addr, 0, 14) | ENCODE_FIELD(op2_addr, 14, 14))
+  (ENCODE_FIELD(op1_addr, 0, 15) | ENCODE_FIELD(op2_addr, 15, 15))
 
 #define MUL_WARP16_ENCODE_RS2(wr_addr, iter)                                   \
-  (ENCODE_FIELD(wr_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+  (ENCODE_FIELD(wr_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10))
 
 // MUL_WARP16指令低级实现
 #ifndef __x86_64__
