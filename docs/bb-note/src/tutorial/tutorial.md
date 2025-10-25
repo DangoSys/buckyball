@@ -230,12 +230,6 @@ cmake -G Ninja ../
 ```
 ninja ctest_relu_test // 软件编译
 ninja sync-bin  // 同步二进制文件
-
-cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_multicore-baremetal" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
-
-cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test_singlecore-baremetal" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
-
-cp -p "/home/MikeNotFound/code/buckyball/bb-tests/build/workloads/src/CTest/toy/ctest_relu_test-linux" "/home/MikeNotFound/code/buckyball/bb-tests/output/workloads/src/CTest/"
 ```
 
 若`ninja ctest_relu_test`执行后报错，这是软件编译没有通过，请检查**”三、 编写测试软件“**等相关文件。
