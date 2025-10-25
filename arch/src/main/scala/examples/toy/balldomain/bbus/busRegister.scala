@@ -16,9 +16,6 @@ class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus 
     () => new prototype.matrix.MatrixBall(1),
     () => new prototype.im2col.Im2colBall(2),
     () => new prototype.transpose.TransposeBall(3),
-    () => new prototype.nagisa.gelu.GeluBall(4),
-    () => new prototype.nagisa.layernorm.LayerNormBall(5),
-    () => new prototype.nagisa.softmax.SoftmaxBall(6),
     () => new prototype.relu.ReluBall(7)
   )
 ) {

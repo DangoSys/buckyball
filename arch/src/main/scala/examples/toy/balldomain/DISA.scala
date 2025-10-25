@@ -17,8 +17,5 @@ object DISA {
   val MATMUL_WARP16_BITPAT = BitPat("b0100000") // 32
   val IM2COL               = BitPat("b0100001") // 33
   val TRANSPOSE            = BitPat("b0100010") // 34
-  val GELU                 = BitPat("b0100011") // 35
-  val LAYERNORM            = BitPat("b0100100") // 36
-  val SOFTMAX              = BitPat("b0100101") // 37
   val RELU                 = BitPat("b0100110") // 38
 }

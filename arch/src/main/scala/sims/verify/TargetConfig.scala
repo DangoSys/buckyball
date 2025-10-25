@@ -9,9 +9,6 @@ import prototype.vector.VecBall
 import prototype.matrix.MatrixBall
 import prototype.transpose.TransposeBall
 import prototype.im2col.Im2colBall
-import prototype.nagisa.gelu.GeluBall
-import prototype.nagisa.layernorm.LayerNormBall
-import prototype.nagisa.softmax.SoftmaxBall
 import prototype.relu.ReluBall
 
 // Ball类型定义
@@ -20,9 +17,6 @@ case object VecBallType extends BallType
 case object MatrixBallType extends BallType
 case object TransposeBallType extends BallType
 case object Im2colBallType extends BallType
-case object GeluBallType extends BallType
-case object LayerNormBallType extends BallType
-case object SoftmaxBallType extends BallType
 case object ReluBallType extends BallType
 
 // Config Key
@@ -44,15 +38,6 @@ class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
       io <> ball.io
     case TransposeBallType =>
       val ball = Module(new TransposeBall(0))
-      io <> ball.io
-    case GeluBallType =>
-      val ball = Module(new GeluBall(0))
-      io <> ball.io
-    case LayerNormBallType =>
-      val ball = Module(new LayerNormBall(0))
-      io <> ball.io
-    case SoftmaxBallType =>
-      val ball = Module(new SoftmaxBall(0))
       io <> ball.io
     case ReluBallType =>
       val ball = Module(new ReluBall(0))
@@ -87,7 +72,7 @@ object BallTopMain extends App {
   // 从命令行参数选择 Ball 类型
   val ballType = if (args.isEmpty) {
     println("Usage: BallTopMain <ball-type> [firtool-opts...]")
-    println("Available ball types: vecball, matrixball, transposeball, im2colball, geluball, layernormball, softmaxball, reluball")
+    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball")
     println("Using default: vecball")
     VecBallType
   } else {
@@ -96,9 +81,6 @@ object BallTopMain extends App {
       case "matrixball" => MatrixBallType
       case "transpose" => TransposeBallType
       case "im2colball" => Im2colBallType
-      case "geluball" => GeluBallType
-      case "layernormball" => LayerNormBallType
-      case "softmaxball" => SoftmaxBallType
       case "reluball" => ReluBallType
       case other =>
         println(s"Unknown ball type: $other, using vecball")
