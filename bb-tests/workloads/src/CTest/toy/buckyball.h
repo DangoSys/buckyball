@@ -34,18 +34,31 @@ static inline void multicore(int target_hart_id) {
 }
 
 // Utility functions
+
+/* Read CPU cycle counter (64-bit). Implemented in buckyball.c for global use */
+unsigned long long read_rdcycle(void);
+
 void print_u32_matrix(const char *name, result_t *matrix, int rows, int cols);
 void print_u8_matrix(const char *name, elem_t *matrix, int rows, int cols);
+void print_i32_matrix(const char *name, result_t *matrix, int rows, int cols);
+void print_i8_matrix(const char *name, elem_t *matrix, int rows, int cols);
+
 
 void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_u32_random_matrix(result_t *matrix, int rows, int cols, int seed);
+void init_i8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
+void init_i32_random_matrix(result_t *matrix, int rows, int cols, int seed);
 
 int compare_u8_matrices(elem_t *a, elem_t *b, int rows, int cols);
 int compare_u32_matrices(result_t *a, result_t *b, int rows, int cols);
+int compare_i8_matrices(elem_t *a, elem_t *b, int rows, int cols);
+int compare_i32_matrices(result_t *a, result_t *b, int rows, int cols);
 int compare_u32_matrices_with_tolerance(result_t *a, result_t *b, int rows,
                                         int cols, double tolerance);
 void clear_u32_matrix(result_t *matrix, int rows, int cols);
 void clear_u8_matrix(elem_t *matrix, int rows, int cols);
+void clear_i32_matrix(result_t *matrix, int rows, int cols);
+void clear_i8_matrix(elem_t *matrix, int rows, int cols);
 
 void init_ones_matrix(elem_t *matrix, int rows, int cols);
 void init_identity_matrix(elem_t *matrix, int size);
