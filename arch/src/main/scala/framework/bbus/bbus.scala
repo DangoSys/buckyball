@@ -86,9 +86,9 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
 val pmc = Module(new BallCyclePMC(numBalls))
 
 for (i <- 0 until numBalls) {
-  pmc.io.cmdReq_i(i).valid := cmdRouter.io.cmdReq_i(i).valid
+  pmc.io.cmdReq_i(i).valid := cmdRouter.io.cmdReq_i(i).fire
   pmc.io.cmdReq_i(i).bits := cmdRouter.io.cmdReq_i(i).bits
-  pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
+  pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid // 去除被RoB阻塞不给提交的延迟
   pmc.io.cmdResp_o(i).bits := cmdRouter.io.cmdResp_o(i).bits
 }
 

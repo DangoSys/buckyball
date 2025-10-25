@@ -38,7 +38,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val acc_flip_reg = RegInit(false.B) // 用于交替读取两个acc bank
 
   // 缓存解码好的bank信息
-  val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks).W))
+  val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))  // 需要3位以支持8个banks（SPAD+ACC）
   val rd_bank_addr_reg = Reg(UInt(log2Up(b.spad_bank_entries).W))
 
   // 数据缓存相关寄存器
@@ -76,13 +76,13 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   }
 
   //默认赋值
-  for(i <- 0 until b.acc_banks) {
+  for (i <- 0 until b.acc_banks) {
     io.accRead(i).req.valid := false.B
     io.accRead(i).req.bits.addr := 0.U
     io.accRead(i).req.bits.fromDMA := true.B
   }
 
-  for(i <- 0 until b.acc_banks/2){
+  for (i <- 0 until b.acc_banks/2){
     when((state === s_sram_req) && acc_reg){
       when(sram_count(2) === 0.U){
         io.accRead(i).req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)

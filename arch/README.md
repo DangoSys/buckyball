@@ -6,16 +6,6 @@ BuckyBall是一个全栈开源NPU/DSA设计框架。
 
 ## 1. 🤔 Why BuckyBall
 
-⭐ BuckyBall框架提供一套基础设施使得开发者无需关心系统控制和内存层级等实现。
-
-⭐ 每个单元使用统一的接口协议，易于集成，可以由顶层统一优化。
-
-⭐ 提供多种设计模板，满足不同设计范式的同时，可以基于这些轻松定制你自己的计算单元。
-
-⭐ BuckyBall 全栈开源，提供了丰富的workload和设计demo，从算法到编译器到RTL。
-
-⭐ BuckyBall 提供了一套Prompt案例，助力你实现5美元定制NPU。
-
 
 >❗BuckyBall 并不是某个具体的NPU设计，而是一个设计框架。你可以在example文件夹下找到各种NPU的设计案例
 
@@ -174,87 +164,12 @@ rs2:
 
 
 
-## 3. simulator
-
-
-
-## 4. workload
-
-
-
-## 5. 工具链
-
-### 5.1 BuddyCompiler
-生成workload
+### 2.4 指令通路
 ```
-cd voyager-test
-mkdir build && cd build
-cmake ..
-make -j256
+GlobalDecoder → 全局RS(frontend/rs) → BallDomain / MemDomain
+                  ↓                       ↓           ↓
+            全局ROB                  BallDecoder  MemDecoder
+        (只知道ball/mem)               ↓           ↓
+                                   局部FIFO    局部FIFO
+                           (对应ball空闲则发送)   (对应ball空闲则发送)
 ```
-
-### 5.2 内联汇编
-生成workload
-```
-cd voyager-test
-mkdir build && cd build
-cmake ..
-make -j256
-```
-
-### 5.3 Spike
-```
-./voyager-test/scripts/build-spike.sh
-./voyager-test/scripts/run-spike.sh --ext=buckyballFunc bb_mvin_mvout
-```
-
-### 5.4 Verilator
-```
-./voyager-test/scripts/build-verilator.sh --config BuckyBallRocketConfig --debug
-./voyager-test/scripts/run-verilator.sh --config BuckyBallRocketConfig --debug
-```
-
-
-### 5.5 Firesim
-```
-
-```
-
-### 5.6 帕拉丁
-```
-
-```
-
-### 5.7 DC
-```
-./voyager-test/scripts/run-dc.sh --config BuckyBallRocketConfig
-```
-生成报告可以使用可视化工具查看 [dc_helper](https://github.com/SEU-ACAL/tapeout-Voyager/blob/dev/voyager-test/scripts/dc_helper.ipynb)
-
-
-
-## 6. Buckyball 设计流程
-书写workload->实现模拟器->实现RTL
-
-约定：
-
-设计新指令必须配套对应的测试用例
-
-设计新算子必须配套对应的测试用例
-
-
-
-
-## 7. BuckyBall 验证流程
-没有经过验证的代码都是错误的代码，任何功能的实现都包括两级验证：模拟器的功能对齐和RTL的正确性验证，确保编译器-模拟器-RTL的一致性。
-
-测试集都会添加在`voyager-test/scripts/batch-test.sh`中，可以添加`--bb-test`参数来执行BuckyBall的测试用例
-```
-./voyager-test/scripts/batch-test.sh --bb-test
-./voyager-test/scripts/batch-test.sh --bb-test --difftest=on
-```
-
-
-
-
-## 8. Buckyball 案例分析

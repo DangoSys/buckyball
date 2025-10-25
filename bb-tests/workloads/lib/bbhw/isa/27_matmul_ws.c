@@ -2,21 +2,21 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig matmul_ws_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 13},
-                                     {"op2_spaddr", 14, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 14},
+                                     {"op2_spaddr", 15, 29},
                                      {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){{"wr_spaddr", 0, 13},
-                                     {"iter", 14, 23},
-                                     {"ws_flag", 24, 24},
+    .rs2_fields = (BitFieldConfig[]){{"wr_spaddr", 0, 14},
+                                     {"iter", 15, 24},
+                                     {"ws_flag", 25, 25},
                                      {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MATMUL_WS_ENCODE_RS1(op1_addr, op2_addr)                               \
-  (ENCODE_FIELD(op1_addr, 0, 14) | ENCODE_FIELD(op2_addr, 14, 14))
+  (ENCODE_FIELD(op1_addr, 0, 15) | ENCODE_FIELD(op2_addr, 15, 15))
 
 #define MATMUL_WS_ENCODE_RS2(wr_addr, iter, ws_flag)                           \
-  (ENCODE_FIELD(wr_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10) |                 \
-   ENCODE_FIELD(ws_flag, 24, 1))
+  (ENCODE_FIELD(wr_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
+   ENCODE_FIELD(ws_flag, 25, 1))
 
 // MATMUL_WS指令低级实现
 #ifndef __x86_64__

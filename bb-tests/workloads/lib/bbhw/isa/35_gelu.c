@@ -2,15 +2,15 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig gelu_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 13}, {NULL, 0, 0}},
+    .rs1_fields = (BitFieldConfig[]){{"op1_spaddr", 0, 14}, {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){
-        {"wr_spaddr", 0, 13}, {"iter", 14, 23}, {NULL, 0, 0}}};
+        {"wr_spaddr", 0, 14}, {"iter", 15, 24}, {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
-#define GELU_ENCODE_RS1(op1_addr) (ENCODE_FIELD(op1_addr, 0, 14))
+#define GELU_ENCODE_RS1(op1_addr) (ENCODE_FIELD(op1_addr, 0, 15))
 
 #define GELU_ENCODE_RS2(wr_addr, iter)                                         \
-  (ENCODE_FIELD(wr_addr, 0, 14) | ENCODE_FIELD(iter, 14, 10))
+  (ENCODE_FIELD(wr_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10))
 
 // GELU指令低级实现
 #ifndef __x86_64__

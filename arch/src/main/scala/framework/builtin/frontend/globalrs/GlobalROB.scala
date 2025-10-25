@@ -1,32 +1,22 @@
-package framework.builtin.frontend.rs
+package framework.builtin.frontend.globalrs
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import examples.toy.balldomain.BallDecodeCmd
+import framework.builtin.frontend.PostGDCmd
 
-// ROB 条目数据结构 - 保留ROB ID支持乱序完成
-class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val cmd    = new BallDecodeCmd
-  val rob_id = UInt(log2Up(b.rob_entries).W)
-}
-
-class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalROB(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // 分配接口
-    val alloc = Flipped(new DecoupledIO(new BallDecodeCmd))
-    val alloc_rob_id = Input(UInt(log2Up(b.rob_entries).W))  // 外部指定的rob_id
+    val alloc = Flipped(new DecoupledIO(new PostGDCmd))
 
     // 发射接口 - 发射未完成的头部指令
-    val issue = new DecoupledIO(new RobEntry)
+    val issue = new DecoupledIO(new GlobalRobEntry)
 
     // 完成接口 - 报告指令完成
     val complete = Flipped(new DecoupledIO(UInt(log2Up(b.rob_entries).W)))
-
-    // 提交接口 - 提交已完成的头部指令
-    // val commit = new DecoupledIO(new RobEntry)
 
     // 状态信号 - 暴露给保留站用于决策
     val empty = Output(Bool())
@@ -38,7 +28,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   })
 
   // 环状ROB结构
-  val robEntries = Reg(Vec(b.rob_entries, new RobEntry))
+  val robEntries = Reg(Vec(b.rob_entries, new GlobalRobEntry))
   val robValid   = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))  // 条目是否有效
   val robIssued  = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))  // 条目是否已发射
   val robComplete = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B))) // 条目是否已完成
@@ -55,9 +45,6 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   // 队列状态
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
   val isFull  = headPtr === tailPtr && robValid(headPtr)
-  val count = Mux(isFull, b.rob_entries.U,
-                  Mux(tailPtr >= headPtr, tailPtr - headPtr,
-                      b.rob_entries.U + tailPtr - headPtr))
 
 // -----------------------------------------------------------------------------
 // 入站 - 指令分配
@@ -133,14 +120,6 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 // -----------------------------------------------------------------------------
 // 指令提交 - 乱序提交所有已完成的指令
 // -----------------------------------------------------------------------------
-  // 当head指令完成时，自动提交并移动head指针
-  // when(robValid(headPtr) && robComplete(headPtr)) {
-  //   robValid(headPtr) := false.B
-  //   robIssued(headPtr) := false.B
-  //   robComplete(headPtr) := false.B
-  //   headPtr := Mux(headPtr === (b.rob_entries - 1).U, 0.U, headPtr + 1.U)
-  // } // 顺序提交版本
-
   // 提交所有已完成的指令
   for (i <- 0 until b.rob_entries) {
     when(robValid(i.U) && robComplete(i.U)) {

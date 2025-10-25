@@ -90,7 +90,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(true.B))
   }
   //默认赋值
-  for(i <- 0 until b.acc_banks) {
+  for (i <- 0 until b.acc_banks) {
     io.accWrite(i).req.valid := false.B
     io.accWrite(i).req.bits.addr := 0.U
     io.accWrite(i).req.bits.data := 0.U

@@ -14,21 +14,17 @@ import examples.toy.balldomain.bbus.BBusModule
 
 // Ball Domain的输入输出接口
 class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  // 来自GlobalDecoder的命令分发接口
-  val gDecoderIn = Flipped(Decoupled(new PostGDCmd))
+  // 来自全局RS的发射接口 (单通道)
+  val global_issue_i = Flipped(Decoupled(new framework.builtin.frontend.globalrs.GlobalRsIssue))
+
+  // 向全局RS报告完成 (单通道)
+  val global_complete_o = Decoupled(new framework.builtin.frontend.globalrs.GlobalRsComplete)
 
   // 连接到Scratchpad的执行接口
   val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
   val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
   val accRead   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
   val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
-
-  // RoCC响应接口
-  val roccResp = Decoupled(new RoCCResponseBB()(p))
-  val busy = Output(Bool())
-
-  // fence信号
-  val fence_o = Output(Bool())
 }
 
 // Ball Domain 顶层 - 使用新的简化BBus架构
@@ -40,22 +36,28 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   val bbus = Module(new BBusModule)
 
 //---------------------------------------------------------------------------
-// Decoder -> BallReservationStation
+// 全局RS -> Decoder (接收全局发射并构造PostGDCmd)
 //---------------------------------------------------------------------------
   val ballDecoder = Module(new BallDomainDecoder)
-  ballDecoder.io.raw_cmd_i <> io.gDecoderIn
 
-  // fence信号连接
-  io.fence_o := ballDecoder.io.fence_o
+  // 将全局RS的发射转换为Decoder的输入格式
+  ballDecoder.io.raw_cmd_i.valid := io.global_issue_i.valid
+  ballDecoder.io.raw_cmd_i.bits  := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready := ballDecoder.io.raw_cmd_i.ready
 
 //---------------------------------------------------------------------------
-// Decoder -> BallReservationStation
+// Decoder -> 局部BallRS (多通道发射到各Ball设备)
 //---------------------------------------------------------------------------
   val ballRs = Module(new BallRSModule)
-  ballRs.io.ball_decode_cmd_i <> ballDecoder.io.ball_decode_cmd_o
+
+  // 连接解码后的指令和全局rob_id
+  ballRs.io.ball_decode_cmd_i.valid := ballDecoder.io.ball_decode_cmd_o.valid
+  ballRs.io.ball_decode_cmd_i.bits.cmd := ballDecoder.io.ball_decode_cmd_o.bits
+  ballRs.io.ball_decode_cmd_i.bits.rob_id := io.global_issue_i.bits.rob_id
+  ballDecoder.io.ball_decode_cmd_o.ready := ballRs.io.ball_decode_cmd_i.ready
 
 //---------------------------------------------------------------------------
-// BallReservationStation -> BBus
+// 局部BallRS -> BBus (多通道)
 //---------------------------------------------------------------------------
   bbus.io.cmdReq <> ballRs.io.issue_o.balls
   ballRs.io.commit_i.balls <> bbus.io.cmdResp
@@ -69,10 +71,9 @@ class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   bbus.io.accWrite  <> io.accWrite
 
 //---------------------------------------------------------------------------
-// BallController -> RoCC
+// 局部RS完成信号 -> 全局RS (单通道，包含全局rob_id)
 //---------------------------------------------------------------------------
-  io.roccResp <> ballRs.io.rs_rocc_o.resp
-  io.busy := ballRs.io.rs_rocc_o.busy
+  io.global_complete_o <> ballRs.io.complete_o
 
   override lazy val desiredName = "BallDomain"
 }
