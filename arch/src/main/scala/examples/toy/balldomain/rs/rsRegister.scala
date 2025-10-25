@@ -16,9 +16,6 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bal
     BallRsRegist(ballId = 1, ballName = "MatrixBall"),
     BallRsRegist(ballId = 2, ballName = "Im2colBall"),
     BallRsRegist(ballId = 3, ballName = "TransposeBall"),
-    BallRsRegist(ballId = 4, ballName = "GeluBall"),
-    BallRsRegist(ballId = 5, ballName = "LayerNormBall"),
-    BallRsRegist(ballId = 6, ballName = "SoftmaxBall"),
     BallRsRegist(ballId = 7, ballName = "ReluBall"),
   )
 ) {
