@@ -18,8 +18,11 @@ import framework.rocket.RoCCResponseBB
 
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
-    // 来自GlobalDecoder的输入
-    val gDecoderIn = Flipped(Decoupled(new PostGDCmd))
+    // 来自全局RS的发射接口 (单通道)
+    val global_issue_i = Flipped(Decoupled(new framework.builtin.frontend.globalrs.GlobalRsIssue))
+
+    // 向全局RS报告完成 (单通道)
+    val global_complete_o = Decoupled(new framework.builtin.frontend.globalrs.GlobalRsComplete)
 
     // 与Ball Domain交互的SRAM接口
     val ballDomain = new Bundle {
@@ -50,8 +53,7 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
     // TLB异常接口 - 暴露给上层处理flush等
     val tlbExp = Vec(2, new BBTLBExceptionIO)
 
-    // RoCC响应接口
-    val roccResp = Decoupled(new RoCCResponseBB()(p))
+    // busy信号
     val busy = Output(Bool())
   })
 
@@ -67,14 +69,20 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes))
 
 // -----------------------------------------------------------------------------
-// GlobalDecoder -> MemDecoder
+// 全局RS -> MemDecoder
 // -----------------------------------------------------------------------------
-  memDecoder.io.raw_cmd_i <> io.gDecoderIn
+  memDecoder.io.raw_cmd_i.valid := io.global_issue_i.valid
+  memDecoder.io.raw_cmd_i.bits  := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready := memDecoder.io.raw_cmd_i.ready
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation
 // -----------------------------------------------------------------------------
-  memRs.io.mem_decode_cmd_i <> memDecoder.io.mem_decode_cmd_o
+  // 连接解码后的指令和全局rob_id
+  memRs.io.mem_decode_cmd_i.valid := memDecoder.io.mem_decode_cmd_o.valid
+  memRs.io.mem_decode_cmd_i.bits.cmd := memDecoder.io.mem_decode_cmd_o.bits
+  memRs.io.mem_decode_cmd_i.bits.rob_id := io.global_issue_i.bits.rob_id
+  memDecoder.io.mem_decode_cmd_o.ready := memRs.io.mem_decode_cmd_i.ready
 
 // -----------------------------------------------------------------------------
 // MemReservationStation -> MemLoader/MemStorer
@@ -122,9 +130,9 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   io.ballDomain.accRead <> memController.io.ballDomain.accRead
   io.ballDomain.accWrite <> memController.io.ballDomain.accWrite
 
-  // RoCC响应直接连接
-  io.roccResp <> memRs.io.rs_rocc_o.resp
+  // 完成信号连接到全局RS
+  io.global_complete_o <> memRs.io.complete_o
 
   // 忙碌信号
-  io.busy := memRs.io.rs_rocc_o.busy // 没用的信号
+  io.busy := !memRs.io.complete_o.ready // 简单的busy信号
 }

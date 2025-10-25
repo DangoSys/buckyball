@@ -21,8 +21,8 @@ class MemDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bun
   val iter          = UInt(10.W)
 
   // Scratchpad地址和bank信息
-  val sp_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
-  val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries + b.acc_bank_entries).W)
+  val sp_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks（SPAD+ACC）
+  val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数（足够容纳ACC的10位地址）
 
   val special       = UInt(40.W)
 }

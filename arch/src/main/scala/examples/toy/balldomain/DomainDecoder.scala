@@ -25,14 +25,14 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
   val special       = UInt(40.W) // 指令专用子段
 
   // Ball的操作数地址
-  val op1_bank      = UInt(log2Up(b.sp_banks).W)
-  val op1_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
-  val op2_bank      = UInt(log2Up(b.sp_banks).W)
-  val op2_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
+  val op1_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
+  val op1_bank_addr = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
+  val op2_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
+  val op2_bank_addr = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
 
   // 写入地址和bank信息
-  val wr_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
-  val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries + b.acc_bank_entries).W)
+  val wr_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
+  val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
   val is_acc        = Bool() // 是否是acc bank的操作
 
   val rs1 = UInt(64.W)
@@ -47,10 +47,6 @@ object BallDecodeFields extends Enumeration {
       OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, SPECIAL, VALID = Value
 }
 
-object CtrlDecodeFields extends Enumeration {
-  type Field = Value
-  val FENCE_EN, VALID = Value
-}
 
 
 // Default constants for EX decoder
@@ -69,8 +65,6 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val io = IO(new Bundle {
     val raw_cmd_i = Flipped(Decoupled(new PostGDCmd))
     val ball_decode_cmd_o = Decoupled(new BallDecodeCmd)
-
-    val fence_o = Output(Bool())
   })
 
   val spAddrLen = b.spAddrLen
@@ -97,20 +91,14 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
     RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),7.U,rs2(63,spAddrLen + 10),Y)
   ))
 
-  import CtrlDecodeFields._
-  val ctrl_default_decode = List(N,N)
-  val ctrl_decode_list = ListLookup(func7, ctrl_default_decode, Array(
-    FENCE -> List(Y,Y)
-  ))
-
   // 断言：解码列表中必须有VALID字段
-  assert(!(io.raw_cmd_i.fire && !ball_decode_list(BallDecodeFields.VALID.id).asBool && !ctrl_decode_list(CtrlDecodeFields.VALID.id).asBool),
+  assert(!(io.raw_cmd_i.fire && !ball_decode_list(BallDecodeFields.VALID.id).asBool),
     "BallDomainDecoder: Invalid command opcode, func7 = 0x%x\n", func7)
 
 // -----------------------------------------------------------------------------
 // 输出赋值
 // -----------------------------------------------------------------------------
-  io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_ball && !(ctrl_decode_list(CtrlDecodeFields.VALID.id).asBool) // 需要不是控制信号才能进rob
+  io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_ball
 
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
@@ -131,13 +119,14 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val op2_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, op2_spaddr)
   val wr_laddr  = LocalAddr.cast_to_sp_addr(b.local_addr_t, wr_spaddr)
 
-  io.ball_decode_cmd_o.bits.op1_bank      := Mux(io.ball_decode_cmd_o.valid, op1_laddr.sp_bank(), 0.U(log2Up(b.sp_banks).W))
-  io.ball_decode_cmd_o.bits.op1_bank_addr := Mux(io.ball_decode_cmd_o.valid, op1_laddr.sp_row(),  0.U(log2Up(b.spad_bank_entries).W))
-  io.ball_decode_cmd_o.bits.op2_bank      := Mux(io.ball_decode_cmd_o.valid, op2_laddr.sp_bank(), 0.U(log2Up(b.sp_banks).W))
-  io.ball_decode_cmd_o.bits.op2_bank_addr := Mux(io.ball_decode_cmd_o.valid, op2_laddr.sp_row(),  0.U(log2Up(b.spad_bank_entries).W))
+  // 使用 mem_bank() 和 mem_row() 以支持 ACC banks (bank 4+)
+  io.ball_decode_cmd_o.bits.op1_bank      := Mux(io.ball_decode_cmd_o.valid, op1_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
+  io.ball_decode_cmd_o.bits.op1_bank_addr := Mux(io.ball_decode_cmd_o.valid, op1_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
+  io.ball_decode_cmd_o.bits.op2_bank      := Mux(io.ball_decode_cmd_o.valid, op2_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
+  io.ball_decode_cmd_o.bits.op2_bank_addr := Mux(io.ball_decode_cmd_o.valid, op2_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
 
   io.ball_decode_cmd_o.bits.wr_bank       := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
-  io.ball_decode_cmd_o.bits.wr_bank_addr  := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries + b.acc_bank_entries).W))
+  io.ball_decode_cmd_o.bits.wr_bank_addr  := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
   io.ball_decode_cmd_o.bits.is_acc        := Mux(io.ball_decode_cmd_o.valid, (io.ball_decode_cmd_o.bits.wr_bank >= b.sp_banks.U), false.B)
 
   // 断言：执行指令中OpA和OpB必须访问不同的bank
@@ -150,12 +139,4 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 // -----------------------------------------------------------------------------
   io.ball_decode_cmd_o.bits.rs1 := rs1
   io.ball_decode_cmd_o.bits.rs2 := rs2
-
-// -----------------------------------------------------------------------------
-// 控制信号不进入ROB
-// -----------------------------------------------------------------------------
-  val is_fence = ctrl_decode_list(CtrlDecodeFields.FENCE_EN.id).asBool
-
-  // 当fence命令有效时，输出fence设置信号
-  io.fence_o := io.raw_cmd_i.fire && is_fence
 }

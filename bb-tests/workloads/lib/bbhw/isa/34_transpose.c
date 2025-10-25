@@ -2,16 +2,16 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig transpose_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 13},
-                                     {"wr_spaddr", 14, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 14},
+                                     {"wr_spaddr", 15, 29},
                                      {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){{"iter", 14, 23}, {NULL, 0, 0}}};
+    .rs2_fields = (BitFieldConfig[]){{"iter", 15, 24}, {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define TRANSPOSE_ENCODE_RS1(op_addr, wr_addr)                                 \
-  (ENCODE_FIELD(op_addr, 0, 14) | ENCODE_FIELD(wr_addr, 14, 14))
+  (ENCODE_FIELD(op_addr, 0, 15) | ENCODE_FIELD(wr_addr, 15, 15))
 
-#define TRANSPOSE_ENCODE_RS2(iter) ENCODE_FIELD(iter, 14, 10)
+#define TRANSPOSE_ENCODE_RS2(iter) ENCODE_FIELD(iter, 15, 10)
 
 // TRANSPOSE指令低级实现
 #ifndef __x86_64__

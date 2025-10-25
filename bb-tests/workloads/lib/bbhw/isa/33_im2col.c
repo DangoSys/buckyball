@@ -2,8 +2,8 @@
 
 // =========================== for simulator ===========================
 const InstructionConfig im2col_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 13},
-                                     {"wr_spaddr", 14, 27},
+    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 14},
+                                     {"wr_spaddr", 15, 29},
                                      {NULL, 0, 0}},
     .rs2_fields = (BitFieldConfig[]){{"kcol", 26, 29},
                                      {"krow", 30, 33},
@@ -15,7 +15,7 @@ const InstructionConfig im2col_config = {
 
 // =========================== for CTest ===========================
 #define IM2COL_ENCODE_RS1(op_addr, wr_addr)                                    \
-  (ENCODE_FIELD(op_addr, 0, 14) | ENCODE_FIELD(wr_addr, 14, 14))
+  (ENCODE_FIELD(op_addr, 0, 15) | ENCODE_FIELD(wr_addr, 15, 15))
 
 #define IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol)        \
   (ENCODE_FIELD(kcol, 26, 4) | ENCODE_FIELD(krow, 30, 4) |                     \

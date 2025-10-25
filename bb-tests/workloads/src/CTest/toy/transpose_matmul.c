@@ -17,7 +17,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
   uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
   uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(2, 0);  // acc0: 写入累加器, 偏移0
+  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
   uint32_t col_stride = (size + DIM - 1) / DIM;
   for (int i = 0; i < col_stride; i++) {
     bb_mvin((uintptr_t)a + i * DIM, op2_addr + size + i * DIM, DIM, col_stride);
