@@ -13,7 +13,7 @@ void hw_transpose(const char *test_name, elem_t *a, elem_t *b, int size) {
 
   bb_mvin((uintptr_t)a, op1_addr, size, 1);
   bb_fence();
-  bb_transpose(op1_addr, op2_addr, size);
+  bb_transpose(op1_addr, op2_addr, size, 0);
   bb_fence();
 }
 

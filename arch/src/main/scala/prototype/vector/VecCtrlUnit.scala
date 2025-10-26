@@ -32,6 +32,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   val wr_bank_addr  = RegInit(0.U(12.W))
   val is_acc        = RegInit(false.B)
   val has_send      = RegInit(false.B)
+  val mode          = RegInit(0.U(1.W))
 
   val idle :: busy :: Nil = Enum(2)
   val state = RegInit(idle)
@@ -50,6 +51,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     wr_bank       := io.cmdReq.bits.cmd.wr_bank
     wr_bank_addr  := io.cmdReq.bits.cmd.wr_bank_addr
     is_acc        := io.cmdReq.bits.cmd.is_acc
+    mode          := io.cmdReq.bits.cmd.special(0)
 
     state         := busy
   }
@@ -65,6 +67,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     io.ctrl_ld_o.bits.op2_bank       := op2_bank
     io.ctrl_ld_o.bits.op2_bank_addr  := op2_bank_addr
     io.ctrl_ld_o.bits.iter           := iter
+    io.ctrl_ld_o.bits.mode           := mode
 
     io.ctrl_ex_o.valid               := true.B
     io.ctrl_ex_o.bits.iter           := iter
@@ -82,6 +85,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
     io.ctrl_ld_o.bits.op2_bank       := 0.U
     io.ctrl_ld_o.bits.op2_bank_addr  := 0.U
     io.ctrl_ld_o.bits.iter           := 0.U
+    io.ctrl_ld_o.bits.mode           := 0.U
 
     io.ctrl_ex_o.valid               := false.B
     io.ctrl_ex_o.bits.iter           := 0.U

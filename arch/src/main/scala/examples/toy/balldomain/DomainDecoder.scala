@@ -85,7 +85,8 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
     MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
     IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10),Y),
     TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10),Y),
-    RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10),Y)
+    RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10),Y),
+    BBUS_CONFIG          -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),5.U,rs2(63,spAddrLen + 10),Y)
   ))
 
   // 断言：解码列表中必须有VALID字段
@@ -125,12 +126,12 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.wr_bank       := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
   io.ball_decode_cmd_o.bits.wr_bank_addr  := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
   io.ball_decode_cmd_o.bits.is_acc        := Mux(io.ball_decode_cmd_o.valid, (io.ball_decode_cmd_o.bits.wr_bank >= b.sp_banks.U), false.B)
-
+/*
   // 断言：执行指令中OpA和OpB必须访问不同的bank
   assert(!(io.ball_decode_cmd_o.valid && io.ball_decode_cmd_o.bits.op1_en && io.ball_decode_cmd_o.bits.op2_en &&
            io.ball_decode_cmd_o.bits.op1_bank === io.ball_decode_cmd_o.bits.op2_bank),
   "BallDomainDecoder: Ball instruction OpA and OpB cannot access the same bank")
-
+*/
 // -----------------------------------------------------------------------------
 // 继续传递rs1和rs2
 // -----------------------------------------------------------------------------

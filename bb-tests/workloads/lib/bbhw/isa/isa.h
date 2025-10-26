@@ -40,7 +40,8 @@ typedef enum {
   FLUSH_FUNC7 = 7,       // 0x07 - Flush function code
   BBFP_MUL_FUNC7 = 26,   // 0x1A - BBFP matrix multiply function code
   MATMUL_WS_FUNC7 = 27,  // 0x1B - Matrix multiply with warp16 function code
-  RELU_FUNC7 = 38        // 0x26 - ReLU activation function code
+  RELU_FUNC7 = 38,       // 0x26 - ReLU activation function code
+  BBUS_CONFIG_FUNC7 = 39 // 0x27 - BBUS configuration function code
 } InstructionType;
 
 // 指令配置结构 (for simulator)
@@ -59,10 +60,11 @@ void set_bbinst_field(uint64_t *value, const char *field_name,
 
 void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
              uint32_t col_stride);
-void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter);
+void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
+              uint32_t stride);
 void bb_fence(void);
 void bb_mul_warp16(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
-                   uint32_t iter);
+                   uint32_t iter, uint32_t mode);
 void bb_bbfp_mul(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                  uint32_t iter);
 void bb_matmul_ws(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
@@ -70,8 +72,10 @@ void bb_matmul_ws(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
 void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
                uint32_t startcol);
-void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
+                  uint32_t mode);
 void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+void bb_bbus_config(uint32_t src_bid, uint32_t dst_bid, uint64_t enable);
 void bb_flush(void);
 
 // 通过func7获取指令配置

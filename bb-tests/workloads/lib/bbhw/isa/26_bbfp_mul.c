@@ -29,7 +29,7 @@ const InstructionConfig bbfp_mul_config = {
 // BBFP_MUL指令高级API实现
 void bb_bbfp_mul(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                  uint32_t iter) {
-  uint32_t rs1_val = BBFP_MUL_ENCODE_RS1(op1_addr, op2_addr);
-  uint32_t rs2_val = BBFP_MUL_ENCODE_RS2(wr_addr, iter);
+  uint64_t rs1_val = BBFP_MUL_ENCODE_RS1(op1_addr, op2_addr);
+  uint64_t rs2_val = BBFP_MUL_ENCODE_RS2(wr_addr, iter);
   BBFP_MUL_RAW(rs1_val, rs2_val);
 }

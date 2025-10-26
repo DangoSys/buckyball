@@ -10,6 +10,8 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.blink.Status
+import freechips.rocketchip.tilelink.MemoryOpCategories.wr
+import os.read
 
 class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
@@ -27,16 +29,19 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
     val status = new Status
   })
 
-  val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
+  val idle :: compute :: Nil = Enum(2)
   val state = RegInit(idle)
 
   // 矩阵存储寄存器 (veclane x veclane)
-  val regArray = Reg(Vec(b.veclane, Vec(b.veclane, UInt(b.inputType.getWidth.W))))
+  val regArray = Reg(Vec(b.veclane * 2, Vec(b.veclane, UInt(b.inputType.getWidth.W))))
 
   // 计数器
-  val readCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W))
-  val respCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W))
-  val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
+  val readCounter  = RegInit(0.U(10.W))
+  val respCounter  = RegInit(0.U(10.W))
+  val writeCounter = RegInit(0.U(10.W))
+  val respWaitcounter = RegInit(0.U(10.W))
+  val writeHeadptr = RegInit(0.U(10.W))
+  val writeTailptr = RegInit(0.U(10.W))
 
   // 指令寄存器
   val robid_reg = RegInit(0.U(10.W))
@@ -45,13 +50,15 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val raddr_reg = RegInit(0.U(10.W))
   val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
   val iter_reg  = RegInit(0.U(10.W))
-  val cycle_reg = RegInit(0.U(6.W))
-  val iterCnt   = RegInit(0.U(32.W))  // 批次迭代计数器
+  val write_iter_reg = RegInit(0.U(10.W))
+  val mode_reg  = RegInit(0.U(1.W))
+
 
   // 预计算写入数据
   val writeDataReg = Reg(UInt(spad_w.W))
   val writeMaskReg = Reg(Vec(b.spad_mask_len, UInt(1.W)))
 
+  val start_write = RegInit(false.B)
   // SRAM默认赋值
   for (i <- 0 until b.sp_banks) {
     io.sramRead(i).req.valid        := false.B
@@ -67,122 +74,77 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
 
   // cmd接口默认赋值
   io.cmdReq.ready        := state === idle
-  io.cmdResp.valid       := false.B
+
+  when(state === idle && io.cmdReq.fire){
+    state        := compute
+    readCounter  := 0.U
+    respCounter  := 0.U
+    respWaitcounter := io.cmdReq.bits.cmd.iter + respWaitcounter
+
+    robid_reg := io.cmdReq.bits.rob_id
+    waddr_reg := io.cmdReq.bits.cmd.op2_bank_addr
+    wbank_reg := io.cmdReq.bits.cmd.op2_bank
+    raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr
+    rbank_reg := io.cmdReq.bits.cmd.op1_bank
+    iter_reg  := io.cmdReq.bits.cmd.iter
+    mode_reg  := io.cmdReq.bits.cmd.special(0)
+  }
+  // read req
+  when(((mode_reg === 1.U) &&(state === compute) && RegNext(io.sramWrite(0).req.ready))||
+        ((mode_reg === 0.U) && (state === compute))){
+      readCounter :=  readCounter + 1.U
+      io.sramRead(rbank_reg).req.valid     := readCounter < iter_reg
+      io.sramRead(rbank_reg).req.bits.addr := raddr_reg + readCounter
+      state := Mux((readCounter >= iter_reg - 1.U) && io.cmdResp.ready, idle, state)
+  }
+  io.cmdResp.valid       := (readCounter >= (iter_reg - 1.U)) && (state === compute)
   io.cmdResp.bits.rob_id := robid_reg
 
-  // 状态机
-  switch(state) {
-    is(idle) {
-      // 指令到达，初始化各个寄存器
-      when(io.cmdReq.fire) {
-        state        := sRead
-        readCounter  := 0.U
-        writeCounter := 0.U
-
-        robid_reg := io.cmdReq.bits.rob_id
-        waddr_reg := io.cmdReq.bits.cmd.op2_bank_addr
-        wbank_reg := io.cmdReq.bits.cmd.op2_bank
-        raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr
-        rbank_reg := io.cmdReq.bits.cmd.op1_bank
-        iter_reg  := io.cmdReq.bits.cmd.iter
-        cycle_reg := (io.cmdReq.bits.cmd.iter +& (b.veclane.U - 1.U)) / b.veclane.U - 1.U
-      }
-
-      when (cycle_reg =/= 0.U){
-        state        := sRead
-        readCounter  := 0.U
-        writeCounter := 0.U
-        respCounter  := 0.U
-        waddr_reg    := waddr_reg + b.veclane.U
-        raddr_reg    := raddr_reg + b.veclane.U
-        cycle_reg    := cycle_reg - 1.U
-      }
+  //read resp
+  io.sramRead(rbank_reg).resp.ready := true.B
+  val dataWord = io.sramRead(rbank_reg).resp.bits.data
+  val row = respCounter(4,0)
+  when(io.sramRead(rbank_reg).resp.fire && respWaitcounter > 0.U){
+    for (col <- 0 until b.veclane) {
+      val hi = (col + 1) * b.inputType.getWidth - 1
+      val lo = col * b.inputType.getWidth
+      regArray(row)(col) := dataWord(hi, lo)
     }
-
-    is(sRead) {
-      when(readCounter < b.veclane.U) {
-      // 发起读取请求
-      readCounter := readCounter + 1.U
-      io.sramRead(rbank_reg).req.valid     := true.B
-      io.sramRead(rbank_reg).req.bits.addr := raddr_reg + readCounter
-
-    }
-          // 当收到响应时，存储数据并增加计数器
-      val dataWord = io.sramRead(rbank_reg).resp.bits.data
-      // 准备接收响应
-      io.sramRead(rbank_reg).resp.ready := true.B
-      // 按行写入寄存器阵列
-      when(io.sramRead(rbank_reg).resp.fire) {
-          for (col <- 0 until b.veclane) {
-            val hi = (col + 1) * b.inputType.getWidth - 1
-            val lo = col * b.inputType.getWidth
-            regArray(respCounter)(col) := dataWord(hi, lo)
-      }
-          respCounter := respCounter + 1.U
-      }
-
-        // 如果读取完成，转到写入状态
-        when(respCounter  ===  b.veclane.U) {
-          state := sWrite
-
-          // 预计算第一列写入数据（取转置后第0列 -> 原矩阵每行的第0个元素）
-          for (i <- 0 until b.veclane) {
-            writeDataReg := Cat((0 until b.veclane).reverse.map(i => regArray(i)(0)))
-          }
-          // 设置写入掩码（全写）
-          for (i <- 0 until b.spad_mask_len) {
-            writeMaskReg(i) := 1.U(1.W)
-          }
-        }
-    }
-
-is(sWrite) {
-  // 发起写入请求
-  io.sramWrite(wbank_reg).req.valid     := writeCounter < b.veclane.U
-  io.sramWrite(wbank_reg).req.bits.addr := waddr_reg + writeCounter
-  io.sramWrite(wbank_reg).req.bits.data := writeDataReg
-  io.sramWrite(wbank_reg).req.bits.mask := writeMaskReg
-
-  // 写入完成，转到完成状态
-  when(writeCounter === (b.veclane - 1).U) {
-      state := complete
-    }.otherwise {
-      writeCounter := writeCounter + 1.U
-      writeDataReg := Cat((0 until b.veclane).reverse.map(i => regArray(i)(writeCounter + 1.U)))
-    }
-}
-
-    is(complete) {
-      when(cycle_reg === 0.U) {
-        io.cmdResp.valid       := true.B
-        io.cmdResp.bits.rob_id := robid_reg
-        when(io.cmdResp.fire) {
-          iterCnt := iterCnt + 1.U
-        }
-      }
-        state := idle
-    }
+    respCounter := Mux(respCounter === iter_reg - 1.U, 0.U, respCounter + 1.U)
+    writeHeadptr := Mux(writeHeadptr === 2.U* b.veclane.U - 1.U, 0.U, writeHeadptr + 1.U)
+    respWaitcounter := Mux(state === idle && io.cmdReq.fire, io.cmdReq.bits.cmd.iter + respWaitcounter - 1.U, respWaitcounter - 1.U)
   }
 
-  // Status signals
+  // write req
+  val wreg = RegInit(0.U(10.W))
+  val array_full = ((writeTailptr < b.veclane.U) && (writeHeadptr >= b.veclane.U)) ||
+                   ((writeTailptr >= b.veclane.U) && (writeHeadptr < b.veclane.U))
+  when(writeCounter === iter_reg - 1.U){
+    start_write := false.B
+  }.elsewhen( array_full && !start_write){
+    start_write := true.B
+    wreg := waddr_reg
+    write_iter_reg := iter_reg
+  }.otherwise{
+    start_write := start_write
+  }
+
+  when(start_write){
+    io.sramWrite(wbank_reg).req.valid     := true.B
+    io.sramWrite(wbank_reg).req.bits.addr := wreg + writeCounter
+    io.sramWrite(wbank_reg).req.bits.data := Mux( writeCounter(4) === 0.U, Cat((0 until b.veclane).reverse.map(i => regArray(i)(writeCounter(3,0)))) ,
+                                              Cat((0 until b.veclane).reverse.map(i => regArray(i + b.veclane)(writeCounter(3,0)))))
+    io.sramWrite(wbank_reg).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(~0.U(1.W)))
+    writeCounter :=  Mux(writeCounter === write_iter_reg - 1.U, 0.U,writeCounter + 1.U)
+    writeTailptr := Mux(writeTailptr === 2.U* b.veclane.U - 1.U, 0.U, writeTailptr + 1.U)
+  }
+    // Status signals
   io.status.ready := io.cmdReq.ready
   io.status.valid := io.cmdResp.valid
-  io.status.idle := (state === idle)
-  io.status.init := (state === sRead) && (respCounter < b.veclane.U)
-  io.status.running := (state === sWrite) || ((state === sRead) && (respCounter === b.veclane.U))
-  io.status.complete := (state === complete) && io.cmdResp.fire
-  io.status.iter := iterCnt
+  io.status.idle := state === idle
+  io.status.init := readCounter === 0.U && state === compute
+  io.status.running := state === compute
+  io.status.iter := readCounter
+  io.status.complete := io.cmdResp.valid
 
-  // 初始化寄存器阵列
-  when(reset.asBool) {
-    for (i <- 0 until b.veclane) {
-      for (j <- 0 until b.veclane) {
-        regArray(i)(j) := 0.U
-      }
-    }
-    writeDataReg := 0.U
-    for (i <- 0 until b.spad_mask_len) {
-      writeMaskReg(i) := 0.U
-    }
-  }
 }
