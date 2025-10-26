@@ -109,7 +109,7 @@ val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
 // -----------------------------------------------------------------------------
 // iter counter归零，提交cmdResp，回到idle状态
 // -----------------------------------------------------------------------------
-	when(state === busy && iter_counter === iter) {
+	when(state === busy && iter_counter >= iter) {
 		state := idle
 		io.cmdResp_o.valid := true.B
 		io.cmdResp_o.bits.commit := true.B

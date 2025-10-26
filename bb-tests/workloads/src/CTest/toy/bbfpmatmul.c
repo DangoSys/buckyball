@@ -55,7 +55,7 @@ int main() {
   bb_bbfp_mul(op1_addr, op2_addr, wr_addr, DIM);
   bb_fence();
   // Move back from scratchpad to output
-  bb_mvout((uintptr_t)output_matrix, wr_addr, DIM << 2);
+  bb_mvout((uintptr_t)output_matrix, wr_addr, DIM << 2, 1);
   bb_fence();
   if (compare_u32_matrices(output_matrix, expected_output_matrix, DIM, DIM)) {
     printf("Test passed!\n");

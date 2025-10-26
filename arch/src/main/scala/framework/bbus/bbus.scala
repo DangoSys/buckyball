@@ -11,6 +11,12 @@ import framework.bbus.pmc.BallCyclePMC
 import framework.bbus.cmdrouter.CmdRouter
 import framework.bbus.memrouter.MemRouter
 
+
+class BBusConfigIO(numBalls: Int)extends Bundle {
+  val src_bid = UInt(log2Ceil(numBalls).W)
+  val dst_bid = UInt(log2Ceil(numBalls).W)
+  val set     = Bool()
+}
 /**
  * BBus - Ball总线，管理多个Ball设备的连接和仲裁
  */
@@ -72,6 +78,7 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
   io.sramWrite <> memoryrouter.io.sramWrite_o
   io.accRead <> memoryrouter.io.accRead_o
   io.accWrite <> memoryrouter.io.accWrite_o
+  memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
 
   for(i <- 0 until numBalls){
     memoryrouter.io.sramRead_i(i) <> balls(i).Blink.sramRead

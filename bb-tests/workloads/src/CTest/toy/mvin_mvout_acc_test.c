@@ -22,7 +22,7 @@ int acc_mvin_mvout_pressure_test() {
     clear_u32_matrix(output_matrix, DIM, DIM);
 
     wr_addr = spad_addr(4, i);
-    bb_mvout((uintptr_t)output_matrix, wr_addr, DIM << 2);
+    bb_mvout((uintptr_t)output_matrix, wr_addr, DIM << 2, 1);
     bb_fence();
     if (!compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
       printf("Test ACC mvin/mvout pressure %d FAILED\n", i);

@@ -138,13 +138,14 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // ---------------------------------------------------------------------------
 // Busy信号 - 由全局RS管理
 // ---------------------------------------------------------------------------
-  io.busy := globalRs.io.rs_rocc_o.busy
+  //io.busy := globalRs.io.rs_rocc_o.busy
+  io.busy := false.B
 
 // ---------------------------------------------------------------------------
 // busy计数器，防止仿真长时间停顿
 // ---------------------------------------------------------------------------
   val busy_counter = RegInit(0.U(32.W))
-  busy_counter := Mux(io.busy, busy_counter + 1.U, 0.U)
+  busy_counter := Mux(globalRs.io.rs_rocc_o.busy, busy_counter + 1.U, 0.U)
   assert(busy_counter < 10000.U, "ToyBuckyBall: busy for too long!")
 
 }

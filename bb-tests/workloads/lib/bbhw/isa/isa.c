@@ -38,6 +38,7 @@ extern const InstructionConfig matmul_ws_config;
 extern const InstructionConfig im2col_config;
 extern const InstructionConfig transpose_config;
 extern const InstructionConfig relu_config;
+extern const InstructionConfig bbus_config_config;
 
 // 通过func7获取指令配置
 const InstructionConfig *config(InstructionType func7) {
@@ -58,6 +59,8 @@ const InstructionConfig *config(InstructionType func7) {
     return &transpose_config;
   case RELU_FUNC7:
     return &relu_config;
+  case BBUS_CONFIG_FUNC7:
+    return &bbus_config_config;
   case FENCE_FUNC7:
     return NULL; // FENCE指令没有参数，不需要配置
   case FLUSH_FUNC7:

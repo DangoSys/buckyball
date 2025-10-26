@@ -32,7 +32,7 @@ const InstructionConfig matmul_ws_config = {
 // MATMUL_WS指令高级API实现
 void bb_matmul_ws(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                   uint32_t iter) {
-  uint32_t rs1_val = MATMUL_WS_ENCODE_RS1(op1_addr, op2_addr);
-  uint32_t rs2_val = MATMUL_WS_ENCODE_RS2(wr_addr, iter, 1);
+  uint64_t rs1_val = MATMUL_WS_ENCODE_RS1(op1_addr, op2_addr);
+  uint64_t rs2_val = MATMUL_WS_ENCODE_RS2(wr_addr, iter, 1);
   MATMUL_WS_RAW(rs1_val, rs2_val);
 }

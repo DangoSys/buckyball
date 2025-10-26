@@ -36,7 +36,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val sram_count = Reg(UInt(10.W))
   val acc_reg = RegInit(false.B)  // 是否是acc bank的操作
   val acc_flip_reg = RegInit(false.B) // 用于交替读取两个acc bank
-
+  val stride_reg = Reg(UInt(10.W)) // 缓存stride
   // 缓存解码好的bank信息
   val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))  // 需要3位以支持8个banks（SPAD+ACC）
   val rd_bank_addr_reg = Reg(UInt(log2Up(b.spad_bank_entries).W))
@@ -59,6 +59,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     sram_count    := 0.U
     acc_reg       := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
     acc_flip_reg  := true.B // 重置交替寄存器
+    stride_reg    := io.cmdReq.bits.cmd.special(10,0)
     // 初始化缓存状态
     buffer_valid_bytes := 0.U
   }
@@ -103,7 +104,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val acc_resp_data = Mux1H(io.accRead.map(_.resp.valid), io.accRead.map(_.resp.bits.data))
 
   // 计算当前行对应的内存地址
-  val current_mem_addr = mem_addr_reg + (sram_count * line_bytes.U)
+  val current_mem_addr = mem_addr_reg + sram_count(1,0) * line_bytes.U + ((sram_count >> 2) << 2) * stride_reg * line_bytes.U
   val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)  // 地址的低4位，16字节对齐时为0
   val aligned_addr = Cat(current_mem_addr(b.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
   val is_aligned = addr_offset === 0.U
