@@ -37,8 +37,8 @@ const InstructionConfig im2col_config = {
 void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
                uint32_t startcol) {
-  uint32_t rs1_val = IM2COL_ENCODE_RS1(op1_addr, wr_addr);
-  uint32_t rs2_val =
+  uint64_t rs1_val = IM2COL_ENCODE_RS1(op1_addr, wr_addr);
+  uint64_t rs2_val =
       IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol);
   IM2COL_RAW(rs1_val, rs2_val);
 }

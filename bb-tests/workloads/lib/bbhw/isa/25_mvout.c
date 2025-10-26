@@ -3,14 +3,17 @@
 // =========================== for simulator ===========================
 const InstructionConfig mvout_config = {
     .rs1_fields = (BitFieldConfig[]){{"base_dram_addr", 0, 31}, {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){
-        {"base_sp_addr", 0, 14}, {"iter", 15, 24}, {NULL, 0, 0}}};
+    .rs2_fields = (BitFieldConfig[]){{"base_sp_addr", 0, 14},
+                                     {"iter", 15, 24},
+                                     {"stride", 24, 33},
+                                     {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MVOUT_ENCODE_RS1(dram_addr) ENCODE_FIELD(dram_addr, 0, 32)
 
-#define MVOUT_ENCODE_RS2(sp_addr, iter)                                        \
-  (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10))
+#define MVOUT_ENCODE_RS2(sp_addr, iter, stride)                                \
+  (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
+   ENCODE_FIELD(stride, 25, 10))
 
 // MVOUT指令低级实现
 #ifndef __x86_64__
@@ -24,8 +27,9 @@ const InstructionConfig mvout_config = {
 #endif
 
 // MVOUT指令高级API实现
-void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter) {
-  uint32_t rs1_val = MVOUT_ENCODE_RS1(mem_addr);
-  uint32_t rs2_val = MVOUT_ENCODE_RS2(sp_addr, iter);
+void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
+              uint32_t stride) {
+  uint64_t rs1_val = MVOUT_ENCODE_RS1(mem_addr);
+  uint64_t rs2_val = MVOUT_ENCODE_RS2(sp_addr, iter, stride);
   MVOUT_RAW(rs1_val, rs2_val);
 }

@@ -16,7 +16,8 @@ class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus 
     () => new prototype.matrix.MatrixBall(1),
     () => new prototype.im2col.Im2colBall(2),
     () => new prototype.transpose.TransposeBall(3),
-    () => new prototype.relu.ReluBall(4)
+    () => new prototype.relu.ReluBall(4),
+    () => new examples.toy.balldomain.emptyball.EmptyBall(5)
   )
 ) {
   override lazy val desiredName = "BBusModule"

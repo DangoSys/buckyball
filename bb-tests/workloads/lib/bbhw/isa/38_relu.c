@@ -24,7 +24,7 @@ const InstructionConfig relu_config = {
 
 // RELU指令高级API实现
 void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter) {
-  uint32_t rs1_val = RELU_ENCODE_RS1(op1_addr);
-  uint32_t rs2_val = RELU_ENCODE_RS2(wr_addr, iter);
+  uint64_t rs1_val = RELU_ENCODE_RS1(op1_addr);
+  uint64_t rs2_val = RELU_ENCODE_RS2(wr_addr, iter);
   RELU_RAW(rs1_val, rs2_val);
 }

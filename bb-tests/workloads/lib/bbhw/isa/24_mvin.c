@@ -29,7 +29,7 @@ const InstructionConfig mvin_config = {
 // MVIN指令高级API实现
 void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
              uint32_t col_stride) {
-  uint32_t rs1_val = MVIN_ENCODE_RS1(mem_addr);
-  uint32_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter, col_stride);
+  uint64_t rs1_val = MVIN_ENCODE_RS1(mem_addr);
+  uint64_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter, col_stride);
   MVIN_RAW(rs1_val, rs2_val);
 }

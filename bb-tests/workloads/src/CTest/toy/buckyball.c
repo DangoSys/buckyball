@@ -195,7 +195,7 @@ void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
 void init_sequence_matrix(elem_t *matrix, int rows, int cols) {
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      matrix[i * cols + j] = 1;
+      matrix[i * cols + j] = i + j;
     }
   }
 }
@@ -242,4 +242,10 @@ void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
       }
     }
   }
+}
+
+unsigned long long read_cycle(void) {
+  unsigned long long c;
+  asm volatile("csrr %0, cycle" : "=r"(c));
+  return c;
 }

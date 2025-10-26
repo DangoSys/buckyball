@@ -65,11 +65,11 @@ void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
   bb_fence();
 
   // 执行矩阵乘法
-  bb_mul_warp16(op1_addr, op2_addr, wr_addr, size);
+  bb_mul_warp16(op1_addr, op2_addr, wr_addr, size, 0);
   bb_fence();
 
   // 移回结果
-  bb_mvout((uintptr_t)c, wr_addr, size << 2);
+  bb_mvout((uintptr_t)c, wr_addr, size << 2, 1);
   bb_fence();
 }
 

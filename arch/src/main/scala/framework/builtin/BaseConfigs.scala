@@ -46,6 +46,9 @@ case class BaseConfig(
 
   numVecPE: Int = 16, // 每个线程的向量PE数量
   numVecThread: Int = 16, // 每个线程的向量线程数量
+
+  emptyBallid: Int = 5, // 空ball的id
+
 ) {
   val spad_w = veclane * inputType.getWidth
   val spad_mask_len = (spad_w / (aligned_to * 8)) max 1

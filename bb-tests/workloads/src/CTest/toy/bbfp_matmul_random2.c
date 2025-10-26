@@ -24,7 +24,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_fence();
   bb_bbfp_mul(op1_addr, op2_addr, wr_addr, size);
   bb_fence();
-  bb_mvout((uintptr_t)c, wr_addr, size << 2);
+  bb_mvout((uintptr_t)c, wr_addr, size << 2, 1);
   bb_fence();
 }
 

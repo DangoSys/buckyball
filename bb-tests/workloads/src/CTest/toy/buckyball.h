@@ -43,7 +43,6 @@ void print_u8_matrix(const char *name, elem_t *matrix, int rows, int cols);
 void print_i32_matrix(const char *name, result_t *matrix, int rows, int cols);
 void print_i8_matrix(const char *name, elem_t *matrix, int rows, int cols);
 
-
 void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_u32_random_matrix(result_t *matrix, int rows, int cols, int seed);
 void init_i8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
@@ -74,4 +73,6 @@ void transpose_u8_matrix(elem_t *src, elem_t *dst, int rows, int cols);
 void transpose_u32_matrix(result_t *src, result_t *dst, int rows, int cols);
 void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
                 int inner);
+
+unsigned long long read_cycle(void);
 #endif

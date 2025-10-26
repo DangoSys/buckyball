@@ -23,6 +23,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
     bb_mvin((uintptr_t)a + i * DIM, op2_addr + size + i * DIM, DIM, col_stride);
   }
   bb_mvin((uintptr_t)b, op2_addr, size, 1);
+  bb_mvin((uintptr_t)c, wr_addr, DIM << 2, 1);
   bb_fence();
   bb_transpose(op2_addr + size, op1_addr, size, 0);
   bb_fence();
@@ -46,11 +47,11 @@ int run_test(const char *test_name, elem_t *aligned_a, elem_t *a, elem_t *b,
   }
 }
 
-int test_transpose_matmul() {
+int test_aligned_matmul() {
   init_col_aligned_random_matrix(aligned_input_matrix_a, input_matrix_a, DIM,
                                  DIM, MATMUL_COL, 111);
   init_u8_random_matrix(input_matrix_b, MATMUL_COL, DIM, 222);
-  return run_test("Transpose Matmul", aligned_input_matrix_a, input_matrix_a,
+  return run_test("Aligned Matmul", aligned_input_matrix_a, input_matrix_a,
                   input_matrix_b, MATMUL_COL);
 }
 
@@ -58,12 +59,12 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  int passed = test_transpose_matmul();
+  int passed = test_aligned_matmul();
   if (passed) {
-    printf("Transpose Matmul test PASSED\n");
+    printf("Aligned Matmul test PASSED\n");
     return 0;
   } else {
-    printf("Transpose Matmul test FAILED\n");
+    printf("Aligned Matmul test FAILED\n");
     return 1;
   }
 #ifdef MULTICORE
