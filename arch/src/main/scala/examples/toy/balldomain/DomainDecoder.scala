@@ -40,11 +40,10 @@ class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bu
 }
 
 // Ball decode fields
-// VALID is used to indicate the command opcode is valid, invalid command will assert
 object BallDecodeFields extends Enumeration {
   type Field = Value
   val OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD,
-      OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, SPECIAL, VALID = Value
+      OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, SPECIAL = Value
 }
 
 
@@ -78,20 +77,16 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 
   // ball指令解码
   import BallDecodeFields._
-  val ball_default_decode = List(N,N,N,N,N,DADDR,DADDR,DADDR,DITER,DBID,DSPECIAL,N)
+  val ball_default_decode = List(N,N,N,N,N,DADDR,DADDR,DADDR,DITER,DBID,DSPECIAL)
   val ball_decode_list = ListLookup(func7, ball_default_decode, Array(
-    MATMUL_WARP16_BITPAT -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),0.U,rs2(63,spAddrLen + 10),Y),
-    BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
-    MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10),Y),
-    IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10),Y),
-    TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10),Y),
-    RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10),Y),
-    BBUS_CONFIG          -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),5.U,rs2(63,spAddrLen + 10),Y)
+    MATMUL_WARP16_BITPAT -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),0.U,rs2(63,spAddrLen + 10)),
+    BB_BBFP_MUL          -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10)),
+    MATMUL_WS            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),1.U,rs2(63,spAddrLen + 10)),
+    IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10)),
+    TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10)),
+    RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10)),
+    BBUS_CONFIG          -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),5.U,rs2(63,spAddrLen + 10))
   ))
-
-  // 断言：解码列表中必须有VALID字段
-  assert(!(io.raw_cmd_i.fire && !ball_decode_list(BallDecodeFields.VALID.id).asBool),
-    "BallDomainDecoder: Invalid command opcode, func7 = 0x%x\n", func7)
 
 // -----------------------------------------------------------------------------
 // 输出赋值
@@ -126,12 +121,12 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.wr_bank       := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
   io.ball_decode_cmd_o.bits.wr_bank_addr  := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
   io.ball_decode_cmd_o.bits.is_acc        := Mux(io.ball_decode_cmd_o.valid, (io.ball_decode_cmd_o.bits.wr_bank >= b.sp_banks.U), false.B)
-/*
+
   // 断言：执行指令中OpA和OpB必须访问不同的bank
   assert(!(io.ball_decode_cmd_o.valid && io.ball_decode_cmd_o.bits.op1_en && io.ball_decode_cmd_o.bits.op2_en &&
            io.ball_decode_cmd_o.bits.op1_bank === io.ball_decode_cmd_o.bits.op2_bank),
   "BallDomainDecoder: Ball instruction OpA and OpB cannot access the same bank")
-*/
+
 // -----------------------------------------------------------------------------
 // 继续传递rs1和rs2
 // -----------------------------------------------------------------------------
