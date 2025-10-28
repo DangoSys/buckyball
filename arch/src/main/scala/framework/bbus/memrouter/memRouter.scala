@@ -6,14 +6,15 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp, SramWriteReq}
+import framework.blink.{SramReadWithRobId, SramWriteWithRobId}
 import framework.bbus.BBusConfigIO
 
 class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    val sramRead_i = Vec(numBalls, Vec(b.sp_banks, new SramReadIO(b.spad_bank_entries, b.spad_w)))
-    val sramWrite_i = Vec(numBalls, Vec(b.sp_banks, new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
-    val accRead_i = Vec(numBalls, Vec(b.acc_banks, new SramReadIO(b.acc_bank_entries, b.acc_w)))
-    val accWrite_i = Vec(numBalls, Vec(b.acc_banks, new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    val sramRead_i = Vec(numBalls, Vec(b.sp_banks, new SramReadWithRobId(b.spad_bank_entries, b.spad_w)))
+    val sramWrite_i = Vec(numBalls, Vec(b.sp_banks, new SramWriteWithRobId(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    val accRead_i = Vec(numBalls, Vec(b.acc_banks, new SramReadWithRobId(b.acc_bank_entries, b.acc_w)))
+    val accWrite_i = Vec(numBalls, Vec(b.acc_banks, new SramWriteWithRobId(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
     val bbusConfig_i = Flipped(Decoupled(new BBusConfigIO(numBalls)))
 
     val sramRead_o = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
@@ -34,61 +35,61 @@ class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   io.accRead_o := DontCare
   io.accWrite_o := DontCare
   for (i <- 0 until numBalls) {
-    io.sramRead_i(i).foreach(_.req.ready := false.B)
-    io.sramRead_i(i).foreach(_.resp.valid := false.B)
-    io.sramRead_i(i).foreach(_.resp.bits := DontCare)
-    io.sramWrite_i(i).foreach(_.req.ready := false.B)
-    io.accRead_i(i).foreach(_.req.ready := false.B)
-    io.accRead_i(i).foreach(_.resp.valid := false.B)
-    io.accRead_i(i).foreach(_.resp.bits := DontCare)
-    io.accWrite_i(i).foreach(_.req.ready := false.B)
+    io.sramRead_i(i).foreach(_.io.req.ready := false.B)
+    io.sramRead_i(i).foreach(_.io.resp.valid := false.B)
+    io.sramRead_i(i).foreach(_.io.resp.bits := DontCare)
+    io.sramWrite_i(i).foreach(_.io.req.ready := false.B)
+    io.accRead_i(i).foreach(_.io.req.ready := false.B)
+    io.accRead_i(i).foreach(_.io.resp.valid := false.B)
+    io.accRead_i(i).foreach(_.io.resp.bits := DontCare)
+    io.accWrite_i(i).foreach(_.io.req.ready := false.B)
   }
 
   //路由选择
   for (i <- 0 until numBalls) {
 /*
-    memReq(i) := io.sramRead_i(i).map(_.req.valid).reduce(_||_) ||
-                 io.sramWrite_i(i).map(_.req.valid).reduce(_||_) ||
-                 io.accRead_i(i).map(_.req.valid).reduce(_||_)   ||
-                 io.accWrite_i(i).map(_.req.valid).reduce(_||_)
+    memReq(i) := io.sramRead_i(i).map(_.io.req.valid).reduce(_||_) ||
+                 io.sramWrite_i(i).map(_.io.req.valid).reduce(_||_) ||
+                 io.accRead_i(i).map(_.io.req.valid).reduce(_||_)   ||
+                 io.accWrite_i(i).map(_.io.req.valid).reduce(_||_)
 
     when (memReq(i)) {
-      io.sramRead_o <> io.sramRead_i(i)
-      io.sramWrite_o <> io.sramWrite_i(i)
-      io.accRead_o <> io.accRead_i(i)
-      io.accWrite_o <> io.accWrite_i(i)
+      io.sramRead_o <> io.sramRead_i(i).io
+      io.sramWrite_o <> io.sramWrite_i(i).io
+      io.accRead_o <> io.accRead_i(i).io
+      io.accWrite_o <> io.accWrite_i(i).io
     }
     */
 
     for(j <- 0 until b.sp_banks){
-        when(io.sramRead_i(i)(j).req.valid){
-            io.sramRead_o(j).req <> io.sramRead_i(i)(j).req
+        when(io.sramRead_i(i)(j).io.req.valid){
+            io.sramRead_o(j).req <> io.sramRead_i(i)(j).io.req
         }
     }
     for(j <- 0 until b.sp_banks){
         when(io.sramRead_o(j).resp.valid){
-          io.sramRead_i(i)(j).resp <> io.sramRead_o(j).resp
+          io.sramRead_i(i)(j).io.resp <> io.sramRead_o(j).resp
         }
     }
 
     for(j <- 0 until b.acc_banks){
-        when(io.accRead_i(i)(j).req.valid){
-            io.accRead_o(j).req <> io.accRead_i(i)(j).req
+        when(io.accRead_i(i)(j).io.req.valid){
+            io.accRead_o(j).req <> io.accRead_i(i)(j).io.req
         }
     }
     for(j <- 0 until b.acc_banks){
         when(io.accRead_o(j).resp.valid){
-          io.accRead_i(i)(j).resp <> io.accRead_o(j).resp
+          io.accRead_i(i)(j).io.resp <> io.accRead_o(j).resp
       }
     }
     for(j <- 0 until b.sp_banks){
-        when(io.sramWrite_i(i)(j).req.valid){
-            io.sramWrite_o(j)<> io.sramWrite_i(i)(j)
+        when(io.sramWrite_i(i)(j).io.req.valid){
+            io.sramWrite_o(j)<> io.sramWrite_i(i)(j).io
         }
     }
     for(j <- 0 until b.acc_banks){
-        when(io.accWrite_i(i)(j).req.valid){
-            io.accWrite_o(j) <> io.accWrite_i(i)(j)
+        when(io.accWrite_i(i)(j).io.req.valid){
+            io.accWrite_o(j) <> io.accWrite_i(i)(j).io
         }
     }
   }
@@ -107,8 +108,8 @@ class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     when(list_valid(i)){
       val sramIOadapter = Module(new SramIOAdapter(numBalls)(b, p))
       val dst_bid = list_dst_bid(i)
-      sramIOadapter.io.sramWrite_i <> io.sramWrite_i(i)(0)
-      io.sramRead_i(dst_bid)(0) <> sramIOadapter.io.sramRead_o
+      sramIOadapter.io.sramWrite_i <> io.sramWrite_i(i)(0).io
+      io.sramRead_i(dst_bid)(0).io <> sramIOadapter.io.sramRead_o
       io.sramWrite_o(0).req.valid := false.B
       io.sramWrite_o(0).req.bits := DontCare
     }
