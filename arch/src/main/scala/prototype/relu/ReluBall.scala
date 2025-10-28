@@ -28,21 +28,25 @@ class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
 
   // 连接 Scratchpad SRAM 读写接口
   for (i <- 0 until b.sp_banks) {
-    reluUnit.io.sramRead(i) <> io.sramRead(i)
-    reluUnit.io.sramWrite(i) <> io.sramWrite(i)
+    reluUnit.io.sramRead(i) <> io.sramRead(i).io
+    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
+    reluUnit.io.sramWrite(i) <> io.sramWrite(i).io
+    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // Accumulator 读接口（ReLU 不访问 accumulator，tie-off）
   for (i <- 0 until b.acc_banks) {
-    io.accRead(i).req.valid := false.B
-    io.accRead(i).req.bits := DontCare
-    io.accRead(i).resp.ready := true.B
+    io.accRead(i).io.req.valid := false.B
+    io.accRead(i).io.req.bits := DontCare
+    io.accRead(i).io.resp.ready := true.B
+    io.accRead(i).rob_id := 0.U
   }
 
   // Accumulator 写接口（ReLU 不写 accumulator，tie-off）
   for (i <- 0 until b.acc_banks) {
-    io.accWrite(i).req.valid := false.B
-    io.accWrite(i).req.bits := DontCare
+    io.accWrite(i).io.req.valid := false.B
+    io.accWrite(i).io.req.bits := DontCare
+    io.accWrite(i).rob_id := 0.U
   }
 
   // 透传状态信号

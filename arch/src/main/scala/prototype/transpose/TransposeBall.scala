@@ -25,27 +25,31 @@ class TransposeBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) e
 
   // 连接SRAM读接口 - Transpose需要从scratchpad读取数据
   for (i <- 0 until b.sp_banks) {
-    transposeUnit.io.sramRead(i) <> io.sramRead(i)
+    transposeUnit.io.sramRead(i) <> io.sramRead(i).io
+    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // 连接SRAM写接口 - Transpose需要写入scratchpad
   for (i <- 0 until b.sp_banks) {
-    transposeUnit.io.sramWrite(i) <> io.sramWrite(i)
+    transposeUnit.io.sramWrite(i) <> io.sramWrite(i).io
+    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // 处理Accumulator读接口 - Transpose不读accumulator，所以tie off
   for (i <- 0 until b.acc_banks) {
     // 对于Flipped(SramReadIO)，我们需要驱动req.valid, req.bits（输出）和resp.ready（输出）
-    io.accRead(i).req.valid := false.B
-    io.accRead(i).req.bits := DontCare
-    io.accRead(i).resp.ready := true.B
+    io.accRead(i).io.req.valid := false.B
+    io.accRead(i).io.req.bits := DontCare
+    io.accRead(i).io.resp.ready := true.B
+    io.accRead(i).rob_id := 0.U
   }
 
   // 处理Accumulator写接口 - Transpose不写accumulator，所以tie off
   for (i <- 0 until b.acc_banks) {
     // 对于Flipped(SramWriteIO)，我们需要驱动req.valid和req.bits（输出）
-    io.accWrite(i).req.valid := false.B
-    io.accWrite(i).req.bits := DontCare
+    io.accWrite(i).io.req.valid := false.B
+    io.accWrite(i).io.req.bits := DontCare
+    io.accWrite(i).rob_id := 0.U
   }
 
   // 连接Status信号 - 直接从内部单元获取
