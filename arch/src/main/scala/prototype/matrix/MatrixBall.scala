@@ -28,25 +28,29 @@ class MatrixBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) exte
 
   // 连接SRAM读接口 - MatrixBall需要从scratchpad读取数据
   for (i <- 0 until b.sp_banks) {
-    matrixUnit.io.sramRead(i) <> io.sramRead(i)
+    matrixUnit.io.sramRead(i) <> io.sramRead(i).io
+    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // 连接SRAM写接口 - MatrixBall需要写入scratchpad
   for (i <- 0 until b.sp_banks) {
-    matrixUnit.io.sramWrite(i) <> io.sramWrite(i)
+    matrixUnit.io.sramWrite(i) <> io.sramWrite(i).io
+    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // 处理Accumulator读接口 - MatrixBall不读accumulator，所以tie off
   for (i <- 0 until b.acc_banks) {
     // 对于Flipped(SramReadIO)，我们需要驱动req.valid, req.bits（输出）和resp.ready（输出）
-    io.accRead(i).req.valid := false.B
-    io.accRead(i).req.bits := DontCare
-    io.accRead(i).resp.ready := true.B
+    io.accRead(i).io.req.valid := false.B
+    io.accRead(i).io.req.bits := DontCare
+    io.accRead(i).io.resp.ready := true.B
+    io.accRead(i).rob_id := 0.U
   }
 
   // 连接Accumulator写接口 - MatrixBall向accumulator写入结果
   for (i <- 0 until b.acc_banks) {
-    matrixUnit.io.accWrite(i) <> io.accWrite(i)
+    matrixUnit.io.accWrite(i) <> io.accWrite(i).io
+    io.accWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
   // 连接Status信号 - 直接从内部单元获取
