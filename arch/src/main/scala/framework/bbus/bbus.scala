@@ -18,7 +18,7 @@ class BBusConfigIO(numBalls: Int)extends Bundle {
   val set     = Bool()
 }
 /**
- * BBus - Ball总线，管理多个Ball设备的连接和仲裁
+ * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
  */
 class BBus(ballGenerators: Seq[() => BallRegist with Module])
   (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -34,7 +34,7 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
-  // 实例化所有注册的Ball
+  // Instantiate all registered Balls
   val balls = ballGenerators.map(gen => Module(gen()))
 
 
@@ -95,7 +95,8 @@ val pmc = Module(new BallCyclePMC(numBalls))
 for (i <- 0 until numBalls) {
   pmc.io.cmdReq_i(i).valid := cmdRouter.io.cmdReq_i(i).fire
   pmc.io.cmdReq_i(i).bits := cmdRouter.io.cmdReq_i(i).bits
-  pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid // 去除被RoB阻塞不给提交的延迟
+  // Remove delay caused by RoB blocking preventing commit
+  pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
   pmc.io.cmdResp_o(i).bits := cmdRouter.io.cmdResp_o(i).bits
 }
 

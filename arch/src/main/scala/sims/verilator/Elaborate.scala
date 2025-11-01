@@ -9,7 +9,7 @@ import freechips.rocketchip.devices.tilelink.{BootROMParams, BootROMLocated}
 import freechips.rocketchip.subsystem.InSubsystem
 
 
-// 自定义BootROM配置，指向正确的资源路径
+// Custom BootROM configuration, pointing to correct resource path
 class WithCustomBootROM extends Config((site, here, up) => {
   case BootROMLocated(InSubsystem) => Some(BootROMParams(
     contentFileName = "src/main/resources/bootrom/bootrom.rv64.img"
@@ -26,7 +26,7 @@ class BuckyBallToyVerilatorConfig extends Config(
 //   new examples.gemmini.BuckyBallGemminiSystemConfig)
 
 object Elaborate extends App {
-  // 从命令行参数选择 Ball 类型
+  // Select Ball type from command line arguments
   val configName = if (args.isEmpty) {
     println("Usage: Elaborate <configName> [firtool-opts...]")
     println("Available config types: toy, gemmini")
@@ -42,18 +42,20 @@ object Elaborate extends App {
     }
   }
 
-  // 根据配置名称选择对应的 Config
+  // Select corresponding Config based on configuration name
   val config: Config = configName match {
     case "toy" => new BuckyBallToyVerilatorConfig
     // case "gemmini" => new BuckyBallGemminiVerilatorConfig
-    case _ => new BuckyBallToyVerilatorConfig // 默认使用 toy
+    // Default to toy
+    case _ => new BuckyBallToyVerilatorConfig
   }
 
   println(s"Elaborating with config: $configName")
 
   ChiselStage.emitSystemVerilogFile(
     new chipyard.harness.TestHarness()(config.toInstance),
-    firtoolOpts = args.drop(1), // 剩余参数传给 firtool
+    // Remaining parameters passed to firtool
+    firtoolOpts = args.drop(1),
     args = Array.empty
   )
 }

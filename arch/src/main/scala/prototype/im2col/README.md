@@ -1,62 +1,62 @@
-# Im2col 图像处理加速器
+# Im2col Image Processing Accelerator
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 的 Im2col 操作加速器，用于卷积神经网络中的图像到列矩阵转换。位于 `arch/src/main/scala/prototype/im2col` 下，作为图像处理加速器，将卷积操作转换为矩阵乘法操作以提高计算效率。
+This directory implements BuckyBall's Im2col operation accelerator for image-to-column matrix conversion in convolutional neural networks. Located at `arch/src/main/scala/prototype/im2col`, it serves as an image processing accelerator that converts convolution operations to matrix multiplication operations to improve computational efficiency.
 
-实现的核心组件：
-- **im2col.scala**: Im2col 加速器主体实现
+Core components:
+- **im2col.scala**: Im2col accelerator main implementation
 
-## 代码结构
+## Code Structure
 
 ```
 im2col/
-└── im2col.scala  - Im2col 加速器实现
+└── im2col.scala  - Im2col accelerator implementation
 ```
 
-### 模块职责
+### Module Responsibilities
 
-**Im2col.scala** (加速器实现层)
-- 实现图像到列矩阵的转换逻辑
-- 管理 SRAM 读写操作
-- 提供 Ball 域命令接口
+**Im2col.scala** (Accelerator implementation layer)
+- Implements image-to-column matrix conversion logic
+- Manages SRAM read/write operations
+- Provides Ball domain command interface
 
-## 模块说明
+## Module Description
 
 ### im2col.scala
 
-**主要功能**: 实现卷积窗口的滑动和数据重排
+**Main functionality**: Implements sliding convolution window and data rearrangement
 
-**状态机定义**:
+**State machine definition**:
 ```scala
 val idle :: read :: read_and_convert :: complete :: Nil = Enum(4)
 val state = RegInit(idle)
 ```
 
-**关键寄存器**:
+**Key registers**:
 ```scala
 val ConvertBuffer = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W))))))
-val rowptr = RegInit(0.U(10.W))    // 卷积窗口左上角行指针
-val colptr = RegInit(0.U(5.W))     // 卷积窗口左上角列指针
-val krow_reg = RegInit(0.U(log2Up(b.veclane).W))  // 卷积核行数
-val kcol_reg = RegInit(0.U(log2Up(b.veclane).W))  // 卷积核列数
+val rowptr = RegInit(0.U(10.W))    // Convolution window top-left row pointer
+val colptr = RegInit(0.U(5.W))     // Convolution window top-left column pointer
+val krow_reg = RegInit(0.U(log2Up(b.veclane).W))  // Convolution kernel row count
+val kcol_reg = RegInit(0.U(log2Up(b.veclane).W))  // Convolution kernel column count
 ```
 
-**命令解析**:
+**Command parsing**:
 ```scala
 when(io.cmdReq.fire) {
-  rowptr := io.cmdReq.bits.cmd.special(37,28)      // 起始行
-  colptr := io.cmdReq.bits.cmd.special(27,23)      // 起始列
-  kcol_reg := io.cmdReq.bits.cmd.special(3,0)      // 卷积核列数
-  krow_reg := io.cmdReq.bits.cmd.special(7,4)      // 卷积核行数
-  incol_reg := io.cmdReq.bits.cmd.special(12,8)    // 输入矩阵列数
-  inrow_reg := io.cmdReq.bits.cmd.special(22,13)   // 输入矩阵行数
+  rowptr := io.cmdReq.bits.cmd.special(37,28)      // Start row
+  colptr := io.cmdReq.bits.cmd.special(27,23)      // Start column
+  kcol_reg := io.cmdReq.bits.cmd.special(3,0)      // Convolution kernel column count
+  krow_reg := io.cmdReq.bits.cmd.special(7,4)      // Convolution kernel row count
+  incol_reg := io.cmdReq.bits.cmd.special(12,8)    // Input matrix column count
+  inrow_reg := io.cmdReq.bits.cmd.special(22,13)   // Input matrix row count
 }
 ```
 
-**数据转换逻辑**:
+**Data conversion logic**:
 ```scala
-// 填充窗口数据
+// Fill window data
 for (i <- 0 until 4; j <- 0 until 4) {
   when(i.U < krow_reg && j.U < kcol_reg) {
     val bufferRow = (rowcnt + i.U) % krow_reg
@@ -68,7 +68,7 @@ for (i <- 0 until 4; j <- 0 until 4) {
 }
 ```
 
-**SRAM 接口**:
+**SRAM interface**:
 ```scala
 val io = IO(new Bundle {
   val cmdReq = Flipped(Decoupled(new BallRsIssue))
@@ -78,34 +78,34 @@ val io = IO(new Bundle {
 })
 ```
 
-**处理流程**:
-1. **idle**: 等待命令，解析卷积参数
-2. **read**: 读取初始的卷积核大小的数据到缓冲区
-3. **read_and_convert**: 滑动窗口，转换数据并写回
-4. **complete**: 发送完成信号
+**Processing flow**:
+1. **idle**: Wait for command, parse convolution parameters
+2. **read**: Read initial convolution kernel-sized data into buffer
+3. **read_and_convert**: Slide window, convert data and write back
+4. **complete**: Send completion signal
 
-**输入输出**:
-- 输入: Ball 域命令，包含卷积参数和地址信息
-- 输出: 转换后的列矩阵数据，完成信号
-- 边缘情况: 边界处理时填充零值
+**Inputs/Outputs**:
+- Input: Ball domain commands containing convolution parameters and address information
+- Output: Converted column matrix data, completion signal
+- Edge cases: Fill zero values when handling boundaries
 
-## 使用方法
+## Usage
 
-### 算法原理
+### Algorithm Principle
 
-**Im2col 转换**: 将卷积操作转换为矩阵乘法
-- 输入: H×W 的图像，K×K 的卷积核
-- 输出: (H-K+1)×(W-K+1) 个 K×K 的窗口，展开为列向量
+**Im2col conversion**: Convert convolution operation to matrix multiplication
+- Input: H×W image, K×K convolution kernel
+- Output: (H-K+1)×(W-K+1) windows of size K×K, expanded as column vectors
 
-**滑动窗口**:
-- 按行优先顺序滑动卷积窗口
-- 每个窗口位置生成一个列向量
-- 使用循环缓冲区优化内存访问
+**Sliding window**:
+- Slide convolution window in row-major order
+- Each window position generates a column vector
+- Uses circular buffer to optimize memory access
 
-### 注意事项
+### Notes
 
-1. **缓冲区管理**: 使用 4×veclane 的转换缓冲区存储窗口数据
-2. **边界处理**: 超出图像边界的位置填充零值
-3. **地址计算**: 支持可配置的起始地址和 bank 选择
-4. **流水线优化**: 在转换过程中提前发送下一行的读请求
-5. **参数限制**: 最大支持 4×4 的卷积核大小
+1. **Buffer management**: Uses 4×veclane conversion buffer to store window data
+2. **Boundary handling**: Fill zero values for positions beyond image boundaries
+3. **Address calculation**: Supports configurable start address and bank selection
+4. **Pipeline optimization**: Prefetch next row read requests during conversion
+5. **Parameter limitation**: Maximum support for 4×4 convolution kernel size

@@ -18,10 +18,10 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
 
-    // 连接到Scratchpad的SRAM读写接口
+    // Connect to Scratchpad SRAM read/write interface
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     // val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
-    // 连接到Accumulator的读写接口
+    // Connect to Accumulator read/write interface
     // val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
 

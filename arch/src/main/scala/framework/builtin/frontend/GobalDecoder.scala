@@ -17,12 +17,15 @@ class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
 
 
 class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  // 指令类型判断
-  val is_ball       = Bool()  // Ball指令(不包括FENCE)
-  val is_mem        = Bool()  // 内存指令(load/store)
-  val is_fence      = Bool()  // Fence指令
+  // Instruction type determination
+  // Ball instruction (excluding FENCE)
+  val is_ball       = Bool()
+  // Memory instruction (load/store)
+  val is_mem        = Bool()
+  // Fence instruction
+  val is_fence      = Bool()
 
-  // 原始指令信息，传递给对应的domain decoder
+  // Raw instruction information, passed to corresponding domain decoder
   val raw_cmd       = new RoCCCommandBB
 }
 
@@ -34,16 +37,17 @@ class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mo
     val id_o = Decoupled(new PostGDCmd)
   })
 
-  io.id_i.ready := io.id_o.ready // 如果保留站阻塞了，id_i也阻塞
+  // If reservation station is blocked, id_i is also blocked
+  io.id_i.ready := io.id_o.ready
 
   val func7 = io.id_i.bits.cmd.inst.funct
 
-  // 指令类型判断：区分Ball、Mem、Fence指令
+  // Instruction type determination: distinguish Ball, Mem, Fence instructions
   val is_mem_instr   = (func7 === MVIN_BITPAT) || (func7 === MVOUT_BITPAT)
   val is_fence_instr = (func7 === FENCE_BITPAT)
   val is_ball_instr  = !is_mem_instr && !is_fence_instr
 
-  // 输出控制
+  // Output control
   io.id_o.valid          := io.id_i.valid
 
   io.id_o.bits.is_ball   := is_ball_instr

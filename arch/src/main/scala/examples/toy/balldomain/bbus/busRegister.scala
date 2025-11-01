@@ -7,10 +7,10 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.bbus.BBus
 
 /**
- * BBusModule - 直接继承BBus的Ball总线模块
+ * BBusModule - Ball bus module that directly extends BBus
  */
 class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus (
-  // 定义要注册的Ball设备生成器
+  // Define Ball device generators to register
   Seq(
     () => new prototype.vector.VecBall(0),
     () => new prototype.matrix.MatrixBall(1),

@@ -4,7 +4,7 @@
 // import chisel3.util._
 // import chisel3.experimental._
 
-// // Blink DPI-C监控接口 - 监控整个Blink协议的信号
+// // Blink DPI-C monitoring interface - monitors all signals of the Blink protocol
 // class BlinkDpiC extends BlackBox with HasBlackBoxInline {
 //   val io = IO(new Bundle {
 //     val clock = Input(Clock())

@@ -11,7 +11,7 @@ import prototype.transpose.TransposeBall
 import prototype.im2col.Im2colBall
 import prototype.relu.ReluBall
 
-// Ball类型定义
+// Ball type definitions
 sealed trait BallType
 case object VecBallType extends BallType
 case object MatrixBallType extends BallType
@@ -22,7 +22,7 @@ case object ReluBallType extends BallType
 // Config Key
 case object TargetBallKey extends Field[BallType](VecBallType)
 
-// TargetBall - 直接实例化已封装好的Ball
+// TargetBall - directly instantiate pre-packaged Ball
 class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Blink)
 
@@ -47,13 +47,13 @@ class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
   override lazy val desiredName = "TargetBall"
 }
 
-// WithBlink配置 - 空配置，用于组合其他配置
+// WithBlink configuration - empty configuration, used to combine with other configurations
 // class WithBlink extends Config((site, here, up) => {
 //   case _ => up(site)
 // })
 
 // ============================================================================
-// Config 组合使用示例：
+// Config combination usage examples:
 // new Config(new WithVecBall ++ new WithBlink)
 // new Config(new WithMatrixBall ++ new WithBlink)
 // new Config(new WithTransposeBall ++ new WithBlink)
@@ -69,7 +69,7 @@ class CustomBallTopConfig(ballType: BallType) extends Config(
 )
 
 object BallTopMain extends App {
-  // 从命令行参数选择 Ball 类型
+  // Select Ball type from command line arguments
   val ballType = if (args.isEmpty) {
     println("Usage: BallTopMain <ball-type> [firtool-opts...]")
     println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball")
@@ -93,7 +93,8 @@ object BallTopMain extends App {
 
   ChiselStage.emitSystemVerilogFile(
     new TargetBall(),
-    firtoolOpts = args.drop(1), // 剩余参数传给 firtool
+    // Remaining parameters passed to firtool
+    firtoolOpts = args.drop(1),
     args = Array.empty
   )
 }

@@ -1,60 +1,58 @@
-# Blink 互连系统实现
+# Blink Interconnect System
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 的 Blink 互连系统，基于 Diplomacy 框架提供 Ball 和 BBus 之间的连接协商。位于 `arch/src/main/scala/framework/blink` 下，作为系统互连层，负责管理 SRAM 带宽资源的分配和协商。
+This directory implements the BuckyBall Blink interconnect system, providing connection negotiation between Ball and BBus based on the Diplomacy framework. Located in `arch/src/main/scala/framework/blink`, it serves as the system interconnect layer, managing SRAM bandwidth resource allocation and negotiation.
 
-实现的核心组件：
-- **ball.scala**: Ball 模块，作为 Diplomacy source 端
-- **bbus.scala**: BBus 模块，作为 Diplomacy sink 端
-- **blink.scala**: Blink 协议定义和 nexus 节点
+Core components:
+- **ball.scala**: Ball module as Diplomacy source
+- **bbus.scala**: BBus module as Diplomacy sink
+- **blink.scala**: Blink protocol definition and nexus node
 
-## 代码结构
+## Code Structure
 
 ```
 blink/
-├── ball.scala    - Ball 模块(source)
-├── bbus.scala    - BBus 模块(sink)
-└── blink.scala   - Blink 协议和 nexus
+├── ball.scala    - Ball module (source)
+├── bbus.scala    - BBus module (sink)
+└── blink.scala   - Blink protocol and nexus
 ```
 
-ball节点请求带宽需求
-bbus节点给出系统的带宽能力
-两者在blinkNode协商
+Ball nodes request bandwidth requirements, BBus nodes provide system bandwidth capabilities, and they negotiate at the BlinkNode.
 
 Ball nodes -> BlinkNode (nexus) -> BBusNode (sink)
 
-### 文件依赖关系
+### File Dependencies
 
-**blink.scala** (协议定义层)
-- 定义 BBusParams, BallParams, BlinkParams
-- 实现 BlinkNodeImp 和各种 Node 类型
-- 提供 BlinkBundle 接口定义
+**blink.scala** (Protocol definition layer)
+- Defines BBusParams, BallParams, BlinkParams
+- Implements BlinkNodeImp and various Node types
+- Provides BlinkBundle interface definition
 
-**ball.scala** (source 端)
-- 继承 LazyModule，使用 BallNode
-- 向上发送带宽需求参数
-- 提供默认的接口实现
+**ball.scala** (source side)
+- Extends LazyModule, uses BallNode
+- Sends bandwidth requirement parameters upstream
+- Provides default interface implementation
 
-**bbus.scala** (sink 端)
-- 继承 LazyModule，使用 BBusNode
-- 接收来自 Ball 的连接请求
-- 实现带宽资源的分配
+**bbus.scala** (sink side)
+- Extends LazyModule, uses BBusNode
+- Receives connection requests from Ball
+- Implements bandwidth resource allocation
 
-## 模块说明
+## Module Description
 
 ### blink.scala
 
-**主要功能**: 定义 Blink 协议的参数类型和 Diplomacy 节点
+**Main functionality**: Defines Blink protocol parameter types and Diplomacy nodes
 
-**参数定义**:
+**Parameter definition**:
 ```scala
 case class BBusParams (sramReadBW: Int = 2, sramWriteBW: Int = 1)  // DownParam
 case class BlinkParams(sramReadBW: Int = 2, sramWriteBW: Int = 1)  // EdgeParam
 case class BallParams (sramReadBW: Int = 2, sramWriteBW: Int = 1)  // UpParam
 ```
 
-**协议接口**:
+**Protocol interface**:
 ```scala
 class BlinkBundle(params: BlinkParams) extends Bundle {
   val cmd = new Bundle {
@@ -69,20 +67,20 @@ class BlinkBundle(params: BlinkParams) extends Bundle {
 }
 ```
 
-**带宽协商逻辑**:
+**Bandwidth negotiation logic**:
 ```scala
 def edge(pd: BBusParams, pu: BallParams, p: Parameters, sourceInfo: SourceInfo) = {
-  require(pd.sramReadBW >= pu.sramReadBW, "BBus 读带宽必须大于等于 Ball 需求")
-  require(pd.sramWriteBW >= pu.sramWriteBW, "BBus 写带宽必须大于等于 Ball 需求")
+  require(pd.sramReadBW >= pu.sramReadBW, "BBus read bandwidth must be >= Ball requirement")
+  require(pd.sramWriteBW >= pu.sramWriteBW, "BBus write bandwidth must be >= Ball requirement")
   BlinkParams(pd.sramReadBW, pd.sramWriteBW)
 }
 ```
 
 ### ball.scala
 
-**主要功能**: Ball 模块作为 Diplomacy source 端，向上发送带宽需求
+**Main functionality**: Ball module as Diplomacy source, sends bandwidth requirements upstream
 
-**关键实现**:
+**Key implementation**:
 ```scala
 class Ball(params: BallParams) extends LazyModule {
   val node = new BallNode(Seq(BBusParams(params.sramReadBW, params.sramWriteBW)))
@@ -95,9 +93,9 @@ class Ball(params: BallParams) extends LazyModule {
 }
 ```
 
-**默认接口行为**:
+**Default interface behavior**:
 ```scala
-// Ball接口默认值（由各个具体Ball实现来覆盖）
+// Ball interface default values (overridden by specific Ball implementations)
 io.cmd.req.ready := false.B
 io.cmd.resp.valid := false.B
 io.cmd.resp.bits := DontCare
@@ -105,9 +103,9 @@ io.cmd.resp.bits := DontCare
 
 ### bbus.scala
 
-**主要功能**: BBus 模块作为 Diplomacy sink 端，接收 Ball 的连接
+**Main functionality**: BBus module as Diplomacy sink, receives Ball connections
 
-**关键实现**:
+**Key implementation**:
 ```scala
 class BBus(params: BallParams) extends LazyModule {
   val node = new BBusNode(params)
@@ -122,33 +120,33 @@ class BBus(params: BallParams) extends LazyModule {
 }
 ```
 
-**接口规范**:
+**Interface specification**:
 ```
-前端输入: RS cmd, MemDomain bridge: n0 * sramRead(), m0 * sramWrite()
-后端输出: Ball cmd, n1 * sramRead(), m1 * sramWrite()
-要求: n0 >= n1, m0 >= m1
+Frontend input: RS cmd, MemDomain bridge: n0 * sramRead(), m0 * sramWrite()
+Backend output: Ball cmd, n1 * sramRead(), m1 * sramWrite()
+Requirement: n0 >= n1, m0 >= m1
 ```
 
-## 使用方法
+## Usage
 
-### 使用方法
+### Usage Examples
 
-**创建 Ball 和 BBus 连接**:
+**Create Ball and BBus connection**:
 ```scala
 val ball = LazyModule(new Ball(BallParams(sramReadBW = 2, sramWriteBW = 1)))
 val bbus = LazyModule(new BBus(BallParams(sramReadBW = 4, sramWriteBW = 2)))
 bbus.node := ball.node
 ```
 
-**Blink nexus 使用**:
+**Blink nexus usage**:
 ```scala
 val blink = LazyModule(new Blink())
-// 连接多个 Ball 和 BBus
+// Connect multiple Ball and BBus
 ```
 
-### 注意事项
+### Notes
 
-1. **带宽约束**: BBus 的带宽必须大于等于连接的 Ball 带宽需求
-2. **Diplomacy 协商**: 参数在编译时通过 Diplomacy 框架协商确定
-3. **接口连接**: 使用 `<>` 操作符连接 Diplomacy 生成的接口
-4. **默认实现**: Ball 和 BBus 提供默认接口行为，需要具体实现覆盖
+1. **Bandwidth constraints**: BBus bandwidth must be >= connected Ball bandwidth requirements
+2. **Diplomacy negotiation**: Parameters negotiated at compile time through Diplomacy framework
+3. **Interface connection**: Use `<>` operator to connect Diplomacy-generated interfaces
+4. **Default implementation**: Ball and BBus provide default interface behavior, needs to be overridden by specific implementations

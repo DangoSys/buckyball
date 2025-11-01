@@ -4,7 +4,7 @@ package prototype.vector.thread
 import chisel3._
 import org.chipsalliance.cde.config._
 
-// 参数定义
+// Parameter definitions
 case class ThreadParam(lane: Int, attr: String, threadName: String, Op: OpParam)
 case class OpParam(OpType: String, bondType: BondParam)
 case class BondParam(bondType: String, inputWidth: Int = 8, outputWidth: Int = 32)
@@ -15,7 +15,7 @@ case object ThreadBondKey extends Field[Option[BondParam]](None)
 case object ThreadMapKey extends Field[Map[String, ThreadParam]](Map.empty)
 
 //===----------------------------------------------------------------------===//
-// BaseThread 基类
+// BaseThread base class
 //===----------------------------------------------------------------------===//
 class BaseThread(implicit p: Parameters) extends Module {
   val io = IO(new Bundle {})

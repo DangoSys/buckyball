@@ -39,13 +39,13 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   	val idle :: busy :: Nil = Enum(2)
   	val state = RegInit(idle)
 
-	// 输出寄存器，用于打破组合逻辑环
+	// Output register to break combinational logic loop
 	val ld_ex_valid_reg = RegInit(false.B)
 	val ld_ex_op1_reg = Reg(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
 	val ld_ex_op2_reg = Reg(Vec(b.veclane, UInt(b.inputType.getWidth.W)))
 	val ld_ex_iter_reg = RegInit(0.U(10.W))
 
-	// 每个bank读请求默认赋值
+	// Default assignment for each bank read request
   for (i <- 0 until b.sp_banks){
     io.sramReadReq(i).valid 		   := false.B
     io.sramReadReq(i).bits.fromDMA := false.B
@@ -55,7 +55,7 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 	io.ctrl_ld_i.ready := state === idle
 
 // -----------------------------------------------------------------------------
-// Ctrl指令到来设置寄存器
+// Set registers when Ctrl instruction arrives
 // -----------------------------------------------------------------------------
 
   when (io.ctrl_ld_i.fire) {
@@ -74,7 +74,7 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 	}
    when(mode === 0.U){
 // -----------------------------------------------------------------------------
-// 发送SRAM读请求 (只在输出寄存器空闲时发送)
+// Send SRAM read request (only when output register is idle)
 // -----------------------------------------------------------------------------
 	when (state === busy && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
 		io.sramReadReq(op1_bank).valid        := iter_counter < iter
@@ -88,15 +88,15 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   }
 
 // -----------------------------------------------------------------------------
-// SRAM返回数据, 并传递给EX单元 (使用寄存器打破组合逻辑环)
+// SRAM returns data and passes to EX unit (use register to break combinational logic loop)
 // -----------------------------------------------------------------------------
-	// sramReadResp 的 ready 信号：当没有待发送数据或下游已接收时可以接收
+	// ready signal for sramReadResp: can receive when there's no pending data or downstream has received
 	/*
 	io.sramReadResp.foreach { resp =>
 		resp.ready := !ld_ex_valid_reg || io.ld_ex_o.ready
 	}
 */
-	// 接收 SRAM 数据并缓存到寄存器
+	// Receive SRAM data and cache to register
   when (io.sramReadResp(op1_bank).valid && io.sramReadResp(op2_bank).valid &&
         (!ld_ex_valid_reg || io.ld_ex_o.ready) && (state === busy)) {
 		ld_ex_valid_reg := true.B
@@ -107,14 +107,14 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 		ld_ex_valid_reg := false.B
 	}
 
-	// 输出来自寄存器
+	// Output comes from register
 	io.ld_ex_o.valid := ld_ex_valid_reg
 	io.ld_ex_o.bits.op1 := ld_ex_op1_reg
 	io.ld_ex_o.bits.op2 := ld_ex_op2_reg
 	io.ld_ex_o.bits.iter := ld_ex_iter_reg
 
 // -----------------------------------------------------------------------------
-// iter_counter归零，回归idle状态
+// Reset iter_counter and return to idle state
 // -----------------------------------------------------------------------------
 
 	when(state === busy && iter_counter === iter && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
@@ -122,7 +122,7 @@ class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 		iter_counter 	:= 0.U
 	}
    }.otherwise{
-		//默认赋值
+		// Default assignment
 		io.ld_ex_o.valid := false.B
 		io.ld_ex_o.bits.op1 := VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))
 		io.ld_ex_o.bits.op2 := VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))

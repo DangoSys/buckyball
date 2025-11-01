@@ -21,7 +21,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   })
 
   val idle :: busy :: Nil = Enum(2)
-  //寄存器定义
+  // Register definitions
   val state = RegInit(idle)
   val rob_id_reg = RegInit(0.U(rob_id_width.W))
   val iteration_counter = RegInit(0.U(10.W))
@@ -74,7 +74,7 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
     }
   }
-  //生成ID_LU请求
+  // Generate ID_LU request
   io.id_lu_o.valid              := state === busy
   io.id_lu_o.bits.op1_bank      := op1_bank
   io.id_lu_o.bits.op1_bank_addr := op1_bank_addr + b.veclane.U - iteration_counter - 1.U
@@ -89,10 +89,10 @@ class BBFP_ID(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
   io.cmdReq.ready := io.id_lu_o.ready
 
-  //指令完成信号
+  // Instruction completion signal
 
 
-  // 将complete信号打10拍
+  // Delay complete signal by 10 cycles
   // val complete_delay = RegInit(VecInit(Seq.fill(10)(false.B)))
   // complete_delay(0) := complete
   // for (i <- 1 until 10) {

@@ -1,30 +1,29 @@
-# BBTLB (Translation Lookaside Buffer) 规格说明
+# BBTLB (Translation Lookaside Buffer) Specification
 
-## 概述
+## Overview
 
-DecoupledTLB是一个解耦的转换后备缓冲器实现，用于加速虚拟地址到物理地址的转换。该模块继承自CoreModule，提供了一个带有异常处理机制的TLB接口，支持页表遍历(PTW)和多种内存访问命令。模块通过参数化设计支持可配置的条目数和最大页面大小，同时集成了完整的异常处理流程。
+BBTLB is a decoupled translation lookaside buffer implementation that accelerates virtual to physical address translation. Inheriting from CoreModule, it provides a TLB interface with exception handling mechanism, supporting page table walk (PTW) and various memory access commands. The module uses parameterized design to support configurable entry count and maximum page size, while integrating complete exception handling flow.
 
-## 接口设计
+## Interface Design
 
-该模块的IO接口包含四个主要组件：
-- 请求接口(req): 接收包含TLB请求和状态信息
-- 响应接口(resp): TLB返回转换结果、页错误标志和访问异常信息
-- 页表遍历接口(ptw): 页表遍历接口与内存管理单元通信，处理TLB未命中时的页表查找操作
-- 异常处理接口(exp): 异常处理接口管理中断信号的产生和清除，支持重试和跳过两种flush操作模式。
+The module's IO interface contains four main components:
+- Request interface (req): Receives TLB request and status information
+- Response interface (resp): TLB returns translation result, page fault flags, and access exception information
+- Page table walker interface (ptw): PTW interface communicates with memory management unit, handling page table lookup on TLB misses
+- Exception handling interface (exp): Exception handling interface manages interrupt signal generation and clearing, supporting both retry and skip flush operation modes
 
+## Internal Implementation
 
-## 内部实现机制
+Module internally instantiates a standard TLB module, configured as single-set associative structure (nSets=1, nWays=entries), with instruction TLB feature disabled. Internal TLB's request signal directly connects to input request's tlb_req field, while kill signal is hardwired to false, indicating no support for request cancellation. Page table walker interface communicates with internal TLB through direct connection, while passing request's status information to PTW module to ensure correct permission checking.
 
-模块内部实例化了一个标准的TLB模块，配置为单路组相联结构(nSets=1, nWays=entries)，禁用指令TLB特性。内部TLB的请求信号直接连接到输入请求的tlb_req字段，而kill信号被硬连线为false，表示不支持请求取消功能。页表遍历接口通过直接连接的方式与内部TLB通信，同时将请求中的状态信息传递给PTW模块以确保正确的权限检查。
+## Exception Handling Flow
 
-## 异常处理流程
+Exception handling uses interrupt-based mechanism, tracking exception state through RegInit-initialized interrupt register. When valid request with page fault or access exception is detected, module performs corresponding exception checks based on memory command type: for read operations (M_XRD) checks load page fault and access exception, for write operations checks store page fault and access exception. Once exception condition is detected, interrupt signal is set high and maintained until flush operation received and flush signal successfully fires, then cleared.
 
-异常处理采用基于中断的机制，通过RegInit初始化的interrupt寄存器来跟踪异常状态。当检测到有效请求且发生页错误或访问异常时，模块会根据内存命令类型进行相应的异常检查：对于读操作(M_XRD)检查加载页错误和访问异常，对于写操作检查存储页错误和访问异常。一旦检测到异常条件，interrupt信号被置为高电平并保持，直到收到flush操作且flush信号成功触发时才被清除。
+## SFENCE Operation Support
 
-## SFENCE操作支持
+Module implements complete SFENCE (Supervisor Fence) operation support for TLB flush and synchronization. SFENCE operation trigger condition is any form of flush signal (flush_retry or flush_skip). During SFENCE execution, all related address and ASID fields are set to DontCare, rs1 and rs2 flags are cleared, hv and hg flags are also disabled, indicating this implementation adopts simplified global flush strategy rather than selective flush. Module uses assertion to ensure not receiving retry and skip flush signals simultaneously, guaranteeing operation determinism.
 
-模块实现了完整的SFENCE(Supervisor Fence)操作支持，用于TLB的刷新和同步。SFENCE操作的触发条件是任何形式的flush信号(flush_retry或flush_skip)。在执行SFENCE时，所有相关的地址和ASID字段被设置为DontCare，rs1和rs2标志被清除，hv和hg标志也被禁用，这表明该实现采用了简化的全局刷新策略而非选择性刷新。模块通过断言确保不会同时接收到重试和跳过两种flush信号，保证了操作的确定性。
+## Parameterized Configuration
 
-## 参数化配置
-
-模块通过构造参数支持灵活的配置：entries参数控制TLB条目数量，maxSize参数定义最大支持的页面大小。lgMaxSize通过log2Ceil计算得出，用于确定地址位宽和内部逻辑的精度。这种参数化设计使得模块能够适应不同的系统需求和性能要求，同时保持接口的一致性和实现的可重用性。
+Module supports flexible configuration through constructor parameters: entries parameter controls TLB entry count, maxSize parameter defines maximum supported page size. lgMaxSize calculated through log2Ceil, used to determine address width and internal logic precision. This parameterized design enables the module to adapt to different system requirements and performance needs while maintaining interface consistency and implementation reusability.

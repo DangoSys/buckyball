@@ -38,7 +38,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   val state = RegInit(idle)
 
 // -----------------------------------------------------------------------------
-// EX指令到来设置寄存器
+// Set registers when EX instruction arrives
 // -----------------------------------------------------------------------------
 
   when(io.cmdReq.fire) {
@@ -57,7 +57,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   }
 
 // -----------------------------------------------------------------------------
-// 发送控制信号到VecUnit的load/store/ex单元
+// Send control signals to VecUnit's load/store/ex units
 // -----------------------------------------------------------------------------
 
   when(state === busy && !has_send) {
@@ -97,7 +97,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
   }
 
 // -----------------------------------------------------------------------------
-// 等待VecUnit的最后的写回完成
+// Wait for VecUnit's final write-back to complete
 // -----------------------------------------------------------------------------
 
   when(io.cmdResp_i.valid) {

@@ -17,9 +17,11 @@ import framework.builtin.memdomain.dma.LocalAddr
 
 class BBReadRequest()(implicit p: Parameters) extends CoreBundle {
   val vaddr = UInt(coreMaxAddrBits.W)
-  val len = UInt(16.W) // 读取长度（字节）
+  // Read length (bytes)
+  val len = UInt(16.W)
   val status = new MStatus
-  val stride = UInt(10.W) // 步长（字节）
+  // Stride (bytes)
+  val stride = UInt(10.W)
 }
 
 class BBReadResponse(dataWidth: Int) extends Bundle {
@@ -31,8 +33,10 @@ class BBReadResponse(dataWidth: Int) extends Bundle {
 class BBWriteRequest(dataWidth: Int)(implicit p: Parameters) extends CoreBundle {
   val vaddr = UInt(coreMaxAddrBits.W)
   val data = UInt(dataWidth.W)
-  val len = UInt(16.W) // 写入长度（字节）
-  val mask = UInt((dataWidth / 8).W) // 字节mask
+  // Write length (bytes)
+  val len = UInt(16.W)
+  // Byte mask
+  val mask = UInt((dataWidth / 8).W)
   val status = new MStatus
 }
 
@@ -62,20 +66,24 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val state = RegInit(s_idle)
 
     val req = Reg(new BBReadRequest())
-    val bytesRequested = Reg(UInt(16.W))  // 已发出请求的字节数
-    val bytesReceived = Reg(UInt(16.W))   // 已接收响应的字节数
+    // Number of bytes requested
+    val bytesRequested = Reg(UInt(16.W))
+    // Number of bytes received
+    val bytesReceived = Reg(UInt(16.W))
     val bytesLeft = req.len - bytesRequested
 
-    // 选择请求大小 - 简化版本，固定使用 beatBytes
+    // Select request size - simplified version, fixed use of beatBytes
     val read_size = minOf(beatBytes.U, bytesLeft)
     val read_vaddr = req.vaddr + bytesRequested * req.stride
 
-    // 为了正确计算last信号，需要跟踪每个请求对应的字节范围
-    val req_byte_start = Reg(UInt(16.W))  // 当前请求的起始字节位置
-    val req_byte_end = Wire(UInt(16.W))   // 当前请求的结束字节位置
+    // Track byte range corresponding to each request for correct last signal calculation
+    // Starting byte position of current request
+    val req_byte_start = Reg(UInt(16.W))
+    // Ending byte position of current request
+    val req_byte_end = Wire(UInt(16.W))
     req_byte_end := req_byte_start + read_size
 
-    // Transaction ID 管理
+    // Transaction ID management
     val xactBusy = RegInit(0.U(nXacts.W))
     val xactOnehot = PriorityEncoderOH(~xactBusy)
     val xactId = OHToUInt(xactOnehot)
@@ -85,14 +93,15 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val xactBusy_remove = ~Mux(tl.d.fire, (1.U << tl.d.bits.source).asUInt, 0.U)
     xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
 
-    // TileLink 请求构造 - 回到单beat请求以避免地址对齐问题
+    // TileLink request construction - return to single beat requests to avoid address alignment issues
     val get = edge.Get(
       fromSource = xactId,
       toAddress = 0.U,
-      lgSize = log2Ceil(beatBytes).U  // 每次只请求一个beat
+      // Request only one beat each time
+      lgSize = log2Ceil(beatBytes).U
     )._2
 
-    // TLB 处理管道 - 参照 Gemmini 但简化
+    // TLB processing pipeline - simplified based on Gemmini
     class TLBundleAWithInfo extends Bundle {
       val tl_a = tl.a.bits.cloneType
       val vaddr = Output(UInt(vaddrBits.W))
@@ -108,7 +117,7 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
 
 
 
-    // 简化：不实现重试机制，直接连接
+    // Simplified: no retry mechanism, direct connection
     val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe=true))
     tlb_q.io.enq <> untranslated_a
 
@@ -124,58 +133,67 @@ class BBStreamReader(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     translate_q.io.enq <> tlb_q.io.deq
     translate_q.io.deq.ready := tl.a.ready || io.tlb.resp.miss
 
-    // TileLink 连接
+    // TileLink connection
     tl.a.valid := translate_q.io.deq.valid
     tl.a.bits := translate_q.io.deq.bits.tl_a
     tl.a.bits.address := io.tlb.resp.paddr
 
-    val iter_counter = RegInit(0.U(10.W))  // 迭代计数器，用于跟踪请求次数
-    val iter_mangage_table = RegInit(VecInit(Seq.fill(16)(0.U(10.W)))) // 管理迭代次数的表
-    // 迭代次数管理 - 每次请求后更新
+    // Iteration counter for tracking number of requests
+    val iter_counter = RegInit(0.U(10.W))
+    // Table for managing iteration counts
+    val iter_mangage_table = RegInit(VecInit(Seq.fill(16)(0.U(10.W))))
+    // Iteration count management - update after each request
     when (tl.a.fire) {
       iter_counter := iter_counter + 1.U
       iter_mangage_table(tl.a.bits.source) := iter_counter
     }
 
-    // 响应处理
+    // Response processing
     io.resp.valid := tl.d.valid
     io.resp.bits.data := tl.d.bits.data
-    io.resp.bits.addrcounter := iter_mangage_table(tl.d.bits.source) // 使用source作为地址计数器
-    // 修正last信号：使用已接收字节数计算
-    val resp_bytes_end = bytesReceived + beatBytes.U  // 接收当前beat后的总字节数
+    // Use source as address counter
+    io.resp.bits.addrcounter := iter_mangage_table(tl.d.bits.source)
+    // Fix last signal: calculate using received byte count
+    // Total byte count after receiving current beat
+    val resp_bytes_end = bytesReceived + beatBytes.U
     io.resp.bits.last := edge.last(tl.d) && (resp_bytes_end >= req.len)
     tl.d.ready := io.resp.ready
 
-    // 更新已接收字节数
+    // Update received byte count
     when (tl.d.fire) {
       bytesReceived := bytesReceived + beatBytes.U
     }
 
-    // 状态机
+    // State machine
     io.req.ready := state === s_idle
     io.busy := xactBusy.orR || (state =/= s_idle)
 
     when (io.req.fire) {
       req := io.req.bits
       bytesRequested := 0.U
-      bytesReceived := 0.U  // 重置已接收字节数
-      iter_counter := 0.U  // 重置迭代计数器
+      // Reset received byte count
+      bytesReceived := 0.U
+      // Reset iteration counter
+      iter_counter := 0.U
       state := s_req_new_block
     }
 
     when (untranslated_a.fire) {
-      bytesRequested := bytesRequested + read_size  // 使用实际请求的字节数
-      // 检查是否还需要发送更多请求
+      // Use actual requested byte count
+      bytesRequested := bytesRequested + read_size
+      // Check if more requests need to be sent
       when (bytesRequested + read_size >= req.len) {
-        state := s_idle  // 所有请求都发送完毕
+        // All requests sent
+        state := s_idle
       }.otherwise {
-        state := s_req_new_block  // 继续发送下一个请求
+        // Continue sending next request
+        state := s_req_new_block
       }
     }
   }
 }
 
-// 约定：数据已经对齐并带有mask
+// Convention: data is already aligned and has mask
 class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
                         (implicit p: Parameters) extends LazyModule {
   val node = TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
@@ -208,7 +226,7 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     val xactBusy_remove = ~Mux(tl.d.fire, (1.U << tl.d.bits.source).asUInt, 0.U)
     xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
 
-    // 简化：数据已经对齐，直接构造TileLink请求
+    // Simplified: data is already aligned, directly construct TileLink request
     val lg_beat_bytes = log2Ceil(beatBytes)
     val use_put_full = req.mask === ~0.U(beatBytes.W)
 
@@ -229,7 +247,7 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
 
     val selected_put = Mux(use_put_full, putFull, putPartial)
 
-    // TLB 处理管道
+    // TLB processing pipeline
     class TLBundleAWithInfo extends Bundle {
       val tl_a = tl.a.bits.cloneType
       val vaddr = Output(UInt(vaddrBits.W))
@@ -258,18 +276,18 @@ class BBStreamWriter(nXacts: Int, beatBits: Int, maxBytes: Int, dataWidth: Int)
     translate_q.io.enq <> tlb_q.io.deq
     translate_q.io.deq.ready := tl.a.ready || io.tlb.resp.miss
 
-    // TileLink 连接
+    // TileLink connection
     tl.a.valid := translate_q.io.deq.valid && !io.tlb.resp.miss
     tl.a.bits := translate_q.io.deq.bits.tl_a
     tl.a.bits.address := io.tlb.resp.paddr
 
     tl.d.ready := true.B
 
-    // 响应处理
+    // Response processing
     io.resp.valid := tl.d.valid && edge.last(tl.d)
     io.resp.bits.done := true.B
 
-    // 状态机
+    // State machine
     io.req.ready := state === s_idle
     io.busy := xactBusy.orR || (state =/= s_idle)
 

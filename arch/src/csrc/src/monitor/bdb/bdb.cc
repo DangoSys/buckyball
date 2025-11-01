@@ -111,10 +111,12 @@ void bdb_mainloop() {
     return;
   }
 
-  for (char *str; (str = rl_gets()) != NULL;) { // rl_gets读取（bdb）开始命令行
+  // rl_gets reads command line (bdb start)
+  for (char *str; (str = rl_gets()) != NULL;) {
     char *str_end = str + strlen(str);
 
-    char *cmd = strtok(str, " "); // strtok: 分解字符串为一组字符串
+    // strtok: split string into a set of strings
+    char *cmd = strtok(str, " ");
     if (cmd == NULL) {
       continue;
     }

@@ -1,108 +1,108 @@
-# ReLU 激活函数加速器
+# ReLU Activation Function Accelerator
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 的 ReLU（Rectified Linear Unit）激活加速器，位于 `arch/src/main/scala/prototype/relu` 下。模块以矢量化方式对 Scratchpad 中的数据按 tile（`veclane × veclane`）进行逐元素 ReLU 处理，并将结果写回。
+This directory implements BuckyBall's ReLU (Rectified Linear Unit) activation accelerator, located at `arch/src/main/scala/prototype/relu`. The module performs element-wise ReLU processing on Scratchpad data by tiles (`veclane × veclane`) in a vectorized manner and writes results back.
 
-实现的核心组件：
-- **Relu.scala**: ReLU 加速器主体实现
+Core components:
+- **Relu.scala**: ReLU accelerator main implementation
 
-## 代码结构
+## Code Structure
 
 ```
 relu/
-└── Relu.scala  - ReLU 加速器实现
+└── Relu.scala  - ReLU accelerator implementation
 ```
 
-### 模块职责
+### Module Responsibilities
 
-**Relu.scala**（加速器实现层）
-- 从 Scratchpad 读取一个 `veclane × veclane` tile 数据
-- 对每个元素执行带符号比较的 ReLU 运算（负数置 0）
-- 以掩码全写方式写回同尺寸 tile
-- 提供 Ball 域命令接口并回传完成响应/状态
+**Relu.scala** (Accelerator implementation layer)
+- Reads a `veclane × veclane` tile of data from Scratchpad
+- Performs signed comparison-based ReLU operation on each element (negative values set to 0)
+- Writes back same-sized tile with full mask write
+- Provides Ball domain command interface and returns completion response/status
 
-## 模块说明
+## Module Description
 
 ### Relu.scala
 
-**主要功能**:
+**Main functionality**:
 
-逐 tile（`veclane × veclane`）读取输入 → 执行逐元素 ReLU → 逐行写回输出；支持 `iter` 驱动的批量处理与流水工作流。
+Read input tile by tile (`veclane × veclane`) → Execute element-wise ReLU → Write output back row by row; supports `iter`-driven batch processing and pipelined workflow.
 
-**状态机定义**:
+**State machine definition**:
 
 ```scala
 val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
 val state = RegInit(idle)
 ```
 
-**关键寄存器**:
+**Key registers**:
 
 ```scala
-// 数据缓存：veclane × veclane，每个元素宽度为 inputType.getWidth
+// Data cache: veclane × veclane, each element width is inputType.getWidth
 val regArray = RegInit(
   VecInit(Seq.fill(b.veclane)(
     VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))
   ))
 )
 
-// 计数器
-val readCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // 已发起的读请求“行”计数
-val respCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // 已接收的读响应“行”计数
-val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // 已写回的“行”计数
+// Counters
+val readCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // Read request row count
+val respCounter  = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // Read response row count
+val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W)) // Write-back row count
 
-// 指令字段寄存器
-val robid_reg = RegInit(0.U(10.W)) // 记录命令的 ROB ID
-val waddr_reg = RegInit(0.U(10.W)) // 写回的起始行地址
-val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W)) // 写回目标的 Scratchpad bank 选择
-val raddr_reg = RegInit(0.U(10.W)) // 读取的起始行地址
-val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W)) // 读取来源的 Scratchpad bank 选择
-val iter_reg  = RegInit(0.U(10.W)) // 命令中指定的处理行数/长度
-val cycle_reg = RegInit(0.U(6.W))      // tile 轮数（由 iter 推导）
-val iterCnt   = RegInit(0.U(32.W))     // 完成的批次数
+// Instruction field registers
+val robid_reg = RegInit(0.U(10.W)) // Command ROB ID
+val waddr_reg = RegInit(0.U(10.W)) // Write-back start row address
+val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W)) // Write-back target Scratchpad bank selection
+val raddr_reg = RegInit(0.U(10.W)) // Read start row address
+val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W)) // Read source Scratchpad bank selection
+val iter_reg  = RegInit(0.U(10.W)) // Processing row count/length specified in command
+val cycle_reg = RegInit(0.U(6.W))      // Tile round count (derived from iter)
+val iterCnt   = RegInit(0.U(32.W))     // Completed batch count
 
-// 写回数据与掩码
-val spad_w       = b.veclane * b.inputType.getWidth // 一行打包的数据位宽
-val writeDataReg = Reg(UInt(spad_w.W)) // 待写回的一行打包数据
-val writeMaskReg = Reg(Vec(b.spad_mask_len, UInt(1.W))) // 写回掩码向量
+// Write-back data and mask
+val spad_w       = b.veclane * b.inputType.getWidth // Packed data width per row
+val writeDataReg = Reg(UInt(spad_w.W)) // Packed data to write back per row
+val writeMaskReg = Reg(Vec(b.spad_mask_len, UInt(1.W))) // Write-back mask vector
 ```
 
-**命令解析**:
+**Command parsing**:
 
 ```scala
 when(io.cmdReq.fire) {
-  // 进入读取阶段并初始化本轮计数
+  // Enter read phase and initialize round counters
   state        := sRead
-  readCounter  := 0.U      // 已发起的读请求行计数清零
-  writeCounter := 0.U      // 已写回的行计数清零
+  readCounter  := 0.U      // Clear read request row count
+  writeCounter := 0.U      // Clear write-back row count
 
-  // 记录命令标识
-  robid_reg := io.cmdReq.bits.rob_id            // ROB ID（用于完成响应匹配）
+  // Record command identifier
+  robid_reg := io.cmdReq.bits.rob_id            // ROB ID (for completion response matching)
 
-  // 输出（写回）目标地址：使用 wr_* 字段
-  waddr_reg := io.cmdReq.bits.cmd.wr_bank_addr  // 写回起始行地址
-  wbank_reg := io.cmdReq.bits.cmd.wr_bank       // 写回目标 bank
+  // Output (write-back) target address: use wr_* fields
+  waddr_reg := io.cmdReq.bits.cmd.wr_bank_addr  // Write-back start row address
+  wbank_reg := io.cmdReq.bits.cmd.wr_bank       // Write-back target bank
 
-  // 输入（读取）来源地址：使用 op1_* 字段
-  raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr // 读取起始行地址
-  rbank_reg := io.cmdReq.bits.cmd.op1_bank      // 读取来源 bank
+  // Input (read) source address: use op1_* fields
+  raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr // Read start row address
+  rbank_reg := io.cmdReq.bits.cmd.op1_bank      // Read source bank
 
-  // 迭代与轮次
-  iter_reg  := io.cmdReq.bits.cmd.iter          // 需要处理的总行数（迭代数）
-  // 计算本批需要的 tile 轮数：每轮处理 veclane 行
-  // cycle_reg = ceil(iter / veclane) - 1，写/读完成一轮后递减
+  // Iteration and rounds
+  iter_reg  := io.cmdReq.bits.cmd.iter          // Total rows to process (iteration count)
+  // Calculate required tile rounds for this batch: each round processes veclane rows
+  // cycle_reg = ceil(iter / veclane) - 1, decrements after each read/write round completes
   cycle_reg := (io.cmdReq.bits.cmd.iter +& (b.veclane.U - 1.U)) / b.veclane.U - 1.U
 }
 ```
 
-**数据转换逻辑（ReLU）**:
+**Data conversion logic (ReLU)**:
 
-- 读取返回宽度为 `spad_w = veclane × inputWidth` 的一行打包数据；
-- 将其拆分为 `veclane` 个元素，并进行带符号判断：`x < 0 ? 0 : x`；
+- Read returns a packed data row of width `spad_w = veclane × inputWidth`;
+- Split into `veclane` elements and perform signed comparison: `x < 0 ? 0 : x`;
 
 ```scala
-// 拆分 + ReLU（按列）
+// Split + ReLU (by column)
 val dataWord = io.sramRead(rbank_reg).resp.bits.data
 for (col <- 0 until b.veclane) {
   val hi = (col + 1) * b.inputType.getWidth - 1
@@ -114,16 +114,16 @@ for (col <- 0 until b.veclane) {
 }
 ```
 
-写回时，将一整行的 `veclane` 个元素重新打包：
+When writing back, repack a full row of `veclane` elements:
 
 ```scala
-// 将 regArray(rowIdx) 打包成一行写回
+// Pack regArray(rowIdx) into one row for write-back
 writeDataReg := Cat((0 until b.veclane).reverse.map(j => regArray(rowIdx)(j)))
-// 全掩码写
+// Full mask write
 for (i <- 0 until b.spad_mask_len) { writeMaskReg(i) := 1.U }
 ```
 
-**SRAM 接口**:
+**SRAM interface**:
 
 ```scala
 val io = IO(new Bundle {
@@ -135,44 +135,44 @@ val io = IO(new Bundle {
 })
 ```
 
-**处理流程**:
+**Processing flow**:
 
-1. **idle**：等待命令；解析输入/输出地址 bank/addr、迭代次数 `iter`，并据此计算 `cycle_reg`。
-2. **sRead**：按行对输入 bank/addr 连续发起读请求；接收数据后逐元素执行 ReLU，填充到 `regArray`；当累计 `veclane` 行后进入写阶段。
-3. **sWrite**：逐行打包并写回到 `wbank` 的连续地址，掩码全写；写满 `veclane` 行后进入完成阶段。
-4. **complete**：当所有轮次完成（`cycle_reg == 0`）时，发出 `cmdResp` 完成响应；随后回到 `idle`。
+1. **idle**: Wait for command; parse input/output address bank/addr, iteration count `iter`, and calculate `cycle_reg` accordingly.
+2. **sRead**: Issue consecutive read requests row by row for input bank/addr; after receiving data, perform element-wise ReLU and fill into `regArray`; enter write phase after accumulating `veclane` rows.
+3. **sWrite**: Pack and write back row by row to consecutive addresses in `wbank` with full mask write; enter complete phase after writing `veclane` rows.
+4. **complete**: When all rounds complete (`cycle_reg == 0`), issue `cmdResp` completion response; then return to `idle`.
 
-**输入输出**:
+**Inputs/Outputs**:
 
-- 输入：Ball 域命令（`wr_bank/wr_bank_addr`、`op1_bank/op1_bank_addr`、`iter` 等）
-- 输出：写回后的 ReLU 结果 tile，`cmdResp` 完成通知
-- 边界与约束：
-  - 每轮处理 `veclane` 行，迭代轮数由 `iter` 推导；
-  - 数据元素按 `b.inputType` 进行带符号比较；
-  - 写回使用全掩码（可根据需求扩展部分写）。
+- Input: Ball domain commands (`wr_bank/wr_bank_addr`, `op1_bank/op1_bank_addr`, `iter`, etc.)
+- Output: ReLU result tile after write-back, `cmdResp` completion notification
+- Boundaries and constraints:
+  - Each round processes `veclane` rows, iteration round count derived from `iter`;
+  - Data elements perform signed comparison based on `b.inputType`;
+  - Write-back uses full mask (can be extended for partial write as needed).
 
-## ISA结构
+## ISA Structure
 
-本模块对应的 Ball 指令用于对 Scratchpad 中的数据进行逐元素 ReLU 并写回。
+The Ball instruction corresponding to this module performs element-wise ReLU on Scratchpad data and writes back.
 
-**功能**: 对输入矩阵逐元素执行 ReLU（负值置 0），按行写回到目标地址。
+**Function**: Execute element-wise ReLU on input matrix (negative values set to 0), write back row by row to target address.
 
-**func7**: `0100110` 38（对应 `DISA.RELU`）
+**func7**: `0100110` 38 (corresponds to `DISA.RELU`)
 
-**格式**: `bb_relu rs1, rs2`
+**Format**: `bb_relu rs1, rs2`
 
-**操作数**:
+**Operands**:
 
-- `rs1[spAddrLen-1:0]`: 源操作数的 Scratchpad 地址（op1_spaddr）
-- `rs2[spAddrLen-1:0]`: 结果写回的 Scratchpad 地址（wr_spaddr）
-- `rs2[spAddrLen+9:spAddrLen]`: 迭代次数（iter，按行计数）
-- `rs2[63:spAddrLen+10]`: special/保留字段（当前 ReLU 未使用）
+- `rs1[spAddrLen-1:0]`: Source operand Scratchpad address (op1_spaddr)
+- `rs2[spAddrLen-1:0]`: Result write-back Scratchpad address (wr_spaddr)
+- `rs2[spAddrLen+9:spAddrLen]`: Iteration count (iter, row count)
+- `rs2[63:spAddrLen+10]`: special/reserved field (not used by current ReLU)
 
-地址说明：`spAddrLen` 宽度的本地地址在硬件中会进一步被拆分为 bank 与 row（见 LocalAddr），无需在 ISA 层显式区分。
+Address note: Local address of `spAddrLen` width is further split into bank and row in hardware (see LocalAddr), no need to explicitly distinguish at ISA level.
 
-**操作**: 从 `rs1` 指定的 Scratchpad 地址读取数据，执行逐元素 ReLU，再将结果按行写回 `rs2` 指定地址，循环 `iter` 次。
+**Operation**: Read data from Scratchpad address specified by `rs1`, perform element-wise ReLU, then write results back row by row to address specified by `rs2`, loop `iter` times.
 
-rs1（输入地址）:
+rs1 (input address):
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -183,7 +183,7 @@ rs1（输入地址）:
 └──────────────────────────────────────────────────────┘
 ```
 
-rs2（写回地址与迭代次数）:
+rs2 (write-back address and iteration count):
 
 ```
 ┌──────────────────────────────────┬────────────────────┐
@@ -194,20 +194,20 @@ rs2（写回地址与迭代次数）:
 └──────────────────────────────────┴────────────────────┘
 ```
 
-备注：解码时 `op1_spaddr` 来自 `rs1`，`wr_spaddr` 与 `iter` 来自 `rs2`，其余 `special` 高位可留作扩展。
+Note: During decode, `op1_spaddr` comes from `rs1`, `wr_spaddr` and `iter` come from `rs2`, remaining `special` high bits can be reserved for extension.
 
-## 使用方法
+## Usage
 
-- 将源数据布置在 Scratchpad 指定的 `op1_bank/op1_bank_addr` 起始位置，保证每行宽度为 `veclane × inputWidth`；
-- 配置输出 `wr_bank/wr_bank_addr`，以及待处理的元素行数 `iter`；
-- 发送 Ball 命令后，等待 `cmdResp` 完成；
-- 可轮询 `status`：`ready/valid/idle/init/running/complete/iter` 获取运行时信息。
+- Place source data at Scratchpad starting position specified by `op1_bank/op1_bank_addr`, ensure each row width is `veclane × inputWidth`;
+- Configure output `wr_bank/wr_bank_addr`, and element row count `iter` to process;
+- After sending Ball command, wait for `cmdResp` completion;
+- Can poll `status`: `ready/valid/idle/init/running/complete/iter` to get runtime information.
 
-### 注意事项
+### Notes
 
-1. **有符号比较**：ReLU 使用 `asSInt` 进行负值判断，负数置 0；请确保 `b.inputType` 与上游数据约定一致（定点/补码）。
-2. **带宽与对齐**：每次读写为一行打包（`spad_w` 位），地址需按行对齐并连续递增。
-3. **掩码策略**：当前实现为全掩码写；若需稀疏/部分写，可扩展 `writeMaskReg` 的生成逻辑。
-4. **迭代与分块**：`iter` 非整倍数 `veclane` 时，`cycle_reg` 会按向上取整处理剩余行；必要时在边界补 0 或裁剪。
-5. **子模块交互**：`sramRead/Write` 的 ready/valid 握手需与 Scratchpad 控制器保持一致；如存在返序/多拍延迟，需在 `respCounter` 逻辑中保护乱序情况。
-6. **复位行为**：复位将清空 `regArray`、`writeDataReg`、`writeMaskReg`，便于仿真可重复。
+1. **Signed comparison**: ReLU uses `asSInt` for negative value detection, negative values set to 0; ensure `b.inputType` matches upstream data convention (fixed-point/two's complement).
+2. **Bandwidth and alignment**: Each read/write is one packed row (`spad_w` bits), addresses need to be row-aligned and increment consecutively.
+3. **Mask strategy**: Current implementation uses full mask write; if sparse/partial write needed, extend `writeMaskReg` generation logic.
+4. **Iteration and chunking**: When `iter` is not a multiple of `veclane`, `cycle_reg` handles remaining rows with ceiling rounding; pad 0 or trim at boundaries if necessary.
+5. **Submodule interaction**: `sramRead/Write` ready/valid handshake needs to be consistent with Scratchpad controller; if out-of-order/multi-cycle delay exists, protect out-of-order cases in `respCounter` logic.
+6. **Reset behavior**: Reset clears `regArray`, `writeDataReg`, `writeMaskReg`, facilitating reproducible simulation.

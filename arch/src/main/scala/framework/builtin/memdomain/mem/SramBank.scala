@@ -43,23 +43,23 @@ class SramBank(n: Int, w: Int, aligned_to: Int, single_ported: Boolean) extends 
 
   val mem = SyncReadMem(n, Vec(mask_len, mask_elem))
 
-  // 初始化内存为0
+  // Initialize memory to 0
   when(reset.asBool) {
     for (i <- 0 until n) {
       mem.write(i.U, VecInit(Seq.fill(mask_len)(0.U(mask_elem.getWidth.W))))
     }
   }
 
-  // 只允许每周期一个请求
+  // Only one request per cycle is allowed
   assert(!(io.read.req.valid && io.write.req.valid), "SramBank: Read and write requests is not allowed at the same time")
 
-  // 只要没有写请求，读请求就可以ready
+  // Read request can be ready as long as there is no write request
   io.read.req.ready := !io.write.req.valid
 
 // -----------------------------------------------------------------------------
 // Write
 // -----------------------------------------------------------------------------
-  // 写请求总是ready，除非有读请求正在进行
+  // Write request is always ready unless there is a read request in progress
   io.write.req.ready := !io.read.req.valid
 
   when (io.write.req.valid) {

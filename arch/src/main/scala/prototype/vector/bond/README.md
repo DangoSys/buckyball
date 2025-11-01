@@ -1,22 +1,22 @@
-# 绑定模块 (Bond)
+# Binding Module
 
-## 概述
+## Overview
 
-绑定模块实现了向量处理单元中的数据接口和同步机制，位于 `prototype/vector/bond` 路径下。该模块定义了线程间的数据传递接口，支持不同类型的数据绑定模式。
+The binding module implements data interfaces and synchronization mechanisms in the vector processing unit, located at `prototype/vector/bond`. This module defines inter-thread data transfer interfaces, supporting different types of data binding patterns.
 
-## 文件结构
+## File Structure
 
 ```
 bond/
-├── BondWrapper.scala    - 绑定包装器基类
-└── vvv.scala           - VVV 绑定实现
+├── BondWrapper.scala    - Binding wrapper base class
+└── vvv.scala           - VVV binding implementation
 ```
 
-## 核心组件
+## Core Components
 
-### VVV - 向量到向量绑定
+### VVV - Vector-to-Vector Binding
 
-VVV (Vector-Vector-Vector) 绑定实现了双输入向量到单输出向量的数据接口：
+VVV (Vector-Vector-Vector) binding implements a data interface from dual input vectors to single output vector:
 
 ```scala
 class VVV(implicit p: Parameters) extends Bundle {
@@ -38,33 +38,33 @@ class VVV(implicit p: Parameters) extends Bundle {
 }
 ```
 
-#### 接口说明
+#### Interface Description
 
-**输入接口**：
-- `in.bits.in1`: 第一个输入向量，位宽为 `inputWidth`
-- `in.bits.in2`: 第二个输入向量，位宽为 `inputWidth`
-- `in.valid`: 输入数据有效信号
-- `in.ready`: 输入就绪信号
+**Input interface**:
+- `in.bits.in1`: First input vector, width is `inputWidth`
+- `in.bits.in2`: Second input vector, width is `inputWidth`
+- `in.valid`: Input data valid signal
+- `in.ready`: Input ready signal
 
-**输出接口**：
-- `out.bits.out`: 输出向量，位宽为 `outputWidth`
-- `out.valid`: 输出数据有效信号
-- `out.ready`: 输出就绪信号
+**Output interface**:
+- `out.bits.out`: Output vector, width is `outputWidth`
+- `out.valid`: Output data valid signal
+- `out.ready`: Output ready signal
 
-#### 参数配置
+#### Parameter Configuration
 
-VVV 绑定的参数通过配置系统获取：
+VVV binding parameters are obtained through the configuration system:
 
 ```scala
-val lane = p(ThreadKey).get.lane                    // 向量通道数
-val bondParam = p(ThreadBondKey).get                // 绑定参数
-val inputWidth = bondParam.inputWidth               // 输入位宽
-val outputWidth = bondParam.outputWidth             // 输出位宽
+val lane = p(ThreadKey).get.lane                    // Vector lane count
+val bondParam = p(ThreadBondKey).get                // Binding parameter
+val inputWidth = bondParam.inputWidth               // Input width
+val outputWidth = bondParam.outputWidth             // Output width
 ```
 
-### CanHaveVVVBond - VVV 绑定特质
+### CanHaveVVVBond - VVV Binding Trait
 
-CanHaveVVVBond 特质为线程提供 VVV 绑定功能：
+The CanHaveVVVBond trait provides VVV binding functionality for threads:
 
 ```scala
 trait CanHaveVVVBond { this: BaseThread =>
@@ -76,16 +76,16 @@ trait CanHaveVVVBond { this: BaseThread =>
 }
 ```
 
-#### 使用方式
+#### Usage
 
-线程类通过混入该特质获得 VVV 绑定能力：
+Thread classes gain VVV binding capability by mixing in this trait:
 
 ```scala
 class MulThread(implicit p: Parameters) extends BaseThread
   with CanHaveMulOp
   with CanHaveVVVBond {
 
-  // 连接操作和绑定
+  // Connect operation and binding
   for {
     op <- mulOp
     bond <- vvvBond
@@ -96,9 +96,9 @@ class MulThread(implicit p: Parameters) extends BaseThread
 }
 ```
 
-### BondWrapper - 绑定包装器
+### BondWrapper - Binding Wrapper
 
-BondWrapper 提供了基于 Diplomacy 的绑定封装：
+BondWrapper provides Diplomacy-based binding encapsulation:
 
 ```scala
 abstract class BondWrapper(implicit p: Parameters) extends LazyModule {
@@ -114,54 +114,54 @@ abstract class BondWrapper(implicit p: Parameters) extends LazyModule {
 }
 ```
 
-#### 作用域管理
+#### Scope Management
 
-BondWrapper 提供了命名作用域管理功能：
-- `to()`: 创建输出方向的绑定作用域
-- `from()`: 创建输入方向的绑定作用域
+BondWrapper provides named scope management functionality:
+- `to()`: Creates binding scope in output direction
+- `from()`: Creates binding scope in input direction
 
-## 绑定类型
+## Binding Types
 
-### VVV 绑定模式
+### VVV Binding Pattern
 
-VVV 绑定支持以下数据流模式：
+VVV binding supports the following data flow patterns:
 
-1. **双输入单输出**：两个向量输入，一个向量输出
-2. **位宽转换**：支持输入和输出位宽不同
-3. **向量并行**：支持多通道并行数据传输
+1. **Dual input single output**: Two vector inputs, one vector output
+2. **Width conversion**: Supports different input and output widths
+3. **Vector parallelism**: Supports multi-lane parallel data transmission
 
-### 数据流控制
+### Data Flow Control
 
-VVV 绑定使用 Decoupled 接口进行流控：
+VVV binding uses Decoupled interface for flow control:
 
 ```scala
-// 生产者端
+// Producer side
 producer.io.out.valid := dataReady
 producer.io.out.bits.in1 := inputVector1
 producer.io.out.bits.in2 := inputVector2
 
-// 消费者端
+// Consumer side
 consumer.io.in.ready := canAcceptData
 when(consumer.io.in.fire) {
   processData(consumer.io.in.bits.out)
 }
 ```
 
-## 配置参数
+## Configuration Parameters
 
-### 绑定参数
+### Binding Parameters
 
-绑定参数通过 `BondParam` 定义：
+Binding parameters are defined through `BondParam`:
 
 ```scala
 case class BondParam(
-  bondType: String,           // 绑定类型 ("vvv")
-  inputWidth: Int = 8,        // 输入位宽
-  outputWidth: Int = 32       // 输出位宽
+  bondType: String,           // Binding type ("vvv")
+  inputWidth: Int = 8,        // Input width
+  outputWidth: Int = 32       // Output width
 )
 ```
 
-### 配置示例
+### Configuration Example
 
 ```scala
 val bondConfig = BondParam(
@@ -178,23 +178,23 @@ val threadConfig = ThreadParam(
 )
 ```
 
-## 使用方法
+## Usage
 
-### 创建 VVV 绑定
+### Creating VVV Binding
 
 ```scala
-// 在线程中使用 VVV 绑定
+// Using VVV binding in thread
 class CustomThread(implicit p: Parameters) extends BaseThread
   with CanHaveVVVBond {
 
-  // 获取绑定接口
+  // Get binding interface
   for (bond <- vvvBond) {
-    // 连接输入
+    // Connect input
     bond.in.valid := inputValid
     bond.in.bits.in1 := inputVector1
     bond.in.bits.in2 := inputVector2
 
-    // 连接输出
+    // Connect output
     outputValid := bond.out.valid
     outputVector := bond.out.bits.out
     bond.out.ready := outputReady
@@ -202,14 +202,14 @@ class CustomThread(implicit p: Parameters) extends BaseThread
 }
 ```
 
-### 绑定连接
+### Binding Connection
 
 ```scala
-// 连接两个模块的绑定接口
+// Connect binding interfaces of two modules
 val producer = Module(new ProducerThread())
 val consumer = Module(new ConsumerThread())
 
-// 直接连接绑定接口
+// Direct binding interface connection
 for {
   prodBond <- producer.vvvBond
   consBond <- consumer.vvvBond
@@ -218,43 +218,43 @@ for {
 }
 ```
 
-## 同步机制
+## Synchronization Mechanisms
 
-### 握手协议
+### Handshake Protocol
 
-VVV 绑定使用标准的 Decoupled 握手协议：
+VVV binding uses standard Decoupled handshake protocol:
 
-1. **数据准备**：生产者设置 `valid` 和 `bits`
-2. **接收就绪**：消费者设置 `ready`
-3. **数据传输**：当 `valid && ready` 时完成传输
-4. **状态更新**：双方更新内部状态
+1. **Data preparation**: Producer sets `valid` and `bits`
+2. **Receive ready**: Consumer sets `ready`
+3. **Data transmission**: Transfer completes when `valid && ready`
+4. **State update**: Both sides update internal state
 
-### 背压处理
+### Backpressure Handling
 
-绑定接口支持背压机制：
+Binding interface supports backpressure mechanism:
 
 ```scala
-// 当下游未就绪时，上游会等待
+// When downstream is not ready, upstream waits
 when(!downstream.ready) {
   upstream.valid := false.B
-  // 保持数据不变
+  // Keep data unchanged
 }
 ```
 
-## 扩展性
+## Extensibility
 
-### 新绑定类型
+### New Binding Types
 
-可以通过类似的模式定义新的绑定类型：
+New binding types can be defined following a similar pattern:
 
 ```scala
-// 单输入单输出绑定
+// Single input single output binding
 class VV(implicit p: Parameters) extends Bundle {
   val in = Flipped(Decoupled(Vec(lane, UInt(inputWidth.W))))
   val out = Decoupled(Vec(lane, UInt(outputWidth.W)))
 }
 
-// 对应的特质
+// Corresponding trait
 trait CanHaveVVBond { this: BaseThread =>
   val vvBond = params(ThreadBondKey).filter(_.bondType == "vv").map { _ =>
     IO(new VV()(params))
@@ -262,16 +262,16 @@ trait CanHaveVVBond { this: BaseThread =>
 }
 ```
 
-### 参数化支持
+### Parameterization Support
 
-绑定模块支持完全参数化配置：
+The binding module supports full parameterized configuration:
 
-- 向量通道数可配置
-- 输入输出位宽可配置
-- 绑定类型可扩展
+- Vector lane count configurable
+- Input/output width configurable
+- Binding type extensible
 
-## 相关模块
+## Related Modules
 
-- [线程模块](../thread/README.md) - 提供绑定的使用环境
-- [向量操作模块](../op/README.md) - 绑定的数据处理逻辑
-- [向量处理单元](../README.md) - 上层向量处理器
+- [Thread Module](../thread/README.md) - Provides usage environment for bindings
+- [Vector Operations Module](../op/README.md) - Data processing logic for bindings
+- [Vector Processing Unit](../README.md) - Upper-level vector processor

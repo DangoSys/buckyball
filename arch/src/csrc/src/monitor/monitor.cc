@@ -11,10 +11,10 @@
 #include "ioe/mem.cc"
 #include "utils/welcome.cc"
 
-// 定义全局VCD路径变量
+// Define global VCD path variable
 const char *vcd_path = nullptr;
 
-// 定义全局日志路径变量
+// Define global log path variable
 const char *log_path = nullptr;
 const char *fst_path = nullptr;
 
@@ -36,14 +36,17 @@ static int parse_args(int argc, char *argv[]) {
   //     printf("\t-v,--vcd <path>   specify VCD file path\n");
   //     printf("\t-l,--log <path>   specify log file path\n");
 
-  // 手动解析Verilator风格的参数 (+vcd=path, +log=path)
+  // Manually parse Verilator-style parameters (+vcd=path, +log=path)
   for (int i = 1; i < argc; i++) {
     if (strncmp(argv[i], "+vcd=", 5) == 0) {
-      vcd_path = argv[i] + 5; // 跳过 "+vcd="
+      // Skip "+vcd="
+      vcd_path = argv[i] + 5;
     } else if (strncmp(argv[i], "+fst=", 5) == 0) {
-      fst_path = argv[i] + 5; // 跳过 "+fst="
+      // Skip "+fst="
+      fst_path = argv[i] + 5;
     } else if (strncmp(argv[i], "+log=", 5) == 0) {
-      log_path = argv[i] + 5; // 跳过 "+log="
+      // Skip "+log="
+      log_path = argv[i] + 5;
     } else if (strcmp(argv[i], "+batch") == 0) {
       bdb_set_batch_mode();
     } else if (strcmp(argv[i], "+help") == 0) {
@@ -74,15 +77,17 @@ static void init_log(const char *log_file) {
 }
 
 static void init_io() {
-  // 强制刷新所有输出缓冲
+  // Force flush all output buffers
   fflush(stdout);
   fflush(stderr);
 
-  // 恢复终端回显功能
+  // Restore terminal echo functionality
   struct termios tty;
   if (tcgetattr(STDIN_FILENO, &tty) == 0) {
-    tty.c_lflag |= ECHO;   // 启用回显
-    tty.c_lflag |= ICANON; // 启用行缓冲模式
+    // Enable echo
+    tty.c_lflag |= ECHO;
+    // Enable line buffered mode
+    tty.c_lflag |= ICANON;
     tcsetattr(STDIN_FILENO, TCSANOW, &tty);
     Log("Terminal echo restored");
   }

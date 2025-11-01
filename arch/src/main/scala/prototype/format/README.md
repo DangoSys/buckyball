@@ -1,40 +1,40 @@
-# 数据格式处理模块
+# Data Format Processing Module
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 中的数据格式定义和算术运算抽象，提供统一的数据类型处理接口。位于 `arch/src/main/scala/prototype/format` 下，作为数据格式层，为其他原型加速器提供类型安全的数据格式支持。
+This directory implements data format definitions and arithmetic operation abstractions in BuckyBall, providing a unified data type processing interface. Located at `arch/src/main/scala/prototype/format`, it serves as the data format layer, providing type-safe data format support for other prototype accelerators.
 
-实现的核心组件：
-- **Dataformat.scala**: 数据格式定义和工厂类
-- **Arithmetic.scala**: 算术运算类型类实现
+Core components:
+- **Dataformat.scala**: Data format definitions and factory classes
+- **Arithmetic.scala**: Arithmetic operation type class implementations
 
-## 代码结构
+## Code Structure
 
 ```
 format/
-├── Dataformat.scala  - 数据格式定义
-└── Arithmetic.scala  - 算术运算抽象
+├── Dataformat.scala  - Data format definitions
+└── Arithmetic.scala  - Arithmetic operation abstractions
 ```
 
-### 文件依赖关系
+### File Dependencies
 
-**Dataformat.scala** (格式定义层)
-- 定义 DataFormat 抽象类和具体格式实现
-- 提供 DataFormatFactory 工厂类
-- 实现 DataFormatParams 参数类
+**Dataformat.scala** (Format definition layer)
+- Defines DataFormat abstract class and concrete format implementations
+- Provides DataFormatFactory factory class
+- Implements DataFormatParams parameter class
 
-**Arithmetic.scala** (运算抽象层)
-- 定义 Arithmetic 类型类接口
-- 实现 UIntArithmetic 具体运算
-- 提供 ArithmeticFactory 工厂类
+**Arithmetic.scala** (Operation abstraction layer)
+- Defines Arithmetic type class interface
+- Implements UIntArithmetic concrete operations
+- Provides ArithmeticFactory factory class
 
-## 模块说明
+## Module Description
 
 ### Dataformat.scala
 
-**主要功能**: 定义支持的数据格式类型
+**Main functionality**: Defines supported data format types
 
-**格式定义**:
+**Format definition**:
 ```scala
 abstract class DataFormat {
   def width: Int
@@ -43,7 +43,7 @@ abstract class DataFormat {
 }
 ```
 
-**支持的格式**:
+**Supported formats**:
 ```scala
 class INT8Format extends DataFormat {
   override def width: Int = 8
@@ -64,7 +64,7 @@ class FP32Format extends DataFormat {
 }
 ```
 
-**工厂类**:
+**Factory class**:
 ```scala
 object DataFormatFactory {
   def create(formatType: String): DataFormat = formatType.toUpperCase match {
@@ -76,7 +76,7 @@ object DataFormatFactory {
 }
 ```
 
-**参数类**:
+**Parameter class**:
 ```scala
 case class DataFormatParams(formatType: String = "INT8") {
   def format: DataFormat = DataFormatFactory.create(formatType)
@@ -87,9 +87,9 @@ case class DataFormatParams(formatType: String = "INT8") {
 
 ### Arithmetic.scala
 
-**主要功能**: 提供类型安全的算术运算抽象
+**Main functionality**: Provides type-safe arithmetic operation abstractions
 
-**类型类定义**:
+**Type class definition**:
 ```scala
 abstract class Arithmetic[T <: Data] {
   def add(x: T, y: T): T
@@ -100,7 +100,7 @@ abstract class Arithmetic[T <: Data] {
 }
 ```
 
-**UInt 实现**:
+**UInt implementation**:
 ```scala
 class UIntArithmetic extends Arithmetic[UInt] {
   override def add(x: UInt, y: UInt): UInt = x + y
@@ -111,7 +111,7 @@ class UIntArithmetic extends Arithmetic[UInt] {
 }
 ```
 
-**工厂类**:
+**Factory class**:
 ```scala
 object ArithmeticFactory {
   def createArithmetic[T <: Data](dataType: T): Arithmetic[T] = {
@@ -123,12 +123,12 @@ object ArithmeticFactory {
 }
 ```
 
-## 使用方法
+## Usage
 
-### 注意事项
+### Notes
 
-1. **浮点支持**: FP16 和 FP32 目前使用 UInt 表示，后续可扩展为真正的浮点类型
-2. **除零保护**: UInt 除法运算包含除零检查，返回 0 作为默认值
-3. **类型安全**: 使用 Scala 类型系统确保运算的类型安全性
-4. **扩展性**: 工厂模式支持添加新的数据格式和算术实现
-5. **参数化**: DataFormatParams 提供便捷的参数化配置接口
+1. **Floating-point support**: FP16 and FP32 currently use UInt representation, can be extended to true floating-point types later
+2. **Division by zero protection**: UInt division operation includes division-by-zero check, returns 0 as default value
+3. **Type safety**: Uses Scala type system to ensure operation type safety
+4. **Extensibility**: Factory pattern supports adding new data formats and arithmetic implementations
+5. **Parameterization**: DataFormatParams provides convenient parameterized configuration interface

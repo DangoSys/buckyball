@@ -1,23 +1,23 @@
-# 线程模块 (Thread)
+# Thread Module
 
-## 概述
+## Overview
 
-线程模块实现了向量处理单元中的线程抽象，位于 `prototype/vector/thread` 路径下。该模块定义了线程的基本结构和具体实现，通过组合不同的操作 (Op) 和绑定 (Bond) 来构建特定功能的线程。
+The thread module implements thread abstractions in the vector processing unit, located at `prototype/vector/thread`. This module defines the basic structure and specific implementations of threads, constructing threads with specific functionality by combining different operations (Op) and bindings (Bond).
 
-## 文件结构
+## File Structure
 
 ```
 thread/
-├── BaseThread.scala    - 线程基类定义
-├── CasThread.scala     - 级联操作线程
-└── MulThread.scala     - 乘法操作线程
+├── BaseThread.scala    - Thread base class definition
+├── CasThread.scala     - Cascade operation thread
+└── MulThread.scala     - Multiplication operation thread
 ```
 
-## 核心组件
+## Core Components
 
-### BaseThread - 线程基类
+### BaseThread - Thread Base Class
 
-BaseThread 是所有线程的基类，定义了线程的基本参数和配置：
+BaseThread is the base class for all threads, defining basic thread parameters and configuration:
 
 ```scala
 class BaseThread(implicit p: Parameters) extends Module {
@@ -33,9 +33,9 @@ class BaseThread(implicit p: Parameters) extends Module {
 }
 ```
 
-### 参数定义
+### Parameter Definition
 
-线程模块使用以下参数结构：
+The thread module uses the following parameter structure:
 
 ```scala
 case class ThreadParam(lane: Int, attr: String, threadName: String, Op: OpParam)
@@ -43,26 +43,26 @@ case class OpParam(OpType: String, bondType: BondParam)
 case class BondParam(bondType: String, inputWidth: Int = 8, outputWidth: Int = 32)
 ```
 
-参数说明：
-- `lane`: 向量通道数量
-- `threadName`: 线程名称标识
-- `OpType`: 操作类型 ("cascade", "mul")
-- `bondType`: 绑定类型 ("vvv")
-- `inputWidth`: 输入数据位宽，默认 8 位
-- `outputWidth`: 输出数据位宽，默认 32 位
+Parameter description:
+- `lane`: Vector lane count
+- `threadName`: Thread name identifier
+- `OpType`: Operation type ("cascade", "mul")
+- `bondType`: Binding type ("vvv")
+- `inputWidth`: Input data width, default 8 bits
+- `outputWidth`: Output data width, default 32 bits
 
-## 具体线程实现
+## Specific Thread Implementations
 
-### CasThread - 级联操作线程
+### CasThread - Cascade Operation Thread
 
-CasThread 实现级联加法操作，组合了 CascadeOp 和 VVVBond：
+CasThread implements cascade addition operation, combining CascadeOp and VVVBond:
 
 ```scala
 class CasThread(implicit p: Parameters) extends BaseThread
   with CanHaveCascadeOp
   with CanHaveVVVBond {
 
-  // 连接CascadeOp和VVVBond
+  // Connect CascadeOp and VVVBond
   for {
     op <- cascadeOp
     bond <- vvvBond
@@ -73,18 +73,18 @@ class CasThread(implicit p: Parameters) extends BaseThread
 }
 ```
 
-功能：对两个输入向量执行逐元素加法操作。
+Function: Performs element-wise addition operation on two input vectors.
 
-### MulThread - 乘法操作线程
+### MulThread - Multiplication Operation Thread
 
-MulThread 实现乘法操作，组合了 MulOp 和 VVVBond：
+MulThread implements multiplication operation, combining MulOp and VVVBond:
 
 ```scala
 class MulThread(implicit p: Parameters) extends BaseThread
   with CanHaveMulOp
   with CanHaveVVVBond {
 
-  // 连接MulOp和VVVBond
+  // Connect MulOp and VVVBond
   for {
     op <- mulOp
     bond <- vvvBond
@@ -95,11 +95,11 @@ class MulThread(implicit p: Parameters) extends BaseThread
 }
 ```
 
-功能：实现向量乘法操作，支持逐周期输出结果。
+Function: Implements vector multiplication operation, supporting per-cycle result output.
 
-## 配置系统
+## Configuration System
 
-线程模块使用 Chipyard 的配置系统进行参数化：
+The thread module uses Chipyard's configuration system for parameterization:
 
 ```scala
 case object ThreadKey extends Field[Option[ThreadParam]](None)
@@ -108,18 +108,18 @@ case object ThreadBondKey extends Field[Option[BondParam]](None)
 case object ThreadMapKey extends Field[Map[String, ThreadParam]](Map.empty)
 ```
 
-配置键说明：
-- `ThreadKey`: 当前线程参数
-- `ThreadOpKey`: 操作参数
-- `ThreadBondKey`: 绑定参数
-- `ThreadMapKey`: 线程映射表
+Configuration key description:
+- `ThreadKey`: Current thread parameter
+- `ThreadOpKey`: Operation parameter
+- `ThreadBondKey`: Binding parameter
+- `ThreadMapKey`: Thread mapping table
 
-## 使用方法
+## Usage
 
-### 创建线程实例
+### Creating Thread Instance
 
 ```scala
-// 配置参数
+// Configure parameters
 val threadParam = ThreadParam(
   lane = 4,
   attr = "vector",
@@ -127,7 +127,7 @@ val threadParam = ThreadParam(
   Op = OpParam("mul", BondParam("vvv", 8, 32))
 )
 
-// 创建线程
+// Create thread
 val mulThread = Module(new MulThread()(
   new Config((site, here, up) => {
     case ThreadKey => Some(threadParam)
@@ -137,24 +137,24 @@ val mulThread = Module(new MulThread()(
 ))
 ```
 
-### 连接接口
+### Connecting Interfaces
 
-线程通过 VVV 绑定接口进行数据交互：
+Threads interact data through VVV binding interface:
 
 ```scala
-// 输入数据
+// Input data
 mulThread.io.in.valid := inputValid
 mulThread.io.in.bits.in1 := inputVector1
 mulThread.io.in.bits.in2 := inputVector2
 
-// 输出数据
+// Output data
 outputValid := mulThread.io.out.valid
 outputVector := mulThread.io.out.bits.out
 mulThread.io.out.ready := outputReady
 ```
 
-## 相关模块
+## Related Modules
 
-- [向量操作模块](../op/README.md) - 提供具体的计算操作
-- [绑定模块](../bond/README.md) - 提供数据接口和同步机制
-- [向量处理单元](../README.md) - 上层向量处理器
+- [Vector Operation Module](../op/README.md) - Provides specific computation operations
+- [Binding Module](../bond/README.md) - Provides data interfaces and synchronization mechanisms
+- [Vector Processing Unit](../README.md) - Upper-level vector processor

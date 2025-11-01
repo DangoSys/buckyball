@@ -13,14 +13,14 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val rob_id_width = log2Up(b.rob_entries)
 
   val io = IO(new Bundle {
-    // 来自ReservationStation的load指令
+    // Load instruction from ReservationStation
     val cmdReq = Flipped(Decoupled(new MemRsIssue))
-    // 发送给ReservationStation的完成信号
+    // Completion signal sent to ReservationStation
     val cmdResp = Decoupled(new MemRsComplete)
-    // 直接连接DMA读取接口
+    // Direct connection to DMA read interface
     val dmaReq = Decoupled(new BBReadRequest())
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.spad_w)))
-    // 连接到Scratchpad的SRAM写入接口
+    // Connected to Scratchpad SRAM write interface
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
@@ -29,17 +29,22 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val state = RegInit(s_idle)
 
   val rob_id_reg = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg = Reg(UInt(b.memAddrLen.W))  // 缓存mem_addr
-  val iter_reg = Reg(UInt(10.W))  // 缓存迭代次数
-  val resp_count = Reg(UInt(log2Up(16).W))  // 计数接收到的响应数量，最多支持16个响应
+  // Cache mem_addr
+  val mem_addr_reg = Reg(UInt(b.memAddrLen.W))
+  // Cache iteration count
+  val iter_reg = Reg(UInt(10.W))
+  // Count number of responses received, supports up to 16 responses
+  val resp_count = Reg(UInt(log2Up(16).W))
 
-  // 缓存解码好的bank信息
+  // Cache decoded bank information
   val wr_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))
   val wr_bank_addr_reg = Reg(UInt(log2Up(b.spad_bank_entries).W))
-  val is_acc_reg = RegInit(false.B) // 是否是acc bank的操作
-  val stride_reg = Reg(UInt(10.W)) // 缓存stride
+  // Whether this is an acc bank operation
+  val is_acc_reg = RegInit(false.B)
+  // Cache stride
+  val stride_reg = Reg(UInt(10.W))
 
-  // 接收load指令
+  // Receive load instruction
   io.cmdReq.ready := state === s_idle
 
   when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
@@ -49,38 +54,44 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     iter_reg           := io.cmdReq.bits.cmd.iter
     wr_bank_reg        := io.cmdReq.bits.cmd.sp_bank
     wr_bank_addr_reg   := io.cmdReq.bits.cmd.sp_bank_addr
-    is_acc_reg         := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
+    // Determine if acc based on bank
+    is_acc_reg         := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U)
     stride_reg         := io.cmdReq.bits.cmd.special(10,0)
     resp_count         := 0.U
   }
 
-  // 发起DMA读取请求 - 读取iter_reg行数据
+  // Issue DMA read request - read iter_reg rows of data
   io.dmaReq.valid       := state === s_dma_req
   io.dmaReq.bits.vaddr  := mem_addr_reg
-  io.dmaReq.bits.len    := iter_reg * (b.veclane * b.inputType.getWidth / 8).U // iter行数据的字节数
-  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus) // 简化：使用默认状态
+  // Byte count of iter rows of data
+  io.dmaReq.bits.len    := iter_reg * (b.veclane * b.inputType.getWidth / 8).U
+  // Simplified: use default status
+  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
   io.dmaReq.bits.stride := stride_reg
 
   when (io.dmaReq.fire) {
     state := s_dma_wait
-    resp_count := 0.U  // 重置响应计数器
+    // Reset response counter
+    resp_count := 0.U
   }
 
-  // 等待DMA响应
+  // Wait for DMA response
   io.dmaResp.ready := state === s_dma_wait
 
   when (io.dmaResp.fire) {
     resp_count := resp_count + 1.U
-    // 收到最后一个响应时转回idle状态
+    // Return to idle state when last response is received
     when (io.dmaResp.bits.last) {
       state := s_idle
     }
   }
 
-  // 流式写入SRAM - 每收到一个响应就立即写入
-  // 计算当前写入的bank和地址
-  val current_bank_addr = wr_bank_addr_reg + io.dmaResp.bits.addrcounter // 使用DMA响应中的地址计数器
-  val target_bank = wr_bank_reg  // 所有响应都写入同一个bank
+  // Stream write to SRAM - write immediately upon receiving each response
+  // Calculate current write bank and address
+  // Use address counter from DMA response
+  val current_bank_addr = wr_bank_addr_reg + io.dmaResp.bits.addrcounter
+  // All responses write to the same bank
+  val target_bank = wr_bank_reg
   val target_row = current_bank_addr
 
   for (i <- 0 until b.sp_banks) {
@@ -89,7 +100,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     io.sramWrite(i).req.bits.data := io.dmaResp.bits.data
     io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(true.B))
   }
-  //默认赋值
+  // Default assignment
   for (i <- 0 until b.acc_banks) {
     io.accWrite(i).req.valid := false.B
     io.accWrite(i).req.bits.addr := 0.U
@@ -113,7 +124,7 @@ class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     }
   }
 
-  // 发送完成信号 - 只有收到最后一个响应时才发送
+  // Send completion signal - only send when last response is received
   io.cmdResp.valid := io.dmaResp.fire && io.dmaResp.bits.last
   io.cmdResp.bits.rob_id := rob_id_reg
 }

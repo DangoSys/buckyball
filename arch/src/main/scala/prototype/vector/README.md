@@ -1,29 +1,29 @@
-# 向量处理单元 (Vector Processing Unit)
+# Vector Processing Unit
 
-## 概述
+## Overview
 
-向量处理单元是 BuckyBall 框架中的专用计算加速器，位于 `prototype/vector` 路径下。该模块实现了完整的向量处理流水线，包括控制单元、加载单元、执行单元和存储单元，支持向量数据的并行处理。
+The Vector Processing Unit is a specialized computation accelerator in the BuckyBall framework, located at `prototype/vector`. This module implements a complete vector processing pipeline, including control unit, load unit, execution unit, and store unit, supporting parallel processing of vector data.
 
-## 文件结构
+## File Structure
 
 ```
 vector/
-├── VecUnit.scala         - 向量处理单元顶层模块
-├── VecCtrlUnit.scala     - 向量控制单元
-├── VecLoadUnit.scala     - 向量加载单元
-├── VecEXUnit.scala       - 向量执行单元
-├── VecStoreUnit.scala    - 向量存储单元
-├── bond/                 - 绑定和同步机制
-├── op/                   - 向量操作实现
-├── thread/               - 线程管理
-└── warp/                 - 线程束管理
+├── VecUnit.scala         - Vector processing unit top module
+├── VecCtrlUnit.scala     - Vector control unit
+├── VecLoadUnit.scala     - Vector load unit
+├── VecEXUnit.scala       - Vector execution unit
+├── VecStoreUnit.scala    - Vector store unit
+├── bond/                 - Binding and synchronization mechanisms
+├── op/                   - Vector operation implementations
+├── thread/               - Thread management
+└── warp/                 - Thread warp management
 ```
 
-## 核心组件
+## Core Components
 
-### VecUnit - 向量处理单元顶层
+### VecUnit - Vector Processing Unit Top Level
 
-VecUnit 是向量处理器的顶层模块，集成了所有子单元：
+VecUnit is the top-level module of the vector processor, integrating all sub-units:
 
 ```scala
 class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -31,29 +31,29 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
 
-    // 连接到Scratchpad的SRAM读写接口
+    // Connected to Scratchpad SRAM read/write interfaces
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
-    // 连接到Accumulator的读写接口
+    // Connected to Accumulator read/write interfaces
     val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 }
 ```
 
-#### 接口说明
+#### Interface Description
 
-**命令接口**：
-- `cmdReq`: 来自保留站的向量指令请求
-- `cmdResp`: 向保留站返回的完成响应
+**Command interface**:
+- `cmdReq`: Vector instruction request from reservation station
+- `cmdResp`: Completion response returned to reservation station
 
-**存储接口**：
-- `sramRead/sramWrite`: 连接到 Scratchpad 的读写接口
-- `accRead/accWrite`: 连接到 Accumulator 的读写接口
+**Memory interface**:
+- `sramRead/sramWrite`: Read/write interfaces connected to Scratchpad
+- `accRead/accWrite`: Read/write interfaces connected to Accumulator
 
-### VecCtrlUnit - 向量控制单元
+### VecCtrlUnit - Vector Control Unit
 
-向量控制单元负责指令解码和流水线控制：
+The vector control unit is responsible for instruction decode and pipeline control:
 
 ```scala
 class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
@@ -70,7 +70,7 @@ class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modu
 }
 ```
 
-#### 控制状态
+#### Control State
 
 ```scala
 val rob_id_reg    = RegInit(0.U(log2Up(b.rob_entries).W))
@@ -84,50 +84,50 @@ val wr_bank_addr  = RegInit(0.U(12.W))
 val is_acc        = RegInit(false.B)
 ```
 
-### 数据流架构
+### Data Flow Architecture
 
-向量处理单元采用流水线架构，数据流如下：
+The vector processing unit uses a pipeline architecture with the following data flow:
 
 ```
-指令输入 → VecCtrlUnit → 控制信号分发
-                ↓
-        VecLoadUnit (加载数据)
-                ↓
-        VecEXUnit (执行计算)
-                ↓
-        VecStoreUnit (存储结果)
-                ↓
-            完成响应
+Instruction input → VecCtrlUnit → Control signal dispatch
+                          ↓
+                  VecLoadUnit (Load data)
+                          ↓
+                  VecEXUnit (Execute computation)
+                          ↓
+                  VecStoreUnit (Store results)
+                          ↓
+                      Completion response
 ```
 
-#### 模块连接
+#### Module Connections
 
 ```scala
-// 控制单元
+// Control unit
 val VecCtrlUnit = Module(new VecCtrlUnit)
 VecCtrlUnit.io.cmdReq <> io.cmdReq
 io.cmdResp <> VecCtrlUnit.io.cmdResp_o
 
-// 加载单元
+// Load unit
 val VecLoadUnit = Module(new VecLoadUnit)
 VecLoadUnit.io.ctrl_ld_i <> VecCtrlUnit.io.ctrl_ld_o
 
-// 执行单元
+// Execution unit
 val VecEX = Module(new VecEXUnit)
 VecEX.io.ctrl_ex_i <> VecCtrlUnit.io.ctrl_ex_o
 VecEX.io.ld_ex_i <> VecLoadUnit.io.ld_ex_o
 
-// 存储单元
+// Store unit
 val VecStoreUnit = Module(new VecStoreUnit)
 VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
 VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
 ```
 
-## 存储系统集成
+## Memory System Integration
 
-### Scratchpad 连接
+### Scratchpad Connection
 
-向量处理单元通过多个 Bank 连接到 Scratchpad：
+The vector processing unit connects to Scratchpad through multiple banks:
 
 ```scala
 for (i <- 0 until b.sp_banks) {
@@ -136,9 +136,9 @@ for (i <- 0 until b.sp_banks) {
 }
 ```
 
-### Accumulator 连接
+### Accumulator Connection
 
-执行结果通过存储单元写入 Accumulator：
+Execution results are written to Accumulator through the store unit:
 
 ```scala
 for (i <- 0 until b.acc_banks) {
@@ -146,41 +146,41 @@ for (i <- 0 until b.acc_banks) {
 }
 ```
 
-## 配置参数
+## Configuration Parameters
 
-### 向量配置
+### Vector Configuration
 
-通过 `CustomBuckyBallConfig` 配置向量处理器参数：
+Configure vector processor parameters through `CustomBuckyBallConfig`:
 
 ```scala
 class CustomBuckyBallConfig extends Config((site, here, up) => {
-  case "veclane" => 16              // 向量通道数
-  case "sp_banks" => 4              // Scratchpad Bank 数
-  case "acc_banks" => 2             // Accumulator Bank 数
-  case "spad_bank_entries" => 1024  // 每个 Bank 的条目数
-  case "acc_bank_entries" => 512    // Accumulator 条目数
+  case "veclane" => 16              // Vector lane count
+  case "sp_banks" => 4              // Scratchpad bank count
+  case "acc_banks" => 2             // Accumulator bank count
+  case "spad_bank_entries" => 1024  // Entries per bank
+  case "acc_bank_entries" => 512    // Accumulator entry count
 })
 ```
 
-### 数据位宽
+### Data Width
 
 ```scala
-val spad_w = b.veclane * b.inputType.getWidth  // Scratchpad 位宽
-val acc_w = b.outputType.getWidth              // Accumulator 位宽
+val spad_w = b.veclane * b.inputType.getWidth  // Scratchpad width
+val acc_w = b.outputType.getWidth              // Accumulator width
 ```
 
-## 使用方法
+## Usage
 
-### 创建向量处理单元
+### Creating Vector Processing Unit
 
 ```scala
 val vecUnit = Module(new VecUnit())
 
-// 连接命令接口
+// Connect command interface
 vecUnit.io.cmdReq <> reservationStation.io.issue
 reservationStation.io.complete <> vecUnit.io.cmdResp
 
-// 连接存储系统
+// Connect memory system
 for (i <- 0 until sp_banks) {
   scratchpad.io.read(i) <> vecUnit.io.sramRead(i)
   scratchpad.io.write(i) <> vecUnit.io.sramWrite(i)
@@ -192,66 +192,66 @@ for (i <- 0 until acc_banks) {
 }
 ```
 
-### 向量指令格式
+### Vector Instruction Format
 
-向量指令通过 `BallRsIssue` 接口传递：
+Vector instructions are passed through the `BallRsIssue` interface:
 
 ```scala
 class BallRsIssue extends Bundle {
   val cmd = new Bundle {
-    val iter = UInt(10.W)           // 迭代次数
-    val op1_bank = UInt(2.W)        // 操作数1的Bank
-    val op1_bank_addr = UInt(12.W)  // 操作数1的地址
-    val op2_bank = UInt(2.W)        // 操作数2的Bank
-    val op2_bank_addr = UInt(12.W)  // 操作数2的地址
-    val wr_bank = UInt(2.W)         // 写入Bank
-    val wr_bank_addr = UInt(12.W)   // 写入地址
+    val iter = UInt(10.W)           // Iteration count
+    val op1_bank = UInt(2.W)        // Operand 1 bank
+    val op1_bank_addr = UInt(12.W)  // Operand 1 address
+    val op2_bank = UInt(2.W)        // Operand 2 bank
+    val op2_bank_addr = UInt(12.W)  // Operand 2 address
+    val wr_bank = UInt(2.W)         // Write bank
+    val wr_bank_addr = UInt(12.W)   // Write address
   }
   val rob_id = UInt(log2Up(rob_entries).W)
 }
 ```
 
-## 执行模型
+## Execution Model
 
-### 流水线执行
+### Pipeline Execution
 
-1. **指令解码**：VecCtrlUnit 解码向量指令
-2. **数据加载**：VecLoadUnit 从 Scratchpad 加载操作数
-3. **向量计算**：VecEXUnit 执行向量运算
-4. **结果存储**：VecStoreUnit 将结果写入 Accumulator
-5. **完成响应**：向保留站返回完成信号
+1. **Instruction decode**: VecCtrlUnit decodes vector instructions
+2. **Data load**: VecLoadUnit loads operands from Scratchpad
+3. **Vector computation**: VecEXUnit executes vector operations
+4. **Result store**: VecStoreUnit writes results to Accumulator
+5. **Completion response**: Returns completion signal to reservation station
 
-### 并行处理
+### Parallel Processing
 
-- **多通道并行**：支持多个向量通道并行计算
-- **Bank 级并行**：多个存储 Bank 支持并行访问
-- **流水线重叠**：不同阶段可以重叠执行
+- **Multi-lane parallelism**: Supports parallel computation across multiple vector lanes
+- **Bank-level parallelism**: Multiple memory banks support parallel access
+- **Pipeline overlap**: Different stages can overlap execution
 
-## 子模块说明
+## Submodule Description
 
-### 绑定机制 (Bond)
-提供线程间的同步和数据绑定功能，支持生产者-消费者模式的数据传递。
+### Binding Mechanism (Bond)
+Provides inter-thread synchronization and data binding functionality, supporting producer-consumer pattern data transfer.
 
-### 向量操作 (Op)
-实现具体的向量计算操作，包括算术运算、逻辑运算和特殊函数。
+### Vector Operations (Op)
+Implements specific vector computation operations, including arithmetic operations, logical operations, and special functions.
 
-### 线程管理 (Thread)
-提供线程抽象和管理功能，支持不同类型的向量线程。
+### Thread Management (Thread)
+Provides thread abstraction and management functionality, supporting different types of vector threads.
 
-### 线程束管理 (Warp)
-实现线程束的组织和调度，支持大规模并行计算。
+### Thread Warp Management (Warp)
+Implements thread warp organization and scheduling, supporting large-scale parallel computation.
 
-## 性能特性
+## Performance Characteristics
 
-- **高并行度**：支持多通道向量并行处理
-- **流水线化**：多级流水线提高吞吐量
-- **存储优化**：多 Bank 存储系统减少访问冲突
-- **灵活配置**：支持不同的向量长度和数据类型
+- **High parallelism**: Supports multi-lane vector parallel processing
+- **Pipelined**: Multi-stage pipeline improves throughput
+- **Memory optimization**: Multi-bank memory system reduces access conflicts
+- **Flexible configuration**: Supports different vector lengths and data types
 
-## 相关模块
+## Related Modules
 
-- [绑定机制](bond/README.md) - 线程同步和数据绑定
-- [向量操作](op/README.md) - 具体的计算操作实现
-- [线程管理](thread/README.md) - 线程抽象和管理
-- [线程束管理](warp/README.md) - 线程束组织和调度
-- [原型加速器概览](../README.md) - 上层加速器框架
+- [Binding Mechanism](bond/README.md) - Thread synchronization and data binding
+- [Vector Operations](op/README.md) - Specific computation operation implementations
+- [Thread Management](thread/README.md) - Thread abstraction and management
+- [Thread Warp Management](warp/README.md) - Thread warp organization and scheduling
+- [Prototype Accelerator Overview](../README.md) - Upper-level accelerator framework

@@ -17,11 +17,11 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {
-    // cmd接口
+    // cmd interface
     val cmdReq  = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
 
-    // 连接到Scratchpad的SRAM读写接口
+    // Connect to Scratchpad SRAM read/write interface
     val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
 
@@ -32,10 +32,10 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val idle :: compute :: Nil = Enum(2)
   val state = RegInit(idle)
 
-  // 矩阵存储寄存器 (veclane x veclane)
+  // Matrix storage register (veclane x veclane)
   val regArray = Reg(Vec(b.veclane * 2, Vec(b.veclane, UInt(b.inputType.getWidth.W))))
 
-  // 计数器
+  // Counters
   val readCounter  = RegInit(0.U(10.W))
   val respCounter  = RegInit(0.U(10.W))
   val writeCounter = RegInit(0.U(10.W))
@@ -43,7 +43,7 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val writeHeadptr = RegInit(0.U(10.W))
   val writeTailptr = RegInit(0.U(10.W))
 
-  // 指令寄存器
+  // Instruction registers
   val robid_reg = RegInit(0.U(10.W))
   val waddr_reg = RegInit(0.U(10.W))
   val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
@@ -54,12 +54,12 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   val mode_reg  = RegInit(0.U(1.W))
 
 
-  // 预计算写入数据
+  // Precompute write data
   val writeDataReg = Reg(UInt(spad_w.W))
   val writeMaskReg = Reg(Vec(b.spad_mask_len, UInt(1.W)))
 
   val start_write = RegInit(false.B)
-  // SRAM默认赋值
+  // SRAM default assignment
   for (i <- 0 until b.sp_banks) {
     io.sramRead(i).req.valid        := false.B
     io.sramRead(i).req.bits.addr    := 0.U
@@ -72,7 +72,7 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
     io.sramWrite(i).req.bits.mask   := VecInit(Seq.fill(b.spad_mask_len)(0.U(1.W)))
   }
 
-  // cmd接口默认赋值
+  // cmd interface default assignment
   io.cmdReq.ready        := state === idle
 
   when(state === idle && io.cmdReq.fire){
@@ -100,7 +100,7 @@ class PipelinedTransposer[T <: Data](implicit b: CustomBuckyBallConfig, p: Param
   io.cmdResp.valid       := (readCounter >= (iter_reg - 1.U)) && (state === compute)
   io.cmdResp.bits.rob_id := robid_reg
 
-  //read resp
+  // read resp
   io.sramRead(rbank_reg).resp.ready := true.B
   val dataWord = io.sramRead(rbank_reg).resp.bits.data
   val row = respCounter(4,0)

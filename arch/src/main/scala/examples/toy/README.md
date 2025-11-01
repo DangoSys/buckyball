@@ -1,48 +1,48 @@
-# Toy BuckyBall 示例实现
+# Toy BuckyBall Example Implementation
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架的完整示例实现，展示了如何构建一个基于 RoCC 接口的自定义协处理器。位于 `arch/src/main/scala/examples/toy` 下，作为 BuckyBall 系统的参考实现，集成了全局解码器、Ball域和内存域。
+This directory contains a complete example implementation of the BuckyBall framework, demonstrating how to build a custom coprocessor based on the RoCC interface. Located in `arch/src/main/scala/examples/toy`, it serves as a reference implementation for the BuckyBall system, integrating global decoder, Ball domain, and memory domain.
 
-实现的核心组件：
-- **ToyBuckyBall.scala**: 主要的 RoCC 协处理器实现
-- **CustomConfigs.scala**: 系统配置和 RoCC 集成配置
-- **CSR.scala**: 自定义控制状态寄存器
-- **balldomain/**: Ball域相关组件实现
+Core components:
+- **ToyBuckyBall.scala**: Main RoCC coprocessor implementation
+- **CustomConfigs.scala**: System configuration and RoCC integration
+- **CSR.scala**: Custom control and status registers
+- **balldomain/**: Ball domain related components
 
-## 代码结构
+## Code Structure
 
 ```
 toy/
-├── ToyBuckyBall.scala    - 主协处理器实现
-├── CustomConfigs.scala   - 配置定义
-├── CSR.scala            - CSR实现
-└── balldomain/          - Ball域组件
+├── ToyBuckyBall.scala    - Main coprocessor implementation
+├── CustomConfigs.scala   - Configuration definitions
+├── CSR.scala            - CSR implementation
+└── balldomain/          - Ball domain components
 ```
 
-### 文件依赖关系
+### File Dependencies
 
-**ToyBuckyBall.scala** (核心实现层)
-- 继承 LazyRoCCBB，实现 RoCC 协处理器接口
-- 集成 GlobalDecoder、BallDomain、MemDomain
-- 管理 TileLink 连接和 DMA 组件
+**ToyBuckyBall.scala** (Core implementation layer)
+- Extends LazyRoCCBB, implements RoCC coprocessor interface
+- Integrates GlobalDecoder, BallDomain, MemDomain
+- Manages TileLink connections and DMA components
 
-**CustomConfigs.scala** (配置层)
-- 定义 BuckyBallCustomConfig 和 BuckyBallToyConfig
-- 配置 RoCC 集成和系统参数
-- 提供多核配置支持
+**CustomConfigs.scala** (Configuration layer)
+- Defines BuckyBallCustomConfig and BuckyBallToyConfig
+- Configures RoCC integration and system parameters
+- Provides multi-core configuration support
 
-**CSR.scala** (寄存器层)
-- 实现 FenceCSR 控制寄存器
-- 提供简单的 64 位寄存器接口
+**CSR.scala** (Register layer)
+- Implements FenceCSR control register
+- Provides simple 64-bit register interface
 
-## 模块说明
+## Module Description
 
 ### ToyBuckyBall.scala
 
-**主要功能**: 实现完整的 BuckyBall RoCC 协处理器
+**Main functionality**: Implements complete BuckyBall RoCC coprocessor
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
@@ -54,36 +54,36 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
 }
 ```
 
-**系统架构**:
+**System architecture**:
 ```scala
-// 前端：全局解码器
+// Frontend: global decoder
 val gDecoder = Module(new GlobalDecoder)
 
-// 后端：Ball域和内存域
+// Backend: Ball domain and memory domain
 val ballDomain = Module(new BallDomain)
 val memDomain = Module(new MemDomain)
 
-// 响应仲裁
+// Response arbitration
 val respArb = Module(new Arbiter(new RoCCResponseBB()(p), 2))
 ```
 
-**TileLink 连接**:
+**TileLink connections**:
 ```scala
 xbar_node := TLBuffer() := reader.node
 xbar_node := TLBuffer() := writer.node
 id_node := TLWidthWidget(b.dma_buswidth/8) := TLBuffer() := xbar_node
 ```
 
-**输入输出**:
-- 输入: RoCC 命令接口，PTW 接口
-- 输出: RoCC 响应，TileLink 内存访问
-- 边缘情况: Fence 操作时的忙等待处理
+**Inputs/Outputs**:
+- Input: RoCC command interface, PTW interface
+- Output: RoCC response, TileLink memory access
+- Edge cases: Busy-wait handling during Fence operations
 
 ### CustomConfigs.scala
 
-**主要功能**: 定义系统配置和 RoCC 集成
+**Main functionality**: Defines system configuration and RoCC integration
 
-**配置类定义**:
+**Configuration class definition**:
 ```scala
 class BuckyBallCustomConfig(
   buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
@@ -97,7 +97,7 @@ class BuckyBallCustomConfig(
 })
 ```
 
-**系统配置**:
+**System configuration**:
 ```scala
 class BuckyBallToyConfig extends Config(
   new framework.rocket.WithNBuckyBallCores(1) ++
@@ -108,23 +108,23 @@ class BuckyBallToyConfig extends Config(
 )
 ```
 
-**多核支持**:
+**Multi-core support**:
 ```scala
 class WithMultiRoCCToyBuckyBall(harts: Int*) extends Config(...)
 ```
 
 ### CSR.scala
 
-**主要功能**: 提供自定义控制状态寄存器
+**Main functionality**: Provides custom control and status registers
 
-**实现**:
+**Implementation**:
 ```scala
 object FenceCSR {
   def apply(): UInt = RegInit(0.U(64.W))
 }
 ```
 
-**Fence 处理逻辑**:
+**Fence handling logic**:
 ```scala
 val fenceCSR = FenceCSR()
 val fenceSet = ballDomain.io.fence_o
@@ -136,32 +136,32 @@ when (fenceSet) {
 }
 ```
 
-## 使用方法
+## Usage
 
-### 系统集成
+### System Integration
 
-**RoCC 接口集成**:
-- 通过 BuildRoCCBB 配置键注册协处理器
-- 支持多核心配置
-- 提供 2 个 PTW 端口用于地址转换
+**RoCC interface integration**:
+- Register coprocessor through BuildRoCCBB configuration key
+- Support multi-core configuration
+- Provide 2 PTW ports for address translation
 
-**域间通信**:
+**Inter-domain communication**:
 ```scala
-// BallDomain -> MemDomain 桥接
+// BallDomain -> MemDomain bridge
 ballDomain.io.sramRead <> memDomain.io.ballDomain.sramRead
 ballDomain.io.sramWrite <> memDomain.io.ballDomain.sramWrite
 ```
 
-**DMA 连接**:
+**DMA connections**:
 ```scala
 memDomain.io.dma.read.req <> outer.reader.module.io.req
 memDomain.io.dma.write.req <> outer.writer.module.io.req
 ```
 
-### 注意事项
+### Notes
 
-1. **Fence 语义**: 使用 CSR 实现 Fence 操作的同步
-2. **忙等待检测**: 防止仿真长时间停顿的断言检查
-3. **TLB 集成**: TLB 功能集成在 MemDomain 内部
-4. **响应仲裁**: BallDomain 优先级高于 MemDomain
-5. **配置依赖**: 需要正确配置 CustomBuckyBallConfig 参数
+1. **Fence semantics**: Use CSR to implement Fence operation synchronization
+2. **Busy-wait detection**: Assertion checks to prevent long simulation stalls
+3. **TLB integration**: TLB functionality integrated in MemDomain
+4. **Response arbitration**: BallDomain has higher priority than MemDomain
+5. **Configuration dependencies**: Correctly configure CustomBuckyBallConfig parameters

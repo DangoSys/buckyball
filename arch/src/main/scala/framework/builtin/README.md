@@ -1,179 +1,340 @@
-# BuckyBall 内置组件库
+# BuckyBall Built-in Component Library
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架的内置硬件组件实现，提供标准化的可复用硬件模块。位于 `arch/src/main/scala/framework/builtin` 下，作为组件库层，为上层系统提供经过验证的硬件构建块。
+This directory contains the built-in hardware component implementations of the BuckyBall framework, providing standardized and reusable hardware modules. Located at `arch/src/main/scala/framework/builtin`, it serves as the component library layer, offering verified hardware building blocks for upper-level systems.
 
-主要组件模块：
-- **memdomain**: 内存域组件，包含存储器和DMA引擎
-- **frontend**: 前端处理组件
-- **util**: 框架级工具函数
-- **BaseConfigs.scala**: 基础配置定义
+Main component modules:
+- **memdomain**: Memory domain components, including storage and DMA engines
+- **frontend**: Frontend processing components for instruction decode and scheduling
+- **util**: Framework-level utility functions
+- **BaseConfigs.scala**: Base configuration definitions
 
-## 代码结构
+## Code Structure
 
 ```
 builtin/
-├── BaseConfigs.scala - 基础配置参数定义
-├── memdomain/        - 内存域实现
-├── frontend/         - 前端组件
-└── util/             - 工具函数库
+├── BaseConfigs.scala - Base configuration parameter definitions
+├── memdomain/        - Memory domain implementation
+│   ├── dma/          - DMA engines (BBStreamReader/Writer)
+│   ├── mem/          - Memory components (Scratchpad, Accumulator)
+│   ├── rs/           - Memory domain reservation station
+│   ├── tlb/          - TLB implementation
+│   ├── MemController.scala  - Memory controller
+│   ├── MemDomain.scala      - Memory domain top-level
+│   ├── MemLoader.scala      - Load instruction handler
+│   ├── MemStorer.scala      - Store instruction handler
+│   └── DomainDecoder.scala  - Memory domain decoder
+├── frontend/         - Frontend components
+│   ├── GobalDecoder.scala   - Global instruction decoder
+│   ├── globalrs/            - Global reservation station
+│   │   ├── GlobalReservationStation.scala
+│   │   └── GlobalROB.scala  - Global reorder buffer
+│   └── rs/                  - Ball domain reservation station
+│       ├── reservationStation.scala
+│       └── rob.scala
+└── util/             - Utility function library
 ```
 
-### 文件依赖关系
+### Module Dependencies
 
-**BaseConfigs.scala** (配置基础层)
-- 定义所有内置组件的基础配置参数
-- 提供默认配置和参数验证
-- 被所有子模块引用作为配置源
+```
+Configuration Layer (BaseConfigs.scala)
+    ↓
+Component Layer (memdomain, frontend, util)
+    ↓
+Application Layer (examples, prototypes)
+```
 
-**memdomain/** (内存子系统)
-- 依赖 BaseConfigs 获取内存相关配置
-- 实现存储器、DMA、地址管理等功能
-- 为其他组件提供内存访问服务
+**BaseConfigs.scala** (Configuration Base Layer)
+- Defines base configuration parameters for all built-in components
+- Provides default configuration and parameter validation
+- Referenced by all sub-modules as configuration source
 
-**frontend/** (前端处理)
-- 使用 BaseConfigs 中的前端配置参数
-- 实现指令获取、解码等前端功能
-- 与处理器核心紧密集成
+**memdomain/** (Memory Subsystem)
+- Depends on BaseConfigs for memory-related configuration
+- Implements storage, DMA, address management, etc.
+- Provides memory access services for other components
 
-**util/** (工具库)
-- 提供通用的硬件设计工具函数
-- 被其他组件广泛使用
-- 独立于具体配置参数
+**frontend/** (Frontend Processing)
+- Uses frontend configuration parameters from BaseConfigs
+- Implements instruction fetch, decode, and scheduling
+- Tightly integrated with processor core
 
-## 模块说明
+**util/** (Utility Library)
+- Provides common hardware design utility functions
+- Widely used by other components
+- Independent of specific configuration parameters
+
+## Module Details
 
 ### BaseConfigs.scala
 
-**主要功能**: 定义内置组件的基础配置参数和默认值
+**Main Function**: Define base configuration parameters and defaults for built-in components
 
-**关键组件**:
+**Key Components**:
 
 ```scala
-trait BaseConfig extends Config {
-  // 内存域配置
-  case object MemDomainKey extends Field[MemDomainParams](MemDomainParams())
-
-  // 前端配置
-  case object FrontendKey extends Field[FrontendParams](FrontendParams())
-
-  // 工具配置
-  case object UtilKey extends Field[UtilParams](UtilParams())
-}
-
-case class MemDomainParams(
-  spBanks: Int = 16,           // 暂存器Bank数量
-  spBankEntries: Int = 1024,   // 每个Bank条目数
-  accBanks: Int = 4,           // 累加器Bank数量
-  accBankEntries: Int = 256,   // 累加器Bank条目数
-  dmaEngines: Int = 2          // DMA引擎数量
+case class BaseConfig(
+  opcodes: OpcodeSet = OpcodeSet.custom3,
+  
+  inputType: Data,                      // Input data type
+  accType: Data,                        // Accumulator data type
+  
+  veclane: Int = 16,                    // Vector lane width
+  accveclane: Int = 4,                  // Accumulator vector lane
+  
+  tlb_size: Int = 4,                    // TLB size
+  rob_entries: Int = 16,                // Number of ROB entries
+  rs_out_of_order_response: Boolean = true,  // Out-of-order response support
+  
+  dma_maxbytes: Int = 64,               // Unused
+  dma_buswidth: Int = 128,              // DMA bus width
+  
+  sp_banks: Int = 4,                    // Scratchpad bank count
+  acc_banks: Int = 8,                   // Accumulator bank count
+  
+  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
+  
+  spAddrLen: Int = 15,                  // SPAD address length
+  memAddrLen: Int = 32,                 // Memory address length
+  
+  numVecPE: Int = 16,                   // Vector PEs per thread
+  numVecThread: Int = 16,               // Vector threads
+  
+  emptyBallid: Int = 5                  // Empty ball ID
 )
 ```
 
-**配置参数**:
-- **MemDomainParams**: 内存域相关参数
-- **FrontendParams**: 前端处理参数
-- **UtilParams**: 工具函数参数
+**Configuration Parameters**:
+- **Memory Domain**: Bank counts, capacities, address lengths
+- **Frontend**: ROB entries, out-of-order response
+- **Vector Unit**: PE count, thread count, lane width
+- **Data Types**: Input and accumulator data types
 
-**参数验证**:
+**Parameter Validation**:
 ```scala
-require(spBanks > 0, "SP banks must be positive")
-require(isPow2(spBankEntries), "SP bank entries must be power of 2")
-require(accBanks > 0, "ACC banks must be positive")
+require(sp_banks > 0, "SP banks must be positive")
+require(acc_banks > 0, "ACC banks must be positive")
+require(rob_entries > 0 && isPow2(rob_entries), "ROB entries must be power of 2")
 ```
 
-**输入输出**:
-- 输入: 用户自定义配置覆盖
-- 输出: 验证后的完整配置参数
-- 边缘情况: 参数冲突检测和错误报告
+**Input/Output**:
+- Input: User-defined configuration overrides
+- Output: Validated complete configuration parameters
+- Edge cases: Parameter conflict detection and error reporting
 
-### memdomain/ 子模块
+### memdomain/ Submodule
 
-**主要功能**: 实现完整的内存域功能
+**Main Function**: Implement complete memory domain functionality
 
-**包含组件**:
-- **mem/**: 存储器组件(SramBank, AccBank, Scratchpad)
-- **dma/**: DMA引擎(BBStreamReader, BBStreamWriter, LocalAddr)
+**Key Components**:
+- **MemDomain.scala**: Memory domain top-level module
+  - Integrates all memory subsystem components
+  - Provides unified external interface
+  - Manages DMA and Ball domain access coordination
 
-**接口定义**:
+- **MemController.scala**: Memory controller
+  - Encapsulates Scratchpad and Accumulator
+  - Dual-port design for DMA and Ball domain
+  - Bank arbitration and routing
+
+- **MemLoader.scala**: Load instruction handler
+  - Receives load instructions from reservation station
+  - Issues DMA read requests
+  - Writes data to Scratchpad/Accumulator
+
+- **MemStorer.scala**: Store instruction handler
+  - Reads data from Scratchpad/Accumulator
+  - Issues DMA write requests with alignment
+  - Handles byte masking
+
+- **dma/**: DMA engines
+  - **BBStreamReader**: Streaming read with TLB support
+  - **BBStreamWriter**: Streaming write with alignment
+  - Transaction ID management
+
+- **mem/**: Memory components
+  - **Scratchpad**: Multi-bank scratchpad memory
+  - **AccBank**: Accumulator bank with accumulation pipeline
+  - **SramBank**: Generic SRAM bank
+
+- **tlb/**: Translation Lookaside Buffer
+  - Virtual to physical address translation
+  - Integrated with DMA engines
+
+- **rs/**: Memory domain reservation station
+  - FIFO-based instruction scheduler
+  - Local ROB for memory instructions
+
+**Interface Definition**:
 ```scala
-class MemDomainIO(implicit p: Parameters) extends Bundle {
-  val exec = new Bundle {
-    val cmd = Flipped(Decoupled(new MemCmd))
-    val resp = Decoupled(new MemResp)
-  }
+class MemDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+  // From Global RS
+  val issue = Flipped(Decoupled(new MemRsIssue))
+  
+  // To Global RS
+  val complete = Decoupled(new MemRsComplete)
+  
+  // Ball domain SRAM interface
+  val sramRead = Vec(sp_banks, Flipped(new SramReadIO))
+  val sramWrite = Vec(sp_banks, Flipped(new SramWriteIO))
+  val accRead = Vec(acc_banks, Flipped(new SramReadIO))
+  val accWrite = Vec(acc_banks, Flipped(new SramWriteIO))
+  
+  // DMA interface
   val dma = new Bundle {
-    val read = Decoupled(new DMAReadReq)
-    val write = Flipped(Decoupled(new DMAWriteReq))
+    val read = Decoupled(new BBReadRequest)
+    val write = Decoupled(new BBWriteRequest)
   }
+  
+  // TLB interface
+  val tlb = Vec(2, new BBTLBIO)
+  val ptw = Vec(2, Flipped(new TLBPTWIO))
+  val tlbExp = Output(Vec(2, new BBTLBExceptionIO))
 }
 ```
 
-### frontend/ 子模块
+### frontend/ Submodule
 
-**主要功能**: 实现处理器前端功能
+**Main Function**: Implement processor frontend functionality for instruction decode and scheduling
 
-**核心功能**:
-- 指令获取和缓存
-- 分支预测和跳转处理
-- 指令解码预处理
+**Core Components**:
+- **GobalDecoder.scala**: Global instruction decoder
+  - Classifies instructions into Ball/Memory/Fence types
+  - Constructs PostGDCmd for domain-specific decoders
+  - Interfaces with Global RS
 
-### util/ 子模块
+- **globalrs/**: Global reservation station
+  - **GlobalReservationStation.scala**: Central instruction manager
+    - Allocates ROB entries
+    - Issues to Ball and Memory domains
+    - Handles completion from both domains
+    - Manages Fence synchronization
+  - **GlobalROB.scala**: Global reorder buffer
+    - Tracks instruction state across domains
+    - Supports out-of-order completion
+    - Sequential commit
 
-**主要功能**: 提供通用工具函数
+- **rs/**: Ball domain reservation station
+  - **reservationStation.scala**: Ball-specific scheduler
+  - **rob.scala**: Local ROB for Ball instructions
 
-**工具类别**:
-- 数学运算工具
-- 接口转换工具
-- 调试和监控工具
+**Data Flow**:
+```
+RoCC → Global Decoder → Global RS → Ball Domain / Mem Domain
+                          ↓                ↓            ↓
+                      Global ROB    Ball Decoder  Mem Decoder
+                   (tracks state)       ↓            ↓
+                                   Ball Devices  Loader/Storer
+```
 
-## 使用方法
+### util/ Submodule
 
-### 配置使用
+**Main Function**: Provide common utility functions
 
-**基础配置继承**:
+**Utility Categories**:
+- Mathematical operation tools
+- Interface conversion tools
+- Debug and monitoring tools
+- Common hardware patterns
+
+## Usage Guide
+
+### Configuration Usage
+
+**Basic Configuration Inheritance**:
 ```scala
 class MySystemConfig extends Config(
   new BaseConfig ++
-  new WithCustomMemDomain(spBanks = 32) ++
-  new WithCustomFrontend(icacheWays = 8)
+  new WithCustomMemDomain(spBanks = 8) ++
+  new WithCustomFrontend(robEntries = 32)
 )
 ```
 
-**参数访问**:
+**Parameter Access**:
 ```scala
-class MyModule(implicit p: Parameters) extends Module {
-  val memParams = p(MemDomainKey)
-  val spBanks = memParams.spBanks
-  val accBanks = memParams.accBanks
+class MyModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  val spBanks = b.sp_banks
+  val accBanks = b.acc_banks
+  val robEntries = b.rob_entries
 }
 ```
 
-### 扩展开发
+### Extension Development
 
-**添加新组件**:
-1. 在相应子目录创建新模块
-2. 在 BaseConfigs.scala 中添加配置参数
-3. 实现标准的 LazyModule 接口
-4. 添加相应的测试用例
+**Adding New Components**:
+1. Create new module in corresponding subdirectory
+2. Add configuration parameters in BaseConfigs.scala
+3. Implement standard Module interface
+4. Add corresponding test cases
+5. Update documentation
 
-**自定义配置**:
+**Custom Configuration**:
 ```scala
 case class MyComponentParams(
   param1: Int = 16,
   param2: Boolean = true
 )
 
-trait WithMyComponent extends Config {
-  case object MyComponentKey extends Field[MyComponentParams](MyComponentParams())
-}
+class WithMyComponent(param1: Int, param2: Boolean) extends Config((site, here, up) => {
+  case MyComponentKey => MyComponentParams(param1, param2)
+})
 ```
 
-### 注意事项
+### Important Notes
 
-1. **配置一致性**: 确保相关组件的配置参数兼容
-2. **资源约束**: 注意硬件资源的合理分配
-3. **时序优化**: 关注跨组件的时序路径
-4. **接口标准**: 遵循统一的接口设计规范
-5. **测试覆盖**: 为每个组件提供充分的测试用例
+1. **Configuration Consistency**: Ensure related component configurations are compatible
+2. **Resource Constraints**: Pay attention to reasonable hardware resource allocation
+3. **Timing Optimization**: Focus on timing paths across components
+4. **Interface Standards**: Follow unified interface design specifications
+5. **Test Coverage**: Provide sufficient test cases for each component
+6. **Memory Access**: Respect bank access constraints (op1 and op2 cannot access same bank)
+7. **ROB Management**: Coordinate between Global ROB and local ROBs
+
+## Architecture Highlights
+
+### Instruction Pipeline
+```
+RoCC Interface
+    ↓
+Global Decoder (classify instruction type)
+    ↓
+Global RS (with ROB) ← tracks all in-flight instructions
+    ↓           ↓
+Ball Domain  Mem Domain
+    ↓           ↓
+Ball Devices  Loader/Storer
+    ↓           ↓
+    MemController
+    ↓           ↓
+Scratchpad  Accumulator
+```
+
+### Memory Architecture
+```
+Main Memory
+    ↓ (DMA + TLB)
+MemController
+├─→ Scratchpad (4 banks × 64KB = 256KB)
+└─→ Accumulator (8 banks × 8KB = 64KB)
+    ↑
+Ball Devices (read/write access)
+```
+
+## Performance Considerations
+
+1. **ROB Depth**: 16 entries support up to 16 in-flight instructions
+2. **Memory Banks**: 4 scratchpad + 8 accumulator banks enable parallel access
+3. **Out-of-Order Execution**: Global RS supports OOO when enabled
+4. **DMA Bandwidth**: 128-bit bus provides high memory throughput
+5. **Pipeline Depth**: Multi-stage pipeline for high clock frequency
+
+## Related Documentation
+
+- [Memory Domain Details](memdomain/README.md) - Memory subsystem implementation
+- [Frontend Components](frontend/README.md) - Instruction decode and scheduling
+- [DMA Engines](memdomain/dma/README.md) - DMA implementation
+- [TLB Management](memdomain/tlb/README.md) - Address translation
+- [Framework Overview](../README.md) - Upper-level architecture

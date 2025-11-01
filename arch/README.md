@@ -2,39 +2,61 @@
 
 ![image](./img/buckyball.png)
 
-BuckyBall是一个全栈开源NPU/DSA设计框架。
+BuckyBall is a full-stack open-source NPU/DSA design framework.
 
 ## 1. 🤔 Why BuckyBall
 
-
->❗BuckyBall 并不是某个具体的NPU设计，而是一个设计框架。你可以在example文件夹下找到各种NPU的设计案例
-
+> ❗BuckyBall is not a specific NPU design, but a design framework. You can find various NPU design examples in the examples folder.
 
 
+## 2. Architecture Overview
 
+### 2.1 System Architecture
 
-## 2. Architecture
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Rocket Core                          │
+│              (RoCC Interface)                           │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+         ┌────────▼────────┐
+         │ Global Decoder  │
+         └────────┬────────┘
+                  │
+         ┌────────▼────────┐
+         │   Global RS     │
+         │  (with ROB)     │
+         └────┬──────┬─────┘
+              │      │
+      ┌───────▼──┐ ┌▼──────────┐
+      │  Ball    │ │   Mem     │
+      │  Domain  │ │  Domain   │
+      └───┬──────┘ └──────┬────┘
+          │               │
+      ┌───▼──────────────▼────┐
+      │   Memory Controller   │
+      │ (Scratchpad + Acc)    │
+      └───────────────────────┘
+```
 
-### 2.1 ISA
-#### 2.1.1 bb_mvin
+### 2.2 ISA Specification
 
-**功能**: 将数据从主内存加载到scratchpad内存
+#### 2.2.1 bb_mvin
+
+**Function**: Load data from main memory to scratchpad memory
 
 **func7**: `0010000` (24)
 
-**格式**: `bb_mvin rs1, rs2`
+**Format**: `bb_mvin rs1, rs2`
 
-**操作数**:
+**Operands**:
+- `rs1`: Main memory address
+- `rs2[spAddrLen-1:0]`: Scratchpad address
+- `rs2[spAddrLen+9:spAddrLen]`: Number of rows (iteration count)
 
-- `rs1`: 主内存地址
-- `rs2[addrLen-1:0]`: scratchpad地址
-- `rs2[2*addrLen-1:addrLen]`: 行数(iter) 一共有多少行
-- `rs2[2*addrLen+9:2*addrLen]`: 列数 最后一行有多少列（mask），其余行均与带宽对齐
+**Operation**: Load data from main memory address `rs1` to scratchpad address specified in `rs2`, with iteration count determining number of rows
 
-**操作**: 将主内存地址`rs1`处的数据加载到scratchpad地址`rs2[addrLen-1:0]`，执行`rs2[2*addrLen+9:addrLen]`次迭代
-
-rs1:
-
+rs1 format:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        mem_addr                                 │
@@ -44,37 +66,32 @@ rs1:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-rs2:
-
+rs2 format:
 ```
 ┌──────────────────────────────────┬──────────────────────────────────────────┐
-│        row(iter)                 │                sp_addr                   │
+│        row (iter)                │                sp_addr                   │
 │     (10 bits)                    │            (spAddrLen bits)              │
 ├──────────────────────────────────┼──────────────────────────────────────────┤
-│ [spAddrLen+9: spAddrLen]         │            [spAddrLen-1:0]               │
+│ [spAddrLen+9:spAddrLen]          │            [spAddrLen-1:0]               │
 └──────────────────────────────────┴──────────────────────────────────────────┘
 ```
 
+#### 2.2.2 bb_mvout
 
+**Function**: Store data from scratchpad memory to main memory
 
-#### 2.1.2 bb_mvout
+**func7**: `0010001` (25)
 
-**功能**: 将数据从scratchpad内存存储到主内存
+**Format**: `bb_mvout rs1, rs2`
 
-**func7**: `0010001` 25
+**Operands**:
+- `rs1`: Main memory address
+- `rs2[spAddrLen-1:0]`: Scratchpad address
+- `rs2[spAddrLen+9:spAddrLen]`: Number of rows to store (iteration count)
 
-**格式**: `bb_mvout rs1, rs2`
+**Operation**: Store data from scratchpad address specified in `rs2` to main memory address `rs1`
 
-**操作数**:
-
-- `rs1`: 主内存地址
-- `rs2[addrLen-1:0]`: scratchpad地址
-- `rs2[2*addrLen+9:addrLen]`: 搬出去多少行（迭代次数）
-
-**操作**: 将scratchpad地址`rs2[addrLen-1:0]`处的数据存储到主内存地址`rs1`，执行`rs2[2*addrLen+9:addrLen]`次迭代
-
-rs1:
-
+rs1 format:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        mem_addr                                 │
@@ -84,36 +101,31 @@ rs1:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-rs2:
-
+rs2 format:
 ```
 ┌──────────────────────────────────┬──────────────────────────────────────────┐
-│        row(iter)                 │                sp_addr                   │
+│        row (iter)                │                sp_addr                   │
 │     (10 bits)                    │            (spAddrLen bits)              │
 ├──────────────────────────────────┼──────────────────────────────────────────┤
-│   [spAddrLen+9: spAddrLen]       │             [spAddrLen-1:0]              │
+│   [spAddrLen+9:spAddrLen]        │             [spAddrLen-1:0]              │
 └──────────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-#### 2.1.3 bb_mul_warp16 - 乘法指令
+#### 2.2.3 Ball Execution Instructions
 
-**功能**: 执行16-way warp的矩阵乘法运算
+**Function**: Execute computation on Ball devices (matrix multiply, transpose, im2col, ReLU, etc.)
 
-**func7**: `0100000` 32
+**func7**: `0100000` - `0111111` (32-63)
 
-**格式**: `bb_mul_warp16 rs1, rs2`
+**Format**: `bb_<op> rs1, rs2`
 
-**操作数**:
+**Common Operands**:
+- `rs1[spAddrLen-1:0]`: First operand scratchpad address
+- `rs1[2*spAddrLen-1:spAddrLen]`: Second operand scratchpad address
+- `rs2[spAddrLen-1:0]`: Result write-back scratchpad address
+- `rs2[spAddrLen+9:spAddrLen]`: Iteration count
 
-- `rs1[spAddrLen-1:0]`: 第一个操作数的scratchpad地址
-- `rs1[2*spAddrLen-1:spAddrLen]`: 第二个操作数的scratchpad地址
-- `rs2[spAddrLen-1:0]`: 结果写回的scratchpad地址
-- `rs2[spAddrLen+9:spAddrLen]`: 迭代次数
-
-**操作**: 从scratchpad读取两个操作数，执行矩阵乘法运算，并将结果写回到指定的scratchpad地址
-
-rs1:
-
+rs1 format:
 ```
 ┌────────────────────────────────┬──────────────────────────────┐
 │           op2_spaddr           │          op1_spaddr          │
@@ -123,53 +135,166 @@ rs1:
 └────────────────────────────────┴──────────────────────────────┘
 ```
 
-rs2:
-
+rs2 format:
 ```
-┌──────────────────────────┌────────────────────────────────────┐
+┌──────────────────────────┬────────────────────────────────────┐
 │         iter             │    wr_spaddr                       │
 │       (10 bits)          │  (spAddrLen bits)                  │
-├──────────────────────────├────────────────────────────────────┤
-│ [spAddrLen+9:  spAddrLen]│  [spAddrLen-1:0]                   │
-└──────────────────────────└────────────────────────────────────┘
+├──────────────────────────┼────────────────────────────────────┤
+│ [spAddrLen+9:spAddrLen]  │  [spAddrLen-1:0]                   │
+└──────────────────────────┴────────────────────────────────────┘
 ```
 
+**Supported Operations**:
+- Matrix multiplication (various formats: INT8, FP16, FP32, BBFP)
+- Transpose operations
+- Im2col transformation
+- ReLU activation
+- Vector operations
 
+### 2.3 Ball Protocol
 
+The Ball protocol defines a unified interface for all computation units in BuckyBall. All Ball devices share common base properties:
 
-
-
-
-### 2.2 Ball 协议
-
-所有Ball具有相同的基础属性, 具体属性会随着版本更新变化
-
+**Command Interface**:
+```scala
+class BallCmd extends Bundle {
+  val bid      = UInt(4.W)      // Ball device ID
+  val iter     = UInt(10.W)     // Iteration count
+  val special  = UInt(40.W)     // Device-specific parameters
+}
 ```
 
-```
+**Common Properties**:
+- Unified command/response interface
+- ROB ID tracking for out-of-order completion
+- Standardized SRAM read/write interfaces
+- Configurable iteration support
 
-
-
-### 2.3 数据通路
+### 2.4 Memory Hierarchy
 
 ![image](./img/dma1.png)
 ![image](./img/dma2.png)
 
-约定：
-1. 所有EX指令的op1和op2不能同时访问同一个bank
-2. 所有指令对scratchpad的访问不能超出该bank
-3. 所有bank均为单端口(同时可读可写，应该不支持读写同一个地址(未测试))
-4. 目前的bank划分，scratchpad为4个bank(64KBx4)，acc为2个bank(64KBx2)
-5. acc的两个bank是弹性的，当CPU需要使用spad时，会操作acc中的bank2
-
-
-
-### 2.4 指令通路
+**Architecture**:
 ```
-GlobalDecoder → 全局RS(frontend/rs) → BallDomain / MemDomain
-                  ↓                       ↓           ↓
-            全局ROB                  BallDecoder  MemDecoder
-        (只知道ball/mem)               ↓           ↓
-                                   局部FIFO    局部FIFO
-                           (对应ball空闲则发送)   (对应ball空闲则发送)
+┌──────────────┐
+│  Main Memory │
+└──────┬───────┘
+       │ (DMA + TLB)
+┌──────▼────────────────────────────────┐
+│      Memory Controller                │
+├───────────────────┬───────────────────┤
+│   Scratchpad      │   Accumulator     │
+│   (4 banks)       │   (8 banks)       │
+│   256KB total     │   64KB total      │
+└───────────────────┴───────────────────┘
+       │                   │
+       └────────┬──────────┘
+                │
+        ┌───────▼─────────┐
+        │  Ball Devices   │
+        └─────────────────┘
 ```
+
+**Design Constraints**:
+1. All EX instructions' op1 and op2 cannot access the same bank simultaneously
+2. All instructions accessing scratchpad must not exceed bank boundaries
+3. All banks are single-ported (simultaneous read/write supported, but not to same address)
+4. Current bank division: scratchpad has 4 banks (64KB×4), accumulator has 8 banks (8KB×8)
+5. Accumulator banks are elastic - CPU can access accumulator banks when needed
+
+### 2.5 Instruction Pipeline
+
+```
+┌─────────────────┐
+│ RoCC Interface  │
+└────────┬────────┘
+         │
+┌────────▼─────────┐
+│ Global Decoder   │  ← Decode instruction type (Ball/Mem/Fence)
+└────────┬─────────┘
+         │
+┌────────▼─────────┐
+│   Global RS      │  ← Unified reservation station with ROB
+│   (with ROB)     │     - Tracks instruction state
+└────┬───────┬─────┘     - Supports out-of-order completion
+     │       │
+     │       └─────────────┐
+┌────▼──────┐     ┌───────▼────────┐
+│Ball Domain│     │  Mem Domain    │
+│           │     │                │
+│ Decoder   │     │   Decoder      │
+│    ↓      │     │      ↓         │
+│Local FIFO │     │ Local FIFO     │
+│    ↓      │     │      ↓         │
+│Ball Devices│    │MemLoader/Storer│
+└───────────┘     └────────────────┘
+```
+
+**Pipeline Stages**:
+1. **Global Decoder**: Classify instruction type (Ball/Memory/Fence)
+2. **Global RS**: Allocate ROB entry and issue to appropriate domain
+3. **Domain Decoder**: Decode domain-specific instruction details
+4. **Local RS/FIFO**: Buffer and issue to execution units when ready
+5. **Execution**: Perform computation or memory operation
+6. **Completion**: Report to Global RS for ROB commit
+
+### 2.6 Configuration Parameters
+
+**Default Configuration** (defined in `BaseConfig`):
+- **Vector Lane**: 16 elements per vector operation
+- **ROB Entries**: 16 (supports up to 16 in-flight instructions)
+- **Scratchpad**: 256KB (4 banks × 64KB)
+- **Accumulator**: 64KB (8 banks × 8KB)
+- **DMA Bus Width**: 128 bits
+- **Address Lengths**:
+  - spAddrLen: 15 bits (supports SPAD + ACC indexing)
+  - memAddrLen: 32 bits (4GB address space)
+
+
+- Scala 2.13+
+- Mill build tool
+- Verilator (for simulation)
+
+
+
+
+
+### Directory Structure
+
+```
+arch/
+├── src/main/scala/
+│   ├── examples/          # Example configurations and systems
+│   │   └── toy/          # Toy example system
+│   ├── framework/        # Core framework
+│   │   ├── builtin/     # Built-in components
+│   │   │   ├── frontend/  # Global decoder, RS, ROB
+│   │   │   └── memdomain/ # Memory domain components
+│   │   └── blink/       # Ball protocol definitions
+│   └── prototype/       # Prototype Ball devices
+│       ├── matrix/      # Matrix computation Balls
+│       ├── vector/      # Vector computation Balls
+│       ├── transpose/   # Transpose Ball
+│       ├── im2col/      # Im2col Ball
+│       └── relu/        # ReLU Ball
+└── sims/               # Simulation environments
+    ├── verilator/      # Verilator simulation
+    └── firesim/        # FireSim FPGA simulation
+```
+
+## 4. Documentation
+
+- [Framework Overview](src/main/scala/framework/README.md) - Core framework architecture
+- [Examples](src/main/scala/examples/README.md) - Example configurations
+- [Prototype Balls](src/main/scala/prototype/README.md) - Ball device implementations
+- [Memory Domain](src/main/scala/framework/builtin/memdomain/README.md) - Memory subsystem
+- [Simulation Guide](src/main/scala/sims/README.md) - Simulation setup
+
+## 5. Contributing
+
+We welcome contributions! Please see our contributing guidelines and feel free to submit issues and pull requests.
+
+## 6. License
+
