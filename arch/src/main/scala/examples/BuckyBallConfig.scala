@@ -8,14 +8,14 @@ object BuckyBallConfigs {
   val defaultConfig = BaseConfig
   val toyConfig = BuckyBallToyConfig.defaultConfig
 
-  // 实际使用的配置
+  // Actually used configuration
   val customConfig = toyConfig
 
   type CustomBuckyBallConfig = BaseConfig
 }
 
 
-// 获取当前选择的配置
+// Get currently selected configuration
 object CustomBuckyBallConfig {
   import BuckyBallConfigs._
   def apply(): CustomBuckyBallConfig = BuckyBallConfigs.customConfig

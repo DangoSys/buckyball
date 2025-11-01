@@ -1,60 +1,60 @@
-# BallDomain 球域示例实现
+# BallDomain Example Implementation
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架中球域(BallDomain)的完整示例实现，展示了如何构建一个自定义的计算域来管理专用加速器。球域是 BuckyBall 架构中的核心概念，用于封装和管理一组相关的计算单元，提供统一的控制和数据流管理。
+This directory contains a complete example implementation of BallDomain in the BuckyBall framework, demonstrating how to build a custom computation domain to manage specialized accelerators. BallDomain is a core concept in BuckyBall architecture, used to encapsulate and manage a group of related computation units with unified control and dataflow management.
 
-该目录实现了球域架构，包括：
-- **BallDomain**: 球域顶层模块，管理整个计算域
-- **BallController**: 球域控制器，负责指令调度和执行控制
-- **DISA**: 分布式指令调度架构
-- **DomainDecoder**: 域指令解码器
-- **专用加速器**: 包含矩阵、向量、im2col等多种加速器实现
+This directory implements the ball domain architecture, including:
+- **BallDomain**: Top-level module managing the entire computation domain
+- **BallController**: Ball domain controller for instruction scheduling and execution control
+- **DISA**: Distributed instruction scheduling architecture
+- **DomainDecoder**: Domain instruction decoder
+- **Specialized accelerators**: Including matrix, vector, im2col and other accelerator implementations
 
-## 代码结构
+## Code Structure
 
 ```
 balldomain/
-├── BallDomain.scala      - 球域顶层模块
-├── BallController.scala  - 球域控制器
-├── DISA.scala           - 分布式指令调度架构
-├── DomainDecoder.scala  - 域指令解码器
-├── bbus/                - 球域总线系统
-├── im2col/              - 图像到列转换加速器
-├── matrixball/          - 矩阵运算球域
-├── rs/                  - 保留站实现
-└── vecball/             - 向量运算球域
+├── BallDomain.scala      - Ball domain top module
+├── BallController.scala  - Ball domain controller
+├── DISA.scala           - Distributed instruction scheduling architecture
+├── DomainDecoder.scala  - Domain instruction decoder
+├── bbus/                - Ball domain bus system
+├── im2col/              - Image-to-column conversion accelerator
+├── matrixball/          - Matrix computation ball domain
+├── rs/                  - Reservation station implementation
+└── vecball/             - Vector computation ball domain
 ```
 
-### 文件依赖关系
+### File Dependencies
 
-**BallDomain.scala** (顶层模块)
-- 集成所有子模块，提供统一的球域接口
-- 管理球域内部的数据流和控制流
-- 连接到系统总线和RoCC接口
+**BallDomain.scala** (Top-level module)
+- Integrates all submodules, provides unified ball domain interface
+- Manages dataflow and control flow within ball domain
+- Connects to system bus and RoCC interface
 
-**BallController.scala** (控制层)
-- 实现球域的指令调度和执行控制
-- 管理多个加速器之间的协调
-- 提供状态管理和错误处理
+**BallController.scala** (Control layer)
+- Implements instruction scheduling and execution control for ball domain
+- Manages coordination between multiple accelerators
+- Provides state management and error handling
 
-**DISA.scala** (调度层)
-- 分布式指令调度架构实现
-- 支持多指令并发执行
-- 提供动态负载均衡
+**DISA.scala** (Scheduling layer)
+- Distributed instruction scheduling architecture implementation
+- Supports concurrent execution of multiple instructions
+- Provides dynamic load balancing
 
-**DomainDecoder.scala** (解码层)
-- 球域专用指令解码
-- 指令分发到相应的执行单元
-- 支持复杂指令的分解和重组
+**DomainDecoder.scala** (Decode layer)
+- Ball domain specific instruction decode
+- Instruction dispatch to corresponding execution units
+- Supports complex instruction decomposition and reorganization
 
-## 模块说明
+## Module Description
 
 ### BallDomain.scala
 
-**主要功能**: 球域顶层模块，集成所有计算单元和控制逻辑
+**Main functionality**: Ball domain top module, integrates all computation units and control logic
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class BallDomain(implicit p: Parameters) extends LazyModule {
@@ -63,7 +63,7 @@ class BallDomain(implicit p: Parameters) extends LazyModule {
   val vecBall = LazyModule(new VecBall)
   val im2colUnit = LazyModule(new Im2colUnit)
 
-  // 球域总线连接
+  // Ball domain bus connections
   val bbus = LazyModule(new BBus)
   bbus.node := controller.node
   matrixBall.node := bbus.node
@@ -71,16 +71,16 @@ class BallDomain(implicit p: Parameters) extends LazyModule {
 }
 ```
 
-**输入输出**:
-- 输入: RoCC指令接口，内存访问接口
-- 输出: 计算结果，状态信息
-- 边缘情况: 指令冲突处理，资源竞争管理
+**Inputs/Outputs**:
+- Input: RoCC instruction interface, memory access interface
+- Output: Computation results, status information
+- Edge cases: Instruction conflict handling, resource contention management
 
 ### BallController.scala
 
-**主要功能**: 球域控制器，负责整个球域的运行控制
+**Main functionality**: Ball domain controller, manages overall ball domain execution control
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class BallController extends Module {
@@ -90,22 +90,22 @@ class BallController extends Module {
     val domain_ctrl = new DomainControlIO
   })
 
-  // 指令队列和调度逻辑
+  // Instruction queue and scheduling logic
   val inst_queue = Module(new Queue(new RoCCInstruction, 16))
   val scheduler = Module(new InstructionScheduler)
 }
 ```
 
-**调度策略**:
-- 基于指令类型的静态调度
-- 动态资源分配和负载均衡
-- 支持指令流水线和并发执行
+**Scheduling strategy**:
+- Static scheduling based on instruction type
+- Dynamic resource allocation and load balancing
+- Supports instruction pipelining and concurrent execution
 
 ### DISA.scala
 
-**主要功能**: 分布式指令调度架构
+**Main functionality**: Distributed instruction scheduling architecture
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class DISA extends Module {
@@ -115,22 +115,22 @@ class DISA extends Module {
     val completion = Decoupled(new CompletionInfo)
   })
 
-  // 分布式调度表
+  // Distributed dispatch table
   val dispatch_table = Reg(Vec(numUnits, new DispatchEntry))
   val load_balancer = Module(new LoadBalancer)
 }
 ```
 
-**调度算法**:
-- 轮询调度保证公平性
-- 优先级调度支持关键任务
-- 动态调度适应负载变化
+**Scheduling algorithms**:
+- Round-robin scheduling for fairness
+- Priority scheduling for critical tasks
+- Dynamic scheduling adapts to load changes
 
 ### DomainDecoder.scala
 
-**主要功能**: 球域指令解码器
+**Main functionality**: Ball domain instruction decoder
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class DomainDecoder extends Module {
@@ -140,7 +140,7 @@ class DomainDecoder extends Module {
     val valid = Output(Bool())
   })
 
-  // 指令解码表
+  // Instruction decode table
   val decode_table = Array(
     MATRIX_OP -> MatrixOpDecoder,
     VECTOR_OP -> VectorOpDecoder,
@@ -149,44 +149,44 @@ class DomainDecoder extends Module {
 }
 ```
 
-**解码功能**:
-- 支持多种指令格式
-- 复杂指令的微码展开
-- 指令依赖分析和优化
+**Decode functionality**:
+- Supports multiple instruction formats
+- Microcode expansion for complex instructions
+- Instruction dependency analysis and optimization
 
-## 使用方法
+## Usage
 
-### 设计特点
+### Design Features
 
-1. **模块化架构**: 每个加速器都是独立的模块，便于扩展和维护
-2. **统一接口**: 所有加速器通过统一的球域总线进行通信
-3. **灵活调度**: 支持多种调度策略，适应不同的计算模式
-4. **可扩展性**: 易于添加新的加速器类型和功能
+1. **Modular architecture**: Each accelerator is an independent module, easy to extend and maintain
+2. **Unified interface**: All accelerators communicate through unified ball domain bus
+3. **Flexible scheduling**: Supports multiple scheduling strategies, adapts to different computation patterns
+4. **Scalability**: Easy to add new accelerator types and functionality
 
-### 性能优化
+### Performance Optimization
 
-1. **流水线设计**: 指令解码、调度、执行采用流水线架构
-2. **并发执行**: 支持多个加速器同时工作
-3. **数据管理**: 数据缓存和访问管理
-4. **工作负载**: 工作负载分配
+1. **Pipeline design**: Instruction decode, scheduling, execution use pipeline architecture
+2. **Concurrent execution**: Supports multiple accelerators working simultaneously
+3. **Data management**: Data caching and access management
+4. **Workload**: Workload distribution
 
-### 使用示例
+### Usage Example
 
 ```scala
-// 创建球域实例
+// Create ball domain instance
 val ballDomain = LazyModule(new BallDomain)
 
-// 连接到RoCC接口
+// Connect to RoCC interface
 rocc.cmd <> ballDomain.module.io.rocc.cmd
 rocc.resp <> ballDomain.module.io.rocc.resp
 
-// 配置球域参数
+// Configure ball domain parameters
 ballDomain.module.io.config := ballDomainConfig
 ```
 
-### 注意事项
+### Notes
 
-1. **资源管理**: 需要合理分配计算资源，避免资源冲突
-2. **时序约束**: 注意不同模块间的时序关系和数据同步
-3. **功耗控制**: 实现动态功耗管理，在不使用时关闭相应模块
-4. **调试支持**: 调试接口和状态监控功能
+1. **Resource management**: Properly allocate computational resources, avoid resource conflicts
+2. **Timing constraints**: Pay attention to timing relationships and data synchronization between different modules
+3. **Power control**: Implement dynamic power management, shut down modules when not in use
+4. **Debug support**: Debug interface and status monitoring functionality

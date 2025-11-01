@@ -1,22 +1,22 @@
-# 向量操作模块 (Vector Operations)
+# Vector Operations Module
 
-## 概述
+## Overview
 
-向量操作模块实现了向量处理单元中的具体计算操作，位于 `prototype/vector/op` 路径下。该模块提供了不同类型的向量运算实现，包括乘法操作和级联操作。
+The vector operations module implements specific computation operations in the vector processing unit, located at `prototype/vector/op`. This module provides implementations of different types of vector operations, including multiplication operations and cascade operations.
 
-## 文件结构
+## File Structure
 
 ```
 op/
-├── cascade.scala    - 级联加法操作
-└── mul.scala       - 乘法操作
+├── cascade.scala    - Cascade addition operation
+└── mul.scala       - Multiplication operation
 ```
 
-## 核心组件
+## Core Components
 
-### CascadeOp - 级联加法操作
+### CascadeOp - Cascade Addition Operation
 
-CascadeOp 实现向量元素的逐元素加法操作：
+CascadeOp implements element-wise addition operation on vector elements:
 
 ```scala
 class CascadeOp(implicit p: Parameters) extends Module {
@@ -28,7 +28,7 @@ class CascadeOp(implicit p: Parameters) extends Module {
 }
 ```
 
-#### 操作逻辑
+#### Operation Logic
 
 ```scala
 val reg1 = RegInit(VecInit(Seq.fill(lane)(0.U(outputWidth.W))))
@@ -40,13 +40,13 @@ when (io.in.valid) {
 }
 ```
 
-**功能说明**：
-- 接收两个输入向量 `in1` 和 `in2`
-- 执行逐元素加法：`out[i] = in1[i] + in2[i]`
-- 使用寄存器缓存计算结果
-- 支持流水线操作
+**Function description**:
+- Receives two input vectors `in1` and `in2`
+- Performs element-wise addition: `out[i] = in1[i] + in2[i]`
+- Uses register to cache computation results
+- Supports pipelined operations
 
-#### 流控机制
+#### Flow Control Mechanism
 
 ```scala
 io.in.ready := io.out.ready
@@ -60,9 +60,9 @@ when (io.out.ready && valid) {
 }
 ```
 
-### MulOp - 乘法操作
+### MulOp - Multiplication Operation
 
-MulOp 实现向量乘法操作，支持广播模式：
+MulOp implements vector multiplication operation with broadcast mode support:
 
 ```scala
 class MulOp(implicit p: Parameters) extends Module {
@@ -74,7 +74,7 @@ class MulOp(implicit p: Parameters) extends Module {
 }
 ```
 
-#### 操作逻辑
+#### Operation Logic
 
 ```scala
 val reg1 = RegInit(VecInit(Seq.fill(lane)(0.U(inputWidth.W))))
@@ -90,12 +90,12 @@ when (io.in.valid) {
 }
 ```
 
-**功能说明**：
-- 接收两个输入向量并缓存到寄存器
-- 使用计数器 `cnt` 控制输出序列
-- 实现广播乘法：`out[i] = reg1[cnt] * reg2[i]`
+**Function description**:
+- Receives two input vectors and caches them in registers
+- Uses counter `cnt` to control output sequence
+- Implements broadcast multiplication: `out[i] = reg1[cnt] * reg2[i]`
 
-#### 序列输出
+#### Sequential Output
 
 ```scala
 for (i <- 0 until lane) {
@@ -110,14 +110,14 @@ when (active && io.out.ready) {
 }
 ```
 
-**输出模式**：
-- 每个周期输出一组乘法结果
-- `reg1[cnt]` 与 `reg2` 的所有元素相乘
-- 计数器递增，实现序列输出
+**Output mode**:
+- Outputs one set of multiplication results per cycle
+- `reg1[cnt]` multiplied with all elements of `reg2`
+- Counter increments to achieve sequential output
 
-## 操作特质
+## Operation Traits
 
-### CanHaveCascadeOp - 级联操作特质
+### CanHaveCascadeOp - Cascade Operation Trait
 
 ```scala
 trait CanHaveCascadeOp { this: BaseThread =>
@@ -129,7 +129,7 @@ trait CanHaveCascadeOp { this: BaseThread =>
 }
 ```
 
-### CanHaveMulOp - 乘法操作特质
+### CanHaveMulOp - Multiplication Operation Trait
 
 ```scala
 trait CanHaveMulOp { this: BaseThread =>
@@ -141,16 +141,16 @@ trait CanHaveMulOp { this: BaseThread =>
 }
 ```
 
-## 使用方法
+## Usage
 
-### 在线程中使用操作
+### Using Operations in Threads
 
 ```scala
 class CasThread(implicit p: Parameters) extends BaseThread
   with CanHaveCascadeOp
   with CanHaveVVVBond {
 
-  // 连接操作和绑定
+  // Connect operation and binding
   for {
     op <- cascadeOp
     bond <- vvvBond
@@ -161,11 +161,11 @@ class CasThread(implicit p: Parameters) extends BaseThread
 }
 ```
 
-### 配置操作参数
+### Configuring Operation Parameters
 
 ```scala
 val opParam = OpParam(
-  OpType = "cascade",                    // 操作类型
+  OpType = "cascade",                    // Operation type
   bondType = BondParam(
     bondType = "vvv",
     inputWidth = 32,
@@ -174,65 +174,65 @@ val opParam = OpParam(
 )
 ```
 
-## 操作类型对比
+## Operation Type Comparison
 
 ### CascadeOp vs MulOp
 
-| 特性 | CascadeOp | MulOp |
+| Feature | CascadeOp | MulOp |
 |------|-----------|-------|
-| 操作类型 | 逐元素加法 | 广播乘法 |
-| 输入位宽 | 任意 | 通常较小 |
-| 输出位宽 | 任意 | 通常较大 |
-| 延迟 | 1 周期 | lane 周期 |
-| 吞吐量 | 每周期 1 组 | 每 lane 周期 1 组 |
-| 资源消耗 | 加法器 × lane | 乘法器 × lane |
+| Operation type | Element-wise addition | Broadcast multiplication |
+| Input width | Arbitrary | Usually smaller |
+| Output width | Arbitrary | Usually larger |
+| Latency | 1 cycle | lane cycles |
+| Throughput | 1 group per cycle | 1 group per lane cycle |
+| Resource consumption | Adder × lane | Multiplier × lane |
 
-### 应用场景
+### Application Scenarios
 
-**CascadeOp 适用于**：
-- 向量加法运算
-- 累加操作
-- 数据合并
+**CascadeOp is suitable for**:
+- Vector addition operations
+- Accumulation operations
+- Data merging
 
-**MulOp 适用于**：
-- 矩阵向量乘法
-- 卷积运算
-- 缩放操作
+**MulOp is suitable for**:
+- Matrix-vector multiplication
+- Convolution operations
+- Scaling operations
 
-## 数据流模式
+## Data Flow Patterns
 
-### CascadeOp 数据流
-
-```
-输入: [a0, a1, ..., an], [b0, b1, ..., bn]
-      ↓
-计算: [a0+b0, a1+b1, ..., an+bn]
-      ↓
-输出: [c0, c1, ..., cn] (1 周期)
-```
-
-### MulOp 数据流
+### CascadeOp Data Flow
 
 ```
-输入: [a0, a1, ..., an], [b0, b1, ..., bn]
+Input: [a0, a1, ..., an], [b0, b1, ..., bn]
       ↓
-周期0: [a0*b0, a0*b1, ..., a0*bn]
-周期1: [a1*b0, a1*b1, ..., a1*bn]
+Compute: [a0+b0, a1+b1, ..., an+bn]
+      ↓
+Output: [c0, c1, ..., cn] (1 cycle)
+```
+
+### MulOp Data Flow
+
+```
+Input: [a0, a1, ..., an], [b0, b1, ..., bn]
+      ↓
+Cycle 0: [a0*b0, a0*b1, ..., a0*bn]
+Cycle 1: [a1*b0, a1*b1, ..., a1*bn]
 ...
-周期n: [an*b0, an*b1, ..., an*bn]
+Cycle n: [an*b0, an*b1, ..., an*bn]
 ```
 
-## 扩展操作
+## Extended Operations
 
-### 添加新操作
+### Adding New Operations
 
-可以通过类似的模式添加新的向量操作：
+New vector operations can be added following a similar pattern:
 
 ```scala
 class SubOp(implicit p: Parameters) extends Module {
   val io = IO(new VVV()(p))
 
-  // 实现减法操作
+  // Implement subtraction operation
   io.out.bits.out := io.in.bits.in1.zip(io.in.bits.in2).map {
     case (a, b) => a - b
   }
@@ -245,38 +245,38 @@ trait CanHaveSubOp { this: BaseThread =>
 }
 ```
 
-### 复杂操作
+### Complex Operations
 
-对于更复杂的操作，可以组合多个基础操作：
+For more complex operations, multiple basic operations can be combined:
 
 ```scala
 class FMAOp(implicit p: Parameters) extends Module {
-  // 融合乘加操作: out = a * b + c
+  // Fused multiply-add operation: out = a * b + c
   val mulOp = Module(new MulOp())
   val addOp = Module(new CascadeOp())
 
-  // 连接操作流水线
+  // Connect operation pipeline
   addOp.io.in.bits.in1 <> mulOp.io.out.bits.out
   // ...
 }
 ```
 
-## 性能优化
+## Performance Optimization
 
-### 流水线优化
+### Pipeline Optimization
 
-- 使用寄存器缓存中间结果
-- 支持连续数据流处理
-- 最小化组合逻辑延迟
+- Use registers to cache intermediate results
+- Support continuous data stream processing
+- Minimize combinational logic delay
 
-### 资源优化
+### Resource Optimization
 
-- 根据操作类型选择合适的硬件资源
-- 支持资源共享和复用
-- 可配置的并行度
+- Choose appropriate hardware resources based on operation type
+- Support resource sharing and reuse
+- Configurable parallelism
 
-## 相关模块
+## Related Modules
 
-- [绑定模块](../bond/README.md) - 提供数据接口
-- [线程模块](../thread/README.md) - 提供操作的执行环境
-- [向量处理单元](../README.md) - 上层向量处理器
+- [Binding Module](../bond/README.md) - Provides data interfaces
+- [Thread Module](../thread/README.md) - Provides execution environment for operations
+- [Vector Processing Unit](../README.md) - Upper-level vector processor

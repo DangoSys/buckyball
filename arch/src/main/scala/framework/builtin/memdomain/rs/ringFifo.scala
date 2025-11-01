@@ -11,28 +11,38 @@ class RingFifo[T <: Data](gen: T, n: Int) extends Module {
   require(n > 0, "FIFO size must be greater than 0")
 
   val io = IO(new Bundle{
-    val enq = Flipped(new DecoupledIO(gen)) // Flipped是反转接口
+    // Flipped reverses the interface
+    val enq = Flipped(new DecoupledIO(gen))
     val deq = new DecoupledIO(gen)
   })
 
-  val enqPtr = RegInit(0.U(log2Up(n).W)) // 栈尾
-  val deqPtr = RegInit(0.U(log2Up(n).W)) // 栈首
-  val isFull = RegInit(false.B)  // 是否满了
+  // Stack tail
+  val enqPtr = RegInit(0.U(log2Up(n).W))
+  // Stack head
+  val deqPtr = RegInit(0.U(log2Up(n).W))
+  // Whether it is full
+  val isFull = RegInit(false.B)
 
-  val doEnq = io.enq.ready && io.enq.valid // 需要执行入栈，入栈操作开启且入栈的元素有效
-  val doDeq = io.deq.ready && io.deq.valid // 执行出栈
+  // Need to execute enqueue, enqueue operation is enabled and enqueue element is valid
+  val doEnq = io.enq.ready && io.enq.valid
+  // Execute dequeue
+  val doDeq = io.deq.ready && io.deq.valid
 
-  val isEmpty = !isFull && (enqPtr === deqPtr) // 栈空
+  // Stack empty
+  val isEmpty = !isFull && (enqPtr === deqPtr)
 
   val deqPtrInc = deqPtr + 1.U
   val enqPtrInc = enqPtr + 1.U
 
-  // 判断接下来是否会满
-  val isFullNext = Mux(doEnq && !doDeq && (enqPtrInc === deqPtr),  // 入栈，且不出栈，且栈接下会满
-                       true.B , Mux(doDeq && isFull, // 要出栈，且满了
+  // Determine if it will be full next
+  // Enqueue, and no dequeue, and stack will be full next
+  val isFullNext = Mux(doEnq && !doDeq && (enqPtrInc === deqPtr),
+                       true.B , Mux(doDeq && isFull, // Dequeue, and full
                              false.B, isFull))
-  enqPtr := Mux(doEnq, enqPtrInc, enqPtr) // 入栈，改变尾，向后加一个元素
-  deqPtr := Mux(doDeq, deqPtrInc, deqPtr) // 出栈，改变首，头向后移一个
+  // Enqueue, change tail, add one element backward
+  enqPtr := Mux(doEnq, enqPtrInc, enqPtr)
+  // Dequeue, change head, head moves backward by one
+  deqPtr := Mux(doDeq, deqPtrInc, deqPtr)
 
   isFull := isFullNext
   val ram = Mem(n, gen)

@@ -34,7 +34,7 @@
 #define __P_ZERO_0 X,
 // define some selection functions based on the properties of BOOLEAN macro
 #define MUXDEF(macro, X, Y) MUX_MACRO_PROPERTY(__P_DEF_, macro, X, Y)
-// 如果定义，则为X，否则为Y
+// If defined, then X, otherwise Y
 #define MUXNDEF(macro, X, Y) MUX_MACRO_PROPERTY(__P_DEF_, macro, Y, X)
 #define MUXONE(macro, X, Y) MUX_MACRO_PROPERTY(__P_ONE_, macro, X, Y)
 #define MUXZERO(macro, X, Y) MUX_MACRO_PROPERTY(__P_ZERO_, macro, X, Y)
@@ -75,7 +75,7 @@
 #define BITS(x, hi, lo)                                                        \
   (((x) >> (lo)) &                                                             \
    BITMASK((hi) - (lo) + 1)) // similar to x[hi:lo] in verilog
-                             // 取x的hi到lo位,这么用的吗，人麻了(22.8.5)
+                             // Extract bits hi to lo from x
 #define SEXT(x, len)                                                           \
   ({                                                                           \
     struct {                                                                   \
@@ -104,15 +104,15 @@
 //   ({ reg##_T __io_param = (reg##_T) { __VA_ARGS__ }; \
 //   ioe_write(reg, &__io_param); })
 
-// 自定义宏
+// Custom macros
 #define MUX(v, p, a, b) v == p ? a : b
-// value, p可能值, 则为a, 否则为b
+// value, p possible value, then a, otherwise b
 #define SWAP(a, b)                                                             \
   a ^= b;                                                                      \
   b ^= a;                                                                      \
   a ^= b;
 
-// 将x转换为字符串
+// Convert x to string
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 

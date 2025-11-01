@@ -26,15 +26,17 @@ class MeshWarp(implicit p: Parameters) extends Module {
 
   val threadMap = (0 until 32).map { i =>
     val threadName = i.toString
-    val opType = if (i < 16) "mul" else "cascade" // 0-15 mul, 16-31 cascade
-    // mul操作：8位输入，32位输出；cascade操作：32位输入，32位输出
+    // 0-15 mul, 16-31 cascade
+    val opType = if (i < 16) "mul" else "cascade"
+    // mul operation: 8-bit input, 32-bit output; cascade operation: 32-bit input, 32-bit output
     val bond = if (opType == "mul") {
       BondParam("vvv", inputWidth = 8, outputWidth = 32)
     } else {
       BondParam("vvv", inputWidth = 32, outputWidth = 32)
     }
     val op = OpParam(opType, bond)
-    val thread = ThreadParam(16, s"attr$threadName", threadName, op)  // 所有线程使用相同的lane数量
+    // All threads use the same lane count
+    val thread = ThreadParam(16, s"attr$threadName", threadName, op)
     threadName -> thread
   }.toMap
 
@@ -75,16 +77,16 @@ class MeshWarp(implicit p: Parameters) extends Module {
       mulBond <- mulThread.vvvBond
       casBond <- casThread.vvvBond
     } {
-      // 连接mul线程的输出到cascade线程的输入
+      // Connect mul thread output to cascade thread input
       casBond.in.bits.in1 := mulBond.out.bits.out
       mulBond.out.ready   := casBond.in.ready
 
-      // 连接cascade线程的第二个输入和输出ready信号
+      // Connect cascade thread's second input and output ready signal
       if (i == 0) {
         casBond.in.bits.in2 := VecInit(Seq.fill(16)(0.U(32.W)))
-        // 第一个cascade线程的valid由mulBond的输出valid决定
+        // First cascade thread's valid is determined by mulBond's output valid
         casBond.in.valid := mulBond.out.valid
-        // 第一个cascade线程的输出ready连接到下一个cascade线程的输入ready
+        // First cascade thread's output ready is connected to next cascade thread's input ready
         if (i < 15) {
           for {
             nextCasBond <- casThreads(i + 1).vvvBond
@@ -96,12 +98,12 @@ class MeshWarp(implicit p: Parameters) extends Module {
         for {
           prevCasBond <- casThreads(i - 1).vvvBond
         } {
-          // 直接连接32位输出到32位输入
+          // Directly connect 32-bit output to 32-bit input
           casBond.in.bits.in2 := prevCasBond.out.bits.out
-          // casBond的valid由上一个casBond的输出valid和当前mulBond的输出valid共同决定
+          // casBond's valid is jointly determined by previous casBond's output valid and current mulBond's output valid
           casBond.in.valid := prevCasBond.out.valid || mulBond.out.valid
         }
-        // 中间cascade线程的输出ready连接到下一个cascade线程的输入ready
+        // Middle cascade thread's output ready is connected to next cascade thread's input ready
         if (i < 15) {
           for {
             nextCasBond <- casThreads(i + 1).vvvBond
@@ -111,7 +113,7 @@ class MeshWarp(implicit p: Parameters) extends Module {
         }
       }
 
-      // 只允许thread_id对应的mulOp驱动输入
+      // Only allow mulOp corresponding to thread_id to drive input
       when (i.U === io.in.bits.thread_id && io.in.valid) {
         mulBond.in.valid := true.B
         mulBond.in.bits.in1 := io.in.bits.op1
@@ -125,7 +127,7 @@ class MeshWarp(implicit p: Parameters) extends Module {
     }
   }
 
-  // 连接输出
+  // Connect output
   for {
     finalCasBond <- casThreads(15).vvvBond
   } {

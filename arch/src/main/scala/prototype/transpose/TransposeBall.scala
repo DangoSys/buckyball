@@ -8,7 +8,7 @@ import framework.blink.{Blink, BallRegist}
 import prototype.transpose.PipelinedTransposer
 
 /**
- * TransposeBall - 遵守Blink协议的转置计算Ball
+ * TransposeBall - A transpose computation Ball that complies with the Blink protocol
  */
 class TransposeBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)
@@ -16,43 +16,43 @@ class TransposeBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) e
 
   def Blink: Blink = io
 
-  // 实例化PipelinedTransposer
+  // Instantiate PipelinedTransposer
   val transposeUnit = Module(new PipelinedTransposer)
 
-  // 连接命令接口
+  // Connect command interface
   transposeUnit.io.cmdReq <> io.cmdReq
   transposeUnit.io.cmdResp <> io.cmdResp
 
-  // 连接SRAM读接口 - Transpose需要从scratchpad读取数据
+  // Connect SRAM read interface - Transpose needs to read data from scratchpad
   for (i <- 0 until b.sp_banks) {
     transposeUnit.io.sramRead(i) <> io.sramRead(i).io
     io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // 连接SRAM写接口 - Transpose需要写入scratchpad
+  // Connect SRAM write interface - Transpose needs to write to scratchpad
   for (i <- 0 until b.sp_banks) {
     transposeUnit.io.sramWrite(i) <> io.sramWrite(i).io
     io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // 处理Accumulator读接口 - Transpose不读accumulator，所以tie off
+  // Handle Accumulator read interface - Transpose does not read accumulator, so tie off
   for (i <- 0 until b.acc_banks) {
-    // 对于Flipped(SramReadIO)，我们需要驱动req.valid, req.bits（输出）和resp.ready（输出）
+    // For Flipped(SramReadIO), we need to drive req.valid, req.bits (outputs) and resp.ready (output)
     io.accRead(i).io.req.valid := false.B
     io.accRead(i).io.req.bits := DontCare
     io.accRead(i).io.resp.ready := true.B
     io.accRead(i).rob_id := 0.U
   }
 
-  // 处理Accumulator写接口 - Transpose不写accumulator，所以tie off
+  // Handle Accumulator write interface - Transpose does not write accumulator, so tie off
   for (i <- 0 until b.acc_banks) {
-    // 对于Flipped(SramWriteIO)，我们需要驱动req.valid和req.bits（输出）
+    // For Flipped(SramWriteIO), we need to drive req.valid and req.bits (outputs)
     io.accWrite(i).io.req.valid := false.B
     io.accWrite(i).io.req.bits := DontCare
     io.accWrite(i).rob_id := 0.U
   }
 
-  // 连接Status信号 - 直接从内部单元获取
+  // Connect Status signals - directly obtained from internal unit
   io.status <> transposeUnit.io.status
 
   override lazy val desiredName = "TransposeBall"

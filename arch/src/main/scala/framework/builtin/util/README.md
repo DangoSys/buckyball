@@ -1,90 +1,90 @@
-# 框架工具函数库
+# Framework Utility Library
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架级别的工具函数和辅助模块，提供通用的硬件设计工具。位于 `arch/src/main/scala/framework/builtin/util` 下，作为工具函数层，为框架内的其他组件提供可复用的硬件构建块和实用函数。
+This directory contains framework-level utility functions and helper modules for BuckyBall, providing general-purpose hardware design tools. Located in `arch/src/main/scala/framework/builtin/util`, it serves as a utility layer, offering reusable hardware building blocks and utility functions for other framework components.
 
-主要工具类别：
-- 数学运算和位操作工具
-- 接口转换和适配器
-- 调试和性能监控工具
-- 通用硬件模式实现
+Main utility categories:
+- Mathematical operations and bit manipulation tools
+- Interface conversion and adapters
+- Debug and performance monitoring tools
+- Common hardware pattern implementations
 
-## 代码结构
+## Code Structure
 
 ```
 util/
-└── (具体工具文件待分析)
+└── (specific utility files to be analyzed)
 ```
 
-### 工具分类
+### Utility Categories
 
-**数学工具**
-- 位宽计算和对数函数
-- 数值转换和格式化
-- 算术运算优化实现
+**Math Tools**
+- Bit width calculation and logarithm functions
+- Numeric conversion and formatting
+- Optimized arithmetic operation implementations
 
-**接口工具**
-- 协议转换适配器
-- 信号同步和跨时钟域
-- 握手协议实现
+**Interface Tools**
+- Protocol conversion adapters
+- Signal synchronization and clock domain crossing
+- Handshake protocol implementations
 
-**调试工具**
-- 性能计数器模板
-- 调试信号输出
-- 状态监控接口
+**Debug Tools**
+- Performance counter templates
+- Debug signal output
+- State monitoring interfaces
 
-## 模块说明
+## Module Description
 
-### 数学运算工具
+### Mathematical Operations Tools
 
-**主要功能**: 提供常用的数学运算和位操作函数
+**Main functionality**: Provides common mathematical operations and bit manipulation functions
 
-**关键函数**:
+**Key functions**:
 
 ```scala
 object MathUtils {
-  // 计算log2向上取整
+  // Calculate log2 ceiling
   def log2Ceil(x: Int): Int = {
     require(x > 0)
     (log(x) / log(2)).ceil.toInt
   }
 
-  // 判断是否为2的幂
+  // Check if power of 2
   def isPow2(x: Int): Boolean = x > 0 && (x & (x - 1)) == 0
 
-  // 计算最小的2的幂大于等于x
+  // Calculate smallest power of 2 >= x
   def nextPow2(x: Int): Int = {
     if (isPow2(x)) x else 1 << log2Ceil(x)
   }
 }
 ```
 
-**位操作工具**:
+**Bit manipulation tools**:
 ```scala
 object BitUtils {
-  // 位反转
+  // Bit reversal
   def reverseBits(data: UInt, width: Int): UInt = {
     VecInit((0 until width).map(i => data(i))).asUInt
   }
 
-  // 计算汉明重量(1的个数)
+  // Hamming weight (count of 1s)
   def popCount(data: UInt): UInt = {
     PopCount(data)
   }
 
-  // 前导零计数
+  // Leading zero count
   def leadingZeros(data: UInt, width: Int): UInt = {
     PriorityEncoder(Reverse(data))
   }
 }
 ```
 
-### 接口转换工具
+### Interface Conversion Tools
 
-**主要功能**: 提供常用的接口转换和适配功能
+**Main functionality**: Provides common interface conversion and adaptation
 
-**协议转换器**:
+**Protocol converters**:
 ```scala
 class DecoupledToValid[T <: Data](gen: T) extends Module {
   val io = IO(new Bundle {
@@ -108,7 +108,7 @@ class ValidToDecoupled[T <: Data](gen: T) extends Module {
 }
 ```
 
-**跨时钟域同步**:
+**Clock domain crossing**:
 ```scala
 class AsyncFIFO[T <: Data](gen: T, depth: Int) extends Module {
   val io = IO(new Bundle {
@@ -121,16 +121,16 @@ class AsyncFIFO[T <: Data](gen: T, depth: Int) extends Module {
     val deq = Decoupled(gen)
   })
 
-  // 异步FIFO实现
-  // 使用格雷码指针避免亚稳态
+  // Async FIFO implementation
+  // Uses Gray code pointers to avoid metastability
 }
 ```
 
-### 调试监控工具
+### Debug and Monitoring Tools
 
-**主要功能**: 提供调试和性能监控的通用工具
+**Main functionality**: Provides general debugging and performance monitoring tools
 
-**性能计数器**:
+**Performance counter**:
 ```scala
 class PerfCounter(name: String) extends Module {
   val io = IO(new Bundle {
@@ -144,14 +144,14 @@ class PerfCounter(name: String) extends Module {
   }
   io.value := counter
 
-  // 可选的调试输出
+  // Optional debug output
   when(io.inc) {
     printf(s"[PerfCounter] $name: %d\n", counter + 1.U)
   }
 }
 ```
 
-**调试信号输出**:
+**Debug signal output**:
 ```scala
 object DebugUtils {
   def debugPrint(cond: Bool, fmt: String, args: Bits*): Unit = {
@@ -170,11 +170,11 @@ object DebugUtils {
 }
 ```
 
-## 使用方法
+## Usage
 
-### 使用示例
+### Usage Examples
 
-**数学工具使用**:
+**Using math tools**:
 ```scala
 import util.MathUtils._
 
@@ -186,14 +186,14 @@ class MyModule extends Module {
 }
 ```
 
-**接口转换使用**:
+**Using interface conversion**:
 ```scala
 val converter = Module(new DecoupledToValid(UInt(32.W)))
 converter.io.in <> some_decoupled_signal
 val valid_signal = converter.io.out
 ```
 
-**性能监控使用**:
+**Using performance monitoring**:
 ```scala
 val hit_counter = Module(new PerfCounter("cache_hits"))
 hit_counter.io.inc := cache_hit
@@ -202,24 +202,24 @@ val miss_counter = Module(new PerfCounter("cache_misses"))
 miss_counter.io.inc := cache_miss
 ```
 
-### 扩展开发
+### Extension Development
 
-**添加新工具**:
-1. 确定工具的通用性和复用价值
-2. 实现标准的Chisel模块接口
-3. 添加充分的参数化支持
-4. 提供使用示例和测试用例
+**Adding new tools**:
+1. Determine utility's generality and reuse value
+2. Implement standard Chisel module interfaces
+3. Add sufficient parameterization support
+4. Provide usage examples and test cases
 
-**工具设计原则**:
-- 保持接口简洁明确
-- 支持参数化配置
-- 提供良好的错误检查
-- 考虑硬件实现效率
+**Tool design principles**:
+- Keep interfaces concise and clear
+- Support parameterized configuration
+- Provide good error checking
+- Consider hardware implementation efficiency
 
-### 注意事项
+### Notes
 
-1. **硬件开销**: 工具函数应该考虑硬件实现的开销
-2. **时序影响**: 避免在关键路径上使用复杂工具
-3. **参数验证**: 在编译时进行充分的参数检查
-4. **文档完整**: 为每个工具提供清晰的使用说明
-5. **测试覆盖**: 确保工具函数的正确性和边界情况处理
+1. **Hardware overhead**: Utility functions should consider hardware implementation costs
+2. **Timing impact**: Avoid using complex tools on critical paths
+3. **Parameter validation**: Perform sufficient parameter checking at compile time
+4. **Complete documentation**: Provide clear usage instructions for each tool
+5. **Test coverage**: Ensure correctness and boundary case handling of utility functions

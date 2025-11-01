@@ -31,8 +31,8 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   val reader = LazyModule(new BBStreamReader(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
   val writer = LazyModule(new BBStreamWriter(b.max_in_flight_mem_reqs, b.dma_buswidth, b.dma_maxbytes, spad_w))
 
-  // 注意：BallDomain现在是普通Module，不再是LazyModule
-  // 将在module中实例化
+  // Note: BallDomain is now a regular Module, no longer a LazyModule
+  // Will be instantiated in module
 
   xbar_node := TLBuffer() := reader.node
   xbar_node := TLBuffer() := writer.node
@@ -56,12 +56,12 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   val tagWidth = 32
 
 // -----------------------------------------------------------------------------
-// Frontend: TLB 移至MemDomain内部
+// Frontend: TLB moved inside MemDomain
 // -----------------------------------------------------------------------------
   implicit val edge: TLEdgeOut = outer.id_node.edges.out.head
 
 // -----------------------------------------------------------------------------
-// Frontend: Global Decoder -> 全局RS -> BallDomain/MemDomain
+// Frontend: Global Decoder -> Global RS -> BallDomain/MemDomain
 // -----------------------------------------------------------------------------
   implicit val b: CustomBuckyBallConfig = outer.b
   val gDecoder = Module(new GlobalDecoder)
@@ -69,7 +69,7 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   gDecoder.io.id_i.bits.cmd := io.cmd.bits
   io.cmd.ready              := gDecoder.io.id_i.ready
 
-  // 全局保留站
+  // Global reservation station
   val globalRs = Module(new framework.builtin.frontend.globalrs.GlobalReservationStation)
   globalRs.io.global_decode_cmd_i <> gDecoder.io.id_o
 
@@ -78,51 +78,51 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // -----------------------------------------------------------------------------
 // Backend: Ball Domain
 // -----------------------------------------------------------------------------
-  // BallDomain现在是普通Module，直接实例化
+  // BallDomain is now a regular Module, instantiate directly
   val ballDomain = Module(new BallDomain()(b, p))
 
-  // 全局RS->BallDomain
+  // Global RS -> BallDomain
   ballDomain.io.global_issue_i <> globalRs.io.ball_issue_o
   globalRs.io.ball_complete_i <> ballDomain.io.global_complete_o
 
 // -----------------------------------------------------------------------------
-// Backend: Mem Domain 包含DMA+TLB+SRAM的完整域
+// Backend: Mem Domain - complete domain containing DMA+TLB+SRAM
 // -----------------------------------------------------------------------------
   val memDomain = Module(new MemDomain)
 
-  // 全局RS->MemDomain
+  // Global RS -> MemDomain
   memDomain.io.global_issue_i <> globalRs.io.mem_issue_o
   globalRs.io.mem_complete_i <> memDomain.io.global_complete_o
 
 // -----------------------------------------------------------------------------
 // Backend: MemDomain Connections
 // -----------------------------------------------------------------------------
-  // MemDomain->DMA
+  // MemDomain -> DMA
   memDomain.io.dma.read.req <> outer.reader.module.io.req
   outer.reader.module.io.resp <> memDomain.io.dma.read.resp
   memDomain.io.dma.write.req <> outer.writer.module.io.req
   outer.writer.module.io.resp <> memDomain.io.dma.write.resp
 
-  // DMA->TLB (现在通过MemDomain)
+  // DMA -> TLB (now through MemDomain)
   outer.reader.module.io.tlb <> memDomain.io.tlb(1)
   outer.writer.module.io.tlb <> memDomain.io.tlb(0)
 
-  // PTW连接到MemDomain的TLB
+  // PTW connected to MemDomain's TLB
   io.ptw <> memDomain.io.ptw
 
-  // TLB异常处理 - 现在MemDomain的tlbExp是Output，所以我们从它读取信号
-  // 设置flush输入信号
+  // TLB exception handling - MemDomain's tlbExp is now Output, so we read signals from it
+  // Set flush input signals
   memDomain.io.tlbExp.foreach { exp =>
     exp.flush_skip := false.B
     exp.flush_retry := false.B
   }
 
-  // Flush信号给DMA组件 (从MemDomain的TLB异常获取)
+  // Flush signals to DMA components (obtained from MemDomain's TLB exceptions)
   outer.reader.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
   outer.writer.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
 
 // -----------------------------------------------------------------------------
-// Backend: Domain Bridge: BallDomain->MemDomain
+// Backend: Domain Bridge: BallDomain -> MemDomain
 // -----------------------------------------------------------------------------
   ballDomain.io.sramRead  <> memDomain.io.ballDomain.sramRead
   ballDomain.io.sramWrite <> memDomain.io.ballDomain.sramWrite
@@ -130,19 +130,19 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
 // ---------------------------------------------------------------------------
-// 返回RoCC接口连接 - 从全局RS获取响应
+// Return RoCC interface connection - get response from global RS
 // ---------------------------------------------------------------------------
   io.resp <> globalRs.io.rs_rocc_o.resp
 
 
 // ---------------------------------------------------------------------------
-// Busy信号 - 由全局RS管理
+// Busy signal - managed by global RS
 // ---------------------------------------------------------------------------
   //io.busy := globalRs.io.rs_rocc_o.busy
   io.busy := false.B
 
 // ---------------------------------------------------------------------------
-// busy计数器，防止仿真长时间停顿
+// Busy counter to prevent long simulation stalls
 // ---------------------------------------------------------------------------
   val busy_counter = RegInit(0.U(32.W))
   busy_counter := Mux(globalRs.io.rs_rocc_o.busy, busy_counter + 1.U, 0.U)

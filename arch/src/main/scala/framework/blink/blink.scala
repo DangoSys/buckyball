@@ -9,28 +9,37 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 
 // Ball device status bundle
 class Status extends Bundle {
-  val ready = Output(Bool())      // device is ready to accept new input
-  val valid = Output(Bool())      // device has valid output
-  val idle = Output(Bool())       // no input and no output
-  val init = Output(Bool())       // has input but no output
-  val running = Output(Bool())    // started producing output
-  val complete = Output(Bool())   // fully finished current batch
-  val iter = Output(UInt(32.W))  // current batch iteration
+  // device is ready to accept new input
+  val ready = Output(Bool())      
+  // device has valid output
+  val valid = Output(Bool())      
+  // no input and no output
+  val idle = Output(Bool())      
+  // has input but no output
+  val init = Output(Bool())      
+  // started producing output
+  val running = Output(Bool())   
+  // fully finished current batch
+  val complete = Output(Bool())  
+  // current batch iteration
+  val iter = Output(UInt(32.W))  
 }
 
-// SramReadIO 包含 rob_id
+// SramReadIO with rob_id
 class SramReadWithRobId(val n: Int, val w: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val io = new SramReadIO(n, w)
-  val rob_id = Input(UInt(log2Up(b.rob_entries).W))  // Input 因为外层有 Flipped
+  // Input because the outer layer has Flipped
+  val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
 
-// SramWriteIO 包含 rob_id
+// SramWriteIO with rob_id
 class SramWriteWithRobId(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val io = new SramWriteIO(n, w, mask_len)
-  val rob_id = Input(UInt(log2Up(b.rob_entries).W))  // Input 因为外层有 Flipped
+  // Input because the outer layer has Flipped
+  val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
 
-// Ball设备的标准接口
+// Standard interface for Ball devices
 class Blink(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val cmdReq = Flipped(Decoupled(new BallRsIssue))
   val cmdResp = Decoupled(new BallRsComplete)

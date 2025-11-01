@@ -9,31 +9,40 @@ import framework.builtin.memdomain.dma.LocalAddr
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config.Parameters
 
-// Ball域的详细解码输出
+// Detailed decode output for Ball domain
 class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val bid = UInt(5.W) // Ball ID
+  // Ball ID
+  val bid = UInt(5.W)
 
-  // 迭代次数
+  // Iteration count
   val iter          = UInt(10.W)
 
-  // Ball专用字段
+  // Ball-specific fields
   val op1_en        = Bool()
   val op2_en        = Bool()
   val wr_spad_en    = Bool()
   val op1_from_spad = Bool()
   val op2_from_spad = Bool()
-  val special       = UInt(40.W) // 指令专用子段
+  // Instruction-specific subfield
+  val special       = UInt(40.W)
 
-  // Ball的操作数地址
-  val op1_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
-  val op1_bank_addr = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
-  val op2_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
-  val op2_bank_addr = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
+  // Ball operand addresses
+  // 3 bits, supports 8 banks
+  val op1_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)
+  // 12 bits, uses SPAD row count
+  val op1_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
+  // 3 bits, supports 8 banks
+  val op2_bank      = UInt(log2Up(b.sp_banks + b.acc_banks).W)
+  // 12 bits, uses SPAD row count
+  val op2_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
 
-  // 写入地址和bank信息
-  val wr_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks
-  val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数
-  val is_acc        = Bool() // 是否是acc bank的操作
+  // Write address and bank information
+  // 3 bits, supports 8 banks
+  val wr_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
+  // 12 bits, uses SPAD row count
+  val wr_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)
+  // Whether this is an acc bank operation
+  val is_acc        = Bool()
 
   val rs1 = UInt(64.W)
   val rs2 = UInt(64.W)
@@ -68,14 +77,14 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 
   val spAddrLen = b.spAddrLen
 
-  // 只处理ball指令
+  // Only process ball instructions
   io.raw_cmd_i.ready := io.ball_decode_cmd_o.ready
 
   val func7 = io.raw_cmd_i.bits.raw_cmd.inst.funct
   val rs1   = io.raw_cmd_i.bits.raw_cmd.rs1
   val rs2   = io.raw_cmd_i.bits.raw_cmd.rs2
 
-  // ball指令解码
+  // Ball instruction decoding
   import BallDecodeFields._
   val ball_default_decode = List(N,N,N,N,N,DADDR,DADDR,DADDR,DITER,DBID,DSPECIAL)
   val ball_decode_list = ListLookup(func7, ball_default_decode, Array(
@@ -89,7 +98,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   ))
 
 // -----------------------------------------------------------------------------
-// 输出赋值
+// Output assignment
 // -----------------------------------------------------------------------------
   io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_ball
 
@@ -103,7 +112,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.op1_from_spad := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP1_FROM_SPAD.id).asBool, false.B)
   io.ball_decode_cmd_o.bits.op2_from_spad := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.OP2_FROM_SPAD.id).asBool, false.B)
 
-  // 地址解析
+  // Address parsing
   val op1_spaddr = ball_decode_list(BallDecodeFields.OP1_SPADDR.id).asUInt
   val op2_spaddr = ball_decode_list(BallDecodeFields.OP2_SPADDR.id).asUInt
   val wr_spaddr  = ball_decode_list(BallDecodeFields.WR_SPADDR.id).asUInt
@@ -112,7 +121,7 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   val op2_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, op2_spaddr)
   val wr_laddr  = LocalAddr.cast_to_sp_addr(b.local_addr_t, wr_spaddr)
 
-  // 使用 mem_bank() 和 mem_row() 以支持 ACC banks (bank 4+)
+  // Use mem_bank() and mem_row() to support ACC banks (bank 4+)
   io.ball_decode_cmd_o.bits.op1_bank      := Mux(io.ball_decode_cmd_o.valid, op1_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
   io.ball_decode_cmd_o.bits.op1_bank_addr := Mux(io.ball_decode_cmd_o.valid, op1_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
   io.ball_decode_cmd_o.bits.op2_bank      := Mux(io.ball_decode_cmd_o.valid, op2_laddr.mem_bank(), 0.U(log2Up(b.sp_banks + b.acc_banks).W))
@@ -122,13 +131,13 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
   io.ball_decode_cmd_o.bits.wr_bank_addr  := Mux(io.ball_decode_cmd_o.valid, wr_laddr.mem_row(),  0.U(log2Up(b.spad_bank_entries).W))
   io.ball_decode_cmd_o.bits.is_acc        := Mux(io.ball_decode_cmd_o.valid, (io.ball_decode_cmd_o.bits.wr_bank >= b.sp_banks.U), false.B)
 
-  // 断言：执行指令中OpA和OpB必须访问不同的bank
+  // Assertion: OpA and OpB in execution instructions must access different banks
   assert(!(io.ball_decode_cmd_o.valid && io.ball_decode_cmd_o.bits.op1_en && io.ball_decode_cmd_o.bits.op2_en &&
            io.ball_decode_cmd_o.bits.op1_bank === io.ball_decode_cmd_o.bits.op2_bank),
   "BallDomainDecoder: Ball instruction OpA and OpB cannot access the same bank")
 
 // -----------------------------------------------------------------------------
-// 继续传递rs1和rs2
+// Continue passing rs1 and rs2
 // -----------------------------------------------------------------------------
   io.ball_decode_cmd_o.bits.rs1 := rs1
   io.ball_decode_cmd_o.bits.rs2 := rs2

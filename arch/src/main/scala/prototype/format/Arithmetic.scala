@@ -3,7 +3,7 @@ package prototype.format
 import chisel3._
 import chisel3.util._
 
-// 算术类型类
+// Arithmetic type class
 abstract class Arithmetic[T <: Data] {
   def add(x: T, y: T): T
   def sub(x: T, y: T): T
@@ -12,7 +12,7 @@ abstract class Arithmetic[T <: Data] {
   def gt(x: T, y: T): Bool
 }
 
-// UInt 算术实现
+// UInt arithmetic implementation
 class UIntArithmetic extends Arithmetic[UInt] {
   override def add(x: UInt, y: UInt): UInt = x + y
   override def sub(x: UInt, y: UInt): UInt = x - y
@@ -21,7 +21,7 @@ class UIntArithmetic extends Arithmetic[UInt] {
   override def gt(x: UInt, y: UInt): Bool = x > y
 }
 
-// 工厂
+// Factory
 object ArithmeticFactory {
   def createArithmetic[T <: Data](dataType: T): Arithmetic[T] = {
     dataType match {

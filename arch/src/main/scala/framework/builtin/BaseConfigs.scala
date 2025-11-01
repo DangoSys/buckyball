@@ -23,10 +23,13 @@ case class BaseConfig(
   accveclane: Int = 4,
 
   tlb_size: Int = 4,
-  rob_entries: Int = 16,  // RoB条目数量
-  rs_out_of_order_response: Boolean = true,  // 保留站是否乱序响应（false=等待ROB空才响应）
+  // Number of RoB entries
+  rob_entries: Int = 16,
+  // Whether reservation station responds out-of-order (false = wait for ROB to be empty before responding)
+  rs_out_of_order_response: Boolean = true,
 
-  dma_maxbytes: Int = 64, // 未使用
+  // Unused
+  dma_maxbytes: Int = 64,
   dma_buswidth: Int = 128,
 
   sp_banks: Int = 4,
@@ -37,17 +40,22 @@ case class BaseConfig(
   sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
   acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
 
-  max_in_flight_mem_reqs: Int = 16, // 未使用
+  max_in_flight_mem_reqs: Int = 16, // Unused
   aligned_to: Int = 1,
   spad_read_delay: Int = 0,
 
-  spAddrLen: Int = 15, // 支持SPAD(16384行)+ACC(4096行)的索引长度
-  memAddrLen: Int = 32, // 4GB的索引长度
+  // Index length supporting SPAD (16384 rows) + ACC (4096 rows)
+  spAddrLen: Int = 15,
+  // Index length for 4GB
+  memAddrLen: Int = 32,
 
-  numVecPE: Int = 16, // 每个线程的向量PE数量
-  numVecThread: Int = 16, // 每个线程的向量线程数量
+  // Number of vector PEs per thread
+  numVecPE: Int = 16,
+  // Number of vector threads per thread
+  numVecThread: Int = 16,
 
-  emptyBallid: Int = 5, // 空ball的id
+  // Empty ball id
+  emptyBallid: Int = 5,
 
 ) {
   val spad_w = veclane * inputType.getWidth

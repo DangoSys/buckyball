@@ -45,7 +45,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val act_cycles = RegInit(0.U(10.W))
   val weight_expreg=RegInit(0.U(32.W))
   val act_expreg=RegInit(0.U(32.W))
-  // 提取流水线前端的信号
+  // Extract signals from pipeline frontend
   val op1_bank_reg  = Reg(UInt(io.lu_ex_i.bits.op1_bank.getWidth.W))
   val op2_bank_reg  = Reg(UInt(io.lu_ex_i.bits.op2_bank.getWidth.W))
   val wr_bank   = Reg(UInt(io.lu_ex_i.bits.wr_bank.getWidth.W))
@@ -71,13 +71,13 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val state = RegInit(idle)
   val pe_array = Module(new BBFP_PE_Array16x16)
 
-  // 使用移位寄存器代替原来的普通寄存器
+  // Use shift registers instead of original regular registers
 
 
-  // 激活数据输入逻辑
+  // Activation data input logic
   val act_reg_ptr = RegInit(0.U(5.W))
 
-  // 在idle和weight_load阶段，像普通寄存器一样存储数据
+  // In idle and weight_load phases, store data like regular registers
   when(io.sramReadResp(op2_bank).valid && state =/= data_compute && act_data_ready === false.B) {
     val data = io.sramReadResp(op2_bank).bits.data
     for(i <- 0 until 16) {
@@ -97,15 +97,18 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
   }
 
-  // 新增寄存器用于权重和激活计数
+  // New registers for weight and activation counting
 
-  val output_buffer = Reg(Vec(64, Vec(4, UInt(32.W)))) // 保存输出的64个4x32寄存器
-  val output_buffer_parallelogram = Reg(Vec(32, Vec(16, UInt(32.W)))) // 保存平行四边形输出
+  // Save 64 4x32 registers for output
+  val output_buffer = Reg(Vec(64, Vec(4, UInt(32.W))))
+  // Save parallelogram output
+  val output_buffer_parallelogram = Reg(Vec(32, Vec(16, UInt(32.W))))
   val output_ptr = RegInit(0.U(5.W))
   val output_ready = RegInit(false.B)
 
-  // 新的输出数据处理逻辑
-  val write_cycles = RegInit(0.U(7.W)) // 扩展到7位以支持64个周期
+  // New output data processing logic
+  // Extended to 7 bits to support 64 cycles
+  val write_cycles = RegInit(0.U(7.W))
   val writing_output = RegInit(false.B)
 
   val wr_bank_addr_base = Reg(UInt(io.lu_ex_i.bits.wr_bank_addr.getWidth.W))
@@ -121,7 +124,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
 
 
-  // PE阵列默认值赋值
+  // PE array default value assignment
   pe_array.io.in_last := VecInit(Seq.fill(16)(false.B))
   pe_array.io.in_id := DontCare
   pe_array.io.in_a := DontCare
@@ -130,7 +133,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   pe_array.io.in_control.foreach(_.propagate := 0.U)
   pe_array.io.in_valid := VecInit(Seq.fill(16)(false.B))
 
-  // 默认SRAM写端口赋值
+  // Default SRAM write port assignment
   for(i <- 0 until b.sp_banks){
     io.sramWrite(i).req.valid := false.B
     io.sramWrite(i).req.bits.addr := 0.U
@@ -138,7 +141,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(spad_w / 8)(false.B))
   }
 
-  // 当输出准备好时，开始写入SRAM
+  // Start writing to SRAM when output is ready
   when(output_ready && !writing_output) {
     writing_output := true.B
     write_cycles := 0.U
@@ -146,7 +149,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
   when(writing_output) {
     when(write_cycles < 16.U) {
-    // 将一个4x32位数据拼接成128位宽的数据写入SRAM
+    // Concatenate 4x32-bit data into 128-bit wide data and write to SRAM
      for(i <- 0 until b.acc_banks/2) {
       when((wr_bank_addr_base + write_cycles)(0) === 0.U){
         io.accWrite(i).req.valid := true.B
@@ -174,7 +177,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
     write_cycles := write_cycles + 1.U
     }.otherwise {
-    // 写入完成
+    // Write completed
       writing_output := false.B
       output_ready := false.B
       addr_base_captured:=false.B
@@ -188,7 +191,7 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   switch(state) {
     is(idle) {
     when(io.lu_ex_i.valid && !io.is_matmul_ws) {
-      // 启动权重加载
+      // Start weight loading
       weight_cycles := 0.U
       state := weight_load
     }.elsewhen(io.is_matmul_ws && act_data_ready){
@@ -197,14 +200,14 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
     }
     is(weight_load) {
-    // 加载16周期权重
+    // Load 16 cycles of weights
     when(weight_cycles < 16.U) {
       pe_array.io.in_d := weight_reg
       pe_array.io.in_control.foreach(_.propagate := 1.U)
       pe_array.io.in_valid.foreach(_ := true.B)
       weight_cycles := weight_cycles + 1.U
     }.otherwise {
-      // 权重加载完成，等待激活数据准备好后进入计算
+      // Weight loading completed, wait for activation data to be ready then enter computation
       when(act_data_ready) {
       act_cycles := 0.U
       state := data_compute
@@ -213,9 +216,9 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     }
     is(data_compute) {
     act_cycles := act_cycles + 1.U
-    // 在计算阶段，启动移位寄存器的平行四边形输入模式
+    // In computation phase, start parallelogram input mode for shift registers
     when(act_cycles < 31.U) {
-      // 每个周期逐行使能更多行进行移位
+      // Each cycle enables more rows for shifting row by row
       for(col <- 0 until 16) {
       when(col.U <= act_cycles && col.U < 16.U) {
         col_enable(col) := true.B
@@ -224,18 +227,18 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       }
       }
 
-      // 移位寄存器操作：使能的行向右移位
+      // Shift register operation: enabled rows shift right
       for(col <- 0 until 16) {
       when(col_enable(col)) {
         for(row <- 0 until 15) {
         act_shift_reg(row)(col) := act_shift_reg(row + 1)(col)
         }
-        // 左侧补0（因为是计算阶段，不再输入新数据）
+        // Pad left with 0 (because in computation phase, no new data is input)
         act_shift_reg(15)(col) := 0.U(7.W)
       }
       }
 
-      // 将每行的最右侧元素（第15列）输入到PE阵列
+      // Input rightmost element of each row (column 15) to PE array
       val current_input = WireDefault(VecInit(Seq.fill(16)(0.U(7.W))))
       for(col <- 0 until 16) {
       when(col_enable(col)) {
@@ -247,22 +250,24 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       pe_array.io.in_a := current_input
       pe_array.io.in_b.foreach(_ := 0.U)
     }
-    // 从第16个周期开始接收输出，到第47个周期结束
+    // Start receiving output from cycle 16, end at cycle 47
 
     when(act_cycles > 16.U && act_cycles <= 48.U) {
       output_buffer_parallelogram(output_ptr) := pe_array.io.out_b
       output_ptr := output_ptr + 1.U
     }
 
-    // 第47个周期后，将平行四边形输出转换为64个4x32寄存器
+    // After cycle 47, convert parallelogram output to 64 4x32 registers
     when(act_cycles === 49.U) {
       output_ready := true.B
-      // 转换平行四边形输出为64个4x32寄存器，按行优先顺序组织
+      // Convert parallelogram output to 64 4x32 registers, organized in row-major order
       for(row <- 0 until 16) {
       for(col <- 0 until 16) {
         val src_row = row + col
-        val buffer_index = row * 4 + (col >> 2) // 每4列为一个寄存器组
-        val element_index = col & 0x3 // 在4元素组内的位置
+        // Every 4 columns form one register group
+        val buffer_index = row * 4 + (col >> 2)
+        // Position within 4-element group
+        val element_index = col & 0x3
         if(src_row < 32) {
         output_buffer(buffer_index)(element_index) := output_buffer_parallelogram(src_row)(col)
         } else {
@@ -272,12 +277,12 @@ class BBFP_EX(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       }
     }
 
-    // 重置数据准备标志
+    // Reset data ready flag
     when(act_cycles === 50.U) {
       act_data_ready := false.B
       act_reg_ptr := 0.U
       output_ptr := 0.U
-      // 重置所有行使能信号
+      // Reset all row enable signals
       col_enable := VecInit(Seq.fill(16)(false.B))
       state := idle
     }

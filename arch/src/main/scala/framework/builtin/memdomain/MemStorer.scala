@@ -11,18 +11,20 @@ import framework.builtin.memdomain.dma.{BBWriteRequest, BBWriteResponse, LocalAd
 
 class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
-  val line_bytes = b.spad_w / 8  // 一行数据的字节数
-  val align_bytes = 16  // 16字节对齐
+  // Byte count of one row of data
+  val line_bytes = b.spad_w / 8
+  // 16-byte alignment
+  val align_bytes = 16
 
   val io = IO(new Bundle {
-    // 来自ReservationStation的store指令
+    // Store instruction from ReservationStation
     val cmdReq = Flipped(Decoupled(new MemRsIssue))
-    // 发送给ReservationStation的完成信号
+    // Completion signal sent to ReservationStation
     val cmdResp = Decoupled(new MemRsComplete)
-    // 直接连接DMA写入接口
+    // Direct connection to DMA write interface
     val dmaReq = Decoupled(new BBWriteRequest(b.spad_w))
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
-    // 连接到Scratchpad的SRAM读取接口
+    // Connected to Scratchpad SRAM read interface
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
     val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
   })
@@ -34,19 +36,26 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val mem_addr_reg = Reg(UInt(b.memAddrLen.W))
   val iter_reg = Reg(UInt(10.W))
   val sram_count = Reg(UInt(10.W))
-  val acc_reg = RegInit(false.B)  // 是否是acc bank的操作
-  val acc_flip_reg = RegInit(false.B) // 用于交替读取两个acc bank
-  val stride_reg = Reg(UInt(10.W)) // 缓存stride
-  // 缓存解码好的bank信息
-  val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))  // 需要3位以支持8个banks（SPAD+ACC）
+  // Whether this is an acc bank operation
+  val acc_reg = RegInit(false.B)
+  // Used to alternately read two acc banks
+  val acc_flip_reg = RegInit(false.B)
+  // Cache stride
+  val stride_reg = Reg(UInt(10.W))
+  // Cache decoded bank information
+  // Need 3 bits to support 8 banks (SPAD+ACC)
+  val rd_bank_reg = Reg(UInt(log2Up(b.sp_banks + b.acc_banks).W))
   val rd_bank_addr_reg = Reg(UInt(log2Up(b.spad_bank_entries).W))
 
-  // 数据缓存相关寄存器
-  val data_buffer = Reg(UInt((align_bytes * 8).W))  // 16字节缓存
-  val buffer_valid_bytes = Reg(UInt(log2Ceil(align_bytes + 1).W))  // 缓存中有效字节数
-  val buffer_start_addr = Reg(UInt(b.memAddrLen.W))  // 缓存对应的起始地址
+  // Data buffer related registers
+  // 16-byte buffer
+  val data_buffer = Reg(UInt((align_bytes * 8).W))
+  // Number of valid bytes in buffer
+  val buffer_valid_bytes = Reg(UInt(log2Ceil(align_bytes + 1).W))
+  // Starting address corresponding to buffer
+  val buffer_start_addr = Reg(UInt(b.memAddrLen.W))
 
-  // 接收store指令
+  // Receive store instruction
   io.cmdReq.ready := state === s_idle
 
   when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
@@ -57,17 +66,20 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     rd_bank_reg   := io.cmdReq.bits.cmd.sp_bank
     rd_bank_addr_reg := io.cmdReq.bits.cmd.sp_bank_addr
     sram_count    := 0.U
-    acc_reg       := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U) // 根据bank判断是否是acc
-    acc_flip_reg  := true.B // 重置交替寄存器
+    // Determine if acc based on bank
+    acc_reg       := (io.cmdReq.bits.cmd.sp_bank >= b.sp_banks.U)
+    // Reset flip register
+    acc_flip_reg  := true.B
     stride_reg    := io.cmdReq.bits.cmd.special(10,0)
-    // 初始化缓存状态
+    // Initialize buffer state
     buffer_valid_bytes := 0.U
   }
 
-  // 流式读取SRAM数据
-  // 计算当前读取的bank和地址
+  // Stream read SRAM data
+  // Calculate current read bank and address
   val current_bank_addr = rd_bank_addr_reg + sram_count
-  val target_bank = rd_bank_reg  // 所有读取都来自同一个bank
+  // All reads come from the same bank
+  val target_bank = rd_bank_reg
   val target_row = current_bank_addr
 
   for (i <- 0 until b.sp_banks) {
@@ -76,7 +88,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     io.sramRead(i).req.bits.fromDMA := true.B
   }
 
-  //默认赋值
+  // Default assignment
   for (i <- 0 until b.acc_banks) {
     io.accRead(i).req.valid := false.B
     io.accRead(i).req.bits.addr := 0.U
@@ -97,88 +109,93 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     }
   }
 
-  // SRAM响应处理
+  // SRAM response processing
   val sram_resp_valid = io.sramRead.map(_.resp.valid).reduce(_ || _)
   val sram_resp_data = Mux1H(io.sramRead.map(_.resp.valid), io.sramRead.map(_.resp.bits.data))
   val acc_resp_valid = io.accRead.map(_.resp.valid).reduce(_ || _)
   val acc_resp_data = Mux1H(io.accRead.map(_.resp.valid), io.accRead.map(_.resp.bits.data))
 
-  // 计算当前行对应的内存地址
+  // Calculate memory address corresponding to current row
   val current_mem_addr = mem_addr_reg + sram_count(1,0) * line_bytes.U + ((sram_count >> 2) << 2) * stride_reg * line_bytes.U
-  val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)  // 地址的低4位，16字节对齐时为0
+  // Lower 4 bits of address, 0 when 16-byte aligned
+  val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
   val aligned_addr = Cat(current_mem_addr(b.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
   val is_aligned = addr_offset === 0.U
   dontTouch(is_aligned)
   dontTouch(aligned_addr)
 
-  // 数据合并逻辑 (line_bytes = 16字节)
+  // Data merge logic (line_bytes = 16 bytes)
   val incoming_data = Mux(sram_resp_valid, sram_resp_data.asUInt, acc_resp_data.asUInt)
-  val incoming_bytes = 16.U  // 永远是16字节
+  // Always 16 bytes
+  val incoming_bytes = 16.U
 
-  // 合并到缓存的数据
+  // Data merged into buffer
   val merged_data = Wire(UInt((align_bytes * 8).W))
   val total_valid_bytes = Wire(UInt(log2Ceil(align_bytes * 2).W))
   val is_last_iter = (sram_count >= (iter_reg - 1.U) && iter_reg > 0.U) || iter_reg === 0.U
 
   when (buffer_valid_bytes === 0.U) {
-    // 缓存为空
+    // Buffer is empty
     when (addr_offset === 0.U) {
-      // 地址已对齐，直接使用数据
+      // Address is aligned, use data directly
       merged_data := incoming_data
       total_valid_bytes := incoming_bytes
     }.otherwise {
-      // 地址不对齐，第一次：将新数据低位作为发送数据高位，低位补0
+      // Address not aligned, first time: use low bits of new data as high bits of send data, pad low bits with 0
       val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
       merged_data := new_data_low << (addr_offset * 8.U)
       total_valid_bytes := align_bytes.U
     }
   }.otherwise {
-    // 缓存有数据，拼接：新数据低位作为高位 + 缓存数据作为低位
+    // Buffer has data, concatenate: low bits of new data as high bits + buffer data as low bits
     val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
     merged_data := (new_data_low << (addr_offset * 8.U)) | data_buffer
-    total_valid_bytes := align_bytes.U  // 总是16字节
+    // Always 16 bytes
+    total_valid_bytes := align_bytes.U
   }
 
-  // 发送逻辑：除了最后一次迭代，总是能填满16字节
+  // Send logic: except for last iteration, can always fill 16 bytes
   val can_send_full_line = total_valid_bytes >= align_bytes.U
   val send_bytes = Mux(can_send_full_line, align_bytes.U, total_valid_bytes)
 
-  // 确定发送地址 - 始终使用对齐地址
+  // Determine send address - always use aligned address
   val send_addr = Mux(buffer_valid_bytes === 0.U, aligned_addr,
     Cat(buffer_start_addr(b.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W)))
 
-  // DMA请求逻辑
+  // DMA request logic
   val should_send_normal = (sram_resp_valid || acc_resp_valid) && can_send_full_line
   val should_send_first_unaligned = (sram_resp_valid || acc_resp_valid) && (buffer_valid_bytes === 0.U && addr_offset =/= 0.U)
   val should_send_last = (sram_resp_valid || acc_resp_valid) && is_last_iter && !can_send_full_line
   val should_send = should_send_normal || should_send_first_unaligned || should_send_last
 
-  // 添加一个标志来跟踪是否所有数据都已处理完成
-  // 完成检测逻辑 - 支持两种情况：
-  // 1. 干净的数据完成（完全对齐情况）
+  // Add a flag to track whether all data has been processed
+  // Completion detection logic - supports two cases:
+  // 1. Clean data completion (fully aligned case)
   val aligned_completion = buffer_valid_bytes === 0.U && is_last_iter
-  // 2. 有剩余数据需要发送（非对齐情况）
-  val has_remaining_data_completion = buffer_valid_bytes > 0.U && is_last_iter  // 有剩余数据
+  // 2. Remaining data needs to be sent (unaligned case)
+  // Has remaining data
+  val has_remaining_data_completion = buffer_valid_bytes > 0.U && is_last_iter
   val unaligned_completion_final_send = has_remaining_data_completion && !(sram_resp_valid || acc_resp_valid)
 
-  // 生成mask
+  // Generate mask
   val send_mask = Wire(UInt(align_bytes.W))
   when (buffer_valid_bytes === 0.U && addr_offset =/= 0.U) {
-    // 第一次非对齐：发送新数据高位，mask在高位
+    // First unaligned: send high bits of new data, mask on high bits
     val valid_bytes = align_bytes.U - addr_offset
-    send_mask := ((1.U << valid_bytes) - 1.U) << addr_offset  // 0xFF00 (如果addr_offset=8)
+    // 0xFF00 (if addr_offset=8)
+    send_mask := ((1.U << valid_bytes) - 1.U) << addr_offset
   }.elsewhen (buffer_valid_bytes > 0.U && can_send_full_line) {
-    // 中间拼接：发送完整16字节
+    // Middle concatenation: send full 16 bytes
     send_mask := ~0.U(align_bytes.W)  // 0xFFFF
   }.elsewhen (unaligned_completion_final_send) {
-    // 最后发送剩余buffer数据：缓存数据在低位
+    // Last send remaining buffer data: buffer data in low bits
     send_mask := (1.U << buffer_valid_bytes) - 1.U  // 0x00FF
   }.otherwise {
-    // 对齐情况：完整数据
+    // Aligned case: full data
     send_mask := ~0.U(align_bytes.W)  // 0xFFFF
   }
 
-  // DMA请求信号控制逻辑 - 只有在DMA ready时才能更新
+  // DMA request signal control logic - can only update when DMA is ready
   val dma_req_valid_reg = RegInit(false.B)
   val dma_req_vaddr_reg = RegInit(0.U(b.memAddrLen.W))
   val dma_req_data_reg = RegInit(0.U((align_bytes * 8).W))
@@ -186,7 +203,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val dma_req_mask_reg = RegInit(0.U(align_bytes.W))
   val dma_req_status_reg = RegInit(0.U.asTypeOf(new MStatus))
 
-  // 计算DMA请求信号
+  // Calculate DMA request signals
   val dma_req_valid_next = (should_send || unaligned_completion_final_send) && (state === s_sram_req || state === s_dma_wait)
   val dma_req_vaddr_next = Mux(unaligned_completion_final_send, buffer_start_addr, send_addr)
   val dma_req_data_next = Mux(unaligned_completion_final_send, data_buffer, merged_data)
@@ -194,7 +211,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   val dma_req_mask_next = Mux(unaligned_completion_final_send, (1.U << buffer_valid_bytes) - 1.U, send_mask)
   val dma_req_status_next = 0.U.asTypeOf(new MStatus)
 
-  // 只有在DMA ready时才更新寄存器
+  // Only update registers when DMA is ready
   when (io.dmaReq.ready) {
     dma_req_valid_reg := dma_req_valid_next
     dma_req_vaddr_reg := dma_req_vaddr_next
@@ -204,7 +221,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     dma_req_status_reg := dma_req_status_next
   }
 
-  // 连接到DMA接口
+  // Connect to DMA interface
   io.dmaReq.valid := dma_req_valid_reg
   io.dmaReq.bits.vaddr := dma_req_vaddr_reg
   io.dmaReq.bits.data := dma_req_data_reg
@@ -212,10 +229,10 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   io.dmaReq.bits.mask := dma_req_mask_reg
   io.dmaReq.bits.status := dma_req_status_reg
 
-  // 连接SRAM响应ready信号 - 基于DMA ready状态
+  // Connect SRAM response ready signal - based on DMA ready state
   io.sramRead.foreach(_.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
   io.accRead.foreach(_.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
-  // 状态转换和计数器更新
+  // State transition and counter update
   when (io.sramRead.map(_.req.fire).reduce(_ || _)) {
     state := s_dma_wait
   }
@@ -225,39 +242,41 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
       sram_count := sram_count + 1.U
     }
 
-    // 更新缓存状态
+    // Update buffer state
     when (addr_offset =/= 0.U && (sram_resp_valid || acc_resp_valid)) {
-      // 非对齐情况：缓存新数据的高位部分
-      val remaining_bytes = align_bytes.U - addr_offset  // 缓存的是高位部分
+      // Unaligned case: cache high bits of new data
+      // Cache is the high bits part
+      val remaining_bytes = align_bytes.U - addr_offset
       data_buffer := incoming_data >> (addr_offset * 8.U)
       buffer_valid_bytes := remaining_bytes
-      // 更新buffer对应的地址（指向下一个16字节对齐地址）
+      // Update buffer corresponding address (point to next 16-byte aligned address)
       when (buffer_valid_bytes === 0.U) {
         buffer_start_addr := aligned_addr + align_bytes.U
       }.otherwise {
         buffer_start_addr := buffer_start_addr + align_bytes.U
       }
     }.elsewhen (unaligned_completion_final_send) {
-      // 发送了最后的剩余数据，清空缓存
+      // Sent final remaining data, clear buffer
       buffer_valid_bytes := 0.U
     }.otherwise {
-      // 对齐情况下，如果之前有缓存数据被合并发送了，需要清空缓存
+      // In aligned case, if previous buffer data was merged and sent, need to clear buffer
       when (buffer_valid_bytes > 0.U && can_send_full_line && sram_resp_valid) {
         buffer_valid_bytes := 0.U
       }
     }
 
-    // 修复状态转换逻辑
+    // Fix state transition logic
     when (unaligned_completion_final_send) {
-      // unaligned_completion_final_send 完成后才回到 idle
+      // Only return to idle after unaligned_completion_final_send completes
       state := s_idle
     }.elsewhen (aligned_completion) {
-      // 所有数据都已发送完成
+      // All data has been sent
       state := s_idle
     }.elsewhen (sram_count + 1.U >= iter_reg && iter_reg > 0.U) {
-      // 迭代结束，但可能还有缓存数据需要发送
+      // Iteration ended, but there may still be buffer data to send
       when (buffer_valid_bytes > 0.U) {
-        state := s_dma_wait  // 保持状态，等待 unaligned_completion_final_send
+        // Maintain state, wait for unaligned_completion_final_send
+        state := s_dma_wait
       }.otherwise {
         state := s_idle
       }
@@ -268,10 +287,10 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
     }
   }
 
-  // 等待DMA真正完成
+  // Wait for DMA to truly complete
   io.dmaResp.ready := true.B
 
-  // 修复完成信号逻辑 - 只有在真正完成所有数据传输后才发出完成信号
+  // Fix completion signal logic - only issue completion signal after all data transfer is truly complete
   val task_complete = RegInit(false.B)
   when (io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
     task_complete := false.B
@@ -282,7 +301,7 @@ class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   io.cmdResp.valid := task_complete && (state === s_idle)
   io.cmdResp.bits.rob_id := rob_id_reg
 
-  // 发送完成信号后重置标志
+  // Reset flag after sending completion signal
   when (io.cmdResp.fire) {
     task_complete := false.B
   }

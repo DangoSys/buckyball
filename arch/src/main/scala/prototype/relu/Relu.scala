@@ -16,11 +16,11 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {
-    // cmd 接口
+    // cmd interface
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
 
-    // 连接到 Scratchpad 的 SRAM 读写接口
+    // Connect to Scratchpad SRAM read/write interface
     val sramRead =
       Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(
@@ -35,20 +35,20 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
   val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
   val state = RegInit(idle)
 
-  // 存储一行被拆分的元素（veclane 个元素）
-  // 存储一个 veclane x veclane 的 tile（逐元素做 ReLU 后再写回）
+  // Store a row of split elements (veclane elements)
+  // Store a veclane x veclane tile (perform element-wise ReLU then write back)
   val regArray = RegInit(
     VecInit(Seq.fill(b.veclane)(
       VecInit(Seq.fill(b.veclane)(0.U(b.inputType.getWidth.W)))
     ))
   )
 
-  // 计数器 ?
+  // Counters
   val readCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
   val respCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
   val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
 
-  // 指令寄存器 ?
+  // Instruction registers
   val robid_reg = RegInit(0.U(10.W))
   val waddr_reg = RegInit(0.U(10.W))
   val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
@@ -56,13 +56,14 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
   val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
   val iter_reg = RegInit(0.U(10.W))
   val cycle_reg = RegInit(0.U(6.W))
-  val iterCnt = RegInit(0.U(32.W)) // 批次迭代计数器
+  // Batch iteration counter
+  val iterCnt = RegInit(0.U(32.W))
 
-  // 预计算写入数据
+  // Precompute write data
   val writeDataReg = Reg(UInt(spad_w.W))
   val writeMaskReg = Reg(Vec(b.spad_mask_len, UInt(1.W)))
 
-  // SRAM 默认赋值
+  // SRAM default assignment
   for (i <- 0 until b.sp_banks) {
     io.sramRead(i).req.valid          := false.B
     io.sramRead(i).req.bits.addr      := 0.U
@@ -75,12 +76,12 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
     io.sramWrite(i).req.bits.mask     := VecInit(Seq.fill(b.spad_mask_len)(0.U(1.W)))
   }
 
-  // cmd 接口默认赋值
+  // cmd interface default assignment
   io.cmdReq.ready := state === idle
   io.cmdResp.valid := false.B
   io.cmdResp.bits.rob_id := robid_reg
 
-  // 状态机
+  // State machine
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
@@ -90,7 +91,7 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
         writeCounter := 0.U
 
         robid_reg := io.cmdReq.bits.rob_id
-  // 对于 ReLU，输出写回应使用解码后的 wr_bank/addr，而不是 op2_* 字段
+  // For ReLU, output write-back should use decoded wr_bank/addr, not op2_* fields
         waddr_reg := io.cmdReq.bits.cmd.wr_bank_addr
         wbank_reg := io.cmdReq.bits.cmd.wr_bank
         raddr_reg := io.cmdReq.bits.cmd.op1_bank_addr
@@ -112,14 +113,14 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
 
     is(sRead) {
       when(readCounter < b.veclane.U) {
-      // 发起读取请求
+      // Issue read request
       readCounter := readCounter + 1.U
       io.sramRead(rbank_reg).req.valid     := true.B
       io.sramRead(rbank_reg).req.bits.addr := raddr_reg + readCounter
 
     }
 
-      // 接收响应，仅在存在未完成读时拉起 ready
+      // Receive response, only raise ready when there are outstanding reads
       val dataWord = io.sramRead(rbank_reg).resp.bits.data
       // val hasOutstandingRead = readCounter =/= respCounter
       io.sramRead(rbank_reg).resp.ready := true.B
@@ -137,9 +138,9 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
 
       when(respCounter === b.veclane.U) {
         state := sWrite
-        // 预计算首个写入数据（第0行，逐列拼接）
+        // Precompute first write data (row 0, concatenated by column)
         writeDataReg := Cat((0 until b.veclane).reverse.map(j => regArray(0)(j)))
-        // 设置写入掩码（全写）
+        // Set write mask (write all)
         for (i <- 0 until b.spad_mask_len) {
           writeMaskReg(i) := 1.U(1.W)
         }
@@ -147,7 +148,7 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
     }
 
     is(sWrite) {
-      // 正确使用 ready/valid 握手推进写入，避免丢写
+      // Correctly use ready/valid handshake to advance writes, avoid dropped writes
       io.sramWrite(wbank_reg).req.valid := writeCounter < b.veclane.U
       io.sramWrite(wbank_reg).req.bits.addr := waddr_reg + writeCounter
       io.sramWrite(wbank_reg).req.bits.data := writeDataReg
@@ -157,7 +158,7 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
         state := complete
       }.otherwise {
         writeCounter := writeCounter + 1.U
-        // 准备下一行的写入数据
+        // Prepare next row's write data
         writeDataReg := Cat((0 until b.veclane).reverse.map(j => regArray(writeCounter + 1.U)(j)))
       }
       

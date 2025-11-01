@@ -30,18 +30,18 @@ class EmptyBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) exten
     io.sramWrite(i).rob_id             := 0.U
   }
 
-    // 处理Accumulator读接口 - Transpose不读accumulator，所以tie off
+    // Handle Accumulator read interface - EmptyBall does not read accumulator, so tie off
   for (i <- 0 until b.acc_banks) {
-    // 对于Flipped(SramReadIO)，我们需要驱动req.valid, req.bits（输出）和resp.ready（输出）
+    // For Flipped(SramReadIO), we need to drive req.valid, req.bits (outputs) and resp.ready (output)
     io.accRead(i).io.req.valid := false.B
     io.accRead(i).io.req.bits := DontCare
     io.accRead(i).io.resp.ready := true.B
     io.accRead(i).rob_id := 0.U
   }
 
-  // 处理Accumulator写接口 - Transpose不写accumulator，所以tie off
+  // Handle Accumulator write interface - EmptyBall does not write accumulator, so tie off
   for (i <- 0 until b.acc_banks) {
-    // 对于Flipped(SramWriteIO)，我们需要驱动req.valid和req.bits（输出）
+    // For Flipped(SramWriteIO), we need to drive req.valid and req.bits (outputs)
     io.accWrite(i).io.req.valid := false.B
     io.accWrite(i).io.req.bits := DontCare
     io.accWrite(i).rob_id := 0.U

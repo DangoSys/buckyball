@@ -1,102 +1,102 @@
-# Ball域保留站 (Ball Reservation Station)
+# Ball Domain Reservation Station
 
-## 核心功能
+## Core Features
 
-通用的Ball域保留站实现，支持：
-- ✅ 环状ROB（循环队列）
-- ✅ 顺序发射，最多发射ROB深度一半的指令
-- ✅ 乱序完成和乱序提交
-- ✅ 可配置的顺序/乱序响应模式
-- ✅ 动态Ball设备数量支持
+General Ball domain reservation station implementation supporting:
+- ✅ Circular ROB (ring buffer)
+- ✅ In-order issue, max half of ROB depth instructions
+- ✅ Out-of-order completion and commit
+- ✅ Configurable in-order/out-of-order response mode
+- ✅ Dynamic Ball device count support
 
-## 文件结构
+## File Structure
 
 ```
 rs/
-├── reservationStation.scala  - 保留站主模块，连接ROB和Ball设备
-├── rob.scala                 - 环状ROB实现
-└── README.md                 - 本文档
+├── reservationStation.scala  - Main RS module, connects ROB and Ball devices
+├── rob.scala                 - Circular ROB implementation
+└── README.md                 - This document
 ```
 
-## 架构设计
+## Architecture Design
 
-### 整体流水线
+### Overall Pipeline
 
 ```
-Ball Decoder → ROB分配 → ROB发射 → Ball设备执行 → 完成信号 → ROB提交
-     ↓                                                        ↑
-  立即响应(可配置)                                  顺序/乱序过滤(可配置)
+Ball Decoder → ROB Alloc → ROB Issue → Ball Execute → Complete → ROB Commit
+     ↓                                                      ↑
+  Immediate resp (configurable)                  In-order/OoO filter (configurable)
 ```
 
-### 模块职责
+### Module Responsibilities
 
-**保留站 (BallReservationStation)**：
-- 接收Ball域解码指令
-- 管理多个Ball设备的发射和完成
-- 根据配置决定响应策略（顺序/乱序）
-- 在顺序模式下过滤非head的完成信号
+**Reservation Station (BallReservationStation)**:
+- Receives Ball domain decoded instructions
+- Manages multiple Ball devices' issue and completion
+- Decides response strategy based on configuration (in-order/out-of-order)
+- Filters non-head completion signals in in-order mode
 
-**ROB (Reorder Buffer)**：
-- 环状队列管理（循环的rob_id）
-- 顺序发射，限制inflight数量
-- 乱序提交（每周期提交所有已完成指令）
-- 暴露内部状态供保留站决策
+**ROB (Reorder Buffer)**:
+- Circular queue management (circular rob_id)
+- In-order issue, limits inflight count
+- Out-of-order commit (commits all completed instructions per cycle)
+- Exposes internal state for reservation station decisions
 
-## ROB实现细节
+## ROB Implementation Details
 
-### 环状队列结构
+### Circular Queue Structure
 
 ```scala
-// 核心状态
-val robEntries   = Reg(Vec(b.rob_entries, new RobEntry))  // 指令存储
-val robValid     = Reg(Vec(b.rob_entries, Bool()))         // 条目有效
-val robIssued    = Reg(Vec(b.rob_entries, Bool()))         // 已发射
-val robComplete  = Reg(Vec(b.rob_entries, Bool()))         // 已完成
+// Core state
+val robEntries   = Reg(Vec(b.rob_entries, new RobEntry))  // Instruction storage
+val robValid     = Reg(Vec(b.rob_entries, Bool()))         // Entry valid
+val robIssued    = Reg(Vec(b.rob_entries, Bool()))         // Issued
+val robComplete  = Reg(Vec(b.rob_entries, Bool()))         // Completed
 
-// 循环队列指针
-val headPtr      = Reg(UInt())  // 最老的未提交指令
-val tailPtr      = Reg(UInt())  // 下一个分配位置
-val robIdCounter = Reg(UInt())  // ROB ID循环计数器（0 ~ rob_entries-1）
+// Circular queue pointers
+val headPtr      = Reg(UInt())  // Oldest uncommitted instruction
+val tailPtr      = Reg(UInt())  // Next allocation position
+val robIdCounter = Reg(UInt())  // ROB ID circular counter (0 ~ rob_entries-1)
 
-// 发射限制
-val issuedCount  = Reg(UInt())  // 已发射未完成的指令数
-val maxIssueLimit = (b.rob_entries / 2).U  // 最多发射一半
+// Issue limit
+val issuedCount  = Reg(UInt())  // Issued but not completed instruction count
+val maxIssueLimit = (b.rob_entries / 2).U  // Max issue half
 ```
 
-### ROB ID循环
+### ROB ID Circulation
 
 ```scala
-// 分配时循环递增
+// Circular increment on allocation
 when(io.alloc.fire) {
   robIdCounter := Mux(robIdCounter === (b.rob_entries - 1).U,
                       0.U, robIdCounter + 1.U)
 }
 ```
 
-### 顺序发射逻辑
+### In-order Issue Logic
 
-从head指针开始扫描，找到第一个未发射的指令：
+Scan from head pointer to find the first non-issued instruction:
 
 ```scala
-// 扫描所有位置
+// Scan all positions
 for (i <- 0 until b.rob_entries) {
   val ptr = (headPtr + i.U) % b.rob_entries.U
   scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
 }
 
-// 优先级编码器找到第一个
+// Priority encoder finds the first
 val issuePtr = PriorityEncoder(scanValid)
 
-// 检查发射限制
+// Check issue limit
 val canIssue = scanValid.orR && (issuedCount < maxIssueLimit)
 ```
 
-### 乱序提交逻辑
+### Out-of-order Commit Logic
 
-每周期提交所有已完成的指令，然后更新head指针：
+Commit all completed instructions per cycle, then update head pointer:
 
 ```scala
-// 提交所有完成的指令
+// Commit all completed instructions
 for (i <- 0 until b.rob_entries) {
   when(robValid(i.U) && robComplete(i.U)) {
     robValid(i.U) := false.B
@@ -105,25 +105,25 @@ for (i <- 0 until b.rob_entries) {
   }
 }
 
-// head指针跳过所有已提交的位置，移动到第一个有效未完成的指令
+// Head pointer skips all committed positions, moves to first valid uncompleted instruction
 ```
 
-### 暴露的状态信号
+### Exposed State Signals
 
 ```scala
-io.empty          // ROB是否为空
-io.full           // ROB是否已满
-io.head_ptr       // 头指针位置
-io.issued_count   // inflight指令数
-io.entry_valid    // 每个条目是否有效
-io.entry_complete // 每个条目是否完成
+io.empty          // ROB empty
+io.full           // ROB full
+io.head_ptr       // Head pointer position
+io.issued_count   // Inflight instruction count
+io.entry_valid    // Each entry valid
+io.entry_complete // Each entry completed
 ```
 
-## 保留站实现细节
+## Reservation Station Implementation Details
 
-### 发射逻辑
+### Issue Logic
 
-根据指令的`bid`（Ball ID）分发到对应Ball设备：
+Dispatch to corresponding Ball device based on instruction `bid` (Ball ID):
 
 ```scala
 for (i <- 0 until numBalls) {
@@ -133,7 +133,7 @@ for (i <- 0 until numBalls) {
   io.issue_o.balls(i).bits  := rob.io.issue.bits
 }
 
-// ROB ready：只有目标Ball设备ready时才能发射
+// ROB ready: only issue when target Ball device is ready
 rob.io.issue.ready := VecInit(
   BallRsRegists.zipWithIndex.map { case (info, idx) =>
     (rob.io.issue.bits.cmd.bid === info.ballId.U) &&
@@ -142,9 +142,9 @@ rob.io.issue.ready := VecInit(
 ).asUInt.orR
 ```
 
-### 完成信号处理（关键）
+### Completion Signal Handling (Critical)
 
-**乱序模式**：接受所有完成信号
+**Out-of-order mode**: Accept all completion signals
 
 ```scala
 if (b.rs_out_of_order_response) {
@@ -152,40 +152,40 @@ if (b.rs_out_of_order_response) {
 }
 ```
 
-**顺序模式**：只接受`rob_id == head_ptr`的完成信号
+**In-order mode**: Only accept completion signals where `rob_id == head_ptr`
 
 ```scala
 else {
   val isHeadComplete = completeArb.io.out.bits === rob.io.head_ptr
   rob.io.complete.valid := completeArb.io.out.valid && isHeadComplete
   rob.io.complete.bits  := completeArb.io.out.bits
-  // 非head指令会被阻塞等待
+  // Non-head instructions are blocked and wait
   completeArb.io.out.ready := rob.io.complete.ready && isHeadComplete
 }
 ```
 
-## 配置参数
+## Configuration Parameters
 
 ### BaseConfigs.scala
 
 ```scala
 case class CustomBuckyBallConfig(
-  rob_entries: Int = 16,                      // ROB条目数量
-  rs_out_of_order_response: Boolean = true,   // 乱序响应模式
+  rob_entries: Int = 16,                      // ROB entry count
+  rs_out_of_order_response: Boolean = true,   // Out-of-order response mode
   ...
 )
 ```
 
-### 参数说明
+### Parameter Description
 
-| 参数 | 默认值 | 说明 |
+| Parameter | Default | Description |
 |------|--------|------|
-| `rob_entries` | 16 | ROB深度，影响乱序窗口大小 |
-| `rs_out_of_order_response` | true | true=乱序响应，false=顺序响应 |
+| `rob_entries` | 16 | ROB depth, affects out-of-order window size |
+| `rs_out_of_order_response` | true | true=out-of-order response, false=in-order response |
 
-## 使用示例
+## Usage Examples
 
-### 注册Ball设备
+### Registering Ball Devices
 
 ```scala
 val ballDevices = Seq(
@@ -198,140 +198,140 @@ val ballDevices = Seq(
 val rs = Module(new BallReservationStation(ballDevices))
 ```
 
-### 连接接口
+### Connecting Interfaces
 
 ```scala
-// 输入：来自Ball域解码器
+// Input: from Ball domain decoder
 rs.io.ball_decode_cmd_i <> decoder.io.ball_cmd_o
 
-// 输出：到各个Ball设备
+// Output: to each Ball device
 rs.io.issue_o.balls(0) <> vectorUnit.io.cmd_i
 rs.io.issue_o.balls(1) <> matrixUnit.io.cmd_i
 rs.io.issue_o.balls(2) <> loadUnit.io.cmd_i
 rs.io.issue_o.balls(3) <> storeUnit.io.cmd_i
 
-// 完成信号：从各个Ball设备
+// Completion signals: from each Ball device
 rs.io.commit_i.balls(0) <> vectorUnit.io.complete_o
 rs.io.commit_i.balls(1) <> matrixUnit.io.complete_o
 rs.io.commit_i.balls(2) <> loadUnit.io.complete_o
 rs.io.commit_i.balls(3) <> storeUnit.io.complete_o
 
-// RoCC响应
+// RoCC response
 rocc.resp <> rs.io.rs_rocc_o.resp
 rocc.busy := rs.io.rs_rocc_o.busy
 ```
 
-## 性能特性
+## Performance Characteristics
 
-### 乱序模式 (rs_out_of_order_response = true)
+### Out-of-order Mode (rs_out_of_order_response = true)
 
-**优点**：
-- ✅ 高吞吐量
-- ✅ Ball设备不会被阻塞
-- ✅ 充分利用ROB容量
-- ✅ 适合高性能场景
+**Advantages**:
+- ✅ High throughput
+- ✅ Ball devices not blocked
+- ✅ Full utilization of ROB capacity
+- ✅ Suitable for high-performance scenarios
 
-**缺点**：
-- ❌ 不保证严格的指令顺序
-- ❌ 调试困难
+**Disadvantages**:
+- ❌ No strict instruction ordering guarantee
+- ❌ Difficult to debug
 
-**适用场景**：
-- 独立的Ball计算任务
-- 无数据依赖的批量操作
-- 追求最大吞吐量
+**Use cases**:
+- Independent Ball computation tasks
+- Batch operations without data dependencies
+- Maximum throughput required
 
-### 顺序模式 (rs_out_of_order_response = false)
+### In-order Mode (rs_out_of_order_response = false)
 
-**优点**：
-- ✅ 严格按程序顺序提交
-- ✅ 行为可预测
-- ✅ 便于调试
-- ✅ 支持精确异常
+**Advantages**:
+- ✅ Strict program order commit
+- ✅ Predictable behavior
+- ✅ Easy to debug
+- ✅ Supports precise exceptions
 
-**缺点**：
-- ❌ 吞吐量较低
-- ❌ Ball设备可能被阻塞（等待head完成）
-- ❌ ROB利用率可能较低
+**Disadvantages**:
+- ❌ Lower throughput
+- ❌ Ball devices may be blocked (waiting for head completion)
+- ❌ ROB utilization may be low
 
-**适用场景**：
-- 有数据依赖的操作序列
-- 需要调试和验证
-- 对顺序有严格要求
+**Use cases**:
+- Operation sequences with data dependencies
+- Debug and verification
+- Strict ordering requirements
 
-### 发射限制的影响
+### Impact of Issue Limit
 
 ```
-最大inflight数 = rob_entries / 2
+Max inflight count = rob_entries / 2
 ```
 
-**ROB=16时**：
-- 最多同时发射8条指令
-- 剩余8个位置用于缓冲新指令
-- 平衡发射压力和缓冲能力
+**With ROB=16**:
+- Max 8 instructions issued simultaneously
+- Remaining 8 positions for buffering new instructions
+- Balance issue pressure and buffering capacity
 
-## 性能调优建议
+## Performance Tuning Recommendations
 
-### 增加ROB深度
+### Increase ROB Depth
 
 ```scala
-override val rob_entries = 32  // 增加到32
+override val rob_entries = 32  // Increase to 32
 ```
-- ✅ 更大的乱序窗口
-- ✅ 更多指令可并行执行
-- ❌ 面积和功耗增加
+- ✅ Larger out-of-order window
+- ✅ More instructions can execute in parallel
+- ❌ Increased area and power
 
-### 调整发射限制
+### Adjust Issue Limit
 
-如果需要修改发射比例，编辑`rob.scala`：
+To modify issue ratio, edit `rob.scala`:
 
 ```scala
-val maxIssueLimit = (b.rob_entries * 3 / 4).U  // 改为3/4
+val maxIssueLimit = (b.rob_entries * 3 / 4).U  // Change to 3/4
 ```
 
-### 混合模式（未来扩展）
+### Hybrid Mode (Future Extension)
 
-保留站可以利用`rob.io.entry_complete`等信号实现更复杂的策略：
+Reservation station can use signals like `rob.io.entry_complete` for more complex strategies:
 
 ```scala
-// 示例：根据完成情况动态调整
+// Example: dynamically adjust based on completion status
 val completedRatio = PopCount(rob.io.entry_complete) / rob_entries.U
 val allowResponse = (completedRatio > threshold.U) || rob.io.empty
 ```
 
-## 时序图
+## Timing Diagrams
 
-### 乱序模式执行流程
-
-```
-周期 | 动作              | headPtr | issuedCount | ROB状态
------|-------------------|---------|-------------|------------------
-1    | 分配指令0         | 0       | 0           | [0:未发射]
-2    | 发射指令0         | 0       | 1           | [0:已发射]
-3    | 分配指令1，发射1  | 0       | 2           | [0:已发射, 1:已发射]
-4    | 指令1完成         | 0       | 1           | [0:已发射, 1:完成]
-5    | 指令1提交         | 0       | 1           | [0:已发射, 1:空]
-6    | 指令0完成         | 0       | 0           | [0:完成, 1:空]
-7    | 指令0提交         | 2       | 0           | [0:空, 1:空]
-```
-
-### 顺序模式执行流程
+### Out-of-order Mode Execution Flow
 
 ```
-周期 | 动作              | headPtr | 完成信号        | 提交
------|-------------------|---------|-----------------|----------
-1    | 分配指令0         | 0       | -               | -
-2    | 发射指令0         | 0       | -               | -
-3    | 分配指令1，发射1  | 0       | -               | -
-4    | 指令1完成         | 0       | rob_id=1 ❌阻塞 | -
-5    | 指令1继续等待     | 0       | rob_id=1 ❌阻塞 | -
-6    | 指令0完成         | 0       | rob_id=0 ✅接受 | 指令0
-7    | head移动          | 1       | -               | -
-8    | 指令1重新尝试     | 1       | rob_id=1 ✅接受 | 指令1
+Cycle | Action               | headPtr | issuedCount | ROB State
+------|----------------------|---------|-------------|------------------
+1     | Alloc instr 0        | 0       | 0           | [0:not issued]
+2     | Issue instr 0        | 0       | 1           | [0:issued]
+3     | Alloc+issue instr 1  | 0       | 2           | [0:issued, 1:issued]
+4     | Instr 1 completes    | 0       | 1           | [0:issued, 1:completed]
+5     | Instr 1 commits      | 0       | 1           | [0:issued, 1:empty]
+6     | Instr 0 completes    | 0       | 0           | [0:completed, 1:empty]
+7     | Instr 0 commits      | 2       | 0           | [0:empty, 1:empty]
 ```
 
-## 调试技巧
+### In-order Mode Execution Flow
 
-### 查看ROB状态
+```
+Cycle | Action               | headPtr | Complete signal  | Commit
+------|----------------------|---------|------------------|----------
+1     | Alloc instr 0        | 0       | -                | -
+2     | Issue instr 0        | 0       | -                | -
+3     | Alloc+issue instr 1  | 0       | -                | -
+4     | Instr 1 completes    | 0       | rob_id=1 ❌block | -
+5     | Instr 1 waits        | 0       | rob_id=1 ❌block | -
+6     | Instr 0 completes    | 0       | rob_id=0 ✅accept| Instr 0
+7     | Head moves           | 1       | -                | -
+8     | Instr 1 retries      | 1       | rob_id=1 ✅accept| Instr 1
+```
+
+## Debug Techniques
+
+### View ROB State
 
 ```scala
 when(rob.io.alloc.fire) {
@@ -350,35 +350,35 @@ when(rob.io.complete.fire) {
 }
 ```
 
-### 常见问题排查
+### Common Issue Troubleshooting
 
-**问题1：ROB一直满**
-- 检查Ball设备是否正常完成
-- 检查完成信号是否正确连接
-- 顺序模式下检查是否head指令卡住
+**Issue 1: ROB always full**
+- Check if Ball devices complete normally
+- Check if completion signals are connected correctly
+- In in-order mode, check if head instruction is stuck
 
-**问题2：指令没有发射**
-- 检查`issued_count`是否达到上限
-- 检查Ball设备的ready信号
-- 检查bid是否匹配注册的Ball设备
+**Issue 2: Instructions not issued**
+- Check if `issued_count` reaches limit
+- Check Ball device ready signals
+- Check if bid matches registered Ball devices
 
-**问题3：顺序模式下性能低**
-- 考虑切换到乱序模式
-- 增加ROB深度
-- 优化Ball设备执行延迟
+**Issue 3: Low performance in in-order mode**
+- Consider switching to out-of-order mode
+- Increase ROB depth
+- Optimize Ball device execution latency
 
-## 相关文档
+## Related Documentation
 
-- [框架概览](../../../README.md)
-- [Ball域实现示例](../../../../examples/toy/balldomain/)
-- [BaseConfigs配置说明](../../BaseConfigs.scala)
+- [Framework Overview](../../../README.md)
+- [Ball Domain Implementation Example](../../../../examples/toy/balldomain/)
+- [BaseConfigs Configuration Guide](../../BaseConfigs.scala)
 
-## 设计权衡
+## Design Tradeoffs
 
-| 设计选择 | 原因 |
+| Design Choice | Reason |
 |---------|------|
-| ROB固定乱序提交 | 简化ROB逻辑，提高性能 |
-| 保留站控制顺序/乱序 | 策略灵活，易于扩展 |
-| 发射限制=深度/2 | 平衡并行度和缓冲能力 |
-| 暴露ROB内部状态 | 支持复杂的调度策略 |
-| 环状队列 | ROB ID可循环使用，支持长时间运行 |
+| Fixed out-of-order ROB commit | Simplifies ROB logic, improves performance |
+| RS controls in-order/out-of-order | Flexible strategy, easy to extend |
+| Issue limit = depth/2 | Balance parallelism and buffering |
+| Expose ROB internal state | Support complex scheduling strategies |
+| Circular queue | ROB ID recyclable, supports long-running |

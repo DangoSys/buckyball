@@ -7,10 +7,10 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.rs.{BallReservationStation, BallRsRegist}
 
 /**
- * Ball RS模块 - 参考BBus机制，管理Ball设备的注册和连接
+ * Ball RS module - references BBus mechanism, manages Ball device registration and connections
  */
 class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BallReservationStation(
-  // 定义要注册的Ball设备信息
+  // Define Ball device information to register
   Seq(
     BallRsRegist(ballId = 0, ballName = "VecBall"),
     BallRsRegist(ballId = 1, ballName = "MatrixBall"),
