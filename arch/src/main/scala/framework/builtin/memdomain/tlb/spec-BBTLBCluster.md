@@ -1,49 +1,49 @@
-# BBTLBCluster (Translation Lookaside Buffer Cluster) 规格说明
+# BBTLBCluster (Translation Lookaside Buffer Cluster) Specification
 
-## 概述
+## Overview
 
-BBTLBCluster是一个多客户端TLB集群实现，用于支持多个客户端的并发虚拟地址转换需求。该模块继承自CoreModule，通过实例化多个BBTLB模块来为每个客户端提供独立的TLB服务，同时实现了一个L0级别的快速转换缓存机制来提升性能。模块支持参数化配置客户端数量、TLB条目数和最大页面大小。
+BBTLBCluster is a multi-client TLB cluster implementation that supports concurrent virtual address translation for multiple clients. Inheriting from CoreModule, it instantiates multiple BBTLB modules to provide independent TLB services for each client, while implementing an L0-level fast translation cache mechanism to improve performance. The module supports parameterized configuration of client count, TLB entries, and maximum page size.
 
-## 接口设计
+## Interface Design
 
-BBTLBCluster的IO接口包含三个主要组件：
-- 客户端接口(clients): 提供Vec(nClients, BBTLBIO)，每个客户端都有独立的请求和响应通道
-- 页表遍历接口(ptw): Vec(nClients, TLBPTWIO)，为每个客户端提供独立的PTW连接
-- 异常处理接口(exp): Vec(nClients, BBTLBExceptionIO)，管理每个客户端的异常和flush操作
+BBTLBCluster's IO interface contains three main components:
+- Client interface (clients): Provides Vec(nClients, BBTLBIO), each client has independent request and response channels
+- Page table walker interface (ptw): Vec(nClients, TLBPTWIO), provides independent PTW connection for each client
+- Exception handling interface (exp): Vec(nClients, BBTLBExceptionIO), manages exceptions and flush operations for each client
 
-BBTLBIO接口定义：
-- req: Valid(BBTLBReq)，包含TLB请求和相关状态信息
-- resp: Flipped(TLBResp)，返回地址转换结果、miss标志和异常信息
+BBTLBIO interface definition:
+- req: Valid(BBTLBReq), contains TLB request and related status information
+- resp: Flipped(TLBResp), returns address translation result, miss flag, and exception information
 
-## 内部架构设计
+## Internal Architecture
 
-### TLB实例化
-模块为每个客户端实例化一个独立的BBTLB模块，通过`Seq.fill(nClients)(Module(new BBTLB(entries, maxSize)))`创建TLB数组。每个TLB实例的PTW和异常接口直接连接到对应的输出端口。
+### TLB Instantiation
+The module instantiates an independent BBTLB module for each client through `Seq.fill(nClients)(Module(new BBTLB(entries, maxSize)))` to create a TLB array. Each TLB instance's PTW and exception interfaces are directly connected to corresponding output ports.
 
-### L0级快速缓存机制
-为了提升频繁访问地址的转换性能，每个客户端都实现了一个L0级别的单条目转换缓存：
-- `last_translated_valid`: 标识缓存条目的有效性
-- `last_translated_vpn`: 缓存的虚拟页号
-- `last_translated_ppn`: 缓存的物理页号
+### L0 Fast Cache Mechanism
+To improve translation performance for frequently accessed addresses, each client implements a single-entry L0-level translation cache:
+- `last_translated_valid`: Indicates cache entry validity
+- `last_translated_vpn`: Cached virtual page number
+- `last_translated_ppn`: Cached physical page number
 
-L0缓存命中条件为：缓存有效且当前请求的虚拟页号与缓存中的虚拟页号匹配。
+L0 cache hit condition: cache is valid and current request's virtual page number matches cached virtual page number.
 
-## 地址转换流程
+## Address Translation Flow
 
-### L0缓存查找
-每个客户端的地址转换首先在L0缓存中查找：
-1. 检查`l0_tlb_hit`条件：缓存有效且页号匹配
-2. 如果命中，直接计算物理地址：`Cat(last_translated_ppn >> pgIdxBits, vaddr(pgIdxBits-1,0))`
-3. 如果未命中，将请求转发给对应的BBTLB模块
+### L0 Cache Lookup
+Each client's address translation first looks up in the L0 cache:
+1. Check `l0_tlb_hit` condition: cache valid and page number match
+2. If hit, directly calculate physical address: `Cat(last_translated_ppn >> pgIdxBits, vaddr(pgIdxBits-1,0))`
+3. If miss, forward request to corresponding BBTLB module
 
-### TLB查找流程
-当L0缓存未命中时：
-1. 使用`RegNext`延迟一个周期，将客户端请求转发给TLB
-2. TLB有效信号设置为：`RegNext(client.req.valid && !l0_tlb_hit)`
-3. TLB请求数据设置为：`RegNext(client.req.bits)`
+### TLB Lookup Flow
+When L0 cache misses:
+1. Use `RegNext` to delay one cycle and forward client request to TLB
+2. TLB valid signal set to: `RegNext(client.req.valid && !l0_tlb_hit)`
+3. TLB request data set to: `RegNext(client.req.bits)`
 
-### 缓存更新机制
-当TLB请求完成且未发生miss时，更新L0缓存：
+### Cache Update Mechanism
+When TLB request completes without miss, update L0 cache:
 ```scala
 when (tlbReqFire && !tlb.io.resp.miss) {
   last_translated_valid := true.B
@@ -52,37 +52,37 @@ when (tlbReqFire && !tlb.io.resp.miss) {
 }
 ```
 
-## 响应路径设计
+## Response Path Design
 
-模块实现了双路径响应机制：
-1. **TLB路径**: 当TLB请求触发时，直接返回TLB的响应结果
-2. **L0缓存路径**: 当使用L0缓存时，返回缓存计算的物理地址，miss标志设置为`!RegNext(l0_tlb_hit)`
+Module implements dual-path response mechanism:
+1. **TLB Path**: When TLB request fires, directly return TLB response result
+2. **L0 Cache Path**: When using L0 cache, return cached calculated physical address, miss flag set to `!RegNext(l0_tlb_hit)`
 
-通过寄存器`l0_tlb_paddr_reg`保存客户端请求的虚拟地址，用于L0缓存路径的响应。
+Register `l0_tlb_paddr_reg` saves client request's virtual address for L0 cache path response.
 
-## 异常和Flush处理
+## Exception and Flush Handling
 
-模块通过监听每个TLB的flush信号来维护L0缓存的一致性：
+Module maintains L0 cache coherency by monitoring each TLB's flush signal:
 ```scala
 when (tlb.io.exp.flush()) {
   last_translated_valid := false.B
 }
 ```
 
-当任何flush操作发生时，L0缓存被立即无效化，确保地址转换的正确性。
+When any flush operation occurs, L0 cache is immediately invalidated, ensuring address translation correctness.
 
-## 参数化配置
+## Parameterized Configuration
 
-BBTLBCluster支持三个主要参数：
-- `nClients`: 支持的客户端数量，决定了并发TLB访问的程度
-- `entries`: 每个TLB实例的条目数量
-- `maxSize`: 支持的最大页面大小
+BBTLBCluster supports three main parameters:
+- `nClients`: Number of supported clients, determines degree of concurrent TLB access
+- `entries`: Number of entries per TLB instance
+- `maxSize`: Maximum supported page size
 
-`lgMaxSize`通过`log2Ceil(coreDataBytes)`计算，用于确定地址位宽和相关逻辑的精度。
+`lgMaxSize` calculated through `log2Ceil(coreDataBytes)`, used to determine address width and related logic precision.
 
-## 性能优化特性
+## Performance Optimization Features
 
-1. **L0快速缓存**: 为每个客户端提供单条目快速访问，减少热点地址的访问延迟
-2. **并行处理**: 多个客户端可以同时进行地址转换，提高系统吞吐量
-3. **独立PTW**: 每个客户端都有独立的页表遍历接口，避免PTW资源竞争
-4. **流水线设计**: 使用寄存器延迟实现流水线操作，提高时钟频率
+1. **L0 Fast Cache**: Provides single-entry fast access for each client, reducing hot address access latency
+2. **Parallel Processing**: Multiple clients can perform address translation simultaneously, improving system throughput
+3. **Independent PTW**: Each client has independent page table walker interface, avoiding PTW resource contention
+4. **Pipeline Design**: Uses register delays to implement pipeline operations, improving clock frequency

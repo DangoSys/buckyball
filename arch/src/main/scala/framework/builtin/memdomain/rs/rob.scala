@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.memdomain.MemDecodeCmd
 
-// ROB 条目数据结构 - 保留ROB ID支持乱序完成
+// ROB entry data structure - preserves ROB ID to support out-of-order completion
 class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val cmd    = new MemDecodeCmd
   val rob_id = UInt(log2Up(b.rob_entries).W)
@@ -15,29 +15,29 @@ class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle 
 
 class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    // 分配接口
+    // Allocation interface
     val alloc = Flipped(new DecoupledIO(new MemDecodeCmd))
 
-    // 发射接口 - 发射未完成的头部指令
+    // Issue interface - issue uncompleted head instruction
     val issue = new DecoupledIO(new RobEntry)
 
-    // 完成接口 - 报告指令完成
+    // Completion interface - report instruction completion
     val complete = Flipped(new DecoupledIO(UInt(log2Up(b.rob_entries).W)))
 
-    // 提交接口 - 提交已完成的头部指令
+    // Commit interface - commit completed head instruction
     // val commit = new DecoupledIO(new RobEntry)
 
-    // 状态信号
+    // Status signals
     val empty = Output(Bool())
     val full  = Output(Bool())
   })
 
-  // 只使用 FIFO + 完成状态表, 只做入队出队，顺序执行顺序完成
+  // Only use FIFO + completion status table, only enqueue/dequeue, sequential execution and sequential completion
   val robFifo = Module(new Queue(new RobEntry, b.rob_entries))
   val robIdCounter = RegInit(0.U(log2Up(b.rob_entries).W))
   val robTable = Reg(Vec(b.rob_entries, Bool()))
 
-  // 初始化完成状态表
+  // Initialize completion status table
   for (i <- 0 until b.rob_entries) {
     when(reset.asBool) {
       robTable(i) := true.B
@@ -45,7 +45,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   }
 
 // -----------------------------------------------------------------------------
-// 入站 - 指令分配
+// Inbound - instruction allocation
 // -----------------------------------------------------------------------------
   robFifo.io.enq.valid       := io.alloc.valid
   robFifo.io.enq.bits.cmd    := io.alloc.bits
@@ -59,7 +59,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   }
 
 // -----------------------------------------------------------------------------
-// 完成信号处理 使用robTable跟踪
+// Completion signal processing using robTable tracking
 // -----------------------------------------------------------------------------
   io.complete.ready := true.B
   when(io.complete.fire) {
@@ -67,7 +67,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   }
 
 // -----------------------------------------------------------------------------
-// 出站 - 头部指令发射
+// Outbound - head instruction issue
 // -----------------------------------------------------------------------------
   val headEntry     = robFifo.io.deq.bits
   val headCompleted = robTable(headEntry.rob_id)
@@ -78,7 +78,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 
 
 // -----------------------------------------------------------------------------
-// 状态信号
+// Status signals
 // -----------------------------------------------------------------------------
   val isEmpty = robTable.reduce(_ && _)
   val isFull = !robFifo.io.enq.ready

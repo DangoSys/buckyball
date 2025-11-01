@@ -1,153 +1,327 @@
-# BuckyBall 原型加速器
+# BuckyBall Prototype Accelerators
 
-该目录包含了 BuckyBall 框架中各种专用计算加速器的原型实现，涵盖了机器学习、数值计算和数据处理等多个领域的硬件加速器设计。
+This directory contains prototype implementations of various domain-specific computation accelerators in the BuckyBall framework, covering hardware accelerator designs for machine learning, numerical computation, and data processing domains.
 
-## 目录结构
+## Directory Structure
 
 ```
 prototype/
-├── format/      - 数据格式转换加速器
-├── im2col/      - 图像到列转换加速器
-├── matrix/      - 矩阵运算加速器
-├── transpose/   - 矩阵转置加速器
-└── vector/      - 向量处理单元
+├── format/      - Data format conversion accelerators
+├── im2col/      - Image-to-column transformation accelerator
+├── matrix/      - Matrix computation accelerators
+├── relu/        - ReLU activation accelerator
+├── transpose/   - Matrix transpose accelerator
+└── vector/      - Vector processing unit
 ```
 
-## 加速器组件
+## Accelerator Components
 
-### format/ - 数据格式处理
-实现了各种数据格式转换和算术运算的硬件加速：
-- **Arithmetic.scala**: 定制化算术运算单元
-- **Dataformat.scala**: 数据格式转换和编码
+### format/ - Data Format Processing
+Implements hardware acceleration for various data format conversions and arithmetic operations:
+- **Arithmetic.scala**: Custom arithmetic operation units
+- **Dataformat.scala**: Data format conversion and encoding
 
-**应用场景**:
-- 浮点数格式转换
-- 定点数运算优化
-- 数据压缩和解压缩
+**Key Features**:
+- Support for multiple data formats (INT8, FP16, FP32, BBFP)
+- Abstract arithmetic interface for extensibility
+- Concrete implementations for different data types
 
-### im2col/ - 图像处理加速
-专门用于卷积神经网络中的 im2col 操作加速：
-- **im2col.scala**: 图像到列矩阵转换的硬件实现
+**Use Cases**:
+- Floating-point format conversion
+- Fixed-point arithmetic optimization
+- Data compression and decompression
+- Mixed-precision computation
 
-**应用场景**:
-- CNN 卷积层加速
-- 图像预处理流水线
-- 特征提取优化
+### im2col/ - Image Processing Acceleration
+Specialized accelerator for im2col operations in convolutional neural networks:
+- **im2col.scala**: Hardware implementation of image-to-column matrix transformation
 
-### matrix/ - 矩阵运算引擎
-矩阵运算加速器实现，包含多个模块：
-- **bbfp_buffer.scala**: 矩阵数据缓冲管理
-- **bbfp_control.scala**: 运算控制逻辑
-- **bbfp_ex.scala**: 执行单元实现
-- **bbfp_load.scala**: 数据加载单元
-- **bbfp_pe.scala**: 处理单元(PE)阵列
-- **bbfpIns_decode.scala**: 指令解码器
+**Key Features**:
+- Configurable kernel size and stride
+- Efficient data reorganization for convolution
+- Pipeline-based processing for high throughput
+- Support for different input dimensions
 
-**应用场景**:
-- 深度学习训练和推理
-- 科学计算加速
-- 线性代数运算
+**Use Cases**:
+- CNN convolution layer acceleration
+- Image preprocessing pipeline
+- Feature extraction optimization
+- Memory-efficient convolution implementation
 
-### transpose/ - 矩阵转置
-高效的矩阵转置操作硬件实现：
-- **Transpose.scala**: 矩阵转置加速器
+### matrix/ - Matrix Computation Engine
+Matrix computation accelerator implementation with multiple modules:
 
-**应用场景**:
-- 矩阵运算预处理
-- 数据重排和转换
-- 内存访问模式优化
+**Core Components**:
+- **bbfpIns_decode.scala**: Instruction decoder for matrix operations
+- **bbfp_load.scala**: Data loading unit for matrix operands
+- **bbfp_ex.scala**: Execution unit for matrix multiplication
+- **bbfp_pe.scala**: Processing Element (PE) array implementation
+- **bbfp_control.scala**: Control logic for matrix operations
 
-### vector/ - 向量处理单元
-向量处理架构，支持 SIMD 和多线程处理：
-- **VecCtrlUnit.scala**: 向量控制单元
-- **VecEXUnit.scala**: 向量执行单元
-- **VecLoadUnit.scala**: 向量加载单元
-- **VecStoreUnit.scala**: 向量存储单元
-- **VecUnit.scala**: 向量处理器顶层模块
-- **bond/**: 绑定和同步机制
-- **op/**: 向量操作实现
-- **thread/**: 多线程支持
-- **warp/**: 线程束管理
+**PE Array Architecture**:
+- **BBFP_PE**: Individual processing element with weight stationary mode
+- **BBFP_PE_Array2x2**: 2×2 PE array building block
+- **BBFP_PE_Array16x16**: 16×16 PE array for high-performance computing
+- Systolic array dataflow for efficient matrix multiplication
 
-**应用场景**:
-- 并行数值计算
-- 信号处理加速
-- 高性能计算应用
+**Supported Formats**:
+- INT8 integer arithmetic
+- FP16 half-precision floating-point
+- FP32 single-precision floating-point
+- BBFP (Brain Floating Point) custom format
 
-## 设计特点
+**Use Cases**:
+- Deep learning training and inference
+- Scientific computing acceleration
+- Linear algebra operations
+- High-performance GEMM operations
 
-### 模块化设计
-每个加速器都采用模块化设计，便于：
-- 独立开发和测试
-- 灵活组合和配置
-- 性能调优和扩展
+### relu/ - ReLU Activation
+Efficient hardware implementation of ReLU (Rectified Linear Unit) activation:
+- **Relu.scala**: Pipelined ReLU accelerator
 
-### 流水线架构
-大多数加速器采用深度流水线设计：
-- 提高吞吐量和频率
-- 支持连续数据流处理
-- 优化资源利用率
+**Key Features**:
+- Element-wise ReLU computation
+- Configurable tile size
+- Pipeline-based processing
+- Integrated with scratchpad memory
 
-### 可配置参数
-支持丰富的配置参数：
-- 数据位宽和精度
-- 并行度和流水线深度
-- 缓存大小和组织方式
-- 接口协议和时序
+**Use Cases**:
+- Neural network activation layers
+- Non-linear transformation
+- Post-convolution activation
 
-## 集成方式
+### transpose/ - Matrix Transpose
+Efficient hardware implementation for matrix transpose operations:
+- **Transpose.scala**: Matrix transpose accelerator
 
-### RoCC 接口
-所有加速器都通过标准的 RoCC 接口与 Rocket 核心集成：
+**Key Features**:
+- Tile-based transpose for large matrices
+- Optimized memory access patterns
+- Configurable tile size
+- Pipeline-based implementation
+
+**Use Cases**:
+- Matrix operation preprocessing
+- Data reorganization and transformation
+- Memory access pattern optimization
+- Transpose in GEMM operations
+
+### vector/ - Vector Processing Unit
+Vector processing architecture supporting SIMD and multi-threading:
+
+**Core Components**:
+- **VecUnit.scala**: Vector processor top-level module
+- **VecCtrlUnit.scala**: Vector control unit for instruction dispatch
+- **VecLoadUnit.scala**: Vector load unit for data fetching
+- **VecEXUnit.scala**: Vector execution unit with multiple functional units
+- **VecStoreUnit.scala**: Vector store unit for result write-back
+
+**Submodules**:
+- **bond/**: Binding and synchronization mechanisms
+  - Various bond types (VSSBond, VVVBond, VSVBond, VVSBond, VVBond)
+  - Operand routing and data distribution
+  
+- **op/**: Vector operation implementations
+  - AddOp, MulOp, CascadeOp, SelectOp, etc.
+  - Arithmetic and logical operations
+  
+- **thread/**: Multi-threading support
+  - Thread-level parallelism
+  - Warp-based execution model
+  
+- **warp/**: Thread bundle management (MeshWarp)
+  - 16×16 PE mesh for vector operations
+  - Parallel execution of vector instructions
+
+**Architecture Highlights**:
+- Configurable number of PEs and threads
+- Support for various vector operations (add, mul, cascade, select)
+- Flexible data routing through bond mechanisms
+- High parallelism with warp-level execution
+
+**Use Cases**:
+- Parallel numerical computation
+- Signal processing acceleration
+- High-performance computing applications
+- SIMD-style data processing
+
+## Design Features
+
+### Modular Design
+Each accelerator adopts modular design for:
+- Independent development and testing
+- Flexible composition and configuration
+- Performance tuning and extension
+- Easy integration with BuckyBall framework
+
+### Pipeline Architecture
+Most accelerators use deep pipeline design:
+- Improved throughput and frequency
+- Support for continuous data stream processing
+- Optimized resource utilization
+- Latency hiding through pipelining
+
+### Configurable Parameters
+Support rich configuration parameters:
+- Data width and precision
+- Parallelism and pipeline depth
+- Cache size and organization
+- Interface protocol and timing
+
+## Integration Method
+
+### Blink Protocol Interface
+All Ball accelerators implement the Blink protocol interface:
 ```scala
-class CustomAccelerator extends LazyRoCC {
-  // 加速器实现
+class CustomBall(implicit b: CustomBuckyBallConfig, p: Parameters) 
+  extends Module with BallRegist {
+  val io = IO(new BlinkIO)
+  def ballId = <unique_id>.U
+  def Blink = // Implement Blink protocol
 }
 ```
 
-### 内存接口
-支持多种内存访问模式：
-- DMA 批量传输
-- 缓存一致性访问
-- 暂存器直接访问
+**Blink Interface Components**:
+- **cmdReq**: Command request interface with rob_id tracking
+- **cmdResp**: Command response interface for completion signaling
+- **status**: Status signals (ready, valid, idle, complete)
+- **sramRead/Write**: SRAM interfaces for scratchpad and accumulator access
 
-### 配置集成
-通过 BuckyBall 配置系统进行参数化：
+### Memory Interface
+Support multiple memory access patterns:
+- DMA bulk transfer through MemDomain
+- Scratchpad direct access for low-latency operations
+- Accumulator access for result accumulation
+- Bank-aware memory access (op1 and op2 must access different banks)
+
+### Configuration Integration
+Parameterized through BuckyBall configuration system:
 ```scala
-class AcceleratorConfig extends Config(
-  new WithCustomAccelerator ++
-  new BuckyBallConfig
+case class BaseConfig(
+  veclane: Int = 16,        // Vector lane width
+  numVecPE: Int = 16,       // Number of vector PEs
+  numVecThread: Int = 16,   // Number of vector threads
+  // ... more parameters
 )
 ```
 
-## 性能优化
+## Performance Optimization
 
-### 数据局部性
-- 优化数据访问模式
-- 减少内存带宽需求
-- 提高缓存命中率
+### Data Locality
+- Optimize data access patterns for spatial and temporal locality
+- Reduce memory bandwidth requirements through data reuse
+- Improve cache hit rate with tile-based processing
+- Scratchpad memory for frequently accessed data
 
-### 并行处理
-- 多级并行设计
-- 流水线并行
-- 数据并行和任务并行
+### Parallel Processing
+- Multi-level parallelism design
+  - Instruction-level parallelism (ILP) through pipelining
+  - Data-level parallelism (DLP) through vector operations
+  - Thread-level parallelism (TLP) through multiple warps
+- Pipeline parallelism for continuous data flow
+- Data parallelism through PE arrays
 
-### 资源共享
-- 算术单元复用
-- 存储资源共享
-- 控制逻辑优化
+### Resource Sharing
+- Arithmetic unit reuse across different operations
+- Storage resource sharing between modules
+- Control logic optimization for area efficiency
+- Flexible routing for resource utilization
 
-## 验证和测试
+## Verification and Testing
 
-每个加速器都配有相应的测试用例：
-- 功能正确性验证
-- 性能基准测试
-- 边界条件检查
-- 随机测试生成
+Each accelerator comes with corresponding test cases:
+- Functional correctness verification
+- Performance benchmark testing
+- Boundary condition checking
+- Random test generation
+- Integration testing with complete system
 
-## 扩展开发
+## Development Guidelines
 
-1. **新增加速器**: 参考现有实现创建新的专用加速器
-2. **性能优化**: 针对特定应用场景进行优化
-3. **接口扩展**: 支持新的数据格式和协议
-4. **工具链集成**: 开发编译器和软件支持
+### Adding New Accelerators
+
+**Steps**:
+1. Implement Ball device with BallRegist trait
+2. Define Blink protocol interfaces
+3. Implement computation logic
+4. Add SRAM access logic (respect bank constraints)
+5. Register in BBus and Ball RS
+
+**Example Template**:
+```scala
+class NewBall(implicit b: CustomBuckyBallConfig, p: Parameters) 
+  extends Module with BallRegist {
+  val io = IO(new BlinkIO)
+  
+  def ballId = <unique_id>.U
+  def Blink = io
+  
+  // State machine
+  val sIdle :: sCompute :: sComplete :: Nil = Enum(3)
+  val state = RegInit(sIdle)
+  
+  // Computation logic
+  switch(state) {
+    is(sIdle) {
+      when(io.cmdReq.fire) {
+        state := sCompute
+      }
+    }
+    is(sCompute) {
+      // Perform computation
+      when(done) {
+        state := sComplete
+      }
+    }
+    is(sComplete) {
+      io.cmdResp.valid := true.B
+      state := sIdle
+    }
+  }
+}
+```
+
+### Performance Optimization Tips
+
+1. **Memory Access**: 
+   - Group memory accesses to same bank
+   - Use streaming access patterns
+   - Minimize random access
+
+2. **Pipeline Design**:
+   - Balance pipeline stages
+   - Add registers for timing closure
+   - Use buffering for throughput
+
+3. **Resource Utilization**:
+   - Share expensive resources (multipliers, dividers)
+   - Use LUTs for simple operations
+   - Optimize control logic
+
+### Common Pitfalls
+
+1. **Bank Conflict**: op1 and op2 accessing same bank - violates design constraint
+2. **ROB ID Tracking**: Must forward rob_id from request to response
+3. **Ready/Valid Protocol**: Carefully implement handshake to avoid deadlock
+4. **Iteration Count**: Properly handle iteration for multi-row operations
+
+## Related Documentation
+
+- [Format Conversion](format/README.md) - Data format details
+- [Im2col Implementation](im2col/README.md) - Im2col accelerator
+- [Matrix Operations](matrix/README.md) - Matrix computation
+- [ReLU Activation](relu/README.md) - ReLU implementation
+- [Transpose Operations](transpose/README.md) - Matrix transpose
+- [Vector Processing](vector/README.md) - Vector unit architecture
+- [Blink Protocol](../framework/blink/README.md) - Ball protocol specification
+
+## Future Enhancements
+
+Potential areas for extension:
+- Support for additional data formats (INT4, BF16)
+- Advanced matrix operations (SVD, QR decomposition)
+- Fused operations (Conv+ReLU, GEMM+BiasAdd)
+- Dynamic reconfiguration for different workloads
+- Power management and clock gating
+- Advanced synchronization mechanisms

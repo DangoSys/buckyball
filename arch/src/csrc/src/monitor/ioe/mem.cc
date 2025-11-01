@@ -20,16 +20,18 @@ static long load_image(char const *img_file) {
   FILE *fp = fopen(img_file, "rb");
   Assert(fp, "Can not open '%s'", img_file);
 
-  fseek(fp, 0,
-        SEEK_END); // fseek:把与fp有关的文件位置指针放到一个指定位置 //
-                   // fseek(fp, 0, SEEK_END)文件指针定位到文件末尾，偏移0个字节
-  static long img_size = ftell(fp); // ftell:返回文件大小
+  // fseek: set file position pointer related to fp to a specified position
+  // fseek(fp, 0, SEEK_END) positions file pointer to end of file, offset 0 bytes
+  fseek(fp, 0, SEEK_END);
+  // ftell: returns file size
+  static long img_size = ftell(fp);
 
   printf("The image is %s, size = %ld\n", img_file, img_size);
 
-  fseek(fp, 0,
-        SEEK_SET); // fseek(fp, 0, SEEK_SET)文件指针定位到文件末尾，偏移0个字节
-  int ret = fread(mem, img_size, 1, fp); // 从fp向mem读img_size大小
+  // fseek(fp, 0, SEEK_SET) positions file pointer to beginning of file, offset 0 bytes
+  fseek(fp, 0, SEEK_SET);
+  // Read img_size from fp to mem
+  int ret = fread(mem, img_size, 1, fp);
   assert(ret == 1);
 
   fclose(fp);

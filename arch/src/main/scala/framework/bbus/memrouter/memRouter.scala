@@ -26,10 +26,11 @@ class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   val list_valid = RegInit(VecInit(Seq.fill(numBalls)(false.B)))
   val list_dst_bid = RegInit(VecInit(Seq.fill(numBalls)(0.U(log2Ceil(numBalls).W))))
 
-  val memReq = WireInit(VecInit(Seq.fill(numBalls)(false.B))) // 显式初始化为false
+  // Explicitly initialize to false
+  val memReq = WireInit(VecInit(Seq.fill(numBalls)(false.B)))
 
 
-  //默认赋值
+  // Default assignment
   io.sramRead_o := DontCare
   io.sramWrite_o := DontCare
   io.accRead_o := DontCare
@@ -45,7 +46,7 @@ class MemRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     io.accWrite_i(i).foreach(_.io.req.ready := false.B)
   }
 
-  //路由选择
+  // Routing selection
   for (i <- 0 until numBalls) {
 /*
     memReq(i) := io.sramRead_i(i).map(_.io.req.valid).reduce(_||_) ||

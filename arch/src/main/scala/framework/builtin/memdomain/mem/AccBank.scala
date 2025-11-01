@@ -29,7 +29,8 @@ class AccPipe(val n: Int, val w: Int, val mask_len: Int) extends Module {
     // Stage 1: Read request
     io.read.req.valid        := io.write_in.req.valid
     io.read.req.bits.addr    := io.write_in.req.bits.addr
-    io.read.req.bits.fromDMA := false.B  // AccPipe读取不是来自DMA
+    // AccPipe read is not from DMA
+    io.read.req.bits.fromDMA := false.B
     valid_reg                := io.write_in.req.valid
     addr_reg                 := io.write_in.req.bits.addr
     data_reg                 := io.write_in.req.bits.data
@@ -79,25 +80,25 @@ class AccReadRouter(val n: Int, val w: Int) extends Module {
   })
 
 // -----------------------------------------------------------------------------
-// 仲裁器 - 使用两个Arbiter分别处理req和resp
+// Arbiter - use two Arbiters to handle req and resp separately
 // -----------------------------------------------------------------------------
-  //  priority arbiter, read_in2 has index 0 for higher priority
+  // Priority arbiter, read_in2 has index 0 for higher priority
   val req_arbiter = Module(new Arbiter(new SramReadReq(n), 2))
   req_arbiter.io.in(0) <> io.read_in2.req
   req_arbiter.io.in(1) <> io.read_in1.req
   io.read_out.req <> req_arbiter.io.out
 
-  // 响应分发器：记录哪个输入发起了请求
+  // Response distributor: record which input initiated the request
   val resp_to_in1 = RegNext(req_arbiter.io.chosen === 1.U && req_arbiter.io.out.fire, false.B)
   val resp_to_in2 = RegNext(req_arbiter.io.chosen === 0.U && req_arbiter.io.out.fire, false.B)
 
-  // 响应分发
+  // Response distribution
   io.read_in1.resp.valid := io.read_out.resp.valid && resp_to_in1
   io.read_in1.resp.bits  := io.read_out.resp.bits
   io.read_in2.resp.valid := io.read_out.resp.valid && resp_to_in2
   io.read_in2.resp.bits  := io.read_out.resp.bits
 
-  // 响应的ready信号
+  // Response ready signal
   io.read_out.resp.ready :=
     (resp_to_in1 && io.read_in1.resp.ready) ||
     (resp_to_in2 && io.read_in2.resp.ready)
@@ -120,21 +121,21 @@ class AccBank(n: Int, w: Int, aligned_to: Int, single_ported: Boolean) extends M
   val read_router = Module(new AccReadRouter(n, w))
 
 // -----------------------------------------------------------------------------
-// 写请求进流水线
+// Write request enters pipeline
 // -----------------------------------------------------------------------------
   pipe.io.write_in <> io.write
 
 // -----------------------------------------------------------------------------
-// 读请求仲裁
+// Read request arbitration
 // -----------------------------------------------------------------------------
   read_router.io.read_in1 <> pipe.io.read
   read_router.io.read_in2 <> io.read
 
-  // 连接AccRouter的输出到SramBank
+  // Connect AccRouter output to SramBank
   sram.io.read <> read_router.io.read_out
 
 // -----------------------------------------------------------------------------
-// 流水线输出连到底层SRAM写端
+// Pipeline output connected to underlying SRAM write port
 // -----------------------------------------------------------------------------
   sram.io.write <> pipe.io.write_out
 

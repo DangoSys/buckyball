@@ -1,51 +1,51 @@
-# 矩阵运算加速器
+# Matrix Computation Accelerator
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 的矩阵运算加速器，用于矩阵乘法和相关运算。位于 `arch/src/main/scala/prototype/matrix` 下，作为矩阵计算加速器，支持多种数据格式和运算模式。
+This directory implements BuckyBall's matrix computation accelerator for matrix multiplication and related operations. Located at `arch/src/main/scala/prototype/matrix`, it serves as a matrix computation accelerator supporting multiple data formats and operation modes.
 
-实现的核心组件：
-- **bbfp_control.scala**: 矩阵运算控制器
-- **bbfp_pe.scala**: 处理单元(PE)和MAC单元
-- **bbfp_buffer.scala**: 数据缓冲管理
-- **bbfp_load.scala**: 数据加载单元
-- **bbfp_ex.scala**: 执行单元
-- **bbfpIns_decode.scala**: 指令解码器
+Core components:
+- **bbfp_control.scala**: Matrix computation controller
+- **bbfp_pe.scala**: Processing Element (PE) and MAC unit
+- **bbfp_buffer.scala**: Data buffer management
+- **bbfp_load.scala**: Data load unit
+- **bbfp_ex.scala**: Execution unit
+- **bbfpIns_decode.scala**: Instruction decoder
 
-## 代码结构
+## Code Structure
 
 ```
 matrix/
-├── bbfp_control.scala   - 控制器主体
-├── bbfp_pe.scala        - 处理单元实现
-├── bbfp_buffer.scala    - 缓冲管理
-├── bbfp_load.scala      - 加载单元
-├── bbfp_ex.scala        - 执行单元
-└── bbfpIns_decode.scala - 指令解码
+├── bbfp_control.scala   - Controller main module
+├── bbfp_pe.scala        - Processing element implementation
+├── bbfp_buffer.scala    - Buffer management
+├── bbfp_load.scala      - Load unit
+├── bbfp_ex.scala        - Execution unit
+└── bbfpIns_decode.scala - Instruction decode
 ```
 
-### 文件依赖关系
+### File Dependencies
 
-**bbfp_control.scala** (控制器层)
-- 集成各个子模块(ID, LU, EX等)
-- 管理 SRAM 和 Accumulator 接口
-- 处理 Ball 域命令
+**bbfp_control.scala** (Controller layer)
+- Integrates submodules (ID, LU, EX, etc.)
+- Manages SRAM and Accumulator interfaces
+- Handles Ball domain commands
 
-**bbfp_pe.scala** (计算核心层)
-- 实现 MacUnit 乘累加单元
-- 定义 PEControl 控制信号
-- 处理有符号/无符号运算
+**bbfp_pe.scala** (Computation core layer)
+- Implements MacUnit multiply-accumulate unit
+- Defines PEControl control signals
+- Handles signed/unsigned operations
 
-**其他模块** (功能支持层)
-- 提供数据缓冲、加载、执行等支持功能
+**Other modules** (Functional support layer)
+- Provides data buffering, loading, execution and other support functions
 
-## 模块说明
+## Module Description
 
 ### bbfp_control.scala
 
-**主要功能**: 矩阵运算加速器的顶层控制模块
+**Main functionality**: Top-level control module for matrix computation accelerator
 
-**模块集成**:
+**Module integration**:
 ```scala
 class BBFP_Control extends Module {
   val BBFP_ID = Module(new BBFP_ID)
@@ -55,7 +55,7 @@ class BBFP_Control extends Module {
 }
 ```
 
-**接口定义**:
+**Interface definition**:
 ```scala
 val io = IO(new Bundle {
   val cmdReq = Flipped(Decoupled(new BallRsIssue))
@@ -68,32 +68,32 @@ val io = IO(new Bundle {
 })
 ```
 
-**数据流向**:
+**Data flow**:
 ```
 cmdReq → BBFP_ID → ID_LU → BBFP_LoadUnit → LU_EX
                               ↓
-                         SRAM/ACC 接口
+                         SRAM/ACC interface
 ```
 
 ### bbfp_pe.scala
 
-**主要功能**: 实现矩阵运算的基本处理单元
+**Main functionality**: Implements basic processing element for matrix computation
 
-**MAC 单元定义**:
+**MAC unit definition**:
 ```scala
 class MacUnit extends Module {
   val io = IO(new Bundle {
     val in_a = Input(UInt(7.W))    // [6]=sign, [5]=flag, [4:0]=value
     val in_b = Input(UInt(7.W))    // [6]=sign, [5]=flag, [4:0]=value
     val in_c = Input(UInt(32.W))   // [31]=sign, [30:0]=value
-    val out_d = Output(UInt(32.W)) // 输出结果
+    val out_d = Output(UInt(32.W)) // Output result
   })
 }
 ```
 
-**数据格式处理**:
+**Data format processing**:
 ```scala
-// 提取符号位和数值
+// Extract sign bit and value
 val sign_a = io.in_a(6)
 val sign_b = io.in_b(6)
 val flag_a = io.in_a(5)
@@ -101,53 +101,53 @@ val flag_b = io.in_b(5)
 val value_a = io.in_a(4, 0)
 val value_b = io.in_b(4, 0)
 
-// 根据flag位决定是否左移
+// Determine left shift based on flag bit
 val shifted_a = Mux(flag_a === 1.U, value_a << 2, value_a)
 val shifted_b = Mux(flag_b === 1.U, value_b << 2, value_b)
 ```
 
-**有符号运算**:
+**Signed arithmetic**:
 ```scala
 val a_signed = Mux(sign_a === 1.U, -(shifted_a.zext), shifted_a.zext).asSInt
 val b_signed = Mux(sign_b === 1.U, -(shifted_b.zext), shifted_b.zext).asSInt
 ```
 
-**控制信号**:
+**Control signals**:
 ```scala
 class PEControl extends Bundle {
-  val propagate = UInt(1.W)   // 传播控制
+  val propagate = UInt(1.W)   // Propagation control
 }
 ```
 
-## 使用方法
+## Usage
 
-### 数据格式
+### Data Format
 
-**输入格式**: 7位压缩格式
-- bit[6]: 符号位 (0=正数, 1=负数)
-- bit[5]: 标志位 (1=左移2位)
-- bit[4:0]: 5位数值
+**Input format**: 7-bit compressed format
+- bit[6]: Sign bit (0=positive, 1=negative)
+- bit[5]: Flag bit (1=left shift by 2)
+- bit[4:0]: 5-bit value
 
-**输出格式**: 32位有符号数
-- bit[31]: 符号位
-- bit[30:0]: 31位数值
+**Output format**: 32-bit signed number
+- bit[31]: Sign bit
+- bit[30:0]: 31-bit value
 
-### 运算特性
+### Operation Characteristics
 
-**MAC 运算**: 乘累加操作 (Multiply-Accumulate)
-- 支持有符号和无符号运算
-- 可配置的位移操作
-- 32位累加器输出
+**MAC operation**: Multiply-Accumulate operation
+- Supports signed and unsigned operations
+- Configurable shift operations
+- 32-bit accumulator output
 
-**流水线结构**:
-- ID: 指令解码阶段
-- LU: 加载单元阶段
-- EX: 执行单元阶段
+**Pipeline structure**:
+- ID: Instruction decode stage
+- LU: Load unit stage
+- EX: Execution unit stage
 
-### 注意事项
+### Notes
 
-1. **数据格式**: 使用自定义的7位压缩格式减少存储开销
-2. **符号处理**: 支持有符号数的正确运算和符号扩展
-3. **位移优化**: 通过flag位控制数据的预处理位移
-4. **接口兼容**: 与 SRAM 和 Accumulator 接口完全兼容
-5. **流水线设计**: 多级流水线提高吞吐量
+1. **Data format**: Uses custom 7-bit compressed format to reduce storage overhead
+2. **Sign handling**: Supports correct signed number operations and sign extension
+3. **Shift optimization**: Controls data preprocessing shift through flag bit
+4. **Interface compatibility**: Fully compatible with SRAM and Accumulator interfaces
+5. **Pipeline design**: Multi-stage pipeline improves throughput

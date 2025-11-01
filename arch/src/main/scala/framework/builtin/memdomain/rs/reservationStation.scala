@@ -9,79 +9,81 @@ import framework.builtin.memdomain._
 import framework.rocket.RoCCResponseBB
 
 
-// Mem域的发射接口 - 包含全局rob_id
+// Mem domain issue interface - includes global rob_id
 class MemRsIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val cmd = new MemDecodeCmd
-  val rob_id = UInt(log2Up(b.rob_entries).W)  // 全局ROB ID
+  // Global ROB ID
+  val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
-// Mem域的完成接口
+// Mem domain completion interface
 class MemRsComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
-// Mem域发射接口组合 (Load + Store)
+// Mem domain issue interface combination (Load + Store)
 class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val ld = Decoupled(new MemRsIssue)
   val st = Decoupled(new MemRsIssue)
 }
 
-// Mem域完成接口组合 (Load + Store)
+// Mem domain completion interface combination (Load + Store)
 class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val ld = Flipped(Decoupled(new MemRsComplete))
   val st = Flipped(Decoupled(new MemRsComplete))
 }
 
-// 局部Mem保留站 - 简单的FIFO调度器
+// Local Mem reservation station - simple FIFO scheduler
 class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    // 解码后的指令输入（带全局rob_id）
+    // Decoded instruction input (with global rob_id)
     val mem_decode_cmd_i = Flipped(new DecoupledIO(new Bundle {
       val cmd = new MemDecodeCmd
-      val rob_id = UInt(log2Up(b.rob_entries).W)  // 全局ROB ID
+      // Global ROB ID
+      val rob_id = UInt(log2Up(b.rob_entries).W)
     }))
 
     // Rs -> MemLoader/MemStorer
     val issue_o     = new MemIssueInterface
     val commit_i    = new MemCommitInterface
 
-    // 输出完成信号（带全局rob_id，单通道）
+    // Output completion signal (with global rob_id, single channel)
     val complete_o = Decoupled(new MemRsComplete)
   })
 
-  // 简单的FIFO队列，只做缓冲
+  // Simple FIFO queue, only for buffering
   val fifo = Module(new Queue(new Bundle {
     val cmd = new MemDecodeCmd
     val rob_id = UInt(log2Up(b.rob_entries).W)
-  }, entries = 4))  // 小缓冲即可
+  }, entries = 4))  // Small buffer is sufficient
 
 // -----------------------------------------------------------------------------
-// 入站 - FIFO入队
+// Inbound - FIFO enqueue
 // -----------------------------------------------------------------------------
   fifo.io.enq <> io.mem_decode_cmd_i
 
 // -----------------------------------------------------------------------------
-// 出站 - 指令发射 (根据is_load/is_store分发)
+// Outbound - instruction issue (dispatch based on is_load/is_store)
 // -----------------------------------------------------------------------------
   val headEntry = fifo.io.deq.bits
 
-  // Load发射
+  // Load issue
   io.issue_o.ld.valid := fifo.io.deq.valid && headEntry.cmd.is_load
   io.issue_o.ld.bits.cmd := headEntry.cmd
   io.issue_o.ld.bits.rob_id := headEntry.rob_id
 
-  // Store发射
+  // Store issue
   io.issue_o.st.valid := fifo.io.deq.valid && headEntry.cmd.is_store
   io.issue_o.st.bits.cmd := headEntry.cmd
   io.issue_o.st.bits.rob_id := headEntry.rob_id
 
-  // FIFO deq.ready - 只有目标单元ready时才能出队
+  // FIFO deq.ready - can only dequeue when target unit is ready
   fifo.io.deq.ready :=
     (headEntry.cmd.is_load  && io.issue_o.ld.ready) ||
     (headEntry.cmd.is_store && io.issue_o.st.ready)
 
 // -----------------------------------------------------------------------------
-// 完成信号处理 - 直接转发给全局RS
+// Completion signal processing - directly forward to global RS
 // -----------------------------------------------------------------------------
   val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 2))
 
@@ -93,7 +95,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
   completeArb.io.in(1).bits   := io.commit_i.st.bits.rob_id
   io.commit_i.st.ready := completeArb.io.in(1).ready
 
-  // 转发完成信号（带全局rob_id）
+  // Forward completion signal (with global rob_id)
   io.complete_o.valid := completeArb.io.out.valid
   io.complete_o.bits.rob_id := completeArb.io.out.bits
   completeArb.io.out.ready := io.complete_o.ready

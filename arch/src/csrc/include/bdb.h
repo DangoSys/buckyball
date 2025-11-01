@@ -16,9 +16,12 @@
 // ================ RISCV CPU ===================
 
 // ================ BDB Config ===================
-extern const char *vcd_path; // VCD文件路径
-extern const char *log_path; // 日志文件路径
-extern const char *fst_path; // FST文件路径
+// VCD file path
+extern const char *vcd_path;
+// Log file path
+extern const char *log_path;
+// FST file path
+extern const char *fst_path;
 
 void init_monitor(int argc, char *argv[]);
 void bdb_mainloop();

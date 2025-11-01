@@ -18,13 +18,13 @@ import framework.rocket.RoCCResponseBB
 
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
-    // 来自全局RS的发射接口 (单通道)
+    // Issue interface from global RS (single channel)
     val global_issue_i = Flipped(Decoupled(new framework.builtin.frontend.globalrs.GlobalRsIssue))
 
-    // 向全局RS报告完成 (单通道)
+    // Report completion to global RS (single channel)
     val global_complete_o = Decoupled(new framework.builtin.frontend.globalrs.GlobalRsComplete)
 
-    // 与Ball Domain交互的SRAM接口
+    // SRAM interface for interaction with Ball Domain
     val ballDomain = new Bundle {
       val sramRead = Vec(b.sp_banks, new SramReadIO(b.spad_bank_entries, b.spad_w))
       val sramWrite = Vec(b.sp_banks, new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
@@ -32,7 +32,7 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
       val accWrite = Vec(b.acc_banks, new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len))
     }
 
-    // DMA接口
+    // DMA interface
     val dma = new Bundle {
       val read = new Bundle {
         val req = Decoupled(new BBReadRequest())
@@ -44,16 +44,16 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
       }
     }
 
-    // TLB接口 - 对外暴露给DMA使用
+    // TLB interface - exposed externally for DMA use
     val tlb = Vec(2, Flipped(new BBTLBIO))
 
-    // PTW接口 - 需要连接到上层的PTW
+    // PTW interface - needs to connect to upper level PTW
     val ptw = Vec(2, new TLBPTWIO)
 
-    // TLB异常接口 - 暴露给上层处理flush等
+    // TLB exception interface - exposed to upper level for handling flush, etc.
     val tlbExp = Vec(2, new BBTLBExceptionIO)
 
-    // busy信号
+    // Busy signal
     val busy = Output(Bool())
   })
 
@@ -62,14 +62,14 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   val memLoader  = Module(new MemLoader)
   val memStorer  = Module(new MemStorer)
 
-  // 内部MemController (封装了spad和acc)
+  // Internal MemController (encapsulates spad and acc)
   val memController = Module(new MemController)
 
-  // TLB集群
+  // TLB cluster
   val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes))
 
 // -----------------------------------------------------------------------------
-// 全局RS -> MemDecoder
+// Global RS -> MemDecoder
 // -----------------------------------------------------------------------------
   memDecoder.io.raw_cmd_i.valid := io.global_issue_i.valid
   memDecoder.io.raw_cmd_i.bits  := io.global_issue_i.bits.cmd
@@ -78,7 +78,7 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation
 // -----------------------------------------------------------------------------
-  // 连接解码后的指令和全局rob_id
+  // Connect decoded instruction and global rob_id
   memRs.io.mem_decode_cmd_i.valid := memDecoder.io.mem_decode_cmd_o.valid
   memRs.io.mem_decode_cmd_i.bits.cmd := memDecoder.io.mem_decode_cmd_o.bits
   memRs.io.mem_decode_cmd_i.bits.rob_id := io.global_issue_i.bits.rob_id
@@ -105,34 +105,35 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
   pmc.io.stResp_o.bits := memStorer.io.cmdResp.bits
 
-  // 连接MemLoader和MemStorer到DMA
+  // Connect MemLoader and MemStorer to DMA
   memLoader.io.dmaReq <> io.dma.read.req
   io.dma.read.resp <> memLoader.io.dmaResp
   memStorer.io.dmaReq <> io.dma.write.req
   io.dma.write.resp <> memStorer.io.dmaResp
 
-  // 连接TLB - 现在使用内部的BBTLBCluster
+  // Connect TLB - now using internal BBTLBCluster
   io.tlb <> tlbCluster.io.clients
   io.ptw <> tlbCluster.io.ptw
 
-  // 连接异常接口 - 注意方向：内部TLB的exp是Output，外部接口是Input
+  // Connect exception interface - note direction: internal TLB's exp is Output, external interface is Input
   tlbCluster.io.exp <> io.tlbExp
 
-  // 连接MemLoader和MemStorer到MemController的DMA接口
+  // Connect MemLoader and MemStorer to MemController's DMA interface
   memLoader.io.sramWrite <> memController.io.dma.sramWrite
   memLoader.io.accWrite <> memController.io.dma.accWrite
   memStorer.io.sramRead <> memController.io.dma.sramRead
   memStorer.io.accRead <> memController.io.dma.accRead
 
-  // Ball Domain SRAM接口连接到MemController的Ball Domain接口
+  // Ball Domain SRAM interface connected to MemController's Ball Domain interface
   io.ballDomain.sramRead <> memController.io.ballDomain.sramRead
   io.ballDomain.sramWrite <> memController.io.ballDomain.sramWrite
   io.ballDomain.accRead <> memController.io.ballDomain.accRead
   io.ballDomain.accWrite <> memController.io.ballDomain.accWrite
 
-  // 完成信号连接到全局RS
+  // Completion signal connected to global RS
   io.global_complete_o <> memRs.io.complete_o
 
-  // 忙碌信号
-  io.busy := !memRs.io.complete_o.ready // 简单的busy信号
+  // Busy signal
+  // Simple busy signal
+  io.busy := !memRs.io.complete_o.ready
 }

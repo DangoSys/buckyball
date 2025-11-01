@@ -4,13 +4,13 @@
 #include "utils/macro.h"
 #include <stdio.h>
 
-// 不带格式化的
+// Without formatting
 // #define COLOR(a, b) "\033[" #b "m" a "\033[0m"
 // #define GREEN(a) COLOR(a, 32)
 // #define RED(a) COLOR(a, 31)
 // #define BLUE(a) COLOR(a, 34)
 
-// Printf的参数，方便使用 默认为FG了
+// Printf parameters for convenience, default is FG
 #define BLACK "\33[1;30m"
 #define RED "\33[1;31m"
 #define GREEN "\33[1;32m"
@@ -20,8 +20,9 @@
 #define CYAN "\33[1;36m"
 #define WHITE "\33[1;37m"
 
-// 对接 原版Debug
-#define ASNI_FG_BLACK "\33[1;30m" // 前面的颜色
+// Interface with original Debug
+// Foreground color
+#define ASNI_FG_BLACK "\33[1;30m"
 #define ASNI_FG_RED "\33[1;31m"
 #define ASNI_FG_GREEN "\33[1;32m"
 #define ASNI_FG_YELLOW "\33[1;33m"
@@ -37,7 +38,8 @@
 #define ASNI_BG_MAGENTA "\33[1;35m"
 #define ASNI_BG_CYAN "\33[1;46m"
 #define ASNI_BG_WHITE "\33[1;47m"
-#define ASNI_NONE "\33[0m" // 后面的"\033[0m"
+// Reset color to "\033[0m"
+#define ASNI_NONE "\33[0m"
 
 #define ASNI_FMT(str, fmt) fmt str ASNI_NONE
 
@@ -62,7 +64,7 @@
   _Log(ASNI_FMT("[%s:%d %s] " format, ASNI_FG_BLUE) "\n", __FILE__, __LINE__,  \
        __func__, ##__VA_ARGS__)
 
-// Printf使用说明，第一个参数为颜色，之后（若有）参数则往后一次排列
+// Printf usage: first parameter is color, subsequent parameters (if any) follow in order
 #define Printf(format, color, ...) _Log(ASNI_FMT(format, color), ##__VA_ARGS__)
 
 // #define assert(cond) \

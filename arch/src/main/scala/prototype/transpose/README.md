@@ -1,62 +1,62 @@
-# 矩阵转置加速器
+# Matrix Transpose Accelerator
 
-## 概述
+## Overview
 
-该目录实现了 BuckyBall 的矩阵转置加速器，用于矩阵转置操作。位于 `arch/src/main/scala/prototype/transpose` 下，作为矩阵转置加速器，支持流水线化的转置操作。
+This directory implements BuckyBall's matrix transpose accelerator for matrix transpose operations. Located at `arch/src/main/scala/prototype/transpose`, it serves as a matrix transpose accelerator supporting pipelined transpose operations.
 
-实现的核心组件：
-- **Transpose.scala**: 流水线化转置器实现
+Core components:
+- **Transpose.scala**: Pipelined transposer implementation
 
-## 代码结构
+## Code Structure
 
 ```
 transpose/
-└── Transpose.scala  - 流水线转置器
+└── Transpose.scala  - Pipelined transposer
 ```
 
-### 模块职责
+### Module Responsibilities
 
-**Transpose.scala** (转置实现层)
-- 实现 PipelinedTransposer 模块
-- 管理矩阵数据的读取、转置和写回
-- 提供 Ball 域命令接口
+**Transpose.scala** (Transpose implementation layer)
+- Implements PipelinedTransposer module
+- Manages matrix data read, transpose, and write-back
+- Provides Ball domain command interface
 
-## 模块说明
+## Module Description
 
 ### Transpose.scala
 
-**主要功能**: 实现流水线化的矩阵转置操作
+**Main functionality**: Implements pipelined matrix transpose operation
 
-**状态机定义**:
+**State machine definition**:
 ```scala
 val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
 val state = RegInit(idle)
 ```
 
-**存储结构**:
+**Storage structure**:
 ```scala
-// 矩阵存储寄存器 (veclane x veclane)
+// Matrix storage register (veclane x veclane)
 val regArray = Reg(Vec(b.veclane, Vec(b.veclane, UInt(b.inputType.getWidth.W))))
 ```
 
-**计数器管理**:
+**Counter management**:
 ```scala
 val readCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
 val respCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
 val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
 ```
 
-**指令寄存器**:
+**Instruction registers**:
 ```scala
 val robid_reg = RegInit(0.U(10.W))    // ROB ID
-val waddr_reg = RegInit(0.U(10.W))    // 写地址
-val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))  // 写bank
-val raddr_reg = RegInit(0.U(10.W))    // 读地址
-val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))  // 读bank
-val iter_reg = RegInit(0.U(10.W))     // 迭代计数
+val waddr_reg = RegInit(0.U(10.W))    // Write address
+val wbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))  // Write bank
+val raddr_reg = RegInit(0.U(10.W))    // Read address
+val rbank_reg = RegInit(0.U(log2Up(b.sp_banks).W))  // Read bank
+val iter_reg = RegInit(0.U(10.W))     // Iteration count
 ```
 
-**接口定义**:
+**Interface definition**:
 ```scala
 val io = IO(new Bundle {
   val cmdReq = Flipped(Decoupled(new BallRsIssue))
@@ -66,50 +66,50 @@ val io = IO(new Bundle {
 })
 ```
 
-**处理流程**:
-1. **idle**: 等待命令，解析转置参数
-2. **sRead**: 按行读取矩阵数据到寄存器阵列
-3. **sWrite**: 按列写回转置后的数据
-4. **complete**: 发送完成信号
+**Processing flow**:
+1. **idle**: Wait for command, parse transpose parameters
+2. **sRead**: Read matrix data row by row into register array
+3. **sWrite**: Write transposed data column by column
+4. **complete**: Send completion signal
 
-**转置算法**:
-- 使用 veclane×veclane 的寄存器阵列存储矩阵
-- 按行读取，按列写回实现转置
-- 支持任意大小矩阵的分块转置
+**Transpose algorithm**:
+- Uses veclane×veclane register array to store matrix
+- Reads row-wise, writes column-wise to implement transpose
+- Supports block-wise transpose for matrices of arbitrary size
 
-## 使用方法
+## Usage
 
-### 实现细节
+### Implementation Details
 
-**状态机**:
+**State machine**:
 ```scala
 val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
 ```
-- `idle`: 等待指令
-- `sRead`: 读取矩阵数据
-- `sWrite`: 写入转置结果
-- `complete`: 完成并响应
+- `idle`: Wait for instruction
+- `sRead`: Read matrix data
+- `sWrite`: Write transpose result
+- `complete`: Complete and respond
 
-**寄存器阵列**:
+**Register array**:
 ```scala
 val regArray = Reg(Vec(b.veclane, Vec(b.veclane, UInt(b.inputType.getWidth.W))))
 ```
-使用 veclane×veclane 的寄存器阵列缓存矩阵数据。
+Uses veclane×veclane register array to cache matrix data.
 
-**转置操作**:
-- 读取阶段：按行读取数据存入 `regArray(row)(col)`
-- 写入阶段：按列读取 `regArray(i)(col)` 组成新行写出
+**Transpose operation**:
+- Read phase: Read data row by row into `regArray(row)(col)`
+- Write phase: Read `regArray(i)(col)` column by column to form new rows for writing
 
-### 配置参数
+### Configuration Parameters
 
-**矩阵大小**: 由 b.veclane 参数决定
-**数据位宽**: 由 b.inputType.getWidth 决定
-**Bank 配置**: 支持多 bank SRAM 访问
+**Matrix size**: Determined by b.veclane parameter
+**Data width**: Determined by b.inputType.getWidth
+**Bank configuration**: Supports multi-bank SRAM access
 
-### 注意事项
+### Notes
 
-1. **矩阵大小限制**: 最大支持 veclane×veclane 的矩阵
-2. **内存带宽**: 转置操作对内存带宽要求较高
-3. **寄存器开销**: 需要 veclane² 个寄存器存储矩阵
-4. **地址计算**: 转置后的地址计算需要正确处理
-5. **流水线控制**: 读写计数器需要正确同步
+1. **Matrix size limitation**: Maximum support for veclane×veclane matrices
+2. **Memory bandwidth**: Transpose operation has high memory bandwidth requirements
+3. **Register overhead**: Requires veclane² registers to store matrix
+4. **Address calculation**: Transposed address calculation needs to be handled correctly
+5. **Pipeline control**: Read/write counters need to be synchronized correctly

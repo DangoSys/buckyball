@@ -1,149 +1,284 @@
-# BuckyBall 框架核心
+# BuckyBall Framework Core
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架的核心实现，是整个硬件架构的基础层。目录位于 `arch/src/main/scala/framework` 下，在系统架构中作为核心框架层，提供处理器核心、内置组件和系统互连的完整实现。
+This directory contains the core implementation of the BuckyBall framework, serving as the foundation layer for the entire hardware architecture. Located at `arch/src/main/scala/framework`, it provides a complete implementation of processor cores, built-in components, and system interconnects.
 
-主要功能模块包括：
-- **rocket**: 基于Rocket-chip的处理器核心定制实现
-- **builtin**: 内置硬件组件库，包含内存域、前端等模块
-- **blink**: 系统互连和通信框架
+Main functional modules include:
+- **builtin**: Built-in hardware component library, including memory domain and frontend modules
+- **blink**: System interconnect and communication framework
 
-## 代码结构
+## Code Structure
 
 ```
 framework/
-├── rocket/           - Rocket核心定制实现
-├── builtin/          - 内置组件库
-│   ├── memdomain/    - 内存域实现
-│   ├── frontend/     - 前端组件
-│   └── util/         - 框架工具函数
-└── blink/            - 系统互连框架
+├── builtin/          - Built-in component library
+│   ├── memdomain/    - Memory domain implementation
+│   │   ├── dma/      - DMA engines (BBStreamReader/Writer)
+│   │   ├── mem/      - Memory components (Scratchpad, Accumulator, SRAM banks)
+│   │   ├── rs/       - Memory domain reservation station
+│   │   ├── tlb/      - TLB implementation
+│   │   ├── MemController.scala  - Memory controller
+│   │   ├── MemDomain.scala      - Memory domain top-level
+│   │   ├── MemLoader.scala      - Load instruction handler
+│   │   └── MemStorer.scala      - Store instruction handler
+│   ├── frontend/     - Frontend components
+│   │   ├── GobalDecoder.scala   - Global instruction decoder
+│   │   ├── globalrs/            - Global reservation station
+│   │   │   ├── GlobalReservationStation.scala
+│   │   │   └── GlobalROB.scala  - Global reorder buffer
+│   │   └── rs/                  - Ball domain reservation station
+│   ├── util/         - Framework utility functions
+│   └── BaseConfigs.scala - Base configuration parameters
+└── blink/            - System interconnect framework
+    ├── baseball.scala    - Ball device base trait
+    ├── blink.scala       - Blink protocol definitions
+    └── bbus.scala        - Ball bus implementation
 ```
 
-### 文件依赖关系
-
-**rocket/** (处理器核心层)
-- 实现BuckyBall定制的Rocket处理器核心
-- 扩展标准Rocket-chip功能
-- 提供RoCC协处理器接口
-
-**builtin/** (内置组件层)
-- 提供标准化的硬件组件实现
-- 包含内存子系统、前端处理等模块
-- 为上层应用提供基础硬件抽象
-
-**blink/** (互连层)
-- 实现系统级互连和通信协议
-- 提供总线仲裁和路由功能
-- 支持多核和多域通信
-
-### 数据流向
+### Module Dependencies
 
 ```
-应用层 → rocket核心 → builtin组件 → blink互连 → 物理接口
-         ↓           ↓            ↓
-    RoCC协处理器  内存域组件   系统总线
+Application Layer → builtin components → blink interconnect → Physical interface
+                        ↓                    ↓
+                   Memory domain        Ball protocol
+                   Frontend             System bus
 ```
 
-## 模块说明
+## Module Details
 
-### rocket/ - Rocket核心实现
+### builtin/ - Built-in Component Library
 
-**主要功能**: 提供BuckyBall定制的RISC-V处理器核心
+**Main Function**: Provides standardized hardware component implementations
 
-**关键特性**:
-- 基于Berkeley Rocket-chip架构
-- 扩展RoCC协处理器接口
-- 支持自定义指令和CSR
-- 集成BuckyBall特有的功能扩展
+**Component Categories**:
 
-**核心文件**:
-- `RocketCoreBB.scala`: BuckyBall版本的Rocket核心
-- `RocketTileBB.scala`: 处理器Tile实现
-- `LazyRoCCBB.scala`: RoCC协处理器框架
-- `CSRBB.scala`: 控制状态寄存器扩展
+#### memdomain/ - Memory Domain
+The memory domain encapsulates all memory-related functionality:
 
-### builtin/ - 内置组件库
+**Key Components**:
+- **MemDomain.scala**: Top-level memory domain module
+  - Integrates MemController, MemLoader, MemStorer, and TLB
+  - Provides unified interface to Global RS
+  - Handles both load and store operations
 
-**主要功能**: 提供标准化的硬件组件实现
+- **MemController.scala**: Memory controller
+  - Encapsulates Scratchpad and Accumulator
+  - Provides DMA and Ball Domain interfaces
+  - Handles bank arbitration and routing
 
-**组件分类**:
-- **memdomain**: 内存域组件，包含存储器和DMA引擎
-- **frontend**: 前端处理组件
-- **util**: 框架级工具函数
+- **MemLoader.scala**: Load instruction handler
+  - Receives load instructions from reservation station
+  - Issues DMA read requests
+  - Writes data to Scratchpad/Accumulator
 
-**设计特点**:
-- 模块化和可配置设计
-- 标准化的接口定义
-- 支持参数化实例化
+- **MemStorer.scala**: Store instruction handler
+  - Receives store instructions from reservation station
+  - Reads data from Scratchpad/Accumulator
+  - Issues DMA write requests with data alignment and masking
 
-### blink/ - 系统互连
+- **dma/**: DMA engines
+  - **BBStreamReader**: Streaming DMA read with TLB support
+  - **BBStreamWriter**: Streaming DMA write with alignment handling
+  - Transaction ID management for multiple outstanding requests
 
-**主要功能**: 实现系统级互连和通信协议
+- **mem/**: Memory components
+  - **Scratchpad.scala**: 4-bank scratchpad memory (256KB total)
+  - **AccBank.scala**: Accumulator bank with accumulation pipeline
+  - **SramBank.scala**: Generic single-port SRAM bank implementation
 
-**关键组件**:
-- `blink.scala`: 互连协议实现
-- `bbus.scala`: 系统总线定义
-- `ball.scala`: 球域通信机制
+- **rs/**: Memory domain reservation station
+  - **reservationStation.scala**: Local FIFO-based scheduler
+  - **rob.scala**: Local reorder buffer for memory instructions
+  - **ringFifo.scala**: Circular FIFO implementation
 
-**互连特性**:
-- 支持多种总线协议
-- 提供仲裁和路由功能
-- 延迟和带宽管理
+- **tlb/**: Translation Lookaside Buffer
+  - Virtual to physical address translation
+  - Integrated with DMA engines
 
-## 使用方法
+#### frontend/ - Frontend Components
+The frontend handles global instruction management:
 
-### 框架集成
+**Key Components**:
+- **GobalDecoder.scala**: Global instruction decoder
+  - Classifies instructions into Ball/Memory/Fence types
+  - Constructs PostGDCmd for domain-specific decoders
+  - Interfaces with Global RS
 
-**配置系统**:
+- **globalrs/**: Global reservation station
+  - **GlobalReservationStation.scala**: Central instruction manager
+    - Allocates ROB entries
+    - Issues instructions to Ball and Memory domains
+    - Handles instruction completion from both domains
+    - Manages Fence instruction synchronization
+  - **GlobalROB.scala**: Global reorder buffer
+    - Tracks instruction state across domains
+    - Supports out-of-order completion
+    - Sequential commit of completed instructions
+
+- **rs/**: Ball domain reservation station
+  - **reservationStation.scala**: Ball-specific scheduler
+  - **rob.scala**: Local ROB for Ball instructions
+
+#### util/ - Framework Utilities
+Common utility functions and helper modules
+
+#### BaseConfigs.scala
+**Configuration Parameters**:
+```scala
+case class BaseConfig(
+  veclane: Int = 16,              // Vector lane width
+  accveclane: Int = 4,            // Accumulator vector lane width
+  rob_entries: Int = 16,          // Number of ROB entries
+  rs_out_of_order_response: Boolean = true,  // Out-of-order response support
+  sp_banks: Int = 4,              // Scratchpad bank count
+  acc_banks: Int = 8,             // Accumulator bank count
+  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
+  spAddrLen: Int = 15,            // SPAD address length
+  memAddrLen: Int = 32,           // Memory address length
+  numVecPE: Int = 16,             // Vector PEs per thread
+  numVecThread: Int = 16,         // Vector threads
+  emptyBallid: Int = 5            // Empty ball ID
+)
+```
+
+### blink/ - System Interconnect
+
+**Main Function**: Implements system-level interconnect and Ball protocol
+
+**Key Components**:
+- **baseball.scala**: Ball device base trait
+  - Defines `BallRegist` trait for Ball device registration
+  - Provides common interface for all Ball devices
+
+- **blink.scala**: Blink protocol definitions
+  - Command/response interfaces
+  - Status and control signals
+  - SRAM read/write interfaces
+
+- **bbus.scala**: Ball bus implementation (BBus)
+  - Manages multiple Ball device connections
+  - Command router: Routes commands to appropriate Ball devices
+  - Bus router: Arbitrates Ball device responses
+  - Memory router: Handles memory access arbitration
+  - Performance monitoring counters
+
+**Interconnect Features**:
+- Support for multiple bus protocols
+- Arbitration and routing functionality
+- Latency and bandwidth management
+- Dynamic Ball device registration
+
+## Usage Guide
+
+### Framework Integration
+
+**Configuration System**:
 ```scala
 class BuckyBallConfig extends Config(
-  new WithBuckyBallRocket ++
   new WithBuiltinComponents ++
   new WithBlinkInterconnect ++
   new BaseConfig
 )
 ```
 
-**模块实例化**:
+**Module Instantiation**:
 ```scala
 class BuckyBallSystem(implicit p: Parameters) extends LazyModule {
-  val rocket = LazyModule(new RocketTileBB)
-  val memdomain = LazyModule(new MemDomain)
-  val interconnect = LazyModule(new BlinkInterconnect)
-
-  // 连接各模块
-  interconnect.node := rocket.masterNode
-  memdomain.node := interconnect.slaveNode
+  // Memory domain
+  val memdomain = Module(new MemDomain)
+  
+  // Ball domain  
+  val balldomain = Module(new BallDomain)
+  
+  // Global RS
+  val globalRS = Module(new GlobalReservationStation)
+  
+  // Connect modules
+  balldomain.io.issue <> globalRS.io.ballIssue
+  memdomain.io.issue <> globalRS.io.memIssue
+  globalRS.io.ballComplete <> balldomain.io.complete
+  globalRS.io.memComplete <> memdomain.io.complete
 }
 ```
 
-### 扩展开发
+### Extension Development
 
-**添加新组件**:
-1. 在builtin目录下创建新的组件模块
-2. 实现标准的LazyModule接口
-3. 在配置系统中注册新组件
-4. 更新互连和路由逻辑
+**Adding New Components**:
+1. Create new component module in builtin directory
+2. Implement standard Module interface
+3. Register in configuration system
+4. Update interconnect and routing logic
 
-**自定义处理器**:
-1. 扩展RocketCoreBB实现
-2. 添加自定义指令解码
-3. 实现相应的执行单元
-4. 更新CSR和异常处理
+**Custom Ball Device**:
+1. Extend `BallRegist` trait
+2. Implement Blink protocol interfaces
+3. Register in BBus
+4. Add to Ball RS device list
 
-### 注意事项
+### Design Principles
 
-1. **参数传递**: 使用Chipyard的Parameters系统进行配置传递
-2. **时钟域**: 注意不同组件间的时钟域crossing
-3. **复位策略**: 确保各模块的复位顺序和依赖关系
-4. **性能优化**: 关注关键路径和时序约束
-5. **调试支持**: 集成必要的调试和监控接口
+1. **Parameter Passing**: Use Chipyard's Parameters system for configuration
+2. **Clock Domains**: Pay attention to clock domain crossing between modules
+3. **Reset Strategy**: Ensure proper reset sequencing and dependencies
+4. **Performance Optimization**: Focus on critical paths and timing constraints
+5. **Debug Support**: Integrate necessary debug and monitoring interfaces
+6. **Memory Access**: Respect bank access constraints (op1 and op2 cannot access same bank)
+7. **Handshake Protocols**: Use ready/valid handshake for all data transfers
 
-## 相关文档
+## Architecture Highlights
 
-- [Blink 互连系统](blink/README.md) - 系统互连实现
-- [内置组件库](builtin/README.md) - 标准硬件组件
-- [Rocket 核心扩展](rocket/README.md) - 处理器核心实现
-- [BuckyBall 源码概览](../README.md) - 上层架构说明
+### Instruction Flow
+```
+RoCC → Global Decoder → Global RS → Ball Domain / Mem Domain
+                          ↓                ↓            ↓
+                      Global ROB    Ball Decoder  Mem Decoder
+                   (tracks state)       ↓            ↓
+                                   Ball Devices  Loader/Storer
+                                        ↓            ↓
+                                   MemController ← → MemController
+```
+
+### Memory Access Flow
+```
+Ball Devices ──→ MemController ──→ Scratchpad (4 banks)
+                      │           └→ Accumulator (8 banks)
+                      │
+Mem Domain    ──→ MemController
+  (Loader/Storer)     │
+                      ↓
+                  DMA + TLB
+                      ↓
+                 Main Memory
+```
+
+## Related Documentation
+
+- [Blink Interconnect System](blink/README.md) - System interconnect implementation
+- [Built-in Components](builtin/README.md) - Standard hardware components
+- [Memory Domain](builtin/memdomain/README.md) - Memory subsystem details
+- [Frontend Components](builtin/frontend/README.md) - Instruction management
+- [BuckyBall Source Overview](../README.md) - Upper-level architecture
+
+## Performance Considerations
+
+1. **ROB Size**: 16 entries support up to 16 in-flight instructions
+2. **Bank Parallelism**: 4 scratchpad + 8 accumulator banks enable parallel access
+3. **Out-of-Order Execution**: Global RS supports out-of-order completion when enabled
+4. **DMA Bandwidth**: 128-bit bus width provides high memory bandwidth
+5. **Pipeline Depth**: Multi-stage pipeline allows high clock frequency
+
+## Common Issues and Solutions
+
+**Issue**: Instructions stall in Global RS
+- **Solution**: Check ROB capacity and completion signals from domains
+
+**Issue**: Memory access conflicts
+- **Solution**: Ensure op1 and op2 don't access same bank, respect bank boundaries
+
+**Issue**: DMA timeout
+- **Solution**: Verify TLB configuration and page table walker connectivity
+
+**Issue**: Ball device not responding
+- **Solution**: Check Ball device registration in BBus and RS device list

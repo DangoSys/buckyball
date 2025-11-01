@@ -1,30 +1,28 @@
-# 保留站模块 (Reservation Station)
+# Reservation Station (RS) Module
 
-## 概述
+## Overview
 
-保留站模块实现了内存域的指令调度和乱序执行管理，位于 `framework/builtin/memdomain/rs` 路径下。该模块包含保留站 (Reservation Station) 和重排序缓冲区 (ROB) 的实现，支持内存指令的发射、执行和完成管理。
+Reservation station module for memory domain instruction scheduling and out-of-order execution management, located at `framework/builtin/memdomain/rs`. Includes reservation station and reorder buffer (ROB) implementation.
 
-## 文件结构
+## File Structure
 
 ```
 rs/
-├── reservationStation.scala  - 内存保留站实现
-├── rob.scala                 - 重排序缓冲区实现
-└── ringFifo.scala           - 环形 FIFO 实现 (未使用)
+├── reservationStation.scala  - Memory reservation station
+├── rob.scala                 - Reorder buffer
+└── ringFifo.scala           - Ring FIFO (unused)
 ```
 
-## 核心组件
+## MemReservationStation
 
-### MemReservationStation - 内存保留站
-
-内存保留站负责管理内存指令的调度和执行：
+### Interface
 
 ```scala
 class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    val mem_decode_cmd_i = Flipped(new DecoupledIO(new MemDecodeCmd))
+    val mem_decode_cmd_i = Flipped(Decoupled(new MemDecodeCmd))
     val rs_rocc_o = new Bundle {
-      val resp  = new DecoupledIO(new RoCCResponseBB()(p))
+      val resp  = Decoupled(new RoCCResponseBB)
       val busy  = Output(Bool())
     }
     val issue_o     = new MemIssueInterface
@@ -33,60 +31,50 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
 }
 ```
 
-#### 接口定义
-
-**输入接口**：
-- `mem_decode_cmd_i`: 来自内存域解码器的指令
-- `commit_i`: 来自内存加载器/存储器的完成信号
-
-**输出接口**：
-- `issue_o`: 向内存加载器/存储器发射指令
-- `rs_rocc_o`: 向 RoCC 接口返回响应
-
-#### 发射接口
+### Issue Interface
 
 ```scala
 class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val ld = Decoupled(new MemRsIssue)    // 加载指令发射
-  val st = Decoupled(new MemRsIssue)    // 存储指令发射
+  val ld = Decoupled(new MemRsIssue)    // Load instruction issue
+  val st = Decoupled(new MemRsIssue)    // Store instruction issue
 }
 ```
 
-#### 完成接口
+### Commit Interface
 
 ```scala
 class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val ld = Flipped(Decoupled(new MemRsComplete))    // 加载指令完成
-  val st = Flipped(Decoupled(new MemRsComplete))    // 存储指令完成
+  val ld = Flipped(Decoupled(new MemRsComplete))    // Load completion
+  val st = Flipped(Decoupled(new MemRsComplete))    // Store completion
 }
 ```
 
-### ROB - 重排序缓冲区
+## ROB - Reorder Buffer
 
-ROB 管理指令的顺序执行和乱序完成：
+### Interface
 
 ```scala
 class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
-    val alloc = Flipped(new DecoupledIO(new MemDecodeCmd))
-    val issue = new DecoupledIO(new RobEntry)
-    val complete = Flipped(new DecoupledIO(UInt(log2Up(b.rob_entries).W)))
+    val alloc = Flipped(Decoupled(new MemDecodeCmd))
+    val issue = Decoupled(new RobEntry)
+    val complete = Flipped(Decoupled(UInt(log2Up(b.rob_entries).W)))
     val empty = Output(Bool())
     val full  = Output(Bool())
   })
 }
 ```
 
-#### ROB 条目
+### ROB Entry
 
 ```scala
 class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val cmd    = new MemDecodeCmd                    // 内存指令
-  val rob_id = UInt(log2Up(b.rob_entries).W)      // ROB 标识符
+  val cmd    = new MemDecodeCmd                    // Memory instruction
+  val rob_id = UInt(log2Up(b.rob_entries).W)      // ROB ID
 }
 ```
 
-#### 核心数据结构
+### Core Data Structures
 
 ```scala
 val robFifo = Module(new Queue(new RobEntry, b.rob_entries))
@@ -94,18 +82,18 @@ val robIdCounter = RegInit(0.U(log2Up(b.rob_entries).W))
 val robTable = Reg(Vec(b.rob_entries, Bool()))
 ```
 
-- `robFifo`: FIFO 队列，维护指令顺序
-- `robIdCounter`: ROB ID 计数器
-- `robTable`: 完成状态表，跟踪指令完成状态
+- `robFifo`: FIFO queue maintaining instruction order
+- `robIdCounter`: ROB ID counter
+- `robTable`: Completion status table tracking instruction completion
 
-## 工作流程
+## Workflow
 
-### 指令分配
+### Instruction Allocation
 
-1. **接收指令**：从内存域解码器接收 `MemDecodeCmd`
-2. **分配 ROB ID**：为指令分配唯一的 ROB ID
-3. **入队操作**：将指令和 ROB ID 存入 ROB FIFO
-4. **状态初始化**：在完成状态表中标记为未完成
+1. Receive `MemDecodeCmd` from memory domain decoder
+2. Allocate unique ROB ID
+3. Enqueue instruction with ROB ID into ROB FIFO
+4. Mark as incomplete in completion status table
 
 ```scala
 robFifo.io.enq.valid       := io.alloc.valid
@@ -118,11 +106,11 @@ when(io.alloc.fire) {
 }
 ```
 
-### 指令发射
+### Instruction Issue
 
-1. **检查头部指令**：检查 ROB 头部的未完成指令
-2. **类型分离**：根据指令类型分离加载和存储操作
-3. **发射控制**：只有在对应执行单元就绪时才发射
+1. Check head instruction in ROB
+2. Separate by type (load/store)
+3. Issue only when execution unit ready
 
 ```scala
 io.issue_o.ld.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_load
@@ -132,11 +120,11 @@ rob.io.issue.ready  := (rob.io.issue.bits.cmd.is_load && io.issue_o.ld.ready) ||
                        (rob.io.issue.bits.cmd.is_store && io.issue_o.st.ready)
 ```
 
-### 指令完成
+### Instruction Completion
 
-1. **完成仲裁**：使用仲裁器处理多个完成信号
-2. **状态更新**：在完成状态表中标记指令为已完成
-3. **乱序支持**：支持指令乱序完成
+1. Arbiter handles multiple completion signals
+2. Update completion status table
+3. Support out-of-order completion
 
 ```scala
 val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 2))
@@ -148,98 +136,32 @@ when(io.complete.fire) {
 }
 ```
 
-### 头部指令管理
+## Configuration
 
-ROB 只发射头部的未完成指令：
-
-```scala
-val headEntry     = robFifo.io.deq.bits
-val headCompleted = robTable(headEntry.rob_id)
-io.issue.valid   := robFifo.io.deq.valid && !headCompleted
-robFifo.io.deq.ready := io.issue.ready && !headCompleted
-```
-
-## 配置参数
-
-### ROB 配置
-
-通过 `CustomBuckyBallConfig` 配置 ROB 参数：
+ROB configuration through `CustomBuckyBallConfig`:
 
 ```scala
 class CustomBuckyBallConfig extends Config((site, here, up) => {
-  case "rob_entries" => 16    // ROB 条目数量
+  case "rob_entries" => 16    // Number of ROB entries
 })
 ```
 
-### 使用示例
+## Execution Model
 
-```scala
-// 创建内存保留站
-val memRS = Module(new MemReservationStation())
+### In-Order Issue, Out-of-Order Completion
 
-// 连接指令输入
-memRS.io.mem_decode_cmd_i <> memDecoder.io.cmd_out
+- **In-Order Issue**: Instructions issued from ROB head in program order
+- **Out-of-Order Completion**: Instructions can complete out-of-order, tracked by ROB ID
+- **In-Order Commit**: Instructions commit in program order (simplified in current implementation)
 
-// 连接发射接口
-memLoader.io.req <> memRS.io.issue_o.ld
-memStorer.io.req <> memRS.io.issue_o.st
+### Memory Consistency
 
-// 连接完成接口
-memRS.io.commit_i.ld <> memLoader.io.resp
-memRS.io.commit_i.st <> memStorer.io.resp
+- **Load/Store Separation**: Load and store instructions handled separately
+- **Dependency Checking**: ROB maintains memory access ordering
+- **Exception Handling**: Supports memory access exception handling
 
-// 连接 RoCC 响应
-rocc.io.resp <> memRS.io.rs_rocc_o.resp
-```
+## Related Modules
 
-## 执行模型
-
-### 顺序发射，乱序完成
-
-- **顺序发射**：指令按程序顺序从 ROB 头部发射
-- **乱序完成**：指令可以乱序完成，通过 ROB ID 跟踪
-- **顺序提交**：指令按程序顺序提交 (当前实现中简化)
-
-### 内存一致性
-
-- **加载存储分离**：加载和存储指令分别处理
-- **依赖检查**：通过 ROB 维护内存访问顺序
-- **异常处理**：支持内存访问异常的处理
-
-## 状态监控
-
-### ROB 状态
-
-```scala
-val isEmpty = robTable.reduce(_ && _)    // 所有指令都已完成
-val isFull = !robFifo.io.enq.ready      // ROB 已满
-
-io.empty := isEmpty
-io.full  := isFull
-```
-
-### 忙碌信号
-
-```scala
-io.rs_rocc_o.busy := !rob.io.empty      // ROB 非空时保留站忙碌
-```
-
-## 性能考虑
-
-### 吞吐量优化
-
-- 支持加载和存储指令并行发射
-- 使用仲裁器处理多个完成信号
-- 最小化 ROB 查找延迟
-
-### 资源利用
-
-- ROB 大小可配置，平衡性能和面积
-- 完成状态表使用位向量，节省存储
-- FIFO 队列提供高效的顺序管理
-
-## 相关模块
-
-- [内存域概览](../README.md) - 上层内存管理
-- [内存控制器](../mem/README.md) - 内存加载器和存储器
-- [DMA 引擎](../dma/README.md) - DMA 数据传输
+- [Memory Domain](../README.md)
+- [Memory Controller](../mem/README.md)
+- [DMA Engines](../dma/README.md)

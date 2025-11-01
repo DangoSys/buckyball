@@ -7,8 +7,9 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.relu.PipelinedRelu
 
-/** ReluBall - 遵守 Blink 协议的 ReLU 计算 Ball 行为：从 Scratchpad 读取数据，逐元素做 ReLU（负数置
-  * 0），再写回 Scratchpad。
+/** ReluBall - A ReLU computation Ball that complies with the Blink protocol.
+  * Behavior: Read data from Scratchpad, perform element-wise ReLU (set negative values to 0),
+  * then write back to Scratchpad.
   */
 class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     extends Module
@@ -16,17 +17,17 @@ class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   val io = IO(new Blink)
   val ballId = id.U
 
-  // 满足 BallRegist 的要求
+  // Satisfy BallRegist requirements
   def Blink: Blink = io
 
-  // 实例化 PipelinedRelu 计算单元
+  // Instantiate PipelinedRelu computation unit
   private val reluUnit = Module(new PipelinedRelu[UInt])
 
-  // 连接命令接口
+  // Connect command interface
   reluUnit.io.cmdReq <> io.cmdReq
   reluUnit.io.cmdResp <> io.cmdResp
 
-  // 连接 Scratchpad SRAM 读写接口
+  // Connect Scratchpad SRAM read/write interface
   for (i <- 0 until b.sp_banks) {
     reluUnit.io.sramRead(i) <> io.sramRead(i).io
     io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
@@ -34,7 +35,7 @@ class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // Accumulator 读接口（ReLU 不访问 accumulator，tie-off）
+  // Accumulator read interface (ReLU does not access accumulator, tie-off)
   for (i <- 0 until b.acc_banks) {
     io.accRead(i).io.req.valid := false.B
     io.accRead(i).io.req.bits := DontCare
@@ -42,14 +43,14 @@ class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     io.accRead(i).rob_id := 0.U
   }
 
-  // Accumulator 写接口（ReLU 不写 accumulator，tie-off）
+  // Accumulator write interface (ReLU does not write accumulator, tie-off)
   for (i <- 0 until b.acc_banks) {
     io.accWrite(i).io.req.valid := false.B
     io.accWrite(i).io.req.bits := DontCare
     io.accWrite(i).rob_id := 0.U
   }
 
-  // 透传状态信号
+  // Pass through status signals
   io.status <> reluUnit.io.status
 
   override lazy val desiredName: String = "ReluBall"

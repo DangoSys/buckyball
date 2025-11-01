@@ -50,7 +50,7 @@ class VecEXUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   VecBall.io.rstOut.ready := false.B
 
 // -----------------------------------------------------------------------------
-// Ctrl指令到来设置寄存器
+// Set registers when Ctrl instruction arrives
 // -----------------------------------------------------------------------------
   io.ctrl_ex_i.ready := state === idle
   when(io.ctrl_ex_i.fire) {
@@ -60,7 +60,7 @@ class VecEXUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   }
 
 // -----------------------------------------------------------------------------
-// 接受来自load unit的读结果, 并进行计算
+// Accept read results from load unit and perform computation
 // -----------------------------------------------------------------------------
 	io.ld_ex_i.ready := state === busy && VecBall.io.iterIn.ready
 	when(io.ld_ex_i.valid) {
@@ -73,7 +73,7 @@ class VecEXUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
 	}
 
 // -----------------------------------------------------------------------------
-// 向store unit发送计算结果，进行写回
+// Send computation results to store unit for write-back
 // -----------------------------------------------------------------------------
 	io.ex_st_o.valid        := VecBall.io.rstOut.valid
 	VecBall.io.rstOut.ready := io.ex_st_o.ready

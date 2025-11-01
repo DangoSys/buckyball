@@ -8,7 +8,7 @@ import framework.blink.{Blink, BallRegist}
 import prototype.matrix.BBFP_Control
 
 /**
- * MatrixBall - 遵守Blink协议的矩阵计算Ball
+ * MatrixBall - A matrix computation Ball that complies with the Blink protocol
  */
 class MatrixBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)
@@ -16,44 +16,44 @@ class MatrixBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) exte
 
   def Blink: Blink = io
 
-  // 实例化BBFP_Control
+  // Instantiate BBFP_Control
   val matrixUnit = Module(new BBFP_Control)
 
-  // 连接命令接口
+  // Connect command interface
   matrixUnit.io.cmdReq <> io.cmdReq
   matrixUnit.io.cmdResp <> io.cmdResp
 
-  // 设置is_matmul_ws信号
+  // Set is_matmul_ws signal
   matrixUnit.io.is_matmul_ws := false.B  // TODO:
 
-  // 连接SRAM读接口 - MatrixBall需要从scratchpad读取数据
+  // Connect SRAM read interface - MatrixBall needs to read data from scratchpad
   for (i <- 0 until b.sp_banks) {
     matrixUnit.io.sramRead(i) <> io.sramRead(i).io
     io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // 连接SRAM写接口 - MatrixBall需要写入scratchpad
+  // Connect SRAM write interface - MatrixBall needs to write to scratchpad
   for (i <- 0 until b.sp_banks) {
     matrixUnit.io.sramWrite(i) <> io.sramWrite(i).io
     io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // 处理Accumulator读接口 - MatrixBall不读accumulator，所以tie off
+  // Handle Accumulator read interface - MatrixBall does not read accumulator, so tie off
   for (i <- 0 until b.acc_banks) {
-    // 对于Flipped(SramReadIO)，我们需要驱动req.valid, req.bits（输出）和resp.ready（输出）
+    // For Flipped(SramReadIO), we need to drive req.valid, req.bits (outputs) and resp.ready (output)
     io.accRead(i).io.req.valid := false.B
     io.accRead(i).io.req.bits := DontCare
     io.accRead(i).io.resp.ready := true.B
     io.accRead(i).rob_id := 0.U
   }
 
-  // 连接Accumulator写接口 - MatrixBall向accumulator写入结果
+  // Connect Accumulator write interface - MatrixBall writes results to accumulator
   for (i <- 0 until b.acc_banks) {
     matrixUnit.io.accWrite(i) <> io.accWrite(i).io
     io.accWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // 连接Status信号 - 直接从内部单元获取
+  // Connect Status signals - directly obtained from internal unit
   io.status <> matrixUnit.io.status
 
   override lazy val desiredName = "MatrixBall"

@@ -10,7 +10,7 @@ class CasThread(implicit p: Parameters) extends BaseThread
   with CanHaveCascadeOp
   with CanHaveVVVBond {
 
-  // 连接CascadeOp和VVVBond
+  // Connect CascadeOp and VVVBond
   for {
     op <- cascadeOp
     bond <- vvvBond

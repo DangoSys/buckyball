@@ -17,7 +17,8 @@ class ctrl_st_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bund
 }
 
 class ex_st_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
-  val rst = Vec(b.veclane, UInt(b.accType.getWidth.W))  // 使用accumulator类型，32位
+  // Use accumulator type, 32 bits
+  val rst = Vec(b.veclane, UInt(b.accType.getWidth.W))
   val iter = UInt(10.W)
 }
 
@@ -42,7 +43,7 @@ class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
   val state = RegInit(idle)
 
 // -----------------------------------------------------------------------------
-// Ctrl指令到来设置寄存器
+// Set registers when Ctrl instruction arrives
 // -----------------------------------------------------------------------------
   io.ctrl_st_i.ready := state === idle
 
@@ -55,7 +56,7 @@ class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Mod
   }
 
 // -----------------------------------------------------------------------------
-// 接受来自EX单元的计算结果，进行写回
+// Accept computation results from EX unit and perform write-back
 // -----------------------------------------------------------------------------
 	io.ex_st_i.ready := state === busy
   // for(i <- 0 until b.sp_banks) {
@@ -77,12 +78,13 @@ val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
         io.accWrite(i).req.valid := true.B
 			  io.accWrite(i).req.bits.addr :=  wr_bank_addr + (iter_counter(log2Ceil(b.veclane) - 1, 0) >> 1.U)
 
-        // 每个accumulator bank存储 veclane/acc_banks 个元素
-        val elementsPerBank = b.veclane / b.acc_banks * 2 // 16/4 = 4个元素
+        // Each accumulator bank stores veclane/acc_banks elements
+        // 16/4 = 4 elements
+        val elementsPerBank = b.veclane / b.acc_banks * 2
         val startIdx = i * elementsPerBank
         val endIdx = startIdx + elementsPerBank - 1
 
-        // 将对应的元素打包成一个UInt
+        // Pack corresponding elements into a UInt
         val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
         io.accWrite(i).req.bits.data := bankData
 
@@ -91,12 +93,13 @@ val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
         io.accWrite(i + b.acc_banks/2).req.valid := true.B
 			  io.accWrite(i + b.acc_banks/2).req.bits.addr := wr_bank_addr + (iter_counter(log2Ceil(b.veclane) - 1, 0) >> 1.U)
 
-        // 每个accumulator bank存储 veclane/acc_banks 个元素
-        val elementsPerBank = b.veclane / b.acc_banks * 2  // 16/4 = 4个元素
+        // Each accumulator bank stores veclane/acc_banks elements
+        // 16/4 = 4 elements
+        val elementsPerBank = b.veclane / b.acc_banks * 2
         val startIdx = i * elementsPerBank
         val endIdx = startIdx + elementsPerBank - 1
 
-        // 将对应的元素打包成一个UInt
+        // Pack corresponding elements into a UInt
         val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
         io.accWrite(i + b.acc_banks/2).req.bits.data := bankData
 
@@ -107,7 +110,7 @@ val waddr = wr_bank_addr + iter_counter(log2Ceil(b.veclane) - 1, 0)
 	}
 
 // -----------------------------------------------------------------------------
-// iter counter归零，提交cmdResp，回到idle状态
+// Reset iter counter, commit cmdResp, return to idle state
 // -----------------------------------------------------------------------------
 	when(state === busy && iter_counter >= iter) {
 		state := idle

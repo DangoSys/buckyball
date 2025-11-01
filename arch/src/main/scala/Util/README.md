@@ -1,34 +1,34 @@
-# BuckyBall 工具函数库
+# BuckyBall Utility Library
 
-## 概述
+## Overview
 
-该目录包含了 BuckyBall 框架中的通用工具函数和辅助模块，主要提供可复用的硬件设计组件。目录位于 `arch/src/main/scala/Util` 下，在整个架构中作为基础工具层，为其他模块提供通用的硬件构建块。
+This directory contains general utility functions and helper modules in the BuckyBall framework, primarily providing reusable hardware design components. Located at `arch/src/main/scala/Util`, it serves as the base utility layer throughout the architecture, providing common hardware building blocks for other modules.
 
-主要功能包括：
-- **Pipeline**: 流水线控制和管理工具
-- 通用的硬件设计模式实现
+Main functionality includes:
+- **Pipeline**: Pipeline control and management tools
+- Common hardware design pattern implementations
 
-## 代码结构
+## Code Structure
 
 ```
 Util/
-└── Pipeline.scala    - 流水线控制实现
+└── Pipeline.scala    - Pipeline control implementation
 ```
 
-### 文件依赖关系
+### File Dependencies
 
-**Pipeline.scala** (基础工具层)
-- 提供通用的流水线控制逻辑
-- 被其他需要流水线功能的模块引用
-- 实现标准的流水线接口和控制信号
+**Pipeline.scala** (Base utility layer)
+- Provides general pipeline control logic
+- Referenced by other modules requiring pipeline functionality
+- Implements standard pipeline interfaces and control signals
 
-## 模块说明
+## Module Description
 
 ### Pipeline.scala
 
-**主要功能**: 提供通用的流水线控制和管理功能
+**Main functionality**: Provides general pipeline control and management functionality
 
-**关键组件**:
+**Key components**:
 
 ```scala
 class Pipeline extends Module {
@@ -40,7 +40,7 @@ class Pipeline extends Module {
     val valid_out = Output(Bool())
   })
 
-  // 流水线控制逻辑
+  // Pipeline control logic
   val pipeline_valid = RegInit(false.B)
 
   when(io.flush) {
@@ -54,54 +54,54 @@ class Pipeline extends Module {
 }
 ```
 
-**流水线控制信号**:
-- **flush**: 流水线冲刷信号，清空所有流水线级
-- **stall**: 流水线暂停信号，保持当前状态
-- **valid_in**: 输入数据有效信号
-- **ready_out**: 准备接收新数据信号
-- **valid_out**: 输出数据有效信号
+**Pipeline control signals**:
+- **flush**: Pipeline flush signal, clears all pipeline stages
+- **stall**: Pipeline stall signal, maintains current state
+- **valid_in**: Input data valid signal
+- **ready_out**: Ready to receive new data signal
+- **valid_out**: Output data valid signal
 
-**输入输出**:
-- 输入: 控制信号(flush, stall)和数据有效信号
-- 输出: 流水线状态和数据有效指示
-- 边缘情况: flush优先级高于stall，确保正确的流水线行为
+**Inputs/Outputs**:
+- Input: Control signals (flush, stall) and data valid signal
+- Output: Pipeline state and data valid indication
+- Edge cases: flush has higher priority than stall, ensuring correct pipeline behavior
 
-**依赖项**: Chisel3基础库，标准的Module和Bundle接口
+**Dependencies**: Chisel3 base library, standard Module and Bundle interfaces
 
-## 使用方法
+## Usage
 
-### 使用方法
+### Usage
 
-**集成流水线控制**:
+**Integrating pipeline control**:
 ```scala
 class MyModule extends Module {
   val pipeline = Module(new Pipeline)
 
-  // 连接控制信号
+  // Connect control signals
   pipeline.io.flush := flush_condition
   pipeline.io.stall := stall_condition
   pipeline.io.valid_in := input_valid
 
-  // 使用流水线输出
+  // Use pipeline output
   val output_enable = pipeline.io.valid_out
 }
 ```
 
-### 设计模式
+### Design Patterns
 
-**流水线级联**:
-- 支持多级流水线的级联连接
-- 提供标准的ready/valid握手协议
-- 确保数据流的正确性和时序
+**Pipeline cascading**:
+- Supports cascaded connection of multi-stage pipelines
+- Provides standard ready/valid handshake protocol
+- Ensures correctness and timing of data flow
 
-**背压处理**:
-- 实现标准的背压传播机制
-- 支持上游模块的暂停和恢复
-- 保证数据不丢失和不重复
+**Backpressure handling**:
+- Implements standard backpressure propagation mechanism
+- Supports pause and resume of upstream modules
+- Guarantees no data loss or duplication
 
-### 注意事项
+### Notes
 
-1. **时序约束**: flush信号应该在时钟上升沿同步断言
-2. **复位行为**: 流水线在复位时应该清空所有有效位
-3. **组合逻辑**: ready信号是组合逻辑，避免时序路径问题
-4. **扩展性**: 设计支持参数化的流水线深度和数据宽度
+1. **Timing constraints**: flush signal should be asserted synchronously at clock rising edge
+2. **Reset behavior**: Pipeline should clear all valid bits on reset
+3. **Combinational logic**: ready signal is combinational logic, avoid timing path issues
+4. **Extensibility**: Design supports parameterized pipeline depth and data width

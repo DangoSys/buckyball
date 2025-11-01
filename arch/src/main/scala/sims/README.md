@@ -1,22 +1,68 @@
-# 仿真配置模块
+# Simulation Configurations
 
-该目录包含了 BuckyBall 项目中各种仿真器的配置和接口实现，为不同的仿真环境提供统一的配置管理。
+This directory contains simulation configurations and interfaces for various simulators, providing unified configuration management for different simulation environments.
 
-## 目录结构
+## Directory Structure
 
 ```
 sims/
 ├── firesim/
-│   └── TargetConfigs.scala    - FireSim FPGA仿真配置
-└── verilator/
-    └── Elaborate.scala        - Verilator仿真顶层生成
+│   └── TargetConfigs.scala    - FireSim FPGA simulation configuration
+├── verilator/
+│   └── Elaborate.scala        - Verilator simulation top-level generation
+└── verify/
+    └── TargetConfig.scala     - Verification configurations
 ```
 
-## FireSim 配置 (firesim/)
+## Verilator Simulation (verilator/)
+
+### Elaborate.scala
+
+Top-level generator for Verilator simulation:
+
+```scala
+object Elaborate extends App {
+  // Select Ball type from command line arguments
+  val ballType = args.headOption.getOrElse("toy")
+  
+  val config = ballType match {
+    case "toy" => new ToyBuckyBallConfig
+    case "vec" => new WithBlink(TargetBall.VecBall)
+    case "matrix" => new WithBlink(TargetBall.MatrixBall)
+    case "transpose" => new WithBlink(TargetBall.TransposeBall)
+    case "im2col" => new WithBlink(TargetBall.Im2colBall)
+    case "relu" => new WithBlink(TargetBall.ReluBall)
+    case _ => new ToyBuckyBallConfig
+  }
+  
+  val gen = () => LazyModule(new TestHarness()(config)).module
+  
+  (new ChiselStage).execute(
+    args.tail,  // Remaining args passed to firtool
+    Seq(
+      ChiselGeneratorAnnotation(gen),
+      TargetDirAnnotation("generated-src/verilator")
+    )
+  )
+}
+```
+
+**Generation Flow**:
+1. Parse command line arguments and configuration
+2. Instantiate BuckyBall system module
+3. Generate Verilog RTL code
+4. Output auxiliary files for simulation
+
+**Output Files**:
+- `*.v` - Verilog files
+- `*.anno.json` - FIRRTL annotation files
+- `*.fir` - FIRRTL intermediate representation
+
+## FireSim Simulation (firesim/)
 
 ### TargetConfigs.scala
 
-定义了在 FireSim FPGA 平台上运行的目标配置：
+Configurations for running on FireSim FPGA platform:
 
 ```scala
 class FireSimBuckyBallConfig extends Config(
@@ -27,118 +73,130 @@ class FireSimBuckyBallConfig extends Config(
 )
 ```
 
-**关键配置项**:
-- **Bridge 配置**: UART、BlockDevice、NIC 等 I/O 桥接
-- **内存模型**: DDR3/DDR4 内存控制器配置
-- **时钟域**: 多时钟域管理和时钟生成
-- **调试接口**: JTAG 和 Debug Module 配置
+**Key Configuration Items**:
+- **Bridge Configuration**: UART, BlockDevice, NIC I/O bridges
+- **Memory Model**: DDR3/DDR4 memory controller configuration
+- **Clock Domains**: Multi-clock domain management
+- **Debug Interface**: JTAG and Debug Module configuration
 
-**使用场景**:
-- 大规模系统仿真
-- 长时间运行的工作负载测试
-- 多核系统性能评估
-- I/O 密集型应用验证
+**Use Cases**:
+- Large-scale system simulation
+- Long-running workload testing
+- Multi-core system performance evaluation
+- I/O-intensive application verification
 
-## Verilator 配置 (verilator/)
+## Verification Configurations (verify/)
 
-### Elaborate.scala
+### TargetConfig.scala
 
-Verilator 仿真的顶层模块生成器：
+Configurations for single Ball device verification:
 
 ```scala
-object Elaborate extends App {
-  val config = new BuckyBallConfig
-  val gen = () => LazyModule(new BuckyBallSystem()(config)).module
-
-  (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(gen),
-    TargetDirAnnotation("generated-src")
-  ))
+sealed trait TargetBall
+object TargetBall {
+  case object VecBall extends TargetBall
+  case object MatrixBall extends TargetBall
+  case object TransposeBall extends TargetBall
+  case object Im2colBall extends TargetBall
+  case object ReluBall extends TargetBall
 }
 ```
 
-**生成流程**:
-1. 解析命令行参数和配置
-2. 实例化 BuckyBall 系统模块
-3. 生成 Verilog RTL 代码
-4. 输出仿真所需的辅助文件
+**WithBlink Configuration**: Empty configuration class for composing with Ball-specific configs
 
-**输出文件**:
-- `BuckyBallSystem.v` - 主 Verilog 文件
-- `BuckyBallSystem.anno.json` - FIRRTL 注解文件
-- `BuckyBallSystem.fir` - FIRRTL 中间表示
-
-## 配置参数化
-
-### 通用参数
-```scala
-// 处理器核心配置
-case object RocketTilesKey extends Field[Seq[RocketTileParams]]
-
-// 内存系统配置
-case object MemoryBusKey extends Field[MemoryBusParams]
-
-// 外设配置
-case object PeripheryBusKey extends Field[PeripheryBusParams]
-```
-
-### 仿真特定参数
-```scala
-// Verilator 仿真参数
-case object VerilatorDRAMKey extends Field[Boolean](false)
-
-// FireSim 仿真参数
-case object FireSimBridgesKey extends Field[Seq[BridgeIOAnnotation]]
-```
-
-## 构建和使用
-
-### Verilator 仿真构建
+**Usage**:
 ```bash
-# 生成 Verilog
+# Verify specific Ball device
+mill arch.runMain sims.verilator.Elaborate matrix
+mill arch.runMain sims.verilator.Elaborate transpose
+```
+
+## Build and Usage
+
+### Verilator Simulation Build
+
+```bash
+# Generate Verilog
 cd arch
-mill arch.runMain sims.verilator.Elaborate
+mill arch.runMain sims.verilator.Elaborate [ball_type]
 
-# 编译仿真器
-cd generated-src
-verilator --cc BuckyBallSystem.v --exe sim_main.cpp
-make -C obj_dir -f VBuckyBallSystem.mk
+# Build simulator (in sims/verilator directory)
+cd ../../sims/verilator
+make CONFIG=ToyBuckyBall
 ```
 
-### FireSim 仿真部署
+**Available Ball Types**:
+- `toy`: Complete toy system (default)
+- `vec`: Vector Ball only
+- `matrix`: Matrix Ball only
+- `transpose`: Transpose Ball only
+- `im2col`: Im2col Ball only
+- `relu`: ReLU Ball only
+
+### FireSim Deployment
+
 ```bash
-# 配置 FireSim 环境
+# Set up FireSim environment
 cd firesim
 source sourceme-f1-manager.sh
 
-# 构建 FPGA 镜像
+# Build FPGA bitstream
 firesim buildbitstream
 
-# 运行仿真
+# Run simulation
 firesim runworkload
 ```
 
-## 调试和优化
+## Debug and Optimization
 
-### Verilator 调试
-- **波形生成**: 使用 `--trace` 选项生成 VCD 文件
-- **性能分析**: 使用 `--prof-cfuncs` 进行性能剖析
-- **覆盖率**: 使用 `--coverage` 生成覆盖率报告
+### Verilator Debug
 
-### FireSim 调试
-- **Printf 调试**: 使用 `printf` 语句输出调试信息
-- **断言检查**: 启用运行时断言验证
-- **性能计数器**: 集成 HPM 计数器监控
+- **Waveform Generation**: Use `--trace` option to generate VCD files
+- **Performance Profiling**: Use `--prof-cfuncs` for profiling
+- **Coverage**: Use `--coverage` to generate coverage reports
 
-## 扩展开发
+### FireSim Debug
 
-### 添加新仿真器支持
-1. 创建新的配置目录 (如 `vcs/`)
-2. 实现仿真器特定的配置类
-3. 添加构建脚本和 Makefile
-4. 更新文档和测试用例
+- **Printf Debugging**: Use `printf` statements for debug output
+- **Assertion Checking**: Enable runtime assertion verification
+- **Performance Counters**: Integrated HPM counters for monitoring
 
-### 自定义配置
+## Configuration Parameters
+
+### Common Parameters
+
+```scala
+// Processor core configuration
+case object RocketTilesKey extends Field[Seq[RocketTileParams]]
+
+// Memory system configuration
+case object MemoryBusKey extends Field[MemoryBusParams]
+
+// Peripheral configuration
+case object PeripheryBusKey extends Field[PeripheryBusParams]
+```
+
+### Simulation-Specific Parameters
+
+```scala
+// Verilator simulation parameters
+case object VerilatorDRAMKey extends Field[Boolean](false)
+
+// FireSim simulation parameters
+case object FireSimBridgesKey extends Field[Seq[BridgeIOAnnotation]]
+```
+
+## Extension Development
+
+### Adding New Simulator Support
+
+1. Create new configuration directory (e.g., `vcs/`)
+2. Implement simulator-specific configuration classes
+3. Add build scripts and Makefiles
+4. Update documentation and test cases
+
+### Custom Configuration
+
 ```scala
 class MyCustomConfig extends Config(
   new WithMyCustomParameters ++
@@ -146,7 +204,8 @@ class MyCustomConfig extends Config(
 )
 ```
 
-## 相关文档
-- [架构概览](../README.md)
-- [Verilator 工作流](../../../../workflow/steps/verilator/README.md)
-- [测试框架](../../../../bb-tests/README.md)
+## Related Documentation
+
+- [Architecture Overview](../README.md)
+- [Verilator Workflow](../../../../workflow/steps/verilator/README.md)
+- [Test Framework](../../../../bb-tests/README.md)

@@ -4,7 +4,7 @@
 
 // #include "../build/obj_dir/VTestHarness___024root.h"
 
-// #define MAX_SIM_TIME 50 最大仿真周期
+// #define MAX_SIM_TIME 50 Maximum simulation cycles
 vluint64_t sim_time = 0;
 
 VerilatedContext *contextp = NULL;
@@ -12,7 +12,8 @@ VerilatedContext *contextp = NULL;
 VerilatedFstC *tfp = NULL;
 static VTestHarness *top;
 
-int bb_step = 1; // 记录一共走了多少步，出错时抛出，方便单步调试到周围
+// Record how many steps taken, useful for debugging when errors occur
+int bb_step = 1;
 
 //================ SIM FUNCTION =====================//
 void step_and_dump_wave() {
@@ -49,7 +50,8 @@ void sim_init(int argc, char **argv) {
 
   // top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg
   // = 0x80000000ULL;
-} // 低电平复位
+  // Low-level reset
+}
 
 void sim_exit() {
   contextp->timeInc(1);
@@ -75,19 +77,21 @@ void ball_exec_once() {
   // npc_step++;
   // printf("bootAddrReg = 0x%x\n",
   // top->rootp->TestHarness__DOT__chiptop0__DOT__system__DOT__pbus__DOT__bootAddrReg);
-} // 翻转两次走一条指令
+  // Toggle twice to execute one instruction
+}
 
 // void init_tet() {
 //   while (cpu_npc.pc != MEM_BASE) {
 //     // printf("%ld\n", cpu_npc.pc);
 //     npc_exec_once();
 //     // npc_step--;
-//   } // pc先走拍到第一条指令执行结束
+//   } // PC advances until first instruction execution completes
 // }
 
 //================ main =====================//
 int main(int argc, char *argv[]) {
-  init_monitor(argc, argv); // 在这里解析参数，包括VCD路径
+  // Parse parameters here, including VCD path
+  init_monitor(argc, argv);
   sim_init(argc, argv);
   bdb_mainloop();
   sim_exit();

@@ -10,7 +10,7 @@ class MulThread(implicit p: Parameters) extends BaseThread
   with CanHaveMulOp
   with CanHaveVVVBond {
 
-  // 连接MulOp和VVVBond
+  // Connect MulOp and VVVBond
   for {
     op <- mulOp
     bond <- vvvBond

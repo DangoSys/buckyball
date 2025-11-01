@@ -9,20 +9,22 @@ import framework.builtin.memdomain.dma.LocalAddr
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config.Parameters
 
-// Mem域的详细解码输出
+// Detailed decode output for Mem domain
 class MemDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val is_load       = Bool()
   val is_store      = Bool()
 
-  // 内存地址
+  // Memory address
   val mem_addr      = UInt(b.memAddrLen.W)
 
-  // 迭代次数
+  // Iteration count
   val iter          = UInt(10.W)
 
-  // Scratchpad地址和bank信息
-  val sp_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)  // 3位，支持8个banks（SPAD+ACC）
-  val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)  // 12位，使用SPAD行数（足够容纳ACC的10位地址）
+  // Scratchpad address and bank information
+  // 3 bits, supports 8 banks (SPAD+ACC)
+  val sp_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
+  // 12 bits, uses SPAD row count (sufficient to accommodate ACC's 10-bit address)
+  val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)
 
   val special       = UInt(40.W)
 }
@@ -54,14 +56,14 @@ class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends
   val spAddrLen = b.spAddrLen
   val memAddrLen = b.memAddrLen
 
-  // 只处理Mem指令
+  // Only process Mem instructions
   io.raw_cmd_i.ready := io.mem_decode_cmd_o.ready
 
   val func7 = io.raw_cmd_i.bits.raw_cmd.inst.funct
   val rs1   = io.raw_cmd_i.bits.raw_cmd.rs1
   val rs2   = io.raw_cmd_i.bits.raw_cmd.rs2
 
-  // Load/Store指令解码
+  // Load/Store instruction decoding
   import LSDecodeFields._
   val ls_default_decode = List(N,N,DADDR,DADDR,DITER,DSPECIAL,N)
   val ls_decode_list = ListLookup(func7, ls_default_decode, Array(
@@ -73,7 +75,7 @@ class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends
     s"MemDomainDecoder: Invalid command opcode, func7 = 0x%x\n", func7)
 
 // -----------------------------------------------------------------------------
-// 输出赋值
+// Output assignment
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_mem
 
@@ -83,7 +85,7 @@ class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends
   io.mem_decode_cmd_o.bits.iter     := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ITER.id).asUInt, 0.U(10.W))
 
 
-  // 地址解析
+  // Address parsing
   val ls_spaddr = ls_decode_list(LSDecodeFields.SPADDR.id).asUInt
   val ls_laddr = LocalAddr.cast_to_sp_addr(b.local_addr_t, ls_spaddr)
 
