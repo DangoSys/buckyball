@@ -1,26 +1,26 @@
-# Buckyball ISA 指令注册机制
+# Buckyball ISA Instruction Registration Mechanism
 
-## 概述
+## Overview
 
-这个ISA库现在支持动态指令注册机制，允许你轻松添加新的自定义指令而无需修改核心代码。
+This ISA library now supports a dynamic instruction registration mechanism, allowing you to easily add new custom instructions without modifying core code.
 
-## 如何添加新指令
+## How to Add New Instructions
 
-### 1. 在头文件中定义新的指令类型
+### 1. Define New Instruction Type in Header File
 
-在 `isa.h` 中的 `InstructionType` 枚举中添加新的指令：
+Add new instructions to the `InstructionType` enum in `isa.h`:
 
 ```c
 typedef enum {
-  // 现有指令...
-  CUSTOM_ADD_FUNC7 = 50,    // 新的自定义加法指令
-  CUSTOM_SUB_FUNC7 = 51,    // 新的自定义减法指令
+  // Existing instructions...
+  CUSTOM_ADD_FUNC7 = 50,    // New custom addition instruction
+  CUSTOM_SUB_FUNC7 = 51,    // New custom subtraction instruction
 } InstructionType;
 ```
 
-### 2. 实现指令执行函数
+### 2. Implement Instruction Execution Function
 
-创建一个新的.c文件或在现有文件中添加：
+Create a new .c file or add to existing file:
 
 ```c
 #ifndef __x86_64__
@@ -30,14 +30,14 @@ static void execute_custom_add(uint32_t rs1_val, uint32_t rs2_val) {
 }
 #else
 static void execute_custom_add_nop(uint32_t rs1_val, uint32_t rs2_val) {
-  // x86平台下的空实现
+  // No-op implementation on x86 platform
 }
 #endif
 ```
 
-### 3. 注册指令
+### 3. Register Instruction
 
-在初始化代码中注册新指令：
+Register new instruction in initialization code:
 
 ```c
 void init_custom_instructions(void) {
@@ -49,31 +49,31 @@ void init_custom_instructions(void) {
 }
 ```
 
-### 4. 使用指令
+### 4. Use Instruction
 
 ```c
 BuckyballInstruction inst = build_instruction(CUSTOM_ADD_FUNC7);
 InstructionBuilder builder = create_builder(&inst, CUSTOM_ADD_FUNC7);
 
-// 设置参数
+// Set parameters
 builder.set.rs1(builder.set.builder_ptr, "field_name", value1);
 builder.set.rs2(builder.set.builder_ptr, "field_name", value2);
 
-// 执行指令
+// Execute instruction
 execute_builder(builder);
 ```
 
-## 优势
+## Advantages
 
-1. **模块化**：新指令可以在单独的文件中实现
-2. **可扩展**：无需修改核心代码就能添加新指令
-3. **平台兼容**：自动处理x86和RISC-V平台的差异
-4. **类型安全**：编译时检查指令类型
-5. **性能**：运行时查找开销很小
+1. **Modularity**: New instructions can be implemented in separate files
+2. **Extensibility**: Add new instructions without modifying core code
+3. **Platform Compatibility**: Automatically handles differences between x86 and RISC-V platforms
+4. **Type Safety**: Compile-time checking of instruction types
+5. **Performance**: Minimal runtime lookup overhead
 
-## 注意事项
+## Notes
 
-- func7值必须在0-127范围内
-- 每个指令类型只能注册一次
-- 最多支持16个指令（可通过修改MAX_INSTRUCTIONS调整）
-- 在RISC-V平台上，内联汇编中的func7值必须是编译时常量
+- func7 values must be in the range 0-127
+- Each instruction type can only be registered once
+- Supports up to 16 instructions (can be adjusted by modifying MAX_INSTRUCTIONS)
+- On RISC-V platforms, func7 values in inline assembly must be compile-time constants

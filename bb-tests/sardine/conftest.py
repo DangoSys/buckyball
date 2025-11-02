@@ -35,17 +35,18 @@ def script_runner():
         logger.info(f"Starting command: {' '.join(cmd)}")
 
         try:
-            # 使用Popen并设置非阻塞
+            # Use Popen with non-blocking mode
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=0,  # 无缓冲
+                # No buffering
+                bufsize=0,
                 universal_newlines=True,
             )
 
-            # 设置非阻塞模式
+            # Set non-blocking mode
             import fcntl
 
             fcntl.fcntl(process.stdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
@@ -56,19 +57,19 @@ def script_runner():
 
             start_time = time.time()
 
-            # 实时读取输出
+            # Read output in real-time
             while True:
-                # 检查进程是否结束
+                # Check if process has ended
                 if process.poll() is not None:
                     break
 
-                # 检查超时
+                # Check timeout
                 if timeout and timeout > 0 and (time.time() - start_time) > timeout:
                     process.kill()
                     logger.error(f"Process killed due to timeout ({timeout}s)")
                     break
 
-                # 使用select检查是否有数据可读
+                # Use select to check if data is ready to read
                 ready, _, _ = select.select(
                     [process.stdout, process.stderr], [], [], 0.1
                 )
@@ -90,10 +91,10 @@ def script_runner():
                                         stderr_lines.append(line)
                                         logger.warning(f"STDERR: {line}")
                     except Exception:
-                        # 非阻塞读取可能会抛出异常，忽略
+                        # Non-blocking read may throw exceptions, ignore
                         pass
 
-            # 等待进程结束并读取剩余输出
+            # Wait for process to finish and read remaining output
             remaining_stdout, remaining_stderr = process.communicate()
             if remaining_stdout:
                 for line in remaining_stdout.splitlines():
@@ -139,7 +140,7 @@ def command_run():
         logger.info(f"Running command: {command}")
 
         try:
-            # 使用 shell=True 执行命令
+            # Execute command with shell=True
             process = subprocess.Popen(
                 command,
                 shell=True,
@@ -151,7 +152,7 @@ def command_run():
                 executable="bash",
             )
 
-            # 设置非阻塞模式
+            # Set non-blocking mode
             import fcntl
 
             fcntl.fcntl(process.stdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
@@ -162,17 +163,17 @@ def command_run():
             start_time = time.time()
             last_output_time = start_time
 
-            # 实时读取输出
+            # Read output in real-time
             while True:
                 current_time = time.time()
 
-                # 检查超时
+                # Check timeout
                 if timeout and timeout > 0 and (current_time - start_time) > timeout:
                     logger.error(f"Process killed due to timeout ({timeout}s)")
                     process.kill()
                     break
 
-                # 使用select检查是否有数据可读
+                # Use select to check if data is ready to read
                 ready, _, _ = select.select(
                     [process.stdout, process.stderr], [], [], 0.1
                 )
@@ -180,7 +181,7 @@ def command_run():
                 if ready:
                     last_output_time = current_time
                 else:
-                    # 如果5秒没有输出，检查进程是否结束
+                    # If no output for 5 seconds, check if process has ended
                     if (current_time - last_output_time) > 5:
                         if process.poll() is not None:
                             logger.info("Process finished naturally")
@@ -194,11 +195,12 @@ def command_run():
                                 for line in data.splitlines():
                                     if line.strip():
                                         line_text = line.strip()
-                                        print(line_text)  # 实时输出到控制台
+                                        # Output to console in real-time
+                                        print(line_text)
                                         stdout_lines.append(line_text)
                                         logger.info(f"STDOUT: {line_text}")
 
-                                        # 检测提前退出模式
+                                        # Detect early exit pattern
                                         if early_exit_pattern and re.search(
                                             early_exit_pattern, line_text
                                         ):
@@ -206,7 +208,7 @@ def command_run():
                                                 "Detected early exit pattern, terminating process"
                                             )
                                             process.terminate()
-                                            # 等待进程结束
+                                            # Wait for process to finish
                                             try:
                                                 process.wait(timeout=5)
                                             except subprocess.TimeoutExpired:
@@ -225,10 +227,10 @@ def command_run():
                                         stderr_lines.append(line_text)
                                         logger.warning(f"STDERR: {line_text}")
                     except Exception:
-                        # 非阻塞读取可能会抛出异常，忽略
+                        # Non-blocking read may throw exceptions, ignore
                         pass
 
-            # 等待进程结束并读取剩余输出
+            # Wait for process to finish and read remaining output
             try:
                 remaining_stdout, remaining_stderr = process.communicate(timeout=5)
                 if remaining_stdout:
@@ -261,28 +263,28 @@ def command_run():
 def pytest_runtest_setup(item):
     """Before each test runs."""
     logger = logging.getLogger()
-    # 获取当前时间戳和进程ID
+    # Get current timestamp and process ID
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     pid = os.getpid()
-    # 获取测试函数名
+    # Get test function name
     test_func = item.name
 
-    # 获取测试的marker，用于创建文件夹名
+    # Get test markers for creating folder name
     markers = [mark.name for mark in item.iter_markers()]
-    # 使用第一个marker作为文件夹名，如果没有marker则使用"default"
+    # Use first marker as folder name, use "default" if no markers
     log_folder_name = markers[0] if markers else "default"
 
-    # 创建专门的logs文件夹，使用marker名称
+    # Create dedicated logs folder using marker name
     log_dir = Path(__file__).parent / "reports" / f"{timestamp}-{log_folder_name}"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{timestamp}_pid{pid}_{test_func}.log"
 
-    # 创建FlushFileHandler
+    # Create FlushFileHandler
     file_handler = FlushFileHandler(log_file, mode="w", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     file_handler.setFormatter(formatter)
-    # 标记到item，方便teardown移除
+    # Store in item for teardown removal
     item._sardine_log_handler = file_handler
     logger.addHandler(file_handler)
     logger.info(f"=== Starting test: {item.name} (PID: {pid}) ===")
@@ -294,7 +296,7 @@ def pytest_runtest_teardown(item, nextitem):
     """After each test completes."""
     logger = logging.getLogger()
     logger.info(f"=== Completed test: {item.name} ===")
-    # 移除并关闭handler
+    # Remove and close handler
     if hasattr(item, "_sardine_log_handler"):
         logger.removeHandler(item._sardine_log_handler)
         item._sardine_log_handler.close()
@@ -303,7 +305,7 @@ def pytest_runtest_teardown(item, nextitem):
 
 def pytest_sessionstart(session):
     """Before test session starts."""
-    # 确保reports和logs目录存在
+    # Ensure reports and logs directories exist
     reports_dir = Path(__file__).parent / "reports"
     logs_dir = reports_dir / "logs"
     reports_dir.mkdir(exist_ok=True)

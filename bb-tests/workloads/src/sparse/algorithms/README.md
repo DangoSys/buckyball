@@ -1,41 +1,41 @@
-# 稀疏矩阵乘法加速器的四种分块策略算法
+# Four Tiling Strategy Algorithms for Sparse Matrix Multiplication Accelerator
 
-本文档详细介绍了HYTE系统中实现的四种稀疏矩阵乘法分块优化算法：Tailors、DRT、Harp和HYTE。这些算法针对稀疏矩阵乘法 C = A × B 在硬件加速器上的执行进行了不同的分块优化策略。
+This document provides a detailed introduction to four sparse matrix multiplication tiling optimization algorithms implemented in the HYTE system: Tailors, DRT, Harp, and HYTE. These algorithms employ different tiling optimization strategies for executing sparse matrix multiplication C = A × B on hardware accelerators.
 
-## Tailors算法
+## Tailors Algorithm
 
-Tailors算法是一种基于缓存约束的静态分块策略，专注于K维度的分块优化。该算法的核心思想是确保每个分块的数据能够完全放入可用的缓存空间中，避免因缓存溢出导致的性能下降。
+The Tailors algorithm is a cache-constraint-based static tiling strategy that focuses on K-dimension tiling optimization. The core idea of this algorithm is to ensure that data for each tile can fully fit into available cache space, avoiding performance degradation caused by cache overflow.
 
-算法首先计算一个基础的分块边界pbound，这个边界是通过滑动窗口的方式确定的，确保窗口内的所有数据大小不超过缓存容量Bbound。随后，算法尝试使用不同的倍数来扩大分块大小，从1.0倍开始逐步增加到1025倍，每次都检查分块的溢出率。当溢出的分块数量超过总分块数量的10%时，算法停止搜索并选择当前的分块大小。
+The algorithm first calculates a base tile boundary pbound, which is determined through a sliding window approach to ensure that the total data size within the window does not exceed cache capacity Bbound. Subsequently, the algorithm attempts to expand tile size using different multipliers, gradually increasing from 1.0x to 1025x, checking the tile overflow rate each time. When the number of overflowed tiles exceeds 10% of the total number of tiles, the algorithm stops searching and selects the current tile size.
 
-Tailors算法使用IJK的迭代顺序，并将缓存资源按照45%、50%、5%的比例分配给三个不同的存储层次。这种分配策略优化了A矩阵和B矩阵的访问模式，减少了内存带宽的需求。该算法的优势在于其简单性和对缓存友好的特性，但缺点是只在K维度进行分块，可能无法充分利用其他维度的优化潜力。
+The Tailors algorithm uses IJK iteration order and allocates cache resources in a 45%, 50%, 5% ratio across three different storage hierarchies. This allocation strategy optimizes the access patterns for matrices A and B, reducing memory bandwidth requirements. The algorithm's advantages lie in its simplicity and cache-friendly characteristics, but its disadvantage is that it only performs tiling in the K dimension, which may not fully utilize optimization potential in other dimensions.
 
-## DRT算法
+## DRT Algorithm
 
-DRT（Dynamic Restructuring Tiling）算法采用了更均衡的多维度分块策略。与Tailors不同，DRT算法在J和K两个维度上都进行分块，使用JKI的迭代顺序来优化数据访问模式。
+The DRT (Dynamic Restructuring Tiling) algorithm employs a more balanced multi-dimensional tiling strategy. Unlike Tailors, the DRT algorithm performs tiling in both J and K dimensions, using JKI iteration order to optimize data access patterns.
 
-该算法基于Tailors算法计算得出的分块大小，通过取平方根的方式来确定J和K维度的分块大小，即jjj = J/√tilesize，kkk = K/√tilesize。这种方法旨在创建更加平衡的分块形状，避免某一个维度过大或过小导致的性能问题。DRT算法在计算过程中使用了两阶段的缓存资源配置：首先使用5%、45%、50%的分配比例进行初始计算，然后切换到45%、40%、5%的配置进行实际执行。
+The algorithm is based on the tile size calculated by the Tailors algorithm, determining J and K dimension tile sizes by taking square roots: jjj = J/√tilesize, kkk = K/√tilesize. This approach aims to create more balanced tile shapes, avoiding performance issues caused by one dimension being too large or too small. The DRT algorithm uses a two-stage cache resource configuration during computation: first using a 5%, 45%, 50% allocation ratio for initial calculations, then switching to a 45%, 40%, 5% configuration for actual execution.
 
-DRT算法的主要优势是其多维度优化能力，能够更好地平衡不同维度的访问模式。通过同时优化J和K维度，该算法能够减少数据重用的距离，提高缓存命中率。然而，其固定的平方根分块策略可能不适用于所有类型的稀疏矩阵模式。
+The main advantage of the DRT algorithm is its multi-dimensional optimization capability, which can better balance access patterns across different dimensions. By simultaneously optimizing J and K dimensions, the algorithm can reduce data reuse distance and improve cache hit rates. However, its fixed square root tiling strategy may not be suitable for all types of sparse matrix patterns.
 
-## Harp算法
+## Harp Algorithm
 
-Harp算法采用了独特的单维度深度分块策略，专注于I维度的分块而保持J和K维度不分块。该算法的设计理念是通过减少I维度的分块大小来降低中间结果的存储需求，同时保持对B矩阵的完整访问。
+The Harp algorithm employs a unique single-dimension deep tiling strategy, focusing on I-dimension tiling while keeping J and K dimensions untiled. The design philosophy of this algorithm is to reduce intermediate result storage requirements by decreasing I-dimension tile size while maintaining full access to matrix B.
 
-算法将I维度的分块大小设定为iii = I/tilesize，而jjj和kkk分别保持为完整的J和K大小。这种策略特别适合于某些特定的稀疏模式，其中行方向的分块能够显著减少部分积累的内存需求。Harp算法使用JKI的迭代顺序，并采用了极端的缓存分配策略：4.5%、91%、4.5%，将绝大部分缓存资源分配给中间层存储。
+The algorithm sets I-dimension tile size as iii = I/tilesize, while jjj and kkk remain as full J and K sizes respectively. This strategy is particularly suitable for certain specific sparse patterns where row-direction tiling can significantly reduce memory requirements for partial accumulation. The Harp algorithm uses JKI iteration order and employs an extreme cache allocation strategy: 4.5%, 91%, 4.5%, allocating the vast majority of cache resources to intermediate layer storage.
 
-Harp算法的优势在于其对特定工作负载的高度优化能力，特别是当矩阵具有特定的稀疏模式时。通过避免J和K维度的分块，该算法减少了分块管理的开销。但是，这种策略的适用性相对有限，可能不适合所有类型的稀疏矩阵。
+The advantage of the Harp algorithm lies in its highly optimized capability for specific workloads, especially when matrices have specific sparse patterns. By avoiding tiling in J and K dimensions, the algorithm reduces tile management overhead. However, this strategy's applicability is relatively limited and may not be suitable for all types of sparse matrices.
 
-## HYTE算法
+## HYTE Algorithm
 
-HYTE（Hybrid Static-Dynamic Tiling）算法是本系统的核心创新，结合了静态和动态优化的优势。该算法首先通过静态分析确定初始的最优分块策略，然后在运行时根据实际的数据访问模式动态调整分块大小。
+The HYTE (Hybrid Static-Dynamic Tiling) algorithm is the core innovation of this system, combining the advantages of static and dynamic optimization. The algorithm first determines an initial optimal tiling strategy through static analysis, then dynamically adjusts tile sizes at runtime based on actual data access patterns.
 
-静态优化阶段，HYTE算法使用成本模型对大量可能的分块配置进行评估，搜索空间包括I、J、K三个维度的不同分块大小组合。算法通过采样技术获取矩阵的特征参数，然后使用这些参数来指导搜索过程。搜索策略采用分层方法：首先只改变J维度，然后只改变K维度，最后同时改变J和K维度。
+In the static optimization phase, the HYTE algorithm evaluates a large number of possible tiling configurations using a cost model, with the search space including different tile size combinations across I, J, and K dimensions. The algorithm obtains matrix characteristic parameters through sampling techniques, then uses these parameters to guide the search process. The search strategy employs a hierarchical approach: first changing only the J dimension, then only the K dimension, and finally changing both J and K dimensions simultaneously.
 
-动态优化阶段，HYTE算法在执行过程中监控每个分块内的非零元素分布，通过update_T()函数实时调整分块大小。系统维护了多种分块配置的性能统计信息，包括缓存使用率、带宽利用率等关键指标。当检测到当前分块配置不是最优时，算法会选择性能更好的配置并立即切换。
+In the dynamic optimization phase, the HYTE algorithm monitors non-zero element distribution within each tile during execution, dynamically adjusting tile sizes through the update_T() function. The system maintains performance statistics for multiple tiling configurations, including cache utilization, bandwidth utilization, and other key metrics. When detecting that the current tiling configuration is not optimal, the algorithm selects a better-performing configuration and immediately switches to it.
 
-HYTE算法的主要优势是其适应性强，能够处理各种不同的稀疏模式和硬件配置。静态优化确保了良好的初始性能，而动态调整机制则能够应对运行时的变化。该算法使用了5%、50%、45%的缓存分配策略，并支持多种迭代顺序。虽然HYTE算法的复杂性较高，但其卓越的性能表现和广泛的适用性使其成为处理复杂稀疏矩阵乘法问题的理想选择。
+The main advantage of the HYTE algorithm is its strong adaptability, capable of handling various different sparse patterns and hardware configurations. Static optimization ensures good initial performance, while the dynamic adjustment mechanism can respond to runtime changes. The algorithm uses a 5%, 50%, 45% cache allocation strategy and supports multiple iteration orders. Although the HYTE algorithm has high complexity, its excellent performance and broad applicability make it an ideal choice for handling complex sparse matrix multiplication problems.
 
-## 算法比较与选择
+## Algorithm Comparison and Selection
 
-这四种算法各有特色：Tailors简单高效但优化维度有限；DRT提供了平衡的多维度优化；Harp在特定场景下表现出色但适用范围较窄；HYTE则通过混合优化策略实现了最佳的整体性能。在实际应用中，可以根据具体的硬件配置、矩阵特征和性能需求来选择最适合的算法。
+These four algorithms each have distinct characteristics: Tailors is simple and efficient but has limited optimization dimensions; DRT provides balanced multi-dimensional optimization; Harp performs excellently in specific scenarios but has a narrow scope of application; HYTE achieves the best overall performance through a hybrid optimization strategy. In practical applications, the most suitable algorithm can be selected based on specific hardware configurations, matrix characteristics, and performance requirements.

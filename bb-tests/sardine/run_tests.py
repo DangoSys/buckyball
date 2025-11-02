@@ -21,7 +21,7 @@ def get_git_commit():
             cwd=Path(__file__).parent,
         )
         if result.returncode == 0:
-            # 获取完整的commit hash并取前7位
+            # Get full commit hash and take first 7 characters
             full_hash = result.stdout.strip()
             return full_hash[:7] if len(full_hash) >= 7 else full_hash
     except Exception:
@@ -42,7 +42,7 @@ def install_allure():
     """Install Allure command line tool."""
     print("Installing Allure command line tool...")
     try:
-        # 尝试使用 npm 安装
+        # Try installing using npm
         result = subprocess.run(
             ["npm", "install", "-g", "allure-commandline"],
             capture_output=True,
@@ -65,17 +65,17 @@ def run_pytest(args=None, use_allure=False):
     """Run pytest with given arguments."""
     args = args or []
 
-    # 确保在正确的目录
+    # Ensure we're in the correct directory
     script_dir = Path(__file__).parent
 
-    # 获取 git commit 版本
+    # Get git commit version
     git_commit = get_git_commit()
 
-    # 确保 reports 目录存在
+    # Ensure reports directory exists
     reports_dir = script_dir / "reports"
     reports_dir.mkdir(exist_ok=True)
 
-    # 构建pytest命令
+    # Build pytest command
     cmd = ["python", "-m", "pytest", "-s", "-v", "-n", "auto"]
 
     if use_allure:
@@ -98,20 +98,20 @@ def run_pytest(args=None, use_allure=False):
     print(f"Working directory: {script_dir}")
     print(f"Git commit: {git_commit}")
 
-    # 运行pytest
+    # Run pytest
     try:
         result = subprocess.run(cmd, cwd=script_dir)
 
-        # 无论测试成功还是失败，都处理报告
+        # Process reports whether tests succeed or fail
         if use_allure:
-            # 生成 Allure 报告
+            # Generate Allure report
             allure_results_dir = reports_dir / "allure-results"
             allure_report_dir = reports_dir / f"{git_commit}"
             current_report_dir = reports_dir / "allure"
 
             print("Generating Allure report...")
 
-            # 生成版本化的报告
+            # Generate versioned report
             allure_cmd = [
                 "allure",
                 "generate",
@@ -123,7 +123,7 @@ def run_pytest(args=None, use_allure=False):
 
             allure_result = subprocess.run(allure_cmd, cwd=script_dir)
             if allure_result.returncode == 0:
-                # 生成当前运行的报告（保存在 allure 目录）
+                # Generate current run report (saved in allure directory)
                 current_cmd = [
                     "allure",
                     "generate",
@@ -205,10 +205,10 @@ def main():
             return 0
 
         elif sys.argv[1] == "--allure":
-            # 传递 --allure 之后的所有参数给 pytest
+            # Pass all arguments after --allure to pytest
             return run_pytest(sys.argv[2:], use_allure=True)
 
-    # 传递所有参数给pytest（默认使用 HTML 报告）
+    # Pass all arguments to pytest (default uses HTML report)
     return run_pytest(sys.argv[1:])
 
 

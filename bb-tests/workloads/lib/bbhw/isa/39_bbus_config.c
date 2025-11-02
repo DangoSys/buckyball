@@ -15,7 +15,7 @@ const InstructionConfig bbus_config_config = {
   (ENCODE_FIELD(src_bid, 25, 6) | ENCODE_FIELD(dst_bid, 31, 6) |               \
    ENCODE_FIELD(enable, 37, 1))
 
-// bbus_config指令低级实现
+// bbus_config instruction low-level implementation
 #ifndef __x86_64__
 #define bbus_config_RAW(rs1, rs2)                                              \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 39, x0, %0, %1"                \
@@ -23,10 +23,11 @@ const InstructionConfig bbus_config_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define bbus_config_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define bbus_config_RAW(rs1, rs2)
 #endif
 
-// bbus_config指令高级API实现
+// bbus_config instruction high-level API implementation
 void bb_bbus_config(uint32_t src_bid, uint32_t dst_bid, uint64_t enable) {
   uint64_t rs1_val = bbus_config_ENCODE_RS1(0);
   uint64_t rs2_val = bbus_config_ENCODE_RS2(src_bid, dst_bid, enable);

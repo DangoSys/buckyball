@@ -68,7 +68,7 @@ void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_sequence_matrix(elem_t *matrix, int rows, int cols);
 void init_col_aligned_random_matrix(elem_t *aligned_matrix, elem_t *matrix,
                                     int align, int rows, int cols, int seed);
-/* 矩阵运算函数 */
+/* Matrix operation functions */
 void transpose_u8_matrix(elem_t *src, elem_t *dst, int rows, int cols);
 void transpose_u32_matrix(result_t *src, result_t *dst, int rows, int cols);
 void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,

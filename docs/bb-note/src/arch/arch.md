@@ -1,68 +1,68 @@
-# BuckyBall 架构设计概览
+# BuckyBall Architecture Design Overview
 
-BuckyBall 架构模块包含了完整的硬件设计实现，基于 RISC-V 指令集架构，采用 Scala/Chisel 硬件描述语言开发。架构设计遵循模块化和可扩展原则，支持多种配置和自定义扩展。
+The BuckyBall architecture module contains complete hardware design implementations, based on the RISC-V instruction set architecture, developed using the Scala/Chisel hardware description language. The architecture design follows modular and extensible principles, supporting various configurations and custom extensions.
 
-## 架构层次结构
+## Architecture Hierarchy
 
-### 系统级架构
-BuckyBall 采用分层设计，从上到下包括：
-- **SoC 子系统**: 集成多核处理器、缓存层次、互连网络
-- **处理器核心**: 基于 Rocket 核心的定制实现
-- **协处理器**: 支持 RoCC 接口的专用加速器
-- **内存子系统**: 高性能内存控制器和 DMA 引擎
+### System-Level Architecture
+BuckyBall adopts a layered design, including from top to bottom:
+- **SoC Subsystem**: Integrates multi-core processors, cache hierarchy, interconnect networks
+- **Processor Core**: Custom implementation based on Rocket core
+- **Coprocessor**: Dedicated accelerators supporting RoCC interface
+- **Memory Subsystem**: High-performance memory controllers and DMA engines
 
-### 核心特性
-- **可配置性**: 支持核心数量、缓存大小、总线宽度等参数配置
-- **扩展性**: 提供标准化的协处理器接口和扩展机制
-- **兼容性**: 保持与标准 RISC-V 生态系统的兼容性
-- **性能优化**: 针对特定应用场景的性能优化设计
+### Core Features
+- **Configurability**: Supports parameter configuration for core count, cache size, bus width, etc.
+- **Extensibility**: Provides standardized coprocessor interfaces and extension mechanisms
+- **Compatibility**: Maintains compatibility with the standard RISC-V ecosystem
+- **Performance Optimization**: Performance-optimized design for specific application scenarios
 
-## 目录结构
+## Directory Structure
 
 ```
 arch/
 ├── src/main/scala/
-│   └── framework/          - BuckyBall 框架核心
-│       ├── rocket/         - Rocket 核心定制实现
-│       └── builtin/        - 内置组件库
-│           └── memdomain/  - 内存域实现
-│               ├── mem/    - 存储器组件
-│               └── dma/    - DMA 引擎
-└── thirdparty/            - 第三方依赖
-    └── chipyard/          - Chipyard 框架
+│   └── framework/          - BuckyBall framework core
+│       ├── rocket/         - Rocket core custom implementation
+│       └── builtin/        - Built-in component library
+│           └── memdomain/  - Memory domain implementation
+│               ├── mem/    - Memory components
+│               └── dma/    - DMA engine
+└── thirdparty/            - Third-party dependencies
+    └── chipyard/          - Chipyard framework
 ```
 
-## 设计原则
+## Design Principles
 
-### 模块化设计
-每个功能模块都具有清晰的接口定义和独立的实现，便于测试、验证和复用。模块间通过标准化的接口进行通信，降低耦合度。
+### Modular Design
+Each functional module has clear interface definitions and independent implementations, facilitating testing, verification, and reuse. Modules communicate through standardized interfaces, reducing coupling.
 
-### 参数化配置
-所有硬件模块都支持参数化配置，通过 Scala 的类型系统和配置框架实现灵活的硬件生成。配置参数包括：
-- 数据路径宽度
-- 缓存大小和组织方式
-- 并行度和流水线深度
-- 协处理器类型和数量
+### Parameterized Configuration
+All hardware modules support parameterized configuration, achieving flexible hardware generation through Scala's type system and configuration framework. Configuration parameters include:
+- Data path width
+- Cache size and organization
+- Parallelism and pipeline depth
+- Coprocessor types and quantities
 
-### 性能优化
-针对目标应用场景进行专门的性能优化：
-- 内存访问模式优化
-- 数据流水线设计
-- 并行计算支持
-- 低延迟通信机制
+### Performance Optimization
+Specialized performance optimizations for target application scenarios:
+- Memory access pattern optimization
+- Data pipeline design
+- Parallel computing support
+- Low-latency communication mechanisms
 
-## 开发工作流
+## Development Workflow
 
-1. **需求分析**: 确定目标应用的性能和功能需求
-2. **架构设计**: 选择合适的配置参数和扩展模块
-3. **RTL 实现**: 使用 Chisel 进行硬件描述和实现
-4. **功能验证**: 通过单元测试和集成测试验证功能正确性
-5. **性能评估**: 使用仿真器和 FPGA 进行性能分析和优化
+1. **Requirement Analysis**: Determine performance and functional requirements for target applications
+2. **Architecture Design**: Select appropriate configuration parameters and extension modules
+3. **RTL Implementation**: Use Chisel for hardware description and implementation
+4. **Functional Verification**: Verify functional correctness through unit tests and integration tests
+5. **Performance Evaluation**: Use simulators and FPGA for performance analysis and optimization
 
-## 工具链支持
+## Toolchain Support
 
-- **Chisel/FIRRTL**: 硬件描述和综合工具链
-- **Verilator**: 快速仿真和验证
-- **VCS**: 商业级仿真工具
-- **FireSim**: FPGA 加速仿真平台
-- **Chipyard**: 集成开发环境和工具链
+- **Chisel/FIRRTL**: Hardware description and synthesis toolchain
+- **Verilator**: Fast simulation and verification
+- **VCS**: Commercial-grade simulation tools
+- **FireSim**: FPGA accelerated simulation platform
+- **Chipyard**: Integrated development environment and toolchain

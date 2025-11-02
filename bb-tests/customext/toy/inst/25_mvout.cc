@@ -5,9 +5,9 @@
 
 // Move data from scratchpad to DRAM
 // rs1: mem_addr, rs2: sp_addr[spAddrLen-1:0] | rows[spAddrLen+9:spAddrLen]
-// 按bank行宽度搬运数据
+// Transfer data according to bank row width
 void toy_t::mvout(reg_t rs1, reg_t rs2) {
-  // 使用库中的字段提取函数 - mvout和mvin使用相同的字段格式
+  // Use field extraction functions from library - mvout and mvin use the same field format
   const InstructionConfig *cfg = config(MVOUT_FUNC7);
 
   auto const base_dram_addr =

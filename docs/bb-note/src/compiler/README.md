@@ -22,7 +22,7 @@ cmake -G Ninja .. \
 ninja
 ```
 
-注意:
-1. bert, whisper, stable-diffusion, llama2, DeepseekR1 模型下载需要提前配置好 huggingface 的访问
-2. whisper 暂不支持
-3. llama2 的模型下载需要额外填写 API-key 或使用缓存的凭证
+Note:
+1. Model downloads for bert, whisper, stable-diffusion, llama2, DeepseekR1 require pre-configured HuggingFace access
+2. whisper is currently not supported
+3. llama2 model download requires additional API-key or cached credentials

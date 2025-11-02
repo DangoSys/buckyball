@@ -13,9 +13,12 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
   static elem_t a_transposed[48 * DIM] __attribute__((aligned(16)));
   transpose_u8_matrix(a, a_transposed, DIM, 48);
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
 
   bb_mvin((uintptr_t)a_transposed, op1_addr, size, 1);
   bb_mvin((uintptr_t)b, op2_addr, size, 1);

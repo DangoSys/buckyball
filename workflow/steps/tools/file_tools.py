@@ -129,7 +129,8 @@ class GrepFilesTool(Tool):
                             continue
                         files_to_search.append(os.path.join(root, file))
 
-            for filepath in files_to_search[:100]:  # Limit file count
+            # Limit file count
+            for filepath in files_to_search[:100]:
                 try:
                     with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                         for line_num, line in enumerate(f, 1):
@@ -141,7 +142,8 @@ class GrepFilesTool(Tool):
                                         "content": line.strip()[:150],
                                     }
                                 )
-                                if len(results) >= 50:  # Limit result count
+                                # Limit result count
+                                if len(results) >= 50:
                                     break
                 except Exception:
                     continue

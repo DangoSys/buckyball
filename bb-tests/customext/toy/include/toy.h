@@ -20,10 +20,10 @@ struct toy_state_t {
   bool enable;
   bool resetted = false;
 
-  // 按bank组织的统一spad存储
-  // banks[bank_id][row][col] - 每个bank可以存储不同类型的数据
+  // Unified spad storage organized by bank
+  // banks[bank_id][row][col] - each bank can store different types of data
   std::vector<std::vector<std::vector<uint8_t>>>
-      banks;                            // 统一的bank存储，用字节存储
+      banks;                            // Unified bank storage, stored in bytes
   std::vector<std::vector<int32_t>> rf; // Register files for indices
 };
 
@@ -39,7 +39,7 @@ public:
   static toy_t *get_instance() { return instance; }
   processor_t *get_processor() { return p; }
 
-  // Difftest接口 - 提供对内存的访问
+  // Difftest interface - provides memory access
   toy_state_t &get_toy_state() { return toy_state; }
   const toy_state_t &get_toy_state() const { return toy_state; }
 
@@ -67,7 +67,7 @@ template <class T>
 T read_from_bank(toy_state_t &toy_state, uint32_t bank, uint32_t row,
                  uint32_t col) {
   uint32_t elem_size = spad_get_bank_row_bytes(bank) /
-                       DIM; // Element size = row_bytes / elements_per_row
+                       DIM;  // Element size = row_bytes / elements_per_row
   uint32_t byte_offset = col * elem_size;
 
   T value = 0;
@@ -86,7 +86,7 @@ template <class T>
 void write_to_bank(toy_state_t &toy_state, uint32_t bank, uint32_t row,
                    uint32_t col, T data) {
   uint32_t elem_size = spad_get_bank_row_bytes(bank) /
-                       DIM; // Element size = row_bytes / elements_per_row
+                       DIM;  // Element size = row_bytes / elements_per_row
   uint32_t byte_offset = col * elem_size;
 
   for (size_t byte_idx = 0; byte_idx < sizeof(T) && byte_idx < elem_size;

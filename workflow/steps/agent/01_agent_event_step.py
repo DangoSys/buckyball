@@ -89,7 +89,8 @@ async def handler(input_data, context):
 
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
-                        data = line[6:]  # Remove "data: " prefix
+                        # Remove "data: " prefix
+                        data = line[6:]
 
                         if data == "[DONE]":
                             break

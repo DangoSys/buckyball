@@ -108,7 +108,8 @@ class ToolManager:
             {
                 "tool": tool_name,
                 "arguments": arguments,
-                "result": result[:200] if len(result) > 200 else result,  # Truncate long results
+                # Truncate long results
+                "result": result[:200] if len(result) > 200 else result,
             }
         )
 

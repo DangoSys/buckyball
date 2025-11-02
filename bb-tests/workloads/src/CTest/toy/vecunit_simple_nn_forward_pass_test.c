@@ -4,12 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// 定义神经网络参数
+// Define neural network parameters
 #define INPUT_SIZE DIM
 #define HIDDEN_SIZE DIM
 #define OUTPUT_SIZE DIM
 
-// 测试矩阵和数据缓冲区
+// Test matrices and data buffers
 static elem_t input_data[DIM * DIM] __attribute__((aligned(64)));
 static elem_t weights1[HIDDEN_SIZE * INPUT_SIZE] __attribute__((aligned(64)));
 static elem_t weights2[OUTPUT_SIZE * HIDDEN_SIZE] __attribute__((aligned(64)));
@@ -17,7 +17,7 @@ static result_t hidden_output[DIM * DIM] __attribute__((aligned(64)));
 static result_t final_output[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_output[DIM * DIM] __attribute__((aligned(64)));
 
-// ReLU激活函数（在CPU上执行）
+// ReLU activation function (executed on CPU)
 void relu(result_t *matrix, int rows, int cols) {
   for (int i = 0; i < rows * cols; i++) {
     if (matrix[i] < 0) {
@@ -26,74 +26,79 @@ void relu(result_t *matrix, int rows, int cols) {
   }
 }
 
-// 量化函数（将int32结果量化为elem_t类型）
+// Quantization function (quantize int32 results to elem_t type)
 void quantize_matrix(result_t *src, elem_t *dst, int size) {
   for (int i = 0; i < size * size; i++) {
     dst[i] = (src[i] > 127) ? 127 : (src[i] < -128) ? -128 : (elem_t)src[i];
   }
 }
 
-// CPU上的神经网络前向传播
+// Neural network forward propagation on CPU
 void cpu_nn_forward(elem_t *input, elem_t *w1, elem_t *w2, result_t *hidden,
                     result_t *output, int size) {
-  // 输入层 -> 隐藏层
+  // Input layer -> hidden layer
   cpu_matmul(input, w1, hidden, size, size, size);
-  relu(hidden, size, size); // 应用ReLU激活
+  // Apply ReLU activation
+  relu(hidden, size, size);
 
-  // 量化隐藏层输出作为下一层输入
+  // Quantize hidden layer output as input for next layer
   static elem_t hidden_quantized[DIM * DIM];
   quantize_matrix(hidden, hidden_quantized, size);
 
-  // 隐藏层 -> 输出层
+  // Hidden layer -> output layer
   cpu_matmul(hidden_quantized, w2, output, size, size, size);
 }
 
-// 执行硬件矩阵乘法
+// Execute hardware matrix multiplication
 void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
-  // 转置左矩阵
+  // Transpose left matrix
   static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
   transpose_u8_matrix(a, a_transposed, size, size);
 
-  // 移动矩阵到暂存器
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // Move matrices to scratchpad
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
 
   bb_mvin((uintptr_t)a_transposed, op1_addr, size, 1);
   bb_mvin((uintptr_t)b, op2_addr, size, 1);
   bb_mvin((uintptr_t)c, wr_addr, size << 2, 1);
   bb_fence();
 
-  // 执行矩阵乘法
+  // Execute matrix multiplication
   bb_mul_warp16(op1_addr, op2_addr, wr_addr, size, 0);
   bb_fence();
 
-  // 移回结果
+  // Move result back
   bb_mvout((uintptr_t)c, wr_addr, size << 2, 1);
   bb_fence();
 }
 
 void hw_nn_forward(elem_t *input, elem_t *w1, elem_t *w2, result_t *hidden,
                    result_t *output, int size) {
-  // 输入层 -> 隐藏层
+  // Input layer -> hidden layer
   hw_matmul(input, w1, hidden, size);
-  relu(hidden, size, size); // 在CPU上应用ReLU
+  // Apply ReLU on CPU
+  relu(hidden, size, size);
 
-  // 量化隐藏层输出作为下一层输入
+  // Quantize hidden layer output as input for next layer
   static elem_t hidden_quantized[DIM * DIM];
   quantize_matrix(hidden, hidden_quantized, size);
 
-  // 隐藏层 -> 输出层
+  // Hidden layer -> output layer
   hw_matmul(hidden_quantized, w2, output, size);
 }
 
-// 执行神经网络测试
+// Execute neural network test
 int test_neural_network() {
-  // 初始化数据
+  // Initialize data
   printf("Initializing random input data and weights...\n");
   init_u8_random_matrix(input_data, DIM, DIM, 123);
 
-  // 初始化权重
+  // Initialize weights
   srand(114);
   for (int i = 0; i < HIDDEN_SIZE * INPUT_SIZE; i++) {
     weights1[i] = rand() % 128;
@@ -103,25 +108,25 @@ int test_neural_network() {
     weights2[i] = rand() % 128;
   }
 
-  // 清空输出缓冲区
+  // Clear output buffers
   clear_u32_matrix(hidden_output, DIM, DIM);
   clear_u32_matrix(expected_output, DIM, DIM);
 
-  // 在CPU上生成预期结果
+  // Generate expected results on CPU
   printf("Running CPU Neural Network Forward Pass...\n");
   cpu_nn_forward(input_data, weights1, weights2, hidden_output, expected_output,
                  DIM);
 
-  // 重新清空hidden_output用于硬件计算
+  // Clear hidden_output again for hardware computation
   clear_u32_matrix(hidden_output, DIM, DIM);
   clear_u32_matrix(final_output, DIM, DIM);
 
-  // 在硬件上执行神经网络前向传播
+  // Execute neural network forward propagation on hardware
   printf("Running Hardware Neural Network Forward Pass...\n");
   hw_nn_forward(input_data, weights1, weights2, hidden_output, final_output,
                 DIM);
 
-  // 比较硬件输出和预期输出
+  // Compare hardware output with expected output
   printf("Comparing hardware output with expected output...\n");
   if (compare_u32_matrices(final_output, expected_output, DIM, DIM)) {
     return 1;

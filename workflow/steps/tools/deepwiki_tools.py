@@ -123,7 +123,8 @@ class DeepwikiAskTool(Tool):
                     # Manually parse SSE stream
                     for line in tool_resp.iter_lines():
                         if line.startswith("data: "):
-                            data_str = line[6:]  # Remove "data: " prefix
+                            # Remove "data: " prefix
+                            data_str = line[6:]
 
                             # Skip heartbeat
                             if data_str.strip() == "ping":
@@ -276,7 +277,8 @@ class DeepwikiReadWikiTool(Tool):
                     # Manually parse SSE stream
                     for line in tool_resp.iter_lines():
                         if line.startswith("data: "):
-                            data_str = line[6:]  # Remove "data: " prefix
+                            # Remove "data: " prefix
+                            data_str = line[6:]
 
                             # Skip heartbeat
                             if data_str.strip() == "ping":

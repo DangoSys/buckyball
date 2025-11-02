@@ -1,79 +1,80 @@
-# Buckyball Docker 环境
+# Buckyball Docker Environment
 
-这个目录包含了用于运行Buckyball项目的Docker配置。
+This directory contains Docker configurations for running the Buckyball project.
 
-## 文件说明
+## File Description
 
-- `Dockerfile`: 主要的Docker镜像构建文件
-- `docker-compose.yml`: Docker Compose配置文件，用于管理容器
-- `.dockerignore`: 指定哪些文件不需要复制到Docker容器中
-- `README.md`: 本说明文件
+- `Dockerfile`: Main Docker image build file
+- `docker-compose.yml`: Docker Compose configuration file for managing containers
+- `.dockerignore`: Specifies which files should not be copied into the Docker container
+- `README.md`: This documentation file
 
-## 环境要求
+## Environment Requirements
 
 - Docker Engine 20.10+
 - Docker Compose 2.0+
 
-## 快速开始
+## Quick Start
 
-### 1. 构建镜像
+### 1. Build Image
 
 ```bash
-# 在项目根目录下执行
+# Execute from project root directory
 docker build -f docker/Dockerfile -t buckyball-dev .
 ```
 
-### 2. 使用Docker Compose启动环境
+### 2. Start Environment Using Docker Compose
 
 ```bash
-# 在docker目录下执行
+# Execute from docker directory
 cd docker
 docker-compose up -d
 ```
 
-### 3. 进入容器
+### 3. Enter Container
 
 ```bash
-# 进入运行中的容器
+# Enter running container
 docker exec -it buckyball-dev bash
 ```
 
-## 详细使用说明
+## Detailed Usage Instructions
 
-### 使用Docker Compose
+### Using Docker Compose
 
-1. **启动环境**：
+1. **Start Environment**:
 ```bash
 cd docker
 docker-compose up -d
 ```
 
-2. **查看容器状态**：
+2. **Check Container Status**:
 ```bash
 docker-compose ps
 ```
 
-3. **进入容器**：
+3. **Enter Container**:
 ```bash
 docker-compose exec buckyball bash
 ```
 
-4. **停止环境**：
+4. **Stop Environment**:
 ```bash
 docker-compose down
 ```
 
-5. **重新构建并启动**：
+5. **Rebuild and Start**:
 ```bash
 docker-compose up --build -d
 ```
 
-## 常见问题
-1. 执行 `docker-compose up -d` 报错如下
+## Common Issues
+
+1. When executing `docker-compose up -d`, the following error occurs:
 ```
 permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.45/containers/json?all=1&filters=%7B%22label%22%3A%7B%22com.docker.compose.config-hash%22%3Atrue%2C%22com.docker.compose.project%3Ddocker%22%3Atrue%7D%7D": dial unix /var/run/docker.sock: connect: permission denied
 ```
-执行以下命令, 并退出终端重新登录
+Execute the following command and logout and login again:
 ```
 sudo usermod -aG docker $USER
 ```
