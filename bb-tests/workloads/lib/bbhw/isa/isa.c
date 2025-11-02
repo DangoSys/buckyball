@@ -11,7 +11,8 @@ uint32_t get_bbinst_field(uint64_t value, const char *field_name,
       return (value >> config[i].start_bit) & mask;
     }
   }
-  return 0; // 字段未找到
+  // Field not found
+  return 0;
 }
 
 void set_bbinst_field(uint64_t *value, const char *field_name,
@@ -20,16 +21,16 @@ void set_bbinst_field(uint64_t *value, const char *field_name,
     if (strcmp(config[i].name, field_name) == 0) {
       uint32_t bit_width = config[i].end_bit - config[i].start_bit + 1;
       uint64_t mask = ((1ULL << bit_width) - 1);
-      // 清除原有值
+      // Clear original value
       *value &= ~(mask << config[i].start_bit);
-      // 设置新值
+      // Set new value
       *value |= ((uint64_t)(field_value & mask) << config[i].start_bit);
       return;
     }
   }
 }
 
-// 外部配置声明 - 各个指令文件中定义
+// External configuration declarations - defined in individual instruction files
 extern const InstructionConfig mvin_config;
 extern const InstructionConfig mvout_config;
 extern const InstructionConfig mul_warp16_config;
@@ -40,7 +41,7 @@ extern const InstructionConfig transpose_config;
 extern const InstructionConfig relu_config;
 extern const InstructionConfig bbus_config_config;
 
-// 通过func7获取指令配置
+// Get instruction configuration by func7
 const InstructionConfig *config(InstructionType func7) {
   switch (func7) {
   case MVIN_FUNC7:
@@ -62,9 +63,11 @@ const InstructionConfig *config(InstructionType func7) {
   case BBUS_CONFIG_FUNC7:
     return &bbus_config_config;
   case FENCE_FUNC7:
-    return NULL; // FENCE指令没有参数，不需要配置
+    // FENCE instruction has no parameters, no configuration needed
+    return NULL;
   case FLUSH_FUNC7:
-    return NULL; // FLUSH指令没有参数，不需要配置
+    // FLUSH instruction has no parameters, no configuration needed
+    return NULL;
   default:
     return NULL;
   }

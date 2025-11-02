@@ -18,9 +18,12 @@ void tiled_matmul(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
                      elem_t *a, elem_t *b, result_t *c, result_t *zero_c) {
       int row_iter = dim_i / DIM;
       int col_iter = dim_k / DIM;
-      uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-      uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-      uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+      // spad0: operand A, offset 0
+      uint32_t op1_addr = spad_addr(0, 0);
+      // spad1: operand B, offset 0
+      uint32_t op2_addr = spad_addr(1, 0);
+      // acc0: write to accumulator, offset 0
+      uint32_t wr_addr = spad_addr(4, 0);
       uint32_t j_stride = dim_j / DIM;
       uint32_t k_stride = dim_k / DIM;
       unsigned long long start_compute, end_compute;
@@ -52,9 +55,12 @@ DIM << 2, k_stride); bb_fence();
 */
 void tiled_matmul_connect_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
                                elem_t *a, elem_t *b, result_t *c) {
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
   uint32_t i_stride = dim_i / DIM;
   uint32_t j_stride = dim_j / DIM;
   uint32_t k_stride = dim_k / DIM;
@@ -100,9 +106,12 @@ void tiled_matmul_connect_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
 
 void tiled_matmul_normal_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
                               elem_t *a, elem_t *b, result_t *c) {
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
   uint32_t i_stride = dim_i / DIM;
   uint32_t j_stride = dim_j / DIM;
   uint32_t k_stride = dim_k / DIM;
@@ -164,9 +173,10 @@ int run_test(const char *test_name) {
   }
 
   clear_u32_matrix(output_c, DIM_I, DIM_K);
-  uint32_t wr_addr = spad_addr(4, 0); // acc0: 写入累加器, 偏移0
-  bb_mvin((uintptr_t)output_c, wr_addr, DIM_I * DIM_K * 4 / DIM,
-          1); // TODO: ACC覆盖写可省去这一步
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
+  // TODO: ACC overwrite write can skip this step
+  bb_mvin((uintptr_t)output_c, wr_addr, DIM_I * DIM_K * 4 / DIM, 1);
   tiled_matmul_normal_mode(DIM_I, DIM_J, DIM_K, input_a, input_b, output_c);
   if (compare_u32_matrices(output_c, expected_c, DIM_I, DIM_K)) {
     printf("Test Normal Mode %s PASSED\n", test_name);

@@ -7,7 +7,7 @@
 // rs2: kcol[23] | krow[27] | inrow[31:45] | incol[36:47] | startrow[46:57] |
 // startcol[51:62]
 void toy_t::im2col(reg_t rs1, reg_t rs2) {
-  // 使用库中的字段提取函数
+  // Use field extraction functions from library
   const InstructionConfig *cfg = config(IM2COL_FUNC7);
 
   auto const op_spaddr = get_bbinst_field(rs1, "op_spaddr", cfg->rs1_fields);

@@ -15,7 +15,7 @@ const InstructionConfig transpose_config = {
 #define TRANSPOSE_ENCODE_RS2(iter, mode)                                       \
   (ENCODE_FIELD(iter, 15, 10) | ENCODE_FIELD(mode, 25, 1))
 
-// TRANSPOSE指令低级实现
+// TRANSPOSE instruction low-level implementation
 #ifndef __x86_64__
 #define TRANSPOSE_RAW(rs1, rs2)                                                \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 34, x0, %0, %1"                \
@@ -23,10 +23,11 @@ const InstructionConfig transpose_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define TRANSPOSE_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define TRANSPOSE_RAW(rs1, rs2)
 #endif
 
-// TRANSPOSE指令高级API实现
+// TRANSPOSE instruction high-level API implementation
 void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
                   uint32_t mode) {
   uint64_t rs1_val = TRANSPOSE_ENCODE_RS1(op1_addr, wr_addr);

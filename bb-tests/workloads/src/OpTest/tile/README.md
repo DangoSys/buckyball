@@ -1,36 +1,36 @@
-# Tile Dialect 测试用例
+# Tile Dialect Test Cases
 
-## 测试文件
+## Test Files
 
-### 分阶段测试
-- `tile-matmul.mlir` - 测试 Linalg → Tile 转换
-- `tile-to-buckyball.mlir` - 测试 Tile → Buckyball 转换
-- `buckyball-to-llvm.mlir` - 测试 Buckyball MatMulOp → LLVM Intrinsics 转换
+### Stage-by-Stage Tests
+- `tile-matmul.mlir` - Test Linalg → Tile conversion
+- `tile-to-buckyball.mlir` - Test Tile → Buckyball conversion
+- `buckyball-to-llvm.mlir` - Test Buckyball MatMulOp → LLVM Intrinsics conversion
 
-### 端到端测试
-- `end-to-end.mlir` - 完整的转换流程测试（Linalg → Tile → Buckyball → LLVM）
+### End-to-End Tests
+- `end-to-end.mlir` - Complete conversion pipeline test (Linalg → Tile → Buckyball → LLVM)
 
-## 运行测试
+## Running Tests
 
 ```bash
-# 阶段1: Linalg → Tile
+# Stage 1: Linalg → Tile
 ./compiler/build/bin/buddy-opt bb-tests/workloads/src/OpTest/tile/tile-matmul.mlir -convert-linalg-to-tile
 
-# 阶段2: Tile → Buckyball
+# Stage 2: Tile → Buckyball
 ./compiler/build/bin/buddy-opt bb-tests/workloads/src/OpTest/tile/tile-to-buckyball.mlir -convert-tile-to-buckyball
 
-# 阶段3: Buckyball → LLVM Intrinsics
+# Stage 3: Buckyball → LLVM Intrinsics
 ./compiler/build/bin/buddy-opt bb-tests/workloads/src/OpTest/tile/buckyball-to-llvm.mlir \
   -lower-buckyball="dim=16 sp_addr_len=14 spad_rows=1024 acc_rows=1024 warp=16 lane=16"
 
-# 端到端测试：完整流程
+# End-to-end test: Complete pipeline
 ./compiler/build/bin/buddy-opt bb-tests/workloads/src/OpTest/tile/end-to-end.mlir \
   -convert-linalg-to-tile \
   -convert-tile-to-buckyball \
   -lower-buckyball="dim=16 sp_addr_len=14 spad_rows=1024 acc_rows=1024 warp=16 lane=16"
 ```
 
-## 新架构说明
+## New Architecture Description
 
 ```
 Linalg MatmulOp

@@ -1,11 +1,11 @@
 # Summary
 
-- [项目概览](./README.md)
-	- [项目结构](./overview/overview.md)
-	- [开发流程教学](./tutorial/tutorial.md)
+- [Project Overview](./README.md)
+	- [Project Structure](./overview/overview.md)
+	- [Development Tutorial](./tutorial/tutorial.md)
 
-- [架构设计](./arch/arch.md)
-  - [Scala 源码](./arch/src/main/scala/README.md)
+- [Architecture Design](./arch/arch.md)
+  - [Scala Source Code](./arch/src/main/scala/README.md)
 	- [Util](./arch/src/main/scala/Util/README.md)
 	- [framework](./arch/src/main/scala/framework/README.md)
 		- [blink](./arch/src/main/scala/framework/blink/README.md)
@@ -53,4 +53,4 @@
 
 ---
 
-[贡献者](misc/contributors.md)
+[Contributors](misc/contributors.md)

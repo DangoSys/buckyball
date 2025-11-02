@@ -1,50 +1,50 @@
-# 贡献者
+# Contributors
 
-感谢所有为 BuckyBall 项目做出贡献的开发者和研究人员。
+Thank you to all developers and researchers who have contributed to the BuckyBall project.
 
-## 核心开发团队
+## Core Development Team
 
-BuckyBall 项目由 DangoSys 团队主导开发，致力于构建高性能的领域特定架构框架。
+The BuckyBall project is primarily developed by the DangoSys team, dedicated to building a high-performance domain-specific architecture framework.
 
-## 贡献方式
+## Contribution Methods
 
-我们欢迎各种形式的贡献：
+We welcome contributions of all kinds:
 
-### 代码贡献
-- 硬件架构设计和优化
-- 软件工具链改进
-- 测试用例和基准程序
-- 文档编写和维护
+### Code Contributions
+- Hardware architecture design and optimization
+- Software toolchain improvements
+- Test cases and benchmark programs
+- Documentation writing and maintenance
 
-### 问题反馈
-- Bug 报告和修复建议
-- 功能需求和改进建议
-- 性能优化建议
-- 使用体验反馈
+### Issue Feedback
+- Bug reports and fix suggestions
+- Feature requirements and improvement suggestions
+- Performance optimization suggestions
+- Usage experience feedback
 
-### 学术合作
-- 研究论文和技术报告
-- 会议演讲和技术分享
-- 开源社区推广
+### Academic Collaboration
+- Research papers and technical reports
+- Conference presentations and technical sharing
+- Open source community promotion
 
-## 参与指南
+## Participation Guidelines
 
-1. **Fork 项目**: 从 GitHub 创建项目分支
-2. **本地开发**: 按照文档搭建开发环境
-3. **提交更改**: 遵循代码规范和提交格式
-4. **创建 PR**: 详细描述更改内容和测试结果
-5. **代码审查**: 配合维护者完成代码审查流程
+1. **Fork Project**: Create a project branch from GitHub
+2. **Local Development**: Set up development environment according to documentation
+3. **Submit Changes**: Follow code standards and commit format
+4. **Create PR**: Describe changes and test results in detail
+5. **Code Review**: Cooperate with maintainers to complete code review process
 
-## 联系方式
+## Contact
 
 - **GitHub**: [DangoSys/buckyball](https://github.com/DangoSys/buckyball)
-- **Issues**: 通过 GitHub Issues 报告问题
-- **Discussions**: 参与 [Slack](https://buckyballhq.slack.com/) 进行讨论
+- **Issues**: Report issues through GitHub Issues
+- **Discussions**: Participate in [Slack](https://buckyballhq.slack.com/) for discussions
 
-## 致谢
+## Acknowledgments
 
-特别感谢以下开源项目和社区：
-- Buddy-Compiler 开发团队
-- Chipyard 项目
-- RISCV 基金会
-- 所有测试用户和反馈者
+Special thanks to the following open source projects and communities:
+- Buddy-Compiler development team
+- Chipyard project
+- RISCV Foundation
+- All test users and feedback providers

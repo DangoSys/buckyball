@@ -2,9 +2,12 @@
 """查看 Redis 中的会话数据
 
 Usage:
-    python view_redis_sessions.py           # 简要信息
-    python view_redis_sessions.py -v        # 详细信息
-    python view_redis_sessions.py --verbose # 详细信息
+    # 简要信息
+    python view_redis_sessions.py
+    # 详细信息
+    python view_redis_sessions.py -v
+    # 详细信息
+    python view_redis_sessions.py --verbose
 """
 
 import redis

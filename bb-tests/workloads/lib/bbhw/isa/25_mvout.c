@@ -15,7 +15,7 @@ const InstructionConfig mvout_config = {
   (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
    ENCODE_FIELD(stride, 25, 10))
 
-// MVOUT指令低级实现
+// MVOUT instruction low-level implementation
 #ifndef __x86_64__
 #define MVOUT_RAW(rs1, rs2)                                                    \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 25, x0, %0, %1"                \
@@ -23,10 +23,11 @@ const InstructionConfig mvout_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define MVOUT_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define MVOUT_RAW(rs1, rs2)
 #endif
 
-// MVOUT指令高级API实现
+// MVOUT instruction high-level API implementation
 void bb_mvout(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
               uint32_t stride) {
   uint64_t rs1_val = MVOUT_ENCODE_RS1(mem_addr);

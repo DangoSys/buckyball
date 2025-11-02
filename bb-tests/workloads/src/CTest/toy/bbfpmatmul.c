@@ -45,9 +45,12 @@ int main() {
   // print_matrix("Input", input_matrix, DIM, DIM);
 
   // Move input to scratchpad
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
 
   bb_mvin((uintptr_t)weight_matrix, op1_addr, DIM, 1);
   bb_mvin((uintptr_t)input_matrix, op2_addr, DIM, 1);

@@ -1,68 +1,68 @@
-# BuckyBall 项目结构概览
+# BuckyBall Project Structure Overview
 
-BuckyBall 是一个面向领域特定架构的可扩展框架，项目采用模块化设计，各目录职责明确，支持从硬件设计到软件开发的完整工具链。
+BuckyBall is a scalable framework for domain-specific architectures. The project adopts a modular design with clear directory responsibilities, supporting a complete toolchain from hardware design to software development.
 
-## 主要目录结构
+## Main Directory Structure
 
-### 核心架构模块
-- **`arch/`** - 硬件架构实现，包含 Scala/Chisel 编写的 RTL 代码
-  - 基于 Rocket-chip 和 Chipyard 框架
-  - 实现自定义 RoCC 协处理器和内存子系统
-  - 支持多种配置和扩展选项
+### Core Architecture Module
+- **`arch/`** - Hardware architecture implementation, containing RTL code written in Scala/Chisel
+  - Based on Rocket-chip and Chipyard framework
+  - Implements custom RoCC coprocessors and memory subsystems
+  - Supports various configuration and extension options
 
-### 测试验证模块
-- **`bb-tests/`** - 统一测试框架
-  - `workloads/` - 应用工作负载测试
-  - `customext/` - 自定义扩展验证
-  - `sardine/` - Sardine 测试框架
-  - `uvbb/` - 单元测试套件
+### Test Verification Module
+- **`bb-tests/`** - Unified test framework
+  - `workloads/` - Application workload tests
+  - `customext/` - Custom extension verification
+  - `sardine/` - Sardine test framework
+  - `uvbb/` - Unit test suite
 
-### 仿真环境模块
-- **`sims/`** - 仿真器和验证环境
-  - 支持 Verilator、VCS 等多种仿真器
-  - 集成 FireSim FPGA 加速仿真
-  - 提供性能分析和调试工具
+### Simulation Environment Module
+- **`sims/`** - Simulators and verification environments
+  - Supports Verilator, VCS and other simulators
+  - Integrates FireSim FPGA accelerated simulation
+  - Provides performance analysis and debugging tools
 
-### 开发工具模块
-- **`scripts/`** - 构建和部署脚本
-  - 环境初始化脚本
-  - 自动化构建工具
-  - 依赖管理和配置
+### Development Tools Module
+- **`scripts/`** - Build and deployment scripts
+  - Environment initialization scripts
+  - Automated build tools
+  - Dependency management and configuration
 
-- **`workflow/`** - 开发工作流和自动化
-  - CI/CD 流水线配置
-  - 文档生成工具
-  - 代码质量检查
+- **`workflow/`** - Development workflows and automation
+  - CI/CD pipeline configuration
+  - Documentation generation tools
+  - Code quality checks
 
-### 文档系统
-- **`docs/`** - 项目文档
-  - `bb-note/` - 基于 mdBook 的技术文档
-  - `img/` - 文档图片资源
-  - 支持自动生成和更新
+### Documentation System
+- **`docs/`** - Project documentation
+  - `bb-note/` - Technical documentation based on mdBook
+  - `img/` - Documentation image resources
+  - Supports automatic generation and updates
 
-### 第三方依赖
-- **`thirdparty/`** - 外部依赖模块 (**submodules**)
-  - `chipyard/` - Berkeley Chipyard SoC 设计框架
-  - `circt/` - CIRCT 电路编译器工具链
+### Third-party Dependencies
+- **`thirdparty/`** - External dependency modules (**submodules**)
+  - `chipyard/` - Berkeley Chipyard SoC design framework
+  - `circt/` - CIRCT circuit compiler toolchain
 
-## 开发工作流
+## Development Workflow
 
-1. **环境准备**: 使用 `scripts/init.sh` 初始化开发环境
-2. **架构开发**: 在 `arch/` 目录进行硬件设计和修改
-3. **测试验证**: 使用 `bb-tests/` 中的测试套件进行功能验证
-4. **仿真调试**: 通过 `sims/` 目录的仿真环境进行性能分析
-5. **文档更新**: 自动生成或手动更新 `docs/` 中的技术文档
+1. **Environment Setup**: Use `scripts/init.sh` to initialize the development environment
+2. **Architecture Development**: Perform hardware design and modifications in the `arch/` directory
+3. **Test Verification**: Use test suites in `bb-tests/` for functional verification
+4. **Simulation Debugging**: Perform performance analysis through simulation environments in the `sims/` directory
+5. **Documentation Updates**: Automatically generate or manually update technical documentation in `docs/`
 
-## 构建系统
+## Build System
 
-项目支持多种构建方式：
-- **Make**: 传统 Makefile 构建
-- **SBT**: Scala 项目构建工具
-- **CMake**: 测试框架构建系统
-- **Conda**: Python 环境和依赖管理
+The project supports multiple build methods:
+- **Make**: Traditional Makefile builds
+- **SBT**: Scala project build tool
+- **CMake**: Test framework build system
+- **Conda**: Python environment and dependency management
 
-## 版本管理说明
+## Version Management Notes
 
-- **Submodules**: `thirdparty/` 下的模块需要独立更新
-- **主仓库**: 核心代码和配置随主分支同步更新
-- **文档**: 支持自动生成，与代码变更保持同步
+- **Submodules**: Modules under `thirdparty/` need independent updates
+- **Main Repository**: Core code and configuration update synchronously with the main branch
+- **Documentation**: Supports automatic generation, keeping in sync with code changes
