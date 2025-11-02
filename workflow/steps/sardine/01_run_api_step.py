@@ -33,7 +33,7 @@ async def handler(req, context):
     await context.emit({"topic": "sardine.run", "data": data})
 
     # ==================================================================================
-    # 等待执行结果
+    # Wait for execution result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

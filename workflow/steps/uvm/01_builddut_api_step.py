@@ -18,7 +18,7 @@ async def handler(req, context):
     await context.emit({"topic": "uvm.builddut", "data": data})
 
     # ==================================================================================
-    #  等待仿真结果
+    #  Wait for build result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

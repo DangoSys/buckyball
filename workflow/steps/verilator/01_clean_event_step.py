@@ -25,7 +25,7 @@ async def handler(data, context):
     bbdir = get_buckyball_path()
     build_dir = f"{bbdir}/arch/build"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     command = f"rm -rf {build_dir}"
     result = stream_run_logger(
@@ -37,7 +37,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context,
@@ -47,7 +47,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # ==================================================================================
     if data.get("from_run_workflow"):
         await context.emit(

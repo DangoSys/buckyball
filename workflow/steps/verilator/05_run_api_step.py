@@ -25,9 +25,9 @@ async def handler(req, context):
     await context.emit({"topic": "verilator.run", "data": config})
 
     # ==================================================================================
-    #  等待仿真结果
+    #  Wait for simulation result
     #
-    #  期望返回结果是：
+    #  Expected return result format:
     #  {
     #    "status": 200/400/500,
     #    "body": {
@@ -35,11 +35,11 @@ async def handler(req, context):
     #      "failure": true/false,
     #      "processing": true/false,
     #      "return_code": 0,
-    #      其余字段
+    #      other fields
     #    }
     #  }
     #
-    #  由于Motia框架会把数据包装在data字段中，所以需要解包
+    #  Since the Motia framework wraps data in the data field, it needs to be unpacked
     #       if isinstance(result, dict) and 'data' in result:
     #          return result['data']
     #       return result

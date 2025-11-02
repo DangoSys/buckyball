@@ -30,7 +30,7 @@ async def handler(data, context):
     log_dir = f"{arch_dir}/log"
 
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     # Find sources
     vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(
@@ -103,7 +103,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context,
@@ -113,7 +113,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # ==================================================================================
     if data.get("from_run_workflow"):
         await context.emit({"topic": "verilator.sim", "data": {**data, "task": "run"}})

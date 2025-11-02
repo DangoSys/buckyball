@@ -1,22 +1,22 @@
-# Compiler 工作流
+# Compiler Workflow
 
-BuckyBall 框架中的编译器构建工作流，用于构建 BuckyBall 编译器工具链。
+Compiler build workflow in the BuckyBall framework for building the BuckyBall compiler toolchain.
 
-## API 使用说明
+## API Usage
 
 ### `build`
-**端点**: `POST /compiler/build`
+**Endpoint**: `POST /compiler/build`
 
-**功能**: 构建 BuckyBall 编译器
+**Function**: Build BuckyBall compiler
 
-**参数**: 无特定参数
+**Parameters**: No specific parameters
 
-**示例**:
+**Example**:
 ```bash
 bbdev compiler --build
 ```
 
-**响应**:
+**Response**:
 ```json
 {
   "status": 200,
@@ -28,6 +28,6 @@ bbdev compiler --build
 }
 ```
 
-## 注意事项
+## Notes
 
-- 确保系统具备必要的构建工具和依赖
+- Ensure the system has necessary build tools and dependencies

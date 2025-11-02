@@ -1,4 +1,4 @@
-"""Workflow 内部 API 调用工具"""
+"""Workflow internal API call tools"""
 
 import httpx
 import asyncio
@@ -7,7 +7,7 @@ from .base import Tool
 
 
 class WorkflowAPITool(Tool):
-    """调用 Workflow 内部 API 的通用工具"""
+    """Generic tool for calling Workflow internal APIs"""
 
     def get_name(self) -> str:
         return "call_workflow_api"
@@ -42,7 +42,7 @@ class WorkflowAPITool(Tool):
         endpoint = arguments.get("endpoint")
         params = arguments.get("params", {})
 
-        # 获取 workflow API 地址
+        # Get workflow API address
         import os
 
         workflow_host = os.getenv("WORKFLOW_HOST", "localhost")
@@ -54,7 +54,7 @@ class WorkflowAPITool(Tool):
             context.log_info(f"Calling workflow API: {url}")
             context.log_info(f"Parameters: {params}")
 
-            # 同步调用（使用 httpx 同步客户端）
+            # Synchronous call (using httpx sync client)
             response = httpx.post(url, json=params, timeout=300.0)
 
             if response.status_code == 200:

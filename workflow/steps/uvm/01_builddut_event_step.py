@@ -27,7 +27,7 @@ async def handler(data, context):
     dut_dir = f"{bbdir}/bb-tests/uvbb/dut"
     arch_dir = f"{bbdir}/arch"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     command = f"cd {arch_dir} && mill -i __.uvbb.runMain uvbb.Elaborate "
     command += "--disable-annotation-unknown -strip-debug-info -O=debug "
@@ -46,14 +46,14 @@ async def handler(data, context):
         os.remove(topname_file)
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # Routing to verilog or finish workflow
     # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================

@@ -7,7 +7,7 @@ import os
 config = {
     "type": "api",
     "name": "doc_agent",
-    "description": "生成代码目录文档",
+    "description": "Generate code directory documentation",
     "path": "/doc/generate",
     "method": "POST",
     "emits": ["doc.generate"],
@@ -38,16 +38,16 @@ config = {
 
 
 async def handler(req, context):
-    context.logger.info("doc-agent API - 接收到请求", {"body": req.get("body")})
+    context.logger.info("doc-agent API - Request received", {"body": req.get("body")})
 
-    # 参数验证
+    # Parameter validation
     body = req.get("body", {})
     target_path = body.get("target_path")
     mode = body.get("mode")
 
-    # 验证必需参数
+    # Validate required parameters
     if not target_path:
-        context.logger.error("doc-agent API - 缺少target_path参数")
+        context.logger.error("doc-agent API - Missing target_path parameter")
         return {
             "status": 400,
             "body": {
@@ -57,7 +57,7 @@ async def handler(req, context):
         }
 
     if not mode:
-        context.logger.error("doc-agent API - 缺少mode参数")
+        context.logger.error("doc-agent API - Missing mode parameter")
         return {
             "status": 400,
             "body": {
@@ -66,9 +66,9 @@ async def handler(req, context):
             },
         }
 
-    # 验证mode参数值
+    # Validate mode parameter value
     if mode not in ["create", "update"]:
-        context.logger.error("doc-agent API - 无效的mode参数", {"mode": mode})
+        context.logger.error("doc-agent API - Invalid mode parameter", {"mode": mode})
         return {
             "status": 400,
             "body": {
@@ -77,10 +77,10 @@ async def handler(req, context):
             },
         }
 
-    # 验证target_path是否存在
+    # Validate target_path exists
     if not os.path.exists(target_path):
         context.logger.error(
-            "doc-agent API - 目标路径不存在", {"target_path": target_path}
+            "doc-agent API - Target path does not exist", {"target_path": target_path}
         )
         return {
             "status": 400,
@@ -90,7 +90,7 @@ async def handler(req, context):
             },
         }
 
-    # 发送事件到处理步骤
+    # Send event to processing step
     await context.emit(
         {
             "topic": "doc.generate",
@@ -103,7 +103,7 @@ async def handler(req, context):
     )
 
     # ==================================================================================
-    # 等待执行结果
+    # Wait for execution result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

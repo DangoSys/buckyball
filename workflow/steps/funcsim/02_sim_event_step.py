@@ -55,9 +55,9 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 返回仿真结果
+    # Return simulation result
     # ==================================================================================
-    # 此处为run workflow的终点，status状态不再继续设为processing
+    # This is the end of run workflow, status no longer set to processing
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False
     )

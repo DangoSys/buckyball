@@ -1,84 +1,84 @@
-# Verilator 仿真工作流
+# Verilator Simulation Workflow
 
-BuckyBall 框架中基于 Verilator 的硬件仿真工作流，提供从 RTL 生成到仿真执行的完整自动化流程。Verilator 是一个高性能的 Verilog 仿真器，支持快速的功能验证和性能分析。
+Hardware simulation workflow based on Verilator in the BuckyBall framework, providing a complete automation flow from RTL generation to simulation execution. Verilator is a high-performance Verilog simulator that supports fast functional verification and performance analysis.
 
-## 二、原始API使用说明
+## II. Original API Usage Guide
 
 #### `run`
-**端点**: `POST /verilator/run`
+**Endpoint**: `POST /verilator/run`
 
-**功能**: 执行完整流程。清理build目录，生成Verilog，然后编译Verilator为仿真文件，并直接运行仿真
+**Function**: Execute complete workflow. Clean build directory, generate Verilog, compile Verilator into simulation file, and run simulation directly
 
-**参数**:
+**Parameters**:
 
-- **`jobs`** - 并行编译任务数
-  - 默认值: `16`
-- **`binary`** [必选] - 测试二进制文件路径
-  - 默认值: `""`
+- **`jobs`** - Number of parallel compilation tasks
+  - Default value: `16`
+- **`binary`** [Required] - Test binary file path
+  - Default value: `""`
 
-**示例**:
+**Example**:
 ```bash
-# bbdev封装
+# bbdev wrapper
 bbdev verilator --run "jobs 256 --binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
 
-# 原始命令
+# Raw command
 curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"jobs": 8, "binary": "/home/user/test.elf"}'
 ```
 
 
 #### `clean`
 
-**端点**: `POST /verilator/clean`
+**Endpoint**: `POST /verilator/clean`
 
-**功能**: 清空build文件夹
+**Function**: Clean build folder
 
-**参数**: 无
+**Parameters**: None
 
-**示例**:
+**Example**:
 ```bash
 curl -X POST http://localhost:5000/verilator/clean
 ```
 
 #### `verilog`
 
-**端点**: `POST /verilator/verilog`
+**Endpoint**: `POST /verilator/verilog`
 
-**功能**: 仅生成Verilog代码，不进行编译和仿真
+**Function**: Only generate Verilog code, without compilation and simulation
 
-**参数**: 无
+**Parameters**: None
 
-**示例**:
+**Example**:
 ```bash
 curl -X POST http://localhost:5000/verilator/verilog -d '{"jobs": 8}'
 ```
 
 #### `build`
 
-**端点**: `POST /verilator/build`
+**Endpoint**: `POST /verilator/build`
 
-**功能**: 将verilog源文件和cpp源文件编译为可执行仿真文件
+**Function**: Compile verilog source files and cpp source files into executable simulation file
 
-**参数**:
+**Parameters**:
 
-- **`jobs`** - 并行编译任务数
-  - 默认值: `16`
+- **`jobs`** - Number of parallel compilation tasks
+  - Default value: `16`
 
-**示例**:
+**Example**:
 ```bash
 curl -X POST http://localhost:5000/verilator/build -d '{"jobs": 16}'
 ```
 
 #### `sim`
 
-**端点**: `POST /verilator/sim`
+**Endpoint**: `POST /verilator/sim`
 
-**功能**: 运行已存在的仿真可执行文件
+**Function**: Run existing simulation executable
 
-**参数**:
+**Parameters**:
 
-- **`binary`**[必选] - 自定义测试二进制文件路径
+- **`binary`** [Required] - Custom test binary file path
 
-**示例**:
+**Example**:
 ```bash
 curl -X POST http://localhost:5000/verilator/sim \
   -H "Content-Type: application/json" \
@@ -88,105 +88,105 @@ curl -X POST http://localhost:5000/verilator/sim \
 
 
 
-## 二、开发者文档
+## II. Developer Documentation
 
-### 目录结构
+### Directory Structure
 
 ```
 steps/verilator/
-├── 00_start_node_noop_step.py      # 工作流入口节点定义
-├── 00_start_node_noop_step.tsx     # 前端UI组件
-├── 01_run_api_step.py              # 完整工作流API入口
-├── 01_clean_api_step.py            # 清理API端点
-├── 01_verilog_api_step.py          # Verilog生成API端点
-├── 01_build_api_step.py            # 编译API端点
-├── 01_sim_api_step.py              # 仿真API端点
-├── 02_clean_event_step.py          # 清理构建目录
-├── 03_verilog_event_step.py        # Verilog代码生成
-├── 04_build_event_step.py          # Verilator编译
-├── 05_sim_event_step.py            # 仿真运行
-├── 99_complete_event_step.py       # 完成处理
-├── 99_error_event_step.py          # 错误处理
-└── README.md                       # 本文档
+├── 00_start_node_noop_step.py      # Workflow entry node definition
+├── 00_start_node_noop_step.tsx     # Frontend UI component
+├── 01_run_api_step.py              # Complete workflow API entry
+├── 01_clean_api_step.py            # Clean API endpoint
+├── 01_verilog_api_step.py          # Verilog generation API endpoint
+├── 01_build_api_step.py            # Build API endpoint
+├── 01_sim_api_step.py              # Simulation API endpoint
+├── 02_clean_event_step.py          # Clean build directory
+├── 03_verilog_event_step.py        # Verilog code generation
+├── 04_build_event_step.py          # Verilator compilation
+├── 05_sim_event_step.py            # Simulation execution
+├── 99_complete_event_step.py       # Completion handling
+├── 99_error_event_step.py          # Error handling
+└── README.md                       # This document
 ```
 
-### 工作流步骤详解
+### Workflow Steps Detailed
 
-#### 1. 入口节点 (`00_start_node_noop_step.py`)
-- **类型**: `noop` 节点
-- **功能**: 提供UI界面入口
-- **前端**: "Start Build Verilator"按钮
+#### 1. Entry Node (`00_start_node_noop_step.py`)
+- **Type**: `noop` node
+- **Function**: Provide UI interface entry point
+- **Frontend**: "Start Build Verilator" button
 
-#### 2. API端点
-- **完整工作流API** (`01_run_api_step.py`): `/verilator` → `verilator.run`
-- **清理API** (`01_clean_api_step.py`): `/verilator/clean` → `verilator.clean`
-- **Verilog生成API** (`01_verilog_api_step.py`): `/verilator/verilog` → `verilator.verilog`
-- **编译API** (`01_build_api_step.py`): `/verilator/build` → `verilator.build`
-- **仿真API** (`01_sim_api_step.py`): `/verilator/sim` → `verilator.sim`
+#### 2. API Endpoints
+- **Complete Workflow API** (`01_run_api_step.py`): `/verilator` → `verilator.run`
+- **Clean API** (`01_clean_api_step.py`): `/verilator/clean` → `verilator.clean`
+- **Verilog Generation API** (`01_verilog_api_step.py`): `/verilator/verilog` → `verilator.verilog`
+- **Build API** (`01_build_api_step.py`): `/verilator/build` → `verilator.build`
+- **Simulation API** (`01_sim_api_step.py`): `/verilator/sim` → `verilator.sim`
 
-#### 3. 清理步骤 (`02_clean_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.run`, `verilator.clean`
-- **发出**: `verilator.verilog`, `verilator.complete`
-- **功能**: 删除build目录，为工作流或单独操作服务
+#### 3. Clean Step (`02_clean_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.run`, `verilator.clean`
+- **Emits**: `verilator.verilog`, `verilator.complete`
+- **Function**: Delete build directory, serves workflow or standalone operation
 
-#### 4. Verilog生成 (`03_verilog_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.verilog`
-- **发出**: `verilator.build`, `verilator.complete`
-- **功能**: 使用mill生成Verilog代码到build目录
+#### 4. Verilog Generation (`03_verilog_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.verilog`
+- **Emits**: `verilator.build`, `verilator.complete`
+- **Function**: Use mill to generate Verilog code to build directory
 
-#### 5. Verilator编译 (`04_build_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.build`
-- **发出**: `verilator.sim`, `verilator.complete`
-- **功能**: 编译Verilog和C++源文件为可执行仿真文件
+#### 5. Verilator Compilation (`04_build_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.build`
+- **Emits**: `verilator.sim`, `verilator.complete`
+- **Function**: Compile Verilog and C++ source files into executable simulation file
 
-#### 6. 仿真运行 (`05_sim_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.sim`
-- **发出**: `verilator.complete`
-- **功能**: 运行仿真，支持自定义binary参数
+#### 6. Simulation Execution (`05_sim_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.sim`
+- **Emits**: `verilator.complete`
+- **Function**: Run simulation, supports custom binary parameter
 
-#### 7. 完成处理 (`99_complete_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.complete`
-- **功能**: 打印成功消息，标记工作流完成
+#### 7. Completion Handling (`99_complete_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.complete`
+- **Function**: Print success message, mark workflow as complete
 
-#### 8. 错误处理 (`99_error_event_step.py`)
-- **类型**: `event` 步骤
-- **订阅**: `verilator.error`
-- **功能**: 打印错误消息，处理工作流异常
+#### 8. Error Handling (`99_error_event_step.py`)
+- **Type**: `event` step
+- **Subscribes**: `verilator.error`
+- **Function**: Print error message, handle workflow exceptions
 
-### 工作流程图
+### Workflow Diagram
 
 ```mermaid
 graph TD;
-    API[POST /verilator<br/>完整工作流] --> RUN[verilator.run]
+    API[POST /verilator<br/>Complete Workflow] --> RUN[verilator.run]
 
-    CLEAN_DIRECT[verilator.clean<br/>单步清理] --> CLEAN_STEP[02_clean_event_step]
-    VERILOG_DIRECT[verilator.verilog<br/>单步生成] --> VERILOG_STEP[03_verilog_event_step]
-    BUILD_DIRECT[verilator.build<br/>单步编译] --> BUILD_STEP[04_build_event_step]
-    SIM_DIRECT[verilator.sim<br/>单步仿真] --> SIM_STEP[05_sim_event_step]
+    CLEAN_DIRECT[verilator.clean<br/>Single-step Clean] --> CLEAN_STEP[02_clean_event_step]
+    VERILOG_DIRECT[verilator.verilog<br/>Single-step Generate] --> VERILOG_STEP[03_verilog_event_step]
+    BUILD_DIRECT[verilator.build<br/>Single-step Build] --> BUILD_STEP[04_build_event_step]
+    SIM_DIRECT[verilator.sim<br/>Single-step Simulation] --> SIM_STEP[05_sim_event_step]
 
     RUN --> CLEAN_STEP
-    CLEAN_STEP --> |工作流模式| VERILOG_STEP
-    CLEAN_STEP --> |单步模式| COMPLETE[verilator.complete]
+    CLEAN_STEP --> |Workflow Mode| VERILOG_STEP
+    CLEAN_STEP --> |Single-step Mode| COMPLETE[verilator.complete]
 
-    VERILOG_STEP --> |工作流模式| BUILD_STEP
-    VERILOG_STEP --> |单步模式| COMPLETE
+    VERILOG_STEP --> |Workflow Mode| BUILD_STEP
+    VERILOG_STEP --> |Single-step Mode| COMPLETE
 
-    BUILD_STEP --> |工作流模式| SIM_STEP
-    BUILD_STEP --> |单步模式| COMPLETE
+    BUILD_STEP --> |Workflow Mode| SIM_STEP
+    BUILD_STEP --> |Single-step Mode| COMPLETE
 
     SIM_STEP --> COMPLETE
 
     COMPLETE --> COMPLETE_STEP[99_complete_event_step]
 
-    CLEAN_STEP -.-> |错误| ERROR[verilator.error]
-    VERILOG_STEP -.-> |错误| ERROR
-    BUILD_STEP -.-> |错误| ERROR
-    SIM_STEP -.-> |错误| ERROR
+    CLEAN_STEP -.-> |Error| ERROR[verilator.error]
+    VERILOG_STEP -.-> |Error| ERROR
+    BUILD_STEP -.-> |Error| ERROR
+    SIM_STEP -.-> |Error| ERROR
 
     ERROR --> ERROR_STEP[99_error_event_step]
 
