@@ -4,14 +4,14 @@ from typing import Optional, List
 
 def search_workload(search_dir: str, filename: str) -> Optional[str]:
     """
-    在指定文件夹及其子文件夹下递归搜索指定文件名
+    Recursively search for a specified filename in the directory and its subdirectories
 
     Args:
-      search_dir: 搜索的根目录
-      filename: 要搜索的文件名
+      search_dir: Root directory to search
+      filename: Filename to search for
 
     Returns:
-      找到的文件的绝对路径，如果未找到则返回None
+      Absolute path of the found file, or None if not found
     """
     if not os.path.exists(search_dir):
         return None
@@ -25,14 +25,14 @@ def search_workload(search_dir: str, filename: str) -> Optional[str]:
 
 def search_workload_all(search_dir: str, filename: str) -> List[str]:
     """
-    在指定文件夹及其子文件夹下递归搜索指定文件名，返回所有匹配的文件
+    Recursively search for a specified filename in the directory and its subdirectories, returning all matches
 
     Args:
-      search_dir: 搜索的根目录
-      filename: 要搜索的文件名
+      search_dir: Root directory to search
+      filename: Filename to search for
 
     Returns:
-      所有找到的文件的绝对路径列表
+      List of absolute paths of all found files
     """
     results = []
 
@@ -48,14 +48,14 @@ def search_workload_all(search_dir: str, filename: str) -> List[str]:
 
 def search_workload_pattern(search_dir: str, pattern: str) -> List[str]:
     """
-    在指定文件夹及其子文件夹下递归搜索匹配指定模式的文件
+    Recursively search for files matching a specified pattern in the directory and its subdirectories
 
     Args:
-      search_dir: 搜索的根目录
-      pattern: 文件名模式 (支持通配符 * 和 ?)
+      search_dir: Root directory to search
+      pattern: Filename pattern (supports wildcards * and ?)
 
     Returns:
-      所有匹配的文件的绝对路径列表
+      List of absolute paths of all matching files
     """
     import fnmatch
 

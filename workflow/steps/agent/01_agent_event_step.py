@@ -16,7 +16,7 @@ load_dotenv()
 config = {
     "type": "event",
     "name": "agent",
-    "description": "处理agent流式响应",
+    "description": "Handle agent streaming response",
     "subscribes": ["agent.prompt"],
     "emits": ["agent.response"],
     "input": {
@@ -34,13 +34,13 @@ config = {
 
 
 async def handler(input_data, context):
-    context.logger.info("agent - 开始处理", {"input": input_data})
+    context.logger.info("agent - Starting processing", {"input": input_data})
 
     message = input_data.get("message")
     model = input_data.get("model", "deepseek-chat")
     trace_id = input_data.get("traceId")
 
-    # API配置：优先使用传入的参数，否则使用环境变量
+    # API configuration: prefer parameters passed in, otherwise use environment variables
     api_key = input_data.get("apiKey") or os.getenv("API_KEY")
     base_url = input_data.get("baseUrl") or os.getenv(
         "BASE_URL", "https://api.deepseek.com/v1"
@@ -82,14 +82,14 @@ async def handler(input_data, context):
             ) as response:
 
                 if response.status_code != 200:
-                    context.logger.error(f"agent API错误: {response.status_code}")
+                    context.logger.error(f"agent API error: {response.status_code}")
                     return
 
                 full_response = ""
 
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
-                        data = line[6:]  # 移除 "data: " 前缀
+                        data = line[6:]  # Remove "data: " prefix
 
                         if data == "[DONE]":
                             break
@@ -107,7 +107,7 @@ async def handler(input_data, context):
                         except json.JSONDecodeError:
                             continue
 
-                # 发送完整响应
+                # Send complete response
                 await context.emit(
                     {
                         "topic": "agent.response",
@@ -120,17 +120,17 @@ async def handler(input_data, context):
                 )
 
                 context.logger.info(
-                    "agent处理完成",
+                    "agent processing completed",
                     {"response_length": len(full_response), "traceId": trace_id},
                 )
 
-        # 将响应内容通过 extra_fields 传回 API
+        # Pass response content back to API via extra_fields
         success_result, failure_result = await check_result(
             context, 0, continue_run=False, extra_fields={"response": full_response}
         )
 
     except Exception as e:
-        context.logger.error(f"agent API调用失败: {str(e)}")
+        context.logger.error(f"agent API call failed: {str(e)}")
         await context.emit(
             {
                 "topic": "agent.error",
@@ -142,7 +142,7 @@ async def handler(input_data, context):
             }
         )
 
-        # 将错误信息通过 extra_fields 传回 API
+        # Pass error information back to API via extra_fields
         success_result, failure_result = await check_result(
             context, 1, continue_run=False, extra_fields={"error": str(e)}
         )

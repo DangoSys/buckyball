@@ -1,4 +1,4 @@
-"""文件操作相关的工具"""
+"""File operation related tools"""
 
 import os
 import json
@@ -8,7 +8,7 @@ from .base import Tool
 
 
 class MakeDirTool(Tool):
-    """创建目录工具"""
+    """Create directory tool"""
 
     def get_name(self) -> str:
         return "make_dir"
@@ -44,7 +44,7 @@ class MakeDirTool(Tool):
 
 
 class GetPathTool(Tool):
-    """获取路径信息工具"""
+    """Get path information tool"""
 
     def get_name(self) -> str:
         return "get_path_info"
@@ -86,7 +86,7 @@ class GetPathTool(Tool):
 
 
 class GrepFilesTool(Tool):
-    """搜索文件内容工具"""
+    """Search file content tool"""
 
     def get_name(self) -> str:
         return "grep_files"
@@ -129,7 +129,7 @@ class GrepFilesTool(Tool):
                             continue
                         files_to_search.append(os.path.join(root, file))
 
-            for filepath in files_to_search[:100]:  # 限制文件数
+            for filepath in files_to_search[:100]:  # Limit file count
                 try:
                     with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                         for line_num, line in enumerate(f, 1):
@@ -141,7 +141,7 @@ class GrepFilesTool(Tool):
                                         "content": line.strip()[:150],
                                     }
                                 )
-                                if len(results) >= 50:  # 限制结果数
+                                if len(results) >= 50:  # Limit result count
                                     break
                 except Exception:
                     continue
@@ -156,7 +156,7 @@ class GrepFilesTool(Tool):
 
 
 class DeleteFileTool(Tool):
-    """删除文件工具"""
+    """Delete file tool"""
 
     def get_name(self) -> str:
         return "delete_file"
@@ -195,7 +195,7 @@ class DeleteFileTool(Tool):
 
 
 class ReadFileTool(Tool):
-    """读取文件内容"""
+    """Read file content"""
 
     def get_name(self) -> str:
         return "read_file"
@@ -223,7 +223,7 @@ class ReadFileTool(Tool):
 
         full_path = os.path.join(context.work_dir, file_path)
 
-        # 安全检查：防止路径穿越
+        # Security check: prevent path traversal
         abs_full = os.path.abspath(full_path)
         abs_work = os.path.abspath(context.work_dir)
         if not abs_full.startswith(abs_work):
@@ -249,7 +249,7 @@ class ReadFileTool(Tool):
 
 
 class WriteFileTool(Tool):
-    """写入文件内容"""
+    """Write file content"""
 
     def get_name(self) -> str:
         return "write_file"
@@ -285,19 +285,19 @@ class WriteFileTool(Tool):
 
         full_path = os.path.join(context.work_dir, file_path)
 
-        # 安全检查：防止路径穿越
+        # Security check: prevent path traversal
         abs_full = os.path.abspath(full_path)
         abs_work = os.path.abspath(context.work_dir)
         if not abs_full.startswith(abs_work):
             return json.dumps({"error": "Access denied: path outside work directory"})
 
         try:
-            # 创建目录
+            # Create directory
             dir_path = os.path.dirname(full_path)
             if dir_path:
                 os.makedirs(dir_path, exist_ok=True)
 
-            # 写入文件
+            # Write file
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
@@ -312,7 +312,7 @@ class WriteFileTool(Tool):
 
 
 class ListFilesTool(Tool):
-    """列出目录中的文件"""
+    """List files in directory"""
 
     def get_name(self) -> str:
         return "list_files"
@@ -335,7 +335,7 @@ class ListFilesTool(Tool):
         dir_path = arguments.get("path", ".")
         full_path = os.path.join(context.work_dir, dir_path)
 
-        # 安全检查
+        # Security check
         abs_full = os.path.abspath(full_path)
         abs_work = os.path.abspath(context.work_dir)
         if not abs_full.startswith(abs_work):

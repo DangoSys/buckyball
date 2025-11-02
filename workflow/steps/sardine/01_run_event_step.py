@@ -44,7 +44,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 返回仿真结果
+    # Return execution result
     # ==================================================================================
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False

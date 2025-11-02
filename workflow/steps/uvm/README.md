@@ -1,54 +1,54 @@
-# UVM 工作流
+# UVM Workflow
 
-BuckyBall 框架中的 UVM (Universal Verification Methodology) 工作流，用于构建和运行 UVM 验证环境。
+UVM (Universal Verification Methodology) workflow in the BuckyBall framework for building and running UVM verification environments.
 
-## API 使用说明
+## API Usage
 
 ### `builddut`
-**端点**: `POST /uvm/builddut`
+**Endpoint**: `POST /uvm/builddut`
 
-**功能**: 构建 DUT (Design Under Test)
+**Function**: Build DUT (Design Under Test)
 
-**参数**:
-- **`jobs`** - 并行构建任务数，默认 16
+**Parameters**:
+- **`jobs`** - Number of parallel build tasks, default 16
 
-**示例**:
+**Example**:
 ```bash
-# 使用默认并行数构建 DUT
+# Build DUT with default parallelism
 bbdev uvm --builddut
 
-# 指定并行任务数
+# Specify number of parallel tasks
 bbdev uvm --builddut "--jobs 8"
 ```
 
 ### `build`
-**端点**: `POST /uvm/build`
+**Endpoint**: `POST /uvm/build`
 
-**功能**: 构建 UVM 可执行文件
+**Function**: Build UVM executable
 
-**参数**:
-- **`jobs`** - 并行构建任务数，默认 16
+**Parameters**:
+- **`jobs`** - Number of parallel build tasks, default 16
 
-**示例**:
+**Example**:
 ```bash
-# 使用默认并行数构建 UVM
+# Build UVM with default parallelism
 bbdev uvm --build
 
-# 指定并行任务数
+# Specify number of parallel tasks
 bbdev uvm --build "--jobs 8"
 ```
 
-## 典型工作流程
+## Typical Workflow
 
 ```bash
-# 1. 构建 DUT
+# 1. Build DUT
 bbdev uvm --builddut
 
-# 2. 构建 UVM 环境
+# 2. Build UVM environment
 bbdev uvm --build
 ```
 
-**响应格式**:
+**Response Format**:
 ```json
 {
   "status": 200,

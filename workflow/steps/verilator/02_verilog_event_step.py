@@ -26,7 +26,7 @@ async def handler(data, context):
     build_dir = data.get("output_dir", f"{bbdir}/arch/build/")
     arch_dir = f"{bbdir}/arch"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     if data.get("balltype"):
         command = f"cd {arch_dir} && mill -i __.test.runMain sims.verify.BallTopMain {data.get('balltype')} "
@@ -48,7 +48,7 @@ async def handler(data, context):
         os.remove(topname_file)
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context,
@@ -58,7 +58,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # Routing to verilog or finish workflow
     # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================

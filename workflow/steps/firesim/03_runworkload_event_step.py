@@ -26,7 +26,7 @@ async def handler(data, context):
     script_dir = f"{bbdir}/workflow/steps/firesim/scripts"
     yaml_dir = f"{script_dir}/yaml"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     command = f"source {bbdir}/env.sh && firesim runworkload "
     command += f" -a {yaml_dir}/config_hwdb.yaml"
@@ -41,14 +41,14 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # Routing to verilog or finish workflow
     # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================

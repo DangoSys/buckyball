@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 导入本地工具模块
+# Import local utility modules
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 from doc_utils import detect_doc_type, load_prompt_template, prepare_update_mode_prompt
@@ -21,7 +21,7 @@ load_dotenv()
 config = {
     "type": "event",
     "name": "doc_agent",
-    "description": "处理文档生成请求",
+    "description": "Handle documentation generation requests",
     "subscribes": ["doc.generate"],
     "emits": ["doc.response", "doc.integrate"],
     "input": {
@@ -37,30 +37,30 @@ config = {
 
 
 async def handler(input_data, context):
-    context.logger.info("doc-agent - 开始处理", {"input": input_data})
+    context.logger.info("doc-agent - Start processing", {"input": input_data})
 
     target_path = input_data.get("target_path")
     mode = input_data.get("mode")
     trace_id = input_data.get("traceId")
 
     try:
-        # 1. 检测文档类型并准备prompt
+        # 1. Detect document type and prepare prompt
         doc_type = detect_doc_type(target_path)
-        context.logger.info("doc-agent - 检测到文档类型", {"doc_type": doc_type})
+        context.logger.info("doc-agent - Document type detected", {"doc_type": doc_type})
 
         prompt_template = load_prompt_template(doc_type, target_path)
         prompt_template = prepare_update_mode_prompt(prompt_template, target_path, mode)
 
-        # 2. 调用LLM API生成文档
+        # 2. Call LLM API to generate documentation
         full_response = await generate_documentation(prompt_template, context)
 
-        # 3. 保存文档
+        # 3. Save documentation
         output_path = os.path.join(target_path, "README.md")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(full_response)
-        context.logger.info("doc-agent - 文档已保存", {"output_path": output_path})
+        context.logger.info("doc-agent - Documentation saved", {"output_path": output_path})
 
-        # 4. 发送集成事件
+        # 4. Send integration event
         await context.emit(
             {
                 "topic": "doc.integrate",
@@ -73,7 +73,7 @@ async def handler(input_data, context):
             }
         )
 
-        # 5. 发送完成响应
+        # 5. Send completion response
         await send_success_response(
             context, target_path, mode, doc_type, output_path, full_response, trace_id
         )
@@ -83,7 +83,7 @@ async def handler(input_data, context):
 
 
 async def generate_documentation(prompt_template, context):
-    """调用LLM API生成文档"""
+    """Call LLM API to generate documentation"""
     api_key = os.getenv("API_KEY")
     base_url = os.getenv("BASE_URL", "https://api.deepseek.com/v1")
 
@@ -106,7 +106,7 @@ async def generate_documentation(prompt_template, context):
 
             if response.status_code != 200:
                 error_text = await response.atext()
-                raise Exception(f"API调用失败: {response.status_code}, {error_text}")
+                raise Exception(f"API call failed: {response.status_code}, {error_text}")
 
             full_response = ""
             async for line in response.aiter_lines():
@@ -130,7 +130,7 @@ async def generate_documentation(prompt_template, context):
 async def send_success_response(
     context, target_path, mode, doc_type, output_path, full_response, trace_id
 ):
-    """发送成功响应"""
+    """Send success response"""
     await context.emit(
         {
             "topic": "doc.response",
@@ -150,7 +150,7 @@ async def send_success_response(
         0,
         continue_run=False,
         extra_fields={
-            "message": f"文档生成成功: {output_path}",
+            "message": f"Documentation generation successful: {output_path}",
             "data": {
                 "target_path": target_path,
                 "mode": mode,
@@ -163,8 +163,8 @@ async def send_success_response(
 
 
 async def send_error_response(context, error_msg, target_path, mode, trace_id):
-    """发送错误响应"""
-    full_error_msg = f"doc-agent处理失败: {error_msg}"
+    """Send error response"""
+    full_error_msg = f"doc-agent processing failed: {error_msg}"
     context.logger.error(full_error_msg)
 
     await context.emit(

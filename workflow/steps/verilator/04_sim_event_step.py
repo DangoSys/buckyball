@@ -25,13 +25,13 @@ config = {
 
 async def handler(data, context):
     # ==================================================================================
-    # 获取仿真参数
+    # Get simulation parameters
     # ==================================================================================
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = f"{arch_dir}/build"
 
-    # 生成时间戳
+    # Generate timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
 
     binary_name = data.get("binary", "")
@@ -65,7 +65,7 @@ async def handler(data, context):
     subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
 
     # ==================================================================================
-    # 执行仿真脚本，实现流式输出
+    # Execute simulation script with streaming output
     # ==================================================================================
     # batch_param = "True" if batch else "False"
     # sim_cmd = f"./scripts/sim.sh {bin_path} {binary_path} {log_dir}/stdout.log \
@@ -101,9 +101,9 @@ async def handler(data, context):
         )
 
     # ==================================================================================
-    # 返回仿真结果
+    # Return simulation result
     # ==================================================================================
-    # 此处为run workflow的终点，status状态不再继续设为processing
+    # This is the end point of the run workflow, status will no longer be set to processing
     success_result, failure_result = await check_result(
         context,
         result.returncode,
@@ -118,7 +118,7 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    #  finish workflow
+    #  Finish workflow
     # ==================================================================================
 
     return

@@ -1,27 +1,27 @@
-# Sardine 工作流
+# Sardine Workflow
 
-BuckyBall 框架中的 Sardine 工作流，用于运行 Sardine 相关任务。
+Sardine workflow in the BuckyBall framework for running Sardine-related tasks.
 
-## API 使用说明
+## API Usage
 
 ### `run`
-**端点**: `POST /sardine/run`
+**Endpoint**: `POST /sardine/run`
 
-**功能**: 运行 Sardine 任务
+**Function**: Run Sardine tasks
 
-**参数**:
-- **`workload`** - 指定要运行的工作负载
+**Parameters**:
+- **`workload`** - Specify the workload to run
 
-**示例**:
+**Example**:
 ```bash
-# 运行指定工作负载
+# Run specified workload
 bbdev sardine --run "--workload /path/to/workload"
 
-# 运行默认工作负载
+# Run default workload
 bbdev sardine --run
 ```
 
-**响应**:
+**Response**:
 ```json
 {
   "status": 200,

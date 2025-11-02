@@ -50,9 +50,9 @@ async def check_result(context, returncode, continue_run=False, extra_fields=Non
 
 
 # ==================================================================================
-#  api 等待 event 的返回结果
+#  API waits for event return result
 #
-#  期望返回结果是：
+#  Expected return result format:
 #  {
 #    "status": 200/400/500,
 #    "body": {
@@ -60,11 +60,11 @@ async def check_result(context, returncode, continue_run=False, extra_fields=Non
 #      "failure": true/false,
 #      "processing": true/false,
 #      "return_code": 0,
-#      其余字段
+#      other fields
 #    }
 #  }
 #
-#  由于Motia框架会把数据包装在data字段中，所以需要解包
+#  Since the Motia framework wraps data in the data field, it needs to be unpacked
 #       if isinstance(result, dict) and 'data' in result:
 #          return result['data']
 #       return result
@@ -82,10 +82,10 @@ async def wait_for_result(context):
     Returns:
         dict or None: The result data if task completed, None if still processing
     """
-    # 检查成功结果
+    # Check for success result
     success_result = await context.state.get(context.trace_id, "success")
     if success_result and success_result.get("data"):
-        # 过滤无效的null状态
+        # Filter out invalid null state
         if success_result == {"data": None} or (
             isinstance(success_result, dict)
             and success_result.get("data") is None
@@ -99,7 +99,7 @@ async def wait_for_result(context):
             return success_result["data"]
         return success_result
 
-    # 检查错误状态
+    # Check for error status
     failure_result = await context.state.get(context.trace_id, "failure")
     if failure_result and failure_result.get("data"):
         context.logger.error("task failed", failure_result)

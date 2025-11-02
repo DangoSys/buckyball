@@ -21,26 +21,26 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    # 全局参数
+    # Global parameters
     parser.add_argument(
         "--port", type=int, default=None, help="Port for dev server (default: None)"
     )
     parser.add_argument("--server", action="store_true", help="server mode")
 
-    # 子命令解析器
+    # Subcommand parser
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # ===== start 子命令 ==============================================================================
+    # ===== start subcommand ==============================================================================
     start_parser = subparsers.add_parser("start", help="Start dev server")
 
-    # ===== stop 子命令 ==============================================================================
+    # ===== stop subcommand ==============================================================================
     stop_parser = subparsers.add_parser("stop", help="Stop dev server")
     stop_group = stop_parser.add_mutually_exclusive_group(required=False)
     stop_group.add_argument("--all", action="store_true", help="Stop all servers")
 
-    # ===== verilator 子命令 =========================================================================
+    # ===== verilator subcommand =========================================================================
     verilator_parser = subparsers.add_parser("verilator", help="Verilator operations")
-    # verilator 的互斥选项组 - 只能选择一个操作
+    # Mutually exclusive option group for verilator - only one operation can be selected
     verilator_group = verilator_parser.add_mutually_exclusive_group(required=True)
     verilator_group.add_argument(
         "--clean", action="store_true", help="Clean verilator build directory"
@@ -78,9 +78,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     )
 
-    # ===== vcs 子命令 =========================================================================
+    # ===== vcs subcommand =========================================================================
     vcs_parser = subparsers.add_parser("vcs", help="vcs operations")
-    # vcs 的互斥选项组 - 只能选择一个操作
+    # Mutually exclusive option group for vcs - only one operation can be selected
     vcs_group = vcs_parser.add_mutually_exclusive_group(required=True)
     vcs_group.add_argument(
         "--clean", action="store_true", help="Clean vcs build directory"
@@ -113,7 +113,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     )
 
-    # ===== sardine 子命令 =========================================================================
+    # ===== sardine subcommand =========================================================================
     sardine_parser = subparsers.add_parser("sardine", help="sardine operations")
     sardine_group = sardine_parser.add_mutually_exclusive_group(required=True)
     sardine_group.add_argument(
@@ -125,7 +125,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help='Run sardine. Args: "--workload <path>"',
     )
 
-    # ===== agent 子命令 =========================================================================
+    # ===== agent subcommand =========================================================================
     agent_parser = subparsers.add_parser("agent", help="agent operations")
     agent_group = agent_parser.add_mutually_exclusive_group(required=True)
     agent_group.add_argument(
@@ -137,7 +137,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help='Run agent. Args: "--message <message>", "--model <model>"',
     )
 
-    # ===== workload 子命令 =========================================================================
+    # ===== workload subcommand =========================================================================
     workload_parser = subparsers.add_parser("workload", help="workload operations")
     workload_group = workload_parser.add_mutually_exclusive_group(required=True)
     workload_group.add_argument(
@@ -149,12 +149,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Build workload. ",
     )
 
-    # ===== doc 子命令 =========================================================================
+    # ===== doc subcommand =========================================================================
     doc_parser = subparsers.add_parser("doc", help="doc operations")
     doc_group = doc_parser.add_mutually_exclusive_group(required=True)
     doc_group.add_argument("--deploy", action="store_true", help="Deploy doc. ")
 
-    # ===== marshal 子命令 =========================================================================
+    # ===== marshal subcommand =========================================================================
     marshal_parser = subparsers.add_parser("marshal", help="marshal operations")
     marshal_group = marshal_parser.add_mutually_exclusive_group(required=True)
     marshal_group.add_argument(
@@ -169,7 +169,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Launch marshal. ",
     )
 
-    # ===== firesim 子命令 =========================================================================
+    # ===== firesim subcommand =========================================================================
     firesim_parser = subparsers.add_parser("firesim", help="firesim operations")
     firesim_group = firesim_parser.add_mutually_exclusive_group(required=True)
     firesim_group.add_argument(
@@ -197,7 +197,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Run workload. ",
     )
 
-    # ===== compiler 子命令 =========================================================================
+    # ===== compiler subcommand =========================================================================
     compiler_parser = subparsers.add_parser("compiler", help="compiler operations")
     compiler_group = compiler_parser.add_mutually_exclusive_group(required=True)
     compiler_group.add_argument(
@@ -209,7 +209,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Build compiler. ",
     )
 
-    # ===== funcsim 子命令 =========================================================================
+    # ===== funcsim subcommand =========================================================================
     funcsim_parser = subparsers.add_parser("funcsim", help="funcsim operations")
     funcsim_group = funcsim_parser.add_mutually_exclusive_group(required=True)
     funcsim_group.add_argument(
@@ -219,7 +219,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--sim", type=str, nargs="?", const="", metavar="ARGS", help="Sim funcsim. "
     )
 
-    # ===== uvm 子命令 =========================================================================
+    # ===== uvm subcommand =========================================================================
     uvm_parser = subparsers.add_parser("uvm", help="uvm operations")
     uvm_group = uvm_parser.add_mutually_exclusive_group(required=True)
     uvm_group.add_argument(
@@ -229,29 +229,29 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build uvm. "
     )
 
-    # 解析参数，允许未知参数（这样 --port 可以在子命令中工作）
+    # Parse arguments, allowing unknown arguments (so --port can work in subcommands)
     args, unknown = parser.parse_known_args(argv)
 
-    # 如果 --port 和 --server 在未知参数中，手动处理
+    # If --port and --server are in unknown arguments, handle them manually
     while unknown:
         found = False
         for i in range(len(unknown)):
             if unknown[i] == "--port":
                 try:
                     args.port = int(unknown[i + 1])
-                    unknown = unknown[i + 2 :]  # 移除已处理的参数
+                    unknown = unknown[i + 2 :]  # Remove processed arguments
                     found = True
                     break
                 except (ValueError, IndexError):
                     break
             if unknown[i] == "--server":
                 args.server = True
-                unknown = unknown[i + 1 :]  # 移除已处理的参数
+                unknown = unknown[i + 1 :]  # Remove processed arguments
                 found = True
                 break
         if not found:
             break
-    # 如果有其他未知参数，报错
+    # If there are other unknown arguments, throw error
     if unknown:
         parser.error(f"unrecognized arguments: {' '.join(unknown)}")
 
@@ -259,26 +259,26 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def extract_command_info(args):
-    """通用的命令信息提取器，适用于所有命令"""
-    # 基础返回结构
+    """Generic command info extractor, applicable to all commands"""
+    # Basic return structure
     result = {"command": getattr(args, "command", None), "operation": None, "args": {}}
 
-    # 动态提取操作类型（遍历args的所有属性）
+    # Dynamically extract operation type (iterate through all attributes of args)
     for attr_name in dir(args):
-        # 跳过内置属性和已知的非操作属性
+        # Skip built-in attributes and known non-operation attributes
         if attr_name.startswith("_") or attr_name in ["command", "port"]:
             continue
 
         attr_value = getattr(args, attr_name)
-        # 找到值为True或非空字符串的属性（跳过None和False）
+        # Find attributes with value True or non-empty string (skip None and False)
         if attr_value is not None and attr_value is not False:
             result["operation"] = attr_name
             if attr_value is True:
-                # 布尔操作，如 --clean, --verilog
+                # Boolean operations, such as --clean, --verilog
                 result["args"] = {}
             else:
-                # 带参数的操作，如 --sim "arg_string"
-                # 解析参数字符串
+                # Operations with arguments, such as --sim "arg_string"
+                # Parse argument string
                 args_dict = {}
                 if attr_value:
                     try:
@@ -333,10 +333,10 @@ if __name__ == "__main__":
     # print(f"Arguments: {cmd_info['args']}")
 
     # ==================================================================================
-    # 两种模式 server mode 和 script mode
+    # Two modes: server mode and script mode
     #
-    # server mode: 手动启动/关闭 server，可以通过浏览器可视化访问对应的工作流
-    # script mode: 自动分配port，任务开始时自动开启服务，结束时自动关闭服务
+    # server mode: Manually start/stop server, can visualize and access workflows through browser
+    # script mode: Automatically assign port, start service when task begins, stop service when task ends
     # ==================================================================================
     if args.server:
         if cmd_info["command"] == "start":
@@ -419,8 +419,8 @@ if __name__ == "__main__":
             "funcsim",
             "uvm",
         ]:
-            # 1.启动服务在后台 ================================
-            # 如果指定了端口，则使用指定的端口, 否则，自动分配端口
+            # 1. Start service in background ================================
+            # If port is specified, use the specified port; otherwise, automatically assign port
             if args.port:
                 available_port = args.port
             else:
@@ -430,11 +430,11 @@ if __name__ == "__main__":
                 ["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir
             )
 
-            # 等待服务启动完成
+            # Wait for service to start
             max_retries = 30
             for i in range(max_retries):
                 try:
-                    # 禁用代理，直接连接localhost
+                    # Disable proxy, connect directly to localhost
                     # response = requests.get(f"http://localhost:{available_port}", timeout=1)
                     response = requests.get(
                         f"http://localhost:{available_port}",
@@ -459,11 +459,11 @@ if __name__ == "__main__":
                 proc.wait()
                 sys.exit(1)
 
-            # 2. 执行API调用 ================================
+            # 2. Execute API call ================================
             api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
             json_data = json.dumps(cmd_info["args"])
             print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
-            # 禁用代理，直接连接localhost
+            # Disable proxy, connect directly to localhost
             result = subprocess.run(
                 [
                     "curl",
@@ -483,14 +483,14 @@ if __name__ == "__main__":
                 text=True,
             )
 
-            # 3.关闭服务 ================================
+            # 3. Shutdown service ================================
             proc.terminate()
             proc.wait()
             print(
                 f"\nTask completed. Command running on http://localhost:{available_port} is finished"
             )
 
-            # 检查API返回的success字段
+            # Check the success field returned by API
             try:
                 response = json.loads(result.stdout)
                 if not response.get("success", False):

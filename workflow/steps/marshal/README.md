@@ -1,46 +1,46 @@
-# Marshal 工作流
+# Marshal Workflow
 
-BuckyBall 框架中的 Marshal 工作流，用于构建和启动 Marshal 组件。
+Marshal workflow in the BuckyBall framework, used to build and launch the Marshal component.
 
-## API 使用说明
+## API Usage Guide
 
 ### `build`
-**端点**: `POST /marshal/build`
+**Endpoint**: `POST /marshal/build`
 
-**功能**: 构建 Marshal 组件
+**Function**: Build Marshal component
 
-**参数**: 无特定参数
+**Parameters**: No specific parameters
 
-**示例**:
+**Example**:
 ```bash
 bbdev marshal --build
 ```
 
 ### `launch`
-**端点**: `POST /marshal/launch`
+**Endpoint**: `POST /marshal/launch`
 
-**功能**: 启动 Marshal 服务
+**Function**: Launch Marshal service
 
-**参数**: 无特定参数
+**Parameters**: No specific parameters
 
-**示例**:
+**Example**:
 ```bash
 bbdev marshal --launch
 ```
 
-## 典型工作流程
+## Typical Workflow
 
 ```bash
-# 1. 构建 Marshal
+# 1. Build Marshal
 bbdev marshal --build
 
-# 2. 启动 Marshal 服务
+# 2. Launch Marshal service
 bbdev marshal --launch
 ```
 
-## 响应格式
+## Response Format
 
-所有 API 调用返回统一格式：
+All API calls return a unified format:
 ```json
 {
   "status": 200,

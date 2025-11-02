@@ -1,4 +1,4 @@
-# 防止pre-commit检查未暂存的文件
+# Prevent pre-commit from checking unstaged files
 exclude: ^$
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
