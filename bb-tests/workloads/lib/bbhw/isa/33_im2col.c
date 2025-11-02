@@ -22,7 +22,7 @@ const InstructionConfig im2col_config = {
    ENCODE_FIELD(incol, 34, 5) | ENCODE_FIELD(inrow, 39, 5) |                   \
    ENCODE_FIELD(startcol, 49, 5) | ENCODE_FIELD(startrow, 54, 5))
 
-// IM2COL指令低级实现
+// IM2COL instruction low-level implementation
 #ifndef __x86_64__
 #define IM2COL_RAW(rs1, rs2)                                                   \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 33, x0, %0, %1"                \
@@ -30,10 +30,11 @@ const InstructionConfig im2col_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define IM2COL_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define IM2COL_RAW(rs1, rs2)
 #endif
 
-// IM2COL指令高级API实现
+// IM2COL instruction high-level API implementation
 void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
                uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
                uint32_t startcol) {

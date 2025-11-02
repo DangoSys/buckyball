@@ -18,7 +18,7 @@ const InstructionConfig matmul_ws_config = {
   (ENCODE_FIELD(wr_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
    ENCODE_FIELD(ws_flag, 25, 1))
 
-// MATMUL_WS指令低级实现
+// MATMUL_WS instruction low-level implementation
 #ifndef __x86_64__
 #define MATMUL_WS_RAW(rs1, rs2)                                                \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 27, x0, %0, %1"                \
@@ -26,10 +26,11 @@ const InstructionConfig matmul_ws_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define MATMUL_WS_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define MATMUL_WS_RAW(rs1, rs2)
 #endif
 
-// MATMUL_WS指令高级API实现
+// MATMUL_WS instruction high-level API implementation
 void bb_matmul_ws(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                   uint32_t iter) {
   uint64_t rs1_val = MATMUL_WS_ENCODE_RS1(op1_addr, op2_addr);

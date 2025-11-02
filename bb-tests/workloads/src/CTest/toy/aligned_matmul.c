@@ -4,8 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MATMUL_COL 50             // 16xn矩阵乘法的列数n
-#define MAX_ALIGNED_MATMUL_COL 64 // n的16字节对齐
+// Column count n for 16xn matrix multiplication
+#define MATMUL_COL 50
+// 16-byte alignment of n
+#define MAX_ALIGNED_MATMUL_COL 64
 static elem_t aligned_input_matrix_a[DIM * MAX_ALIGNED_MATMUL_COL]
     __attribute__((aligned(16)));
 static elem_t input_matrix_a[DIM * MATMUL_COL] __attribute__((aligned(16)));
@@ -15,9 +17,12 @@ static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
-  uint32_t op1_addr = spad_addr(0, 0); // spad0: 操作数A, 偏移0
-  uint32_t op2_addr = spad_addr(1, 0); // spad1: 操作数B, 偏移0
-  uint32_t wr_addr = spad_addr(4, 0);  // acc0: 写入累加器, 偏移0
+  // spad0: operand A, offset 0
+  uint32_t op1_addr = spad_addr(0, 0);
+  // spad1: operand B, offset 0
+  uint32_t op2_addr = spad_addr(1, 0);
+  // acc0: write to accumulator, offset 0
+  uint32_t wr_addr = spad_addr(4, 0);
   uint32_t col_stride = (size + DIM - 1) / DIM;
   for (int i = 0; i < col_stride; i++) {
     bb_mvin((uintptr_t)a + i * DIM, op2_addr + size + i * DIM, DIM, col_stride);

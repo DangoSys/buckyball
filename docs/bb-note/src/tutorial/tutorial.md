@@ -2,220 +2,216 @@
 
 > by -王博涵
 >
-> 本文档会逐步更新，作者也在不断出现的问题的中尝试解决并总结。
+> This document will be gradually updated as the author continues to solve and summarize encountered issues.
 
-本文档用于说明一个完整的`buckyball`开发流程的步骤顺序和各种问题的解决思路。我们以构建一个用于执行`relu()`函数的ball算子模块为例：
+This document explains the step-by-step process and problem-solving approaches for a complete `buckyball` development workflow. We use building a ball operator module for executing the `relu()` function as an example:
 
-第一步我们需要完成该模块的硬件代码编写，即编写`scala`语言的chisel硬件语言代码，并生成对应的`verilog`代码。
+First, we need to complete the hardware code writing for this module, i.e., write hardware code in Scala's Chisel language and generate corresponding `verilog` code.
 
-第二步我们需要编写测试软件去实现`relu()`，可以编写一个在`cpu`执行软件代码的对照函数和一个在我们第一步编写的专用硬件执行软件代码的实验函数，测试结果一致即成功，或者做第三步来测试。
+Second, we need to write test software to implement `relu()`, which can be a reference function that runs on `CPU` with software code and an experimental function that runs software code on the dedicated hardware written in step one. If the test results match, it's successful, or proceed to step three for testing.
 
-第三步，在硬件层上进行仿真，查看波形图进行debug。此外，还有一些其他的细节，比如编译文档的更改，指令集的更新等细节，下文会依次说明。
+Third, simulate at the hardware level, view waveform diagrams for debugging. Additionally, there are other details such as compiler documentation changes, instruction set updates, etc., which will be explained below.
 
-在开发中遇到问题，可访问[DangoSys/buckyball | DeepWiki](https://deepwiki.com/DangoSys/buckyball)或者[项目概览 - Buckyball Technical Documentation](https://dangosys.github.io/buckyball/index.html)
+When encountering issues during development, you can visit [DangoSys/buckyball | DeepWiki](https://deepwiki.com/DangoSys/buckyball) or [Project Overview - Buckyball Technical Documentation](https://dangosys.github.io/buckyball/index.html)
 
-Chisel学习资源：[binder](https://mybinder.org/v2/gh/freechipsproject/chisel-bootcamp/master)
+Chisel learning resources: [binder](https://mybinder.org/v2/gh/freechipsproject/chisel-bootcamp/master)
 
-在正式开始之前，我们先启动环境：
+Before starting officially, let's initialize the environment:
 
 ```
 cd /path/to/buckyball
 source env.sh
-// source ./env.sh 若报错试试这个
-// 全文所有路径都是以./buckyball为起点的相对路径
+// source ./env.sh if this gives an error
+// All paths in this document are relative paths starting from ./buckyball
 ```
 
-## 一、 编写Chisel硬件模块
+## I. Writing Chisel Hardware Module
 
-在 `arch/src/main/scala/prototype/` 目录下创建`ReLU`加速器的Chisel实现。参考现有的加速器结构，建议在 `prototype/` 下创建新的子目录，例如 `prototype/relu/Relu.scala`，编写硬件代码。
+Create a Chisel implementation of the `ReLU` accelerator in the `arch/src/main/scala/prototype/` directory. Referring to existing accelerator structures, it's recommended to create a new subdirectory under `prototype/`, for example `prototype/relu/Relu.scala`, and write the hardware code.
 
-## 二、硬件指令解码
+## II. Hardware Instruction Decoding
 
-接下来对硬件指令进行解码，需要在**硬件端**添加 ReLU 指令的支持，让硬件解码器认识这个指令，编写注册该ball的指令集。
+Next, decode hardware instructions. Support for ReLU instructions needs to be added on the **hardware side** so that the hardware decoder recognizes this instruction, and register the instruction set for this ball.
 
-该工作主要分为下面五个方面：
+This work is mainly divided into the following five aspects:
 
-- 指令枚举（DISA）定义了 func7 → 指令名（RELU）
-- 解码器（DomainDecoder）定义了 func7 → 解码规则（读/写/地址/iter）→ BID（例如 4）
-- 总线注册（busRegister）定义了 BID → 实际的 Ball 实例（索引为 4 的 ReluBall）
-- 保留站注册（rsRegister）用于 RS/发射描述，与 BID 对齐，便于系统的发射/完成管理与调试
-若任一环缺失或不一致，都会导致 ReLU 这条指令无法正确被识别/路由/落到实际硬件执行。
-- 创建一个新的 Ball 执行单元`class ReluUnit`来处理` ReLU`操作。
+- Instruction enumeration (DISA) defines func7 → instruction name (RELU)
+- Decoder (DomainDecoder) defines func7 → decoding rules (read/write/address/iter) → BID (e.g., 4)
+- Bus registration (busRegister) defines BID → actual Ball instance (ReluBall indexed at 4)
+- Reservation station registration (rsRegister) is used for RS/issue descriptions, aligned with BID, facilitating system issue/completion management and debugging
+If any link is missing or inconsistent, the ReLU instruction cannot be correctly recognized/routed/executed on actual hardware.
+- Create a new Ball execution unit `class ReluUnit` to handle ReLU operations.
 
-#### 1. 在 DISA.scala 中定义 RELU_BITPAT
+#### 1. Define RELU_BITPAT in DISA.scala
 
-`arch/src/main/scala/examples/toy/balldomain/DISA.scala` 定义 Ball 指令的 funct7 编码（BitPat），比如 TRANSPOSE、IM2COL 等。可以视作“指令集的枚举表”，供解码器匹配。
+`arch/src/main/scala/examples/toy/balldomain/DISA.scala` defines the funct7 encoding (BitPat) for Ball instructions, such as TRANSPOSE, IM2COL, etc. It can be viewed as an "instruction set enumeration table" for decoder matching.
 
-在此文件中添加 ReLU 指令的位模式定义:
+Add the bit pattern definition for the ReLU instruction in this file:
 
 ```
 val RELU_BITPAT = BitPat("b0100110") // func7 = 38 = 0x23
 ```
 
-#### 2. 在 Ball 域解码器中添加 ReLU 指令
+#### 2. Add ReLU instruction to Ball domain decoder
 
- `arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala` 是Ball域解码器。
-作用如下：
-- 输入：来自全局解码的 PostGDCmd（已经判断这是 Ball 类别的命令）。
-- 输出：结构化的 BallDecodeCmd，包括：
-  - 是否使用 op1/op2、是否写回 scratchpad、操作数是否来自 scratchpad
-  - 操作数/写回的 bank 与地址
-  - 迭代次数 iter
-  - 目标 Ball ID（BID）
-  - 其它专用字段 special 等
-- 内部通过 ListLookup(func7, ...)，把不同 funct7 的指令映射到一套布尔开关和字段抽取规则。
+`arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala` is the Ball domain decoder.
+Its functions are as follows:
+- Input: PostGDCmd from global decoding (already determined to be a Ball category command).
+- Output: Structured BallDecodeCmd, including:
+  - Whether to use op1/op2, whether to write back to scratchpad, whether operands come from scratchpad
+  - Operand/writeback bank and address
+  - Iteration count iter
+  - Target Ball ID (BID)
+  - Other dedicated fields special, etc.
+- Internally maps different funct7 instructions to a set of boolean switches and field extraction rules through ListLookup(func7, ...).
 
-此文件中在解码列表中添加 ReLU 指令的解码项。参考其他指令(如 TRANSPOSE_FUNC7 = 38)的实现方式,您需要:
+Add the decoding entry for the ReLU instruction in the decoding list in this file. Referring to the implementation of other instructions (e.g., TRANSPOSE_FUNC7 = 38), you need:
 
 ```
-// 在 BallDecodeFields 的 ListLookup 中添加
-RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0), 0.U(spAddrLen.W), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen), 7.U, rs2(63,spAddrLen + 10), Y) // 根据 ReLU 指令的具体需求填写解码字段，列表参数的数量一定要一致，可以参考其他指令
+// Add to BallDecodeFields ListLookup
+RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0), 0.U(spAddrLen.W), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen), 7.U, rs2(63,spAddrLen + 10), Y) // Fill in decoding fields according to specific ReLU instruction requirements, the number of list parameters must be consistent, you can refer to other instructions
 ```
 
+#### 3. Add ReLuBall generator and register it
 
+a. `arch/src/main/scala/examples/toy/balldomain/bbus/busRegister.scala` is the Ball bus registration table, using a `Seq(() => new SomeBall(...))` to register the actual Ball modules to be instantiated in the system.
 
-
-
-#### 3. 添加ReLuBall生成器并进行注册
-
-a. `arch/src/main/scala/examples/toy/balldomain/bbus/busRegister.scala`是Ball 总线注册表，用一个 `Seq(() => new 某Ball(...)) `注册系统里实际要实例化的 Ball 模块。
-
-在此文件中找到并添加ReLuBall的新ID。
+Find and add the new ID for ReLuBall in this file.
 
 ```
 class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters)
     extends BBus(
-      // 定义要注册的Ball设备生成器
+      // Define Ball device generator to register
       Seq(
         () => new examples.toy.balldomain.vecball.VecBall(0),
         () => new examples.toy.balldomain.matrixball.MatrixBall(1),
         () => new examples.toy.balldomain.im2colball.Im2colBall(2),
         () => new examples.toy.balldomain.transposeball.TransposeBall(3),
         ...
-        () =>new examples.toy.balldomain.reluball.ReluBall(7) // Ball ID 7 - 新添加
+        () =>new examples.toy.balldomain.reluball.ReluBall(7) // Ball ID 7 - newly added
       )
     ) {
   override lazy val desiredName = "BBusModule"
 }
 ```
 
-b. `arch/src/main/scala/examples/toy/balldomain/rs/rsRegister.scala`是"Ball 保留站"的注册表，用一个列表注册系统里有哪些 Ball（按 ballId 指定 ID、指定名称）。保留站（RS）负责管理 Ball 的发射、占用、完成等元信息，通常也用于可视化/统计、命名与日志。
+b. `arch/src/main/scala/examples/toy/balldomain/rs/rsRegister.scala` is the "Ball reservation station" registration table, using a list to register which Balls exist in the system (specifying ID and name by ballId). The reservation station (RS) is responsible for managing Ball issue, occupancy, completion and other metadata, usually also used for visualization/statistics, naming and logging.
 
-在此文件中进行ReluBall的注册:
+Register ReluBall in this file:
 
 ```
 class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters)
     extends BallReservationStation(
-      // 定义要注册的Ball设备信息
+      // Define Ball device information to register
       Seq(
         BallRsRegist(ballId = 0, ballName = "VecBall"),
         BallRsRegist(ballId = 1, ballName = "MatrixBall"),
         BallRsRegist(ballId = 2, ballName = "Im2colBall"),
         BallRsRegist(ballId = 3, ballName = "TransposeBall"),
         ...
-        BallRsRegist(ballId = 7, ballName = "ReluBall") // Ball ID 7 - 新添加
+        BallRsRegist(ballId = 7, ballName = "ReluBall") // Ball ID 7 - newly added
       )
     ) {
   override lazy val desiredName = "BallRSModule"
 }
 ```
-#### 4. 编写ReluBall的接口文件
+#### 4. Write ReluBall interface file
 
-在`arch/src/main/scala/examples/toy/balldomain`文件中创建`reluball`文件夹，进入文件夹后创建`ReluBall.scala`编写接口代码。
+Create a `reluball` folder in the `arch/src/main/scala/examples/toy/balldomain` directory, enter the folder and create `ReluBall.scala` to write the interface code.
 
-## 三、 编写测试软件与编译设置
+## III. Writing Test Software and Compilation Settings
 
-### 1. 创建测试文件
+### 1. Create test file
 
-在 `bb-tests/workloads/src/CTest/toy/` 下创建 `relu_test.c`, 编写测试代码，代码中核心函数会执行`void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);` 下文中要注意该函数的声明和定义。
+Create `relu_test.c` under `bb-tests/workloads/src/CTest/toy/`, write test code. The core function in the code will execute `void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);` Note the declaration and definition of this function below.
 
-### 2. 修改CMakeLists.txt
+### 2. Modify CMakeLists.txt
 
-在 `bb-tests/workloads/src/CTest/toy/CMakeLists.txt` 中添加测试目标： CMakeLists.txt:120-127
+Add test target in `bb-tests/workloads/src/CTest/toy/CMakeLists.txt`: CMakeLists.txt:120-127
 
 ```
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 ```
 
-并在总构建目标中添加： CMakeLists.txt:137-162
+And add to the main build target: CMakeLists.txt:137-162
 
 ```
 add_custom_target(buckyball-CTest-build ALL DEPENDS
-  # ... 其他测试 ...
+  # ... other tests ...
   ctest_relu_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)
 ```
 
-### 3. 需要添加ReLU指令API
+### 3. Need to add ReLU instruction API
 
 #### a. isa.h
 
-- 在 `bb-tests/workloads/lib/bbhw/isa/isa.h` 中添加`ReLU`指令的声明：` isa.h:33-43`
+- Add declaration for `ReLU` instruction in `bb-tests/workloads/lib/bbhw/isa/isa.h`: `isa.h:33-43`
 
-- 在 `InstructionType` 枚举中添加：
+- Add to `InstructionType` enum:
 
 ```
-RELU_FUNC7 = 38,  // 0x26 - ReLU function code (或您选择的其他值)
+RELU_FUNC7 = 38,  // 0x26 - ReLU function code (or other value you choose)
 ```
 
-- 在函数声明部分添加： `isa.h:72-73`
+- Add to function declaration section: `isa.h:72-73`
 
 ```
 void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 ```
 
-#### b.  isa.c
+#### b. isa.c
 
-- 在`bb-tests/workloads/lib/bbhw/isa`添加`38_relu.c`,在里面实现`void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter)`
+- Add `38_relu.c` in `bb-tests/workloads/lib/bbhw/isa`, implement `void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter)` inside
 
-- 在 `bb-tests/workloads/lib/bbhw/isa/isa.c` 中添加声明: `isa.c:53-76`
+- Add declaration in `bb-tests/workloads/lib/bbhw/isa/isa.c`: `isa.c:53-76`
 
 ```
 case RELU_FUNC7:
 	return &relu_config;
 ```
 
-- 在`isa.c:37-47`
+- In `isa.c:37-47`
 
 ```
 extern const InstructionConfig relu_config;
 ```
 
-### 4. 更新 CMakeLists.txt
+### 4. Update CMakeLists.txt
 
-在 `bb-tests/workloads/lib/bbhw/isa/CMakeLists.txt` 中的三个编译命令中都添加 `38_relu.c` 的编译和链接:
+Add compilation and linking of `38_relu.c` in all three compilation commands in `bb-tests/workloads/lib/bbhw/isa/CMakeLists.txt`:
 
-1. **Linux 版本**:在 `add_custom_command` 的 `COMMAND` 中添加:
+1. **Linux version**: Add in `COMMAND` of `add_custom_command`:
 
    ```
    && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-38_relu.o
    ```
 
-   并在 `ar rcs` 命令中添加 `linux-38_relu.o`
+   And add `linux-38_relu.o` to the `ar rcs` command
 
-2. **Baremetal 版本**:在 `add_custom_command` 的 `COMMAND` 中添加:
+2. **Baremetal version**: Add in `COMMAND` of `add_custom_command`:
 
    ```
    && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-38_relu.o
    ```
 
-   并在 `ar rcs` 命令中添加 `baremetal-38_relu.o`
+   And add `baremetal-38_relu.o` to the `ar rcs` command
 
-3. **x86 版本**:在 `add_custom_command` 的 `COMMAND` 中添加:
+3. **x86 version**: Add in `COMMAND` of `add_custom_command`:
 
    ```
    && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-38_relu.o
    ```
 
-   并在 `ar rcs` 命令中添加 `x86-38_relu.o`
+   And add `x86-38_relu.o` to the `ar rcs` command
 
-4. 开头的ISA子模块库需要添加对应的**38_relu.c**文件。
+4. The ISA submodule library at the beginning needs to add the corresponding **38_relu.c** file.
 
 
-## 四、 测试操作步骤
+## IV. Test Operation Steps
 
-### 步骤1: 编译测试程序
+### Step 1: Compile test program
 
 ```
 cd bb-tests/build
@@ -223,54 +219,54 @@ rm -rf *
 cmake -G Ninja ../
 ```
 
-**Warning**：执行`rm -rf * `之前一定要检查是否在`bb-tests/build `目录里面，否则在错误的文件夹里面强制删除重要文件将会带来灾难！
+**Warning**: Before executing `rm -rf *`, make sure you are in the `bb-tests/build` directory, otherwise forcing deletion in the wrong folder will be catastrophic!
 
-若灾难发生了，可以从GitHub重新拉取初始文档，但自己在服务器端更新的文件无法复原。
+If a disaster occurs, you can pull the initial documents from GitHub again, but files updated on the server side cannot be recovered.
 
 ```
-ninja ctest_relu_test // 软件编译
-ninja sync-bin  // 同步二进制文件
+ninja ctest_relu_test // Software compilation
+ninja sync-bin  // Synchronize binary files
 ```
 
-若`ninja ctest_relu_test`执行后报错，这是软件编译没有通过，请检查**”三、 编写测试软件“**等相关文件。
+If `ninja ctest_relu_test` reports an error after execution, this means software compilation failed, please check **"III. Writing Test Software"** and related files.
 
-### 步骤2: 生成Verilog
+### Step 2: Generate Verilog
 
 ```
 cd buckyball
 bbdev verilator --verilog
 ```
 
-若`bbdev verilator --verilog`执行后报错，这是硬件编译没有通过，请检查**“一、 编写Chisel硬件模块 二、编译适配准备”**相关文件。
+If `bbdev verilator --verilog` reports an error after execution, this means hardware compilation failed, please check **"I. Writing Chisel Hardware Module II. Compilation Adaptation Preparation"** related files.
 
 
-### 步骤3: 运行仿真
+### Step 3: Run simulation
 
 ```
 bbdev verilator --run '--jobs 16 --binary ctest_relu_test_singlecore-baremetal --batch'
 ```
 
-若`bbdev verilator --verilog`执行后报错，这是硬件系统有超时，卡死等问题，请检查**一、 编写Chisel硬件模块**相关文件。
+If `bbdev verilator --verilog` reports an error after execution, this means the hardware system has timeout, deadlock and other issues, please check **I. Writing Chisel Hardware Module** related files.
 
-### 步骤5：查看仿真文件
+### Step 5: View simulation files
 
-在`arch/waveform/仿真文件名(E.g.2025-10-08-00-03-ctest_vecunit_matmul_random1_singlecore-baremetal)`中，将`waveform.fst`文件用本地系统的`Filezilla`等软件下载到本地上，在本地的仿真波形查看器(E.g. GTKWave)进行波形查看。
+In `arch/waveform/SimulationFileName(E.g.2025-10-08-00-03-ctest_vecunit_matmul_random1_singlecore-baremetal)`, download the `waveform.fst` file to your local system using software like `Filezilla`, and view the waveform using a local simulation waveform viewer (E.g. GTKWave).
 
-注意，仿真文件所在的文件夹只能由`waveform.fst`一个文件，若存在`waveform.fst.hier`文件则代表仿真失败.
+Note that the simulation file folder should only contain the `waveform.fst` file. If a `waveform.fst.hier` file exists, it means the simulation failed.
 
-若波形没有满足理论情况，请在软件测试代码没有问题的情况下检查**一、 编写Chisel硬件模块**相关文件。
+If the waveform does not meet theoretical conditions, check **I. Writing Chisel Hardware Module** related files when the software test code is correct.
 
-软件代码是否有问题可以参考其在`cpu`执行的结果，可以更改`relu_test.c`文件暂时完全移除硬件加速器调用，只测试 CPU 版本。
+To check if the software code has problems, you can refer to its execution results on `CPU`. You can temporarily completely remove hardware accelerator calls from the `relu_test.c` file and only test the CPU version.
 
-## 五、仿真波形
-将`waveform.fst`导入到本地后，用[GTKWAVE](https://zhuanlan.zhihu.com/p/647533706)，在工程索引中寻找：
-`TOP.TestHarness.chiptop0.system.tile_prci_domain.element_reset_domain_tile.buckyball.ballDomain.bbus.balls_4.reluUnit`该文件下的常量就是我们Relu.scala用到的所用硬件常量，双击便可查看波形！
+## V. Simulation Waveform
+After importing `waveform.fst` locally, use [GTKWAVE](https://zhuanlan.zhihu.com/p/647533706) to find in the project index:
+`TOP.TestHarness.chiptop0.system.tile_prci_domain.element_reset_domain_tile.buckyball.ballDomain.bbus.balls_4.reluUnit` The constants under this file are all hardware constants used by Relu.scala, double-click to view the waveform!
 
-> 不同例程的一些命名可能不会完全一样，但基本相差不大
+> Some naming for different routines may not be exactly the same, but they are basically similar
 
-## 六、性能测试
+## VI. Performance Testing
 
-### 查询所用时钟周期数量-速度性能衡量参数
+### Query number of clock cycles used - speed performance metric
 ```Scala
 cat /home/MikeNotFound/code/buckyball/arch/log/2025-10-24-16-59-ctest_relu_test_singlecore-baremetal/disasm.log | grep "PMC"
 ```

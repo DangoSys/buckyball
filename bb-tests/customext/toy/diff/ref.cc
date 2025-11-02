@@ -7,34 +7,34 @@
 #include <cstring>
 #include <dlfcn.h>
 
-// 全局difftest状态
+// Global difftest state
 static bool difftest_enabled = false;
 static bool difftest_running = false;
 
-// DUT库相关
+// DUT library related
 static void *dut_handle = nullptr;
 static void (*ball_exec_once)() = nullptr;
 static bool dut_init = false;
 
 void difftest_init() {
   difftest_enabled = true;
-  printf("Difftest初始化完成\n");
+  printf("Difftest initialization complete\n");
 }
 
 void difftest_exec(uint64_t n) {
-  // 空实现
+  // Empty implementation
 }
 
 void difftest_cleanup() {
   difftest_enabled = false;
-  printf("Difftest清理完成\n");
+  printf("Difftest cleanup complete\n");
 }
 
 void difftest_start(bool enable) {
   if (!enable || !difftest_enabled)
     return;
 
-  printf("=== 开始difftest ===\n");
+  printf("=== Start difftest ===\n");
   difftest_running = true;
 }
 
@@ -42,6 +42,6 @@ void difftest_end(bool enable) {
   if (!enable || !difftest_enabled)
     return;
 
-  printf("=== 结束difftest ===\n");
+  printf("=== End difftest ===\n");
   difftest_running = false;
 }

@@ -4,7 +4,7 @@
 
 // Matrix multiplication using bbfp pattern
 void toy_t::bbfp_mul(reg_t rs1, reg_t rs2) {
-  // 使用库中的字段提取函数
+  // Use field extraction functions from library
   const InstructionConfig *cfg = config(BBFP_MUL_FUNC7);
 
   auto const op1_spaddr = get_bbinst_field(rs1, "op1_spaddr", cfg->rs1_fields);

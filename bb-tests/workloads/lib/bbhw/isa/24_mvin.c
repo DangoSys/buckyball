@@ -15,7 +15,7 @@ const InstructionConfig mvin_config = {
   (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
    ENCODE_FIELD(col_stride, 25, 10))
 
-// MVIN指令低级实现
+// MVIN instruction low-level implementation
 #ifndef __x86_64__
 #define MVIN_RAW(rs1, rs2)                                                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 24, x0, %0, %1"                \
@@ -23,10 +23,11 @@ const InstructionConfig mvin_config = {
                : "r"(rs1), "r"(rs2)                                            \
                : "memory")
 #else
-#define MVIN_RAW(rs1, rs2) /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define MVIN_RAW(rs1, rs2)
 #endif
 
-// MVIN指令高级API实现
+// MVIN instruction high-level API implementation
 void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
              uint32_t col_stride) {
   uint64_t rs1_val = MVIN_ENCODE_RS1(mem_addr);

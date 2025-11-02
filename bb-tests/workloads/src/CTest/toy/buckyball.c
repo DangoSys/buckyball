@@ -178,7 +178,8 @@ void init_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
   srand(seed);
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      matrix[i * cols + j] = (rand() % 5); // 0-4的随机数
+      // Random number in range 0-4
+      matrix[i * cols + j] = (rand() % 5);
     }
   }
 }
@@ -199,7 +200,7 @@ void init_sequence_matrix(elem_t *matrix, int rows, int cols) {
     }
   }
 }
-// 初始化列对齐的随机矩阵和原始矩阵
+// Initialize column-aligned random matrix and original matrix
 void init_col_aligned_random_matrix(elem_t *aligned_matrix, elem_t *matrix,
                                     int align, int rows, int cols, int seed) {
   srand(seed);
@@ -215,7 +216,7 @@ void init_col_aligned_random_matrix(elem_t *aligned_matrix, elem_t *matrix,
     }
   }
 }
-// 转置矩阵
+// Transpose matrix
 void transpose_u8_matrix(elem_t *src, elem_t *dst, int rows, int cols) {
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
@@ -231,7 +232,7 @@ void transpose_u32_matrix(result_t *src, result_t *dst, int rows, int cols) {
   }
 }
 
-// CPU矩阵乘法（用于生成期望结果）
+// CPU matrix multiplication (used to generate expected results)
 void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
                 int inner) {
   clear_u32_matrix(c, rows, cols);

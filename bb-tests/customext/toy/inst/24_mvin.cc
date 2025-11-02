@@ -5,9 +5,9 @@
 
 // Move data from DRAM to scratchpad
 // rs1: mem_addr, rs2: sp_addr[spAddrLen-1:0] | rows[spAddrLen+9:spAddrLen]
-// 每次都搬运完整的行(DIM个元素)
+// Always transfer complete row (DIM elements)
 void toy_t::mvin(reg_t rs1, reg_t rs2) {
-  // 使用库中的字段提取函数
+  // Use field extraction functions from library
   const InstructionConfig *cfg = config(MVIN_FUNC7);
 
   auto const base_dram_addr =

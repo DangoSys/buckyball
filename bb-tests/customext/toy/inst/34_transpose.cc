@@ -4,7 +4,7 @@
 #include <cassert>
 
 void toy_t::transpose(reg_t rs1, reg_t rs2) {
-  // 使用库中的字段提取函数
+  // Use field extraction functions from library
   const InstructionConfig *cfg = config(TRANSPOSE_FUNC7);
 
   auto const op_spaddr = get_bbinst_field(rs1, "op_spaddr", cfg->rs1_fields);

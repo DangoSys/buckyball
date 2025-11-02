@@ -209,7 +209,8 @@ async def handler(input_data, context):
             "  - Pass 'baseUrl' in request\n\n"
             "Example:\n"
             "  export BASE_URL='https://api.deepseek.com/v1'\n"
-            "  # or for Claude:\n"
+            # or for Claude:\n"
+            "
             "  export BASE_URL='https://api.anthropic.com/v1'\n"
         )
         context.logger.error(error_msg)
@@ -285,7 +286,8 @@ async def handler(input_data, context):
 
     files_created = []
     files_read = []
-    max_iterations = 10  # 防止无限循环
+    # 防止无限循环
+    max_iterations = 10
     iteration = 0
 
     # 获取工具定义
@@ -518,7 +520,8 @@ This is iteration {iteration}. If you return text again, the system will fail.""
                                     "content": force_message,
                                 }
                             )
-                            continue  # 继续下一轮迭代
+                            # 继续下一轮迭代
+                            continue
                         else:
                             # 已经超过5轮且调用过 call_agent，或没有错误反馈，正常结束
                             final_response = assistant_message.get("content", "")
@@ -571,7 +574,8 @@ write_file(
 不要只返回文本，必须调用 write_file 工具！""",
                                     }
                                 )
-                                continue  # 继续下一轮迭代
+                                # 继续下一轮迭代
+                                continue
 
                         # 正常结束
                         context.logger.info(f"任务完成: {final_response}")
@@ -599,7 +603,8 @@ write_file(
                         arguments=tool_args,
                         work_dir=work_dir,
                         logger=context.logger,
-                        model=model,  # 传递当前使用的 model
+                        # 传递当前使用的 model
+                        model=model,
                     )
 
                     # 记录工具返回结果
@@ -635,7 +640,8 @@ write_file(
 
             # 保存会话（TTL 24小时）
             if session_id:
-                session_ttl = int(os.getenv("SESSION_TTL", "86400"))  # 默认 24 小时
+                # 默认 24 小时
+                session_ttl = int(os.getenv("SESSION_TTL", "86400"))
                 SESSION_STORE.set(session_id, messages, ttl=session_ttl)
                 context.logger.info(
                     f"会话 {session_id} 已保存，消息数: {len(messages)}, TTL: {session_ttl}s"

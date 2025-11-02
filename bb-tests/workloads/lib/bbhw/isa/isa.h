@@ -18,18 +18,18 @@ typedef int32_t result_t;
 #define STR(x) STR1(x)
 #endif
 
-// 通用字段编码宏
+// Generic field encoding macro
 #define ENCODE_FIELD(value, start_bit, width)                                  \
   (((value) & ((1ULL << (width)) - 1)) << (start_bit))
 
-// 位字段配置结构
+// Bit field configuration structure
 typedef struct {
-  const char *name;   // 字段名称 (NULL表示数组结束)
-  uint32_t start_bit; // 起始位
-  uint32_t end_bit;   // 结束位(包含)
+  const char *name;   // Field name (NULL indicates end of array)
+  uint32_t start_bit; // Start bit
+  uint32_t end_bit;   // End bit (inclusive)
 } BitFieldConfig;
 
-// 指令类型枚举 - 直接使用func7值
+// Instruction type enum - directly uses func7 values
 typedef enum {
   MVIN_FUNC7 = 24,       // 0x18 - Move in function code
   MVOUT_FUNC7 = 25,      // 0x19 - Move out function code
@@ -44,19 +44,21 @@ typedef enum {
   BBUS_CONFIG_FUNC7 = 39 // 0x27 - BBUS configuration function code
 } InstructionType;
 
-// 指令配置结构 (for simulator)
+// Instruction configuration structure (for simulator)
 typedef struct {
-  const BitFieldConfig *rs1_fields; // rs1寄存器的字段配置 (以NULL name结尾)
-  const BitFieldConfig *rs2_fields; // rs2寄存器的字段配置 (以NULL name结尾)
+  // Field configuration for rs1 register (terminated by NULL name)
+  const BitFieldConfig *rs1_fields;
+  // Field configuration for rs2 register (terminated by NULL name)
+  const BitFieldConfig *rs2_fields;
 } InstructionConfig;
 
-// 通用字段获取函数 (for simulator)
+// Generic field access functions (for simulator)
 uint32_t get_bbinst_field(uint64_t value, const char *field_name,
                           const BitFieldConfig *config);
 void set_bbinst_field(uint64_t *value, const char *field_name,
                       uint32_t field_value, const BitFieldConfig *config);
 
-// 高级别API (for CTest)
+// High-level API (for CTest)
 
 void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
              uint32_t col_stride);
@@ -78,7 +80,7 @@ void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_bbus_config(uint32_t src_bid, uint32_t dst_bid, uint64_t enable);
 void bb_flush(void);
 
-// 通过func7获取指令配置
+// Get instruction configuration by func7
 const InstructionConfig *config(InstructionType func7);
 
 /* End of pure C header */

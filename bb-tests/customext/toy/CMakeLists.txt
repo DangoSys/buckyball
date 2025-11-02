@@ -45,7 +45,7 @@ target_link_libraries(toy PRIVATE
   dl
 )
 
-# 添加依赖，确保bbhw-x86在toy之前构建，并链接生成的库文件
+# Add dependency to ensure bbhw-x86 is built before toy and link the generated library
 add_dependencies(toy bbhw-x86)
 target_link_libraries(toy PRIVATE ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-x86.a)
 

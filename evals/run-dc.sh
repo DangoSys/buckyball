@@ -49,34 +49,34 @@ mkdir -p $REPORT_DIR
 mkdir -p $TMP_DIR
 
 #-------------------------------------------------------------------
-# Step0 执行build Verilator
+# Step0 Execute build Verilator
 #-------------------------------------------------------------------
 # ${CYDIR}/voyager-test/scripts/build-verilator.sh --config ${CONFIG}
 
 #-------------------------------------------------------------------
-# Step1 搬运对应Config的Verilog到工作目录
+# Step1 Copy Verilog files for corresponding Config to work directory
 #-------------------------------------------------------------------
 DESIGN_SOURCE_DIR="${CYDIR}/${SRC_DIR}"
 rm -rf ${DESIGN_DIR}/*
 cp -r ${DESIGN_SOURCE_DIR}/* ${DESIGN_DIR}/
 
 #-------------------------------------------------------------------
-# Step2 替换SRAM
+# Step2 Replace SRAM
 #-------------------------------------------------------------------
-# echo "正在检查SRAM  File..."
+# echo "Checking SRAM File..."
 # python ${CYDIR}/voyager-test/scripts/read_json.py $DB_FILE $DESIGN_DIR "/home/hxm123/tapeout-Voyager/sims/verilator/generated-src/chipyard.harness.TestHarness.GemminiRocketConfig/gen-collateral/metadata/seq_mems.json"
 
 #-------------------------------------------------------------------
-# Step3 编写tcl脚本
+# Step3 Write tcl script
 #-------------------------------------------------------------------
 
 
-# 将文件路径格式化为 Tcl 所需的字符串（以空格分隔）
+# Format file paths as Tcl required string (space-separated)
 tcl_db_list=""
 
 
 cat > $TCL_FILE << EOF
-# 设置搜索路径
+# Set search path
 set search_path [list . $DESIGN_DIR]
 define_design_lib work -path $TMP_DIR
 
@@ -91,15 +91,15 @@ set link_library "$tcl_db_list\
 /data0/tools/lib/db/scc28nhkcp_hdc35p140_rvt_ffg_v0p99_0c_ecsm.db \
 "
 
-# 读取设计文件
+# Read design files
 set file_list [glob -nocomplain -directory $DESIGN_DIR *.sv ]
 analyze -format sverilog \$file_list
 elaborate $TOP_MODULE
 
-# 设置顶层模块名
+# Set top module name
 set current_design "$TOP_MODULE"
 
-# 链接设计
+# Link design
 link
 
 create_clock -name clk1 -period 2 [get_ports clock]
@@ -109,11 +109,11 @@ set_clock_uncertainty 0.6 [get_clocks clock]
 set_input_delay 1.2 -clock clk1  [remove_from_collection [all_inputs] [get_ports clock]]
 set_output_delay 0.6 -clock clk1 [all_outputs]
 
-#同频同相位
+# Same frequency same phase
 
 set_clock_equivalence clk1 
 
-#输出负载 
+# Output load 
 
 set_load 0.08 [all_outputs]
 
@@ -126,20 +126,20 @@ set_clock_transition 0.08 [get_clocks clk1]
 compile_ultra -retime -scan 
 write -format ddc -hierarchy -output $REPORT_DIR/design_compiled.ddc
 
-# 生成报告
+# Generate reports
 report_area -hierarchy -nosplit > $REPORT_DIR/area.rpt
 report_timing > $REPORT_DIR/timing.rpt    
 report_power -hierarchy > $REPORT_DIR/power.rpt
 
-# 保存网表
+# Save netlist
 write -format verilog -output $REPORT_DIR/netlist.v
 
-# 退出
+# Exit
 exit
 EOF
 
 #-------------------------------------------------------------------
-# Step4 运行DC
+# Step4 Run DC
 #-------------------------------------------------------------------
 echo "Running DC synthesis for design: ${CONFIG}, top module: $TOP_MODULE"
 dc_shell -f $TCL_FILE 

@@ -8,12 +8,12 @@
 extern "C" {
 #endif
 
-// Difftest接口函数
+// Difftest interface functions
 void difftest_init();
 void difftest_exec(uint64_t n);
 void difftest_cleanup();
 
-// difftest触发接口
+// Difftest trigger interface
 void difftest_start(bool enable);
 void difftest_end(bool enable);
 

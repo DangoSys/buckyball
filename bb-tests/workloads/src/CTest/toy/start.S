@@ -18,4 +18,5 @@ _start:
 
 .align 12
 stack_space:
-    .space 0x8000      # 32KB 栈空间
+    # 32KB stack space
+    .space 0x8000
