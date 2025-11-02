@@ -1,6 +1,6 @@
 """
-SUMMARY.md管理器
-负责解析和更新mdBook的SUMMARY.md文件
+SUMMARY.md manager
+Responsible for parsing and updating mdBook's SUMMARY.md file
 """
 
 import os
@@ -9,14 +9,14 @@ from pathlib import Path
 
 
 class SummaryManager:
-    """SUMMARY.md管理器"""
+    """SUMMARY.md manager"""
 
     def __init__(self):
         self.project_root = Path.cwd()
         self.docs_base = self.project_root / "docs" / "bb-note" / "src"
 
     def parse_summary(self, summary_path):
-        """解析SUMMARY.md文件，返回结构化数据"""
+        """Parse SUMMARY.md file and return structured data"""
         if not os.path.exists(summary_path):
             return {"sections": [], "entries": [], "original_content": ""}
 
@@ -37,7 +37,7 @@ class SummaryManager:
         return {"entries": entries, "original_content": content}
 
     def generate_entry(self, target_path, docs_path, doc_type):
-        """为新文档生成SUMMARY.md条目"""
+        """Generate SUMMARY.md entry for new documentation"""
         docs_file = Path(docs_path)
 
         try:
@@ -45,7 +45,7 @@ class SummaryManager:
         except ValueError:
             relative_path = docs_file
 
-        title = Path(target_path).parts[-1] if Path(target_path).parts else "未知文档"
+        title = Path(target_path).parts[-1] if Path(target_path).parts else "Unknown Document"
         indent_level = self._determine_indent_level(target_path, doc_type)
         indent = "\t" * indent_level
 
@@ -60,7 +60,7 @@ class SummaryManager:
         }
 
     def _determine_indent_level(self, target_path, doc_type):
-        """根据目录路径和文档类型确定缩进级别"""
+        """Determine indent level based on directory path and document type"""
         path_parts = Path(target_path).parts
         base_level = 1
 
@@ -71,27 +71,27 @@ class SummaryManager:
         return max(0, base_level)
 
     def update_summary(self, summary_path, new_entry):
-        """更新SUMMARY.md文件，添加新条目"""
+        """Update SUMMARY.md file, add new entry"""
         summary_data = self.parse_summary(summary_path)
 
-        # 检查重复
+        # Check for duplicates
         existing_paths = [entry["path"] for entry in summary_data["entries"]]
         if new_entry["path"] in existing_paths:
-            return False, "条目已存在"
+            return False, "Entry already exists"
 
-        # 插入新条目
+        # Insert new entry
         lines = summary_data["original_content"].split("\n")
         new_lines = self._insert_entry(lines, new_entry)
 
-        # 写回文件
+        # Write back to file
         new_content = "\n".join(new_lines)
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write(new_content)
 
-        return True, "SUMMARY.md已更新"
+        return True, "SUMMARY.md updated"
 
     def _insert_entry(self, lines, new_entry):
-        """在适当位置插入新条目"""
+        """Insert new entry at appropriate position"""
         new_lines = []
         inserted = False
 

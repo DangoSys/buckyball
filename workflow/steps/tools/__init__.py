@@ -1,24 +1,24 @@
 """
-Function Calling 工具管理模块
+Function Calling Tool Management Module
 
-这个模块提供了一套完整的 Function Calling 工具管理系统，包括：
-- 工具基类定义
-- 工具注册和管理
-- 预定义工具集
-- 工具执行上下文
+This module provides a complete Function Calling tool management system, including:
+- Tool base class definitions
+- Tool registration and management
+- Predefined tool sets
+- Tool execution context
 
-使用示例：
+Usage example:
 
 ```python
 from tools import create_code_agent_manager
 
-# 创建工具管理器
+# Create tool manager
 manager = create_code_agent_manager()
 
-# 获取工具定义（用于发送给 LLM）
+# Get tool definitions (to send to LLM)
 tools_schema = manager.get_tools_schema()
 
-# 执行工具调用
+# Execute tool call
 result = manager.execute_tool(
   tool_name="read_file",
   arguments={"path": "main.py"},
@@ -52,13 +52,13 @@ from .presets import (
 )
 
 __all__ = [
-    # 基础类
+    # Base classes
     "Tool",
     "ToolContext",
-    # 注册和管理
+    # Registration and management
     "ToolRegistry",
     "ToolManager",
-    # 文件操作工具
+    # File operation tools
     "ReadFileTool",
     "WriteFileTool",
     "ListFilesTool",
@@ -66,13 +66,13 @@ __all__ = [
     "DeleteFileTool",
     "GetPathTool",
     "GrepFilesTool",
-    # Agent 协调
+    # Agent coordination
     "CallAgentTool",
-    # API 工具
+    # API tools
     "WorkflowAPITool",
     "DeepwikiAskTool",
     "DeepwikiReadWikiTool",
-    # 预定义工具集
+    # Predefined tool sets
     "create_file_tools",
     "create_code_agent_tools",
     "create_default_manager",

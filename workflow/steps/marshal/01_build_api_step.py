@@ -16,7 +16,7 @@ async def handler(req, context):
     body = req.get("body") or {}
     await context.emit({"topic": "marshal.build", "data": body})
     # ==================================================================================
-    #  等待仿真结果
+    #  Wait for result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

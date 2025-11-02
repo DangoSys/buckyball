@@ -1,4 +1,4 @@
-"""Function Calling 工具基础类"""
+"""Function Calling tool base classes"""
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -6,7 +6,7 @@ import json
 
 
 class Tool(ABC):
-    """工具基类"""
+    """Tool base class"""
 
     def __init__(self):
         self.name = self.get_name()
@@ -15,35 +15,35 @@ class Tool(ABC):
 
     @abstractmethod
     def get_name(self) -> str:
-        """返回工具名称"""
+        """Return tool name"""
         pass
 
     @abstractmethod
     def get_description(self) -> str:
-        """返回工具描述"""
+        """Return tool description"""
         pass
 
     @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:
-        """返回工具参数定义（JSON Schema）"""
+        """Return tool parameter definition (JSON Schema)"""
         pass
 
     @abstractmethod
     def execute(self, arguments: Dict[str, Any], context: Any) -> str:
         """
-        执行工具
+        Execute tool
 
         Args:
-            arguments: 工具参数
-            context: 执行上下文（包含 logger、work_dir 等）
+            arguments: Tool parameters
+            context: Execution context (contains logger, work_dir, etc.)
 
         Returns:
-            执行结果（字符串格式）
+            Execution result (string format)
         """
         pass
 
     def to_openai_format(self) -> Dict[str, Any]:
-        """转换为 OpenAI Function Calling 格式"""
+        """Convert to OpenAI Function Calling format"""
         return {
             "type": "function",
             "function": {
@@ -55,23 +55,23 @@ class Tool(ABC):
 
     def safe_execute(self, arguments: Any, context: Any) -> str:
         """
-        安全执行工具（带错误处理）
+        Safely execute tool (with error handling)
 
         Args:
-            arguments: 工具参数（可能是字符串或字典）
-            context: 执行上下文
+            arguments: Tool parameters (can be string or dict)
+            context: Execution context
 
         Returns:
-            执行结果或错误信息
+            Execution result or error message
         """
         try:
-            # 解析参数
+            # Parse arguments
             if isinstance(arguments, str):
                 args = json.loads(arguments)
             else:
                 args = arguments
 
-            # 执行工具
+            # Execute tool
             result = self.execute(args, context)
             return result
 
@@ -92,7 +92,7 @@ class Tool(ABC):
 
 
 class ToolContext:
-    """工具执行上下文"""
+    """Tool execution context"""
 
     def __init__(self, work_dir: str, logger: Any = None, **kwargs):
         self.work_dir = work_dir
@@ -100,14 +100,14 @@ class ToolContext:
         self.extra = kwargs
 
     def log_info(self, message: str):
-        """记录信息日志"""
+        """Log info message"""
         if self.logger:
             self.logger.info(message)
         else:
             print(f"[INFO] {message}")
 
     def log_error(self, message: str):
-        """记录错误日志"""
+        """Log error message"""
         if self.logger:
             self.logger.error(message)
         else:

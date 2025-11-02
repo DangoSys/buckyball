@@ -1,4 +1,4 @@
-"""预定义的工具集"""
+"""Predefined tool sets"""
 
 from typing import List
 from .base import Tool
@@ -18,7 +18,7 @@ from .registry import ToolManager
 
 
 def create_file_tools() -> List[Tool]:
-    """创建文件操作工具集"""
+    """Create file operation tool set"""
     return [
         ReadFileTool(),
         WriteFileTool(),
@@ -31,9 +31,9 @@ def create_file_tools() -> List[Tool]:
 
 
 def create_code_agent_tools() -> List[Tool]:
-    """创建 Code Agent 工具集（包含所有必需工具）"""
+    """Create Code Agent tool set (includes all required tools)"""
     return [
-        # 文件操作
+        # File operations
         ReadFileTool(),
         WriteFileTool(),
         ListFilesTool(),
@@ -41,7 +41,7 @@ def create_code_agent_tools() -> List[Tool]:
         DeleteFileTool(),
         GetPathTool(),
         GrepFilesTool(),
-        # Agent 协调
+        # Agent coordination
         CallAgentTool(),
         # Workflow API
         WorkflowAPITool(),
@@ -52,20 +52,20 @@ def create_code_agent_tools() -> List[Tool]:
 
 
 def create_default_manager() -> ToolManager:
-    """创建默认工具管理器"""
+    """Create default tool manager"""
     manager = ToolManager()
     manager.register_tools(create_file_tools())
     return manager
 
 
 def create_code_agent_manager() -> ToolManager:
-    """创建 Code Agent 专用工具管理器"""
+    """Create Code Agent dedicated tool manager"""
     manager = ToolManager()
     manager.register_tools(create_code_agent_tools())
     return manager
 
 
-# 预定义的工具集配置
+# Predefined tool set configurations
 PRESET_CONFIGS = {
     "file_tools": {
         "name": "File Operations",
@@ -82,16 +82,16 @@ PRESET_CONFIGS = {
 
 def get_preset(name: str) -> List[Tool]:
     """
-    获取预定义工具集
+    Get predefined tool set
 
     Args:
-        name: 工具集名称（"file_tools", "code_agent"）
+        name: Tool set name ("file_tools", "code_agent")
 
     Returns:
-        工具列表
+        Tool list
 
     Raises:
-        ValueError: 如果工具集不存在
+        ValueError: If tool set does not exist
     """
     config = PRESET_CONFIGS.get(name)
     if not config:
@@ -102,5 +102,5 @@ def get_preset(name: str) -> List[Tool]:
 
 
 def list_presets() -> List[str]:
-    """列出所有可用的预定义工具集"""
+    """List all available predefined tool sets"""
     return list(PRESET_CONFIGS.keys())

@@ -31,7 +31,7 @@ async def handler(req, context):
 
     await context.emit({"topic": "verilator.sim", "data": {**body, "task": "sim"}})
     # ==================================================================================
-    #  等待仿真结果
+    #  Wait for simulation result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

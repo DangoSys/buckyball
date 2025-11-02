@@ -1,4 +1,4 @@
-"""Deepwiki 工具封装 - 通过 MCP Streamable HTTP"""
+"""Deepwiki tool wrapper - via MCP Streamable HTTP"""
 
 import httpx
 import json
@@ -9,7 +9,7 @@ from .base import Tool
 
 
 class DeepwikiAskTool(Tool):
-    """Deepwiki 问答工具 - 通过 MCP"""
+    """Deepwiki Q&A tool - via MCP"""
 
     def get_name(self) -> str:
         return "deepwiki_ask"
@@ -46,7 +46,7 @@ class DeepwikiAskTool(Tool):
                 f"Asking Deepwiki via MCP HTTP: {question[:100]}... (repo: {repo})"
             )
 
-            # MCP 工具调用请求（JSON-RPC 2.0）
+            # MCP tool call request (JSON-RPC 2.0)
             request_payload = {
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -57,13 +57,13 @@ class DeepwikiAskTool(Tool):
                 },
             }
 
-            # 使用 Streamable HTTP 端点
+            # Use Streamable HTTP endpoint
             mcp_url = "https://mcp.deepwiki.com/mcp"
 
             context.log_info(f"MCP URL: {mcp_url}")
 
             with httpx.Client(timeout=120.0) as client:
-                # 步骤 1: 初始化 session (不带 sessionId)
+                # Step 1: Initialize session (without sessionId)
                 init_payload = {
                     "jsonrpc": "2.0",
                     "id": 0,
@@ -81,7 +81,7 @@ class DeepwikiAskTool(Tool):
                 context.log_info("Initializing MCP session (without sessionId)...")
 
                 session_id = None
-                # 直接使用 POST 请求，从响应头获取 sessionId
+                # Use POST request directly, get sessionId from response headers
                 init_resp = client.post(
                     mcp_url,
                     json=init_payload,
@@ -91,7 +91,7 @@ class DeepwikiAskTool(Tool):
                     },
                 )
 
-                # 从响应头获取 sessionId
+                # Get sessionId from response headers
                 session_id = init_resp.headers.get("mcp-session-id")
                 if not session_id:
                     context.log_error(f"Init response status: {init_resp.status_code}")
@@ -102,12 +102,12 @@ class DeepwikiAskTool(Tool):
 
                 context.log_info(f"Session initialized, ID: {session_id}")
 
-                # 步骤 2: 调用工具（带 sessionId）- 使用 SSE 流式接收
+                # Step 2: Call tool (with sessionId) - use SSE streaming
                 context.log_info(
                     f"Calling tool: {json.dumps(request_payload, ensure_ascii=False)[:300]}"
                 )
 
-                # 使用 stream 而不是 connect_sse
+                # Use stream instead of connect_sse
                 with client.stream(
                     "POST",
                     mcp_url,
@@ -120,12 +120,12 @@ class DeepwikiAskTool(Tool):
                 ) as tool_resp:
                     context.log_info(f"Tool response status: {tool_resp.status_code}")
 
-                    # 手动解析 SSE 流
+                    # Manually parse SSE stream
                     for line in tool_resp.iter_lines():
                         if line.startswith("data: "):
-                            data_str = line[6:]  # 移除 "data: " 前缀
+                            data_str = line[6:]  # Remove "data: " prefix
 
-                            # 跳过心跳包
+                            # Skip heartbeat
                             if data_str.strip() == "ping":
                                 continue
 
@@ -135,7 +135,7 @@ class DeepwikiAskTool(Tool):
                                     f"Tool response: {json.dumps(result, ensure_ascii=False)[:500]}"
                                 )
 
-                                # 处理 JSON-RPC 2.0 响应
+                                # Handle JSON-RPC 2.0 response
                                 if "error" in result:
                                     error = result["error"]
                                     error_msg = f"MCP Error: {error.get('message', 'Unknown error')}"
@@ -153,7 +153,7 @@ class DeepwikiAskTool(Tool):
                                             f"Deepwiki answer preview: {answer[:200]}..."
                                         )
 
-                                        # 限制返回长度
+                                        # Limit return length
                                         if len(answer) > 3000:
                                             answer = answer[:3000] + "\n... (truncated)"
                                         return answer
@@ -172,7 +172,7 @@ class DeepwikiAskTool(Tool):
 
 
 class DeepwikiReadWikiTool(Tool):
-    """读取 Deepwiki wiki 内容 - 通过 MCP"""
+    """Read Deepwiki wiki content - via MCP"""
 
     def get_name(self) -> str:
         return "deepwiki_read_wiki"
@@ -199,7 +199,7 @@ class DeepwikiReadWikiTool(Tool):
         try:
             context.log_info(f"Reading Deepwiki wiki via MCP HTTP for: {repo}")
 
-            # MCP 工具调用请求
+            # MCP tool call request
             request_payload = {
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -210,13 +210,13 @@ class DeepwikiReadWikiTool(Tool):
                 },
             }
 
-            # 使用 Streamable HTTP 端点
+            # Use Streamable HTTP endpoint
             mcp_url = "https://mcp.deepwiki.com/mcp"
 
             context.log_info(f"MCP URL: {mcp_url}")
 
             with httpx.Client(timeout=120.0) as client:
-                # 步骤 1: 初始化 session (不带 sessionId)
+                # Step 1: Initialize session (without sessionId)
                 init_payload = {
                     "jsonrpc": "2.0",
                     "id": 0,
@@ -234,7 +234,7 @@ class DeepwikiReadWikiTool(Tool):
                 context.log_info("Initializing MCP session (without sessionId)...")
 
                 session_id = None
-                # 直接使用 POST 请求，从响应头获取 sessionId
+                # Use POST request directly, get sessionId from response headers
                 init_resp = client.post(
                     mcp_url,
                     json=init_payload,
@@ -244,7 +244,7 @@ class DeepwikiReadWikiTool(Tool):
                     },
                 )
 
-                # 从响应头获取 sessionId
+                # Get sessionId from response headers
                 session_id = init_resp.headers.get("mcp-session-id")
                 if not session_id:
                     context.log_error(f"Init response status: {init_resp.status_code}")
@@ -255,12 +255,12 @@ class DeepwikiReadWikiTool(Tool):
 
                 context.log_info(f"Session initialized, ID: {session_id}")
 
-                # 步骤 2: 调用工具（带 sessionId）- 使用 SSE 流式接收
+                # Step 2: Call tool (with sessionId) - use SSE streaming
                 context.log_info(
                     f"Calling tool: {json.dumps(request_payload, ensure_ascii=False)}"
                 )
 
-                # 使用 stream 而不是 connect_sse
+                # Use stream instead of connect_sse
                 with client.stream(
                     "POST",
                     mcp_url,
@@ -273,12 +273,12 @@ class DeepwikiReadWikiTool(Tool):
                 ) as tool_resp:
                     context.log_info(f"Tool response status: {tool_resp.status_code}")
 
-                    # 手动解析 SSE 流
+                    # Manually parse SSE stream
                     for line in tool_resp.iter_lines():
                         if line.startswith("data: "):
-                            data_str = line[6:]  # 移除 "data: " 前缀
+                            data_str = line[6:]  # Remove "data: " prefix
 
-                            # 跳过心跳包
+                            # Skip heartbeat
                             if data_str.strip() == "ping":
                                 continue
 
@@ -288,7 +288,7 @@ class DeepwikiReadWikiTool(Tool):
                                     f"Tool response: {json.dumps(result, ensure_ascii=False)[:500]}"
                                 )
 
-                                # 处理 JSON-RPC 2.0 响应
+                                # Handle JSON-RPC 2.0 response
                                 if "error" in result:
                                     error = result["error"]
                                     error_msg = f"MCP Error: {error.get('message', 'Unknown error')}"

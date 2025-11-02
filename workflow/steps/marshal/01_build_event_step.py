@@ -25,7 +25,7 @@ async def handler(data, context):
     bbdir = get_buckyball_path()
     script_dir = f"{bbdir}/workflow/steps/marshal/scripts"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     command = f"source {bbdir}/env.sh && ./marshal -v build interactive.json  && ./marshal -v install interactive.json"
     result = stream_run_logger(
@@ -37,16 +37,15 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False
     )
 
     # ==================================================================================
-    # 继续路由
-    # Routing to verilog or finish workflow
-    # For run workflow, continue to verilog; for standalone clean, complete
+    # Continue routing
+    # Routing to completion or error handling
     # ==================================================================================
     if result.returncode == 0:
         await context.emit(

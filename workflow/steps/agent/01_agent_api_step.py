@@ -7,7 +7,7 @@ import os
 config = {
     "type": "api",
     "name": "agent",
-    "description": "调用agent API进行流式对话",
+    "description": "Call agent API for streaming conversation",
     "path": "/agent/chat",
     "method": "POST",
     "emits": ["agent.prompt"],
@@ -32,14 +32,14 @@ config = {
 
 
 async def handler(req, context):
-    context.logger.info("agent API - 接收到请求", {"body": req.get("body")})
+    context.logger.info("agent API - Request received", {"body": req.get("body")})
     body = req.get("body")
     message = body.get("message")
     model = body.get("model", "deepseek-chat")
     api_key = body.get("apiKey")
     base_url = body.get("baseUrl")
 
-    # 发送事件到处理步骤
+    # Send event to processing step
     await context.emit(
         {
             "topic": "agent.prompt",
@@ -54,7 +54,7 @@ async def handler(req, context):
     )
 
     # ==================================================================================
-    # 等待执行结果
+    # Wait for execution result
     # ==================================================================================
     while True:
         result = await wait_for_result(context)

@@ -1,50 +1,50 @@
-# FuncSim 工作流
+# FuncSim Workflow
 
-BuckyBall 框架中的功能仿真工作流，提供快速的功能验证环境。
+Functional simulation workflow in BuckyBall framework, providing fast functional verification environment.
 
-## API 使用说明
+## API Usage
 
 ### `build`
-**端点**: `POST /funcsim/build`
+**Endpoint**: `POST /funcsim/build`
 
-**功能**: 构建功能仿真器
+**Function**: Build functional simulator
 
-**参数**: 无特定参数
+**Parameters**: No specific parameters
 
-**示例**:
+**Example**:
 ```bash
 bbdev funcsim --build
 ```
 
 ### `sim`
-**端点**: `POST /funcsim/sim`
+**Endpoint**: `POST /funcsim/sim`
 
-**功能**: 运行功能仿真
+**Function**: Run functional simulation
 
-**参数**:
-- **`binary`** - 要仿真的二进制文件路径
-- **`ext`** - 扩展参数
+**Parameters**:
+- **`binary`** - Binary file path to simulate
+- **`ext`** - Extension parameters
 
-**示例**:
+**Examples**:
 ```bash
-# 基本仿真
+# Basic simulation
 bbdev funcsim --sim "--binary /path/to/test.elf"
 
-# 带扩展参数
+# With extension parameters
 bbdev funcsim --sim "--binary /path/to/test.elf --ext additional_args"
 ```
 
-## 典型工作流程
+## Typical Workflow
 
 ```bash
-# 1. 构建功能仿真器
+# 1. Build functional simulator
 bbdev funcsim --build
 
-# 2. 运行仿真
+# 2. Run simulation
 bbdev funcsim --sim "--binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_basic-baremetal"
 ```
 
-## 注意事项
+## Notes
 
-- 只提供功能级别的仿真，不包含时序信息
-- 确保二进制文件路径正确且可访问
+- Only provides functional-level simulation, no timing information
+- Ensure binary file path is correct and accessible

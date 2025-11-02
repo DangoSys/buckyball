@@ -1,31 +1,31 @@
-# Agent 工作流
+# Agent Workflow
 
-BuckyBall 框架中的 AI 助手工作流，提供与 AI 模型的对话交互功能。
+AI assistant workflow in BuckyBall framework, providing conversational interaction with AI models.
 
-## API 使用说明
+## API Usage
 
 ### `chat`
-**端点**: `POST /agent/chat`
+**Endpoint**: `POST /agent/chat`
 
-**功能**: 与 AI 助手进行对话交互
+**Function**: Conversational interaction with AI assistant
 
-**参数**:
-- **`message`** [必选] - 发送给 AI 的消息内容
-- **`model`** - 使用的 AI 模型，默认 `"deepseek-chat"`
+**Parameters**:
+- **`message`** [Required] - Message content to send to AI
+- **`model`** - AI model to use, default `"deepseek-chat"`
 
-**示例**:
+**Examples**:
 ```bash
-# 基本对话
+# Basic conversation
 bbdev agent --chat "--message 'Hello, can you help me with BuckyBall development?'"
 
-# 指定模型
+# Specify model
 bbdev agent --chat "--message 'Explain this Scala code' --model deepseek-chat"
 
-# 代码分析
+# Code analysis
 bbdev agent --chat "--message 'Please analyze this Chisel module and suggest optimizations'"
 ```
 
-**响应**:
+**Response**:
 ```json
 {
   "traceId": "unique-trace-id",
@@ -33,8 +33,8 @@ bbdev agent --chat "--message 'Please analyze this Chisel module and suggest opt
 }
 ```
 
-## 注意事项
+## Notes
 
-- 需要配置 AI 模型的 API 密钥
-- 响应采用流式输出
-- 注意消息长度限制
+- Requires configured AI model API key
+- Responses use streaming output
+- Note message length limits

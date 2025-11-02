@@ -1,5 +1,5 @@
 """
-文档生成工具函数
+Documentation generation utility functions
 """
 
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def detect_doc_type(target_path):
-    """根据目录路径自动检测文档类型"""
+    """Automatically detect document type based on directory path"""
     path_str = str(Path(target_path).resolve()).replace("\\", "/")
 
     if "arch/src/main/scala" in path_str:
@@ -33,7 +33,7 @@ def detect_doc_type(target_path):
 
 
 def load_prompt_template(doc_type, target_path):
-    """加载并处理prompt模板"""
+    """Load and process prompt template"""
     template_path = f"workflow/prompts/doc/{doc_type}-doc.md"
 
     if not os.path.exists(template_path):
@@ -49,7 +49,7 @@ def load_prompt_template(doc_type, target_path):
 
 
 def prepare_update_mode_prompt(template, target_path, mode):
-    """为更新模式准备prompt"""
+    """Prepare prompt for update mode"""
     if mode != "update":
         return template
 
@@ -62,15 +62,15 @@ def prepare_update_mode_prompt(template, target_path, mode):
 
     update_instruction = f"""
 
-## 更新模式特殊指令
+## Special Instructions for Update Mode
 
-你正在更新现有文档。请注意：
-1. 仔细分析现有文档内容，保留准确和有价值的信息
-2. 识别并更新过时、不准确或不完整的部分
-3. 保持文档的整体结构和风格一致性
-4. 如果现有内容准确且完整，请保留它们
+You are updating existing documentation. Please note:
+1. Carefully analyze existing documentation content, retain accurate and valuable information
+2. Identify and update outdated, inaccurate or incomplete sections
+3. Maintain overall document structure and style consistency
+4. If existing content is accurate and complete, retain it
 
-现有文档内容：
+Existing documentation content:
 ```markdown
 {existing_content}
 ```

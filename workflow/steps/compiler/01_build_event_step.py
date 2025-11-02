@@ -26,7 +26,7 @@ async def handler(data, context):
     script_dir = f"{bbdir}/workflow/steps/compiler/scripts"
     yaml_dir = f"{script_dir}/yaml"
     # ==================================================================================
-    # 执行操作
+    # Execute operation
     # ==================================================================================
     command = f"source {bbdir}/env.sh && mkdir -p {bbdir}/compiler/build && cd {bbdir}/compiler/build && ninja -j{os.cpu_count()}"
     result = stream_run_logger(
@@ -37,13 +37,13 @@ async def handler(data, context):
     )
 
     # ==================================================================================
-    # 向API返回结果
+    # Return result to API
     # ==================================================================================
     success_result, failure_result = await check_result(
         context, result.returncode, continue_run=False
     )
 
     # ==================================================================================
-    # 继续路由
+    # Continue routing
     # ==================================================================================
     return

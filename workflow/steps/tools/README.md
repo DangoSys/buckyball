@@ -1,39 +1,39 @@
-# Function Calling 工具管理系统
+# Function Calling Tool Management System
 
-一个模块化、可扩展的 Function Calling 工具管理框架，用于 AI Agent 与外部系统交互。
+A modular and extensible Function Calling tool management framework for AI Agent interaction with external systems.
 
-## 📁 目录结构
+## 📁 Directory Structure
 
 ```
 tools/
-├── __init__.py       # 模块导出
-├── base.py          # 工具基类和上下文
-├── registry.py      # 工具注册器和管理器
-├── file_tools.py    # 文件操作工具
-├── presets.py       # 预定义工具集
-└── README.md        # 本文档
+├── __init__.py       # Module exports
+├── base.py          # Tool base class and context
+├── registry.py      # Tool registry and manager
+├── file_tools.py    # File operation tools
+├── presets.py       # Predefined tool sets
+└── README.md        # This document
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 使用预定义工具管理器
+### 1. Using Predefined Tool Manager
 
 ```python
 from steps.tools import create_code_agent_manager
 
-# 创建工具管理器（已注册 file_tools）
+# Create tool manager (file_tools already registered)
 manager = create_code_agent_manager()
 
-# 获取工具定义（发送给 LLM）
+# Get tool definitions (send to LLM)
 tools_schema = manager.get_tools_schema()
 
-# 调用 LLM
+# Call LLM
 response = llm.chat(
   messages=messages,
-  tools=tools_schema  # 传入工具定义
+  tools=tools_schema  # Pass in tool definitions
 )
 
-# 执行 LLM 返回的工具调用
+# Execute tool calls returned by LLM
 if response.tool_calls:
   for tool_call in response.tool_calls:
     result = manager.execute_tool(
@@ -44,14 +44,14 @@ if response.tool_calls:
     )
 ```
 
-### 2. 自定义工具
+### 2. Custom Tools
 
 ```python
 from steps.tools import Tool, ToolManager
 import json
 
 class RunCommandTool(Tool):
-  """执行命令工具"""
+  """Command execution tool"""
 
   def get_name(self) -> str:
     return "run_command"
@@ -89,76 +89,76 @@ class RunCommandTool(Tool):
     except Exception as e:
       return json.dumps({"error": str(e)})
 
-# 注册自定义工具
+# Register custom tool
 manager = ToolManager()
 manager.register_tool(RunCommandTool())
 ```
 
-## 📚 核心概念
+## 📚 Core Concepts
 
-### Tool（工具基类）
+### Tool (Base Class)
 
-所有工具都继承自 `Tool` 基类：
+All tools inherit from the `Tool` base class:
 
 ```python
 class MyTool(Tool):
   def get_name(self) -> str:
-    """工具名称（唯一标识）"""
+    """Tool name (unique identifier)"""
     return "my_tool"
 
   def get_description(self) -> str:
-    """工具描述（告诉 AI 这个工具做什么）"""
+    """Tool description (tells AI what this tool does)"""
     return "My custom tool"
 
   def get_parameters(self) -> dict:
-    """参数定义（JSON Schema 格式）"""
+    """Parameter definition (JSON Schema format)"""
     return {
       "type": "object",
       "properties": {
-        "param1": {"type": "string", "description": "参数1"},
-        "param2": {"type": "integer", "description": "参数2"}
+        "param1": {"type": "string", "description": "Parameter 1"},
+        "param2": {"type": "integer", "description": "Parameter 2"}
       },
       "required": ["param1"]
     }
 
   def execute(self, arguments: dict, context) -> str:
     """
-    执行工具逻辑
+    Execute tool logic
 
     Args:
-      arguments: AI 传入的参数
-      context: ToolContext 对象（包含 work_dir, logger 等）
+      arguments: Parameters passed by AI
+      context: ToolContext object (contains work_dir, logger, etc.)
 
     Returns:
-      执行结果（字符串，可以是 JSON）
+      Execution result (string, can be JSON)
     """
-    # 实现工具逻辑
+    # Implement tool logic
     return json.dumps({"result": "success"})
 ```
 
-### ToolContext（执行上下文）
+### ToolContext (Execution Context)
 
-提供给工具的执行环境：
+Execution environment provided to tools:
 
 ```python
 context = ToolContext(
-  work_dir="/path/to/project",  # 工作目录
-  logger=logger,                 # 日志记录器
-  extra_key="extra_value"        # 自定义扩展字段
+  work_dir="/path/to/project",  # Working directory
+  logger=logger,                 # Logger
+  extra_key="extra_value"        # Custom extension fields
 )
 
-# 在工具中使用
+# Use in tool
 class MyTool(Tool):
   def execute(self, arguments, context):
-    context.log_info("开始执行")
+    context.log_info("Starting execution")
     work_dir = context.work_dir
     custom = context.extra.get("extra_key")
     # ...
 ```
 
-### ToolRegistry（工具注册器）
+### ToolRegistry (Tool Registry)
 
-管理工具的注册和查找：
+Manage tool registration and lookup:
 
 ```python
 from steps.tools import ToolRegistry, ReadFileTool, WriteFileTool
@@ -167,19 +167,19 @@ registry = ToolRegistry()
 registry.register(ReadFileTool())
 registry.register(WriteFileTool())
 
-# 获取工具
+# Get tool
 tool = registry.get("read_file")
 
-# 列出所有工具
+# List all tools
 tools = registry.list_tools()  # ['read_file', 'write_file']
 
-# 转换为 OpenAI 格式
+# Convert to OpenAI format
 schema = registry.to_openai_format()
 ```
 
-### ToolManager（工具管理器）
+### ToolManager (Tool Manager)
 
-高级封装，提供更便捷的接口：
+High-level wrapper providing more convenient interface:
 
 ```python
 from steps.tools import ToolManager
@@ -187,26 +187,26 @@ from steps.tools import ToolManager
 manager = ToolManager()
 manager.register_tools([ReadFileTool(), WriteFileTool()])
 
-# 获取工具定义
+# Get tool definitions
 schema = manager.get_tools_schema()
 
-# 执行工具
+# Execute tool
 result = manager.execute_tool(
   tool_name="read_file",
   arguments={"path": "main.py"},
   work_dir="/project"
 )
 
-# 查看执行日志
+# View execution log
 log = manager.get_execution_log()
 ```
 
-## 🛠️ 内置工具
+## 🛠️ Built-in Tools
 
-### 文件操作工具
+### File Operation Tools
 
 #### read_file
-读取文件内容
+Read file content
 
 ```json
 {
@@ -218,7 +218,7 @@ log = manager.get_execution_log()
 ```
 
 #### write_file
-写入文件内容（自动创建目录）
+Write file content (automatically creates directories)
 
 ```json
 {
@@ -231,36 +231,36 @@ log = manager.get_execution_log()
 ```
 
 #### list_files
-列出目录中的文件
+List files in directory
 
 ```json
 {
   "name": "list_files",
   "parameters": {
-    "path": "src"  // 可选，默认当前目录
+    "path": "src"  // Optional, defaults to current directory
   }
 }
 ```
 
-## 🎨 预定义工具集
+## 🎨 Predefined Tool Sets
 
 ```python
 from steps.tools import get_preset, list_presets
 
-# 查看可用的工具集
+# View available tool sets
 presets = list_presets()  # ['file_tools', 'code_agent']
 
-# 获取工具集
-tools = get_preset("file_tools")  # 返回 [ReadFileTool, WriteFileTool, ...]
+# Get tool set
+tools = get_preset("file_tools")  # Returns [ReadFileTool, WriteFileTool, ...]
 
-# 创建管理器
+# Create manager
 from steps.tools import create_code_agent_manager
 manager = create_code_agent_manager()
 ```
 
-## 📝 完整示例
+## 📝 Complete Examples
 
-### Agent 集成示例
+### Agent Integration Example
 
 ```python
 from steps.tools import create_code_agent_manager
@@ -268,30 +268,30 @@ import httpx
 import json
 
 async def run_agent(prompt: str, work_dir: str):
-  # 1. 创建工具管理器
+  # 1. Create tool manager
   manager = create_code_agent_manager()
   tools_schema = manager.get_tools_schema()
 
-  # 2. 初始化对话
+  # 2. Initialize conversation
   messages = [
     {"role": "system", "content": "You are a code assistant"},
     {"role": "user", "content": prompt}
   ]
 
-  # 3. AI 循环
+  # 3. AI loop
   max_iterations = 10
   for i in range(max_iterations):
-    # 调用 LLM
+    # Call LLM
     response = await call_llm(messages, tools_schema)
     assistant_msg = response["choices"][0]["message"]
     messages.append(assistant_msg)
 
-    # 检查是否有工具调用
+    # Check for tool calls
     if not assistant_msg.get("tool_calls"):
-      print(f"完成！最终回复: {assistant_msg['content']}")
+      print(f"Done! Final response: {assistant_msg['content']}")
       break
 
-    # 执行所有工具调用
+    # Execute all tool calls
     for tool_call in assistant_msg["tool_calls"]:
       result = manager.execute_tool(
         tool_name=tool_call["function"]["name"],
@@ -299,7 +299,7 @@ async def run_agent(prompt: str, work_dir: str):
         work_dir=work_dir
       )
 
-      # 添加工具结果到对话
+      # Add tool result to conversation
       messages.append({
         "role": "tool",
         "tool_call_id": tool_call["id"],
@@ -307,33 +307,33 @@ async def run_agent(prompt: str, work_dir: str):
       })
 ```
 
-## 🔒 安全特性
+## 🔒 Security Features
 
-### 路径安全
+### Path Security
 
-所有文件操作工具都包含路径穿越检查：
+All file operation tools include path traversal checks:
 
 ```python
-# ✅ 允许
+# ✅ Allowed
 read_file("src/main.py")
 
-# ❌ 拒绝（路径穿越）
+# ❌ Denied (path traversal)
 read_file("../../../etc/passwd")
 ```
 
-### 错误处理
+### Error Handling
 
-工具执行自动捕获异常：
+Tool execution automatically catches exceptions:
 
 ```python
-# 工具内部异常会被捕获并返回错误信息
+# Internal exceptions are caught and returned as error messages
 result = manager.execute_tool("read_file", {"path": "nonexist.txt"})
-# 返回: {"error": "File not found: nonexist.txt"}
+# Returns: {"error": "File not found: nonexist.txt"}
 ```
 
-## 🧪 测试
+## 🧪 Testing
 
-创建测试文件：
+Create test file:
 
 ```python
 # test_tools.py
@@ -345,7 +345,7 @@ def test_file_tools():
   manager = create_code_agent_manager()
 
   with tempfile.TemporaryDirectory() as tmpdir:
-    # 测试 write_file
+    # Test write_file
     result = manager.execute_tool(
       "write_file",
       {"path": "test.txt", "content": "hello"},
@@ -353,7 +353,7 @@ def test_file_tools():
     )
     assert "success" in result
 
-    # 测试 read_file
+    # Test read_file
     result = manager.execute_tool(
       "read_file",
       {"path": "test.txt"},
@@ -361,17 +361,17 @@ def test_file_tools():
     )
     assert result == "hello"
 
-    print("✅ 测试通过")
+    print("✅ Test passed")
 
 if __name__ == "__main__":
   test_file_tools()
 ```
 
-## 📦 扩展工具
+## 📦 Extending Tools
 
-### 添加新工具类别
+### Adding New Tool Categories
 
-创建新文件 `network_tools.py`：
+Create new file `network_tools.py`:
 
 ```python
 from .base import Tool
@@ -403,7 +403,7 @@ class HttpGetTool(Tool):
     })
 ```
 
-然后在 `presets.py` 中添加：
+Then add to `presets.py`:
 
 ```python
 def create_network_tools():
@@ -411,25 +411,25 @@ def create_network_tools():
   return [HttpGetTool()]
 ```
 
-## 🎯 最佳实践
+## 🎯 Best Practices
 
-1. **工具命名**：使用清晰的动词+名词格式（`read_file`, `list_users`）
-2. **参数描述**：详细描述每个参数的作用，帮助 AI 正确使用
-3. **错误处理**：返回 JSON 格式的错误信息，包含 `error` 字段
-4. **日志记录**：使用 `context.log_info/log_error` 记录关键操作
-5. **安全检查**：验证输入参数，防止路径穿越等安全问题
-6. **结果格式**：返回 JSON 字符串或纯文本，保持一致性
+1. **Tool Naming**: Use clear verb+noun format (`read_file`, `list_users`)
+2. **Parameter Descriptions**: Describe each parameter in detail to help AI use them correctly
+3. **Error Handling**: Return JSON format error messages with `error` field
+4. **Logging**: Use `context.log_info/log_error` to record key operations
+5. **Security Checks**: Validate input parameters, prevent path traversal and other security issues
+6. **Result Format**: Return JSON strings or plain text, maintain consistency
 
-## 🤝 贡献
+## 🤝 Contributing
 
-添加新工具步骤：
+Steps to add new tools:
 
-1. 继承 `Tool` 基类
-2. 实现 4 个抽象方法
-3. 在 `presets.py` 中添加到相应工具集
-4. 在 `__init__.py` 中导出
-5. 更新 README 文档
+1. Inherit from `Tool` base class
+2. Implement 4 abstract methods
+3. Add to appropriate tool set in `presets.py`
+4. Export in `__init__.py`
+5. Update README documentation
 
-## 📄 许可
+## 📄 License
 
-与主项目相同
+Same as main project

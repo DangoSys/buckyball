@@ -1,4 +1,4 @@
-"""Agent 协调工具"""
+"""Agent coordination tools"""
 
 import httpx
 import uuid
@@ -7,7 +7,7 @@ from .base import Tool
 
 
 class CallAgentTool(Tool):
-    """调用其他 Agent 的工具"""
+    """Tool for calling other agents"""
 
     def get_name(self) -> str:
         return "call_agent"
@@ -47,23 +47,23 @@ class CallAgentTool(Tool):
         agent_role = arguments.get("agent_role")
         task_description = arguments.get("task_description")
         context_files = arguments.get("context_files", [])
-        # 优先使用参数中的 model，否则从 context 继承
+        # Prefer model from parameters, otherwise inherit from context
         model = arguments.get("model") or context.extra.get("model")
 
-        # 生成临时任务文件
+        # Generate temporary task file
         import os
         import tempfile
 
-        # 创建临时任务文件
+        # Create temporary task file
         task_content = task_description
 
-        # 如果指定了上下文文件，添加引用
+        # Add context file references if specified
         if context_files:
             task_content += "\n\n## Context Files\n"
             for filepath in context_files:
                 task_content += f"- {filepath}\n"
 
-        # 写入临时文件
+        # Write to temporary file
         temp_dir = os.path.join(context.work_dir, ".agent_tasks")
         os.makedirs(temp_dir, exist_ok=True)
 
@@ -77,7 +77,7 @@ class CallAgentTool(Tool):
         context.log_info(f"Calling {agent_role}_agent with task")
 
         try:
-            # 获取 workflow API 地址（从环境变量或使用默认值）
+            # Get workflow API address (from environment or use defaults)
             import os
 
             workflow_host = os.getenv("WORKFLOW_HOST", "localhost")
@@ -93,7 +93,7 @@ class CallAgentTool(Tool):
                 "workDir": context.work_dir,
             }
 
-            # 如果指定了 model，添加到 payload
+            # Add model to payload if specified
             if model:
                 payload["model"] = model
                 context.log_info(f"Using model: {model}")
@@ -103,7 +103,7 @@ class CallAgentTool(Tool):
             if response.status_code == 200:
                 result = response.json()
 
-                # 清理临时文件
+                # Clean up temporary file
                 try:
                     os.remove(task_file)
                 except Exception:

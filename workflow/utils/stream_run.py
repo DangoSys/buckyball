@@ -4,7 +4,7 @@ from typing import Optional, List, Callable
 
 
 class StreamResult:
-    """模拟subprocess.CompletedProcess的结果对象"""
+    """Result object mimicking subprocess.CompletedProcess"""
 
     def __init__(self, returncode: int, stdout: str, stderr: str):
         self.returncode = returncode
@@ -24,20 +24,20 @@ def stream_run(
     stderr_prefix: str = "STDERR",
 ) -> StreamResult:
     """
-    执行命令并实时流式输出结果
+    Execute command and stream output in real-time
 
     Args:
-      cmd: 要执行的命令
-      cwd: 工作目录
-      shell: 是否使用shell执行
-      timeout: 超时时间（秒）
-      on_stdout: stdout行的回调函数
-      on_stderr: stderr行的回调函数
-      stdout_prefix: stdout输出前缀
-      stderr_prefix: stderr输出前缀
+      cmd: Command to execute
+      cwd: Working directory
+      shell: Whether to execute using shell
+      timeout: Timeout in seconds
+      on_stdout: Callback function for stdout lines
+      on_stderr: Callback function for stderr lines
+      stdout_prefix: Prefix for stdout output
+      stderr_prefix: Prefix for stderr output
 
     Returns:
-      StreamResult: 包含returncode, stdout, stderr的结果对象
+      StreamResult: Result object containing returncode, stdout, stderr
 
     Example:
       def log_stdout(line):
@@ -57,7 +57,7 @@ def stream_run(
     def read_stream(
         stream, output_list: List[str], callback: Optional[Callable], prefix: str
     ):
-        """读取流输出的线程函数"""
+        """Thread function to read stream output"""
         try:
             for line in iter(stream.readline, ""):
                 if line:
@@ -68,7 +68,7 @@ def stream_run(
         finally:
             stream.close()
 
-    # 启动进程
+    # Start process
     process = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -83,7 +83,7 @@ def stream_run(
     stdout_lines = []
     stderr_lines = []
 
-    # 创建线程来读取stdout和stderr
+    # Create threads to read stdout and stderr
     stdout_thread = threading.Thread(
         target=read_stream,
         args=(process.stdout, stdout_lines, on_stdout, stdout_prefix),
@@ -97,14 +97,14 @@ def stream_run(
     stderr_thread.start()
 
     try:
-        # 等待进程结束（带超时）
+        # Wait for process to finish (with timeout)
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        # 超时则终止进程
+        # Kill process on timeout
         process.kill()
         process.wait()
 
-    # 等待线程结束
+    # Wait for threads to finish
     stdout_thread.join()
     stderr_thread.join()
 
@@ -127,36 +127,36 @@ def stream_run_logger(
     verbose: bool = False,
 ) -> StreamResult:
     """
-    使用logger进行流式输出的便捷函数
+    Convenience function for streaming output using logger
 
     Args:
-      cmd: 要执行的命令
-      logger: 日志记录器
-      cwd: 工作目录
-      shell: 是否使用shell执行
-      timeout: 超时时间（秒）
-      stdout_prefix: stdout输出前缀
-      stderr_prefix: stderr输出前缀
-      verbose: 是否详细输出模式（verbose模式使用logger带时间戳，非verbose模式直接打印）
+      cmd: Command to execute
+      logger: Logger instance
+      cwd: Working directory
+      shell: Whether to execute using shell
+      timeout: Timeout in seconds
+      stdout_prefix: Prefix for stdout output
+      stderr_prefix: Prefix for stderr output
+      verbose: Whether to use verbose output mode (verbose mode uses logger with timestamp, non-verbose prints directly)
 
     Returns:
-      StreamResult: 包含returncode, stdout, stderr的结果对象
+      StreamResult: Result object containing returncode, stdout, stderr
     """
 
     def log_stdout(line):
         if verbose:
-            # verbose模式：使用logger.info，会包含时间戳和任务ID
+            # Verbose mode: use logger.info, includes timestamp and task ID
             logger.info(f"[{stdout_prefix}] {line}")
         else:
-            # 非verbose模式：直接打印，使用绿色标识STDOUT
+            # Non-verbose mode: print directly, use green for STDOUT
             print(f"\033[32m[{stdout_prefix}]\033[0m {line}")
 
     def log_stderr(line):
         if verbose:
-            # verbose模式：使用logger.info，会包含时间戳和任务ID
+            # Verbose mode: use logger.info, includes timestamp and task ID
             logger.info(f"[{stderr_prefix}] {line}")
         else:
-            # 非verbose模式：直接打印，使用红色标识STDERR
+            # Non-verbose mode: print directly, use red for STDERR
             print(f"\033[31m[{stderr_prefix}]\033[0m {line}")
 
     return stream_run(

@@ -30,7 +30,7 @@ async def handler(data, context):
     funcsim_dir = f"{bbdir}/sims/func-sim"
 
     # ==================================================================================
-    # 返回构建1结果
+    # Return build result 1
     # ==================================================================================
     customext_dir = f"{funcsim_dir}/../customext/"
     if not os.path.exists(customext_dir):
@@ -57,7 +57,7 @@ async def handler(data, context):
         exit(1)
 
     # ==================================================================================
-    # 返回构建2结果
+    # Return build result 2
     # ==================================================================================
     build_dir = f"{funcsim_dir}/build"
     subprocess.run(f"rm -rf {build_dir} && mkdir -p {build_dir}", shell=True)

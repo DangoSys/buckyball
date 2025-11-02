@@ -1,6 +1,6 @@
 """
-符号链接管理器
-负责创建和验证文档目录结构中的符号链接
+Symbolic link manager
+Responsible for creating and validating symbolic links in the documentation directory structure
 """
 
 import os
@@ -9,21 +9,21 @@ from pathlib import Path
 
 
 class LinkManager:
-    """符号链接管理器"""
+    """Symbolic link manager"""
 
     def __init__(self):
         self.project_root = Path.cwd()
         self.docs_base = self.project_root / "docs" / "bb-note" / "src"
 
     def create_docs_structure(self, target_path):
-        """创建对应的文档目录结构"""
+        """Create corresponding documentation directory structure"""
         docs_path = self._convert_to_docs_path(target_path)
         docs_dir = Path(docs_path).parent
         docs_dir.mkdir(parents=True, exist_ok=True)
         return docs_path
 
     def _convert_to_docs_path(self, target_path):
-        """将代码目录路径转换为对应的文档目录路径"""
+        """Convert code directory path to corresponding documentation directory path"""
         target_path = Path(target_path).resolve()
 
         try:
@@ -39,12 +39,12 @@ class LinkManager:
         return str(docs_path)
 
     def create_symbolic_link(self, source_path, target_path):
-        """创建符号链接"""
+        """Create symbolic link"""
         source = Path(source_path)
         target = Path(target_path)
 
         if not source.exists():
-            raise FileNotFoundError(f"源文件不存在: {source_path}")
+            raise FileNotFoundError(f"Source file does not exist: {source_path}")
 
         target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,11 +61,11 @@ class LinkManager:
                 return True
             except Exception as copy_error:
                 raise Exception(
-                    f"创建符号链接和复制文件都失败: {str(e)}, {str(copy_error)}"
+                    f"Both creating symbolic link and copying file failed: {str(e)}, {str(copy_error)}"
                 )
 
     def validate_links(self, docs_base_path=None):
-        """验证符号链接的有效性"""
+        """Validate symbolic links"""
         if docs_base_path is None:
             docs_base_path = self.docs_base
         else:
@@ -84,12 +84,12 @@ class LinkManager:
                             {
                                 "link": str(link_path),
                                 "target": str(link_path.readlink()),
-                                "error": "目标文件不存在",
+                                "error": "Target file does not exist",
                             }
                         )
                 except Exception as e:
                     invalid_links.append(
-                        {"link": str(link_path), "target": "无法读取", "error": str(e)}
+                        {"link": str(link_path), "target": "Cannot read", "error": str(e)}
                     )
 
         return {
