@@ -9,7 +9,7 @@ extern "C" {
 
 #define DMA_BANDWIDTH 128
 
-// 获取DMA的行宽度（字节数）
+// Get DMA row width (bytes)
 static inline uint32_t dma_row_bytes() { return DMA_BANDWIDTH / 8; }
 
 #ifdef __cplusplus

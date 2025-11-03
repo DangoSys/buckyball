@@ -1,5 +1,5 @@
 """
-演示所有四种稀疏矩阵分块算法的对比
+Demonstrate comparison of all four sparse matrix tiling algorithms
 """
 
 import numpy as np
@@ -15,24 +15,24 @@ from hyte import HYTEAlgorithm
 
 def generate_test_matrices(I, J, K, sparsity=0.9, seed=42):
     """
-    生成测试用的稀疏矩阵
+    Generate sparse matrices for testing
 
     Args:
-        I, J, K: 矩阵维度
-        sparsity: 稀疏度 (0-1)
-        seed: 随机种子
+        I, J, K: matrix dimensions
+        sparsity: sparsity (0-1)
+        seed: random seed
 
     Returns:
-        A_csr, B_csc: CSR和CSC格式的稀疏矩阵
+        A_csr, B_csc: sparse matrices in CSR and CSC formats
     """
     np.random.seed(seed)
 
-    # 生成稀疏矩阵A
+    # Generate sparse matrix A
     A_dense = np.random.random((I, J))
     A_dense[A_dense < sparsity] = 0
     A_csr = csr_matrix(A_dense)
 
-    # 生成稀疏矩阵B
+    # Generate sparse matrix B
     B_dense = np.random.random((J, K))
     B_dense[B_dense < sparsity] = 0
     B_csc = csr_matrix(B_dense).tocsc()
@@ -41,39 +41,40 @@ def generate_test_matrices(I, J, K, sparsity=0.9, seed=42):
 
 
 def run_algorithm_comparison():
-    """运行四种算法的性能对比"""
+    """Run performance comparison of four algorithms"""
 
     print("=" * 60)
-    print("稀疏矩阵分块算法性能对比")
+    print("Sparse Matrix Tiling Algorithm Performance Comparison")
     print("=" * 60)
 
-    # 测试配置
+    # Test configurations
     test_configs = [
-        {"I": 100, "J": 150, "K": 200, "name": "小规模"},
-        {"I": 200, "J": 300, "K": 400, "name": "中规模"},
-        {"I": 400, "J": 500, "K": 600, "name": "大规模"},
+        {"I": 100, "J": 150, "K": 200, "name": "Small scale"},
+        {"I": 200, "J": 300, "K": 400, "name": "Medium scale"},
+        {"I": 400, "J": 500, "K": 600, "name": "Large scale"},
     ]
 
-    cache_size = 2 * 1024 * 1024  # 2MB缓存
+    # 2MB cache
+    cache_size = 2 * 1024 * 1024
 
     results = []
 
     for config in test_configs:
         I, J, K = config["I"], config["J"], config["K"]
-        print(f"\n测试 {config['name']} 矩阵: {I}x{J} × {J}x{K}")
+        print(f"\nTest {config['name']} matrix: {I}x{J} × {J}x{K}")
         print("-" * 50)
 
-        # 生成测试矩阵
+        # Generate test matrices
         A_csr, B_csc = generate_test_matrices(I, J, K, sparsity=0.9)
-        print(f"矩阵A非零元素: {A_csr.nnz}, 矩阵B非零元素: {B_csc.nnz}")
+        print(f"Matrix A non-zero elements: {A_csr.nnz}, Matrix B non-zero elements: {B_csc.nnz}")
 
-        # 参考结果
+        # Reference result
         reference = A_csr.dot(B_csc).toarray()
 
         config_results = {"config": config, "algorithms": {}}
 
-        # 1. Tailors算法
-        print("\n1. 测试Tailors算法...")
+        # 1. Tailors algorithm
+        print("\n1. Test Tailors algorithm...")
         try:
             tailors = TailorsAlgorithm(cache_size=cache_size)
 
@@ -91,19 +92,19 @@ def run_algorithm_comparison():
                 "success": True,
             }
 
-            print(f"   执行时间: {exec_time:.4f}s")
-            print(f"   最大误差: {error:.2e}")
-            print(f"   K分块大小: {optimal_k}")
+            print(f"   Execution time: {exec_time:.4f}s")
+            print(f"   Maximum error: {error:.2e}")
+            print(f"   K tile size: {optimal_k}")
 
         except Exception as e:
-            print(f"   Tailors算法执行失败: {e}")
+            print(f"   Tailors algorithm execution failed: {e}")
             config_results["algorithms"]["Tailors"] = {
                 "success": False,
                 "error": str(e),
             }
 
-        # 2. DRT算法
-        print("\n2. 测试DRT算法...")
+        # 2. DRT algorithm
+        print("\n2. Test DRT algorithm...")
         try:
             drt = DRTAlgorithm(cache_size=cache_size)
 
@@ -126,16 +127,16 @@ def run_algorithm_comparison():
                 "success": True,
             }
 
-            print(f"   执行时间: {exec_time:.4f}s")
-            print(f"   最大误差: {error:.2e}")
-            print(f"   J分块大小: {optimal_jjj}, K分块大小: {optimal_kkk}")
+            print(f"   Execution time: {exec_time:.4f}s")
+            print(f"   Maximum error: {error:.2e}")
+            print(f"   J tile size: {optimal_jjj}, K tile size: {optimal_kkk}")
 
         except Exception as e:
-            print(f"   DRT算法执行失败: {e}")
+            print(f"   DRT algorithm execution failed: {e}")
             config_results["algorithms"]["DRT"] = {"success": False, "error": str(e)}
 
-        # 3. Harp算法
-        print("\n3. 测试Harp算法...")
+        # 3. Harp algorithm
+        print("\n3. Test Harp algorithm...")
         try:
             harp = HarpAlgorithm(cache_size=cache_size)
 
@@ -155,16 +156,16 @@ def run_algorithm_comparison():
                 "success": True,
             }
 
-            print(f"   执行时间: {exec_time:.4f}s")
-            print(f"   最大误差: {error:.2e}")
-            print(f"   I分块大小: {optimal_iii}")
+            print(f"   Execution time: {exec_time:.4f}s")
+            print(f"   Maximum error: {error:.2e}")
+            print(f"   I tile size: {optimal_iii}")
 
         except Exception as e:
-            print(f"   Harp算法执行失败: {e}")
+            print(f"   Harp algorithm execution failed: {e}")
             config_results["algorithms"]["Harp"] = {"success": False, "error": str(e)}
 
-        # 4. HYTE算法
-        print("\n4. 测试HYTE算法...")
+        # 4. HYTE algorithm
+        print("\n4. Test HYTE algorithm...")
         try:
             hyte = HYTEAlgorithm(cache_size=cache_size, pe_count=16)
 
@@ -182,20 +183,20 @@ def run_algorithm_comparison():
                 "success": True,
             }
 
-            print(f"   总执行时间: {exec_time:.4f}s")
-            print(f"   静态搜索时间: {hyte_result['search_time']:.4f}s")
-            print(f"   最大误差: {error:.2e}")
-            print(f"   静态配置: {hyte_result['static_config']}")
+            print(f"   Total execution time: {exec_time:.4f}s")
+            print(f"   Static search time: {hyte_result['search_time']:.4f}s")
+            print(f"   Maximum error: {error:.2e}")
+            print(f"   Static config: {hyte_result['static_config']}")
 
         except Exception as e:
-            print(f"   HYTE算法执行失败: {e}")
+            print(f"   HYTE algorithm execution failed: {e}")
             config_results["algorithms"]["HYTE"] = {"success": False, "error": str(e)}
 
         results.append(config_results)
 
-    # 生成性能对比报告
+    # Generate performance comparison report
     print("\n" + "=" * 60)
-    print("性能对比总结")
+    print("Performance Comparison Summary")
     print("=" * 60)
 
     for result in results:
@@ -205,7 +206,7 @@ def run_algorithm_comparison():
 
         algorithms = result["algorithms"]
 
-        # 按执行时间排序
+        # Sort by execution time
         successful_algos = [
             (name, data)
             for name, data in algorithms.items()
@@ -213,13 +214,13 @@ def run_algorithm_comparison():
         ]
         successful_algos.sort(key=lambda x: x[1]["execution_time"])
 
-        print("执行时间排名:")
+        print("Execution time ranking:")
         for i, (name, data) in enumerate(successful_algos, 1):
             print(
-                f"  {i}. {name}: {data['execution_time']:.4f}s (误差: {data['error']:.2e})"
+                f"  {i}. {name}: {data['execution_time']:.4f}s (error: {data['error']:.2e})"
             )
 
-        print("\n分块策略:")
+        print("\nTiling strategy:")
         for name, data in algorithms.items():
             if data.get("success", False):
                 if name == "Tailors":
@@ -237,4 +238,4 @@ def run_algorithm_comparison():
 
 if __name__ == "__main__":
     results = run_algorithm_comparison()
-    print("\n算法对比完成!")
+    print("\nAlgorithm comparison completed!")
