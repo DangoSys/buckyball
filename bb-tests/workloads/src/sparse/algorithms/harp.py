@@ -1,6 +1,6 @@
 """
-Harp算法实现
-单维度深度分块策略，专注于I维度的分块而保持J和K维度不分块
+Harp algorithm implementation
+Single-dimension deep tiling strategy, focusing on I-dimension tiling while keeping J and K dimensions un-tiled
 """
 
 import numpy as np
@@ -11,11 +11,11 @@ import math
 class HarpAlgorithm:
     def __init__(self, cache_size=4 * 1024 * 1024, element_size=4):
         """
-        初始化Harp算法
+        Initialize Harp algorithm
 
         Args:
-            cache_size: 缓存大小(字节)
-            element_size: 每个元素的字节数
+            cache_size: cache size (bytes)
+            element_size: bytes per element
         """
         self.cache_size = cache_size
         self.element_size = element_size
@@ -23,47 +23,50 @@ class HarpAlgorithm:
 
     def compute_i_tile_size(self, A_csr, base_tile_factor):
         """
-        计算I维度的分块大小
+        Compute I-dimension tile size
 
         Args:
-            A_csr: A矩阵的CSR格式
-            base_tile_factor: 基础分块因子
+            A_csr: A matrix in CSR format
+            base_tile_factor: base tiling factor
 
         Returns:
-            iii: I维度的分块大小
-            tti: I维度的分块数量
+            iii: I-dimension tile size
+            tti: I-dimension tile count
         """
         I = A_csr.shape[0]
 
-        # Harp算法：iii = I / tilesize
+        # Harp algorithm: iii = I / tilesize
         iii = max(1, int(I / base_tile_factor))
-        tti = (I + iii - 1) // iii  # 向上取整计算分块数量
+        # Calculate tile count with ceiling division
+        tti = (I + iii - 1) // iii
 
         return iii, tti
 
     def estimate_memory_usage(self, A_csr, B_csc, iii):
         """
-        估算内存使用量
+        Estimate memory usage
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
-            iii: I维度分块大小
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
+            iii: I-dimension tile size
 
         Returns:
-            memory_usage: 估算的内存使用量
+            memory_usage: estimated memory usage
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
 
-        # A矩阵分块的内存使用
+        # Memory usage for A matrix tile
         avg_nnz_per_row = A_csr.nnz / I
-        a_tile_memory = iii * avg_nnz_per_row * 3  # CSR格式存储
+        # CSR format storage
+        a_tile_memory = iii * avg_nnz_per_row * 3
 
-        # B矩阵完整存储的内存使用
-        b_memory = B_csc.nnz * 3  # CSC格式存储
+        # Memory usage for complete B matrix storage
+        # CSC format storage
+        b_memory = B_csc.nnz * 3
 
-        # 中间结果C的内存使用
+        # Memory usage for intermediate result C
         c_tile_memory = iii * K
 
         total_memory = a_tile_memory + b_memory + c_tile_memory
@@ -71,19 +74,19 @@ class HarpAlgorithm:
 
     def optimize_i_tiling(self, A_csr, B_csc, base_tile_factor):
         """
-        优化I维度分块大小
+        Optimize I-dimension tile size
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
-            base_tile_factor: 基础分块因子
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
+            base_tile_factor: base tiling factor
 
         Returns:
-            optimal_iii: 最优I维度分块大小
+            optimal_iii: optimal I-dimension tile size
         """
         I = A_csr.shape[0]
 
-        # 尝试不同的分块大小
+        # Try different tile sizes
         best_iii = max(1, int(I / base_tile_factor))
         best_score = float("-inf")
 
@@ -98,18 +101,19 @@ class HarpAlgorithm:
             if iii <= 0 or iii > I:
                 continue
 
-            # 计算性能评分
+            # Compute performance score
             memory_usage = self.estimate_memory_usage(A_csr, B_csc, iii)
 
-            # 评分函数：考虑内存使用效率和计算局部性
+            # Scoring function: consider memory usage efficiency and computation locality
             if memory_usage <= self.cache_capacity:
                 cache_efficiency = 1.0
             else:
                 cache_efficiency = self.cache_capacity / memory_usage
 
-            # 分块数量适中时得分更高
+            # Higher score when tile count is moderate
             tile_count = (I + iii - 1) // iii
-            parallelism_score = min(1.0, tile_count / 8.0)  # 假设8个并行单元
+            # Assume 8 parallel units
+            parallelism_score = min(1.0, tile_count / 8.0)
 
             score = cache_efficiency * parallelism_score
 
@@ -121,35 +125,36 @@ class HarpAlgorithm:
 
     def execute_tiling(self, A_csr, B_csc, iii):
         """
-        执行Harp分块矩阵乘法
+        Execute Harp tiled matrix multiplication
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
-            iii: I维度分块大小
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
+            iii: I-dimension tile size
 
         Returns:
-            C: 结果矩阵
+            C: result matrix
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
-        assert J == J_b, "矩阵维度不匹配"
+        assert J == J_b, "Matrix dimensions do not match"
 
         C = np.zeros((I, K))
 
-        # JKI迭代顺序，只在I维度分块
-        # 预先转换B矩阵为密集格式以提高访问效率
+        # JKI iteration order, only tile in I dimension
+        # Pre-convert B matrix to dense format for better access efficiency
         B_dense = B_csc.toarray()
 
         for i_start in range(0, I, iii):
             i_end = min(i_start + iii, I)
 
-            # 提取当前I分块的A矩阵部分
+            # Extract A matrix portion for current I tile
             A_tile = A_csr[i_start:i_end, :]
 
-            # 对于当前I分块，遍历所有J和K
+            # For current I tile, iterate over all J and K
             for j in range(J):
-                if A_tile[:, j].nnz > 0:  # 只处理非零列
+                # Only process non-zero columns
+                if A_tile[:, j].nnz > 0:
                     A_col = A_tile[:, j].toarray().flatten()
 
                     for k in range(K):
@@ -160,20 +165,20 @@ class HarpAlgorithm:
 
     def analyze_sparsity_pattern(self, A_csr):
         """
-        分析稀疏模式以优化分块策略
+        Analyze sparsity pattern to optimize tiling strategy
 
         Args:
-            A_csr: A矩阵的CSR格式
+            A_csr: A matrix in CSR format
 
         Returns:
-            pattern_info: 稀疏模式信息
+            pattern_info: sparsity pattern information
         """
         I, J = A_csr.shape
 
-        # 计算每行的非零元素数量
+        # Calculate non-zero element count per row
         nnz_per_row = np.array([len(A_csr.getrow(i).data) for i in range(I)])
 
-        # 计算行稀疏度的统计信息
+        # Calculate row sparsity statistics
         row_density = nnz_per_row / J
 
         pattern_info = {
@@ -189,53 +194,56 @@ class HarpAlgorithm:
 
 
 def demo_harp():
-    """演示Harp算法"""
-    print("=== Harp算法演示 ===")
+    """Demonstrate Harp algorithm"""
+    print("=== Harp Algorithm Demo ===")
 
-    # 创建示例稀疏矩阵
+    # Create example sparse matrices
     np.random.seed(42)
     I, J, K = 100, 150, 200
 
-    # 生成稀疏矩阵A和B
+    # Generate sparse matrices A and B
     A_dense = np.random.random((I, J))
-    A_dense[A_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    A_dense[A_dense < 0.9] = 0
     A_csr = csr_matrix(A_dense)
 
     B_dense = np.random.random((J, K))
-    B_dense[B_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    B_dense[B_dense < 0.9] = 0
     B_csc = csr_matrix(B_dense).tocsc()
 
-    # 初始化Harp算法
-    harp = HarpAlgorithm(cache_size=1024 * 1024)  # 1MB缓存
+    # Initialize Harp algorithm
+    # 1MB cache
+    harp = HarpAlgorithm(cache_size=1024 * 1024)
 
-    # 分析A矩阵的稀疏模式
+    # Analyze A matrix sparsity pattern
     pattern_info = harp.analyze_sparsity_pattern(A_csr)
-    print("A矩阵稀疏模式分析:")
+    print("A matrix sparsity pattern analysis:")
     for key, value in pattern_info.items():
         print(f"  {key}: {value:.2f}")
 
-    # 计算基础分块因子（简化版本）
+    # Compute base tiling factor (simplified version)
     base_tile_factor = max(2.0, pattern_info["avg_nnz_per_row"] / 10.0)
-    print(f"基础分块因子: {base_tile_factor:.2f}")
+    print(f"Base tiling factor: {base_tile_factor:.2f}")
 
-    # 优化I维度分块大小
+    # Optimize I-dimension tile size
     optimal_iii = harp.optimize_i_tiling(A_csr, B_csc, base_tile_factor)
-    print(f"最优I分块大小: {optimal_iii}")
+    print(f"Optimal I tile size: {optimal_iii}")
 
-    # 估算内存使用
+    # Estimate memory usage
     memory_usage = harp.estimate_memory_usage(A_csr, B_csc, optimal_iii)
-    print(f"估算内存使用: {memory_usage:.0f} 元素")
-    print(f"缓存利用率: {min(100.0, memory_usage/harp.cache_capacity*100):.1f}%")
+    print(f"Estimated memory usage: {memory_usage:.0f} elements")
+    print(f"Cache utilization: {min(100.0, memory_usage/harp.cache_capacity*100):.1f}%")
 
-    # 执行分块矩阵乘法
+    # Execute tiled matrix multiplication
     result = harp.execute_tiling(A_csr, B_csc, optimal_iii)
-    print(f"结果矩阵形状: {result.shape}")
-    print(f"结果矩阵非零元素数: {np.count_nonzero(result)}")
+    print(f"Result matrix shape: {result.shape}")
+    print(f"Result matrix non-zero elements: {np.count_nonzero(result)}")
 
-    # 验证正确性
+    # Verify correctness
     reference = A_csr.dot(B_csc).toarray()
     error = np.max(np.abs(result - reference))
-    print(f"与参考结果的最大误差: {error}")
+    print(f"Maximum error vs reference: {error}")
 
 
 if __name__ == "__main__":

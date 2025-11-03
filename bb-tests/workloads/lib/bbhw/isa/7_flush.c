@@ -1,13 +1,14 @@
 #include "isa.h"
 
 // =========================== for CTest ===========================
-// FLUSH指令低级实现
+// FLUSH instruction low-level implementation
 #ifndef __x86_64__
 #define FLUSH_RAW()                                                            \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 7, x0, x0, x0" ::: "memory")
 #else
-#define FLUSH_RAW() /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define FLUSH_RAW()
 #endif
 
-// FLUSH指令高级API实现
+// FLUSH instruction high-level API implementation
 void bb_flush(void) { FLUSH_RAW(); }
