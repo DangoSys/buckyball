@@ -1,9 +1,9 @@
 #include "isa.h"
 
 // =========================== for CTest ===========================
-// FENCE指令没有参数，直接定义汇编宏
+// FENCE instruction has no parameters, define assembly macro directly
 
-// FENCE指令低级实现
+// FENCE instruction low-level implementation
 #ifndef __x86_64__
 #define FENCE_RAW()                                                            \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 31, x0, x0, x0"                \
@@ -12,8 +12,9 @@
                : "memor"                                                       \
                  "y")
 #else
-#define FENCE_RAW() /* x86平台下不执行RISC-V指令 */
+// Do not execute RISC-V instructions on x86 platform
+#define FENCE_RAW()
 #endif
 
-// FENCE指令高级API实现
+// FENCE instruction high-level API implementation
 void bb_fence(void) { FENCE_RAW(); }

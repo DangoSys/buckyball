@@ -2,29 +2,29 @@ set(ELF_CC "riscv64-unknown-elf-gcc")
 set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 
 #-------------------------------------------------------------------------------
-# 设置baremetal编译标志
+# Set baremetal compilation flags
 #-------------------------------------------------------------------------------
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -std=gnu99 -ffast-math -fno-builtin-printf -fno-tree-loop-distribute-patterns
   -DBAREMETAL=1 -DPREALLOCATE=1 -DMULTITHREAD=1 -DPRINT_TILE=0
   -specs=htif_nano.specs -I${CTEST_GEMMINI_WORKLOAD_DIR})
 
-# 链接库
+# Link libraries
 set(LINK_LIBS -lm -lgcc)
 
 #-------------------------------------------------------------------------------
-# 定义公共的编译步骤函数
+# Define common compilation step functions
 #-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
-# 生成不同平台的可执行文件
+# Generate executables for different platforms
 #-------------------------------------------------------------------------------
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
 set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-g++")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc -mcmodel=medany -std=gnu99 -O2 -ffast-math -fno-common -fno-builtin-printf -fno-tree-loop-distribute-patterns -DPREALLOCATE=1 -DMULTITHREAD=1 -DPRINT_TILE=0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=rv64gc -mcmodel=medany -std=gnu++11 -O2 -ffast-math -fno-common -fno-builtin-printf -fno-tree-loop-distribute-patterns -DPREALLOCATE=1 -DMULTITHREAD=1 -DPRINT_TILE=0")
 
-# 生成Linux版本的可执行文件
+# Generate Linux version executables
 function(add_linux_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}-linux")
 
@@ -33,14 +33,14 @@ function(add_linux_test_target TEST_NAME SOURCE_FILE)
     ${WORKLOAD_LIB_DIR}
     ${CTEST_GEMMINI_WORKLOAD_DIR}
   )
-  # 确保依赖库先构建，并链接合并的库文件
+  # Ensure dependent libraries are built first and link merged library files
   add_dependencies(${EXECUTABLE} bbhw-linux)
   target_link_libraries(${EXECUTABLE}
     m
   )
 endfunction()
 
-# 生成multicore baremetal版本的可执行文件
+# Generate multicore baremetal version executables
 function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_multicore-baremetal")
 
@@ -61,7 +61,7 @@ function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal)
 endfunction()
 
-# 生成singlecore baremetal版本的可执行文件
+# Generate singlecore baremetal version executables
 function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_singlecore-baremetal")
 
@@ -81,13 +81,13 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   )
 endfunction()
 
-# 创建跨平台测试目标
+# Create cross-platform test targets
 function(add_cross_platform_test_target TEST_NAME SOURCE_FILE)
   add_linux_test_target(${TEST_NAME} ${SOURCE_FILE})
   add_multicore_baremetal_test_target(${TEST_NAME} ${SOURCE_FILE})
   add_singlecore_baremetal_test_target(${TEST_NAME} ${SOURCE_FILE})
 
-  # 创建一个总目标，同时构建所有平台
+  # Create a master target that builds all platforms simultaneously
   add_custom_target(${TEST_NAME}
     DEPENDS  ${TEST_NAME}-linux ${TEST_NAME}_multicore_baremetal ${TEST_NAME}_singlecore_baremetal
     COMMENT "Building ${TEST_NAME} for all platforms"
@@ -101,7 +101,7 @@ set(LINK_FLAGS "-static -Wl,--no-dynamic-linker")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_FLAGS}")
 
 #-------------------------------------------------------------------------------
-# 构建列表 - 使用跨平台function生成所有测试目标
+# Build list - use cross-platform function to generate all test targets
 #-------------------------------------------------------------------------------
 add_cross_platform_test_target(gemmini_mvin_mvout mvin_mvout.c)
 add_cross_platform_test_target(gemmini_mvin_mvout_zeros mvin_mvout_zeros.c)
@@ -158,7 +158,7 @@ add_cross_platform_test_target(gemmini_global_average global_average.c)
 add_cross_platform_test_target(gemmini_gemmini_counter gemmini_counter.c)
 add_cross_platform_test_target(gemmini_template template.c)
 
-# 创建总的构建目标
+# Create master build target
 add_custom_target(buckyball-gemmini-build ALL DEPENDS
   gemmini_mvin_mvout
   gemmini_mvin_mvout_zeros

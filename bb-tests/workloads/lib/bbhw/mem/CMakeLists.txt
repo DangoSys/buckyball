@@ -1,11 +1,11 @@
-# MEM子模块库
+# MEM submodule library
 
 set(MEM_SOURCES
     bank.c
     spad.c
 )
 
-# 1. Linux版本
+# 1. Linux version
 add_library(bbmem-linux STATIC IMPORTED)
 set_target_properties(bbmem-linux PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libbbmem-linux.a)
 
@@ -17,7 +17,7 @@ add_custom_command(
 )
 add_custom_target(bbmem-linux-build ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libbbmem-linux.a)
 
-# 2. Baremetal版本
+# 2. Baremetal version
 add_library(bbmem-baremetal STATIC IMPORTED)
 set_target_properties(bbmem-baremetal PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libbbmem-baremetal.a)
 
@@ -29,7 +29,7 @@ add_custom_command(
 )
 add_custom_target(bbmem-baremetal-build ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libbbmem-baremetal.a)
 
-# 3. x86版本
+# 3. x86 version
 add_library(bbmem-x86 STATIC IMPORTED)
 set_target_properties(bbmem-x86 PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libbbmem-x86.a)
 

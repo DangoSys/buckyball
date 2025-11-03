@@ -78,15 +78,15 @@ def run_pytest(args=None, use_allure=False):
     # Build pytest command
     cmd = ["python", "-m", "pytest", "-s", "-v", "-n", "auto"]
 
+    # 检查 Allure 是否已安装
     if use_allure:
-        # 检查 Allure 是否已安装
         if not check_allure_installed():
             if not install_allure():
                 print("Falling back to default HTML report")
                 use_allure = False
 
+        # Allure 配置
         if use_allure:
-            # Allure 配置
             allure_results_dir = reports_dir / "allure-results"
             allure_results_dir.mkdir(exist_ok=True)
             cmd.extend(["--alluredir", str(allure_results_dir), "--clean-alluredir"])

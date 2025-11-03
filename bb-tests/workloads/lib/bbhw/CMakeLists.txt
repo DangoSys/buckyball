@@ -2,18 +2,18 @@ set(ELF_CC "riscv64-unknown-elf-gcc")
 set(LINUX_CC "riscv64-unknown-linux-gnu-gcc")
 
 #-------------------------------------------------------------------------------
-# 添加子目录，各自编译三个版本
+# Add subdirectories, each compiles three versions
 #-------------------------------------------------------------------------------
 add_subdirectory(mem)
 add_subdirectory(isa)
 
 #-------------------------------------------------------------------------------
-# 组合最终库 - 只负责链接子模块
+# Combine final library - only responsible for linking submodules
 #-------------------------------------------------------------------------------
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
 set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-gcc")
 
-# 1. Linux版本 - 合并子模块的Linux版本
+# 1. Linux version - merge Linux versions of submodules
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libbbhw-linux.a
   COMMAND ${CMAKE_COMMAND} -E make_directory temp_extract_linux
@@ -35,9 +35,9 @@ add_custom_target(bbhw-linux ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libbbhw-lin
 set(LINK_FLAGS "-static -Wl,--no-dynamic-linker")
 
 #-------------------------------------------------------------------------------
-# 生成x86_64版本的库(用于toy项目)
+# Generate x86_64 version library (for toy project)
 #-------------------------------------------------------------------------------
-# 3. x86版本 - 组合子模块的x86版本
+# 3. x86 version - combine x86 versions of submodules
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libbbhw-x86.a
   COMMAND ${CMAKE_COMMAND} -E make_directory temp_extract
@@ -54,10 +54,10 @@ add_custom_command(
 add_custom_target(bbhw-x86 ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libbbhw-x86.a)
 
 #-------------------------------------------------------------------------------
-# 设置baremetal编译标志
+# Set baremetal compilation flags
 #-------------------------------------------------------------------------------
 
-# 2. Baremetal版本 - 合并子模块的Baremetal版本
+# 2. Baremetal version - merge Baremetal versions of submodules
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libbbhw-baremetal.a
   COMMAND ${CMAKE_COMMAND} -E make_directory temp_extract_baremetal

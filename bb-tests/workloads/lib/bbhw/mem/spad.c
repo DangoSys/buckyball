@@ -1,17 +1,17 @@
 #include "spad.h"
 
 /**
- * SPAD (Scratchpad) 内存地址管理库
+ * SPAD (Scratchpad) memory address management library
  *
- * 提供的 bank 和 row 到物理地址的转换
+ * Provides conversion from bank and row to physical address
  */
 
-// 运行时接口 - 纯 C 实现
+// Runtime interface - pure C implementation
 uint32_t spad_addr(uint32_t bank, uint32_t row) {
   return (bank < BANK_NUM) ? bank_addr(&bank_configs[bank], row) : -1;
 }
 
-// 从spad地址获取bank编号
+// Get bank number from spad address
 uint32_t spad_get_bank(uint32_t addr) {
   for (uint32_t bank = 0; bank < BANK_NUM; bank++) {
     uint32_t base = bank_configs[bank].base_addr_;
@@ -20,10 +20,11 @@ uint32_t spad_get_bank(uint32_t addr) {
       return bank;
     }
   }
-  return -1; // 未找到对应的bank
+  // Bank not found
+  return -1;
 }
 
-// 从spad地址获取在bank内的偏移(row)
+// Get offset (row) within bank from spad address
 uint32_t spad_get_offset(uint32_t addr) {
   for (uint32_t bank = 0; bank < BANK_NUM; bank++) {
     uint32_t base = bank_configs[bank].base_addr_;
@@ -32,10 +33,11 @@ uint32_t spad_get_offset(uint32_t addr) {
       return addr - base;
     }
   }
-  return -1; // 未找到对应的bank
+  // Bank not found
+  return -1;
 }
 
-// 从spad地址同时获取bank和offset
+// Get both bank and offset from spad address
 void spad_get_bank_offset(uint32_t addr, uint32_t *bank, uint32_t *offset) {
   for (uint32_t i = 0; i < BANK_NUM; i++) {
     uint32_t base = bank_configs[i].base_addr_;
@@ -50,7 +52,7 @@ void spad_get_bank_offset(uint32_t addr, uint32_t *bank, uint32_t *offset) {
   *offset = -1;
 }
 
-// 获取指定bank的行宽度（字节数）
+// Get row width (bytes) of specified bank
 uint32_t spad_get_bank_row_bytes(uint32_t bank) {
   if (bank >= BANK_NUM)
     return 0;

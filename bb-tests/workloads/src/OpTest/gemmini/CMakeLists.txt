@@ -2,18 +2,18 @@
 
 
 #-------------------------------------------------------------------------------
-# 定义公共的编译步骤函数 .mlir -> .o
+# Define common compilation step functions .mlir -> .o
 #-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
-# 生成不同平台的可执行文件
+# Generate executables for different platforms
 #-------------------------------------------------------------------------------
-# 生成baremetal的可执行文件
+# Generate baremetal executables
 function(add_baremetal_target TARGET_NAME MLIR_FILE)
   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal.o")
   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-baremetal")
 
-  # 编译xx.mlir到xx-baremetal.o
+  # Compile xx.mlir to xx-baremetal.o
   add_custom_command(
     OUTPUT ${OBJ_FILE}
     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
@@ -30,7 +30,7 @@ function(add_baremetal_target TARGET_NAME MLIR_FILE)
     COMMENT "Compiling ${MLIR_FILE} to object file"
   )
 
-  # 链接xx-baremetal.o到xx-baremetal
+  # Link xx-baremetal.o to xx-baremetal
   add_custom_command(
 
     OUTPUT ${EXECUTABLE}
@@ -40,18 +40,18 @@ function(add_baremetal_target TARGET_NAME MLIR_FILE)
     COMMENT "Linking baremetal executable: ${EXECUTABLE}"
   )
 
-  # 创建xx-baremetal的目标
+  # Create target for xx-baremetal
   add_custom_target(${TARGET_NAME}_baremetal
     DEPENDS ${EXECUTABLE}
   )
 endfunction()
 
-# 生成Linux的可执行文件
+# Generate Linux executables
 function(add_linux_target TARGET_NAME MLIR_FILE)
   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-linux.o")
   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}-linux")
 
-  # 编译xx.mlir到xx-linux.o
+  # Compile xx.mlir to xx-linux.o
   add_custom_command(
     OUTPUT ${OBJ_FILE}
     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
@@ -67,7 +67,7 @@ function(add_linux_target TARGET_NAME MLIR_FILE)
     COMMENT "Compiling ${MLIR_FILE} to Linux object file"
   )
 
-  # 链接xx-linux.o到xx-linux
+  # Link xx-linux.o to xx-linux
   add_custom_command(
     OUTPUT ${EXECUTABLE}
     COMMAND ${LINUX_CC} -O2 -static ${OBJ_FILE} -o ${EXECUTABLE}
@@ -75,18 +75,18 @@ function(add_linux_target TARGET_NAME MLIR_FILE)
     COMMENT "Linking Linux executable: ${EXECUTABLE}"
   )
 
-  # 创建xx-linux的目标 - 使用目标名前缀避免冲突
+  # Create target for xx-linux - use target name prefix to avoid conflicts
   add_custom_target(${TARGET_NAME}_linux
     DEPENDS ${EXECUTABLE}
   )
 endfunction()
 
-# 创建不同平台的可执行文件
+# Create executables for different platforms
 function(add_cross_platform_target TARGET_NAME MLIR_FILE)
   add_baremetal_target(${TARGET_NAME} ${MLIR_FILE})
   add_linux_target(${TARGET_NAME} ${MLIR_FILE})
 
-  # 创建一个总目标，同时构建两个平台
+  # Create a master target that builds both platforms simultaneously
   add_custom_target(${TARGET_NAME}
     DEPENDS ${TARGET_NAME}_baremetal ${TARGET_NAME}_linux
     COMMENT "Building ${TARGET_NAME} for both baremetal and Linux"
@@ -94,7 +94,7 @@ function(add_cross_platform_target TARGET_NAME MLIR_FILE)
 endfunction()
 
 #-------------------------------------------------------------------------------
-# 构建列表
+# Build list
 #-------------------------------------------------------------------------------
 add_cross_platform_target(matrix-add ${OPTEST_GEMMINI_DIR}/matrix-add.mlir)
 add_cross_platform_target(matrix-add-scale ${OPTEST_GEMMINI_DIR}/matrix-add-scale.mlir)

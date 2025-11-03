@@ -1,6 +1,6 @@
 """
-DRT算法实现
-Dynamic Restructuring Tiling - 均衡的多维度分块策略
+DRT algorithm implementation
+Dynamic Restructuring Tiling - balanced multi-dimension tiling strategy
 """
 
 import numpy as np
@@ -11,11 +11,11 @@ import math
 class DRTAlgorithm:
     def __init__(self, cache_size=4 * 1024 * 1024, element_size=4):
         """
-        初始化DRT算法
+        Initialize DRT algorithm
 
         Args:
-            cache_size: 缓存大小(字节)
-            element_size: 每个元素的字节数
+            cache_size: cache size (bytes)
+            element_size: bytes per element
         """
         self.cache_size = cache_size
         self.element_size = element_size
@@ -23,16 +23,16 @@ class DRTAlgorithm:
 
     def compute_base_tile_size(self, B_csc, K):
         """
-        基于Tailors方法计算基础分块大小
+        Compute base tile size based on Tailors method
 
         Args:
-            B_csc: B矩阵的CSC格式
-            K: K维度大小
+            B_csc: B matrix in CSC format
+            K: K dimension size
 
         Returns:
-            base_tile_size: 基础分块因子
+            base_tile_size: base tiling factor
+        # Simplified pbound calculation
         """
-        # 简化的pbound计算
         pbound = K
         left_bound = 0
         sum_now = 0
@@ -52,16 +52,16 @@ class DRTAlgorithm:
 
     def compute_jk_tiles(self, J, K, base_tile_size):
         """
-        计算J和K维度的分块大小
+        Compute tile sizes for J and K dimensions
 
         Args:
-            J, K: 矩阵维度
-            base_tile_size: 基础分块因子
+            J, K: matrix dimensions
+            base_tile_size: base tiling factor
 
         Returns:
-            jjj, kkk: J和K维度的分块大小
+            jjj, kkk: tile sizes for J and K dimensions
+        # DRT uses square root strategy to balance J and K dimensions
         """
-        # DRT使用平方根策略平衡J和K维度
         tt = math.sqrt(base_tile_size)
 
         jjj = max(1, int(J / tt))
@@ -71,37 +71,37 @@ class DRTAlgorithm:
 
     def execute_tiling(self, A_csr, B_csc, jjj, kkk):
         """
-        执行DRT分块矩阵乘法
+        Execute DRT tiled matrix multiplication
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
-            jjj, kkk: J和K维度的分块大小
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
+            jjj, kkk: tile sizes for J and K dimensions
 
         Returns:
-            C: 结果矩阵
+            C: result matrix
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
-        assert J == J_b, "矩阵维度不匹配"
+        assert J == J_b, "Matrix dimensions do not match"
 
         C = np.zeros((I, K))
 
-        # JKI迭代顺序，在J和K维度都分块
+        # JKI iteration order, tile in both J and K dimensions
         for j_start in range(0, J, jjj):
             j_end = min(j_start + jjj, J)
 
             for k_start in range(0, K, kkk):
                 k_end = min(k_start + kkk, K)
 
-                # 预取当前J-K分块的数据
+                # Prefetch data for current J-K tile
                 B_tile = B_csc[j_start:j_end, k_start:k_end].toarray()
 
+                # Get data for row i of matrix A in current J tile range
                 for i in range(I):
-                    # 获取A矩阵第i行在当前J分块范围内的数据
                     A_row = A_csr[i, j_start:j_end].toarray().flatten()
 
-                    # 计算当前分块的矩阵乘法
+                    # Compute matrix multiplication for current tile
                     C_tile = np.dot(A_row, B_tile)
                     C[i, k_start:k_end] += C_tile
 
@@ -109,25 +109,25 @@ class DRTAlgorithm:
 
     def adaptive_tile_adjustment(self, A_csr, B_csc, initial_jjj, initial_kkk):
         """
-        自适应分块大小调整
+        Adaptive tile size adjustment
 
         Args:
-            A_csr, B_csc: 输入矩阵
-            initial_jjj, initial_kkk: 初始分块大小
+            A_csr, B_csc: input matrices
+            initial_jjj, initial_kkk: initial tile sizes
 
         Returns:
-            adjusted_jjj, adjusted_kkk: 调整后的分块大小
+            adjusted_jjj, adjusted_kkk: adjusted tile sizes
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
 
-        # 评估不同分块大小的性能
+        # Evaluate performance of different tile sizes
         best_jjj, best_kkk = initial_jjj, initial_kkk
         best_score = self._evaluate_tiling_efficiency(
             A_csr, B_csc, initial_jjj, initial_kkk
         )
 
-        # 尝试调整分块大小
+        # Try adjusting tile sizes
         for j_factor in [0.5, 1.0, 2.0]:
             for k_factor in [0.5, 1.0, 2.0]:
                 test_jjj = max(1, int(initial_jjj * j_factor))
@@ -145,19 +145,19 @@ class DRTAlgorithm:
 
     def _evaluate_tiling_efficiency(self, A_csr, B_csc, jjj, kkk):
         """
-        评估分块效率
+        Evaluate tiling efficiency
 
         Args:
-            A_csr, B_csc: 输入矩阵
-            jjj, kkk: 分块大小
+            A_csr, B_csc: input matrices
+            jjj, kkk: tile sizes
 
         Returns:
-            efficiency_score: 效率评分
+            efficiency_score: efficiency score
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
 
-        # 计算分块内数据局部性得分
+        # Compute data locality score within tiles
         locality_score = 0
         total_tiles = 0
 
@@ -166,11 +166,11 @@ class DRTAlgorithm:
             for k_start in range(0, K, kkk):
                 k_end = min(k_start + kkk, K)
 
-                # 估算分块内的非零元素密度
+                # Estimate non-zero element density within tile
                 B_tile = B_csc[j_start:j_end, k_start:k_end]
                 tile_density = B_tile.nnz / ((j_end - j_start) * (k_end - k_start))
 
-                # 分块大小适中且密度较高时得分更高
+                # Higher score when tile size is moderate and density is high
                 size_score = 1.0 / (1.0 + abs(jjj * kkk - self.cache_capacity / 10))
                 density_score = tile_density
 
@@ -181,48 +181,51 @@ class DRTAlgorithm:
 
 
 def demo_drt():
-    """演示DRT算法"""
-    print("=== DRT算法演示 ===")
+    """Demonstrate DRT algorithm"""
+    print("=== DRT Algorithm Demo ===")
 
-    # 创建示例稀疏矩阵
+    # Create example sparse matrices
     np.random.seed(42)
     I, J, K = 100, 150, 200
 
-    # 生成稀疏矩阵A和B
+    # Generate sparse matrices A and B
     A_dense = np.random.random((I, J))
-    A_dense[A_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    A_dense[A_dense < 0.9] = 0
     A_csr = csr_matrix(A_dense)
 
     B_dense = np.random.random((J, K))
-    B_dense[B_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    B_dense[B_dense < 0.9] = 0
     B_csc = csr_matrix(B_dense).tocsc()
 
-    # 初始化DRT算法
-    drt = DRTAlgorithm(cache_size=1024 * 1024)  # 1MB缓存
+    # Initialize DRT algorithm
+    # 1MB cache
+    drt = DRTAlgorithm(cache_size=1024 * 1024)
 
-    # 计算基础分块大小
+    # Compute base tile size
     base_tile_size = drt.compute_base_tile_size(B_csc, K)
-    print(f"基础分块因子: {base_tile_size:.2f}")
+    print(f"Base tiling factor: {base_tile_size:.2f}")
 
-    # 计算J和K维度分块大小
+    # Compute J and K dimension tile sizes
     initial_jjj, initial_kkk = drt.compute_jk_tiles(J, K, base_tile_size)
-    print(f"初始J分块大小: {initial_jjj}, K分块大小: {initial_kkk}")
+    print(f"Initial J tile size: {initial_jjj}, K tile size: {initial_kkk}")
 
-    # 自适应调整分块大小
+    # Adaptive tile size adjustment
     optimal_jjj, optimal_kkk = drt.adaptive_tile_adjustment(
         A_csr, B_csc, initial_jjj, initial_kkk
     )
-    print(f"优化后J分块大小: {optimal_jjj}, K分块大小: {optimal_kkk}")
+    print(f"Optimized J tile size: {optimal_jjj}, K tile size: {optimal_kkk}")
 
-    # 执行分块矩阵乘法
+    # Execute tiled matrix multiplication
     result = drt.execute_tiling(A_csr, B_csc, optimal_jjj, optimal_kkk)
-    print(f"结果矩阵形状: {result.shape}")
-    print(f"结果矩阵非零元素数: {np.count_nonzero(result)}")
+    print(f"Result matrix shape: {result.shape}")
+    print(f"Result matrix non-zero elements: {np.count_nonzero(result)}")
 
-    # 验证正确性
+    # Verify correctness
     reference = A_csr.dot(B_csc).toarray()
     error = np.max(np.abs(result - reference))
-    print(f"与参考结果的最大误差: {error}")
+    print(f"Maximum error vs reference: {error}")
 
 
 if __name__ == "__main__":

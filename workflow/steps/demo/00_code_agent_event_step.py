@@ -209,8 +209,6 @@ async def handler(input_data, context):
             "  - Pass 'baseUrl' in request\n\n"
             "Example:\n"
             "  export BASE_URL='https://api.deepseek.com/v1'\n"
-            # or for Claude:\n"
-            "
             "  export BASE_URL='https://api.anthropic.com/v1'\n"
         )
         context.logger.error(error_msg)

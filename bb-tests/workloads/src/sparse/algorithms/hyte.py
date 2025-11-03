@@ -1,6 +1,6 @@
 """
-HYTE算法实现
-Hybrid Static-Dynamic Tiling - 混合静态动态分块策略
+HYTE algorithm implementation
+Hybrid Static-Dynamic Tiling - hybrid static-dynamic tiling strategy
 """
 
 import numpy as np
@@ -13,45 +13,45 @@ from collections import defaultdict
 class HYTEAlgorithm:
     def __init__(self, cache_size=4 * 1024 * 1024, element_size=4, pe_count=32):
         """
-        初始化HYTE算法
+        Initialize HYTE algorithm
 
         Args:
-            cache_size: 缓存大小(字节)
-            element_size: 每个元素的字节数
-            pe_count: 处理单元数量
+            cache_size: cache size (bytes)
+            element_size: bytes per element
+            pe_count: number of processing units
         """
         self.cache_size = cache_size
         self.element_size = element_size
         self.cache_capacity = cache_size // element_size
         self.pe_count = pe_count
 
-        # 动态调整参数
+        # Dynamic adjustment parameters
         self.tile_history = []
         self.performance_stats = defaultdict(list)
 
     def sample_matrix_parameters(self, A_csr, B_csc):
         """
-        采样矩阵参数用于静态优化
+        Sample matrix parameters for static optimization
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
 
         Returns:
-            params: 采样得到的矩阵参数
+            params: sampled matrix parameters
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
 
-        # 计算采样参数
+        # Compute sampling parameters
         sample_k = int(math.sqrt(I))
         sample_p = 1.0 / sample_k
 
-        # 分析矩阵稀疏度和分布
+        # Analyze matrix sparsity and distribution
         a_density = A_csr.nnz / (I * J)
         b_density = B_csc.nnz / (J * K)
 
-        # 分析行/列的非零元素分布
+        # Analyze non-zero element distribution of rows/columns
         a_nnz_per_row = np.array(
             [len(A_csr.getrow(i).data) for i in range(min(I, 100))]
         )
@@ -77,28 +77,28 @@ class HYTEAlgorithm:
 
     def compute_tile_bounds(self, params):
         """
-        计算分块搜索边界
+        Compute tile search bounds
 
         Args:
-            params: 矩阵参数
+            params: matrix parameters
 
         Returns:
-            bounds: 各维度的分块边界
+            bounds: tiling bounds for each dimension
         """
         I, J, K = params["I"], params["J"], params["K"]
 
-        # 基于缓存容量和矩阵大小计算边界
+        # Compute bounds based on cache capacity and matrix size
         cache_elements = self.cache_capacity
 
-        # K维度边界（基于B矩阵列的大小）
+        # K dimension bound (based on B matrix column size)
         avg_col_size = params["avg_b_nnz_per_col"] * 3 + 1
         k_bound = max(1, int(cache_elements / (avg_col_size * 4)))
         k_bound = min(k_bound, K // 2)
 
-        # J维度边界
+        # J dimension bound
         j_bound = max(1, int(J / 8))
 
-        # I维度边界
+        # I dimension bound
         i_bound = max(1, int(I / 8))
 
         bounds = {"i_bound": i_bound, "j_bound": j_bound, "k_bound": k_bound}
@@ -107,15 +107,15 @@ class HYTEAlgorithm:
 
     def static_tile_search(self, A_csr, B_csc, params, bounds):
         """
-        静态分块搜索
+        Static tile search
 
         Args:
-            A_csr, B_csc: 输入矩阵
-            params: 矩阵参数
-            bounds: 搜索边界
+            A_csr, B_csc: input matrices
+            params: matrix parameters
+            bounds: search bounds
 
         Returns:
-            best_config: 最优分块配置
+            best_config: optimal tiling configuration
         """
         I, J, K = params["I"], params["J"], params["K"]
         i_bound, j_bound, k_bound = (
@@ -127,11 +127,11 @@ class HYTEAlgorithm:
         best_cost = float("inf")
         best_config = {"iii": I, "jjj": J, "kkk": K}
 
-        # 分层搜索策略
+        # Hierarchical search strategy
         for iii in [I // (2**i) for i in range(0, int(math.log2(I // i_bound)) + 1)]:
             iii = max(i_bound, iii)
 
-            # 只改变J
+            # Only change J
             for jjj in [
                 J // (2**j) for j in range(0, int(math.log2(J // j_bound)) + 1)
             ]:
@@ -143,7 +143,7 @@ class HYTEAlgorithm:
                     best_cost = cost
                     best_config = {"iii": iii, "jjj": jjj, "kkk": kkk}
 
-            # 只改变K
+            # Only change K
             jjj = J
             for kkk in [
                 K // (2**k) for k in range(1, int(math.log2(K // k_bound)) + 1)
@@ -155,7 +155,7 @@ class HYTEAlgorithm:
                     best_cost = cost
                     best_config = {"iii": iii, "jjj": jjj, "kkk": kkk}
 
-            # 同时改变J和K
+            # Change both J and K
             for kkk in [
                 K // (2**k) for k in range(1, int(math.log2(K // k_bound)) + 1)
             ]:
@@ -174,43 +174,43 @@ class HYTEAlgorithm:
 
     def _estimate_tile_cost(self, A_csr, B_csc, iii, jjj, kkk, params):
         """
-        估算分块成本
+        Estimate tile cost
 
         Args:
-            A_csr, B_csc: 输入矩阵
-            iii, jjj, kkk: 分块大小
-            params: 矩阵参数
+            A_csr, B_csc: input matrices
+            iii, jjj, kkk: tile sizes
+            params: matrix parameters
 
         Returns:
-            cost: 估算成本
+            cost: estimated cost
         """
         I, J, K = params["I"], params["J"], params["K"]
 
-        # 计算分块数量
+        # Calculate tile count
         ti = (I + iii - 1) // iii
         tj = (J + jjj - 1) // jjj
         tk = (K + kkk - 1) // kkk
 
-        # 估算内存访问成本
-        # A矩阵访问成本
+        # Estimate memory access cost
+        # A matrix access cost
         a_access_cost = ti * A_csr.nnz * 3
 
-        # B矩阵访问成本
+        # B matrix access cost
         b_tiles = tj * tk
         avg_b_tile_size = (B_csc.nnz / b_tiles) * 3
         b_access_cost = b_tiles * avg_b_tile_size
 
-        # C矩阵写入成本
+        # C matrix write cost
         c_write_cost = I * K * 3
 
-        # 缓存溢出惩罚
+        # Cache overflow penalty
         tile_memory = iii * jjj * 3 + jjj * kkk * 3 + iii * kkk * 3
         if tile_memory > self.cache_capacity:
             cache_penalty = (tile_memory / self.cache_capacity) ** 2
         else:
             cache_penalty = 1.0
 
-        # 并行效率
+        # Parallel efficiency
         parallel_efficiency = min(1.0, (ti * tj * tk) / self.pe_count)
 
         total_cost = (
@@ -223,14 +223,14 @@ class HYTEAlgorithm:
 
     def dynamic_tile_adjustment(self, current_config, tile_stats):
         """
-        动态分块调整
+        Dynamic tile adjustment
 
         Args:
-            current_config: 当前分块配置
-            tile_stats: 分块统计信息
+            current_config: current tiling configuration
+            tile_stats: tile statistics
 
         Returns:
-            new_config: 新的分块配置
+            new_config: new tiling configuration
         """
         iii, jjj, kkk = (
             current_config["iii"],
@@ -238,19 +238,20 @@ class HYTEAlgorithm:
             current_config["kkk"],
         )
 
-        # 分析当前分块的性能
+        # Analyze performance of current tiles
         cache_hit_rate = tile_stats.get("cache_hit_rate", 0.8)
         tile_utilization = tile_stats.get("tile_utilization", 0.7)
 
         new_config = current_config.copy()
 
-        # 基于性能指标调整分块大小
-        if cache_hit_rate < 0.6:  # 缓存命中率低，减小分块
+        # Adjust tile size based on performance metrics
+        # Low cache hit rate, reduce tile size
+        if cache_hit_rate < 0.6:
             if jjj > 1:
                 new_config["jjj"] = max(1, jjj // 2)
             elif kkk > 1:
                 new_config["kkk"] = max(1, kkk // 2)
-        elif cache_hit_rate > 0.9 and tile_utilization < 0.5:  # 可以增大分块
+        elif cache_hit_rate > 0.9 and tile_utilization < 0.5:
             if jjj * 2 <= self.cache_capacity**0.5:
                 new_config["jjj"] = jjj * 2
             elif kkk * 2 <= self.cache_capacity**0.5:
@@ -260,25 +261,26 @@ class HYTEAlgorithm:
 
     def execute_hybrid_tiling(self, A_csr, B_csc, initial_config):
         """
-        执行混合分块矩阵乘法
+        Execute hybrid tiled matrix multiplication
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
-            initial_config: 初始分块配置
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
+            initial_config: initial tiling configuration
 
         Returns:
-            C: 结果矩阵
+            C: result matrix
         """
         I, J = A_csr.shape
         J_b, K = B_csc.shape
-        assert J == J_b, "矩阵维度不匹配"
+        assert J == J_b, "Matrix dimensions do not match"
 
         C = np.zeros((I, K))
         current_config = initial_config.copy()
 
-        # 执行分块矩阵乘法，周期性进行动态调整
-        adjustment_interval = 10  # 每10个分块调整一次
+        # Execute tiled matrix multiplication, perform dynamic adjustment periodically
+        # Adjust every 10 tiles
+        adjustment_interval = 10
         tile_count = 0
 
         iii, jjj, kkk = (
@@ -296,7 +298,7 @@ class HYTEAlgorithm:
                 for k_start in range(0, K, kkk):
                     k_end = min(k_start + kkk, K)
 
-                    # 执行当前分块的矩阵乘法
+                    # Execute matrix multiplication for current tile
                     start_time = time.time()
 
                     A_tile = A_csr[i_start:i_end, j_start:j_end]
@@ -307,12 +309,13 @@ class HYTEAlgorithm:
 
                     exec_time = time.time() - start_time
 
-                    # 收集性能统计
+                    # Collect performance statistics
+                    # Simulate cache hit rate
                     tile_stats = {
                         "execution_time": exec_time,
                         "cache_hit_rate": np.random.uniform(
                             0.6, 0.95
-                        ),  # 模拟缓存命中率
+                        ),
                         "tile_utilization": A_tile.nnz
                         / (A_tile.shape[0] * A_tile.shape[1]),
                     }
@@ -320,13 +323,13 @@ class HYTEAlgorithm:
                     self.performance_stats["exec_times"].append(exec_time)
                     tile_count += 1
 
-                    # 周期性动态调整
+                    # Periodic dynamic adjustment
                     if tile_count % adjustment_interval == 0:
                         new_config = self.dynamic_tile_adjustment(
                             current_config, tile_stats
                         )
                         if new_config != current_config:
-                            print(f"动态调整分块大小: {current_config} -> {new_config}")
+                            print(f"Dynamic tile size adjustment: {current_config} -> {new_config}")
                             current_config = new_config
                             iii, jjj, kkk = (
                                 current_config["iii"],
@@ -338,36 +341,36 @@ class HYTEAlgorithm:
 
     def run_hyte(self, A_csr, B_csc):
         """
-        运行完整的HYTE算法
+        Run complete HYTE algorithm
 
         Args:
-            A_csr: A矩阵的CSR格式
-            B_csc: B矩阵的CSC格式
+            A_csr: A matrix in CSR format
+            B_csc: B matrix in CSC format
 
         Returns:
-            result: 计算结果和统计信息
+            result: computation result and statistics
         """
-        print("开始HYTE算法...")
+        print("Starting HYTE algorithm...")
 
-        # 1. 采样矩阵参数
-        print("1. 采样矩阵参数...")
+        # 1. Sample matrix parameters
+        print("1. Sampling matrix parameters...")
         params = self.sample_matrix_parameters(A_csr, B_csc)
 
-        # 2. 计算搜索边界
-        print("2. 计算分块搜索边界...")
+        # 2. Compute search bounds
+        print("2. Computing tile search bounds...")
         bounds = self.compute_tile_bounds(params)
 
-        # 3. 静态分块搜索
-        print("3. 执行静态分块搜索...")
+        # 3. Static tile search
+        print("3. Executing static tile search...")
         start_time = time.time()
         best_config = self.static_tile_search(A_csr, B_csc, params, bounds)
         search_time = time.time() - start_time
 
-        print(f"静态优化完成，用时: {search_time:.3f}s")
-        print(f"最优分块配置: {best_config}")
+        print(f"Static optimization completed, time taken: {search_time:.3f}s")
+        print(f"Optimal tiling configuration: {best_config}")
 
-        # 4. 执行混合分块矩阵乘法
-        print("4. 执行混合分块矩阵乘法...")
+        # 4. Execute hybrid tiled matrix multiplication
+        print("4. Executing hybrid tiled matrix multiplication...")
         result_matrix = self.execute_hybrid_tiling(A_csr, B_csc, best_config)
 
         result = {
@@ -381,42 +384,45 @@ class HYTEAlgorithm:
 
 
 def demo_hyte():
-    """演示HYTE算法"""
-    print("=== HYTE算法演示 ===")
+    """Demonstrate HYTE algorithm"""
+    print("=== HYTE Algorithm Demo ===")
 
-    # 创建示例稀疏矩阵
+    # Create example sparse matrices
     np.random.seed(42)
     I, J, K = 100, 150, 200
 
-    # 生成稀疏矩阵A和B
+    # Generate sparse matrices A and B
     A_dense = np.random.random((I, J))
-    A_dense[A_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    A_dense[A_dense < 0.9] = 0
     A_csr = csr_matrix(A_dense)
 
     B_dense = np.random.random((J, K))
-    B_dense[B_dense < 0.9] = 0  # 90%稀疏度
+    # 90% sparsity
+    B_dense[B_dense < 0.9] = 0
     B_csc = csr_matrix(B_dense).tocsc()
 
-    print(f"矩阵A: {A_csr.shape}, 非零元素: {A_csr.nnz}")
-    print(f"矩阵B: {B_csc.shape}, 非零元素: {B_csc.nnz}")
+    print(f"Matrix A: {A_csr.shape}, non-zero elements: {A_csr.nnz}")
+    print(f"Matrix B: {B_csc.shape}, non-zero elements: {B_csc.nnz}")
 
-    # 初始化并运行HYTE算法
-    hyte = HYTEAlgorithm(cache_size=1024 * 1024, pe_count=16)  # 1MB缓存, 16个PE
+    # Initialize and run HYTE algorithm
+    # 1MB cache, 16 PEs
+    hyte = HYTEAlgorithm(cache_size=1024 * 1024, pe_count=16)
 
     result = hyte.run_hyte(A_csr, B_csc)
 
-    print(f"\n结果矩阵形状: {result['matrix'].shape}")
-    print(f"结果矩阵非零元素数: {np.count_nonzero(result['matrix'])}")
+    print(f"\nResult matrix shape: {result['matrix'].shape}")
+    print(f"Result matrix non-zero elements: {np.count_nonzero(result['matrix'])}")
 
-    # 验证正确性
+    # Verify correctness
     reference = A_csr.dot(B_csc).toarray()
     error = np.max(np.abs(result["matrix"] - reference))
-    print(f"与参考结果的最大误差: {error}")
+    print(f"Maximum error vs reference: {error}")
 
-    # 性能统计
+    # Performance statistics
     if result["performance_stats"]["exec_times"]:
         avg_tile_time = np.mean(result["performance_stats"]["exec_times"])
-        print(f"平均分块执行时间: {avg_tile_time:.6f}s")
+        print(f"Average tile execution time: {avg_tile_time:.6f}s")
 
 
 if __name__ == "__main__":
