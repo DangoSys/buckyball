@@ -22,6 +22,7 @@ jobs:
         run: |
           source ~/.zshrc
           buckyball_exec
+          setproxy
           git fetch origin +refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr/${{ github.event.pull_request.number }}
           git clean -fd
           git reset --hard ${{ github.sha }}
