@@ -95,7 +95,7 @@ You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and 
 
 ## Community
 
-Join our discussion on [Slack](https://buckyballhq.slack.com/)
+Join our discussion on [Slack](https://dangosys-buckyball.slack.com/)
 
 ## Contributors
 Thank you for considering contributing to Buckyball!

@@ -25,3 +25,6 @@
 [submodule "tools/palladium"]
 	path = tools/palladium
 	url = https://github.com/DangoSys/awesome-palladium.git
+[submodule "sims/gem5"]
+	path = sims/gem5
+	url = https://github.com/DangoSys/gem5.git
