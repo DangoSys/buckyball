@@ -6,7 +6,7 @@ import os
 config = {
     "type": "api",
     "name": "agent",
-    "description": "通用 agent API，通过 agentRole 参数支持不同角色（code/design/test等）",
+    "description": "通用 agent API，支持简化版 gemmini agent 和旧的多 agent 模式",
     "path": "/agent",
     "method": "POST",
     "emits": ["agent.prompt"],
@@ -15,22 +15,22 @@ config = {
         "properties": {
             "agentRole": {
                 "type": "string",
-                "description": "Agent 角色类型（code/design/test等），决定使用哪个系统 prompt",
-                "default": "code",
+                "description": "Agent 角色类型。使用 'gemmini' 启动简化版单一 Agent，其他值使用旧的多 Agent 模式",
+                "default": "gemmini",
             },
             "promptPath": {
                 "type": "string",
-                "description": "用户需求 Markdown 文件路径",
+                "description": "用户需求 Markdown 文件路径。对于 gemmini agent，使用 prompt/gemmini_task.md",
             },
             "systemPromptPath": {
                 "type": "string",
-                "description": "系统角色 prompt 文件路径，不指定则使用默认：prompt/agent/{agentRole}_agent.md",
+                "description": "系统角色 prompt 文件路径。对于 gemmini agent，使用 prompt/gemmini_ball_generator.md",
             },
             "workDir": {
                 "type": "string",
                 "description": "工作目录路径，默认为当前目录",
             },
-            "model": {"type": "string", "default": "deepseek-chat"},
+            "model": {"type": "string", "default": "qwen3-235b-a22b-instruct-2507"},
             "apiKey": {"type": "string"},
             "baseUrl": {"type": "string"},
             "sessionId": {"type": "string", "description": "会话ID，用于多轮对话"},
