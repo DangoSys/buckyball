@@ -1,101 +1,153 @@
-# Agent Demo - Gemmini NPU 开发
+# Gemmini Ball Generator - 简化版 Agent Demo
 
-这个 demo 展示如何使用多 agent 协作开发一个兼容 Gemmini ISA 的 NPU 系统。
+这个 demo 展示如何使用**单一智能 Agent**自动生成 Gemmini NPU 的 4 个 Ball（MatMul, Im2col, Transpose, Norm）。
 
-**📖 系统架构详解**: [ARCHITECTURE.md](./ARCHITECTURE.md) - Session 管理、多轮对话、Agent 通信机制
+> **🎯 新版本特点**：从复杂的多 Agent 协作改为**单一 Agent** 自动完成所有工作，更简单、更可靠。
 
-**⚠️ 代码保护规则**: [CODE_PROTECTION_RULES.md](./CODE_PROTECTION_RULES.md) - 现有代码保护，禁止删除/修改
+## 🚀 快速开始
 
-**🔐 权限分配表**: [AGENT_PERMISSIONS.md](./AGENT_PERMISSIONS.md) - Agent 工具权限详细说明
-
-**📁 工作范围规范**: [WORK_SCOPE.md](./WORK_SCOPE.md) - 工作路径限制、修改记录规范
-
-## 系统架构
-
-```
-用户任务 (task/gemmini_npu.md)
-    ↓
-master_agent (主控协调)
-    ↓
-spec_agent (编写规范)
-    ↓
-code_agent (实现代码)
-    ↓
-review_agent (代码审查) ⭐ 新增
-    ↓
-verify_agent (测试验证)
-```
-
-## 使用方式
-
-### 方式 1: API 调用
+### 方式 1: 直接运行 Python（推荐）
 
 ```bash
-# 启动 master agent
-curl -X POST http://localhost:8000/agent \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agentRole": "master",
-    "promptPath": "workflow/steps/demo/prompt/task/gemmini_npu.md",
-    "workDir": "/home/mio/Code/buckyball",
-    "model": "deepseek-chat"
-  }'
+cd /home/daiyongyuan/buckyball
+python3 workflow/steps/demo/simple_gemmini_agent.py
 ```
 
-### 方式 2: 直接发送任务描述
+### 方式 2: 使用启动脚本
 
 ```bash
-curl -X POST http://localhost:8000/agent \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agentRole": "master",
-    "promptPath": "<inline>",
-    "promptContent": "实现一个兼容 Gemmini ISA 的 NPU 系统...",
-    "workDir": "/home/mio/Code/buckyball"
-  }'
+# 直接模式
+bash workflow/steps/demo/test_demo.sh
+
+# 或使用 API 模式（需要 bbdev 服务）
+bash workflow/steps/demo/test_demo.sh api
 ```
 
-## Agent 角色
+## 📖 详细文档
 
-### master_agent
-- 任务：协调整体开发流程
-- 输入：任务描述（task/*.md）
-- 输出：项目规划和调度其他 agent
-- **权限**：✅ 完全权限（可调用所有工具，包括 `call_agent` 和 `call_workflow_api`）
+- **快速开始**: [/GEMMINI_QUICKSTART.md](/GEMMINI_QUICKSTART.md)
+- **完整文档**: [prompt/README.md](./prompt/README.md)
+- **Agent 指令**: [prompt/gemmini_ball_generator.md](./prompt/gemmini_ball_generator.md)
+- **任务描述**: [prompt/gemmini_task.md](./prompt/gemmini_task.md)
 
-### spec_agent
-- 任务：编写 Ball 的技术规范
-- 输入：算子需求
-- 输出：spec.md（参考 GELU spec）
-- **权限**：文件操作 + Deepwiki（❌ 无编译/测试权限）
+## 🏗️ 新架构（简化版）
 
-### code_agent
-- 任务：实现并集成 Ball
-- 输入：spec.md
-- 输出：Chisel 代码 + ISA 定义 + 测试
-- **前置检查**：必须先检查 spec.md 是否存在，否则停止并反馈给 master
-- **执行顺序**：先完成 RTL（Chisel + ISA API + 系统注册），再编写测试用例
-- **规则**：只添加新代码，不删除/修改已有代码
-- **权限**：文件操作 + Deepwiki（❌ 无编译/测试权限）
+```
+Gemmini Ball Generator (单一智能 Agent)
+├─ 学习阶段: 读取参考代码 (VecUnit, VecBall)
+├─ 生成循环 (4次):
+│  ├─ 生成代码 (Unit.scala + Ball.scala)
+│  ├─ 更新注册 (DomainDecoder, busRegister, rsRegister, DISA)
+│  ├─ 编译验证 (build_gemmini.sh)
+│  └─ 错误修复 (自动分析并修复，最多5次)
+└─ 完成条件: 所有 4 个 Ball 编译成功
+```
 
-### review_agent ⭐ 新增
-- 任务：审查代码完整性和质量
-- 输入：code_agent 的实现
-- 输出：PASS（通过）或 FAIL（问题列表 + 修复建议）
-- **审查顺序**：优先检查 RTL 是否完整，再检查测试用例
-- **重点**：检查是否删除/修改了已有代码、RTL 未完成就写测试
-- **权限**：文件读取 + 搜索（❌ 无编译/测试权限）
+### 对比旧架构
 
-### verify_agent
-- 任务：测试验证
-- 输入：review 通过的代码
-- 输出：测试报告 + verilator 仿真结果
-- **规则**：只运行测试，不修改代码
-- **权限**：文件操作 + ✅ **Workflow API**（编译、测试）
+| 特性 | 旧架构（多Agent） | 新架构（单Agent） |
+|------|------------------|------------------|
+| Agent 数量 | 5个 | **1个** |
+| 复杂度 | 高 | **低** |
+| 停止问题 | ❌ 经常停止 | ✅ **自动持续** |
+| 错误恢复 | 分散 | ✅ **统一修复** |
+| 代码量 | ~1500行 | **~350行** |
+
+## 🎯 Agent 能力
+
+单一 Agent 具备完整能力：
+
+1. **学习能力** - 自动读取并理解参考代码
+2. **生成能力** - 生成完整可编译的 Chisel 代码
+3. **验证能力** - 自动调用编译脚本验证
+4. **修复能力** - 智能分析编译错误并自动修复
+5. **持续能力** - 自动完成所有 4 个 Ball
+
+## 🛠️ 可用工具
+
+Agent 可以使用以下工具（在 `simple_gemmini_agent.py` 中实现）：
+
+| 工具 | 功能 | 说明 |
+|-----|------|------|
+| `read_file` | 读取文件内容 | 支持相对路径和绝对路径 |
+| `write_file` | 写入文件内容 | 自动创建父目录 |
+| `list_files` | 列出目录文件 | 返回文件列表 |
+| `make_dir` | 创建目录 | 递归创建（mkdir -p） |
+| `run_build` | 运行编译验证 | 自动调用 build_gemmini.sh 并分析结果 |
+| `grep_files` | 搜索文件内容 | 使用 grep 搜索模式 |
+
+## 📊 执行流程
+
+```
+[迭代 1] 🔧 读取参考代码 (VecUnit.scala, VecBall.scala)
+[迭代 2] 🔧 生成 MatMulUnit.scala
+[迭代 3] 🔧 生成 MatMulBall.scala
+[迭代 4] 🔧 更新系统注册文件
+[迭代 5] 🔧 运行编译
+           ✅ 编译成功
+           ✅ MatMul Ball 完成！
+[迭代 6] 🔧 开始生成 Im2col...
+...
+[迭代 N] 🎉 所有 4 个 Ball 完成！
+```
+
+## 🔍 旧文档（已废弃）
+
+以下文档仍然保留，但**仅供参考**，不再使用：
+
+- ~~[00_code_agent_event_step.py](./00_code_agent_event_step.py)~~ - 旧的事件驱动系统
+- ~~[00_code_agent_api_step.py](./00_code_agent_api_step.py)~~ - 旧的 API 步骤
+- ~~[ARCHITECTURE.md](./ARCHITECTURE.md)~~ - 旧的多 Agent 架构
+- ~~[AGENT_PERMISSIONS.md](./AGENT_PERMISSIONS.md)~~ - 旧的权限系统
+- ~~[CODE_PROTECTION_RULES.md](./CODE_PROTECTION_RULES.md)~~ - 代码保护规则
+- ~~[WORK_SCOPE.md](./WORK_SCOPE.md)~~ - 工作范围规范
+
+**新系统**只需要 `simple_gemmini_agent.py` 和两个 prompt 文件。
+
+## 📁 生成的文件
+
+成功执行后，会在以下位置生成代码：
+
+```
+arch/src/main/scala/prototype/gemmini/
+├── matmul/
+│   ├── MatMulUnit.scala
+│   └── MatMulBall.scala
+├── im2col/
+│   ├── Im2colUnit.scala
+│   └── Im2colBall.scala
+├── transpose/
+│   ├── TransposeUnit.scala
+│   └── TransposeBall.scala
+└── norm/
+    ├── NormUnit.scala
+    └── NormBall.scala
+```
+
+同时会更新系统注册文件：
+- `examples/toy/balldomain/DomainDecoder.scala`
+- `examples/toy/balldomain/busRegister.scala`
+- `examples/toy/balldomain/rsRegister.scala`
+- `examples/toy/balldomain/DISA.scala`
+
+## 🐛 故障排查
+
+### Agent 停止执行
+检查是否达到最大迭代次数（默认100次），可在 `simple_gemmini_agent.py` 中调整。
+
+### 编译失败无法修复
+查看编译日志：`/home/daiyongyuan/buckyball/build_logs/gemmini_build.log`
+
+### API 调用失败
+检查 `.env` 配置，确保 LLM API 可访问。
+
+## 🎓 设计理念
+
+**简单优于复杂** - 单一 Agent 自动完成所有工作，无需复杂的协作机制。
 
 ## 可用工具与权限
 
-**🔐 详细权限说明**: 请参考 [AGENT_PERMISSIONS.md](./AGENT_PERMISSIONS.md)
+**🔐 详细权限说明**: 新系统中 Agent 拥有所有必需的工具权限。
 
 ### 工具权限矩阵
 
