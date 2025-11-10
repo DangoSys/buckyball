@@ -270,3 +270,63 @@ After importing `waveform.fst` locally, use [GTKWAVE](https://zhuanlan.zhihu.com
 ```Scala
 cat /home/MikeNotFound/code/buckyball/arch/log/2025-10-24-16-59-ctest_relu_test_singlecore-baremetal/disasm.log | grep "PMC"
 ```
+
+### DC Test - Check Timing, Frequency, Area, and Related Parameters
+
+* **Preparation**
+
+1. In the `/home/<server_name>/bash.sh` file, add the required environment variables at the end:
+
+   ```bash
+   export SNPSLMD_LICENSE_FILE=27000@amax
+   export PATH="$PATH:/opt/riscv/bin"
+   export VCS_HOME="/data0/tools/Synopsys/vcs/vcs/W-2024.09-SP1"
+   export PATH="$PATH:$VCS_HOME/bin"
+   export VERDI_HOME="/data0/tools/Synopsys/verdi/verdi/W-2024.09-SP1"
+   export PATH="$PATH:$VERDI_HOME/bin"
+   export SCL_HOME="/data0/tools/Synopsys/scl/scl/2024.06"
+   export PATH="$PATH:$SCL_HOME/linux64/bin"
+   export DC_HOME="/data0/tools/Synopsys/dc/syn/W-2024.09-SP1"
+   export PATH="$PATH:$DC_HOME/bin"
+   export PT_HOME="/data0/tools/Synopsys/ptpx/prime/W-2024.09-SP1/"
+   export PATH="$PATH:$PT_HOME/bin"
+
+   export LM_LICENSE_FILE=/data0/tools/Synopsys/lic/Synopsys.dat
+
+   alias vcs="vcs -full64"
+   alias lmli="lmgrd -c /data0/tools/Synopsys/lic/Synopsys.dat"
+   ```
+
+2. In the `/home/<server_name>/code/buckyball/evals/run-dc.sh` file, remove the `-retime` option around line 126.
+
+---
+
+* **Formal Test**
+
+1. Go back to the `buckyball` directory and run the command
+
+   ```bash
+   bbdev verilator --verilog "--balltype ReluBall --output_dir ReluBall_1"
+   ```
+
+   This will generate a Verilog folder for the specified ball under the `arch` directory.
+
+2. Grant execution permission to the script:
+
+   ```bash
+   chmod 777 evals/run-dc.sh
+   ```
+
+3. Run the DC command:
+
+   ```bash
+   ./evals/run-dc.sh --srcdir arch/ReluBall_1 --top ReluBall
+   ```
+
+   This means performing the DC test on the top-level file `ReluBall.sv` located in the `arch/ReluBall_1` folder.
+
+4. You can find the test results in
+
+   ```
+   /home/<server_name>/buckyball/bb-tests/output/dc/reports
+   ```
