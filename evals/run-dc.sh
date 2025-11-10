@@ -123,7 +123,7 @@ set_clock_transition 0.08 [get_clocks clk1]
 
 
 
-compile_ultra -retime -scan 
+compile_ultra -scan 
 write -format ddc -hierarchy -output $REPORT_DIR/design_compiled.ddc
 
 # Generate reports

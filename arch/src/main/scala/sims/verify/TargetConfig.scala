@@ -79,7 +79,7 @@ object BallTopMain extends App {
     args(0).toLowerCase match {
       case "vecball" => VecBallType
       case "matrixball" => MatrixBallType
-      case "transpose" => TransposeBallType
+      case "transposeball" => TransposeBallType
       case "im2colball" => Im2colBallType
       case "reluball" => ReluBallType
       case other =>
