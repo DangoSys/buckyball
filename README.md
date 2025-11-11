@@ -89,6 +89,9 @@ source buckyball/env.sh
 bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
 ```
 
+## Quick Tutorial
+You can start to learn ball and blink from [here](https://github.com/DangoSys/buckyball/blob/main/docs/bb-note/src/tutorial/tutorial.md)
+
 ## Additional Resources
 
 You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
