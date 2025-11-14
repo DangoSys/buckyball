@@ -38,7 +38,7 @@ Gemmini Ball Generator - 自动生成 4 个 Ball
 
 [迭代 2]
 🔧 执行 3 个工具调用
-  - make_dir({"path": "arch/src/main/scala/prototype/gemmini/matmul"})
+  - make_dir({"path": "arch/src/main/scala/prototype/generated/matmul"})
   - write_file({"path": ".../MatMulUnit.scala", ...})
   - write_file({"path": ".../MatMulBall.scala", ...})
 
@@ -75,7 +75,7 @@ Gemmini Ball Generator - 自动生成 4 个 Ball
 ### 代码文件
 
 ```
-arch/src/main/scala/prototype/gemmini/
+arch/src/main/scala/prototype/generated/
 ├── matmul/
 │   ├── MatMulUnit.scala      # 主计算单元
 │   └── MatMulBall.scala      # Ball 包装类
@@ -136,11 +136,11 @@ MODEL=qwen3-235b-a22b-instruct-2507
 
 ```bash
 # 列出所有生成的 Ball
-ls /home/daiyongyuan/buckyball/arch/src/main/scala/prototype/gemmini/
+ls /home/daiyongyuan/buckyball/arch/src/main/scala/prototype/generated/
 
 # 查看某个 Ball 的代码
-cat arch/src/main/scala/prototype/gemmini/matmul/MatMulUnit.scala
-cat arch/src/main/scala/prototype/gemmini/matmul/MatMulBall.scala
+cat arch/src/main/scala/prototype/generated/matmul/MatMulUnit.scala
+cat arch/src/main/scala/prototype/generated/matmul/MatMulBall.scala
 ```
 
 ### 查看编译日志
@@ -219,7 +219,7 @@ bash scripts/build_gemmini.sh build
 2. 找到第一个错误
 3. 手动修复代码：
    ```bash
-   vim arch/src/main/scala/prototype/gemmini/matmul/MatMulUnit.scala
+   vim arch/src/main/scala/prototype/generated/matmul/MatMulUnit.scala
    ```
 4. 手动编译测试：
    ```bash
@@ -311,10 +311,10 @@ bash workflow/steps/demo/test_demo.sh api
 每次重新生成前，建议清理旧的结果：
 
 ```bash
-rm -rf arch/src/main/scala/prototype/gemmini/matmul
-rm -rf arch/src/main/scala/prototype/gemmini/im2col
-rm -rf arch/src/main/scala/prototype/gemmini/transpose
-rm -rf arch/src/main/scala/prototype/gemmini/norm
+rm -rf arch/src/main/scala/prototype/generated/matmul
+rm -rf arch/src/main/scala/prototype/generated/im2col
+rm -rf arch/src/main/scala/prototype/generated/transpose
+rm -rf arch/src/main/scala/prototype/generated/norm
 ```
 
 ### 2. 备份系统注册文件
@@ -347,7 +347,7 @@ Agent 运行过程中，可以在另一个终端查看生成进度：
 
 ```bash
 # 实时查看生成的文件
-watch -n 1 'ls -lh arch/src/main/scala/prototype/gemmini/*/**.scala'
+watch -n 1 'ls -lh arch/src/main/scala/prototype/generated/*/**.scala'
 
 # 实时查看编译日志
 tail -f /home/daiyongyuan/buckyball/build_logs/gemmini_build.log
@@ -366,7 +366,7 @@ tail -f /home/daiyongyuan/buckyball/build_logs/gemmini_build.log
 
 2. **删除旧的生成结果**：
    ```bash
-   rm -rf arch/src/main/scala/prototype/gemmini/*
+   rm -rf arch/src/main/scala/prototype/generated/*
    ```
 
 3. **运行新系统**：

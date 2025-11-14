@@ -56,7 +56,7 @@
       "function": "call_agent",
       "arguments": {
         "agent_role": "spec",
-        "task_description": "为 matmul 编写或补全 spec.md（路径 arch/src/main/scala/prototype/gemmini/matmul/spec.md），参考 prototype/nagisa/gelu/spec.md",
+        "task_description": "为 matmul 编写或补全 spec.md（路径 arch/src/main/scala/prototype/generated/matmul/spec.md），参考 prototype/nagisa/gelu/spec.md",
         "context_files": ["arch/src/main/scala/prototype/nagisa/gelu/spec.md"]
       }
     },
@@ -65,7 +65,7 @@
       "arguments": {
         "agent_role": "code",
         "task_description": "读取 matmul/spec.md 并生成 MatMulUnit.scala 等骨架文件",
-        "context_files": ["arch/src/main/scala/prototype/gemmini/matmul/spec.md"]
+        "context_files": ["arch/src/main/scala/prototype/generated/matmul/spec.md"]
       }
     }
   ]

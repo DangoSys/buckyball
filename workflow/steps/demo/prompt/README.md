@@ -21,8 +21,14 @@
 ```
 workflow/steps/demo/prompt/
 ├── README.md                    # 本文档
-├── gemmini_task.md              # 任务描述
-└── gemmini_ball_generator.md    # Agent 指令（系统 Prompt）
+├── gemmini_task.md              # 任务1：基础计算 Ball
+├── gemmini_ball_generator.md    # Agent 指令（系统 Prompt）
+└── task/                        # 高级任务目录 🆕
+    ├── README.md                # 任务总览和学习路径
+    ├── gemmini_npu.md           # 任务1：基础 Ball（MatMul/Im2col/Transpose/Norm）
+    ├── task2_abft_systolic.md   # 任务2：ABFT 可靠性脉动阵列 ⭐⭐⭐⭐
+    ├── task3_configurable_systolic.md  # 任务3：可配置位宽脉动阵列 ⭐⭐⭐⭐⭐
+    └── task4_triple_dataflow_systolic.md # 任务4：WS/OS/RS 三数据流 ⭐⭐⭐⭐⭐⭐
 
 scripts/
 └── run_gemmini_generator.sh     # 启动脚本
@@ -61,7 +67,7 @@ Agent 会自动执行以下步骤：
 
 **2.1 创建目录**
 ```
-arch/src/main/scala/prototype/gemmini/<ball>/
+arch/src/main/scala/prototype/generated/<ball>/
 ```
 
 **2.2 生成代码**
@@ -117,7 +123,7 @@ Gemmini Ball Generator - 自动生成 4 个 Ball
 
 [迭代 2]
 🔧 执行 3 个工具调用
-  - make_dir({"path": "arch/src/main/scala/prototype/gemmini/matmul"})
+  - make_dir({"path": "arch/src/main/scala/prototype/generated/matmul"})
   - write_file({"path": "arch/.../MatMulUnit.scala", ...})
   - write_file({"path": "arch/.../MatMulBall.scala", ...})
 
@@ -194,15 +200,30 @@ MODEL=qwen3-235b-a22b-instruct-2507
 3. **修复优于报错**：自动修复错误而不是直接失败退出
 4. **完整优于部分**：必须完成所有 Ball 才能停止
 
+## 🚀 高级任务
+
+除了基础的 4 个计算 Ball（任务1），我们还提供了 **3 个高级脉动阵列设计任务**：
+
+### 📋 任务总览
+
+| 任务 | 难度 | 核心特性 | 时间估计 |
+|------|------|---------|---------|
+| [任务 2：ABFT 可靠性](task/task2_abft_systolic.md) | ⭐⭐⭐⭐ | WS/OS 数据流 + ABFT 容错 | 1-2 周 |
+| [任务 3：可配置位宽](task/task3_configurable_systolic.md) | ⭐⭐⭐⭐⭐ | 2/4/8/16-bit 运行时切换 + 量化 | 2-3 周 |
+| [任务 4：三数据流](task/task4_triple_dataflow_systolic.md) | ⭐⭐⭐⭐⭐⭐ | WS/OS/RS 三种数据流（最高能效） | 3-4 周 |
+
+**详细信息**：查看 [`task/README.md`](task/README.md) 获取完整的任务说明、技术规格、C Test 代码和参考资料。
+
 ## 📚 参考
 
 - 参考实现：`arch/src/main/scala/prototype/vector/`
 - 系统注册：`arch/src/main/scala/examples/toy/balldomain/`
 - Blink 接口：`framework/blink/`
 - Chisel 文档：https://www.chisel-lang.org/
+- **高级任务**：`workflow/steps/demo/prompt/task/`
 
 ---
 
-**版本**：2.0 - 简化版
-**更新时间**：2025-11-10
+**版本**：2.0 - 简化版（支持高级任务）
+**更新时间**：2025-01-13
 

@@ -2,7 +2,7 @@
 
 你是 AI 定制化加速单元实现专家，负责实现并集成新的硬件加速单元（针对 Gemmini 的 MatMul/Im2col/Transpose/Norm）。
 
-> 目标：在 `arch/src/main/scala/prototype/gemmini/` 下自动生成并写入四个 Ball 的实现骨架与集成代码，使得后续人工或自动化流程能快速补全并完成 RTL 仿真与测试。
+> 目标：在 `arch/src/main/scala/prototype/generated/` 下自动生成并写入四个 Ball 的实现骨架与集成代码，使得后续人工或自动化流程能快速补全并完成 RTL 仿真与测试。
 
 ## 核心策略（简明）
 
@@ -22,7 +22,7 @@
 目标路径（必须）：
 
 ```
-arch/src/main/scala/prototype/gemmini/<ball>/
+arch/src/main/scala/prototype/generated/<ball>/
 ```
 
 每个 ball 最少生成文件：
@@ -43,9 +43,9 @@ arch/src/main/scala/prototype/gemmini/<ball>/
 
 ## 前置检查（必做）
 
-1. 检查 `arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 是否存在；不存在则**失败并返回错误**：`"❌ 无法继续实现，spec.md 文件不存在: <path>"`。
+1. 检查 `arch/src/main/scala/prototype/generated/<ball>/spec.md` 是否存在；不存在则**失败并返回错误**：`"❌ 无法继续实现，spec.md 文件不存在: <path>"`。
 2. 读取 spec.md，解析必要字段（Overview, Interface, Instruction Semantics）。
-3. 根据 spec 生成骨架文件，写入 `arch/src/main/scala/prototype/gemmini/<ball>/`，后缀 `.scala`。
+3. 根据 spec 生成骨架文件，写入 `arch/src/main/scala/prototype/generated/<ball>/`，后缀 `.scala`。
 
 ## 输出（必需）
 
@@ -58,7 +58,7 @@ arch/src/main/scala/prototype/gemmini/<ball>/
 
 ```scala
 // AUTO-GENERATED: MatMulUnit.scala.gen
-package prototype.gemmini.matmul
+package prototype.generated.matmul
 
 import chisel3._
 import chisel3.util._
