@@ -4,6 +4,7 @@
 
 set -e
 
+
 # Define paths
 WORK_DIR="/home/daiyongyuan/buckyball/arch"
 SRC_DIR="$WORK_DIR/src/main/scala/prototype/generated"
