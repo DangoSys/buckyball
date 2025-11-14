@@ -40,9 +40,24 @@ API_BASE_URL = os.getenv("API_BASE_URL") or os.getenv("BASE_URL") or os.getenv("
 API_KEY = os.getenv("API_KEY") or os.getenv("LLM_API_KEY") or "dummy-key"
 MODEL = os.getenv("MODEL") or "qwen3-235b-a22b-instruct-2507"
 
-# 任务配置 - 当前只运行任务2
-TASKS = [
-  {
+# ============================================================================
+# 🎯 快速切换任务 - 只需修改下面这个数字！
+# ============================================================================
+TASK_TO_RUN = 3  # 改成 1, 2, 3, 或 4 即可切换任务
+# ============================================================================
+
+# 所有可用任务定义
+ALL_TASKS = {
+  1: {
+    "id": 1,
+    "name": "基础 Ball 生成",
+    "desc": "生成 MatMul, Im2col, Transpose, Norm 四个基础 Ball",
+    "task_file": "task/gemmini_task.md",
+    "user_prompt": "**立即开始生成 4 个 Gemmini Ball！**",
+    "success_keywords": ["matmul", "im2col", "transpose", "norm"],
+    "max_iterations": 100
+  },
+  2: {
     "id": 2,
     "name": "ABFT 可靠性脉动阵列",
     "desc": "设计支持 WS/OS 数据流和 ABFT 可靠性机制的脉动阵列",
@@ -50,39 +65,33 @@ TASKS = [
     "user_prompt": "**立即开始设计 ABFT 可靠性脉动阵列！**",
     "success_keywords": ["abft"],
     "max_iterations": 150
+  },
+  3: {
+    "id": 3,
+    "name": "可配置位宽脉动阵列",
+    "desc": "设计支持 WS/OS 和可配置数据位宽/量化精度的脉动阵列",
+    "task_file": "task/task3_configurable_systolic.md",
+    "user_prompt": "**立即开始设计可配置位宽脉动阵列！**",
+    "success_keywords": ["configurable", "quantization"],
+    "max_iterations": 120
+  },
+  4: {
+    "id": 4,
+    "name": "三数据流脉动阵列",
+    "desc": "设计支持 WS/OS/RS 三种数据流的脉动阵列",
+    "task_file": "task/task4_triple_dataflow_systolic.md",
+    "user_prompt": "**立即开始设计三数据流脉动阵列！**",
+    "success_keywords": ["ws", "os", "rs"],
+    "max_iterations": 150
   }
-]
+}
 
-# 如果需要运行其他任务，取消注释对应的任务：
-# TASKS = [
-#   {
-#     "id": 1,
-#     "name": "基础 Ball 生成",
-#     "desc": "生成 MatMul, Im2col, Transpose, Norm 四个基础 Ball",
-#     "task_file": "gemmini_task.md",
-#     "user_prompt": "**立即开始生成 4 个 Gemmini Ball！**",
-#     "success_keywords": ["matmul", "im2col", "transpose", "norm"],
-#     "max_iterations": 100
-#   },
-#   {
-#     "id": 3,
-#     "name": "可配置位宽脉动阵列",
-#     "desc": "设计支持 WS/OS 和可配置数据位宽/量化精度的脉动阵列",
-#     "task_file": "task/task3_configurable_systolic.md",
-#     "user_prompt": "**立即开始设计可配置位宽脉动阵列！**",
-#     "success_keywords": ["configurable", "quantization"],
-#     "max_iterations": 120
-#   },
-#   {
-#     "id": 4,
-#     "name": "三数据流脉动阵列",
-#     "desc": "设计支持 WS/OS/RS 三种数据流的脉动阵列",
-#     "task_file": "task/task4_triple_dataflow_systolic.md",
-#     "user_prompt": "**立即开始设计三数据流脉动阵列！**",
-#     "success_keywords": ["ws", "os", "rs"],
-#     "max_iterations": 150
-#   }
-# ]
+# 根据配置选择任务
+if TASK_TO_RUN not in ALL_TASKS:
+  print(f"❌ 错误：任务 {TASK_TO_RUN} 不存在！请选择 1, 2, 3, 或 4")
+  sys.exit(1)
+
+TASKS = [ALL_TASKS[TASK_TO_RUN]]
 
 # Agent 工具定义
 TOOLS = [
@@ -624,7 +633,16 @@ def run_gemmini_generator():
   print("🎯 Gemmini NPU 自动化多任务生成器")
   print("="*80)
   print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-  print(f"总共 {len(TASKS)} 个任务")
+  print("")
+  
+  # 显示当前运行的任务
+  print("🚀 当前任务:")
+  for task in TASKS:
+    print(f"  任务 {task['id']}: {task['name']}")
+    print(f"  描述: {task['desc']}")
+    print(f"  最大迭代: {task['max_iterations']}")
+  print("")
+  print("💡 提示: 要切换任务，请修改文件第 46 行的 TASK_TO_RUN 变量")
   print("")
   
   # 显示配置信息
