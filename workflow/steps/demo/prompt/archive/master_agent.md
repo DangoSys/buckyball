@@ -7,7 +7,7 @@
 - **无缝自动化执行**：将任务自动分派给 spec_agent → code_agent → 编译验证 的完整流程，不允许任何人工干预
 - **每个 Ball 必须完整处理**：对于每个 Ball，必须完成 spec → code → 编译验证 的全流程，不能只做 spec 就认为完成
 - **必须完成所有 4 个 Ball**：matmul、im2col、transpose、norm，每个 Ball 必须完整实现并编译成功
-- **必须自动编译验证**：每个 Ball 生成后立即运行 `/home/daiyongyuan/buckyball/scripts/build_gemmini.sh build` 验证编译
+- **必须自动编译验证**：每个 Ball 生成后立即运行 `{BUILD_SCRIPT_PATH}` 验证编译
 - **必须自动修复错误**：编译失败时自动读取日志并修复，直到编译成功
 - **只有所有 Ball 都完成且编译通过后才能停止**
 - **绝对不允许中途停止**：每个步骤完成后必须无缝衔接下一步
@@ -22,13 +22,13 @@
 
 **阶段2：代码生成与编译**
 3. **生成代码**：调用 code_agent 生成 `.scala` 文件
-4. **立即编译验证**：code_agent 必须立即调用 `bash /home/daiyongyuan/buckyball/scripts/build_gemmini.sh build`
-5. **自动修复错误**：如果编译失败，code_agent 必须立即读取 `/home/daiyongyuan/buckyball/build_logs/gemmini_build.log` 并自动修复
+4. **立即编译验证**：code_agent 必须立即调用 `bash {BUILD_SCRIPT_PATH}`
+5. **自动修复错误**：如果编译失败，code_agent 必须立即读取 `{BUILD_LOG_PATH}` 并自动修复
 6. **循环重试**：修复后重新编译，直到编译成功（最多重试5次）
 7. **代码阶段完成后**：**立即无缝衔接下一个 Ball，不要停止任何操作！**
 
 **所有 4 个 Ball 完成后：**
-8. **最终全局编译验证**：**必须**调用 `call_workflow_api` 运行 `bash /home/daiyongyuan/buckyball/scripts/build_gemmini.sh build`
+8. **最终全局编译验证**：**必须**调用 `call_workflow_api` 运行 `bash {BUILD_SCRIPT_PATH}`
 9. **如果全局编译失败**：修复编译错误，重新编译
 10. **编译成功后**：返回最终报告，任务完成
 
@@ -75,12 +75,12 @@
 ## 错误处理（自动化）
 
 - 若 code_agent 报错 `spec.md 文件不存在` → 立即调用 spec_agent 并重新执行 code_agent
-- **编译失败** → code_agent 会**自动读取 `/home/daiyongyuan/buckyball/build_logs/gemmini_build.log` 并智能修复**，无需 master_agent 干预
+- **编译失败** → code_agent 会**自动读取 `{BUILD_LOG_PATH}` 并智能修复**，无需 master_agent 干预
   - code_agent 严格执行智能修复流程：
     1. 使用 `read_file` 工具读取完整的编译日志文件
     2. 提取所有 `[error]` 错误行并分类统计
     3. 按优先级批量修复（类型定义 → 字段访问 → 响应字段 → 其他接口）
-    4. 重新调用 `bash /home/daiyongyuan/buckyball/scripts/build_gemmini.sh build` 验证修复
+    4. 重新调用 `bash {BUILD_SCRIPT_PATH}` 验证修复
     5. 循环重试最多5次，记录每次修复的详细统计
     6. 返回包含修复统计和最终编译状态的详细结果
 - 若系统注册失败 → 检查注册文件格式，必要时手动修复
@@ -152,7 +152,7 @@
 
 1. ✅ 所有 4 个 Ball（matmul, im2col, transpose, norm）的 spec.md 都已创建
 2. ✅ 所有 4 个 Ball 的代码都已生成（Unit.scala + Ball.scala + 系统注册）
-3. ✅ **必须执行编译验证**：运行 `/home/daiyongyuan/buckyball/scripts/build_gemmini.sh build`
+3. ✅ **必须执行编译验证**：运行 `{BUILD_SCRIPT_PATH}`
 4. ✅ **编译必须成功**：编译无错误，返回成功状态
 
 **重要规则：**

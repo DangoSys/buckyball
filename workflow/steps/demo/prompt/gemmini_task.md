@@ -5,14 +5,14 @@
 为 Gemmini NPU 自动生成并验证 **4 个计算 Ball**：
 
 1. **MatMul** - 矩阵乘法
-2. **Im2col** - 图像到列转换  
+2. **Im2col** - 图像到列转换
 3. **Transpose** - 矩阵转置
 4. **Norm** - 归一化
 
 ## 成功标准
 
 ✅ 所有 4 个 Ball 的代码生成完成
-✅ 所有代码能够通过 `bash /home/daiyongyuan/buckyball/scripts/build_gemmini.sh build` 编译
+✅ 所有代码能够通过 `bash {/home/daiyongyuan/buckyball/scripts/build_gemmini.sh} build` 编译
 ✅ 无编译错误
 
 ## 工作流程
@@ -58,4 +58,3 @@
 ## 立即开始
 
 **第一步**：为 `matmul` Ball 生成代码并验证编译
-

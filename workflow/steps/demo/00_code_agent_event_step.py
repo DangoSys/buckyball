@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 import sys
 import redis
+from pathlib import Path
 from typing import Optional, List, Dict
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -143,10 +144,32 @@ def get_default_system_prompt_path(agent_role: str) -> str:
     )
 
 
+def replace_prompt_placeholders(content: str, work_dir: Optional[str] = None) -> str:
+    """替换 prompt 中的占位符为实际路径"""
+    # 从环境变量或参数获取工作目录
+    if not work_dir:
+        work_dir = os.getenv("WORK_DIR") or os.getenv("BUCKYBALL_WORK_DIR")
+
+    work_dir_path = Path(work_dir)
+
+    # 从环境变量获取构建脚本路径，或使用默认值
+    build_script_path = str(work_dir_path / "scripts/build_gemmini.sh")
+    build_log_path = str(work_dir_path / "build_logs/gemmini_build.log")
+
+    # 替换占位符
+    content = content.replace("{BUILD_SCRIPT_PATH}", build_script_path)
+    content = content.replace("{BUILD_LOG_PATH}", build_log_path)
+    content = content.replace("{WORK_DIR}", str(work_dir_path))
+
+    return content
+
+
 def load_system_prompt(
-    agent_role: str, system_prompt_path: Optional[str] = None
+    agent_role: str,
+    system_prompt_path: Optional[str] = None,
+    work_dir: Optional[str] = None,
 ) -> str:
-    """从 markdown 文件加载系统 prompt"""
+    """从 markdown 文件加载系统 prompt，并替换占位符"""
     prompt_path = system_prompt_path or get_default_system_prompt_path(agent_role)
 
     if not os.path.isabs(prompt_path):
@@ -160,6 +183,9 @@ def load_system_prompt(
 
     if not content:
         raise ValueError(f"System prompt file is empty: {prompt_path}")
+
+    # 替换占位符
+    content = replace_prompt_placeholders(content, work_dir)
 
     return content
 
@@ -221,7 +247,7 @@ async def handler(input_data, context):
 
     # 读取系统 prompt
     try:
-        system_prompt = load_system_prompt(agent_role, system_prompt_path)
+        system_prompt = load_system_prompt(agent_role, system_prompt_path, work_dir)
         used_prompt_path = system_prompt_path or get_default_system_prompt_path(
             agent_role
         )
