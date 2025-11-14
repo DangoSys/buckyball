@@ -30,7 +30,7 @@
     </span><span>"ball_name"</span><span>:</span><span> </span><span>"matmul"</span><span>,</span><span>                </span><span>// ["matmul", "im2col", "transpose", "norm"]</span><span>
     </span><span>"task_description"</span><span>:</span><span> </span><span>"为 matmul 生成或补全 spec.md"</span><span>,</span><span>
     </span><span>"context_files"</span><span>:</span><span> </span><span>[</span><span>
-      </span><span>"arch/src/main/scala/prototype/gemmini/matmul/spec.md"</span><span>
+      </span><span>"arch/src/main/scala/prototype/generated/matmul/spec.md"</span><span>
     </span><span>]</span><span>,</span><span>
     </span><span>"options"</span><span>:</span><span> </span><span>{</span><span>
       </span><span>"mode"</span><span>:</span><span> </span><span>"create_or_update"</span><span>,</span><span>         </span><span>// 模式：create / update / review_only / verify_only</span><span>
@@ -58,7 +58,7 @@
     </span><span>"ball_name"</span><span>:</span><span> </span><span>"matmul"</span><span>,</span><span>
     </span><span>"task_description"</span><span>:</span><span> </span><span>"生成 Gemmini MatMul 的 spec.md"</span><span>,</span><span>
     </span><span>"context_files"</span><span>:</span><span> </span><span>[</span><span>
-      </span><span>"arch/src/main/scala/prototype/gemmini/matmul/spec.md"</span><span>
+      </span><span>"arch/src/main/scala/prototype/generated/matmul/spec.md"</span><span>
     </span><span>]</span><span>
   </span><span>}</span><span>
 </span><span>}</span><span>
@@ -67,7 +67,7 @@
 **返回示例：**
 
 <pre class="overflow-visible!" data-start="1859" data-end="2057"><div class="contain-inline-size rounded-2xl relative bg-token-sidebar-surface-primary"><div class="sticky top-9"><div class="absolute end-0 bottom-0 flex h-9 items-center pe-2"><div class="bg-token-bg-elevated-secondary text-token-text-secondary flex items-center gap-4 rounded-sm px-2 font-sans text-xs"></div></div></div><div class="overflow-y-auto p-4" dir="ltr"><code class="whitespace-pre! language-json"><span><span>{</span><span>
-  </span><span>"path"</span><span>:</span><span> </span><span>"arch/src/main/scala/prototype/gemmini/matmul/spec.md"</span><span>,</span><span>
+  </span><span>"path"</span><span>:</span><span> </span><span>"arch/src/main/scala/prototype/generated/matmul/spec.md"</span><span>,</span><span>
   </span><span>"status"</span><span>:</span><span> </span><span>"created"</span><span>,</span><span>
   </span><span>"fields"</span><span>:</span><span> </span><span>[</span><span>"Overview"</span><span>,</span><span> </span><span>"Interface"</span><span>,</span><span> </span><span>"Instruction Semantics"</span><span>,</span><span> </span><span>"State Machine"</span><span>,</span><span> </span><span>"Validation"</span><span>]</span><span>
 </span><span>}</span><span>
@@ -88,7 +88,7 @@
     </span><span>"ball_name"</span><span>:</span><span> </span><span>"im2col"</span><span>,</span><span>
     </span><span>"task_description"</span><span>:</span><span> </span><span>"根据 spec.md 生成 Im2colUnit.scala 等文件"</span><span>,</span><span>
     </span><span>"context_files"</span><span>:</span><span> </span><span>[</span><span>
-      </span><span>"arch/src/main/scala/prototype/gemmini/im2col/spec.md"</span><span>
+      </span><span>"arch/src/main/scala/prototype/generated/im2col/spec.md"</span><span>
     </span><span>]</span><span>
   </span><span>}</span><span>
 </span><span>}</span><span>
@@ -98,8 +98,8 @@
 
 <pre class="overflow-visible!" data-start="2424" data-end="2662"><div class="contain-inline-size rounded-2xl relative bg-token-sidebar-surface-primary"><div class="sticky top-9"><div class="absolute end-0 bottom-0 flex h-9 items-center pe-2"><div class="bg-token-bg-elevated-secondary text-token-text-secondary flex items-center gap-4 rounded-sm px-2 font-sans text-xs"></div></div></div><div class="overflow-y-auto p-4" dir="ltr"><code class="whitespace-pre! language-json"><span><span>{</span><span>
   </span><span>"created_files"</span><span>:</span><span> </span><span>[</span><span>
-    </span><span>"arch/src/main/scala/prototype/gemmini/im2col/Im2colUnit.scala"</span><span>,</span><span>
-    </span><span>"arch/src/main/scala/prototype/gemmini/im2col/Im2colCtrlUnit.scala"</span><span>
+    </span><span>"arch/src/main/scala/prototype/generated/im2col/Im2colUnit.scala"</span><span>,</span><span>
+    </span><span>"arch/src/main/scala/prototype/generated/im2col/Im2colCtrlUnit.scala"</span><span>
   </span><span>]</span><span>,</span><span>
   </span><span>"skipped_existing"</span><span>:</span><span> </span><span>[</span><span>]</span><span>,</span><span>
   </span><span>"status"</span><span>:</span><span> </span><span>"success"</span><span>
@@ -121,7 +121,7 @@
     </span><span>"ball_name"</span><span>:</span><span> </span><span>"transpose"</span><span>,</span><span>
     </span><span>"task_description"</span><span>:</span><span> </span><span>"检查 TransposeUnit.scala 的接口规范"</span><span>,</span><span>
     </span><span>"context_files"</span><span>:</span><span> </span><span>[</span><span>
-      </span><span>"arch/src/main/scala/prototype/gemmini/transpose/TransposeUnit.scala"</span><span>
+      </span><span>"arch/src/main/scala/prototype/generated/transpose/TransposeUnit.scala"</span><span>
     </span><span>]</span><span>
   </span><span>}</span><span>
 </span><span>}</span><span>
@@ -153,7 +153,7 @@
     </span><span>"ball_name"</span><span>:</span><span> </span><span>"norm"</span><span>,</span><span>
     </span><span>"task_description"</span><span>:</span><span> </span><span>"执行 NormUnit 的仿真验证"</span><span>,</span><span>
     </span><span>"context_files"</span><span>:</span><span> </span><span>[</span><span>
-      </span><span>"arch/src/main/scala/prototype/gemmini/norm/NormUnit.scala"</span><span>
+      </span><span>"arch/src/main/scala/prototype/generated/norm/NormUnit.scala"</span><span>
     </span><span>]</span><span>
   </span><span>}</span><span>
 </span><span>}</span><span>

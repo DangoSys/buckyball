@@ -104,10 +104,10 @@ python3 workflow/steps/demo/simple_gemmini_agent.py
 2. **不需要修改代码** - 直接使用新的 `simple_gemmini_agent.py`
 3. **删除旧的生成结果**（可选）：
    ```bash
-   rm -rf arch/src/main/scala/prototype/gemmini/matmul
-   rm -rf arch/src/main/scala/prototype/gemmini/im2col
-   rm -rf arch/src/main/scala/prototype/gemmini/transpose
-   rm -rf arch/src/main/scala/prototype/gemmini/norm
+   rm -rf arch/src/main/scala/prototype/generated/matmul
+   rm -rf arch/src/main/scala/prototype/generated/im2col
+   rm -rf arch/src/main/scala/prototype/generated/transpose
+   rm -rf arch/src/main/scala/prototype/generated/norm
    ```
 4. **运行新系统**：
    ```bash

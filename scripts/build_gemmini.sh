@@ -6,7 +6,7 @@ set -e
 
 # Define paths
 WORK_DIR="/home/daiyongyuan/buckyball/arch"
-SRC_DIR="$WORK_DIR/src/main/scala/prototype/gemmini"
+SRC_DIR="$WORK_DIR/src/main/scala/prototype/generated"
 LOG_FILE="/home/daiyongyuan/buckyball/build_logs/gemmini_build.log"
 
 # Ensure log directory exists

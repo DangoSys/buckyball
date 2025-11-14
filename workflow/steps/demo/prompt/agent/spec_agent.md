@@ -45,7 +45,7 @@
 
 ## 输出
 
-- 成功：写入 `arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 并返回 `{"path": ..., "status": "created/updated"}`。
+- 成功：写入 `arch/src/main/scala/prototype/generated/<ball>/spec.md` 并返回 `{"path": ..., "status": "created/updated"}`。
 - 失败：返回 `{"error": "reason"}`（例如无法解析模板字段）。
 
 ## 最低优先级字段示例（MatMul）
@@ -80,4 +80,4 @@
 
 ---
 
-**完成标志**：spec_agent 在 `arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 写入或补全文件，且返回成功状态。
+**完成标志**：spec_agent 在 `arch/src/main/scala/prototype/generated/<ball>/spec.md` 写入或补全文件，且返回成功状态。

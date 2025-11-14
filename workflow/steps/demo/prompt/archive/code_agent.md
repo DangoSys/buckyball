@@ -2,7 +2,7 @@
 
 你是 AI 定制化加速单元实现专家，负责实现并集成新的硬件加速单元（针对 Gemmini 的 MatMul/Im2col/Transpose/Norm）。
 
-> 目标：在 `arch/src/main/scala/prototype/gemmini/` 下自动生成并写入四个 Ball 的实现骨架与集成代码，使得后续人工或自动化流程能快速补全并完成 RTL 仿真与测试。
+> 目标：在 `arch/src/main/scala/prototype/generated/` 下自动生成并写入四个 Ball 的实现骨架与集成代码，使得后续人工或自动化流程能快速补全并完成 RTL 仿真与测试。
 
 ## 核心策略（简明）
 
@@ -25,7 +25,7 @@
 目标路径（必须）：
 
 ```
-arch/src/main/scala/prototype/gemmini/<ball>/
+arch/src/main/scala/prototype/generated/<ball>/
 ```
 
 每个 ball **必须生成**以下文件（不能只生成部分文件）：
@@ -54,7 +54,7 @@ arch/src/main/scala/prototype/gemmini/<ball>/
 
 ## 前置检查（必做）
 
-1. **检查 spec.md**：`arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 必须存在；不存在则**失败并返回错误**：`"❌ 无法继续实现，spec.md 文件不存在: <path>"`。
+1. **检查 spec.md**：`arch/src/main/scala/prototype/generated/<ball>/spec.md` 必须存在；不存在则**失败并返回错误**：`"❌ 无法继续实现，spec.md 文件不存在: <path>"`。
 2. **读取参考实现**：必须读取 `prototype/vector/VecUnit.scala` 和 `prototype/vector/VecBall.scala` 作为模板参考。
 3. **读取系统注册文件**：必须读取 DomainDecoder.scala、busRegister.scala、rsRegister.scala、DISA.scala 了解注册方式。
 4. **解析 spec.md**：提取必要字段（Overview, Interface, Instruction Semantics）。
@@ -145,7 +145,7 @@ call_workflow_api(
 
 ```scala
 // AUTO-GENERATED: MatMulUnit.scala
-package prototype.gemmini.matmul
+package prototype.generated.matmul
 
 import chisel3._
 import chisel3.util._

@@ -54,7 +54,7 @@ python3 workflow/steps/demo/simple_gemmini_agent.py
 cat /home/daiyongyuan/buckyball/build_logs/gemmini_build.log
 
 # 查看生成的文件
-ls /home/daiyongyuan/buckyball/arch/src/main/scala/prototype/gemmini/
+ls /home/daiyongyuan/buckyball/arch/src/main/scala/prototype/generated/
 
 # 停止执行
 按 Ctrl+C
