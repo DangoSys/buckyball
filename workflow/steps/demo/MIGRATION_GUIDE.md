@@ -66,10 +66,10 @@
 cd /home/daiyongyuan/buckyball
 
 # 删除旧的 Ball 目录
-rm -rf arch/src/main/scala/prototype/gemmini/matmul
-rm -rf arch/src/main/scala/prototype/gemmini/im2col
-rm -rf arch/src/main/scala/prototype/gemmini/transpose
-rm -rf arch/src/main/scala/prototype/gemmini/norm
+rm -rf arch/src/main/scala/prototype/generated/matmul
+rm -rf arch/src/main/scala/prototype/generated/im2col
+rm -rf arch/src/main/scala/prototype/generated/transpose
+rm -rf arch/src/main/scala/prototype/generated/norm
 
 # 恢复系统注册文件（如果有 git）
 cd arch/src/main/scala/examples/toy/balldomain/
@@ -196,7 +196,7 @@ Gemmini Ball Generator - 自动生成 4 个 Ball
   ...
 
 [迭代 5] 🔧 执行 3 个工具调用
-  - make_dir({"path": "arch/src/main/scala/prototype/gemmini/matmul"})
+  - make_dir({"path": "arch/src/main/scala/prototype/generated/matmul"})
   - write_file({"path": "arch/.../MatMulUnit.scala", ...})
   - write_file({"path": "arch/.../MatMulBall.scala", ...})
 

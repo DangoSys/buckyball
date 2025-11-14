@@ -45,7 +45,7 @@
 
 ## 输出
 
-- 成功：写入 `arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 并返回 `{"path": ..., "status": "created"}` 或 `{"path": ..., "status": "updated"}`。
+- 成功：写入 `arch/src/main/scala/prototype/generated/<ball>/spec.md` 并返回 `{"path": ..., "status": "created"}` 或 `{"path": ..., "status": "updated"}`。
 - 失败：返回 `{"error": "reason"}`（例如无法解析模板字段）。
 
 **⚠️ 重要**：spec 生成完成后，master_agent 必须立即无缝衔接调用 code_agent 生成代码，不能有任何停顿！
@@ -56,8 +56,8 @@
 3. 如果 master_agent 没有立即继续，系统会失败
 
 **输出格式必须严格遵循**：
-- 成功：`{"path": "arch/src/main/scala/prototype/gemmini/<ball>/spec.md", "status": "created"}`
-- 更新：`{"path": "arch/src/main/scala/prototype/gemmini/<ball>/spec.md", "status": "updated"}`
+- 成功：`{"path": "arch/src/main/scala/prototype/generated/<ball>/spec.md", "status": "created"}`
+- 更新：`{"path": "arch/src/main/scala/prototype/generated/<ball>/spec.md", "status": "updated"}`
 
 ## 最低优先级字段示例（MatMul）
 
@@ -91,4 +91,4 @@
 
 ---
 
-**完成标志**：spec_agent 在 `arch/src/main/scala/prototype/gemmini/<ball>/spec.md` 写入或补全文件，且返回成功状态。
+**完成标志**：spec_agent 在 `arch/src/main/scala/prototype/generated/<ball>/spec.md` 写入或补全文件，且返回成功状态。

@@ -26,8 +26,8 @@
 
 ### 2. 生成阶段
 为每个 Ball 生成以下文件：
-- `arch/src/main/scala/prototype/gemmini/<ball>/<BallName>Unit.scala`
-- `arch/src/main/scala/prototype/gemmini/<ball>/<BallName>Ball.scala`
+- `arch/src/main/scala/prototype/generated/<ball>/<BallName>Unit.scala`
+- `arch/src/main/scala/prototype/generated/<ball>/<BallName>Ball.scala`
 - 更新系统注册文件（追加解码、注册信息）
 
 ### 3. 验证阶段
@@ -53,7 +53,7 @@
 
 - 参考实现：`arch/src/main/scala/prototype/vector/`
 - 系统注册：`arch/src/main/scala/examples/toy/balldomain/`
-- 目标位置：`arch/src/main/scala/prototype/gemmini/`
+- 目标位置：`arch/src/main/scala/prototype/generated/`
 
 ## 立即开始
 

@@ -109,7 +109,7 @@ Agent 可以使用以下工具（在 `simple_gemmini_agent.py` 中实现）：
 成功执行后，会在以下位置生成代码：
 
 ```
-arch/src/main/scala/prototype/gemmini/
+arch/src/main/scala/prototype/generated/
 ├── matmul/
 │   ├── MatMulUnit.scala
 │   └── MatMulBall.scala
@@ -203,7 +203,7 @@ arch/src/main/scala/prototype/gemmini/
 ## 预期输出
 
 ```
-arch/src/main/scala/prototype/gemmini/
+arch/src/main/scala/prototype/generated/
 ├── dma/
 │   ├── spec.md
 │   ├── DMAUnit.scala

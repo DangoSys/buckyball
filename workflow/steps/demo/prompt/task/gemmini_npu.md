@@ -19,7 +19,7 @@
 ## 必要输出结构
 
 ```
-arch/src/main/scala/prototype/gemmini/
+arch/src/main/scala/prototype/generated/
 ├── matmul/
 │   ├── spec.md
 │   ├── MatMulUnit.scala

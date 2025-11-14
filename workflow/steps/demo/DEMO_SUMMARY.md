@@ -91,7 +91,7 @@ python3 workflow/steps/demo/simple_gemmini_agent.py
 
 ### 代码文件（自动生成）
 ```
-arch/src/main/scala/prototype/gemmini/
+arch/src/main/scala/prototype/generated/
 ├── matmul/{MatMulUnit.scala, MatMulBall.scala}
 ├── im2col/{Im2colUnit.scala, Im2colBall.scala}
 ├── transpose/{TransposeUnit.scala, TransposeBall.scala}
@@ -164,7 +164,7 @@ Agent 具备完整的自动化能力：
 
 ```bash
 # 1. 清理旧结果
-rm -rf arch/src/main/scala/prototype/gemmini/*
+rm -rf arch/src/main/scala/prototype/generated/*
 
 # 2. 备份系统文件
 cd arch/src/main/scala/examples/toy/balldomain
