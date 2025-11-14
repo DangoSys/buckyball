@@ -48,7 +48,8 @@ MODEL = os.getenv("MODEL") or "qwen3-235b-a22b-instruct-2507"
 # ============================================================================
 # 🎯 快速切换任务 - 只需修改下面这个数字！
 # ============================================================================
-TASK_TO_RUN = 3  # 改成 1, 2, 3, 或 4 即可切换任务
+TASK_TO_RUN = 4  # 改成 1, 2, 3, 或 4 即可切换任务
+TOTAL_RUNS = 20  # 连续运行次数（无论成功失败都继续）
 # ============================================================================
 
 # 所有可用任务定义
@@ -428,6 +429,7 @@ def run_single_task(task_config: Dict[str, Any], agent_prompt: str) -> Dict[str,
     iteration = 0
     success_count = 0
     last_build_success = False
+    last_test_success = False  # 追踪测试是否通过
     consecutive_json_errors = 0  # 连续JSON错误计数
 
     # Token 统计
@@ -439,6 +441,20 @@ def run_single_task(task_config: Dict[str, Any], agent_prompt: str) -> Dict[str,
         while iteration < max_iterations:
             iteration += 1
             print(f"\n[任务 {task_config['id']} - 迭代 {iteration}]")
+            
+            # ⚡ 关键修复：如果测试已通过，立即返回成功（避免无限迭代）
+            if last_test_success:
+                print(f"\n✅ 任务 {task_config['id']} 完成！（测试已通过）")
+                print("📊 Token 使用统计:")
+                print(f"   输入 tokens: {total_prompt_tokens:,}")
+                print(f"   输出 tokens: {total_completion_tokens:,}")
+                print(f"   总计 tokens: {total_tokens:,}")
+                return {
+                    "success": True,
+                    "tokens": total_tokens,
+                    "prompt_tokens": total_prompt_tokens,
+                    "completion_tokens": total_completion_tokens,
+                }
 
             # 调用 LLM
             try:
@@ -576,18 +592,22 @@ Please try a different approach."""
                             if test_result["status"] == "success":
                                 print("    ✅ 测试通过")
                                 success_count += 1
+                                last_test_success = True  # 标记测试通过
                             elif test_result["status"] == "test_failed":
                                 print("    ❌ 测试失败，需要修复")
                                 print(
                                     f"    输出: {test_result.get('stdout', '')[:200]}"
                                 )
+                                last_test_success = False
                             elif test_result["status"] == "compile_failed":
                                 print("    ❌ C 测试编译失败")
                                 print(
                                     f"    错误: {test_result.get('stderr', '')[:200]}"
                                 )
+                                last_test_success = False
                             elif test_result["status"] == "timeout":
                                 print("    ⏱️  测试超时（30秒）")
+                                last_test_success = False
                         except Exception:
                             pass
 
@@ -596,11 +616,21 @@ Please try a different approach."""
                 content = message.get("content", "")
                 print(f"💬 Agent: {content[:200]}...")
 
-                # 如果编译成功且 Agent 说完成了，认为任务完成
-                if last_build_success and any(
-                    kw in content.lower() for kw in ["完成", "成功", "finished", "done"]
+                # 检查任务是否完成
+                # 条件1：测试通过了
+                # 条件2：编译成功 + Agent说完成了
+                task_complete = False
+                
+                if last_test_success:
+                    print(f"\n✅ 任务 {task_config['id']} 完成！（测试通过）")
+                    task_complete = True
+                elif last_build_success and any(
+                    kw in content.lower() for kw in ["完成", "成功", "successfully", "finished", "done", "completed"]
                 ):
-                    print(f"\n✅ 任务 {task_config['id']} 完成！")
+                    print(f"\n✅ 任务 {task_config['id']} 完成！（编译成功且Agent确认）")
+                    task_complete = True
+                
+                if task_complete:
                     print("📊 Token 使用统计:")
                     print(f"   输入 tokens: {total_prompt_tokens:,}")
                     print(f"   输出 tokens: {total_completion_tokens:,}")
@@ -656,14 +686,15 @@ Please try a different approach."""
 
 
 def run_gemmini_generator():
-    """运行 Gemmini Ball Generator - 多任务自动执行"""
+    """运行 Gemmini Ball Generator - 连续多次执行"""
 
-    start_time = datetime.now()
+    total_start_time = datetime.now()
 
     print("\n" + "=" * 80)
-    print("🎯 Gemmini NPU 自动化多任务生成器")
+    print("🎯 Gemmini NPU 自动化多任务生成器 - 批量测试模式")
     print("=" * 80)
-    print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"开始时间: {total_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"🔄 连续运行次数: {TOTAL_RUNS} 次")
     print("")
 
     # 显示当前运行的任务
@@ -673,7 +704,8 @@ def run_gemmini_generator():
         print(f"  描述: {task['desc']}")
         print(f"  最大迭代: {task['max_iterations']}")
     print("")
-    print("💡 提示: 要切换任务，请修改文件第 46 行的 TASK_TO_RUN 变量")
+    print("💡 提示: 要切换任务，请修改文件第 51 行的 TASK_TO_RUN 变量")
+    print("💡 提示: 要修改运行次数，请修改文件第 52 行的 TOTAL_RUNS 变量")
     print("")
 
     # 显示配置信息
@@ -697,67 +729,111 @@ def run_gemmini_generator():
     agent_prompt = agent_prompt.replace("{BUILD_LOG_PATH}", build_log_path)
     agent_prompt = agent_prompt.replace("{WORK_DIR}", str(WORK_DIR))
 
-    # 执行所有任务
-    results = []
-    for task in TASKS:
-        task_result = run_single_task(task, agent_prompt)
-        results.append(
-            {
-                "task_id": task["id"],
-                "task_name": task["name"],
-                "success": task_result.get("success", False),
-                "tokens": task_result.get("tokens", 0),
-                "prompt_tokens": task_result.get("prompt_tokens", 0),
-                "completion_tokens": task_result.get("completion_tokens", 0),
-            }
-        )
+    # 统计所有运行的结果
+    all_runs_results = []
+    
+    # 🔄 外层循环：连续运行 TOTAL_RUNS 次
+    for run_number in range(1, TOTAL_RUNS + 1):
+        run_start_time = datetime.now()
+        
+        print("\n" + "━" * 80)
+        print(f"🔄 第 {run_number}/{TOTAL_RUNS} 次运行")
+        print("━" * 80)
+        
+        # 执行所有任务
+        results = []
+        for task in TASKS:
+            task_result = run_single_task(task, agent_prompt)
+            results.append(
+                {
+                    "run": run_number,
+                    "task_id": task["id"],
+                    "task_name": task["name"],
+                    "success": task_result.get("success", False),
+                    "tokens": task_result.get("tokens", 0),
+                    "prompt_tokens": task_result.get("prompt_tokens", 0),
+                    "completion_tokens": task_result.get("completion_tokens", 0),
+                }
+            )
 
-        if not task_result.get("success", False):
-            print(f"\n⚠️  任务 {task['id']} 失败，是否继续？")
-            print("   提示：可以手动检查并修复，然后重新运行")
-            # 继续执行下一个任务（不中断）
-            print("   继续执行下一个任务...\n")
+            # 无论成功失败都继续，不中断
+            if not task_result.get("success", False):
+                print(f"\n⚠️  任务 {task['id']} 失败，继续下一个任务...")
+        
+        all_runs_results.extend(results)
+        
+        run_end_time = datetime.now()
+        run_duration = run_end_time - run_start_time
+        
+        # 每次运行后的小结
+        print(f"\n✅ 第 {run_number} 次运行完成，耗时: {run_duration}")
+        success_count = sum(1 for r in results if r["success"])
+        print(f"   本次成功: {success_count}/{len(results)}")
+        
+        # 如果还有下一次运行，稍微等待一下
+        if run_number < TOTAL_RUNS:
+            print(f"   准备第 {run_number + 1} 次运行...\n")
 
     # 最终总结
-    end_time = datetime.now()
-    duration = end_time - start_time
+    total_end_time = datetime.now()
+    total_duration = total_end_time - total_start_time
 
     print("\n" + "=" * 80)
-    print("📊 最终执行总结")
+    print(f"📊 批量测试最终总结 - {TOTAL_RUNS} 次运行")
     print("=" * 80)
-    print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"总耗时: {duration}")
+    print(f"开始时间: {total_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"结束时间: {total_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"总耗时: {total_duration}")
     print("")
-    print("任务完成情况:")
-    for result in results:
-        status = "✅ 成功" if result["success"] else "❌ 失败"
-        print(f"  任务 {result['task_id']}: {result['task_name']} - {status}")
+    
+    # 统计每次运行的情况
+    print("📋 每次运行结果:")
+    for run_num in range(1, TOTAL_RUNS + 1):
+        run_results = [r for r in all_runs_results if r["run"] == run_num]
+        success_count = sum(1 for r in run_results if r["success"])
+        total_tasks = len(run_results)
+        status_icon = "✅" if success_count == total_tasks else "❌"
+        print(f"  第 {run_num:2d} 次: {status_icon} {success_count}/{total_tasks} 成功")
     print("")
-
-    success_count = sum(1 for r in results if r["success"])
-    print(f"成功: {success_count}/{len(TASKS)}")
+    
+    # 总体统计
+    total_attempts = len(all_runs_results)
+    total_success = sum(1 for r in all_runs_results if r["success"])
+    success_rate = (total_success / total_attempts * 100) if total_attempts > 0 else 0
+    
+    print("📊 总体统计:")
+    print(f"   总运行次数: {TOTAL_RUNS} 次")
+    print(f"   总任务执行: {total_attempts} 次")
+    print(f"   成功次数: {total_success} 次")
+    print(f"   失败次数: {total_attempts - total_success} 次")
+    print(f"   成功率: {success_rate:.1f}%")
     print("")
 
     # Token 统计汇总
-    total_all_tokens = sum(r["tokens"] for r in results)
-    total_all_prompt_tokens = sum(r["prompt_tokens"] for r in results)
-    total_all_completion_tokens = sum(r["completion_tokens"] for r in results)
+    total_all_tokens = sum(r["tokens"] for r in all_runs_results)
+    total_all_prompt_tokens = sum(r["prompt_tokens"] for r in all_runs_results)
+    total_all_completion_tokens = sum(r["completion_tokens"] for r in all_runs_results)
+    avg_tokens_per_run = total_all_tokens / TOTAL_RUNS if TOTAL_RUNS > 0 else 0
 
     print("📊 Token 使用统计:")
     print(f"   输入 tokens: {total_all_prompt_tokens:,}")
     print(f"   输出 tokens: {total_all_completion_tokens:,}")
     print(f"   总计 tokens: {total_all_tokens:,}")
+    print(f"   平均每次: {avg_tokens_per_run:,.0f} tokens")
     print("")
 
-    if success_count == len(TASKS):
-        print("🎉 所有任务成功完成！")
+    # 最终评价
+    if success_rate == 100:
+        print("🎉 完美！所有运行100%成功！")
         return 0
-    elif success_count > 0:
-        print("⚠️  部分任务完成")
+    elif success_rate >= 80:
+        print(f"✅ 良好！成功率达到 {success_rate:.1f}%")
+        return 0
+    elif success_rate >= 50:
+        print(f"⚠️  一般，成功率 {success_rate:.1f}%，需要改进")
         return 1
     else:
-        print("❌ 所有任务失败")
+        print(f"❌ 较差，成功率仅 {success_rate:.1f}%，需要重点优化")
         return 1
 
 
