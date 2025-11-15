@@ -1,17 +1,17 @@
-package prototype.snn
+package prototype.ibuki.matmul
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.blink.{Blink, BallRegist}
-import prototype.snn.SNN
+import prototype.ibuki.matmul.SNN
 
 /**
- * SNNBall - A Spiking Neural Network computation Ball that complies with the Blink protocol.
+ * SNNMatmulBall - A Spiking Neural Network computation Ball that complies with the Blink protocol.
  * Behavior: Read membrane potential from Scratchpad, apply LIF neuron model, generate spikes, then write back to Scratchpad.
  */
-class SNNBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class SNNMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)
@@ -53,5 +53,5 @@ class SNNBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   // Pass through status signals
   io.status <> snnUnit.io.status
 
-  override lazy val desiredName: String = "SNNBall"
+  override lazy val desiredName: String = "SNNMatmulBall"
 }

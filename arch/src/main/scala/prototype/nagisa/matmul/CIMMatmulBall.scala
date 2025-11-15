@@ -1,18 +1,18 @@
-package prototype.cim
+package prototype.nagisa.matmul
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.blink.{Blink, BallRegist}
-import prototype.cim.CIM
+import prototype.nagisa.matmul.CIM
 
 /**
- * CIMBall - A Compute-in-Memory Ball that complies with the Blink protocol
+ * CIMMatmulBall - A Compute-in-Memory Ball that complies with the Blink protocol
  * Behavior: Read operands from Scratchpad, perform CIM computation (inspired by PiDRAM),
  * then write results back to Scratchpad.
  */
-class CIMBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class CIMMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)
@@ -53,6 +53,6 @@ class CIMBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   // Pass through status signals
   io.status <> cimUnit.io.status
 
-  override lazy val desiredName: String = "CIMBall"
+  override lazy val desiredName: String = "CIMMatmulBall"
 }
 

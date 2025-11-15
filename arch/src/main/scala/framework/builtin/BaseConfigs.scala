@@ -55,7 +55,7 @@ case class BaseConfig(
   numVecThread: Int = 16,
 
   // Empty ball id
-  emptyBallid: Int = 5,
+  emptyBallid: Int = 7,
 
 ) {
   val spad_w = veclane * inputType.getWidth

@@ -1,4 +1,4 @@
-package prototype.cim
+package prototype.nagisa.matmul
 
 import chisel3._
 import chisel3.util._

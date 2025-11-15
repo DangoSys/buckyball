@@ -18,10 +18,10 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bal
     BallRsRegist(ballId = 3, ballName = "TransposeBall"),
     BallRsRegist(ballId = 4, ballName = "ReluBall"),
     BallRsRegist(ballId = 5, ballName = "NNLutBall"),
-    BallRsRegist(ballId = 6, ballName = "SNNBall"),
+    BallRsRegist(ballId = 6, ballName = "SNNMatmulBall"),
     BallRsRegist(ballId = 8, ballName = "ABFTSystolicArrayBall"),
     BallRsRegist(ballId = 9, ballName = "ConvBall"),
-    BallRsRegist(ballId = 10, ballName = "CIMBall"),
+    BallRsRegist(ballId = 10, ballName = "CIMMatmulBall"),
     BallRsRegist(ballId = 7, ballName = "EmptyBall")
   )
 ) {
