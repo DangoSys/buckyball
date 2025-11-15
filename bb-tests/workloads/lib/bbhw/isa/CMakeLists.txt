@@ -16,6 +16,7 @@ set(ISA_SOURCES
     41_snn.c
     42_abft_systolic.c
     43_conv.c
+    44_cim.c
     7_flush.c
 )
 
@@ -40,6 +41,7 @@ add_custom_command(
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/41_snn.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-41_snn.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/42_abft_systolic.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-42_abft_systolic.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/43_conv.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-43_conv.o
+        && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/44_cim.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-44_cim.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-linux.a
             linux-isa.o
@@ -57,6 +59,7 @@ add_custom_command(
             linux-41_snn.o
             linux-42_abft_systolic.o
             linux-43_conv.o
+            linux-44_cim.o
             linux-7_flush.o
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building RISC-V Linux version of ISA library"
@@ -84,6 +87,7 @@ add_custom_command(
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/41_snn.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-41_snn.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/42_abft_systolic.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-42_abft_systolic.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/43_conv.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-43_conv.o
+        && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/44_cim.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-44_cim.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-baremetal.a
             baremetal-isa.o
@@ -101,6 +105,7 @@ add_custom_command(
             baremetal-41_snn.o
             baremetal-42_abft_systolic.o
             baremetal-43_conv.o
+            baremetal-44_cim.o
             baremetal-7_flush.o
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building RISC-V Baremetal version of ISA library"
@@ -128,6 +133,7 @@ add_custom_command(
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/41_snn.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-41_snn.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/42_abft_systolic.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-42_abft_systolic.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/43_conv.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-43_conv.o
+        && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/44_cim.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-44_cim.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-x86.a
             x86-isa.o
@@ -145,6 +151,7 @@ add_custom_command(
             x86-41_snn.o
             x86-42_abft_systolic.o
             x86-43_conv.o
+            x86-44_cim.o
             x86-7_flush.o
         && ranlib ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-x86.a
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

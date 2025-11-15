@@ -21,6 +21,7 @@ class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus 
     () => new prototype.snn.SNNBall(6),
     () => new prototype.abft_systolic.ABFTSystolicArrayBall(8),
     () => new prototype.conv.ConvBall(9),
+    () => new prototype.cim.CIMBall(10),
     () => new examples.toy.balldomain.emptyball.EmptyBall(7)
   )
 ) {
