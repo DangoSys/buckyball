@@ -20,4 +20,5 @@ object DISA {
   val RELU                 = BitPat("b0100110") // 38
   val BBUS_CONFIG          = BitPat("b0100111") // 39
   val NNLUT                = BitPat("b0101000") // 40
+  val SNN                  = BitPat("b0101001") // 41
 }

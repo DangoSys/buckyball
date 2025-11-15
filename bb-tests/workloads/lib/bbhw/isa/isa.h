@@ -42,7 +42,8 @@ typedef enum {
   MATMUL_WS_FUNC7 = 27,   // 0x1B - Matrix multiply with warp16 function code
   RELU_FUNC7 = 38,        // 0x26 - ReLU activation function code
   BBUS_CONFIG_FUNC7 = 39, // 0x27 - BBUS configuration function code
-  NNLUT_FUNC7 = 40        // 0x28 - NN-LUT lookup function code
+  NNLUT_FUNC7 = 40,       // 0x28 - NN-LUT lookup function code
+  SNN_FUNC7 = 41          // 0x29 - SNN spiking neural network function code
 } InstructionType;
 
 // Instruction configuration structure (for simulator)
@@ -80,6 +81,8 @@ void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
 void bb_relu(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_bbus_config(uint32_t src_bid, uint32_t dst_bid, uint64_t enable);
 void bb_nnlut(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+void bb_snn(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
+            uint32_t threshold, uint32_t leak_factor);
 void bb_flush(void);
 
 // Get instruction configuration by func7
