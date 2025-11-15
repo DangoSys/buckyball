@@ -19,6 +19,7 @@ class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bal
     BallRsRegist(ballId = 4, ballName = "ReluBall"),
     BallRsRegist(ballId = 5, ballName = "NNLutBall"),
     BallRsRegist(ballId = 6, ballName = "SNNBall"),
+    BallRsRegist(ballId = 8, ballName = "ABFTSystolicArrayBall"),
     BallRsRegist(ballId = 7, ballName = "EmptyBall")
   )
 ) {

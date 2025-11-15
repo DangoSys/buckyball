@@ -31,19 +31,20 @@ typedef struct {
 
 // Instruction type enum - directly uses func7 values
 typedef enum {
-  MVIN_FUNC7 = 24,        // 0x18 - Move in function code
-  MVOUT_FUNC7 = 25,       // 0x19 - Move out function code
-  FENCE_FUNC7 = 31,       // 0x1F - Fence function code
-  MUL_WARP16_FUNC7 = 32,  // 0x20 - Matrix multiply function code
-  IM2COL_FUNC7 = 33,      // 0x21 - Matrix im2col function code
-  TRANSPOSE_FUNC7 = 34,   // 0x22 - Matrix transpose function code
-  FLUSH_FUNC7 = 7,        // 0x07 - Flush function code
-  BBFP_MUL_FUNC7 = 26,    // 0x1A - BBFP matrix multiply function code
-  MATMUL_WS_FUNC7 = 27,   // 0x1B - Matrix multiply with warp16 function code
-  RELU_FUNC7 = 38,        // 0x26 - ReLU activation function code
-  BBUS_CONFIG_FUNC7 = 39, // 0x27 - BBUS configuration function code
-  NNLUT_FUNC7 = 40,       // 0x28 - NN-LUT lookup function code
-  SNN_FUNC7 = 41          // 0x29 - SNN spiking neural network function code
+  MVIN_FUNC7 = 24,         // 0x18 - Move in function code
+  MVOUT_FUNC7 = 25,        // 0x19 - Move out function code
+  FENCE_FUNC7 = 31,        // 0x1F - Fence function code
+  MUL_WARP16_FUNC7 = 32,   // 0x20 - Matrix multiply function code
+  IM2COL_FUNC7 = 33,       // 0x21 - Matrix im2col function code
+  TRANSPOSE_FUNC7 = 34,    // 0x22 - Matrix transpose function code
+  FLUSH_FUNC7 = 7,         // 0x07 - Flush function code
+  BBFP_MUL_FUNC7 = 26,     // 0x1A - BBFP matrix multiply function code
+  MATMUL_WS_FUNC7 = 27,    // 0x1B - Matrix multiply with warp16 function code
+  RELU_FUNC7 = 38,         // 0x26 - ReLU activation function code
+  BBUS_CONFIG_FUNC7 = 39,  // 0x27 - BBUS configuration function code
+  NNLUT_FUNC7 = 40,        // 0x28 - NN-LUT lookup function code
+  SNN_FUNC7 = 41,          // 0x29 - SNN spiking neural network function code
+  ABFT_SYSTOLIC_FUNC7 = 42 // 0x2A - ABFT systolic array function code
 } InstructionType;
 
 // Instruction configuration structure (for simulator)
@@ -83,6 +84,8 @@ void bb_bbus_config(uint32_t src_bid, uint32_t dst_bid, uint64_t enable);
 void bb_nnlut(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
 void bb_snn(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
             uint32_t threshold, uint32_t leak_factor);
+void bb_abft_systolic(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
+                      uint32_t iter);
 void bb_flush(void);
 
 // Get instruction configuration by func7
