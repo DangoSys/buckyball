@@ -19,4 +19,5 @@ object DISA {
   val TRANSPOSE            = BitPat("b0100010") // 34
   val RELU                 = BitPat("b0100110") // 38
   val BBUS_CONFIG          = BitPat("b0100111") // 39
+  val NNLUT                = BitPat("b0101000") // 40
 }

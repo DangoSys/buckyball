@@ -12,6 +12,7 @@ set(ISA_SOURCES
     34_transpose.c
     38_relu.c
     39_bbus_config.c
+    40_nnlut.c
     7_flush.c
 )
 
@@ -32,6 +33,7 @@ add_custom_command(
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/34_transpose.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-34_transpose.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-38_relu.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/39_bbus_config.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-39_bbus_config.o
+        && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/40_nnlut.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-40_nnlut.o
         && riscv64-unknown-linux-gnu-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -march=rv64gc -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o linux-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-linux.a
             linux-isa.o
@@ -45,6 +47,7 @@ add_custom_command(
             linux-34_transpose.o
             linux-38_relu.o
             linux-39_bbus_config.o
+            linux-40_nnlut.o
             linux-7_flush.o
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building RISC-V Linux version of ISA library"
@@ -68,6 +71,7 @@ add_custom_command(
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/34_transpose.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-34_transpose.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-38_relu.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/39_bbus_config.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-39_bbus_config.o
+        && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/40_nnlut.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-40_nnlut.o
         && riscv64-unknown-elf-gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany -fno-builtin-printf -D__BAREMETAL__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o baremetal-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-baremetal.a
             baremetal-isa.o
@@ -81,6 +85,7 @@ add_custom_command(
             baremetal-34_transpose.o
             baremetal-38_relu.o
             baremetal-39_bbus_config.o
+            baremetal-40_nnlut.o
             baremetal-7_flush.o
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Building RISC-V Baremetal version of ISA library"
@@ -104,6 +109,7 @@ add_custom_command(
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/34_transpose.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-34_transpose.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/38_relu.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-38_relu.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/39_bbus_config.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-39_bbus_config.o
+        && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/40_nnlut.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-40_nnlut.o
         && gcc -c ${CMAKE_CURRENT_SOURCE_DIR}/7_flush.c -fPIC -D__x86_64__ -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_SOURCE_DIR}/.. -o x86-7_flush.o
         && ar rcs ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-x86.a
             x86-isa.o
@@ -117,6 +123,7 @@ add_custom_command(
             x86-34_transpose.o
             x86-38_relu.o
             x86-39_bbus_config.o
+            x86-40_nnlut.o
             x86-7_flush.o
         && ranlib ${CMAKE_CURRENT_BINARY_DIR}/libbbisa-x86.a
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

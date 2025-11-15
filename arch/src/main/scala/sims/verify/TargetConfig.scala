@@ -10,6 +10,7 @@ import prototype.matrix.MatrixBall
 import prototype.transpose.TransposeBall
 import prototype.im2col.Im2colBall
 import prototype.relu.ReluBall
+import prototype.nnlut.NNLutBall
 
 // Ball type definitions
 sealed trait BallType
@@ -18,6 +19,7 @@ case object MatrixBallType extends BallType
 case object TransposeBallType extends BallType
 case object Im2colBallType extends BallType
 case object ReluBallType extends BallType
+case object NNLutBallType extends BallType
 
 // Config Key
 case object TargetBallKey extends Field[BallType](VecBallType)
@@ -41,6 +43,9 @@ class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
       io <> ball.io
     case ReluBallType =>
       val ball = Module(new ReluBall(0))
+      io <> ball.io
+    case NNLutBallType =>
+      val ball = Module(new NNLutBall(0))
       io <> ball.io
     case _ => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
@@ -72,7 +77,7 @@ object BallTopMain extends App {
   // Select Ball type from command line arguments
   val ballType = if (args.isEmpty) {
     println("Usage: BallTopMain <ball-type> [firtool-opts...]")
-    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball")
+    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball, nnlutball")
     println("Using default: vecball")
     VecBallType
   } else {
@@ -82,6 +87,7 @@ object BallTopMain extends App {
       case "transposeball" => TransposeBallType
       case "im2colball" => Im2colBallType
       case "reluball" => ReluBallType
+      case "nnlutball" => NNLutBallType
       case other =>
         println(s"Unknown ball type: $other, using vecball")
         VecBallType
