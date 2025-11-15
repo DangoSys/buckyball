@@ -44,7 +44,8 @@ typedef enum {
   BBUS_CONFIG_FUNC7 = 39,  // 0x27 - BBUS configuration function code
   NNLUT_FUNC7 = 40,        // 0x28 - NN-LUT lookup function code
   SNN_FUNC7 = 41,          // 0x29 - SNN spiking neural network function code
-  ABFT_SYSTOLIC_FUNC7 = 42 // 0x2A - ABFT systolic array function code
+  ABFT_SYSTOLIC_FUNC7 = 42, // 0x2A - ABFT systolic array function code
+  CONV_FUNC7 = 43          // 0x2B - CONV convolution function code
 } InstructionType;
 
 // Instruction configuration structure (for simulator)
@@ -86,6 +87,9 @@ void bb_snn(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
             uint32_t threshold, uint32_t leak_factor);
 void bb_abft_systolic(uint32_t op1_addr, uint32_t op2_addr, uint32_t wr_addr,
                       uint32_t iter);
+void bb_conv(uint32_t ifmap_addr, uint32_t weight_addr, uint32_t ofmap_addr,
+             uint32_t iter, uint32_t in_height, uint32_t in_width,
+             uint32_t kernel_h, uint32_t kernel_w);
 void bb_flush(void);
 
 // Get instruction configuration by func7

@@ -22,4 +22,5 @@ object DISA {
   val NNLUT                = BitPat("b0101000") // 40
   val SNN                  = BitPat("b0101001") // 41
   val ABFT_SYSTOLIC        = BitPat("b0101010") // 42
+  val CONV                 = BitPat("b0101011") // 43
 }
