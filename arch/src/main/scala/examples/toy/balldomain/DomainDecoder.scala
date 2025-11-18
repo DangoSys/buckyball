@@ -94,7 +94,12 @@ class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extend
     IM2COL               -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),2.U,rs2(63,spAddrLen + 10)),
     TRANSPOSE            -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),3.U,rs2(63,spAddrLen + 10)),
     RELU                 -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),4.U,rs2(63,spAddrLen + 10)),
-    BBUS_CONFIG          -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),5.U,rs2(63,spAddrLen + 10))
+    BBUS_CONFIG          -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),5.U,rs2(63,spAddrLen + 10)),
+    NNLUT                -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),6.U,rs2(63,spAddrLen + 10)),
+    SNN                  -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0),                          DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),7.U,rs2(63,spAddrLen + 10)),
+    ABFT_SYSTOLIC        -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),8.U,rs2(63,spAddrLen + 10)),
+    CONV                 -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),9.U,rs2(63,spAddrLen + 10)),
+    CIM                  -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),10.U,rs2(63,spAddrLen + 10))
   ))
 
 // -----------------------------------------------------------------------------

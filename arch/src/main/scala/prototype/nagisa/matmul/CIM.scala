@@ -1,0 +1,332 @@
+package prototype.nagisa.matmul
+
+import chisel3._
+import chisel3.util._
+import org.chipsalliance.cde.config.Parameters
+import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import framework.blink.Status
+
+/**
+ * PiDRAMCIMBlackBox - BlackBox wrapper for PiDRAM-style Compute-in-Memory module
+ * Uses inline verilog to embed CIM computation logic
+ * Inspired by PiDRAM's processing-in-memory architecture
+ */
+class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
+  val io = IO(new Bundle {
+    val clock = Input(Clock())
+    val reset = Input(Bool())
+
+    // Control interface
+    val start = Input(Bool())
+    val done = Output(Bool())
+
+    // Data addresses
+    val op1_addr = Input(UInt(32.W))
+    val op2_addr = Input(UInt(32.W))
+    val result_addr = Input(UInt(32.W))
+
+    // Computation parameters
+    val rows = Input(UInt(16.W))
+    val cols = Input(UInt(16.W))
+    val op_type = Input(UInt(4.W))  // 0: matmul, 1: add, 2: mul, etc.
+
+    // Data width
+    val data_width = Input(UInt(8.W))
+  })
+
+  setInline("PiDRAMCIMBlackBox.v",
+    s"""
+    |module PiDRAMCIMBlackBox(
+    |  input clock,
+    |  input reset,
+    |  input start,
+    |  output reg done,
+    |  input [31:0] op1_addr,
+    |  input [31:0] op2_addr,
+    |  input [31:0] result_addr,
+    |  input [15:0] rows,
+    |  input [15:0] cols,
+    |  input [3:0] op_type,
+    |  input [7:0] data_width
+    |);
+    |
+    |  // State machine for CIM computation
+    |  reg [2:0] state;
+    |  localparam IDLE = 3'b000;
+    |  localparam LOAD = 3'b001;
+    |  localparam COMPUTE = 3'b010;
+    |  localparam STORE = 3'b011;
+    |  localparam DONE = 3'b100;
+    |
+    |  // Cycle counter for computation
+    |  reg [31:0] cycle_count;
+    |  reg [31:0] total_cycles;
+    |  reg running;
+    |
+    |  // Compute total cycles based on operation type and size
+    |  always @(*) begin
+    |    case(op_type)
+    |      4'b0000: // Matrix multiplication: rows * cols * cols
+    |        total_cycles = rows * cols * cols;
+    |      4'b0001: // Element-wise addition: rows * cols
+    |        total_cycles = rows * cols;
+    |      4'b0010: // Element-wise multiplication: rows * cols
+    |        total_cycles = rows * cols;
+    |      default:
+    |        total_cycles = rows * cols;
+    |    endcase
+    |  end
+    |
+    |  always @(posedge clock) begin
+    |    if (reset) begin
+    |      done <= 1'b0;
+    |      state <= IDLE;
+    |      cycle_count <= 32'b0;
+    |      running <= 1'b0;
+    |    end else begin
+    |      case(state)
+    |        IDLE: begin
+    |          done <= 1'b0;
+    |          cycle_count <= 32'b0;
+    |          running <= 1'b0;
+    |          if (start) begin
+    |            state <= LOAD;
+    |            running <= 1'b1;
+    |          end
+    |        end
+    |        LOAD: begin
+    |          // Load phase: simulate data loading from memory
+    |          // In real CIM, this would be handled by the memory controller
+    |          state <= COMPUTE;
+    |        end
+    |        COMPUTE: begin
+    |          // Compute phase: perform CIM computation
+    |          // This simulates the computation cycles in CIM
+    |          if (cycle_count >= total_cycles) begin
+    |            state <= STORE;
+    |            cycle_count <= 32'b0;
+    |          end else begin
+    |            cycle_count <= cycle_count + 1;
+    |          end
+    |        end
+    |        STORE: begin
+    |          // Store phase: write results back
+    |          state <= DONE;
+    |        end
+    |        DONE: begin
+    |          done <= 1'b1;
+    |          running <= 1'b0;
+    |          if (!start) begin
+    |            state <= IDLE;
+    |          end
+    |        end
+    |        default: begin
+    |          state <= IDLE;
+    |        end
+    |      endcase
+    |    end
+    |  end
+    |
+    |endmodule
+    """.stripMargin)
+}
+
+/**
+ * CIM - Compute-in-Memory unit
+ * Implements CIM functionality inspired by PiDRAM's processing-in-memory architecture
+ * Reads operands from scratchpad, performs CIM computation, writes results back
+ */
+class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  val spad_w = b.veclane * b.inputType.getWidth
+
+  val io = IO(new Bundle {
+    // Command interface
+    val cmdReq = Flipped(Decoupled(new BallRsIssue))
+    val cmdResp = Decoupled(new BallRsComplete)
+
+    // Scratchpad SRAM read/write interface
+    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
+    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
+
+    // Accumulator write interface (for partial sums in CIM operations)
+    val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+
+    // Status output
+    val status = new Status
+  })
+
+  // State machine
+  val idle :: sLoadOp1 :: sLoadOp2 :: sCompute :: sWrite :: complete :: Nil = Enum(6)
+  val state = RegInit(idle)
+
+  // Instruction registers
+  val robid_reg = RegInit(0.U(10.W))
+  val op1_addr_reg = RegInit(0.U(10.W))
+  val op1_bank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
+  val op2_addr_reg = RegInit(0.U(10.W))
+  val op2_bank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
+  val result_addr_reg = RegInit(0.U(10.W))
+  val result_bank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
+  val iter_reg = RegInit(0.U(10.W))
+
+  // CIM parameters from special field (40 bits total)
+  // special[15:0] = rows (16 bits)
+  // special[31:16] = cols (16 bits)
+  // special[35:32] = op_type (4 bits): 0=matmul, 1=add, 2=mul
+  val rows_reg = RegInit(0.U(16.W))
+  val cols_reg = RegInit(0.U(16.W))
+  val op_type_reg = RegInit(0.U(4.W))
+
+  // Counters
+  val readCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
+  val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
+  val computeCounter = RegInit(0.U(32.W))
+
+  // PiDRAM CIM BlackBox instance
+  val pidramCIM = Module(new PiDRAMCIMBlackBox)
+  pidramCIM.io.clock := clock
+  pidramCIM.io.reset := reset.asBool
+
+  // Default SRAM assignments
+  for (i <- 0 until b.sp_banks) {
+    io.sramRead(i).req.valid := false.B
+    io.sramRead(i).req.bits.addr := 0.U
+    io.sramRead(i).req.bits.fromDMA := false.B
+    io.sramRead(i).resp.ready := false.B
+
+    io.sramWrite(i).req.valid := false.B
+    io.sramWrite(i).req.bits.addr := 0.U
+    io.sramWrite(i).req.bits.data := 0.U
+    io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(0.U(1.W)))
+  }
+
+  // Default accumulator assignments
+  for (i <- 0 until b.acc_banks) {
+    io.accWrite(i).req.valid := false.B
+    io.accWrite(i).req.bits.addr := 0.U
+    io.accWrite(i).req.bits.data := 0.U
+    io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(0.U(1.W)))
+  }
+
+  // Command interface defaults
+  io.cmdReq.ready := state === idle
+  io.cmdResp.valid := false.B
+  io.cmdResp.bits.rob_id := robid_reg
+
+  // PiDRAM CIM interface defaults
+  pidramCIM.io.start := false.B
+  pidramCIM.io.op1_addr := op1_addr_reg
+  pidramCIM.io.op2_addr := op2_addr_reg
+  pidramCIM.io.result_addr := result_addr_reg
+  pidramCIM.io.rows := rows_reg
+  pidramCIM.io.cols := cols_reg
+  pidramCIM.io.op_type := op_type_reg
+  pidramCIM.io.data_width := b.inputType.getWidth.U
+
+  // Status output
+  io.status.ready := io.cmdReq.ready
+  io.status.valid := io.cmdResp.valid
+  io.status.idle := (state === idle)
+  io.status.init := (state === sLoadOp1) || (state === sLoadOp2)
+  io.status.running := (state === sCompute) || (state === sWrite)
+  io.status.complete := (state === complete) && io.cmdResp.fire
+  io.status.iter := computeCounter
+
+  // State machine
+  switch(state) {
+    is(idle) {
+      when(io.cmdReq.fire) {
+        state := sLoadOp1
+        readCounter := 0.U
+        writeCounter := 0.U
+        computeCounter := 0.U
+
+        robid_reg := io.cmdReq.bits.rob_id
+        op1_addr_reg := io.cmdReq.bits.cmd.op1_bank_addr
+        op1_bank_reg := io.cmdReq.bits.cmd.op1_bank
+        op2_addr_reg := io.cmdReq.bits.cmd.op2_bank_addr
+        op2_bank_reg := io.cmdReq.bits.cmd.op2_bank
+        result_addr_reg := io.cmdReq.bits.cmd.wr_bank_addr
+        result_bank_reg := io.cmdReq.bits.cmd.wr_bank
+        iter_reg := io.cmdReq.bits.cmd.iter
+
+        // Extract CIM parameters from special field (40 bits)
+        // special[15:0] = rows, special[31:16] = cols, special[35:32] = op_type
+        rows_reg := io.cmdReq.bits.cmd.special(15, 0)
+        cols_reg := io.cmdReq.bits.cmd.special(31, 16)
+        op_type_reg := io.cmdReq.bits.cmd.special(35, 32)
+      }
+    }
+
+    is(sLoadOp1) {
+      // Load operand 1 (simplified: load one tile)
+      when(readCounter < iter_reg) {
+        io.sramRead(op1_bank_reg).req.valid := true.B
+        io.sramRead(op1_bank_reg).req.bits.addr := op1_addr_reg + readCounter
+        io.sramRead(op1_bank_reg).req.bits.fromDMA := false.B
+
+        when(io.sramRead(op1_bank_reg).resp.valid) {
+          io.sramRead(op1_bank_reg).resp.ready := true.B
+          readCounter := readCounter + 1.U
+        }
+      }.otherwise {
+        state := sLoadOp2
+        readCounter := 0.U
+      }
+    }
+
+    is(sLoadOp2) {
+      // Load operand 2 (simplified: load one tile)
+      when(readCounter < iter_reg) {
+        io.sramRead(op2_bank_reg).req.valid := true.B
+        io.sramRead(op2_bank_reg).req.bits.addr := op2_addr_reg + readCounter
+        io.sramRead(op2_bank_reg).req.bits.fromDMA := false.B
+
+        when(io.sramRead(op2_bank_reg).resp.valid) {
+          io.sramRead(op2_bank_reg).resp.ready := true.B
+          readCounter := readCounter + 1.U
+        }
+      }.otherwise {
+        state := sCompute
+        readCounter := 0.U
+        pidramCIM.io.start := true.B
+      }
+    }
+
+    is(sCompute) {
+      // Wait for PiDRAM CIM to complete
+      when(pidramCIM.io.done) {
+        state := sWrite
+        writeCounter := 0.U
+      }.otherwise {
+        computeCounter := computeCounter + 1.U
+      }
+    }
+
+    is(sWrite) {
+      // Write result (simplified: write one tile)
+      when(writeCounter < iter_reg) {
+        io.sramWrite(result_bank_reg).req.valid := true.B
+        io.sramWrite(result_bank_reg).req.bits.addr := result_addr_reg + writeCounter
+        // Simplified: write zeros as placeholder (actual output would come from PiDRAM CIM)
+        io.sramWrite(result_bank_reg).req.bits.data := 0.U
+        io.sramWrite(result_bank_reg).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(1.U(1.W)))
+
+        when(io.sramWrite(result_bank_reg).req.ready) {
+          writeCounter := writeCounter + 1.U
+        }
+      }.otherwise {
+        state := complete
+      }
+    }
+
+    is(complete) {
+      io.cmdResp.valid := true.B
+      when(io.cmdResp.ready) {
+        state := idle
+      }
+    }
+  }
+}
