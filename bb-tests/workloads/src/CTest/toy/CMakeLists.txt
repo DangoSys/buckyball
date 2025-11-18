@@ -127,6 +127,11 @@ add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_tiled_matmul tiled_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
+add_cross_platform_test_target(ctest_nnlut_test nnlut_test.c)
+add_cross_platform_test_target(ctest_snn_test snn_test.c)
+add_cross_platform_test_target(ctest_abft_systolic_test abft_systolic_test.c)
+add_cross_platform_test_target(ctest_conv_test conv_test.c)
+add_cross_platform_test_target(ctest_cim_test cim_test.c)
 
 
 # Create library dependency target to ensure all libraries are built first
@@ -162,5 +167,10 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_transpose_matmul
   ctest_tiled_matmul
   ctest_relu_test
+  ctest_nnlut_test
+  ctest_snn_test
+  ctest_abft_systolic_test
+  ctest_conv_test
+  ctest_cim_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

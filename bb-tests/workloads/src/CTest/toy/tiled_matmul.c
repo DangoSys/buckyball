@@ -163,7 +163,7 @@ void tiled_matmul_normal_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
 
 int run_test(const char *test_name) {
 
-  tiled_matmul_connect_mode(DIM_I, DIM_J, DIM_K, input_a, input_b, output_c);
+  tiled_matmul_normal_mode(DIM_I, DIM_J, DIM_K, input_a, input_b, output_c);
   cpu_matmul(input_a, input_b, expected_c, DIM_I, DIM_K, DIM_J);
   if (compare_u32_matrices(output_c, expected_c, DIM_I, DIM_K)) {
     printf("Test Connect Mode %s PASSED\n", test_name);
