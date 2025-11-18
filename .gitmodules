@@ -19,12 +19,12 @@
 [submodule "thirdparty/picker"]
 	path = thirdparty/picker
 	url = https://github.com/XS-MLVP/picker.git
-[submodule "sims/bebop"]
-	path = sims/bebop
-	url = https://github.com/DangoSys/bebop.git
 [submodule "tools/palladium"]
 	path = tools/palladium
 	url = https://github.com/DangoSys/awesome-palladium.git
-[submodule "sims/gem5"]
-	path = sims/gem5
-	url = https://github.com/DangoSys/gem5.git
+[submodule "bebop/thirdparty/gem5"]
+	path = bebop/thirdparty/gem5
+	url = https://github.com/gem5/gem5.git
+[submodule "bebop/thirdparty/riscv-isa-sim"]
+	path = bebop/thirdparty/riscv-isa-sim
+	url = https://github.com/riscv-software-src/riscv-isa-sim

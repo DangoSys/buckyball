@@ -40,7 +40,6 @@ jobs:
           cargo install mdbook-linkcheck
           cargo install mdbook-pandoc
           cargo install mdbook-toc
-          cargo install mdbook-mermaid
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4

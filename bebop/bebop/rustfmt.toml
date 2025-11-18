@@ -1,0 +1,23 @@
+# Rust code formatting configuration file (stable features only)
+# More configuration options: https://rust-lang.github.io/rustfmt/
+
+# Maximum width per line
+max_width = 120
+
+# Hard tab width
+tab_spaces = 2
+
+# Use field initialization shorthand
+use_field_init_shorthand = true
+
+# Use small layout on small arrays
+use_small_heuristics = "Default"
+
+# Match block trailing comma
+match_block_trailing_comma = true
+
+# Newline style
+newline_style = "Unix"
+
+# Edition
+edition = "2021"
