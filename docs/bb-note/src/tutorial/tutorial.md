@@ -1,7 +1,5 @@
 # Tutorial for buckyball
 
-> by -王博涵
->
 > This document will be gradually updated as the author continues to solve and summarize encountered issues.
 
 This document explains the step-by-step process and problem-solving approaches for a complete `buckyball` development workflow. We use building a ball operator module for executing the `relu()` function as an example:
