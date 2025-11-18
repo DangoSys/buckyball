@@ -4,9 +4,6 @@
 [submodule "thirdparty/circt"]
 	path = thirdparty/circt
 	url = https://github.com/llvm/circt.git
-[submodule "compiler"]
-	path = compiler
-	url = https://github.com/DangoSys/bb-compiler
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
@@ -28,3 +25,6 @@
 [submodule "bebop/thirdparty/riscv-isa-sim"]
 	path = bebop/thirdparty/riscv-isa-sim
 	url = https://github.com/riscv-software-src/riscv-isa-sim
+[submodule "compiler/thirdparty/buddy-mlir"]
+	path = compiler/thirdparty/buddy-mlir
+	url = https://github.com/buddy-compiler/buddy-mlir.git

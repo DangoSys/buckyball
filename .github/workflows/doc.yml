@@ -39,7 +39,6 @@ jobs:
           cargo install --version ${MDBOOK_VERSION} mdbook
           cargo install mdbook-linkcheck
           cargo install mdbook-pandoc
-          cargo install mdbook-toc
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4

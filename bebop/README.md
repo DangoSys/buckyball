@@ -21,5 +21,5 @@ source $BUCKYBALL_PATH/env.sh
 
 4. Run the program
 ```
-spike --extension=toy --log-commits $BUCKYBALL_PATH/bb-tests/build/workloads/src/OpTest/gemmini//transpose-baremetal 2>/dev/null
+spike --extension=bebop --log-commits $BUCKYBALL_PATH/bb-tests/build/workloads/src/OpTest/gemmini/transpose-baremetal 2>/dev/null
 ```
