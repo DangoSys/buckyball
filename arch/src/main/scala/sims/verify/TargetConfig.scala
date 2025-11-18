@@ -6,18 +6,20 @@ import org.chipsalliance.cde.config.{Config, Parameters, Field}
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.blink.Blink
 import prototype.vector.VecBall
-import prototype.matrix.MatrixBall
+import prototype.nagisa.matmul.CIMMatmulBall
 import prototype.transpose.TransposeBall
 import prototype.im2col.Im2colBall
 import prototype.relu.ReluBall
+import prototype.nnlut.NNLutBall
 
 // Ball type definitions
 sealed trait BallType
 case object VecBallType extends BallType
-case object MatrixBallType extends BallType
+case object CIMMatmulBallType extends BallType
 case object TransposeBallType extends BallType
 case object Im2colBallType extends BallType
 case object ReluBallType extends BallType
+case object NNLutBallType extends BallType
 
 // Config Key
 case object TargetBallKey extends Field[BallType](VecBallType)
@@ -30,8 +32,8 @@ class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
     case VecBallType =>
       val ball = Module(new VecBall(0))
       io <> ball.io
-    case MatrixBallType =>
-      val ball = Module(new MatrixBall(0))
+    case CIMMatmulBallType =>
+      val ball = Module(new CIMMatmulBall(0))
       io <> ball.io
     case Im2colBallType =>
       val ball = Module(new Im2colBall(0))
@@ -41,6 +43,9 @@ class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Modul
       io <> ball.io
     case ReluBallType =>
       val ball = Module(new ReluBall(0))
+      io <> ball.io
+    case NNLutBallType =>
+      val ball = Module(new NNLutBall(0))
       io <> ball.io
     case _ => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
@@ -72,16 +77,17 @@ object BallTopMain extends App {
   // Select Ball type from command line arguments
   val ballType = if (args.isEmpty) {
     println("Usage: BallTopMain <ball-type> [firtool-opts...]")
-    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball")
+    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball, nnlutball")
     println("Using default: vecball")
     VecBallType
   } else {
     args(0).toLowerCase match {
       case "vecball" => VecBallType
-      case "matrixball" => MatrixBallType
+      case "matrixball" => CIMMatmulBallType
       case "transposeball" => TransposeBallType
       case "im2colball" => Im2colBallType
       case "reluball" => ReluBallType
+      case "nnlutball" => NNLutBallType
       case other =>
         println(s"Unknown ball type: $other, using vecball")
         VecBallType

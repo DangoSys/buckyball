@@ -40,6 +40,11 @@ extern const InstructionConfig im2col_config;
 extern const InstructionConfig transpose_config;
 extern const InstructionConfig relu_config;
 extern const InstructionConfig bbus_config_config;
+extern const InstructionConfig nnlut_config;
+extern const InstructionConfig snn_config;
+extern const InstructionConfig abft_systolic_config;
+extern const InstructionConfig conv_config;
+extern const InstructionConfig cim_config;
 
 // Get instruction configuration by func7
 const InstructionConfig *config(InstructionType func7) {
@@ -62,6 +67,16 @@ const InstructionConfig *config(InstructionType func7) {
     return &relu_config;
   case BBUS_CONFIG_FUNC7:
     return &bbus_config_config;
+  case NNLUT_FUNC7:
+    return &nnlut_config;
+  case SNN_FUNC7:
+    return &snn_config;
+  case ABFT_SYSTOLIC_FUNC7:
+    return &abft_systolic_config;
+  case CONV_FUNC7:
+    return &conv_config;
+  case CIM_FUNC7:
+    return &cim_config;
   case FENCE_FUNC7:
     // FENCE instruction has no parameters, no configuration needed
     return NULL;
