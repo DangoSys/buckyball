@@ -91,18 +91,3 @@ bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-b
 
 ## Quick Tutorial
 You can start to learn ball and blink from [here](https://github.com/DangoSys/buckyball/blob/main/docs/bb-note/src/tutorial/tutorial.md)
-
-## Additional Resources
-
-You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
-
-## Community
-
-Join our discussion on [Slack](https://dangosys-buckyball.slack.com/)
-
-## Contributors
-Thank you for considering contributing to Buckyball!
-
-<a href="https://github.com/DangoSys/buckyball/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=DangoSys/buckyball" />
-</a>
