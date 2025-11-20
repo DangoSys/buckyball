@@ -188,13 +188,13 @@ class BuckyBallConfig extends Config(
 class BuckyBallSystem(implicit p: Parameters) extends LazyModule {
   // Memory domain
   val memdomain = Module(new MemDomain)
-  
-  // Ball domain  
+
+  // Ball domain
   val balldomain = Module(new BallDomain)
-  
+
   // Global RS
   val globalRS = Module(new GlobalReservationStation)
-  
+
   // Connect modules
   balldomain.io.issue <> globalRS.io.ballIssue
   memdomain.io.issue <> globalRS.io.memIssue

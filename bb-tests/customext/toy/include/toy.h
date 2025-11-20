@@ -67,7 +67,7 @@ template <class T>
 T read_from_bank(toy_state_t &toy_state, uint32_t bank, uint32_t row,
                  uint32_t col) {
   uint32_t elem_size = spad_get_bank_row_bytes(bank) /
-                       DIM;  // Element size = row_bytes / elements_per_row
+                       DIM; // Element size = row_bytes / elements_per_row
   uint32_t byte_offset = col * elem_size;
 
   T value = 0;
@@ -86,7 +86,7 @@ template <class T>
 void write_to_bank(toy_state_t &toy_state, uint32_t bank, uint32_t row,
                    uint32_t col, T data) {
   uint32_t elem_size = spad_get_bank_row_bytes(bank) /
-                       DIM;  // Element size = row_bytes / elements_per_row
+                       DIM; // Element size = row_bytes / elements_per_row
   uint32_t byte_offset = col * elem_size;
 
   for (size_t byte_idx = 0; byte_idx < sizeof(T) && byte_idx < elem_size;

@@ -55,15 +55,15 @@ class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters)
   val io = IO(new Bundle {
     // From GlobalDecoder
     val decode = Flipped(Decoupled(new PostGDCmd))
-    
+
     // To Ball Domain
     val ballIssue = Decoupled(new BallRsIssue)
     val ballComplete = Flipped(Decoupled(new BallRsComplete))
-    
+
     // To Mem Domain
     val memIssue = Decoupled(new MemRsIssue)
     val memComplete = Flipped(Decoupled(new MemRsComplete))
-    
+
     // RoCC response
     val resp = Decoupled(new RoCCResponse)
   })

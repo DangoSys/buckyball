@@ -77,32 +77,32 @@ Application Layer (examples, prototypes)
 ```scala
 case class BaseConfig(
   opcodes: OpcodeSet = OpcodeSet.custom3,
-  
+
   inputType: Data,                      // Input data type
   accType: Data,                        // Accumulator data type
-  
+
   veclane: Int = 16,                    // Vector lane width
   accveclane: Int = 4,                  // Accumulator vector lane
-  
+
   tlb_size: Int = 4,                    // TLB size
   rob_entries: Int = 16,                // Number of ROB entries
   rs_out_of_order_response: Boolean = true,  // Out-of-order response support
-  
+
   dma_maxbytes: Int = 64,               // Unused
   dma_buswidth: Int = 128,              // DMA bus width
-  
+
   sp_banks: Int = 4,                    // Scratchpad bank count
   acc_banks: Int = 8,                   // Accumulator bank count
-  
+
   sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
   acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
-  
+
   spAddrLen: Int = 15,                  // SPAD address length
   memAddrLen: Int = 32,                 // Memory address length
-  
+
   numVecPE: Int = 16,                   // Vector PEs per thread
   numVecThread: Int = 16,               // Vector threads
-  
+
   emptyBallid: Int = 5                  // Empty ball ID
 )
 ```
@@ -173,22 +173,22 @@ require(rob_entries > 0 && isPow2(rob_entries), "ROB entries must be power of 2"
 class MemDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   // From Global RS
   val issue = Flipped(Decoupled(new MemRsIssue))
-  
+
   // To Global RS
   val complete = Decoupled(new MemRsComplete)
-  
+
   // Ball domain SRAM interface
   val sramRead = Vec(sp_banks, Flipped(new SramReadIO))
   val sramWrite = Vec(sp_banks, Flipped(new SramWriteIO))
   val accRead = Vec(acc_banks, Flipped(new SramReadIO))
   val accWrite = Vec(acc_banks, Flipped(new SramWriteIO))
-  
+
   // DMA interface
   val dma = new Bundle {
     val read = Decoupled(new BBReadRequest)
     val write = Decoupled(new BBWriteRequest)
   }
-  
+
   // TLB interface
   val tlb = Vec(2, new BBTLBIO)
   val ptw = Vec(2, Flipped(new TLBPTWIO))

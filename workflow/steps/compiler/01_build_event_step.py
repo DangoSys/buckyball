@@ -28,7 +28,14 @@ async def handler(data, context):
     # ==================================================================================
     # Execute operation
     # ==================================================================================
-    command = f"source {bbdir}/env.sh && mkdir -p {bbdir}/compiler/build && cd {bbdir}/compiler/build && ninja -j{os.cpu_count()}"
+    command = f"source {bbdir}/env.sh && mkdir -p {bbdir}/compiler/build"
+    result = stream_run_logger(
+        cmd=command,
+        logger=context.logger,
+        stdout_prefix="compiler build",
+        stderr_prefix="compiler build",
+    )
+    command = f"cd {bbdir}/compiler/build && ninja -j{os.cpu_count()}"
     result = stream_run_logger(
         cmd=command,
         logger=context.logger,

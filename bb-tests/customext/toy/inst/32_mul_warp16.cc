@@ -25,7 +25,8 @@ void toy_t::mul_warp16(reg_t rs1, reg_t rs2) {
   uint32_t acc_bank = spad_get_bank(wr_accaddr);
   uint32_t acc_offset = spad_get_offset(wr_accaddr);
 
-  // iter in outer loop: each iteration performs scalar-vector multiplication and accumulation
+  // iter in outer loop: each iteration performs scalar-vector multiplication
+  // and accumulation
   for (size_t k = 0; k < iter; ++k) {
     for (size_t i = 0; i < DIM; ++i) {
       elem_t a = read_from_bank<elem_t>(toy_state, op1_bank, op1_offset + k, i);

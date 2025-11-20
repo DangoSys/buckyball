@@ -121,15 +121,15 @@ Vector processing architecture supporting SIMD and multi-threading:
 - **bond/**: Binding and synchronization mechanisms
   - Various bond types (VSSBond, VVVBond, VSVBond, VVSBond, VVBond)
   - Operand routing and data distribution
-  
+
 - **op/**: Vector operation implementations
   - AddOp, MulOp, CascadeOp, SelectOp, etc.
   - Arithmetic and logical operations
-  
+
 - **thread/**: Multi-threading support
   - Thread-level parallelism
   - Warp-based execution model
-  
+
 - **warp/**: Thread bundle management (MeshWarp)
   - 16×16 PE mesh for vector operations
   - Parallel execution of vector instructions
@@ -174,7 +174,7 @@ Support rich configuration parameters:
 ### Blink Protocol Interface
 All Ball accelerators implement the Blink protocol interface:
 ```scala
-class CustomBall(implicit b: CustomBuckyBallConfig, p: Parameters) 
+class CustomBall(implicit b: CustomBuckyBallConfig, p: Parameters)
   extends Module with BallRegist {
   val io = IO(new BlinkIO)
   def ballId = <unique_id>.U
@@ -250,17 +250,17 @@ Each accelerator comes with corresponding test cases:
 
 **Example Template**:
 ```scala
-class NewBall(implicit b: CustomBuckyBallConfig, p: Parameters) 
+class NewBall(implicit b: CustomBuckyBallConfig, p: Parameters)
   extends Module with BallRegist {
   val io = IO(new BlinkIO)
-  
+
   def ballId = <unique_id>.U
   def Blink = io
-  
+
   // State machine
   val sIdle :: sCompute :: sComplete :: Nil = Enum(3)
   val state = RegInit(sIdle)
-  
+
   // Computation logic
   switch(state) {
     is(sIdle) {
@@ -284,7 +284,7 @@ class NewBall(implicit b: CustomBuckyBallConfig, p: Parameters)
 
 ### Performance Optimization Tips
 
-1. **Memory Access**: 
+1. **Memory Access**:
    - Group memory accesses to same bank
    - Use streaming access patterns
    - Minimize random access

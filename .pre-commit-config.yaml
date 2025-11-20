@@ -44,3 +44,13 @@ repos:
       - id: check-merge-conflict
       - id: check-yaml
       - id: check-added-large-files
+
+  # # Scala formatting with scalafmt
+  # - repo: local
+  #   hooks:
+  #     - id: scalafmt-check
+  #       name: Check Scala formatting with scalafmt
+  #       entry: bash -c 'cd arch && scalafmt --test'
+  #       language: system
+  #       files: ^arch/.*\.scala$
+  #       pass_filenames: false

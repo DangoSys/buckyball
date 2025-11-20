@@ -46,7 +46,9 @@ async def handler(input_data, context):
     try:
         # 1. Detect document type and prepare prompt
         doc_type = detect_doc_type(target_path)
-        context.logger.info("doc-agent - Document type detected", {"doc_type": doc_type})
+        context.logger.info(
+            "doc-agent - Document type detected", {"doc_type": doc_type}
+        )
 
         prompt_template = load_prompt_template(doc_type, target_path)
         prompt_template = prepare_update_mode_prompt(prompt_template, target_path, mode)
@@ -58,7 +60,9 @@ async def handler(input_data, context):
         output_path = os.path.join(target_path, "README.md")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(full_response)
-        context.logger.info("doc-agent - Documentation saved", {"output_path": output_path})
+        context.logger.info(
+            "doc-agent - Documentation saved", {"output_path": output_path}
+        )
 
         # 4. Send integration event
         await context.emit(
@@ -106,7 +110,9 @@ async def generate_documentation(prompt_template, context):
 
             if response.status_code != 200:
                 error_text = await response.atext()
-                raise Exception(f"API call failed: {response.status_code}, {error_text}")
+                raise Exception(
+                    f"API call failed: {response.status_code}, {error_text}"
+                )
 
             full_response = ""
             async for line in response.aiter_lines():

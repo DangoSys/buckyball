@@ -32,19 +32,19 @@ class MemDomain extends LazyModule {
   val io = IO(new Bundle {
     // From Global RS
     val issue = Flipped(Decoupled(new MemRsIssue))
-    
-    // To Global RS  
+
+    // To Global RS
     val complete = Decoupled(new MemRsComplete)
-    
+
     // Ball domain SRAM access
     val sramRead = Vec(sp_banks, Flipped(new SramReadIO))
     val sramWrite = Vec(sp_banks, Flipped(new SramWriteIO))
     val accRead = Vec(acc_banks, Flipped(new SramReadIO))
     val accWrite = Vec(acc_banks, Flipped(new SramWriteIO))
-    
+
     // DMA
     val dma = new DMABundle
-    
+
     // TLB
     val tlb = Vec(2, new BBTLBIO)
     val ptw = Vec(2, Flipped(new TLBPTWIO))
@@ -62,7 +62,7 @@ Encapsulates Scratchpad and Accumulator, provides interfaces for DMA and Ball do
 - Bank arbitration for parallel access
 - Unified interface for Scratchpad and Accumulator
 
-**Arbitration**: 
+**Arbitration**:
 - Read: Ball domain (execution) has higher priority than DMA (main)
 - Write: Ball domain has higher priority than DMA
 
@@ -131,7 +131,7 @@ Main Memory ←→ DMA Engine ←→ MemController ←→ Scratchpad/Accumulator
 - TLB support for virtual addressing
 - Transaction ID management for multiple outstanding requests
 
-**BBStreamWriter**: Streaming data writer  
+**BBStreamWriter**: Streaming data writer
 - Handles data alignment (16-byte aligned)
 - Generates byte masks for partial writes
 - TLB support
@@ -170,7 +170,7 @@ Main Memory ←→ DMA Engine ←→ MemController ←→ Scratchpad/Accumulator
 case class BaseConfig(
   sp_banks: Int = 4,              // Scratchpad banks
   sp_capacity: CapacityInKilobytes(256),
-  acc_banks: Int = 8,             // Accumulator banks  
+  acc_banks: Int = 8,             // Accumulator banks
   acc_capacity: CapacityInKilobytes(64),
   dma_buswidth: Int = 128,        // DMA bus width
   spAddrLen: Int = 15,            // Address length

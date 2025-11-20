@@ -167,6 +167,7 @@ fi
 if run_step "11"; then
   begin_step "11" "Install pre-commit"
   source ${BBDIR}/env.sh
+  ${BBDIR}/scripts/install-pre-commit.sh
   pip install pre-commit
   cd ${BBDIR}
   pre-commit install

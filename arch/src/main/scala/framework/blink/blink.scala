@@ -10,19 +10,19 @@ import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 // Ball device status bundle
 class Status extends Bundle {
   // device is ready to accept new input
-  val ready = Output(Bool())      
+  val ready = Output(Bool())
   // device has valid output
-  val valid = Output(Bool())      
+  val valid = Output(Bool())
   // no input and no output
-  val idle = Output(Bool())      
+  val idle = Output(Bool())
   // has input but no output
-  val init = Output(Bool())      
+  val init = Output(Bool())
   // started producing output
-  val running = Output(Bool())   
+  val running = Output(Bool())
   // fully finished current batch
-  val complete = Output(Bool())  
+  val complete = Output(Bool())
   // current batch iteration
-  val iter = Output(UInt(32.W))  
+  val iter = Output(UInt(32.W))
 }
 
 // SramReadIO with rob_id

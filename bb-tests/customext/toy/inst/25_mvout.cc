@@ -7,7 +7,8 @@
 // rs1: mem_addr, rs2: sp_addr[spAddrLen-1:0] | rows[spAddrLen+9:spAddrLen]
 // Transfer data according to bank row width
 void toy_t::mvout(reg_t rs1, reg_t rs2) {
-  // Use field extraction functions from library - mvout and mvin use the same field format
+  // Use field extraction functions from library - mvout and mvin use the same
+  // field format
   const InstructionConfig *cfg = config(MVOUT_FUNC7);
 
   auto const base_dram_addr =

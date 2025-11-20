@@ -24,7 +24,7 @@ Top-level generator for Verilator simulation:
 object Elaborate extends App {
   // Select Ball type from command line arguments
   val ballType = args.headOption.getOrElse("toy")
-  
+
   val config = ballType match {
     case "toy" => new ToyBuckyBallConfig
     case "vec" => new WithBlink(TargetBall.VecBall)
@@ -34,9 +34,9 @@ object Elaborate extends App {
     case "relu" => new WithBlink(TargetBall.ReluBall)
     case _ => new ToyBuckyBallConfig
   }
-  
+
   val gen = () => LazyModule(new TestHarness()(config)).module
-  
+
   (new ChiselStage).execute(
     args.tail,  // Remaining args passed to firtool
     Seq(

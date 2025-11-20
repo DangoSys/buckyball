@@ -43,12 +43,8 @@ class SramBank(n: Int, w: Int, aligned_to: Int, single_ported: Boolean) extends 
 
   val mem = SyncReadMem(n, Vec(mask_len, mask_elem))
 
-  // Initialize memory to 0
-  when(reset.asBool) {
-    for (i <- 0 until n) {
-      mem.write(i.U, VecInit(Seq.fill(mask_len)(0.U(mask_elem.getWidth.W))))
-    }
-  }
+  // Note: Memory is not initialized on reset to avoid FIRRTL compilation explosion
+  // Software should initialize memory before use if needed
 
   // Only one request per cycle is allowed
   assert(!(io.read.req.valid && io.write.req.valid), "SramBank: Read and write requests is not allowed at the same time")

@@ -54,10 +54,10 @@ examples/
 object BuckyBallConfigs {
   val defaultConfig = BaseConfig
   val toyConfig = BuckyBallToyConfig.defaultConfig
-  
+
   // Actually used configuration
   val customConfig = toyConfig
-  
+
   type CustomBuckyBallConfig = BaseConfig
 }
 ```
@@ -88,16 +88,16 @@ class ToyBuckyBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Laz
 class ToyBuckyBallModuleImp(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer) {
   // Global Decoder
   val globalDecoder = Module(new GlobalDecoder)
-  
+
   // Global Reservation Station (with ROB)
   val globalRS = Module(new GlobalReservationStation)
-  
+
   // Ball Domain (regular Module, not LazyModule)
   val ballDomain = Module(new BallDomain)
-  
+
   // Memory Domain (complete domain with DMA+TLB+SRAM)
   val memDomain = LazyModule(new MemDomain)
-  
+
   // Connect components
   globalDecoder.io.rocc <> io.cmd
   globalRS.io.decode <> globalDecoder.io.issue
@@ -210,7 +210,7 @@ mill arch.runMain examples.toy.ToyBuckyBall
 
 1. Implement Ball device:
 ```scala
-class MyCustomBall(implicit b: CustomBuckyBallConfig, p: Parameters) 
+class MyCustomBall(implicit b: CustomBuckyBallConfig, p: Parameters)
   extends Module with BallRegist {
   // Implement Ball interfaces
   val io = IO(new BlinkIO)
