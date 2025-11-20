@@ -22,12 +22,22 @@ midasexamples_gcd:
     custom_runtime_config: null
 # DOCREF END: Example HWDB Entry
 
+# alveo_u280_firesim_GemminiBuckyballConfig_no_nic:
+#     bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-24--17-27-06-alveo_u280_firesim_GemminiBuckyballConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimGemminiBuckyballConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+#     deploy_quintuplet_override: null
+#     custom_runtime_config: null
+
 alveo_u280_firesim_GemminiBuckyballConfig_no_nic:
-    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-24--17-27-06-alveo_u280_firesim_GemminiBuckyballConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimGemminiBuckyballConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-11-19--17-01-23-alveo_u280_firesim_GemminiBuckyballConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimGemminiBuckyballConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
     deploy_quintuplet_override: null
     custom_runtime_config: null
 
+# alveo_u280_firesim_BuckyballToyConfig_no_nic:
+#     bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-29--19-18-46-alveo_u280_firesim_BuckyballToyConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimBuckyballToyConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+#     deploy_quintuplet_override: null
+#     custom_runtime_config: null
+
 alveo_u280_firesim_BuckyballToyConfig_no_nic:
-    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-09-29--19-18-46-alveo_u280_firesim_BuckyballToyConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimBuckyballToyConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
+    bitstream_tar: file:///home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/results-build/2025-11-20--00-29-01-alveo_u280_firesim_BuckyballToyConfig_no_nic/cl_xilinx_alveo_u280-firesim-FireSim-sims.firesim.FireSimBuckyballToyConfig-BaseXilinxAlveoU280Config/firesim.tar.gz
     deploy_quintuplet_override: null
     custom_runtime_config: null

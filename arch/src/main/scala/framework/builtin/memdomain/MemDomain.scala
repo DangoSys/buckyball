@@ -47,11 +47,11 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
     // TLB interface - exposed externally for DMA use
     val tlb = Vec(2, Flipped(new BBTLBIO))
 
-    // PTW interface - needs to connect to upper level PTW
-    val ptw = Vec(2, new TLBPTWIO)
+    // PTW interface - needs to connect to upper level PTW (shared TLB has only 1 PTW)
+    val ptw = Vec(1, new TLBPTWIO)
 
-    // TLB exception interface - exposed to upper level for handling flush, etc.
-    val tlbExp = Vec(2, new BBTLBExceptionIO)
+    // TLB exception interface - exposed to upper level for handling flush, etc. (shared TLB has only 1 exp)
+    val tlbExp = Vec(1, new BBTLBExceptionIO)
 
     // Busy signal
     val busy = Output(Bool())
@@ -65,8 +65,8 @@ class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOu
   // Internal MemController (encapsulates spad and acc)
   val memController = Module(new MemController)
 
-  // TLB cluster
-  val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes))
+  // TLB cluster - use shared TLB like Gemmini
+  val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes, use_shared_tlb = true))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder

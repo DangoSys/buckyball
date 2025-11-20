@@ -111,9 +111,9 @@ set_output_delay 0.6 -clock clk1 [all_outputs]
 
 # Same frequency same phase
 
-set_clock_equivalence clk1 
+set_clock_equivalence clk1
 
-# Output load 
+# Output load
 
 set_load 0.08 [all_outputs]
 
@@ -123,12 +123,12 @@ set_clock_transition 0.08 [get_clocks clk1]
 
 
 
-compile_ultra -scan 
+compile_ultra -scan
 write -format ddc -hierarchy -output $REPORT_DIR/design_compiled.ddc
 
 # Generate reports
 report_area -hierarchy -nosplit > $REPORT_DIR/area.rpt
-report_timing > $REPORT_DIR/timing.rpt    
+report_timing > $REPORT_DIR/timing.rpt
 report_power -hierarchy > $REPORT_DIR/power.rpt
 
 # Save netlist
@@ -142,7 +142,7 @@ EOF
 # Step4 Run DC
 #-------------------------------------------------------------------
 echo "Running DC synthesis for design: ${CONFIG}, top module: $TOP_MODULE"
-dc_shell -f $TCL_FILE 
+dc_shell -f $TCL_FILE
 
 # rm $TCL_FILE
 rm -rf ${CYDIR}/alib-52
