@@ -13,6 +13,7 @@ const BankConfig bank_configs[BANK_NUM] = {
 
     // ACC area: bank 4+, starting at address 16384
     // (each ACC bank actually has 1024 rows, but address is aligned to 4096)
-    // bank 4: ACC0, rows 16384-17407 (uses first 1024 rows), accumulator uses 32 bits
+    // bank 4: ACC0, rows 16384-17407 (uses first 1024 rows), accumulator uses
+    // 32 bits
     {"acc0", 16384, 1024, 16, 32},
 };

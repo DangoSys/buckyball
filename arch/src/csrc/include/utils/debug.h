@@ -64,7 +64,8 @@
   _Log(ASNI_FMT("[%s:%d %s] " format, ASNI_FG_BLUE) "\n", __FILE__, __LINE__,  \
        __func__, ##__VA_ARGS__)
 
-// Printf usage: first parameter is color, subsequent parameters (if any) follow in order
+// Printf usage: first parameter is color, subsequent parameters (if any) follow
+// in order
 #define Printf(format, color, ...) _Log(ASNI_FMT(format, color), ##__VA_ARGS__)
 
 // #define assert(cond) \

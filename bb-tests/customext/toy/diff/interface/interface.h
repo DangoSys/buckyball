@@ -22,14 +22,14 @@ typedef struct {
 } vecunit_cmd_t;
 
 typedef struct {
-  uint8_t data[16];  // SRAM data (128 bits)
+  uint8_t data[16]; // SRAM data (128 bits)
   uint32_t addr;
   uint8_t mask;
   bool valid;
 } sram_data_t;
 
 typedef struct {
-  int32_t data[4];  // ACC data (4 x 32 bits)
+  int32_t data[4]; // ACC data (4 x 32 bits)
   uint32_t addr;
   uint8_t mask;
   bool valid;

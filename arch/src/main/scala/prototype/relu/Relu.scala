@@ -161,7 +161,7 @@ class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
         // Prepare next row's write data
         writeDataReg := Cat((0 until b.veclane).reverse.map(j => regArray(writeCounter + 1.U)(j)))
       }
-      
+
     }
 
     is(complete) {

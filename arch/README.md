@@ -297,4 +297,3 @@ arch/
 We welcome contributions! Please see our contributing guidelines and feel free to submit issues and pull requests.
 
 ## 6. License
-

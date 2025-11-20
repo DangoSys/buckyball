@@ -124,11 +124,11 @@ class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters)
 // -----------------------------------------------------------------------------
 // Response generation
 // -----------------------------------------------------------------------------
-  // Response logic:
-  // - Normal instructions: respond immediately
-  // - Fence instructions: respond after ROB is empty
-  io.rs_rocc_o.resp.valid := io.global_decode_cmd_i.fire &&
-                             (!io.global_decode_cmd_i.bits.is_fence || robEmpty)
-  io.rs_rocc_o.resp.bits  := DontCare
-  io.rs_rocc_o.busy       := !rob.io.empty || fenceActive
+  // BuckyBall does not generate RoCC responses for normal instructions
+  // Only performance counter or special commands would generate responses
+  // This matches Gemmini's behavior where io.resp is only connected to counters
+  io.rs_rocc_o.resp.valid     := false.B
+  io.rs_rocc_o.resp.bits.rd   := 0.U
+  io.rs_rocc_o.resp.bits.data := 0.U
+  io.rs_rocc_o.busy           := !rob.io.empty || fenceActive
 }

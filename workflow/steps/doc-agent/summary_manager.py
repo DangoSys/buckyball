@@ -45,7 +45,11 @@ class SummaryManager:
         except ValueError:
             relative_path = docs_file
 
-        title = Path(target_path).parts[-1] if Path(target_path).parts else "Unknown Document"
+        title = (
+            Path(target_path).parts[-1]
+            if Path(target_path).parts
+            else "Unknown Document"
+        )
         indent_level = self._determine_indent_level(target_path, doc_type)
         indent = "\t" * indent_level
 

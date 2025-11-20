@@ -20,7 +20,7 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
-  extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 2) {
+  extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 1) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
 
@@ -61,9 +61,16 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   implicit val edge: TLEdgeOut = outer.id_node.edges.out.head
 
 // -----------------------------------------------------------------------------
-// Frontend: Global Decoder -> Global RS -> BallDomain/MemDomain
+// Frontend: Global Decoder + Global Reservation Station
 // -----------------------------------------------------------------------------
   implicit val b: CustomBuckyBallConfig = outer.b
+
+  // Initialize RoCC response interface early (like Gemmini does with CounterController)
+  // This ensures io.resp has a clear driver from the start
+  io.resp.valid := false.B
+  io.resp.bits.rd := 0.U
+  io.resp.bits.data := 0.U
+
   val gDecoder = Module(new GlobalDecoder)
   gDecoder.io.id_i.valid    := io.cmd.valid
   gDecoder.io.id_i.bits.cmd := io.cmd.bits
@@ -107,19 +114,17 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   outer.reader.module.io.tlb <> memDomain.io.tlb(1)
   outer.writer.module.io.tlb <> memDomain.io.tlb(0)
 
-  // PTW connected to MemDomain's TLB
-  io.ptw <> memDomain.io.ptw
+  // PTW connected to MemDomain's TLB (shared TLB has only 1 PTW port)
+  io.ptw(0) <> memDomain.io.ptw(0)
 
-  // TLB exception handling - MemDomain's tlbExp is now Output, so we read signals from it
+  // TLB exception handling - shared TLB has only 1 exception interface
   // Set flush input signals
-  memDomain.io.tlbExp.foreach { exp =>
-    exp.flush_skip := false.B
-    exp.flush_retry := false.B
-  }
+  memDomain.io.tlbExp(0).flush_skip := false.B
+  memDomain.io.tlbExp(0).flush_retry := false.B
 
   // Flush signals to DMA components (obtained from MemDomain's TLB exceptions)
-  outer.reader.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
-  outer.writer.module.io.flush := memDomain.io.tlbExp.map(_.flush()).reduce(_ || _)
+  outer.reader.module.io.flush := memDomain.io.tlbExp(0).flush()
+  outer.writer.module.io.flush := memDomain.io.tlbExp(0).flush()
 
 // -----------------------------------------------------------------------------
 // Backend: Domain Bridge: BallDomain -> MemDomain
@@ -130,16 +135,10 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
 // ---------------------------------------------------------------------------
-// Return RoCC interface connection - get response from global RS
+// Busy and interrupt signals
 // ---------------------------------------------------------------------------
-  io.resp <> globalRs.io.rs_rocc_o.resp
-
-
-// ---------------------------------------------------------------------------
-// Busy signal - managed by global RS
-// ---------------------------------------------------------------------------
-  //io.busy := globalRs.io.rs_rocc_o.busy
-  io.busy := false.B
+  io.busy := globalRs.io.rs_rocc_o.busy
+  io.interrupt := memDomain.io.tlbExp(0).interrupt
 
 // ---------------------------------------------------------------------------
 // Busy counter to prevent long simulation stalls

@@ -79,7 +79,8 @@ async def handler(input_data, context):
                     )
                 else:
                     context.logger.info(
-                        "doc-integration - SUMMARY.md update skipped", {"message": message}
+                        "doc-integration - SUMMARY.md update skipped",
+                        {"message": message},
                     )
             except Exception as e:
                 context.logger.warning(

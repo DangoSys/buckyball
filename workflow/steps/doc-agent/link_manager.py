@@ -89,7 +89,11 @@ class LinkManager:
                         )
                 except Exception as e:
                     invalid_links.append(
-                        {"link": str(link_path), "target": "Cannot read", "error": str(e)}
+                        {
+                            "link": str(link_path),
+                            "target": "Cannot read",
+                            "error": str(e),
+                        }
                     )
 
         return {

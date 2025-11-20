@@ -11,16 +11,18 @@ static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
 // Used to verify content in SPAD after MVIN
 
 // Expected: provide a ReLU flow similar to TRANSPOSE
-// Currently bbhw/isa does not have bb_relu high-level API, this example uses the
-// same move-in->execute->fence flow as transpose. Need to add bb_relu(op1_addr,
-// wr_addr, iter) wrapper in bbhw implementation (func7=RELU_FUNC7).
+// Currently bbhw/isa does not have bb_relu high-level API, this example uses
+// the same move-in->execute->fence flow as transpose. Need to add
+// bb_relu(op1_addr, wr_addr, iter) wrapper in bbhw implementation
+// (func7=RELU_FUNC7).
 
 void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   // Source operand in spad bank 0, write target in spad bank 1
   uint32_t op1_addr = spad_addr(0, 0);
   uint32_t wr_addr = spad_addr(1, 0);
 
-  // Move input into scratchpad bank0, starting at offset 0, iterate size times row-wise
+  // Move input into scratchpad bank0, starting at offset 0, iterate size times
+  // row-wise
   bb_mvin((uintptr_t)a, op1_addr, size, 1);
   bb_fence();
   // Call ReLU instruction

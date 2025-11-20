@@ -82,7 +82,8 @@ reg_t toy_t::custom3(processor_t *p, rocc_insn_t insn, reg_t xs1, reg_t xs2) {
   return 0;
 }
 
-// Override custom3 function because custom3 function needs processor_t pointer, but rocc_t doesn't have this pointer
+// Override custom3 function because custom3 function needs processor_t pointer,
+// but rocc_t doesn't have this pointer
 static reg_t toy_custom3(processor_t *p, insn_t insn, reg_t pc) {
   toy_t *rocc = static_cast<toy_t *>(p->get_extension("toy"));
   rocc_insn_union_t u;
