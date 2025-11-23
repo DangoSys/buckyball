@@ -6,7 +6,7 @@ import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.frontend.PostGDCmd
-import framework.rocket.RoCCResponseBB
+import freechips.rocketchip.tile.RoCCResponse
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
 class GlobalRobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
@@ -44,7 +44,7 @@ class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters)
 
     // RoCC response
     val rs_rocc_o = new Bundle {
-      val resp  = new DecoupledIO(new RoCCResponseBB()(p))
+      val resp  = new DecoupledIO(new RoCCResponse()(p))
       val busy  = Output(Bool())
     }
   })

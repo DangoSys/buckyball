@@ -229,6 +229,27 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build uvm. "
     )
 
+    # ===== palladium subcommand ===================================================================
+    palladium_parser = subparsers.add_parser("palladium", help="palladium operations")
+    palladium_group = palladium_parser.add_mutually_exclusive_group(required=True)
+    palladium_group.add_argument(
+        "--verilog",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Generate verilog files from chisel. Args example: "[--config sims.palladium.BuckyballToyP2EConfig]"',
+    )
+    # palladium_group.add_argument(
+    #     "--build", action="store_true", help="Build palladium"
+    # )
+    # palladium_group.add_argument(
+    #     "--sim", action="store_true", help="Sim palladium"
+    # )
+    # palladium_group.add_argument(
+    #     "--run", action="store_true", help="Run palladium"
+    # )
+
     # Parse arguments, allowing unknown arguments (so --port can work in subcommands)
     args, unknown = parser.parse_known_args(argv)
 
@@ -377,6 +398,7 @@ if __name__ == "__main__":
             "compiler",
             "funcsim",
             "uvm",
+            "palladium",
         ]:
             api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
             json_data = json.dumps(cmd_info["args"])
@@ -418,6 +440,7 @@ if __name__ == "__main__":
             "compiler",
             "funcsim",
             "uvm",
+            "palladium",
         ]:
             # 1. Start service in background ================================
             # If port is specified, use the specified port; otherwise, automatically assign port

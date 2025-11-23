@@ -8,7 +8,6 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.PostGDCmd
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
-import framework.rocket.RoCCResponseBB
 import examples.toy.balldomain.rs.BallRSModule
 import examples.toy.balldomain.bbus.BBusModule
 

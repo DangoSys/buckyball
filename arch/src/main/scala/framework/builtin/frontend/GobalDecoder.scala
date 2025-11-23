@@ -8,10 +8,8 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import freechips.rocketchip.tile._
 import framework.builtin.memdomain.DISA._
 import framework.builtin.frontend.GISA._
-import framework.rocket.RoCCCommandBB
-
 class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommandBB
+  val cmd = new RoCCCommand
 }
 
 
@@ -26,13 +24,13 @@ class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle
   val is_fence      = Bool()
 
   // Raw instruction information, passed to corresponding domain decoder
-  val raw_cmd       = new RoCCCommandBB
+  val raw_cmd       = new RoCCCommand
 }
 
 class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val id_i = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB
+      val cmd = new RoCCCommand
     }))
     val id_o = Decoupled(new PostGDCmd)
   })
