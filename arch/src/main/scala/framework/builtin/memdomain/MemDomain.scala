@@ -14,8 +14,6 @@ import framework.builtin.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
 import framework.builtin.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
-import framework.rocket.RoCCResponseBB
-
 class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)

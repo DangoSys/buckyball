@@ -50,10 +50,33 @@ class BuckyBallCustomConfig(
 //   }
 // })
 
-
-
 class BuckyBallToyConfig extends Config(
   new BuckyBallCustomConfig ++
   new framework.rocket.WithNBuckyBallCores(1) ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.config.AbstractConfig)
+
+
+
+import freechips.rocketchip.subsystem.{InCluster}
+
+class BuckyBallToy1024Config extends Config(
+  new BuckyBallCustomConfig ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(7)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(6)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(5)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(4)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(3)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(2)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(1)) ++
+  new framework.rocket.WithNBuckyBallCores(128, location=InCluster(0)) ++
+  new freechips.rocketchip.subsystem.WithCluster(7) ++
+  new freechips.rocketchip.subsystem.WithCluster(6) ++
+  new freechips.rocketchip.subsystem.WithCluster(5) ++
+  new freechips.rocketchip.subsystem.WithCluster(4) ++
+  new freechips.rocketchip.subsystem.WithCluster(3) ++
+  new freechips.rocketchip.subsystem.WithCluster(2) ++
+  new freechips.rocketchip.subsystem.WithCluster(1) ++
+  new freechips.rocketchip.subsystem.WithCluster(0) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)

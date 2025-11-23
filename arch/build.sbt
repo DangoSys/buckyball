@@ -35,11 +35,14 @@ lazy val scalaTestSettings =  Seq(
 lazy val chipyard = ProjectRef(file("thirdparty/chipyard"), "chipyard")
 lazy val firechip = ProjectRef(file("thirdparty/chipyard"), "firechip")
 
+// Palladium FPGA subproject (external reference)
+lazy val palladium = ProjectRef(file("../tools/palladium"), "palladium")
+
 // ------------------------------------------------------------------------------
 // Project Settings
 // ------------------------------------------------------------------------------
 lazy val buckyball = (project in file("."))
-  .dependsOn(chipyard, firechip)
+  .dependsOn(chipyard, firechip, palladium)
   .settings(
     name := "buckyball",
     organization := "com.buckyball",

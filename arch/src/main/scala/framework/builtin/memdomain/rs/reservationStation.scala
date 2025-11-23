@@ -6,9 +6,6 @@ import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import framework.builtin.memdomain._
-import framework.rocket.RoCCResponseBB
-
-
 // Mem domain issue interface - includes global rob_id
 class MemRsIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
   val cmd = new MemDecodeCmd
