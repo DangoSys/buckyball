@@ -32,7 +32,8 @@ class GlobalROB(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module
   })
 
   // Circular ROB structure
-  val robEntries = Reg(Vec(b.rob_entries, new GlobalRobEntry))
+  // Initialize to zero to avoid X states in FPGA (critical for FireSim)
+  val robEntries = RegInit(VecInit(Seq.fill(b.rob_entries)(0.U.asTypeOf(new GlobalRobEntry))))
   // Whether entry is valid
   val robValid   = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
   // Whether entry is issued

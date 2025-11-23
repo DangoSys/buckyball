@@ -11,8 +11,9 @@ import framework.builtin.BaseConfig
 import examples.BuckyBallConfigs.CustomBuckyBallConfig
 import examples.CustomBuckyBallConfig
 
-import framework.rocket.BuildRoCCBB
-import framework.rocket.MultiRoCCKeyBB
+// Use standard BuildRoCC instead of BuildRoCCBB
+// import framework.rocket.BuildRoCCBB
+// import framework.rocket.MultiRoCCKeyBB
 
 
 
@@ -28,7 +29,7 @@ object BuckyBallToyConfig {
 class BuckyBallCustomConfig(
   buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
 ) extends Config((site, here, up) => {
-  case BuildRoCCBB => up(BuildRoCCBB) ++ Seq(
+  case BuildRoCC => up(BuildRoCC) ++ Seq(
     (p: Parameters) => {
       implicit val q = p
       val buckyball = LazyModule(new ToyBuckyBall(buckyballConfig))
@@ -37,22 +38,22 @@ class BuckyBallCustomConfig(
   )
 })
 
-class WithMultiRoCCToyBuckyBall(harts: Int*)(
-  buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
-) extends Config((site, here, up) => {
-    case MultiRoCCKeyBB => up(MultiRoCCKeyBB, site) ++ harts.distinct.map { i =>
-    (i -> Seq((p: Parameters) => {
-      implicit val q = p
-      val buckyball = LazyModule(new ToyBuckyBall(buckyballConfig))
-      buckyball
-    }))
-  }
-})
+// class WithMultiRoCCToyBuckyBall(harts: Int*)(
+//   buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
+// ) extends Config((site, here, up) => {
+//     case MultiRoCCKeyBB => up(MultiRoCCKeyBB, site) ++ harts.distinct.map { i =>
+//     (i -> Seq((p: Parameters) => {
+//       implicit val q = p
+//       val buckyball = LazyModule(new ToyBuckyBall(buckyballConfig))
+//       buckyball
+//     }))
+//   }
+// })
 
 
 
 class BuckyBallToyConfig extends Config(
-  new framework.rocket.WithNBuckyBallCores(1) ++
   new BuckyBallCustomConfig ++
+  new framework.rocket.WithNBuckyBallCores(1) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)

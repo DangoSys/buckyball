@@ -35,7 +35,8 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   // Only use FIFO + completion status table, only enqueue/dequeue, sequential execution and sequential completion
   val robFifo = Module(new Queue(new RobEntry, b.rob_entries))
   val robIdCounter = RegInit(0.U(log2Up(b.rob_entries).W))
-  val robTable = Reg(Vec(b.rob_entries, Bool()))
+  // Initialize to false to avoid X states in FPGA
+  val robTable = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
 
   // Initialize completion status table
   for (i <- 0 until b.rob_entries) {

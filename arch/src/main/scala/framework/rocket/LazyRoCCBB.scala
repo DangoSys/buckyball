@@ -92,8 +92,8 @@ trait HasLazyRoCCModuleBB extends CanHavePTWModule
     with HasCoreParameters { this: RocketTileModuleImpBB =>
 
   val (respArb, cmdRouter) = if(outer.roccs.nonEmpty) {
-    val respArb = Module(new RRArbiter(new RoCCResponseBB()(outer.p), outer.roccs.size))
-    val cmdRouter = Module(new RoccCommandRouterBB(outer.roccs.map(_.opcodes))(outer.p))
+    val respArb = Module(new RRArbiter(new RoCCResponse()(outer.p), outer.roccs.size))
+    val cmdRouter = Module(new RoccCommandRouter(outer.roccs.map(_.opcodes))(outer.p))
     outer.roccs.zipWithIndex.foreach { case (rocc, i) =>
       rocc.module.io.ptw ++=: ptwPorts
       rocc.module.io.cmd <> cmdRouter.io.out(i)
