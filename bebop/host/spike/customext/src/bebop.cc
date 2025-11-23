@@ -1,5 +1,5 @@
 #include "bebop.h"
-#include "socket.h"
+#include "ipc/socket.h"
 #include <cassert>
 #include <cstdio>
 #include <riscv/mmu.h>
@@ -47,8 +47,43 @@ reg_t bebop_t::CUSTOMFN(XCUSTOM_ACC)(rocc_insn_t insn, reg_t xs1, reg_t xs2) {
     bebop_state.reset();
   }
 
-  // Set processor for socket client (for DMA operations)
-  socket_client->set_processor(p);
+  auto read_cb = [this](uint64_t addr, uint32_t size) -> uint64_t {
+    switch (size) {
+    case 1:
+      return read_from_dram<uint8_t>(addr);
+    case 2:
+      return read_from_dram<uint16_t>(addr);
+    case 4:
+      return read_from_dram<uint32_t>(addr);
+    case 8:
+      return read_from_dram<uint64_t>(addr);
+    default:
+      fprintf(stderr, "bebop: Invalid DMA read size %u\n", size);
+      return 0;
+    }
+  };
+
+  auto write_cb = [this](uint64_t addr, uint64_t data, uint32_t size) {
+    switch (size) {
+    case 1:
+      write_to_dram<uint8_t>(addr, static_cast<uint8_t>(data));
+      break;
+    case 2:
+      write_to_dram<uint16_t>(addr, static_cast<uint16_t>(data));
+      break;
+    case 4:
+      write_to_dram<uint32_t>(addr, static_cast<uint32_t>(data));
+      break;
+    case 8:
+      write_to_dram<uint64_t>(addr, data);
+      break;
+    default:
+      fprintf(stderr, "bebop: Invalid DMA write size %u\n", size);
+      break;
+    }
+  };
+
+  socket_client->set_dma_callbacks(read_cb, write_cb);
 
   // Send socket request and wait for response
   dprintf("bebop: Processing custom instruction with funct=%d\n", insn.funct);

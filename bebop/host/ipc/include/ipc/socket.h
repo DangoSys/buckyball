@@ -1,7 +1,8 @@
-#ifndef _SOCKET_H
-#define _SOCKET_H
+#ifndef IPC_SOCKET_H_
+#define IPC_SOCKET_H_
 
 #include <cstdint>
+#include <functional>
 
 // Socket configuration
 #define SOCKET_PORT 9999
@@ -67,8 +68,9 @@ struct dma_write_resp_t {
   uint64_t reserved;   // Reserved for future use
 };
 
-// Forward declaration
-class processor_t;
+using dma_read_cb_t = std::function<uint64_t(uint64_t addr, uint32_t size)>;
+using dma_write_cb_t =
+    std::function<void(uint64_t addr, uint64_t data, uint32_t size)>;
 
 // Socket client class
 class SocketClient {
@@ -82,8 +84,8 @@ public:
   // Close socket connection
   void close();
 
-  // Set processor for DMA operations
-  void set_processor(processor_t *p) { this->p = p; }
+  // Register DMA callbacks
+  void set_dma_callbacks(dma_read_cb_t read_cb, dma_write_cb_t write_cb);
 
   // Send request and wait for response (handles DMA requests during wait)
   uint64_t send_and_wait(uint32_t funct, uint64_t xs1, uint64_t xs2);
@@ -94,7 +96,8 @@ public:
 private:
   int sock_fd;
   bool socket_initialized;
-  processor_t *p;
+  dma_read_cb_t dma_read_cb;
+  dma_write_cb_t dma_write_cb;
 
   // CMD path functions
   bool send_cmd_request(const cmd_req_t &req);
@@ -114,4 +117,4 @@ private:
   void handle_dma_write(uint64_t addr, uint64_t data, uint32_t size);
 };
 
-#endif // _SOCKET_H
+#endif // IPC_SOCKET_H_

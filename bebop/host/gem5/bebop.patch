@@ -1,0 +1,211 @@
+diff --git a/SConstruct b/SConstruct
+index a5802ad371..b3008bd565 100755
+--- a/SConstruct
++++ b/SConstruct
+@@ -198,6 +198,15 @@ main = Environment(tools=[
+ main.Tool(SCons.Tool.FindTool(['gcc', 'clang'], main))
+ main.Tool(SCons.Tool.FindTool(['g++', 'clang++'], main))
+
++bebop_ipc_lib = environ.get('BEBOP_IPC_LIB')
++bebop_ipc_include = environ.get('BEBOP_IPC_INCLUDE')
++if bebop_ipc_lib:
++    print(f'Linking with bebop IPC library: {bebop_ipc_lib}')
++    main.Append(_LIBFLAGS=[bebop_ipc_lib])
++if bebop_ipc_include:
++    print(f'Adding bebop IPC include path: {bebop_ipc_include}')
++    main.Append(CPPPATH=[bebop_ipc_include])
++
+ Export('main')
+
+ from gem5_scons.util import get_termcap
+diff --git a/src/arch/riscv/faults.cc b/src/arch/riscv/faults.cc
+index dc312b5f67..4e58948316 100644
+--- a/src/arch/riscv/faults.cc
++++ b/src/arch/riscv/faults.cc
+@@ -31,6 +31,7 @@
+
+ #include "arch/riscv/faults.hh"
+
++#include "arch/riscv/insts/custom.hh"
+ #include "arch/riscv/insts/static_inst.hh"
+ #include "arch/riscv/isa.hh"
+ #include "arch/riscv/mmu.hh"
+@@ -286,6 +287,12 @@ void
+ UnknownInstFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
+ {
+     auto *rsi = static_cast<RiscvStaticInst *>(inst.get());
++    const uint8_t opcode = rsi->machInst.opcode;
++    // Handle custom-3 (opcode 0x7b) which conflicts with M5Op
++    if (opcode == 0x7b) {
++        handleRiscvCustomInstruction(tc, rsi->machInst, inst.get());
++        return;
++    }
+     panic("Unknown instruction 0x%08x at pc %s", rsi->machInst,
+         tc->pcState());
+ }
+diff --git a/src/arch/riscv/insts/SConscript b/src/arch/riscv/insts/SConscript
+index 9694cc1405..8449eb7c80 100644
+--- a/src/arch/riscv/insts/SConscript
++++ b/src/arch/riscv/insts/SConscript
+@@ -33,6 +33,7 @@ if not env['CONF']['USE_RISCV_ISA']:
+ Source('amo.cc', tags=['riscv isa'])
+ Source('bs.cc', tags=['riscv isa'])
+ Source('compressed.cc', tags=['riscv isa'])
++Source('custom.cc', tags=['riscv isa'])
+ Source('mem.cc', tags=['riscv isa'])
+ Source('standard.cc', tags=['riscv isa'])
+ Source('static_inst.cc', tags=['riscv isa'])
+diff --git a/src/arch/riscv/insts/custom.cc b/src/arch/riscv/insts/custom.cc
+new file mode 100644
+index 0000000000..e06548d6ec
+--- /dev/null
++++ b/src/arch/riscv/insts/custom.cc
+@@ -0,0 +1,83 @@
++#include "arch/riscv/insts/custom.hh"
++
++#include "ipc/socket.h"
++#include "arch/riscv/insts/static_inst.hh"
++#include "arch/riscv/pcstate.hh"
++#include "arch/riscv/regs/int.hh"
++#include "debug/Faults.hh"
++#include "mem/se_translating_port_proxy.hh"
++#include "sim/debug.hh"
++
++namespace gem5
++{
++
++namespace RiscvISA
++{
++namespace
++{
++
++struct RoCCInstFields {
++  unsigned opcode : 7;
++  unsigned rd : 5;
++  unsigned xs2 : 1;
++  unsigned xs1 : 1;
++  unsigned xd : 1;
++  unsigned rs1 : 5;
++  unsigned rs2 : 5;
++  unsigned funct : 7;
++};
++
++union RoCCInst {
++  RoCCInstFields r;
++  uint32_t bits;
++};
++
++SocketClient &getSocketClient() {
++  static SocketClient client;
++  return client;
++}
++
++} // anonymous namespace
++
++void
++handleRiscvCustomInstruction(ThreadContext *tc, ExtMachInst instBits,
++                             const StaticInst *inst)
++{
++  RoCCInst rocc{};
++  rocc.bits = instBits.instBits;
++
++  RegVal xs1 = rocc.r.xs1 ?
++                   tc->getReg(intRegClass[rocc.r.rs1]) :
++                   static_cast<RegVal>(-1);
++  RegVal xs2 = rocc.r.xs2 ?
++                   tc->getReg(intRegClass[rocc.r.rs2]) :
++                   static_cast<RegVal>(-1);
++
++  auto read_cb = [tc](uint64_t addr, uint32_t size) -> uint64_t {
++    SETranslatingPortProxy proxy(tc);
++    uint64_t value = 0;
++    proxy.readBlob(addr, reinterpret_cast<uint8_t *>(&value), size);
++    return value;
++  };
++
++  auto write_cb = [tc](uint64_t addr, uint64_t data, uint32_t size) {
++    SETranslatingPortProxy proxy(tc);
++    proxy.writeBlob(addr, reinterpret_cast<const uint8_t *>(&data), size);
++  };
++
++  auto &client = getSocketClient();
++  client.set_dma_callbacks(read_cb, write_cb);
++  uint64_t result = client.send_and_wait(rocc.r.funct, xs1, xs2);
++  client.set_dma_callbacks(dma_read_cb_t(), dma_write_cb_t());
++
++  if (rocc.r.xd)
++    tc->setReg(intRegClass[rocc.r.rd], result);
++
++  auto pc_state = tc->pcState().as<PCState>();
++  inst->advancePC(pc_state);
++  tc->pcState(pc_state);
++}
++
++} // namespace RiscvISA
++} // namespace gem5
++
+diff --git a/src/arch/riscv/insts/custom.hh b/src/arch/riscv/insts/custom.hh
+new file mode 100644
+index 0000000000..3e09b67199
+--- /dev/null
++++ b/src/arch/riscv/insts/custom.hh
+@@ -0,0 +1,20 @@
++#ifndef __ARCH_RISCV_CUSTOM_INST_HH__
++#define __ARCH_RISCV_CUSTOM_INST_HH__
++
++#include "arch/riscv/types.hh"
++#include "cpu/static_inst.hh"
++#include "cpu/thread_context.hh"
++
++namespace gem5
++{
++
++namespace RiscvISA
++{
++
++void handleRiscvCustomInstruction(ThreadContext *tc, ExtMachInst instBits,
++                                  const StaticInst *inst);
++
++} // namespace RiscvISA
++} // namespace gem5
++
++#endif // __ARCH_RISCV_CUSTOM_INST_HH__
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index 6235b34aee..678c3db2ea 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -6360,6 +6360,22 @@ decode QUADRANT default Unknown::unknown() {
+             }
+         }
+
++        // Custom instructions (bebop extension)
++        // custom-0 (opcode 0x0b), custom-1 (opcode 0x2b), custom-2 (opcode 0x5b)
++        format ROp {
++            0x02: bebop_custom0({{
++                handleRiscvCustomInstruction(xc->tcBase(), machInst, this);
++            }});
++            0x0a: bebop_custom1({{
++                handleRiscvCustomInstruction(xc->tcBase(), machInst, this);
++            }});
++            0x16: bebop_custom2({{
++                handleRiscvCustomInstruction(xc->tcBase(), machInst, this);
++            }});
++        }
++
++        // M5Op uses 0x1e which conflicts with custom-3 (opcode 0x7b)
++        // Keep M5Op for now, custom-3 handled in unknown fault if needed
+         0x1e: M5Op::M5Op();
+     }
+ }
+diff --git a/src/arch/riscv/isa/includes.isa b/src/arch/riscv/isa/includes.isa
+index b4be0e4ac6..d4f27fb845 100644
+--- a/src/arch/riscv/isa/includes.isa
++++ b/src/arch/riscv/isa/includes.isa
+@@ -53,6 +53,7 @@ output header {{
+ #include "arch/riscv/insts/pseudo.hh"
+ #include "arch/riscv/insts/standard.hh"
+ #include "arch/riscv/insts/static_inst.hh"
++#include "arch/riscv/insts/custom.hh"
+ #include "arch/riscv/insts/unknown.hh"
+ #include "arch/riscv/insts/vector.hh"
+ #include "arch/riscv/insts/zcmp.hh"

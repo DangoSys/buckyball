@@ -1,7 +1,5 @@
-#include "socket.h"
+#include "ipc/socket.h"
 #include <cstdio>
-#include <riscv/mmu.h>
-#include <riscv/processor.h>
 #include <sys/socket.h>
 
 // DMA path: receive DMA read request
@@ -85,32 +83,11 @@ bool SocketClient::send_dma_write_response(const dma_write_resp_t &resp) {
 
 // DMA handlers
 uint64_t SocketClient::handle_dma_read(uint64_t addr, uint32_t size) {
-  if (!p) {
-    fprintf(stderr, "Socket: Processor not set for DMA read\n");
+  if (!dma_read_cb) {
+    fprintf(stderr, "Socket: DMA read callback not set\n");
     return 0;
   }
-
-  uint64_t value = 0;
-  mmu_t *mmu = p->get_mmu();
-
-  switch (size) {
-  case 1:
-    value = mmu->load<uint8_t>(addr);
-    break;
-  case 2:
-    value = mmu->load<uint16_t>(addr);
-    break;
-  case 4:
-    value = mmu->load<uint32_t>(addr);
-    break;
-  case 8:
-    value = mmu->load<uint64_t>(addr);
-    break;
-  default:
-    fprintf(stderr, "Socket: Invalid DMA read size %d\n", size);
-    return 0;
-  }
-
+  uint64_t value = dma_read_cb(addr, size);
   printf("Socket: DMA read addr=0x%lx size=%d value=0x%lx\n", addr, size,
          value);
   return value;
@@ -118,30 +95,10 @@ uint64_t SocketClient::handle_dma_read(uint64_t addr, uint32_t size) {
 
 void SocketClient::handle_dma_write(uint64_t addr, uint64_t data,
                                     uint32_t size) {
-  if (!p) {
-    fprintf(stderr, "Socket: Processor not set for DMA write\n");
+  if (!dma_write_cb) {
+    fprintf(stderr, "Socket: DMA write callback not set\n");
     return;
   }
-
-  mmu_t *mmu = p->get_mmu();
-
-  switch (size) {
-  case 1:
-    mmu->store<uint8_t>(addr, (uint8_t)data);
-    break;
-  case 2:
-    mmu->store<uint16_t>(addr, (uint16_t)data);
-    break;
-  case 4:
-    mmu->store<uint32_t>(addr, (uint32_t)data);
-    break;
-  case 8:
-    mmu->store<uint64_t>(addr, data);
-    break;
-  default:
-    fprintf(stderr, "Socket: Invalid DMA write size %d\n", size);
-    return;
-  }
-
+  dma_write_cb(addr, data, size);
   printf("Socket: DMA write addr=0x%lx size=%d data=0x%lx\n", addr, size, data);
 }

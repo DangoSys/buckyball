@@ -19,12 +19,12 @@
 [submodule "tools/palladium"]
 	path = tools/palladium
 	url = https://github.com/DangoSys/awesome-palladium.git
-[submodule "bebop/thirdparty/gem5"]
-	path = bebop/thirdparty/gem5
-	url = https://github.com/gem5/gem5.git
-[submodule "bebop/thirdparty/riscv-isa-sim"]
-	path = bebop/thirdparty/riscv-isa-sim
-	url = https://github.com/riscv-software-src/riscv-isa-sim
 [submodule "compiler/thirdparty/buddy-mlir"]
 	path = compiler/thirdparty/buddy-mlir
 	url = https://github.com/buddy-compiler/buddy-mlir.git
+[submodule "bebop/host/gem5/gem5"]
+	path = bebop/host/gem5/gem5
+	url = https://github.com/gem5/gem5.git
+[submodule "bebop/host/spike/riscv-isa-sim"]
+	path = bebop/host/spike/riscv-isa-sim
+	url = https://github.com/riscv-software-src/riscv-isa-sim

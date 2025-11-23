@@ -1,4 +1,4 @@
-#include "socket.h"
+#include "ipc/socket.h"
 #include <arpa/inet.h>
 #include <cstdio>
 #include <cstring>
@@ -6,8 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-SocketClient::SocketClient()
-    : sock_fd(-1), socket_initialized(false), p(nullptr) {}
+SocketClient::SocketClient() : sock_fd(-1), socket_initialized(false) {}
 
 SocketClient::~SocketClient() { close(); }
 
@@ -54,6 +53,12 @@ void SocketClient::close() {
     sock_fd = -1;
   }
   socket_initialized = false;
+}
+
+void SocketClient::set_dma_callbacks(dma_read_cb_t read_cb,
+                                     dma_write_cb_t write_cb) {
+  dma_read_cb = std::move(read_cb);
+  dma_write_cb = std::move(write_cb);
 }
 
 // Receive message header (peek first to get type)
