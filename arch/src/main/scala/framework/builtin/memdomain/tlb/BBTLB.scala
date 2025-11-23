@@ -22,6 +22,7 @@ class BBTLBExceptionIO extends Bundle {
 
   def flush(dummy: Int = 0): Bool = flush_retry || flush_skip
 }
+
 class BBTLB(entries: Int, maxSize: Int)(implicit edge: TLEdgeOut, p: Parameters)
   extends CoreModule {
 
@@ -52,9 +53,20 @@ class BBTLB(entries: Int, maxSize: Int)(implicit edge: TLEdgeOut, p: Parameters)
 
   io.ptw <> tlb.io.ptw
   tlb.io.ptw.status := io.req.bits.status
-  val exception = io.req.valid && Mux(io.req.bits.tlb_req.cmd === M_XRD, tlb.io.resp.pf.ld || tlb.io.resp.ae.ld, tlb.io.resp.pf.st || tlb.io.resp.ae.st)
-  when (exception) { interrupt := true.B }
-  when (interrupt && tlb.io.sfence.fire) {
+
+  val exception = io.req.valid && Mux(io.req.bits.tlb_req.cmd === M_XRD,
+    tlb.io.resp.pf.ld || tlb.io.resp.ae.ld || tlb.io.resp.gf.ld,
+    tlb.io.resp.pf.st || tlb.io.resp.ae.st || tlb.io.resp.gf.st)
+
+  when (exception) {
+    interrupt := true.B
+  }
+
+  when (interrupt && io.exp.flush_skip) {
+    interrupt := false.B
+  }
+
+  when (interrupt && io.exp.flush_retry) {
     interrupt := false.B
   }
 

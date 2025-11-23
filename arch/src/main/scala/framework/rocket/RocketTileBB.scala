@@ -22,7 +22,7 @@ import freechips.rocketchip.interrupts.IntIdentityNode
 import freechips.rocketchip.tilelink.{TLIdentityNode, TLBuffer}
 import freechips.rocketchip.rocket.{
   RocketCoreParams, ICacheParams, DCacheParams, BTBParams, HasHellaCache,
-  HasICacheFrontend, ScratchpadSlavePort, HasICacheFrontendModule
+  HasICacheFrontend, ScratchpadSlavePort, HasICacheFrontendModule, Rocket
 }
 import freechips.rocketchip.subsystem.HierarchicalElementCrossingParamsLike
 import freechips.rocketchip.prci.{ClockSinkParameters, RationalCrossing, ClockCrossingType}
@@ -61,7 +61,7 @@ class RocketTileBB private(
     extends BaseTile(rocketParams, crossing, lookup, q)
     with SinksExternalInterrupts
     with SourcesExternalNotifications
-    with HasLazyRoCCBB  // implies CanHaveSharedFPU with CanHavePTW with HasHellaCache
+    with HasLazyRoCC  // Use standard HasLazyRoCC instead of HasLazyRoCCBB
     with HasHellaCache
     with HasICacheFrontend
 {
@@ -142,20 +142,20 @@ class RocketTileBB private(
 
 class RocketTileModuleImpBB(outer: RocketTileBB) extends BaseTileModuleImp(outer)
     with HasFpuOptBB
-    with HasLazyRoCCModuleBB
+    with HasLazyRoCCModuleBB  // Use HasLazyRoCCModuleBB but with standard RoCC types
     with HasICacheFrontendModule {
   Annotated.params(this, outer.rocketParams)
 
-  // val core = Module(new RocketBB(outer)(outer.p))
+  val core = Module(new RocketBB(outer)(outer.p))
   // Create RocketBB with modified parameters that include BuildRoCCBB as BuildRoCC
   // We override the useRoCC and dcacheArbPorts to include BuildRoCCBB
   // if we override after in RocketTileBB it will be too late
   // that other modules like dcache will use the original parameters
   // =================================================================================
-  implicit val modifiedP: Parameters = outer.p.alterMap(Map(
-    BuildRoCC -> (outer.p(BuildRoCC) ++ outer.p(BuildRoCCBB))
-  ))
-  val core = Module(new RocketBB(outer)(modifiedP))
+  // implicit val modifiedP: Parameters = outer.p.alterMap(Map(
+  //   BuildRoCC -> (outer.p(BuildRoCC) ++ outer.p(BuildRoCCBB))
+  // ))
+  // val core = Module(new RocketBB(outer)(modifiedP))
   // =================================================================================
   outer.vector_unit.foreach { v =>
     core.io.vector.get <> v.module.io.core

@@ -43,7 +43,8 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   })
 
   // Circular ROB structure
-  val robEntries = Reg(Vec(b.rob_entries, new RobEntry))
+  // Initialize to zero to avoid X states in FPGA
+  val robEntries = RegInit(VecInit(Seq.fill(b.rob_entries)(0.U.asTypeOf(new RobEntry))))
   // Whether entry is valid
   val robValid   = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
   // Whether entry is issued

@@ -11,7 +11,7 @@ import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.tile._
 import freechips.rocketchip.tilelink._
 
-import framework.rocket.{LazyRoCCBB, LazyRoCCModuleImpBB, RoCCResponseBB}
+import freechips.rocketchip.tile.{LazyRoCC, LazyRoCCModuleImp}
 import framework.builtin.frontend.GlobalDecoder
 import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
@@ -20,7 +20,7 @@ import examples.BuckyBallConfigs.CustomBuckyBallConfig
 
 
 class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
-  extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 1) {
+  extends LazyRoCC (opcodes = b.opcodes, nPTWPorts = 1) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
 
@@ -49,7 +49,7 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   val node = tlNode
 }
 
-class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
+class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
   with HasCoreParameters {
   import outer.b._
 
@@ -64,12 +64,6 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
 // Frontend: Global Decoder + Global Reservation Station
 // -----------------------------------------------------------------------------
   implicit val b: CustomBuckyBallConfig = outer.b
-
-  // Initialize RoCC response interface early (like Gemmini does with CounterController)
-  // This ensures io.resp has a clear driver from the start
-  io.resp.valid := false.B
-  io.resp.bits.rd := 0.U
-  io.resp.bits.data := 0.U
 
   val gDecoder = Module(new GlobalDecoder)
   gDecoder.io.id_i.valid    := io.cmd.valid
@@ -135,8 +129,9 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImpBB(outer)
   ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
 // ---------------------------------------------------------------------------
-// Busy and interrupt signals
+// RoCC response and status signals
 // ---------------------------------------------------------------------------
+  io.resp <> globalRs.io.rs_rocc_o.resp
   io.busy := globalRs.io.rs_rocc_o.busy
   io.interrupt := memDomain.io.tlbExp(0).interrupt
 
