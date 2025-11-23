@@ -105,7 +105,7 @@ if run_step "2"; then
   cp ${BBDIR}/arch/thirdparty/chipyard/env.sh ${BBDIR}/env.sh
   replace_content ${BBDIR}/env.sh build-setup-conda "conda activate ${CONDA_ENV_NAME}
 source ${BBDIR}/arch/thirdparty/chipyard/scripts/fix-open-files.sh"
-  replace_content ${BBDIR}/env.sh bb-dir-helper "BB_DIR=${BBDIR}"
+  replace_content ${BBDIR}/env.sh bb-dir-helper "export BB_DIR=${BBDIR}"
 fi
 
 if run_step "3"; then
@@ -118,7 +118,8 @@ fi
 if run_step "4"; then
   begin_step "4" "Install bebop"
   source ${BBDIR}/env.sh
-  ${BBDIR}/scripts/install-bebop.sh
+  # ${BBDIR}/scripts/install-bebop.sh
+  echo "bebop is not installed"
 fi
 
 if run_step "5"; then
