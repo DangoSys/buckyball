@@ -16,9 +16,6 @@
 [submodule "thirdparty/picker"]
 	path = thirdparty/picker
 	url = https://github.com/XS-MLVP/picker.git
-[submodule "compiler/thirdparty/buddy-mlir"]
-	path = compiler/thirdparty/buddy-mlir
-	url = https://github.com/buddy-compiler/buddy-mlir.git
 [submodule "bebop/host/gem5/gem5"]
 	path = bebop/host/gem5/gem5
 	url = https://github.com/gem5/gem5.git
@@ -28,3 +25,6 @@
 [submodule "tools/palladium"]
 	path = tools/palladium
 	url = https://github.com/SEU-ACAL/awesome-palladium.git
+[submodule "compiler"]
+	path = compiler
+	url = https://github.com/DangoSys/bb-compiler.git
