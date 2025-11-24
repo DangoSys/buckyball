@@ -1,11 +1,11 @@
-# BuckyBall Architecture Design Overview
+# Buckyball Architecture Design Overview
 
-The BuckyBall architecture module contains complete hardware design implementations, based on the RISC-V instruction set architecture, developed using the Scala/Chisel hardware description language. The architecture design follows modular and extensible principles, supporting various configurations and custom extensions.
+The Buckyball architecture module contains complete hardware design implementations, based on the RISC-V instruction set architecture, developed using the Scala/Chisel hardware description language. The architecture design follows modular and extensible principles, supporting various configurations and custom extensions.
 
 ## Architecture Hierarchy
 
 ### System-Level Architecture
-BuckyBall adopts a layered design, including from top to bottom:
+Buckyball adopts a layered design, including from top to bottom:
 - **SoC Subsystem**: Integrates multi-core processors, cache hierarchy, interconnect networks
 - **Processor Core**: Custom implementation based on Rocket core
 - **Coprocessor**: Dedicated accelerators supporting RoCC interface
@@ -22,7 +22,7 @@ BuckyBall adopts a layered design, including from top to bottom:
 ```
 arch/
 ├── src/main/scala/
-│   └── framework/          - BuckyBall framework core
+│   └── framework/          - Buckyball framework core
 │       ├── rocket/         - Rocket core custom implementation
 │       └── builtin/        - Built-in component library
 │           └── memdomain/  - Memory domain implementation

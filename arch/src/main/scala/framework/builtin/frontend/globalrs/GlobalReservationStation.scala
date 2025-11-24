@@ -4,28 +4,28 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.PostGDCmd
 import freechips.rocketchip.tile.RoCCResponse
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
-class GlobalRobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class GlobalRobEntry(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmd    = new PostGDCmd
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // Global RS issue interface
-class GlobalRsIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends GlobalRobEntry
+class GlobalRsIssue(implicit b: CustomBuckyballConfig, p: Parameters) extends GlobalRobEntry
 
 // Global RS completion interface
-class GlobalRsComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class GlobalRsComplete(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // No additional interface Bundle needed, defined directly in IO
 
 // Global reservation station - between GlobalDecoder and each Domain
-class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // GlobalDecoder -> Global RS
     val global_decode_cmd_i = Flipped(new DecoupledIO(new PostGDCmd))
@@ -124,7 +124,7 @@ class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters)
 // -----------------------------------------------------------------------------
 // Response generation
 // -----------------------------------------------------------------------------
-  // BuckyBall does not generate RoCC responses for normal instructions
+  // Buckyball does not generate RoCC responses for normal instructions
   // Only performance counter or special commands would generate responses
   // This matches Gemmini's behavior where io.resp is only connected to counters
   io.rs_rocc_o.resp.valid     := false.B

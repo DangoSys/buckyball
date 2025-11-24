@@ -2,7 +2,7 @@
 
 ## Overview
 
-Core storage units for BuckyBall's memory domain, located at `arch/src/main/scala/framework/builtin/memdomain/mem`. Provides high-performance on-chip memory components.
+Core storage units for Buckyball's memory domain, located at `arch/src/main/scala/framework/builtin/memdomain/mem`. Provides high-performance on-chip memory components.
 
 Components:
 - **SramBank**: Basic SRAM storage bank with synchronous read/write

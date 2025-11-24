@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain._
 import framework.blink.BallRegist
 
@@ -15,30 +15,30 @@ case class BallRsRegist(
 )
 
 // Ball domain issue interface - includes global rob_id
-class BallRsIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallRsIssue(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmd = new BallDecodeCmd
   // Global ROB ID
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // Ball domain completion interface
-class BallRsComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallRsComplete(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // Generic Ball domain issue interface - supports dynamic number of Ball devices
-class BallIssueInterface(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallIssueInterface(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val balls = Vec(numBalls, Decoupled(new BallRsIssue))
 }
 
 // Generic Ball domain completion interface - supports dynamic number of Ball devices
-class BallCommitInterface(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallCommitInterface(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val balls = Vec(numBalls, Flipped(Decoupled(new BallRsComplete)))
 }
 
 // Local Ball reservation station - simple FIFO scheduler
 class BallReservationStation(BallRsRegists: Seq[BallRsRegist])
-  (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  (implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
 
   val numBalls = BallRsRegists.length
 

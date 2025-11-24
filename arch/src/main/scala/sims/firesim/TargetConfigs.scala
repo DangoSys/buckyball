@@ -33,4 +33,4 @@ class FireSimBuckyballToyConfig extends Config(
   new WithBootROM ++
   new firechip.chip.WithDefaultFireSimBridges ++
   new firechip.chip.WithFireSimConfigTweaks ++
-  new examples.toy.BuckyBallToyConfig)
+  new examples.toy.BuckyballToyConfig)

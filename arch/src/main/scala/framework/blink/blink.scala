@@ -3,7 +3,7 @@ package framework.blink
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 
@@ -26,21 +26,21 @@ class Status extends Bundle {
 }
 
 // SramReadIO with rob_id
-class SramReadWithRobId(val n: Int, val w: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class SramReadWithRobId(val n: Int, val w: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramReadIO(n, w)
   // Input because the outer layer has Flipped
   val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
 
 // SramWriteIO with rob_id
-class SramWriteWithRobId(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class SramWriteWithRobId(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramWriteIO(n, w, mask_len)
   // Input because the outer layer has Flipped
   val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
 
 // Standard interface for Ball devices
-class Blink(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class Blink(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmdReq = Flipped(Decoupled(new BallRsIssue))
   val cmdResp = Decoupled(new BallRsComplete)
 

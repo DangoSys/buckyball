@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Vector Processing Unit is a specialized computation accelerator in the BuckyBall framework, located at `prototype/vector`. This module implements a complete vector processing pipeline, including control unit, load unit, execution unit, and store unit, supporting parallel processing of vector data.
+The Vector Processing Unit is a specialized computation accelerator in the Buckyball framework, located at `prototype/vector`. This module implements a complete vector processing pipeline, including control unit, load unit, execution unit, and store unit, supporting parallel processing of vector data.
 
 ## File Structure
 
@@ -26,7 +26,7 @@ vector/
 VecUnit is the top-level module of the vector processor, integrating all sub-units:
 
 ```scala
-class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class VecUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)
@@ -56,7 +56,7 @@ class VecUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 The vector control unit is responsible for instruction decode and pipeline control:
 
 ```scala
-class VecCtrlUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class VecCtrlUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle{
     val cmdReq = Flipped(Decoupled(new BallRsIssue))
     val cmdResp_o = Decoupled(new BallRsComplete)
@@ -150,10 +150,10 @@ for (i <- 0 until b.acc_banks) {
 
 ### Vector Configuration
 
-Configure vector processor parameters through `CustomBuckyBallConfig`:
+Configure vector processor parameters through `CustomBuckyballConfig`:
 
 ```scala
-class CustomBuckyBallConfig extends Config((site, here, up) => {
+class CustomBuckyballConfig extends Config((site, here, up) => {
   case "veclane" => 16              // Vector lane count
   case "sp_banks" => 4              // Scratchpad bank count
   case "acc_banks" => 2             // Accumulator bank count

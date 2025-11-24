@@ -3,14 +3,14 @@ package framework.builtin.memdomain
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, Scratchpad}
 
 /**
  * MemController: Controller that encapsulates scratchpad and accumulator
  * Provides DMA interface and Ball Domain interface
  */
-class MemController(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemController(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // DMA interface - for MemLoader and MemStorer access
     val dma = new Bundle {

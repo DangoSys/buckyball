@@ -3,7 +3,7 @@ package framework.bbus
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.blink.BallRegist
@@ -21,7 +21,7 @@ class BBusConfigIO(numBalls: Int)extends Bundle {
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
  */
 class BBus(ballGenerators: Seq[() => BallRegist with Module])
-  (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+  (implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val numBalls = ballGenerators.length
 
   val io = IO(new Bundle {

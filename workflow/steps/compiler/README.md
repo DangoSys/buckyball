@@ -1,13 +1,13 @@
 # Compiler Workflow
 
-Compiler build workflow in the BuckyBall framework for building the BuckyBall compiler toolchain.
+Compiler build workflow in the Buckyball framework for building the Buckyball compiler toolchain.
 
 ## API Usage
 
 ### `build`
 **Endpoint**: `POST /compiler/build`
 
-**Function**: Build BuckyBall compiler
+**Function**: Build Buckyball compiler
 
 **Parameters**: No specific parameters
 

@@ -8,10 +8,10 @@ import org.chipsalliance.cde.config._
 
 import framework.builtin.memdomain.dma.LocalAddr
 
-sealed abstract trait BuckyBallMemCapacity
-case class CapacityInKilobytes(kilobytes: Int) extends BuckyBallMemCapacity
-case class CapacityInVectors(vectors: Int) extends BuckyBallMemCapacity
-// case class CapacityInMatrices(matrices: Int) extends BuckyBallMemCapacity
+sealed abstract trait BuckyballMemCapacity
+case class CapacityInKilobytes(kilobytes: Int) extends BuckyballMemCapacity
+case class CapacityInVectors(vectors: Int) extends BuckyballMemCapacity
+// case class CapacityInMatrices(matrices: Int) extends BuckyballMemCapacity
 
 case class BaseConfig(
   opcodes: OpcodeSet = OpcodeSet.custom3,
@@ -37,8 +37,8 @@ case class BaseConfig(
 
   sp_singleported: Boolean = true,
 
-  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
-  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
+  sp_capacity: BuckyballMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyballMemCapacity = CapacityInKilobytes(64),
 
   max_in_flight_mem_reqs: Int = 16, // Unused
   aligned_to: Int = 1,

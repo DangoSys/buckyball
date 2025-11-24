@@ -3,16 +3,16 @@ package prototype.nagisa.matmul
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
-import prototype.nagisa.matmul.CIM
+import prototype.nagisa.matmul.marco
 
 /**
- * CIMMatmulBall - A Compute-in-Memory Ball that complies with the Blink protocol
- * Behavior: Read operands from Scratchpad, perform CIM computation (inspired by PiDRAM),
+ * marcoMatmulBall - A Compute-in-Memory Ball that complies with the Blink protocol
+ * Behavior: Read operands from Scratchpad, perform marco computation (inspired by PiDRAM),
  * then write results back to Scratchpad.
  */
-class CIMMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class marcoMatmulBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)
@@ -21,24 +21,24 @@ class CIMMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   // Satisfy BallRegist requirements
   def Blink: Blink = io
 
-  // Instantiate CIM computation unit
-  private val cimUnit = Module(new CIM)
+  // Instantiate marco computation unit
+  private val marcoUnit = Module(new marco)
 
   // Connect command interface
-  cimUnit.io.cmdReq <> io.cmdReq
-  cimUnit.io.cmdResp <> io.cmdResp
+  marcoUnit.io.cmdReq <> io.cmdReq
+  marcoUnit.io.cmdResp <> io.cmdResp
 
   // Connect Scratchpad SRAM read/write interface
   for (i <- 0 until b.sp_banks) {
-    cimUnit.io.sramRead(i) <> io.sramRead(i).io
+    marcoUnit.io.sramRead(i) <> io.sramRead(i).io
     io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
-    cimUnit.io.sramWrite(i) <> io.sramWrite(i).io
+    marcoUnit.io.sramWrite(i) <> io.sramWrite(i).io
     io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // Connect Accumulator write interface (for partial sums in CIM operations)
+  // Connect Accumulator write interface (for partial sums in marco operations)
   for (i <- 0 until b.acc_banks) {
-    cimUnit.io.accWrite(i) <> io.accWrite(i).io
+    marcoUnit.io.accWrite(i) <> io.accWrite(i).io
     io.accWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
@@ -51,7 +51,7 @@ class CIMMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   }
 
   // Pass through status signals
-  io.status <> cimUnit.io.status
+  io.status <> marcoUnit.io.status
 
-  override lazy val desiredName: String = "CIMMatmulBall"
+  override lazy val desiredName: String = "marcoMatmulBall"
 }

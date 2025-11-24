@@ -7,22 +7,22 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 
 
-class ctrl_st_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class ctrl_st_req(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val wr_bank = UInt(log2Up(b.sp_banks).W)
   val wr_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
   val iter = UInt(10.W)
 }
 
-class ex_st_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class ex_st_req(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // Use accumulator type, 32 bits
   val rst = Vec(b.veclane, UInt(b.accType.getWidth.W))
   val iter = UInt(10.W)
 }
 
-class VecStoreUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class VecStoreUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val ctrl_st_i = Flipped(Decoupled(new ctrl_st_req))
     val ex_st_i   = Flipped(Decoupled(new ex_st_req))

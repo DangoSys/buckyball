@@ -4,11 +4,11 @@ package framework.bbus.memrouter
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp, SramWriteReq}
 
-class SramIOAdapter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class SramIOAdapter(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
     val io = IO(new Bundle {
         val sramWrite_i =  new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)
         val sramRead_o =  new SramReadIO(b.spad_bank_entries, b.spad_w)

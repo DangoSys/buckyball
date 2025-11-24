@@ -1,10 +1,10 @@
-# BuckyBall Scala Source Code
+# Buckyball Scala Source Code
 
-This directory contains all Scala/Chisel hardware description language source code for the BuckyBall project, implementing hardware architecture design and simulation environments.
+This directory contains all Scala/Chisel hardware description language source code for the Buckyball project, implementing hardware architecture design and simulation environments.
 
 ## Overview
 
-BuckyBall uses Scala/Chisel as the hardware description language, built on Berkeley's Rocket-chip and Chipyard frameworks. This directory contains implementations from low-level hardware components to system-level integration.
+Buckyball uses Scala/Chisel as the hardware description language, built on Berkeley's Rocket-chip and Chipyard frameworks. This directory contains implementations from low-level hardware components to system-level integration.
 
 Main functional modules include:
 - **framework**: Core framework implementation, including processor core, memory subsystem, bus interconnect, etc.
@@ -17,7 +17,7 @@ Main functional modules include:
 
 ```
 scala/
-├── framework/          - BuckyBall core framework
+├── framework/          - Buckyball core framework
 │   ├── blink/          - Blink communication components
 │   ├── builtin/        - Built-in hardware components
 │   │   ├── frontend/   - Frontend processing components
@@ -41,7 +41,7 @@ scala/
 ## Module Description
 
 ### framework/ - Core Framework
-Implements BuckyBall's core architecture components, including:
+Implements Buckyball's core architecture components, including:
 - Processor core and extensions
 - Memory subsystem and cache hierarchy
 - Bus interconnect and communication protocols
@@ -68,13 +68,13 @@ Supports multiple simulators and verification environments:
 ## Development Guide
 
 ### Build System
-BuckyBall uses Mill as the build tool:
+Buckyball uses Mill as the build tool:
 ```bash
 # Compile all modules
 mill arch.compile
 
 # Generate Verilog
-mill arch.runMain examples.toy.ToyBuckyBall
+mill arch.runMain examples.toy.ToyBuckyball
 
 # Run tests
 mill arch.test

@@ -1,6 +1,6 @@
-# BuckyBall Project Structure Overview
+# Buckyball Project Structure Overview
 
-BuckyBall is a scalable framework for domain-specific architectures. The project adopts a modular design with clear directory responsibilities, supporting a complete toolchain from hardware design to software development.
+Buckyball is a scalable framework for domain-specific architectures. The project adopts a modular design with clear directory responsibilities, supporting a complete toolchain from hardware design to software development.
 
 ## Main Directory Structure
 

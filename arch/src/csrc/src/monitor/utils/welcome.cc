@@ -18,6 +18,6 @@ static void welcome() {
   Log("Build time: %s, %s", __TIME__, __DATE__);
   print_logo();
   printf("Welcome to %s!\n",
-         ASNI_FMT(str(BuckyBall), ASNI_FG_YELLOW ASNI_BG_RED));
+         ASNI_FMT(str(Buckyball), ASNI_FG_YELLOW ASNI_BG_RED));
   printf("For help, type \"help\"\n");
 }

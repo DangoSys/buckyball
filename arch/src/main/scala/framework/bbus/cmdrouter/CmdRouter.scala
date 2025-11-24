@@ -3,11 +3,11 @@ package framework.bbus.cmdrouter
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.bbus.BBusConfigIO
 
-class CmdRouter(numBalls: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class CmdRouter(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val cmdReq_i = Vec(numBalls, Flipped(Decoupled(new BallRsIssue)))
     val cmdResp_i = Vec(numBalls, Flipped(Decoupled(new BallRsComplete)))

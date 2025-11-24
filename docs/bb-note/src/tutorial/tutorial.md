@@ -79,7 +79,7 @@ a. `arch/src/main/scala/examples/toy/balldomain/bbus/busRegister.scala` is the B
 Find and add the new ID for ReLuBall in this file.
 
 ```
-class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters)
+class BBusModule(implicit b: CustomBuckyballConfig, p: Parameters)
     extends BBus(
       // Define Ball device generator to register
       Seq(
@@ -100,7 +100,7 @@ b. `arch/src/main/scala/examples/toy/balldomain/rs/rsRegister.scala` is the "Bal
 Register ReluBall in this file:
 
 ```
-class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters)
+class BallRSModule(implicit b: CustomBuckyballConfig, p: Parameters)
     extends BallReservationStation(
       // Define Ball device information to register
       Seq(

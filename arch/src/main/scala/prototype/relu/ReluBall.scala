@@ -3,7 +3,7 @@ package prototype.relu
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.relu.PipelinedRelu
 
@@ -11,7 +11,7 @@ import prototype.relu.PipelinedRelu
   * Behavior: Read data from Scratchpad, perform element-wise ReLU (set negative values to 0),
   * then write back to Scratchpad.
   */
-class ReluBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class ReluBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)

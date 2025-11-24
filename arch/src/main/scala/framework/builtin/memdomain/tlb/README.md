@@ -2,13 +2,13 @@
 
 ## Overview
 
-The TLB module implements address translation caching from virtual to physical addresses, located at `framework/builtin/memdomain/tlb`. Based on Rocket-chip's TLB implementation, it provides BuckyBall-specific TLB encapsulation and cluster management.
+The TLB module implements address translation caching from virtual to physical addresses, located at `framework/builtin/memdomain/tlb`. Based on Rocket-chip's TLB implementation, it provides Buckyball-specific TLB encapsulation and cluster management.
 
 ## File Structure
 
 ```
 tlb/
-├── BBTLB.scala           - BuckyBall TLB implementation
+├── BBTLB.scala           - Buckyball TLB implementation
 ├── TLBCluster.scala      - TLB cluster manager
 ├── spec-BBTLB.md         - BBTLB specification
 └── spec-BBTLBCluster.md  - TLB cluster specification
@@ -16,9 +16,9 @@ tlb/
 
 ## Core Components
 
-### BBTLB - BuckyBall TLB
+### BBTLB - Buckyball TLB
 
-BBTLB wraps Rocket-chip TLB with BuckyBall-specific interface and exception handling:
+BBTLB wraps Rocket-chip TLB with Buckyball-specific interface and exception handling:
 
 ```scala
 class BBTLB(entries: Int, maxSize: Int)(implicit edge: TLEdgeOut, p: Parameters)

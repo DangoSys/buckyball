@@ -4,10 +4,10 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.PostGDCmd
 
-class GlobalROB(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // Allocation interface
     val alloc = Flipped(new DecoupledIO(new PostGDCmd))

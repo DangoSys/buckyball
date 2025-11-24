@@ -3,14 +3,14 @@ package framework.builtin.memdomain
 import chisel3._
 import chisel3.util._
 import framework.builtin.frontend.PostGDCmd
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain.DISA._
 import framework.builtin.memdomain.dma.LocalAddr
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config.Parameters
 
 // Detailed decode output for Mem domain
-class MemDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemDecodeCmd(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val is_load       = Bool()
   val is_store      = Bool()
 
@@ -45,7 +45,7 @@ object MemDefaultConstants {
   val DSPECIAL = 0.U(40.W)
 }
 
-class MemDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemDomainDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   import MemDefaultConstants._
 
   val io = IO(new Bundle {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BuckyBall Development Tools MCP Server"""
+"""Buckyball Development Tools MCP Server"""
 
 import asyncio
 import sys

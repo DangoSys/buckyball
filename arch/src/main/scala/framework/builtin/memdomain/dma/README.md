@@ -2,7 +2,7 @@
 
 ## Overview
 
-DMA engine implementation for BuckyBall's memory domain, located at `arch/src/main/scala/framework/builtin/memdomain/dma`. Provides high-performance memory data transfer services between main memory and on-chip storage.
+DMA engine implementation for Buckyball's memory domain, located at `arch/src/main/scala/framework/builtin/memdomain/dma`. Provides high-performance memory data transfer services between main memory and on-chip storage.
 
 Main components:
 - **BBStreamReader**: Streaming data reader for bulk reads from external memory

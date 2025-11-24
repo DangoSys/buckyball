@@ -3,13 +3,13 @@ package examples.toy.balldomain.rs
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallReservationStation, BallRsRegist}
 
 /**
  * Ball RS module - references BBus mechanism, manages Ball device registration and connections
  */
-class BallRSModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BallReservationStation(
+class BallRSModule(implicit b: CustomBuckyballConfig, p: Parameters) extends BallReservationStation(
   // Define Ball device information to register
   Seq(
     BallRsRegist(ballId = 0, ballName = "VecBall"),

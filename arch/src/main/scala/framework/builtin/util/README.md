@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains framework-level utility functions and helper modules for BuckyBall, providing general-purpose hardware design tools. Located in `arch/src/main/scala/framework/builtin/util`, it serves as a utility layer, offering reusable hardware building blocks and utility functions for other framework components.
+This directory contains framework-level utility functions and helper modules for Buckyball, providing general-purpose hardware design tools. Located in `arch/src/main/scala/framework/builtin/util`, it serves as a utility layer, offering reusable hardware building blocks and utility functions for other framework components.
 
 Main utility categories:
 - Mathematical operations and bit manipulation tools

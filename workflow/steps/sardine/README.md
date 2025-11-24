@@ -1,6 +1,6 @@
 # Sardine Workflow
 
-Sardine workflow in the BuckyBall framework for running Sardine-related tasks.
+Sardine workflow in the Buckyball framework for running Sardine-related tasks.
 
 ## API Usage
 

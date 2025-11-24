@@ -7,21 +7,21 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadResp}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import warp.VecBall
 
 
-class ctrl_ex_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class ctrl_ex_req(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val iter = UInt(10.W)
 }
 
-class ld_ex_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class ld_ex_req(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val op1 = Vec(b.veclane, UInt(b.inputType.getWidth.W))
   val op2 = Vec(b.veclane, UInt(b.inputType.getWidth.W))
   val iter = UInt(10.W)
 }
 
-class VecEXUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class VecEXUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val ctrl_ex_i = Flipped(Decoupled(new ctrl_ex_req))
     val ld_ex_i = Flipped(Decoupled(new ld_ex_req))

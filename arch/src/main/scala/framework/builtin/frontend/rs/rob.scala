@@ -4,16 +4,16 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.BallDecodeCmd
 
 // ROB entry data structure - preserves ROB ID to support out-of-order completion
-class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class RobEntry(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmd    = new BallDecodeCmd
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
-class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class ROB (implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // Allocation interface
     val alloc = Flipped(new DecoupledIO(new BallDecodeCmd))

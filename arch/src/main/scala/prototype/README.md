@@ -1,6 +1,6 @@
-# BuckyBall Prototype Accelerators
+# Buckyball Prototype Accelerators
 
-This directory contains prototype implementations of various domain-specific computation accelerators in the BuckyBall framework, covering hardware accelerator designs for machine learning, numerical computation, and data processing domains.
+This directory contains prototype implementations of various domain-specific computation accelerators in the Buckyball framework, covering hardware accelerator designs for machine learning, numerical computation, and data processing domains.
 
 ## Directory Structure
 
@@ -153,7 +153,7 @@ Each accelerator adopts modular design for:
 - Independent development and testing
 - Flexible composition and configuration
 - Performance tuning and extension
-- Easy integration with BuckyBall framework
+- Easy integration with Buckyball framework
 
 ### Pipeline Architecture
 Most accelerators use deep pipeline design:
@@ -174,7 +174,7 @@ Support rich configuration parameters:
 ### Blink Protocol Interface
 All Ball accelerators implement the Blink protocol interface:
 ```scala
-class CustomBall(implicit b: CustomBuckyBallConfig, p: Parameters)
+class CustomBall(implicit b: CustomBuckyballConfig, p: Parameters)
   extends Module with BallRegist {
   val io = IO(new BlinkIO)
   def ballId = <unique_id>.U
@@ -196,7 +196,7 @@ Support multiple memory access patterns:
 - Bank-aware memory access (op1 and op2 must access different banks)
 
 ### Configuration Integration
-Parameterized through BuckyBall configuration system:
+Parameterized through Buckyball configuration system:
 ```scala
 case class BaseConfig(
   veclane: Int = 16,        // Vector lane width
@@ -250,7 +250,7 @@ Each accelerator comes with corresponding test cases:
 
 **Example Template**:
 ```scala
-class NewBall(implicit b: CustomBuckyBallConfig, p: Parameters)
+class NewBall(implicit b: CustomBuckyballConfig, p: Parameters)
   extends Module with BallRegist {
   val io = IO(new BlinkIO)
 

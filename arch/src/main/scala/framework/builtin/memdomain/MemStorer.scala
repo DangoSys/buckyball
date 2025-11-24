@@ -3,13 +3,13 @@ package framework.builtin.memdomain
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
 import freechips.rocketchip.rocket.MStatus
 import framework.builtin.memdomain.mem.SramReadIO
 import framework.builtin.memdomain.dma.{BBWriteRequest, BBWriteResponse, LocalAddr}
 
-class MemStorer(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemStorer(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
   // Byte count of one row of data
   val line_bytes = b.spad_w / 8

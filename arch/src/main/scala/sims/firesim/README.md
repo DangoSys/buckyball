@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains BuckyBall system simulation configuration for the FireSim platform. FireSim is an open-source FPGA-based simulation platform that provides hardware simulation environments, supporting system-level simulation and performance analysis.
+This directory contains Buckyball system simulation configuration for the FireSim platform. FireSim is an open-source FPGA-based simulation platform that provides hardware simulation environments, supporting system-level simulation and performance analysis.
 
 ## File Structure
 
@@ -15,7 +15,7 @@ firesim/
 
 ### TargetConfigs.scala
 
-This file defines BuckyBall system configuration for the FireSim platform:
+This file defines Buckyball system configuration for the FireSim platform:
 
 **WithBootROM Configuration**:
 ```scala
@@ -41,7 +41,7 @@ class FireSimBuckyballToyConfig extends Config(
   new WithBootROM ++                              // BootROM configuration
   new firechip.chip.WithDefaultFireSimBridges ++ // Default FireSim bridges
   new firechip.chip.WithFireSimConfigTweaks ++   // FireSim configuration tweaks
-  new examples.toy.BuckyBallToyConfig            // BuckyBall toy configuration
+  new examples.toy.BuckyballToyConfig            // Buckyball toy configuration
 )
 ```
 
@@ -51,7 +51,7 @@ class FireSimBuckyballToyConfig extends Config(
 ```scala
 class MyFireSimConfig extends Config(
   new WithBootROM ++
-  new MyCustomBuckyBallConfig ++
+  new MyCustomBuckyballConfig ++
   // Other configurations...
 )
 ```

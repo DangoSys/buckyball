@@ -16,10 +16,10 @@ import framework.builtin.frontend.GlobalDecoder
 import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.builtin.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 
 
-class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
+class ToyBuckyball(val b: CustomBuckyballConfig)(implicit p: Parameters)
   extends LazyRoCC (opcodes = b.opcodes, nPTWPorts = 1) {
 
   val xLen = p(TileKey).core.xLen   // the width of core's register file
@@ -38,7 +38,7 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   xbar_node := TLBuffer() := writer.node
   id_node := TLWidthWidget(b.dma_buswidth/8) := TLBuffer() := xbar_node
 
-  override lazy val module = new ToyBuckyBallModule(this)
+  override lazy val module = new ToyBuckyballModule(this)
 
   // The LazyRoCC class contains two TLOutputNode instances, atlNode and tlNode.
   // atlNode connects into a tile-local arbiter along with the backside of the L1 instruction cache.
@@ -49,7 +49,7 @@ class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
   val node = tlNode
 }
 
-class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
+class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer)
   with HasCoreParameters {
   import outer.b._
 
@@ -63,7 +63,7 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
 // -----------------------------------------------------------------------------
 // Frontend: Global Decoder + Global Reservation Station
 // -----------------------------------------------------------------------------
-  implicit val b: CustomBuckyBallConfig = outer.b
+  implicit val b: CustomBuckyballConfig = outer.b
 
   val gDecoder = Module(new GlobalDecoder)
   gDecoder.io.id_i.valid    := io.cmd.valid
@@ -140,6 +140,6 @@ class ToyBuckyBallModule(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer)
 // ---------------------------------------------------------------------------
   val busy_counter = RegInit(0.U(32.W))
   busy_counter := Mux(globalRs.io.rs_rocc_o.busy, busy_counter + 1.U, 0.U)
-  assert(busy_counter < 10000.U, "ToyBuckyBall: busy for too long!")
+  assert(busy_counter < 10000.U, "ToyBuckyball: busy for too long!")
 
 }

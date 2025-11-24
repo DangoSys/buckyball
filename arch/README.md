@@ -1,12 +1,12 @@
-# BuckyBall
+# Buckyball
 
 ![image](./img/buckyball.png)
 
-BuckyBall is a full-stack open-source NPU/DSA design framework.
+Buckyball is a full-stack open-source NPU/DSA design framework.
 
-## 1. 🤔 Why BuckyBall
+## 1. 🤔 Why Buckyball
 
-> ❗BuckyBall is not a specific NPU design, but a design framework. You can find various NPU design examples in the examples folder.
+> ❗Buckyball is not a specific NPU design, but a design framework. You can find various NPU design examples in the examples folder.
 
 
 ## 2. Architecture Overview
@@ -154,7 +154,7 @@ rs2 format:
 
 ### 2.3 Ball Protocol
 
-The Ball protocol defines a unified interface for all computation units in BuckyBall. All Ball devices share common base properties:
+The Ball protocol defines a unified interface for all computation units in Buckyball. All Ball devices share common base properties:
 
 **Command Interface**:
 ```scala

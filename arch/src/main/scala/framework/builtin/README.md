@@ -1,8 +1,8 @@
-# BuckyBall Built-in Component Library
+# Buckyball Built-in Component Library
 
 ## Overview
 
-This directory contains the built-in hardware component implementations of the BuckyBall framework, providing standardized and reusable hardware modules. Located at `arch/src/main/scala/framework/builtin`, it serves as the component library layer, offering verified hardware building blocks for upper-level systems.
+This directory contains the built-in hardware component implementations of the Buckyball framework, providing standardized and reusable hardware modules. Located at `arch/src/main/scala/framework/builtin`, it serves as the component library layer, offering verified hardware building blocks for upper-level systems.
 
 Main component modules:
 - **memdomain**: Memory domain components, including storage and DMA engines
@@ -94,8 +94,8 @@ case class BaseConfig(
   sp_banks: Int = 4,                    // Scratchpad bank count
   acc_banks: Int = 8,                   // Accumulator bank count
 
-  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
-  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
+  sp_capacity: BuckyballMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyballMemCapacity = CapacityInKilobytes(64),
 
   spAddrLen: Int = 15,                  // SPAD address length
   memAddrLen: Int = 32,                 // Memory address length
@@ -170,7 +170,7 @@ require(rob_entries > 0 && isPow2(rob_entries), "ROB entries must be power of 2"
 
 **Interface Definition**:
 ```scala
-class MemDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemDomainIO(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // From Global RS
   val issue = Flipped(Decoupled(new MemRsIssue))
 
@@ -255,7 +255,7 @@ class MySystemConfig extends Config(
 
 **Parameter Access**:
 ```scala
-class MyModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MyModule(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val spBanks = b.sp_banks
   val accBanks = b.acc_banks
   val robEntries = b.rob_entries

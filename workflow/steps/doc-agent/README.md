@@ -1,6 +1,6 @@
 # Doc-Agent Workflow
 
-Documentation generation workflow in the BuckyBall framework, providing automated code documentation generation functionality.
+Documentation generation workflow in the Buckyball framework, providing automated code documentation generation functionality.
 
 ## API Usage Guide
 

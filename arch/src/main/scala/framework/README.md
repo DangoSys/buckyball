@@ -1,8 +1,8 @@
-# BuckyBall Framework Core
+# Buckyball Framework Core
 
 ## Overview
 
-This directory contains the core implementation of the BuckyBall framework, serving as the foundation layer for the entire hardware architecture. Located at `arch/src/main/scala/framework`, it provides a complete implementation of processor cores, built-in components, and system interconnects.
+This directory contains the core implementation of the Buckyball framework, serving as the foundation layer for the entire hardware architecture. Located at `arch/src/main/scala/framework`, it provides a complete implementation of processor cores, built-in components, and system interconnects.
 
 Main functional modules include:
 - **builtin**: Built-in hardware component library, including memory domain and frontend modules
@@ -133,8 +133,8 @@ case class BaseConfig(
   rs_out_of_order_response: Boolean = true,  // Out-of-order response support
   sp_banks: Int = 4,              // Scratchpad bank count
   acc_banks: Int = 8,             // Accumulator bank count
-  sp_capacity: BuckyBallMemCapacity = CapacityInKilobytes(256),
-  acc_capacity: BuckyBallMemCapacity = CapacityInKilobytes(64),
+  sp_capacity: BuckyballMemCapacity = CapacityInKilobytes(256),
+  acc_capacity: BuckyballMemCapacity = CapacityInKilobytes(64),
   spAddrLen: Int = 15,            // SPAD address length
   memAddrLen: Int = 32,           // Memory address length
   numVecPE: Int = 16,             // Vector PEs per thread
@@ -176,7 +176,7 @@ case class BaseConfig(
 
 **Configuration System**:
 ```scala
-class BuckyBallConfig extends Config(
+class BuckyballConfig extends Config(
   new WithBuiltinComponents ++
   new WithBlinkInterconnect ++
   new BaseConfig
@@ -185,7 +185,7 @@ class BuckyBallConfig extends Config(
 
 **Module Instantiation**:
 ```scala
-class BuckyBallSystem(implicit p: Parameters) extends LazyModule {
+class BuckyballSystem(implicit p: Parameters) extends LazyModule {
   // Memory domain
   val memdomain = Module(new MemDomain)
 
@@ -259,7 +259,7 @@ Mem Domain    ──→ MemController
 - [Built-in Components](builtin/README.md) - Standard hardware components
 - [Memory Domain](builtin/memdomain/README.md) - Memory subsystem details
 - [Frontend Components](builtin/frontend/README.md) - Instruction management
-- [BuckyBall Source Overview](../README.md) - Upper-level architecture
+- [Buckyball Source Overview](../README.md) - Upper-level architecture
 
 ## Performance Considerations
 

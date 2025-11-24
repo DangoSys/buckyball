@@ -1,8 +1,8 @@
-# BuckyBall Utility Library
+# Buckyball Utility Library
 
 ## Overview
 
-This directory contains general utility functions and helper modules in the BuckyBall framework, primarily providing reusable hardware design components. Located at `arch/src/main/scala/Util`, it serves as the base utility layer throughout the architecture, providing common hardware building blocks for other modules.
+This directory contains general utility functions and helper modules in the Buckyball framework, primarily providing reusable hardware design components. Located at `arch/src/main/scala/Util`, it serves as the base utility layer throughout the architecture, providing common hardware building blocks for other modules.
 
 Main functionality includes:
 - **Pipeline**: Pipeline control and management tools

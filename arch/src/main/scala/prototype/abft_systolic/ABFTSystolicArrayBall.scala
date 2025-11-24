@@ -3,7 +3,7 @@ package prototype.abft_systolic
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.abft_systolic.ABFTSystolicArray
 
@@ -12,7 +12,7 @@ import prototype.abft_systolic.ABFTSystolicArray
  * Behavior: Read matrices A and B from Scratchpad, compute C = A * B with ABFT checks,
  * then write back to Scratchpad.
  */
-class ABFTSystolicArrayBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class ABFTSystolicArrayBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)

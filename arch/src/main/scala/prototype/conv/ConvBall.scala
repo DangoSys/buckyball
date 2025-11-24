@@ -3,7 +3,7 @@ package prototype.conv
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.conv.Conv
 
@@ -12,7 +12,7 @@ import prototype.conv.Conv
  * Behavior: Read input feature map and weights from Scratchpad, perform convolution using NVDLA CONV,
  * then write output feature map back to Scratchpad.
  */
-class ConvBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+class ConvBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)

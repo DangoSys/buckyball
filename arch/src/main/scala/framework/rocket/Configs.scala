@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
 import framework.rocket.{RocketTileParamsBB, RocketCrossingParamsBB}
 
 
-class WithNBuckyBallCores(
+class WithNBuckyballCores(
   n: Int,
   location: HierarchicalLocation,
   crossing: RocketCrossingParams,

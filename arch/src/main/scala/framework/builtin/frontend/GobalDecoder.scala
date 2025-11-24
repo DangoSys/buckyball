@@ -4,17 +4,17 @@ import chisel3._
 import chisel3.util._
 import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import freechips.rocketchip.tile._
 import framework.builtin.memdomain.DISA._
 import framework.builtin.frontend.GISA._
-class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
+class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
   val cmd = new RoCCCommand
 }
 
 
 
-class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class PostGDCmd(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // Instruction type determination
   // Ball instruction (excluding FENCE)
   val is_ball       = Bool()
@@ -27,7 +27,7 @@ class PostGDCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle
   val raw_cmd       = new RoCCCommand
 }
 
-class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val id_i = Flipped(Decoupled(new Bundle {
       val cmd = new RoCCCommand

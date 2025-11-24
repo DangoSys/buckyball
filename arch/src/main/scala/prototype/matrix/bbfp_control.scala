@@ -8,11 +8,11 @@ import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import org.yaml.snakeyaml.events.Event.ID
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.blink.Status
 
-class BBFP_Control(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class BBFP_Control(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val cmdReq  = Flipped(Decoupled(new BallRsIssue))
     val cmdResp = Decoupled(new BallRsComplete)

@@ -1,6 +1,6 @@
 # Workload Workflow
 
-Workload build workflow in BuckyBall framework, used to build test workloads and benchmark programs.
+Workload build workflow in Buckyball framework, used to build test workloads and benchmark programs.
 
 ## API Usage
 

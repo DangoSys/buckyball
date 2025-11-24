@@ -1,10 +1,10 @@
 # Contributors
 
-Thank you to all developers and researchers who have contributed to the BuckyBall project.
+Thank you to all developers and researchers who have contributed to the Buckyball project.
 
 ## Core Development Team
 
-The BuckyBall project is primarily developed by the DangoSys team, dedicated to building a high-performance domain-specific architecture framework.
+The Buckyball project is primarily developed by the DangoSys team, dedicated to building a high-performance domain-specific architecture framework.
 
 ## Contribution Methods
 

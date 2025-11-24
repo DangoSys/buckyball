@@ -5,15 +5,11 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 
-/**
- * PiDRAMCIMBlackBox - BlackBox wrapper for PiDRAM-style Compute-in-Memory module
- * Uses inline verilog to embed CIM computation logic
- * Inspired by PiDRAM's processing-in-memory architecture
- */
-class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
+
+class PiDRAMmarcoBlackBox extends BlackBox with HasBlackBoxInline {
   val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Bool())
@@ -36,9 +32,9 @@ class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
     val data_width = Input(UInt(8.W))
   })
 
-  setInline("PiDRAMCIMBlackBox.v",
+  setInline("PiDRAMmarcoBlackBox.v",
     s"""
-    |module PiDRAMCIMBlackBox(
+    |module PiDRAMmarcoBlackBox(
     |  input clock,
     |  input reset,
     |  input start,
@@ -52,7 +48,7 @@ class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
     |  input [7:0] data_width
     |);
     |
-    |  // State machine for CIM computation
+    |  // State machine for marco computation
     |  reg [2:0] state;
     |  localparam IDLE = 3'b000;
     |  localparam LOAD = 3'b001;
@@ -98,12 +94,12 @@ class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
     |        end
     |        LOAD: begin
     |          // Load phase: simulate data loading from memory
-    |          // In real CIM, this would be handled by the memory controller
+    |          // In real marco, this would be handled by the memory controller
     |          state <= COMPUTE;
     |        end
     |        COMPUTE: begin
-    |          // Compute phase: perform CIM computation
-    |          // This simulates the computation cycles in CIM
+    |          // Compute phase: perform marco computation
+    |          // This simulates the computation cycles in marco
     |          if (cycle_count >= total_cycles) begin
     |            state <= STORE;
     |            cycle_count <= 32'b0;
@@ -133,12 +129,8 @@ class PiDRAMCIMBlackBox extends BlackBox with HasBlackBoxInline {
     """.stripMargin)
 }
 
-/**
- * CIM - Compute-in-Memory unit
- * Implements CIM functionality inspired by PiDRAM's processing-in-memory architecture
- * Reads operands from scratchpad, performs CIM computation, writes results back
- */
-class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+
+class marco(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {
@@ -150,7 +142,7 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
     val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, spad_w)))
     val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, spad_w, b.spad_mask_len)))
 
-    // Accumulator write interface (for partial sums in CIM operations)
+    // Accumulator write interface (for partial sums in marco operations)
     val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
 
     // Status output
@@ -171,7 +163,7 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val result_bank_reg = RegInit(0.U(log2Up(b.sp_banks).W))
   val iter_reg = RegInit(0.U(10.W))
 
-  // CIM parameters from special field (40 bits total)
+  // marco parameters from special field (40 bits total)
   // special[15:0] = rows (16 bits)
   // special[31:16] = cols (16 bits)
   // special[35:32] = op_type (4 bits): 0=matmul, 1=add, 2=mul
@@ -184,10 +176,10 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val writeCounter = RegInit(0.U(log2Ceil(b.veclane + 1).W))
   val computeCounter = RegInit(0.U(32.W))
 
-  // PiDRAM CIM BlackBox instance
-  val pidramCIM = Module(new PiDRAMCIMBlackBox)
-  pidramCIM.io.clock := clock
-  pidramCIM.io.reset := reset.asBool
+  // PiDRAM marco BlackBox instance
+  val pidrammarco = Module(new PiDRAMmarcoBlackBox)
+  pidrammarco.io.clock := clock
+  pidrammarco.io.reset := reset.asBool
 
   // Default SRAM assignments
   for (i <- 0 until b.sp_banks) {
@@ -215,15 +207,15 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   io.cmdResp.valid := false.B
   io.cmdResp.bits.rob_id := robid_reg
 
-  // PiDRAM CIM interface defaults
-  pidramCIM.io.start := false.B
-  pidramCIM.io.op1_addr := op1_addr_reg
-  pidramCIM.io.op2_addr := op2_addr_reg
-  pidramCIM.io.result_addr := result_addr_reg
-  pidramCIM.io.rows := rows_reg
-  pidramCIM.io.cols := cols_reg
-  pidramCIM.io.op_type := op_type_reg
-  pidramCIM.io.data_width := b.inputType.getWidth.U
+  // PiDRAM marco interface defaults
+  pidrammarco.io.start := false.B
+  pidrammarco.io.op1_addr := op1_addr_reg
+  pidrammarco.io.op2_addr := op2_addr_reg
+  pidrammarco.io.result_addr := result_addr_reg
+  pidrammarco.io.rows := rows_reg
+  pidrammarco.io.cols := cols_reg
+  pidrammarco.io.op_type := op_type_reg
+  pidrammarco.io.data_width := b.inputType.getWidth.U
 
   // Status output
   io.status.ready := io.cmdReq.ready
@@ -252,7 +244,7 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         result_bank_reg := io.cmdReq.bits.cmd.wr_bank
         iter_reg := io.cmdReq.bits.cmd.iter
 
-        // Extract CIM parameters from special field (40 bits)
+        // Extract marco parameters from special field (40 bits)
         // special[15:0] = rows, special[31:16] = cols, special[35:32] = op_type
         rows_reg := io.cmdReq.bits.cmd.special(15, 0)
         cols_reg := io.cmdReq.bits.cmd.special(31, 16)
@@ -291,13 +283,13 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       }.otherwise {
         state := sCompute
         readCounter := 0.U
-        pidramCIM.io.start := true.B
+        pidrammarco.io.start := true.B
       }
     }
 
     is(sCompute) {
-      // Wait for PiDRAM CIM to complete
-      when(pidramCIM.io.done) {
+      // Wait for PiDRAM marco to complete
+      when(pidrammarco.io.done) {
         state := sWrite
         writeCounter := 0.U
       }.otherwise {
@@ -310,7 +302,7 @@ class CIM(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
       when(writeCounter < iter_reg) {
         io.sramWrite(result_bank_reg).req.valid := true.B
         io.sramWrite(result_bank_reg).req.bits.addr := result_addr_reg + writeCounter
-        // Simplified: write zeros as placeholder (actual output would come from PiDRAM CIM)
+        // Simplified: write zeros as placeholder (actual output would come from PiDRAM marco)
         io.sramWrite(result_bank_reg).req.bits.data := 0.U
         io.sramWrite(result_bank_reg).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(1.U(1.W)))
 

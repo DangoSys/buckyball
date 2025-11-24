@@ -1,6 +1,6 @@
 # Agent Workflow
 
-AI assistant workflow in BuckyBall framework, providing conversational interaction with AI models.
+AI assistant workflow in Buckyball framework, providing conversational interaction with AI models.
 
 ## API Usage
 
@@ -16,7 +16,7 @@ AI assistant workflow in BuckyBall framework, providing conversational interacti
 **Examples**:
 ```bash
 # Basic conversation
-bbdev agent --chat "--message 'Hello, can you help me with BuckyBall development?'"
+bbdev agent --chat "--message 'Hello, can you help me with Buckyball development?'"
 
 # Specify model
 bbdev agent --chat "--message 'Explain this Scala code' --model deepseek-chat"
