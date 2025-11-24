@@ -169,7 +169,7 @@ else {
 ### BaseConfigs.scala
 
 ```scala
-case class CustomBuckyBallConfig(
+case class CustomBuckyballConfig(
   rob_entries: Int = 16,                      // ROB entry count
   rs_out_of_order_response: Boolean = true,   // Out-of-order response mode
   ...

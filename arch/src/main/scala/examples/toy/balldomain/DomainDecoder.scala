@@ -3,14 +3,14 @@ package examples.toy.balldomain
 import chisel3._
 import chisel3.util._
 import framework.builtin.frontend.PostGDCmd
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.DISA._
 import framework.builtin.memdomain.dma.LocalAddr
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config.Parameters
 
 // Detailed decode output for Ball domain
-class BallDecodeCmd(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallDecodeCmd(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // Ball ID
   val bid = UInt(5.W)
 
@@ -67,7 +67,7 @@ object BallDefaultConstants {
   val DSPECIAL = 0.U(40.W)
 }
 
-class BallDomainDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class BallDomainDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   import BallDefaultConstants._
 
   val io = IO(new Bundle {

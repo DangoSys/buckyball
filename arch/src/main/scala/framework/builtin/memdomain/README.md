@@ -2,7 +2,7 @@
 
 ## Overview
 
-MemDomain is the memory subsystem of BuckyBall, located at `framework/builtin/memdomain`. It handles memory management and data transfer between main memory and on-chip storage (scratchpad and accumulator).
+MemDomain is the memory subsystem of Buckyball, located at `framework/builtin/memdomain`. It handles memory management and data transfer between main memory and on-chip storage (scratchpad and accumulator).
 
 ## File Structure
 
@@ -182,7 +182,7 @@ case class BaseConfig(
 
 ```scala
 // Instantiate memory domain
-implicit val config = new CustomBuckyBallConfig
+implicit val config = new CustomBuckyballConfig
 val memDomain = LazyModule(new MemDomain)
 
 // Connect to Global RS

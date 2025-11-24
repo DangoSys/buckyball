@@ -2,7 +2,7 @@
 
 ## Overview
 
-This module implements the Reservation Station and Reorder Buffer (ROB) in the BuckyBall system for out-of-order execution and instruction scheduling support. The reservation station manages instruction issue and completion, while ROB ensures instructions commit in program order, maintaining precise exception semantics.
+This module implements the Reservation Station and Reorder Buffer (ROB) in the Buckyball system for out-of-order execution and instruction scheduling support. The reservation station manages instruction issue and completion, while ROB ensures instructions commit in program order, maintaining precise exception semantics.
 
 ## File Structure
 
@@ -159,8 +159,8 @@ class BallCommitInterface extends Bundle {
 
 ### Basic Configuration
 ```scala
-// Configure ROB size in CustomBuckyBallConfig
-class MyBuckyBallConfig extends CustomBuckyBallConfig {
+// Configure ROB size in CustomBuckyballConfig
+class MyBuckyballConfig extends CustomBuckyballConfig {
   override val rob_entries = 16  // 16-entry ROB
 }
 

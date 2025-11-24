@@ -5,14 +5,14 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 
 /**
  * NNLut - Neural Network Look-Up Table unit
  * Simple implementation: read data from scratchpad, lookup in LUT, write back
  */
-class NNLut(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class NNLut(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {

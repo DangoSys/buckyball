@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains the implementation of BuckyBall's ball domain bus system, primarily responsible for managing SRAM resource access by multiple Ball nodes within the ball domain. The bus system is implemented based on BBusNode from framework.blink, providing SRAM resource arbitration and routing functionality.
+This directory contains the implementation of Buckyball's ball domain bus system, primarily responsible for managing SRAM resource access by multiple Ball nodes within the ball domain. The bus system is implemented based on BBusNode from framework.blink, providing SRAM resource arbitration and routing functionality.
 
 This directory implements two core components:
 - **BallBus**: Ball domain bus main module, manages SRAM access by multiple Ball nodes

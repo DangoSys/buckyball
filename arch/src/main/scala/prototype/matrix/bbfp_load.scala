@@ -7,9 +7,9 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 
-class BBFP_LoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class BBFP_LoadUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
   val spad_w = b.veclane * b.inputType.getWidth
   val io = IO(new Bundle {

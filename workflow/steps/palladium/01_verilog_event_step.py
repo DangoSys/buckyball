@@ -24,9 +24,9 @@ config = {
 async def handler(data, context):
     bbdir = get_buckyball_path()
     # Use arch/build as the base directory for chipyard.Generator
-    base_build_dir = f"{data.get('output_dir', f'{bbdir}/arch/build')}"
+    base_build_dir = f"{data.get('output_dir', f'{bbdir}/arch/build')}/palladium"
     # Output directory for final Verilog files
-    verilog_output_dir = f"{base_build_dir}/palladium"
+    verilog_output_dir = f"{base_build_dir}/verilog"
     arch_dir = f"{bbdir}/arch"
 
     # Get config name, must be provided

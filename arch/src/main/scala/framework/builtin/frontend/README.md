@@ -2,7 +2,7 @@
 
 ## Overview
 
-Frontend components handle instruction decode and scheduling in BuckyBall. Located at `arch/src/main/scala/framework/builtin/frontend`.
+Frontend components handle instruction decode and scheduling in Buckyball. Located at `arch/src/main/scala/framework/builtin/frontend`.
 
 ## File Structure
 
@@ -24,7 +24,7 @@ Decodes RoCC instructions and classifies them into different types.
 
 **Interface**:
 ```scala
-class GlobalDecoder(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val rocc = Flipped(Decoupled(new RoCCCommand))
     val issue = Decoupled(new PostGDCmd)
@@ -51,7 +51,7 @@ Central instruction manager between GlobalDecoder and execution domains.
 
 **Interface**:
 ```scala
-class GlobalReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // From GlobalDecoder
     val decode = Flipped(Decoupled(new PostGDCmd))

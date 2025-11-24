@@ -18,7 +18,7 @@ rs/
 ### Interface
 
 ```scala
-class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemReservationStation(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val mem_decode_cmd_i = Flipped(Decoupled(new MemDecodeCmd))
     val rs_rocc_o = new Bundle {
@@ -34,7 +34,7 @@ class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) ex
 ### Issue Interface
 
 ```scala
-class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemIssueInterface(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val ld = Decoupled(new MemRsIssue)    // Load instruction issue
   val st = Decoupled(new MemRsIssue)    // Store instruction issue
 }
@@ -43,7 +43,7 @@ class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extend
 ### Commit Interface
 
 ```scala
-class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemCommitInterface(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val ld = Flipped(Decoupled(new MemRsComplete))    // Load completion
   val st = Flipped(Decoupled(new MemRsComplete))    // Store completion
 }
@@ -54,7 +54,7 @@ class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) exten
 ### Interface
 
 ```scala
-class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class ROB (implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val alloc = Flipped(Decoupled(new MemDecodeCmd))
     val issue = Decoupled(new RobEntry)
@@ -68,7 +68,7 @@ class ROB (implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
 ### ROB Entry
 
 ```scala
-class RobEntry(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class RobEntry(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmd    = new MemDecodeCmd                    // Memory instruction
   val rob_id = UInt(log2Up(b.rob_entries).W)      // ROB ID
 }
@@ -138,10 +138,10 @@ when(io.complete.fire) {
 
 ## Configuration
 
-ROB configuration through `CustomBuckyBallConfig`:
+ROB configuration through `CustomBuckyballConfig`:
 
 ```scala
-class CustomBuckyBallConfig extends Config((site, here, up) => {
+class CustomBuckyballConfig extends Config((site, here, up) => {
   case "rob_entries" => 16    // Number of ROB entries
 })
 ```

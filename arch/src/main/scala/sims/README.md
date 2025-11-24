@@ -26,13 +26,13 @@ object Elaborate extends App {
   val ballType = args.headOption.getOrElse("toy")
 
   val config = ballType match {
-    case "toy" => new ToyBuckyBallConfig
+    case "toy" => new ToyBuckyballConfig
     case "vec" => new WithBlink(TargetBall.VecBall)
     case "matrix" => new WithBlink(TargetBall.MatrixBall)
     case "transpose" => new WithBlink(TargetBall.TransposeBall)
     case "im2col" => new WithBlink(TargetBall.Im2colBall)
     case "relu" => new WithBlink(TargetBall.ReluBall)
-    case _ => new ToyBuckyBallConfig
+    case _ => new ToyBuckyballConfig
   }
 
   val gen = () => LazyModule(new TestHarness()(config)).module
@@ -49,7 +49,7 @@ object Elaborate extends App {
 
 **Generation Flow**:
 1. Parse command line arguments and configuration
-2. Instantiate BuckyBall system module
+2. Instantiate Buckyball system module
 3. Generate Verilog RTL code
 4. Output auxiliary files for simulation
 
@@ -65,11 +65,11 @@ object Elaborate extends App {
 Configurations for running on FireSim FPGA platform:
 
 ```scala
-class FireSimBuckyBallConfig extends Config(
+class FireSimBuckyballConfig extends Config(
   new WithDefaultFireSimBridges ++
   new WithDefaultMemModel ++
   new WithFireSimConfigTweaks ++
-  new BuckyBallConfig
+  new BuckyballConfig
 )
 ```
 
@@ -122,7 +122,7 @@ mill arch.runMain sims.verilator.Elaborate [ball_type]
 
 # Build simulator (in sims/verilator directory)
 cd ../../sims/verilator
-make CONFIG=ToyBuckyBall
+make CONFIG=ToyBuckyball
 ```
 
 **Available Ball Types**:
@@ -200,7 +200,7 @@ case object FireSimBridgesKey extends Field[Seq[BridgeIOAnnotation]]
 ```scala
 class MyCustomConfig extends Config(
   new WithMyCustomParameters ++
-  new BuckyBallConfig
+  new BuckyballConfig
 )
 ```
 

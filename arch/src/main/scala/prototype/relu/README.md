@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements BuckyBall's ReLU (Rectified Linear Unit) activation accelerator, located at `arch/src/main/scala/prototype/relu`. The module performs element-wise ReLU processing on Scratchpad data by tiles (`veclane × veclane`) in a vectorized manner and writes results back.
+This directory implements Buckyball's ReLU (Rectified Linear Unit) activation accelerator, located at `arch/src/main/scala/prototype/relu`. The module performs element-wise ReLU processing on Scratchpad data by tiles (`veclane × veclane`) in a vectorized manner and writes results back.
 
 Core components:
 - **Relu.scala**: ReLU accelerator main implementation

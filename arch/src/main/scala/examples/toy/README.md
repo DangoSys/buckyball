@@ -1,11 +1,11 @@
-# Toy BuckyBall Example Implementation
+# Toy Buckyball Example Implementation
 
 ## Overview
 
-This directory contains a complete example implementation of the BuckyBall framework, demonstrating how to build a custom coprocessor based on the RoCC interface. Located in `arch/src/main/scala/examples/toy`, it serves as a reference implementation for the BuckyBall system, integrating global decoder, Ball domain, and memory domain.
+This directory contains a complete example implementation of the Buckyball framework, demonstrating how to build a custom coprocessor based on the RoCC interface. Located in `arch/src/main/scala/examples/toy`, it serves as a reference implementation for the Buckyball system, integrating global decoder, Ball domain, and memory domain.
 
 Core components:
-- **ToyBuckyBall.scala**: Main RoCC coprocessor implementation
+- **ToyBuckyball.scala**: Main RoCC coprocessor implementation
 - **CustomConfigs.scala**: System configuration and RoCC integration
 - **CSR.scala**: Custom control and status registers
 - **balldomain/**: Ball domain related components
@@ -14,7 +14,7 @@ Core components:
 
 ```
 toy/
-├── ToyBuckyBall.scala    - Main coprocessor implementation
+├── ToyBuckyball.scala    - Main coprocessor implementation
 ├── CustomConfigs.scala   - Configuration definitions
 ├── CSR.scala            - CSR implementation
 └── balldomain/          - Ball domain components
@@ -22,13 +22,13 @@ toy/
 
 ### File Dependencies
 
-**ToyBuckyBall.scala** (Core implementation layer)
+**ToyBuckyball.scala** (Core implementation layer)
 - Extends LazyRoCCBB, implements RoCC coprocessor interface
 - Integrates GlobalDecoder, BallDomain, MemDomain
 - Manages TileLink connections and DMA components
 
 **CustomConfigs.scala** (Configuration layer)
-- Defines BuckyBallCustomConfig and BuckyBallToyConfig
+- Defines BuckyballCustomConfig and BuckyballToyConfig
 - Configures RoCC integration and system parameters
 - Provides multi-core configuration support
 
@@ -38,14 +38,14 @@ toy/
 
 ## Module Description
 
-### ToyBuckyBall.scala
+### ToyBuckyball.scala
 
-**Main functionality**: Implements complete BuckyBall RoCC coprocessor
+**Main functionality**: Implements complete Buckyball RoCC coprocessor
 
 **Key components**:
 
 ```scala
-class ToyBuckyBall(val b: CustomBuckyBallConfig)(implicit p: Parameters)
+class ToyBuckyball(val b: CustomBuckyballConfig)(implicit p: Parameters)
   extends LazyRoCCBB (opcodes = b.opcodes, nPTWPorts = 2) {
 
   val reader = LazyModule(new BBStreamReader(...))
@@ -85,12 +85,12 @@ id_node := TLWidthWidget(b.dma_buswidth/8) := TLBuffer() := xbar_node
 
 **Configuration class definition**:
 ```scala
-class BuckyBallCustomConfig(
-  buckyballConfig: CustomBuckyBallConfig = CustomBuckyBallConfig()
+class BuckyballCustomConfig(
+  buckyballConfig: CustomBuckyballConfig = CustomBuckyballConfig()
 ) extends Config((site, here, up) => {
   case BuildRoCCBB => up(BuildRoCCBB) ++ Seq(
     (p: Parameters) => {
-      val buckyball = LazyModule(new ToyBuckyBall(buckyballConfig))
+      val buckyball = LazyModule(new ToyBuckyball(buckyballConfig))
       buckyball
     }
   )
@@ -99,9 +99,9 @@ class BuckyBallCustomConfig(
 
 **System configuration**:
 ```scala
-class BuckyBallToyConfig extends Config(
-  new framework.rocket.WithNBuckyBallCores(1) ++
-  new BuckyBallCustomConfig(CustomBuckyBallConfig()) ++
+class BuckyballToyConfig extends Config(
+  new framework.rocket.WithNBuckyballCores(1) ++
+  new BuckyballCustomConfig(CustomBuckyballConfig()) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new WithCustomBootROM ++
   new chipyard.config.AbstractConfig
@@ -110,7 +110,7 @@ class BuckyBallToyConfig extends Config(
 
 **Multi-core support**:
 ```scala
-class WithMultiRoCCToyBuckyBall(harts: Int*) extends Config(...)
+class WithMultiRoCCToyBuckyball(harts: Int*) extends Config(...)
 ```
 
 ### CSR.scala
@@ -164,4 +164,4 @@ memDomain.io.dma.write.req <> outer.writer.module.io.req
 2. **Busy-wait detection**: Assertion checks to prevent long simulation stalls
 3. **TLB integration**: TLB functionality integrated in MemDomain
 4. **Response arbitration**: BallDomain has higher priority than MemDomain
-5. **Configuration dependencies**: Correctly configure CustomBuckyBallConfig parameters
+5. **Configuration dependencies**: Correctly configure CustomBuckyballConfig parameters

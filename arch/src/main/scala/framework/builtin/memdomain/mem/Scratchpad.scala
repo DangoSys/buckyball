@@ -6,12 +6,12 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 
 import framework.builtin.util.Util._
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 
 import framework.builtin.memdomain.mem.AccWriteIO
 
 
-class Scratchpad(config: CustomBuckyBallConfig)(implicit val p: Parameters) extends Module with HasCoreParameters {
+class Scratchpad(config: CustomBuckyballConfig)(implicit val p: Parameters) extends Module with HasCoreParameters {
   import config._
 
   // Assertion: ensure configuration consistency

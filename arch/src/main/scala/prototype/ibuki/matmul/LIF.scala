@@ -5,15 +5,11 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 
-/**
- * SNN - Spiking Neural Network unit
- * Simple implementation: Leaky Integrate-and-Fire (LIF) neuron model
- * Read membrane potential from scratchpad, apply LIF model, generate spikes, write back
- */
-class SNN(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+
+class LIF(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {
@@ -55,7 +51,7 @@ class SNN(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
   val cycle_reg = RegInit(0.U(6.W))
   val iterCnt = RegInit(0.U(32.W))
 
-  // SNN parameters from special field
+  // LIF parameters from special field
   // special[7:0] = threshold (8 bits)
   // special[15:8] = leak_factor (8 bits, represents leak rate)
   val threshold_reg = RegInit(127.U(8.W))  // Default threshold
@@ -100,7 +96,7 @@ class SNN(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
         iter_reg := io.cmdReq.bits.cmd.iter
         cycle_reg := (io.cmdReq.bits.cmd.iter +& (b.veclane.U - 1.U)) / b.veclane.U - 1.U
 
-        // Extract SNN parameters from special field
+        // Extract LIF parameters from special field
         threshold_reg := io.cmdReq.bits.cmd.special(7, 0)
         leak_factor_reg := io.cmdReq.bits.cmd.special(15, 8)
       }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements BuckyBall's Im2col operation accelerator for image-to-column matrix conversion in convolutional neural networks. Located at `arch/src/main/scala/prototype/im2col`, it serves as an image processing accelerator that converts convolution operations to matrix multiplication operations to improve computational efficiency.
+This directory implements Buckyball's Im2col operation accelerator for image-to-column matrix conversion in convolutional neural networks. Located at `arch/src/main/scala/prototype/im2col`, it serves as an image processing accelerator that converts convolution operations to matrix multiplication operations to improve computational efficiency.
 
 Core components:
 - **im2col.scala**: Im2col accelerator main implementation

@@ -1,6 +1,6 @@
 # UVM Workflow
 
-UVM (Universal Verification Methodology) workflow in the BuckyBall framework for building and running UVM verification environments.
+UVM (Universal Verification Methodology) workflow in the Buckyball framework for building and running UVM verification environments.
 
 ## API Usage
 

@@ -1,6 +1,6 @@
 # FireSim Workflow
 
-FireSim FPGA simulation workflow in BuckyBall framework, providing FPGA-based hardware simulation environment.
+FireSim FPGA simulation workflow in Buckyball framework, providing FPGA-based hardware simulation environment.
 
 ## API Usage
 

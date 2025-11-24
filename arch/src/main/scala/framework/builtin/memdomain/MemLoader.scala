@@ -3,13 +3,13 @@ package framework.builtin.memdomain
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
 import framework.builtin.memdomain.mem.SramWriteIO
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, LocalAddr}
 import freechips.rocketchip.rocket.MStatus
 
-class MemLoader(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemLoader(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
 
   val io = IO(new Bundle {

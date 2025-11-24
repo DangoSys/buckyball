@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains a complete example implementation of BallDomain in the BuckyBall framework, demonstrating how to build a custom computation domain to manage specialized accelerators. BallDomain is a core concept in BuckyBall architecture, used to encapsulate and manage a group of related computation units with unified control and dataflow management.
+This directory contains a complete example implementation of BallDomain in the Buckyball framework, demonstrating how to build a custom computation domain to manage specialized accelerators. BallDomain is a core concept in Buckyball architecture, used to encapsulate and manage a group of related computation units with unified control and dataflow management.
 
 This directory implements the ball domain architecture, including:
 - **BallDomain**: Top-level module managing the entire computation domain

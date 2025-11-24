@@ -3,13 +3,13 @@ package examples.toy.balldomain.bbus
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.bbus.BBus
 
 /**
  * BBusModule - Ball bus module that directly extends BBus
  */
-class BBusModule(implicit b: CustomBuckyBallConfig, p: Parameters) extends BBus (
+class BBusModule(implicit b: CustomBuckyballConfig, p: Parameters) extends BBus (
   // Define Ball device generators to register
   Seq(
     () => new prototype.vector.VecBall(0),

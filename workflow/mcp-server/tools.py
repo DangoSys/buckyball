@@ -1,5 +1,5 @@
 """
-Tool definitions and handlers for BuckyBall MCP server.
+Tool definitions and handlers for Buckyball MCP server.
 """
 
 import asyncio
@@ -224,7 +224,7 @@ def get_all_tools() -> list[Tool]:
         # Agent tools
         Tool(
             name="agent_chat",
-            description="Chat with the BuckyBall development agent",
+            description="Chat with the Buckyball development agent",
             inputSchema={
                 "type": "object",
                 "properties": {

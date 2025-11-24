@@ -17,13 +17,13 @@ class WithCustomBootROM extends Config((site, here, up) => {
 })
 
 
-class BuckyBallToyVerilatorConfig extends Config(
+class BuckyballToyVerilatorConfig extends Config(
   new WithCustomBootROM ++
-  new examples.toy.BuckyBallToyConfig)
+  new examples.toy.BuckyballToyConfig)
 
-// class BuckyBallGemminiVerilatorConfig extends Config(
-//   new WithCustomBootROM ++
-//   new examples.gemmini.BuckyBallGemminiSystemConfig)
+class BuckyballGemminiVerilatorConfig extends Config(
+  new WithCustomBootROM ++
+  new gemmini.DefaultGemminiConfig)
 
 object Elaborate extends App {
   // Select Ball type from command line arguments
@@ -44,10 +44,10 @@ object Elaborate extends App {
 
   // Select corresponding Config based on configuration name
   val config: Config = configName match {
-    case "toy" => new BuckyBallToyVerilatorConfig
-    // case "gemmini" => new BuckyBallGemminiVerilatorConfig
+    case "toy" => new BuckyballToyVerilatorConfig
+    case "gemmini" => new BuckyballGemminiVerilatorConfig
     // Default to toy
-    case _ => new BuckyBallToyVerilatorConfig
+    case _ => new BuckyballToyVerilatorConfig
   }
 
   println(s"Elaborating with config: $configName")

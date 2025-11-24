@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements data format definitions and arithmetic operation abstractions in BuckyBall, providing a unified data type processing interface. Located at `arch/src/main/scala/prototype/format`, it serves as the data format layer, providing type-safe data format support for other prototype accelerators.
+This directory implements data format definitions and arithmetic operation abstractions in Buckyball, providing a unified data type processing interface. Located at `arch/src/main/scala/prototype/format`, it serves as the data format layer, providing type-safe data format support for other prototype accelerators.
 
 Core components:
 - **Dataformat.scala**: Data format definitions and factory classes

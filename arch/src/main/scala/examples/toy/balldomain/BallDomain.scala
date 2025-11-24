@@ -7,12 +7,12 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.PostGDCmd
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.rs.BallRSModule
 import examples.toy.balldomain.bbus.BBusModule
 
 // Ball Domain input/output interface
-class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class BallDomainIO(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // Issue interface from global RS (single channel)
   val global_issue_i = Flipped(Decoupled(new framework.builtin.frontend.globalrs.GlobalRsIssue))
 
@@ -27,7 +27,7 @@ class BallDomainIO(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bun
 }
 
 // Ball Domain top level - uses new simplified BBus architecture
-class BallDomain(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class BallDomain(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
 
   val io = IO(new BallDomainIO)
 

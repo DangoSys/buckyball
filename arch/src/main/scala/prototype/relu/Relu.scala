@@ -8,10 +8,10 @@ import org.chipsalliance.cde.config.Parameters
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 
-class PipelinedRelu[T <: Data](implicit b: CustomBuckyBallConfig, p: Parameters)
+class PipelinedRelu[T <: Data](implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 

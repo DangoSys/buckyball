@@ -5,7 +5,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
 import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 
 /**
@@ -102,7 +102,7 @@ class NVDLAConvBlackBox extends BlackBox with HasBlackBoxInline {
  * Simplified wrapper around NVDLA CONV module
  * Reads input feature map and weights from scratchpad, performs convolution, writes output
  */
-class Conv(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class Conv(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val spad_w = b.veclane * b.inputType.getWidth
 
   val io = IO(new Bundle {

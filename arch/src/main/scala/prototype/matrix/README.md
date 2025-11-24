@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements BuckyBall's matrix computation accelerator for matrix multiplication and related operations. Located at `arch/src/main/scala/prototype/matrix`, it serves as a matrix computation accelerator supporting multiple data formats and operation modes.
+This directory implements Buckyball's matrix computation accelerator for matrix multiplication and related operations. Located at `arch/src/main/scala/prototype/matrix`, it serves as a matrix computation accelerator supporting multiple data formats and operation modes.
 
 Core components:
 - **bbfp_control.scala**: Matrix computation controller

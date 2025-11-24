@@ -1,18 +1,18 @@
-# BuckyBall Example Configurations
+# Buckyball Example Configurations
 
 ## Overview
 
-This directory contains example configurations and reference implementations of the BuckyBall framework, demonstrating how to configure and extend BuckyBall systems. Located at `arch/src/main/scala/examples`, it serves as the configuration layer, providing configuration templates and system instances for developers.
+This directory contains example configurations and reference implementations of the Buckyball framework, demonstrating how to configure and extend Buckyball systems. Located at `arch/src/main/scala/examples`, it serves as the configuration layer, providing configuration templates and system instances for developers.
 
 Main components include:
-- **BuckyBallConfig.scala**: Global configuration parameter definitions
+- **BuckyballConfig.scala**: Global configuration parameter definitions
 - **toy/**: Complete example system implementation with custom coprocessor and CSR extensions
 
 ## Code Structure
 
 ```
 examples/
-├── BuckyBallConfig.scala     - Global configuration definitions
+├── BuckyballConfig.scala     - Global configuration definitions
 └── toy/                      - Complete example system
     ├── balldomain/           - Ball domain component implementation
     │   ├── BallDomain.scala  - Ball domain top-level
@@ -22,43 +22,43 @@ examples/
     │   │   └── rsRegister.scala
     │   └── decoder/          - Ball decoder (if exists)
     ├── CustomConfigs.scala   - System configuration composition
-    └── ToyBuckyBall.scala    - System top-level module
+    └── ToyBuckyball.scala    - System top-level module
 ```
 
 ### File Dependencies
 
-**BuckyBallConfig.scala** (Base Configuration Layer)
+**BuckyballConfig.scala** (Base Configuration Layer)
 - Defines global configuration parameters and defaults
 - Inherited and extended by all other configuration files
 - Provides system-level configuration interface
 
 **toy/CustomConfigs.scala** (Configuration Composition Layer)
-- Inherits from BuckyBallConfig and adds custom parameters
+- Inherits from BuckyballConfig and adds custom parameters
 - Composes multiple configuration fragments into complete configuration
-- Provides configuration support for ToyBuckyBall
+- Provides configuration support for ToyBuckyball
 
-**toy/ToyBuckyBall.scala** (System Instantiation Layer)
+**toy/ToyBuckyball.scala** (System Instantiation Layer)
 - Uses CustomConfigs to instantiate complete system
 - Serves as entry point for Mill build
 - Generates final Verilog code
 
 ## Module Details
 
-### BuckyBallConfig.scala
+### BuckyballConfig.scala
 
-**Main Function**: Define global configuration parameters for the BuckyBall framework
+**Main Function**: Define global configuration parameters for the Buckyball framework
 
 **Key Components**:
 
 ```scala
-object BuckyBallConfigs {
+object BuckyballConfigs {
   val defaultConfig = BaseConfig
-  val toyConfig = BuckyBallToyConfig.defaultConfig
+  val toyConfig = BuckyballToyConfig.defaultConfig
 
   // Actually used configuration
   val customConfig = toyConfig
 
-  type CustomBuckyBallConfig = BaseConfig
+  type CustomBuckyballConfig = BaseConfig
 }
 ```
 
@@ -72,20 +72,20 @@ The framework uses `customConfig` to select the active configuration. This allow
 
 ### toy/ - Example System
 
-The toy system demonstrates a complete BuckyBall implementation with various Ball devices.
+The toy system demonstrates a complete Buckyball implementation with various Ball devices.
 
-#### toy/ToyBuckyBall.scala
+#### toy/ToyBuckyball.scala
 
 **Main Function**: System top-level module, instantiates complete toy system
 
 **Key Components**:
 
 ```scala
-class ToyBuckyBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends LazyRoCC {
-  override lazy val module = new ToyBuckyBallModuleImp(this)
+class ToyBuckyball(implicit b: CustomBuckyballConfig, p: Parameters) extends LazyRoCC {
+  override lazy val module = new ToyBuckyballModuleImp(this)
 }
 
-class ToyBuckyBallModuleImp(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer) {
+class ToyBuckyballModuleImp(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) {
   // Global Decoder
   val globalDecoder = Module(new GlobalDecoder)
 
@@ -108,8 +108,8 @@ class ToyBuckyBallModuleImp(outer: ToyBuckyBall) extends LazyRoCCModuleImp(outer
 ```
 
 **Build Flow**:
-1. Load configuration from BuckyBallConfig
-2. Instantiate ToyBuckyBall LazyRoCC module
+1. Load configuration from BuckyballConfig
+2. Instantiate ToyBuckyball LazyRoCC module
 3. Generate Verilog through ChiselStage
 4. Output to generated-src directory
 
@@ -156,7 +156,7 @@ class BallRSModule extends BallReservationStation {
 **Configuration Composition**:
 
 ```scala
-object BuckyBallToyConfig {
+object BuckyballToyConfig {
   val defaultConfig = BaseConfig(
     opcodes = OpcodeSet.custom3,
     inputType = UInt(8.W),        // INT8 input
@@ -190,7 +190,7 @@ object BuckyBallToyConfig {
 **Generate Verilog**:
 ```bash
 cd arch
-mill arch.runMain examples.toy.ToyBuckyBall
+mill arch.runMain examples.toy.ToyBuckyball
 ```
 
 **Generated Files**:
@@ -210,7 +210,7 @@ mill arch.runMain examples.toy.ToyBuckyBall
 
 1. Implement Ball device:
 ```scala
-class MyCustomBall(implicit b: CustomBuckyBallConfig, p: Parameters)
+class MyCustomBall(implicit b: CustomBuckyballConfig, p: Parameters)
   extends Module with BallRegist {
   // Implement Ball interfaces
   val io = IO(new BlinkIO)
@@ -279,7 +279,7 @@ val smallConfig = BaseConfig(
 
 ## System Architecture
 
-The toy system implements the complete BuckyBall architecture:
+The toy system implements the complete Buckyball architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────┐

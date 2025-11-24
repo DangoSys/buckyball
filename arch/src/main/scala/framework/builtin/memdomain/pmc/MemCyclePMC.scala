@@ -3,10 +3,10 @@ package framework.builtin.memdomain.pmc
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain.rs.{MemRsIssue, MemRsComplete}
 
-class MemCyclePMC(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemCyclePMC(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     val ldReq_i = Input(Valid(new MemRsIssue))
     val stReq_i = Input(Valid(new MemRsIssue))

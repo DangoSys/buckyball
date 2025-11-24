@@ -11,13 +11,13 @@
 
 </div>
 
-# BuckyBall
+# Buckyball
 
-BuckyBall is a scalable framework for Domain Specific Architecture, built on RISC-V architecture and optimized for high-performance computing and machine learning accelerator design.
+Buckyball is a scalable framework for Domain Specific Architecture, built on RISC-V architecture and optimized for high-performance computing and machine learning accelerator design.
 
 ## Project Overview
 
-The BuckyBall framework provides a complete hardware design, simulation verification, and software development toolchain, supporting the full development process from RTL design to system-level verification. The framework adopts a modular design that supports flexible configuration and extension, suitable for various specialized computing scenarios.
+The Buckyball framework provides a complete hardware design, simulation verification, and software development toolchain, supporting the full development process from RTL design to system-level verification. The framework adopts a modular design that supports flexible configuration and extension, suitable for various specialized computing scenarios.
 
 ## Quick Start
 

@@ -7,10 +7,10 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 
 
-class ctrl_ld_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class ctrl_ld_req(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val op1_bank      = UInt(log2Up(b.sp_banks).W)
   val op1_bank_addr = UInt(log2Up(b.spad_bank_entries).W)
   val op2_bank      = UInt(log2Up(b.sp_banks).W)
@@ -19,7 +19,7 @@ class ctrl_ld_req(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bund
   val mode          = UInt(1.W)
 }
 
-class VecLoadUnit(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class VecLoadUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
   val io = IO(new Bundle {
     val sramReadReq = Vec(b.sp_banks, Decoupled(new SramReadReq(b.spad_bank_entries)))

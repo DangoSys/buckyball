@@ -1,6 +1,6 @@
 # Verilator Simulation Workflow
 
-Hardware simulation workflow based on Verilator in the BuckyBall framework, providing a complete automation flow from RTL generation to simulation execution. Verilator is a high-performance Verilog simulator that supports fast functional verification and performance analysis.
+Hardware simulation workflow based on Verilator in the Buckyball framework, providing a complete automation flow from RTL generation to simulation execution. Verilator is a high-performance Verilog simulator that supports fast functional verification and performance analysis.
 
 ## II. Original API Usage Guide
 

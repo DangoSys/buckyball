@@ -3,7 +3,7 @@ package framework.builtin.memdomain
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.frontend.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.builtin.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
@@ -14,7 +14,7 @@ import framework.builtin.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
 import framework.builtin.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
-class MemDomain(implicit b: CustomBuckyBallConfig, p: Parameters, edge: TLEdgeOut) extends Module {
+class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)
     val global_issue_i = Flipped(Decoupled(new framework.builtin.frontend.globalrs.GlobalRsIssue))

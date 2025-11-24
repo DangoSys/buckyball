@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements BuckyBall's matrix transpose accelerator for matrix transpose operations. Located at `arch/src/main/scala/prototype/transpose`, it serves as a matrix transpose accelerator supporting pipelined transpose operations.
+This directory implements Buckyball's matrix transpose accelerator for matrix transpose operations. Located at `arch/src/main/scala/prototype/transpose`, it serves as a matrix transpose accelerator supporting pipelined transpose operations.
 
 Core components:
 - **Transpose.scala**: Pipelined transposer implementation

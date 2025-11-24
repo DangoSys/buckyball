@@ -1,6 +1,6 @@
 # Marshal Workflow
 
-Marshal workflow in the BuckyBall framework, used to build and launch the Marshal component.
+Marshal workflow in the Buckyball framework, used to build and launch the Marshal component.
 
 ## API Usage Guide
 

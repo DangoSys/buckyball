@@ -3,14 +3,14 @@ package prototype.matrix
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.matrix.BBFP_Control
 
 /**
  * MatrixBall - A matrix computation Ball that complies with the Blink protocol
  */
-class MatrixBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallRegist {
+class MatrixBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)
   val ballId = id.U
 

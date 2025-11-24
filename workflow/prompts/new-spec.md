@@ -8,7 +8,7 @@
 
 ## 1. 概述 (Overview)
 
-GELU (Gaussian Error Linear Unit) 加速单元是BuckyBall框架中的专用计算加速器，用于高效执行GELU激活函数运算。GELU是现代深度学习模型（如Transformer、BERT、GPT等）中广泛使用的非线性激活函数。
+GELU (Gaussian Error Linear Unit) 加速单元是Buckyball框架中的专用计算加速器，用于高效执行GELU激活函数运算。GELU是现代深度学习模型（如Transformer、BERT、GPT等）中广泛使用的非线性激活函数。
 
 ### 1.1 基本参数
 
@@ -615,7 +615,7 @@ x → MUL(x²) → MUL(x³) → MUL(poly) → TANH → MUL(final)
 
 ### 7.1 编译时参数
 
-通过`CustomBuckyBallConfig`配置：
+通过`CustomBuckyballConfig`配置：
 
 | 参数名称 | 类型 | 默认值 | 描述 |
 |---------|------|--------|------|
@@ -679,7 +679,7 @@ assert max_error < 1e-3, f"Max error {max_error} exceeds threshold"
 
 ### 9.3 集成验证
 
-- **完整系统**: 在ToyBuckyBall环境中集成测试
+- **完整系统**: 在ToyBuckyball环境中集成测试
 - **编译器支持**: 验证MLIR lowering生成正确的GELU指令
 - **端到端**: 运行完整的Transformer模型，验证功能和性能
 

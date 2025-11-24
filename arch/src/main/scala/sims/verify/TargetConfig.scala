@@ -3,10 +3,10 @@ package sims.verify
 import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.{Config, Parameters, Field}
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Blink
 import prototype.vector.VecBall
-import prototype.nagisa.matmul.CIMMatmulBall
+import prototype.matrix.MatrixBall
 import prototype.transpose.TransposeBall
 import prototype.im2col.Im2colBall
 import prototype.relu.ReluBall
@@ -15,7 +15,7 @@ import prototype.nnlut.NNLutBall
 // Ball type definitions
 sealed trait BallType
 case object VecBallType extends BallType
-case object CIMMatmulBallType extends BallType
+case object MatrixBallType extends BallType
 case object TransposeBallType extends BallType
 case object Im2colBallType extends BallType
 case object ReluBallType extends BallType
@@ -25,15 +25,15 @@ case object NNLutBallType extends BallType
 case object TargetBallKey extends Field[BallType](VecBallType)
 
 // TargetBall - directly instantiate pre-packaged Ball
-class TargetBall(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class TargetBall(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Blink)
 
   p(TargetBallKey) match {
     case VecBallType =>
       val ball = Module(new VecBall(0))
       io <> ball.io
-    case CIMMatmulBallType =>
-      val ball = Module(new CIMMatmulBall(0))
+    case MatrixBallType =>
+      val ball = Module(new MatrixBall(0))
       io <> ball.io
     case Im2colBallType =>
       val ball = Module(new Im2colBall(0))
@@ -83,7 +83,7 @@ object BallTopMain extends App {
   } else {
     args(0).toLowerCase match {
       case "vecball" => VecBallType
-      case "matrixball" => CIMMatmulBallType
+      case "matrixball" => MatrixBallType
       case "transposeball" => TransposeBallType
       case "im2colball" => Im2colBallType
       case "reluball" => ReluBallType
@@ -94,7 +94,7 @@ object BallTopMain extends App {
     }
   }
 
-  implicit val config: CustomBuckyBallConfig = examples.CustomBuckyBallConfig()
+  implicit val config: CustomBuckyballConfig = examples.CustomBuckyballConfig()
   implicit val params: Parameters = new Config(new CustomBallTopConfig(ballType))
 
   ChiselStage.emitSystemVerilogFile(

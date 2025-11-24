@@ -3,15 +3,12 @@ package prototype.ibuki.matmul
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
-import prototype.ibuki.matmul.SNN
+import prototype.ibuki.matmul.LIF
 
-/**
- * SNNMatmulBall - A Spiking Neural Network computation Ball that complies with the Blink protocol.
- * Behavior: Read membrane potential from Scratchpad, apply LIF neuron model, generate spikes, then write back to Scratchpad.
- */
-class SNNMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
+
+class LIFMatmulBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
     extends Module
     with BallRegist {
   val io = IO(new Blink)
@@ -20,22 +17,22 @@ class SNNMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   // Satisfy BallRegist requirements
   def Blink: Blink = io
 
-  // Instantiate SNN computation unit
-  private val snnUnit = Module(new SNN)
+  // Instantiate LIF computation unit
+  private val lifUnit = Module(new LIF)
 
   // Connect command interface
-  snnUnit.io.cmdReq <> io.cmdReq
-  snnUnit.io.cmdResp <> io.cmdResp
+  lifUnit.io.cmdReq <> io.cmdReq
+  lifUnit.io.cmdResp <> io.cmdResp
 
   // Connect Scratchpad SRAM read/write interface
   for (i <- 0 until b.sp_banks) {
-    snnUnit.io.sramRead(i) <> io.sramRead(i).io
+    lifUnit.io.sramRead(i) <> io.sramRead(i).io
     io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
-    snnUnit.io.sramWrite(i) <> io.sramWrite(i).io
+    lifUnit.io.sramWrite(i) <> io.sramWrite(i).io
     io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
   }
 
-  // Accumulator read interface (SNN does not access accumulator, tie-off)
+  // Accumulator read interface (LIF does not access accumulator, tie-off)
   for (i <- 0 until b.acc_banks) {
     io.accRead(i).io.req.valid := false.B
     io.accRead(i).io.req.bits := DontCare
@@ -43,7 +40,7 @@ class SNNMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
     io.accRead(i).rob_id := 0.U
   }
 
-  // Accumulator write interface (SNN does not write accumulator, tie-off)
+  // Accumulator write interface (LIF does not write accumulator, tie-off)
   for (i <- 0 until b.acc_banks) {
     io.accWrite(i).io.req.valid := false.B
     io.accWrite(i).io.req.bits := DontCare
@@ -51,7 +48,7 @@ class SNNMatmulBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters)
   }
 
   // Pass through status signals
-  io.status <> snnUnit.io.status
+  io.status <> lifUnit.io.status
 
-  override lazy val desiredName: String = "SNNMatmulBall"
+  override lazy val desiredName: String = "LIFMatmulBall"
 }

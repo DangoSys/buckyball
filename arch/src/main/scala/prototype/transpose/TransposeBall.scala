@@ -3,14 +3,14 @@ package prototype.transpose
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.{Blink, BallRegist}
 import prototype.transpose.PipelinedTransposer
 
 /**
  * TransposeBall - A transpose computation Ball that complies with the Blink protocol
  */
-class TransposeBall(id: Int)(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module with BallRegist {
+class TransposeBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)
   val ballId = id.U
 

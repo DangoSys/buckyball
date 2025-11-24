@@ -1,4 +1,4 @@
-# Custom configuration for BuckyBall FireSim builds
+# Custom configuration for Buckyball FireSim builds
 # This file overrides the default TARGET_CONFIG_PACKAGE to use our custom configs
 
 # Only used in this projects makefrags

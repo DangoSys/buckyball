@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory implements the BuckyBall Blink interconnect system, providing connection negotiation between Ball and BBus based on the Diplomacy framework. Located in `arch/src/main/scala/framework/blink`, it serves as the system interconnect layer, managing SRAM bandwidth resource allocation and negotiation.
+This directory implements the Buckyball Blink interconnect system, providing connection negotiation between Ball and BBus based on the Diplomacy framework. Located in `arch/src/main/scala/framework/blink`, it serves as the system interconnect layer, managing SRAM bandwidth resource allocation and negotiation.
 
 Core components:
 - **ball.scala**: Ball module as Diplomacy source

@@ -1,4 +1,4 @@
-# BuckyBall MCP Server
+# Buckyball MCP Server
 
 将 bbdev 工具封装为 MCP 服务，可以在 Claude/Cursor 中直接使用。
 

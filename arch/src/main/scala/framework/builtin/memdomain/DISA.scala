@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 
 
-class BuckyBallRawCmd(implicit p: Parameters) extends Bundle {
+class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
   val cmd = new RoCCCommand
 }
 

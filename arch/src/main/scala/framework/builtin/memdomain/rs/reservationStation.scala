@@ -4,34 +4,34 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyBallConfigs.CustomBuckyBallConfig
+import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.builtin.memdomain._
 // Mem domain issue interface - includes global rob_id
-class MemRsIssue(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemRsIssue(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val cmd = new MemDecodeCmd
   // Global ROB ID
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // Mem domain completion interface
-class MemRsComplete(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemRsComplete(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val rob_id = UInt(log2Up(b.rob_entries).W)
 }
 
 // Mem domain issue interface combination (Load + Store)
-class MemIssueInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemIssueInterface(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val ld = Decoupled(new MemRsIssue)
   val st = Decoupled(new MemRsIssue)
 }
 
 // Mem domain completion interface combination (Load + Store)
-class MemCommitInterface(implicit b: CustomBuckyBallConfig, p: Parameters) extends Bundle {
+class MemCommitInterface(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val ld = Flipped(Decoupled(new MemRsComplete))
   val st = Flipped(Decoupled(new MemRsComplete))
 }
 
 // Local Mem reservation station - simple FIFO scheduler
-class MemReservationStation(implicit b: CustomBuckyBallConfig, p: Parameters) extends Module {
+class MemReservationStation(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {
     // Decoded instruction input (with global rob_id)
     val mem_decode_cmd_i = Flipped(new DecoupledIO(new Bundle {
