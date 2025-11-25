@@ -43,7 +43,6 @@
   - [agent](./workflow/steps/agent/README.md)
   - [compiler](./workflow/steps/compiler/README.md)
   - [doc-agent](./workflow/steps/doc-agent/README.md)
-  - [firesim](./workflow/steps/firesim/README.md)
   - [funcsim](./workflow/steps/funcsim/README.md)
   - [marshal](./workflow/steps/marshal/README.md)
   - [sardine](./workflow/steps/sardine/README.md)
