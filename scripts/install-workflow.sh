@@ -20,8 +20,8 @@ conda install -c conda-forge nodejs=20 -y
 cd ${BBDIR}/workflow
 ln -s ${CONDA_PREFIX} ./python_modules
 
-cd ${BBDIR}
-npx motia@latest create -n workflow -t python
+cd ${BBDIR}/workflow
+npx motia@latest create -t python
 
 pip install python-dotenv
 pip install httpx
@@ -32,7 +32,6 @@ cd ${BBDIR}/workflow/steps && rm -r petstore/ || true
 cd ${BBDIR}/workflow && rm -r services/ || true
 cd ${BBDIR}/workflow && rm *.{md,tsx} || true
 # cd ${BBDIR}/workflow && npx motia dev -p 5000
-
 
 # install MCP
 pip install mcp
