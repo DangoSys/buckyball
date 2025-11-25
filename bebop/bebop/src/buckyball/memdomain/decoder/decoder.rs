@@ -1,11 +1,11 @@
 /// Memory Domain Decoder - memory access instruction decoder
-use crate::builtin::{Module, Wire};
-use crate::global_decoder::{DecoderOutput, MvinConfig, MvoutConfig};
+use crate::buckyball::builtin::{Module, Wire};
+use crate::buckyball::frontend::{DecoderOutput, MvinConfig, MvoutConfig};
 
 /// MemDecoder input (from global Decoder output)
 pub type MemDecoderInput = DecoderOutput;
 
-use crate::memdomain::mem::bank::{ReadReq, WriteReq};
+use super::super::mem::bank::{ReadReq, WriteReq};
 
 /// DMA operation type
 #[derive(Debug, Clone)]
