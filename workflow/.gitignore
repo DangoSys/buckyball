@@ -11,7 +11,8 @@ motia-workbench.json
 package-lock.json
 package.json
 types.d.ts
-
+appendonlydir/
+dump.rdb
 services/
 *.log
 output/

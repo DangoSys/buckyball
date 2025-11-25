@@ -27,9 +27,10 @@ pip install python-dotenv
 pip install httpx
 
 cd ${BBDIR}/workflow/steps && rm *.{py,json} || true
-cd ${BBDIR}/workflow/steps && rm -r services/ || true
+cd ${BBDIR}/workflow/steps && rm -r src/ || true
 cd ${BBDIR}/workflow/steps && rm -r petstore/ || true
 cd ${BBDIR}/workflow && rm -r services/ || true
+cd ${BBDIR}/workflow && rm -r tutorial/ || true
 cd ${BBDIR}/workflow && rm *.{md,tsx} || true
 # cd ${BBDIR}/workflow && npx motia dev -p 5000
 

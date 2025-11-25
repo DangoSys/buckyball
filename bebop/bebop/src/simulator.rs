@@ -1,9 +1,9 @@
 /// Accelerator simulator with state management
-use crate::builtin::Module;
+use crate::buckyball::builtin::Module;
+use crate::buckyball::memdomain::decoder::DmaOperation;
+use crate::buckyball::Top;
 use crate::config::NpuConfig;
-use crate::memdomain::decoder::DmaOperation;
 use crate::socket::DmaClient;
-use crate::Top;
 
 /// Accelerator simulator that manages state
 pub struct Simulator {
@@ -55,7 +55,7 @@ impl Simulator {
   /// Execute MVIN DMA operation - read from DRAM to scratchpad
   fn execute_mvin(
     &mut self,
-    config: &crate::global_decoder::MvinConfig,
+    config: &crate::buckyball::frontend::MvinConfig,
     dma_client: &mut DmaClient,
   ) -> std::io::Result<()> {
     const DIM: u32 = 16; // Number of elements per row
@@ -104,7 +104,7 @@ impl Simulator {
   /// Execute MVOUT DMA operation - write from scratchpad to DRAM
   fn execute_mvout(
     &mut self,
-    config: &crate::global_decoder::MvoutConfig,
+    config: &crate::buckyball::frontend::MvoutConfig,
     dma_client: &mut DmaClient,
   ) -> std::io::Result<()> {
     const DIM: u32 = 16; // Number of elements per row

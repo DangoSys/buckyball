@@ -1,5 +1,5 @@
 /// Memory bank with scratchpad
-use crate::builtin::{Module, Wire};
+use crate::buckyball::builtin::{Module, Wire};
 
 /// Read request
 #[derive(Clone, Default)]
