@@ -5,7 +5,7 @@ set -e
 set -o pipefail
 
 BBDIR=$(git rev-parse --show-toplevel)
-BUDDY_MLIR_DIR=${BBDIR}/compiler/thirdparty/buddy-mlir
+BUDDY_MLIR_DIR=${BBDIR}/compiler
 
 # get helpful utilities
 source ${BBDIR}/scripts/utils.sh

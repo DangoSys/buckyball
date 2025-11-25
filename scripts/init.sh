@@ -158,25 +158,27 @@ if run_step "9"; then
   ./install-mill.sh
 fi
 
-if run_step "10"; then
-  begin_step "10" "pre-compile buckyball arch code"
-  source ${BBDIR}/env.sh
-  cd ${BBDIR}/
-  bbdev verilator --verilog
-fi
+# if run_step "10"; then
+#   begin_step "10" "pre-compile buckyball arch code"
+#   source ${BBDIR}/env.sh
+#   cd ${BBDIR}/
+#   bbdev verilator --verilog
+# fi
 
 if run_step "11"; then
   begin_step "11" "Install pre-commit"
   source ${BBDIR}/env.sh
-  ${BBDIR}/scripts/install-pre-commit.sh
+  # ${BBDIR}/scripts/install-pre-commit.sh
   pip install pre-commit
   cd ${BBDIR}
   pre-commit install
 fi
 
-if run_step "12"; then
-  begin_step "12" "Install verify tools"
-  source ${BBDIR}/env.sh
-  # ${BBDIR}/scripts/install-verify-tools.sh
-  echo "veriy toolchain is not installed"
-fi
+# if run_step "12"; then
+#   begin_step "12" "Install verify tools"
+#   source ${BBDIR}/env.sh
+#   # ${BBDIR}/scripts/install-verify-tools.sh
+#   echo "veriy toolchain is not installed"
+# fi
+
+begin_step "END" "Setup completed successfully!"
