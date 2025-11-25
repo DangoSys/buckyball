@@ -10,6 +10,9 @@ renderer = ["html"]
 marker = "[[_TOC_]]"
 max-level = 5
 
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
 [output.html]
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
