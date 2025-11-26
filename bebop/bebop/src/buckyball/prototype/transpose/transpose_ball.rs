@@ -1,88 +1,55 @@
 /// TransposeBall - Matrix transpose accelerator
-/// Reads matrix from scratchpad, transposes it, writes back
-use crate::builtin::{Module, Wire};
-use super::isa::TransposeCmd;
+use crate::builtin::ball::{Ball, Blink};
+use super::decode;
+use super::compute::TransposeCompute;
+use super::runner::run_transpose;
+use super::super::common::{NUM_SP_BANKS, NUM_ACC_BANKS};
 
 pub struct TransposeBall {
-    name: String,
-    pub cmd_req: Wire<TransposeCmd>,
-    pub cmd_resp: Wire<u32>,
-
-    state: State,
-    cycle_count: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum State {
-    Idle,
-    Reading,
-    Transposing,
-    Writing,
-    Complete,
+  bid: u8,
+  blink: Blink,
+  compute: TransposeCompute,
+  src_addr: u32,
+  dst_addr: u32,
+  idle: bool,
 }
 
 impl TransposeBall {
-    pub fn new(bid: u8) -> Self {
-        Self {
-            name: format!("transpose_ball_{}", bid),
-            cmd_req: Wire::default(),
-            cmd_resp: Wire::default(),
-            state: State::Idle,
-            cycle_count: 0,
-        }
+  pub fn new(bid: u8) -> Self {
+    Self {
+      bid,
+      blink: Blink::new(NUM_SP_BANKS, NUM_ACC_BANKS),
+      compute: TransposeCompute::new(),
+      src_addr: 0, dst_addr: 0,
+      idle: true,
     }
+  }
 }
 
-impl Module for TransposeBall {
-    fn run(&mut self) {
-        match self.state {
-            State::Idle => {
-                if self.cmd_req.valid {
-                    let cmd = &self.cmd_req.value;
-                    println!("  [TransposeBall] Starting transpose: op1_addr=0x{:x}, op2_addr=0x{:x}, iter={}",
-                        cmd.op1_addr, cmd.op2_addr, cmd.iter);
-                    self.state = State::Reading;
-                    self.cycle_count = 0;
-                    self.cmd_resp.clear();
-                }
-            },
-            State::Reading => {
-                self.cycle_count += 1;
-                if self.cycle_count >= 3 {
-                    self.state = State::Transposing;
-                    self.cycle_count = 0;
-                }
-            },
-            State::Transposing => {
-                // Simulate matrix transpose
-                self.cycle_count += 1;
-                if self.cycle_count >= 2 {
-                    self.state = State::Writing;
-                    self.cycle_count = 0;
-                }
-            },
-            State::Writing => {
-                self.cycle_count += 1;
-                if self.cycle_count >= 3 {
-                    self.state = State::Complete;
-                }
-            },
-            State::Complete => {
-                self.cmd_resp.set(0);
-                self.state = State::Idle;
-                self.cycle_count = 0;
-            },
-        }
-    }
+impl Ball for TransposeBall {
+  fn ball_id(&self) -> u8 { self.bid }
+  fn blink(&self) -> &Blink { &self.blink }
+  fn blink_mut(&mut self) -> &mut Blink { &mut self.blink }
 
-    fn reset(&mut self) {
-        self.cmd_req = Wire::default();
-        self.cmd_resp = Wire::default();
-        self.state = State::Idle;
-        self.cycle_count = 0;
+  fn tick(&mut self) {
+    self.blink.clear_requests();
+    if self.idle && self.blink.cmd_req.valid {
+      let cmd = decode::decode(&self.blink.cmd_req);
+      self.src_addr = cmd.op1_addr;
+      self.dst_addr = cmd.op2_addr;
+      self.compute.reset();
+      self.idle = false;
     }
+    if !self.idle {
+      let done = run_transpose(&mut self.blink, &mut self.compute,
+        self.src_addr, self.dst_addr);
+      if done { self.idle = true; }
+    }
+  }
 
-    fn name(&self) -> &str {
-        &self.name
-    }
+  fn reset(&mut self) {
+    self.blink = Blink::new(NUM_SP_BANKS, NUM_ACC_BANKS);
+    self.compute.reset();
+    self.idle = true;
+  }
 }

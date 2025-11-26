@@ -1,90 +1,57 @@
 /// VecBall - Vector processing accelerator
-/// Performs vector operations (add, mul, etc.)
-use crate::builtin::{Module, Wire};
-use super::isa::VecCmd;
+use crate::builtin::ball::{Ball, Blink};
+use super::decode;
+use super::compute::VecCompute;
+use super::runner::run_vector;
+use super::super::common::{NUM_SP_BANKS, NUM_ACC_BANKS};
 
 pub struct VecBall {
-    name: String,
-    pub cmd_req: Wire<VecCmd>,
-    pub cmd_resp: Wire<u32>,
-
-    state: State,
-    cycle_count: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum State {
-    Idle,
-    Loading,
-    Computing,
-    Storing,
-    Complete,
+  bid: u8,
+  blink: Blink,
+  compute: VecCompute,
+  op1_addr: u32,
+  op2_addr: u32,
+  dst_addr: u32,
+  idle: bool,
 }
 
 impl VecBall {
-    pub fn new(bid: u8) -> Self {
-        Self {
-            name: format!("vec_ball_{}", bid),
-            cmd_req: Wire::default(),
-            cmd_resp: Wire::default(),
-            state: State::Idle,
-            cycle_count: 0,
-        }
+  pub fn new(bid: u8) -> Self {
+    Self {
+      bid,
+      blink: Blink::new(NUM_SP_BANKS, NUM_ACC_BANKS),
+      compute: VecCompute::new(),
+      op1_addr: 0, op2_addr: 0, dst_addr: 0,
+      idle: true,
     }
+  }
 }
 
-impl Module for VecBall {
-    fn run(&mut self) {
-        match self.state {
-            State::Idle => {
-                if self.cmd_req.valid {
-                    let cmd = &self.cmd_req.value;
-                    println!("  [VecBall] Starting vector op: op1=0x{:x}, op2=0x{:x}, dst=0x{:x}, iter={}",
-                        cmd.op1_addr, cmd.op2_addr, cmd.dst_addr, cmd.iter);
-                    self.state = State::Loading;
-                    self.cycle_count = 0;
-                    self.cmd_resp.clear();
-                }
-            },
-            State::Loading => {
-                // Load operands from scratchpad
-                self.cycle_count += 1;
-                if self.cycle_count >= 2 {
-                    self.state = State::Computing;
-                    self.cycle_count = 0;
-                }
-            },
-            State::Computing => {
-                // Perform vector computation
-                self.cycle_count += 1;
-                if self.cycle_count >= 1 {
-                    self.state = State::Storing;
-                    self.cycle_count = 0;
-                }
-            },
-            State::Storing => {
-                // Store result to accumulator
-                self.cycle_count += 1;
-                if self.cycle_count >= 2 {
-                    self.state = State::Complete;
-                }
-            },
-            State::Complete => {
-                self.cmd_resp.set(0);
-                self.state = State::Idle;
-                self.cycle_count = 0;
-            },
-        }
-    }
+impl Ball for VecBall {
+  fn ball_id(&self) -> u8 { self.bid }
+  fn blink(&self) -> &Blink { &self.blink }
+  fn blink_mut(&mut self) -> &mut Blink { &mut self.blink }
 
-    fn reset(&mut self) {
-        self.cmd_req = Wire::default();
-        self.cmd_resp = Wire::default();
-        self.state = State::Idle;
-        self.cycle_count = 0;
+  fn tick(&mut self) {
+    self.blink.clear_requests();
+    if self.idle && self.blink.cmd_req.valid {
+      let cmd = decode::decode(&self.blink.cmd_req);
+      self.op1_addr = cmd.op1_addr;
+      self.op2_addr = cmd.op2_addr;
+      self.dst_addr = cmd.dst_addr;
+      self.compute.reset();
+      self.idle = false;
     }
+    if !self.idle {
+      let done = run_vector(&mut self.blink, &mut self.compute,
+        self.op1_addr, self.op2_addr, self.dst_addr);
+      if done { self.idle = true; }
+    }
+  }
 
-    fn name(&self) -> &str {
-        &self.name
-    }
+  fn reset(&mut self) {
+    self.blink = Blink::new(NUM_SP_BANKS, NUM_ACC_BANKS);
+    self.compute.reset();
+    self.idle = true;
+  }
 }

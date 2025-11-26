@@ -10,7 +10,6 @@ source ${BBDIR}/scripts/utils.sh
 
 cd ${BBDIR}
 replace_content ${BBDIR}/env.sh install-workflow "export PATH=${BBDIR}/workflow:\$PATH"
-# export PATH=${BBDIR}/workflow:\$PATH
 source ${BBDIR}/env.sh
 
 # lower node veersion is not supported for motia
@@ -33,7 +32,6 @@ cd ${BBDIR}/workflow/steps && rm -r petstore/ || true
 cd ${BBDIR}/workflow && rm -r src/ || true
 cd ${BBDIR}/workflow && rm -r tutorial/ || true
 cd ${BBDIR}/workflow && rm *.{md,tsx} || true
-# cd ${BBDIR}/workflow && npx motia dev -p 5000
 
 # install MCP
 pip install mcp
