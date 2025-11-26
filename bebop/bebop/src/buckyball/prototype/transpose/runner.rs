@@ -1,46 +1,34 @@
 /// Transpose execution logic
 use super::compute::TransposeCompute;
-use super::super::common::{MemoryInterface, SramReadReq, SramWriteReq};
-use crate::builtin::Wire;
+use crate::builtin::ball::Blink;
 
 pub fn run_transpose(
-    mem: &mut MemoryInterface,
-    compute: &mut TransposeCompute,
-    src_addr: u32,
-    dst_addr: u32,
-    cmd_resp: &mut Wire<u32>,
+  blink: &mut Blink,
+  compute: &mut TransposeCompute,
+  src_addr: u32,
+  dst_addr: u32,
 ) -> bool {
-    mem.clear_requests();
+  if compute.should_read() {
+    blink.sram_read_req[0].valid = true;
+    blink.sram_read_req[0].addr = src_addr + compute.read_counter;
+    compute.read_counter += 1;
+  }
 
-    if compute.should_read() {
-        mem.sram_read_req.set(SramReadReq {
-            addr: src_addr + compute.read_counter,
-            bank: 0,
-        });
-        compute.read_counter += 1;
-    }
+  if blink.sram_read_resp[0].valid {
+    compute.store_row(compute.resp_counter as usize, &blink.sram_read_resp[0].data);
+    compute.resp_counter += 1;
+  }
 
-    if mem.sram_read_resp.valid {
-        compute.store_row(
-            compute.resp_counter as usize,
-            &mem.sram_read_resp.value.data
-        );
-        compute.resp_counter += 1;
-    }
+  if compute.is_read_done() && compute.should_write() {
+    blink.sram_write_req[0].valid = true;
+    blink.sram_write_req[0].addr = dst_addr + compute.write_counter;
+    blink.sram_write_req[0].data = compute.get_transposed_row(compute.write_counter as usize);
+    compute.write_counter += 1;
+  }
 
-    if compute.is_read_done() && compute.should_write() {
-        mem.sram_write_req.set(SramWriteReq {
-            addr: dst_addr + compute.write_counter,
-            bank: 0,
-            data: compute.get_transposed_row(compute.write_counter as usize),
-        });
-        compute.write_counter += 1;
-    }
-
-    if compute.is_write_done() {
-        cmd_resp.set(0);
-        true
-    } else {
-        false
-    }
+  if compute.is_write_done() {
+    blink.cmd_resp.valid = true;
+    blink.cmd_resp.rob_id = blink.cmd_req.rob_id;
+    true
+  } else { false }
 }

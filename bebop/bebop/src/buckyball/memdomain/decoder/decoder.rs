@@ -35,67 +35,67 @@ pub struct MemDecoder {
 
 impl MemDecoder {
   pub fn new(name: impl Into<String>) -> Self {
-    Self {
-      name: name.into(),
-      input: Wire::default(),
-      output: Wire::default(),
-    }
+  Self {
+    name: name.into(),
+    input: Wire::default(),
+    output: Wire::default(),
+  }
   }
 }
 
 impl Module for MemDecoder {
   fn run(&mut self) {
-    if !self.input.valid {
-      self.output.clear();
-      return;
-    }
+  if !self.input.valid {
+    self.output.clear();
+    return;
+  }
 
-    let input = &self.input.value;
+  let input = &self.input.value;
 
-    let mut output = MemDecoderOutput::default();
+  let mut output = MemDecoderOutput::default();
 
-    match input.funct {
-      24 => {
-        // MVIN - DMA read from DRAM to scratchpad
-        let config = MvinConfig::from_fields(input.xs1, input.xs2);
-        println!(
-          "  [MemDecoder] MVIN: dram=0x{:08x}, spad=0x{:04x}, iter={}, col_stride={}",
-          config.base_dram_addr, config.base_sp_addr, config.iter, config.col_stride
-        );
+  match input.funct {
+    24 => {
+    // MVIN - DMA read from DRAM to scratchpad
+    let config = MvinConfig::from_fields(input.xs1, input.xs2);
+    println!(
+      "  [MemDecoder] MVIN: dram=0x{:08x}, spad=0x{:04x}, iter={}, col_stride={}",
+      config.base_dram_addr, config.base_sp_addr, config.iter, config.col_stride
+    );
 
-        output.dma_op = Some(DmaOperation::Mvin(config));
-        output.read_req.clear();
-        output.write_req.clear();
-      },
-      25 => {
-        // MVOUT - DMA write from scratchpad to DRAM
-        let config = MvoutConfig::from_fields(input.xs1, input.xs2);
-        println!(
-          "  [MemDecoder] MVOUT: dram=0x{:08x}, spad=0x{:04x}, iter={}",
-          config.base_dram_addr, config.base_sp_addr, config.iter
-        );
+    output.dma_op = Some(DmaOperation::Mvin(config));
+    output.read_req.clear();
+    output.write_req.clear();
+    },
+    25 => {
+    // MVOUT - DMA write from scratchpad to DRAM
+    let config = MvoutConfig::from_fields(input.xs1, input.xs2);
+    println!(
+      "  [MemDecoder] MVOUT: dram=0x{:08x}, spad=0x{:04x}, iter={}",
+      config.base_dram_addr, config.base_sp_addr, config.iter
+    );
 
-        output.dma_op = Some(DmaOperation::Mvout(config));
-        output.read_req.clear();
-        output.write_req.clear();
-      },
-      _ => {
-        println!("  [MemDecoder] UNKNOWN: funct={}", input.funct);
-        output.dma_op = None;
-        output.read_req.clear();
-        output.write_req.clear();
-      },
-    }
+    output.dma_op = Some(DmaOperation::Mvout(config));
+    output.read_req.clear();
+    output.write_req.clear();
+    },
+    _ => {
+    println!("  [MemDecoder] UNKNOWN: funct={}", input.funct);
+    output.dma_op = None;
+    output.read_req.clear();
+    output.write_req.clear();
+    },
+  }
 
-    self.output.set(output);
+  self.output.set(output);
   }
 
   fn reset(&mut self) {
-    self.input = Wire::default();
-    self.output = Wire::default();
+  self.input = Wire::default();
+  self.output = Wire::default();
   }
 
   fn name(&self) -> &str {
-    &self.name
+  &self.name
   }
 }

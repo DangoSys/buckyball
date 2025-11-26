@@ -19,12 +19,12 @@ pub fn decode_and_process(msg: &SocketMsg) -> SocketResp {
   let xs2 = msg.xs2;
 
   let result = match funct {
-    24 => mvin::process(xs1, xs2),
-    25 => mvout::process(xs1, xs2),
-    _ => {
-      println!("  -> UNKNOWN: funct={}, xs1=0x{:016x}, xs2=0x{:016x}", funct, xs1, xs2);
-      0
-    },
+  24 => mvin::process(xs1, xs2),
+  25 => mvout::process(xs1, xs2),
+  _ => {
+    println!("  -> UNKNOWN: funct={}, xs1=0x{:016x}, xs2=0x{:016x}", funct, xs1, xs2);
+    0
+  },
   };
 
   SocketResp::new(result)
