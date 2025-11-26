@@ -1,5 +1,5 @@
 /// Accelerator simulator with state management
-use crate::buckyball::builtin::Module;
+use crate::builtin::Module;
 use crate::buckyball::memdomain::decoder::DmaOperation;
 use crate::buckyball::Top;
 use crate::config::NpuConfig;

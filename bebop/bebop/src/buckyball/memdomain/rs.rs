@@ -1,5 +1,5 @@
 /// MemDomain Reservation Station
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{GlobalRsComplete, GlobalRsIssue, MvinConfig, MvoutConfig};
 use super::{MemLoaderReq, MemStorerReq};
 

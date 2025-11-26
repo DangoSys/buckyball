@@ -2,6 +2,7 @@
 ///
 /// This library provides socket-based communication between Spike (RISC-V ISA simulator)
 /// and custom accelerator implementations.
+pub mod builtin;
 pub mod buckyball;
 pub mod config;
 pub mod simulator;

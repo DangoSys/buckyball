@@ -3,7 +3,7 @@ pub mod decoder;
 pub mod rs;
 pub mod bbus;
 
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{GlobalRsComplete, GlobalRsIssue};
 
 pub struct BallDomain {

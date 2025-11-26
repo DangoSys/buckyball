@@ -1,5 +1,5 @@
 /// BallDomain Reservation Station
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{GlobalRsComplete, GlobalRsIssue, RobId};
 
 const NUM_BALLS: usize = 5;

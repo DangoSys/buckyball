@@ -1,5 +1,5 @@
 /// MemLoader - Handles MVIN (load from DRAM to scratchpad) operations
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{GlobalRsComplete, MvinConfig, RobId};
 
 /// MemLoader command request
