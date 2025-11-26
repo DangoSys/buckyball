@@ -1,15 +1,9 @@
-[submodule "tools/motia"]
-	path = tools/motia
-	url = https://github.com/MotiaDev/motia.git
 [submodule "thirdparty/circt"]
 	path = thirdparty/circt
 	url = https://github.com/llvm/circt.git
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
-[submodule "tools/deepwiki"]
-	path = tools/deepwiki
-	url = https://github.com/AIDotNet/OpenDeepWiki.git
 [submodule "workflow/vscode"]
 	path = workflow/vscode
 	url = https://github.com/DangoSys/buckyball-vscode.git
