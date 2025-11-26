@@ -1,5 +1,5 @@
 /// Memory Domain Decoder - memory access instruction decoder
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{DecoderOutput, MvinConfig, MvoutConfig};
 
 /// MemDecoder input (from global Decoder output)

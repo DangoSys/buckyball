@@ -1,5 +1,5 @@
 /// BBus - Ball bus with registration pattern
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::GlobalRsComplete;
 use crate::buckyball::prototype::*;
 use super::rs::BallIssue;

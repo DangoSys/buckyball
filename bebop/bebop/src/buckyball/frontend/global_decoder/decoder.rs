@@ -1,5 +1,5 @@
 /// Global Decoder Module - decoder module
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 
 /// Global Decoder input
 #[derive(Clone, Default)]

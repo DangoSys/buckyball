@@ -1,5 +1,5 @@
 /// Top Module - top-level module, connects GlobalDecoder, GlobalRS, MemDomain and BallDomain
-use crate::buckyball::builtin::Module;
+use crate::builtin::Module;
 use crate::buckyball::frontend::{GlobalDecoder, GlobalReservationStation, DecoderInput};
 use crate::buckyball::memdomain::{decoder::DmaOperation, MemDomain};
 use crate::buckyball::balldomain::BallDomain;

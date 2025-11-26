@@ -1,5 +1,5 @@
 /// Memory controller
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use super::super::mem::bank::{ReadReq, ReadResp};
 
 /// Memory Controller - sends read requests to bank

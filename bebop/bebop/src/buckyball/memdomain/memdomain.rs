@@ -1,7 +1,7 @@
 use super::{decoder::DmaOperation, Bank, Controller, MemDecoder, MemLoader, MemStorer};
 use super::rs::ReservationStation;
 /// Memory Domain - connects Decoder, RS, Loader, Storer, Controller and Bank together
-use crate::buckyball::builtin::Module;
+use crate::builtin::Module;
 use crate::buckyball::frontend::{GlobalRsComplete, GlobalRsIssue};
 
 /// Memory Domain - contains all memory subsystem components
@@ -15,8 +15,8 @@ pub struct MemDomain {
   controller: Controller,
   bank: Bank,
 
-  pub global_issue_i: crate::buckyball::builtin::Wire<GlobalRsIssue>,
-  pub global_complete_o: crate::buckyball::builtin::Wire<GlobalRsComplete>,
+  pub global_issue_i: crate::builtin::Wire<GlobalRsIssue>,
+  pub global_complete_o: crate::builtin::Wire<GlobalRsComplete>,
 }
 
 impl MemDomain {
@@ -29,8 +29,8 @@ impl MemDomain {
       mem_storer: MemStorer::new("mem_storer"),
       controller: Controller::new("ctrl"),
       bank: Bank::new("bank", bank_size),
-      global_issue_i: crate::buckyball::builtin::Wire::default(),
-      global_complete_o: crate::buckyball::builtin::Wire::default(),
+      global_issue_i: crate::builtin::Wire::default(),
+      global_complete_o: crate::builtin::Wire::default(),
     }
   }
 
@@ -117,8 +117,8 @@ impl Module for MemDomain {
     self.mem_storer.reset();
     self.controller.reset();
     self.bank.reset();
-    self.global_issue_i = crate::buckyball::builtin::Wire::default();
-    self.global_complete_o = crate::buckyball::builtin::Wire::default();
+    self.global_issue_i = crate::builtin::Wire::default();
+    self.global_complete_o = crate::builtin::Wire::default();
   }
 
   fn name(&self) -> &str {

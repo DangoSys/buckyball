@@ -1,5 +1,5 @@
 /// MemStorer - Handles MVOUT (store from scratchpad to DRAM) operations
-use crate::buckyball::builtin::{Module, Wire};
+use crate::builtin::{Module, Wire};
 use crate::buckyball::frontend::{GlobalRsComplete, MvoutConfig, RobId};
 
 /// MemStorer command request

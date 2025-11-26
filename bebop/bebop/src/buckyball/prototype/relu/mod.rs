@@ -1,4 +1,6 @@
 mod isa;
+mod compute;
+mod runner;
 mod relu_ball;
 
 pub use relu_ball::ReluBall;
