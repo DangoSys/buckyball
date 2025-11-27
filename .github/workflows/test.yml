@@ -30,6 +30,7 @@ jobs:
         run: |
           source ~/.zshrc
           buckyball_exec
+          rm -rf workflow/.motia || true
           bbdev workload --build
 
       - name: Build Verilator
@@ -37,8 +38,11 @@ jobs:
         run: |
           source ~/.zshrc
           buckyball_exec
+          rm -rf workflow/.motia || true
           bbdev verilator --clean
+          rm -rf workflow/.motia || true
           bbdev verilator --verilog
+          rm -rf workflow/.motia || true
           bbdev verilator --build '--jobs 16'
 
       - name: Smoke Test
@@ -46,11 +50,12 @@ jobs:
         run: |
           source ~/.zshrc
           buckyball_exec
+          rm -rf workflow/.motia || true
           bbdev sardine --run '--workload ctest'
 
       - run: echo "🍏 CI Test is ${{ job.status }}."
 
-      # 如果检查失败，强制回退分支
+      # if check failed, revert the branch
       # - name: Revert Bad Commit
       #   if: failure()
       #   shell: zsh {0}
