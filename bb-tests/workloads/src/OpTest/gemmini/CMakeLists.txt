@@ -1,3 +1,12 @@
+# Toolchain resolvers (prefer RISCV_GNU_TOOLCHAIN, fallback to PATH names)
+if(DEFINED ENV{RISCV_GNU_TOOLCHAIN})
+  set(ELF_CC "$ENV{RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc")
+  set(LINUX_CC "$ENV{RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc")
+else()
+  set(ELF_CC "riscv64-unknown-elf-gcc")
+  set(LINUX_CC "riscv64-unknown-linux-gnu-gcc")
+endif()
+
 
 
 

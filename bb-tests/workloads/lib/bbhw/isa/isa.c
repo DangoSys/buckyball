@@ -45,6 +45,7 @@ extern const InstructionConfig snn_config;
 extern const InstructionConfig abft_systolic_config;
 extern const InstructionConfig conv_config;
 extern const InstructionConfig cim_config;
+extern const InstructionConfig transfer_config;
 
 // Get instruction configuration by func7
 const InstructionConfig *config(InstructionType func7) {
@@ -77,6 +78,8 @@ const InstructionConfig *config(InstructionType func7) {
     return &conv_config;
   case CIM_FUNC7:
     return &cim_config;
+  case TRANSFER_FUNC7:
+    return &transfer_config;
   case FENCE_FUNC7:
     // FENCE instruction has no parameters, no configuration needed
     return NULL;

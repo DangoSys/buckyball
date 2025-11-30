@@ -1,6 +1,6 @@
 # Tutorial for buckyball
 
-> by -王博涵
+> by - Bohan Wang
 >
 > This document will be gradually updated as the author continues to solve and summarize encountered issues.
 
