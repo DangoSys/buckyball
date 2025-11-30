@@ -5,7 +5,7 @@ use std::net::TcpStream;
 use super::dma_client::DmaClient;
 use super::protocol::{CmdReq, CmdResp};
 use crate::config::NpuConfig;
-use crate::simulator::Simulator;
+use crate::simulator::{Simulator, StepMode};
 
 pub struct ConnectionHandler {
   stream: TcpStream,
@@ -13,18 +13,19 @@ pub struct ConnectionHandler {
 }
 
 impl ConnectionHandler {
-  pub fn new(stream: TcpStream) -> Self {
+  pub fn new(stream: TcpStream, step_mode: bool) -> Self {
     let config = NpuConfig::new();
+    let mode = if step_mode { StepMode::Step } else { StepMode::Run };
     Self {
       stream,
-      simulator: Simulator::new(config),
+      simulator: Simulator::new(config, mode),
     }
   }
 
   /// Handle the client connection loop
   pub fn handle(mut self) -> std::io::Result<()> {
     let peer_addr = self.stream.peer_addr()?;
-    println!("New connection from: {}", peer_addr);
+    log_info!("New connection from: {}", peer_addr);
 
     loop {
       // Read CMD request
@@ -33,7 +34,7 @@ impl ConnectionHandler {
         Ok(_) => {},
         Err(e) => {
           if e.kind() == std::io::ErrorKind::UnexpectedEof {
-            println!("Client {} disconnected", peer_addr);
+            log_info!("Client {} disconnected", peer_addr);
             return Ok(());
           }
           return Err(e);
@@ -48,7 +49,7 @@ impl ConnectionHandler {
       let xs1 = cmd_req.xs1;
       let xs2 = cmd_req.xs2;
 
-      println!("Received CMD: funct={}, xs1=0x{:016x}, xs2=0x{:016x}", funct, xs1, xs2);
+      log_ipc!("Received CMD: funct={}, xs1=0x{:016x}, xs2=0x{:016x}", funct, xs1, xs2);
 
       // Create DMA client for this request
       let mut dma_client = DmaClient::new(&mut self.stream);
@@ -60,7 +61,7 @@ impl ConnectionHandler {
       let cmd_resp = CmdResp::new(result);
       let resp_bytes = cmd_resp.to_bytes();
       self.stream.write_all(&resp_bytes)?;
-      println!("Sent CMD response: result=0x{:016x}\n", result);
+      log_ipc!("Sent CMD response: result=0x{:016x}\n", result);
     }
   }
 }

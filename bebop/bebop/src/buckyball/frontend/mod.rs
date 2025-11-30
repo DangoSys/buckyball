@@ -1,6 +1,7 @@
-/// Frontend - Global instruction decoder and reservation station
-pub mod global_decoder;
-pub mod global_rs;
+/// Frontend - 全局指令解码和保留站
+mod decoder;
+mod rs;
+mod frontend;
 
-pub use global_decoder::{Decoder as GlobalDecoder, DecoderInput, DecoderOutput, MvinConfig, MvoutConfig};
-pub use global_rs::{GlobalReservationStation, GlobalRsIssue, GlobalRsComplete, RobId};
+pub use decoder::TargetDomain;
+pub use frontend::Frontend;

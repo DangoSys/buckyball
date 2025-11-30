@@ -6,13 +6,15 @@ use super::handler::ConnectionHandler;
 pub struct SocketServer {
   host: String,
   port: u16,
+  step_mode: bool,
 }
 
 impl SocketServer {
-  pub fn new(host: impl Into<String>, port: u16) -> Self {
+  pub fn new(host: impl Into<String>, port: u16, step_mode: bool) -> Self {
     Self {
       host: host.into(),
       port,
+      step_mode,
     }
   }
 
@@ -21,20 +23,20 @@ impl SocketServer {
     let addr = format!("{}:{}", self.host, self.port);
     let listener = TcpListener::bind(&addr)?;
 
-    println!("Socket server listening on {}", addr);
-    println!("Waiting for Spike connections...");
-    println!("Press Ctrl+C to exit\n");
+    log_info!("Socket server listening on {}", addr);
+    log_info!("Waiting for host simulator connections...");
+    log_info!("Press Ctrl+C to exit\n");
 
     for stream in listener.incoming() {
       match stream {
         Ok(stream) => {
-          let handler = ConnectionHandler::new(stream);
+          let handler = ConnectionHandler::new(stream, self.step_mode);
           if let Err(e) = handler.handle() {
-            eprintln!("Error handling client: {}", e);
+            log_error!("Error handling client: {}", e);
           }
         },
         Err(e) => {
-          eprintln!("Connection error: {}", e);
+          log_error!("Connection error: {}", e);
         },
       }
     }
@@ -45,6 +47,6 @@ impl SocketServer {
 
 impl Default for SocketServer {
   fn default() -> Self {
-    Self::new("127.0.0.1", 9999)
+    Self::new("127.0.0.1", 9999, false)
   }
 }

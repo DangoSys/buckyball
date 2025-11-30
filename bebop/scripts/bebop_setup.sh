@@ -4,16 +4,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEBOP_DIR="$(dirname "$SCRIPT_DIR")"
 BEBOP_BIN="$BEBOP_DIR/bebop/target/release/bebop"
 
-if [ ! -f "$BEBOP_BIN" ]; then
-    echo "Bebop binary not found. Building..."
-    cd "$BEBOP_DIR/bebop"
-    cargo build --release --bin bebop
+cd "$BEBOP_DIR/bebop"
+cargo build --release --bin bebop
 
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to build bebop"
-        exit 1
-    fi
-    echo ""
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to build bebop"
+    exit 1
 fi
 
 if netstat -tuln 2>/dev/null | grep -q ":9999 "; then

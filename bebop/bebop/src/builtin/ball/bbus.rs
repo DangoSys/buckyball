@@ -69,15 +69,9 @@ impl BBus {
 }
 
 impl Module for BBus {
-  fn run(&mut self) {
+  fn tick(&mut self) {
     for ball in &mut self.balls {
       ball.tick();
-    }
-  }
-
-  fn reset(&mut self) {
-    for ball in &mut self.balls {
-      ball.reset();
     }
   }
 
