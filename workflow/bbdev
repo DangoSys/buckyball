@@ -240,15 +240,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar="ARGS",
         help='Generate verilog files from chisel. Args example: "[--config sims.palladium.BuckyballToyP2EConfig]"',
     )
-    # palladium_group.add_argument(
-    #     "--build", action="store_true", help="Build palladium"
-    # )
-    # palladium_group.add_argument(
-    #     "--sim", action="store_true", help="Sim palladium"
-    # )
-    # palladium_group.add_argument(
-    #     "--run", action="store_true", help="Run palladium"
-    # )
 
     # Parse arguments, allowing unknown arguments (so --port can work in subcommands)
     args, unknown = parser.parse_known_args(argv)
@@ -507,6 +498,8 @@ if __name__ == "__main__":
             )
 
             # 3. Shutdown service ================================
+            # Give observability plugin time to finish async operations (e.g., Redis writes)
+            time.sleep(1)
             proc.terminate()
             proc.wait()
             print(

@@ -3,8 +3,8 @@ package prototype.ibuki.matmul
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.blink.Status
 

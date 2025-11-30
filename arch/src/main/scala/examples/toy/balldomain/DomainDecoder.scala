@@ -2,10 +2,10 @@ package examples.toy.balldomain
 
 import chisel3._
 import chisel3.util._
-import framework.builtin.frontend.PostGDCmd
+import framework.frontend.PostGDCmd
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.DISA._
-import framework.builtin.memdomain.dma.LocalAddr
+import framework.memdomain.dma.LocalAddr
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config.Parameters
 

@@ -20,6 +20,7 @@ mkdir -p "${SPIKE_BUILD}"
   make install
 )
 
-# cmake -S "${HOST_ROOT}" -B "${HOST_BUILD}"
-# cmake --build "${HOST_BUILD}" -j$(nproc)
-# cmake --install "${HOST_BUILD}"
+cd ${SCRIPT_DIR}
+mkdir -p build && cd build
+cmake ..
+make install

@@ -7,9 +7,9 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
 import org.yaml.snakeyaml.events.Event.ID
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.frontend.rs.{BallRsIssue, BallRsComplete}
 import framework.blink.Status
 
 class BBFP_Control(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {

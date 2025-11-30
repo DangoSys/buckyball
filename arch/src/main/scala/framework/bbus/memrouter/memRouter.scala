@@ -4,8 +4,8 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp, SramWriteReq}
+import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp, SramWriteReq}
 import framework.blink.{SramReadWithRobId, SramWriteWithRobId}
 import framework.bbus.BBusConfigIO
 

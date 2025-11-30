@@ -12,9 +12,9 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.tilelink._
 
 import freechips.rocketchip.tile.{LazyRoCC, LazyRoCCModuleImp}
-import framework.builtin.frontend.GlobalDecoder
-import framework.builtin.memdomain.dma.{BBStreamReader, BBStreamWriter}
-import framework.builtin.memdomain.MemDomain
+import framework.frontend.GlobalDecoder
+import framework.memdomain.dma.{BBStreamReader, BBStreamWriter}
+import framework.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain
 import examples.BuckyballConfigs.CustomBuckyballConfig
 
@@ -71,7 +71,7 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer)
   io.cmd.ready              := gDecoder.io.id_i.ready
 
   // Global reservation station
-  val globalRs = Module(new framework.builtin.frontend.globalrs.GlobalReservationStation)
+  val globalRs = Module(new framework.frontend.globalrs.GlobalReservationStation)
   globalRs.io.global_decode_cmd_i <> gDecoder.io.id_o
 
 

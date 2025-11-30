@@ -6,7 +6,7 @@ import chisel3.util._
 import freechips.rocketchip.tile._
 import org.chipsalliance.cde.config._
 
-import framework.builtin.memdomain.dma.LocalAddr
+import framework.memdomain.dma.LocalAddr
 
 sealed abstract trait BuckyballMemCapacity
 case class CapacityInKilobytes(kilobytes: Int) extends BuckyballMemCapacity
