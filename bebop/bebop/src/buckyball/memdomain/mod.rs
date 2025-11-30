@@ -1,14 +1,17 @@
-pub mod decoder;
-pub mod mem;
-pub mod memctrl;
-pub mod memdomain;
-pub mod mem_loader;
-pub mod mem_storer;
-pub mod rs;
+/// MemDomain - 内存域模块
+mod mem;
+mod loader;
+mod storer;
+mod decoder;
+mod memdomain;
 
-pub use decoder::{DmaOperation, MemDecoder, MemDecoderInput, MemDecoderOutput};
-pub use mem::Bank;
-pub use memctrl::Controller;
+pub use decoder::{MvinConfig, MvoutConfig};
+
+/// DMA 操作类型
+#[derive(Debug, Clone)]
+pub enum DmaOperation {
+  Mvin(MvinConfig),
+  Mvout(MvoutConfig),
+}
+
 pub use memdomain::MemDomain;
-pub use mem_loader::{MemLoader, MemLoaderReq};
-pub use mem_storer::{MemStorer, MemStorerReq};

@@ -1,3 +1,6 @@
-pub mod decoder;
+/// MemDomain Decoder - 内存域指令解码
+mod mvin;
+mod mvout;
 
-pub use decoder::{DmaOperation, MemDecoder, MemDecoderInput, MemDecoderOutput};
+pub use mvin::MvinConfig;
+pub use mvout::MvoutConfig;

@@ -1,127 +1,81 @@
-use super::{decoder::DmaOperation, Bank, Controller, MemDecoder, MemLoader, MemStorer};
-use super::rs::ReservationStation;
-/// Memory Domain - connects Decoder, RS, Loader, Storer, Controller and Bank together
+/// MemDomain - 内存域顶层模块
 use crate::builtin::Module;
-use crate::buckyball::frontend::{GlobalRsComplete, GlobalRsIssue};
+use super::mem::Bank;
+use super::loader::MemLoader;
+use super::storer::MemStorer;
+use super::{DmaOperation, MvinConfig, MvoutConfig};
 
-/// Memory Domain - contains all memory subsystem components
 pub struct MemDomain {
   name: String,
-
-  decoder: MemDecoder,
-  rs: ReservationStation,
-  mem_loader: MemLoader,
-  mem_storer: MemStorer,
-  controller: Controller,
   bank: Bank,
-
-  pub global_issue_i: crate::builtin::Wire<GlobalRsIssue>,
-  pub global_complete_o: crate::builtin::Wire<GlobalRsComplete>,
+  loader: MemLoader,
+  storer: MemStorer,
 }
 
 impl MemDomain {
   pub fn new(name: impl Into<String>, bank_size: usize) -> Self {
-  Self {
-    name: name.into(),
-    decoder: MemDecoder::new("mem_decoder"),
-    rs: ReservationStation::new("mem_rs"),
-    mem_loader: MemLoader::new("mem_loader"),
-    mem_storer: MemStorer::new("mem_storer"),
-    controller: Controller::new("ctrl"),
-    bank: Bank::new("bank", bank_size),
-    global_issue_i: crate::builtin::Wire::default(),
-    global_complete_o: crate::builtin::Wire::default(),
-  }
+    Self {
+      name: name.into(),
+      bank: Bank::new("bank", bank_size),
+      loader: MemLoader::new("loader"),
+      storer: MemStorer::new("storer"),
+    }
   }
 
-  /// Write data to bank (for initialization, bypassing signal lines)
-  pub fn init_write(&mut self, addr: usize, data: u32) {
-  self.bank.init_write(addr, data);
+  /// 发送内存指令
+  pub fn issue(&mut self, funct: u64, xs1: u64, xs2: u64) {
+    match funct {
+      24 => self.loader.issue(MvinConfig::from_fields(xs1, xs2)),
+      25 => self.storer.issue(MvoutConfig::from_fields(xs1, xs2)),
+      _ => {}
+    }
   }
 
-  /// Get last read data
-  pub fn get_data(&self) -> u32 {
-  self.controller.get_data()
-  }
-
-  /// Get DMA operation (if any)
+  /// 获取当前 DMA 操作
   pub fn get_dma_operation(&self) -> Option<DmaOperation> {
-  if self.decoder.output.valid {
-    self.decoder.output.value.dma_op.clone()
-  } else {
+    if let Some(config) = self.loader.get_current() {
+      return Some(DmaOperation::Mvin(config.clone()));
+    }
+    if let Some(config) = self.storer.get_current() {
+      return Some(DmaOperation::Mvout(config.clone()));
+    }
     None
   }
-  }
 
-  /// Write to scratchpad
+  /// DMA 写入 scratchpad
   pub fn write_spad(&mut self, addr: usize, data: u32) {
-  self.bank.init_write(addr, data);
+    self.bank.init_write(addr, data);
   }
 
-  /// Read from scratchpad
+  /// DMA 读取 scratchpad
   pub fn read_spad(&self, addr: usize) -> u32 {
-  self.bank.read_data(addr)
+    self.bank.read_data(addr)
+  }
+
+  /// 初始化内存
+  pub fn init_write(&mut self, addr: usize, data: u32) {
+    self.bank.init_write(addr, data);
+  }
+
+  /// 获取数据
+  pub fn get_data(&self) -> u32 {
+    0
+  }
+
+  /// 完成当前 DMA 操作
+  pub fn complete_dma(&mut self) {
+    self.loader.complete();
+    self.storer.complete();
   }
 }
 
 impl Module for MemDomain {
-  fn run(&mut self) {
-  // Run from back to front following RTL architecture
-
-  // 1. Run Bank (read last cycle's request)
-  self.bank.run();
-
-  // 2. Run Controller (read last cycle's bank response)
-  self.controller.run();
-
-  // 3. Run MemLoader and MemStorer (handle DMA operations)
-  self.mem_loader.run();
-  self.mem_storer.run();
-
-  // 4. Run RS (issue to Loader/Storer, forward completion)
-  self.rs.run();
-
-  // 5. Run Decoder (decode incoming instruction from Global RS)
-  self.decoder.run();
-
-  // 6. Wire updates: this cycle's output -> next cycle's input
-
-  // Global RS -> Decoder
-  self.decoder.input.set(self.global_issue_i.value.cmd.clone());
-
-  // Decoder -> RS (with rob_id from Global RS)
-  self.rs.decode_input.set(self.global_issue_i.value.clone());
-
-  // RS -> MemLoader/MemStorer
-  self.mem_loader.cmd_req = self.rs.issue_output.ld.clone();
-  self.mem_storer.cmd_req = self.rs.issue_output.st.clone();
-
-  // MemLoader/MemStorer -> RS (completion)
-  self.rs.commit_input.ld = self.mem_loader.cmd_resp.clone();
-  self.rs.commit_input.st = self.mem_storer.cmd_resp.clone();
-
-  // RS -> Global RS (completion)
-  self.global_complete_o = self.rs.complete_output.clone();
-
-  // Legacy wiring for Bank/Controller (kept for compatibility)
-  self.bank.write_req = self.decoder.output.value.write_req.clone();
-  self.controller.read_req = self.decoder.output.value.read_req.clone();
-  self.bank.read_req = self.controller.req_out.clone();
-  self.controller.resp_in = self.bank.read_resp.clone();
-  }
-
-  fn reset(&mut self) {
-  self.decoder.reset();
-  self.rs.reset();
-  self.mem_loader.reset();
-  self.mem_storer.reset();
-  self.controller.reset();
-  self.bank.reset();
-  self.global_issue_i = crate::builtin::Wire::default();
-  self.global_complete_o = crate::builtin::Wire::default();
+  fn tick(&mut self) {
+    self.loader.tick();
+    self.storer.tick();
   }
 
   fn name(&self) -> &str {
-  &self.name
+    &self.name
   }
 }
