@@ -6,8 +6,8 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.builtin.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.frontend.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 
 class BBFP_ID(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {

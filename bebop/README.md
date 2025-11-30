@@ -9,10 +9,10 @@ A buckyball emulator written in Rust
 source $BUCKYBALL_PATH/env.sh
 ```
 
-2. Build the simulator
+<!-- 2. Build the simulator
 ```
 ./scripts/install.sh
-```
+``` -->
 
 3. Start the socket server
 ```
@@ -21,5 +21,5 @@ source $BUCKYBALL_PATH/env.sh
 
 4. Run the program
 ```
-spike --extension=bebop --log-commits $BUCKYBALL_PATH/bb-tests/build/workloads/src/OpTest/gemmini/transpose-baremetal 2>/dev/null
+$BUCKYBALL_PATH/bebop/host/spike/riscv-isa-sim/install/bin/spike --extension=bebop --log-commits $BUCKYBALL_PATH/bb-tests/build/workloads/src/OpTest/gemmini/transpose-baremetal 2>/dev/null
 ```

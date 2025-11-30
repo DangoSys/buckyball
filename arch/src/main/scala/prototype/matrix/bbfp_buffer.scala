@@ -6,7 +6,7 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 
 class id_lu_req(implicit b: CustomBuckyballConfig) extends Bundle {

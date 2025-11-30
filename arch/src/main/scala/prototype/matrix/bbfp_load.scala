@@ -6,7 +6,7 @@ import chisel3.stage._
 import org.chipsalliance.cde.config.Parameters
 
 import prototype.matrix._
-import framework.builtin.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 
 class BBFP_LoadUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
