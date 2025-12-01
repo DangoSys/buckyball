@@ -132,7 +132,7 @@ add_cross_platform_test_target(ctest_snn_test snn_test.c)
 add_cross_platform_test_target(ctest_abft_systolic_test abft_systolic_test.c)
 add_cross_platform_test_target(ctest_conv_test conv_test.c)
 add_cross_platform_test_target(ctest_cim_test cim_test.c)
-
+add_cross_platform_test_target(ctest_transfer_test transfer_test.c)
 
 # Create library dependency target to ensure all libraries are built first
 # add_custom_target(buckyball-libs-build
@@ -172,5 +172,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_abft_systolic_test
   ctest_conv_test
   ctest_cim_test
+  ctest_transfer_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)
