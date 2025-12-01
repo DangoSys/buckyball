@@ -25,6 +25,7 @@ const InstructionConfig transfer_config = {
 
 // TRANSFER instruction high-level API implementation
 void bb_transfer(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter) {
+  if (iter > 1023) iter = 1023;
   uint64_t rs1_val = TRANSFER_ENCODE_RS1(op1_addr);
   uint64_t rs2_val = TRANSFER_ENCODE_RS2(wr_addr, iter);
   TRANSFER_RAW(rs1_val, rs2_val);
