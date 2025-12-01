@@ -46,7 +46,8 @@ typedef enum {
   SNN_FUNC7 = 41,           // 0x29 - SNN spiking neural network function code
   ABFT_SYSTOLIC_FUNC7 = 42, // 0x2A - ABFT systolic array function code
   CONV_FUNC7 = 43,          // 0x2B - CONV convolution function code
-  CIM_FUNC7 = 44            // 0x2C - CIM compute-in-memory function code
+  CIM_FUNC7 = 44,            // 0x2C - CIM compute-in-memory function code
+  TRANSFER_FUNC7 = 45      // 0x2D - Transfer function code
 } InstructionType;
 
 // Instruction configuration structure (for simulator)
@@ -93,6 +94,8 @@ void bb_conv(uint32_t ifmap_addr, uint32_t weight_addr, uint32_t ofmap_addr,
              uint32_t kernel_h, uint32_t kernel_w);
 void bb_cim(uint32_t op1_addr, uint32_t op2_addr, uint32_t result_addr,
             uint32_t iter, uint32_t rows, uint32_t cols, uint32_t op_type);
+void bb_transfer(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter);
+
 void bb_flush(void);
 
 // Get instruction configuration by func7

@@ -1,6 +1,6 @@
 # Tutorial for buckyball
 
-> by -王博涵
+> by - Bohan Wang
 >
 > This document will be gradually updated as the author continues to solve and summarize encountered issues.
 
@@ -225,10 +225,15 @@ If a disaster occurs, you can pull the initial documents from GitHub again, but 
 
 ```
 ninja ctest_relu_test // Software compilation
-ninja sync-bin  // Synchronize binary files
 ```
 
 If `ninja ctest_relu_test` reports an error after execution, this means software compilation failed, please check **"III. Writing Test Software"** and related files.
+
+```
+bbdev workload --build
+```
+
+Compile/package the selected workload source code or configuration into artifacts (such as executable files, images, runtime scripts, input data packages, etc.) that can be used in the simulation or runtime environment for subsequent running on the Verilator/simulation platform or host side.
 
 ### Step 2: Generate Verilog
 
