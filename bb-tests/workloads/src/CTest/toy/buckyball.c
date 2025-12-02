@@ -245,6 +245,19 @@ void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
   }
 }
 
+// CPU ReLU activation function
+void cpu_relu(elem_t *a, elem_t *matrix, int rows, int cols) {
+  for (int i = 0; i < rows * cols; i++) {
+    matrix[i] = (a[i] > 0) ? a[i] : 0;
+  }
+}
+
+// CPU transfer from elem_t to result_t
+void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols) {
+  for (int i = 0; i < rows * cols; i++) {
+    dst[i] = (result_t)src[i];
+  }
+}
 unsigned long long read_cycle(void) {
   unsigned long long c;
   asm volatile("csrr %0, cycle" : "=r"(c));
