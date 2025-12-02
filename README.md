@@ -71,23 +71,22 @@ bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-b
 
 ### Docker Quick Experience
 
+  We support providing a Docker environment for rapid deployment of buckyball.
+
 **Notice**:
 - Docker images are provided only for specific release versions.
 - Docker image may not be the latest version, source build is recommended.
 
-**Pull Docker Image**
-```bash
-docker pull ghcr.io/dangosys/buckyball:latest
-```
+> We do not provide support for this version as it is not a stable release.
 
-**Run Docker Container**
-```bash
-docker run -it ghcr.io/dangosys/buckyball:latest
-# Activate environment
-source buckyball/env.sh
-# Run Verilator simulation test
-bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
-```
+### Buckyball as a library
+  We support providing a streamlined version of buckyball installation, integrated as a generator within Chipyard.
+
+**Notice**:
+- Buckyball-as-a-lib are maintained only for specific release versions.
+
+> We do not provide support for this version as it is not a stable release.
+
 
 ## Quick Tutorial
 You can start to learn ball and blink from [here](https://github.com/DangoSys/buckyball/blob/main/docs/bb-note/src/tutorial/tutorial.md)
