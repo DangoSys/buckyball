@@ -5,9 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
-static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
-// static elem_t probe_matrix[DIM * DIM] __attribute__((aligned(64)));
+static elem_t input_matrix[DIM * DIM] __attribute__((aligned(64)));
+static elem_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
+static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 // Used to verify content in SPAD after MVIN
 
 // Expected: provide a ReLU flow similar to TRANSPOSE
@@ -16,7 +16,7 @@ static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
 // bb_relu(op1_addr, wr_addr, iter) wrapper in bbhw implementation
 // (func7=RELU_FUNC7).
 
-void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
+void hw_relu(const char *test_name, elem_t *a, result_t*b, int size) {
   // Source operand in spad bank 0, write target in spad bank 1
   uint32_t op1_addr = spad_addr(0, 0);
   uint32_t wr_addr = spad_addr(1, 0);
@@ -28,16 +28,20 @@ void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   // Call ReLU instruction
   bb_relu(op1_addr, wr_addr, size);
   bb_fence();
-
-  // Optional: move result back to memory for host-side verification
-  // bb_mvout((uintptr_t)b, wr_addr, size);
+  bb_mvout((uintptr_t)b, wr_addr, size, 1);
 }
 
-int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
-  hw_relu(test_name, a, b, size);
-  // If mismatch was printed above, can choose to fail directly here;
-  // for compatibility, still return 1 for now
-  return 1;
+int run_test(const char *test_name, elem_t *a, int size) {
+  clear_i8_matrix(output_matrix, size, size);
+  cpu_relu(a, expected_matrix, size, size);
+  hw_relu(test_name, a, output_matrix, size);
+  if(compare_i8_matrices(output_matrix, expected_matrix, size, size)) {
+    printf("%s compare test PASSED\n", test_name);
+    return 1;
+  } else {
+    printf("%s compare test FAILED\n", test_name);
+    return 0;
+  }
 }
 
 int relu_cpu_reference(elem_t *input, elem_t *output, int size) {
@@ -51,22 +55,22 @@ int relu_cpu_reference(elem_t *input, elem_t *output, int size) {
 }
 
 int test_relu(int seed) {
-  init_i8_random_matrix(input_matrix_a, DIM, DIM, seed);
-  // CPU TEST BEGIN
-  // Measure cycles for the CPU ReLU reference implementation
-  unsigned long long start = read_rdcycle();
-  // CPU verification
-  int ok = relu_cpu_reference(input_matrix_a, output_matrix_b, DIM);
-  unsigned long long end = read_rdcycle();
-  unsigned long long cycles = end - start;
-  /* Print as hex high/low 32-bit parts to avoid embedded printf lacking
-    full long long support. This produces a stable, greppable output. */
-  uint32_t lo = (uint32_t)(cycles & 0xffffffffULL);
-  uint32_t hi = (uint32_t)(cycles >> 32);
-  printf("BB_CYCLES_RELU: 0x%08x%08x\n", hi, lo);
-  return ok;
-  // CPU TEST END
-  // return run_test("ReLU", input_matrix_a, output_matrix_b, DIM);
+  init_i8_random_matrix(input_matrix, DIM, DIM, seed);
+  // // CPU TEST BEGIN
+  // // Measure cycles for the CPU ReLU reference implementation
+  // unsigned long long start = read_rdcycle();
+  // // CPU verification
+  // int ok = relu_cpu_reference(input_matrix_a, output_matrix_b, DIM);
+  // unsigned long long end = read_rdcycle();
+  // unsigned long long cycles = end - start;
+  // /* Print as hex high/low 32-bit parts to avoid embedded printf lacking
+  //   full long long support. This produces a stable, greppable output. */
+  // uint32_t lo = (uint32_t)(cycles & 0xffffffffULL);
+  // uint32_t hi = (uint32_t)(cycles >> 32);
+  // printf("BB_CYCLES_RELU: 0x%08x%08x\n", hi, lo);
+  // return ok;
+  // // CPU TEST END
+  return run_test("ReLU", input_matrix, DIM);
   // ReLUBall test code, need to comment out the code block above
 }
 
@@ -77,7 +81,7 @@ int main() {
 
   int passed = test_relu(5);
   if (passed) {
-    printf("ReLU test PASSED!!!!\n");
+    printf("ReLU test PASSED!!!\n");
   } else {
     printf("ReLU test FAILED\n");
   }
