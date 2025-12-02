@@ -23,7 +23,8 @@ object buckyball extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    firechip
+    firechip,
+    palladium
   )
 
   override def ivyDeps = Agg(
@@ -869,21 +870,36 @@ object firechip extends SbtModule {
   )
 }
 
-// uvbb测试模块
-object uvbb extends ScalaModule {
-  override def millSourcePath = os.pwd / os.up / "bb-tests" / "uvbb"
+// Define fpga_shells module
+object fpga_shells extends SbtModule {
+  override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "fpga" / "fpga-shells"
   override def scalaVersion = "2.13.12"
 
-  override def scalacOptions = Seq(
-    "-language:reflectiveCalls",
-    "-deprecation",
-    "-feature",
-    "-Xcheckinit",
-    "-Ymacro-annotations"
+  // Add rocketchip and rocket_chip_blocks as dependencies
+  override def moduleDeps = Seq(
+    rocketchip,
+    rocket_chip_blocks
   )
 
-  // 依赖buckyball模块
-  override def moduleDeps = Seq(buckyball)
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+}
+
+// Palladium FPGA subproject (external reference)
+object palladium extends SbtModule {
+  override def millSourcePath = os.pwd / os.up / "tools" / "palladium"
+  override def scalaVersion = "2.13.12"
+
+  // Add chipyard and fpga_shells as dependencies
+  override def moduleDeps = Seq(
+    chipyard,
+    fpga_shells
+  )
 
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.5.0"
@@ -893,22 +909,53 @@ object uvbb extends ScalaModule {
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
   )
 
-  // 包含dut源码路径
-  override def sources = T.sources {
-    super.sources() ++ Seq(
-      PathRef(millSourcePath / "dut" / "src" / "main" / "scala")
-    )
-  }
-
-  // 包含resources路径
-  override def resources = T.sources {
-    super.resources() ++ Seq(
-      PathRef(millSourcePath / "dut" / "src" / "main" / "resources")
-    )
-  }
-
-  // 生成Verilog的任务
-  def elaborate = T {
-    runMain("uvbb.Elaborate")()
-  }
+  override def scalacOptions = Seq(
+    "-deprecation",
+    "-unchecked",
+    "-Ymacro-annotations"
+  )
 }
+
+// uvbb测试模块
+// object uvbb extends ScalaModule {
+//   override def millSourcePath = os.pwd / os.up / "bb-tests" / "uvbb"
+//   override def scalaVersion = "2.13.12"
+
+//   override def scalacOptions = Seq(
+//     "-language:reflectiveCalls",
+//     "-deprecation",
+//     "-feature",
+//     "-Xcheckinit",
+//     "-Ymacro-annotations"
+//   )
+
+//   // 依赖buckyball模块
+//   override def moduleDeps = Seq(buckyball)
+
+//   override def ivyDeps = Agg(
+//     ivy"org.chipsalliance::chisel:6.5.0"
+//   )
+
+//   override def scalacPluginIvyDeps = Agg(
+//     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+//   )
+
+//   // 包含dut源码路径
+//   override def sources = T.sources {
+//     super.sources() ++ Seq(
+//       PathRef(millSourcePath / "dut" / "src" / "main" / "scala")
+//     )
+//   }
+
+//   // 包含resources路径
+//   override def resources = T.sources {
+//     super.resources() ++ Seq(
+//       PathRef(millSourcePath / "dut" / "src" / "main" / "resources")
+//     )
+//   }
+
+//   // 生成Verilog的任务
+//   def elaborate = T {
+//     runMain("uvbb.Elaborate")()
+//   }
+// }
