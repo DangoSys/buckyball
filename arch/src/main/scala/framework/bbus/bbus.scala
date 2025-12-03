@@ -10,6 +10,7 @@ import framework.blink.BallRegist
 import framework.bbus.pmc.BallCyclePMC
 import framework.bbus.cmdrouter.CmdRouter
 import framework.bbus.memrouter.MemRouter
+import framework.switcher.{ToPhysicalLine, ToVirtualLine}
 
 
 class BBusConfigIO(numBalls: Int)extends Bundle {
@@ -79,26 +80,57 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
   io.accRead <> memoryrouter.io.accRead_o
   io.accWrite <> memoryrouter.io.accWrite_o
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
-
-  for(i <- 0 until numBalls){
-    memoryrouter.io.sramRead_i(i) <> balls(i).Blink.sramRead
-    memoryrouter.io.sramWrite_i(i) <> balls(i).Blink.sramWrite
-    memoryrouter.io.accRead_i(i) <> balls(i).Blink.accRead
-    memoryrouter.io.accWrite_i(i) <> balls(i).Blink.accWrite
-  }
+  
+  // be replaced by ToVirtualLine and ToPhysicalLine modules
+  //begin
+  // for(i <- 0 until numBalls){
+  //   memoryrouter.io.sramRead_i(i) <> balls(i).Blink.sramRead
+  //   memoryrouter.io.sramWrite_i(i) <> balls(i).Blink.sramWrite
+  //   memoryrouter.io.accRead_i(i) <> balls(i).Blink.accRead
+  //   memoryrouter.io.accWrite_i(i) <> balls(i).Blink.accWrite
+  // }
+  //end
 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
-val pmc = Module(new BallCyclePMC(numBalls))
+  val pmc = Module(new BallCyclePMC(numBalls))
 
-for (i <- 0 until numBalls) {
-  pmc.io.cmdReq_i(i).valid := cmdRouter.io.cmdReq_i(i).fire
-  pmc.io.cmdReq_i(i).bits := cmdRouter.io.cmdReq_i(i).bits
-  // Remove delay caused by RoB blocking preventing commit
-  pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
-  pmc.io.cmdResp_o(i).bits := cmdRouter.io.cmdResp_o(i).bits
-}
+  for (i <- 0 until numBalls) {
+    pmc.io.cmdReq_i(i).valid := cmdRouter.io.cmdReq_i(i).fire
+    pmc.io.cmdReq_i(i).bits := cmdRouter.io.cmdReq_i(i).bits
+    // Remove delay caused by RoB blocking preventing commit
+    pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
+    pmc.io.cmdResp_o(i).bits := cmdRouter.io.cmdResp_o(i).bits
+  }
+
+//-----------------------------------------------------------------------------
+// ToVirtualLine - per-ball address to virtual line conversion
+// -----------------------------------------------------------------------------
+
+  val toVirtualLines = Seq.fill(numBalls){ Module(new ToVirtualLine()(b, p)) }
+  for (i <- 0 until numBalls) {
+    toVirtualLines(i).io.sramRead_i  <> balls(i).Blink.sramRead
+    toVirtualLines(i).io.sramWrite_i <> balls(i).Blink.sramWrite
+    toVirtualLines(i).io.accRead_i   <> balls(i).Blink.accRead
+    toVirtualLines(i).io.accWrite_i  <> balls(i).Blink.accWrite
+  }
+
+
+// -----------------------------------------------------------------------------
+// ToPhysicalLine - per-ball conversion from virtual to physical line
+// -----------------------------------------------------------------------------
+
+  val toPhysicalLines = Seq.fill(numBalls){ Module(new ToPhysicalLine()(b, p)) }
+  for (i <- 0 until numBalls) {
+    toPhysicalLines(i).io.sramRead_i  <> toVirtualLines(i).io.sramRead_o
+    toPhysicalLines(i).io.sramWrite_i <> toVirtualLines(i).io.sramWrite_o
+    
+    memoryrouter.io.sramRead_i(i)  <> toPhysicalLines(i).io.sramRead_o
+    memoryrouter.io.sramWrite_i(i) <> toPhysicalLines(i).io.sramWrite_o
+    memoryrouter.io.accRead_i(i)   <> toPhysicalLines(i).io.accRead_o
+    memoryrouter.io.accWrite_i(i)  <> toPhysicalLines(i).io.accWrite_o
+  }
 
   override lazy val desiredName = "BBus"
 }
