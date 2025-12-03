@@ -25,6 +25,7 @@ class Status extends Bundle {
   val iter = Output(UInt(32.W))
 }
 
+
 // SramReadIO with rob_id
 class SramReadWithRobId(val n: Int, val w: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramReadIO(n, w)
@@ -35,9 +36,28 @@ class SramReadWithRobId(val n: Int, val w: Int)(implicit b: CustomBuckyballConfi
 // SramWriteIO with rob_id
 class SramWriteWithRobId(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramWriteIO(n, w, mask_len)
-  // Input because the outer layer has Flipped
+  // Input because theSramWriteIO outer layer has Flipped
   val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
+
+// SramReadIO with rob_id
+class SramReadWithInfo(val n: Int, val w: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
+  val io = new SramReadIO(n, w)
+  // Input because the outer layer has Flipped
+  val rob_id = Input(UInt(log2Up(b.rob_entries).W))
+  val is_acc = Input(Bool())
+  val bank_id = Input(UInt(log2Up(b.sp_banks+b.acc_banks).W))
+}
+
+// SramWriteIO with rob_id
+class SramWriteWithInfo(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
+  val io = new SramWriteIO(n, w, mask_len)
+  // Input because theSramWriteIO outer layer has Flipped
+  val rob_id = Input(UInt(log2Up(b.rob_entries).W))
+  val is_acc = Input(Bool())
+  val bank_id = Input(UInt(log2Up(b.sp_banks+b.acc_banks).W))
+}
+
 
 // Standard interface for Ball devices
 class Blink(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
