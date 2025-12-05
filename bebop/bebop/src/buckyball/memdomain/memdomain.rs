@@ -1,81 +1,177 @@
-/// MemDomain - 内存域顶层模块
-use crate::builtin::Module;
-use super::mem::Bank;
-use super::loader::MemLoader;
-use super::storer::MemStorer;
-use super::{DmaOperation, MvinConfig, MvoutConfig};
+use crate::builtin::{Sim, EventQueue};
+use super::{Decoder, Reader, Writer, Bank, OutController};
+use crate::{log_forward};
+use crate::buckyball::top::{DmaRequest, DmaResponse};
+use std::sync::mpsc::{Sender, Receiver};
 
 pub struct MemDomain {
-  name: String,
+  decoder: Decoder,
+  reader: Reader,
+  writer: Writer,
   bank: Bank,
-  loader: MemLoader,
-  storer: MemStorer,
+  out_ctrl: OutController,
+  pub event_queue: EventQueue<MemDomain>,
+
+  pub funct: u32,
+  pub xs1: u64,
+  pub xs2: u64,
+  pub rob_id: u32,  // ROB ID for tracking instruction completion
+
+  // DMA channels
+  dma_req_tx: Option<Sender<DmaRequest>>,
+  dma_resp_rx: Option<Receiver<DmaResponse>>,
 }
 
 impl MemDomain {
-  pub fn new(name: impl Into<String>, bank_size: usize) -> Self {
+  pub fn new() -> Self {
     Self {
-      name: name.into(),
-      bank: Bank::new("bank", bank_size),
-      loader: MemLoader::new("loader"),
-      storer: MemStorer::new("storer"),
+      decoder: Decoder::new(),
+      reader: Reader::new(),
+      writer: Writer::new(),
+      bank: Bank::new(),
+      out_ctrl: OutController::new(),
+      event_queue: EventQueue::new(),
+
+      funct: 0,
+      xs1: 0,
+      xs2: 0,
+      rob_id: 0,
+
+      dma_req_tx: None,
+      dma_resp_rx: None,
     }
   }
 
-  /// 发送内存指令
-  pub fn issue(&mut self, funct: u64, xs1: u64, xs2: u64) {
-    match funct {
-      24 => self.loader.issue(MvinConfig::from_fields(xs1, xs2)),
-      25 => self.storer.issue(MvoutConfig::from_fields(xs1, xs2)),
-      _ => {}
+  pub fn set_dma_channels(&mut self, req_tx: Sender<DmaRequest>, resp_rx: Receiver<DmaResponse>) {
+    self.dma_req_tx = Some(req_tx.clone());
+    self.dma_resp_rx = Some(resp_rx);
+    self.reader.set_dma_sender(req_tx.clone());
+    self.writer.set_dma_sender(req_tx);
+  }
+
+  pub fn mem_cmd(&mut self) {
+    let funct = self.funct;
+    let xs1 = self.xs1;
+    let xs2 = self.xs2;
+
+    println!("[MemDomain] mem_cmd called: funct={}, xs1=0x{:x}, xs2=0x{:x}", funct, xs1, xs2);
+
+    self.event_queue.push("MemCmd", move |memdomain: &mut MemDomain| {
+      memdomain.decoder.decode_cmd(funct, xs1, xs2);
+    });
+    self.outside_schedule(funct);
+  }
+
+  pub fn outside_schedule(&mut self, funct: u32) {
+    let mem_addr = self.decoder.mem_addr;
+    let is_load = self.decoder.is_load;
+    let is_store = self.decoder.is_store;
+    let bank_id = self.decoder.sp_bank;
+    let sp_bank_addr = self.decoder.sp_bank_addr;
+    let iter = self.decoder.iter;
+    let stride = self.decoder.stride;
+
+    println!("[MemDomain] outside_schedule: is_load={}, is_store={}, mem_addr=0x{:x}", is_load, is_store, mem_addr);
+
+    self.event_queue.push("ChooseDma", move |memdomain: &mut MemDomain| {
+      memdomain.out_ctrl.dma_schedule( bank_id, is_load, is_store,
+        mem_addr, sp_bank_addr, iter, stride);
+    });
+    log_forward!("MemDomain: Drive DMA (mem_addr=0x{:x}, iter={}, stride={})",
+                 mem_addr, iter, stride);
+    if funct == 24 {
+      println!("[MemDomain] Calling dma_read()");
+      self.dma_read();
+    } else if funct == 25 {
+      println!("[MemDomain] Calling dma_write()");
+      self.dma_write();
+    } else {
+      println!("[MemDomain] Not Calling dma");
     }
   }
 
-  /// 获取当前 DMA 操作
-  pub fn get_dma_operation(&self) -> Option<DmaOperation> {
-    if let Some(config) = self.loader.get_current() {
-      return Some(DmaOperation::Mvin(config.clone()));
-    }
-    if let Some(config) = self.storer.get_current() {
-      return Some(DmaOperation::Mvout(config.clone()));
-    }
-    None
+  pub fn dma_read(&mut self) {
+    // MVIN: DMA read from memory
+    let mem_addr = self.out_ctrl.mem_addr;
+    let iter = self.out_ctrl.iter;
+    let stride = self.out_ctrl.stride;
+
+    println!("[MemDomain] dma_read: pushing DmaRead event to queue (mem_addr=0x{:x})", mem_addr);
+
+    self.event_queue.push("DmaRead", move |memdomain: &mut MemDomain| {
+      println!("[MemDomain] DmaRead event executing, calling reader.dma_read()");
+      memdomain.reader.dma_read(mem_addr, iter, stride);
+    });
+    log_forward!("MemDomain: DMA read request");
+    self.bank_write();
   }
 
-  /// DMA 写入 scratchpad
-  pub fn write_spad(&mut self, addr: usize, data: u32) {
-    self.bank.init_write(addr, data);
+  pub fn dma_write(&mut self) {
+    // MVOUT: First read from bank, then DMA write to memory
+    self.bank_read();
+
+    // MVOUT: DMA write to memory after reading from bank
+    let mem_addr = self.out_ctrl.mem_addr;
+    let iter = self.out_ctrl.iter;
+    let stride = self.out_ctrl.stride;
+
+    self.event_queue.push("DmaWrite", move |memdomain: &mut MemDomain| {
+      memdomain.writer.dma_write(mem_addr, iter, stride);
+    });
+    log_forward!("MemDomain: DMA write request");
   }
 
-  /// DMA 读取 scratchpad
-  pub fn read_spad(&self, addr: usize) -> u32 {
-    self.bank.read_data(addr)
+  pub fn bank_read(&mut self) {
+    // MVOUT: Read data from bank
+    let bank_id = self.out_ctrl.bank_id;
+    let sp_bank_addr = self.out_ctrl.sp_bank_addr;
+    let iter = self.out_ctrl.iter;
+
+    self.event_queue.push("BankRead", move |memdomain: &mut MemDomain| {
+      memdomain.bank.bank_read(bank_id, sp_bank_addr, iter);
+    });
+    log_forward!("MemDomain: Bank read for mvout");
   }
 
-  /// 初始化内存
-  pub fn init_write(&mut self, addr: usize, data: u32) {
-    self.bank.init_write(addr, data);
+  pub fn bank_write(&mut self) {
+    // MVIN: Write data to bank from DMA
+    let bank_id = self.out_ctrl.bank_id;
+    let sp_bank_addr = self.out_ctrl.sp_bank_addr;
+    let iter = self.out_ctrl.iter;
+
+    self.event_queue.push("BankWrite", move |memdomain: &mut MemDomain| {
+      memdomain.bank.bank_write(bank_id, sp_bank_addr, iter);
+    });
+    log_forward!("MemDomain: Bank write for mvin");
   }
 
-  /// 获取数据
-  pub fn get_data(&self) -> u32 {
-    0
-  }
-
-  /// 完成当前 DMA 操作
-  pub fn complete_dma(&mut self) {
-    self.loader.complete();
-    self.storer.complete();
-  }
 }
 
-impl Module for MemDomain {
-  fn tick(&mut self) {
-    self.loader.tick();
-    self.storer.tick();
+impl Sim for MemDomain {
+  fn forward(&mut self) {
+    // Forward phase is triggered by external command
+    // Actual forward logic is in mem_cmd()
   }
 
-  fn name(&self) -> &str {
-    &self.name
+  fn backward(&mut self) {
+    // Process all events in the queue (LIFO)
+    println!("[MemDomain] backward: processing event queue");
+    let mut queue = std::mem::take(&mut self.event_queue);
+    queue.process_all(self);
+    self.event_queue = queue;
+    println!("[MemDomain] backward: event queue processed");
+  }
+
+  fn module_name(&self) -> &str {
+    "MemDomain"
+  }
+
+  fn print_status(&self) {
+    println!("  [MemDomain] Module Status:");
+    self.decoder.print_status();
+    self.out_ctrl.print_status();
+    self.reader.print_status();
+    self.writer.print_status();
+    self.bank.print_status();
   }
 }

@@ -1,16 +1,19 @@
-/// Bebop - Accelerator simulator for RISC-V Spike
+/// Bebop - Accelerator simulator for RISC-V host
 ///
-/// This library provides socket-based communication between Spike (RISC-V ISA simulator)
+/// This library provides socket-based communication between host (RISC-V ISA simulator)
 /// and custom accelerator implementations.
 #[macro_use]
-pub mod log;
 pub mod builtin;
 pub mod buckyball;
-pub mod config;
+#[macro_use]
 pub mod simulator;
-pub mod socket;
 
-pub use buckyball::{MemDomain, Module, MvinConfig, MvoutConfig, Top};
-pub use config::NpuConfig;
-pub use simulator::Simulator;
-pub use socket::{DmaClient, SocketMsg, SocketResp, SocketServer};
+// Re-export log configuration functions for convenience
+pub use simulator::utils::log_config::{
+    set_forward_log, set_backward_log,
+    is_forward_log_enabled, is_backward_log_enabled,
+    enable_all_logs, disable_all_logs,
+};
+
+pub use buckyball::{NpuConfig, Top};
+pub use simulator::{Simulator, StepMode};

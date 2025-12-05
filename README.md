@@ -62,7 +62,7 @@ cd buckyball
 source buckyball/env.sh
 ```
 
-### Verify Installation
+**4. Verify Installation**
 
 Run Verilator simulation test to verify installation:
 ```bash

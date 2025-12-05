@@ -1,46 +1,31 @@
-/// GlobalDecoder - 全局指令解码器
-/// 只负责识别指令类型，分发到对应 domain
+use crate::log_backward;
 
-/// 指令目标域
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TargetDomain {
-  MemDomain,
-  BallDomain,
-  Unknown,
-}
-
-/// 解码后的指令
-#[derive(Debug, Clone)]
-pub struct DecodedInstr {
-  pub target: TargetDomain,
-  pub funct: u64,
+pub struct Decoder {
+  pub funct: u32,
   pub xs1: u64,
   pub xs2: u64,
+  pub is_fence: bool,
 }
 
-/// 全局解码器
-pub struct GlobalDecoder {
-  name: String,
-}
-
-impl GlobalDecoder {
-  pub fn new(name: impl Into<String>) -> Self {
-    Self { name: name.into() }
+impl Decoder {
+  pub fn new() -> Self {
+    Self { funct: 0, xs1: 0, xs2: 0, is_fence: false }
   }
 
-  /// 解码指令，确定目标域
-  pub fn decode(&self, funct: u64, xs1: u64, xs2: u64) -> DecodedInstr {
-    let target = match funct {
-      24 | 25 => TargetDomain::MemDomain,      // MVIN, MVOUT
-      32..=42 => TargetDomain::BallDomain,     // Ball instructions
-      _ => TargetDomain::Unknown,
-    };
-
-    DecodedInstr { target, funct, xs1, xs2 }
+  pub fn decode_cmd(&mut self, funct: u32, xs1: u64, xs2: u64) {
+    self.funct = funct;
+    self.xs1 = xs1;
+    self.xs2 = xs2;
+    self.is_fence = funct == 31;
+    if self.is_fence {
+      log_backward!("Fence instruction decoded!");
+    } else {
+      log_backward!("Inst decode!");
+    }
   }
 
-  #[allow(dead_code)]
-  pub fn name(&self) -> &str {
-    &self.name
+  pub fn print_status(&self) {
+    println!("    [Decoder] funct={}, xs1=0x{:x}, xs2=0x{:x}, is_fence={}",
+             self.funct, self.xs1, self.xs2, self.is_fence);
   }
 }

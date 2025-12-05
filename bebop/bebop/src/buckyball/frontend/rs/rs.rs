@@ -1,70 +1,29 @@
-/// GlobalRS - 全局保留站
-/// 管理指令的发射和完成
+use crate::log_backward;
 
-pub type RobId = usize;
-
-/// 保留站条目
-#[derive(Clone, Default)]
-pub struct RobEntry {
-  pub valid: bool,
-  pub funct: u64,
+pub struct Rs {
+  pub funct: u32,
   pub xs1: u64,
   pub xs2: u64,
+  pub rob_id: u64,
+  pub domain_id: u64,
 }
 
-/// 全局保留站
-pub struct GlobalRS {
-  name: String,
-  rob: Vec<RobEntry>,
-  head: usize,
-  tail: usize,
-}
-
-impl GlobalRS {
-  pub fn new(name: impl Into<String>, size: usize) -> Self {
-    Self {
-      name: name.into(),
-      rob: vec![RobEntry::default(); size],
-      head: 0,
-      tail: 0,
-    }
+impl Rs {
+  pub fn new() -> Self {
+    Self { funct: 0, xs1: 0, xs2: 0, rob_id: 0, domain_id: 0 }
   }
 
-  /// 分配 ROB 条目
-  pub fn allocate(&mut self, funct: u64, xs1: u64, xs2: u64) -> Option<RobId> {
-    let next_tail = (self.tail + 1) % self.rob.len();
-    if next_tail == self.head {
-      return None; // ROB full
-    }
-
-    let rob_id = self.tail;
-    self.rob[rob_id] = RobEntry { valid: true, funct, xs1, xs2 };
-    self.tail = next_tail;
-    Some(rob_id)
+  pub fn issue_cmd(&mut self, funct: u32, xs1: u64, xs2: u64, rob_id: u64, domain_id: u64) {
+    self.funct = funct;
+    self.xs1 = xs1;
+    self.xs2 = xs2;
+    self.rob_id = rob_id;
+    self.domain_id = domain_id;
+    log_backward!("Inst issue!");
   }
 
-  /// 提交完成的指令
-  pub fn commit(&mut self, rob_id: RobId) {
-    if rob_id < self.rob.len() && self.rob[rob_id].valid {
-      self.rob[rob_id].valid = false;
-      // 更新 head
-      while self.head != self.tail && !self.rob[self.head].valid {
-        self.head = (self.head + 1) % self.rob.len();
-      }
-    }
-  }
-
-  pub fn is_full(&self) -> bool {
-    (self.tail + 1) % self.rob.len() == self.head
-  }
-
-  #[allow(dead_code)]
-  pub fn is_empty(&self) -> bool {
-    self.head == self.tail
-  }
-
-  #[allow(dead_code)]
-  pub fn name(&self) -> &str {
-    &self.name
+  pub fn print_status(&self) {
+    println!("    [Rs] funct={}, xs1=0x{:x}, xs2=0x{:x}, rob_id={}, domain_id={}",
+             self.funct, self.xs1, self.xs2, self.rob_id, self.domain_id);
   }
 }

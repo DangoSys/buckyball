@@ -1,17 +1,13 @@
-/// MemDomain - 内存域模块
-mod mem;
-mod loader;
-mod storer;
 mod decoder;
+mod reader;
+mod writer;
+mod bank;
+mod out_controller;
 mod memdomain;
 
-pub use decoder::{MvinConfig, MvoutConfig};
-
-/// DMA 操作类型
-#[derive(Debug, Clone)]
-pub enum DmaOperation {
-  Mvin(MvinConfig),
-  Mvout(MvoutConfig),
-}
-
+pub use decoder::Decoder;
+pub use reader::Reader;
+pub use writer::Writer;
+pub use bank::Bank;
+pub use out_controller::OutController;
 pub use memdomain::MemDomain;

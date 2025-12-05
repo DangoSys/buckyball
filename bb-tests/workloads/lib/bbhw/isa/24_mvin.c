@@ -3,17 +3,17 @@
 // =========================== for simulator ===========================
 const InstructionConfig mvin_config = {
     .rs1_fields = (BitFieldConfig[]){{"base_dram_addr", 0, 31}, {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){{"col_stride", 24, 33},
-                                     {"base_sp_addr", 0, 14},
+    .rs2_fields = (BitFieldConfig[]){{"base_sp_addr", 0, 14},
                                      {"iter", 15, 24},
+                                     {"stride", 24, 33},
                                      {NULL, 0, 0}}};
 
 // =========================== for CTest ===========================
 #define MVIN_ENCODE_RS1(dram_addr) ENCODE_FIELD(dram_addr, 0, 32)
 
-#define MVIN_ENCODE_RS2(sp_addr, iter, col_stride)                             \
+#define MVIN_ENCODE_RS2(sp_addr, iter, stride)                                 \
   (ENCODE_FIELD(sp_addr, 0, 15) | ENCODE_FIELD(iter, 15, 10) |                 \
-   ENCODE_FIELD(col_stride, 25, 10))
+   ENCODE_FIELD(stride, 25, 10))
 
 // MVIN instruction low-level implementation
 #ifndef __x86_64__
@@ -29,8 +29,8 @@ const InstructionConfig mvin_config = {
 
 // MVIN instruction high-level API implementation
 void bb_mvin(uint64_t mem_addr, uint32_t sp_addr, uint32_t iter,
-             uint32_t col_stride) {
+             uint32_t stride) {
   uint64_t rs1_val = MVIN_ENCODE_RS1(mem_addr);
-  uint64_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter, col_stride);
+  uint64_t rs2_val = MVIN_ENCODE_RS2(sp_addr, iter, stride);
   MVIN_RAW(rs1_val, rs2_val);
 }
