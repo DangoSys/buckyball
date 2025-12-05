@@ -1,7 +1,11 @@
-/// Frontend - 全局指令解码和保留站
 mod decoder;
-mod rs;
 mod frontend;
+mod rob;
+mod rs;
+mod domain_scheduler;
 
-pub use decoder::TargetDomain;
+pub use decoder::Decoder;
 pub use frontend::Frontend;
+pub use rob::Rob;
+pub use rs::Rs;
+pub use domain_scheduler::DomainScheduler;

@@ -1,6 +1,9 @@
-/// Built-in base types for NPU simulator modules
 pub mod module;
-pub mod ball;
+pub mod sim;
+pub mod interface;
+pub mod event;
 
 pub use module::Module;
-pub use ball::{Ball, Blink, BBus};
+pub use sim::Sim;
+pub use interface::Interface;
+pub use event::EventQueue;
