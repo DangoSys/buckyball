@@ -16,41 +16,44 @@ class WithCustomBootROM extends Config((site, here, up) => {
   ))
 })
 
-
 class BuckyballToyVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new examples.toy.BuckyballToyConfig)
+
+class BuckyballToyVectorVerilatorConfig extends Config(
+  new WithCustomBootROM ++
+  new examples.toy.BuckyballToyVectorConfig)
 
 class BuckyballGemminiVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new gemmini.DefaultGemminiConfig)
 
+
+
 object Elaborate extends App {
-  // Select Ball type from command line arguments
-  val configName = if (args.isEmpty) {
-    println("Usage: Elaborate <configName> [firtool-opts...]")
-    println("Available config types: toy, gemmini")
-    println("Using default: toy")
-    "toy"
-  } else {
-    args(0).toLowerCase match {
-      case "toy" => "toy"
-      case "gemmini" => "gemmini"
-      case other =>
-        println(s"Unknown config name: $other, using toy")
-        "toy"
-    }
+  // Accept full config class name like "sims.verilator.BuckyballToyVerilatorConfig"
+  if (args.isEmpty) {
+    println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
+    println("Example: Elaborate sims.verilator.BuckyballToyVerilatorConfig")
+    sys.exit(1)
   }
 
-  // Select corresponding Config based on configuration name
-  val config: Config = configName match {
-    case "toy" => new BuckyballToyVerilatorConfig
-    case "gemmini" => new BuckyballGemminiVerilatorConfig
-    // Default to toy
-    case _ => new BuckyballToyVerilatorConfig
-  }
+  val configClassName = args(0)
+  println(s"Elaborating with config class: $configClassName")
 
-  println(s"Elaborating with config: $configName")
+  // Dynamically load the config class
+  val config: Config = try {
+    val configClass = Class.forName(configClassName)
+    configClass.getDeclaredConstructor().newInstance().asInstanceOf[Config]
+  } catch {
+    case e: ClassNotFoundException =>
+      println(s"Error: Config class not found: $configClassName")
+      sys.exit(1)
+    case e: Exception =>
+      println(s"Error loading config class: ${e.getMessage}")
+      e.printStackTrace()
+      sys.exit(1)
+  }
 
   ChiselStage.emitSystemVerilogFile(
     new chipyard.harness.TestHarness()(config.toInstance),
