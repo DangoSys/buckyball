@@ -17,6 +17,7 @@ async def handler(req, context):
 
     config = {
         "binary": body.get("binary", ""),
+        "config": body.get("config", "sims.verilator.BuckyballToyVerilatorConfig"),
         "jobs": body.get("jobs", "16"),
         "batch": body.get("batch", False),
         "from_run_workflow": True,

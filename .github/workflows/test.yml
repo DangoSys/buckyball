@@ -41,7 +41,7 @@ jobs:
           rm -rf workflow/.motia || true
           bbdev verilator --clean
           rm -rf workflow/.motia || true
-          bbdev verilator --verilog
+          bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
           rm -rf workflow/.motia || true
           bbdev verilator --build '--jobs 16'
 

@@ -19,8 +19,18 @@ config = {
 async def handler(req, context):
     bbdir = get_buckyball_path()
     body = req.get("body") or {}
+
+    # Get config name, must be provided
+    config_name = body.get("config")
+    if not config_name or config_name == "None":
+        return {
+            "status": "error",
+            "message": "Configuration name is required. Please specify --config parameter.",
+            "example": 'bbdev verilator --verilog "--config sims.verilator.BuckyballToyVerilatorConfig"',
+        }
+
     data = {
-        "config": body.get("config"),
+        "config": config_name,
         "balltype": body.get("balltype"),
         "output_dir": body.get("output_dir", f"{bbdir}/arch/build/"),
     }
