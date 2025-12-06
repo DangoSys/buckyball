@@ -39,9 +39,13 @@ jobs:
           cargo install --version ${MDBOOK_VERSION} mdbook
           cargo install mdbook-linkcheck
           cargo install mdbook-pandoc
+          cargo install mdbook-toc
+          cargo install mdbook-mermaid
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4
+      - name: Install mermaid.js
+        run: cd docs/bb-note && mdbook-mermaid install
       - name: Build with mdBook
         run: cd docs/bb-note && mdbook build
       - name: Upload artifact
