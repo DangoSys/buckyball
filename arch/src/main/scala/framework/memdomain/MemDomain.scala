@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.PostGDCmd
+import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
@@ -14,13 +14,15 @@ import framework.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
 import framework.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
+import framework.frontend.globalrs.{GlobalRsIssue, GlobalRsComplete}
+
 class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOut) extends Module {
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)
-    val global_issue_i = Flipped(Decoupled(new framework.frontend.globalrs.GlobalRsIssue))
+    val global_issue_i = Flipped(Decoupled(new GlobalRsIssue))
 
     // Report completion to global RS (single channel)
-    val global_complete_o = Decoupled(new framework.frontend.globalrs.GlobalRsComplete)
+    val global_complete_o = Decoupled(new GlobalRsComplete)
 
     // SRAM interface for interaction with Ball Domain
     val ballDomain = new Bundle {

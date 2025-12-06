@@ -1,4 +1,4 @@
-package framework.frontend
+package framework.frontend.decoder
 
 import chisel3._
 import chisel3.util._

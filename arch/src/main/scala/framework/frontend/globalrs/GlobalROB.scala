@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.PostGDCmd
+import framework.frontend.decoder.PostGDCmd
 
 class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {

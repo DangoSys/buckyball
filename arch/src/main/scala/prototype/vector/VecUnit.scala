@@ -6,9 +6,9 @@ import org.chipsalliance.cde.config.Parameters
 
 import prototype.vector._
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.blink.Status
+import framework.balldomain.blink.Status
 
 
 class VecUnit(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {

@@ -63,7 +63,7 @@ class BallBus(maxReadBW: Int, maxWriteBW: Int, numBalls: Int) extends LazyModule
 - Output: Read/write interfaces connected to external SRAM
 - Edge cases: Handle ports beyond configuration range, set to DontCare
 
-**Dependencies**: framework.blink.BBusNode, framework.builtin.memdomain.mem
+**Dependencies**: framework.balldomain.blink.BBusNode, framework.builtin.memdomain.mem
 
 ### router.scala
 
@@ -94,7 +94,7 @@ class BBusRouter extends LazyModule {
 - Output: BBusNode standard interface
 - Edge cases: Depends on validity of node.edges.in.head
 
-**Dependencies**: framework.blink.BlinkBundle, framework.blink.BBusNode
+**Dependencies**: framework.balldomain.blink.BlinkBundle, framework.balldomain.blink.BBusNode
 
 ## Usage
 

@@ -9,8 +9,8 @@ import prototype.matrix._
 import org.yaml.snakeyaml.events.Event.ID
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
-import framework.blink.Status
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.blink.Status
 
 class BBFP_Control(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {

@@ -1,10 +1,10 @@
-package framework.blink
+package framework.balldomain.blink
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
 
 // Ball device status bundle

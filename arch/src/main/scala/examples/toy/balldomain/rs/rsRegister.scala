@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallReservationStation, BallRsRegist}
+import framework.balldomain.rs.{BallReservationStation, BallRsRegist}
 
 /**
  * Ball RS module - references BBus mechanism, manages Ball device registration and connections

@@ -8,7 +8,6 @@
   - [Scala Source Code](./arch/src/main/scala/README.md)
 	- [Util](./arch/src/main/scala/Util/README.md)
 	- [framework](./arch/src/main/scala/framework/README.md)
-		- [blink](./arch/src/main/scala/framework/blink/README.md)
 		- [rocket](./arch/src/main/scala/framework/rocket/README.md)
 	- [prototype](./arch/src/main/scala/prototype/README.md)
 		- [format](./arch/src/main/scala/prototype/format/README.md)

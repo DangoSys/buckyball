@@ -4,9 +4,9 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.blink.Status
+import framework.balldomain.blink.Status
 
 
 class PiDRAMmarcoBlackBox extends BlackBox with HasBlackBoxInline {

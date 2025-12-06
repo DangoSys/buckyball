@@ -5,7 +5,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.blink.{SramReadWithRobId, SramWriteWithRobId, SramReadWithInfo, SramWriteWithInfo}
+import framework.balldomain.blink.{SramReadWithRobId, SramWriteWithRobId, SramReadWithInfo, SramWriteWithInfo}
 
 class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
 

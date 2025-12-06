@@ -12,7 +12,7 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.tilelink._
 
 import freechips.rocketchip.tile.{LazyRoCC, LazyRoCCModuleImp}
-import framework.frontend.GlobalDecoder
+import framework.frontend.decoder.GlobalDecoder
 import framework.memdomain.dma.{BBStreamReader, BBStreamWriter}
 import framework.memdomain.MemDomain
 import examples.toy.balldomain.BallDomain

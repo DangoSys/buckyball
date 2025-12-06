@@ -1,11 +1,11 @@
-package framework.bbus.memrouter
+package framework.balldomain.bbus.memrouter
 
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO, SramReadReq, SramReadResp, SramWriteReq}
 
 class SramIOAdapter(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {

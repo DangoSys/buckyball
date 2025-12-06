@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.bbus.BBus
+import framework.balldomain.bbus.BBus
 
 /**
  * BBusModule - Ball bus module that directly extends BBus

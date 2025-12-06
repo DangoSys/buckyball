@@ -4,7 +4,7 @@ import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.{Config, Parameters, Field}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.blink.Blink
+import framework.balldomain.blink.Blink
 import prototype.vector.VecBall
 import prototype.matrix.MatrixBall
 import prototype.transpose.TransposeBall

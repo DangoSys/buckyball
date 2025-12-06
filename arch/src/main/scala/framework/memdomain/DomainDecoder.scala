@@ -2,7 +2,7 @@ package framework.memdomain
 
 import chisel3._
 import chisel3.util._
-import framework.frontend.PostGDCmd
+import framework.frontend.decoder.PostGDCmd
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.memdomain.DISA._
 import framework.memdomain.dma.LocalAddr

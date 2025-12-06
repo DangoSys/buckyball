@@ -1,10 +1,10 @@
-package framework.bbus.cmdrouter
+package framework.balldomain.bbus.cmdrouter
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 
 class CmdReqRouter(numBalls: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val io = IO(new Bundle {

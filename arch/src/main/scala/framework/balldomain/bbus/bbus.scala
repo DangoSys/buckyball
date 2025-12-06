@@ -1,15 +1,15 @@
-package framework.bbus
+package framework.balldomain.bbus
 
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.blink.BallRegist
-import framework.bbus.pmc.BallCyclePMC
-import framework.bbus.cmdrouter.CmdRouter
-import framework.bbus.memrouter.MemRouter
+import framework.balldomain.blink.BallRegist
+import framework.balldomain.bbus.pmc.BallCyclePMC
+import framework.balldomain.bbus.cmdrouter.CmdRouter
+import framework.balldomain.bbus.memrouter.MemRouter
 import framework.switcher.{ToPhysicalLine, ToVirtualLine}
 
 
@@ -80,7 +80,7 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
   io.accRead <> memoryrouter.io.accRead_o
   io.accWrite <> memoryrouter.io.accWrite_o
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
-  
+
   // be replaced by ToVirtualLine and ToPhysicalLine modules
   //begin
   // for(i <- 0 until numBalls){
@@ -125,7 +125,7 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
   for (i <- 0 until numBalls) {
     toPhysicalLines(i).io.sramRead_i  <> toVirtualLines(i).io.sramRead_o
     toPhysicalLines(i).io.sramWrite_i <> toVirtualLines(i).io.sramWrite_o
-    
+
     memoryrouter.io.sramRead_i(i)  <> toPhysicalLines(i).io.sramRead_o
     memoryrouter.io.sramWrite_i(i) <> toPhysicalLines(i).io.sramWrite_o
     memoryrouter.io.accRead_i(i)   <> toPhysicalLines(i).io.accRead_o

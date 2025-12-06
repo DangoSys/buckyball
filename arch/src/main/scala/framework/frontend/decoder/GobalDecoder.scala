@@ -1,4 +1,4 @@
-package framework.frontend
+package framework.frontend.decoder
 
 import chisel3._
 import chisel3.util._
@@ -7,7 +7,8 @@ import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import freechips.rocketchip.tile._
 import framework.memdomain.DISA._
-import framework.frontend.GISA._
+import framework.frontend.decoder.GISA._
+
 class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
   val cmd = new RoCCCommand
 }
