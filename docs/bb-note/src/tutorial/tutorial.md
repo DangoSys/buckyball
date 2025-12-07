@@ -239,7 +239,7 @@ Compile/package the selected workload source code or configuration into artifact
 
 ```
 cd buckyball
-bbdev verilator --verilog
+bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
 ```
 
 If `bbdev verilator --verilog` reports an error after execution, this means hardware compilation failed, please check **"I. Writing Chisel Hardware Module II. Compilation Adaptation Preparation"** related files.
