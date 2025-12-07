@@ -2,7 +2,7 @@ package examples.toy.balldomain
 
 import chisel3._
 import chisel3.util._
-import framework.frontend.PostGDCmd
+import framework.frontend.decoder.PostGDCmd
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.DISA._
 import framework.memdomain.dma.LocalAddr
@@ -100,9 +100,9 @@ class BallDomainDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extend
     ABFT_SYSTOLIC        -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),8.U,rs2(63,spAddrLen + 10)),
     CONV                 -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),9.U,rs2(63,spAddrLen + 10)),
     CIM                  -> List(Y,Y,Y,Y,Y, rs1(spAddrLen-1,0), rs1(2*spAddrLen - 1,spAddrLen), rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),10.U,rs2(63,spAddrLen + 10)),
-    TRANSFER              -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0), DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),6.U,rs2(63,spAddrLen + 10))
+    TRANSFER             -> List(Y,N,Y,Y,N, rs1(spAddrLen-1,0), DADDR, rs2(spAddrLen-1,0), rs2(spAddrLen + 9,spAddrLen),6.U,rs2(63,spAddrLen + 10))
   ))
-  
+
 
 // -----------------------------------------------------------------------------
 // Output assignment

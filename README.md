@@ -66,7 +66,7 @@ source buckyball/env.sh
 
 Run Verilator simulation test to verify installation:
 ```bash
-bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch'
+bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ```
 
 ### Docker Quick Experience

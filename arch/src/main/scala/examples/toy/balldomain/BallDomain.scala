@@ -6,18 +6,19 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.frontend.PostGDCmd
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.rs.BallRSModule
 import examples.toy.balldomain.bbus.BBusModule
+import framework.frontend.globalrs.GlobalRsIssue
+import framework.frontend.globalrs.GlobalRsComplete
 
 // Ball Domain input/output interface
 class BallDomainIO(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   // Issue interface from global RS (single channel)
-  val global_issue_i = Flipped(Decoupled(new framework.frontend.globalrs.GlobalRsIssue))
+  val global_issue_i = Flipped(Decoupled(new GlobalRsIssue))
 
   // Report completion to global RS (single channel)
-  val global_complete_o = Decoupled(new framework.frontend.globalrs.GlobalRsComplete)
+  val global_complete_o = Decoupled(new GlobalRsComplete)
 
   // Execution interface connected to Scratchpad
   val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))

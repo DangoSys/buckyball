@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.blink.{Blink, BallRegist}
+import framework.balldomain.blink.{Blink, BallRegist}
 
 class EmptyBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module with BallRegist {
   val io = IO(new Blink)

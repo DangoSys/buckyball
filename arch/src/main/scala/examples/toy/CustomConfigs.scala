@@ -48,12 +48,20 @@ class BuckyballCustomConfig(
 //   }
 // })
 
+import framework.gendomain.common.VectorParams
+
 class BuckyballToyConfig extends Config(
   new BuckyballCustomConfig ++
   new framework.rocket.WithNBuckyballCores(1) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
 
+class BuckyballToyVectorConfig extends Config(
+  new BuckyballCustomConfig ++
+  new framework.gendomain.rocket.WithRocketVectorUnit(64, 64, VectorParams.minParams) ++
+  new framework.rocket.WithNBuckyballCores(1) ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.config.AbstractConfig)
 
 import freechips.rocketchip.subsystem.{InCluster, InSubsystem, SBUS, MBUS}
 import freechips.rocketchip.devices.tilelink.{BootROMParams, BootROMLocated}

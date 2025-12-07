@@ -8,7 +8,7 @@ import org.chipsalliance.cde.config.Parameters
 import prototype.matrix._
 import framework.memdomain.mem.{SramWriteIO, SramReadIO, SramReadResp}
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.rs.{BallRsIssue, BallRsComplete}
+import framework.balldomain.rs.{BallRsIssue, BallRsComplete}
 
 class BBFP_EX(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)

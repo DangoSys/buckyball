@@ -25,19 +25,42 @@ async def handler(data, context):
     bbdir = get_buckyball_path()
     build_dir = data.get("output_dir", f"{bbdir}/arch/build/")
     arch_dir = f"{bbdir}/arch"
+
+    # Get config name, must be provided
+    config_name = data.get("config")
+    if not config_name or config_name == "None":
+        context.logger.error("Configuration name is required but not provided")
+        success_result, failure_result = await check_result(
+            context,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "validation",
+                "error": "Configuration name is required. Please specify --config parameter.",
+                "example": 'bbdev verilator --verilog "--config sims.verilator.BuckyballToyVerilatorConfig"',
+            },
+        )
+        return failure_result
+
+    context.logger.info(f"Using configuration: {config_name}")
+
     # ==================================================================================
     # Execute operation
     # ==================================================================================
     if data.get("balltype"):
-        command = f"cd {arch_dir} && mill -i __.test.runMain sims.verify.BallTopMain {data.get('balltype')} "
+        command = (
+            f"mill -i __.test.runMain sims.verify.BallTopMain {data.get('balltype')} "
+        )
     else:
-        command = f"cd {arch_dir} && mill -i __.test.runMain sims.verilator.Elaborate {data.get('config')} "
+        command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
+
     command += "--disable-annotation-unknown -strip-debug-info -O=debug "
     command += f"--split-verilog -o={build_dir}"
+
     result = stream_run_logger(
         cmd=command,
         logger=context.logger,
-        cwd=bbdir,
+        cwd=arch_dir,
         stdout_prefix="verilator verilog",
         stderr_prefix="verilator verilog",
     )

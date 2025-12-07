@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.PostGDCmd
+import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile.RoCCResponse
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
