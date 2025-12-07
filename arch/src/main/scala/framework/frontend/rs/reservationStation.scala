@@ -6,7 +6,7 @@ import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain._
-import framework.blink.BallRegist
+import framework.balldomain.blink.BallRegist
 
 // Ball device information - configuration information for registering Ball devices
 case class BallRsRegist(
