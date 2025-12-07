@@ -75,21 +75,7 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
 // memory router
 // -----------------------------------------------------------------------------
   val memoryrouter = Module(new MemRouter(numBalls)(b, p))
-  io.sramRead <> memoryrouter.io.sramRead_o
-  io.sramWrite <> memoryrouter.io.sramWrite_o
-  io.accRead <> memoryrouter.io.accRead_o
-  io.accWrite <> memoryrouter.io.accWrite_o
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
-
-  // be replaced by ToVirtualLine and ToPhysicalLine modules
-  //begin
-  // for(i <- 0 until numBalls){
-  //   memoryrouter.io.sramRead_i(i) <> balls(i).Blink.sramRead
-  //   memoryrouter.io.sramWrite_i(i) <> balls(i).Blink.sramWrite
-  //   memoryrouter.io.accRead_i(i) <> balls(i).Blink.accRead
-  //   memoryrouter.io.accWrite_i(i) <> balls(i).Blink.accWrite
-  // }
-  //end
 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
@@ -116,21 +102,24 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
     toVirtualLines(i).io.accWrite_i  <> balls(i).Blink.accWrite
   }
 
+  for(i <- 0 until numBalls){
+    memoryrouter.io.sramRead_i(i) <> toVirtualLines(i).io.sramRead_o
+    memoryrouter.io.sramWrite_i(i) <> toVirtualLines(i).io.sramWrite_o
+  }
 
 // -----------------------------------------------------------------------------
 // ToPhysicalLine - per-ball conversion from virtual to physical line
 // -----------------------------------------------------------------------------
 
-  val toPhysicalLines = Seq.fill(numBalls){ Module(new ToPhysicalLine()(b, p)) }
-  for (i <- 0 until numBalls) {
-    toPhysicalLines(i).io.sramRead_i  <> toVirtualLines(i).io.sramRead_o
-    toPhysicalLines(i).io.sramWrite_i <> toVirtualLines(i).io.sramWrite_o
-
-    memoryrouter.io.sramRead_i(i)  <> toPhysicalLines(i).io.sramRead_o
-    memoryrouter.io.sramWrite_i(i) <> toPhysicalLines(i).io.sramWrite_o
-    memoryrouter.io.accRead_i(i)   <> toPhysicalLines(i).io.accRead_o
-    memoryrouter.io.accWrite_i(i)  <> toPhysicalLines(i).io.accWrite_o
-  }
+  val toPhysicalLines = Module(new ToPhysicalLine()(b, p))
+  
+    toPhysicalLines.io.sramRead_i  <> memoryrouter.io.sramRead_o
+    toPhysicalLines.io.sramWrite_i <> memoryrouter.io.sramWrite_o
+    
+    io.sramRead  <> toPhysicalLines.io.sramRead_o
+    io.sramWrite <> toPhysicalLines.io.sramWrite_o
+    io.accRead   <> toPhysicalLines.io.accRead_o
+    io.accWrite  <> toPhysicalLines.io.accWrite_o
 
   override lazy val desiredName = "BBus"
 }
