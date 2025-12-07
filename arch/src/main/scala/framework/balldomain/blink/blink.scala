@@ -40,7 +40,7 @@ class SramWriteWithRobId(val n: Int, val w: Int, val mask_len: Int)(implicit b: 
   val rob_id = Input(UInt(log2Up(b.rob_entries).W))
 }
 
-// SramReadIO with rob_id
+// SramReadIO with rob_id, is_acc, bank_id
 class SramReadWithInfo(val n: Int, val w: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramReadIO(n, w)
   // Input because the outer layer has Flipped
@@ -49,7 +49,7 @@ class SramReadWithInfo(val n: Int, val w: Int)(implicit b: CustomBuckyballConfig
   val bank_id = Input(UInt(log2Up(b.sp_banks+b.acc_banks).W))
 }
 
-// SramWriteIO with rob_id
+// SramWriteIO with rob_id, is_acc, bank_id
 class SramWriteWithInfo(val n: Int, val w: Int, val mask_len: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
   val io = new SramWriteIO(n, w, mask_len)
   // Input because theSramWriteIO outer layer has Flipped

@@ -5,7 +5,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.memdomain.mem.{SramReadIO, SramWriteIO}
-import framework.balldomain.blink.{SramReadWithRobId, SramWriteWithRobId, SramReadWithInfo, SramWriteWithInfo}
+import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
 
 class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
 
@@ -17,11 +17,11 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
     val sramWrite_i = Vec(numBanks, new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
 
     // Physical memory endpoints
-    val sramRead_o  = Vec(b.sp_banks, Flipped(new SramReadWithRobId(b.spad_bank_entries, b.spad_w)))
-    val sramWrite_o = Vec(b.sp_banks, Flipped(new SramWriteWithRobId(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    val sramRead_o  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
+    val sramWrite_o = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
 
-    val accRead_o   = Vec(b.acc_banks, Flipped(new SramReadWithRobId(b.acc_bank_entries, b.acc_w)))
-    val accWrite_o  = Vec(b.acc_banks, Flipped(new SramWriteWithRobId(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    val accRead_o   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    val accWrite_o  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
   // --------------------------------------------------------------------------
@@ -31,29 +31,25 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
   // SPAD read/write ports
   for (i <- 0 until b.sp_banks) {
     val spR = io.sramRead_o(i)
-    spR.io.req.valid  := false.B
-    spR.io.req.bits   := DontCare
-    spR.io.resp.ready := false.B
-    spR.rob_id        := 0.U
+    spR.req.valid  := false.B
+    spR.req.bits   := DontCare
+    spR.resp.ready := false.B
 
     val spW = io.sramWrite_o(i)
-    spW.io.req.valid := false.B
-    spW.io.req.bits  := DontCare
-    spW.rob_id       := 0.U
+    spW.req.valid := false.B
+    spW.req.bits  := DontCare
   }
 
   // ACC read/write ports
   for (i <- 0 until b.acc_banks) {
     val accR = io.accRead_o(i)
-    accR.io.req.valid  := false.B
-    accR.io.req.bits   := DontCare
-    accR.io.resp.ready := false.B
-    accR.rob_id        := 0.U
+    accR.req.valid  := false.B
+    accR.req.bits   := DontCare
+    accR.resp.ready := false.B
 
     val accW = io.accWrite_o(i)
-    accW.io.req.valid := false.B
-    accW.io.req.bits  := DontCare
-    accW.rob_id       := 0.U
+    accW.req.valid := false.B
+    accW.req.bits  := DontCare
   }
 
   // Default values for all virtual ports
@@ -76,17 +72,16 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
     val spR = io.sramRead_o(i)
 
     // Request path (virtual → SPAD)
-    spR.io.req.valid        := vR.io.req.valid
-    spR.io.req.bits.addr    := vR.io.req.bits.addr
-    spR.io.req.bits.fromDMA := vR.io.req.bits.fromDMA
-    spR.rob_id              := vR.rob_id
+    spR.req.valid        := vR.io.req.valid
+    spR.req.bits.addr    := vR.io.req.bits.addr
+    spR.req.bits.fromDMA := vR.io.req.bits.fromDMA
 
-    vR.io.req.ready         := spR.io.req.ready
+    vR.io.req.ready         := spR.req.ready
 
     // Response path (SPAD → virtual)
-    vR.io.resp.valid        := spR.io.resp.valid
-    vR.io.resp.bits         := spR.io.resp.bits
-    spR.io.resp.ready       := vR.io.resp.ready
+    vR.io.resp.valid        := spR.resp.valid
+    vR.io.resp.bits         := spR.resp.bits
+    spR.resp.ready       := vR.io.resp.ready
   }
 
   // --------------------------------------------------------------------------
@@ -99,17 +94,16 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
     val accR = io.accRead_o(i)
 
     // Request path (virtual → ACC)
-    accR.io.req.valid        := vR.io.req.valid
-    accR.io.req.bits.addr    := vR.io.req.bits.addr
-    accR.io.req.bits.fromDMA := vR.io.req.bits.fromDMA
-    accR.rob_id              := vR.rob_id
+    accR.req.valid        := vR.io.req.valid
+    accR.req.bits.addr    := vR.io.req.bits.addr
+    accR.req.bits.fromDMA := vR.io.req.bits.fromDMA
 
-    vR.io.req.ready          := accR.io.req.ready
+    vR.io.req.ready          := accR.req.ready
 
     // Response path (ACC → virtual)
-    vR.io.resp.valid         := accR.io.resp.valid
-    vR.io.resp.bits          := accR.io.resp.bits
-    accR.io.resp.ready       := vR.io.resp.ready
+    vR.io.resp.valid         := accR.resp.valid
+    vR.io.resp.bits          := accR.resp.bits
+    accR.resp.ready       := vR.io.resp.ready
   }
 
   // --------------------------------------------------------------------------
@@ -120,13 +114,12 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
     val vW  = io.sramWrite_i(i)
     val spW = io.sramWrite_o(i)
 
-    spW.io.req.valid       := vW.io.req.valid
-    spW.io.req.bits.addr   := vW.io.req.bits.addr
-    spW.io.req.bits.data   := vW.io.req.bits.data
-    spW.io.req.bits.mask   := vW.io.req.bits.mask
-    spW.rob_id             := vW.rob_id
+    spW.req.valid       := vW.io.req.valid
+    spW.req.bits.addr   := vW.io.req.bits.addr
+    spW.req.bits.data   := vW.io.req.bits.data
+    spW.req.bits.mask   := vW.io.req.bits.mask
 
-    vW.io.req.ready        := spW.io.req.ready
+    vW.io.req.ready        := spW.req.ready
   }
 
   // --------------------------------------------------------------------------
@@ -138,12 +131,11 @@ class ToPhysicalLine(implicit b: CustomBuckyballConfig, p: Parameters) extends M
     val vW   = io.sramWrite_i(idx)
     val accW = io.accWrite_o(i)
 
-    accW.io.req.valid       := vW.io.req.valid
-    accW.io.req.bits.addr   := vW.io.req.bits.addr
-    accW.io.req.bits.data   := vW.io.req.bits.data
-    accW.io.req.bits.mask   := vW.io.req.bits.mask
-    accW.rob_id             := vW.rob_id
+    accW.req.valid       := vW.io.req.valid
+    accW.req.bits.addr   := vW.io.req.bits.addr
+    accW.req.bits.data   := vW.io.req.bits.data
+    accW.req.bits.mask   := vW.io.req.bits.mask
 
-    vW.io.req.ready         := accW.io.req.ready
+    vW.io.req.ready         := accW.req.ready
   }
 }
