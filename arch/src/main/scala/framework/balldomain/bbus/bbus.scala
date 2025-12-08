@@ -11,6 +11,7 @@ import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.bbus.memrouter.MemRouter
 import framework.switcher.{ToPhysicalLine, ToVirtualLine}
+import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
 
 
 class BBusConfigIO(numBalls: Int)extends Bundle {
@@ -24,15 +25,15 @@ class BBusConfigIO(numBalls: Int)extends Bundle {
 class BBus(ballGenerators: Seq[() => BallRegist with Module])
   (implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val numBalls = ballGenerators.length
-
+  private val numBanks = b.sp_banks + b.acc_banks
   val io = IO(new Bundle {
     val cmdReq = Vec(numBalls, Flipped(Decoupled(new BallRsIssue)))
     val cmdResp = Vec(numBalls, Decoupled(new BallRsComplete))
 
-    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
-    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
-    val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
-    val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    val sramRead = Vec(numBanks, Flipped(new SramReadWithInfo(b.spad_bank_entries, b.spad_w)))
+    val sramWrite = Vec(numBanks, Flipped(new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    // val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    // val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
   // Instantiate all registered Balls
@@ -76,7 +77,8 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
 // -----------------------------------------------------------------------------
   val memoryrouter = Module(new MemRouter(numBalls)(b, p))
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
-
+  io.sramRead  <> memoryrouter.io.sramRead_o
+  io.sramWrite <> memoryrouter.io.sramWrite_o
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
@@ -111,15 +113,11 @@ class BBus(ballGenerators: Seq[() => BallRegist with Module])
 // ToPhysicalLine - per-ball conversion from virtual to physical line
 // -----------------------------------------------------------------------------
 
-  val toPhysicalLines = Module(new ToPhysicalLine()(b, p))
+  // val toPhysicalLines = Module(new ToPhysicalLine()(b, p))
   
-    toPhysicalLines.io.sramRead_i  <> memoryrouter.io.sramRead_o
-    toPhysicalLines.io.sramWrite_i <> memoryrouter.io.sramWrite_o
-    
-    io.sramRead  <> toPhysicalLines.io.sramRead_o
-    io.sramWrite <> toPhysicalLines.io.sramWrite_o
-    io.accRead   <> toPhysicalLines.io.accRead_o
-    io.accWrite  <> toPhysicalLines.io.accWrite_o
+  //   toPhysicalLines.io.sramRead_i  <> memoryrouter.io.sramRead_o
+  //   toPhysicalLines.io.sramWrite_i <> memoryrouter.io.sramWrite_o
+  
 
   override lazy val desiredName = "BBus"
 }
