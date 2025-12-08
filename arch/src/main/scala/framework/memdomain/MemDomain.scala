@@ -15,8 +15,11 @@ import framework.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
 import framework.frontend.globalrs.{GlobalRsIssue, GlobalRsComplete}
+import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
+import framework.switcher.{ToPhysicalLine, ToVirtualLine}
 
 class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOut) extends Module {
+  private val numBanks = b.sp_banks + b.acc_banks
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)
     val global_issue_i = Flipped(Decoupled(new GlobalRsIssue))
@@ -26,10 +29,8 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
 
     // SRAM interface for interaction with Ball Domain
     val ballDomain = new Bundle {
-      val sramRead = Vec(b.sp_banks, new SramReadIO(b.spad_bank_entries, b.spad_w))
-      val sramWrite = Vec(b.sp_banks, new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
-      val accRead = Vec(b.acc_banks, new SramReadIO(b.acc_bank_entries, b.acc_w))
-      val accWrite = Vec(b.acc_banks, new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len))
+      val sramRead = Vec(numBanks, new SramReadWithInfo(b.spad_bank_entries, b.spad_w))
+      val sramWrite = Vec(numBanks, new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
     }
 
     // DMA interface
@@ -124,11 +125,18 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
   memStorer.io.sramRead <> memController.io.dma.sramRead
   memStorer.io.accRead <> memController.io.dma.accRead
 
+
+  // ToPhysical interface
   // Ball Domain SRAM interface connected to MemController's Ball Domain interface
-  io.ballDomain.sramRead <> memController.io.ballDomain.sramRead
-  io.ballDomain.sramWrite <> memController.io.ballDomain.sramWrite
-  io.ballDomain.accRead <> memController.io.ballDomain.accRead
-  io.ballDomain.accWrite <> memController.io.ballDomain.accWrite
+  val toPhysicalLines = Module(new ToPhysicalLine()(b, p))
+  
+  toPhysicalLines.io.sramRead_i  <> io.ballDomain.sramRead
+  toPhysicalLines.io.sramWrite_i <> io.ballDomain.sramWrite
+
+  toPhysicalLines.io.sramRead_o <> memController.io.ballDomain.sramRead
+  toPhysicalLines.io.sramWrite_o <> memController.io.ballDomain.sramWrite
+  toPhysicalLines.io.accRead_o <> memController.io.ballDomain.accRead
+  toPhysicalLines.io.accWrite_o <> memController.io.ballDomain.accWrite
 
   // Completion signal connected to global RS
   io.global_complete_o <> memRs.io.complete_o

@@ -125,8 +125,6 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer)
 // -----------------------------------------------------------------------------
   ballDomain.io.sramRead  <> memDomain.io.ballDomain.sramRead
   ballDomain.io.sramWrite <> memDomain.io.ballDomain.sramWrite
-  ballDomain.io.accRead   <> memDomain.io.ballDomain.accRead
-  ballDomain.io.accWrite  <> memDomain.io.ballDomain.accWrite
 
 // ---------------------------------------------------------------------------
 // RoCC response and status signals
