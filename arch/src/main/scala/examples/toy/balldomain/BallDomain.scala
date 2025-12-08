@@ -11,9 +11,11 @@ import examples.toy.balldomain.rs.BallRSModule
 import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.GlobalRsIssue
 import framework.frontend.globalrs.GlobalRsComplete
+import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
 
 // Ball Domain input/output interface
 class BallDomainIO(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
+  private val numBanks = b.sp_banks + b.acc_banks
   // Issue interface from global RS (single channel)
   val global_issue_i = Flipped(Decoupled(new GlobalRsIssue))
 
@@ -21,10 +23,10 @@ class BallDomainIO(implicit b: CustomBuckyballConfig, p: Parameters) extends Bun
   val global_complete_o = Decoupled(new GlobalRsComplete)
 
   // Execution interface connected to Scratchpad
-  val sramRead  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
-  val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
-  val accRead   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
-  val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+  val sramRead  = Vec(numBanks, Flipped(new SramReadWithInfo(b.spad_bank_entries, b.spad_w)))
+  val sramWrite = Vec(numBanks, Flipped(new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+  // val accRead   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+  // val accWrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
 }
 
 // Ball Domain top level - uses new simplified BBus architecture
@@ -67,8 +69,6 @@ class BallDomain(implicit b: CustomBuckyballConfig, p: Parameters) extends Modul
 //---------------------------------------------------------------------------
   bbus.io.sramRead  <> io.sramRead
   bbus.io.sramWrite <> io.sramWrite
-  bbus.io.accRead   <> io.accRead
-  bbus.io.accWrite  <> io.accWrite
 
 //---------------------------------------------------------------------------
 // Local RS completion signal -> Global RS (single channel, includes global rob_id)
