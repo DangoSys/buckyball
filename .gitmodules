@@ -22,3 +22,6 @@
 [submodule "compiler"]
 	path = compiler
 	url = https://github.com/DangoSys/bb-compiler.git
+[submodule "arch/thirdparty/t1"]
+	path = arch/thirdparty/t1
+	url = https://github.com/DangoSys/t1.git

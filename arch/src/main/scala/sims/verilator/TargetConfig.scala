@@ -20,10 +20,6 @@ class BuckyballToyVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new examples.toy.BuckyballToyConfig)
 
-class BuckyballToyVectorVerilatorConfig extends Config(
-  new WithCustomBootROM ++
-  new examples.toy.BuckyballToyVectorConfig)
-
 class BuckyballGemminiVerilatorConfig extends Config(
   new WithCustomBootROM ++
   new gemmini.DefaultGemminiConfig)
