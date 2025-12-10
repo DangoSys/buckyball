@@ -1,7 +1,7 @@
 // See LICENSE.SiFive for license details.
 // See LICENSE.Berkeley for license details.
 
-package framework.rocket
+package freechips.rocketchip.rocket
 
 import chisel3._
 import chisel3.util.{BitPat, Cat, Fill, Mux1H, PopCount, PriorityMux, RegEnable, UIntToOH, Valid, log2Ceil, log2Up}
@@ -12,12 +12,232 @@ import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 
 import scala.collection.mutable.LinkedHashMap
-import freechips.rocketchip.rocket._
-import freechips.rocketchip.rocket.Instructions._
-import freechips.rocketchip.rocket.CustomInstructions._
+import Instructions._
+import CustomInstructions._
 
+class MStatus extends Bundle {
+  // not truly part of mstatus, but convenient
+  val debug = Bool()
+  val cease = Bool()
+  val wfi = Bool()
+  val isa = UInt(32.W)
 
-class CSRDecodeIOBB(implicit p: Parameters) extends CoreBundle {
+  val dprv = UInt(PRV.SZ.W) // effective prv for data accesses
+  val dv = Bool() // effective v for data accesses
+  val prv = UInt(PRV.SZ.W)
+  val v = Bool()
+
+  val sd = Bool()
+  val zero2 = UInt(23.W)
+  val mpv = Bool()
+  val gva = Bool()
+  val mbe = Bool()
+  val sbe = Bool()
+  val sxl = UInt(2.W)
+  val uxl = UInt(2.W)
+  val sd_rv32 = Bool()
+  val zero1 = UInt(8.W)
+  val tsr = Bool()
+  val tw = Bool()
+  val tvm = Bool()
+  val mxr = Bool()
+  val sum = Bool()
+  val mprv = Bool()
+  val xs = UInt(2.W)
+  val fs = UInt(2.W)
+  val mpp = UInt(2.W)
+  val vs = UInt(2.W)
+  val spp = UInt(1.W)
+  val mpie = Bool()
+  val ube = Bool()
+  val spie = Bool()
+  val upie = Bool()
+  val mie = Bool()
+  val hie = Bool()
+  val sie = Bool()
+  val uie = Bool()
+}
+
+class MNStatus extends Bundle {
+  val mpp   = UInt(2.W)
+  val zero3 = UInt(3.W)
+  val mpv   = Bool()
+  val zero2 = UInt(3.W)
+  val mie   = Bool()
+  val zero1 = UInt(3.W)
+}
+
+class HStatus extends Bundle {
+  val zero6 = UInt(30.W)
+  val vsxl = UInt(2.W)
+  val zero5 = UInt(9.W)
+  val vtsr = Bool()
+  val vtw = Bool()
+  val vtvm = Bool()
+  val zero3 = UInt(2.W)
+  val vgein = UInt(6.W)
+  val zero2 = UInt(2.W)
+  val hu = Bool()
+  val spvp = Bool()
+  val spv = Bool()
+  val gva = Bool()
+  val vsbe = Bool()
+  val zero1 = UInt(5.W)
+}
+
+class DCSR extends Bundle {
+  val xdebugver = UInt(2.W)
+  val zero4 = UInt(2.W)
+  val zero3 = UInt(12.W)
+  val ebreakm = Bool()
+  val ebreakh = Bool()
+  val ebreaks = Bool()
+  val ebreaku = Bool()
+  val zero2 = Bool()
+  val stopcycle = Bool()
+  val stoptime = Bool()
+  val cause = UInt(3.W)
+  val v = Bool()
+  val zero1 = UInt(2.W)
+  val step = Bool()
+  val prv = UInt(PRV.SZ.W)
+}
+
+class MIP(implicit p: Parameters) extends CoreBundle()(p)
+    with HasCoreParameters {
+  val lip = Vec(coreParams.nLocalInterrupts, Bool())
+  val zero1 = Bool()
+  val debug = Bool() // keep in sync with CSR.debugIntCause
+  val rocc = Bool()
+  val sgeip = Bool()
+  val meip = Bool()
+  val vseip = Bool()
+  val seip = Bool()
+  val ueip = Bool()
+  val mtip = Bool()
+  val vstip = Bool()
+  val stip = Bool()
+  val utip = Bool()
+  val msip = Bool()
+  val vssip = Bool()
+  val ssip = Bool()
+  val usip = Bool()
+}
+
+class Envcfg extends Bundle {
+  val stce = Bool() // only for menvcfg/henvcfg
+  val pbmte = Bool() // only for menvcfg/henvcfg
+  val zero54 = UInt(54.W)
+  val cbze = Bool()
+  val cbcfe = Bool()
+  val cbie = UInt(2.W)
+  val zero3 = UInt(3.W)
+  val fiom = Bool()
+  def write(wdata: UInt) {
+    val new_envcfg = wdata.asTypeOf(new Envcfg)
+    fiom := new_envcfg.fiom // only FIOM is writable currently
+  }
+}
+
+class PTBR(implicit p: Parameters) extends CoreBundle()(p) {
+  def additionalPgLevels = mode.extract(log2Ceil(pgLevels-minPgLevels+1)-1, 0)
+  def pgLevelsToMode(i: Int) = (xLen, i) match {
+    case (32, 2) => 1
+    case (64, x) if x >= 3 && x <= 6 => x + 5
+  }
+  val (modeBits, maxASIdBits) = xLen match {
+    case 32 => (1, 9)
+    case 64 => (4, 16)
+  }
+  require(modeBits + maxASIdBits + maxPAddrBits - pgIdxBits == xLen)
+
+  val mode = UInt(modeBits.W)
+  val asid = UInt(maxASIdBits.W)
+  val ppn = UInt((maxPAddrBits - pgIdxBits).W)
+}
+
+object PRV
+{
+  val SZ = 2
+  val U = 0
+  val S = 1
+  val H = 2
+  val M = 3
+}
+
+object CSR
+{
+  // commands
+  val SZ = 3
+  def X = BitPat.dontCare(SZ)
+  def N = 0.U(SZ.W)
+  def R = 2.U(SZ.W)
+  def I = 4.U(SZ.W)
+  def W = 5.U(SZ.W)
+  def S = 6.U(SZ.W)
+  def C = 7.U(SZ.W)
+
+  // mask a CSR cmd with a valid bit
+  def maskCmd(valid: Bool, cmd: UInt): UInt = {
+    // all commands less than CSR.I are treated by CSRFile as NOPs
+    cmd & ~Mux(valid, 0.U, CSR.I)
+  }
+
+  val ADDRSZ = 12
+
+  def modeLSB: Int = 8
+  def mode(addr: Int): Int = (addr >> modeLSB) % (1 << PRV.SZ)
+  def mode(addr: UInt): UInt = addr(modeLSB + PRV.SZ - 1, modeLSB)
+
+  def busErrorIntCause = 128
+  def debugIntCause = 14 // keep in sync with MIP.debug
+  def debugTriggerCause = {
+    val res = debugIntCause
+    require(!(Causes.all contains res))
+    res
+  }
+  def rnmiIntCause = 13  // NMI: Higher numbers = higher priority, must not reuse debugIntCause
+  def rnmiBEUCause = 12
+
+  val firstCtr = CSRs.cycle
+  val firstCtrH = CSRs.cycleh
+  val firstHPC = CSRs.hpmcounter3
+  val firstHPCH = CSRs.hpmcounter3h
+  val firstHPE = CSRs.mhpmevent3
+  val firstMHPC = CSRs.mhpmcounter3
+  val firstMHPCH = CSRs.mhpmcounter3h
+  val firstHPM = 3
+  val nCtr = 32
+  val nHPM = nCtr - firstHPM
+  val hpmWidth = 40
+
+  val maxPMPs = 16
+}
+
+class PerfCounterIO(implicit p: Parameters) extends CoreBundle
+    with HasCoreParameters {
+  val eventSel = Output(UInt(xLen.W))
+  val inc = Input(UInt(log2Ceil(1+retireWidth).W))
+}
+
+class TracedInstruction(implicit p: Parameters) extends CoreBundle {
+  val valid = Bool()
+  val iaddr = UInt(coreMaxAddrBits.W)
+  val insn = UInt(iLen.W)
+  val priv = UInt(3.W)
+  val exception = Bool()
+  val interrupt = Bool()
+  val cause = UInt(xLen.W)
+  val tval = UInt((coreMaxAddrBits max iLen).W)
+  val wdata = Option.when(traceHasWdata)(UInt((vLen max xLen).W))
+}
+
+class TraceAux extends Bundle {
+  val enable = Bool()
+  val stall = Bool()
+}
+
+class CSRDecodeIO(implicit p: Parameters) extends CoreBundle {
   val inst = Input(UInt(iLen.W))
 
   def csr_addr = (inst >> 20)(CSR.ADDRSZ-1, 0)
@@ -35,7 +255,7 @@ class CSRDecodeIOBB(implicit p: Parameters) extends CoreBundle {
   val virtual_system_illegal = Output(Bool())
 }
 
-class CSRFileIOBB(hasBeu: Boolean)(implicit p: Parameters) extends CoreBundle
+class CSRFileIO(hasBeu: Boolean)(implicit p: Parameters) extends CoreBundle
     with HasCoreParameters {
   val ungated_clock = Input(Clock())
   val interrupts = Input(new CoreInterrupts(hasBeu))
@@ -47,7 +267,7 @@ class CSRFileIOBB(hasBeu: Boolean)(implicit p: Parameters) extends CoreBundle
     val wdata = Input(Bits(xLen.W))
   }
 
-  val decode = Vec(decodeWidth, new CSRDecodeIOBB)
+  val decode = Vec(decodeWidth, new CSRDecodeIO)
 
   val csr_stall = Output(Bool()) // stall retire for wfi
   val rw_stall = Output(Bool()) // stall rw, rw will have no effect while rw_stall
@@ -154,16 +374,16 @@ class VType(implicit p: Parameters) extends CoreBundle {
   }
 }
 
-class CSRFileBB(
+class CSRFile(
   perfEventSets: EventSets = new EventSets(Seq()),
   customCSRs: Seq[CustomCSR] = Nil,
   roccCSRs: Seq[CustomCSR] = Nil,
   hasBeu: Boolean = false)(implicit p: Parameters)
     extends CoreModule()(p)
     with HasCoreParameters {
-  val io = IO(new CSRFileIOBB(hasBeu) {
-    val customCSRs = Vec(CSRFileBB.this.customCSRs.size, new CustomCSRIO)
-    val roccCSRs = Vec(CSRFileBB.this.roccCSRs.size, new CustomCSRIO)
+  val io = IO(new CSRFileIO(hasBeu) {
+    val customCSRs = Vec(CSRFile.this.customCSRs.size, new CustomCSRIO)
+    val roccCSRs = Vec(CSRFile.this.roccCSRs.size, new CustomCSRIO)
   })
 
   io.rw_stall := false.B
@@ -1320,7 +1540,7 @@ class CSRFileBB(
 
   io.vector.map { vio =>
     when (vio.set_vconfig.valid) {
-      // user of CSRFileNpu is responsible for set_vs_dirty in this case
+      // user of CSRFile is responsible for set_vs_dirty in this case
       assert(vio.set_vconfig.bits.vl <= vio.set_vconfig.bits.vtype.vlMax)
       reg_vconfig.get := vio.set_vconfig.bits
     }

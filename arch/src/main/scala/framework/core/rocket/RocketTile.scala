@@ -1,14 +1,12 @@
 // See LICENSE.SiFive for license details.
 // See LICENSE.Berkeley for license details.
 
-package framework.rocket
+package freechips.rocketchip.tile
 
 import chisel3._
 
 import org.chipsalliance.cde.config._
 import org.chipsalliance.diplomacy.lazymodule._
-import freechips.rocketchip.rocket._
-import freechips.rocketchip.tile._
 
 import freechips.rocketchip.devices.tilelink.{BasicBusBlockerParams, BasicBusBlocker}
 import freechips.rocketchip.diplomacy.{
@@ -32,7 +30,7 @@ import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
 case class RocketTileBoundaryBufferParams(force: Boolean = false)
 
-case class RocketTileParamsBB(
+case class RocketTileParams(
     core: RocketCoreParams = RocketCoreParams(),
     icache: Option[ICacheParams] = Some(ICacheParams()),
     dcache: Option[DCacheParams] = Some(DCacheParams()),
@@ -43,38 +41,38 @@ case class RocketTileParamsBB(
     blockerCtrlAddr: Option[BigInt] = None,
     clockSinkParams: ClockSinkParameters = ClockSinkParameters(),
     boundaryBuffers: Option[RocketTileBoundaryBufferParams] = None
-  ) extends InstantiableTileParams[RocketTileBB] {
+  ) extends InstantiableTileParams[RocketTile] {
   require(icache.isDefined)
   require(dcache.isDefined)
   val baseName = "rockettile"
   val uniqueName = s"${baseName}_$tileId"
-  def instantiate(crossing: HierarchicalElementCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters): RocketTileBB = {
-    new RocketTileBB(this, crossing, lookup)
+  def instantiate(crossing: HierarchicalElementCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters): RocketTile = {
+    new RocketTile(this, crossing, lookup)
   }
 }
 
-class RocketTileBB private(
-      val rocketParams: RocketTileParamsBB,
+class RocketTile private(
+      val rocketParams: RocketTileParams,
       crossing: ClockCrossingType,
       lookup: LookupByHartIdImpl,
       q: Parameters)
     extends BaseTile(rocketParams, crossing, lookup, q)
     with SinksExternalInterrupts
     with SourcesExternalNotifications
-    with HasLazyRoCC  // Use standard HasLazyRoCC instead of HasLazyRoCCBB
+    with HasLazyRoCC  // implies CanHaveSharedFPU with CanHavePTW with HasHellaCache
     with HasHellaCache
     with HasICacheFrontend
 {
   // Private constructor ensures altered LazyModule.p is used implicitly
-  def this(params: RocketTileParamsBB, crossing: HierarchicalElementCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters) =
+  def this(params: RocketTileParams, crossing: HierarchicalElementCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters) =
     this(params, crossing.crossingType, lookup, p)
 
   val intOutwardNode = rocketParams.beuAddr map { _ => IntIdentityNode() }
   val slaveNode = TLIdentityNode()
   val masterNode = visibilityNode
 
-  val dtim_adapter = rocketParams.dcache.flatMap { d => d.scratch.map { s =>
-    LazyModule(new ScratchpadSlavePort(AddressSet.misaligned(s, d.dataScratchpadBytes), lazyCoreParamsView.coreDataBytes, rocketParams.core.useAtomics && !rocketParams.core.useAtomicsOnlyForIO))
+  val dtim_adapter = tileParams.dcache.flatMap { d => d.scratch.map { s =>
+    LazyModule(new ScratchpadSlavePort(AddressSet.misaligned(s, d.dataScratchpadBytes), lazyCoreParamsView.coreDataBytes, tileParams.core.useAtomics && !tileParams.core.useAtomicsOnlyForIO))
   }}
   dtim_adapter.foreach(lm => connectTLSlave(lm.node, lm.node.portParams.head.beatBytes))
 
@@ -86,7 +84,7 @@ class RocketTileBB private(
   }
 
   val tile_master_blocker =
-    rocketParams.blockerCtrlAddr
+    tileParams.blockerCtrlAddr
       .map(BasicBusBlockerParams(_, xBytes, masterPortBeatBytes, deadlock = true))
       .map(bp => LazyModule(new BasicBusBlocker(bp)))
 
@@ -122,10 +120,10 @@ class RocketTileBB private(
 
 
   ResourceBinding {
-    Resource(cpuDevice, "reg").bind(ResourceAddress(rocketParams.tileId))
+    Resource(cpuDevice, "reg").bind(ResourceAddress(tileId))
   }
 
-  override lazy val module = new RocketTileModuleImpBB(this)
+  override lazy val module = new RocketTileModuleImp(this)
 
   override def makeMasterBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = (rocketParams.boundaryBuffers, crossing) match {
     case (Some(RocketTileBoundaryBufferParams(true )), _)                   => TLBuffer()
@@ -140,23 +138,13 @@ class RocketTileBB private(
   }
 }
 
-class RocketTileModuleImpBB(outer: RocketTileBB) extends BaseTileModuleImp(outer)
-    with HasFpuOptBB
-    with HasLazyRoCCModuleBB  // Use HasLazyRoCCModuleBB but with standard RoCC types
+class RocketTileModuleImp(outer: RocketTile) extends BaseTileModuleImp(outer)
+    with HasFpuOpt
+    with HasLazyRoCCModule
     with HasICacheFrontendModule {
   Annotated.params(this, outer.rocketParams)
 
-  val core = Module(new RocketBB(outer)(outer.p))
-  // Create RocketBB with modified parameters that include BuildRoCCBB as BuildRoCC
-  // We override the useRoCC and dcacheArbPorts to include BuildRoCCBB
-  // if we override after in RocketTileBB it will be too late
-  // that other modules like dcache will use the original parameters
-  // =================================================================================
-  // implicit val modifiedP: Parameters = outer.p.alterMap(Map(
-  //   BuildRoCC -> (outer.p(BuildRoCC) ++ outer.p(BuildRoCCBB))
-  // ))
-  // val core = Module(new RocketBB(outer)(modifiedP))
-  // =================================================================================
+  val core = Module(new Rocket(outer)(outer.p))
   outer.vector_unit.foreach { v =>
     core.io.vector.get <> v.module.io.core
     v.module.io.tlb <> outer.dcache.module.io.tlb_port
@@ -250,8 +238,8 @@ class RocketTileModuleImpBB(outer: RocketTileBB) extends BaseTileModuleImp(outer
   ptw.io.requestor <> ptwPorts.toSeq
 }
 
-trait HasFpuOptBB { this: RocketTileModuleImpBB =>
-  val fpuOpt = outer.rocketParams.core.fpu.map(params => Module(new FPU(params)(outer.p)))
+trait HasFpuOpt { this: RocketTileModuleImp =>
+  val fpuOpt = outer.tileParams.core.fpu.map(params => Module(new FPU(params)(outer.p)))
   fpuOpt.foreach { fpu =>
     val nRoCCFPUPorts = outer.roccs.count(_.usesFPU)
     val nFPUPorts = nRoCCFPUPorts + outer.rocketParams.core.useVector.toInt

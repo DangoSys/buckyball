@@ -51,7 +51,7 @@ class BuckyballCustomConfig(
 
 class BuckyballToyConfig extends Config(
   new BuckyballCustomConfig ++
-  new framework.rocket.WithNBuckyballCores(1) ++
+  new freechips.rocketchip.rocket.WithNBuckyballCores(1) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
 
@@ -106,7 +106,7 @@ class BuckyballToy4Config extends Config(
       routingRelation = BlockingVirtualSubnetworksRouting(TerminalRouterRouting(Mesh2DEscapeRouting()), 5, 1))
   )) ++
   new BuckyballCustomConfig ++
-  new framework.rocket.WithNBuckyballCores(4) ++
+  new freechips.rocketchip.rocket.WithNBuckyballCores(4) ++
   new freechips.rocketchip.subsystem.WithNBanks(4) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
@@ -132,7 +132,7 @@ class BuckyballToy64Config extends Config(
       routingRelation = BlockingVirtualSubnetworksRouting(TerminalRouterRouting(Mesh2DEscapeRouting()), 5, 1))
   )) ++
   new BuckyballCustomConfig ++
-  new framework.rocket.WithNBuckyballCores(64) ++
+  new freechips.rocketchip.rocket.WithNBuckyballCores(64) ++
   new freechips.rocketchip.subsystem.WithNBanks(2) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
@@ -158,7 +158,7 @@ class BuckyballToy256Config extends Config(
       routingRelation = BlockingVirtualSubnetworksRouting(TerminalRouterRouting(Mesh2DEscapeRouting()), 5, 1))
   )) ++
   new BuckyballCustomConfig ++
-  new framework.rocket.WithNBuckyballCores(256) ++
+  new freechips.rocketchip.rocket.WithNBuckyballCores(256) ++
   new freechips.rocketchip.subsystem.WithNBanks(32) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)

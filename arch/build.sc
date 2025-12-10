@@ -8,7 +8,6 @@ import scalalib._
 import mill.bsp._
 
 
-
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion = "2.13.12"

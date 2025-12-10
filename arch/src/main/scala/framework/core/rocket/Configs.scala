@@ -1,19 +1,16 @@
-package framework.rocket
+package freechips.rocketchip.rocket
 
 import chisel3.util._
 
 import org.chipsalliance.cde.config._
 import org.chipsalliance.diplomacy.lazymodule._
 
-import freechips.rocketchip.rocket._
 import freechips.rocketchip.prci.{SynchronousCrossing, AsynchronousCrossing, RationalCrossing, ClockCrossingType}
 import freechips.rocketchip.subsystem.{TilesLocated, NumTiles, HierarchicalLocation, RocketCrossingParams, SystemBusKey, CacheBlockBytes, RocketTileAttachParams, InSubsystem, InCluster, HierarchicalElementMasterPortParams, HierarchicalElementSlavePortParams, CBUS, CCBUS, ClustersLocated, TileAttachConfig, CloneTileAttachParams}
 import freechips.rocketchip.tile.{RocketTileParams, RocketTileBoundaryBufferParams, FPUParams}
 import scala.reflect.ClassTag
 
-import framework.rocket.{RocketTileParamsBB, RocketCrossingParamsBB}
-
-
+// All the user-level bells and whistles
 class WithNBuckyballCores(
   n: Int,
   location: HierarchicalLocation,
@@ -22,7 +19,7 @@ class WithNBuckyballCores(
   case TilesLocated(`location`) => {
     val prev = up(TilesLocated(`location`), site)
     val idOffset = up(NumTiles)
-    val big = RocketTileParamsBB(
+    val big = RocketTileParams(
       core   = RocketCoreParams(
         mulDiv = Some(MulDivParams(
           mulUnroll = 8,
@@ -44,7 +41,7 @@ class WithNBuckyballCores(
         nWays = 8,
         rowBits = site(SystemBusKey).beatBits,
         blockBytes = site(CacheBlockBytes))))
-    List.tabulate(n)(i => RocketTileAttachParamsBB(
+    List.tabulate(n)(i => RocketTileAttachParams(
       big.copy(tileId = i + idOffset),
       crossing
     )) ++ prev
@@ -60,6 +57,194 @@ class WithNBuckyballCores(
     }
   ))
 }
+
+class WithNHugeCores(
+  n: Int,
+  location: HierarchicalLocation,
+  crossing: RocketCrossingParams,
+) extends Config((site, here, up) => {
+  case TilesLocated(`location`) => {
+    val prev = up(TilesLocated(`location`), site)
+    val idOffset = up(NumTiles)
+    val big = RocketTileParams(
+      core   = RocketCoreParams(
+        mulDiv = Some(MulDivParams(
+          mulUnroll = 8,
+          mulEarlyOut = true,
+          divEarlyOut = true,
+        )),
+        useZba = true,
+        useZbb = true,
+        useZbs = true,
+        fpu = Some(FPUParams(minFLen = 16))),
+      dcache = Some(DCacheParams(
+        nSets = 64,
+        nWays = 8,
+        rowBits = site(SystemBusKey).beatBits,
+        nMSHRs = 0,
+        blockBytes = site(CacheBlockBytes))),
+      icache = Some(ICacheParams(
+        nSets = 64,
+        nWays = 8,
+        rowBits = site(SystemBusKey).beatBits,
+        blockBytes = site(CacheBlockBytes))))
+    List.tabulate(n)(i => RocketTileAttachParams(
+      big.copy(tileId = i + idOffset),
+      crossing
+    )) ++ prev
+  }
+  case NumTiles => up(NumTiles) + n
+}) {
+  def this(n: Int, location: HierarchicalLocation = InSubsystem) = this(n, location, RocketCrossingParams(
+    master = HierarchicalElementMasterPortParams.locationDefault(location),
+    slave = HierarchicalElementSlavePortParams.locationDefault(location),
+    mmioBaseAddressPrefixWhere = location match {
+      case InSubsystem => CBUS
+      case InCluster(clusterId) => CCBUS(clusterId)
+    }
+  ))
+}
+
+class WithNBigCores(
+  n: Int,
+  location: HierarchicalLocation,
+  crossing: RocketCrossingParams,
+) extends Config((site, here, up) => {
+  case TilesLocated(`location`) => {
+    val prev = up(TilesLocated(`location`), site)
+    val idOffset = up(NumTiles)
+    val big = RocketTileParams(
+      core   = RocketCoreParams(mulDiv = Some(MulDivParams(
+        mulUnroll = 8,
+        mulEarlyOut = true,
+        divEarlyOut = true))),
+      dcache = Some(DCacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nMSHRs = 0,
+        blockBytes = site(CacheBlockBytes))),
+      icache = Some(ICacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        blockBytes = site(CacheBlockBytes))))
+    List.tabulate(n)(i => RocketTileAttachParams(
+      big.copy(tileId = i + idOffset),
+      crossing
+    )) ++ prev
+  }
+  case NumTiles => up(NumTiles) + n
+}) {
+  def this(n: Int, location: HierarchicalLocation = InSubsystem) = this(n, location, RocketCrossingParams(
+    master = HierarchicalElementMasterPortParams.locationDefault(location),
+    slave = HierarchicalElementSlavePortParams.locationDefault(location),
+    mmioBaseAddressPrefixWhere = location match {
+      case InSubsystem => CBUS
+      case InCluster(clusterId) => CCBUS(clusterId)
+    }
+  ))
+}
+
+class WithNMedCores(
+  n: Int,
+  crossing: RocketCrossingParams = RocketCrossingParams(),
+) extends Config((site, here, up) => {
+  case TilesLocated(InSubsystem) => {
+    val prev = up(TilesLocated(InSubsystem), site)
+    val idOffset = up(NumTiles)
+    val med = RocketTileParams(
+      core = RocketCoreParams(fpu = None),
+      btb = None,
+      dcache = Some(DCacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 64,
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        nMSHRs = 0,
+        blockBytes = site(CacheBlockBytes))),
+      icache = Some(ICacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 64,
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        blockBytes = site(CacheBlockBytes))))
+    List.tabulate(n)(i => RocketTileAttachParams(
+      med.copy(tileId = i + idOffset),
+      crossing
+    )) ++ prev
+  }
+  case NumTiles => up(NumTiles) + n
+})
+
+class WithNSmallCores(
+  n: Int,
+  crossing: RocketCrossingParams = RocketCrossingParams()
+) extends Config((site, here, up) => {
+  case TilesLocated(InSubsystem) => {
+    val prev = up(TilesLocated(InSubsystem), site)
+    val idOffset = up(NumTiles)
+    val small = RocketTileParams(
+      core = RocketCoreParams(useVM = false, fpu = None),
+      btb = None,
+      dcache = Some(DCacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 64,
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        nMSHRs = 0,
+        blockBytes = site(CacheBlockBytes))),
+      icache = Some(ICacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 64,
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        blockBytes = site(CacheBlockBytes))))
+    List.tabulate(n)(i => RocketTileAttachParams(
+      small.copy(tileId = i + idOffset),
+      crossing
+    )) ++ prev
+  }
+  case NumTiles => up(NumTiles) + n
+})
+
+class With1TinyCore extends Config((site, here, up) => {
+  case TilesLocated(InSubsystem) => {
+    val tiny = RocketTileParams(
+      core = RocketCoreParams(
+        xLen = 32,
+        pgLevels = 2, // sv32
+        useVM = false,
+        fpu = None,
+        mulDiv = Some(MulDivParams(mulUnroll = 8))),
+      btb = None,
+      dcache = Some(DCacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 256, // 16Kb scratchpad
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        nMSHRs = 0,
+        blockBytes = site(CacheBlockBytes),
+        scratch = Some(0x80000000L))),
+      icache = Some(ICacheParams(
+        rowBits = site(SystemBusKey).beatBits,
+        nSets = 64,
+        nWays = 1,
+        nTLBSets = 1,
+        nTLBWays = 4,
+        blockBytes = site(CacheBlockBytes)))
+    )
+    List(RocketTileAttachParams(
+      tiny,
+      RocketCrossingParams(
+        crossingType = SynchronousCrossing(),
+        master = HierarchicalElementMasterPortParams())
+    ))
+  }
+  case NumTiles => 1
+  case ClustersLocated(_) => Nil
+})
 
 class RocketTileAttachConfig(f: RocketTileAttachParams => RocketTileAttachParams) extends TileAttachConfig[RocketTileAttachParams](f)
 
@@ -171,6 +356,8 @@ class WithSeperateClockReset                                           extends R
 class WithSynchronousCDCs                                              extends WithCDC(SynchronousCrossing())
 class WithAsynchronousCDCs(depth: Int, sync: Int)                      extends WithCDC(AsynchronousCrossing(depth, sync))
 class WithRationalCDCs                                                 extends WithCDC(RationalCrossing())
+
+
 
 class WithCloneRocketTiles(
   n: Int = 1,

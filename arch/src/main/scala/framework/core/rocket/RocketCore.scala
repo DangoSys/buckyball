@@ -1,7 +1,7 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package framework.rocket
+package freechips.rocketchip.rocket
 
 import chisel3._
 import chisel3.util._
@@ -11,22 +11,135 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 import scala.collection.mutable.ArrayBuffer
-import freechips.rocketchip.rocket._
-import framework.rocket.RoCCCoreIOBB
 
+case class RocketCoreParams(
+  xLen: Int = 64,
+  pgLevels: Int = 3, // sv39 default
+  bootFreqHz: BigInt = 0,
+  useVM: Boolean = true,
+  useUser: Boolean = false,
+  useSupervisor: Boolean = false,
+  useHypervisor: Boolean = false,
+  useDebug: Boolean = true,
+  useAtomics: Boolean = true,
+  useAtomicsOnlyForIO: Boolean = false,
+  useCompressed: Boolean = true,
+  useRVE: Boolean = false,
+  useConditionalZero: Boolean = false,
+  useZba: Boolean = false,
+  useZbb: Boolean = false,
+  useZbs: Boolean = false,
+  nLocalInterrupts: Int = 0,
+  useNMI: Boolean = false,
+  nBreakpoints: Int = 1,
+  useBPWatch: Boolean = false,
+  mcontextWidth: Int = 0,
+  scontextWidth: Int = 0,
+  nPMPs: Int = 8,
+  nPerfCounters: Int = 0,
+  haveBasicCounters: Boolean = true,
+  haveCFlush: Boolean = false,
+  misaWritable: Boolean = true,
+  nL2TLBEntries: Int = 0,
+  nL2TLBWays: Int = 1,
+  nPTECacheEntries: Int = 8,
+  mtvecInit: Option[BigInt] = Some(BigInt(0)),
+  mtvecWritable: Boolean = true,
+  fastLoadWord: Boolean = true,
+  fastLoadByte: Boolean = false,
+  branchPredictionModeCSR: Boolean = false,
+  clockGate: Boolean = false,
+  mvendorid: Int = 0, // 0 means non-commercial implementation
+  mimpid: Int = 0x20181004, // release date in BCD
+  mulDiv: Option[MulDivParams] = Some(MulDivParams()),
+  fpu: Option[FPUParams] = Some(FPUParams()),
+  debugROB: Option[DebugROBParams] = None, // if size < 1, SW ROB, else HW ROB
+  haveCease: Boolean = true, // non-standard CEASE instruction
+  haveSimTimeout: Boolean = true, // add plusarg for simulation timeout
+  vector: Option[RocketCoreVectorParams] = None
+) extends CoreParams {
+  val lgPauseCycles = 5
+  val haveFSDirty = false
+  val pmpGranularity: Int = if (useHypervisor) 4096 else 4
+  val fetchWidth: Int = if (useCompressed) 2 else 1
+  //  fetchWidth doubled, but coreInstBytes halved, for RVC:
+  val decodeWidth: Int = fetchWidth / (if (useCompressed) 2 else 1)
+  val retireWidth: Int = 1
+  val instBits: Int = if (useCompressed) 16 else 32
+  val lrscCycles: Int = 80 // worst case is 14 mispredicted branches + slop
+  val traceHasWdata: Boolean = debugROB.isDefined // ooo wb, so no wdata in trace
+  override val useVector = vector.isDefined
+  override val vectorUseDCache = vector.map(_.useDCache).getOrElse(false)
+  override def vLen = vector.map(_.vLen).getOrElse(0)
+  override def eLen = vector.map(_.eLen).getOrElse(0)
+  override def vfLen = vector.map(_.vfLen).getOrElse(0)
+  override def vfh = vector.map(_.vfh).getOrElse(false)
+  override def vExts = vector.map(_.vExts).getOrElse(Nil)
+  override def vMemDataBits = vector.map(_.vMemDataBits).getOrElse(0)
+  override val customIsaExt = Option.when(haveCease)("xrocket") // CEASE instruction
+  override def minFLen: Int = fpu.map(_.minFLen).getOrElse(32)
+  override def customCSRs(implicit p: Parameters) = new RocketCustomCSRs
+}
 
-trait HasRocketCoreIOBB extends HasRocketCoreParameters {
+trait HasRocketCoreParameters extends HasCoreParameters {
+  lazy val rocketParams: RocketCoreParams = tileParams.core.asInstanceOf[RocketCoreParams]
+
+  val fastLoadWord = rocketParams.fastLoadWord
+  val fastLoadByte = rocketParams.fastLoadByte
+
+  val mulDivParams = rocketParams.mulDiv.getOrElse(MulDivParams()) // TODO ask andrew about this
+
+  require(!fastLoadByte || fastLoadWord)
+  require(!rocketParams.haveFSDirty, "rocket doesn't support setting fs dirty from outside, please disable haveFSDirty")
+}
+
+class RocketCustomCSRs(implicit p: Parameters) extends CustomCSRs with HasRocketCoreParameters {
+  override def bpmCSR = {
+    rocketParams.branchPredictionModeCSR.option(CustomCSR(bpmCSRId, BigInt(1), Some(BigInt(0))))
+  }
+
+  private def haveDCache = tileParams.dcache.get.scratch.isEmpty
+
+  override def chickenCSR = {
+    val mask = BigInt(
+      tileParams.dcache.get.clockGate.toInt << 0 |
+      rocketParams.clockGate.toInt << 1 |
+      rocketParams.clockGate.toInt << 2 |
+      1 << 3 | // disableSpeculativeICacheRefill
+      haveDCache.toInt << 9 | // suppressCorruptOnGrantData
+      tileParams.icache.get.prefetch.toInt << 17
+    )
+    Some(CustomCSR(chickenCSRId, mask, Some(mask)))
+  }
+
+  def disableICachePrefetch = getOrElse(chickenCSR, _.value(17), true.B)
+
+  def marchid = CustomCSR.constant(CSRs.marchid, BigInt(1))
+
+  def mvendorid = CustomCSR.constant(CSRs.mvendorid, BigInt(rocketParams.mvendorid))
+
+  // mimpid encodes a release version in the form of a BCD-encoded datestamp.
+  def mimpid = CustomCSR.constant(CSRs.mimpid, BigInt(rocketParams.mimpid))
+
+  override def decls = super.decls :+ marchid :+ mvendorid :+ mimpid
+}
+
+class CoreInterrupts(val hasBeu: Boolean)(implicit p: Parameters) extends TileInterrupts()(p) {
+  val buserror = Option.when(hasBeu)(Bool())
+}
+
+trait HasRocketCoreIO extends HasRocketCoreParameters {
   implicit val p: Parameters
   def nTotalRoCCCSRs: Int
   val io = IO(new CoreBundle()(p) {
     val hartid = Input(UInt(hartIdLen.W))
     val reset_vector = Input(UInt(resetVectorLen.W))
-    val interrupts = Input(new CoreInterrupts(tileParams.asInstanceOf[RocketTileParamsBB].beuAddr.isDefined))
+    val interrupts = Input(new CoreInterrupts(tileParams.asInstanceOf[RocketTileParams].beuAddr.isDefined))
     val imem  = new FrontendIO
     val dmem = new HellaCacheIO
     val ptw = Flipped(new DatapathPTWIO())
     val fpu = Flipped(new FPUCoreIO())
-    val rocc = Flipped(new RoCCCoreIOBB(nTotalRoCCCSRs))
+    val rocc = Flipped(new RoCCCoreIO(nTotalRoCCCSRs))
     val trace = Output(new TraceBundle)
     val bpwatch = Output(Vec(coreParams.nBreakpoints, new BPWatch(coreParams.retireWidth)))
     val cease = Output(Bool())
@@ -37,9 +150,9 @@ trait HasRocketCoreIOBB extends HasRocketCoreParameters {
 }
 
 
-class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(p)
+class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     with HasRocketCoreParameters
-    with HasRocketCoreIOBB {
+    with HasRocketCoreIO {
   def nTotalRoCCCSRs = tile.roccCSRs.flatten.size
   import ALU._
 
@@ -101,7 +214,6 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
       ("DTLB miss", () => io.dmem.perf.tlbMiss),
       ("L2 TLB miss", () => io.ptw.perf.l2miss)))))
 
-
   val pipelinedMul = usingMulDiv && mulDivParams.mulUnroll == xLen
   val decode_table = {
     (if (usingMulDiv) new MDecode(pipelinedMul) +: (xLen > 32).option(new M64Decode(pipelinedMul)).toSeq else Nil) ++:
@@ -140,37 +252,37 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   val ex_reg_flush_pipe      = Reg(Bool())
   val ex_reg_load_use        = Reg(Bool())
   val ex_reg_cause           = Reg(UInt())
-  val ex_reg_replay          = Reg(Bool())
-  val ex_reg_pc              = Reg(UInt())
-  val ex_reg_mem_size        = Reg(UInt())
-  val ex_reg_hls             = Reg(Bool())
-  val ex_reg_inst            = Reg(Bits())
-  val ex_reg_raw_inst        = Reg(UInt())
-  val ex_reg_wphit           = Reg(Vec(nBreakpoints, Bool()))
-  val ex_reg_set_vconfig     = Reg(Bool())
+  val ex_reg_replay = Reg(Bool())
+  val ex_reg_pc = Reg(UInt())
+  val ex_reg_mem_size = Reg(UInt())
+  val ex_reg_hls = Reg(Bool())
+  val ex_reg_inst = Reg(Bits())
+  val ex_reg_raw_inst = Reg(UInt())
+  val ex_reg_wphit            = Reg(Vec(nBreakpoints, Bool()))
+  val ex_reg_set_vconfig      = Reg(Bool())
 
-  val mem_reg_xcpt_interrupt = Reg(Bool())
-  val mem_reg_valid          = Reg(Bool())
-  val mem_reg_rvc            = Reg(Bool())
-  val mem_reg_btb_resp       = Reg(new BTBResp)
-  val mem_reg_xcpt           = Reg(Bool())
-  val mem_reg_replay         = Reg(Bool())
-  val mem_reg_flush_pipe     = Reg(Bool())
-  val mem_reg_cause          = Reg(UInt())
-  val mem_reg_slow_bypass    = Reg(Bool())
-  val mem_reg_load           = Reg(Bool())
-  val mem_reg_store          = Reg(Bool())
-  val mem_reg_set_vconfig    = Reg(Bool())
-  val mem_reg_sfence         = Reg(Bool())
-  val mem_reg_pc             = Reg(UInt())
-  val mem_reg_inst           = Reg(Bits())
-  val mem_reg_mem_size       = Reg(UInt())
-  val mem_reg_hls_or_dv      = Reg(Bool())
-  val mem_reg_raw_inst       = Reg(UInt())
-  val mem_reg_wdata          = Reg(Bits())
-  val mem_reg_rs2            = Reg(Bits())
-  val mem_br_taken           = Reg(Bool())
-  val take_pc_mem            = Wire(Bool())
+  val mem_reg_xcpt_interrupt  = Reg(Bool())
+  val mem_reg_valid           = Reg(Bool())
+  val mem_reg_rvc             = Reg(Bool())
+  val mem_reg_btb_resp        = Reg(new BTBResp)
+  val mem_reg_xcpt            = Reg(Bool())
+  val mem_reg_replay          = Reg(Bool())
+  val mem_reg_flush_pipe      = Reg(Bool())
+  val mem_reg_cause           = Reg(UInt())
+  val mem_reg_slow_bypass     = Reg(Bool())
+  val mem_reg_load            = Reg(Bool())
+  val mem_reg_store           = Reg(Bool())
+  val mem_reg_set_vconfig     = Reg(Bool())
+  val mem_reg_sfence = Reg(Bool())
+  val mem_reg_pc = Reg(UInt())
+  val mem_reg_inst = Reg(Bits())
+  val mem_reg_mem_size = Reg(UInt())
+  val mem_reg_hls_or_dv = Reg(Bool())
+  val mem_reg_raw_inst = Reg(UInt())
+  val mem_reg_wdata = Reg(Bits())
+  val mem_reg_rs2 = Reg(Bits())
+  val mem_br_taken = Reg(Bool())
+  val take_pc_mem = Wire(Bool())
   val mem_reg_wphit          = Reg(Vec(nBreakpoints, Bool()))
 
   val wb_reg_valid           = Reg(Bool())
@@ -179,17 +291,17 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   val wb_reg_flush_pipe      = Reg(Bool())
   val wb_reg_cause           = Reg(UInt())
   val wb_reg_set_vconfig     = Reg(Bool())
-  val wb_reg_sfence          = Reg(Bool())
-  val wb_reg_pc              = Reg(UInt())
-  val wb_reg_mem_size        = Reg(UInt())
-  val wb_reg_hls_or_dv       = Reg(Bool())
-  val wb_reg_hfence_v        = Reg(Bool())
-  val wb_reg_hfence_g        = Reg(Bool())
-  val wb_reg_inst            = Reg(Bits())
-  val wb_reg_raw_inst        = Reg(UInt())
-  val wb_reg_wdata           = Reg(Bits())
-  val wb_reg_rs2             = Reg(Bits())
-  val take_pc_wb             = Wire(Bool())
+  val wb_reg_sfence = Reg(Bool())
+  val wb_reg_pc = Reg(UInt())
+  val wb_reg_mem_size = Reg(UInt())
+  val wb_reg_hls_or_dv = Reg(Bool())
+  val wb_reg_hfence_v = Reg(Bool())
+  val wb_reg_hfence_g = Reg(Bool())
+  val wb_reg_inst = Reg(Bits())
+  val wb_reg_raw_inst = Reg(UInt())
+  val wb_reg_wdata = Reg(Bits())
+  val wb_reg_rs2 = Reg(Bits())
+  val take_pc_wb = Wire(Bool())
   val wb_reg_wphit           = Reg(Vec(nBreakpoints, Bool()))
 
   val take_pc_mem_wb = take_pc_wb || take_pc_mem
@@ -226,7 +338,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   val ctrl_killd = Wire(Bool())
   val id_npc = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
 
-  val csr = Module(new CSRFileBB(perfEvents, coreParams.customCSRs.decls, tile.roccCSRs.flatten, tile.rocketParams.beuAddr.isDefined))
+  val csr = Module(new CSRFile(perfEvents, coreParams.customCSRs.decls, tile.roccCSRs.flatten, tile.rocketParams.beuAddr.isDefined))
   val id_csr_en = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
   val id_system_insn = id_ctrl.csr === CSR.I
   val id_csr_ren = id_ctrl.csr.isOneOf(CSR.S, CSR.C) && id_expanded_inst(0).rs1 === 0.U
@@ -1119,7 +1231,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   }
   else {
     when (csr.io.trace(0).valid) {
-      printf("C%d: %d [%d] pc=[%x] W[r%d=%x][%d] R[r%d=%x] R[r%d=%x] inst=[%x] DASM(%x) wb_xcpt:%d\n",
+      printf("C%d: %d [%d] pc=[%x] W[r%d=%x][%d] R[r%d=%x] R[r%d=%x] inst=[%x] DASM(%x)\n",
          io.hartid, coreMonitorBundle.timer, coreMonitorBundle.valid,
          coreMonitorBundle.pc,
          Mux(wb_ctrl.wxd || wb_ctrl.wfd, coreMonitorBundle.wrdst, 0.U),
@@ -1129,7 +1241,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
          Mux(wb_ctrl.rxs1 || wb_ctrl.rfs1, coreMonitorBundle.rd0val, 0.U),
          Mux(wb_ctrl.rxs2 || wb_ctrl.rfs2, coreMonitorBundle.rd1src, 0.U),
          Mux(wb_ctrl.rxs2 || wb_ctrl.rfs2, coreMonitorBundle.rd1val, 0.U),
-         coreMonitorBundle.inst, coreMonitorBundle.inst, wb_xcpt)
+         coreMonitorBundle.inst, coreMonitorBundle.inst)
     }
   }
 
