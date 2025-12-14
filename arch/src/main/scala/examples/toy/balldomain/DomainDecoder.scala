@@ -2,7 +2,7 @@ package examples.toy.balldomain
 
 import chisel3._
 import chisel3.util._
-import framework.frontend.decoder.PostGDCmd
+import framework.frontend.decoder.{PostGDCmd, DomainId}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.toy.balldomain.DISA._
 import framework.memdomain.dma.LocalAddr
@@ -107,7 +107,7 @@ class BallDomainDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extend
 // -----------------------------------------------------------------------------
 // Output assignment
 // -----------------------------------------------------------------------------
-  io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_ball
+  io.ball_decode_cmd_o.valid := io.raw_cmd_i.valid && (io.raw_cmd_i.bits.domain_id === DomainId.BALL)
 
   io.ball_decode_cmd_o.bits.bid           := Mux(io.ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 

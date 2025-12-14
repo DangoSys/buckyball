@@ -3,7 +3,7 @@ package framework.builtin
 import scala.math.{max, pow, sqrt}
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.tile._
+import freechips.rocketchip.tile.OpcodeSet
 import org.chipsalliance.cde.config._
 
 import framework.memdomain.dma.LocalAddr

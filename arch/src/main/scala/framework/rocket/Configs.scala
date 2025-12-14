@@ -23,6 +23,7 @@ class WithNBuckyballCores(
     val prev = up(TilesLocated(`location`), site)
     val idOffset = up(NumTiles)
     val big = RocketTileParamsBB(
+      usingRVVRoCC = true,
       core   = RocketCoreParams(
         mulDiv = Some(MulDivParams(
           mulUnroll = 8,

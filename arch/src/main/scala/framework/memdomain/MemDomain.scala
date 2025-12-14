@@ -129,7 +129,7 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
   // ToPhysical interface
   // Ball Domain SRAM interface connected to MemController's Ball Domain interface
   val toPhysicalLines = Module(new ToPhysicalLine()(b, p))
-  
+
   toPhysicalLines.io.sramRead_i  <> io.ballDomain.sramRead
   toPhysicalLines.io.sramWrite_i <> io.ballDomain.sramWrite
 

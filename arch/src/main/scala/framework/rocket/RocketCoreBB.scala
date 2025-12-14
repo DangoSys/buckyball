@@ -12,7 +12,9 @@ import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 import scala.collection.mutable.ArrayBuffer
 import freechips.rocketchip.rocket._
+
 import framework.rocket.RoCCCoreIOBB
+import framework.rocket.id.RVVRoCCDecode
 
 
 trait HasRocketCoreIOBB extends HasRocketCoreParameters {
@@ -103,6 +105,14 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
 
 
   val pipelinedMul = usingMulDiv && mulDivParams.mulUnroll == xLen
+
+  val usingRVVRoCC = tile.rocketParams.usingRVVRoCC
+
+  // Ensure usingVector and usingRVVRoCC are mutually exclusive
+  require(!usingVector || !usingRVVRoCC,
+    "usingVector and usingRVVRoCC cannot both be enabled. " +
+    "Use usingVector for built-in vector unit, or usingRVVRoCC to route vector instructions to RoCC.")
+
   val decode_table = {
     (if (usingMulDiv) new MDecode(pipelinedMul) +: (xLen > 32).option(new M64Decode(pipelinedMul)).toSeq else Nil) ++:
     (if (usingAtomics) new ADecode +: (xLen > 32).option(new A64Decode).toSeq else Nil) ++:
@@ -110,6 +120,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
     (if (fLen >= 64)    new DDecode +: (xLen > 32).option(new D64Decode).toSeq else Nil) ++:
     (if (minFLen == 16) new HDecode +: (xLen > 32).option(new H64Decode).toSeq ++: (fLen >= 64).option(new HDDecode).toSeq else Nil) ++:
     (usingRoCC.option(new RoCCDecode)) ++:
+    (usingRVVRoCC.option(new RVVRoCCDecode)) ++:
     (if (xLen == 32) new I32Decode else new I64Decode) +:
     (usingVM.option(new SVMDecode)) ++:
     (usingSupervisor.option(new SDecode)) ++:
@@ -226,7 +237,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   val ctrl_killd = Wire(Bool())
   val id_npc = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
 
-  val csr = Module(new CSRFileBB(perfEvents, coreParams.customCSRs.decls, tile.roccCSRs.flatten, tile.rocketParams.beuAddr.isDefined))
+  val csr = Module(new CSRFile(perfEvents, coreParams.customCSRs.decls, tile.roccCSRs.flatten, tile.rocketParams.beuAddr.isDefined))
   val id_csr_en = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
   val id_system_insn = id_ctrl.csr === CSR.I
   val id_csr_ren = id_ctrl.csr.isOneOf(CSR.S, CSR.C) && id_expanded_inst(0).rs1 === 0.U
