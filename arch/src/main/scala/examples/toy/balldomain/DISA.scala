@@ -23,5 +23,5 @@ object DISA {
   val ABFT_SYSTOLIC        = BitPat("b0101010") // 42
   val CONV                 = BitPat("b0101011") // 43
   val CIM                  = BitPat("b0101100") // 44
-  val TRANSFER              = BitPat("b0101101") // 45
+  val TRANSFER             = BitPat("b0101101") // 45
 }

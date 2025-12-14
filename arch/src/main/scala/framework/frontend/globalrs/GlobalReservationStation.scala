@@ -5,7 +5,8 @@ import chisel3.util._
 import chisel3.experimental._
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.decoder.PostGDCmd
+import framework.frontend.decoder.{PostGDCmd, DomainId}
+import framework.frontend.decoder.GISA._
 import freechips.rocketchip.tile.RoCCResponse
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
@@ -36,11 +37,17 @@ class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters)
     // Global RS -> MemDomain (single channel)
     val mem_issue_o = Decoupled(new GlobalRsIssue)
 
+    // Global RS -> GpDomain (single channel)
+    val gp_issue_o = Decoupled(new GlobalRsIssue)
+
     // BallDomain -> Global RS (single channel)
     val ball_complete_i = Flipped(Decoupled(new GlobalRsComplete))
 
     // MemDomain -> Global RS (single channel)
     val mem_complete_i = Flipped(Decoupled(new GlobalRsComplete))
+
+    // GpDomain -> Global RS (single channel)
+    val gp_complete_i = Flipped(Decoupled(new GlobalRsComplete))
 
     // RoCC response
     val rs_rocc_o = new Bundle {
@@ -52,11 +59,12 @@ class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters)
   val rob = Module(new GlobalROB)
 
 // -----------------------------------------------------------------------------
-// Fence handling
+// Fence handling - fence instructions require ROB to be empty before execution
 // -----------------------------------------------------------------------------
   val fenceActive = RegInit(false.B)
   // Cannot use fire, would form a loop
-  val isFenceCmd = io.global_decode_cmd_i.valid && io.global_decode_cmd_i.bits.is_fence
+  val func7 = io.global_decode_cmd_i.bits.raw_cmd.inst.funct
+  val isFenceCmd = io.global_decode_cmd_i.valid && (func7 === FENCE_BITPAT)
   val robEmpty = rob.io.empty
 
   // Fence state machine: only activate when fence instruction is accepted (fire)
@@ -70,37 +78,46 @@ class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters)
 // -----------------------------------------------------------------------------
 // Inbound - instruction allocation (Fence instructions do not enter ROB)
 // -----------------------------------------------------------------------------
-  // Filter out fence instructions
+  // Filter out fence instructions (they don't need ROB tracking)
   rob.io.alloc.valid := io.global_decode_cmd_i.valid && !isFenceCmd
   rob.io.alloc.bits  := io.global_decode_cmd_i.bits
 
   // Backpressure logic:
   // - Normal instructions: wait for ROB ready
-  // - Fence instructions: wait for ROB empty
+  // - Fence instructions: wait for ROB empty (to ensure ordering)
   io.global_decode_cmd_i.ready := Mux(isFenceCmd, robEmpty, rob.io.alloc.ready)
 
 // -----------------------------------------------------------------------------
-// Outbound - instruction issue (dispatch to corresponding domain based on is_ball/is_mem)
+// Outbound - instruction issue (dispatch to corresponding domain based on domain_id)
 // -----------------------------------------------------------------------------
+  val is_ball_domain = rob.io.issue.bits.cmd.domain_id === DomainId.BALL
+  val is_mem_domain  = rob.io.issue.bits.cmd.domain_id === DomainId.MEM
+  val is_gp_domain   = rob.io.issue.bits.cmd.domain_id === DomainId.GP
+
   // Ball domain issue
-  io.ball_issue_o.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_ball
+  io.ball_issue_o.valid := rob.io.issue.valid && is_ball_domain
   io.ball_issue_o.bits  := rob.io.issue.bits
 
   // Mem domain issue
-  io.mem_issue_o.valid := rob.io.issue.valid && rob.io.issue.bits.cmd.is_mem
+  io.mem_issue_o.valid := rob.io.issue.valid && is_mem_domain
   io.mem_issue_o.bits  := rob.io.issue.bits
+
+  // GP domain issue
+  io.gp_issue_o.valid := rob.io.issue.valid && is_gp_domain
+  io.gp_issue_o.bits  := rob.io.issue.bits
 
   // Set ROB ready signal - can only issue when target domain is ready
   rob.io.issue.ready :=
-    (rob.io.issue.bits.cmd.is_ball && io.ball_issue_o.ready) ||
-    (rob.io.issue.bits.cmd.is_mem  && io.mem_issue_o.ready)
+    (is_ball_domain && io.ball_issue_o.ready) ||
+    (is_mem_domain  && io.mem_issue_o.ready) ||
+    (is_gp_domain   && io.gp_issue_o.ready)
 
 // -----------------------------------------------------------------------------
 // Completion signal processing
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 2))
+  val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 3))
 
-  // Connect Ball and Mem domain completion signals to arbiter
+  // Connect Ball, Mem, and GP domain completion signals to arbiter
   completeArb.io.in(0).valid := io.ball_complete_i.valid
   completeArb.io.in(0).bits  := io.ball_complete_i.bits.rob_id
   io.ball_complete_i.ready := completeArb.io.in(0).ready
@@ -108,6 +125,10 @@ class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters)
   completeArb.io.in(1).valid := io.mem_complete_i.valid
   completeArb.io.in(1).bits  := io.mem_complete_i.bits.rob_id
   io.mem_complete_i.ready := completeArb.io.in(1).ready
+
+  completeArb.io.in(2).valid := io.gp_complete_i.valid
+  completeArb.io.in(2).bits  := io.gp_complete_i.bits.rob_id
+  io.gp_complete_i.ready := completeArb.io.in(2).ready
 
   // Decide whether to filter completion signals based on configuration
   if (b.rs_out_of_order_response) {

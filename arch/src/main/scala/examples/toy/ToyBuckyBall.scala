@@ -8,7 +8,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config._
 
 import freechips.rocketchip.diplomacy.LazyModule
-import freechips.rocketchip.tile._
+import freechips.rocketchip.tile.{TileKey, HasCoreParameters, LazyRoCC, LazyRoCCModuleImp}
 import freechips.rocketchip.tilelink._
 
 import freechips.rocketchip.tile.{LazyRoCC, LazyRoCCModuleImp}
@@ -119,6 +119,15 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer)
   // Flush signals to DMA components (obtained from MemDomain's TLB exceptions)
   outer.reader.module.io.flush := memDomain.io.tlbExp(0).flush()
   outer.writer.module.io.flush := memDomain.io.tlbExp(0).flush()
+
+// -----------------------------------------------------------------------------
+// Backend: Gen Domain - General purpose domain (for T1 vector processor)
+// -----------------------------------------------------------------------------
+  val gpDomain = Module(new framework.gpdomain.GpDomain()(b, p))
+
+  // Global RS -> GpDomain
+  gpDomain.io.global_issue_i <> globalRs.io.gp_issue_o
+  globalRs.io.gp_complete_i <> gpDomain.io.global_complete_o
 
 // -----------------------------------------------------------------------------
 // Backend: Domain Bridge: BallDomain -> MemDomain

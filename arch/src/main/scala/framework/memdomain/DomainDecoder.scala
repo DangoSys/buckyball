@@ -2,7 +2,7 @@ package framework.memdomain
 
 import chisel3._
 import chisel3.util._
-import framework.frontend.decoder.PostGDCmd
+import framework.frontend.decoder.{PostGDCmd, DomainId}
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.memdomain.DISA._
 import framework.memdomain.dma.LocalAddr
@@ -77,7 +77,7 @@ class MemDomainDecoder(implicit b: CustomBuckyballConfig, p: Parameters) extends
 // -----------------------------------------------------------------------------
 // Output assignment
 // -----------------------------------------------------------------------------
-  io.mem_decode_cmd_o.valid := io.raw_cmd_i.valid && io.raw_cmd_i.bits.is_mem
+  io.mem_decode_cmd_o.valid := io.raw_cmd_i.valid && (io.raw_cmd_i.bits.domain_id === DomainId.MEM)
 
   io.mem_decode_cmd_o.bits.is_load  := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.LD_EN.id).asBool, false.B)
   io.mem_decode_cmd_o.bits.is_store := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ST_EN.id).asBool, false.B)

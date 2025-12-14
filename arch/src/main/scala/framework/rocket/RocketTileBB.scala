@@ -42,7 +42,9 @@ case class RocketTileParamsBB(
     beuAddr: Option[BigInt] = None,
     blockerCtrlAddr: Option[BigInt] = None,
     clockSinkParams: ClockSinkParameters = ClockSinkParameters(),
-    boundaryBuffers: Option[RocketTileBoundaryBufferParams] = None
+    boundaryBuffers: Option[RocketTileBoundaryBufferParams] = None,
+
+    usingRVVRoCC: Boolean = false
   ) extends InstantiableTileParams[RocketTileBB] {
   require(icache.isDefined)
   require(dcache.isDefined)
