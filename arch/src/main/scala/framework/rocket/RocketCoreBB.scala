@@ -116,11 +116,11 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters) extends CoreModule()(
   val decode_table = {
     (if (usingMulDiv) new MDecode(pipelinedMul) +: (xLen > 32).option(new M64Decode(pipelinedMul)).toSeq else Nil) ++:
     (if (usingAtomics) new ADecode +: (xLen > 32).option(new A64Decode).toSeq else Nil) ++:
+    (usingRVVRoCC.option(new RVVRoCCDecode)) ++:
     (if (fLen >= 32)    new FDecode +: (xLen > 32).option(new F64Decode).toSeq else Nil) ++:
     (if (fLen >= 64)    new DDecode +: (xLen > 32).option(new D64Decode).toSeq else Nil) ++:
     (if (minFLen == 16) new HDecode +: (xLen > 32).option(new H64Decode).toSeq ++: (fLen >= 64).option(new HDDecode).toSeq else Nil) ++:
     (usingRoCC.option(new RoCCDecode)) ++:
-    (usingRVVRoCC.option(new RVVRoCCDecode)) ++:
     (if (xLen == 32) new I32Decode else new I64Decode) +:
     (usingVM.option(new SVMDecode)) ++:
     (usingSupervisor.option(new SDecode)) ++:

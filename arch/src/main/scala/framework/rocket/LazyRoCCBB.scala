@@ -93,7 +93,9 @@ trait HasLazyRoCCModuleBB extends CanHavePTWModule
 
   val (respArb, cmdRouter) = if(outer.roccs.nonEmpty) {
     val respArb = Module(new RRArbiter(new RoCCResponse()(outer.p), outer.roccs.size))
-    val cmdRouter = Module(new RoccCommandRouter(outer.roccs.map(_.opcodes))(outer.p))
+    // Get usingRVVRoCC from tile parameters
+    val usingRVVRoCC = outer.rocketParams.asInstanceOf[RocketTileParamsBB].usingRVVRoCC
+    val cmdRouter = Module(new RoccCommandRouterBB(outer.roccs.map(_.opcodes), usingRVVRoCC)(outer.p))
     outer.roccs.zipWithIndex.foreach { case (rocc, i) =>
       rocc.module.io.ptw ++=: ptwPorts
       rocc.module.io.cmd <> cmdRouter.io.out(i)
@@ -110,24 +112,40 @@ trait HasLazyRoCCModuleBB extends CanHavePTWModule
 }
 
 
-class RoccCommandRouterBB(opcodes: Seq[OpcodeSet])(implicit p: Parameters)
+class RoccCommandRouterBB(opcodes: Seq[OpcodeSet], usingRVVRoCC: Boolean)(implicit p: Parameters)
     extends CoreModule()(p) {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new RoCCCommandBB))
-    val out = Vec(opcodes.size, Decoupled(new RoCCCommandBB))
+    val in = Flipped(Decoupled(new RoCCCommand))
+    val out = Vec(opcodes.size, Decoupled(new RoCCCommand))
     val busy = Output(Bool())
   })
 
   val cmd = Queue(io.in)
-  val cmdReadys = io.out.zip(opcodes).map { case (out, opcode) =>
-    val me = opcode.matches(cmd.bits.inst.opcode)
-    out.valid := cmd.valid && me
+
+  // Check which opcodes match
+  val opcodeMatches = opcodes.map(opcode => opcode.matches(cmd.bits.inst.opcode))
+  val anyMatch = opcodeMatches.reduce(_ || _)
+
+  val cmdReadys = io.out.zip(opcodeMatches).zipWithIndex.map { case ((out, matches), i) =>
+    // In RVVRoCC mode: route unmatched opcodes to first RoCC (index 0)
+    // Otherwise: only route if opcode matches
+    val shouldRoute = if (usingRVVRoCC && i == 0) {
+      matches || !anyMatch  // First RoCC gets matched opcodes OR unmatched opcodes
+    } else {
+      matches  // Other RoCCs only get their matched opcodes
+    }
+
+    out.valid := cmd.valid && shouldRoute
     out.bits := cmd.bits
-    out.ready && me
+    out.ready && shouldRoute
   }
   cmd.ready := cmdReadys.reduce(_ || _)
   io.busy := cmd.valid
 
-  assert(PopCount(cmdReadys) <= 1.U,
-    "Custom opcode matched for more than one accelerator")
+  // In RVVRoCC mode, allow unmatched opcodes to go to first RoCC
+  // Otherwise, assert that only one RoCC matches
+  if (!usingRVVRoCC) {
+    assert(PopCount(cmdReadys) <= 1.U,
+      "Custom opcode matched for more than one accelerator")
+  }
 }
