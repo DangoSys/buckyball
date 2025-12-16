@@ -7,7 +7,6 @@ import scalalib._
 // support BSP
 import mill.bsp._
 
-
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion = "2.13.12"
@@ -914,47 +913,3 @@ object palladium extends SbtModule {
     "-Ymacro-annotations"
   )
 }
-
-// uvbb测试模块
-// object uvbb extends ScalaModule {
-//   override def millSourcePath = os.pwd / os.up / "bb-tests" / "uvbb"
-//   override def scalaVersion = "2.13.12"
-
-//   override def scalacOptions = Seq(
-//     "-language:reflectiveCalls",
-//     "-deprecation",
-//     "-feature",
-//     "-Xcheckinit",
-//     "-Ymacro-annotations"
-//   )
-
-//   // 依赖buckyball模块
-//   override def moduleDeps = Seq(buckyball)
-
-//   override def ivyDeps = Agg(
-//     ivy"org.chipsalliance::chisel:6.5.0"
-//   )
-
-//   override def scalacPluginIvyDeps = Agg(
-//     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-//   )
-
-//   // 包含dut源码路径
-//   override def sources = T.sources {
-//     super.sources() ++ Seq(
-//       PathRef(millSourcePath / "dut" / "src" / "main" / "scala")
-//     )
-//   }
-
-//   // 包含resources路径
-//   override def resources = T.sources {
-//     super.resources() ++ Seq(
-//       PathRef(millSourcePath / "dut" / "src" / "main" / "resources")
-//     )
-//   }
-
-//   // 生成Verilog的任务
-//   def elaborate = T {
-//     runMain("uvbb.Elaborate")()
-//   }
-// }
