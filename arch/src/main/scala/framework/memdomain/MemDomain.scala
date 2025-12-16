@@ -7,7 +7,7 @@ import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
-import framework.memdomain.mem.{SramReadIO, SramWriteIO}
+import framework.memdomain.mem.{SramReadIO, SramWriteIO, Scratchpad}
 import framework.memdomain.{MemLoader, MemStorer, MemController}
 import framework.memdomain.rs.MemReservationStation
 import framework.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
@@ -58,73 +58,48 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
     val busy = Output(Bool())
   })
 
-  val memDecoder = Module(new MemDomainDecoder)
-  val memRs      = Module(new MemReservationStation)
-  val memLoader  = Module(new MemLoader)
-  val memStorer  = Module(new MemStorer)
-
-  // Internal MemController (encapsulates spad and acc)
   val memController = Module(new MemController)
-
-  // TLB cluster - use shared TLB like Gemmini
-  val tlbCluster = Module(new BBTLBCluster(2, b.tlb_size, b.dma_maxbytes, use_shared_tlb = true))
+  val translator = Module(new Translator)
+  val spad = Module(new Scratchpad(b))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
 // -----------------------------------------------------------------------------
-  memDecoder.io.raw_cmd_i.valid := io.global_issue_i.valid
-  memDecoder.io.raw_cmd_i.bits  := io.global_issue_i.bits.cmd
-  io.global_issue_i.ready := memDecoder.io.raw_cmd_i.ready
+  memController.io.global_issue_i.valid := io.global_issue_i.valid
+  memController.io.global_issue_i.bits.cmd  := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready := memController.io.global_issue_i.ready
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation
 // -----------------------------------------------------------------------------
   // Connect decoded instruction and global rob_id
-  memRs.io.mem_decode_cmd_i.valid := memDecoder.io.mem_decode_cmd_o.valid
-  memRs.io.mem_decode_cmd_i.bits.cmd := memDecoder.io.mem_decode_cmd_o.bits
-  memRs.io.mem_decode_cmd_i.bits.rob_id := io.global_issue_i.bits.rob_id
-  memDecoder.io.mem_decode_cmd_o.ready := memRs.io.mem_decode_cmd_i.ready
+  memController.io.global_issue_i.bits.rob_id := io.global_issue_i.bits.rob_id
 
-// -----------------------------------------------------------------------------
-// MemReservationStation -> MemLoader/MemStorer
-// -----------------------------------------------------------------------------
-  memLoader.io.cmdReq <> memRs.io.issue_o.ld
-  memStorer.io.cmdReq <> memRs.io.issue_o.st
-  memRs.io.commit_i.ld <> memLoader.io.cmdResp
-  memRs.io.commit_i.st <> memStorer.io.cmdResp
-
-// -----------------------------------------------------------------------------
-// PMC - Performance Monitor Counter
-// -----------------------------------------------------------------------------
-  val pmc = Module(new MemCyclePMC)
-  pmc.io.ldReq_i.valid := memRs.io.issue_o.ld.fire
-  pmc.io.ldReq_i.bits := memRs.io.issue_o.ld.bits
-  pmc.io.stReq_i.valid := memRs.io.issue_o.st.fire
-  pmc.io.stReq_i.bits := memRs.io.issue_o.st.bits
-  pmc.io.ldResp_o.valid := memLoader.io.cmdResp.fire
-  pmc.io.ldResp_o.bits := memLoader.io.cmdResp.bits
-  pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
-  pmc.io.stResp_o.bits := memStorer.io.cmdResp.bits
 
   // Connect MemLoader and MemStorer to DMA
-  memLoader.io.dmaReq <> io.dma.read.req
-  io.dma.read.resp <> memLoader.io.dmaResp
-  memStorer.io.dmaReq <> io.dma.write.req
-  io.dma.write.resp <> memStorer.io.dmaResp
+  memController.io.intradma.read.req <> io.dma.read.req
+  io.dma.read.resp <> memController.io.intradma.read.resp
+  memController.io.intradma.write.req <> io.dma.write.req
+  io.dma.write.resp <> memController.io.intradma.write.resp
 
   // Connect TLB - now using internal BBTLBCluster
-  io.tlb <> tlbCluster.io.clients
-  io.ptw <> tlbCluster.io.ptw
+  io.tlb <> memController.io.tlb
+  io.ptw <> memController.io.ptw
 
   // Connect exception interface - note direction: internal TLB's exp is Output, external interface is Input
-  tlbCluster.io.exp <> io.tlbExp
+  memController.io.tlbExp <> io.tlbExp
 
   // Connect MemLoader and MemStorer to MemController's DMA interface
-  memLoader.io.sramWrite <> memController.io.dma.sramWrite
-  memLoader.io.accWrite <> memController.io.dma.accWrite
-  memStorer.io.sramRead <> memController.io.dma.sramRead
-  memStorer.io.accRead <> memController.io.dma.accRead
 
+  memController.io.interdma.sramwrite <> translator.io.dma_in.sramwrite
+  memController.io.interdma.accwrite <>translator.io.dma_in.accwrite
+  memController.io.interdma.sramread <> translator.io.dma_in.sramread
+  memController.io.interdma.accread <> translator.io.dma_in.accread
+
+  translator.io.dma_out.sramwrite <> spad.io.dma.sramwrite
+  translator.io.dma_out.accwrite <> spad.io.dma.accwrite
+  translator.io.dma_out.sramread <> spad.io.dma.sramread
+  translator.io.dma_out.accread <> spad.io.dma.accread
 
   // ToPhysical interface
   // Ball Domain SRAM interface connected to MemController's Ball Domain interface
@@ -133,15 +108,23 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
   toPhysicalLines.io.sramRead_i  <> io.ballDomain.sramRead
   toPhysicalLines.io.sramWrite_i <> io.ballDomain.sramWrite
 
-  toPhysicalLines.io.sramRead_o <> memController.io.ballDomain.sramRead
-  toPhysicalLines.io.sramWrite_o <> memController.io.ballDomain.sramWrite
-  toPhysicalLines.io.accRead_o <> memController.io.ballDomain.accRead
-  toPhysicalLines.io.accWrite_o <> memController.io.ballDomain.accWrite
+  toPhysicalLines.io.sramRead_o <> translator.io.exec_in.sramread
+  toPhysicalLines.io.sramWrite_o <> translator.io.exec_in.sramwrite
+  toPhysicalLines.io.accRead_o <> translator.io.exec_in.accread
+  toPhysicalLines.io.accWrite_o <> translator.io.exec_in.accwrite
 
+  translator.io.exec_out.sramread <> spad.io.exec.sramread
+  translator.io.exec_out.sramwrite <> spad.io.exec.sramwrite
+  translator.io.exec_out.accread <> spad.io.exec.accread
+  translator.io.exec_out.accwrite <> spad.io.exec.accwrite
+
+  // translator.io.dma_return := DontCare 
+  // translator.io.exec_return := DontCare
+  
   // Completion signal connected to global RS
-  io.global_complete_o <> memRs.io.complete_o
+  io.global_complete_o <> memController.io.global_complete_o
 
   // Busy signal
   // Simple busy signal
-  io.busy := !memRs.io.complete_o.ready
+  io.busy := memController.io.busy
 }
