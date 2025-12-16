@@ -1,1 +1,0 @@
-../vec-sgemm/gendata.py
