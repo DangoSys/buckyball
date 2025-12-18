@@ -11,6 +11,7 @@ import org.chipsalliance.cde.config.Parameters
 
 // Detailed decode output for Mem domain
 class MemDecodeCmd(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
+  private val numBanks = b.sp_banks + b.acc_banks
   val is_load       = Bool()
   val is_store      = Bool()
 
@@ -22,7 +23,7 @@ class MemDecodeCmd(implicit b: CustomBuckyballConfig, p: Parameters) extends Bun
 
   // Scratchpad address and bank information
   // 3 bits, supports 8 banks (SPAD+ACC)
-  val sp_bank       = UInt(log2Up(b.sp_banks + b.acc_banks).W)
+  val sp_bank       = UInt(log2Up(numBanks).W)
   // 12 bits, uses SPAD row count (sufficient to accommodate ACC's 10-bit address)
   val sp_bank_addr  = UInt(log2Up(b.spad_bank_entries).W)
 

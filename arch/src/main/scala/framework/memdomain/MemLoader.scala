@@ -8,10 +8,11 @@ import framework.memdomain.rs.{MemRsIssue, MemRsComplete}
 import framework.memdomain.mem.SramWriteIO
 import framework.memdomain.dma.{BBReadRequest, BBReadResponse, LocalAddr}
 import freechips.rocketchip.rocket.MStatus
+import framework.balldomain.blink.{SramWriteWithRobId, SramWriteWithInfo}
 
 class MemLoader(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
-
+  val numBanks = b.sp_banks + b.acc_banks
   val io = IO(new Bundle {
     // Load instruction from ReservationStation
     val cmdReq = Flipped(Decoupled(new MemRsIssue))
@@ -21,8 +22,8 @@ class MemLoader(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
     val dmaReq = Decoupled(new BBReadRequest())
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.spad_w)))
     // Connected to Scratchpad SRAM write interface
-    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
-    val accWrite = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+    val sramWrite = Vec(b.sp_banks, Flipped(new SramWriteWithRobId(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+    val accWrite = Vec(b.acc_banks, Flipped(new SramWriteWithRobId(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
   })
 
   val s_idle :: s_dma_req :: s_dma_wait :: Nil = Enum(3)
@@ -95,31 +96,35 @@ class MemLoader(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
   val target_row = current_bank_addr
 
   for (i <- 0 until b.sp_banks) {
-    io.sramWrite(i).req.valid     := io.dmaResp.fire && (target_bank === i.U)
-    io.sramWrite(i).req.bits.addr := target_row
-    io.sramWrite(i).req.bits.data := io.dmaResp.bits.data
-    io.sramWrite(i).req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(true.B))
+    io.sramWrite(i).io.req.valid     := io.dmaResp.fire && (target_bank === i.U)
+    io.sramWrite(i).io.req.bits.addr := target_row
+    io.sramWrite(i).io.req.bits.data := io.dmaResp.bits.data
+    io.sramWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.spad_mask_len)(true.B))
+    io.sramWrite(i).rob_id := rob_id_reg
   }
   // Default assignment
   for (i <- 0 until b.acc_banks) {
-    io.accWrite(i).req.valid := false.B
-    io.accWrite(i).req.bits.addr := 0.U
-    io.accWrite(i).req.bits.data := 0.U
-    io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(false.B))
+    io.accWrite(i).io.req.valid := false.B
+    io.accWrite(i).io.req.bits.addr := 0.U
+    io.accWrite(i).io.req.bits.data := 0.U
+    io.accWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(false.B))
+    io.accWrite(i).rob_id := 0.U
   }
 
   for (i <- 0 until b.acc_banks/2) {
     when(io.dmaResp.fire && is_acc_reg){
       when(io.dmaResp.bits.addrcounter(2)){
-        io.accWrite(i).req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
-        io.accWrite(i).req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >> (log2Ceil(b.acc_banks/2) + 1))
-        io.accWrite(i).req.bits.data := io.dmaResp.bits.data
-        io.accWrite(i).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+        io.accWrite(i).io.req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
+        io.accWrite(i).io.req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accWrite(i).io.req.bits.data := io.dmaResp.bits.data
+        io.accWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+        io.accWrite(i).rob_id := rob_id_reg
       }.otherwise{
-        io.accWrite(i + b.acc_banks/2).req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
-        io.accWrite(i + b.acc_banks/2).req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >>  (log2Ceil(b.acc_banks/2) + 1))
-        io.accWrite(i + b.acc_banks/2).req.bits.data := io.dmaResp.bits.data
-        io.accWrite(i + b.acc_banks/2).req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+        io.accWrite(i + b.acc_banks/2).io.req.valid     := target_row(log2Ceil(b.acc_banks/2) - 1, 0) === i.U
+        io.accWrite(i + b.acc_banks/2).io.req.bits.addr := wr_bank_addr_reg + (io.dmaResp.bits.addrcounter >>  (log2Ceil(b.acc_banks/2) + 1))
+        io.accWrite(i + b.acc_banks/2).io.req.bits.data := io.dmaResp.bits.data
+        io.accWrite(i + b.acc_banks/2).io.req.bits.mask := VecInit(Seq.fill(b.acc_mask_len)(true.B))
+        io.accWrite(i + b.acc_banks/2).rob_id := rob_id_reg
       }
     }
   }
