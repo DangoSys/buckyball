@@ -8,6 +8,7 @@ import framework.memdomain.rs.{MemRsIssue, MemRsComplete}
 import freechips.rocketchip.rocket.MStatus
 import framework.memdomain.mem.SramReadIO
 import framework.memdomain.dma.{BBWriteRequest, BBWriteResponse, LocalAddr}
+import framework.balldomain.blink.{SramReadWithRobId,  SramReadWithInfo}
 
 class MemStorer(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
   val rob_id_width = log2Up(b.rob_entries)
@@ -25,8 +26,8 @@ class MemStorer(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
     val dmaReq = Decoupled(new BBWriteRequest(b.spad_w))
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
     // Connected to Scratchpad SRAM read interface
-    val sramRead = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
-    val accRead = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
+    val sramRead = Vec(b.sp_banks, Flipped(new SramReadWithRobId(b.spad_bank_entries, b.spad_w)))
+    val accRead = Vec(b.acc_banks, Flipped(new SramReadWithRobId(b.acc_bank_entries, b.acc_w)))
   })
 
   val s_idle :: s_sram_req :: s_dma_wait :: Nil = Enum(3)
@@ -83,37 +84,41 @@ class MemStorer(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
   val target_row = current_bank_addr
 
   for (i <- 0 until b.sp_banks) {
-    io.sramRead(i).req.valid := (state === s_sram_req) && (target_bank === i.U) && !acc_reg
-    io.sramRead(i).req.bits.addr := target_row
-    io.sramRead(i).req.bits.fromDMA := true.B
+    io.sramRead(i).io.req.valid := (state === s_sram_req) && (target_bank === i.U) && !acc_reg
+    io.sramRead(i).io.req.bits.addr := target_row
+    io.sramRead(i).io.req.bits.fromDMA := true.B
+    io.sramRead(i).rob_id := rob_id_reg
   }
 
   // Default assignment
   for (i <- 0 until b.acc_banks) {
-    io.accRead(i).req.valid := false.B
-    io.accRead(i).req.bits.addr := 0.U
-    io.accRead(i).req.bits.fromDMA := true.B
+    io.accRead(i).io.req.valid := false.B
+    io.accRead(i).io.req.bits.addr := 0.U
+    io.accRead(i).io.req.bits.fromDMA := true.B
+    io.accRead(i).rob_id := 0.U
   }
 
   for (i <- 0 until b.acc_banks/2){
     when((state === s_sram_req) && acc_reg){
       when(sram_count(2) === 0.U){
-        io.accRead(i).req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
-        io.accRead(i).req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
-        io.accRead(i).req.bits.fromDMA := true.B
+        io.accRead(i).io.req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
+        io.accRead(i).io.req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accRead(i).io.req.bits.fromDMA := true.B
+        io.accRead(i).rob_id := rob_id_reg
       }.otherwise{
-        io.accRead(i + b.acc_banks/2).req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
-        io.accRead(i + b.acc_banks/2).req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
-        io.accRead(i + b.acc_banks/2).req.bits.fromDMA := true.B
+        io.accRead(i + b.acc_banks/2).io.req.valid := i.U === target_row(log2Ceil(b.acc_banks/2) - 1, 0)
+        io.accRead(i + b.acc_banks/2).io.req.bits.addr := rd_bank_addr_reg + (sram_count >> (log2Ceil(b.acc_banks/2) + 1))
+        io.accRead(i + b.acc_banks/2).io.req.bits.fromDMA := true.B
+        io.accRead(i + b.acc_banks/2).rob_id := rob_id_reg
       }
     }
   }
 
   // SRAM response processing
-  val sram_resp_valid = io.sramRead.map(_.resp.valid).reduce(_ || _)
-  val sram_resp_data = Mux1H(io.sramRead.map(_.resp.valid), io.sramRead.map(_.resp.bits.data))
-  val acc_resp_valid = io.accRead.map(_.resp.valid).reduce(_ || _)
-  val acc_resp_data = Mux1H(io.accRead.map(_.resp.valid), io.accRead.map(_.resp.bits.data))
+  val sram_resp_valid = io.sramRead.map(_.io.resp.valid).reduce(_ || _)
+  val sram_resp_data = Mux1H(io.sramRead.map(_.io.resp.valid), io.sramRead.map(_.io.resp.bits.data))
+  val acc_resp_valid = io.accRead.map(_.io.resp.valid).reduce(_ || _)
+  val acc_resp_data = Mux1H(io.accRead.map(_.io.resp.valid), io.accRead.map(_.io.resp.bits.data))
 
   // Calculate memory address corresponding to current row
   val current_mem_addr = mem_addr_reg + sram_count(1,0) * line_bytes.U + ((sram_count >> 2) << 2) * stride_reg * line_bytes.U
@@ -230,10 +235,10 @@ class MemStorer(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
   io.dmaReq.bits.status := dma_req_status_reg
 
   // Connect SRAM response ready signal - based on DMA ready state
-  io.sramRead.foreach(_.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
-  io.accRead.foreach(_.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
+  io.sramRead.foreach(_.io.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
+  io.accRead.foreach(_.io.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
   // State transition and counter update
-  when (io.sramRead.map(_.req.fire).reduce(_ || _)) {
+  when (io.sramRead.map(_.io.req.fire).reduce(_ || _)) {
     state := s_dma_wait
   }
 
