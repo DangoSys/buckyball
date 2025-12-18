@@ -15,7 +15,7 @@ import framework.memdomain.pmc.MemCyclePMC
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
 import framework.frontend.globalrs.{GlobalRsIssue, GlobalRsComplete}
-import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
+import framework.balldomain.blink.{SramReadWithRobId, SramWriteWithRobId, SramReadWithInfo, SramWriteWithInfo}
 import framework.switcher.{ToPhysicalLine, ToVirtualLine}
 
 /**
@@ -33,10 +33,10 @@ class MemController(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEd
 
     // SRAM read/write interface - used by load/store
     val interdma = new Bundle {
-      val sramread  = Vec(b.sp_banks, Flipped(new SramReadIO(b.spad_bank_entries, b.spad_w)))
-      val sramwrite = Vec(b.sp_banks, Flipped(new SramWriteIO(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
-      val accread   = Vec(b.acc_banks, Flipped(new SramReadIO(b.acc_bank_entries, b.acc_w)))
-      val accwrite  = Vec(b.acc_banks, Flipped(new SramWriteIO(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
+      val sramread  = Vec(b.sp_banks, Flipped(new SramReadWithRobId(b.spad_bank_entries, b.spad_w)))
+      val sramwrite = Vec(b.sp_banks, Flipped(new SramWriteWithRobId(b.spad_bank_entries, b.spad_w, b.spad_mask_len)))
+      val accread   = Vec(b.acc_banks, Flipped(new SramReadWithRobId(b.acc_bank_entries, b.acc_w)))
+      val accwrite  = Vec(b.acc_banks, Flipped(new SramWriteWithRobId(b.acc_bank_entries, b.acc_w, b.acc_mask_len)))
     }
 
     // DMA interface - used by Outer DRAM controller
