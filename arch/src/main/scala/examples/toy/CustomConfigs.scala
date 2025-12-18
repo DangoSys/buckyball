@@ -4,16 +4,11 @@ import org.chipsalliance.cde.config.{Config, Parameters, Field}
 import chisel3._
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.SystemBusKey
-// import freechips.rocketchip.tile.{BuildRoCC, OpcodeSet}
 import freechips.rocketchip.tile._
 import examples.toy.ToyBuckyball
 import framework.builtin.BaseConfig
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import examples.CustomBuckyballConfig
-
-// Use standard BuildRoCC instead of BuildRoCCBB
-// import framework.rocket.BuildRoCCBB
-// import framework.rocket.MultiRoCCKeyBB
 
 object BuckyballToyConfig {
   val defaultConfig = new BaseConfig(
@@ -35,19 +30,6 @@ class BuckyballCustomConfig(
     }
   )
 })
-
-// class WithMultiRoCCToyBuckyball(harts: Int*)(
-//   buckyballConfig: CustomBuckyballConfig = CustomBuckyballConfig()
-// ) extends Config((site, here, up) => {
-//     case MultiRoCCKeyBB => up(MultiRoCCKeyBB, site) ++ harts.distinct.map { i =>
-//     (i -> Seq((p: Parameters) => {
-//       implicit val q = p
-//       val buckyball = LazyModule(new ToyBuckyball(buckyballConfig))
-//       buckyball
-//     }))
-//   }
-// })
-
 
 class BuckyballToyConfig extends Config(
   new BuckyballCustomConfig ++
@@ -160,5 +142,27 @@ class BuckyballToy256Config extends Config(
   new BuckyballCustomConfig ++
   new framework.rocket.WithNBuckyballCores(256) ++
   new freechips.rocketchip.subsystem.WithNBanks(32) ++
+  new chipyard.config.WithSystemBusWidth(128) ++
+  new chipyard.config.AbstractConfig)
+
+class BuckyballToy256CBConfig extends Config(
+  new WithLargeBootROM(0x80000, 0x80000) ++ // 512KB BootROM at 0x80000 (for 1024 cores)
+  new BuckyballCustomConfig ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(7)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(6)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(5)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(4)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(3)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(2)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(1)) ++
+  new framework.rocket.WithNBuckyballCores(32, location=InCluster(0)) ++
+  new freechips.rocketchip.subsystem.WithCluster(7) ++
+  new freechips.rocketchip.subsystem.WithCluster(6) ++
+  new freechips.rocketchip.subsystem.WithCluster(5) ++
+  new freechips.rocketchip.subsystem.WithCluster(4) ++
+  new freechips.rocketchip.subsystem.WithCluster(3) ++
+  new freechips.rocketchip.subsystem.WithCluster(2) ++
+  new freechips.rocketchip.subsystem.WithCluster(1) ++
+  new freechips.rocketchip.subsystem.WithCluster(0) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new chipyard.config.AbstractConfig)
