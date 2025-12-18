@@ -8,7 +8,7 @@ import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
 import framework.memdomain.mem.{SramReadIO, SramWriteIO, Scratchpad}
-import framework.memdomain.{MemLoader, MemStorer, MemController}
+import framework.memdomain.{MemLoader, MemStorer}
 import framework.memdomain.rs.MemReservationStation
 import framework.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
 import framework.memdomain.pmc.MemCyclePMC

@@ -60,7 +60,7 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
 
   val memController = Module(new MemController)
   val translator = Module(new Translator)
-  val spad = Module(new Scratchpad(b))
+  val spad = Module(new Scratchpad())
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
@@ -92,7 +92,6 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
   // Connect MemLoader and MemStorer to MemController's DMA interface
  
   val toVirtualLines0 = Module(new ToVirtualLine()(b, p))
-  val toPhysicalLines0 = Module(new ToPhysicalLine()(b, p))
 
   memController.io.interdma.sramwrite <> toVirtualLines0.io.sramWrite_i
   memController.io.interdma.accwrite <> toVirtualLines0.io.accWrite_i
@@ -102,30 +101,17 @@ class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOu
   translator.io.dma_in.sramread  <> toVirtualLines0.io.sramRead_o
   translator.io.dma_in.sramwrite <> toVirtualLines0.io.sramWrite_o
 
-  translator.io.dma_out.sramread <> toPhysicalLines0.io.sramRead_i
-  translator.io.dma_out.sramwrite <> toPhysicalLines0.io.sramWrite_i
-
-  toPhysicalLines0.io.sramRead_o <> spad.io.dma.sramread
-  toPhysicalLines0.io.sramWrite_o <> spad.io.dma.sramwrite
-  toPhysicalLines0.io.accRead_o <> spad.io.dma.accread
-  toPhysicalLines0.io.accWrite_o <> spad.io.dma.accwrite
+  translator.io.dma_out.sramread <> spad.io.dma.sramread
+  translator.io.dma_out.sramwrite <> spad.io.dma.sramwrite
 
   // ToPhysical interface
   // Ball Domain SRAM interface connected to MemController's Ball Domain interface
-  val toPhysicalLines1 = Module(new ToPhysicalLine()(b, p))
 
   translator.io.exec_in.sramread  <> io.ballDomain.sramRead
   translator.io.exec_in.sramwrite <> io.ballDomain.sramWrite
 
-  translator.io.exec_out.sramread <> toPhysicalLines1.io.sramRead_i
-  translator.io.exec_out.sramwrite <> toPhysicalLines1.io.sramWrite_i
-
-  toPhysicalLines1.io.sramRead_o <> spad.io.exec.sramread
-  toPhysicalLines1.io.sramWrite_o <> spad.io.exec.sramwrite
-  toPhysicalLines1.io.accRead_o <> spad.io.exec.accread
-  toPhysicalLines1.io.accWrite_o <> spad.io.exec.accwrite
-
-
+  translator.io.exec_out.sramread <> spad.io.exec.sramread
+  translator.io.exec_out.sramwrite <> spad.io.exec.sramwrite
 
   // translator.io.dma_return := DontCare 
   // translator.io.exec_return := DontCare
