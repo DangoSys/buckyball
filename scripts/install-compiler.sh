@@ -14,7 +14,7 @@ source ${BBDIR}/env.sh
 pip install -r ${BUDDY_MLIR_DIR}/requirements.txt
 
 cd ${BUDDY_MLIR_DIR}
-git submodule update --init
+git submodule update --init llvm
 
 mkdir -p llvm/build && cd llvm/build
 cmake -G Ninja ../llvm \
