@@ -23,15 +23,11 @@ class Scratchpad(implicit b: CustomBuckyballConfig, implicit val p: Parameters)
     val dma = new Bundle {
       val sramread  = Vec(numBanks, new SramReadWithInfo(b.spad_bank_entries, b.spad_w))
       val sramwrite = Vec(numBanks, new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
-      // val accread   = Vec(acc_banks, new SramReadIO(acc_bank_entries, acc_w))
-      // val accwrite  = Vec(acc_banks, new SramWriteIO(acc_bank_entries, acc_w, acc_mask_len))
     }
     // Execution unit read/write interface - one read and write per bank, OpA and OpB guaranteed to access different banks
     val exec = new Bundle {
       val sramread  = Vec(numBanks, new SramReadWithInfo(b.spad_bank_entries, b.spad_w))
       val sramwrite = Vec(numBanks, new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
-      // val accread   = Vec(acc_banks, new SramReadIO(acc_bank_entries, acc_w))
-      // val accwrite  = Vec(acc_banks, new SramWriteIO(acc_bank_entries, acc_w, acc_mask_len))
     }
   })
 
@@ -106,7 +102,7 @@ class Scratchpad(implicit b: CustomBuckyballConfig, implicit val p: Parameters)
     bank.io.write.io.req.bits.addr := Mux(exec_write_sel, exec_write.io.req.bits.addr, main_write.io.req.bits.addr)
     bank.io.write.io.req.bits.data := Mux(exec_write_sel, exec_write.io.req.bits.data, main_write.io.req.bits.data)
     bank.io.write.io.req.bits.mask := Mux(exec_write_sel, exec_write.io.req.bits.mask, main_write.io.req.bits.mask)
-    bank.io.write.is_acc        := Mux(exec_write_sel, exec_isacc_sel, main_isacc_sel) 
+    bank.io.write.is_acc        := Mux(exec_write_sel, exec_isacc_sel, false.B) 
     bank.io.write.bank_id      := Mux(exec_write_sel, exec_bankid, main_bankid)
     bank.io.write.rob_id       := Mux(exec_write_sel, exec_robid, main_robid)
 
