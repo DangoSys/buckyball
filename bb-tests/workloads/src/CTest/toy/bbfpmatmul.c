@@ -1,10 +1,12 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 void init_matrix(elem_t *matrix, int rows, int cols, int seed) {
   srand(seed);
@@ -45,20 +47,17 @@ int main() {
   // print_matrix("Input", input_matrix, DIM, DIM);
 
   // Move input to scratchpad
-  // spad0: operand A, offset 0
-  uint32_t op1_addr = spad_addr(0, 0);
-  // spad1: operand B, offset 0
-  uint32_t op2_addr = spad_addr(1, 0);
-  // acc0: write to accumulator, offset 0
-  uint32_t wr_addr = spad_addr(4, 0);
+  uint32_t op1_bank_id = 0;
+  uint32_t op2_bank_id = 1;
+  int acc_bank_id = bb_mset(0, 0, 1, 4, 1, 4);
 
-  bb_mvin((uintptr_t)weight_matrix, op1_addr, DIM, 1);
-  bb_mvin((uintptr_t)input_matrix, op2_addr, DIM, 1);
+  bb_mvin((uintptr_t)weight_matrix, op1_bank_id, DIM, 1);
+  bb_mvin((uintptr_t)input_matrix, op2_bank_id, DIM, 1);
   bb_fence();
-  bb_bbfp_mul(op1_addr, op2_addr, wr_addr, DIM);
+  bb_bbfp_mul(op1_bank_id, op2_bank_id, acc_bank_id, DIM);
   bb_fence();
   // Move back from scratchpad to output
-  bb_mvout((uintptr_t)output_matrix, wr_addr, DIM << 2, 1);
+  bb_mvout((uintptr_t)output_matrix, op2_bank_id, DIM << 2, 1);
   bb_fence();
   if (compare_u32_matrices(output_matrix, expected_output_matrix, DIM, DIM)) {
     printf("Test passed!\n");

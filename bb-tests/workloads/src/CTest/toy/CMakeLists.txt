@@ -4,7 +4,7 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 #-------------------------------------------------------------------------------
 # Set baremetal compilation flags
 #-------------------------------------------------------------------------------
-set(C_FLAGS -g -fno-common -O1 -static -march=rv64gc -mcmodel=medany
+set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=htif_nano.specs -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
@@ -134,12 +134,6 @@ add_cross_platform_test_target(ctest_conv_test conv_test.c)
 add_cross_platform_test_target(ctest_cim_test cim_test.c)
 add_cross_platform_test_target(ctest_transfer_test transfer_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
-
-# Create library dependency target to ensure all libraries are built first
-# add_custom_target(buckyball-libs-build
-#   DEPENDS bbmem-linux-build bbisa-linux-build bbmem-baremetal-build bbisa-baremetal-build
-#   COMMENT "Building all required libraries"
-# )
 
 # Create master build target
 add_custom_target(buckyball-CTest-build ALL DEPENDS

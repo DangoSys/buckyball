@@ -1,8 +1,10 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 static elem_t input_matrix_a[DIM * 48] __attribute__((aligned(16)));
 static elem_t input_matrix_b[48 * DIM] __attribute__((aligned(16)));
@@ -14,18 +16,18 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   static elem_t a_transposed[48 * DIM] __attribute__((aligned(16)));
   transpose_u8_matrix(a, a_transposed, DIM, 48);
   // spad0: operand A, offset 0
-  uint32_t op1_addr = spad_addr(0, 0);
+  uint32_t op1_bank_id = 0;
   // spad1: operand B, offset 0
-  uint32_t op2_addr = spad_addr(1, 0);
+  uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
-  uint32_t wr_addr = spad_addr(4, 0);
+  int acc_bank_id = bb_mset(0, 0, 1, 4, 1, 4);
 
-  bb_mvin((uintptr_t)a_transposed, op1_addr, size, 1);
-  bb_mvin((uintptr_t)b, op2_addr, size, 1);
+  bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
+  bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
   bb_fence();
-  bb_mul_warp16(op1_addr, op2_addr, wr_addr, size, 0);
+  bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_fence();
-  bb_mvout((uintptr_t)c, wr_addr, DIM << 2, 1);
+  bb_mvout((uintptr_t)c, acc_bank_id, DIM << 2, 1);
   bb_fence();
 }
 

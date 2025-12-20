@@ -1,9 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 #define OP1_SIZE 64
 #define OP2_SIZE 64
@@ -66,24 +68,22 @@ int cim_cpu_reference(elem_t *op1, elem_t *op2, elem_t *result, int rows,
 }
 
 void hw_cim(const char *test_name, elem_t *op1, elem_t *op2, elem_t *result,
-            int rows, int cols, int op_type) {
+            int rows, int cols, int op_type, int acc_bank_id) {
   // Operand 1 in spad bank 0, operand 2 in spad bank 1, result in spad bank 2
-  uint32_t op1_addr = spad_addr(0, 0);
-  uint32_t op2_addr = spad_addr(1, 0);
-  uint32_t result_addr = spad_addr(2, 0);
-
+  uint32_t op1_bank_id = 0;
+  uint32_t op2_bank_id = 1;
   // Move operand 1 into scratchpad
-  bb_mvin((uintptr_t)op1, op1_addr, OP1_SIZE, 1);
+  bb_mvin((uintptr_t)op1, op1_bank_id, OP1_SIZE, 1);
   bb_fence();
 
   // Move operand 2 into scratchpad
-  bb_mvin((uintptr_t)op2, op2_addr, OP2_SIZE, 1);
+  bb_mvin((uintptr_t)op2, op2_bank_id, OP2_SIZE, 1);
   bb_fence();
 
   // Call CIM instruction
   // iter is the number of iterations (simplified: use rows*cols for now)
   uint32_t iter = rows * cols;
-  bb_cim(op1_addr, op2_addr, result_addr, iter, rows, cols, op_type);
+  bb_cim(op1_bank_id, op2_bank_id, acc_bank_id, iter, rows, cols, op_type);
   bb_fence();
 
   // Result will be moved back in run_test for verification
@@ -94,12 +94,14 @@ int run_test(const char *test_name, elem_t *op1, elem_t *op2, elem_t *result,
   // CPU reference computation
   cim_cpu_reference(op1, op2, expected_result, rows, cols, op_type);
 
+  // Allocate accumulator bank
+  int acc_bank_id = bb_mset(0, 0, 1, 4, 1, 4);
+
   // Hardware computation
-  hw_cim(test_name, op1, op2, result, rows, cols, op_type);
+  hw_cim(test_name, op1, op2, result, rows, cols, op_type, acc_bank_id);
 
   // Move result back from scratchpad for verification
-  uint32_t result_addr = spad_addr(2, 0);
-  bb_mvout((uintptr_t)result, result_addr, RESULT_SIZE, 1);
+  bb_mvout((uintptr_t)result, acc_bank_id, RESULT_SIZE, 1);
   bb_fence();
 
   // Verify results
