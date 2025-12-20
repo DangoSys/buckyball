@@ -1,36 +1,13 @@
+#ifndef _BB_TRANSPOSE_H_
+#define _BB_TRANSPOSE_H_
+
 #include "isa.h"
 
-// =========================== for simulator ===========================
-const InstructionConfig transpose_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 14},
-                                     {"wr_spaddr", 15, 29},
-                                     {NULL, 0, 0}},
-    .rs2_fields =
-        (BitFieldConfig[]){{"mode", 25, 25}, {"iter", 15, 24}, {NULL, 0, 0}}};
+#define BB_TRANSPOSE_FUNC7 34
 
-// =========================== for CTest ===========================
-#define TRANSPOSE_ENCODE_RS1(op_addr, wr_addr)                                 \
-  (ENCODE_FIELD(op_addr, 0, 15) | ENCODE_FIELD(wr_addr, 15, 15))
+#define bb_transpose(op1_bank_id, wr_bank_id, iter, mode)                      \
+  BUCKYBALL_INSTRUCTION_R_R(                                                   \
+      (FIELD(op1_bank_id, 0, 7) | FIELD(wr_bank_id, 8, 15)),                   \
+      (FIELD(iter, 15, 24) | FIELD(mode, 25, 25)), BB_TRANSPOSE_FUNC7)
 
-#define TRANSPOSE_ENCODE_RS2(iter, mode)                                       \
-  (ENCODE_FIELD(iter, 15, 10) | ENCODE_FIELD(mode, 25, 1))
-
-// TRANSPOSE instruction low-level implementation
-#ifndef __x86_64__
-#define TRANSPOSE_RAW(rs1, rs2)                                                \
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 34, x0, %0, %1"                \
-               :                                                               \
-               : "r"(rs1), "r"(rs2)                                            \
-               : "memory")
-#else
-// Do not execute RISC-V instructions on x86 platform
-#define TRANSPOSE_RAW(rs1, rs2)
-#endif
-
-// TRANSPOSE instruction high-level API implementation
-void bb_transpose(uint32_t op1_addr, uint32_t wr_addr, uint32_t iter,
-                  uint32_t mode) {
-  uint64_t rs1_val = TRANSPOSE_ENCODE_RS1(op1_addr, wr_addr);
-  uint64_t rs2_val = TRANSPOSE_ENCODE_RS2(iter, mode);
-  TRANSPOSE_RAW(rs1_val, rs2_val);
-}
+#endif // _BB_TRANSPOSE_H_

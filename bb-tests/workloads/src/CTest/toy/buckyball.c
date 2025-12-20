@@ -1,9 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 /* Read cycle counter (rdcycle) helper. Works on RV64 with a single rdcycle.
    On RV32 we read low/high and detect rollover to produce a 64-bit value. */

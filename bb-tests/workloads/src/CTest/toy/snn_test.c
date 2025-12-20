@@ -1,9 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
 static elem_t output_matrix_b[DIM * DIM] __attribute__((aligned(64)));
@@ -35,15 +37,15 @@ int snn_cpu_reference(elem_t *input, elem_t *output, int size,
 void hw_snn(const char *test_name, elem_t *a, elem_t *b, int size,
             uint8_t threshold, uint8_t leak_factor) {
   // Source operand in spad bank 0, write target in spad bank 1
-  uint32_t op1_addr = spad_addr(0, 0);
-  uint32_t wr_addr = spad_addr(1, 0);
+  uint32_t op1_bank_id = 0;
+  uint32_t wr_bank_id = 1;
 
   // Move input into scratchpad bank0, starting at offset 0, iterate size times
   // row-wise
-  bb_mvin((uintptr_t)a, op1_addr, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_fence();
   // Call SNN instruction
-  bb_snn(op1_addr, wr_addr, size, threshold, leak_factor);
+  bb_snn(op1_bank_id, wr_bank_id, size, threshold, leak_factor);
   bb_fence();
 
   // Result will be moved back in run_test for verification
@@ -58,8 +60,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size,
   hw_snn(test_name, a, b, size, threshold, leak_factor);
 
   // Move result back from scratchpad for verification
-  uint32_t wr_addr = spad_addr(1, 0);
-  bb_mvout((uintptr_t)output_matrix_b, wr_addr, size, 1);
+  uint32_t wr_bank_id = 1;
+  bb_mvout((uintptr_t)output_matrix_b, wr_bank_id, size, 1);
   bb_fence();
 
   // Verify results
