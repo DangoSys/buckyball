@@ -18,7 +18,8 @@ object zvbbUop8   extends ZvbbUOPType // andn
 object zvbbUop9   extends ZvbbUOPType // pop
 
 object ZvbbUOP {
-  def apply(t1DecodePattern: T1DecodePattern): Uop     = {
+
+  def apply(t1DecodePattern: T1DecodePattern): Uop = {
     Seq(
       t0 _ -> zvbbUop0,
       t1 _ -> zvbbUop1,
@@ -34,44 +35,51 @@ object ZvbbUOP {
       case (fn, tpe) if fn(t1DecodePattern) => tpe
     }.getOrElse(UopDC)
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vbrev.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t1(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t1(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vbrev8.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t2(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t2(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vrev8.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t3(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t3(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vclz.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t4(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t4(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vctz.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t5(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t5(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vrol.vv",
       "vrol.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t6(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t6(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vror.vv",
       "vror.vx",
@@ -79,7 +87,8 @@ object ZvbbUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t7(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t7(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vwsll.vv",
       "vwsll.vx",
@@ -87,17 +96,20 @@ object ZvbbUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t8(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t8(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vandn.vv",
       "vandn.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t9(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t9(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vcpop.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }

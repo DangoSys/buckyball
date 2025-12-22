@@ -2,54 +2,42 @@ package prototype.im2col
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.balldomain.blink.{Blink, BallRegist}
+import examples.toy.balldomain.BallDomainParam
+import framework.balldomain.blink.{BallRegist, Blink}
 import prototype.im2col.Im2col
+import prototype.im2col.configs.Im2colConfig
 
 /**
  * Im2colBall - An Im2col computation Ball that complies with the Blink protocol
  */
-class Im2colBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module with BallRegist {
-  val io = IO(new Blink)
-  val ballId = id.U
+@instantiable
+class Im2colBall(config: Im2colConfig, id: Int)(implicit p: Parameters) extends Module with BallRegist {
+  val parameter = config.ballParam
+  @public
+  val io        = IO(new Blink(parameter, config.bankEntries, config.bankWidth, config.bankMaskLen))
+  val ballId    = id.U
 
   def Blink: Blink = io
 
   // Instantiate Im2col
-  val im2colUnit = Module(new Im2col)
+  val im2colUnit: Instance[Im2col] = Instantiate(new Im2col(config))
 
   // Connect command interface
   im2colUnit.io.cmdReq <> io.cmdReq
   im2colUnit.io.cmdResp <> io.cmdResp
 
-  // Connect SRAM read interface - Im2col needs to read data from scratchpad
-  for (i <- 0 until b.sp_banks) {
-    im2colUnit.io.sramRead(i) <> io.sramRead(i).io
-    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
-  }
+  // Connect Bank interface
+  for (i <- 0 until parameter.numBanks) {
+    im2colUnit.io.bankRead(i) <> io.bankRead(i).io
+    io.bankRead(i).rob_id  := io.cmdReq.bits.rob_id
+    io.bankRead(i).bank_id := i.U
 
-  // Connect SRAM write interface - Im2col needs to write to scratchpad
-  for (i <- 0 until b.sp_banks) {
-    im2colUnit.io.sramWrite(i) <> io.sramWrite(i).io
-    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
-  }
-
-  // Handle Accumulator read interface - Im2col does not read accumulator, so tie off
-  for (i <- 0 until b.acc_banks) {
-    // For Flipped(SramReadIO), we need to drive req.valid, req.bits (outputs) and resp.ready (output)
-    io.accRead(i).io.req.valid := false.B
-    io.accRead(i).io.req.bits := DontCare
-    io.accRead(i).io.resp.ready := true.B
-    io.accRead(i).rob_id := 0.U
-  }
-
-  // Handle Accumulator write interface - Im2col does not write accumulator, so tie off
-  for (i <- 0 until b.acc_banks) {
-    // For Flipped(SramWriteIO), we need to drive req.valid and req.bits (outputs)
-    io.accWrite(i).io.req.valid := false.B
-    io.accWrite(i).io.req.bits := DontCare
-    io.accWrite(i).rob_id := 0.U
+    im2colUnit.io.bankWrite(i) <> io.bankWrite(i).io
+    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
+    io.bankWrite(i).bank_id           := i.U
+    io.bankWrite(i).io.req.bits.wmode := false.B // Im2colBall uses overwrite mode
   }
 
   // Connect Status signals - directly obtained from internal unit

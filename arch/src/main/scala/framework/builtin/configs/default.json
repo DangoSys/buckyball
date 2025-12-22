@@ -1,0 +1,21 @@
+{
+  "tlb_size": 4,
+  "rob_entries": 16,
+  "rs_out_of_order_response": true,
+  "dma_maxbytes": 64,
+  "dma_buswidth": 128,
+  "bankNum": 32,
+  "bankWidth": 128,
+  "bankCapacity": {
+    "$type": "framework.builtin.CapacityInKilobytes",
+    "kilobytes": 16
+  },
+  "sp_singleported": true,
+  "max_in_flight_mem_reqs": 16,
+  "aligned_to": 1,
+  "spad_read_delay": 0,
+  "memAddrLen": 32,
+  "numVecPE": 16,
+  "numVecThread": 16,
+  "emptyBallid": 5
+}

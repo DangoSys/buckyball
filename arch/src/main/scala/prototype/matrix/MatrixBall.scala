@@ -2,55 +2,45 @@ package prototype.matrix
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.balldomain.blink.{Blink, BallRegist}
+import examples.toy.balldomain.BallDomainParam
+import framework.balldomain.blink.{BallRegist, Blink}
 import prototype.matrix.BBFP_Control
+import prototype.matrix.configs.MatrixConfig
 
 /**
  * MatrixBall - A matrix computation Ball that complies with the Blink protocol
  */
-class MatrixBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters) extends Module with BallRegist {
-  val io = IO(new Blink)
-  val ballId = id.U
+@instantiable
+class MatrixBall(config: MatrixConfig, id: Int)(implicit p: Parameters) extends Module with BallRegist {
+  val parameter = config.ballParam
+  @public
+  val io        = IO(new Blink(parameter, config.bankEntries, config.bankWidth, config.bankMaskLen))
+  val ballId    = id.U
 
   def Blink: Blink = io
 
   // Instantiate BBFP_Control
-  val matrixUnit = Module(new BBFP_Control)
+  val matrixUnit: Instance[BBFP_Control] = Instantiate(new BBFP_Control(parameter))
 
   // Connect command interface
   matrixUnit.io.cmdReq <> io.cmdReq
   matrixUnit.io.cmdResp <> io.cmdResp
 
   // Set is_matmul_ws signal
-  matrixUnit.io.is_matmul_ws := false.B  // TODO:
+  matrixUnit.io.is_matmul_ws := false.B // TODO:
 
-  // Connect SRAM read interface - MatrixBall needs to read data from scratchpad
-  for (i <- 0 until b.sp_banks) {
-    matrixUnit.io.sramRead(i) <> io.sramRead(i).io
-    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
-  }
+  // Connect Bank interface
+  for (i <- 0 until parameter.numBanks) {
+    matrixUnit.io.sramRead(i) <> io.bankRead(i).io
+    io.bankRead(i).rob_id  := io.cmdReq.bits.rob_id
+    io.bankRead(i).bank_id := i.U
 
-  // Connect SRAM write interface - MatrixBall needs to write to scratchpad
-  for (i <- 0 until b.sp_banks) {
-    matrixUnit.io.sramWrite(i) <> io.sramWrite(i).io
-    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
-  }
-
-  // Handle Accumulator read interface - MatrixBall does not read accumulator, so tie off
-  for (i <- 0 until b.acc_banks) {
-    // For Flipped(SramReadIO), we need to drive req.valid, req.bits (outputs) and resp.ready (output)
-    io.accRead(i).io.req.valid := false.B
-    io.accRead(i).io.req.bits := DontCare
-    io.accRead(i).io.resp.ready := true.B
-    io.accRead(i).rob_id := 0.U
-  }
-
-  // Connect Accumulator write interface - MatrixBall writes results to accumulator
-  for (i <- 0 until b.acc_banks) {
-    matrixUnit.io.accWrite(i) <> io.accWrite(i).io
-    io.accWrite(i).rob_id := io.cmdReq.bits.rob_id
+    matrixUnit.io.sramWrite(i) <> io.bankWrite(i).io
+    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
+    io.bankWrite(i).bank_id           := i.U
+    io.bankWrite(i).io.req.bits.wmode := false.B // MatrixBall uses overwrite mode
   }
 
   // Connect Status signals - directly obtained from internal unit

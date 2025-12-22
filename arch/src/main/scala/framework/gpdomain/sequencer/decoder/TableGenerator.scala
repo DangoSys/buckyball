@@ -9,15 +9,20 @@ import chisel3.util.experimental.decode.TruthTable
 import scala.language.postfixOps
 
 object TableGenerator extends App {
+
   implicit class CrossAble[X](xs: Traversable[X]) {
+
     def cross[Y](ys: Traversable[Y]): Traversable[(X, Y)] = for {
       x <- xs
       y <- ys
     } yield (x, y)
+
   }
+
   implicit def bool2str(b: Boolean): String = if (b) "b1" else "b0"
 
   object LogicTable {
+
     object LogicOpcode {
       var index = 0
     }
@@ -51,13 +56,16 @@ object TableGenerator extends App {
     val table: List[(BitPat, BitPat)] = bitValue
       .cross(bitValue)
       .cross(opList)
-      .map { case ((op0, op1), op) =>
-        BitPat(toBinary(op.value)) ## BitPat(op0) ## BitPat(op1) -> BitPat(op.op(op0, op1))
+      .map {
+        case ((op0, op1), op) =>
+          BitPat(toBinary(op.value)) ## BitPat(op0) ## BitPat(op1) -> BitPat(op.op(op0, op1))
       }
       .toList
+
   }
 
   object LaneDecodeTable {
+
     object LaneUop {
       var index = 0
     }
@@ -67,14 +75,9 @@ object TableGenerator extends App {
       LaneUop.index = LaneUop.index + 1
     }
 
-    /*object SubUnitCode {
-      var index = 1
-    }
-
-    sealed trait SubUnitCode {
-      val value: Int = SubUnitCode.index
-      SubUnitCode.index = SubUnitCode.index << 1
-    }*/
+    /* object SubUnitCode { var index = 1 }
+     *
+     * sealed trait SubUnitCode { val value: Int = SubUnitCode.index SubUnitCode.index = SubUnitCode.index << 1 } */
     trait BaseObject
     trait SubUnit extends BaseObject
 
@@ -171,10 +174,9 @@ object TableGenerator extends App {
         toBinary(groupId, 2)
       ) -> BitPat(toBinary(index, 2)) ## BitPat(toBinary(mask, 4))
     }
-    val res:          TruthTable             = TruthTable(table, BitPat.dontCare(6))
+    val res: TruthTable = TruthTable(table, BitPat.dontCare(6))
   }
 
-  def toBinary(i: Int, digits: Int = 3): String = {
+  def toBinary(i: Int, digits: Int = 3): String =
     String.format("b%" + digits + "s", i.toBinaryString).replace(' ', '0')
-  }
 }

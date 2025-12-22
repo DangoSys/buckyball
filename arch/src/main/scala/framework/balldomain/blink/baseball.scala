@@ -6,6 +6,6 @@ import org.chipsalliance.cde.config.Parameters
 
 // Base trait for Ball devices
 trait BallRegist {
-  def Blink: Blink
+  def Blink:  Blink
   def ballId: UInt
 }

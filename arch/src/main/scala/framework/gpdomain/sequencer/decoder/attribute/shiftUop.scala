@@ -13,7 +13,8 @@ object shiftUop4   extends ShiftUopType
 object shiftUop6   extends ShiftUopType
 
 object ShiftUop {
-  def apply(t1DecodePattern: T1DecodePattern): Uop     = {
+
+  def apply(t1DecodePattern: T1DecodePattern): Uop = {
     Seq(
       t0 _ -> shiftUop0,
       t1 _ -> shiftUop1,
@@ -24,7 +25,8 @@ object ShiftUop {
       case (fn, tpe) if fn(t1DecodePattern) => tpe
     }.getOrElse(UopDC)
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vnsrl.wi",
       "vnsrl.wv",
@@ -35,7 +37,8 @@ object ShiftUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t1(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t1(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vsll.vi",
       "vsll.vv",
@@ -43,7 +46,8 @@ object ShiftUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t2(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t2(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vnsra.wi",
       "vnsra.wv",
@@ -54,7 +58,8 @@ object ShiftUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t4(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t4(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vssrl.vi",
       "vssrl.vv",
@@ -62,7 +67,8 @@ object ShiftUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t6(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t6(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vssra.vi",
       "vssra.vv",
@@ -70,6 +76,7 @@ object ShiftUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }
 
 case class ShiftUop(value: ShiftUopType) extends UopDecodeAttribute[ShiftUopType] {

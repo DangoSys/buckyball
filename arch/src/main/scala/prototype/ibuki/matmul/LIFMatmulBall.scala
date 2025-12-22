@@ -2,49 +2,38 @@ package prototype.ibuki.matmul
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.balldomain.blink.{Blink, BallRegist}
+import examples.toy.balldomain.BallDomainParam
+import framework.balldomain.blink.{BallRegist, Blink}
 import prototype.ibuki.matmul.LIF
 
-
-class LIFMatmulBall(id: Int)(implicit b: CustomBuckyballConfig, p: Parameters)
-    extends Module
-    with BallRegist {
-  val io = IO(new Blink)
+@instantiable
+class LIFMatmulBall(parameter: BallDomainParam, id: Int)(implicit p: Parameters) extends Module with BallRegist {
+  @public
+  val io     = IO(new Blink(parameter, parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen))
   val ballId = id.U
 
   // Satisfy BallRegist requirements
   def Blink: Blink = io
 
   // Instantiate LIF computation unit
-  private val lifUnit = Module(new LIF)
+  private val lifUnit: Instance[LIF] = Instantiate(new LIF(parameter))
 
   // Connect command interface
   lifUnit.io.cmdReq <> io.cmdReq
   lifUnit.io.cmdResp <> io.cmdResp
 
-  // Connect Scratchpad SRAM read/write interface
-  for (i <- 0 until b.sp_banks) {
-    lifUnit.io.sramRead(i) <> io.sramRead(i).io
-    io.sramRead(i).rob_id := io.cmdReq.bits.rob_id
-    lifUnit.io.sramWrite(i) <> io.sramWrite(i).io
-    io.sramWrite(i).rob_id := io.cmdReq.bits.rob_id
-  }
+  // Connect Bank read/write interface
+  for (i <- 0 until parameter.numBanks) {
+    lifUnit.io.sramRead(i) <> io.bankRead(i).io
+    io.bankRead(i).rob_id  := io.cmdReq.bits.rob_id
+    io.bankRead(i).bank_id := i.U
 
-  // Accumulator read interface (LIF does not access accumulator, tie-off)
-  for (i <- 0 until b.acc_banks) {
-    io.accRead(i).io.req.valid := false.B
-    io.accRead(i).io.req.bits := DontCare
-    io.accRead(i).io.resp.ready := true.B
-    io.accRead(i).rob_id := 0.U
-  }
-
-  // Accumulator write interface (LIF does not write accumulator, tie-off)
-  for (i <- 0 until b.acc_banks) {
-    io.accWrite(i).io.req.valid := false.B
-    io.accWrite(i).io.req.bits := DontCare
-    io.accWrite(i).rob_id := 0.U
+    lifUnit.io.sramWrite(i) <> io.bankWrite(i).io
+    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
+    io.bankWrite(i).bank_id           := i.U
+    io.bankWrite(i).io.req.bits.wmode := false.B // LIFMatmulBall uses overwrite mode
   }
 
   // Pass through status signals

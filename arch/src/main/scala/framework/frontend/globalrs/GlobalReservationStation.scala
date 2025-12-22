@@ -3,75 +3,90 @@ package framework.frontend.globalrs
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.decoder.{PostGDCmd, DomainId}
+import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
 import freechips.rocketchip.tile.RoCCResponse
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
-class GlobalRobEntry(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
+class GlobalRobEntry(rob_entries: Int)(implicit p: Parameters) extends Bundle {
   val cmd    = new PostGDCmd
-  val rob_id = UInt(log2Up(b.rob_entries).W)
+  val rob_id = UInt(log2Up(rob_entries).W)
 }
 
 // Global RS issue interface
-class GlobalRsIssue(implicit b: CustomBuckyballConfig, p: Parameters) extends GlobalRobEntry
+class GlobalRsIssue(rob_entries: Int)(implicit p: Parameters) extends GlobalRobEntry(rob_entries)
 
 // Global RS completion interface
-class GlobalRsComplete(implicit b: CustomBuckyballConfig, p: Parameters) extends Bundle {
-  val rob_id = UInt(log2Up(b.rob_entries).W)
+class GlobalRsComplete(rob_entries: Int)(implicit p: Parameters) extends Bundle {
+  val rob_id = UInt(log2Up(rob_entries).W)
 }
 
 // No additional interface Bundle needed, defined directly in IO
 
+case class GlobalReservationStationParam(
+  rob_entries:              Int,
+  rs_out_of_order_response: Boolean)
+    extends SerializableModuleParameter
+
 // Global reservation station - between GlobalDecoder and each Domain
-class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
+@instantiable
+class GlobalReservationStation(val parameter: GlobalReservationStationParam)(implicit p: Parameters)
+    extends Module
+    with SerializableModule[GlobalReservationStationParam] {
+
+  @public
   val io = IO(new Bundle {
     // GlobalDecoder -> Global RS
     val global_decode_cmd_i = Flipped(new DecoupledIO(new PostGDCmd))
-
-    // Global RS -> BallDomain (single channel)
-    val ball_issue_o = Decoupled(new GlobalRsIssue)
-
-    // Global RS -> MemDomain (single channel)
-    val mem_issue_o = Decoupled(new GlobalRsIssue)
-
-    // Global RS -> GpDomain (single channel)
-    val gp_issue_o = Decoupled(new GlobalRsIssue)
-
-    // BallDomain -> Global RS (single channel)
-    val ball_complete_i = Flipped(Decoupled(new GlobalRsComplete))
-
-    // MemDomain -> Global RS (single channel)
-    val mem_complete_i = Flipped(Decoupled(new GlobalRsComplete))
-
-    // GpDomain -> Global RS (single channel)
-    val gp_complete_i = Flipped(Decoupled(new GlobalRsComplete))
+    // Global RS -> BallDomain
+    //           -> MemDomain
+    //           -> GpDomain
+    val ball_issue_o        = Decoupled(new GlobalRsIssue(parameter.rob_entries))
+    val mem_issue_o         = Decoupled(new GlobalRsIssue(parameter.rob_entries))
+    val gp_issue_o          = Decoupled(new GlobalRsIssue(parameter.rob_entries))
+    // BallDomain -> Global RS
+    // MemDomain  ->
+    // GpDomain   ->
+    val ball_complete_i     = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
+    val mem_complete_i      = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
+    val gp_complete_i       = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
 
     // RoCC response
     val rs_rocc_o = new Bundle {
-      val resp  = new DecoupledIO(new RoCCResponse()(p))
-      val busy  = Output(Bool())
+      val resp = new DecoupledIO(new RoCCResponse)
+      val busy = Output(Bool())
     }
+
   })
 
-  val rob = Module(new GlobalROB)
+  // Convert GlobalReservationStationParam to FrontendParam for GlobalROB
+  import framework.frontend.FrontendParam
+
+  val frontendParam = FrontendParam(
+    rob_entries = parameter.rob_entries,
+    rs_out_of_order_response = parameter.rs_out_of_order_response
+  )
+
+  val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(frontendParam))
 
 // -----------------------------------------------------------------------------
 // Fence handling - fence instructions require ROB to be empty before execution
 // -----------------------------------------------------------------------------
   val fenceActive = RegInit(false.B)
   // Cannot use fire, would form a loop
-  val func7 = io.global_decode_cmd_i.bits.raw_cmd.inst.funct
-  val isFenceCmd = io.global_decode_cmd_i.valid && (func7 === FENCE_BITPAT)
-  val robEmpty = rob.io.empty
+  val func7       = io.global_decode_cmd_i.bits.raw_cmd.inst.funct
+  val isFenceCmd  = io.global_decode_cmd_i.valid && (func7 === FENCE_BITPAT)
+  val robEmpty    = rob.io.empty
 
   // Fence state machine: only activate when fence instruction is accepted (fire)
-  when (io.global_decode_cmd_i.fire && isFenceCmd && !fenceActive) {
+  when(io.global_decode_cmd_i.fire && isFenceCmd && !fenceActive) {
     fenceActive := true.B
   }
-  when (fenceActive && robEmpty) {
+  when(fenceActive && robEmpty) {
     fenceActive := false.B
   }
 
@@ -109,36 +124,36 @@ class GlobalReservationStation(implicit b: CustomBuckyballConfig, p: Parameters)
   // Set ROB ready signal - can only issue when target domain is ready
   rob.io.issue.ready :=
     (is_ball_domain && io.ball_issue_o.ready) ||
-    (is_mem_domain  && io.mem_issue_o.ready) ||
-    (is_gp_domain   && io.gp_issue_o.ready)
+      (is_mem_domain && io.mem_issue_o.ready) ||
+      (is_gp_domain && io.gp_issue_o.ready)
 
 // -----------------------------------------------------------------------------
 // Completion signal processing
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.rob_entries).W), 3))
+  val completeArb = Module(new Arbiter(UInt(log2Up(parameter.rob_entries).W), 3))
 
   // Connect Ball, Mem, and GP domain completion signals to arbiter
   completeArb.io.in(0).valid := io.ball_complete_i.valid
   completeArb.io.in(0).bits  := io.ball_complete_i.bits.rob_id
-  io.ball_complete_i.ready := completeArb.io.in(0).ready
+  io.ball_complete_i.ready   := completeArb.io.in(0).ready
 
   completeArb.io.in(1).valid := io.mem_complete_i.valid
   completeArb.io.in(1).bits  := io.mem_complete_i.bits.rob_id
-  io.mem_complete_i.ready := completeArb.io.in(1).ready
+  io.mem_complete_i.ready    := completeArb.io.in(1).ready
 
   completeArb.io.in(2).valid := io.gp_complete_i.valid
   completeArb.io.in(2).bits  := io.gp_complete_i.bits.rob_id
-  io.gp_complete_i.ready := completeArb.io.in(2).ready
+  io.gp_complete_i.ready     := completeArb.io.in(2).ready
 
   // Decide whether to filter completion signals based on configuration
-  if (b.rs_out_of_order_response) {
+  if (parameter.rs_out_of_order_response) {
     // Out-of-order mode: accept all completion signals, ROB commits out-of-order internally
     rob.io.complete <> completeArb.io.out
   } else {
     // Sequential mode: only accept completion signals where rob_id == head_ptr
     val isHeadComplete = completeArb.io.out.bits === rob.io.head_ptr
-    rob.io.complete.valid := completeArb.io.out.valid && isHeadComplete
-    rob.io.complete.bits  := completeArb.io.out.bits
+    rob.io.complete.valid    := completeArb.io.out.valid && isHeadComplete
+    rob.io.complete.bits     := completeArb.io.out.bits
     completeArb.io.out.ready := rob.io.complete.ready && isHeadComplete
   }
 

@@ -100,7 +100,7 @@ class BuckyballCustomConfig(
 **System configuration**:
 ```scala
 class BuckyballToyConfig extends Config(
-  new framework.rocket.WithNBuckyballCores(1) ++
+  new framework.core.rocket.WithNBuckyballCores(1) ++
   new BuckyballCustomConfig(CustomBuckyballConfig()) ++
   new chipyard.config.WithSystemBusWidth(128) ++
   new WithCustomBootROM ++

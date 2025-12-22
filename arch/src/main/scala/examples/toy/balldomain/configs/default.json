@@ -1,0 +1,9 @@
+{
+  "rob_entries": 16,
+  "numBanks": 32,
+  "bbusChannel": 8,
+  "bankEntries": 128,
+  "bankWidth": 128,
+  "bankMaskLen": 16,
+  "emptyBallid": 5
+}
