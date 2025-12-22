@@ -12,11 +12,9 @@ import org.chipsalliance.diplomacy.nodes._
 abstract class BondWrapper(implicit p: Parameters) extends LazyModule {
   val bondName = "vvv"
 
-  def to[T](name: String)(body: => T): T = {
-    LazyScope(s"bond_to_${name}", s"Bond_${bondName}_to_${name}") { body }
-  }
+  def to[T](name: String)(body: => T): T =
+    LazyScope(s"bond_to_$name", s"Bond_${bondName}_to_$name")(body)
 
-  def from[T](name: String)(body: => T): T = {
-    LazyScope(s"bond_from_${name}", s"Bond_${bondName}_from_${name}") { body }
-  }
+  def from[T](name: String)(body: => T): T =
+    LazyScope(s"bond_from_$name", s"Bond_${bondName}_from_$name")(body)
 }

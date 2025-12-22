@@ -9,14 +9,16 @@ trait ZeroUOPType extends Uop
 object zeroUop0   extends ZeroUOPType
 
 object ZeroUOP {
-  def apply(t1DecodePattern: T1DecodePattern): Uop     = {
+
+  def apply(t1DecodePattern: T1DecodePattern): Uop = {
     Seq(
       t0 _ -> zeroUop0
     ).collectFirst {
       case (fn, tpe) if fn(t1DecodePattern) => tpe
     }.getOrElse(UopDC)
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vcompress.vm",
       "vfslide1down.vf",
@@ -41,4 +43,5 @@ object ZeroUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }

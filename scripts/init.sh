@@ -158,12 +158,12 @@ if run_step "9"; then
   ./install-mill.sh
 fi
 
-# if run_step "10"; then
-#   begin_step "10" "pre-compile buckyball arch code"
-#   source ${BBDIR}/env.sh
-#   cd ${BBDIR}/
-#   bbdev verilator --verilog
-# fi
+if run_step "10"; then
+  begin_step "10" "install fmt tools"
+  source ${BBDIR}/env.sh
+  cd ${BBDIR}
+  ${BBDIR}/scripts/install-scalafmt.sh
+fi
 
 if run_step "11"; then
   begin_step "11" "Install pre-commit"

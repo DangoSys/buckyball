@@ -45,9 +45,10 @@ class T1InstructionOM(
   attributes      := attributesIn
 }
 
-/** A case class that should wrap all Vector Instructions. This is used to store the attribute for Vector Instruction
-  * under the T1 uArch. It generates [[chisel3.util.experimental.decode.TruthTable]], as well as documentation field.
-  */
+/**
+ * A case class that should wrap all Vector Instructions. This is used to store the attribute for Vector Instruction
+ * under the T1 uArch. It generates [[chisel3.util.experimental.decode.TruthTable]], as well as documentation field.
+ */
 case class T1DecodePattern(instruction: Instruction, param: DecoderParam) extends DecodePattern {
   override def bitPat: BitPat = BitPat("b" + instruction.encoding.toString)
 
@@ -189,4 +190,5 @@ case class T1DecodePattern(instruction: Instruction, param: DecoderParam) extend
     )
     obj.getPropertyReference
   }
+
 }

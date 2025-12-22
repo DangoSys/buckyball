@@ -8,6 +8,7 @@ package framework.gpdomain.sequencer.decoder
  * Provides instruction definitions without external dependencies
  */
 object InstructionEncoding {
+
   /** Like chisel3.BitPat, this stores the instruction encoding */
   case class Encoding(value: BigInt, mask: BigInt) {
     def toBitMask(bit_pat: String) =
@@ -21,24 +22,27 @@ object InstructionEncoding {
     def fromString(str: String): Encoding = {
       require(str.length == 32, s"Encoding string must be 32 bits, got ${str.length}")
       Encoding(
-        str.reverse.zipWithIndex.map { case (c, i) =>
-          c match {
-            case '1' => BigInt(1) << i
-            case '0' => BigInt(0)
-            case '?' => BigInt(0)
-            case _ => throw new IllegalArgumentException(s"Invalid encoding character: $c")
-          }
+        str.reverse.zipWithIndex.map {
+          case (c, i) =>
+            c match {
+              case '1' => BigInt(1) << i
+              case '0' => BigInt(0)
+              case '?' => BigInt(0)
+              case _   => throw new IllegalArgumentException(s"Invalid encoding character: $c")
+            }
         }.sum,
-        str.reverse.zipWithIndex.map { case (c, i) =>
-          c match {
-            case '1' => BigInt(1) << i
-            case '0' => BigInt(1) << i
-            case '?' => BigInt(0)
-            case _ => throw new IllegalArgumentException(s"Invalid encoding character: $c")
-          }
+        str.reverse.zipWithIndex.map {
+          case (c, i) =>
+            c match {
+              case '1' => BigInt(1) << i
+              case '0' => BigInt(1) << i
+              case '?' => BigInt(0)
+              case _   => throw new IllegalArgumentException(s"Invalid encoding character: $c")
+            }
         }.sum
       )
     }
+
   }
 
   case class Arg(name: String, msb: Int, lsb: Int) {
@@ -56,20 +60,20 @@ object InstructionEncoding {
   }
 
   case class Instruction(
-      name: String,
-      encoding: Encoding,
-      args: Seq[Arg],
-      instructionSets: Seq[InstructionSet],
-      pseudoFrom: Option[Instruction],
-      ratified: Boolean,
-      custom: Boolean
-  ) {
+    name:            String,
+    encoding:        Encoding,
+    args:            Seq[Arg],
+    instructionSets: Seq[InstructionSet],
+    pseudoFrom:      Option[Instruction],
+    ratified:        Boolean,
+    custom:          Boolean) {
     def instructionSet: InstructionSet = instructionSets.head
   }
 
   object Instruction {
     implicit val rw: upickle.default.ReadWriter[Instruction] = upickle.default.macroRW
   }
+
 }
 
 /**
@@ -80,22 +84,22 @@ object RVVInstructions {
   import InstructionEncoding._
 
   // Common argument definitions
-  val vd = Arg("vd", 11, 7)
-  val vs1 = Arg("vs1", 19, 15)
-  val vs2 = Arg("vs2", 24, 20)
-  val vs3 = Arg("vs3", 11, 7)
-  val vm = Arg("vm", 25, 25)
-  val rs1 = Arg("rs1", 19, 15)
-  val rs2 = Arg("rs2", 24, 20)
-  val rd = Arg("rd", 11, 7)
-  val zimm5 = Arg("zimm5", 19, 15)
+  val vd     = Arg("vd", 11, 7)
+  val vs1    = Arg("vs1", 19, 15)
+  val vs2    = Arg("vs2", 24, 20)
+  val vs3    = Arg("vs3", 11, 7)
+  val vm     = Arg("vm", 25, 25)
+  val rs1    = Arg("rs1", 19, 15)
+  val rs2    = Arg("rs2", 24, 20)
+  val rd     = Arg("rd", 11, 7)
+  val zimm5  = Arg("zimm5", 19, 15)
   val zimm10 = Arg("zimm10", 29, 20)
   val zimm11 = Arg("zimm11", 30, 20)
-  val simm5 = Arg("simm5", 19, 15)
-  val nf = Arg("nf", 31, 29)
+  val simm5  = Arg("simm5", 19, 15)
+  val nf     = Arg("nf", 31, 29)
 
   // Instruction set definitions
-  val rv_v = InstructionSet("rv_v")
+  val rv_v    = InstructionSet("rv_v")
   val rv_zvbb = InstructionSet("rv_zvbb")
 
   /**
@@ -104,10 +108,10 @@ object RVVInstructions {
    */
   def allInstructions: Seq[Instruction] = {
     configInstructions ++
-    integerArithmeticInstructions ++
-    loadStoreInstructions ++
-    maskInstructions ++
-    permuteInstructions
+      integerArithmeticInstructions ++
+      loadStoreInstructions ++
+      maskInstructions ++
+      permuteInstructions
   }
 
   // ============================================================================
@@ -116,7 +120,10 @@ object RVVInstructions {
   def configInstructions: Seq[Instruction] = Seq(
     Instruction(
       name = "vsetvli",
-      encoding = Encoding.fromString("0????????????????111?????1010111"), // 31=0, zimm11(30..20), rs1(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
+      encoding =
+        Encoding.fromString(
+          "0????????????????111?????1010111"
+        ), // 31=0, zimm11(30..20), rs1(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
       args = Seq(rd, rs1, zimm11),
       instructionSets = Seq(rv_v),
       pseudoFrom = None,
@@ -125,7 +132,10 @@ object RVVInstructions {
     ),
     Instruction(
       name = "vsetivli",
-      encoding = Encoding.fromString("11???????????????111?????1010111"), // 31..30=11, zimm10(29..20), zimm5(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
+      encoding =
+        Encoding.fromString(
+          "11???????????????111?????1010111"
+        ), // 31..30=11, zimm10(29..20), zimm5(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
       args = Seq(rd, zimm10, zimm5),
       instructionSets = Seq(rv_v),
       pseudoFrom = None,
@@ -134,7 +144,10 @@ object RVVInstructions {
     ),
     Instruction(
       name = "vsetvl",
-      encoding = Encoding.fromString("1000000??????????111?????1010111"), // 31=1, 30..25=000000, rs2(24..20), rs1(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
+      encoding =
+        Encoding.fromString(
+          "1000000??????????111?????1010111"
+        ), // 31=1, 30..25=000000, rs2(24..20), rs1(19..15), funct3=111(14..12), rd(11..7), opcode=1010111(6..0)
       args = Seq(rd, rs1, rs2),
       instructionSets = Seq(rv_v),
       pseudoFrom = None,
@@ -175,7 +188,6 @@ object RVVInstructions {
       ratified = true,
       custom = false
     ),
-
     // VSUB variants
     Instruction(
       name = "vsub.vv",
@@ -195,7 +207,6 @@ object RVVInstructions {
       ratified = true,
       custom = false
     ),
-
     // VMUL variants
     Instruction(
       name = "vmul.vv",
@@ -224,7 +235,10 @@ object RVVInstructions {
     // Unit-stride loads
     Instruction(
       name = "vle8.v",
-      encoding = Encoding.fromString("???000?00000?????000?????0000111"), // nf, mew=0, mop=00, lumop=00000, funct3=000, opcode=0000111
+      encoding =
+        Encoding.fromString(
+          "???000?00000?????000?????0000111"
+        ),                                                                // nf, mew=0, mop=00, lumop=00000, funct3=000, opcode=0000111
       args = Seq(vd, rs1, vm),
       instructionSets = Seq(rv_v),
       pseudoFrom = None,
@@ -258,7 +272,6 @@ object RVVInstructions {
       ratified = true,
       custom = false
     ),
-
     // Unit-stride stores
     Instruction(
       name = "vse8.v",
@@ -354,4 +367,5 @@ object RVVInstructions {
       custom = false
     )
   )
+
 }

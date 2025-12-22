@@ -9,7 +9,7 @@ abstract class Arithmetic[T <: Data] {
   def sub(x: T, y: T): T
   def mul(x: T, y: T): T
   def div(x: T, y: T): T
-  def gt(x: T, y: T): Bool
+  def gt(x:  T, y: T): Bool
 }
 
 // UInt arithmetic implementation
@@ -18,15 +18,17 @@ class UIntArithmetic extends Arithmetic[UInt] {
   override def sub(x: UInt, y: UInt): UInt = x - y
   override def mul(x: UInt, y: UInt): UInt = x * y
   override def div(x: UInt, y: UInt): UInt = Mux(y =/= 0.U, x / y, 0.U)
-  override def gt(x: UInt, y: UInt): Bool = x > y
+  override def gt(x:  UInt, y: UInt): Bool = x > y
 }
 
 // Factory
 object ArithmeticFactory {
+
   def createArithmetic[T <: Data](dataType: T): Arithmetic[T] = {
     dataType match {
       case _: UInt => new UIntArithmetic().asInstanceOf[Arithmetic[T]]
       case _ => throw new IllegalArgumentException(s"Unsupported data type: ${dataType.getClass}")
     }
   }
+
 }

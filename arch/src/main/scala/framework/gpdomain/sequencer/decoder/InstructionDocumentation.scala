@@ -5,12 +5,14 @@ package framework.gpdomain.sequencer.decoder
 
 import framework.gpdomain.sequencer.decoder.InstructionEncoding.Instruction
 
-/** Generate documentation for each instructions for T1. The documentation should contain the behavior for instruction
-  * in a specific configuration in T1.
-  * @todo
-  *   should it be a post process at omreader?
-  */
+/**
+ * Generate documentation for each instructions for T1. The documentation should contain the behavior for instruction
+ * in a specific configuration in T1.
+ * @todo
+ *   should it be a post process at omreader?
+ */
 case class InstructionDocumentation(instruction: Instruction, param: DecoderParam) {
+
   override def toString: String = instruction.name match {
     case "vaadd.vv"          => "TODO!"
     case "vaadd.vx"          => "TODO!"
@@ -462,4 +464,5 @@ case class InstructionDocumentation(instruction: Instruction, param: DecoderPara
     case "vtdiscard"         => "TODO!"
     case _                   => "TODO"
   }
+
 }

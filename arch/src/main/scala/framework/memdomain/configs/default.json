@@ -1,0 +1,10 @@
+{
+  "bankNum": 32,
+  "bankWidth": 128,
+  "bankEntries": 128,
+  "bankMaskLen": 16,
+  "tlb_size": 4,
+  "rob_entries": 16,
+  "dma_maxbytes": 64,
+  "bankChannel": 8
+}

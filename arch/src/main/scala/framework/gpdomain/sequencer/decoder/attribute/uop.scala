@@ -6,6 +6,7 @@ package framework.gpdomain.sequencer.decoder.attribute
 import framework.gpdomain.sequencer.decoder.T1DecodePattern
 
 object DecoderUop {
+
   def apply(t1DecodePattern: T1DecodePattern): DecoderUop = {
     val tpe: Option[DecoderUop] = Seq(
       isDivider.y(t1DecodePattern)    -> DivUOP(t1DecodePattern),
@@ -23,6 +24,7 @@ object DecoderUop {
     require(tpe.size <= 1)
     tpe.getOrElse(DecoderUop(UopDC))
   }
+
 }
 
 case class DecoderUop(value: Uop) extends UopDecodeAttribute[Uop] {

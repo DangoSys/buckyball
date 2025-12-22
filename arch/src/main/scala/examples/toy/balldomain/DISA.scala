@@ -5,7 +5,6 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 
-
 class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
   val cmd = new RoCCCommand
 }

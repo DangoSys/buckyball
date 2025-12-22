@@ -45,12 +45,12 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
-  # # Scala formatting with scalafmt
-  # - repo: local
-  #   hooks:
-  #     - id: scalafmt-check
-  #       name: Check Scala formatting with scalafmt
-  #       entry: bash -c 'cd arch && scalafmt --test'
-  #       language: system
-  #       files: ^arch/.*\.scala$
-  #       pass_filenames: false
+  # Scala formatting with scalafmt
+  - repo: local
+    hooks:
+      - id: scalafmt
+        name: Format Scala code with scalafmt
+        entry: bash -c 'cd arch && source ../env.sh && scalafmt --config .scalafmt.conf src/main/scala'
+        language: system
+        files: ^arch/src/main/scala/.*\.scala$
+        pass_filenames: false

@@ -13,7 +13,8 @@ object divUop9   extends DivUOPType
 object divUop10  extends DivUOPType
 
 object DivUOP {
-  def apply(t1DecodePattern: T1DecodePattern): Uop     = {
+
+  def apply(t1DecodePattern: T1DecodePattern): Uop = {
     Seq(
       t0 _  -> divUop0,
       t1 _  -> divUop1,
@@ -24,7 +25,8 @@ object DivUOP {
       case (fn, tpe) if fn(t1DecodePattern) => tpe
     }.getOrElse(UopDC)
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vdiv.vv",
       "vdiv.vx",
@@ -33,7 +35,8 @@ object DivUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t1(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t1(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vrem.vv",
       "vrem.vx",
@@ -42,23 +45,27 @@ object DivUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t8(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t8(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfdiv.vf",
       "vfdiv.vv"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t9(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t9(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfsqrt.v"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t10(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t10(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfrdiv.vf"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }

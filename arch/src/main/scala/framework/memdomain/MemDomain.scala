@@ -2,124 +2,173 @@ package framework.memdomain
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
-import framework.memdomain.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
-import framework.memdomain.mem.{SramReadIO, SramWriteIO, Scratchpad}
-import framework.memdomain.{MemLoader, MemStorer, MemController}
-import framework.memdomain.rs.MemReservationStation
-import framework.memdomain.tlb.{BBTLBCluster, BBTLBIO, BBTLBExceptionIO}
-import framework.memdomain.pmc.MemCyclePMC
+
+import framework.balldomain.blink.{BankRead, BankWrite}
 import freechips.rocketchip.tilelink.TLEdgeOut
 import freechips.rocketchip.rocket.TLBPTWIO
-import framework.frontend.globalrs.{GlobalRsIssue, GlobalRsComplete}
-import framework.balldomain.blink.{SramReadWithInfo, SramWriteWithInfo}
-import framework.switcher.{ToPhysicalLine, ToVirtualLine}
+import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 
-class MemDomain(implicit b: CustomBuckyballConfig, p: Parameters, edge: TLEdgeOut) extends Module {
-  private val numBanks = b.sp_banks + b.acc_banks
+import framework.memdomain.frontend.MemController
+import framework.memdomain.frontend.outside_channel.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
+import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBIO}
+
+import framework.memdomain.midend.MemScheduler
+import framework.memdomain.backend.MemManager
+
+object MemDomainParam {
+  implicit def rw: upickle.default.ReadWriter[MemDomainParam] = upickle.default.macroRW
+
+  /**
+   * Load from JSON file
+   */
+  def fromJson(path: String): MemDomainParam = {
+    val jsonStr = scala.io.Source.fromFile(path).mkString
+    upickle.default.read[MemDomainParam](jsonStr)
+  }
+
+  /**
+   * Generate from global config
+   */
+  def fromGlobal(global: framework.builtin.BaseConfig): MemDomainParam = {
+    MemDomainParam(
+      bankNum = global.bankNum,
+      bankWidth = global.bankWidth,
+      bankEntries = global.bankEntries,
+      bankMaskLen = global.bankMaskLen,
+      tlb_size = global.tlb_size,
+      rob_entries = global.rob_entries,
+      dma_maxbytes = global.dma_maxbytes,
+      memAddrLen = global.memAddrLen,
+      bankChannel = 8 // Default value
+    )
+  }
+
+}
+
+case class MemDomainParam(
+  bankNum:      Int,
+  bankWidth:    Int,
+  bankEntries:  Int,
+  bankMaskLen:  Int,
+  tlb_size:     Int,
+  rob_entries:  Int,
+  dma_maxbytes: Int,
+  memAddrLen:   Int,
+  bankChannel:  Int)
+    extends SerializableModuleParameter {
+  override def toString: String =
+    s"""MemDomainParam
+       |  Bank num: $bankNum
+       |  Bank width: $bankWidth bits
+       |  Bank entries: $bankEntries
+       |  Bank mask length: $bankMaskLen
+       |  TLB size: $tlb_size
+       |  ROB entries: $rob_entries
+       |  DMA max bytes: $dma_maxbytes
+       |  Mem addr len: $memAddrLen
+       |  Bank channel: $bankChannel
+       |""".stripMargin
+}
+
+@instantiable
+class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Parameters)
+    extends Module
+    with SerializableModule[MemDomainParam] {
+
+  @public
   val io = IO(new Bundle {
-    // Issue interface from global RS (single channel)
-    val global_issue_i = Flipped(Decoupled(new GlobalRsIssue))
+    // -------------------------------------------------
+    // Command Channel
+    // -------------------------------------------------
+    // global RS -> MemDomain
+    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(parameter.rob_entries)(p)))
+    // MemDomain -> global RS
+    val global_complete_o = Decoupled(new GlobalRsComplete(parameter.rob_entries)(p))
+    val busy              = Output(Bool())
 
-    // Report completion to global RS (single channel)
-    val global_complete_o = Decoupled(new GlobalRsComplete)
-
-    // SRAM interface for interaction with Ball Domain
+    // -------------------------------------------------
+    // Inside Channel
+    // -------------------------------------------------
+    // Bank interface for interaction with Ball Domain
     val ballDomain = new Bundle {
-      val sramRead = Vec(numBanks, new SramReadWithInfo(b.spad_bank_entries, b.spad_w))
-      val sramWrite = Vec(numBanks, new SramWriteWithInfo(b.spad_bank_entries, b.spad_w, b.spad_mask_len))
+
+      val bankRead = Vec(
+        parameter.bankNum,
+        new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.bankNum)
+      )
+
+      val bankWrite = Vec(
+        parameter.bankNum,
+        new BankWrite(
+          parameter.bankEntries,
+          parameter.bankWidth,
+          parameter.bankMaskLen,
+          parameter.rob_entries,
+          parameter.bankNum
+        )
+      )
+
     }
 
-    // DMA interface
+    // -------------------------------------------------
+    // Outside Channel
+    // -------------------------------------------------
     val dma = new Bundle {
+
       val read = new Bundle {
-        val req = Decoupled(new BBReadRequest())
-        val resp = Flipped(Decoupled(new BBReadResponse(b.spad_w)))
+        val req  = Decoupled(new BBReadRequest())
+        val resp = Flipped(Decoupled(new BBReadResponse(parameter.bankWidth)))
       }
+
       val write = new Bundle {
-        val req = Decoupled(new BBWriteRequest(b.spad_w))
+        val req  = Decoupled(new BBWriteRequest(parameter.bankWidth))
         val resp = Flipped(Decoupled(new BBWriteResponse))
       }
+
     }
 
-    // TLB interface - exposed externally for DMA use
-    val tlb = Vec(2, Flipped(new BBTLBIO))
-
-    // PTW interface - needs to connect to upper level PTW (shared TLB has only 1 PTW)
-    val ptw = Vec(1, new TLBPTWIO)
-
-    // TLB exception interface - exposed to upper level for handling flush, etc. (shared TLB has only 1 exp)
+    val tlb    = Vec(2, Flipped(new BBTLBIO))
+    val ptw    = Vec(1, new TLBPTWIO)
     val tlbExp = Vec(1, new BBTLBExceptionIO)
-
-    // Busy signal
-    val busy = Output(Bool())
   })
 
-  val memController = Module(new MemController)
-  val translator = Module(new Translator)
-  val spad = Module(new Scratchpad())
+  val frontend: Instance[MemController] = Instantiate(new MemController(parameter)(edge))
+  val midend:   Instance[MemScheduler]  = Instantiate(new MemScheduler(parameter))
+  val backend:  Instance[MemManager]    = Instantiate(new MemManager(parameter))
 
-// -----------------------------------------------------------------------------
-// Global RS -> MemDecoder
-// -----------------------------------------------------------------------------
-  memController.io.global_issue_i.valid := io.global_issue_i.valid
-  memController.io.global_issue_i.bits.cmd  := io.global_issue_i.bits.cmd
-  io.global_issue_i.ready := memController.io.global_issue_i.ready
+  // -------------------------------------------------
+  // Connection with outside (all in frontend)
+  // -------------------------------------------------
+  // Global RS interface
+  frontend.io.global_issue_i <> io.global_issue_i
+  frontend.io.global_complete_o <> io.global_complete_o
+  frontend.io.busy := io.busy
 
-// -----------------------------------------------------------------------------
-// MemDecoder -> MemReservationStation
-// -----------------------------------------------------------------------------
-  // Connect decoded instruction and global rob_id
-  memController.io.global_issue_i.bits.rob_id := io.global_issue_i.bits.rob_id
+  // DMA interface
+  frontend.io.intradma <> io.dma
 
+  // TLB interface
+  frontend.io.tlb <> io.tlb
+  frontend.io.ptw <> io.ptw
+  frontend.io.tlbExp <> io.tlbExp
 
-  // Connect MemLoader and MemStorer to DMA
-  memController.io.intradma.read.req <> io.dma.read.req
-  io.dma.read.resp <> memController.io.intradma.read.resp
-  memController.io.intradma.write.req <> io.dma.write.req
-  io.dma.write.resp <> memController.io.intradma.write.resp
+  // Ball Domain interface (connects to frontend's interdma)
+  frontend.io.interdma.bankRead <> io.ballDomain.bankRead
+  frontend.io.interdma.bankWrite <> io.ballDomain.bankWrite
 
-  // Connect TLB - now using internal BBTLBCluster
-  io.tlb <> memController.io.tlb
-  io.ptw <> memController.io.ptw
+  // -------------------------------------------------
+  // Internal Connection (frontend - midend - backend)
+  // -------------------------------------------------
+  // Frontend to Midend: route interdma requests to scheduler
+  midend.io.frontend.bankRead <> frontend.io.interdma.bankRead
+  midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
 
-  // Connect exception interface - note direction: internal TLB's exp is Output, external interface is Input
-  memController.io.tlbExp <> io.tlbExp
-
-  // Connect MemLoader and MemStorer to MemController's DMA interface
- 
-  val toVirtualLines0 = Module(new ToVirtualLine()(b, p))
-
-  memController.io.interdma.sramwrite <> toVirtualLines0.io.sramWrite_i
-  memController.io.interdma.accwrite <> toVirtualLines0.io.accWrite_i
-  memController.io.interdma.sramread <> toVirtualLines0.io.sramRead_i
-  memController.io.interdma.accread <> toVirtualLines0.io.accRead_i
-
-  translator.io.dma_in.sramread  <> toVirtualLines0.io.sramRead_o
-  translator.io.dma_in.sramwrite <> toVirtualLines0.io.sramWrite_o
-
-  translator.io.dma_out.sramread <> spad.io.dma.sramread
-  translator.io.dma_out.sramwrite <> spad.io.dma.sramwrite
-
-  // ToPhysical interface
-  // Ball Domain SRAM interface connected to MemController's Ball Domain interface
-
-  translator.io.exec_in.sramread  <> io.ballDomain.sramRead
-  translator.io.exec_in.sramwrite <> io.ballDomain.sramWrite
-
-  translator.io.exec_out.sramread <> spad.io.exec.sramread
-  translator.io.exec_out.sramwrite <> spad.io.exec.sramwrite
-
-  // translator.io.dma_return := DontCare 
-  // translator.io.exec_return := DontCare
-  
-  // Completion signal connected to global RS
-  io.global_complete_o <> memController.io.global_complete_o
-
-  // Busy signal
-  // Simple busy signal
-  io.busy := memController.io.busy
+  // Midend to Backend: route scheduled requests to memory manager
+  midend.io.mem_req <> backend.io.mem_req
 }

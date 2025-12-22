@@ -8,18 +8,21 @@ import chisel3.properties.{ClassType, Property}
 
 package object attribute {
 
-  /** Attribute that will be encode the property of an instruction in the uarch and will be additional encode into the
-    * object module, which will be used to provide metadata for verifications.
-    */
+  /**
+   * Attribute that will be encode the property of an instruction in the uarch and will be additional encode into the
+   * object module, which will be used to provide metadata for verifications.
+   */
   trait DecodeAttribute[T] {
     val identifier: String = this.getClass.getSimpleName.replace("$", "")
     val value:       T
     val description: String
+
     // Property of this attribute
     def om: Property[ClassType] = {
       val obj = Instantiate(new T1DecodeAttributeOM(identifier, description, value.toString))
       obj.getPropertyReference
     }
+
   }
 
   sealed trait TriState
