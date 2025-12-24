@@ -14,7 +14,8 @@ object mulUop10  extends MulUOPType
 object mulUop14  extends MulUOPType
 
 object MulUOP {
-  def apply(t1DecodePattern: T1DecodePattern): Uop     = {
+
+  def apply(t1DecodePattern: T1DecodePattern): Uop = {
     Seq(
       t0 _  -> mulUop0,
       t1 _  -> mulUop1,
@@ -26,7 +27,8 @@ object MulUOP {
       case (fn, tpe) if fn(t1DecodePattern) => tpe
     }.getOrElse(UopDC)
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmul.vv",
       "vmul.vx",
@@ -41,14 +43,16 @@ object MulUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t1(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t1(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmadd.vv",
       "vmadd.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t3(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t3(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmulh.vv",
       "vmulh.vx",
@@ -59,7 +63,8 @@ object MulUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t5(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t5(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmacc.vv",
       "vmacc.vx",
@@ -73,20 +78,23 @@ object MulUOP {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t10(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t10(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vnmsub.vv",
       "vnmsub.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t14(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t14(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vnmsac.vv",
       "vnmsac.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }
 
 case class MulUOP(value: MulUOPType) extends UopDecodeAttribute[MulUOPType] {

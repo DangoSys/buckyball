@@ -1,0 +1,10 @@
+{
+  "ballParam": {
+    "rob_entries": 16,
+    "numBanks": 32,
+    "bankEntries": 128,
+    "bankMaskLen": 16,
+    "InputNum": 16,
+    "inputWidth": 8
+  }
+}

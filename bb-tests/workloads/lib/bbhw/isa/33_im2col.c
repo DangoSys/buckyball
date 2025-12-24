@@ -1,45 +1,17 @@
+#ifndef _BB_IM2COL_H_
+#define _BB_IM2COL_H_
+
 #include "isa.h"
 
-// =========================== for simulator ===========================
-const InstructionConfig im2col_config = {
-    .rs1_fields = (BitFieldConfig[]){{"op_spaddr", 0, 14},
-                                     {"wr_spaddr", 15, 29},
-                                     {NULL, 0, 0}},
-    .rs2_fields = (BitFieldConfig[]){{"kcol", 26, 29},
-                                     {"krow", 30, 33},
-                                     {"incol", 34, 38},
-                                     {"inrow", 39, 43},
-                                     {"startcol", 49, 53},
-                                     {"startrow", 54, 58},
-                                     {NULL, 0, 0}}};
+#define BB_IM2COL_FUNC7 33
 
-// =========================== for CTest ===========================
-#define IM2COL_ENCODE_RS1(op_addr, wr_addr)                                    \
-  (ENCODE_FIELD(op_addr, 0, 15) | ENCODE_FIELD(wr_addr, 15, 15))
+#define bb_im2col(op1_bank_id, wr_bank_id, krow, kcol, inrow, incol, startrow, \
+                  startcol)                                                    \
+  BUCKYBALL_INSTRUCTION_R_R(                                                   \
+      (FIELD(op1_bank_id, 0, 7) | FIELD(wr_bank_id, 8, 15)),                   \
+      (FIELD(kcol, 0, 3) | FIELD(krow, 4, 7) | FIELD(incol, 8, 12) |      \
+       FIELD(inrow, 13, 17) | FIELD(startcol, 23, 27) |                        \
+       FIELD(startrow, 28, 32)),                                               \
+      BB_IM2COL_FUNC7)
 
-#define IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol)        \
-  (ENCODE_FIELD(kcol, 26, 4) | ENCODE_FIELD(krow, 30, 4) |                     \
-   ENCODE_FIELD(incol, 34, 5) | ENCODE_FIELD(inrow, 39, 5) |                   \
-   ENCODE_FIELD(startcol, 49, 5) | ENCODE_FIELD(startrow, 54, 5))
-
-// IM2COL instruction low-level implementation
-#ifndef __x86_64__
-#define IM2COL_RAW(rs1, rs2)                                                   \
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 33, x0, %0, %1"                \
-               :                                                               \
-               : "r"(rs1), "r"(rs2)                                            \
-               : "memory")
-#else
-// Do not execute RISC-V instructions on x86 platform
-#define IM2COL_RAW(rs1, rs2)
-#endif
-
-// IM2COL instruction high-level API implementation
-void bb_im2col(uint32_t op1_addr, uint32_t wr_addr, uint32_t krow,
-               uint32_t kcol, uint32_t inrow, uint32_t incol, uint32_t startrow,
-               uint32_t startcol) {
-  uint64_t rs1_val = IM2COL_ENCODE_RS1(op1_addr, wr_addr);
-  uint64_t rs2_val =
-      IM2COL_ENCODE_RS2(krow, kcol, inrow, incol, startrow, startcol);
-  IM2COL_RAW(rs1_val, rs2_val);
-}
+#endif // _BB_IM2COL_H_

@@ -3,56 +3,64 @@ package framework.frontend.globalrs
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import org.chipsalliance.cde.config.Parameters
 import examples.BuckyballConfigs.CustomBuckyballConfig
 import framework.frontend.decoder.PostGDCmd
+import framework.frontend.FrontendParam
 
-class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
+@instantiable
+class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
+    extends Module
+    with SerializableModule[FrontendParam] {
+
+  @public
   val io = IO(new Bundle {
     // Allocation interface
     val alloc = Flipped(new DecoupledIO(new PostGDCmd))
 
     // Issue interface - issue uncompleted head instruction
-    val issue = new DecoupledIO(new GlobalRobEntry)
+    val issue = new DecoupledIO(new GlobalRobEntry(parameter.rob_entries))
 
     // Completion interface - report instruction completion
-    val complete = Flipped(new DecoupledIO(UInt(log2Up(b.rob_entries).W)))
+    val complete = Flipped(new DecoupledIO(UInt(log2Up(parameter.rob_entries).W)))
 
     // Status signals - exposed to reservation station for decision making
-    val empty = Output(Bool())
-    val full  = Output(Bool())
+    val empty          = Output(Bool())
+    val full           = Output(Bool())
     // head pointer position
-    val head_ptr = Output(UInt(log2Up(b.rob_entries).W))
+    val head_ptr       = Output(UInt(log2Up(parameter.rob_entries).W))
     // Number of issued but uncompleted instructions
-    val issued_count = Output(UInt(log2Up(b.rob_entries + 1).W))
+    val issued_count   = Output(UInt(log2Up(parameter.rob_entries + 1).W))
     // Whether each entry is valid
-    val entry_valid = Output(Vec(b.rob_entries, Bool()))
+    val entry_valid    = Output(Vec(parameter.rob_entries, Bool()))
     // Whether each entry is complete
-    val entry_complete = Output(Vec(b.rob_entries, Bool()))
+    val entry_complete = Output(Vec(parameter.rob_entries, Bool()))
   })
 
   // Circular ROB structure
-  // Initialize to zero to avoid X states in FPGA (critical for FireSim)
-  val robEntries = RegInit(VecInit(Seq.fill(b.rob_entries)(0.U.asTypeOf(new GlobalRobEntry))))
+  val robEntries  =
+    RegInit(VecInit(Seq.fill(parameter.rob_entries)(0.U.asTypeOf(new GlobalRobEntry(parameter.rob_entries)))))
   // Whether entry is valid
-  val robValid   = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
+  val robValid    = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
   // Whether entry is issued
-  val robIssued  = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
+  val robIssued   = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
   // Whether entry is complete
-  val robComplete = RegInit(VecInit(Seq.fill(b.rob_entries)(false.B)))
+  val robComplete = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
 
   // Circular queue pointers
   // Points to oldest uncommitted instruction
-  val headPtr = RegInit(0.U(log2Up(b.rob_entries).W))
+  val headPtr      = RegInit(0.U(log2Up(parameter.rob_entries).W))
   // Points to next position to allocate
-  val tailPtr = RegInit(0.U(log2Up(b.rob_entries).W))
+  val tailPtr      = RegInit(0.U(log2Up(parameter.rob_entries).W))
   // ROB ID circular counter
-  val robIdCounter = RegInit(0.U(log2Up(b.rob_entries).W))
+  val robIdCounter = RegInit(0.U(log2Up(parameter.rob_entries).W))
 
   // Number of issued but uncompleted instructions (used to limit issue)
-  val issuedCount = RegInit(0.U(log2Up(b.rob_entries + 1).W))
+  val issuedCount   = RegInit(0.U(log2Up(parameter.rob_entries + 1).W))
   // Maximum issue limit: half of ROB depth
-  val maxIssueLimit = (b.rob_entries / 2).U
+  val maxIssueLimit = (parameter.rob_entries / 2).U
 
   // Queue status
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
@@ -66,13 +74,13 @@ class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
   when(io.alloc.fire) {
     robEntries(tailPtr).cmd    := io.alloc.bits
     robEntries(tailPtr).rob_id := robIdCounter
-    robValid(tailPtr)   := true.B
-    robIssued(tailPtr)  := false.B
-    robComplete(tailPtr) := false.B
+    robValid(tailPtr)          := true.B
+    robIssued(tailPtr)         := false.B
+    robComplete(tailPtr)       := false.B
 
     // Update tail pointer and rob_id counter (circular)
-    tailPtr := Mux(tailPtr === (b.rob_entries - 1).U, 0.U, tailPtr + 1.U)
-    robIdCounter := Mux(robIdCounter === (b.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
+    tailPtr      := Mux(tailPtr === (parameter.rob_entries - 1).U, 0.U, tailPtr + 1.U)
+    robIdCounter := Mux(robIdCounter === (parameter.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
   }
 
 // -----------------------------------------------------------------------------
@@ -93,28 +101,28 @@ class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
 // -----------------------------------------------------------------------------
   // Find first valid and unissued instruction starting from head
   val canIssue = Wire(Bool())
-  val issuePtr = Wire(UInt(log2Up(b.rob_entries).W))
+  val issuePtr = Wire(UInt(log2Up(parameter.rob_entries).W))
 
   // Default values
   canIssue := false.B
   issuePtr := headPtr
 
   // Scan from head to find first issuable instruction
-  val scanValid = Wire(Vec(b.rob_entries, Bool()))
-  for (i <- 0 until b.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= b.rob_entries.U,
-                  headPtr + i.U - b.rob_entries.U,
-                  headPtr + i.U)
+  val scanValid = Wire(Vec(parameter.rob_entries, Bool()))
+  for (i <- 0 until parameter.rob_entries) {
+    val ptr = Mux(headPtr + i.U >= parameter.rob_entries.U, headPtr + i.U - parameter.rob_entries.U, headPtr + i.U)
     scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
   }
 
   // Find first issuable position
   val firstValid = PriorityEncoder(scanValid.asUInt)
-  val hasValid = scanValid.asUInt.orR
+  val hasValid   = scanValid.asUInt.orR
 
-  val actualIssuePtr = Mux(headPtr + firstValid >= b.rob_entries.U,
-                           headPtr + firstValid - b.rob_entries.U,
-                           headPtr + firstValid)
+  val actualIssuePtr = Mux(
+    headPtr + firstValid >= parameter.rob_entries.U,
+    headPtr + firstValid - parameter.rob_entries.U,
+    headPtr + firstValid
+  )
 
   // Can only issue if issue limit is not reached
   val canIssueMore = issuedCount < maxIssueLimit
@@ -126,37 +134,38 @@ class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
 
   when(io.issue.fire) {
     robIssued(issuePtr) := true.B
-    issuedCount := issuedCount + 1.U
+    issuedCount         := issuedCount + 1.U
   }
 
 // -----------------------------------------------------------------------------
 // Instruction commit - commit all completed instructions out-of-order
 // -----------------------------------------------------------------------------
   // Commit all completed instructions
-  for (i <- 0 until b.rob_entries) {
+  for (i <- 0 until parameter.rob_entries) {
     when(robValid(i.U) && robComplete(i.U)) {
-      robValid(i.U) := false.B
-      robIssued(i.U) := false.B
+      robValid(i.U)    := false.B
+      robIssued(i.U)   := false.B
       robComplete(i.U) := false.B
     }
   }
 
   // Update head pointer: skip all completed (about to be cleared) positions
   // Find first "valid and incomplete" instruction position starting from head
-  val nextHeadCandidates = Wire(Vec(b.rob_entries, Bool()))
-  for (i <- 0 until b.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= b.rob_entries.U,
-                  headPtr + i.U - b.rob_entries.U,
-                  headPtr + i.U)
+  val nextHeadCandidates = Wire(Vec(parameter.rob_entries, Bool()))
+  for (i <- 0 until parameter.rob_entries) {
+    val ptr = Mux(headPtr + i.U >= parameter.rob_entries.U, headPtr + i.U - parameter.rob_entries.U, headPtr + i.U)
     // Entry is valid and incomplete (will not be committed)
     nextHeadCandidates(i) := robValid(ptr) && !robComplete(ptr)
   }
 
   val hasUncommitted = nextHeadCandidates.asUInt.orR
   val nextHeadOffset = PriorityEncoder(nextHeadCandidates.asUInt)
-  val nextHeadPtr = Mux(headPtr + nextHeadOffset >= b.rob_entries.U,
-                        headPtr + nextHeadOffset - b.rob_entries.U,
-                        headPtr + nextHeadOffset)
+
+  val nextHeadPtr = Mux(
+    headPtr + nextHeadOffset >= parameter.rob_entries.U,
+    headPtr + nextHeadOffset - parameter.rob_entries.U,
+    headPtr + nextHeadOffset
+  )
 
   // Update head pointer:
   // - If there are uncompleted instructions, move head to first uncompleted position
@@ -166,10 +175,10 @@ class GlobalROB(implicit b: CustomBuckyballConfig, p: Parameters) extends Module
 // -----------------------------------------------------------------------------
 // Status signals - exposed to reservation station
 // -----------------------------------------------------------------------------
-  io.empty := isEmpty
-  io.full  := isFull
-  io.head_ptr := headPtr
-  io.issued_count := issuedCount
-  io.entry_valid := robValid
+  io.empty          := isEmpty
+  io.full           := isFull
+  io.head_ptr       := headPtr
+  io.issued_count   := issuedCount
+  io.entry_valid    := robValid
   io.entry_complete := robComplete
 }

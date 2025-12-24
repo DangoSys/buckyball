@@ -15,7 +15,11 @@ object DecoderParam {
   implicit def rwP: upickle.default.ReadWriter[DecoderParam] = upickle.default.macroRW
 }
 
-case class DecoderParam(fpuEnable: Boolean, zvbbEnable: Boolean, useXsfmm: Boolean, allInstructions: Seq[Instruction])
+case class DecoderParam(
+  fpuEnable:       Boolean,
+  zvbbEnable:      Boolean,
+  useXsfmm:        Boolean,
+  allInstructions: Seq[Instruction])
     extends SerializableModuleParameter
 
 trait T1DecodeFiled[D <: Data] extends DecodeField[T1DecodePattern, D] with FieldName
@@ -29,6 +33,7 @@ trait BoolField extends T1DecodeFiled[Bool] with BoolDecodeField[T1DecodePattern
       case attribute.N  => n
       case attribute.DC => dc
     }
+
 }
 
 trait T1UopField extends T1DecodeFiled[UInt] with FieldName {
@@ -44,6 +49,7 @@ trait T1fpExecutionTypeUopField extends T1DecodeFiled[UInt] with FieldName {
 }
 
 object Decoder {
+
   object logic extends BoolField {
     override def getTriState(pattern: T1DecodePattern): TriState = pattern.isLogic.value
   }
@@ -233,6 +239,7 @@ object Decoder {
   }
 
   object topUop extends T1TopUopField {
+
     override def genTable(pattern: T1DecodePattern): BitPat = pattern.topUop.value match {
       case _: TopT0.type  => BitPat("b00000")
       case _: TopT1.type  => BitPat("b00001")
@@ -268,9 +275,11 @@ object Decoder {
       case _: TopT31.type => BitPat("b11111")
       case _ => BitPat.dontCare(5)
     }
+
   }
 
   object uop extends T1UopField {
+
     override def genTable(pattern: T1DecodePattern): BitPat = pattern.decoderUop.value match {
       case addCase:   AdderUOPType =>
         addCase match {
@@ -380,15 +389,18 @@ object Decoder {
         }
       case _ => BitPat.dontCare(4)
     }
+
   }
 
   object fpExecutionType extends T1fpExecutionTypeUopField {
+
     override def genTable(pattern: T1DecodePattern): BitPat = pattern.fpExecutionType match {
       case FpExecutionType.Compare => BitPat("b10")
       case FpExecutionType.MA      => BitPat("b00")
       case FpExecutionType.Other   => BitPat("b11")
       case FpExecutionType.Nil     => BitPat.dontCare(2)
     }
+
   }
 
   object maskPipeType extends BoolField {
@@ -400,6 +412,7 @@ object Decoder {
   }
 
   object maskPipeUop extends T1TopUopField {
+
     override def genTable(pattern: T1DecodePattern): BitPat = pattern.maskPipeUop.value match {
       case _: MaskUop0.type  => BitPat("b00000")
       case _: MaskUop1.type  => BitPat("b00001")
@@ -415,9 +428,10 @@ object Decoder {
       case _: MaskUop11.type => BitPat("b01011")
       case _ => BitPat.dontCare(chiselType.getWidth)
     }
+
   }
 
-  def allFields(param: DecoderParam):        Seq[T1DecodeFiled[_ >: Bool <: UInt]] = Seq(
+  def allFields(param: DecoderParam): Seq[T1DecodeFiled[_ >: Bool <: UInt]] = Seq(
     logic,
     adder,
     shift,
@@ -491,7 +505,8 @@ object Decoder {
       )
     else Seq()
   }
-  def allDecodePattern(param: DecoderParam): Seq[T1DecodePattern]                  =
+
+  def allDecodePattern(param: DecoderParam): Seq[T1DecodePattern] =
     param.allInstructions.map(T1DecodePattern(_, param)).toSeq.sortBy(_.instruction.name)
 
   def decodeTable(param: DecoderParam): DecodeTable[T1DecodePattern] =
@@ -507,7 +522,13 @@ trait FieldName {
 
 case class SpecialAux(name: String, vs: Int, value: String)
 case class SpecialMap(name: String, vs: Int, data: Map[String, String])
-case class SpecialAuxInstr(instrName: String, vs: Int, value: String, name: String)
+
+case class SpecialAuxInstr(
+  instrName: String,
+  vs:        Int,
+  value:     String,
+  name:      String)
+
 case class Op(
   tpe:     String,
   funct6:  String,
@@ -519,6 +540,7 @@ case class Op(
   vd:      String,
   opcode:  String)
     extends DecodePattern {
+
   // include 32 bits: funct6 + vm + vs2 + vs1 + funct3 + vd + opcode
   def bitPat: BitPat = BitPat(
     "b" +
@@ -535,4 +557,5 @@ case class Op(
       vd +
       opcode
   )
+
 }

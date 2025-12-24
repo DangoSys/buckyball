@@ -40,7 +40,8 @@ object TopT30    extends TopUopType
 object TopT31    extends TopUopType
 
 object TopUop {
-  def apply(t1DecodePattern: T1DecodePattern): TopUop  = {
+
+  def apply(t1DecodePattern: T1DecodePattern): TopUop = {
     Seq(
       t0 _  -> TopT0,
       t1 _  -> TopT1,
@@ -78,85 +79,100 @@ object TopUop {
       case (fn, tpe) if fn(t1DecodePattern) => TopUop(tpe)
     }.getOrElse(TopUop(TopT0))
   }
-  def t0(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t0(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vslidedown.vi",
       "vslidedown.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t1(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t1(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vslideup.vi",
       "vslideup.vx"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t2(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t2(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vslide1down.vx",
       "vfslide1down.vf"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t3(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t3(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vslide1up.vx",
       "vfslide1up.vf"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t4(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t4(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vrgather.vv"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t5(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t5(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vrgatherei16.vv"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t6(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t6(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq()
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t7(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t7(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq()
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t8(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t8(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("viota.m")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t9(t1DecodePattern: T1DecodePattern):    Boolean = {
+
+  def t9(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vcompress.vm")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t10(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t10(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfmv.s.f",
       "vmv.s.x"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t11(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t11(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfmv.f.s",
       "vmv.x.s"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t12(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t12(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq()
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t13(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t13(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq()
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t14(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t14(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmsbf.m",
       "vmsif.m",
@@ -164,11 +180,13 @@ object TopUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t15(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t15(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vfirst.m")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t16(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t16(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vcpop.m",
       "vredmax.vs",
@@ -179,14 +197,16 @@ object TopUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t17(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t17(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vwredsum.vs",
       "vwredsumu.vs"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t18(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t18(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vredand.vs",
       "vredor.vs",
@@ -194,30 +214,36 @@ object TopUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t19(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t19(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vfredmax.vs",
       "vfredmin.vs"
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t20(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t20(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vfredusum.vs")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t21(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t21(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vfredosum.vs")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t22(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t22(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vfwredusum.vs")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t23(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t23(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vfwredosum.vs")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t24(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t24(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq(
       "vmadc.vi",
       "vmadc.vim",
@@ -262,34 +288,42 @@ object TopUop {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t25(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t25(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq()
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t26(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t26(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vzext.vf2")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t27(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t27(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vsext.vf2")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t28(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t28(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vzext.vf4")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t29(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t29(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vsext.vf4")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t30(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t30(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vzext.vf8")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
-  def t31(t1DecodePattern: T1DecodePattern):   Boolean = {
+
+  def t31(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched: Seq[String] = Seq("vsext.vf8")
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
 }
 
 case class TopUop(value: TopUopType) extends UopDecodeAttribute[TopUopType] {

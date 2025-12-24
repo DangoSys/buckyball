@@ -1,9 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 static elem_t input_matrix[DIM * DIM] __attribute__((aligned(64)));
 static elem_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
@@ -16,26 +18,26 @@ static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 // bb_relu(op1_addr, wr_addr, iter) wrapper in bbhw implementation
 // (func7=RELU_FUNC7).
 
-void hw_relu(const char *test_name, elem_t *a, result_t*b, int size) {
+void hw_relu(const char *test_name, elem_t *a, result_t *b, int size) {
   // Source operand in spad bank 0, write target in spad bank 1
-  uint32_t op1_addr = spad_addr(0, 0);
-  uint32_t wr_addr = spad_addr(1, 0);
+  uint32_t op1_bank_id = 0;
+  uint32_t wr_bank_id = 1;
 
   // Move input into scratchpad bank0, starting at offset 0, iterate size times
   // row-wise
-  bb_mvin((uintptr_t)a, op1_addr, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_fence();
   // Call ReLU instruction
-  bb_relu(op1_addr, wr_addr, size);
+  bb_relu(op1_bank_id, wr_bank_id, size);
   bb_fence();
-  bb_mvout((uintptr_t)b, wr_addr, size, 1);
+  bb_mvout((uintptr_t)b, wr_bank_id, size, 1);
 }
 
 int run_test(const char *test_name, elem_t *a, int size) {
   clear_i8_matrix(output_matrix, size, size);
   cpu_relu(a, expected_matrix, size, size);
   hw_relu(test_name, a, output_matrix, size);
-  if(compare_i8_matrices(output_matrix, expected_matrix, size, size)) {
+  if (compare_i8_matrices(output_matrix, expected_matrix, size, size)) {
     printf("%s compare test PASSED\n", test_name);
     return 1;
   } else {

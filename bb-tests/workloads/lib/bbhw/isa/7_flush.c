@@ -1,14 +1,10 @@
+#ifndef _BB_FLUSH_H_
+#define _BB_FLUSH_H_
+
 #include "isa.h"
 
-// =========================== for CTest ===========================
-// FLUSH instruction low-level implementation
-#ifndef __x86_64__
-#define FLUSH_RAW()                                                            \
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, 7, x0, x0, x0" ::: "memory")
-#else
-// Do not execute RISC-V instructions on x86 platform
-#define FLUSH_RAW()
-#endif
+#define BB_FLUSH_FUNC7 7
 
-// FLUSH instruction high-level API implementation
-void bb_flush(void) { FLUSH_RAW(); }
+#define bb_flush() BUCKYBALL_INSTRUCTION_R_R(0, 0, BB_FLUSH_FUNC7)
+
+#endif // _BB_FLUSH_H_

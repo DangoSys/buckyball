@@ -6,6 +6,7 @@ package framework.gpdomain.sequencer.decoder.attribute
 import framework.gpdomain.sequencer.decoder.T1DecodePattern
 
 object isOrderreduce {
+
   def apply(t1DecodePattern: T1DecodePattern): isOrderreduce =
     Seq(
       y _  -> Y,
@@ -21,6 +22,7 @@ object isOrderreduce {
     )
     allMatched.contains(t1DecodePattern.instruction.name)
   }
+
   def n(t1DecodePattern: T1DecodePattern): Boolean = {
     val allMatched = t1DecodePattern.param.allInstructions.filter(i => !(y(t1DecodePattern) || dc(t1DecodePattern)))
     allMatched.contains(t1DecodePattern.instruction)

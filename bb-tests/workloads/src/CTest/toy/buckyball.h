@@ -77,4 +77,5 @@ void cpu_relu(elem_t *a, elem_t *matrix, int rows, int cols);
 void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols);
 
 unsigned long long read_cycle(void);
+
 #endif

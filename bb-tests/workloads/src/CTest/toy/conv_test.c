@@ -1,9 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/spad.h>
+#include <bbhw/mem/mem.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define DIM (BANK_WIDTH / sizeof(elem_t))
 
 #define IFMAP_SIZE 64
 #define WEIGHT_SIZE 16
@@ -46,26 +48,25 @@ int conv_cpu_reference(elem_t *ifmap, elem_t *weight, elem_t *ofmap, int in_h,
 }
 
 void hw_conv(const char *test_name, elem_t *ifmap, elem_t *weight,
-             elem_t *ofmap, int in_h, int in_w, int kernel_h, int kernel_w) {
+             elem_t *ofmap, int in_h, int in_w, int kernel_h, int kernel_w,
+             uint32_t ofmap_bank_id) {
   // Input feature map in spad bank 0, weights in spad bank 1, output in spad
   // bank 2
-  uint32_t ifmap_addr = spad_addr(0, 0);
-  uint32_t weight_addr = spad_addr(1, 0);
-  uint32_t ofmap_addr = spad_addr(2, 0);
-
+  uint32_t ifmap_bank_id = 0;
+  uint32_t weight_bank_id = 1;
   // Move input feature map into scratchpad
-  bb_mvin((uintptr_t)ifmap, ifmap_addr, IFMAP_SIZE, 1);
+  bb_mvin((uintptr_t)ifmap, ifmap_bank_id, IFMAP_SIZE, 1);
   bb_fence();
 
   // Move weights into scratchpad
-  bb_mvin((uintptr_t)weight, weight_addr, WEIGHT_SIZE, 1);
+  bb_mvin((uintptr_t)weight, weight_bank_id, WEIGHT_SIZE, 1);
   bb_fence();
 
   // Call CONV instruction
   // iter is the number of iterations (simplified: use 1 for now)
   uint32_t iter = 1;
-  bb_conv(ifmap_addr, weight_addr, ofmap_addr, iter, in_h, in_w, kernel_h,
-          kernel_w);
+  bb_conv(ifmap_bank_id, weight_bank_id, ofmap_bank_id, iter, in_h, in_w,
+          kernel_h, kernel_w);
   bb_fence();
 
   // Result will be moved back in run_test for verification
@@ -76,12 +77,15 @@ int run_test(const char *test_name, elem_t *ifmap, elem_t *weight,
   // CPU reference computation
   conv_cpu_reference(ifmap, weight, ofmap, in_h, in_w, kernel_h, kernel_w);
 
+  // Output feature map in spad bank 2
+  uint32_t ofmap_bank_id = 2;
+
   // Hardware computation
-  hw_conv(test_name, ifmap, weight, ofmap, in_h, in_w, kernel_h, kernel_w);
+  hw_conv(test_name, ifmap, weight, ofmap, in_h, in_w, kernel_h, kernel_w,
+          ofmap_bank_id);
 
   // Move result back from scratchpad for verification
-  uint32_t ofmap_addr = spad_addr(2, 0);
-  bb_mvout((uintptr_t)output_feature_map, ofmap_addr, OFMAP_SIZE, 1);
+  bb_mvout((uintptr_t)output_feature_map, ofmap_bank_id, OFMAP_SIZE, 1);
   bb_fence();
 
   // Verify results
