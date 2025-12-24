@@ -7,8 +7,8 @@
 
 #define bb_bbus_config(src_bid, dst_bid, enable)                               \
   BUCKYBALL_INSTRUCTION_R_R(0,                                                 \
-                            (FIELD(src_bid, 25, 30) | FIELD(dst_bid, 31, 36) | \
-                             FIELD(enable, 37, 37)),                           \
+                            (FIELD(src_bid,0, 5) | FIELD(dst_bid, 6, 11) | \
+                             FIELD(enable, 12, 12)),                           \
                             BB_BBUS_CONFIG_FUNC7)
 
 #endif // _BB_BBUS_CONFIG_H_
