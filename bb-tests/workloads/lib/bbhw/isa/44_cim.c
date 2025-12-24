@@ -4,11 +4,11 @@
 #include "isa.h"
 
 #define BB_CIM_FUNC7 44
-#define bb_cim(op1_addr, op2_addr, result_addr, iter, rows, cols, op_type)     \
+#define bb_cim(op1_bank_id, op2_bank_id, result_bank_id, iter, rows, cols, op_type)     \
   BUCKYBALL_INSTRUCTION_R_R(                                                   \
-      (FIELD(op1_addr, 0, 14) | FIELD(op2_addr, 15, 29)),                      \
-      (FIELD(result_addr, 0, 14) | FIELD(iter, 15, 24) | FIELD(rows, 25, 40) | \
-       FIELD(cols, 41, 56) | FIELD(op_type, 57, 60)),                          \
+      (FIELD(op1_bank_id, 0, 7) | FIELD(op2_bank_id, 8, 15)),                      \
+      (FIELD(result_bank_id, 0, 7) | FIELD(iter, 8, 23) | FIELD(rows, 24, 39) | \
+       FIELD(cols, 40, 55) | FIELD(op_type, 56, 59)),                          \
       BB_CIM_FUNC7)
 
 #endif // _BB_CIM_H_
