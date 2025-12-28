@@ -2,42 +2,32 @@ package framework.memdomain.frontend.outside_channel
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
 import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
 import framework.memdomain.backend.banks.SramWriteIO
 import framework.memdomain.frontend.outside_channel.dma.{BBReadRequest, BBReadResponse}
 import freechips.rocketchip.rocket.MStatus
 import framework.balldomain.blink.BankWrite
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
+import framework.top.GlobalConfig
 
 @instantiable
-class MemLoader(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
-  val rob_id_width = log2Up(parameter.rob_entries)
+class MemLoader(val b: GlobalConfig) extends Module {
+  val rob_id_width = log2Up(b.frontend.rob_entries)
 
   @public
   val io = IO(new Bundle {
     // Load instruction from ReservationStation
-    val cmdReq  = Flipped(Decoupled(new MemRsIssue(parameter)))
+    val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
     // Completion signal sent to ReservationStation
-    val cmdResp = Decoupled(new MemRsComplete(parameter))
+    val cmdResp = Decoupled(new MemRsComplete(b))
     // Direct connection to DMA read interface
     val dmaReq  = Decoupled(new BBReadRequest())
-    val dmaResp = Flipped(Decoupled(new BBReadResponse(parameter.bankWidth)))
+    val dmaResp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
 
     // Connected to Bank write interface
     val bankWrite = Vec(
-      parameter.bankNum,
-      Flipped(new BankWrite(
-        parameter.bankEntries,
-        parameter.bankWidth,
-        parameter.bankMaskLen,
-        parameter.rob_entries,
-        parameter.bankNum
-      ))
+      b.memDomain.bankNum,
+      Flipped(new BankWrite(b))
     )
 
   })
@@ -47,14 +37,14 @@ class MemLoader(val parameter: MemDomainParam)(implicit p: Parameters)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
   // Cache mem_addr
-  val mem_addr_reg = Reg(UInt(parameter.memAddrLen.W))
+  val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
   // Cache iteration count
   val iter_reg     = Reg(UInt(10.W))
   // Count number of responses received, supports up to 16 responses
   val resp_count   = Reg(UInt(log2Up(16).W))
 
   // Cache decoded bank information
-  val wr_bank_reg = Reg(UInt(log2Up(parameter.bankNum).W))
+  val wr_bank_reg = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   // Cache stride
   val stride_reg  = Reg(UInt(10.W))
 
@@ -75,7 +65,7 @@ class MemLoader(val parameter: MemDomainParam)(implicit p: Parameters)
   io.dmaReq.valid       := state === s_dma_req
   io.dmaReq.bits.vaddr  := mem_addr_reg
   // Byte count of iter rows of data
-  io.dmaReq.bits.len    := iter_reg * (parameter.bankWidth / 8).U
+  io.dmaReq.bits.len    := iter_reg * (b.memDomain.bankWidth / 8).U
   // Simplified: use default status
   io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
   io.dmaReq.bits.stride := stride_reg
@@ -102,11 +92,11 @@ class MemLoader(val parameter: MemDomainParam)(implicit p: Parameters)
   val target_bank = wr_bank_reg
   val target_row  = io.dmaResp.bits.addrcounter
 
-  for (i <- 0 until parameter.bankNum) {
+  for (i <- 0 until b.memDomain.bankNum) {
     io.bankWrite(i).io.req.valid      := io.dmaResp.fire && (target_bank === i.U)
     io.bankWrite(i).io.req.bits.addr  := target_row
     io.bankWrite(i).io.req.bits.data  := io.dmaResp.bits.data
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(parameter.bankMaskLen)(true.B))
+    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
     io.bankWrite(i).io.req.bits.wmode := false.B // Load is always overwrite
     io.bankWrite(i).rob_id            := rob_id_reg
     io.bankWrite(i).bank_id           := target_bank

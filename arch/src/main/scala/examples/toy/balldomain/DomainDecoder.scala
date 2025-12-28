@@ -6,9 +6,10 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import org.chipsalliance.cde.config.Parameters
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import examples.toy.balldomain.DISA._
+import framework.top.GlobalConfig
 
 // Detailed decode output for Ball domain
-class BallDecodeCmd(parameter: BallDomainParam) extends Bundle {
+class BallDecodeCmd(numBanks: Int) extends Bundle {
   // Ball ID
   val bid = UInt(5.W)
 
@@ -25,9 +26,9 @@ class BallDecodeCmd(parameter: BallDomainParam) extends Bundle {
   val special       = UInt(40.W)
 
   // Ball operand bank IDs (now directly from rs1/rs2)
-  val op1_bank = UInt(log2Up(parameter.numBanks).W)
-  val op2_bank = UInt(log2Up(parameter.numBanks).W)
-  val wr_bank  = UInt(log2Up(parameter.numBanks).W)
+  val op1_bank = UInt(log2Up(numBanks).W)
+  val op2_bank = UInt(log2Up(numBanks).W)
+  val wr_bank  = UInt(log2Up(numBanks).W)
 
   val rs1 = UInt(64.W)
   val rs2 = UInt(64.W)
@@ -51,14 +52,14 @@ object BallDefaultConstants {
 }
 
 @instantiable
-class BallDomainDecoder(val parameter: BallDomainParam)(implicit p: Parameters) extends Module {
+class BallDomainDecoder(val b: GlobalConfig) extends Module {
   import BallDefaultConstants._
 
   @public
-  val raw_cmd_i = IO(Flipped(Decoupled(new PostGDCmd)))
+  val raw_cmd_i = IO(Flipped(Decoupled(new PostGDCmd(b))))
 
   @public
-  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(parameter)))
+  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum)))
 
   val spAddrLen = 14 // b.spAddrLen replaced with constant
 

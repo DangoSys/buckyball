@@ -2,12 +2,8 @@ package framework.gpdomain.sequencer.decoder
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import freechips.rocketchip.tile._
-
-class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommand
-}
+import framework.core.rocket.RoCCCommandBB
+import framework.top.GlobalConfig
 
 object DISA {
   // RVV Instruction Opcodes

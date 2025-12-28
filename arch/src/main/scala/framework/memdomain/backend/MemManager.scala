@@ -2,11 +2,8 @@ package framework.memdomain.backend
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
+import framework.top.GlobalConfig
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import framework.memdomain.MemDomainParam
 import framework.memdomain.backend.banks.{SramBank, SramReadIO, SramWriteIO}
 import framework.memdomain.backend.accpipe.AccPipe
 
@@ -20,38 +17,36 @@ import framework.memdomain.backend.accpipe.AccPipe
  * - All requests go through AccPipe, which handles both direct write mode and accumulator mode (read-modify-write)
  * - Assert checks ensure no bank_id conflicts in the same cycle
  */
-class MemRequestIO(parameter: MemDomainParam) extends Bundle {
-  val write   = Flipped(new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen))
-  val read    = Flipped(new SramReadIO(parameter.bankEntries, parameter.bankWidth))
-  val bank_id = Input(UInt(log2Up(parameter.bankNum).W))
+class MemRequestIO(b: GlobalConfig) extends Bundle {
+  val write   = Flipped(new SramWriteIO(b))
+  val read    = Flipped(new SramReadIO(b))
+  val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
 }
 
 @instantiable
-class MemManager(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class MemManager(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
     // Interface from midend (new architecture)
-    val mem_req = Vec(parameter.bankChannel, new MemRequestIO(parameter))
+    val mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
   })
 
   // Instantiate bankNum SRAM banks
-  val banks: Seq[Instance[SramBank]] = Seq.fill(parameter.bankNum) {
-    Instantiate(new SramBank(parameter))
+  val banks: Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum) {
+    Instantiate(new SramBank(b))
   }
 
   // Instantiate bankChannel accumulator pipes (all requests go through AccPipe)
-  val accPipes: Seq[Instance[AccPipe]] = Seq.fill(parameter.bankChannel) {
-    Instantiate(new AccPipe(parameter))
+  val accPipes: Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel) {
+    Instantiate(new AccPipe(b))
   }
 
   // -----------------------------------------------------------------------------
   // Request routing: All requests go through AccPipe
   // -----------------------------------------------------------------------------
   // Route all requests to AccPipe (AccPipe handles both wmode and read operations)
-  for (i <- 0 until parameter.bankChannel) {
+  for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.write <> io.mem_req(i).write
     accPipes(i).io.read <> io.mem_req(i).read
     accPipes(i).io.bank_id := io.mem_req(i).bank_id
@@ -61,8 +56,8 @@ class MemManager(val parameter: MemDomainParam)(implicit p: Parameters)
   // Bank conflict detection
   // -----------------------------------------------------------------------------
   // Check for bank_id conflicts across all requests (all go through AccPipe)
-  for (i <- 0 until parameter.bankChannel) {
-    for (j <- (i + 1) until parameter.bankChannel) {
+  for (i <- 0 until b.memDomain.bankChannel) {
+    for (j <- (i + 1) until b.memDomain.bankChannel) {
       // Check write conflicts
       when(io.mem_req(i).write.req.valid && io.mem_req(j).write.req.valid) {
         assert(

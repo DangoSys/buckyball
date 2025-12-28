@@ -61,7 +61,9 @@ lazy val buckyball = (project in file("."))
       scalaTestSettings ++
       Seq(
         libraryDependencies ++= Seq(
-          "edu.berkeley.cs" %% "rocketchip" % "1.6"
+          "edu.berkeley.cs" %% "rocketchip" % "1.6",
+          "com.lihaoyi" %% "os-lib" % "0.10.0",
+          "com.lihaoyi" %% "upickle" % "3.3.1"
         )
       )
   )

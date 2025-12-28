@@ -3,25 +3,22 @@ package framework.memdomain.frontend.cmd_channel.decoder
 import chisel3._
 import chisel3.util._
 import framework.frontend.decoder.{DomainId, PostGDCmd}
-import framework.frontend.decoder.PostGDCmd
-import framework.memdomain.MemDomainParam
+import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd_channel.decoder.DISA._
 import freechips.rocketchip.tile._
-import org.chipsalliance.cde.config.Parameters
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 
 // Detailed decode output for Mem domain
-class MemDecodeCmd(parameter: MemDomainParam)(implicit p: Parameters) extends Bundle {
+class MemDecodeCmd(b: GlobalConfig) extends Bundle {
   val is_load  = Bool()
   val is_store = Bool()
   // Memory address
-  val mem_addr = UInt(parameter.memAddrLen.W)
+  val mem_addr = UInt(b.memDomain.memAddrLen.W)
   // Iteration count
   val iter     = UInt(10.W)
   // Bank information
   // 3 bits, supports 8 banks (SPAD+ACC)
-  val bank_id  = UInt(log2Up(parameter.bankNum).W)
+  val bank_id  = UInt(log2Up(b.memDomain.bankNum).W)
   val special  = UInt(40.W)
 }
 
@@ -41,19 +38,17 @@ object MemDefaultConstants {
 }
 
 @instantiable
-class MemDomainDecoder(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class MemDomainDecoder(val b: GlobalConfig) extends Module {
   import MemDefaultConstants._
 
   @public
   val io = IO(new Bundle {
-    val raw_cmd_i        = Flipped(Decoupled(new PostGDCmd))
-    val mem_decode_cmd_o = Decoupled(new MemDecodeCmd(parameter))
+    val raw_cmd_i        = Flipped(Decoupled(new PostGDCmd(b)))
+    val mem_decode_cmd_o = Decoupled(new MemDecodeCmd(b))
   })
 
-  val bankAddrLen = log2Up(parameter.bankEntries)
-  val memAddrLen  = parameter.memAddrLen
+  val bankAddrLen = log2Up(b.memDomain.bankEntries)
+  val memAddrLen  = b.memDomain.memAddrLen
 
   // Only process Mem instructions
   io.raw_cmd_i.ready := io.mem_decode_cmd_o.ready
@@ -124,7 +119,7 @@ class MemDomainDecoder(val parameter: MemDomainParam)(implicit p: Parameters)
   io.mem_decode_cmd_o.bits.mem_addr := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt,
-    0.U(parameter.memAddrLen.W)
+    0.U(b.memDomain.memAddrLen.W)
   )
   io.mem_decode_cmd_o.bits.iter     := Mux(
     io.mem_decode_cmd_o.valid,
@@ -134,7 +129,7 @@ class MemDomainDecoder(val parameter: MemDomainParam)(implicit p: Parameters)
 
   // Address parsing
   val ls_bank_id = ls_decode_list(LSDecodeFields.BANK_ID.id).asUInt
-  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, ls_bank_id, 0.U(log2Up(parameter.bankNum).W))
+  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, ls_bank_id, 0.U(log2Up(b.memDomain.bankNum).W))
   io.mem_decode_cmd_o.bits.special := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.SPECIAL.id).asUInt,

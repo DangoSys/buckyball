@@ -2,11 +2,9 @@ package framework.memdomain.backend.accpipe
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
+import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 
 /**
  * BankPipe: Bank Pipeline (直通，非流水线)
@@ -15,26 +13,24 @@ import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
  * Can also serve as a bypass when AccPipe is not fully utilized
  */
 @instantiable
-class BankPipe(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class BankPipe(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
     // Interface to SramBank
-    val sramRead  = new SramReadIO(parameter.bankEntries, parameter.bankWidth)
-    val sramWrite = new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen)
+    val sramRead  = new SramReadIO(b)
+    val sramWrite = new SramWriteIO(b)
 
     // Interface from midend
-    val read  = Flipped(new SramReadIO(parameter.bankEntries, parameter.bankWidth))
-    val write = Flipped(new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen))
+    val read  = Flipped(new SramReadIO(b))
+    val write = Flipped(new SramWriteIO(b))
 
     // Control signals
-    val bank_id = Input(UInt(log2Up(parameter.bankNum).W))
+    val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
   })
 
   @public
-  val current_bank_id = Reg(UInt(log2Up(parameter.bankNum).W))
+  val current_bank_id = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   @public
   val busy            = Reg(Bool())
 

@@ -2,60 +2,37 @@ package framework.memdomain.frontend
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
 import framework.memdomain.frontend.outside_channel.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
-import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import framework.memdomain.frontend.outside_channel.{MemLoader, MemStorer}
-import framework.memdomain.frontend.cmd_channel.rs.MemReservationStation
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO}
-import framework.memdomain.utils.pmc.MemCyclePMC
+import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.TLEdgeOut
-import freechips.rocketchip.rocket.TLBPTWIO
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import framework.memdomain.MemDomainParam
+import framework.top.GlobalConfig
+import framework.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder
+import framework.memdomain.frontend.cmd_channel.rs.MemReservationStation
+import framework.memdomain.utils.pmc.MemCyclePMC
 
 /**
  * MemController: Controller that encapsulates scratchpad and accumulator
  * Provides DMA interface and Ball Domain interface
  */
 @instantiable
-class MemController(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   @public
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)
-    val global_issue_i = Flipped(Decoupled(new GlobalRsIssue(parameter.rob_entries)))
-
+    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
     // Report completion to global RS (single channel)
-    val global_complete_o = Decoupled(new GlobalRsComplete(parameter.rob_entries))
+    val global_complete_o = Decoupled(new GlobalRsComplete(b))
 
     // Bank read/write interface - used by load/store
     val interdma = new Bundle {
-
-      val bankRead = Vec(
-        parameter.bankNum,
-        Flipped(new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.bankNum))
-      )
-
-      val bankWrite = Vec(
-        parameter.bankNum,
-        Flipped(new BankWrite(
-          parameter.bankEntries,
-          parameter.bankWidth,
-          parameter.bankMaskLen,
-          parameter.rob_entries,
-          parameter.bankNum
-        ))
-      )
-
+      val bankRead  = Vec(b.memDomain.bankNum, Flipped(new BankRead(b)))
+      val bankWrite = Vec(b.memDomain.bankNum, Flipped(new BankWrite(b)))
     }
 
     // DMA interface - used by Outer DRAM controller
@@ -63,11 +40,11 @@ class MemController(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: 
 
       val read = new Bundle {
         val req  = Decoupled(new BBReadRequest())
-        val resp = Flipped(Decoupled(new BBReadResponse(parameter.bankWidth)))
+        val resp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
       }
 
       val write = new Bundle {
-        val req  = Decoupled(new BBWriteRequest(parameter.bankWidth))
+        val req  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
         val resp = Flipped(Decoupled(new BBWriteResponse))
       }
 
@@ -75,31 +52,24 @@ class MemController(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: 
 
     // TLB interface - exposed externally for DMA modules (BBStreamReader/BBStreamWriter)
     // TLB connection is managed internally, but interface needs to be exposed for external DMA
-    val tlb = Vec(2, Flipped(new BBTLBIO))
-
+    val tlb    = Vec(2, Flipped(new BBTLBIO(b)))
     // PTW interface - needs to connect to upper level PTW (shared TLB has only 1 PTW)
-    val ptw = Vec(1, new TLBPTWIO)
-
+    val ptw    = Vec(1, new BBTLBPTWIO(b))
     // TLB exception interface - exposed to upper level for handling flush, etc. (shared TLB has only 1 exp)
     val tlbExp = Vec(1, new BBTLBExceptionIO)
-
     // Busy signal
-    val busy = Output(Bool())
+    val busy   = Output(Bool())
   })
 
-  val memDecoder: Instance[framework.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder] =
-    Instantiate(new framework.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder(parameter))
-  val memRs:      Instance[framework.memdomain.frontend.cmd_channel.rs.MemReservationStation] =
-    Instantiate(new framework.memdomain.frontend.cmd_channel.rs.MemReservationStation(parameter))
-  val memLoader:  Instance[framework.memdomain.frontend.outside_channel.MemLoader]            =
-    Instantiate(new framework.memdomain.frontend.outside_channel.MemLoader(parameter))
-  val memStorer:  Instance[framework.memdomain.frontend.outside_channel.MemStorer]            =
-    Instantiate(new framework.memdomain.frontend.outside_channel.MemStorer(parameter))
-
+  val memDecoder: Instance[MemDomainDecoder]      = Instantiate(new MemDomainDecoder(b))
+  val memRs:      Instance[MemReservationStation] = Instantiate(new MemReservationStation(b))
+  val memLoader:  Instance[MemLoader]             = Instantiate(new MemLoader(b))
+  val memStorer:  Instance[MemStorer]             = Instantiate(new MemStorer(b))
+  val pmc:        Instance[MemCyclePMC]           = Instantiate(new MemCyclePMC(b))
   // TLB cluster - internal TLB management for DMA modules
   // Supports 2 clients: BBStreamReader (client 1) and BBStreamWriter (client 0)
   val tlbCluster =
-    Module(new BBTLBCluster(2, parameter.tlb_size, parameter.dma_maxbytes, use_shared_tlb = true)(edge, p))
+    Instantiate(new BBTLBCluster(b)(edge))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
@@ -128,8 +98,6 @@ class MemController(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: 
 //-----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
-  val pmc: Instance[framework.memdomain.utils.pmc.MemCyclePMC] =
-    Instantiate(new framework.memdomain.utils.pmc.MemCyclePMC(parameter))
   pmc.io.ldReq_i.valid  := memRs.io.issue_o.ld.fire
   pmc.io.ldReq_i.bits   := memRs.io.issue_o.ld.bits
   pmc.io.stReq_i.valid  := memRs.io.issue_o.st.fire
@@ -138,7 +106,7 @@ class MemController(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: 
   pmc.io.ldResp_o.bits  := memLoader.io.cmdResp.bits
   pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
   pmc.io.stResp_o.bits  := memStorer.io.cmdResp.bits
-//
+
   // Connect MemLoader and MemStorer to DMA interface
   memLoader.io.dmaReq <> io.intradma.read.req
   io.intradma.read.resp <> memLoader.io.dmaResp

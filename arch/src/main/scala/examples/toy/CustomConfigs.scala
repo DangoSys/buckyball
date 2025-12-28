@@ -6,20 +6,15 @@ import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem.SystemBusKey
 import freechips.rocketchip.tile._
 import examples.toy.ToyBuckyball
-import framework.builtin.BaseConfig
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import examples.CustomBuckyballConfig
+import framework.top.GlobalConfig
 
 object BuckyballToyConfig {
-
-  val defaultConfig = new BaseConfig(
-    bankNum = 32
-  )
-
+  // 简化：直接使用GlobalConfig()
+  val defaultConfig = GlobalConfig()
 }
 
 class BuckyballCustomConfig(
-  buckyballConfig: CustomBuckyballConfig = CustomBuckyballConfig())
+  buckyballConfig: GlobalConfig = GlobalConfig())
     extends Config((site, here, up) => {
       case BuildRoCC => up(BuildRoCC) ++ Seq {
           (p: Parameters) =>

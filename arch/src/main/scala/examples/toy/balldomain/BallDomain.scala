@@ -3,108 +3,37 @@ package examples.toy.balldomain
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import examples.toy.balldomain.rs.BallRSModule
+import framework.top.GlobalConfig
 import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
+import framework.balldomain.rs.BallReservationStation
 
-object BallDomainParam {
-  implicit def rw: upickle.default.ReadWriter[BallDomainParam] = upickle.default.macroRW
-
-  /**
-   * Load from JSON file
-   */
-  def fromJson(path: String): BallDomainParam = {
-    val jsonStr = scala.io.Source.fromFile(path).mkString
-    upickle.default.read[BallDomainParam](jsonStr)
-  }
-
-  /**
-   * Generate from global config
-   */
-  def fromGlobal(global: framework.builtin.BaseConfig): BallDomainParam = {
-    BallDomainParam(
-      rob_entries = global.rob_entries,
-      numBanks = global.bankNum,
-      bbusChannel = global.bankChannel,
-      bankEntries = global.bankEntries,
-      bankWidth = global.bankWidth,
-      bankMaskLen = global.bankMaskLen,
-      emptyBallid = global.emptyBallid
-    )
-  }
-
-}
-
-case class BallDomainParam(
-  rob_entries: Int,
-  numBanks:    Int,
-  bbusChannel: Int,
-  bankEntries: Int,
-  bankWidth:   Int,
-  bankMaskLen: Int,
-  emptyBallid: Int = 5)
-    extends SerializableModuleParameter {
-  override def toString: String =
-    s"""BallDomainParam
-       |  ROB entries: $rob_entries
-       |  Num banks: $numBanks
-       |  BBus channel: $bbusChannel
-       |  Bank entries: $bankEntries
-       |  Bank width: $bankWidth
-       |  Bank mask length: $bankMaskLen
-       |  Empty Ball ID: $emptyBallid
-       |""".stripMargin
-}
-
-/**
- * Ball Domain top level - uses new simplified BBus architecture
- */
 @instantiable
-class BallDomain(val parameter: BallDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[BallDomainParam] {
+class BallDomain(val b: GlobalConfig) extends Module {
 
   @public
-  val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(parameter.rob_entries))))
+  val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))
 
   @public
-  val global_complete_o = IO(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
+  val global_complete_o = IO(Decoupled(new GlobalRsComplete(b)))
 
   @public
-  val bankRead = IO(Vec(
-    parameter.numBanks,
-    Flipped(new BankRead(
-      parameter.bankEntries,
-      parameter.bankWidth,
-      parameter.rob_entries,
-      parameter.numBanks
-    ))
-  ))
+  val bankRead = IO(Vec(b.memDomain.bankNum, Flipped(new BankRead(b))))
 
   @public
-  val bankWrite = IO(Vec(
-    parameter.numBanks,
-    Flipped(new BankWrite(
-      parameter.bankEntries,
-      parameter.bankWidth,
-      parameter.bankMaskLen,
-      parameter.rob_entries,
-      parameter.numBanks
-    ))
-  ))
+  val bankWrite = IO(Vec(b.memDomain.bankNum, Flipped(new BankWrite(b))))
 
   // Create new BBus module
-  val bbus: Instance[BBusModule] = Instantiate(new BBusModule(parameter))
+  val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
+  val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
+  val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))
 
 //---------------------------------------------------------------------------
 // Global RS -> Decoder (receive global issue and construct PostGDCmd)
 //---------------------------------------------------------------------------
-  val ballDecoder: Instance[BallDomainDecoder] = Instantiate(new BallDomainDecoder(parameter)(p))
 
   // Convert global RS issue to Decoder input format
   ballDecoder.raw_cmd_i.valid := global_issue_i.valid
@@ -114,7 +43,6 @@ class BallDomain(val parameter: BallDomainParam)(implicit p: Parameters)
 //---------------------------------------------------------------------------
 // Decoder -> Local BallRS (multi-channel issue to each Ball device)
 //---------------------------------------------------------------------------
-  val ballRs: Instance[BallRSModule] = Instantiate(new BallRSModule(parameter))
 
   // Connect decoded instruction and global rob_id
   ballRs.ball_decode_cmd_i.valid       := ballDecoder.ball_decode_cmd_o.valid
@@ -139,5 +67,4 @@ class BallDomain(val parameter: BallDomainParam)(implicit p: Parameters)
 //---------------------------------------------------------------------------
   global_complete_o <> ballRs.complete_o
 
-  override lazy val desiredName = "BallDomain"
 }

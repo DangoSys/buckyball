@@ -2,10 +2,8 @@ package framework.memdomain.backend.banks
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
+import framework.top.GlobalConfig
 
 /**
  * SramBank: Pure SRAM bank
@@ -13,22 +11,20 @@ import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
  * Each bank is a single-port SRAM
  */
 @instantiable
-class SramBank(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class SramBank(val b: GlobalConfig) extends Module {
   val aligned_to = 8
-  val mask_len   = (parameter.bankWidth / (aligned_to * 8)) max 1
-  val mask_elem  = UInt((parameter.bankWidth min (aligned_to * 8)).W)
+  val mask_len   = (b.memDomain.bankWidth / (aligned_to * 8)) max 1
+  val mask_elem  = UInt((b.memDomain.bankWidth min (aligned_to * 8)).W)
 
   @public
   val io = IO(new Bundle {
     // Bank interface (connected to MemManager)
-    val sramRead  = new SramReadIO(parameter.bankEntries, parameter.bankWidth)
-    val sramWrite = new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen)
+    val sramRead  = new SramReadIO(b)
+    val sramWrite = new SramWriteIO(b)
   })
 
   // SRAM memory
-  val mem = SyncReadMem(parameter.bankEntries, Vec(mask_len, mask_elem))
+  val mem = SyncReadMem(b.memDomain.bankEntries, Vec(mask_len, mask_elem))
 
   // -----------------------------------------------------------------------------
   // Read path
