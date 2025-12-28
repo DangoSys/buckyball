@@ -2,12 +2,10 @@ package framework.gpdomain.sequencer.decoder
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.gpdomain.GpDomainParam
+import framework.top.GlobalConfig
+import framework.core.rocket.RoCCCommandBB
 import framework.gpdomain.sequencer.decoder.{Decoder, DecoderParam}
-import freechips.rocketchip.tile.RoCCCommand
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 
 /**
  * Domain Decoder Parameter Object
@@ -33,8 +31,8 @@ object DomainDecoderParameter {
 /**
  * Domain Decoder IO
  */
-class DomainDecoderIO(implicit p: Parameters) extends Bundle {
-  val inst_i    = Input(new RoCCCommand)
+class DomainDecoderIO(b: GlobalConfig) extends Bundle {
+  val inst_i    = Input(new RoCCCommandBB(b.core.xLen))
   val decoded_o = Decoder.bundle(DomainDecoderParameter.decoderParam).cloneType
 }
 
@@ -43,11 +41,9 @@ class DomainDecoderIO(implicit p: Parameters) extends Bundle {
  * Encapsulates the T1 decoder logic with local instruction database
  */
 @instantiable
-class DomainDecoder(val parameter: GpDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[GpDomainParam] {
+class DomainDecoder(val b: GlobalConfig) extends Module {
   @public
-  val io = IO(new DomainDecoderIO)
+  val io = IO(new DomainDecoderIO(b))
 
   import DomainDecoderParameter._
 
@@ -55,8 +51,8 @@ class DomainDecoder(val parameter: GpDomainParam)(implicit p: Parameters)
   val decode = Decoder.decode(decoderParam)
 
   // Decode the incoming instruction
+  // RoCCCommandBB has 'inst' field (RoCCInstruction Bundle), need to convert to UInt
   val inst = io.inst_i.inst.asUInt
   io.decoded_o := decode(inst)
 
-  override lazy val desiredName = "DomainDecoder"
 }

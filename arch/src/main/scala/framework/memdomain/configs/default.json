@@ -4,7 +4,9 @@
   "bankEntries": 128,
   "bankMaskLen": 16,
   "tlb_size": 4,
-  "rob_entries": 16,
   "dma_maxbytes": 64,
-  "bankChannel": 8
+  "bankChannel": 8,
+  "max_in_flight_mem_reqs": 16,
+  "dma_buswidth": 128,
+  "memAddrLen": 32
 }

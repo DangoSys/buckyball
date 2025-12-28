@@ -4,74 +4,57 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
+import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
-import freechips.rocketchip.tile.RoCCResponse
+import framework.core.rocket.RoCCResponseBB
 
 // Global ROB entry - only contains basic information, does not include specific instruction decoding
-class GlobalRobEntry(rob_entries: Int)(implicit p: Parameters) extends Bundle {
-  val cmd    = new PostGDCmd
-  val rob_id = UInt(log2Up(rob_entries).W)
+class GlobalRobEntry(b: GlobalConfig) extends Bundle {
+  val cmd    = new PostGDCmd(b)
+  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
 // Global RS issue interface
-class GlobalRsIssue(rob_entries: Int)(implicit p: Parameters) extends GlobalRobEntry(rob_entries)
+class GlobalRsIssue(b: GlobalConfig) extends GlobalRobEntry(b)
 
 // Global RS completion interface
-class GlobalRsComplete(rob_entries: Int)(implicit p: Parameters) extends Bundle {
-  val rob_id = UInt(log2Up(rob_entries).W)
+class GlobalRsComplete(b: GlobalConfig) extends Bundle {
+  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
 // No additional interface Bundle needed, defined directly in IO
 
-case class GlobalReservationStationParam(
-  rob_entries:              Int,
-  rs_out_of_order_response: Boolean)
-    extends SerializableModuleParameter
-
 // Global reservation station - between GlobalDecoder and each Domain
 @instantiable
-class GlobalReservationStation(val parameter: GlobalReservationStationParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[GlobalReservationStationParam] {
+class GlobalReservationStation(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
     // GlobalDecoder -> Global RS
-    val global_decode_cmd_i = Flipped(new DecoupledIO(new PostGDCmd))
+    val global_decode_cmd_i = Flipped(new DecoupledIO(new PostGDCmd(b)))
     // Global RS -> BallDomain
     //           -> MemDomain
     //           -> GpDomain
-    val ball_issue_o        = Decoupled(new GlobalRsIssue(parameter.rob_entries))
-    val mem_issue_o         = Decoupled(new GlobalRsIssue(parameter.rob_entries))
-    val gp_issue_o          = Decoupled(new GlobalRsIssue(parameter.rob_entries))
+    val ball_issue_o        = Decoupled(new GlobalRsIssue(b))
+    val mem_issue_o         = Decoupled(new GlobalRsIssue(b))
+    val gp_issue_o          = Decoupled(new GlobalRsIssue(b))
     // BallDomain -> Global RS
     // MemDomain  ->
     // GpDomain   ->
-    val ball_complete_i     = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
-    val mem_complete_i      = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
-    val gp_complete_i       = Flipped(Decoupled(new GlobalRsComplete(parameter.rob_entries)))
+    val ball_complete_i     = Flipped(Decoupled(new GlobalRsComplete(b)))
+    val mem_complete_i      = Flipped(Decoupled(new GlobalRsComplete(b)))
+    val gp_complete_i       = Flipped(Decoupled(new GlobalRsComplete(b)))
 
     // RoCC response
     val rs_rocc_o = new Bundle {
-      val resp = new DecoupledIO(new RoCCResponse)
+      val resp = new DecoupledIO(new RoCCResponseBB(b.core.xLen))
       val busy = Output(Bool())
     }
 
   })
 
-  // Convert GlobalReservationStationParam to FrontendParam for GlobalROB
-  import framework.frontend.FrontendParam
-
-  val frontendParam = FrontendParam(
-    rob_entries = parameter.rob_entries,
-    rs_out_of_order_response = parameter.rs_out_of_order_response
-  )
-
-  val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(frontendParam))
+  val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
 
 // -----------------------------------------------------------------------------
 // Fence handling - fence instructions require ROB to be empty before execution
@@ -130,7 +113,7 @@ class GlobalReservationStation(val parameter: GlobalReservationStationParam)(imp
 // -----------------------------------------------------------------------------
 // Completion signal processing
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(parameter.rob_entries).W), 3))
+  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), 3))
 
   // Connect Ball, Mem, and GP domain completion signals to arbiter
   completeArb.io.in(0).valid := io.ball_complete_i.valid
@@ -146,7 +129,7 @@ class GlobalReservationStation(val parameter: GlobalReservationStationParam)(imp
   io.gp_complete_i.ready     := completeArb.io.in(2).ready
 
   // Decide whether to filter completion signals based on configuration
-  if (parameter.rs_out_of_order_response) {
+  if (b.frontend.rs_out_of_order_response) {
     // Out-of-order mode: accept all completion signals, ROB commits out-of-order internally
     rob.io.complete <> completeArb.io.out
   } else {

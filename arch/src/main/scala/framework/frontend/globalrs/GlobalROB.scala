@@ -4,67 +4,58 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
+import framework.top.GlobalConfig
 import framework.frontend.decoder.PostGDCmd
-import framework.frontend.FrontendParam
 
 @instantiable
-class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[FrontendParam] {
+class GlobalROB(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
     // Allocation interface
-    val alloc = Flipped(new DecoupledIO(new PostGDCmd))
+    val alloc = Flipped(new DecoupledIO(new PostGDCmd(b)))
 
     // Issue interface - issue uncompleted head instruction
-    val issue = new DecoupledIO(new GlobalRobEntry(parameter.rob_entries))
+    val issue = new DecoupledIO(new GlobalRobEntry(b))
 
     // Completion interface - report instruction completion
-    val complete = Flipped(new DecoupledIO(UInt(log2Up(parameter.rob_entries).W)))
+    val complete = Flipped(new DecoupledIO(UInt(log2Up(b.frontend.rob_entries).W)))
 
     // Status signals - exposed to reservation station for decision making
     val empty          = Output(Bool())
     val full           = Output(Bool())
     // head pointer position
-    val head_ptr       = Output(UInt(log2Up(parameter.rob_entries).W))
+    val head_ptr       = Output(UInt(log2Up(b.frontend.rob_entries).W))
     // Number of issued but uncompleted instructions
-    val issued_count   = Output(UInt(log2Up(parameter.rob_entries + 1).W))
+    val issued_count   = Output(UInt(log2Up(b.frontend.rob_entries + 1).W))
     // Whether each entry is valid
-    val entry_valid    = Output(Vec(parameter.rob_entries, Bool()))
+    val entry_valid    = Output(Vec(b.frontend.rob_entries, Bool()))
     // Whether each entry is complete
-    val entry_complete = Output(Vec(parameter.rob_entries, Bool()))
+    val entry_complete = Output(Vec(b.frontend.rob_entries, Bool()))
   })
 
   // Circular ROB structure
-  val robEntries  =
-    RegInit(VecInit(Seq.fill(parameter.rob_entries)(0.U.asTypeOf(new GlobalRobEntry(parameter.rob_entries)))))
+  val robEntries    =
+    RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(0.U.asTypeOf(new GlobalRobEntry(b)))))
   // Whether entry is valid
-  val robValid    = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
+  val robValid      = RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(false.B)))
   // Whether entry is issued
-  val robIssued   = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
+  val robIssued     = RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(false.B)))
   // Whether entry is complete
-  val robComplete = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
-
-  // Circular queue pointers
+  val robComplete   = RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(false.B)))
   // Points to oldest uncommitted instruction
-  val headPtr      = RegInit(0.U(log2Up(parameter.rob_entries).W))
+  val headPtr       = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   // Points to next position to allocate
-  val tailPtr      = RegInit(0.U(log2Up(parameter.rob_entries).W))
+  val tailPtr       = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   // ROB ID circular counter
-  val robIdCounter = RegInit(0.U(log2Up(parameter.rob_entries).W))
-
+  val robIdCounter  = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   // Number of issued but uncompleted instructions (used to limit issue)
-  val issuedCount   = RegInit(0.U(log2Up(parameter.rob_entries + 1).W))
+  val issuedCount   = RegInit(0.U(log2Up(b.frontend.rob_entries + 1).W))
   // Maximum issue limit: half of ROB depth
-  val maxIssueLimit = (parameter.rob_entries / 2).U
-
+  val maxIssueLimit = (b.frontend.rob_entries / 2).U
   // Queue status
-  val isEmpty = headPtr === tailPtr && !robValid(headPtr)
-  val isFull  = headPtr === tailPtr && robValid(headPtr)
+  val isEmpty       = headPtr === tailPtr && !robValid(headPtr)
+  val isFull        = headPtr === tailPtr && robValid(headPtr)
 
 // -----------------------------------------------------------------------------
 // Inbound - instruction allocation
@@ -79,8 +70,8 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
     robComplete(tailPtr)       := false.B
 
     // Update tail pointer and rob_id counter (circular)
-    tailPtr      := Mux(tailPtr === (parameter.rob_entries - 1).U, 0.U, tailPtr + 1.U)
-    robIdCounter := Mux(robIdCounter === (parameter.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
+    tailPtr      := Mux(tailPtr === (b.frontend.rob_entries - 1).U, 0.U, tailPtr + 1.U)
+    robIdCounter := Mux(robIdCounter === (b.frontend.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
   }
 
 // -----------------------------------------------------------------------------
@@ -101,16 +92,16 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
 // -----------------------------------------------------------------------------
   // Find first valid and unissued instruction starting from head
   val canIssue = Wire(Bool())
-  val issuePtr = Wire(UInt(log2Up(parameter.rob_entries).W))
+  val issuePtr = Wire(UInt(log2Up(b.frontend.rob_entries).W))
 
   // Default values
   canIssue := false.B
   issuePtr := headPtr
 
   // Scan from head to find first issuable instruction
-  val scanValid = Wire(Vec(parameter.rob_entries, Bool()))
-  for (i <- 0 until parameter.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= parameter.rob_entries.U, headPtr + i.U - parameter.rob_entries.U, headPtr + i.U)
+  val scanValid = Wire(Vec(b.frontend.rob_entries, Bool()))
+  for (i <- 0 until b.frontend.rob_entries) {
+    val ptr = Mux(headPtr + i.U >= b.frontend.rob_entries.U, headPtr + i.U - b.frontend.rob_entries.U, headPtr + i.U)
     scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
   }
 
@@ -119,8 +110,8 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
   val hasValid   = scanValid.asUInt.orR
 
   val actualIssuePtr = Mux(
-    headPtr + firstValid >= parameter.rob_entries.U,
-    headPtr + firstValid - parameter.rob_entries.U,
+    headPtr + firstValid >= b.frontend.rob_entries.U,
+    headPtr + firstValid - b.frontend.rob_entries.U,
     headPtr + firstValid
   )
 
@@ -141,7 +132,7 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
 // Instruction commit - commit all completed instructions out-of-order
 // -----------------------------------------------------------------------------
   // Commit all completed instructions
-  for (i <- 0 until parameter.rob_entries) {
+  for (i <- 0 until b.frontend.rob_entries) {
     when(robValid(i.U) && robComplete(i.U)) {
       robValid(i.U)    := false.B
       robIssued(i.U)   := false.B
@@ -151,9 +142,9 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
 
   // Update head pointer: skip all completed (about to be cleared) positions
   // Find first "valid and incomplete" instruction position starting from head
-  val nextHeadCandidates = Wire(Vec(parameter.rob_entries, Bool()))
-  for (i <- 0 until parameter.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= parameter.rob_entries.U, headPtr + i.U - parameter.rob_entries.U, headPtr + i.U)
+  val nextHeadCandidates = Wire(Vec(b.frontend.rob_entries, Bool()))
+  for (i <- 0 until b.frontend.rob_entries) {
+    val ptr = Mux(headPtr + i.U >= b.frontend.rob_entries.U, headPtr + i.U - b.frontend.rob_entries.U, headPtr + i.U)
     // Entry is valid and incomplete (will not be committed)
     nextHeadCandidates(i) := robValid(ptr) && !robComplete(ptr)
   }
@@ -162,8 +153,8 @@ class GlobalROB(val parameter: FrontendParam)(implicit p: Parameters)
   val nextHeadOffset = PriorityEncoder(nextHeadCandidates.asUInt)
 
   val nextHeadPtr = Mux(
-    headPtr + nextHeadOffset >= parameter.rob_entries.U,
-    headPtr + nextHeadOffset - parameter.rob_entries.U,
+    headPtr + nextHeadOffset >= b.frontend.rob_entries.U,
+    headPtr + nextHeadOffset - b.frontend.rob_entries.U,
     headPtr + nextHeadOffset
   )
 

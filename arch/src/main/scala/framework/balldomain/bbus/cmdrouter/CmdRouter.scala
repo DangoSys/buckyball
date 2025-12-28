@@ -2,22 +2,26 @@ package framework.balldomain.bbus.cmdrouter
 
 import chisel3._
 import chisel3.util._
-import examples.toy.balldomain.BallDomainParam
+import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.bbus.BBusConfigIO
+import framework.balldomain.bbus.cmdrouter.CmdReqRouter
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-class CmdRouter(val parameter: BallDomainParam, val numBalls: Int) extends Module {
+@instantiable
+class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
 
+  @public
   val io = IO(new Bundle {
-    val cmdReq_i     = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(parameter))))
-    val cmdResp_i    = Vec(numBalls, Flipped(Decoupled(new BallRsComplete(parameter))))
+    val cmdReq_i     = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b))))
+    val cmdResp_i    = Vec(numBalls, Flipped(Decoupled(new BallRsComplete(b))))
     val ballIdle     = Input(Vec(numBalls, Bool()))
-    val cmdReq_o     = Decoupled(new BallRsIssue(parameter))
-    val cmdResp_o    = Vec(numBalls, Decoupled(new BallRsComplete(parameter)))
+    val cmdReq_o     = Decoupled(new BallRsIssue(b))
+    val cmdResp_o    = Vec(numBalls, Decoupled(new BallRsComplete(b)))
     val bbusConfig_o = Decoupled(new BBusConfigIO(numBalls))
   })
 
-  val reqRouter = Module(new CmdReqRouter(parameter, numBalls))
+  val reqRouter = Module(new CmdReqRouter(b, numBalls))
 
   reqRouter.io.cmdReq_i <> io.cmdReq_i
   reqRouter.io.ballIdle := io.ballIdle
@@ -30,11 +34,10 @@ class CmdRouter(val parameter: BallDomainParam, val numBalls: Int) extends Modul
   io.bbusConfig_o.bits.src_bid := 0.U
   io.bbusConfig_o.bits.dst_bid := 0.U
   io.bbusConfig_o.bits.set     := false.B
-  when(io.cmdReq_i(parameter.emptyBallid).valid) {
+  when(io.cmdReq_i(b.ballDomain.emptyBallid).valid) {
     io.bbusConfig_o.valid        := true.B
-    io.bbusConfig_o.bits.src_bid := io.cmdReq_i(parameter.emptyBallid).bits.cmd.special(5, 0)
-    io.bbusConfig_o.bits.dst_bid := io.cmdReq_i(parameter.emptyBallid).bits.cmd.special(11, 6)
-    io.bbusConfig_o.bits.set     := io.cmdReq_i(parameter.emptyBallid).bits.cmd.special(12, 12)
+    io.bbusConfig_o.bits.src_bid := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(5, 0)
+    io.bbusConfig_o.bits.dst_bid := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(11, 6)
+    io.bbusConfig_o.bits.set     := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(12, 12)
   }
-  override lazy val desiredName = "CmdRouter"
 }

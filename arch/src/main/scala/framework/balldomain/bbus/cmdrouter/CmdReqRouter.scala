@@ -2,18 +2,18 @@ package framework.balldomain.bbus.cmdrouter
 
 import chisel3._
 import chisel3.util._
-import examples.toy.balldomain.BallDomainParam
+import framework.top.GlobalConfig
 import framework.balldomain.rs.BallRsIssue
 
-class CmdReqRouter(val parameter: BallDomainParam, val numBalls: Int) extends Module {
+class CmdReqRouter(val b: GlobalConfig, val numBalls: Int) extends Module {
 
   val io = IO(new Bundle {
-    val cmdReq_i = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(parameter))))
+    val cmdReq_i = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b))))
     val ballIdle = Input(Vec(numBalls, Bool()))
-    val cmdReq_o = Decoupled(new BallRsIssue(parameter))
+    val cmdReq_o = Decoupled(new BallRsIssue(b))
   })
 
-  val arbiter = Module(new RRArbiter(new BallRsIssue(parameter), numBalls))
+  val arbiter = Module(new RRArbiter(new BallRsIssue(b), numBalls))
 
   for (i <- 0 until numBalls) {
     arbiter.io.in(i).valid := io.cmdReq_i(i).valid && io.ballIdle(i)
@@ -23,5 +23,4 @@ class CmdReqRouter(val parameter: BallDomainParam, val numBalls: Int) extends Mo
 
   io.cmdReq_o <> arbiter.io.out
 
-  override lazy val desiredName = "CmdReqRouter"
 }

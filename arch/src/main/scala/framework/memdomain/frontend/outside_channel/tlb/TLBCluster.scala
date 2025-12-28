@@ -2,51 +2,75 @@ package framework.memdomain.frontend.outside_channel.tlb
 
 import chisel3._
 import chisel3.util._
-
-import org.chipsalliance.cde.config.Parameters
-import freechips.rocketchip.rocket._
-import freechips.rocketchip.tile.{CoreBundle, CoreModule}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import freechips.rocketchip.tilelink.TLEdgeOut
+import framework.top.GlobalConfig
 
-class BBTLBIO(implicit p: Parameters) extends CoreBundle {
-  val lgMaxSize = log2Ceil(coreDataBytes)
-  val req       = Valid(new BBTLBReq(lgMaxSize))
-  val resp      = Flipped(new TLBResp)
-}
+@instantiable
+class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Module {
 
-class BBTLBCluster(
-  nClients:          Int,
-  entries:           Int,
-  maxSize:           Int,
-  use_shared_tlb:    Boolean = true
-)(
-  implicit val edge: TLEdgeOut,
-  p:                 Parameters)
-    extends CoreModule {
+  val nClients  = 2
+  val entries   = b.memDomain.tlb_size
+  val maxSize   = b.core.coreDataBytes
+  val lgMaxSize = log2Ceil(b.core.coreDataBytes)
+  val vaddrBits = b.core.vaddrBits
+  val paddrBits = b.core.paddrBits
+  val pgIdxBits = b.core.pgIdxBits
 
-  val num_tlbs  = if (use_shared_tlb) 1 else nClients
-  val lgMaxSize = log2Ceil(coreDataBytes)
-
+  @public
   val io = IO(new Bundle {
-    val clients = Flipped(Vec(nClients, new BBTLBIO))
-    val ptw     = Vec(num_tlbs, new TLBPTWIO)
-    val exp     = Vec(num_tlbs, new BBTLBExceptionIO)
+    val clients = Flipped(Vec(nClients, new BBTLBIO(b)))
+    val ptw     = Vec(1, new BBTLBPTWIO(b))    // Shared TLB has only 1 PTW port
+    val exp     = Vec(1, new BBTLBExceptionIO) // Shared TLB has only 1 exception interface
   })
 
-  val tlbs = Seq.fill(num_tlbs)(Module(new BBTLB(entries, maxSize)))
+  val tlb = Instantiate(new TLB(b, lgMaxSize))
 
-  io.ptw <> VecInit(tlbs.map(_.io.ptw))
-  io.exp <> VecInit(tlbs.map(_.io.exp))
+  // Exception handling
+  val interrupt = RegInit(false.B)
+  io.exp(0).interrupt := interrupt
 
-  val tlbArbOpt = if (use_shared_tlb) Some(Module(new RRArbiter(new BBTLBReq(lgMaxSize), nClients))) else None
+  // Connect PTW
+  io.ptw(0) <> tlb.io.ptw
 
-  if (use_shared_tlb) {
-    val tlbArb = tlbArbOpt.get
-    val tlb    = tlbs.head
-    tlb.io.req.valid    := tlbArb.io.out.valid
-    tlb.io.req.bits     := tlbArb.io.out.bits
-    tlbArb.io.out.ready := true.B
+  val tlbArb    = Module(new RRArbiter(new BBTLBReq(lgMaxSize, vaddrBits, b.core.xLen), nClients))
+  val tlbArbOut = tlbArb.io.out
+  val tlb_io    = tlb.io
+
+  tlb_io.req.valid := tlbArbOut.valid
+  tlb_io.req.bits  := tlbArbOut.bits
+  tlbArbOut.ready  := tlb_io.req.ready
+
+  // Connect status to PTW
+  tlb_io.ptw.status := tlbArbOut.bits.status
+  tlb_io.kill       := false.B
+
+  // Handle sfence from exception IO
+  tlb_io.sfence.valid := io.exp(0).flush()
+  tlb_io.sfence.bits  := false.B
+
+  // Exception detection
+  val isRead = tlbArbOut.bits.cmd(0) === 0.U
+
+  val exception = tlbArbOut.valid && !tlb_io.resp.miss && Mux(
+    isRead,
+    tlb_io.resp.pf.ld || tlb_io.resp.ae.ld || tlb_io.resp.gf.ld,
+    tlb_io.resp.pf.st || tlb_io.resp.ae.st || tlb_io.resp.gf.st
+  )
+
+  when(exception) {
+    interrupt := true.B
   }
+
+  when(interrupt && io.exp(0).flush_skip) {
+    interrupt := false.B
+  }
+
+  when(interrupt && io.exp(0).flush_retry) {
+    interrupt := false.B
+  }
+
+  assert(!io.exp(0).flush_retry || !io.exp(0).flush_skip, "TLB: flushing with both retry and skip at same time")
 
   io.clients.zipWithIndex.foreach {
     case (client, i) =>
@@ -55,35 +79,33 @@ class BBTLBCluster(
       val last_translated_ppn   = RegInit(0.U(paddrBits.W))
 
       val l0_tlb_hit   =
-        last_translated_valid && ((client.req.bits.tlb_req.vaddr >> pgIdxBits).asUInt === (last_translated_vpn >> pgIdxBits).asUInt)
-      val l0_tlb_paddr = Cat(last_translated_ppn >> pgIdxBits, client.req.bits.tlb_req.vaddr(pgIdxBits - 1, 0))
+        last_translated_valid && ((client.req.bits.vaddr >> pgIdxBits).asUInt === (last_translated_vpn >> pgIdxBits).asUInt)
+      val l0_tlb_paddr = Cat(last_translated_ppn >> pgIdxBits, client.req.bits.vaddr(pgIdxBits - 1, 0))
 
-      val tlb         = if (use_shared_tlb) tlbs.head else tlbs(i)
-      val tlbReq      = if (use_shared_tlb) tlbArbOpt.get.io.in(i).bits else tlb.io.req.bits
-      val tlbReqValid = if (use_shared_tlb) tlbArbOpt.get.io.in(i).valid else tlb.io.req.valid
-      val tlbReqFire  = if (use_shared_tlb) tlbArbOpt.get.io.in(i).fire else tlb.io.req.fire
+      tlbArb.io.in(i).valid := client.req.valid && !l0_tlb_hit
+      tlbArb.io.in(i).bits  := client.req.bits
 
-      val l0_tlb_paddr_reg = RegEnable(client.req.bits.tlb_req.vaddr, client.req.valid)
+      val tlbReq     = tlbArb.io.in(i).bits
+      val tlbReqFire = tlbArb.io.in(i).fire
 
-      tlbReqValid := RegNext(client.req.valid && !l0_tlb_hit)
-      tlbReq      := RegNext(client.req.bits)
-
-      when(tlbReqFire && !tlb.io.resp.miss) {
+      when(tlbReqFire && !tlb_io.resp.miss) {
         last_translated_valid := true.B
-        last_translated_vpn   := tlbReq.tlb_req.vaddr
-        last_translated_ppn   := tlb.io.resp.paddr
+        last_translated_vpn   := tlbReq.vaddr
+        last_translated_ppn   := tlb_io.resp.paddr
       }
 
-      when(tlb.io.exp.flush()) {
+      when(io.exp(0).flush()) {
         last_translated_valid := false.B
       }
 
       when(tlbReqFire) {
-        client.resp := tlb.io.resp
+        client.resp.valid := !tlb_io.resp.miss
+        client.resp.bits  := tlb_io.resp
       }.otherwise {
-        client.resp       := DontCare
-        client.resp.paddr := RegNext(l0_tlb_paddr)
-        client.resp.miss  := !RegNext(l0_tlb_hit)
+        client.resp.valid      := RegNext(!l0_tlb_hit)
+        client.resp.bits       := DontCare
+        client.resp.bits.paddr := RegNext(l0_tlb_paddr)
+        client.resp.bits.miss  := !RegNext(l0_tlb_hit)
       }
   }
 }

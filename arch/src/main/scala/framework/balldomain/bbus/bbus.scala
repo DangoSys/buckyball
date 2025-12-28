@@ -2,8 +2,8 @@ package framework.balldomain.bbus
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public}
-import examples.toy.balldomain.BallDomainParam
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.BallRegist
 import framework.balldomain.bbus.pmc.BallCyclePMC
@@ -21,40 +21,38 @@ class BBusConfigIO(numBalls: Int) extends Bundle {
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
  */
 @instantiable
-class BBus(val parameter: BallDomainParam, ballGenerators: Seq[() => BallRegist with Module]) extends Module {
+class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module]) extends Module {
   val numBalls = ballGenerators.length
 
   @public
-  val cmdReq = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(parameter)))))
+  val cmdReq = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
 
   @public
-  val cmdResp = IO(Vec(numBalls, Decoupled(new BallRsComplete(parameter))))
+  val cmdResp = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
 
   @public
   val bankRead = IO(Vec(
-    parameter.numBanks,
-    Flipped(new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.numBanks))
+    b.memDomain.bankNum,
+    Flipped(new BankRead(b))
   ))
 
   @public
   val bankWrite = IO(Vec(
-    parameter.numBanks,
-    Flipped(new BankWrite(
-      parameter.bankEntries,
-      parameter.bankWidth,
-      parameter.bankMaskLen,
-      parameter.rob_entries,
-      parameter.numBanks
-    ))
+    b.memDomain.bankNum,
+    Flipped(new BankWrite(b))
   ))
 
   // Instantiate all registered Balls
-  val balls = ballGenerators.map(gen => Module(gen()))
+  // Note: Since Instantiate requires 'new' expression and ballGenerators are functions,
+  // we use Module here. The balls themselves are @instantiable, but when instantiated
+  // from a function generator pattern, we use Module. This is acceptable as the balls
+  // are still properly instantiated and can be used with the hierarchy system.
+  val balls = ballGenerators.map(gen => gen())
 
 // -----------------------------------------------------------------------------
 // cmd router
 // -----------------------------------------------------------------------------
-  val cmdRouter = Module(new CmdRouter(parameter, numBalls))
+  val cmdRouter: Instance[CmdRouter] = Instantiate(new CmdRouter(b, numBalls))
   val idle_ball = Wire(Vec(numBalls, Bool()))
   for (i <- 0 until numBalls) {
     idle_ball(i) := balls(i).Blink.cmdReq.ready
@@ -81,12 +79,12 @@ class BBus(val parameter: BallDomainParam, ballGenerators: Seq[() => BallRegist 
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
-  val memoryrouter = Module(new MemRouter(parameter, numBalls, parameter.bbusChannel))
+  val memoryrouter: Instance[MemRouter] = Instantiate(new MemRouter(b, numBalls, b.memDomain.bankChannel))
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
 
   // Direct connection from balls to memory router (no ToVirtualLine)
   for (i <- 0 until numBalls) {
-    for (j <- 0 until parameter.numBanks) {
+    for (j <- 0 until b.memDomain.bankNum) {
       memoryrouter.io.bankRead_i(i)(j) <> balls(i).Blink.bankRead(j)
       memoryrouter.io.bankWrite_i(i)(j) <> balls(i).Blink.bankWrite(j)
     }
@@ -98,7 +96,7 @@ class BBus(val parameter: BallDomainParam, ballGenerators: Seq[() => BallRegist 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
-  val pmc = Module(new BallCyclePMC(parameter, numBalls))
+  val pmc = Module(new BallCyclePMC(b, numBalls))
 
   for (i <- 0 until numBalls) {
     pmc.io.cmdReq_i(i).valid  := cmdRouter.io.cmdReq_i(i).fire
@@ -108,5 +106,4 @@ class BBus(val parameter: BallDomainParam, ballGenerators: Seq[() => BallRegist 
     pmc.io.cmdResp_o(i).bits  := cmdRouter.io.cmdResp_o(i).bits
   }
 
-  override lazy val desiredName = "BBus"
 }

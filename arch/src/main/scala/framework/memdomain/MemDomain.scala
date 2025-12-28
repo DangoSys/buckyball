@@ -3,83 +3,30 @@ package framework.memdomain
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import framework.frontend.decoder.PostGDCmd
 import freechips.rocketchip.tile._
-
 import framework.balldomain.blink.{BankRead, BankWrite}
 import freechips.rocketchip.tilelink.TLEdgeOut
-import freechips.rocketchip.rocket.TLBPTWIO
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 
 import framework.memdomain.frontend.MemController
-import framework.memdomain.frontend.outside_channel.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBIO}
+import framework.memdomain.frontend.outside_channel.dma.{
+  BBReadRequest,
+  BBReadResponse,
+  BBStreamReader,
+  BBStreamReaderParam,
+  BBStreamWriter,
+  BBStreamWriterParam,
+  BBWriteRequest,
+  BBWriteResponse
+}
+import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 
 import framework.memdomain.midend.MemScheduler
 import framework.memdomain.backend.MemManager
-
-object MemDomainParam {
-  implicit def rw: upickle.default.ReadWriter[MemDomainParam] = upickle.default.macroRW
-
-  /**
-   * Load from JSON file
-   */
-  def fromJson(path: String): MemDomainParam = {
-    val jsonStr = scala.io.Source.fromFile(path).mkString
-    upickle.default.read[MemDomainParam](jsonStr)
-  }
-
-  /**
-   * Generate from global config
-   */
-  def fromGlobal(global: framework.builtin.BaseConfig): MemDomainParam = {
-    MemDomainParam(
-      bankNum = global.bankNum,
-      bankWidth = global.bankWidth,
-      bankEntries = global.bankEntries,
-      bankMaskLen = global.bankMaskLen,
-      tlb_size = global.tlb_size,
-      rob_entries = global.rob_entries,
-      dma_maxbytes = global.dma_maxbytes,
-      memAddrLen = global.memAddrLen,
-      bankChannel = 8 // Default value
-    )
-  }
-
-}
-
-case class MemDomainParam(
-  bankNum:      Int,
-  bankWidth:    Int,
-  bankEntries:  Int,
-  bankMaskLen:  Int,
-  tlb_size:     Int,
-  rob_entries:  Int,
-  dma_maxbytes: Int,
-  memAddrLen:   Int,
-  bankChannel:  Int)
-    extends SerializableModuleParameter {
-  override def toString: String =
-    s"""MemDomainParam
-       |  Bank num: $bankNum
-       |  Bank width: $bankWidth bits
-       |  Bank entries: $bankEntries
-       |  Bank mask length: $bankMaskLen
-       |  TLB size: $tlb_size
-       |  ROB entries: $rob_entries
-       |  DMA max bytes: $dma_maxbytes
-       |  Mem addr len: $memAddrLen
-       |  Bank channel: $bankChannel
-       |""".stripMargin
-}
+import framework.top.GlobalConfig
 
 @instantiable
-class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   @public
   val io = IO(new Bundle {
@@ -87,9 +34,9 @@ class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Para
     // Command Channel
     // -------------------------------------------------
     // global RS -> MemDomain
-    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(parameter.rob_entries)(p)))
+    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
     // MemDomain -> global RS
-    val global_complete_o = Decoupled(new GlobalRsComplete(parameter.rob_entries)(p))
+    val global_complete_o = Decoupled(new GlobalRsComplete(b))
     val busy              = Output(Bool())
 
     // -------------------------------------------------
@@ -97,22 +44,8 @@ class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Para
     // -------------------------------------------------
     // Bank interface for interaction with Ball Domain
     val ballDomain = new Bundle {
-
-      val bankRead = Vec(
-        parameter.bankNum,
-        new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.bankNum)
-      )
-
-      val bankWrite = Vec(
-        parameter.bankNum,
-        new BankWrite(
-          parameter.bankEntries,
-          parameter.bankWidth,
-          parameter.bankMaskLen,
-          parameter.rob_entries,
-          parameter.bankNum
-        )
-      )
+      val bankRead  = Vec(b.memDomain.bankNum, new BankRead(b))
+      val bankWrite = Vec(b.memDomain.bankNum, new BankWrite(b))
 
     }
 
@@ -123,24 +56,24 @@ class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Para
 
       val read = new Bundle {
         val req  = Decoupled(new BBReadRequest())
-        val resp = Flipped(Decoupled(new BBReadResponse(parameter.bankWidth)))
+        val resp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
       }
 
       val write = new Bundle {
-        val req  = Decoupled(new BBWriteRequest(parameter.bankWidth))
+        val req  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
         val resp = Flipped(Decoupled(new BBWriteResponse))
       }
 
     }
 
-    val tlb    = Vec(2, Flipped(new BBTLBIO))
-    val ptw    = Vec(1, new TLBPTWIO)
+    val tlb    = Vec(2, Flipped(new BBTLBIO(b)))
+    val ptw    = Vec(1, new BBTLBPTWIO(b))
     val tlbExp = Vec(1, new BBTLBExceptionIO)
   })
 
-  val frontend: Instance[MemController] = Instantiate(new MemController(parameter)(edge))
-  val midend:   Instance[MemScheduler]  = Instantiate(new MemScheduler(parameter))
-  val backend:  Instance[MemManager]    = Instantiate(new MemManager(parameter))
+  val frontend: Instance[MemController] = Instantiate(new MemController(b)(edge))
+  val midend:   Instance[MemScheduler]  = Instantiate(new MemScheduler(b))
+  val backend:  Instance[MemManager]    = Instantiate(new MemManager(b))
 
   // -------------------------------------------------
   // Connection with outside (all in frontend)
@@ -171,4 +104,40 @@ class MemDomain(val parameter: MemDomainParam)(edge: TLEdgeOut)(implicit p: Para
 
   // Midend to Backend: route scheduled requests to memory manager
   midend.io.mem_req <> backend.io.mem_req
+
+  // -------------------------------------------------
+  // DMA Modules (Reader and Writer) - Internal instantiation
+  // -------------------------------------------------
+  val readerParam = BBStreamReaderParam(
+    nXacts = b.memDomain.dma_n_xacts,
+    beatBits = b.memDomain.dma_buswidth,
+    maxBytes = b.memDomain.dma_maxbytes,
+    dataWidth = b.memDomain.dma_buswidth,
+    tledge = edge
+  )
+
+  val writerParam = BBStreamWriterParam(
+    nXacts = b.memDomain.dma_n_xacts,
+    beatBits = b.memDomain.dma_buswidth,
+    maxBytes = b.memDomain.dma_maxbytes,
+    dataWidth = b.memDomain.dma_buswidth,
+    tledge = edge
+  )
+
+  val reader: Instance[BBStreamReader] = Instantiate(new BBStreamReader(readerParam, b))
+  val writer: Instance[BBStreamWriter] = Instantiate(new BBStreamWriter(writerParam, b))
+
+  // Connect DMA to TLB and interfaces
+  reader.io.tlb <> io.tlb(1)
+  writer.io.tlb <> io.tlb(0)
+
+  // Connect DMA to external DMA interface
+  io.dma.read.req <> reader.io.req
+  reader.io.resp <> io.dma.read.resp
+  io.dma.write.req <> writer.io.req
+  writer.io.resp <> io.dma.write.resp
+
+  // Connect DMA flush signals to TLB exceptions
+  reader.io.flush := io.tlbExp(0).flush()
+  writer.io.flush := io.tlbExp(0).flush()
 }

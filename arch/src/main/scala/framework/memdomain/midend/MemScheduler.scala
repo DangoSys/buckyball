@@ -3,11 +3,9 @@ package framework.memdomain.midend
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
+import framework.top.GlobalConfig
 import framework.balldomain.blink.{BankRead, BankWrite}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
-import framework.memdomain.MemDomainParam
 import framework.memdomain.backend.MemRequestIO
 
 /**
@@ -17,36 +15,19 @@ import framework.memdomain.backend.MemRequestIO
  * Basic direct connection: routes requests from frontend to backend channels
  */
 @instantiable
-class MemScheduler(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class MemScheduler(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
 
     // Input from frontend (MemController)
     val frontend = new Bundle {
-
-      val bankRead = Vec(
-        parameter.bankNum,
-        Flipped(new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.bankNum))
-      )
-
-      val bankWrite = Vec(
-        parameter.bankNum,
-        Flipped(new BankWrite(
-          parameter.bankEntries,
-          parameter.bankWidth,
-          parameter.bankMaskLen,
-          parameter.rob_entries,
-          parameter.bankNum
-        ))
-      )
-
+      val bankRead  = Vec(b.memDomain.bankNum, Flipped(new BankRead(b)))
+      val bankWrite = Vec(b.memDomain.bankNum, Flipped(new BankWrite(b)))
     }
 
     // Output to backend (MemManager)
-    val mem_req = Vec(parameter.bankChannel, new MemRequestIO(parameter))
+    val mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
   })
 
   // -----------------------------------------------------------------------------
@@ -55,9 +36,9 @@ class MemScheduler(val parameter: MemDomainParam)(implicit p: Parameters)
   // Simple mapping: each channel handles requests for a specific bank
   // Channel ch handles bank (ch % bankNum)
 
-  for (ch <- 0 until parameter.bankChannel) {
-    val targetBank = (ch % parameter.bankNum).U
-    val bankIdx    = ch  % parameter.bankNum
+  for (ch <- 0 until b.memDomain.bankChannel) {
+    val targetBank = (ch % b.memDomain.bankNum).U
+    val bankIdx    = ch  % b.memDomain.bankNum
 
     // Default: no request
     io.mem_req(ch).write.req.valid := false.B

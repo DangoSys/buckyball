@@ -3,21 +3,18 @@ package sims.verify
 import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.{Config, Field, Parameters}
-import examples.BuckyballConfigs.CustomBuckyballConfig
-import examples.toy.balldomain.BallDomainParam
-import framework.balldomain.blink.Blink
-import prototype.vector.VecBall
-import prototype.vector.configs.VecConfig
-import prototype.matrix.MatrixBall
-import prototype.matrix.configs.MatrixConfig
-import prototype.transpose.TransposeBall
-import prototype.transpose.configs.TransposeConfig
-import prototype.im2col.Im2colBall
-import prototype.im2col.configs.Im2colConfig
-import prototype.relu.ReluBall
-import prototype.relu.configs.ReluConfig
-import prototype.nnlut.NNLutBall
-import prototype.nnlut.configs.NNLutConfig
+import framework.top.GlobalConfig
+import framework.balldomain.blink.BlinkIO
+import framework.balldomain.prototype.vector.VecBall
+// import framework.balldomain.prototype.matrix.MatrixBall
+// import framework.balldomain.prototype.matrix.configs.MatrixConfig
+// import framework.balldomain.prototype.transpose.TransposeBall
+// import framework.balldomain.prototype.transpose.configs.TransposeConfig
+// import framework.balldomain.prototype.im2col.Im2colBall
+// import framework.balldomain.prototype.im2col.configs.Im2colConfig
+// import framework.balldomain.prototype.relu.ReluBall
+// import framework.balldomain.prototype.nnlut.NNLutBall
+// import framework.balldomain.prototype.nnlut.configs.NNLutConfig
 
 // Ball type definitions
 sealed trait BallType
@@ -32,35 +29,32 @@ case object NNLutBallType     extends BallType
 case object TargetBallKey extends Field[BallType](VecBallType)
 
 // TargetBall - directly instantiate pre-packaged Ball
-class TargetBall(implicit b: CustomBuckyballConfig, p: Parameters) extends Module {
-  // Create BallDomainParam from global config
-  val ballParam = BallDomainParam.fromGlobal(b)
+class TargetBall(implicit b: GlobalConfig, p: Parameters) extends Module {
 
-  // Create Blink IO with parameter
-  val io = IO(new Blink(ballParam, ballParam.bankEntries, ballParam.bankWidth, ballParam.bankMaskLen))
+  // Create BlinkIO with parameter
+  val io = IO(new BlinkIO(b))
 
   p(TargetBallKey) match {
     case VecBallType       =>
-      val ball = Module(new VecBall(VecConfig.fromBallDomain(ballParam), 0))
+      val ball = Module(new VecBall(b, 0)) // Use id=0 for VecBall
       io <> ball.io
     case MatrixBallType    =>
-      val ball = Module(new MatrixBall(MatrixConfig.fromBallDomain(ballParam), 0))
-      io <> ball.io
+    // val ball = Module(new MatrixBall(MatrixConfig.fromBallDomain(ballParam), 0))
+    // io <> ball.io
     case Im2colBallType    =>
-      val ball = Module(new Im2colBall(Im2colConfig.fromBallDomain(ballParam), 0))
-      io <> ball.io
+    // val ball = Module(new Im2colBall(Im2colConfig.fromBallDomain(ballParam), 0))
+    // io <> ball.io
     case TransposeBallType =>
-      val ball = Module(new TransposeBall(TransposeConfig.fromBallDomain(ballParam), 0))
-      io <> ball.io
+    // val ball = Module(new TransposeBall(TransposeConfig.fromBallDomain(ballParam), 0))
+    // io <> ball.io
     case ReluBallType      =>
-      val ball = Module(new ReluBall(ReluConfig.fromBallDomain(ballParam), 0))
-      io <> ball.io
+    // val ball = Module(new ReluBall(ReluConfig.fromBallDomain(ballParam), 0))
+    // io <> ball.io
     case NNLutBallType     =>
-      val ball = Module(new NNLutBall(NNLutConfig.fromBallDomain(ballParam), 0))
-      io <> ball.io
+    // val ball = Module(new NNLutBall(NNLutConfig.fromBallDomain(ballParam), 0))
+    // io <> ball.io
     case _                 => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
-  override lazy val desiredName = "TargetBall"
 }
 
 class WithTargetBall(ballType: BallType)
@@ -96,11 +90,11 @@ object BallTopMain extends App {
     }
   }
 
-  implicit val config: CustomBuckyballConfig = examples.CustomBuckyballConfig()
-  implicit val params: Parameters            = new Config(new CustomBallTopConfig(ballType))
+  implicit val b:      GlobalConfig = GlobalConfig()
+  implicit val params: Parameters   = new Config(new CustomBallTopConfig(ballType))
 
   ChiselStage.emitSystemVerilogFile(
-    new TargetBall(),
+    new TargetBall()(b, params),
     // Remaining parameters passed to firtool
     firtoolOpts = args.drop(1),
     args = Array.empty

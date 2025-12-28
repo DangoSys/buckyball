@@ -7,6 +7,7 @@
 # $1 - file to replace text in
 # $2 - key used to find block of text to replace
 # $3 - text to fill in block that is replaced
+# $4 - position to add if block not found: "head" or "tail" (default: "tail")
 
 import re
 import sys
@@ -61,7 +62,11 @@ fh_content = re.sub(
 fh_content = fh_content.replace(replace_str, inner_contents)
 
 if CY_INITIALIZE_START_TOKEN(initialize_comment_key) not in fh_content:
-    fh_content += "\n%s\n" % inner_contents
+    position = sys.argv[4] if len(sys.argv) > 4 else "tail"
+    if position == "head":
+        fh_content = "%s\n%s" % (inner_contents, fh_content)
+    else:
+        fh_content += "\n%s\n" % inner_contents
 
 with open(sys.argv[1], "w") as fh:
     fh.write(fh_content)

@@ -3,29 +3,26 @@ package examples.toy.balldomain.emptyball
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import examples.toy.balldomain.BallDomainParam
-import framework.balldomain.blink.{BallRegist, Blink}
+import framework.top.GlobalConfig
+import framework.balldomain.blink.{BallRegist, BlinkIO}
 
 @instantiable
 class EmptyBall(
-  parameter:   BallDomainParam,
-  id:          Int,
-  bankEntries: Int,
-  bankWidth:   Int,
-  bankMaskLen: Int)
+  b:  GlobalConfig,
+  id: Int)
     extends Module
     with BallRegist {
   @public
-  val io     = IO(new Blink(parameter, bankEntries, bankWidth, bankMaskLen))
+  val io     = IO(new BlinkIO(b))
   val ballId = id.U
 
-  def Blink: Blink = io
+  def Blink: BlinkIO = io
 
   io.cmdResp.valid       := RegNext(io.cmdReq.valid)
   io.cmdResp.bits.rob_id := RegNext(io.cmdReq.bits.rob_id)
   io.cmdReq.ready        := true.B
 
-  for (i <- 0 until parameter.numBanks) {
+  for (i <- 0 until b.memDomain.bankNum) {
     io.bankRead(i).io.req.valid        := false.B
     io.bankRead(i).io.req.bits.addr    := 0.U
     io.bankRead(i).io.req.bits.fromDMA := false.B
@@ -36,7 +33,7 @@ class EmptyBall(
     io.bankWrite(i).io.req.valid      := false.B
     io.bankWrite(i).io.req.bits.addr  := 0.U
     io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
     io.bankWrite(i).rob_id            := 0.U
     io.bankWrite(i).bank_id           := 0.U
     io.bankWrite(i).io.req.bits.wmode := false.B

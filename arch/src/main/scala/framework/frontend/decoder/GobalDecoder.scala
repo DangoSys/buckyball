@@ -4,38 +4,36 @@ import chisel3._
 import chisel3.util._
 import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 import org.chipsalliance.cde.config.Parameters
-import examples.BuckyballConfigs.CustomBuckyballConfig
+import framework.top.GlobalConfig
 import freechips.rocketchip.tile._
 
 import framework.frontend.decoder.GISA._
 import framework.memdomain.frontend.cmd_channel.decoder.DISA._
 import framework.gpdomain.sequencer.decoder.DISA._
-import framework.frontend.FrontendParam
 
-class BuckyballRawCmd(implicit p: Parameters) extends Bundle {
-  val cmd = new RoCCCommand
+import framework.core.rocket.RoCCCommandBB
+
+class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
+  val cmd = new RoCCCommandBB(b.core.xLen)
 }
 
-class PostGDCmd(implicit p: Parameters) extends Bundle {
+class PostGDCmd(b: GlobalConfig) extends Bundle {
   val domain_id = UInt(4.W)
-  val raw_cmd   = new RoCCCommand
+  val raw_cmd   = new RoCCCommandBB(b.core.xLen)
 }
 
 @instantiable
-class GlobalDecoder(val parameter: FrontendParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[FrontendParam] {
+class GlobalDecoder(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
 
     val id_i = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommand
+      val cmd = new RoCCCommandBB(b.core.xLen)
     }))
 
-    val id_o = Decoupled(new PostGDCmd)
+    val id_o = Decoupled(new PostGDCmd(b))
   })
 
   // If reservation station is blocked, id_i is also blocked

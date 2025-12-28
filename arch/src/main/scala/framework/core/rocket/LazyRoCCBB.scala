@@ -28,16 +28,15 @@ import freechips.rocketchip.rocket.{
 import freechips.rocketchip.tilelink.{TLClientNode, TLIdentityNode, TLMasterParameters, TLMasterPortParameters, TLNode}
 import freechips.rocketchip.util.InOrderArbiter
 
-case object BuildRoCCBB extends Field[Seq[Parameters => LazyRoCCBB]](Nil)
-
-class RoCCCommandBB(implicit p: Parameters) extends CoreBundle()(p) {
+// Custom simplified RoCC types without implicit Parameters
+class RoCCCommandBB(xLen: Int = 64) extends Bundle {
   val inst   = new RoCCInstruction
   val rs1    = Bits(xLen.W)
   val rs2    = Bits(xLen.W)
   val status = new MStatus
 }
 
-class RoCCResponseBB(implicit p: Parameters) extends CoreBundle()(p) {
+class RoCCResponseBB(xLen: Int = 64) extends Bundle {
   val rd   = Bits(5.W)
   val data = Bits(xLen.W)
 }
@@ -82,7 +81,7 @@ class LazyRoCCModuleImpBB(outer: LazyRoCCBB) extends LazyModuleImp(outer) {
 /** Mixins for including RoCC * */
 
 trait HasLazyRoCCBB extends CanHavePTW { this: BaseTile =>
-  val roccs    = p(BuildRoCCBB).map(_(p))
+  val roccs    = p(BuildRoCC).map(_(p))
   val roccCSRs = roccs.map(_.roccCSRs) // the set of custom CSRs requested by all roccs
   require(
     roccCSRs.flatten.map(_.id).toSet.size == roccCSRs.flatten.size,
@@ -124,8 +123,8 @@ class RoccCommandRouterBB(opcodes: Seq[OpcodeSet], usingRVVRoCC: Boolean)(implic
     extends CoreModule()(p) {
 
   val io = IO(new Bundle {
-    val in   = Flipped(Decoupled(new RoCCCommand))
-    val out  = Vec(opcodes.size, Decoupled(new RoCCCommand))
+    val in   = Flipped(Decoupled(new RoCCCommandBB))
+    val out  = Vec(opcodes.size, Decoupled(new RoCCCommandBB))
     val busy = Output(Bool())
   })
 

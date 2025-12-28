@@ -2,11 +2,9 @@ package framework.memdomain.backend.accpipe
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
-import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO, SramWriteReq, SramWriteResp}
+import framework.top.GlobalConfig
+import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 
 /**
  * AccPipe: Accumulator Pipeline
@@ -14,26 +12,24 @@ import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
  * Separated from SramBank for flexibility
  */
 @instantiable
-class AccPipe(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
+class AccPipe(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
     // Interface to SramBank
-    val sramRead  = new SramReadIO(parameter.bankEntries, parameter.bankWidth)
-    val sramWrite = new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen)
+    val sramRead  = new SramReadIO(b)
+    val sramWrite = new SramWriteIO(b)
 
     // Interface from midend
-    val read  = Flipped(new SramReadIO(parameter.bankEntries, parameter.bankWidth))
-    val write = Flipped(new SramWriteIO(parameter.bankEntries, parameter.bankWidth, parameter.bankMaskLen))
+    val read  = Flipped(new SramReadIO(b))
+    val write = Flipped(new SramWriteIO(b))
 
     // Control signals
-    val bank_id = Input(UInt(log2Up(parameter.bankNum).W))
+    val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
   })
 
   @public
-  val current_bank_id = Reg(UInt(log2Up(parameter.bankNum).W))
+  val current_bank_id = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   @public
   val busy            = Reg(Bool())
 
@@ -57,9 +53,9 @@ class AccPipe(val parameter: MemDomainParam)(implicit p: Parameters)
   }
 
   // Pipeline registers
-  val acc_addr = RegInit(0.U(log2Ceil(parameter.bankEntries).W))
-  val acc_data = RegInit(0.U(parameter.bankWidth.W))
-  val acc_mask = RegInit(VecInit(Seq.fill(parameter.bankMaskLen)(false.B)))
+  val acc_addr = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  val acc_data = RegInit(0.U(b.memDomain.bankWidth.W))
+  val acc_mask = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)))
 
   // State machine logic
   when(state === s_idle) {

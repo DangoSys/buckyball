@@ -3,27 +3,26 @@ package framework.memdomain.frontend.cmd_channel.rs
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
 import framework.memdomain.frontend.cmd_channel.decoder.MemDecodeCmd
+import framework.top.GlobalConfig
 
 // ROB entry data structure - preserves ROB ID to support out-of-order completion
-class RobEntry(parameter: MemDomainParam)(implicit p: Parameters) extends Bundle {
-  val cmd    = new MemDecodeCmd(parameter)
-  val rob_id = UInt(log2Up(parameter.rob_entries).W)
+class RobEntry(b: GlobalConfig) extends Bundle {
+  val cmd    = new MemDecodeCmd(b)
+  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
-class ROB(parameter: MemDomainParam)(implicit p: Parameters) extends Module {
+class ROB(val b: GlobalConfig) extends Module {
 
   val io = IO(new Bundle {
     // Allocation interface
-    val alloc = Flipped(new DecoupledIO(new MemDecodeCmd(parameter)))
+    val alloc = Flipped(new DecoupledIO(new MemDecodeCmd(b)))
 
     // Issue interface - issue uncompleted head instruction
-    val issue = new DecoupledIO(new RobEntry(parameter))
+    val issue = new DecoupledIO(new RobEntry(b))
 
     // Completion interface - report instruction completion
-    val complete = Flipped(new DecoupledIO(UInt(log2Up(parameter.rob_entries).W)))
+    val complete = Flipped(new DecoupledIO(UInt(log2Up(b.frontend.rob_entries).W)))
 
     // Commit interface - commit completed head instruction
     // val commit = new DecoupledIO(new RobEntry)
@@ -34,13 +33,13 @@ class ROB(parameter: MemDomainParam)(implicit p: Parameters) extends Module {
   })
 
   // Only use FIFO + completion status table, only enqueue/dequeue, sequential execution and sequential completion
-  val robFifo      = Module(new Queue(new RobEntry(parameter), parameter.rob_entries))
-  val robIdCounter = RegInit(0.U(log2Up(parameter.rob_entries).W))
+  val robFifo      = Module(new Queue(new RobEntry(b), b.frontend.rob_entries))
+  val robIdCounter = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   // Initialize to false to avoid X states in FPGA
-  val robTable     = RegInit(VecInit(Seq.fill(parameter.rob_entries)(false.B)))
+  val robTable     = RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(false.B)))
 
   // Initialize completion status table
-  for (i <- 0 until parameter.rob_entries) {
+  for (i <- 0 until b.frontend.rob_entries) {
     when(reset.asBool) {
       robTable(i) := true.B
     }

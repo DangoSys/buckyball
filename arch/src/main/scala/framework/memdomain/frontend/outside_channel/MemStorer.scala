@@ -2,40 +2,36 @@ package framework.memdomain.frontend.outside_channel
 
 import chisel3._
 import chisel3.util._
-import org.chipsalliance.cde.config.Parameters
-import framework.memdomain.MemDomainParam
+import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
 import freechips.rocketchip.rocket.MStatus
 import framework.memdomain.backend.banks.SramReadIO
 import framework.memdomain.frontend.outside_channel.dma.{BBWriteRequest, BBWriteResponse}
 import framework.balldomain.blink.BankRead
 import chisel3.experimental.hierarchy.{instantiable, public}
-import chisel3.experimental.{SerializableModule, SerializableModuleParameter}
 
 @instantiable
-class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
-    extends Module
-    with SerializableModule[MemDomainParam] {
-  val rob_id_width = log2Up(parameter.rob_entries)
+class MemStorer(val b: GlobalConfig) extends Module {
+  val rob_id_width = log2Up(b.frontend.rob_entries)
   // Byte count of one row of data
-  val line_bytes   = parameter.bankWidth / 8
+  val line_bytes   = b.memDomain.bankWidth / 8
   // 16-byte alignment
   val align_bytes  = 16
 
   @public
   val io = IO(new Bundle {
     // Store instruction from ReservationStation
-    val cmdReq  = Flipped(Decoupled(new MemRsIssue(parameter)))
+    val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
     // Completion signal sent to ReservationStation
-    val cmdResp = Decoupled(new MemRsComplete(parameter))
+    val cmdResp = Decoupled(new MemRsComplete(b))
     // Direct connection to DMA write interface
-    val dmaReq  = Decoupled(new BBWriteRequest(parameter.bankWidth))
+    val dmaReq  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
 
     // Connected to Bank read interface
     val bankRead = Vec(
-      parameter.bankNum,
-      Flipped(new BankRead(parameter.bankEntries, parameter.bankWidth, parameter.rob_entries, parameter.bankNum))
+      b.memDomain.bankNum,
+      Flipped(new BankRead(b))
     )
 
   })
@@ -44,13 +40,13 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
   val state                                     = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg = Reg(UInt(parameter.memAddrLen.W))
+  val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
   val iter_reg     = Reg(UInt(10.W))
   val sram_count   = Reg(UInt(10.W))
   // Cache stride
   val stride_reg   = Reg(UInt(10.W))
   // Cache decoded bank information
-  val rd_bank_reg  = Reg(UInt(log2Up(parameter.bankNum).W))
+  val rd_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
 
   // Data buffer related registers
   // 16-byte buffer
@@ -58,7 +54,7 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
   // Number of valid bytes in buffer
   val buffer_valid_bytes = Reg(UInt(log2Ceil(align_bytes + 1).W))
   // Starting address corresponding to buffer
-  val buffer_start_addr  = Reg(UInt(parameter.memAddrLen.W))
+  val buffer_start_addr  = Reg(UInt(b.memDomain.memAddrLen.W))
 
   // Receive store instruction
   io.cmdReq.ready := state === s_idle
@@ -80,7 +76,7 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
   val target_bank = rd_bank_reg
   val target_row  = sram_count
 
-  for (i <- 0 until parameter.bankNum) {
+  for (i <- 0 until b.memDomain.bankNum) {
     io.bankRead(i).io.req.valid        := (state === s_sram_req) && (target_bank === i.U)
     io.bankRead(i).io.req.bits.addr    := target_row
     io.bankRead(i).io.req.bits.fromDMA := true.B
@@ -97,7 +93,8 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
     mem_addr_reg + sram_count(1, 0) * line_bytes.U + ((sram_count >> 2) << 2) * stride_reg * line_bytes.U
   // Lower 4 bits of address, 0 when 16-byte aligned
   val addr_offset      = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
-  val aligned_addr     = Cat(current_mem_addr(parameter.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
+  val aligned_addr     =
+    Cat(current_mem_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
   val is_aligned       = addr_offset === 0.U
   dontTouch(is_aligned)
   dontTouch(aligned_addr)
@@ -140,7 +137,7 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
   val send_addr = Mux(
     buffer_valid_bytes === 0.U,
     aligned_addr,
-    Cat(buffer_start_addr(parameter.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
+    Cat(buffer_start_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
   )
 
   // DMA request logic
@@ -178,7 +175,7 @@ class MemStorer(val parameter: MemDomainParam)(implicit p: Parameters)
 
   // DMA request signal control logic - can only update when DMA is ready
   val dma_req_valid_reg  = RegInit(false.B)
-  val dma_req_vaddr_reg  = RegInit(0.U(parameter.memAddrLen.W))
+  val dma_req_vaddr_reg  = RegInit(0.U(b.memDomain.memAddrLen.W))
   val dma_req_data_reg   = RegInit(0.U((align_bytes * 8).W))
   val dma_req_len_reg    = RegInit(0.U(8.W))
   val dma_req_mask_reg   = RegInit(0.U(align_bytes.W))
