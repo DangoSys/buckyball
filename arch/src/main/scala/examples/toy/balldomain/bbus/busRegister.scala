@@ -27,7 +27,7 @@ class BBusModule(b: GlobalConfig)
         // () => new prototype.im2col.Im2colBall(Im2colConfig.fromBallDomain(parameter), 2),
         // () => new prototype.transpose.TransposeBall(TransposeConfig.fromBallDomain(parameter), 3),
         // () => new prototype.relu.ReluBall(ReluConfig.fromBallDomain(parameter), 4),
-        () => new examples.toy.balldomain.emptyball.EmptyBall(b, 5)
+        () => new examples.toy.balldomain.emptyball.EmptyBall(b, 1)
         // () => new prototype.transfer.TransferBall(TransferConfig.fromBallDomain(parameter), 6)
       )
     ) {}

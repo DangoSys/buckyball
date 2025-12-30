@@ -3,10 +3,15 @@ package framework.memdomain.frontend
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tile._
-import framework.memdomain.frontend.outside_channel.dma.{BBReadRequest, BBReadResponse, BBWriteRequest, BBWriteResponse}
+import framework.memdomain.frontend.outside_channel.dma.{
+  BBStreamReader,
+  BBStreamReaderParam,
+  BBStreamWriter,
+  BBStreamWriterParam
+}
 import framework.memdomain.frontend.outside_channel.{MemLoader, MemStorer}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
-import freechips.rocketchip.tilelink.TLEdgeOut
+import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
@@ -35,30 +40,19 @@ class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
       val bankWrite = Vec(b.memDomain.bankNum, Flipped(new BankWrite(b)))
     }
 
-    // DMA interface - used by Outer DRAM controller
-    val intradma = new Bundle {
-
-      val read = new Bundle {
-        val req  = Decoupled(new BBReadRequest())
-        val resp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
-      }
-
-      val write = new Bundle {
-        val req  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
-        val resp = Flipped(Decoupled(new BBWriteResponse))
-      }
-
-    }
-
-    // TLB interface - exposed externally for DMA modules (BBStreamReader/BBStreamWriter)
-    // TLB connection is managed internally, but interface needs to be exposed for external DMA
-    val tlb    = Vec(2, Flipped(new BBTLBIO(b)))
+    // TLB interfaces for internal DMA modules (Reader/Writer)
+    // These are NOT exposed to outside - only PTW and TLB exception are exposed
     // PTW interface - needs to connect to upper level PTW (shared TLB has only 1 PTW)
     val ptw    = Vec(1, new BBTLBPTWIO(b))
     // TLB exception interface - exposed to upper level for handling flush, etc. (shared TLB has only 1 exp)
     val tlbExp = Vec(1, new BBTLBExceptionIO)
+
+    // TileLink physical connections for DMA (Reader/Writer)
+    val tl_reader = new TLBundle(edge.bundle)
+    val tl_writer = new TLBundle(edge.bundle)
+
     // Busy signal
-    val busy   = Output(Bool())
+    val busy = Output(Bool())
   })
 
   val memDecoder: Instance[MemDomainDecoder]      = Instantiate(new MemDomainDecoder(b))
@@ -66,10 +60,30 @@ class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val memLoader:  Instance[MemLoader]             = Instantiate(new MemLoader(b))
   val memStorer:  Instance[MemStorer]             = Instantiate(new MemStorer(b))
   val pmc:        Instance[MemCyclePMC]           = Instantiate(new MemCyclePMC(b))
+
   // TLB cluster - internal TLB management for DMA modules
   // Supports 2 clients: BBStreamReader (client 1) and BBStreamWriter (client 0)
-  val tlbCluster =
-    Instantiate(new BBTLBCluster(b)(edge))
+  val tlbCluster = Instantiate(new BBTLBCluster(b)(edge))
+
+  // DMA Reader and Writer modules - handle actual DMA transfers
+  val readerParam = BBStreamReaderParam(
+    nXacts = b.memDomain.dma_n_xacts,
+    beatBits = b.memDomain.dma_buswidth,
+    maxBytes = b.memDomain.dma_maxbytes,
+    dataWidth = b.memDomain.dma_buswidth,
+    tledge = edge
+  )
+
+  val writerParam = BBStreamWriterParam(
+    nXacts = b.memDomain.dma_n_xacts,
+    beatBits = b.memDomain.dma_buswidth,
+    maxBytes = b.memDomain.dma_maxbytes,
+    dataWidth = b.memDomain.dma_buswidth,
+    tledge = edge
+  )
+
+  val reader: Instance[BBStreamReader] = Instantiate(new BBStreamReader(readerParam, b))
+  val writer: Instance[BBStreamWriter] = Instantiate(new BBStreamWriter(writerParam, b))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
@@ -107,21 +121,34 @@ class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
   pmc.io.stResp_o.bits  := memStorer.io.cmdResp.bits
 
-  // Connect MemLoader and MemStorer to DMA interface
-  memLoader.io.dmaReq <> io.intradma.read.req
-  io.intradma.read.resp <> memLoader.io.dmaResp
-  memStorer.io.dmaReq <> io.intradma.write.req
-  io.intradma.write.resp <> memStorer.io.dmaResp
+  // Connect Reader and Writer to MemLoader and MemStorer
+  memLoader.io.dmaReq <> reader.io.req
+  reader.io.resp <> memLoader.io.dmaResp
+  memStorer.io.dmaReq <> writer.io.req
+  writer.io.resp <> memStorer.io.dmaResp
 
-  // TLB connection - internal TLB cluster connected to external DMA modules
+  // TLB connection - internal TLB cluster connected to DMA modules
   // Client 0: BBStreamWriter, Client 1: BBStreamReader
-  io.tlb <> tlbCluster.io.clients
+  // Insert pipeline registers to break combinational loops
+  tlbCluster.io.clients(1).req := RegNext(reader.io.tlb.req)
+  reader.io.tlb.resp           := RegNext(tlbCluster.io.clients(1).resp)
+
+  tlbCluster.io.clients(0).req := RegNext(writer.io.tlb.req)
+  writer.io.tlb.resp           := RegNext(tlbCluster.io.clients(0).resp)
+
+  // Connect DMA flush signals to TLB exceptions
+  reader.io.flush := io.tlbExp(0).flush()
+  writer.io.flush := io.tlbExp(0).flush()
 
   // PTW interface - connect to upper level page table walker
   io.ptw <> tlbCluster.io.ptw
 
   // TLB exception interface - connect to upper level for flush handling
   tlbCluster.io.exp <> io.tlbExp
+
+  // Connect TileLink physical ports from Reader/Writer to external interface
+  io.tl_reader <> reader.io.tl
+  io.tl_writer <> writer.io.tl
 
   // Connect MemLoader and MemStorer to MemController's DMA interface
   memLoader.io.bankWrite <> io.interdma.bankWrite

@@ -18,7 +18,7 @@ object VectorBallParam {
 
   def apply(): VectorBallParam = {
     val jsonStr = scala.io.Source.fromFile(
-      "arch/src/main/scala/framework/balldomain/prototype/vector/configs/default.json"
+      "src/main/scala/framework/balldomain/prototype/vector/configs/default.json"
     ).mkString
     read[VectorBallParam](jsonStr)
   }

@@ -42,9 +42,11 @@ class BBStreamReader(val parameter: BBStreamReaderParam, val b: GlobalConfig) ex
   val io = IO(new Bundle {
     val req   = Flipped(Decoupled(new BBReadRequest()))
     val resp  = Decoupled(new BBReadResponse(parameter.dataWidth))
-    val tlb   = new BBTLBIO(b)
+    val tlb   = Flipped(new BBTLBIO(b))
     val busy  = Output(Bool())
     val flush = Input(Bool())
+    // TileLink physical connection
+    val tl    = new TLBundle(parameter.tledge.bundle)
   })
 
   val edge      = parameter.tledge
@@ -121,36 +123,43 @@ class BBStreamReader(val parameter: BBStreamReaderParam, val b: GlobalConfig) ex
   translate_q.io.enq <> tlb_q.io.deq
   translate_q.io.deq.ready := io.tlb.resp.fire || io.tlb.resp.bits.miss
 
-  // TileLink connection - using parameterized edge
-  val tl_a = Wire(Decoupled(get.cloneType))
-  tl_a.valid        := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
-  tl_a.bits         := translate_q.io.deq.bits.tl_a
-  tl_a.bits.address := io.tlb.resp.bits.paddr
+  // TileLink A channel (request) connection
+  io.tl.a.valid            := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
+  io.tl.a.bits             := translate_q.io.deq.bits.tl_a
+  io.tl.a.bits.address     := io.tlb.resp.bits.paddr
+  translate_q.io.deq.ready := (io.tlb.resp.fire && !io.tlb.resp.bits.miss && io.tl.a.ready) || io.tlb.resp.bits.miss
 
   // Iteration counter for tracking number of requests
   val iter_counter       = RegInit(0.U(10.W))
   // Table for managing iteration counts
   val iter_mangage_table = RegInit(VecInit(Seq.fill(16)(0.U(10.W))))
   // Iteration count management - update after each request
-  when(tl_a.fire) {
+  when(io.tl.a.fire) {
     iter_counter               := iter_counter + 1.U
     iter_mangage_table(xactId) := iter_counter
   }
 
-  // Response processing - simplified without edge
-  io.resp.valid            := io.tlb.resp.valid && !io.tlb.resp.bits.miss
-  io.resp.bits.data        := DontCare
+  // TileLink D channel (response) processing
+  io.tl.d.ready := io.resp.ready
+
+  io.resp.valid            := io.tl.d.valid
+  io.resp.bits.data        := io.tl.d.bits.data
   // Use source as address counter
-  io.resp.bits.addrcounter := iter_mangage_table(xactId)
+  io.resp.bits.addrcounter := iter_mangage_table(io.tl.d.bits.source)
   // Fix last signal: calculate using received byte count
   // Total byte count after receiving current beat
   val resp_bytes_end = bytesReceived + beatBytes.U
-  io.resp.bits.last := io.tlb.resp.valid && !io.tlb.resp.bits.miss && (resp_bytes_end >= req.len)
+  io.resp.bits.last := io.tl.d.valid && (resp_bytes_end >= req.len)
 
   // Update received byte count
-  when(io.tlb.resp.valid && !io.tlb.resp.bits.miss) {
+  when(io.tl.d.fire) {
     bytesReceived := bytesReceived + beatBytes.U
   }
+
+  // Tie off unused TileLink channels
+  io.tl.b.ready := true.B
+  io.tl.c.valid := false.B
+  io.tl.e.valid := false.B
 
   // State machine
   io.req.ready := state === s_idle

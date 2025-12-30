@@ -22,7 +22,7 @@ object MemDomainParam {
   implicit val rw: ReadWriter[MemDomainParam] = macroRW
 
   def apply(): MemDomainParam = {
-    val jsonStr = scala.io.Source.fromFile("arch/src/main/scala/framework/memdomain/configs/default.json").mkString
+    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/memdomain/configs/default.json").mkString
     read[MemDomainParam](jsonStr)
   }
 

@@ -3,5 +3,6 @@
   "xLen": 64,
   "vaddrBits": 39,
   "paddrBits": 56,
-  "pgIdxBits": 12
+  "pgIdxBits": 12,
+  "nPMPs": 8
 }

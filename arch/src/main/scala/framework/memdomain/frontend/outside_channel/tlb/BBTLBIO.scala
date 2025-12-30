@@ -4,21 +4,14 @@ import chisel3._
 import chisel3.util.{Decoupled, Valid}
 import chisel3.util.log2Ceil
 import framework.top.GlobalConfig
+import freechips.rocketchip.rocket.{HStatus, MStatus}
+import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
 // TLB Exception types
 class TLBExceptions extends Bundle {
   val ld   = Bool()
   val st   = Bool()
   val inst = Bool()
-}
-
-// MStatus - Simplified status register
-class BBTLBMStatus(val xLen: Int) extends Bundle {
-  val prv   = UInt(2.W)
-  val v     = Bool()
-  val mxr   = Bool()
-  val sum   = Bool()
-  val debug = Bool()
 }
 
 // TLB Request
@@ -29,7 +22,7 @@ class BBTLBReq(val lgMaxSize: Int, val vaddrBits: Int, val xLen: Int) extends Bu
   val cmd         = Bits(5.W) // M_SZ = 5
   val prv         = UInt(2.W) // PRV.SZ = 2
   val v           = Bool()
-  val status      = new BBTLBMStatus(xLen)
+  val status      = new MStatus
 }
 
 // TLB Response
@@ -118,28 +111,37 @@ class BBTLBPTWResp(
   val gpa_is_pte           = Bool()
 }
 
-// HStatus - Simplified hypervisor status
-class BBTLBHStatus extends Bundle {
-  val vsxl  = UInt(2.W)
-  val vtsr  = Bool()
-  val vtw   = Bool()
-  val vtvm  = Bool()
-  val vgein = UInt(6.W)
-  val hu    = Bool()
+// Simplified CustomCSR IO wrapper - without Parameters dependency
+class BBCustomCSRIO(val xLen: Int) extends Bundle {
+  val ren   = Output(Bool())
+  val wen   = Output(Bool())
+  val wdata = Output(UInt(xLen.W))
+  val value = Output(UInt(xLen.W))
+  val stall = Input(Bool())
+  val set   = Input(Bool())
+  val sdata = Input(UInt(xLen.W))
 }
 
-// PMP - Simplified Physical Memory Protection
-class BBTLBPMP(val paddrBits: Int) extends Bundle {
+// Simplified CustomCSRs Bundle - matches rocket-chip interface without Parameters
+class BBCustomCSRs(val xLen: Int) extends Bundle {
+  // Empty by default - no custom CSRs defined
+  val csrs = Vec(0, new BBCustomCSRIO(xLen))
+}
+
+// Simplified PMP - without Parameters dependency
+class BBPMP(val paddrBits: Int) extends Bundle {
 
   val cfg = new Bundle {
-    val l = Bool()
-    val a = UInt(2.W)
-    val x = Bool()
-    val w = Bool()
-    val r = Bool()
+    val l   = Bool()
+    val res = UInt(2.W) // Reserved field
+    val a   = UInt(2.W)
+    val x   = Bool()
+    val w   = Bool()
+    val r   = Bool()
   }
 
-  val addr = UInt((paddrBits - 2).W) // Assuming lgAlign = 2
+  val addr = UInt((paddrBits - 2).W)
+  val mask = UInt(paddrBits.W)
 }
 
 // PTW IO
@@ -149,18 +151,18 @@ class BBTLBPTWIO(val b: GlobalConfig) extends Bundle {
   val pgIdxBits = b.core.pgIdxBits
   val xLen      = b.core.xLen
   val pgLevels  = if (xLen == 32) 2 else 4 // Simplified: assume SV39 for 64-bit
-  val nPMPs     = 16                       // Fixed size, can be parameterized later
+  val nPMPs     = b.core.nPMPs
 
-  val req     = Decoupled(Valid(new BBTLBPTWReq(vaddrBits, pgIdxBits)))
-  val resp    = Flipped(Valid(new BBTLBPTWResp(vaddrBits, paddrBits, pgIdxBits, pgLevels)))
-  val ptbr    = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
-  val hgatp   = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
-  val vsatp   = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
-  val status  = Input(new BBTLBMStatus(xLen))
-  val hstatus = Input(new BBTLBHStatus())
-  val gstatus = Input(new BBTLBMStatus(xLen))
-  val pmp     = Input(Vec(nPMPs, new BBTLBPMP(paddrBits)))
-  // Note: customCSRs removed - not needed for our implementation
+  val req        = Decoupled(Valid(new BBTLBPTWReq(vaddrBits, pgIdxBits)))
+  val resp       = Flipped(Valid(new BBTLBPTWResp(vaddrBits, paddrBits, pgIdxBits, pgLevels)))
+  val ptbr       = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
+  val hgatp      = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
+  val vsatp      = Input(new BBTLBPTBR(paddrBits, pgIdxBits, xLen))
+  val status     = Input(new MStatus)
+  val hstatus    = Input(new HStatus)
+  val gstatus    = Input(new MStatus)
+  val pmp        = Input(Vec(nPMPs, new BBPMP(paddrBits)))
+  val customCSRs = Flipped(new BBCustomCSRs(xLen))
 }
 
 // TLB Client IO (used in TLBCluster)

@@ -40,9 +40,11 @@ class BBStreamWriter(val parameter: BBStreamWriterParam, val b: GlobalConfig) ex
   val io = IO(new Bundle {
     val req   = Flipped(Decoupled(new BBWriteRequest(parameter.dataWidth)))
     val resp  = Decoupled(new BBWriteResponse)
-    val tlb   = new BBTLBIO(b)
+    val tlb   = Flipped(new BBTLBIO(b))
     val busy  = Output(Bool())
     val flush = Input(Bool())
+    // TileLink physical connection
+    val tl    = new TLBundle(parameter.tledge.bundle)
   })
 
   val edge      = parameter.tledge
@@ -112,17 +114,23 @@ class BBStreamWriter(val parameter: BBStreamWriterParam, val b: GlobalConfig) ex
 
   val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
   translate_q.io.enq <> tlb_q.io.deq
-  translate_q.io.deq.ready := io.tlb.resp.valid || io.tlb.resp.bits.miss
+  translate_q.io.deq.ready := (io.tlb.resp.fire && !io.tlb.resp.bits.miss && io.tl.a.ready) || io.tlb.resp.bits.miss
 
-  // TileLink connection - using parameterized edge
-  val tl_a = Wire(Decoupled(selected_put.cloneType))
-  tl_a.valid        := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
-  tl_a.bits         := translate_q.io.deq.bits.tl_a
-  tl_a.bits.address := io.tlb.resp.bits.paddr
+  // TileLink A channel (request) connection
+  io.tl.a.valid        := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
+  io.tl.a.bits         := translate_q.io.deq.bits.tl_a
+  io.tl.a.bits.address := io.tlb.resp.bits.paddr
 
-  // Response processing
-  io.resp.valid     := io.tlb.resp.valid && !io.tlb.resp.bits.miss
+  // TileLink D channel (response) processing
+  io.tl.d.ready := io.resp.ready
+
+  io.resp.valid     := io.tl.d.valid
   io.resp.bits.done := true.B
+
+  // Tie off unused TileLink channels
+  io.tl.b.ready := true.B
+  io.tl.c.valid := false.B
+  io.tl.e.valid := false.B
 
   // State machine
   io.req.ready := state === s_idle

@@ -14,7 +14,7 @@ object ReluBallParam {
 
   def apply(): ReluBallParam = {
     val jsonStr =
-      scala.io.Source.fromFile("arch/src/main/scala/framework/balldomain/prototype/relu/configs/default.json").mkString
+      scala.io.Source.fromFile("src/main/scala/framework/balldomain/prototype/relu/configs/default.json").mkString
     read[ReluBallParam](jsonStr)
   }
 

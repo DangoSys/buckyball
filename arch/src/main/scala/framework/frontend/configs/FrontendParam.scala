@@ -13,7 +13,7 @@ object FrontendParam {
   implicit val rw: ReadWriter[FrontendParam] = macroRW
 
   def apply(): FrontendParam = {
-    val jsonStr = scala.io.Source.fromFile("arch/src/main/scala/framework/frontend/configs/default.json").mkString
+    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/frontend/configs/default.json").mkString
     read[FrontendParam](jsonStr)
   }
 

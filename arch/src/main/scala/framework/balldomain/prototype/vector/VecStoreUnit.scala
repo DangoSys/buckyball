@@ -67,10 +67,12 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.ex_st_i.ready := state === busy
   io.bankWrite.foreach { acc =>
-    acc.req.valid     := false.B
-    acc.req.bits.addr := 0.U
-    acc.req.bits.data := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
-    acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    acc.req.valid      := false.B
+    acc.req.bits.addr  := 0.U
+    acc.req.bits.data  := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
+    acc.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    acc.req.bits.wmode := false.B // Default: direct write mode
+    acc.resp.ready     := false.B // Default: not ready for response
   }
   val waddr = wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
   when(io.ex_st_i.fire) {
