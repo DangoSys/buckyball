@@ -19,7 +19,7 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
 
   @public
   val io = IO(new Bundle {
-    val clients = Flipped(Vec(nClients, new BBTLBIO(b)))
+    val clients = Vec(nClients, new BBTLBIO(b))
     val ptw     = Vec(1, new BBTLBPTWIO(b))    // Shared TLB has only 1 PTW port
     val exp     = Vec(1, new BBTLBExceptionIO) // Shared TLB has only 1 exception interface
   })

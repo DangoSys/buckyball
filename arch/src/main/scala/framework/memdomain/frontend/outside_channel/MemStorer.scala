@@ -77,11 +77,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val target_row  = sram_count
 
   for (i <- 0 until b.memDomain.bankNum) {
-    io.bankRead(i).io.req.valid        := (state === s_sram_req) && (target_bank === i.U)
-    io.bankRead(i).io.req.bits.addr    := target_row
-    io.bankRead(i).io.req.bits.fromDMA := true.B
-    io.bankRead(i).rob_id              := rob_id_reg
-    io.bankRead(i).bank_id             := target_bank
+    io.bankRead(i).io.req.valid     := (state === s_sram_req) && (target_bank === i.U)
+    io.bankRead(i).io.req.bits.addr := target_row
+    io.bankRead(i).rob_id           := rob_id_reg
+    io.bankRead(i).bank_id          := target_bank
   }
 
   // Bank response processing

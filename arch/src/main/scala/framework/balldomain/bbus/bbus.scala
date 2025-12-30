@@ -22,32 +22,22 @@ class BBusConfigIO(numBalls: Int) extends Bundle {
  */
 @instantiable
 class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module]) extends Module {
-  val numBalls = ballGenerators.length
-
+  val numBalls  = b.ballDomain.ballNum
   @public
-  val cmdReq = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
-
+  val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
-
+  val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   @public
-  val bankRead = IO(Vec(
-    b.memDomain.bankNum,
-    Flipped(new BankRead(b))
-  ))
-
+  val bankRead  = IO(Vec(b.memDomain.bankNum, Flipped(new BankRead(b))))
   @public
-  val bankWrite = IO(Vec(
-    b.memDomain.bankNum,
-    Flipped(new BankWrite(b))
-  ))
+  val bankWrite = IO(Vec(b.memDomain.bankNum, Flipped(new BankWrite(b))))
 
   // Instantiate all registered Balls
   // Note: Since Instantiate requires 'new' expression and ballGenerators are functions,
   // we use Module here. The balls themselves are @instantiable, but when instantiated
   // from a function generator pattern, we use Module. This is acceptable as the balls
   // are still properly instantiated and can be used with the hierarchy system.
-  val balls = ballGenerators.map(gen => gen())
+  val balls = ballGenerators.map(gen => Module(gen()))
 
 // -----------------------------------------------------------------------------
 // cmd router

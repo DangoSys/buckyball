@@ -98,6 +98,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.bits.data  := io.dmaResp.bits.data
     io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
     io.bankWrite(i).io.req.bits.wmode := false.B // Load is always overwrite
+    io.bankWrite(i).io.resp.ready     := false.B // Add missing resp.ready
     io.bankWrite(i).rob_id            := rob_id_reg
     io.bankWrite(i).bank_id           := target_bank
   }

@@ -12,9 +12,9 @@ import framework.top.GlobalConfig
  */
 @instantiable
 class SramBank(val b: GlobalConfig) extends Module {
-  val aligned_to = 8
-  val mask_len   = (b.memDomain.bankWidth / (aligned_to * 8)) max 1
-  val mask_elem  = UInt((b.memDomain.bankWidth min (aligned_to * 8)).W)
+  // Use bankMaskLen from config instead of calculating
+  val mask_len  = b.memDomain.bankMaskLen
+  val mask_elem = UInt((b.memDomain.bankWidth / mask_len).W)
 
   @public
   val io = IO(new Bundle {
@@ -36,9 +36,8 @@ class SramBank(val b: GlobalConfig) extends Module {
   val ren   = io.sramRead.req.fire
   val rdata = mem.read(raddr, ren)
 
-  io.sramRead.resp.valid        := RegNext(ren)
-  io.sramRead.resp.bits.data    := RegNext(rdata.asUInt)
-  io.sramRead.resp.bits.fromDMA := false.B
+  io.sramRead.resp.valid     := RegNext(ren)
+  io.sramRead.resp.bits.data := RegNext(rdata.asUInt)
 
   // -----------------------------------------------------------------------------
   // Write path
@@ -52,4 +51,8 @@ class SramBank(val b: GlobalConfig) extends Module {
       io.sramWrite.req.bits.mask
     )
   }
+
+  // Write response - single cycle write
+  io.sramWrite.resp.valid   := RegNext(io.sramWrite.req.fire)
+  io.sramWrite.resp.bits.ok := RegNext(io.sramWrite.req.fire)
 }

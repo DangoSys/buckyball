@@ -72,10 +72,9 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
 
   // SRAM default assignment
   for (i <- 0 until b.memDomain.bankNum) {
-    io.bankRead(i).req.valid        := false.B
-    io.bankRead(i).req.bits.addr    := 0.U
-    io.bankRead(i).req.bits.fromDMA := false.B
-    io.bankRead(i).resp.ready       := false.B
+    io.bankRead(i).req.valid     := false.B
+    io.bankRead(i).req.bits.addr := 0.U
+    io.bankRead(i).resp.ready    := false.B
 
     io.bankWrite(i).req.valid     := false.B
     io.bankWrite(i).req.bits.addr := 0.U

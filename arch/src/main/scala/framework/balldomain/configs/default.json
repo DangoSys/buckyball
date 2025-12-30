@@ -1,7 +1,8 @@
 {
-  "emptyBallid": 5,
+  "ballNum": 2,
+  "emptyBallid": 1,
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall"},
-    {"ballId": 5, "ballName": "EmptyBall"}
+    {"ballId": 1, "ballName": "EmptyBall"}
   ]
 }

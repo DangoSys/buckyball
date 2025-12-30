@@ -52,9 +52,8 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 
   // Default assignment for each bank read request
   for (i <- 0 until b.memDomain.bankNum) {
-    io.bankReadReq(i).valid        := false.B
-    io.bankReadReq(i).bits.fromDMA := false.B
-    io.bankReadReq(i).bits.addr    := 0.U
+    io.bankReadReq(i).valid     := false.B
+    io.bankReadReq(i).bits.addr := 0.U
   }
 
   io.ctrl_ld_i.ready := state === idle
@@ -82,14 +81,12 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // Send SRAM read request (only when output register is idle)
 // -----------------------------------------------------------------------------
     when(state === busy && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
-      io.bankReadReq(op1_bank).valid        := iter_counter < iter
-      io.bankReadReq(op1_bank).bits.fromDMA := false.B
-      io.bankReadReq(op1_bank).bits.addr    := op1_addr + iter_counter
+      io.bankReadReq(op1_bank).valid     := iter_counter < iter
+      io.bankReadReq(op1_bank).bits.addr := op1_addr + iter_counter
 
-      io.bankReadReq(op2_bank).valid        := iter_counter < iter
-      io.bankReadReq(op2_bank).bits.fromDMA := false.B
-      io.bankReadReq(op2_bank).bits.addr    := op2_addr + iter_counter
-      iter_counter                          := iter_counter + 1.U
+      io.bankReadReq(op2_bank).valid     := iter_counter < iter
+      io.bankReadReq(op2_bank).bits.addr := op2_addr + iter_counter
+      iter_counter                       := iter_counter + 1.U
     }
 
 // -----------------------------------------------------------------------------
@@ -129,11 +126,10 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.ld_ex_o.bits.op2  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
     io.ld_ex_o.bits.iter := 0.U
     when(state === busy && io.bankReadResp(0).valid) {
-      iter_counter                   := iter_counter + 1.U
-      ld_ex_op1_reg                  := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      io.bankReadReq(1).valid        := true.B
-      io.bankReadReq(1).bits.addr    := op2_addr + iter_counter
-      io.bankReadReq(1).bits.fromDMA := false.B
+      iter_counter                := iter_counter + 1.U
+      ld_ex_op1_reg               := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      io.bankReadReq(1).valid     := true.B
+      io.bankReadReq(1).bits.addr := op2_addr + iter_counter
     }
     when(state === busy && io.bankReadResp(1).valid && RegNext(io.bankReadResp(0).valid)) {
       io.ld_ex_o.valid     := true.B

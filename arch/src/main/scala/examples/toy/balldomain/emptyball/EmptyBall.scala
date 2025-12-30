@@ -23,20 +23,20 @@ class EmptyBall(
   io.cmdReq.ready        := true.B
 
   for (i <- 0 until b.memDomain.bankNum) {
-    io.bankRead(i).io.req.valid        := false.B
-    io.bankRead(i).io.req.bits.addr    := 0.U
-    io.bankRead(i).io.req.bits.fromDMA := false.B
-    io.bankRead(i).io.resp.ready       := false.B
-    io.bankRead(i).rob_id              := 0.U
-    io.bankRead(i).bank_id             := 0.U
+    io.bankRead(i).io.req.valid     := false.B
+    io.bankRead(i).io.req.bits.addr := 0.U
+    io.bankRead(i).io.resp.ready    := false.B
+    io.bankRead(i).rob_id           := 0.U
+    io.bankRead(i).bank_id          := 0.U
 
     io.bankWrite(i).io.req.valid      := false.B
     io.bankWrite(i).io.req.bits.addr  := 0.U
     io.bankWrite(i).io.req.bits.data  := 0.U
     io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.wmode := false.B
+    io.bankWrite(i).io.resp.ready     := false.B // Add missing resp.ready
     io.bankWrite(i).rob_id            := 0.U
     io.bankWrite(i).bank_id           := 0.U
-    io.bankWrite(i).io.req.bits.wmode := false.B
   }
   io.status.ready := true.B
   io.status.valid    := io.cmdResp.valid

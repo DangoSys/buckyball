@@ -20,12 +20,12 @@ class BallRsComplete(b: GlobalConfig) extends Bundle {
 
 // Generic Ball domain issue interface - supports dynamic number of Ball devices
 class BallIssueInterface(b: GlobalConfig) extends Bundle {
-  val balls = Vec(b.memDomain.bankNum, Decoupled(new BallRsIssue(b)))
+  val balls = Vec(b.ballDomain.ballNum, Decoupled(new BallRsIssue(b)))
 }
 
 // Generic Ball domain completion interface - supports dynamic number of Ball devices
 class BallCommitInterface(b: GlobalConfig) extends Bundle {
-  val balls = Vec(b.memDomain.bankNum, Flipped(Decoupled(new BallRsComplete(b))))
+  val balls = Vec(b.ballDomain.ballNum, Flipped(Decoupled(new BallRsComplete(b))))
 }
 
 // Local Ball reservation station - simple FIFO scheduler
@@ -76,7 +76,7 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
 
   // Set issue signals for each Ball device
   // Use configured ball id mappings: index i in issue_o.balls corresponds to ballIdMappings(i).ballId
-  for (i <- 0 until b.memDomain.bankNum) {
+  for (i <- 0 until b.ballDomain.ballNum) {
     if (i < numConfiguredBalls) {
       val configuredBallId = b.ballDomain.ballIdMappings(i).ballId.U
       issue_o.balls(i).valid       := fifo.io.deq.valid && headEntry.cmd.bid === configuredBallId
@@ -93,7 +93,7 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
   // FIFO deq.ready - can only dequeue when target Ball device is ready
   // Find which index corresponds to the requested ballId
   fifo.io.deq.ready := VecInit(
-    (0 until b.memDomain.bankNum).map { idx =>
+    (0 until b.ballDomain.ballNum).map { idx =>
       if (idx < numConfiguredBalls) {
         val configuredBallId = b.ballDomain.ballIdMappings(idx).ballId.U
         (headEntry.cmd.bid === configuredBallId) && issue_o.balls(idx).ready
@@ -106,10 +106,10 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Completion signal processing - directly forward to global RS
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), b.memDomain.bankNum))
+  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), b.ballDomain.ballNum))
 
   // Connect completion signals from all Ball devices to arbiter
-  for (i <- 0 until b.memDomain.bankNum) {
+  for (i <- 0 until b.ballDomain.ballNum) {
     completeArb.io.in(i).valid := commit_i.balls(i).valid
     completeArb.io.in(i).bits  := commit_i.balls(i).bits.rob_id
     commit_i.balls(i).ready    := completeArb.io.in(i).ready

@@ -25,7 +25,8 @@ class GpDomain(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   val decoder: Instance[framework.gpdomain.sequencer.decoder.DomainDecoder] =
     Instantiate(new framework.gpdomain.sequencer.decoder.DomainDecoder(b))
-  decoder.io.inst_i <> io.global_issue_i.bits.cmd
+  // Extract raw_cmd from PostGDCmd
+  decoder.io.inst_i <> io.global_issue_i.bits.cmd.raw_cmd
   val decoded = decoder.io.decoded_o
 
   io.global_complete_o.valid       := io.global_issue_i.valid

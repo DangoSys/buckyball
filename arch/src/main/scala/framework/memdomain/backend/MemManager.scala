@@ -18,9 +18,9 @@ import framework.memdomain.backend.accpipe.AccPipe
  * - Assert checks ensure no bank_id conflicts in the same cycle
  */
 class MemRequestIO(b: GlobalConfig) extends Bundle {
-  val write   = Flipped(new SramWriteIO(b))
-  val read    = Flipped(new SramReadIO(b))
-  val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
+  val write   = Flipped(new SramWriteIO(b)) // Sender perspective: send write requests
+  val read    = Flipped(new SramReadIO(b))  // Sender perspective: send read requests
+  val bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
 }
 
 @instantiable
@@ -28,19 +28,12 @@ class MemManager(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    // Interface from midend (new architecture)
-    val mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    // Interface from midend - MemManager routes requests to AccPipes
+    val mem_req = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
   })
 
-  // Instantiate bankNum SRAM banks
-  val banks: Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum) {
-    Instantiate(new SramBank(b))
-  }
-
-  // Instantiate bankChannel accumulator pipes (all requests go through AccPipe)
-  val accPipes: Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel) {
-    Instantiate(new AccPipe(b))
-  }
+  val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
+  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
 
   // -----------------------------------------------------------------------------
   // Request routing: All requests go through AccPipe
@@ -76,6 +69,19 @@ class MemManager(val b: GlobalConfig) extends Module {
   }
 
   // -----------------------------------------------------------------------------
+  // Initialize all AccPipe sram interfaces to default values
+  // -----------------------------------------------------------------------------
+  accPipes.foreach { accPipe =>
+    accPipe.io.sramWrite.req.ready    := false.B
+    accPipe.io.sramWrite.resp.valid   := false.B
+    accPipe.io.sramWrite.resp.bits.ok := false.B
+
+    accPipe.io.sramRead.req.ready      := false.B
+    accPipe.io.sramRead.resp.valid     := false.B
+    accPipe.io.sramRead.resp.bits.data := 0.U
+  }
+
+  // -----------------------------------------------------------------------------
   // Bank routing and connection
   // -----------------------------------------------------------------------------
   // Each bank connects to the AccPipe whose current_bank_id matches this bank's ID
@@ -84,28 +90,52 @@ class MemManager(val b: GlobalConfig) extends Module {
     case (bank, bankIdx) =>
       val bank_id = bankIdx.U
 
-      // Default: no write request
-      bank.io.sramWrite.req.valid := false.B
+      // Aggregate write requests from all AccPipes for this bank
+      val writeMatches = VecInit(accPipes.map { accPipe =>
+        accPipe.io.sramWrite.req.valid && accPipe.io.busy && (accPipe.io.current_bank_id === bank_id)
+      })
+      val hasWriteReq  = writeMatches.asUInt.orR
 
-      // Connect write request: find matching AccPipe and connect
-      accPipes.foreach { accPipe =>
-        val isMatch = accPipe.io.sramWrite.req.valid && accPipe.busy && (accPipe.current_bank_id === bank_id)
-        when(isMatch) {
-          bank.io.sramWrite.req <> accPipe.io.sramWrite.req
-          accPipe.io.sramWrite.resp <> bank.io.sramWrite.resp
-        }
+      // Connect write - only one AccPipe can match per bank per cycle (conflict detection ensures this)
+      when(hasWriteReq) {
+        val matchedAccPipe = Mux1H(writeMatches.zip(accPipes).map {
+          case (isMatch, accPipe) =>
+            isMatch -> accPipe.io.sramWrite
+        })
+        bank.io.sramWrite.req.valid := matchedAccPipe.req.valid
+        bank.io.sramWrite.req.bits   := matchedAccPipe.req.bits
+        matchedAccPipe.req.ready     := bank.io.sramWrite.req.ready
+        matchedAccPipe.resp.valid    := bank.io.sramWrite.resp.valid
+        matchedAccPipe.resp.bits     := bank.io.sramWrite.resp.bits
+        bank.io.sramWrite.resp.ready := matchedAccPipe.resp.ready
+      }.otherwise {
+        bank.io.sramWrite.req.valid  := false.B
+        bank.io.sramWrite.req.bits   := 0.U.asTypeOf(bank.io.sramWrite.req.bits)
+        bank.io.sramWrite.resp.ready := false.B
       }
 
-      // Default: no read request
-      bank.io.sramRead.req.valid := false.B
+      // Aggregate read requests from all AccPipes for this bank
+      val readMatches = VecInit(accPipes.map { accPipe =>
+        accPipe.io.sramRead.req.valid && accPipe.io.busy && (accPipe.io.current_bank_id === bank_id)
+      })
+      val hasReadReq  = readMatches.asUInt.orR
 
-      // Connect read request: find matching AccPipe and connect
-      accPipes.foreach { accPipe =>
-        val isMatch = accPipe.io.sramRead.req.valid && accPipe.busy && (accPipe.current_bank_id === bank_id)
-        when(isMatch) {
-          bank.io.sramRead.req <> accPipe.io.sramRead.req
-          accPipe.io.sramRead.resp <> bank.io.sramRead.resp
-        }
+      // Connect read - only one AccPipe can match per bank per cycle
+      when(hasReadReq) {
+        val matchedAccPipe = Mux1H(readMatches.zip(accPipes).map {
+          case (isMatch, accPipe) =>
+            isMatch -> accPipe.io.sramRead
+        })
+        bank.io.sramRead.req.valid := matchedAccPipe.req.valid
+        bank.io.sramRead.req.bits   := matchedAccPipe.req.bits
+        matchedAccPipe.req.ready    := bank.io.sramRead.req.ready
+        matchedAccPipe.resp.valid   := bank.io.sramRead.resp.valid
+        matchedAccPipe.resp.bits    := bank.io.sramRead.resp.bits
+        bank.io.sramRead.resp.ready := matchedAccPipe.resp.ready
+      }.otherwise {
+        bank.io.sramRead.req.valid  := false.B
+        bank.io.sramRead.req.bits   := 0.U.asTypeOf(bank.io.sramRead.req.bits)
+        bank.io.sramRead.resp.ready := false.B
       }
   }
 }

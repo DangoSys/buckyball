@@ -5,21 +5,11 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import freechips.rocketchip.tile._
 import framework.balldomain.blink.{BankRead, BankWrite}
-import freechips.rocketchip.tilelink.TLEdgeOut
+import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 
 import framework.memdomain.frontend.MemController
-import framework.memdomain.frontend.outside_channel.dma.{
-  BBReadRequest,
-  BBReadResponse,
-  BBStreamReader,
-  BBStreamReaderParam,
-  BBStreamWriter,
-  BBStreamWriterParam,
-  BBWriteRequest,
-  BBWriteResponse
-}
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
+import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 
 import framework.memdomain.midend.MemScheduler
 import framework.memdomain.backend.MemManager
@@ -43,6 +33,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // Inside Channel
     // -------------------------------------------------
     // Bank interface for interaction with Ball Domain
+    // BankRead/BankWrite are used with Flipped at Ball Device side
+    // MemDomain receives requests from Ball Domain, so uses raw Bundle (Input for bank_id)
     val ballDomain = new Bundle {
       val bankRead  = Vec(b.memDomain.bankNum, new BankRead(b))
       val bankWrite = Vec(b.memDomain.bankNum, new BankWrite(b))
@@ -52,23 +44,13 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // -------------------------------------------------
     // Outside Channel
     // -------------------------------------------------
-    val dma = new Bundle {
-
-      val read = new Bundle {
-        val req  = Decoupled(new BBReadRequest())
-        val resp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
-      }
-
-      val write = new Bundle {
-        val req  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
-        val resp = Flipped(Decoupled(new BBWriteResponse))
-      }
-
-    }
-
-    val tlb    = Vec(2, Flipped(new BBTLBIO(b)))
+    // PTW and TLB exception interfaces for external connection
     val ptw    = Vec(1, new BBTLBPTWIO(b))
     val tlbExp = Vec(1, new BBTLBExceptionIO)
+
+    // TileLink physical connections for DMA
+    val tl_reader = new TLBundle(edge.bundle)
+    val tl_writer = new TLBundle(edge.bundle)
   })
 
   val frontend: Instance[MemController] = Instantiate(new MemController(b)(edge))
@@ -81,63 +63,39 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // Global RS interface
   frontend.io.global_issue_i <> io.global_issue_i
   frontend.io.global_complete_o <> io.global_complete_o
-  frontend.io.busy := io.busy
-
-  // DMA interface
-  frontend.io.intradma <> io.dma
+  io.busy := frontend.io.busy
 
   // TLB interface
-  frontend.io.tlb <> io.tlb
+  // Note: frontend.io.tlb is connected internally to DMA modules
+  // Only PTW and TLB exception interfaces are exposed to outside
   frontend.io.ptw <> io.ptw
   frontend.io.tlbExp <> io.tlbExp
 
-  // Ball Domain interface (connects to frontend's interdma)
-  frontend.io.interdma.bankRead <> io.ballDomain.bankRead
-  frontend.io.interdma.bankWrite <> io.ballDomain.bankWrite
+  // TileLink physical connections for DMA (Reader/Writer are inside frontend)
+  io.tl_reader <> frontend.io.tl_reader
+  io.tl_writer <> frontend.io.tl_writer
+
+  // Ball Domain interface connects directly to midend (Ball devices' read/write requests)
+  midend.io.frontend.bankRead <> io.ballDomain.bankRead
+  midend.io.frontend.bankWrite <> io.ballDomain.bankWrite
 
   // -------------------------------------------------
   // Internal Connection (frontend - midend - backend)
   // -------------------------------------------------
-  // Frontend to Midend: route interdma requests to scheduler
-  midend.io.frontend.bankRead <> frontend.io.interdma.bankRead
-  midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
+  // Frontend interdma (MemLoader/MemStorer) connects to midend
+  // MemLoader/MemStorer DMA operations also need to access banks
+  // For now we directly tie off interdma since ballDomain is the main data path
+  // TODO: Add multiplexing if interdma also needs bank access
+  for (i <- 0 until b.memDomain.bankNum) {
+    frontend.io.interdma.bankRead(i).io.req.ready  := false.B
+    frontend.io.interdma.bankRead(i).io.resp.valid := false.B
+    frontend.io.interdma.bankRead(i).io.resp.bits  := 0.U.asTypeOf(frontend.io.interdma.bankRead(i).io.resp.bits)
+
+    frontend.io.interdma.bankWrite(i).io.req.ready  := false.B
+    frontend.io.interdma.bankWrite(i).io.resp.valid := false.B
+    frontend.io.interdma.bankWrite(i).io.resp.bits  := 0.U.asTypeOf(frontend.io.interdma.bankWrite(i).io.resp.bits)
+  }
 
   // Midend to Backend: route scheduled requests to memory manager
   midend.io.mem_req <> backend.io.mem_req
-
-  // -------------------------------------------------
-  // DMA Modules (Reader and Writer) - Internal instantiation
-  // -------------------------------------------------
-  val readerParam = BBStreamReaderParam(
-    nXacts = b.memDomain.dma_n_xacts,
-    beatBits = b.memDomain.dma_buswidth,
-    maxBytes = b.memDomain.dma_maxbytes,
-    dataWidth = b.memDomain.dma_buswidth,
-    tledge = edge
-  )
-
-  val writerParam = BBStreamWriterParam(
-    nXacts = b.memDomain.dma_n_xacts,
-    beatBits = b.memDomain.dma_buswidth,
-    maxBytes = b.memDomain.dma_maxbytes,
-    dataWidth = b.memDomain.dma_buswidth,
-    tledge = edge
-  )
-
-  val reader: Instance[BBStreamReader] = Instantiate(new BBStreamReader(readerParam, b))
-  val writer: Instance[BBStreamWriter] = Instantiate(new BBStreamWriter(writerParam, b))
-
-  // Connect DMA to TLB and interfaces
-  reader.io.tlb <> io.tlb(1)
-  writer.io.tlb <> io.tlb(0)
-
-  // Connect DMA to external DMA interface
-  io.dma.read.req <> reader.io.req
-  reader.io.resp <> io.dma.read.resp
-  io.dma.write.req <> writer.io.req
-  writer.io.resp <> io.dma.write.resp
-
-  // Connect DMA flush signals to TLB exceptions
-  reader.io.flush := io.tlbExp(0).flush()
-  writer.io.flush := io.tlbExp(0).flush()
 }
