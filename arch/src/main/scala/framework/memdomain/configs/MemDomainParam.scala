@@ -16,7 +16,10 @@ case class MemDomainParam(
   bankChannel:            Int,
   max_in_flight_mem_reqs: Int,
   dma_buswidth:           Int,
-  memAddrLen:             Int)
+  memAddrLen:             Int,
+  balldomainChannel:      Int,
+  tmaReadChannel:         Int,
+  tmaWriteChannel:        Int)
 
 object MemDomainParam {
   implicit val rw: ReadWriter[MemDomainParam] = macroRW

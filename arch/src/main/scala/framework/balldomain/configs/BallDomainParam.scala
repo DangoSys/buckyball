@@ -7,14 +7,15 @@ import upickle.default._
  */
 case class BallIdMapping(
   ballId:   Int,
-  ballName: String)
+  ballName: String,
+  inBW:     Int,
+  outBW:    Int)
 
 /**
  * BallDomain参数
  */
 case class BallDomainParam(
   ballNum:        Int,
-  emptyBallid:    Int,
   ballIdMappings: Seq[BallIdMapping],
   bbusChannel:    Int)
 
