@@ -11,34 +11,39 @@ import framework.top.GlobalConfig
  * VecBall - A vector computation Ball that complies with the Blink protocol
  */
 @instantiable
-class VecBall(val b: GlobalConfig, id: Int) extends Module with BallRegist {
+class VecBall(val b: GlobalConfig) extends Module with BallRegist {
+  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
+    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+  val inBW        = ballMapping.inBW
+  val outBW       = ballMapping.outBW
+
   @public
-  val io     = IO(new BlinkIO(b))
-  val ballId = id.U
+  val io = IO(new BlinkIO(b, inBW, outBW))
 
   def Blink: BlinkIO = io
 
-  // Instantiate VecUnit
   val vecUnit: Instance[VecUnit] = Instantiate(new VecUnit(b))
 
-  // Connect command interface
   vecUnit.io.cmdReq <> io.cmdReq
   vecUnit.io.cmdResp <> io.cmdResp
 
-  // Connect Bank interface
-  for (i <- 0 until b.memDomain.bankNum) {
-    vecUnit.io.bankRead(i) <> io.bankRead(i).io
-    io.bankRead(i).rob_id  := io.cmdReq.bits.rob_id
-    io.bankRead(i).bank_id := i.U
-
-    // VecUnit uses bankWrite for writes (accumulate mode)
-    vecUnit.io.bankWrite(i) <> io.bankWrite(i).io
-    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
-    io.bankWrite(i).bank_id           := i.U
-    io.bankWrite(i).io.req.bits.wmode := true.B // VecBall uses accumulate mode for writes
+  for (i <- 0 until inBW) {
+    vecUnit.io.bankRead(i) <> io.bankRead(i)
   }
 
-  // Connect Status signals - directly obtained from internal unit
+  for (i <- 0 until outBW) {
+    vecUnit.io.bankWrite(i) <> io.bankWrite(i)
+  }
+
+  for (i <- 0 until inBW) {
+    io.bankRead(i).rob_id := io.cmdReq.bits.rob_id
+  }
+
+  for (i <- 0 until outBW) {
+    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
+    io.bankWrite(i).io.req.bits.wmode := true.B
+  }
+
   io.status <> vecUnit.io.status
 
 }

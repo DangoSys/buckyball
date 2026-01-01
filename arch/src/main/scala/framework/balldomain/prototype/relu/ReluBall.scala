@@ -13,10 +13,14 @@ import framework.top.GlobalConfig
  * then write back to Scratchpad.
  */
 @instantiable
-class ReluBall(val b: GlobalConfig, id: Int) extends Module with BallRegist {
+class ReluBall(val b: GlobalConfig) extends Module with BallRegist {
+  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "ReluBall")
+    .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
+  val inBW        = ballMapping.inBW
+  val outBW       = ballMapping.outBW
+
   @public
-  val io     = IO(new BlinkIO(b))
-  val ballId = id.U
+  val io = IO(new BlinkIO(b, inBW, outBW))
 
   def Blink: BlinkIO = io
 
@@ -25,14 +29,21 @@ class ReluBall(val b: GlobalConfig, id: Int) extends Module with BallRegist {
   reluUnit.io.cmdReq <> io.cmdReq
   reluUnit.io.cmdResp <> io.cmdResp
 
-  for (i <- 0 until b.memDomain.bankNum) {
+  for (i <- 0 until inBW) {
     reluUnit.io.bankRead(i) <> io.bankRead(i).io
-    io.bankRead(i).rob_id             := io.cmdReq.bits.rob_id
-    io.bankRead(i).bank_id            := i.U
+  }
+
+  for (i <- 0 until outBW) {
     reluUnit.io.bankWrite(i) <> io.bankWrite(i).io
+  }
+
+  for (i <- 0 until inBW) {
+    io.bankRead(i).rob_id := io.cmdReq.bits.rob_id
+  }
+
+  for (i <- 0 until outBW) {
     io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
-    io.bankWrite(i).bank_id           := i.U
-    io.bankWrite(i).io.req.bits.wmode := false.B // ReluBall uses overwrite mode
+    io.bankWrite(i).io.req.bits.wmode := false.B
   }
 
   io.status <> reluUnit.io.status

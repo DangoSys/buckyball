@@ -2,19 +2,14 @@ package sims.verify
 
 import chisel3._
 import _root_.circt.stage.ChiselStage
-import org.chipsalliance.cde.config.{Config, Field, Parameters}
 import framework.top.GlobalConfig
-import framework.balldomain.blink.BlinkIO
+import framework.balldomain.blink.{BallRegist, BlinkIO}
 import framework.balldomain.prototype.vector.VecBall
+import framework.balldomain.prototype.relu.ReluBall
 // import framework.balldomain.prototype.matrix.MatrixBall
-// import framework.balldomain.prototype.matrix.configs.MatrixConfig
 // import framework.balldomain.prototype.transpose.TransposeBall
-// import framework.balldomain.prototype.transpose.configs.TransposeConfig
 // import framework.balldomain.prototype.im2col.Im2colBall
-// import framework.balldomain.prototype.im2col.configs.Im2colConfig
-// import framework.balldomain.prototype.relu.ReluBall
 // import framework.balldomain.prototype.nnlut.NNLutBall
-// import framework.balldomain.prototype.nnlut.configs.NNLutConfig
 
 sealed trait BallType
 case object VecBallType       extends BallType
@@ -24,45 +19,37 @@ case object Im2colBallType    extends BallType
 case object ReluBallType      extends BallType
 case object NNLutBallType     extends BallType
 
-case object TargetBallKey extends Field[BallType](VecBallType)
+class TargetBall(ballType: BallType, b: GlobalConfig) extends Module {
 
-class TargetBall(implicit b: GlobalConfig, p: Parameters) extends Module {
+  // Determine bandwidth from config first
+  val (inBW, outBW) = ballType match {
+    case VecBallType  =>
+      val mapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
+        .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+      (mapping.inBW, mapping.outBW)
+    case ReluBallType =>
+      val mapping = b.ballDomain.ballIdMappings.find(_.ballName == "ReluBall")
+        .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
+      (mapping.inBW, mapping.outBW)
+    case _            => (2, 4) // Default bandwidth
+  }
 
-  val io = IO(new BlinkIO(b))
+  val io = IO(new BlinkIO(b, inBW, outBW))
 
-  p(TargetBallKey) match {
+  ballType match {
     case VecBallType       =>
-      val ball = Module(new VecBall(b, 0)) // Use id=0 for VecBall
+      val ball = Module(new VecBall(b))
       io <> ball.io
-    case MatrixBallType    =>
-    // val ball = Module(new MatrixBall(MatrixConfig.fromBallDomain(ballParam), 0))
-    // io <> ball.io
-    case Im2colBallType    =>
-    // val ball = Module(new Im2colBall(Im2colConfig.fromBallDomain(ballParam), 0))
-    // io <> ball.io
-    case TransposeBallType =>
-    // val ball = Module(new TransposeBall(TransposeConfig.fromBallDomain(ballParam), 0))
-    // io <> ball.io
     case ReluBallType      =>
-    // val ball = Module(new ReluBall(ReluConfig.fromBallDomain(ballParam), 0))
-    // io <> ball.io
-    case NNLutBallType     =>
-    // val ball = Module(new NNLutBall(NNLutConfig.fromBallDomain(ballParam), 0))
-    // io <> ball.io
+      val ball = Module(new ReluBall(b))
+      io <> ball.io
+    case MatrixBallType    => throw new IllegalArgumentException("MatrixBall not implemented")
+    case Im2colBallType    => throw new IllegalArgumentException("Im2colBall not implemented")
+    case TransposeBallType => throw new IllegalArgumentException("TransposeBall not implemented")
+    case NNLutBallType     => throw new IllegalArgumentException("NNLutBall not implemented")
     case _                 => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
 }
-
-class WithTargetBall(ballType: BallType)
-    extends Config((site, here, up) => {
-      case TargetBallKey => ballType
-    })
-
-class CustomBallTopConfig(ballType: BallType)
-    extends Config(
-      // new WithBlink ++
-      new WithTargetBall(ballType)
-    )
 
 object BallTopMain extends App {
 
@@ -86,12 +73,10 @@ object BallTopMain extends App {
     }
   }
 
-  implicit val b:      GlobalConfig = GlobalConfig()
-  implicit val params: Parameters   = new Config(new CustomBallTopConfig(ballType))
+  val b: GlobalConfig = GlobalConfig()
 
   ChiselStage.emitSystemVerilogFile(
-    new TargetBall()(b, params),
-    // Remaining parameters passed to firtool
+    new TargetBall(ballType, b),
     firtoolOpts = args.drop(1),
     args = Array.empty
   )

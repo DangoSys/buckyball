@@ -7,6 +7,7 @@ import framework.top.GlobalConfig
 import framework.balldomain.bbus.BBus
 import framework.balldomain.blink.BallRegist
 import framework.balldomain.prototype.vector.VecBall
+import framework.balldomain.prototype.relu.ReluBall
 
 /**
  * BBusModule - Ball bus module that directly extends BBus
@@ -17,8 +18,9 @@ class BBusModule(b: GlobalConfig)
       b,
       b.ballDomain.ballIdMappings.map { mapping =>
         val ballGenerator: () => BallRegist with Module = mapping.ballName match {
-          case "VecBall" => () => new VecBall(b, mapping.ballId)
-          case name      => throw new IllegalArgumentException(s"Unknown ball name: $name")
+          case "VecBall"  => () => new VecBall(b)
+          case "ReluBall" => () => new ReluBall(b)
+          case name       => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator
       }

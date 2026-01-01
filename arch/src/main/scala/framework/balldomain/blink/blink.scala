@@ -34,18 +34,20 @@ class BankWrite(val b: GlobalConfig) extends Bundle {
 }
 
 // Blink IO Bundle - interface for Ball devices
-class BlinkIO(b: GlobalConfig) extends Bundle {
+// inBW: number of input bandwidth channels (bankRead)
+// outBW: number of output bandwidth channels (bankWrite)
+class BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int) extends Bundle {
   val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
   val cmdResp   = Decoupled(new BallRsComplete(b))
-  val bankRead  = Vec(b.memDomain.bankNum, Flipped(new BankRead(b)))
-  val bankWrite = Vec(b.memDomain.bankNum, Flipped(new BankWrite(b)))
+  val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
+  val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
   val status    = new Status
 }
 
 @instantiable
-class Blink(b: GlobalConfig) extends Module {
+class Blink(b: GlobalConfig, inBW: Int, outBW: Int) extends Module {
   @public
-  val io = IO(new BlinkIO(b))
+  val io = IO(new BlinkIO(b, inBW, outBW))
 
   def cmdReq:    DecoupledIO[BallRsIssue]    = io.cmdReq
   def cmdResp:   DecoupledIO[BallRsComplete] = io.cmdResp

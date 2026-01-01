@@ -25,16 +25,28 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val bankWidth    = b.memDomain.bankWidth
   val rob_id_width = log2Up(b.frontend.rob_entries)
 
+  // Get bandwidth from config (use first VecBall mapping)
+  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
+    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+  val inBW        = ballMapping.inBW
+
   @public
   val io = IO(new Bundle {
-    val bankReadReq  = Vec(b.memDomain.bankNum, Decoupled(new SramReadReq(b)))
-    val bankReadResp = Vec(b.memDomain.bankNum, Flipped(Decoupled(new SramReadResp(b))))
+    val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq(b)))
+    val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
     val ctrl_ld_i    = Flipped(Decoupled(new ctrl_ld_req(b)))
     val ld_ex_o      = Decoupled(new ld_ex_req(b))
+    // Output current op1_bank and op2_bank for bank_id setting
+    val op1_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val op2_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
   })
 
-  val op1_bank     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op2_bank     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op2_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+
+  // Output op1_bank and op2_bank for bank_id setting
+  io.op1_bank_o := op1_bank
+  io.op2_bank_o := op2_bank
   val op1_addr     = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val op2_addr     = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val iter         = RegInit(0.U(10.W))
@@ -51,7 +63,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val ld_ex_iter_reg  = RegInit(0.U(10.W))
 
   // Default assignment for each bank read request
-  for (i <- 0 until b.memDomain.bankNum) {
+  for (i <- 0 until inBW) {
     io.bankReadReq(i).valid     := false.B
     io.bankReadReq(i).bits.addr := 0.U
   }
@@ -81,12 +93,14 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // Send SRAM read request (only when output register is idle)
 // -----------------------------------------------------------------------------
     when(state === busy && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
-      io.bankReadReq(op1_bank).valid     := iter_counter < iter
-      io.bankReadReq(op1_bank).bits.addr := op1_addr + iter_counter
+      val op1_channel = op1_bank % inBW.U
+      val op2_channel = op2_bank % inBW.U
+      io.bankReadReq(op1_channel).valid     := iter_counter < iter
+      io.bankReadReq(op1_channel).bits.addr := op1_addr + iter_counter
 
-      io.bankReadReq(op2_bank).valid     := iter_counter < iter
-      io.bankReadReq(op2_bank).bits.addr := op2_addr + iter_counter
-      iter_counter                       := iter_counter + 1.U
+      io.bankReadReq(op2_channel).valid     := iter_counter < iter
+      io.bankReadReq(op2_channel).bits.addr := op2_addr + iter_counter
+      iter_counter                          := iter_counter + 1.U
     }
 
 // -----------------------------------------------------------------------------
@@ -95,11 +109,13 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     // ready signal for bankReadResp: can receive when there's no pending data or downstream has received
     /* io.bankReadResp.foreach { resp => resp.ready := !ld_ex_valid_reg || io.ld_ex_o.ready } */
     // Receive SRAM data and cache to register
-    when(io.bankReadResp(op1_bank).valid && io.bankReadResp(op2_bank).valid &&
+    val op1_channel = op1_bank % inBW.U
+    val op2_channel = op2_bank % inBW.U
+    when(io.bankReadResp(op1_channel).valid && io.bankReadResp(op2_channel).valid &&
       (!ld_ex_valid_reg || io.ld_ex_o.ready) && (state === busy)) {
       ld_ex_valid_reg := true.B
-      ld_ex_op1_reg   := io.bankReadResp(op1_bank).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      ld_ex_op2_reg   := io.bankReadResp(op2_bank).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      ld_ex_op1_reg   := io.bankReadResp(op1_channel).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      ld_ex_op2_reg   := io.bankReadResp(op2_channel).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
       ld_ex_iter_reg  := iter_counter
     }.elsewhen(io.ld_ex_o.ready) {
       ld_ex_valid_reg := false.B
