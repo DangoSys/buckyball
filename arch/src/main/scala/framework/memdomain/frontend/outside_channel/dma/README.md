@@ -5,8 +5,8 @@
 DMA engine implementation for Buckyball's memory domain, located at `arch/src/main/scala/framework/builtin/memdomain/dma`. Provides high-performance memory data transfer services between main memory and on-chip storage.
 
 Main components:
-- **BBStreamReader**: Streaming data reader for bulk reads from external memory
-- **BBStreamWriter**: Streaming data writer for bulk writes to external memory
+- **StreamReader**: Streaming data reader for bulk reads from external memory
+- **StreamWriter**: Streaming data writer for bulk writes to external memory
 - **LocalAddr**: Local address management for Scratchpad and Accumulator mapping
 
 ## File Structure
@@ -37,7 +37,7 @@ class BBWriteRequest(dataWidth: Int)(implicit p: Parameters) extends CoreBundle 
 }
 ```
 
-### BBStreamReader
+### StreamReader
 
 **State Machine**:
 ```scala
@@ -68,7 +68,7 @@ io.tlb.req.bits.tlb_req.cmd := M_XRD  // Read operation
 io.tlb.req.bits.status := tlb_q.io.deq.bits.status
 ```
 
-### BBStreamWriter
+### StreamWriter
 
 **Put Operation Selection**:
 ```scala
@@ -134,5 +134,5 @@ def add_with_overflow(other: UInt): Tuple2[LocalAddr, Bool] = {
 3. **TLB Integration**: Full virtual address translation support for user and kernel mode
 4. **Pipeline Design**: Multiple pipeline stages including address translation, TileLink request, and response handling
 5. **Error Handling**: TLB miss handling implemented, relies on upper layer software for access failures
-6. **Performance**: BBStreamWriter supports full and partial write modes, automatically selects optimal TileLink operation based on mask
+6. **Performance**: StreamWriter supports full and partial write modes, automatically selects optimal TileLink operation based on mask
 7. **Configuration**: DMA engines support parametrized configuration of concurrent transactions, data width, max transfer bytes

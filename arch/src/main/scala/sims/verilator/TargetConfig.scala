@@ -1,14 +1,12 @@
 package sims.verilator
 
 import chisel3._
-// _root_ disambiguates from package chisel3.util.circt if user imports chisel3.util._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.{Config, Parameters}
 
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
 import freechips.rocketchip.subsystem.InSubsystem
 
-// Custom BootROM configuration, pointing to correct resource path
 class WithCustomBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Some(BootROMParams(
@@ -29,7 +27,6 @@ class BuckyballGemminiVerilatorConfig
     )
 
 object Elaborate extends App {
-  // Accept full config class name like "sims.verilator.BuckyballToyVerilatorConfig"
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
     println("Example: Elaborate sims.verilator.BuckyballToyVerilatorConfig")
@@ -39,7 +36,6 @@ object Elaborate extends App {
   val configClassName = args(0)
   println(s"Elaborating with config class: $configClassName")
 
-  // Dynamically load the config class
   val config: Config =
     try {
       val configClass = Class.forName(configClassName)

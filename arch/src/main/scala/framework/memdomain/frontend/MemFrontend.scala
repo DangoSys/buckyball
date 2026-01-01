@@ -3,12 +3,7 @@ package framework.memdomain.frontend
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tile._
-import framework.memdomain.frontend.outside_channel.dma.{
-  BBStreamReader,
-  BBStreamReaderParam,
-  BBStreamWriter,
-  BBStreamWriterParam
-}
+import framework.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWriter}
 import framework.memdomain.frontend.outside_channel.{MemLoader, MemStorer}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
@@ -21,11 +16,11 @@ import framework.memdomain.frontend.cmd_channel.rs.MemReservationStation
 import framework.memdomain.utils.pmc.MemCyclePMC
 
 /**
- * MemController: Controller that encapsulates scratchpad and accumulator
+ * MemFrontend:
  * Provides DMA interface and Ball Domain interface
  */
 @instantiable
-class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
+class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   @public
   val io = IO(new Bundle {
@@ -62,28 +57,12 @@ class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val pmc:        Instance[MemCyclePMC]           = Instantiate(new MemCyclePMC(b))
 
   // TLB cluster - internal TLB management for DMA modules
-  // Supports 2 clients: BBStreamReader (client 1) and BBStreamWriter (client 0)
+  // Supports 2 clients: StreamReader (client 1) and StreamWriter (client 0)
   val tlbCluster = Instantiate(new BBTLBCluster(b)(edge))
 
   // DMA Reader and Writer modules - handle actual DMA transfers
-  val readerParam = BBStreamReaderParam(
-    nXacts = b.memDomain.dma_n_xacts,
-    beatBits = b.memDomain.dma_buswidth,
-    maxBytes = b.memDomain.dma_maxbytes,
-    dataWidth = b.memDomain.dma_buswidth,
-    tledge = edge
-  )
-
-  val writerParam = BBStreamWriterParam(
-    nXacts = b.memDomain.dma_n_xacts,
-    beatBits = b.memDomain.dma_buswidth,
-    maxBytes = b.memDomain.dma_maxbytes,
-    dataWidth = b.memDomain.dma_buswidth,
-    tledge = edge
-  )
-
-  val reader: Instance[BBStreamReader] = Instantiate(new BBStreamReader(readerParam, b))
-  val writer: Instance[BBStreamWriter] = Instantiate(new BBStreamWriter(writerParam, b))
+  val reader: Instance[StreamReader] = Instantiate(new StreamReader(b)(edge))
+  val writer: Instance[StreamWriter] = Instantiate(new StreamWriter(b)(edge))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
@@ -128,7 +107,7 @@ class MemController(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   writer.io.resp <> memStorer.io.dmaResp
 
   // TLB connection - internal TLB cluster connected to DMA modules
-  // Client 0: BBStreamWriter, Client 1: BBStreamReader
+  // Client 0: StreamWriter, Client 1: StreamReader
   // Insert pipeline registers to break combinational loops
   tlbCluster.io.clients(1).req := RegNext(reader.io.tlb.req)
   reader.io.tlb.resp           := RegNext(tlbCluster.io.clients(1).resp)

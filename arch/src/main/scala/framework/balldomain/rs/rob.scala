@@ -148,15 +148,6 @@ class ROB(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Instruction commit - commit all completed instructions out-of-order
 // -----------------------------------------------------------------------------
-  // When head instruction completes, automatically commit and move head pointer
-  // when(robValid(headPtr) && robComplete(headPtr)) {
-  //   robValid(headPtr) := false.B
-  //   robIssued(headPtr) := false.B
-  //   robComplete(headPtr) := false.B
-  //   headPtr := Mux(tailPtr === (parameter.rob_entries - 1).U, 0.U, tailPtr + 1.U)
-  // } // Sequential commit version
-
-  // Commit all completed instructions
   for (i <- 0 until b.frontend.rob_entries) {
     when(robValid(i.U) && robComplete(i.U)) {
       robValid(i.U)    := false.B

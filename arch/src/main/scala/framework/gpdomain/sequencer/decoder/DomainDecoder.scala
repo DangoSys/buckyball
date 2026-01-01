@@ -13,12 +13,10 @@ import chisel3.experimental.hierarchy.{instantiable, public}
  */
 object DomainDecoderParameter {
 
-  // Get all RVV instructions from our local database
   lazy val allInstructions: Seq[InstructionEncoding.Instruction] = {
     RVVInstructions.allInstructions
   }
 
-  // Create decoder parameter using our local instruction types
   lazy val decoderParam: DecoderParam = DecoderParam(
     fpuEnable = true,  // Enable floating-point vector instructions
     zvbbEnable = true, // Enable vector bit manipulation

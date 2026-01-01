@@ -78,19 +78,12 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
     func7,
     ball_default_decode,
     Array(
-      MATMUL_WARP16_BITPAT -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 0.U, rs2(63, 16)),
-      BB_BBFP_MUL          -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 1.U, rs2(63, 16)),
-      MATMUL_WS            -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 1.U, rs2(63, 16)),
-      IM2COL               -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 2.U, rs2(63, 16)),
-      TRANSPOSE            -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 3.U, rs2(63, 16)),
-      RELU                 -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 4.U, rs2(63, 16)),
-      BBUS_CONFIG          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 5.U, rs2(63, 16)),
-      NNLUT                -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 31.U, rs2(63, 16)),
-      SNN                  -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 7.U, rs2(63, 16)),
-      ABFT_SYSTOLIC        -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 8.U, rs2(63, 16)),
-      CONV                 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 9.U, rs2(63, 16)),
-      CIM                  -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 10.U, rs2(63, 16)),
-      TRANSFER             -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 6.U, rs2(63, 16))
+      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 0.U, rs2(63, 16)),
+      IM2COL        -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 2.U, rs2(63, 16)),
+      TRANSPOSE     -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 3.U, rs2(63, 16)),
+      RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 4.U, rs2(63, 16)),
+      CONCAT        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 5.U, rs2(63, 16)),
+      TRANSFER      -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 6.U, rs2(63, 16))
     )
   )
 

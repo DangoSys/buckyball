@@ -14,7 +14,6 @@ import framework.balldomain.prototype.relu.configs.ReluBallParam
 
 @instantiable
 class PipelinedRelu(val b: GlobalConfig) extends Module {
-  // Get parameters from ball's own config JSON file
   val ballConfig = ReluBallParam()
   val InputNum   = ballConfig.InputNum
   val inputWidth = ballConfig.inputWidth
