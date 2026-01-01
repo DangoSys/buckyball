@@ -13,6 +13,7 @@ import framework.balldomain.rs.BallReservationStation
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
+  val memChannel = b.memDomain.balldomainChannel
 
   @public
   val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))
@@ -21,12 +22,13 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val global_complete_o = IO(Decoupled(new GlobalRsComplete(b)))
 
   @public
-  val bankRead = IO(Vec(b.memDomain.bankNum, Flipped(new BankRead(b))))
+  val bankRead = IO(Vec(memChannel, Flipped(new BankRead(b))))
 
   @public
-  val bankWrite = IO(Vec(b.memDomain.bankNum, Flipped(new BankWrite(b))))
+  val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
 
-  // Create new BBus module
+  require(b.memDomain.balldomainChannel == b.ballDomain.bbusChannel, "balldomainChannel must be equal to bbusChannel")
+
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
   val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))

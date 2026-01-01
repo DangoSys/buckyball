@@ -6,8 +6,11 @@
   "tlb_size": 4,
   "dma_n_xacts": 8,
   "dma_maxbytes": 64,
-  "bankChannel": 32,
+  "bankChannel": 8,
   "max_in_flight_mem_reqs": 16,
   "dma_buswidth": 128,
-  "memAddrLen": 32
+  "memAddrLen": 32,
+  "balldomainChannel": 6,
+  "tmaReadChannel": 4,
+  "tmaWriteChannel": 4
 }

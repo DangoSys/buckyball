@@ -1,9 +1,7 @@
 {
-  "ballNum": 2,
-  "emptyBallid": 1,
+  "ballNum": 1,
   "ballIdMappings": [
-    {"ballId": 0, "ballName": "VecBall"},
-    {"ballId": 1, "ballName": "EmptyBall"}
+    {"ballId": 0, "ballName": "VecBall", "inBW": 32, "outBW": 32}
   ],
-  "bbusChannel": 10
+  "bbusChannel": 6
 }

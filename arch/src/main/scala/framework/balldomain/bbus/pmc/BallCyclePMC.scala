@@ -5,9 +5,13 @@ import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.rs.BallRsIssue
 import framework.balldomain.rs.BallRsComplete
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-class BallCyclePMC(val b: GlobalConfig, val numBalls: Int) extends Module {
+@instantiable
+class BallCyclePMC(val b: GlobalConfig) extends Module {
+  val numBalls = b.ballDomain.ballNum
 
+  @public
   val io = IO(new Bundle {
     val cmdReq_i    = Input(Vec(numBalls, Valid(new BallRsIssue(b))))
     val cmdResp_o   = Input(Vec(numBalls, Valid(new BallRsComplete(b))))

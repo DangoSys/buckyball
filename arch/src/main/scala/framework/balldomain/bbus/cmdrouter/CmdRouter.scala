@@ -4,12 +4,12 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.balldomain.bbus.BBusConfigIO
 import framework.balldomain.bbus.cmdrouter.CmdReqRouter
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 @instantiable
-class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
+class CmdRouter(val b: GlobalConfig) extends Module {
+  val numBalls = b.ballDomain.ballNum
 
   @public
   val io = IO(new Bundle {
@@ -18,8 +18,7 @@ class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
     val cmdReq_o  = Decoupled(new BallRsIssue(b))
     val cmdResp_o = Vec(numBalls, Decoupled(new BallRsComplete(b)))
 
-    val ballIdle     = Input(Vec(numBalls, Bool()))
-    val bbusConfig_o = Decoupled(new BBusConfigIO(numBalls))
+    val ballIdle = Input(Vec(numBalls, Bool()))
   })
 
   val reqRouter = Module(new CmdReqRouter(b, numBalls))
@@ -30,16 +29,5 @@ class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
 
   for (i <- 0 until numBalls) {
     io.cmdResp_o(i) <> io.cmdResp_i(i)
-  }
-  io.bbusConfig_o.valid        := false.B
-  io.bbusConfig_o.bits.src_bid := 0.U
-  io.bbusConfig_o.bits.dst_bid := 0.U
-  io.bbusConfig_o.bits.set     := false.B
-
-  when(io.cmdReq_i(b.ballDomain.emptyBallid).valid) {
-    io.bbusConfig_o.valid        := true.B
-    io.bbusConfig_o.bits.src_bid := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(5, 0)
-    io.bbusConfig_o.bits.dst_bid := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(11, 6)
-    io.bbusConfig_o.bits.set     := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(12, 12)
   }
 }

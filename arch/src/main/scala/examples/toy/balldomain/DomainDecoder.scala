@@ -10,9 +10,7 @@ import framework.top.GlobalConfig
 
 // Detailed decode output for Ball domain
 class BallDecodeCmd(numBanks: Int) extends Bundle {
-  // Ball ID
-  val bid = UInt(5.W)
-
+  val bid  = UInt(5.W)
   // Iteration count
   val iter = UInt(10.W)
 
@@ -54,23 +52,18 @@ object BallDefaultConstants {
 @instantiable
 class BallDomainDecoder(val b: GlobalConfig) extends Module {
   import BallDefaultConstants._
-
   @public
-  val raw_cmd_i = IO(Flipped(Decoupled(new PostGDCmd(b))))
-
+  val raw_cmd_i         = IO(Flipped(Decoupled(new PostGDCmd(b))))
   @public
   val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum)))
 
-  val spAddrLen = 14 // b.spAddrLen replaced with constant
-
-  // Only process ball instructions
   raw_cmd_i.ready := ball_decode_cmd_o.ready
 
   val func7 = raw_cmd_i.bits.raw_cmd.inst.funct
   val rs1   = raw_cmd_i.bits.raw_cmd.rs1
   val rs2   = raw_cmd_i.bits.raw_cmd.rs2
 
-  // Ball instruction decoding - now directly use rs1/rs2 as bank IDs
+  // Ball instruction decoding
   import BallDecodeFields._
   val ball_default_decode = List(N, N, N, N, N, 0.U, 0.U, 0.U, DITER, DBID, DSPECIAL)
 
