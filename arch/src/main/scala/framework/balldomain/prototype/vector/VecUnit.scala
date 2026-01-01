@@ -9,7 +9,7 @@ import framework.balldomain.prototype.vector._
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
-import framework.balldomain.blink.Status
+import framework.balldomain.blink.{BankRead, BankWrite, Status}
 import framework.balldomain.prototype.vector.configs.VectorBallParam
 
 @instantiable
@@ -20,65 +20,70 @@ class VecUnit(val b: GlobalConfig) extends Module {
   val accWidth   = ballConfig.outputWidth
   val bankWidth  = b.memDomain.bankWidth
 
+  // Get bandwidth from config (use first VecBall mapping)
+  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
+    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+  val inBW        = ballMapping.inBW
+  val outBW       = ballMapping.outBW
+
   @public
   val io = IO(new Bundle {
     val cmdReq  = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp = Decoupled(new BallRsComplete(b))
 
-    // Connect to unified bank read/write interface
-    val bankRead  = Vec(b.memDomain.bankNum, Flipped(new SramReadIO(b)))
-    // Connect to unified bank write interface
-    val bankWrite =
-      Vec(b.memDomain.bankNum, Flipped(new SramWriteIO(b)))
+    val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
+    val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
 
     // Status output
     val status = new Status
   })
 
+  val VecCtrlUnit:  Instance[VecCtrlUnit]  = Instantiate(new VecCtrlUnit(b))
+  val VecLoadUnit:  Instance[VecLoadUnit]  = Instantiate(new VecLoadUnit(b))
+  val VecEX:        Instance[VecEXUnit]    = Instantiate(new VecEXUnit(b))
+  val VecStoreUnit: Instance[VecStoreUnit] = Instantiate(new VecStoreUnit(b))
+
 // -----------------------------------------------------------------------------
 // VECCTRLUNIT
 // -----------------------------------------------------------------------------
-  val VecCtrlUnit: Instance[VecCtrlUnit] = Instantiate(new VecCtrlUnit(b))
+
   VecCtrlUnit.io.cmdReq <> io.cmdReq
   io.cmdResp <> VecCtrlUnit.io.cmdResp_o
 
 // -----------------------------------------------------------------------------
 // VECLOADUNIT
 // -----------------------------------------------------------------------------
-  val VecLoadUnit: Instance[VecLoadUnit] = Instantiate(new VecLoadUnit(b))
+
   VecLoadUnit.io.ctrl_ld_i <> VecCtrlUnit.io.ctrl_ld_o
-  for (i <- 0 until b.memDomain.bankNum) {
-    io.bankRead(i).req <> VecLoadUnit.io.bankReadReq(i)
-    VecLoadUnit.io.bankReadResp(i) <> io.bankRead(i).resp
+  for (i <- 0 until inBW) {
+    io.bankRead(i).io.req <> VecLoadUnit.io.bankReadReq(i)
+    VecLoadUnit.io.bankReadResp(i) <> io.bankRead(i).io.resp
+    // Set bank_id: channel 0 uses op1_bank, channel 1 uses op2_bank
+    if (i == 0) {
+      io.bankRead(i).bank_id := VecLoadUnit.io.op1_bank_o
+    } else if (i == 1) {
+      io.bankRead(i).bank_id := VecLoadUnit.io.op2_bank_o
+    }
   }
 
 // -----------------------------------------------------------------------------
 // VECEX
 // -----------------------------------------------------------------------------
-  val VecEX: Instance[VecEXUnit] = Instantiate(new VecEXUnit(b))
+
   VecEX.io.ctrl_ex_i <> VecCtrlUnit.io.ctrl_ex_o
   VecEX.io.ld_ex_i <> VecLoadUnit.io.ld_ex_o
 
 // -----------------------------------------------------------------------------
 // VECSTOREUNIT
 // -----------------------------------------------------------------------------
-  val VecStoreUnit: Instance[VecStoreUnit] = Instantiate(new VecStoreUnit(b))
   VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
   VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
-  for (i <- 0 until b.memDomain.bankNum) {
-    io.bankWrite(i) <> VecStoreUnit.io.bankWrite(i)
+  for (i <- 0 until outBW) {
+    io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
+    // Set bank_id from VecStoreUnit
+    io.bankWrite(i).bank_id := VecStoreUnit.io.wr_bank_o
   }
   VecCtrlUnit.io.cmdResp_i <> VecStoreUnit.io.cmdResp_o
-
-// -----------------------------------------------------------------------------
-// Set DontCare
-// -----------------------------------------------------------------------------
-  // for (i <- 0 until b.sp_banks) {
-  //   io.sramWrite(i) := DontCare
-  // }
-  // for (i <- 0 until b.acc_banks) {
-  //   io.accRead(i) := DontCare
-  // }
 
 // -----------------------------------------------------------------------------
 // Status tracking

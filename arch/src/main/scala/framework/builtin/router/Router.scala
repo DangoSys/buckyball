@@ -17,7 +17,7 @@ class Router(val numInputs: Int, val numOutputs: Int) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val in  = Vec(numInputs, Bool())
+    val in  = Input(Vec(numInputs, Bool()))
     val out = Vec(numOutputs, Decoupled(UInt(inputChannelIdWidth.W)))
   })
 

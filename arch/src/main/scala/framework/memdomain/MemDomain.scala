@@ -34,9 +34,10 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // Bank interface for interaction with Ball Domain
     // BankRead/BankWrite are used with Flipped at Ball Device side
     // MemDomain receives requests from Ball Domain, so uses raw Bundle (Input for bank_id)
+    // Use bbusChannel instead of bankNum to match BallDomain output
     val ballDomain = new Bundle {
-      val bankRead  = Vec(b.memDomain.bankNum, new BankRead(b))
-      val bankWrite = Vec(b.memDomain.bankNum, new BankWrite(b))
+      val bankRead  = Vec(b.ballDomain.bbusChannel, new BankRead(b))
+      val bankWrite = Vec(b.ballDomain.bbusChannel, new BankWrite(b))
 
     }
 

@@ -1,7 +1,7 @@
 {
   "ballNum": 1,
   "ballIdMappings": [
-    {"ballId": 0, "ballName": "VecBall", "inBW": 32, "outBW": 32}
+    {"ballId": 0, "ballName": "VecBall", "inBW": 2, "outBW": 4}
   ],
   "bbusChannel": 6
 }

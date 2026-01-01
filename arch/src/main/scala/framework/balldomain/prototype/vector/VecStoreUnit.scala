@@ -18,7 +18,6 @@ class ex_st_req(b: GlobalConfig) extends Bundle {
   val config   = VectorBallParam()
   val InputNum = config.lane
   val accWidth = config.outputWidth
-  // Use accumulator type
   val rst      = Vec(InputNum, UInt(accWidth.W))
   val iter     = UInt(10.W)
 }
@@ -29,14 +28,22 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   val InputNum = config.lane
   val accWidth = config.outputWidth
 
+  // Get bandwidth from config (use first VecBall mapping)
+  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
+    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+  val outBW       = ballMapping.outBW
+
   @public
   val io = IO(new Bundle {
     val ctrl_st_i = Flipped(Decoupled(new ctrl_st_req(b)))
     val ex_st_i   = Flipped(Decoupled(new ex_st_req(b)))
 
     // Unified bank write interface (writes use accumulate mode)
-    val bankWrite =
-      Vec(b.memDomain.bankNum, Flipped(new SramWriteIO(b)))
+    // outBW channels share the data write
+    val bankWrite = Vec(outBW, Flipped(new SramWriteIO(b)))
+
+    // Output current wr_bank for bank_id setting
+    val wr_bank_o = Output(UInt(log2Up(b.memDomain.bankNum).W))
 
     val cmdResp_o = Valid(new Bundle { val commit = Bool() })
   })
@@ -76,42 +83,27 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   }
   val waddr = wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
   when(io.ex_st_i.fire) {
-    for (i <- 0 until b.memDomain.bankNum / 2) {
-      when(waddr(0) === 0.U) {
-        io.bankWrite(i).req.valid     := true.B
-        io.bankWrite(i).req.bits.addr := wr_bank_addr + (iter_counter(log2Ceil(InputNum) - 1, 0) >> 1.U)
+    // Use all outBW channels to share the data write
+    // Each channel gets a portion of the data
+    for (i <- 0 until outBW) {
+      val elementsPerChannel = InputNum / outBW
+      val startIdx           = i * elementsPerChannel
+      val endIdx             = startIdx + elementsPerChannel - 1
 
-        // Each accumulator bank stores InputNum/numBanks elements
-        val elementsPerBank = InputNum / b.memDomain.bankNum * 2
-        val startIdx        = i * elementsPerBank
-        val endIdx          = startIdx + elementsPerBank - 1
+      io.bankWrite(i).req.valid     := true.B
+      io.bankWrite(i).req.bits.addr := wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
 
-        // Pack corresponding elements into a UInt
-        val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
-        io.bankWrite(i).req.bits.data := bankData
-
-        io.bankWrite(i).req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      }.otherwise {
-        io.bankWrite(i + b.memDomain.bankNum / 2).req.valid     := true.B
-        io.bankWrite(i + b.memDomain.bankNum / 2).req.bits.addr := wr_bank_addr + (iter_counter(
-          log2Ceil(InputNum) - 1,
-          0
-        ) >> 1.U)
-
-        // Each accumulator bank stores InputNum/numBanks elements
-        val elementsPerBank = InputNum / b.memDomain.bankNum * 2
-        val startIdx        = i * elementsPerBank
-        val endIdx          = startIdx + elementsPerBank - 1
-
-        // Pack corresponding elements into a UInt
-        val bankData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
-        io.bankWrite(i + b.memDomain.bankNum / 2).req.bits.data := bankData
-
-        io.bankWrite(i + b.memDomain.bankNum / 2).req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      }
+      // Pack corresponding elements into a UInt
+      val channelData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
+      io.bankWrite(i).req.bits.data  := channelData
+      io.bankWrite(i).req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+      io.bankWrite(i).req.bits.wmode := true.B // Accumulate mode
     }
     iter_counter := iter_counter + 1.U
   }
+
+  // Output wr_bank for bank_id setting
+  io.wr_bank_o := wr_bank
 
 // -----------------------------------------------------------------------------
 // Reset iter counter, commit cmdResp, return to idle state

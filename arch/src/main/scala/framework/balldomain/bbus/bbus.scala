@@ -62,13 +62,27 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
+  // Connect each ball's bankRead/bankWrite based on its configured bandwidth
+  // All requests from balls will go through Router inside MemRouter
+  // and become bbusChannel outputs (not bankNum)
   for (i <- 0 until numBalls) {
-    for (j <- 0 until bbusChannel) {
+    val ballMapping = b.ballDomain.ballIdMappings(i)
+    val inBW        = ballMapping.inBW
+    val outBW       = ballMapping.outBW
+
+    // Connect all input bandwidth channels (bankRead) to MemRouter
+    // MemRouter will use Router to route all ball requests to bbusChannel outputs
+    for (j <- 0 until inBW.min(b.memDomain.bankNum)) {
       memoryrouter.io.bankRead_i(i)(j) <> balls(i).Blink.bankRead(j)
+    }
+
+    // Connect all output bandwidth channels (bankWrite) to MemRouter
+    for (j <- 0 until outBW.min(b.memDomain.bankNum)) {
       memoryrouter.io.bankWrite_i(i)(j) <> balls(i).Blink.bankWrite(j)
     }
   }
 
+  // MemRouter outputs bbusChannel channels (routed from all ball requests)
   bankRead <> memoryrouter.io.bankRead_o
   bankWrite <> memoryrouter.io.bankWrite_o
 
