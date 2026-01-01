@@ -13,11 +13,12 @@ class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val cmdReq_i     = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b))))
-    val cmdResp_i    = Vec(numBalls, Flipped(Decoupled(new BallRsComplete(b))))
+    val cmdReq_i  = Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b))))
+    val cmdResp_i = Vec(numBalls, Flipped(Decoupled(new BallRsComplete(b))))
+    val cmdReq_o  = Decoupled(new BallRsIssue(b))
+    val cmdResp_o = Vec(numBalls, Decoupled(new BallRsComplete(b)))
+
     val ballIdle     = Input(Vec(numBalls, Bool()))
-    val cmdReq_o     = Decoupled(new BallRsIssue(b))
-    val cmdResp_o    = Vec(numBalls, Decoupled(new BallRsComplete(b)))
     val bbusConfig_o = Decoupled(new BBusConfigIO(numBalls))
   })
 
@@ -34,6 +35,7 @@ class CmdRouter(b: GlobalConfig, numBalls: Int) extends Module {
   io.bbusConfig_o.bits.src_bid := 0.U
   io.bbusConfig_o.bits.dst_bid := 0.U
   io.bbusConfig_o.bits.set     := false.B
+
   when(io.cmdReq_i(b.ballDomain.emptyBallid).valid) {
     io.bbusConfig_o.valid        := true.B
     io.bbusConfig_o.bits.src_bid := io.cmdReq_i(b.ballDomain.emptyBallid).bits.cmd.special(5, 0)

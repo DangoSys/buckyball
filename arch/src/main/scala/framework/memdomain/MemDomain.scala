@@ -7,13 +7,12 @@ import freechips.rocketchip.tile._
 import framework.balldomain.blink.{BankRead, BankWrite}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
-
-import framework.memdomain.frontend.MemController
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
-
-import framework.memdomain.midend.MemScheduler
-import framework.memdomain.backend.MemManager
 import framework.top.GlobalConfig
+
+import framework.memdomain.frontend.MemFrontend
+import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
+import framework.memdomain.midend.MemMidend
+import framework.memdomain.backend.MemBackend
 
 @instantiable
 class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
@@ -53,9 +52,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tl_writer = new TLBundle(edge.bundle)
   })
 
-  val frontend: Instance[MemController] = Instantiate(new MemController(b)(edge))
-  val midend:   Instance[MemScheduler]  = Instantiate(new MemScheduler(b))
-  val backend:  Instance[MemManager]    = Instantiate(new MemManager(b))
+  val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
+  val midend:   Instance[MemMidend]   = Instantiate(new MemMidend(b))
+  val backend:  Instance[MemBackend]  = Instantiate(new MemBackend(b))
 
   // -------------------------------------------------
   // Connection with outside (all in frontend)
@@ -82,10 +81,6 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // -------------------------------------------------
   // Internal Connection (frontend - midend - backend)
   // -------------------------------------------------
-  // Frontend interdma (MemLoader/MemStorer) connects to midend
-  // MemLoader/MemStorer DMA operations also need to access banks
-  // For now we directly tie off interdma since ballDomain is the main data path
-  // TODO: Add multiplexing if interdma also needs bank access
   for (i <- 0 until b.memDomain.bankNum) {
     frontend.io.interdma.bankRead(i).io.req.ready  := false.B
     frontend.io.interdma.bankRead(i).io.resp.valid := false.B
@@ -96,6 +91,5 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     frontend.io.interdma.bankWrite(i).io.resp.bits  := 0.U.asTypeOf(frontend.io.interdma.bankWrite(i).io.resp.bits)
   }
 
-  // Midend to Backend: route scheduled requests to memory manager
   midend.io.mem_req <> backend.io.mem_req
 }

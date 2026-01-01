@@ -4,5 +4,6 @@
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall"},
     {"ballId": 1, "ballName": "EmptyBall"}
-  ]
+  ],
+  "bbusChannel": 10
 }

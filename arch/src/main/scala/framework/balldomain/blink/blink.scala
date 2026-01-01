@@ -21,16 +21,14 @@ class Status extends Bundle {
 // BankRead with rob_id, bank_id
 class BankRead(val b: GlobalConfig) extends Bundle {
   val io      = new SramReadIO(b)
-  // Input because the outer layer has Flipped
   val rob_id  = Input(UInt(log2Up(b.frontend.rob_entries).W))
   val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
 }
 
 // BankWrite with rob_id, bank_id
-// wmode is in SramWriteIO.io.req.bits.wmode: true = accumulate (累加), false = overwrite (覆盖)
+// wmode is in SramWriteIO.io.req.bits.wmode: true = accumulate, false = overwrite
 class BankWrite(val b: GlobalConfig) extends Bundle {
   val io      = new SramWriteIO(b)
-  // Input because the outer layer has Flipped
   val rob_id  = Input(UInt(log2Up(b.frontend.rob_entries).W))
   val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
 }
@@ -44,14 +42,11 @@ class BlinkIO(b: GlobalConfig) extends Bundle {
   val status    = new Status
 }
 
-// Standard interface for Ball devices
-// bankEntries, bankWidth, bankMaskLen come from MemDomain, not BallDomain
 @instantiable
 class Blink(b: GlobalConfig) extends Module {
   @public
   val io = IO(new BlinkIO(b))
 
-  // Convenience aliases for backward compatibility
   def cmdReq:    DecoupledIO[BallRsIssue]    = io.cmdReq
   def cmdResp:   DecoupledIO[BallRsComplete] = io.cmdResp
   def bankRead:  Vec[BankRead]               = io.bankRead

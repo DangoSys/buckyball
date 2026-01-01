@@ -14,7 +14,6 @@ import framework.balldomain.prototype.vector.configs.VectorBallParam
 
 @instantiable
 class VecUnit(val b: GlobalConfig) extends Module {
-  // Get parameters from ball's own config JSON file
   val ballConfig = VectorBallParam()
   val InputNum   = ballConfig.lane
   val inputWidth = ballConfig.inputWidth

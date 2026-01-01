@@ -6,16 +6,14 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XWR}
 
-import framework.utils.Util._
+import framework.builtin.utils.Util._
 import framework.memdomain.frontend.outside_channel.tlb.BBTLBIO
 import framework.top.GlobalConfig
 
 class BBWriteRequest(dataWidth: Int) extends Bundle {
   val vaddr  = UInt(64.W)
   val data   = UInt(dataWidth.W)
-  // Write length (bytes)
   val len    = UInt(16.W)
-  // Byte mask
   val mask   = UInt((dataWidth / 8).W)
   val status = new MStatus
 }
@@ -24,38 +22,33 @@ class BBWriteResponse extends Bundle {
   val done = Bool()
 }
 
-case class BBStreamWriterParam(
-  nXacts:    Int,
-  beatBits:  Int,
-  maxBytes:  Int,
-  dataWidth: Int,
-  tledge:    TLEdgeOut)
-
 @instantiable
-class BBStreamWriter(val parameter: BBStreamWriterParam, val b: GlobalConfig) extends Module {
+class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val vaddrBits = b.core.vaddrBits
 
+  val nXacts    = b.memDomain.dma_n_xacts
+  val beatBits  = b.memDomain.dma_buswidth
+  val maxBytes  = b.memDomain.dma_maxbytes
+  val dataWidth = b.memDomain.dma_buswidth
+  val beatBytes = beatBits / 8
+
   @public
   val io = IO(new Bundle {
-    val req   = Flipped(Decoupled(new BBWriteRequest(parameter.dataWidth)))
+    val req   = Flipped(Decoupled(new BBWriteRequest(dataWidth)))
     val resp  = Decoupled(new BBWriteResponse)
     val tlb   = Flipped(new BBTLBIO(b))
     val busy  = Output(Bool())
     val flush = Input(Bool())
-    // TileLink physical connection
-    val tl    = new TLBundle(parameter.tledge.bundle)
+    val tl    = new TLBundle(edge.bundle)
   })
-
-  val edge      = parameter.tledge
-  val beatBytes = parameter.beatBits / 8
 
   val s_idle :: s_writing :: Nil = Enum(2)
   val state                      = RegInit(s_idle)
 
-  val req = Reg(new BBWriteRequest(parameter.dataWidth))
+  val req = Reg(new BBWriteRequest(dataWidth))
 
-  val xactBusy   = RegInit(0.U(parameter.nXacts.W))
+  val xactBusy   = RegInit(0.U(nXacts.W))
   val xactOnehot = PriorityEncoderOH(~xactBusy)
   val xactId     = OHToUInt(xactOnehot)
 

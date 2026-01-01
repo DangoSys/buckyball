@@ -7,16 +7,14 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XRD}
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
-import framework.utils.Util._
+import framework.builtin.utils.Util._
 import framework.memdomain.frontend.outside_channel.tlb.BBTLBIO
 import framework.top.GlobalConfig
 
 class BBReadRequest extends Bundle {
   val vaddr  = UInt(64.W)
-  // Read length (bytes)
   val len    = UInt(16.W)
   val status = new MStatus
-  // Stride (bytes)
   val stride = UInt(10.W)
 }
 
@@ -26,31 +24,25 @@ class BBReadResponse(dataWidth: Int) extends Bundle {
   val addrcounter = UInt(10.W)
 }
 
-case class BBStreamReaderParam(
-  nXacts:    Int,
-  beatBits:  Int,
-  maxBytes:  Int,
-  dataWidth: Int,
-  tledge:    TLEdgeOut)
-
 @instantiable
-class BBStreamReader(val parameter: BBStreamReaderParam, val b: GlobalConfig) extends Module {
-
+class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val vaddrBits = b.core.vaddrBits
+  val nXacts    = b.memDomain.dma_n_xacts
+  val beatBits  = b.memDomain.dma_buswidth
+  val maxBytes  = b.memDomain.dma_maxbytes
+  val dataWidth = b.memDomain.dma_buswidth
+  val beatBytes = beatBits / 8
 
   @public
   val io = IO(new Bundle {
     val req   = Flipped(Decoupled(new BBReadRequest()))
-    val resp  = Decoupled(new BBReadResponse(parameter.dataWidth))
+    val resp  = Decoupled(new BBReadResponse(dataWidth))
     val tlb   = Flipped(new BBTLBIO(b))
     val busy  = Output(Bool())
     val flush = Input(Bool())
     // TileLink physical connection
-    val tl    = new TLBundle(parameter.tledge.bundle)
+    val tl    = new TLBundle(edge.bundle)
   })
-
-  val edge      = parameter.tledge
-  val beatBytes = parameter.beatBits / 8
 
   val s_idle :: s_req_new_block :: Nil = Enum(2)
   val state                            = RegInit(s_idle)
@@ -74,7 +66,7 @@ class BBStreamReader(val parameter: BBStreamReaderParam, val b: GlobalConfig) ex
   req_byte_end := req_byte_start + read_size
 
   // Transaction ID management
-  val xactBusy   = RegInit(0.U(parameter.nXacts.W))
+  val xactBusy   = RegInit(0.U(nXacts.W))
   val xactOnehot = PriorityEncoderOH(~xactBusy)
   val xactId     = OHToUInt(xactOnehot)
 

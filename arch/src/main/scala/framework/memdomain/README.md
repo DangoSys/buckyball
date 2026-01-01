@@ -126,12 +126,12 @@ Main Memory ←→ DMA Engine ←→ MemController ←→ Scratchpad/Accumulator
 
 ### dma/ - DMA Engines
 
-**BBStreamReader**: Streaming data reader
+**StreamReader**: Streaming data reader
 - TileLink interface for memory access
 - TLB support for virtual addressing
 - Transaction ID management for multiple outstanding requests
 
-**BBStreamWriter**: Streaming data writer
+**StreamWriter**: Streaming data writer
 - Handles data alignment (16-byte aligned)
 - Generates byte masks for partial writes
 - TLB support

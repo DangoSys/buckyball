@@ -16,7 +16,6 @@ import framework.balldomain.prototype.vector.VecBall
 // import framework.balldomain.prototype.nnlut.NNLutBall
 // import framework.balldomain.prototype.nnlut.configs.NNLutConfig
 
-// Ball type definitions
 sealed trait BallType
 case object VecBallType       extends BallType
 case object MatrixBallType    extends BallType
@@ -25,13 +24,10 @@ case object Im2colBallType    extends BallType
 case object ReluBallType      extends BallType
 case object NNLutBallType     extends BallType
 
-// Config Key
 case object TargetBallKey extends Field[BallType](VecBallType)
 
-// TargetBall - directly instantiate pre-packaged Ball
 class TargetBall(implicit b: GlobalConfig, p: Parameters) extends Module {
 
-  // Create BlinkIO with parameter
   val io = IO(new BlinkIO(b))
 
   p(TargetBallKey) match {

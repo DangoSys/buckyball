@@ -9,13 +9,13 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.memdomain.backend.MemRequestIO
 
 /**
- * MemScheduler: Midend module for memory scheduling
- * Connects MemController to MemManager
+ * MemMidend: Midend module for memory scheduling
+ * Connects MemFrontend to MemManager
  *
  * Basic direct connection: routes requests from frontend to backend channels
  */
 @instantiable
-class MemScheduler(val b: GlobalConfig) extends Module {
+class MemMidend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {

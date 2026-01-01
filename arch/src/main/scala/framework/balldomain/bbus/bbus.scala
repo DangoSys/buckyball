@@ -69,7 +69,7 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
-  val memoryrouter: Instance[MemRouter] = Instantiate(new MemRouter(b, numBalls, b.memDomain.bankChannel))
+  val memoryrouter: Instance[MemRouter] = Instantiate(new MemRouter(b))
   memoryrouter.io.bbusConfig_i <> cmdRouter.io.bbusConfig_o
 
   // Direct connection from balls to memory router (no ToVirtualLine)

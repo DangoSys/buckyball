@@ -8,7 +8,7 @@ import framework.memdomain.backend.banks.{SramBank, SramReadIO, SramWriteIO}
 import framework.memdomain.backend.accpipe.AccPipe
 
 /**
- * MemManager: Backend memory manager
+ * MemBackend: Backend memory manager
  * Manages the physical memory resources (Scratchpad + Accumulator Banks)
  *
  * Features:
@@ -24,7 +24,7 @@ class MemRequestIO(b: GlobalConfig) extends Bundle {
 }
 
 @instantiable
-class MemManager(val b: GlobalConfig) extends Module {
+class MemBackend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
