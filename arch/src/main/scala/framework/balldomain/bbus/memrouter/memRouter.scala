@@ -9,62 +9,31 @@ import framework.builtin.router.Router
 
 @instantiable
 class MemRouter(val b: GlobalConfig) extends Module {
-  val bbusChannel = b.ballDomain.bbusChannel
-  val numBalls    = b.ballDomain.ballNum
-
-  // Calculate total input channels from all balls
+  val bbusChannel        = b.ballDomain.bbusChannel
+  val numBalls           = b.ballDomain.ballNum
   val totalReadChannels  = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalWriteChannels = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   @public
   val io = IO(new Bundle {
-    val bankRead_i  = Vec(numBalls, Vec(b.memDomain.bankNum, new BankRead(b)))
-    val bankWrite_i = Vec(numBalls, Vec(b.memDomain.bankNum, new BankWrite(b)))
-
+    val bankRead_i  = Vec(totalReadChannels, new BankRead(b))
+    val bankWrite_i = Vec(totalWriteChannels, new BankWrite(b))
     val bankRead_o  = Vec(bbusChannel, Flipped(new BankRead(b)))
     val bankWrite_o = Vec(bbusChannel, Flipped(new BankWrite(b)))
   })
 
-  // Build channel mappings at compile time
-  // Map flat index -> (ballIdx, channelIdx)
-  val readMapping: Seq[(Int, Int)] = {
-    var flatIdx = 0
-    val mapping = scala.collection.mutable.ArrayBuffer[(Int, Int)]()
-    for (ballIdx <- 0 until numBalls) {
-      val inBW = b.ballDomain.ballIdMappings(ballIdx).inBW
-      for (chIdx <- 0 until inBW.min(b.memDomain.bankNum)) {
-        mapping += ((ballIdx, chIdx))
-        flatIdx += 1
-      }
-    }
-    mapping.toSeq
-  }
-
-  val writeMapping: Seq[(Int, Int)] = {
-    var flatIdx = 0
-    val mapping = scala.collection.mutable.ArrayBuffer[(Int, Int)]()
-    for (ballIdx <- 0 until numBalls) {
-      val outBW = b.ballDomain.ballIdMappings(ballIdx).outBW
-      for (chIdx <- 0 until outBW.min(b.memDomain.bankNum)) {
-        mapping += ((ballIdx, chIdx))
-        flatIdx += 1
-      }
-    }
-    mapping.toSeq
-  }
+  // No need for mapping anymore - flat index directly corresponds to ball channels
 
   // Create valid signals for Router inputs
   val readValidSignals  = Wire(Vec(totalReadChannels, Bool()))
   val writeValidSignals = Wire(Vec(totalWriteChannels, Bool()))
 
   for (i <- 0 until totalReadChannels) {
-    val (ballIdx, channelIdx) = readMapping(i)
-    readValidSignals(i) := io.bankRead_i(ballIdx)(channelIdx).io.req.valid
+    readValidSignals(i) := io.bankRead_i(i).io.req.valid
   }
 
   for (i <- 0 until totalWriteChannels) {
-    val (ballIdx, channelIdx) = writeMapping(i)
-    writeValidSignals(i) := io.bankWrite_i(ballIdx)(channelIdx).io.req.valid
+    writeValidSignals(i) := io.bankWrite_i(i).io.req.valid
   }
 
   // Instantiate Routers
@@ -79,23 +48,33 @@ class MemRouter(val b: GlobalConfig) extends Module {
     writeRouter.io.in(i) := writeValidSignals(i)
   }
 
+  // Initialize all bankRead_i and bankWrite_i channels with defaults
+  for (i <- 0 until totalReadChannels) {
+    io.bankRead_i(i).io.req.ready  := false.B
+    io.bankRead_i(i).io.resp.valid := false.B
+    io.bankRead_i(i).io.resp.bits  := 0.U.asTypeOf(io.bankRead_i(i).io.resp.bits.cloneType)
+  }
+  for (i <- 0 until totalWriteChannels) {
+    io.bankWrite_i(i).io.req.ready  := false.B
+    io.bankWrite_i(i).io.resp.valid := false.B
+    io.bankWrite_i(i).io.resp.bits  := 0.U.asTypeOf(io.bankWrite_i(i).io.resp.bits.cloneType)
+  }
+
   // Connect Router outputs to bankRead_o and bankWrite_o
   for (outIdx <- 0 until bbusChannel) {
     // Read routing - use MuxCase to select based on Router output
     val readSelectedIdx   = readRouter.io.out(outIdx).bits
     val readCanTransmit   = readRouter.io.out(outIdx).valid && io.bankRead_o(outIdx).io.req.ready
-    val readReqValidCases = readMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (readSelectedIdx === flatIdx.U) -> io.bankRead_i(ballIdx)(channelIdx).io.req.valid
+    val readReqValidCases = (0 until totalReadChannels).map { flatIdx =>
+      (readSelectedIdx === flatIdx.U) -> io.bankRead_i(flatIdx).io.req.valid
     }
     io.bankRead_o(outIdx).io.req.valid := MuxCase(
       false.B,
       readReqValidCases :+ (!readCanTransmit) -> false.B
     )
 
-    val readReqBitsCases = readMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (readSelectedIdx === flatIdx.U) -> io.bankRead_i(ballIdx)(channelIdx).io.req.bits
+    val readReqBitsCases = (0 until totalReadChannels).map { flatIdx =>
+      (readSelectedIdx === flatIdx.U) -> io.bankRead_i(flatIdx).io.req.bits
     }
     io.bankRead_o(outIdx).io.req.bits := MuxCase(
       DontCare,
@@ -103,99 +82,74 @@ class MemRouter(val b: GlobalConfig) extends Module {
     )
 
     // Build MuxCase for read rob_id and bank_id
-    val readRobIdCases = readMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (readSelectedIdx === flatIdx.U) -> io.bankRead_i(ballIdx)(channelIdx).rob_id
+    val readRobIdCases = (0 until totalReadChannels).map { flatIdx =>
+      (readSelectedIdx === flatIdx.U) -> io.bankRead_i(flatIdx).rob_id
     }
     io.bankRead_o(outIdx).rob_id := MuxCase(0.U, readRobIdCases)
 
-    val readBankIdCases = readMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (readSelectedIdx === flatIdx.U) -> io.bankRead_i(ballIdx)(channelIdx).bank_id
+    val readBankIdCases = (0 until totalReadChannels).map { flatIdx =>
+      (readSelectedIdx === flatIdx.U) -> io.bankRead_i(flatIdx).bank_id
     }
     io.bankRead_o(outIdx).bank_id := MuxCase(0.U, readBankIdCases)
 
-    // Connect read response back
-    // Only handle channels that are actually connected (in readMapping)
-    for ((mapping, flatIdx) <- readMapping.zipWithIndex) {
-      val (ballIdx, channelIdx) = mapping
+    // Connect read response back - override defaults for selected channel
+    for (flatIdx <- 0 until totalReadChannels) {
       when(readCanTransmit && readSelectedIdx === flatIdx.U) {
-        io.bankRead_i(ballIdx)(channelIdx).io.req.ready  := io.bankRead_o(outIdx).io.req.ready
-        io.bankRead_i(ballIdx)(channelIdx).io.resp.valid := io.bankRead_o(outIdx).io.resp.valid
-        io.bankRead_i(ballIdx)(channelIdx).io.resp.bits  := io.bankRead_o(outIdx).io.resp.bits
-      }.otherwise {
-        io.bankRead_i(ballIdx)(channelIdx).io.req.ready  := false.B
-        io.bankRead_i(ballIdx)(channelIdx).io.resp.valid := false.B
-        io.bankRead_i(ballIdx)(channelIdx).io.resp.bits  := 0.U.asTypeOf(
-          io.bankRead_i(ballIdx)(channelIdx).io.resp.bits.cloneType
-        )
+        io.bankRead_i(flatIdx).io.req.ready  := io.bankRead_o(outIdx).io.req.ready
+        io.bankRead_i(flatIdx).io.resp.valid := io.bankRead_o(outIdx).io.resp.valid
+        io.bankRead_i(flatIdx).io.resp.bits  := io.bankRead_o(outIdx).io.resp.bits
       }
     }
     // resp.ready: bankRead_o is Flipped, so resp.ready is output (from internal), we drive it from bankRead_i
     io.bankRead_o(outIdx).io.resp.ready := MuxCase(
       false.B,
-      readMapping.zipWithIndex.map {
-        case ((ballIdx, channelIdx), flatIdx) =>
-          (readCanTransmit && readSelectedIdx === flatIdx.U) -> io.bankRead_i(ballIdx)(channelIdx).io.resp.ready
+      (0 until totalReadChannels).map { flatIdx =>
+        (readCanTransmit && readSelectedIdx === flatIdx.U) -> io.bankRead_i(flatIdx).io.resp.ready
       }
     )
 
-    // Write routing - similar to read
     val writeSelectedIdx = writeRouter.io.out(outIdx).bits
     val writeCanTransmit = writeRouter.io.out(outIdx).valid && io.bankWrite_o(outIdx).io.req.ready
 
     // Build MuxCase for write request (only valid and bits, ready is input)
-    val writeReqValidCases = writeMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(ballIdx)(channelIdx).io.req.valid
+    val writeReqValidCases = (0 until totalWriteChannels).map { flatIdx =>
+      (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(flatIdx).io.req.valid
     }
     io.bankWrite_o(outIdx).io.req.valid := MuxCase(
       false.B,
       writeReqValidCases :+ (!writeCanTransmit) -> false.B
     )
 
-    val writeReqBitsCases = writeMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(ballIdx)(channelIdx).io.req.bits
+    val writeReqBitsCases = (0 until totalWriteChannels).map { flatIdx =>
+      (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(flatIdx).io.req.bits
     }
     io.bankWrite_o(outIdx).io.req.bits := MuxCase(
       DontCare,
       writeReqBitsCases :+ (!writeCanTransmit) -> 0.U.asTypeOf(io.bankWrite_o(outIdx).io.req.bits.cloneType)
     )
 
-    val writeRobIdCases = writeMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(ballIdx)(channelIdx).rob_id
+    val writeRobIdCases = (0 until totalWriteChannels).map { flatIdx =>
+      (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(flatIdx).rob_id
     }
     io.bankWrite_o(outIdx).rob_id := MuxCase(0.U, writeRobIdCases)
 
-    val writeBankIdCases = writeMapping.zipWithIndex.map {
-      case ((ballIdx, channelIdx), flatIdx) =>
-        (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(ballIdx)(channelIdx).bank_id
+    val writeBankIdCases = (0 until totalWriteChannels).map { flatIdx =>
+      (writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(flatIdx).bank_id
     }
     io.bankWrite_o(outIdx).bank_id := MuxCase(0.U, writeBankIdCases)
 
-    // Connect write response back
-    // Only handle channels that are actually connected (in writeMapping)
-    for ((mapping, flatIdx) <- writeMapping.zipWithIndex) {
-      val (ballIdx, channelIdx) = mapping
+    // Connect write response back - override defaults for selected channel
+    for (flatIdx <- 0 until totalWriteChannels) {
       when(writeCanTransmit && writeSelectedIdx === flatIdx.U) {
-        io.bankWrite_i(ballIdx)(channelIdx).io.req.ready  := io.bankWrite_o(outIdx).io.req.ready
-        io.bankWrite_i(ballIdx)(channelIdx).io.resp.valid := io.bankWrite_o(outIdx).io.resp.valid
-        io.bankWrite_i(ballIdx)(channelIdx).io.resp.bits  := io.bankWrite_o(outIdx).io.resp.bits
-      }.otherwise {
-        io.bankWrite_i(ballIdx)(channelIdx).io.req.ready  := false.B
-        io.bankWrite_i(ballIdx)(channelIdx).io.resp.valid := false.B
-        io.bankWrite_i(ballIdx)(channelIdx).io.resp.bits  := 0.U.asTypeOf(
-          io.bankWrite_i(ballIdx)(channelIdx).io.resp.bits.cloneType
-        )
+        io.bankWrite_i(flatIdx).io.req.ready  := io.bankWrite_o(outIdx).io.req.ready
+        io.bankWrite_i(flatIdx).io.resp.valid := io.bankWrite_o(outIdx).io.resp.valid
+        io.bankWrite_i(flatIdx).io.resp.bits  := io.bankWrite_o(outIdx).io.resp.bits
       }
     }
     io.bankWrite_o(outIdx).io.resp.ready := MuxCase(
       false.B,
-      writeMapping.zipWithIndex.map {
-        case ((ballIdx, channelIdx), flatIdx) =>
-          (writeCanTransmit && writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(ballIdx)(channelIdx).io.resp.ready
+      (0 until totalWriteChannels).map { flatIdx =>
+        (writeCanTransmit && writeSelectedIdx === flatIdx.U) -> io.bankWrite_i(flatIdx).io.resp.ready
       }
     )
 

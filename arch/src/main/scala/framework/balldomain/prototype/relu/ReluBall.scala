@@ -24,25 +24,17 @@ class ReluBall(val b: GlobalConfig) extends Module with BallRegist {
 
   def Blink: BlinkIO = io
 
-  private val reluUnit: Instance[PipelinedRelu] = Instantiate(new PipelinedRelu(b))
+  val reluUnit: Instance[PipelinedRelu] = Instantiate(new PipelinedRelu(b))
 
   reluUnit.io.cmdReq <> io.cmdReq
   reluUnit.io.cmdResp <> io.cmdResp
 
   for (i <- 0 until inBW) {
-    reluUnit.io.bankRead(i) <> io.bankRead(i).io
+    reluUnit.io.bankRead(i) <> io.bankRead(i)
   }
 
   for (i <- 0 until outBW) {
-    reluUnit.io.bankWrite(i) <> io.bankWrite(i).io
-  }
-
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id := io.cmdReq.bits.rob_id
-  }
-
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
+    reluUnit.io.bankWrite(i) <> io.bankWrite(i)
     io.bankWrite(i).io.req.bits.wmode := false.B
   }
 

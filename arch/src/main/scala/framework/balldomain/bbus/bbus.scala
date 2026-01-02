@@ -65,20 +65,24 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
   // Connect each ball's bankRead/bankWrite based on its configured bandwidth
   // All requests from balls will go through Router inside MemRouter
   // and become bbusChannel outputs (not bankNum)
+  // Build flat index mapping from ball+channel to flat index
+  var readFlatIdx  = 0
+  var writeFlatIdx = 0
   for (i <- 0 until numBalls) {
     val ballMapping = b.ballDomain.ballIdMappings(i)
     val inBW        = ballMapping.inBW
     val outBW       = ballMapping.outBW
 
     // Connect all input bandwidth channels (bankRead) to MemRouter
-    // MemRouter will use Router to route all ball requests to bbusChannel outputs
-    for (j <- 0 until inBW.min(b.memDomain.bankNum)) {
-      memoryrouter.io.bankRead_i(i)(j) <> balls(i).Blink.bankRead(j)
+    for (j <- 0 until inBW) {
+      memoryrouter.io.bankRead_i(readFlatIdx) <> balls(i).Blink.bankRead(j)
+      readFlatIdx += 1
     }
 
     // Connect all output bandwidth channels (bankWrite) to MemRouter
-    for (j <- 0 until outBW.min(b.memDomain.bankNum)) {
-      memoryrouter.io.bankWrite_i(i)(j) <> balls(i).Blink.bankWrite(j)
+    for (j <- 0 until outBW) {
+      memoryrouter.io.bankWrite_i(writeFlatIdx) <> balls(i).Blink.bankWrite(j)
+      writeFlatIdx += 1
     }
   }
 
@@ -92,7 +96,6 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
   for (i <- 0 until numBalls) {
     pmc.io.cmdReq_i(i).valid  := cmdRouter.io.cmdReq_i(i).fire
     pmc.io.cmdReq_i(i).bits   := cmdRouter.io.cmdReq_i(i).bits
-    // Remove delay caused by RoB blocking preventing commit
     pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
     pmc.io.cmdResp_o(i).bits  := cmdRouter.io.cmdResp_o(i).bits
   }

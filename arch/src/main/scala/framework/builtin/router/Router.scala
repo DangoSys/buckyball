@@ -21,14 +21,10 @@ class Router(val numInputs: Int, val numOutputs: Int) extends Module {
     val out = Vec(numOutputs, Decoupled(UInt(inputChannelIdWidth.W)))
   })
 
-  // For each output channel, if ready, select an input with priority
   for (outIdx <- 0 until numOutputs) {
-    // Count how many inputs are valid
     val numValidInputs = PopCount(io.in)
-
-    // Select one input with priority from all valid inputs
-    val selectedIdx   = PriorityEncoder(io.in)
-    val hasValidInput = numValidInputs > 0.U
+    val selectedIdx    = PriorityEncoder(io.in)
+    val hasValidInput  = numValidInputs > 0.U
 
     io.out(outIdx).valid := hasValidInput && io.out(outIdx).ready
     io.out(outIdx).bits  := selectedIdx.asUInt.asTypeOf(io.out(outIdx).bits.cloneType)

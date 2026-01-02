@@ -37,22 +37,15 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
     val ctrl_st_i = Flipped(Decoupled(new ctrl_st_req(b)))
     val ex_st_i   = Flipped(Decoupled(new ex_st_req(b)))
-
-    // Unified bank write interface (writes use accumulate mode)
-    // outBW channels share the data write
     val bankWrite = Vec(outBW, Flipped(new SramWriteIO(b)))
-
-    // Output current wr_bank for bank_id setting
     val wr_bank_o = Output(UInt(log2Up(b.memDomain.bankNum).W))
-
     val cmdResp_o = Valid(new Bundle { val commit = Bool() })
   })
 
-  val wr_bank      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank_addr = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val iter         = RegInit(0.U(10.W))
-  val iter_counter = RegInit(0.U(10.W))
-
+  val wr_bank             = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wr_bank_addr        = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
+  val iter                = RegInit(0.U(10.W))
+  val iter_counter        = RegInit(0.U(10.W))
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
