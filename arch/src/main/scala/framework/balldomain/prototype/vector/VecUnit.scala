@@ -6,7 +6,6 @@ import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 import framework.balldomain.prototype.vector._
-import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
 import framework.balldomain.blink.{BankRead, BankWrite, Status}
@@ -28,15 +27,26 @@ class VecUnit(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val cmdReq  = Flipped(Decoupled(new BallRsIssue(b)))
-    val cmdResp = Decoupled(new BallRsComplete(b))
-
+    val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
+    val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
     val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-
-    // Status output
-    val status = new Status
+    val status    = new Status
   })
+
+  // Register to store rob_id when command is received
+  val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  when(io.cmdReq.fire) {
+    rob_id_reg := io.cmdReq.bits.rob_id
+  }
+
+  // Set rob_id for all bankRead and bankWrite channels from register
+  for (i <- 0 until inBW) {
+    io.bankRead(i).rob_id := rob_id_reg
+  }
+  for (i <- 0 until outBW) {
+    io.bankWrite(i).rob_id := rob_id_reg
+  }
 
   val VecCtrlUnit:  Instance[VecCtrlUnit]  = Instantiate(new VecCtrlUnit(b))
   val VecLoadUnit:  Instance[VecLoadUnit]  = Instantiate(new VecLoadUnit(b))
@@ -58,7 +68,6 @@ class VecUnit(val b: GlobalConfig) extends Module {
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req <> VecLoadUnit.io.bankReadReq(i)
     VecLoadUnit.io.bankReadResp(i) <> io.bankRead(i).io.resp
-    // Set bank_id: channel 0 uses op1_bank, channel 1 uses op2_bank
     if (i == 0) {
       io.bankRead(i).bank_id := VecLoadUnit.io.op1_bank_o
     } else if (i == 1) {
@@ -79,6 +88,10 @@ class VecUnit(val b: GlobalConfig) extends Module {
   VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
   VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
   for (i <- 0 until outBW) {
+    // VecUnit receives write requests from VecBall, forwards to VecStoreUnit
+    // io.bankWrite is Flipped(new BankWrite(b)) so io is output from VecUnit
+    // VecStoreUnit.io.bankWrite is Flipped(SramWriteIO) so it's input to VecStoreUnit
+    // Connect: VecUnit outputs to VecStoreUnit inputs
     io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
     // Set bank_id from VecStoreUnit
     io.bankWrite(i).bank_id := VecStoreUnit.io.wr_bank_o

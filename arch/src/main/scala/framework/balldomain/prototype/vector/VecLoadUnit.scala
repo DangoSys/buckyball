@@ -36,38 +36,31 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
     val ctrl_ld_i    = Flipped(Decoupled(new ctrl_ld_req(b)))
     val ld_ex_o      = Decoupled(new ld_ex_req(b))
-    // Output current op1_bank and op2_bank for bank_id setting
     val op1_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
     val op2_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
   })
 
-  val op1_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op2_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-
-  // Output op1_bank and op2_bank for bank_id setting
-  io.op1_bank_o := op1_bank
-  io.op2_bank_o := op2_bank
-  val op1_addr     = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val op2_addr     = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val iter         = RegInit(0.U(10.W))
-  val iter_counter = RegInit(0.U(10.W))
-  val mode         = RegInit(0.U(1.W))
-
+  val op1_bank            = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op2_bank            = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_addr            = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
+  val op2_addr            = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
+  val iter                = RegInit(0.U(10.W))
+  val iter_counter        = RegInit(0.U(10.W))
+  val mode                = RegInit(0.U(1.W))
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
+  val ld_ex_valid_reg     = RegInit(false.B)
+  val ld_ex_op1_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
+  val ld_ex_op2_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
+  val ld_ex_iter_reg      = RegInit(0.U(10.W))
 
-  // Output register to break combinational logic loop
-  val ld_ex_valid_reg = RegInit(false.B)
-  val ld_ex_op1_reg   = Reg(Vec(InputNum, UInt(inputWidth.W)))
-  val ld_ex_op2_reg   = Reg(Vec(InputNum, UInt(inputWidth.W)))
-  val ld_ex_iter_reg  = RegInit(0.U(10.W))
-
-  // Default assignment for each bank read request
   for (i <- 0 until inBW) {
     io.bankReadReq(i).valid     := false.B
     io.bankReadReq(i).bits.addr := 0.U
   }
 
+  io.op1_bank_o      := op1_bank
+  io.op2_bank_o      := op2_bank
   io.ctrl_ld_i.ready := state === idle
 
 // -----------------------------------------------------------------------------
@@ -90,38 +83,29 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   }
   when(mode === 0.U) {
 // -----------------------------------------------------------------------------
-// Send SRAM read request (only when output register is idle)
+// Send SRAM read request
 // -----------------------------------------------------------------------------
     when(state === busy && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
-      val op1_channel = op1_bank % inBW.U
-      val op2_channel = op2_bank % inBW.U
-      io.bankReadReq(op1_channel).valid     := iter_counter < iter
-      io.bankReadReq(op1_channel).bits.addr := op1_addr + iter_counter
-
-      io.bankReadReq(op2_channel).valid     := iter_counter < iter
-      io.bankReadReq(op2_channel).bits.addr := op2_addr + iter_counter
-      iter_counter                          := iter_counter + 1.U
+      io.bankReadReq(0).valid     := iter_counter < iter
+      io.bankReadReq(0).bits.addr := op1_addr + iter_counter
+      io.bankReadReq(1).valid     := iter_counter < iter
+      io.bankReadReq(1).bits.addr := op2_addr + iter_counter
+      iter_counter                := iter_counter + 1.U
     }
 
 // -----------------------------------------------------------------------------
-// SRAM returns data and passes to EX unit (use register to break combinational logic loop)
+// SRAM returns data and passes to EX unit
 // -----------------------------------------------------------------------------
-    // ready signal for bankReadResp: can receive when there's no pending data or downstream has received
-    /* io.bankReadResp.foreach { resp => resp.ready := !ld_ex_valid_reg || io.ld_ex_o.ready } */
-    // Receive SRAM data and cache to register
-    val op1_channel = op1_bank % inBW.U
-    val op2_channel = op2_bank % inBW.U
-    when(io.bankReadResp(op1_channel).valid && io.bankReadResp(op2_channel).valid &&
+    when(io.bankReadResp(0).valid && io.bankReadResp(1).valid &&
       (!ld_ex_valid_reg || io.ld_ex_o.ready) && (state === busy)) {
       ld_ex_valid_reg := true.B
-      ld_ex_op1_reg   := io.bankReadResp(op1_channel).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      ld_ex_op2_reg   := io.bankReadResp(op2_channel).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      ld_ex_op1_reg   := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      ld_ex_op2_reg   := io.bankReadResp(1).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
       ld_ex_iter_reg  := iter_counter
     }.elsewhen(io.ld_ex_o.ready) {
       ld_ex_valid_reg := false.B
     }
 
-    // Output comes from register
     io.ld_ex_o.valid     := ld_ex_valid_reg
     io.ld_ex_o.bits.op1  := ld_ex_op1_reg
     io.ld_ex_o.bits.op2  := ld_ex_op2_reg
@@ -136,7 +120,6 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
       iter_counter := 0.U
     }
   }.otherwise {
-    // Default assignment
     io.ld_ex_o.valid     := false.B
     io.ld_ex_o.bits.op1  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
     io.ld_ex_o.bits.op2  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))

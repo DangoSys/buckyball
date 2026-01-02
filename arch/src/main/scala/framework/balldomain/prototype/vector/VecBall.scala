@@ -8,7 +8,7 @@ import framework.balldomain.prototype.vector.VecUnit
 import framework.top.GlobalConfig
 
 /**
- * VecBall - A vector computation Ball that complies with the Blink protocol
+ * VecBall
  */
 @instantiable
 class VecBall(val b: GlobalConfig) extends Module with BallRegist {
@@ -33,14 +33,6 @@ class VecBall(val b: GlobalConfig) extends Module with BallRegist {
 
   for (i <- 0 until outBW) {
     vecUnit.io.bankWrite(i) <> io.bankWrite(i)
-  }
-
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id := io.cmdReq.bits.rob_id
-  }
-
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := io.cmdReq.bits.rob_id
     io.bankWrite(i).io.req.bits.wmode := true.B
   }
 
