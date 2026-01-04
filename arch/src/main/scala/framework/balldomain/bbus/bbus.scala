@@ -23,7 +23,7 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   val memBallChannelNum = b.top.memBallChannelNum
   val totalBallRead     = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite    = b.ballDomain.ballIdMappings.map(_.outBW).sum
-
+  val memChannel = b.top.ballMemChannelNum
   // Rs - bbus - balls
   @public
   val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
@@ -31,9 +31,9 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   // balls - bbus
   @public
-  val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead  = IO(Vec(memChannel, Flipped(new BankRead(b))))
   @public
-  val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
 
   // bbus - mem
   // Channel interface using ChannelClusterIO
@@ -43,7 +43,7 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, ballMemChannelNum)))
 
   @public
-  val memBallChannel = IO(new ChannelClusterIO(b, memBallChannelNum))
+  val memBallChannel = IO(Flipped(new ChannelClusterIO(b, memBallChannelNum)))
 
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
@@ -72,6 +72,48 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 
   cmdResp <> cmdRouter.io.cmdResp_o
 
+// Initialize bankRead and bankWrite ports with default values
+  for (i <- 0 until memChannel) {
+    bankRead(i).bank_id := 0.U
+    bankRead(i).rob_id := 0.U
+    bankRead(i).ball_id := 0.U
+    bankRead(i).io.req.valid := false.B
+    bankRead(i).io.req.bits.addr := 0.U
+    bankRead(i).io.resp.ready := false.B
+
+    bankWrite(i).bank_id := 0.U
+    bankWrite(i).rob_id := 0.U
+    bankWrite(i).ball_id := 0.U
+    bankWrite(i).io.req.valid := false.B
+    bankWrite(i).io.req.bits.addr := 0.U
+    bankWrite(i).io.req.bits.mask := 0.U.asTypeOf(Vec(b.memDomain.bankMaskLen, Bool()))
+    bankWrite(i).io.req.bits.data := 0.U
+    bankWrite(i).io.req.bits.wmode := false.B
+    bankWrite(i).io.resp.ready := false.B
+  }
+
+// Initialize ballMemChannel and memBallChannel ports with default values
+  for (i <- 0 until ballMemChannelNum) {
+    ballMemChannel.channelIn(i).data.valid := false.B
+    ballMemChannel.channelIn(i).data.bits := 0.U
+    ballMemChannel.channelOut(i).data.ready := false.B
+  }
+  ballMemChannel.peakChannelReq.valid := false.B
+  ballMemChannel.peakChannelReq.bits.needed_channel_num := 0.U
+  ballMemChannel.peakChannelReq.bits.bank_id := 0.U
+  ballMemChannel.peakChannelReq.bits.rob_id := 0.U
+  ballMemChannel.freeChannelResp.ready := true.B
+
+  for (i <- 0 until memBallChannelNum) {
+    memBallChannel.channelIn(i).data.valid := false.B
+    memBallChannel.channelIn(i).data.bits := 0.U
+    memBallChannel.channelOut(i).data.ready := false.B
+  }
+  memBallChannel.peakChannelReq.valid := false.B
+  memBallChannel.peakChannelReq.bits.needed_channel_num := 0.U
+  memBallChannel.peakChannelReq.bits.bank_id := 0.U
+  memBallChannel.peakChannelReq.bits.rob_id := 0.U
+  memBallChannel.freeChannelResp.ready := true.B
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
@@ -92,7 +134,6 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
     memoryrouter.io.bankWrite_o(i).io.req.bits.addr := ballMemChannel.channelOut(i).data.bits
     ballMemChannel.channelOut(i).data.ready         := memoryrouter.io.bankRead_o(i).io.req.ready || memoryrouter.io.bankWrite_o(i).io.req.ready
   }
-
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
@@ -101,6 +142,25 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
     pmc.io.cmdReq_i(i).bits   := cmdRouter.io.cmdReq_i(i).bits
     pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
     pmc.io.cmdResp_o(i).bits  := cmdRouter.io.cmdResp_o(i).bits
+  }
+
+// Initialize balls' bankRead and bankWrite ports with default values
+  for (ball <- balls) {
+    val ballConfig = b.ballDomain.ballIdMappings.find(_.ballName == ball.getClass.getSimpleName)
+    val inBW = ballConfig.map(_.inBW).getOrElse(0)
+    val outBW = ballConfig.map(_.outBW).getOrElse(0)
+    
+    for (i <- 0 until inBW) {
+      ball.blink.bankRead(i).io.req.ready := false.B
+      ball.blink.bankRead(i).io.resp.valid := false.B
+      ball.blink.bankRead(i).io.resp.bits.data := 0.U
+    }
+    
+    for (i <- 0 until outBW) {
+      ball.blink.bankWrite(i).io.req.ready := false.B
+      ball.blink.bankWrite(i).io.resp.valid := false.B
+      ball.blink.bankWrite(i).io.resp.bits.ok := false.B
+    }
   }
 
 }

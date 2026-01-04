@@ -33,7 +33,7 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, memChannel)))
 
   @public
-  val memBallChannel = IO(new ChannelClusterIO(b, b.top.memBallChannelNum))
+  val memBallChannel = IO(Flipped(new ChannelClusterIO(b, b.top.memBallChannelNum)))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))

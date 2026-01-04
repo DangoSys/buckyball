@@ -81,6 +81,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.req.bits.addr := target_row
     io.bankRead(i).rob_id           := rob_id_reg
     io.bankRead(i).bank_id          := target_bank
+    io.bankRead(i).ball_id          := 0.U
   }
 
   // Bank response processing

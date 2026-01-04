@@ -40,12 +40,14 @@ class VecUnit(val b: GlobalConfig) extends Module {
     rob_id_reg := io.cmdReq.bits.rob_id
   }
 
-  // Set rob_id for all bankRead and bankWrite channels from register
+  // Set rob_id and ball_id for all bankRead and bankWrite channels from register
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id := rob_id_reg
+    io.bankRead(i).ball_id := 0.U
   }
   for (i <- 0 until outBW) {
     io.bankWrite(i).rob_id := rob_id_reg
+    io.bankWrite(i).ball_id := 0.U
   }
 
   val VecCtrlUnit:  Instance[VecCtrlUnit]  = Instantiate(new VecCtrlUnit(b))

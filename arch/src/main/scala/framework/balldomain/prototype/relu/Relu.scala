@@ -40,9 +40,11 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id := rob_id_reg
+    io.bankRead(i).ball_id := 0.U
   }
   for (i <- 0 until outBW) {
     io.bankWrite(i).rob_id := rob_id_reg
+    io.bankWrite(i).ball_id := 0.U
   }
 
   val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
@@ -79,7 +81,8 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.bits.addr  := 0.U
     io.bankWrite(i).io.req.bits.data  := 0.U
     io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
-    io.bankWrite(i).io.req.bits.wmode := false.B // direct write mode
+    io.bankWrite(i).io.req.bits.wmode := false.B
+    io.bankWrite(i).io.resp.ready     := false.B
   }
 
   for (i <- 0 until inBW) {
