@@ -7,7 +7,7 @@ import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 class BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int) extends Bundle with HasBallStatus {
-  def status: BallStatus = new BallStatus()
+  val status = new BallStatus()
 
   val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
   val cmdResp   = Decoupled(new BallRsComplete(b))
