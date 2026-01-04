@@ -110,9 +110,6 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
 
   // Connect MemBallChannelCluster
   memBallChannelCluster.io <> ballDomain.memBallChannel
-  memBallChannelCluster.io.peakChannelReq.ready  := true.B
-  memBallChannelCluster.io.freeChannelResp.valid := false.B
-  memBallChannelCluster.io.freeChannelResp.bits  := DontCare
 
   // Connect TileLink DMA ports from MemDomain to LazyModule nodes
   tl_reader <> memDomain.io.tl_reader
