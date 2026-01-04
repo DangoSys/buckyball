@@ -78,9 +78,6 @@ class MemRouter(val b: GlobalConfig) extends Module {
     when(channelMappingTable.io.routeValid(i)) {
       val outCh = channelMappingTable.io.routeMap(i)
       io.bankRead_o(outCh).io.req <> io.bankRead_i(i).io.req
-      io.bankRead_o(outCh).ball_id := io.bankRead_i(i).ball_id
-      io.bankRead_o(outCh).bank_id := io.bankRead_i(i).bank_id
-      io.bankRead_o(outCh).rob_id  := io.bankRead_i(i).rob_id
     }
   }
 }
