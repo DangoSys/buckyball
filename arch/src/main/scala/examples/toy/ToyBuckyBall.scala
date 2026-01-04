@@ -106,14 +106,10 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
   ballDomain.bankWrite <> memDomain.io.ballDomain.bankWrite
 
   // Connect BallMemChannelCluster
-  ballMemChannelCluster.io.channelIn <> ballDomain.ballMemChannel.channelIn
-  ballDomain.ballMemChannel.channelOut <> ballMemChannelCluster.io.channelOut
-  ballMemChannelCluster.io.peakChannelReq <> ballDomain.ballMemChannel.peakChannelReq
-  ballDomain.ballMemChannel.freeChannelResp <> ballMemChannelCluster.io.freeChannelResp
+  ballMemChannelCluster.io <> ballDomain.ballMemChannel
 
   // Connect MemBallChannelCluster
-  memBallChannelCluster.io.channelIn <> ballDomain.memBallChannelIn
-  ballDomain.memBallChannelOut <> memBallChannelCluster.io.channelOut
+  memBallChannelCluster.io <> ballDomain.memBallChannel
   memBallChannelCluster.io.peakChannelReq.ready  := true.B
   memBallChannelCluster.io.freeChannelResp.valid := false.B
   memBallChannelCluster.io.freeChannelResp.bits  := DontCare

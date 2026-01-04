@@ -10,7 +10,7 @@ import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import framework.balldomain.rs.BallReservationStation
-import framework.top.channels.ChannelIO
+import framework.top.channels.{ChannelClusterIO, ChannelIO}
 import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 @instantiable
@@ -30,19 +30,10 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
 
   @public
-  val ballMemChannel = IO(new Bundle {
-    // Output to channel.in (channel.in is Flipped, so this is ChannelIO)
-    val channelIn       = Vec(memChannel, new ChannelIO(b))
-    // Input from channel.out (channel.out is ChannelIO, so this is Flipped)
-    val channelOut      = Vec(memChannel, Flipped(new ChannelIO(b)))
-    val peakChannelReq  = Flipped(Decoupled(new PeakChannelReq(b)))
-    val freeChannelResp = Decoupled(new FreeChannelResp(b))
-  })
+  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, memChannel)))
 
   @public
-  val memBallChannelIn  = IO(Vec(b.top.memBallChannelNum, Flipped(new ChannelIO(b))))
-  @public
-  val memBallChannelOut = IO(Vec(b.top.memBallChannelNum, new ChannelIO(b)))
+  val memBallChannel = IO(new ChannelClusterIO(b, b.top.memBallChannelNum))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
@@ -79,8 +70,7 @@ class BallDomain(val b: GlobalConfig) extends Module {
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
   bbus.ballMemChannel <> ballMemChannel
-  bbus.memBallChannelIn <> memBallChannelIn
-  bbus.memBallChannelOut <> memBallChannelOut
+  bbus.memBallChannel <> memBallChannel
 
 //---------------------------------------------------------------------------
 // Local RS completion signal -> Global RS (single channel, includes global rob_id)

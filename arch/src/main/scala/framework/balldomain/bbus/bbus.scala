@@ -10,7 +10,7 @@ import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.bbus.memrouter.MemRouter
 import framework.balldomain.blink.{BankRead, BankWrite}
-import framework.top.channels.{Channel, ChannelIO}
+import framework.top.channels.{Channel, ChannelClusterIO, ChannelIO}
 import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 /**
@@ -18,11 +18,11 @@ import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
  */
 @instantiable
 class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module]) extends Module {
-  val numBalls             = b.ballDomain.ballNum
-  val bbusProducerChannels = b.top.ballMemChannelNum
-  val bbusConsumerChannels = b.top.memBallChannelNum
-  val totalBallRead        = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val totalBallWrite       = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val numBalls          = b.ballDomain.ballNum
+  val ballMemChannelNum = b.top.ballMemChannelNum
+  val memBallChannelNum = b.top.memBallChannelNum
+  val totalBallRead     = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite    = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   // Rs - bbus - balls
   @public
@@ -36,21 +36,14 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
 
   // bbus - mem
-  // Channel interface: bbus outputs to channel.in (in top level), receives from channel.out
+  // Channel interface using ChannelClusterIO
+  // For ballMemChannel: bbus outputs to channel.in, receives from channel.out
+  // So we need Flipped because direction is reversed from ChannelClusterIO's perspective
   @public
-  val ballMemChannel = IO(new Bundle {
-    // Output to channel.in (channel.in is Flipped, so this is ChannelIO)
-    val channelIn       = Vec(bbusProducerChannels, new ChannelIO(b))
-    // Input from channel.out (channel.out is ChannelIO, so this is Flipped)
-    val channelOut      = Vec(bbusProducerChannels, Flipped(new ChannelIO(b)))
-    val peakChannelReq  = Decoupled(new PeakChannelReq(b))
-    val freeChannelResp = Flipped(Decoupled(new FreeChannelResp(b)))
-  })
+  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, ballMemChannelNum)))
 
   @public
-  val memBallChannelIn  = IO(Vec(bbusConsumerChannels, Flipped(new ChannelIO(b))))
-  @public
-  val memBallChannelOut = IO(Vec(bbusConsumerChannels, new ChannelIO(b)))
+  val memBallChannel = IO(new ChannelClusterIO(b, memBallChannelNum))
 
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
@@ -91,7 +84,7 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   // Channels are unified, router handles routing to bankRead_o or bankWrite_o based on request type
   // For now, we route to both and let router decide based on internal logic
   // TODO: Router should determine read/write based on request metadata
-  for (i <- 0 until bbusProducerChannels) {
+  for (i <- 0 until ballMemChannelNum) {
     // Connect to both read and write outputs, router will select based on request type
     memoryrouter.io.bankRead_o(i).io.req.valid      := ballMemChannel.channelOut(i).data.valid
     memoryrouter.io.bankRead_o(i).io.req.bits.addr  := ballMemChannel.channelOut(i).data.bits
