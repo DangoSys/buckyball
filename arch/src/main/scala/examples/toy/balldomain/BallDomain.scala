@@ -14,7 +14,7 @@ import framework.top.channels.{BallMemChannelIO, ChannelIO}
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
-  val memChannel = b.memDomain.balldomainChannel
+  val memChannel = b.top.ballMemChannelProducer
 
   @public
   val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))

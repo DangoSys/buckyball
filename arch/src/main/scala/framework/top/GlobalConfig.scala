@@ -9,6 +9,7 @@ import framework.balldomain.configs.BallDomainParam
 import framework.balldomain.prototype.vector.configs.VectorBallParam
 import framework.balldomain.prototype.relu.configs.ReluBallParam
 import framework.core.configs.CoreParam
+import framework.top.configs.TopConfig
 
 case class GlobalConfig(
   memDomain:  MemDomainParam,
@@ -17,7 +18,8 @@ case class GlobalConfig(
   ballDomain: BallDomainParam,
   vectorBall: VectorBallParam,
   reluBall:   ReluBallParam,
-  core:       CoreParam)
+  core:       CoreParam,
+  top:        TopConfig)
     extends SerializableModuleParameter
 
 object GlobalConfig {
@@ -31,7 +33,8 @@ object GlobalConfig {
       ballDomain = BallDomainParam(),
       vectorBall = VectorBallParam(),
       reluBall = ReluBallParam(),
-      core = CoreParam()
+      core = CoreParam(),
+      top = TopConfig()
     )
   }
 

@@ -17,7 +17,6 @@ case class MemDomainParam(
   max_in_flight_mem_reqs: Int,
   dma_buswidth:           Int,
   memAddrLen:             Int,
-  balldomainChannel:      Int,
   tmaReadChannel:         Int,
   tmaWriteChannel:        Int)
 
