@@ -18,7 +18,7 @@ Main functional modules include:
 ```
 scala/
 ├── framework/          - Buckyball core framework
-│   ├── blink/          - Blink communication components
+│   ├── blink/          - blink communication components
 │   ├── builtin/        - Built-in hardware components
 │   │   ├── frontend/   - Frontend processing components
 │   │   ├── memdomain/  - Memory domain implementation

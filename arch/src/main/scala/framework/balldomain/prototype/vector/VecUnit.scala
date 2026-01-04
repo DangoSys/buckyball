@@ -8,7 +8,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.balldomain.prototype.vector._
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
-import framework.balldomain.blink.{BankRead, BankWrite, Status}
+import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.balldomain.prototype.vector.configs.VectorBallParam
 
 @instantiable
@@ -31,7 +31,7 @@ class VecUnit(val b: GlobalConfig) extends Module {
     val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
     val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-    val status    = new Status
+    val status    = new BallStatus
   })
 
   // Register to store rob_id when command is received
@@ -88,13 +88,9 @@ class VecUnit(val b: GlobalConfig) extends Module {
   VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
   VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
   for (i <- 0 until outBW) {
-    // VecUnit receives write requests from VecBall, forwards to VecStoreUnit
-    // io.bankWrite is Flipped(new BankWrite(b)) so io is output from VecUnit
-    // VecStoreUnit.io.bankWrite is Flipped(SramWriteIO) so it's input to VecStoreUnit
-    // Connect: VecUnit outputs to VecStoreUnit inputs
     io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
-    // Set bank_id from VecStoreUnit
-    io.bankWrite(i).bank_id := VecStoreUnit.io.wr_bank_o
+    io.bankWrite(i).bank_id           := VecStoreUnit.io.wr_bank_o
+    io.bankWrite(i).io.req.bits.wmode := true.B
   }
   VecCtrlUnit.io.cmdResp_i <> VecStoreUnit.io.cmdResp_o
 
@@ -117,11 +113,6 @@ class VecUnit(val b: GlobalConfig) extends Module {
     hasOutput := true.B
   }
 
-  io.status.ready    := io.cmdReq.ready
-  io.status.valid    := io.cmdResp.valid
-  io.status.idle     := !hasInput && !hasOutput
-  io.status.init     := hasInput && !hasOutput
-  io.status.running  := hasOutput
-  io.status.complete := io.cmdResp.fire
-  io.status.iter     := iterCnt
+  io.status.idle    := !hasInput && !hasOutput
+  io.status.running := hasOutput
 }

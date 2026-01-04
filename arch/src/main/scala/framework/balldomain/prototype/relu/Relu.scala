@@ -6,9 +6,8 @@ import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 import framework.balldomain.prototype.vector._
-import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.balldomain.blink.{BankRead, BankWrite, Status}
+import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
 import framework.balldomain.prototype.relu.configs.ReluBallParam
 
@@ -31,7 +30,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
     val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-    val status    = new Status
+    val status    = new BallStatus
   })
 
   val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
@@ -76,10 +75,11 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io.req.valid     := false.B
-    io.bankWrite(i).io.req.bits.addr := 0.U
-    io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.valid      := false.B
+    io.bankWrite(i).io.req.bits.addr  := 0.U
+    io.bankWrite(i).io.req.bits.data  := 0.U
+    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.wmode := false.B // direct write mode
   }
 
   for (i <- 0 until inBW) {
@@ -175,13 +175,8 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     }
   }
 
-  io.status.ready    := io.cmdReq.ready
-  io.status.valid    := io.cmdResp.valid
-  io.status.idle     := (state === idle)
-  io.status.init     := (state === sRead) && (respCounter < InputNum.U)
-  io.status.running  := (state === sWrite) || ((state === sRead) && (respCounter === InputNum.U))
-  io.status.complete := (state === complete) && io.cmdResp.fire
-  io.status.iter     := iterCnt
+  io.status.idle    := (state === idle)
+  io.status.running := (state === sRead) || (state === sWrite)
 
   when(reset.asBool) {
     for (i <- 0 until InputNum) {

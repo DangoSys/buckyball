@@ -5,30 +5,40 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.balldomain.blink.BallRegist
+import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.bbus.memrouter.MemRouter
 import framework.balldomain.blink.{BankRead, BankWrite}
+import framework.top.channels.ChannelIO
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
  */
 @instantiable
-class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module]) extends Module {
-  val numBalls    = b.ballDomain.ballNum
-  val bbusChannel = b.ballDomain.bbusChannel
+class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module]) extends Module {
+  val numBalls             = b.ballDomain.ballNum
+  val bbusProducerChannels = b.ballDomain.bbusProducerChannels
+  val bbusConsumerChannels = b.ballDomain.bbusConsumerChannels
+  val totalBallRead        = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite       = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
+  // Rs - bbus - balls
   @public
-  val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq               = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp              = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  // balls - bbus
   @public
-  val bankRead  = IO(Vec(bbusChannel, Flipped(new BankRead(b))))
+  val bankRead             = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite = IO(Vec(bbusChannel, Flipped(new BankWrite(b))))
+  val bankWrite            = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  // bbus - mem
+  @public
+  val channelToMemDomain   = IO(Vec(bbusProducerChannels, new ChannelIO(b)))
+  @public
+  val channelFromMemDomain = IO(Vec(bbusConsumerChannels, Flipped(new ChannelIO(b))))
 
-  // Instantiate all registered Balls
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
   val memoryrouter: Instance[MemRouter]    = Instantiate(new MemRouter(b))
@@ -38,23 +48,20 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
 // cmd router
 // -----------------------------------------------------------------------------
 
-  val idle_ball = Wire(Vec(numBalls, Bool()))
-  for (i <- 0 until numBalls) {
-    idle_ball(i) := balls(i).Blink.cmdReq.ready
-  }
+  val idle_ball = VecInit(balls.map(_.blink.cmdReq.ready))
 
   cmdRouter.io.cmdReq_i <> cmdReq
   cmdRouter.io.ballIdle := idle_ball
 
   for (i <- 0 until numBalls) {
-    balls(i).Blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
-    balls(i).Blink.cmdReq.bits  := cmdRouter.io.cmdReq_o.bits
+    balls(i).blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
+    balls(i).blink.cmdReq.bits  := cmdRouter.io.cmdReq_o.bits
 
-    cmdRouter.io.cmdResp_i(i) <> balls(i).Blink.cmdResp
+    cmdRouter.io.cmdResp_i(i) <> balls(i).blink.cmdResp
   }
 
   cmdRouter.io.cmdReq_o.ready := VecInit((0 until numBalls).map(i =>
-    balls(i).Blink.cmdReq.ready && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
+    balls(i).blink.cmdReq.ready && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
   )).asUInt.orR
 
   cmdResp <> cmdRouter.io.cmdResp_o
@@ -62,33 +69,6 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => BallRegist with Module
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
-  // Connect each ball's bankRead/bankWrite based on its configured bandwidth
-  // All requests from balls will go through Router inside MemRouter
-  // and become bbusChannel outputs (not bankNum)
-  // Build flat index mapping from ball+channel to flat index
-  var readFlatIdx  = 0
-  var writeFlatIdx = 0
-  for (i <- 0 until numBalls) {
-    val ballMapping = b.ballDomain.ballIdMappings(i)
-    val inBW        = ballMapping.inBW
-    val outBW       = ballMapping.outBW
-
-    // Connect all input bandwidth channels (bankRead) to MemRouter
-    for (j <- 0 until inBW) {
-      memoryrouter.io.bankRead_i(readFlatIdx) <> balls(i).Blink.bankRead(j)
-      readFlatIdx += 1
-    }
-
-    // Connect all output bandwidth channels (bankWrite) to MemRouter
-    for (j <- 0 until outBW) {
-      memoryrouter.io.bankWrite_i(writeFlatIdx) <> balls(i).Blink.bankWrite(j)
-      writeFlatIdx += 1
-    }
-  }
-
-  // MemRouter outputs bbusChannel channels (routed from all ball requests)
-  bankRead <> memoryrouter.io.bankRead_o
-  bankWrite <> memoryrouter.io.bankWrite_o
 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter

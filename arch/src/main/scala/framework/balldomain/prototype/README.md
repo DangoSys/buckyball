@@ -171,18 +171,18 @@ Support rich configuration parameters:
 
 ## Integration Method
 
-### Blink Protocol Interface
-All Ball accelerators implement the Blink protocol interface:
+### blink Protocol Interface
+All Ball accelerators implement the blink protocol interface:
 ```scala
 class CustomBall(implicit b: CustomBuckyballConfig, p: Parameters)
   extends Module with BallRegist {
   val io = IO(new BlinkIO)
   def ballId = <unique_id>.U
-  def Blink = // Implement Blink protocol
+  def blink = // Implement blink protocol
 }
 ```
 
-**Blink Interface Components**:
+**blink Interface Components**:
 - **cmdReq**: Command request interface with rob_id tracking
 - **cmdResp**: Command response interface for completion signaling
 - **status**: Status signals (ready, valid, idle, complete)
@@ -243,7 +243,7 @@ Each accelerator comes with corresponding test cases:
 
 **Steps**:
 1. Implement Ball device with BallRegist trait
-2. Define Blink protocol interfaces
+2. Define blink protocol interfaces
 3. Implement computation logic
 4. Add SRAM access logic (respect bank constraints)
 5. Register in BBus and Ball RS
@@ -255,7 +255,7 @@ class NewBall(implicit b: CustomBuckyballConfig, p: Parameters)
   val io = IO(new BlinkIO)
 
   def ballId = <unique_id>.U
-  def Blink = io
+  def blink = io
 
   // State machine
   val sIdle :: sCompute :: sComplete :: Nil = Enum(3)
@@ -314,7 +314,7 @@ class NewBall(implicit b: CustomBuckyballConfig, p: Parameters)
 - [ReLU Activation](relu/README.md) - ReLU implementation
 - [Transpose Operations](transpose/README.md) - Matrix transpose
 - [Vector Processing](vector/README.md) - Vector unit architecture
-- [Blink Protocol](../framework/blink/README.md) - Ball protocol specification
+- [blink Protocol](../framework/blink/README.md) - Ball protocol specification
 
 ## Future Enhancements
 

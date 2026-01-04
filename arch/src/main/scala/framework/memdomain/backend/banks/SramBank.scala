@@ -12,24 +12,20 @@ import framework.top.GlobalConfig
  */
 @instantiable
 class SramBank(val b: GlobalConfig) extends Module {
-  // Use bankMaskLen from config instead of calculating
   val mask_len  = b.memDomain.bankMaskLen
   val mask_elem = UInt((b.memDomain.bankWidth / mask_len).W)
 
   @public
   val io = IO(new Bundle {
-    // Bank interface (connected to MemManager)
     val sramRead  = new SramReadIO(b)
     val sramWrite = new SramWriteIO(b)
   })
 
-  // SRAM memory
   val mem = SyncReadMem(b.memDomain.bankEntries, Vec(mask_len, mask_elem))
 
   // -----------------------------------------------------------------------------
   // Read path
   // -----------------------------------------------------------------------------
-  // Bank read (single port - can't read and write simultaneously)
   io.sramRead.req.ready := !io.sramWrite.req.valid
 
   val raddr = io.sramRead.req.bits.addr
@@ -52,7 +48,6 @@ class SramBank(val b: GlobalConfig) extends Module {
     )
   }
 
-  // Write response - single cycle write
   io.sramWrite.resp.valid   := RegNext(io.sramWrite.req.fire)
   io.sramWrite.resp.bits.ok := RegNext(io.sramWrite.req.fire)
 }
