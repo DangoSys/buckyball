@@ -10,7 +10,8 @@ import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.bbus.memrouter.MemRouter
 import framework.balldomain.blink.{BankRead, BankWrite}
-import framework.top.channels.{BallMemChannelIO, ChannelIO}
+import framework.top.channels.{Channel, ChannelIO}
+import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
@@ -25,17 +26,31 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 
   // Rs - bbus - balls
   @public
-  val cmdReq         = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp        = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   // balls - bbus
   @public
-  val bankRead       = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite      = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+
   // bbus - mem
+  // Channel interface: bbus outputs to channel.in (in top level), receives from channel.out
   @public
-  val ballMemChannel = IO(new BallMemChannelIO(b))
+  val ballMemChannel = IO(new Bundle {
+    // Output to channel.in (channel.in is Flipped, so this is ChannelIO)
+    val channelIn       = Vec(bbusProducerChannels, new ChannelIO(b))
+    // Input from channel.out (channel.out is ChannelIO, so this is Flipped)
+    val channelOut      = Vec(bbusProducerChannels, Flipped(new ChannelIO(b)))
+    val peakChannelReq  = Decoupled(new PeakChannelReq(b))
+    val freeChannelResp = Flipped(Decoupled(new FreeChannelResp(b)))
+  })
+
+  @public
+  val memBallChannelIn  = IO(Vec(bbusConsumerChannels, Flipped(new ChannelIO(b))))
+  @public
+  val memBallChannelOut = IO(Vec(bbusConsumerChannels, new ChannelIO(b)))
 
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
@@ -71,6 +86,21 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   memoryrouter.io.bankWrite_i <> bankWrite
   memoryrouter.io.peakChannelReq <> ballMemChannel.peakChannelReq
   memoryrouter.io.freeChannelResp <> ballMemChannel.freeChannelResp
+
+  // Connect channel outputs (from channel.out in top level) to memory router
+  // Channels are unified, router handles routing to bankRead_o or bankWrite_o based on request type
+  // For now, we route to both and let router decide based on internal logic
+  // TODO: Router should determine read/write based on request metadata
+  for (i <- 0 until bbusProducerChannels) {
+    // Connect to both read and write outputs, router will select based on request type
+    memoryrouter.io.bankRead_o(i).io.req.valid      := ballMemChannel.channelOut(i).data.valid
+    memoryrouter.io.bankRead_o(i).io.req.bits.addr  := ballMemChannel.channelOut(i).data.bits
+    memoryrouter.io.bankWrite_o(i).io.req.valid     := ballMemChannel.channelOut(i).data.valid
+    memoryrouter.io.bankWrite_o(i).io.req.bits.addr := ballMemChannel.channelOut(i).data.bits
+    ballMemChannel.channelOut(i).data.ready         := memoryrouter.io.bankRead_o(
+      i
+    ).io.req.ready || memoryrouter.io.bankWrite_o(i).io.req.ready
+  }
 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter

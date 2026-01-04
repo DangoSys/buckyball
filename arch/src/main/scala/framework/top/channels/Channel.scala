@@ -2,18 +2,48 @@ package framework.top.channels
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
+import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 class ChannelIO(val b: GlobalConfig) extends Bundle {
-  val producer = Flipped(Decoupled(UInt(b.memDomain.bankWidth.W)))
-  val consumer = Decoupled(UInt(b.memDomain.bankWidth.W))
+  val data = Decoupled(UInt(b.memDomain.bankWidth.W))
 }
 
 @instantiable
 class Channel(val b: GlobalConfig) extends Module {
-  @public
-  val io = IO(new ChannelIO(b))
 
-  io.consumer <> io.producer
+  @public
+  val io = IO(new Bundle {
+    val in  = Flipped(new ChannelIO(b))
+    val out = new ChannelIO(b)
+
+    val peakChannelReq  = Flipped(Decoupled(new PeakChannelReq(b)))
+    val freeChannelResp = Decoupled(new FreeChannelResp(b))
+  })
+
+  val headerBuffer: Instance[HeaderBuffer] = Instantiate(new HeaderBuffer(b))
+
+  val isFree           = !headerBuffer.io.read.lock
+  val hasEnoughChannel = isFree
+
+  io.freeChannelResp.valid            := io.peakChannelReq.valid
+  io.freeChannelResp.bits.is_free     := hasEnoughChannel
+  io.freeChannelResp.bits.channel_ids := DontCare
+  io.freeChannelResp.bits.channel_num := 1.U
+  io.peakChannelReq.ready             := io.freeChannelResp.ready
+
+  when(io.peakChannelReq.fire && hasEnoughChannel) {
+    val headerData = Wire(new HeaderBufferData(b))
+    headerData.lock           := true.B
+    headerData.rob_id         := io.peakChannelReq.bits.rob_id
+    headerData.bank_id        := io.peakChannelReq.bits.bank_id
+    headerBuffer.io.set.valid := true.B
+    headerBuffer.io.set.bits  := headerData
+  }.otherwise {
+    headerBuffer.io.set.valid := false.B
+    headerBuffer.io.set.bits  := DontCare
+  }
+
+  io.out <> io.in
 }
