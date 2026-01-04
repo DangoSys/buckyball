@@ -3,8 +3,8 @@ package framework.top.configs
 import upickle.default._
 
 case class TopConfig(
-  ballMemChannelProducer: Int,
-  ballMemChannelConsumer: Int)
+  ballMemChannelNum: Int,
+  memBallChannelNum: Int)
 
 object TopConfig {
   implicit val rw: ReadWriter[TopConfig] = macroRW

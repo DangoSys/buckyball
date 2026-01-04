@@ -22,8 +22,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
     // Input from frontend (Ball Domain read/write requests) - receiver perspective
     val frontend = new Bundle {
-      val bankRead  = Vec(b.top.ballMemChannelConsumer, new BankRead(b))
-      val bankWrite = Vec(b.top.ballMemChannelProducer, new BankWrite(b))
+      val bankRead  = Vec(b.top.memBallChannelNum, new BankRead(b))
+      val bankWrite = Vec(b.top.ballMemChannelNum, new BankWrite(b))
     }
 
     // Output to backend (MemManager) - MemManager expects Flipped, so we don't flip here
@@ -37,7 +37,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
   // Each input channel is mapped to a backend channel based on modulo
 
   for (ch <- 0 until b.memDomain.bankChannel) {
-    val inputIdx = ch % b.top.ballMemChannelConsumer
+    val inputIdx = ch % b.top.memBallChannelNum
 
     // Map input channels to backend channels
     io.mem_req(ch).write <> io.frontend.bankWrite(inputIdx).io

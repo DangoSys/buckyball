@@ -1,4 +1,4 @@
 {
-  "ballMemChannelProducer": 6,
-  "ballMemChannelConsumer": 6
+  "ballMemChannelNum": 6,
+  "memBallChannelNum": 6
 }

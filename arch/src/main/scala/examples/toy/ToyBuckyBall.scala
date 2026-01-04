@@ -64,8 +64,8 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
   val ballDomain:            Instance[BallDomain]     = Instantiate(new BallDomain(b))
   val memDomain:             Instance[MemDomain]      = Instantiate(new MemDomain(b)(edge_reader))
   val gpDomain:              Instance[GpDomain]       = Instantiate(new GpDomain(b))
-  val ballMemChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.ballMemChannelProducer))
-  val memBallChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.ballMemChannelConsumer))
+  val ballMemChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.ballMemChannelNum))
+  val memBallChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.memBallChannelNum))
 
   frontend.io.cmd.valid    := io.cmd.valid
   frontend.io.cmd.bits.cmd := io.cmd.bits

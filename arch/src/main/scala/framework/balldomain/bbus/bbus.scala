@@ -19,8 +19,8 @@ import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 @instantiable
 class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module]) extends Module {
   val numBalls             = b.ballDomain.ballNum
-  val bbusProducerChannels = b.top.ballMemChannelProducer
-  val bbusConsumerChannels = b.top.ballMemChannelConsumer
+  val bbusProducerChannels = b.top.ballMemChannelNum
+  val bbusConsumerChannels = b.top.memBallChannelNum
   val totalBallRead        = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite       = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
