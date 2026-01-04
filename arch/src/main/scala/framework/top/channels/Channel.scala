@@ -30,16 +30,14 @@ class Channel(val b: GlobalConfig) extends Module {
   io.freeChannelResp.valid            := io.peakChannelReq.valid
   io.freeChannelResp.bits.is_free     := hasEnoughChannel
   io.freeChannelResp.bits.channel_ids := DontCare
-  io.freeChannelResp.bits.channel_num := 1.U
+  io.freeChannelResp.bits.channel_num := io.peakChannelReq.bits.needed_channel_num
   io.peakChannelReq.ready             := io.freeChannelResp.ready
 
   when(io.peakChannelReq.fire && hasEnoughChannel) {
-    val headerData = Wire(new HeaderBufferData(b))
-    headerData.lock           := true.B
-    headerData.rob_id         := io.peakChannelReq.bits.rob_id
-    headerData.bank_id        := io.peakChannelReq.bits.bank_id
-    headerBuffer.io.set.valid := true.B
-    headerBuffer.io.set.bits  := headerData
+    headerBuffer.io.set.valid        := true.B
+    headerBuffer.io.set.bits.rob_id  := io.peakChannelReq.bits.rob_id
+    headerBuffer.io.set.bits.bank_id := io.peakChannelReq.bits.bank_id
+    headerBuffer.io.set.bits.lock    := true.B
   }.otherwise {
     headerBuffer.io.set.valid := false.B
     headerBuffer.io.set.bits  := DontCare

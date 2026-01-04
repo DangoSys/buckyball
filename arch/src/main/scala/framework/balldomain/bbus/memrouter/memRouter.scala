@@ -14,15 +14,15 @@ class PeakChannelReq(val b: GlobalConfig) extends Bundle {
 
 class FreeChannelResp(val b: GlobalConfig) extends Bundle {
   val is_free     = Bool()
-  val channel_ids = Vec(b.top.ballMemChannelProducer, UInt(log2Up(b.top.ballMemChannelProducer).W))
-  val channel_num = UInt(log2Up(b.top.ballMemChannelProducer + 1).W)
+  val channel_ids = Vec(b.top.ballMemChannelNum, UInt(log2Up(b.top.ballMemChannelNum).W))
+  val channel_num = UInt(log2Up(b.top.ballMemChannelNum + 1).W)
 }
 
 @instantiable
 class MemRouter(val b: GlobalConfig) extends Module {
   val numBalls             = b.ballDomain.ballNum
-  val bbusProducerChannels = b.top.ballMemChannelProducer
-  val bbusConsumerChannels = b.top.ballMemChannelConsumer
+  val bbusProducerChannels = b.top.ballMemChannelNum
+  val bbusConsumerChannels = b.top.memBallChannelNum
   val totalReadChannels    = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalWriteChannels   = b.ballDomain.ballIdMappings.map(_.outBW).sum
   val maxPerChannelWidth   = b.ballDomain.ballIdMappings.flatMap(m => Seq(m.inBW, m.outBW)).max
@@ -47,11 +47,12 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val channelMappingTable: Instance[ChannelMappingTable] = Instantiate(new ChannelMappingTable(b))
   readReqGen.io.bank_read_i <> io.bankRead_i
 // Step2: Peek if there are enough free channels
-  val hasReadReq = readReqGen.io.read_req_o.valid
-  io.peakChannelReq.valid                   := hasReadReq
-  io.peakChannelReq.bits.needed_channel_num := readReqGen.io.read_req_o.bits.channel_num
-  io.peakChannelReq.bits.bank_id            := readReqGen.io.read_req_o.bits.bank_id
-  io.peakChannelReq.bits.rob_id             := readReqGen.io.read_req_o.bits.rob_id
+  // val hasReadReq = readReqGen.io.read_req_o.valid
+  // io.peakChannelReq.valid                   := hasReadReq
+  // io.peakChannelReq.bits.needed_channel_num := readReqGen.io.read_req_o.bits.channel_num
+  // io.peakChannelReq.bits.bank_id            := readReqGen.io.read_req_o.bits.bank_id
+  // io.peakChannelReq.bits.rob_id             := readReqGen.io.read_req_o.bits.rob_id
+  io.peakChannelReq <> readReqGen.io.read_req_o
 // Step3/1: if there are enough free channels, accept the request
   val isChannelFree = io.freeChannelResp.valid && io.freeChannelResp.bits.is_free
   io.freeChannelResp.ready := true.B

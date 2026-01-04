@@ -29,7 +29,6 @@ class ChannelCluster(val b: GlobalConfig, numChannels: Int) extends Module {
     channels(i).io.freeChannelResp.ready := true.B
   }
 
-  // Aggregate free channel responses
   val freeChannels      = VecInit(channels.map(ch => ch.io.freeChannelResp.bits.is_free))
   val freeChannelCount  = PopCount(freeChannels)
   val hasEnoughChannels = freeChannelCount >= io.peakChannelReq.bits.needed_channel_num

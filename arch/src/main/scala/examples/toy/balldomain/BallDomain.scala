@@ -15,7 +15,7 @@ import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
-  val memChannel = b.top.ballMemChannelProducer
+  val memChannel = b.top.ballMemChannelNum
 
   @public
   val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))
@@ -40,9 +40,9 @@ class BallDomain(val b: GlobalConfig) extends Module {
   })
 
   @public
-  val memBallChannelIn  = IO(Vec(b.top.ballMemChannelConsumer, Flipped(new ChannelIO(b))))
+  val memBallChannelIn  = IO(Vec(b.top.memBallChannelNum, Flipped(new ChannelIO(b))))
   @public
-  val memBallChannelOut = IO(Vec(b.top.ballMemChannelConsumer, new ChannelIO(b)))
+  val memBallChannelOut = IO(Vec(b.top.memBallChannelNum, new ChannelIO(b)))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))

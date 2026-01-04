@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
 @instantiable
 class ChannelMappingTable(val b: GlobalConfig) extends Module {
   val EntryNum       = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val MappedChannels = b.top.ballMemChannelProducer
+  val MappedChannels = b.top.ballMemChannelNum
 
   @public
   val io = IO(new Bundle {
