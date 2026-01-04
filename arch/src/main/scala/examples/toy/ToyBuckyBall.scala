@@ -18,6 +18,7 @@ import examples.toy.balldomain.BallDomain
 import framework.frontend.Frontend
 import framework.gpdomain.GpDomain
 import framework.memdomain.MemDomain
+import framework.top.channels.{BallMemChannel, Channel, ChannelIO}
 
 class ToyBuckyball(val b: GlobalConfig)(implicit p: Parameters)
     extends LazyRoCC(opcodes = OpcodeSet.custom3, nPTWPorts = 1) {
@@ -44,8 +45,7 @@ class ToyBuckyball(val b: GlobalConfig)(implicit p: Parameters)
 
   override lazy val module = new ToyBuckyballModule(this)
 
-  // tlNode connects to mbus (bypassing L1 cache)
-  // This is where DMA traffic goes
+  // tlNode connects to mbus (bypassing L2 cache)
   override val tlNode = TLWidthWidget(b.memDomain.dma_buswidth / 8) := TLBuffer() := xbar_node
 
   // atlNode is not used (set to identity for compatibility)
@@ -60,10 +60,11 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
   val (tl_reader, edge_reader) = outer.reader_node.out(0)
   val (tl_writer, edge_writer) = outer.writer_node.out(0)
 
-  val frontend:   Instance[Frontend]   = Instantiate(new Frontend(b))
-  val ballDomain: Instance[BallDomain] = Instantiate(new BallDomain(b))
-  val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b)(edge_reader))
-  val gpDomain:   Instance[GpDomain]   = Instantiate(new GpDomain(b))
+  val frontend:       Instance[Frontend]       = Instantiate(new Frontend(b))
+  val ballDomain:     Instance[BallDomain]     = Instantiate(new BallDomain(b))
+  val memDomain:      Instance[MemDomain]      = Instantiate(new MemDomain(b)(edge_reader))
+  val gpDomain:       Instance[GpDomain]       = Instantiate(new GpDomain(b))
+  val ballMemChannel: Instance[BallMemChannel] = Instantiate(new BallMemChannel(b))
 
   frontend.io.cmd.valid    := io.cmd.valid
   frontend.io.cmd.bits.cmd := io.cmd.bits
@@ -102,6 +103,8 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
 
   ballDomain.bankRead <> memDomain.io.ballDomain.bankRead
   ballDomain.bankWrite <> memDomain.io.ballDomain.bankWrite
+
+  ballMemChannel.io <> ballDomain.ballMemChannel
 
   // Connect TileLink DMA ports from MemDomain to LazyModule nodes
   tl_reader <> memDomain.io.tl_reader
