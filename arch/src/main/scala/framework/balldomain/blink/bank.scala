@@ -16,18 +16,15 @@ trait HasRobId {
   val rob_id = Input(UInt(log2Up(b.frontend.rob_entries).W))
 }
 
-class BankRead(val b: GlobalConfig) extends Bundle with HasBankId with HasRobId {
+trait HasBallId {
+  val b: GlobalConfig
+  val ball_id = Input(UInt(log2Up(b.ballDomain.ballNum).W))
+}
+
+class BankRead(val b: GlobalConfig) extends Bundle with HasBankId with HasRobId with HasBallId {
   val io = new SramReadIO(b)
 }
 
-class BankWrite(val b: GlobalConfig) extends Bundle with HasBankId with HasRobId {
+class BankWrite(val b: GlobalConfig) extends Bundle with HasBankId with HasRobId with HasBallId {
   val io = new SramWriteIO(b)
-}
-
-class MultiBankRead(val b: GlobalConfig, BW: Int) extends Bundle with HasBankId with HasRobId {
-  val io = Vec(BW, new SramReadIO(b))
-}
-
-class MultiBankWrite(val b: GlobalConfig, BW: Int) extends Bundle with HasBankId with HasRobId {
-  val io = Vec(BW, new SramWriteIO(b))
 }

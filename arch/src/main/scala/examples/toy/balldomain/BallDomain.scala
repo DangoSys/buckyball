@@ -10,6 +10,7 @@ import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import framework.balldomain.rs.BallReservationStation
+import framework.top.channels.{BallMemChannelIO, ChannelIO}
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
@@ -26,6 +27,9 @@ class BallDomain(val b: GlobalConfig) extends Module {
 
   @public
   val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
+
+  @public
+  val ballMemChannel = IO(new BallMemChannelIO(b))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
@@ -61,6 +65,7 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
+  bbus.ballMemChannel <> ballMemChannel
 
 //---------------------------------------------------------------------------
 // Local RS completion signal -> Global RS (single channel, includes global rob_id)

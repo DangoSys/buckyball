@@ -10,7 +10,7 @@ import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.bbus.memrouter.MemRouter
 import framework.balldomain.blink.{BankRead, BankWrite}
-import framework.top.channels.ChannelIO
+import framework.top.channels.{BallMemChannelIO, ChannelIO}
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
@@ -25,19 +25,17 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 
   // Rs - bbus - balls
   @public
-  val cmdReq               = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq         = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp              = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp        = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   // balls - bbus
   @public
-  val bankRead             = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead       = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite            = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite      = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   // bbus - mem
   @public
-  val channelToMemDomain   = IO(Vec(bbusProducerChannels, new ChannelIO(b)))
-  @public
-  val channelFromMemDomain = IO(Vec(bbusConsumerChannels, Flipped(new ChannelIO(b))))
+  val ballMemChannel = IO(new BallMemChannelIO(b))
 
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
@@ -69,6 +67,10 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
+  memoryrouter.io.bankRead_i <> bankRead
+  memoryrouter.io.bankWrite_i <> bankWrite
+  memoryrouter.io.peakChannelReq <> ballMemChannel.peakChannelReq
+  memoryrouter.io.freeChannelResp <> ballMemChannel.freeChannelResp
 
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
