@@ -3,7 +3,5 @@
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall", "inBW": 2, "outBW": 4},
     {"ballId": 1, "ballName": "ReluBall", "inBW": 1, "outBW": 1}
-  ],
-  "bbusProducerChannels": 6,
-  "bbusConsumerChannels": 6
+  ]
 }

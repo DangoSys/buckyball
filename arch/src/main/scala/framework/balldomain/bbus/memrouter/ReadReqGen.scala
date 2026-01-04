@@ -11,6 +11,7 @@ class ReadReq(val b: GlobalConfig) extends Bundle {
   val bank_id           = UInt(log2Up(b.memDomain.bankNum).W)
   val ball_id           = UInt(log2Up(b.ballDomain.ballNum).W)
   val channel_num       = UInt(log2Up(totalReadChannels).W)
+  val rob_id            = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
 @instantiable
@@ -26,7 +27,7 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
     val read_req_o  = Decoupled(new ReadReq(b))
   })
 
-  val reqGroups = (0 until numBalls).flatMap { ballId =>
+  val reqGroupsWithRobId = (0 until numBalls).flatMap { ballId =>
     (0 until numBanks).map { bankId =>
       val ballOffset       = ballIdMappings.take(ballId).map(_.inBW).sum
       val ballInBW         = ballIdMappings(ballId).inBW
@@ -44,7 +45,9 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
           io.bank_read_i(ch).bank_id === bankId.U
       ))
 
-      (hasReq, channelCount, bankId.U, ballId.U)
+      val robId = io.bank_read_i(ballOffset).rob_id
+
+      (hasReq, channelCount, bankId.U, ballId.U, robId)
     }
   }
 
@@ -53,20 +56,23 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
       val channel_num = UInt(log2Up(totalReadChannels + 1).W)
       val bank_id     = UInt(log2Up(numBanks).W)
       val ball_id     = UInt(log2Up(numBalls).W)
+      val rob_id      = UInt(log2Up(b.frontend.rob_entries).W)
     },
-    reqGroups.length
+    reqGroupsWithRobId.length
   ))
 
-  for (i <- reqGroups.indices) {
-    arb.io.in(i).valid            := reqGroups(i)._1
-    arb.io.in(i).bits.channel_num := reqGroups(i)._2
-    arb.io.in(i).bits.bank_id     := reqGroups(i)._3
-    arb.io.in(i).bits.ball_id     := reqGroups(i)._4
+  for (i <- reqGroupsWithRobId.indices) {
+    arb.io.in(i).valid            := reqGroupsWithRobId(i)._1
+    arb.io.in(i).bits.channel_num := reqGroupsWithRobId(i)._2
+    arb.io.in(i).bits.bank_id     := reqGroupsWithRobId(i)._3
+    arb.io.in(i).bits.ball_id     := reqGroupsWithRobId(i)._4
+    arb.io.in(i).bits.rob_id      := reqGroupsWithRobId(i)._5
   }
 
   io.read_req_o.valid            := arb.io.out.valid
   io.read_req_o.bits.bank_id     := arb.io.out.bits.bank_id
   io.read_req_o.bits.ball_id     := arb.io.out.bits.ball_id
   io.read_req_o.bits.channel_num := arb.io.out.bits.channel_num
+  io.read_req_o.bits.rob_id      := arb.io.out.bits.rob_id
   arb.io.out.ready               := io.read_req_o.ready
 }
