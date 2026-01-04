@@ -6,7 +6,7 @@ This directory contains the implementation of Buckyball's ball domain bus system
 
 This directory implements two core components:
 - **BallBus**: Ball domain bus main module, manages SRAM access by multiple Ball nodes
-- **BBusRouter**: Bus router, provides routing functionality for Blink interface
+- **BBusRouter**: Bus router, provides routing functionality for blink interface
 
 ## Code Structure
 
@@ -25,7 +25,7 @@ bbus/
 
 **router.scala** (Routing module)
 - Implements routing functionality based on BBusNode
-- Provides Blink protocol interface encapsulation
+- Provides blink protocol interface encapsulation
 
 ## Module Description
 
@@ -67,7 +67,7 @@ class BallBus(maxReadBW: Int, maxWriteBW: Int, numBalls: Int) extends LazyModule
 
 ### router.scala
 
-**Main functionality**: Bus router, provides routing functionality for Blink protocol interface
+**Main functionality**: Bus router, provides routing functionality for blink protocol interface
 
 **Key components**:
 
@@ -86,11 +86,11 @@ class BBusRouter extends LazyModule {
 
 **Routing functionality**:
 - Implements standard Ball node interface based on BBusNode
-- Provides Blink protocol encapsulation and conversion
+- Provides blink protocol encapsulation and conversion
 - Supports configurable read/write bandwidth parameters
 
 **Inputs/Outputs**:
-- Input: Blink protocol interface
+- Input: blink protocol interface
 - Output: BBusNode standard interface
 - Edge cases: Depends on validity of node.edges.in.head
 

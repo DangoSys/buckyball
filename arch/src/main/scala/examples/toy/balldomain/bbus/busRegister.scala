@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.instantiable
 import framework.top.GlobalConfig
 import framework.balldomain.bbus.BBus
-import framework.balldomain.blink.BallRegist
+import framework.balldomain.blink.HasBlink
 import framework.balldomain.prototype.vector.VecBall
 import framework.balldomain.prototype.relu.ReluBall
 
@@ -17,7 +17,7 @@ class BBusModule(b: GlobalConfig)
     extends BBus(
       b,
       b.ballDomain.ballIdMappings.map { mapping =>
-        val ballGenerator: () => BallRegist with Module = mapping.ballName match {
+        val ballGenerator: () => HasBlink with Module = mapping.ballName match {
           case "VecBall"  => () => new VecBall(b)
           case "ReluBall" => () => new ReluBall(b)
           case name       => throw new IllegalArgumentException(s"Unknown ball name: $name")

@@ -3,7 +3,7 @@ package sims.verify
 import chisel3._
 import _root_.circt.stage.ChiselStage
 import framework.top.GlobalConfig
-import framework.balldomain.blink.{BallRegist, BlinkIO}
+import framework.balldomain.blink.{BlinkIO, HasBlink}
 import framework.balldomain.prototype.vector.VecBall
 import framework.balldomain.prototype.relu.ReluBall
 // import framework.balldomain.prototype.matrix.MatrixBall
@@ -19,36 +19,34 @@ case object Im2colBallType    extends BallType
 case object ReluBallType      extends BallType
 case object NNLutBallType     extends BallType
 
-class TargetBall(ballType: BallType, b: GlobalConfig) extends Module {
+class TargetBall(ballType: BallType, b: GlobalConfig) extends Module with HasBlink {
 
-  // Determine bandwidth from config first
-  val (inBW, outBW) = ballType match {
-    case VecBallType  =>
-      val mapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
-        .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
-      (mapping.inBW, mapping.outBW)
-    case ReluBallType =>
-      val mapping = b.ballDomain.ballIdMappings.find(_.ballName == "ReluBall")
-        .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
-      (mapping.inBW, mapping.outBW)
-    case _            => (2, 4) // Default bandwidth
-  }
-
-  val io = IO(new BlinkIO(b, inBW, outBW))
-
-  ballType match {
-    case VecBallType       =>
-      val ball = Module(new VecBall(b))
-      io <> ball.io
-    case ReluBallType      =>
-      val ball = Module(new ReluBall(b))
-      io <> ball.io
+  val ballName = ballType match {
+    case VecBallType       => "VecBall"
+    case ReluBallType      => "ReluBall"
     case MatrixBallType    => throw new IllegalArgumentException("MatrixBall not implemented")
     case Im2colBallType    => throw new IllegalArgumentException("Im2colBall not implemented")
     case TransposeBallType => throw new IllegalArgumentException("TransposeBall not implemented")
     case NNLutBallType     => throw new IllegalArgumentException("NNLutBall not implemented")
     case _                 => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
+
+  val mapping = b.ballDomain.ballIdMappings.find(_.ballName == ballName)
+    .getOrElse(throw new IllegalArgumentException(s"$ballName not found in config"))
+  val inBW    = mapping.inBW
+  val outBW   = mapping.outBW
+
+  val io = IO(new BlinkIO(b, inBW, outBW))
+
+  def blink: BlinkIO = io
+
+  val ball = ballType match {
+    case VecBallType  => Module(new VecBall(b))
+    case ReluBallType => Module(new ReluBall(b))
+    case _            => throw new scala.MatchError("TargetBall does not handle this ball type")
+  }
+
+  io <> ball.blink
 }
 
 object BallTopMain extends App {

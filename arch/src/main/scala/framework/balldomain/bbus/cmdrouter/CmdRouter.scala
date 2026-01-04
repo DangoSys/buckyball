@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.balldomain.bbus.cmdrouter.CmdReqRouter
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 @instantiable
@@ -21,11 +20,15 @@ class CmdRouter(val b: GlobalConfig) extends Module {
     val ballIdle = Input(Vec(numBalls, Bool()))
   })
 
-  val reqRouter = Module(new CmdReqRouter(b, numBalls))
+  val arbiter = Module(new RRArbiter(new BallRsIssue(b), numBalls))
 
-  reqRouter.io.cmdReq_i <> io.cmdReq_i
-  reqRouter.io.ballIdle := io.ballIdle
-  io.cmdReq_o <> reqRouter.io.cmdReq_o
+  for (i <- 0 until numBalls) {
+    arbiter.io.in(i).valid := io.cmdReq_i(i).valid && io.ballIdle(i)
+    arbiter.io.in(i).bits  := io.cmdReq_i(i).bits
+    io.cmdReq_i(i).ready   := arbiter.io.in(i).ready && io.ballIdle(i)
+  }
+
+  io.cmdReq_o <> arbiter.io.out
 
   for (i <- 0 until numBalls) {
     io.cmdResp_o(i) <> io.cmdResp_i(i)

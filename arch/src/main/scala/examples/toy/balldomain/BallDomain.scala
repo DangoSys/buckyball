@@ -27,8 +27,6 @@ class BallDomain(val b: GlobalConfig) extends Module {
   @public
   val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
 
-  require(b.memDomain.balldomainChannel == b.ballDomain.bbusChannel, "balldomainChannel must be equal to bbusChannel")
-
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
   val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))
