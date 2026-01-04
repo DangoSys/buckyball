@@ -9,10 +9,8 @@ case class BallIdMapping(
   outBW:    Int)
 
 case class BallDomainParam(
-  ballNum:              Int,
-  ballIdMappings:       Seq[BallIdMapping],
-  bbusProducerChannels: Int,
-  bbusConsumerChannels: Int)
+  ballNum:        Int,
+  ballIdMappings: Seq[BallIdMapping])
 
 object BallDomainParam {
   implicit val ballIdMappingRW: ReadWriter[BallIdMapping]   = macroRW

@@ -36,8 +36,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // MemDomain receives requests from Ball Domain, so uses raw Bundle (Input for bank_id)
     // Use bbusProducerChannels and bbusConsumerChannels instead of bankNum to match BallDomain output
     val ballDomain = new Bundle {
-      val bankRead  = Vec(b.ballDomain.bbusConsumerChannels, new BankRead(b))
-      val bankWrite = Vec(b.ballDomain.bbusProducerChannels, new BankWrite(b))
+      val bankRead  = Vec(b.top.ballMemChannelConsumer, new BankRead(b))
+      val bankWrite = Vec(b.top.ballMemChannelProducer, new BankWrite(b))
 
     }
 

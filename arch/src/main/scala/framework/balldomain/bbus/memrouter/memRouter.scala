@@ -17,8 +17,8 @@ class FreeChannelResp(val b: GlobalConfig) extends Bundle {
 @instantiable
 class MemRouter(val b: GlobalConfig) extends Module {
   val numBalls             = b.ballDomain.ballNum
-  val bbusProducerChannels = b.ballDomain.bbusProducerChannels
-  val bbusConsumerChannels = b.ballDomain.bbusConsumerChannels
+  val bbusProducerChannels = b.top.ballMemChannelProducer
+  val bbusConsumerChannels = b.top.ballMemChannelConsumer
   val totalReadChannels    = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalWriteChannels   = b.ballDomain.ballIdMappings.map(_.outBW).sum
   val maxPerChannelWidth   = b.ballDomain.ballIdMappings.flatMap(m => Seq(m.inBW, m.outBW)).max
