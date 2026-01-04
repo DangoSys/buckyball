@@ -90,9 +90,7 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
     memoryrouter.io.bankRead_o(i).io.req.bits.addr  := ballMemChannel.channelOut(i).data.bits
     memoryrouter.io.bankWrite_o(i).io.req.valid     := ballMemChannel.channelOut(i).data.valid
     memoryrouter.io.bankWrite_o(i).io.req.bits.addr := ballMemChannel.channelOut(i).data.bits
-    ballMemChannel.channelOut(i).data.ready         := memoryrouter.io.bankRead_o(
-      i
-    ).io.req.ready || memoryrouter.io.bankWrite_o(i).io.req.ready
+    ballMemChannel.channelOut(i).data.ready         := memoryrouter.io.bankRead_o(i).io.req.ready || memoryrouter.io.bankWrite_o(i).io.req.ready
   }
 
 // -----------------------------------------------------------------------------

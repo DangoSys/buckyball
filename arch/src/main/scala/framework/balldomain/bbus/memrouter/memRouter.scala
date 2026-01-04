@@ -45,7 +45,15 @@ class MemRouter(val b: GlobalConfig) extends Module {
 // Step1: Generate read request
   val readReqGen:          Instance[ReadReqGen]          = Instantiate(new ReadReqGen(b))
   val channelMappingTable: Instance[ChannelMappingTable] = Instantiate(new ChannelMappingTable(b))
-  readReqGen.io.bank_read_i <> io.bankRead_i
+  // readReqGen.io.bank_read_i := io.bankRead_i
+  for (i <- 0 until totalReadChannels) {
+    readReqGen.io.bank_read_i(i).ball_id    := io.bankRead_i(i).ball_id
+    readReqGen.io.bank_read_i(i).bank_id    := io.bankRead_i(i).bank_id
+    readReqGen.io.bank_read_i(i).rob_id     := io.bankRead_i(i).rob_id
+    readReqGen.io.bank_read_i(i).req_valid  := io.bankRead_i(i).io.req.valid
+    readReqGen.io.bank_read_i(i).req_addr   := io.bankRead_i(i).io.req.bits.addr
+  }
+
 // Step2: Peek if there are enough free channels
   // val hasReadReq = readReqGen.io.read_req_o.valid
   // io.peakChannelReq.valid                   := hasReadReq
@@ -59,6 +67,9 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val dispatchChannels = io.freeChannelResp.bits.channel_ids
   readReqGen.io.read_req_o.ready := isChannelFree
 // Step3/2: if there are not enough free channels, continue to peek until there are enough free channels
+  channelMappingTable.io.write.valid := false.B
+  channelMappingTable.io.write.bits.idx := 0.U
+  channelMappingTable.io.write.bits.outCh := 0.U
 
 // Step4: Set the channel mapping table
   when(readReqGen.io.read_req_o.fire) {
@@ -81,7 +92,7 @@ class MemRouter(val b: GlobalConfig) extends Module {
       io.bankRead_o(outCh).io.req <> io.bankRead_i(i).io.req
     }.otherwise {
       io.bankRead_i(i).io.req.ready := false.B
-      io.bankRead_i(i).io.req.bits  := DontCare
+      // io.bankRead_i(i).io.req.bits  := DontCare
     }
   }
 }
