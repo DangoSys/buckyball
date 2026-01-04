@@ -47,11 +47,10 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val channelMappingTable: Instance[ChannelMappingTable] = Instantiate(new ChannelMappingTable(b))
   // readReqGen.io.bank_read_i := io.bankRead_i
   for (i <- 0 until totalReadChannels) {
-    readReqGen.io.bank_read_i(i).ball_id    := io.bankRead_i(i).ball_id
-    readReqGen.io.bank_read_i(i).bank_id    := io.bankRead_i(i).bank_id
-    readReqGen.io.bank_read_i(i).rob_id     := io.bankRead_i(i).rob_id
-    readReqGen.io.bank_read_i(i).req_valid  := io.bankRead_i(i).io.req.valid
-    readReqGen.io.bank_read_i(i).req_addr   := io.bankRead_i(i).io.req.bits.addr
+    io.bankRead_i(i).ball_id := readReqGen.io.bank_read_i(i).ball_id   
+    io.bankRead_i(i).rob_id := readReqGen.io.bank_read_i(i).rob_id
+    io.bankRead_i(i).io.req.valid := readReqGen.io.bank_read_i(i).io.req.valid
+    io.bankRead_i(i).io.req.bits := readReqGen.io.bank_read_i(i).io.req.bits
   }
 
 // Step2: Peek if there are enough free channels
