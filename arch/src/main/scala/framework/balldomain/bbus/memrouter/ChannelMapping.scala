@@ -7,23 +7,23 @@ import framework.top.GlobalConfig
 
 @instantiable
 class ChannelMappingTable(val b: GlobalConfig) extends Module {
-  val totalReadChannels    = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val bbusProducerChannels = b.top.ballMemChannelProducer
+  val EntryNum       = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val MappedChannels = b.top.ballMemChannelProducer
 
   @public
   val io = IO(new Bundle {
 
     val write = Flipped(Decoupled(new Bundle {
-      val idx   = UInt(log2Up(totalReadChannels).W)
-      val outCh = UInt(log2Up(bbusProducerChannels).W)
+      val idx   = UInt(log2Up(EntryNum).W)
+      val outCh = UInt(log2Up(MappedChannels).W)
     }))
 
-    val routeMap   = Output(Vec(totalReadChannels, UInt(log2Up(bbusProducerChannels).W)))
-    val routeValid = Output(Vec(totalReadChannels, Bool()))
+    val routeMap   = Output(Vec(EntryNum, UInt(log2Up(MappedChannels).W)))
+    val routeValid = Output(Vec(EntryNum, Bool()))
   })
 
-  val routeMap   = Reg(Vec(totalReadChannels, UInt(log2Up(bbusProducerChannels).W)))
-  val routeValid = RegInit(VecInit(Seq.fill(totalReadChannels)(false.B)))
+  val routeMap   = Reg(Vec(EntryNum, UInt(log2Up(MappedChannels).W)))
+  val routeValid = RegInit(VecInit(Seq.fill(EntryNum)(false.B)))
 
   when(io.write.fire) {
     routeMap(io.write.bits.idx)   := io.write.bits.outCh
