@@ -23,7 +23,7 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val bank_read_i = Vec(totalReadChannels, Flipped(new BankRead(b)))
+    val bank_read_i = Vec(totalReadChannels, new BankRead(b))
     val read_req_o  = Decoupled(new ReadReq(b))
   })
 

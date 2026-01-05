@@ -72,26 +72,6 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 
   cmdResp <> cmdRouter.io.cmdResp_o
 
-// Initialize bankRead and bankWrite ports with default values
-  for (i <- 0 until memChannel) {
-    bankRead(i).bank_id := 0.U
-    bankRead(i).rob_id := 0.U
-    bankRead(i).ball_id := 0.U
-    bankRead(i).io.req.valid := false.B
-    bankRead(i).io.req.bits.addr := 0.U
-    bankRead(i).io.resp.ready := false.B
-
-    bankWrite(i).bank_id := 0.U
-    bankWrite(i).rob_id := 0.U
-    bankWrite(i).ball_id := 0.U
-    bankWrite(i).io.req.valid := false.B
-    bankWrite(i).io.req.bits.addr := 0.U
-    bankWrite(i).io.req.bits.mask := 0.U.asTypeOf(Vec(b.memDomain.bankMaskLen, Bool()))
-    bankWrite(i).io.req.bits.data := 0.U
-    bankWrite(i).io.req.bits.wmode := false.B
-    bankWrite(i).io.resp.ready := false.B
-  }
-
 // Initialize ballMemChannel and memBallChannel ports with default values
   for (i <- 0 until ballMemChannelNum) {
     ballMemChannel.channelIn(i).data.valid := false.B
@@ -117,23 +97,11 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 // -----------------------------------------------------------------------------
 // memory router
 // -----------------------------------------------------------------------------
-  memoryrouter.io.bankRead_i <> bankRead
-  memoryrouter.io.bankWrite_i <> bankWrite
+  memoryrouter.io.bankRead_o <> bankRead
+  memoryrouter.io.bankWrite_o <> bankWrite
   memoryrouter.io.peakChannelReq <> ballMemChannel.peakChannelReq
   memoryrouter.io.freeChannelResp <> ballMemChannel.freeChannelResp
 
-  // Connect channel outputs (from channel.out in top level) to memory router
-  // Channels are unified, router handles routing to bankRead_o or bankWrite_o based on request type
-  // For now, we route to both and let router decide based on internal logic
-  // TODO: Router should determine read/write based on request metadata
-  for (i <- 0 until ballMemChannelNum) {
-    // Connect to both read and write outputs, router will select based on request type
-    memoryrouter.io.bankRead_o(i).io.req.valid      := ballMemChannel.channelOut(i).data.valid
-    memoryrouter.io.bankRead_o(i).io.req.bits.addr  := ballMemChannel.channelOut(i).data.bits
-    memoryrouter.io.bankWrite_o(i).io.req.valid     := ballMemChannel.channelOut(i).data.valid
-    memoryrouter.io.bankWrite_o(i).io.req.bits.addr := ballMemChannel.channelOut(i).data.bits
-    ballMemChannel.channelOut(i).data.ready         := memoryrouter.io.bankRead_o(i).io.req.ready || memoryrouter.io.bankWrite_o(i).io.req.ready
-  }
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
@@ -144,22 +112,23 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
     pmc.io.cmdResp_o(i).bits  := cmdRouter.io.cmdResp_o(i).bits
   }
 
-// Initialize balls' bankRead and bankWrite ports with default values
+// Connect balls' bankRead and bankWrite to memrouter
+  var readChannelIdx = 0
+  var writeChannelIdx = 0
+  
   for (ball <- balls) {
     val ballConfig = b.ballDomain.ballIdMappings.find(_.ballName == ball.getClass.getSimpleName)
     val inBW = ballConfig.map(_.inBW).getOrElse(0)
     val outBW = ballConfig.map(_.outBW).getOrElse(0)
     
     for (i <- 0 until inBW) {
-      ball.blink.bankRead(i).io.req.ready := false.B
-      ball.blink.bankRead(i).io.resp.valid := false.B
-      ball.blink.bankRead(i).io.resp.bits.data := 0.U
+      memoryrouter.io.bankRead_i(readChannelIdx) <> ball.blink.bankRead(i)
+      readChannelIdx = readChannelIdx + 1
     }
     
     for (i <- 0 until outBW) {
-      ball.blink.bankWrite(i).io.req.ready := false.B
-      ball.blink.bankWrite(i).io.resp.valid := false.B
-      ball.blink.bankWrite(i).io.resp.bits.ok := false.B
+      memoryrouter.io.bankWrite_i(writeChannelIdx) <> ball.blink.bankWrite(i)
+      writeChannelIdx = writeChannelIdx + 1
     }
   }
 
