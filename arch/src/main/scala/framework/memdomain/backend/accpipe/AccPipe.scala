@@ -2,27 +2,36 @@ package framework.memdomain.backend.accpipe
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
+
 import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
-import chisel3.experimental.hierarchy.{instantiable, public}
 
 /**
  * AccPipe: Accumulator Pipeline
- * Handles read-modify-write operations for accumulation
- * Separated from SramBank for flexibility
+ * - Direct write (wmode=0): write.req -> bank write -> forward resp
+ * - Accum write (wmode=1): bank read -> (old + new with mask) -> bank write -> forward resp
+ * - Read: bank read -> forward resp
+ *
+ * This version:
+ * - Uses correct IO directions based on your SramReadIO/SramWriteIO definitions
+ * - Uses strict Decoupled handshakes
+ * - Latches op type/address/data/mask
+ * - Latches old_data on read resp fire (no cross-state resp.bits usage)
  */
 @instantiable
 class AccPipe(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    // Interface to SramBank - AccPipe sends requests to bank (sender perspective)
-    val sramRead  = Flipped(new SramReadIO(b))
-    val sramWrite = Flipped(new SramWriteIO(b))
+    // Interface to SramBank
+    // Your SramReadIO/SramWriteIO are SLAVE-shaped (req is Flipped), so master must Flipped(...)
+    val sramRead  = Flipped(new SramReadIO(b))   // AccPipe -> bank: req out, resp in
+    val sramWrite = Flipped(new SramWriteIO(b))  // AccPipe -> bank: req out, resp in
 
-    // Interface from midend - AccPipe receives requests (receiver perspective)
-    val read  = new SramReadIO(b)
-    val write = new SramWriteIO(b)
+    // Interface from midend (AccPipe is slave)
+    val read  = new SramReadIO(b)   // midend -> AccPipe: req in, resp out
+    val write = new SramWriteIO(b)  // midend -> AccPipe: req in, resp out
 
     // Control and status signals
     val bank_id         = Input(UInt(log2Up(b.memDomain.bankNum).W))
@@ -30,136 +39,198 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val busy            = Output(Bool())
   })
 
-  // Internal registers
-  val current_bank_id = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  val busy            = Reg(Bool())
+  // ---------------------------------------------------------------------------
+  // Latched transaction context
+  // ---------------------------------------------------------------------------
+  val curBankId = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  io.current_bank_id := curBankId
 
-  // Connect to outputs
-  io.current_bank_id := current_bank_id
-  io.busy            := busy
+  val opIsRead  = RegInit(false.B) // true: read transaction; false: write transaction
+  val opIsAccum = RegInit(false.B) // true only for write + wmode=1
 
-  // State machine for read-modify-write
-  val s_idle :: s_read :: s_accumulate :: s_write :: Nil = Enum(4)
-  val state                                              = RegInit(s_idle)
+  val latAddr = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  val latData = RegInit(0.U(b.memDomain.bankWidth.W))
+  val latMask = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)))
 
-  // Update current_bank_id and busy signal
-  when(state === s_idle) {
-    when(io.write.req.valid) {
-      current_bank_id := io.bank_id
-      busy            := true.B
-    }.elsewhen(io.read.req.valid) {
-      current_bank_id := io.bank_id
-      busy            := true.B
-    }.otherwise {
-      busy := false.B
+  val oldData = RegInit(0.U(b.memDomain.bankWidth.W))
+  val resData = RegInit(0.U(b.memDomain.bankWidth.W))
+
+  // ---------------------------------------------------------------------------
+  // FSM
+  // ---------------------------------------------------------------------------
+  val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil =
+    Enum(5)
+  val state = RegInit(s_idle)
+
+  io.busy := (state =/= s_idle)
+
+  // ---------------------------------------------------------------------------
+  // Defaults (avoid multi-drive)
+  // ---------------------------------------------------------------------------
+  // Midend side defaults
+  io.read.req.ready        := false.B
+  io.read.resp.valid       := false.B
+  io.read.resp.bits.data   := 0.U
+
+  io.write.req.ready       := false.B
+  io.write.resp.valid      := false.B
+  io.write.resp.bits.ok    := false.B
+
+  // Bank side defaults
+  io.sramRead.req.valid        := false.B
+  io.sramRead.req.bits.addr    := 0.U
+  io.sramRead.resp.ready       := false.B
+
+  io.sramWrite.req.valid       := false.B
+  io.sramWrite.req.bits.addr   := 0.U
+  io.sramWrite.req.bits.data   := 0.U
+  io.sramWrite.req.bits.mask   := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+  io.sramWrite.req.bits.wmode  := false.B // IMPORTANT: write-back is a normal write
+  io.sramWrite.resp.ready      := false.B
+
+  // ---------------------------------------------------------------------------
+  // Helpers: masked accumulate (segment-wise)
+  // ---------------------------------------------------------------------------
+  private def maskedAccumulate(oldU: UInt, addU: UInt, maskV: Vec[Bool]): UInt = {
+    val segW = b.memDomain.bankWidth / b.memDomain.bankMaskLen
+    // Optional safety: if not divisible, elaboration will still succeed but behavior is wrong.
+    // You can assert if you want:
+    // require(b.memDomain.bankWidth % b.memDomain.bankMaskLen == 0, "bankWidth must be divisible by bankMaskLen")
+
+    val oldVec = oldU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
+    val addVec = addU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
+
+    val resVec = Wire(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
+    for (i <- 0 until b.memDomain.bankMaskLen) {
+      resVec(i) := Mux(maskV(i), oldVec(i) + addVec(i), oldVec(i))
     }
-  }.otherwise {
-    busy := true.B
+    resVec.asUInt
   }
 
-  // Pipeline registers
-  val acc_addr = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
-  val acc_data = RegInit(0.U(b.memDomain.bankWidth.W))
-  val acc_mask = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)))
+  // ---------------------------------------------------------------------------
+  // FSM behavior
+  // ---------------------------------------------------------------------------
+  switch(state) {
+    is(s_idle) {
+      // Simple priority: write first, then read
+      // Only accept a request if we can immediately issue the corresponding bank req (bind ready to downstream ready).
+      when(io.write.req.valid) {
+        val isAccumW = io.write.req.bits.wmode
 
-  // Default values for all outputs
-  io.write.req.ready    := false.B
-  io.write.resp.valid   := false.B
-  io.write.resp.bits.ok := false.B
+        when(isAccumW) {
+          // Need bank read req to start RMW
+          io.write.req.ready := io.sramRead.req.ready
+          when(io.write.req.fire) {
+            curBankId := io.bank_id
+            opIsRead  := false.B
+            opIsAccum := true.B
+            latAddr   := io.write.req.bits.addr
+            latData   := io.write.req.bits.data
+            latMask   := io.write.req.bits.mask
 
-  io.read.req.ready      := false.B
-  io.read.resp.valid     := false.B
-  io.read.resp.bits.data := 0.U
+            // Issue bank read in same cycle (since fire implies sramRead.req.ready)
+            io.sramRead.req.valid     := true.B
+            io.sramRead.req.bits.addr := io.write.req.bits.addr
 
-  io.sramWrite.req.valid  := false.B
-  io.sramWrite.req.bits   := 0.U.asTypeOf(io.sramWrite.req.bits)
-  io.sramWrite.resp.ready := false.B
+            state := s_wait_read_resp
+          }
+        }.otherwise {
+          // Direct write: issue bank write req
+          io.write.req.ready := io.sramWrite.req.ready
+          when(io.write.req.fire) {
+            curBankId := io.bank_id
+            opIsRead  := false.B
+            opIsAccum := false.B
+            latAddr   := io.write.req.bits.addr
+            latData   := io.write.req.bits.data
+            latMask   := io.write.req.bits.mask
 
-  io.sramRead.req.valid     := false.B
-  io.sramRead.req.bits.addr := 0.U
-  io.sramRead.resp.ready    := false.B
+            io.sramWrite.req.valid      := true.B
+            io.sramWrite.req.bits.addr  := io.write.req.bits.addr
+            io.sramWrite.req.bits.data  := io.write.req.bits.data
+            io.sramWrite.req.bits.mask  := io.write.req.bits.mask
+            io.sramWrite.req.bits.wmode := false.B // direct write to bank
 
-  io.current_bank_id := 0.U
-  io.busy            := false.B
-
-  // State machine logic
-  when(state === s_idle) {
-    when(io.write.req.valid) {
-      // Direct write mode: pass through
-      when(!io.write.req.bits.wmode) {
-        io.sramWrite.req.valid     := io.write.req.valid
-        io.sramWrite.req.bits.addr := io.write.req.bits.addr
-        io.sramWrite.req.bits.data := io.write.req.bits.data
-        io.sramWrite.req.bits.mask := io.write.req.bits.mask
-        io.write.req.ready         := io.sramWrite.req.ready
-
-        // Forward write response from bank
-        io.write.resp.valid     := io.sramWrite.resp.valid
-        io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
-        io.sramWrite.resp.ready := io.write.resp.ready
-
-        when(io.write.req.fire) {
-          state := s_idle
-          busy  := false.B
+            state := s_wait_direct_write_resp
+          }
         }
-      }.otherwise {
-        // Accumulator mode: start read-modify-write
-        io.sramRead.req.valid     := true.B
-        io.sramRead.req.bits.addr := io.write.req.bits.addr
-        io.write.req.ready        := io.sramRead.req.ready
-        acc_addr                  := io.write.req.bits.addr
-        acc_data                  := io.write.req.bits.data
-        acc_mask                  := io.write.req.bits.mask
-        state                     := s_read
+      }.elsewhen(io.read.req.valid) {
+        // Read: issue bank read req
+        io.read.req.ready := io.sramRead.req.ready
+        when(io.read.req.fire) {
+          curBankId := io.bank_id
+          opIsRead  := true.B
+          opIsAccum := false.B
+          latAddr   := io.read.req.bits.addr
+
+          io.sramRead.req.valid     := true.B
+          io.sramRead.req.bits.addr := io.read.req.bits.addr
+
+          state := s_wait_read_resp
+        }
       }
-    }.elsewhen(io.read.req.valid) {
-      // Pure read operation (not accumulation)
-      io.sramRead.req.valid     := io.read.req.valid
-      io.sramRead.req.bits.addr := io.read.req.bits.addr
-      io.read.req.ready         := io.sramRead.req.ready
-      state                     := s_read
     }
-  }.elsewhen(state === s_read) {
-    // Wait for read response
-    when(io.sramRead.resp.valid) {
-      // If we got here from a write request, it's accumulation
-      // If we got here from a read request, it's a pure read
-      when(io.read.req.valid) {
-        // Pure read: pass data back immediately
+
+    is(s_wait_read_resp) {
+      when(opIsRead) {
+        // Pure read: directly forward bank resp -> midend resp with proper handshake
         io.read.resp.valid     := io.sramRead.resp.valid
         io.read.resp.bits.data := io.sramRead.resp.bits.data
         io.sramRead.resp.ready := io.read.resp.ready
 
-        when(io.read.resp.ready) {
+        when(io.sramRead.resp.fire) {
           state := s_idle
-          busy  := false.B
+        }
+      }.elsewhen(opIsAccum) {
+        // Accum path: always accept the bank resp (store old data), no dependency on midend ready here
+        io.sramRead.resp.ready := true.B
+        when(io.sramRead.resp.fire) {
+          oldData := io.sramRead.resp.bits.data
+          // Compute result right away and latch
+          resData := maskedAccumulate(io.sramRead.resp.bits.data, latData, latMask)
+          state   := s_issue_write_back
         }
       }.otherwise {
-        // Accumulation: proceed to accumulate
-        state := s_accumulate
+        // Should not happen
+        state := s_idle
       }
     }
-  }.elsewhen(state === s_accumulate) {
-    // Accumulate: old_data + new_data
-    val new_data = io.sramRead.resp.bits.data + acc_data
-    acc_data := new_data
 
-    state := s_write
-  }.elsewhen(state === s_write) {
-    // Write back accumulated result
-    io.sramWrite.req.valid     := true.B
-    io.sramWrite.req.bits.addr := acc_addr
-    io.sramWrite.req.bits.data := acc_data
-    io.sramWrite.req.bits.mask := acc_mask
+    is(s_issue_write_back) {
+      // Issue bank write-back for accumulated result
+      io.sramWrite.req.valid      := true.B
+      io.sramWrite.req.bits.addr  := latAddr
+      io.sramWrite.req.bits.data  := resData
+      io.sramWrite.req.bits.mask  := latMask
+      io.sramWrite.req.bits.wmode := false.B // IMPORTANT: already accumulated in AccPipe
 
-    // Forward write response from bank
-    io.write.resp.valid     := io.sramWrite.resp.valid
-    io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
-    io.sramWrite.resp.ready := io.write.resp.ready
+      when(io.sramWrite.req.fire) {
+        state := s_wait_write_resp
+      }
+    }
 
-    when(io.sramWrite.req.fire) {
-      state := s_idle
-      busy  := false.B
+    is(s_wait_write_resp) {
+      // Forward bank write resp to midend write resp
+      io.write.resp.valid     := io.sramWrite.resp.valid
+      io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
+      io.sramWrite.resp.ready := io.write.resp.ready
+
+      when(io.sramWrite.resp.fire) {
+        // Done
+        opIsAccum := false.B
+        state     := s_idle
+      }
+    }
+
+    is(s_wait_direct_write_resp) {
+      // Direct write: forward resp
+      io.write.resp.valid     := io.sramWrite.resp.valid
+      io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
+      io.sramWrite.resp.ready := io.write.resp.ready
+
+      when(io.sramWrite.resp.fire) {
+        state := s_idle
+      }
     }
   }
 }
