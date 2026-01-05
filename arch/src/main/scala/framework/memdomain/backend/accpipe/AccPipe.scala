@@ -35,7 +35,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     // Control and status signals
     val bank_id         = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val current_bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    // in AccPipe IO bundle, add:
+    val target_bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
+
     val busy            = Output(Bool())
   })
 
@@ -43,7 +45,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // Latched transaction context
   // ---------------------------------------------------------------------------
   val curBankId = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  io.current_bank_id := curBankId
+  // target bank id for routing (combinational)
+  io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
+
 
   val opIsRead  = RegInit(false.B) // true: read transaction; false: write transaction
   val opIsAccum = RegInit(false.B) // true only for write + wmode=1
