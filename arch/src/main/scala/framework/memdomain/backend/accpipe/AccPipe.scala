@@ -79,6 +79,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
   io.sramRead.req.bits.addr := 0.U
   io.sramRead.resp.ready    := false.B
 
+  io.current_bank_id := 0.U
+  io.busy            := false.B
+
   // State machine logic
   when(state === s_idle) {
     when(io.write.req.valid) {

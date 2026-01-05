@@ -40,7 +40,7 @@ class SramBank(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   io.sramWrite.req.ready := !io.sramRead.req.valid
 
-  when(io.sramWrite.req.valid) {
+  when(io.sramWrite.req.fire) {
     mem.write(
       io.sramWrite.req.bits.addr,
       io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem)),
