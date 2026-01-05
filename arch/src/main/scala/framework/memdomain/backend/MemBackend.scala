@@ -135,9 +135,9 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
     when(wHas) {
       val selIdx = OHToUInt(wMatch)
-      // bank gets req from selected pipe
-      bank.io.sramWrite.req.valid := accPipes(selIdx).io.sramWrite.req.valid
-      bank.io.sramWrite.req.bits  := accPipes(selIdx).io.sramWrite.req.bits
+      // bank gets req from selected pipe using Mux1H
+      bank.io.sramWrite.req.valid := Mux1H(wMatch, accPipes.map(_.io.sramWrite.req.valid))
+      bank.io.sramWrite.req.bits  := Mux1H(wMatch, accPipes.map(_.io.sramWrite.req.bits))
       // selected pipe sees ready from bank
       wr_req_ready(selIdx) := bank.io.sramWrite.req.ready
 
@@ -164,9 +164,9 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
     when(rHas) {
       val selIdx = OHToUInt(rMatch)
-      // bank gets req from selected pipe
-      bank.io.sramRead.req.valid := accPipes(selIdx).io.sramRead.req.valid
-      bank.io.sramRead.req.bits  := accPipes(selIdx).io.sramRead.req.bits
+      // bank gets req from selected pipe using Mux1H
+      bank.io.sramRead.req.valid := Mux1H(rMatch, accPipes.map(_.io.sramRead.req.valid))
+      bank.io.sramRead.req.bits  := Mux1H(rMatch, accPipes.map(_.io.sramRead.req.bits))
       // selected pipe sees ready from bank
       rd_req_ready(selIdx) := bank.io.sramRead.req.ready
 
