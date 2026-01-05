@@ -6,22 +6,22 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
-class ChannelClusterIO(val b: GlobalConfig) extends Bundle {
-  val channelIn       = Vec(b.top.ballMemChannelNum, Flipped(new ChannelIO(b)))
-  val channelOut      = Vec(b.top.ballMemChannelNum, new ChannelIO(b))
+class ChannelClusterIO(val b: GlobalConfig, numChannels: Int) extends Bundle {
+  val channelIn       = Vec(numChannels, Flipped(new ChannelIO(b)))
+  val channelOut      = Vec(numChannels, new ChannelIO(b))
   val peakChannelReq  = Flipped(Decoupled(new PeakChannelReq(b)))
   val freeChannelResp = Decoupled(new FreeChannelResp(b))
 }
 
 @instantiable
-class ChannelCluster(val b: GlobalConfig) extends Module {
+class ChannelCluster(val b: GlobalConfig, numChannels: Int) extends Module {
   @public
-  val io = IO(new ChannelClusterIO(b))
+  val io = IO(new ChannelClusterIO(b, numChannels))
 
-  val channels = (0 until b.top.ballMemChannelNum).map(_ => Instantiate(new Channel(b)))
+  val channels = (0 until numChannels).map(_ => Instantiate(new Channel(b)))
 
   // Connect channels
-  for (i <- 0 until b.top.ballMemChannelNum) {
+  for (i <- 0 until numChannels) {
     channels(i).io.in <> io.channelIn(i)
     channels(i).io.out <> io.channelOut(i)
     channels(i).io.peakChannelReq.valid  := io.peakChannelReq.valid
@@ -33,40 +33,21 @@ class ChannelCluster(val b: GlobalConfig) extends Module {
   val freeChannelCount  = PopCount(freeChannels)
   val hasEnoughChannels = freeChannelCount >= io.peakChannelReq.bits.needed_channel_num
 
-  val selectedChannelIds = Wire(Vec(b.top.ballMemChannelNum, UInt(log2Up(b.top.ballMemChannelNum).W)))
-  val selectedMask       = Wire(Vec(b.top.ballMemChannelNum, Bool()))
+  val selectedChannelIds = Wire(Vec(numChannels, UInt(log2Up(numChannels).W)))
+  val selectedMask       = Wire(Vec(numChannels, Bool()))
 
-  val masks = Wire(Vec(b.top.ballMemChannelNum + 1, Vec(b.top.ballMemChannelNum, Bool())))
+  val masks = Wire(Vec(numChannels + 1, Vec(numChannels, Bool())))
   masks(0) := freeChannels
 
-  for (i <- 0 until b.top.ballMemChannelNum) {
+  for (i <- 0 until numChannels) {
     val maskVec = masks(i)
     val selOH   = PriorityEncoderOH(maskVec.asUInt)
     val selIdx  = PriorityEncoder(maskVec.asUInt)
     selectedMask(i)       := maskVec.asUInt.orR && (i.U < io.peakChannelReq.bits.needed_channel_num)
     selectedChannelIds(i) := Mux(selectedMask(i), selIdx, 0.U)
-    if (i < b.top.ballMemChannelNum) {
+    if (i < numChannels) {
       masks(i + 1) := VecInit(maskVec.zip(selOH.asBools).map { case (free, sel) => free && !sel })
     }
-  }
-
-  // -----------------------------
-  // Convert selectedChannelIds to "whether each channel is selected".
-  // -----------------------------
-  val selectedPerChan = Wire(Vec(b.top.ballMemChannelNum, Bool()))
-  for (ch <- 0 until b.top.ballMemChannelNum) {
-    // If the ch appears in the list of selected ids (and the slot is valid), it is considered selected.
-    selectedPerChan(ch) := (0 until b.top.ballMemChannelNum).map { k =>
-      selectedMask(k) && (selectedChannelIds(k) === ch.U)
-    }.reduce(_ || _)
-  }
-
- // Allocation is only truly "distributed" when the upstream handshake is successful and sufficient resources are available.
-  val doAlloc = io.peakChannelReq.valid && io.freeChannelResp.ready && hasEnoughChannels
-
-// Only raise the valid flag for the selected channel to avoid locking all channels simultaneously by firing.
-  for (i <- 0 until b.top.ballMemChannelNum) {
-    channels(i).io.peakChannelReq.valid := doAlloc && selectedPerChan(i)
   }
 
   io.freeChannelResp.valid            := io.peakChannelReq.valid

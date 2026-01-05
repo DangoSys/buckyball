@@ -30,10 +30,10 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
 
   @public
-  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b)))
+  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, memChannel)))
 
   @public
-  val memBallChannel = IO(Flipped(new ChannelClusterIO(b)))
+  val memBallChannel = IO(Flipped(new ChannelClusterIO(b, b.top.memBallChannelNum)))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
