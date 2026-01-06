@@ -69,6 +69,12 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
     arb.io.in(i).bits.rob_id      := reqGroupsWithRobId(i)._5
   }
 
+  for(i <- 0 until totalReadChannels) {
+    io.bank_read_i(i).io.req.ready := true.B
+    io.bank_read_i(i).io.resp.valid := false.B
+    io.bank_read_i(i).io.resp.bits := DontCare
+  }
+  
   io.read_req_o.valid            := arb.io.out.valid
   io.read_req_o.bits.bank_id     := arb.io.out.bits.bank_id
   io.read_req_o.bits.ball_id     := arb.io.out.bits.ball_id

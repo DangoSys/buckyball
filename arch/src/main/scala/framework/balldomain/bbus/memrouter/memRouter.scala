@@ -45,13 +45,10 @@ class MemRouter(val b: GlobalConfig) extends Module {
 // Step1: Generate read request
   val readReqGen:          Instance[ReadReqGen]          = Instantiate(new ReadReqGen(b))
   val channelMappingTable: Instance[ChannelMappingTable] = Instantiate(new ChannelMappingTable(b))
-  // readReqGen.io.bank_read_i := io.bankRead_i
+  
   for (i <- 0 until totalReadChannels) {
-    readReqGen.io.bank_read_i(i).ball_id := io.bankRead_i(i).ball_id 
-    readReqGen.io.bank_read_i(i).rob_id:=  io.bankRead_i(i).rob_id
-    readReqGen.io.bank_read_i(i).io.req.valid := io.bankRead_i(i).io.req.valid
-    readReqGen.io.bank_read_i(i).io.req.bits := io.bankRead_i(i).io.req.bits 
-    io.bankRead_i(i).io.req.ready := readReqGen.io.bank_read_i(i).io.req.ready
+    // Connect input fields from io.bankRead_i to readReqGen.io.bank_read_i
+    readReqGen.io.bank_read_i(i) <> io.bankRead_i(i)
   }
 
 // Step2: Peek if there are enough free channels
@@ -93,14 +90,43 @@ class MemRouter(val b: GlobalConfig) extends Module {
       }
     }
   }
+  for (i <- 0 until bbusProducerChannels) {
+      io.bankRead_o(i).io.req.valid := false.B
+      io.bankRead_o(i).io.resp.ready := true.B
+      io.bankRead_o(i).io.req.bits  := DontCare
+      io.bankRead_o(i).bank_id := DontCare
+      io.bankRead_o(i).ball_id := DontCare
+      io.bankRead_o(i).rob_id  := DontCare
+      io.bankWrite_o(i).io.req.valid := false.B
+      io.bankWrite_o(i).io.resp.ready := true.B
+      io.bankWrite_o(i).io.req.bits  := DontCare
+      io.bankWrite_o(i).bank_id := DontCare
+      io.bankWrite_o(i).ball_id := DontCare
+      io.bankWrite_o(i).rob_id  := DontCare
+  }
+  io.bankWrite_i.map(_.io.req.ready := true.B)
+  io.bankWrite_i.map(_.io.resp.valid := false.B)
+  io.bankWrite_i.map(_.io.resp.bits := DontCare)
+  io.bankRead_i.map(_.io.req.ready := true.B)
+  io.bankRead_i.map(_.io.resp.valid := false.B)
+  io.bankRead_i.map(_.io.resp.bits := DontCare)
+
 // Step5: Dispatch the request to the channels
   for (i <- 0 until totalReadChannels) {
     when(channelMappingTable.io.routeValid(i)) {
       val outCh = channelMappingTable.io.routeMap(i)
+      /*
       io.bankRead_o(outCh).io.req <> io.bankRead_i(i).io.req
-    }.otherwise {
-      io.bankRead_i(i).io.req.ready := false.B
-      // io.bankRead_i(i).io.req.bits  := DontCare
+      io.bankRead_o(outCh).bank_id := io.bankRead_i(i).bank_id
+      io.bankRead_o(outCh).ball_id := io.bankRead_i(i).ball_id
+      io.bankRead_o(outCh).rob_id  := io.bankRead_i(i).rob_id
+      io.bankWrite_o(outCh).io.req <> io.bankWrite_i(i).io.req
+      io.bankWrite_o(outCh).bank_id := io.bankWrite_i(i).bank_id
+      io.bankWrite_o(outCh).ball_id := io.bankWrite_i(i).ball_id
+      io.bankWrite_o(outCh).rob_id  := io.bankWrite_i(i).rob_id
+      */
+      io.bankRead_o(outCh) <> io.bankRead_i(i)
+      io.bankWrite_o(outCh) <> io.bankWrite_i(i)
     }
   }
 }
