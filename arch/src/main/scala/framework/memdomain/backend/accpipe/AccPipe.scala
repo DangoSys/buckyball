@@ -118,62 +118,54 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   switch(state) {
     is(s_idle) {
-      // Simple priority: write first, then read
-      // Only accept a request if we can immediately issue the corresponding bank req (bind ready to downstream ready).
-      when(io.write.req.valid) {
-        val isAccumW = io.write.req.bits.wmode
+      // Priority: write first, then read.
+      // IMPORTANT: never make req.valid depend on ready/fire; that can create combinational loops.
+      val writeValid  = io.write.req.valid
+      val writeAccum  = writeValid && io.write.req.bits.wmode
+      val writeDirect = writeValid && !io.write.req.bits.wmode
+      val readValid   = !writeValid && io.read.req.valid
 
-        when(isAccumW) {
-          // Need bank read req to start RMW
-          io.write.req.ready := io.sramRead.req.ready
-          when(io.write.req.fire) {
-            curBankId := io.bank_id
-            opIsRead  := false.B
-            opIsAccum := true.B
-            latAddr   := io.write.req.bits.addr
-            latData   := io.write.req.bits.data
-            latMask   := io.write.req.bits.mask
+      // Downstream bank requests (valid depends only on upstream valid + state)
+      io.sramRead.req.valid     := writeAccum || readValid
+      io.sramRead.req.bits.addr := Mux(writeAccum, io.write.req.bits.addr, io.read.req.bits.addr)
 
-            // Issue bank read in same cycle (since fire implies sramRead.req.ready)
-            io.sramRead.req.valid     := true.B
-            io.sramRead.req.bits.addr := io.write.req.bits.addr
+      io.sramWrite.req.valid      := writeDirect
+      io.sramWrite.req.bits.addr  := io.write.req.bits.addr
+      io.sramWrite.req.bits.data  := io.write.req.bits.data
+      io.sramWrite.req.bits.mask  := io.write.req.bits.mask
+      io.sramWrite.req.bits.wmode := false.B
 
-            state := s_wait_read_resp
-          }
-        }.otherwise {
-          // Direct write: issue bank write req
-          io.write.req.ready := io.sramWrite.req.ready
-          when(io.write.req.fire) {
-            curBankId := io.bank_id
-            opIsRead  := false.B
-            opIsAccum := false.B
-            latAddr   := io.write.req.bits.addr
-            latData   := io.write.req.bits.data
-            latMask   := io.write.req.bits.mask
+      // Upstream ready is a function of the selected downstream ready
+      io.write.req.ready := Mux(
+        writeAccum,
+        io.sramRead.req.ready,
+        Mux(writeDirect, io.sramWrite.req.ready, false.B)
+      )
+      io.read.req.ready := readValid && io.sramRead.req.ready
 
-            io.sramWrite.req.valid      := true.B
-            io.sramWrite.req.bits.addr  := io.write.req.bits.addr
-            io.sramWrite.req.bits.data  := io.write.req.bits.data
-            io.sramWrite.req.bits.mask  := io.write.req.bits.mask
-            io.sramWrite.req.bits.wmode := false.B // direct write to bank
-
-            state := s_wait_direct_write_resp
-          }
-        }
-      }.elsewhen(io.read.req.valid) {
-        // Read: issue bank read req
-        io.read.req.ready := io.sramRead.req.ready
-        when(io.read.req.fire) {
-          curBankId := io.bank_id
-          opIsRead  := true.B
-          opIsAccum := false.B
-          latAddr   := io.read.req.bits.addr
-
-          io.sramRead.req.valid     := true.B
-          io.sramRead.req.bits.addr := io.read.req.bits.addr
-
-          state := s_wait_read_resp
-        }
+      // State transitions + latching on fire
+      when(writeAccum && io.sramRead.req.fire) {
+        curBankId := io.bank_id
+        opIsRead  := false.B
+        opIsAccum := true.B
+        latAddr   := io.write.req.bits.addr
+        latData   := io.write.req.bits.data
+        latMask   := io.write.req.bits.mask
+        state     := s_wait_read_resp
+      }.elsewhen(writeDirect && io.sramWrite.req.fire) {
+        curBankId := io.bank_id
+        opIsRead  := false.B
+        opIsAccum := false.B
+        latAddr   := io.write.req.bits.addr
+        latData   := io.write.req.bits.data
+        latMask   := io.write.req.bits.mask
+        state     := s_wait_direct_write_resp
+      }.elsewhen(readValid && io.sramRead.req.fire) {
+        curBankId := io.bank_id
+        opIsRead  := true.B
+        opIsAccum := false.B
+        latAddr   := io.read.req.bits.addr
+        state     := s_wait_read_resp
       }
     }
 
