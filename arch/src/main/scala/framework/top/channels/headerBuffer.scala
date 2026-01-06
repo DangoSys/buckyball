@@ -20,10 +20,10 @@ class HeaderBuffer(val b: GlobalConfig) extends Module {
     val set  = Flipped(Decoupled(new HeaderBufferData(b)))
   })
 
-  val reg = Reg(new HeaderBufferData(b))
+  val reg = RegInit(0.U.asTypeOf(new HeaderBufferData(b)))
 
   io.read      := reg
-  io.set.ready := !reg.lock
+  io.set.ready := !reg.lock || (io.set.bits.lock === false.B)
   when(io.set.fire) {
     reg := io.set.bits
   }

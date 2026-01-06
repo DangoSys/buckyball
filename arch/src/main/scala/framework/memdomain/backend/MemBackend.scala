@@ -21,8 +21,9 @@ import framework.memdomain.backend.accpipe.AccPipe
 class MemRequestIO(b: GlobalConfig) extends Bundle {
   val write   = Flipped(new SramWriteIO(b)) // midend sends write req into backend
   val read    = Flipped(new SramReadIO(b))  // midend sends read req into backend
-  val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W)) // FIX: was Output, should be Input
+  val bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W)) // FIX: was Output
 }
+
 
 @instantiable
 class MemBackend(val b: GlobalConfig) extends Module {
