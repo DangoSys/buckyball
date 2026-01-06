@@ -2,16 +2,24 @@ package framework.balldomain.bbus.memrouter
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
-import framework.balldomain.blink.{BankRead}
 
 class ReadReq(val b: GlobalConfig) extends Bundle {
   val totalReadChannels = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val bank_id           = UInt(log2Up(b.memDomain.bankNum).W)
   val ball_id           = UInt(log2Up(b.ballDomain.ballNum).W)
+  // 按你的要求：不加 +1
   val channel_num       = UInt(log2Up(totalReadChannels).W)
   val rob_id            = UInt(log2Up(b.frontend.rob_entries).W)
+}
+
+// 统计探针：只带“统计需要的信息”，不带 ready/resp
+class BankReadProbe(val b: GlobalConfig) extends Bundle {
+  val valid   = Bool()
+  val bank_id = UInt(log2Up(b.memDomain.bankNum).W)
+  val ball_id = UInt(log2Up(b.ballDomain.ballNum).W)
+  val rob_id  = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
 @instantiable
@@ -21,9 +29,14 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
   val totalReadChannels = ballIdMappings.map(_.inBW).sum
   val numBanks          = b.memDomain.bankNum
 
+  require(
+    ballIdMappings.forall(_.inBW > 0),
+    "ReadReqGen assumes every ball has at least one read channel (inBW > 0); otherwise robId indexing is invalid."
+  )
+
   @public
   val io = IO(new Bundle {
-    val bank_read_i = Vec(totalReadChannels, new BankRead(b))
+    val bank_read_i = Input(Vec(totalReadChannels, new BankReadProbe(b)))
     val read_req_o  = Decoupled(new ReadReq(b))
   })
 
@@ -33,17 +46,14 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
       val ballInBW         = ballIdMappings(ballId).inBW
       val matchingChannels = (ballOffset until ballOffset + ballInBW).toSeq
 
-      val hasReq = matchingChannels.map(ch =>
-        io.bank_read_i(ch).io.req.valid &&
+      val matchConds = matchingChannels.map { ch =>
+        io.bank_read_i(ch).valid &&
           io.bank_read_i(ch).ball_id === ballId.U &&
           io.bank_read_i(ch).bank_id === bankId.U
-      ).reduceOption(_ || _).getOrElse(false.B)
+      }
 
-      val channelCount = PopCount(matchingChannels.map(ch =>
-        io.bank_read_i(ch).io.req.valid &&
-          io.bank_read_i(ch).ball_id === ballId.U &&
-          io.bank_read_i(ch).bank_id === bankId.U
-      ))
+      val hasReq       = matchConds.reduceOption(_ || _).getOrElse(false.B)
+      val channelCount = PopCount(matchConds)
 
       val robId = io.bank_read_i(ballOffset).rob_id
 
@@ -53,7 +63,8 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
 
   val arb = Module(new Arbiter(
     new Bundle {
-      val channel_num = UInt(log2Up(totalReadChannels + 1).W)
+      // 按你的要求：不加 +1，且和 ReadReq 保持一致
+      val channel_num = UInt(log2Up(totalReadChannels).W)
       val bank_id     = UInt(log2Up(numBanks).W)
       val ball_id     = UInt(log2Up(numBalls).W)
       val rob_id      = UInt(log2Up(b.frontend.rob_entries).W)
@@ -69,12 +80,6 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
     arb.io.in(i).bits.rob_id      := reqGroupsWithRobId(i)._5
   }
 
-  for(i <- 0 until totalReadChannels) {
-    io.bank_read_i(i).io.req.ready := true.B
-    io.bank_read_i(i).io.resp.valid := false.B
-    io.bank_read_i(i).io.resp.bits := DontCare
-  }
-  
   io.read_req_o.valid            := arb.io.out.valid
   io.read_req_o.bits.bank_id     := arb.io.out.bits.bank_id
   io.read_req_o.bits.ball_id     := arb.io.out.bits.ball_id
