@@ -46,7 +46,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   val curBankId = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   // target bank id for routing (combinational)
-  io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
+
 
 
   val opIsRead  = RegInit(false.B) // true: read transaction; false: write transaction
@@ -65,6 +65,8 @@ class AccPipe(val b: GlobalConfig) extends Module {
   val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil =
     Enum(5)
   val state = RegInit(s_idle)
+  
+  io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
 
   io.busy := (state =/= s_idle)
 
