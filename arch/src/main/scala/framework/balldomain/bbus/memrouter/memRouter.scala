@@ -7,7 +7,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 
 class PeakChannelReq(val b: GlobalConfig) extends Bundle {
-  val needed_channel_num = UInt(log2Up(b.ballDomain.ballIdMappings.map(_.inBW).sum + 1).W)
+  val needed_channel_num = UInt(log2Up(b.ballDomain.ballIdMappings.map(_.inBW).sum).W)
   val bank_id            = UInt(log2Up(b.memDomain.bankNum).W)
   val rob_id             = UInt(log2Up(b.frontend.rob_entries).W)
 }
@@ -42,7 +42,7 @@ class MemRouter(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
 // Read
 //---------------------------------------------------------------------------
-// Step1: Generate read request 
+// Step1: Generate read request (probe only)
   val readReqGen:          Instance[ReadReqGen]          = Instantiate(new ReadReqGen(b))
   val channelMappingTable: Instance[ChannelMappingTable] = Instantiate(new ChannelMappingTable(b))
 
@@ -66,29 +66,50 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val dispatchChannels           = io.freeChannelResp.bits.channel_ids
   readReqGen.io.read_req_o.ready := isChannelFree
 
-// 默认不写映射
-  channelMappingTable.io.write.valid      := false.B
-  channelMappingTable.io.write.bits.idx   := 0.U
-  channelMappingTable.io.write.bits.outCh := 0.U
+// 默认不写映射/不清理（多写口：全部置空）
+  for (w <- 0 until bbusProducerChannels) {
+    channelMappingTable.io.write(w).valid      := false.B
+    channelMappingTable.io.write(w).bits.idx   := 0.U
+    channelMappingTable.io.write(w).bits.outCh := 0.U
 
-// Step4: Set the channel mapping table
+    channelMappingTable.io.invalidate(w).valid := false.B
+    channelMappingTable.io.invalidate(w).bits  := 0.U
+  }
+
+// Step4: Set the channel mapping table (batch write)
   when(readReqGen.io.read_req_o.fire) {
     val matchVec = VecInit((0 until totalReadChannels).map { i =>
       io.bankRead_i(i).ball_id === readReqGen.io.read_req_o.bits.ball_id &&
       io.bankRead_i(i).bank_id === readReqGen.io.read_req_o.bits.bank_id &&
       io.bankRead_i(i).io.req.valid
     })
-    val matchCount    = PopCount(matchVec)
-    val channelNum    = readReqGen.io.read_req_o.bits.channel_num
-    val dispatchCount = Mux(matchCount > channelNum, channelNum, matchCount)
 
+    val matchCount = PopCount(matchVec)
+    val channelNum = readReqGen.io.read_req_o.bits.channel_num
+
+    val portLimit     = bbusProducerChannels.U
+    val wantCount     = Mux(matchCount > channelNum, channelNum, matchCount)
+    val dispatchCount = Mux(wantCount > portLimit, portLimit, wantCount)
+    
+    // Assert: outCh used in this dispatch must be unique (no two inputs drive one output)
+    for (p <- 0 until bbusProducerChannels) {
+      for (q <- p + 1 until bbusProducerChannels) {
+        when((p.U < dispatchCount) && (q.U < dispatchCount)) {
+          assert(
+            dispatchChannels(p) =/= dispatchChannels(q),
+            "MemRouter: duplicate outCh in dispatchChannels within dispatchCount"
+          )
+        }
+      }
+    }
     for (i <- 0 until totalReadChannels) {
       when(matchVec(i)) {
         val priorMatchCount = PopCount(matchVec.take(i))
         when(priorMatchCount < dispatchCount) {
-          channelMappingTable.io.write.valid      := true.B
-          channelMappingTable.io.write.bits.idx   := i.U
-          channelMappingTable.io.write.bits.outCh := dispatchChannels(priorMatchCount)
+          // 第 k 个匹配输入 -> 第 k 个写口
+          channelMappingTable.io.write(priorMatchCount).valid      := true.B
+          channelMappingTable.io.write(priorMatchCount).bits.idx   := i.U
+          channelMappingTable.io.write(priorMatchCount).bits.outCh := dispatchChannels(priorMatchCount)
         }
       }
     }
@@ -111,34 +132,41 @@ class MemRouter(val b: GlobalConfig) extends Module {
     io.bankWrite_o(o).rob_id        := DontCare
   }
 
-  // 输入端：默认不接受请求（等到被映射到 outCh 再根据 outCh.ready 回推）
   for (i <- 0 until totalReadChannels) {
     io.bankRead_i(i).io.req.ready  := false.B
     io.bankRead_i(i).io.resp.valid := false.B
     io.bankRead_i(i).io.resp.bits  := DontCare
   }
 
-// Step5: Dispatch the request to the channels（显式连 req，并回推 ready）
+// Step5: Dispatch the request to the channels + entry-level invalidation
   for (i <- 0 until totalReadChannels) {
     when(channelMappingTable.io.routeValid(i)) {
       val outCh = channelMappingTable.io.routeMap(i)
 
-      // drive output req from selected input
       io.bankRead_o(outCh).io.req.valid := io.bankRead_i(i).io.req.valid
       io.bankRead_o(outCh).io.req.bits  := io.bankRead_i(i).io.req.bits
       io.bankRead_o(outCh).bank_id      := io.bankRead_i(i).bank_id
       io.bankRead_o(outCh).ball_id      := io.bankRead_i(i).ball_id
       io.bankRead_o(outCh).rob_id       := io.bankRead_i(i).rob_id
 
-      // backpressure back to input
       io.bankRead_i(i).io.req.ready := io.bankRead_o(outCh).io.req.ready
+
+      // 当该输入真正 fire（握手成功）后，清掉它的映射条目
+      val didFire = io.bankRead_i(i).io.req.fire
+      for (o <- 0 until bbusProducerChannels) {
+        when(outCh === o.U) {
+          channelMappingTable.io.invalidate(o).valid := didFire
+          channelMappingTable.io.invalidate(o).bits  := i.U
+        }
+      }
     }
   }
 
-//---------------------------------------------------------------------------
-// Write: 你原代码这里还没理顺（读写索引空间不一致），我保持不动/默认不派发
-//---------------------------------------------------------------------------
 
+
+//---------------------------------------------------------------------------
+// Write: 仍未路由（保持你当前的默认行为）
+//---------------------------------------------------------------------------
   for (i <- 0 until totalWriteChannels) {
     io.bankWrite_i(i).io.req.ready  := true.B
     io.bankWrite_i(i).io.resp.valid := false.B
