@@ -6,8 +6,8 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
 
 @instantiable
-class ChannelMappingTable(val b: GlobalConfig) extends Module {
-  val EntryNum       = b.ballDomain.ballIdMappings.map(_.inBW).sum
+class ChannelMappingTable(val b: GlobalConfig, val entryNum: Int) extends Module {
+  val EntryNum       = entryNum
   val MappedChannels = b.top.ballMemChannelNum
 
   // 多写口数量：与输出通道数一致（一次最多派发这么多条）
