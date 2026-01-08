@@ -22,10 +22,12 @@ class CmdRouter(val b: GlobalConfig) extends Module {
 
   val arbiter = Module(new RRArbiter(new BallRsIssue(b), numBalls))
 
+  val ballIdleR = RegNext(io.ballIdle, VecInit(Seq.fill(numBalls)(false.B)))
+
   for (i <- 0 until numBalls) {
-    arbiter.io.in(i).valid := io.cmdReq_i(i).valid && io.ballIdle(i)
+    arbiter.io.in(i).valid := io.cmdReq_i(i).valid && ballIdleR(i)
     arbiter.io.in(i).bits  := io.cmdReq_i(i).bits
-    io.cmdReq_i(i).ready   := arbiter.io.in(i).ready && io.ballIdle(i)
+    io.cmdReq_i(i).ready   := arbiter.io.in(i).ready && ballIdleR(i)
   }
 
   io.cmdReq_o <> arbiter.io.out
