@@ -33,6 +33,14 @@ void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
   }
 }
 
+// Initialize matrix with incrementing values for debugging
+void init_u8_incremental_matrix(elem_t *matrix, int rows, int cols,
+                                int start_value) {
+  for (int i = 0; i < rows * cols; i++) {
+    matrix[i] = (start_value + i) & 0xFF; // Keep values in 0-255 range
+  }
+}
+
 void init_u32_random_matrix(result_t *matrix, int rows, int cols, int seed) {
   srand(seed);
   for (int i = 0; i < rows * cols; i++) {
