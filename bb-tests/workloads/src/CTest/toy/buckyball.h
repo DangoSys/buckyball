@@ -44,6 +44,8 @@ void print_i32_matrix(const char *name, result_t *matrix, int rows, int cols);
 void print_i8_matrix(const char *name, elem_t *matrix, int rows, int cols);
 
 void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
+void init_u8_incremental_matrix(elem_t *matrix, int rows, int cols,
+                                int start_value);
 void init_u32_random_matrix(result_t *matrix, int rows, int cols, int seed);
 void init_i8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_i32_random_matrix(result_t *matrix, int rows, int cols, int seed);
