@@ -95,7 +95,8 @@ int run_test(const char *test_name, elem_t *op1, elem_t *op2, elem_t *result,
   cim_cpu_reference(op1, op2, expected_result, rows, cols, op_type);
 
   // Allocate accumulator bank
-  int acc_bank_id = bb_mem_alloc(1, 4);
+  int acc_bank_id = 2; // virtual bank id
+  bb_mem_alloc(acc_bank_id, 1, 4);
 
   // Hardware computation
   hw_cim(test_name, op1, op2, result, rows, cols, op_type, acc_bank_id);

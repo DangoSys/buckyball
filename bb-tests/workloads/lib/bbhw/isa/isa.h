@@ -23,14 +23,10 @@ typedef int32_t result_t;
 
 // Generic RISC-V custom instruction macro
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
-  ({                                                                           \
-    unsigned long __result;                                                    \
-    asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, %c3, %0, %1, %2"             \
-                 : "=r"(__result)                                              \
-                 : "r"(rs1_val), "r"(rs2_val), "i"(func7)                      \
-                 : "memory");                                                  \
-    __result;                                                                  \
-  })
+  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, %c2, x0, %0, %1"               \
+               :                                                               \
+               : "r"(rs1_val), "r"(rs2_val), "i"(func7)                        \
+               : "memory")
 
 // Include all instruction definitions
 #include "23_mset.c"
