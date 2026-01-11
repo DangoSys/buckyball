@@ -28,7 +28,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   for (int i = 0; i < col_stride; i++) {
     bb_mvin((uintptr_t)a + i * DIM, op2_bank_id, size + i * DIM, col_stride);
   }
-  int acc_bank_id = bb_mset(0, 0, 1, 4, 1, 4);
+  int acc_bank_id = bb_mem_alloc(1, 4);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
   bb_mvin((uintptr_t)c, op2_bank_id, DIM << 2, 1);
   bb_fence();
