@@ -23,7 +23,8 @@ void tiled_matmul_connect_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
-  int acc_bank_id = bb_mem_alloc(1, 4);
+  int acc_bank_id = 2; // virtual bank id
+  bb_mem_alloc(acc_bank_id, 1, 4);
   uint32_t i_stride = dim_i / DIM;
   uint32_t j_stride = dim_j / DIM;
   uint32_t k_stride = dim_k / DIM;
@@ -75,7 +76,8 @@ void tiled_matmul_normal_mode(uint32_t dim_i, uint32_t dim_j, uint32_t dim_k,
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
-  int acc_bank_id = bb_mem_alloc(1, 4);
+  int acc_bank_id = 2; // virtual bank id
+  bb_mem_alloc(acc_bank_id, 1, 4);
   uint32_t i_stride = dim_i / DIM;
   uint32_t j_stride = dim_j / DIM;
   uint32_t k_stride = dim_k / DIM;
@@ -139,7 +141,8 @@ int run_test(const char *test_name) {
 
   clear_u32_matrix(output_c, DIM_I, DIM_K);
   // acc0: write to accumulator, offset 0
-  int acc_bank_id = bb_mem_alloc(1, 4);
+  int acc_bank_id = 2; // virtual bank id
+  bb_mem_alloc(acc_bank_id, 1, 4);
   // TODO: ACC overwrite write can skip this step
   bb_mvin((uintptr_t)output_c, acc_bank_id, DIM_I * DIM_K * 4 / DIM, 1);
   tiled_matmul_normal_mode(DIM_I, DIM_J, DIM_K, input_a, input_b, output_c);

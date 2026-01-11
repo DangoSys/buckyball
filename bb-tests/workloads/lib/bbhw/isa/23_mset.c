@@ -13,6 +13,6 @@
 
 #define bb_mem_release(bank_id) bb_mset(1, bank_id, 0, 0, 0);
 
-#define bb_mem_alloc(row, col) bb_mset(0, 0, 1, row, col)
+#define bb_mem_alloc(bank_id, row, col) bb_mset(0, bank_id, 1, row, col)
 
 #endif // _BB_MSET_H_

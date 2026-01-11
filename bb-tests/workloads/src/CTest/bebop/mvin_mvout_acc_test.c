@@ -14,7 +14,8 @@ static int32_t output_matrix[DIM * DIM] __attribute__((aligned(16)));
 int mvin_mvout_acc_test() {
   for (int i = 0; i < 4; i++) {
     init_i32_random_matrix(input_matrix, DIM, DIM, 111);
-    int acc_bank_id = bb_mem_alloc(1, 4); // row, col
+    int acc_bank_id = 2;             // virtual bank id
+    bb_mem_alloc(acc_bank_id, 1, 4); // bank_id, row, col
     bb_mvin((uintptr_t)input_matrix, acc_bank_id, DIM, 1);
     clear_i32_matrix(output_matrix, DIM, DIM);
     bb_fence();

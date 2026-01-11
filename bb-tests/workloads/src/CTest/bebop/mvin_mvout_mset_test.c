@@ -15,7 +15,8 @@ static elem_t output_matrix[DIM * DIM2] __attribute__((aligned(16)));
 int mvin_mvout_simple_test() {
   for (int i = 0; i < 4; i++) {
     init_u8_random_matrix(input_matrix, DIM, DIM2, 111);
-    int vbank_id = bb_mem_alloc(1, 1);
+    int vbank_id = 2; // virtual bank id
+    bb_mem_alloc(vbank_id, 1, 1);
     bb_mvin((uintptr_t)input_matrix, vbank_id, DIM2, 1);
     clear_u8_matrix(output_matrix, DIM, DIM2);
     bb_fence();

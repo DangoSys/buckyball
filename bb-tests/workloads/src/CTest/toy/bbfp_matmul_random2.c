@@ -15,7 +15,8 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
-  int acc_bank_id = bb_mem_alloc(1, 4);
+  int acc_bank_id = 2; // virtual bank id
+  bb_mem_alloc(acc_bank_id, 1, 4);
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
   bb_fence();

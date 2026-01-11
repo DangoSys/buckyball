@@ -18,12 +18,14 @@ int acc_mvin_mvout_pressure_test() {
   for (int i = 0; i < 4; i++) {
     init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
 
-    uint32_t acc_bank_id = bb_mem_alloc(1, 4);
+    uint32_t acc_bank_id = 2; // virtual bank id
+    bb_mem_alloc(acc_bank_id, 1, 4);
     bb_mvin((uintptr_t)expected_matrix, acc_bank_id, DIM << 2, 1);
     init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
     clear_u32_matrix(output_matrix, DIM, DIM);
 
-    acc_bank_id = bb_mem_alloc(1, 4);
+    acc_bank_id = 2; // virtual bank id
+    bb_mem_alloc(acc_bank_id, 1, 4);
     bb_mvout((uintptr_t)output_matrix, acc_bank_id, DIM << 2, 1);
     bb_fence();
     if (!compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
