@@ -5,14 +5,14 @@
 
 #define BB_MSET_FUNC7 23
 
-#define bb_mset(relase_en, bank_id, alloc_en, bank_num, row, col)              \
-  ({                                                                           \
-    BUCKYBALL_INSTRUCTION_R_R((FIELD(alloc_en, 0, 0) | FIELD(bank_id, 1, 13)), \
-                              (FIELD(relase_en, 0, 0) |                        \
-                               FIELD(bank_num, 1, 5) | FIELD(row, 6, 9) |      \
-                               FIELD(col, 10, 17)),                            \
-                              BB_MSET_FUNC7);                                  \
-    (bank_id);                                                                 \
-  })
+#define bb_mset(relase_en, bank_id, alloc_en, row, col)                        \
+  BUCKYBALL_INSTRUCTION_R_R(                                                   \
+      (FIELD(relase_en, 0, 0) | FIELD(bank_id, 1, 13)),                        \
+      (FIELD(alloc_en, 0, 0) | FIELD(row, 1, 5) | FIELD(col, 6, 13)),          \
+      BB_MSET_FUNC7)
+
+#define bb_mem_release(bank_id) bb_mset(1, bank_id, 0, 0, 0);
+
+#define bb_mem_alloc(row, col) bb_mset(0, 0, 1, row, col)
 
 #endif // _BB_MSET_H_

@@ -57,7 +57,7 @@ int main() {
   // Move input to scratchpad
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
-  int acc_bank_id = bb_mset(0, 0, 1, 4, 1, 4);
+  int acc_bank_id = bb_mem_alloc(1, 4);
 
   bb_mvin((uintptr_t)input_matrix, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)weight_matrix, op2_bank_id, DIM, 1);
