@@ -76,21 +76,10 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl_writer <> frontend.io.tl_writer
 
   // Ball Domain interface connects directly to midend (Ball devices' read/write requests)
-  midend.io.frontend.bankRead <> io.ballDomain.bankRead
-  midend.io.frontend.bankWrite <> io.ballDomain.bankWrite
-
-  // -------------------------------------------------
-  // Internal Connection (frontend - midend - backend)
-  // -------------------------------------------------
-  for (i <- 0 until b.memDomain.bankNum) {
-    frontend.io.interdma.bankRead(i).io.req.ready  := false.B
-    frontend.io.interdma.bankRead(i).io.resp.valid := false.B
-    frontend.io.interdma.bankRead(i).io.resp.bits  := 0.U.asTypeOf(frontend.io.interdma.bankRead(i).io.resp.bits)
-
-    frontend.io.interdma.bankWrite(i).io.req.ready  := false.B
-    frontend.io.interdma.bankWrite(i).io.resp.valid := false.B
-    frontend.io.interdma.bankWrite(i).io.resp.bits  := 0.U.asTypeOf(frontend.io.interdma.bankWrite(i).io.resp.bits)
-  }
+  midend.io.balldomain.bankRead <> io.ballDomain.bankRead
+  midend.io.balldomain.bankWrite <> io.ballDomain.bankWrite
+  midend.io.frontend.bankRead <> frontend.io.interdma.bankRead
+  midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
 
   midend.io.mem_req <> backend.io.mem_req
 }

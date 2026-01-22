@@ -39,11 +39,11 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id := rob_id_reg
+    io.bankRead(i).rob_id  := rob_id_reg
     io.bankRead(i).ball_id := 0.U
   }
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id := rob_id_reg
+    io.bankWrite(i).rob_id  := rob_id_reg
     io.bankWrite(i).ball_id := 0.U
   }
 

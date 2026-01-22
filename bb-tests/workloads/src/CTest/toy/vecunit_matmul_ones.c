@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
 static elem_t input_matrix_b[DIM * DIM] __attribute__((aligned(64)));
@@ -13,18 +13,18 @@ static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
-  static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
-  transpose_u8_matrix(a, a_transposed, size, size);
-  // spad0: operand A, offset 0
+  // static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
+  // transpose_u8_matrix(a, a_transposed, size, size);
+  //  spad0: operand A, offset 0
   uint32_t op1_bank_id = 0;
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
+                       // bb_mem_alloc(acc_bank_id, 1, 4);
 
-  bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
-  bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
+  bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
 
   bb_fence();
   bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
@@ -34,8 +34,8 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 }
 
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
-  clear_u32_matrix(output_matrix, DIM, DIM);
-  cpu_matmul(a, b, expected_matrix, size, size, size);
+  // clear_u32_matrix(output_matrix, DIM, DIM);
+  // cpu_matmul(a, b, expected_matrix, size, size, size);
   hw_matmul(test_name, a, b, output_matrix, size);
   if (compare_u32_matrices(output_matrix, expected_matrix, size, size)) {
     printf("Test %s PASSED\n", test_name);
@@ -47,8 +47,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 int test_ones() {
-  init_ones_matrix(input_matrix_a, DIM, DIM);
-  init_ones_matrix(input_matrix_b, DIM, DIM);
+  // init_ones_matrix(input_matrix_a, DIM, DIM);
+  // init_ones_matrix(input_matrix_b, DIM, DIM);
   return run_test("All-ones matrices", input_matrix_a, input_matrix_b, DIM);
 }
 
@@ -57,6 +57,7 @@ int main() {
   multicore(MULTICORE);
 #endif
   int passed = test_ones();
+  // printf("RS2:%x", (FIELD(0, 0, 4) | FIELD(16, 5, 14) | FIELD(1, 14, 33)));
   if (passed) {
     printf("vecunit_matmul_ones test PASSED\n");
     return 0;

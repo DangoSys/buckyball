@@ -29,10 +29,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
 
     // Connected to Bank read interface
-    val bankRead = Vec(
-      b.memDomain.bankNum,
-      Flipped(new BankRead(b))
-    )
+    val bankRead = Flipped(new BankRead(b))
 
   })
 
@@ -76,17 +73,15 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val target_bank = rd_bank_reg
   val target_row  = sram_count
 
-  for (i <- 0 until b.memDomain.bankNum) {
-    io.bankRead(i).io.req.valid     := (state === s_sram_req) && (target_bank === i.U)
-    io.bankRead(i).io.req.bits.addr := target_row
-    io.bankRead(i).rob_id           := rob_id_reg
-    io.bankRead(i).bank_id          := target_bank
-    io.bankRead(i).ball_id          := 0.U
-  }
+  io.bankRead.io.req.valid     := (state === s_sram_req)
+  io.bankRead.io.req.bits.addr := target_row
+  io.bankRead.rob_id           := rob_id_reg
+  io.bankRead.bank_id          := target_bank
+  io.bankRead.ball_id          := 0.U
 
   // Bank response processing
-  val bank_resp_valid = io.bankRead.map(_.io.resp.valid).reduce(_ || _)
-  val bank_resp_data  = Mux1H(io.bankRead.map(_.io.resp.valid), io.bankRead.map(_.io.resp.bits.data))
+  val bank_resp_valid = io.bankRead.io.resp.valid
+  val bank_resp_data  = io.bankRead.io.resp.bits.data
 
   // Calculate memory address corresponding to current row
   val current_mem_addr =
@@ -209,9 +204,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.dmaReq.bits.status := dma_req_status_reg
 
   // Connect Bank response ready signal - based on DMA ready state
-  io.bankRead.foreach(_.io.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait))
+  io.bankRead.io.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait)
   // State transition and counter update
-  when(io.bankRead.map(_.io.req.fire).reduce(_ || _)) {
+  when(io.bankRead.io.req.fire) {
     state := s_dma_wait
   }
 

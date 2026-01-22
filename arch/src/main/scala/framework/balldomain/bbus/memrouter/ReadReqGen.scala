@@ -45,14 +45,14 @@ class ReadReqGen(val b: GlobalConfig) extends Module {
 
       val matchConds = matchingChannels.map { ch =>
         io.bank_read_i(ch).valid &&
-          io.bank_read_i(ch).ball_id === ballId.U &&
-          io.bank_read_i(ch).bank_id === bankId.U
+        io.bank_read_i(ch).ball_id === ballId.U &&
+        io.bank_read_i(ch).bank_id === bankId.U
       }
 
       val hasReq          = matchConds.reduceOption(_ || _).getOrElse(false.B)
       val channelCountRaw = PopCount(matchConds)
 
-      val maxCh = b.top.ballMemChannelNum.U
+      val maxCh        = b.top.ballMemChannelNum.U
       val channelCount = Mux(channelCountRaw > maxCh, maxCh, channelCountRaw)
 
       val robId = io.bank_read_i(ballOffset).rob_id

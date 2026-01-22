@@ -49,6 +49,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 
   val bankAddrLen = log2Up(b.memDomain.bankEntries)
   val memAddrLen  = b.memDomain.memAddrLen
+  val bankIdLen   = log2Up(b.memDomain.bankNum)
 
   // Only process Mem instructions
   io.raw_cmd_i.ready := io.mem_decode_cmd_o.ready
@@ -69,27 +70,27 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         Y,
         N,
         rs1(memAddrLen - 1, 0),
-        rs2(bankAddrLen - 1, 0),
-        rs2(bankAddrLen + 9, bankAddrLen),
-        rs2(63, bankAddrLen + 10),
+        rs2(bankIdLen - 1, 0),
+        rs2(9 + bankIdLen, bankIdLen),
+        rs2(63, 10 + bankIdLen),
         Y
       ), // mset
       MVIN_BITPAT  -> List(
         Y,
         N,
         rs1(memAddrLen - 1, 0),
-        rs2(bankAddrLen - 1, 0),
-        rs2(bankAddrLen + 9, bankAddrLen),
-        rs2(63, bankAddrLen + 10),
+        rs2(bankIdLen - 1, 0),
+        rs2(9 + bankIdLen, bankIdLen),
+        rs2(63, 10 + bankIdLen),
         Y
       ), // mvin
       MVOUT_BITPAT -> List(
         N,
         Y,
         rs1(memAddrLen - 1, 0),
-        rs2(bankAddrLen - 1, 0),
-        rs2(bankAddrLen + 9, bankAddrLen),
-        rs2(63, bankAddrLen + 10),
+        rs2(bankIdLen - 1, 0),
+        rs2(9 + bankIdLen, bankIdLen),
+        rs2(63, 10 + bankIdLen),
         Y
       )  // mvout
     )

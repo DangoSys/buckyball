@@ -22,6 +22,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
     // Input from frontend (Ball Domain read/write requests) - receiver perspective
     val frontend = new Bundle {
+      val bankRead  = new BankRead(b)
+      val bankWrite = new BankWrite(b)
+    }
+
+    val balldomain = new Bundle {
       val bankRead  = Vec(b.top.memBallChannelNum, new BankRead(b))
       val bankWrite = Vec(b.top.ballMemChannelNum, new BankWrite(b))
     }
@@ -36,12 +41,14 @@ class MemMidend(val b: GlobalConfig) extends Module {
   // Map bbusChannel input channels to bankChannel output channels
   // Each input channel is mapped to a backend channel based on modulo
 
-  for (ch <- 0 until b.memDomain.bankChannel) {
-    val inputIdx = ch % b.top.memBallChannelNum
+  for (ch <- 0 until b.top.memBallChannelNum) {
 
     // Map input channels to backend channels
-    io.mem_req(ch).write <> io.frontend.bankWrite(inputIdx).io
-    io.mem_req(ch).read <> io.frontend.bankRead(inputIdx).io
-    io.mem_req(ch).bank_id := io.frontend.bankWrite(inputIdx).bank_id
+    io.mem_req(ch).write <> io.balldomain.bankWrite(ch).io
+    io.mem_req(ch).read <> io.balldomain.bankRead(ch).io
+    io.mem_req(ch).bank_id := io.balldomain.bankWrite(ch).bank_id
   }
+  io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
+  io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
+  io.mem_req(b.top.memBallChannelNum).bank_id := io.frontend.bankWrite.bank_id
 }

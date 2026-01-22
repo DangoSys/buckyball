@@ -72,7 +72,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val xactBusy_fire   = WireInit(false.B)
   val xactBusy_add    = Mux(xactBusy_fire, (1.U << xactId).asUInt, 0.U)
-  val xactBusy_remove = ~Mux(io.tlb.resp.valid && !io.tlb.resp.bits.miss, (1.U << xactId).asUInt, 0.U)
+  val xactBusy_remove = ~Mux(io.tl.d.fire, (1.U << io.tl.d.bits.source).asUInt, 0.U)
   xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
 
   // TileLink request construction - return to single beat requests to avoid address alignment issues
@@ -104,22 +104,23 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.req.valid            := tlb_q.io.deq.fire
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
-  io.tlb.req.bits.passthrough := false.B
+  io.tlb.req.bits.passthrough := true.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XRD
   io.tlb.req.bits.prv         := 3.U // Machine mode
   io.tlb.req.bits.v           := false.B
   io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
 
-  val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
-  translate_q.io.enq <> tlb_q.io.deq
-  translate_q.io.deq.ready := io.tlb.resp.fire || io.tlb.resp.bits.miss
+  tlb_q.io.deq.ready := true.B;
+
+  /* val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true)) translate_q.io.enq <> tlb_q.io.deq
+   * translate_q.io.deq.ready := io.tlb.resp.fire && !io.tlb.resp.bits.miss */
 
   // TileLink A channel (request) connection
-  io.tl.a.valid            := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
-  io.tl.a.bits             := translate_q.io.deq.bits.tl_a
-  io.tl.a.bits.address     := io.tlb.resp.bits.paddr
-  translate_q.io.deq.ready := (io.tlb.resp.fire && !io.tlb.resp.bits.miss && io.tl.a.ready) || io.tlb.resp.bits.miss
+  //for now, we just use the vaddr as the physical address to simplify the implementation
+  io.tl.a.valid        := tlb_q.io.deq.fire
+  io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
+  io.tl.a.bits.address := tlb_q.io.deq.bits.vaddr
 
   // Iteration counter for tracking number of requests
   val iter_counter       = RegInit(0.U(10.W))
