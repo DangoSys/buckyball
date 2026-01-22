@@ -15,10 +15,14 @@ class ChannelMappingTable(val b: GlobalConfig, val entryNum: Int) extends Module
 
   @public
   val io = IO(new Bundle {
-    val write = Flipped(Vec(WritePorts, Decoupled(new Bundle {
-      val idx   = UInt(log2Up(EntryNum).W)
-      val outCh = UInt(log2Up(MappedChannels).W)
-    })))
+
+    val write = Flipped(Vec(
+      WritePorts,
+      Decoupled(new Bundle {
+        val idx   = UInt(log2Up(EntryNum).W)
+        val outCh = UInt(log2Up(MappedChannels).W)
+      })
+    ))
 
     // 条目级清理：每个写口对应一条可能的派发通道（通常用 outCh 作为端口号）
     val invalidate = Input(Vec(WritePorts, Valid(UInt(log2Up(EntryNum).W))))

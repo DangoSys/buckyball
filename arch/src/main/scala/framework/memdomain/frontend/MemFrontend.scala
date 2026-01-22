@@ -31,8 +31,8 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
     // Bank read/write interface - used by load/store
     val interdma = new Bundle {
-      val bankRead  = Vec(b.memDomain.bankNum, Flipped(new BankRead(b)))
-      val bankWrite = Vec(b.memDomain.bankNum, Flipped(new BankWrite(b)))
+      val bankRead  = Flipped(new BankRead(b))
+      val bankWrite = Flipped(new BankWrite(b))
     }
 
     // TLB interfaces for internal DMA modules (Reader/Writer)

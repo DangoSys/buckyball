@@ -26,8 +26,8 @@ class MemRouter(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val bankRead_i  = Vec(totalReadChannels, new BankRead(b))
-    val bankRead_o  = Vec(bbusProducerChannels, Flipped(new BankRead(b)))
+    val bankRead_i = Vec(totalReadChannels, new BankRead(b))
+    val bankRead_o = Vec(bbusProducerChannels, Flipped(new BankRead(b)))
 
     val bankWrite_i = Vec(totalWriteChannels, new BankWrite(b))
     val bankWrite_o = Vec(bbusProducerChannels, Flipped(new BankWrite(b)))
@@ -78,13 +78,25 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val chooseWrite = hasReadReq && hasWriteReq && !chooseRead || (!hasReadReq && hasWriteReq)
 
   io.peakChannelReq.valid                   := hasReadReq || hasWriteReq
-  io.peakChannelReq.bits.needed_channel_num := Mux(chooseRead, readReqGen.io.read_req_o.bits.channel_num, writeReqGen.io.write_req_o.bits.channel_num)
-  io.peakChannelReq.bits.bank_id            := Mux(chooseRead, readReqGen.io.read_req_o.bits.bank_id, writeReqGen.io.write_req_o.bits.bank_id)
-  io.peakChannelReq.bits.rob_id             := Mux(chooseRead, readReqGen.io.read_req_o.bits.rob_id, writeReqGen.io.write_req_o.bits.rob_id)
+  io.peakChannelReq.bits.needed_channel_num := Mux(
+    chooseRead,
+    readReqGen.io.read_req_o.bits.channel_num,
+    writeReqGen.io.write_req_o.bits.channel_num
+  )
+  io.peakChannelReq.bits.bank_id            := Mux(
+    chooseRead,
+    readReqGen.io.read_req_o.bits.bank_id,
+    writeReqGen.io.write_req_o.bits.bank_id
+  )
+  io.peakChannelReq.bits.rob_id             := Mux(
+    chooseRead,
+    readReqGen.io.read_req_o.bits.rob_id,
+    writeReqGen.io.write_req_o.bits.rob_id
+  )
 
   // allocator 这里当“组合查询”用
   io.freeChannelResp.ready := true.B
-  val isChannelFree = io.freeChannelResp.valid && io.freeChannelResp.bits.is_free && io.peakChannelReq.valid
+  val isChannelFree    = io.freeChannelResp.valid && io.freeChannelResp.bits.is_free && io.peakChannelReq.valid
   val dispatchChannels = io.freeChannelResp.bits.channel_ids
 
   readReqGen.io.read_req_o.ready   := isChannelFree && chooseRead
@@ -93,8 +105,8 @@ class MemRouter(val b: GlobalConfig) extends Module {
   val didDispatchRead  = readReqGen.io.read_req_o.fire
   val didDispatchWrite = writeReqGen.io.write_req_o.fire
 
-  when(didDispatchRead)  { rrLastWasRead := true.B }
-  when(didDispatchWrite) { rrLastWasRead := false.B }
+  when(didDispatchRead)(rrLastWasRead  := true.B)
+  when(didDispatchWrite)(rrLastWasRead := false.B)
 
   // ---------------------------------------------------------------------------
   // defaults: mapping write/invalidate off
@@ -123,10 +135,10 @@ class MemRouter(val b: GlobalConfig) extends Module {
       io.bankRead_i(i).io.req.valid
     })
 
-    val matchCount   = PopCount(matchVec)
-    val channelNum   = readReqGen.io.read_req_o.bits.channel_num
-    val portLimit    = bbusProducerChannels.U
-    val wantCount    = Mux(matchCount > channelNum, channelNum, matchCount)
+    val matchCount    = PopCount(matchVec)
+    val channelNum    = readReqGen.io.read_req_o.bits.channel_num
+    val portLimit     = bbusProducerChannels.U
+    val wantCount     = Mux(matchCount > channelNum, channelNum, matchCount)
     val dispatchCount = Mux(wantCount > portLimit, portLimit, wantCount)
 
     for (p <- 0 until bbusProducerChannels) {
@@ -159,10 +171,10 @@ class MemRouter(val b: GlobalConfig) extends Module {
       io.bankWrite_i(i).io.req.valid
     })
 
-    val matchCount   = PopCount(matchVec)
-    val channelNum   = writeReqGen.io.write_req_o.bits.channel_num
-    val portLimit    = bbusProducerChannels.U
-    val wantCount    = Mux(matchCount > channelNum, channelNum, matchCount)
+    val matchCount    = PopCount(matchVec)
+    val channelNum    = writeReqGen.io.write_req_o.bits.channel_num
+    val portLimit     = bbusProducerChannels.U
+    val wantCount     = Mux(matchCount > channelNum, channelNum, matchCount)
     val dispatchCount = Mux(wantCount > portLimit, portLimit, wantCount)
 
     for (p <- 0 until bbusProducerChannels) {
@@ -222,7 +234,7 @@ class MemRouter(val b: GlobalConfig) extends Module {
   // Step5: route req/resp by outCh, invalidate on resp.fire
   // ---------------------------------------------------------------------------
   for (o <- 0 until bbusProducerChannels) {
-    val readIdxOH = VecInit((0 until totalReadChannels).map { i =>
+    val readIdxOH  = VecInit((0 until totalReadChannels).map { i =>
       readMap.io.routeValid(i) && (readMap.io.routeMap(i) === o.U)
     })
     val writeIdxOH = VecInit((0 until totalWriteChannels).map { i =>

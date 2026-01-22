@@ -26,19 +26,19 @@ class AccPipe(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
     // Interface to SramBank
     // Your SramReadIO/SramWriteIO are SLAVE-shaped (req is Flipped), so master must Flipped(...)
-    val sramRead  = Flipped(new SramReadIO(b))   // AccPipe -> bank: req out, resp in
-    val sramWrite = Flipped(new SramWriteIO(b))  // AccPipe -> bank: req out, resp in
+    val sramRead  = Flipped(new SramReadIO(b))  // AccPipe -> bank: req out, resp in
+    val sramWrite = Flipped(new SramWriteIO(b)) // AccPipe -> bank: req out, resp in
 
     // Interface from midend (AccPipe is slave)
-    val read  = new SramReadIO(b)   // midend -> AccPipe: req in, resp out
-    val write = new SramWriteIO(b)  // midend -> AccPipe: req in, resp out
+    val read  = new SramReadIO(b)  // midend -> AccPipe: req in, resp out
+    val write = new SramWriteIO(b) // midend -> AccPipe: req in, resp out
 
     // Control and status signals
-    val bank_id         = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val bank_id        = Input(UInt(log2Up(b.memDomain.bankNum).W))
     // in AccPipe IO bundle, add:
-    val target_bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val target_bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
 
-    val busy            = Output(Bool())
+    val busy = Output(Bool())
   })
 
   // ---------------------------------------------------------------------------
@@ -46,8 +46,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   val curBankId = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   // target bank id for routing (combinational)
-
-
 
   val opIsRead  = RegInit(false.B) // true: read transaction; false: write transaction
   val opIsAccum = RegInit(false.B) // true only for write + wmode=1
@@ -64,8 +62,8 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil =
     Enum(5)
-  val state = RegInit(s_idle)
-  
+  val state                                                                                                    = RegInit(s_idle)
+
   io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
 
   io.busy := (state =/= s_idle)
@@ -74,25 +72,25 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // Defaults (avoid multi-drive)
   // ---------------------------------------------------------------------------
   // Midend side defaults
-  io.read.req.ready        := false.B
-  io.read.resp.valid       := false.B
-  io.read.resp.bits.data   := 0.U
+  io.read.req.ready      := false.B
+  io.read.resp.valid     := false.B
+  io.read.resp.bits.data := 0.U
 
-  io.write.req.ready       := false.B
-  io.write.resp.valid      := false.B
-  io.write.resp.bits.ok    := false.B
+  io.write.req.ready    := false.B
+  io.write.resp.valid   := false.B
+  io.write.resp.bits.ok := false.B
 
   // Bank side defaults
-  io.sramRead.req.valid        := false.B
-  io.sramRead.req.bits.addr    := 0.U
-  io.sramRead.resp.ready       := false.B
+  io.sramRead.req.valid     := false.B
+  io.sramRead.req.bits.addr := 0.U
+  io.sramRead.resp.ready    := false.B
 
-  io.sramWrite.req.valid       := false.B
-  io.sramWrite.req.bits.addr   := 0.U
-  io.sramWrite.req.bits.data   := 0.U
-  io.sramWrite.req.bits.mask   := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-  io.sramWrite.req.bits.wmode  := false.B // IMPORTANT: write-back is a normal write
-  io.sramWrite.resp.ready      := false.B
+  io.sramWrite.req.valid      := false.B
+  io.sramWrite.req.bits.addr  := 0.U
+  io.sramWrite.req.bits.data  := 0.U
+  io.sramWrite.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+  io.sramWrite.req.bits.wmode := false.B // IMPORTANT: write-back is a normal write
+  io.sramWrite.resp.ready     := false.B
 
   // ---------------------------------------------------------------------------
   // Helpers: masked accumulate (segment-wise)
@@ -141,7 +139,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
         io.sramRead.req.ready,
         Mux(writeDirect, io.sramWrite.req.ready, false.B)
       )
-      io.read.req.ready := readValid && io.sramRead.req.ready
+      io.read.req.ready  := readValid && io.sramRead.req.ready
 
       // State transitions + latching on fire
       when(writeAccum && io.sramRead.req.fire) {

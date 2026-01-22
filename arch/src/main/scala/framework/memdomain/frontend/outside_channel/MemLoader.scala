@@ -25,10 +25,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
 
     // Connected to Bank write interface
-    val bankWrite = Vec(
-      b.memDomain.bankNum,
-      Flipped(new BankWrite(b))
-    )
+    val bankWrite = Flipped(new BankWrite(b))
 
   })
 
@@ -92,17 +89,15 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val target_bank = wr_bank_reg
   val target_row  = io.dmaResp.bits.addrcounter
 
-  for (i <- 0 until b.memDomain.bankNum) {
-    io.bankWrite(i).io.req.valid      := io.dmaResp.fire && (target_bank === i.U)
-    io.bankWrite(i).io.req.bits.addr  := target_row
-    io.bankWrite(i).io.req.bits.data  := io.dmaResp.bits.data
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
-    io.bankWrite(i).rob_id            := rob_id_reg
-    io.bankWrite(i).bank_id           := target_bank
-    io.bankWrite(i).ball_id          := 0.U
-  }
+  io.bankWrite.io.req.valid      := io.dmaResp.fire && (target_bank === target_bank)
+  io.bankWrite.io.req.bits.addr  := target_row
+  io.bankWrite.io.req.bits.data  := io.dmaResp.bits.data
+  io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.bankWrite.io.req.bits.wmode := false.B
+  io.bankWrite.io.resp.ready     := false.B
+  io.bankWrite.rob_id            := rob_id_reg
+  io.bankWrite.bank_id           := target_bank
+  io.bankWrite.ball_id           := 0.U
 
   // Send completion signal - only send when last response is received
   io.cmdResp.valid       := io.dmaResp.fire && io.dmaResp.bits.last
