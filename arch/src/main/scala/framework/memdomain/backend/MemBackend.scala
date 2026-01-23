@@ -19,9 +19,10 @@ import framework.memdomain.backend.accpipe.AccPipe
  * 5) Add cross read/write conflict assertions based on actual bank requests (valid-level, and fire-level optional)
  */
 class MemRequestIO(b: GlobalConfig) extends Bundle {
-  val write   = Flipped(new SramWriteIO(b))                 // midend sends write req into backend
-  val read    = Flipped(new SramReadIO(b))                  // midend sends read req into backend
-  val bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W)) // FIX: was Output
+  val write    = Flipped(new SramWriteIO(b))                 // midend sends write req into backend
+  val read     = Flipped(new SramReadIO(b))                  // midend sends read req into backend
+  val rbank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
+  val wbank_id = Output(UInt(log2Up(b.memDomain.bankNum).W)) // FIX: was Output
 }
 
 @instantiable
@@ -41,7 +42,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.write <> io.mem_req(i).write
     accPipes(i).io.read <> io.mem_req(i).read
-    accPipes(i).io.bank_id := io.mem_req(i).bank_id
+    accPipes(i).io.bank_id := io.mem_req(i).wbank_id
   }
 
   // -----------------------------------------------------------------------------
@@ -128,7 +129,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // -------------------------
       val wMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
-        wMatch(i) := accPipes(i).io.sramWrite.req.valid && (accPipes(i).io.target_bank_id === bankId)
+        wMatch(i) := io.mem_req(i).wbank_id === bankId && io.mem_req(i).write.req.valid
       }
       val wHas = wMatch.asUInt.orR
       // stronger safety: at most 1
@@ -158,27 +159,33 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // -------------------------
       val rMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
-        rMatch(i) := accPipes(i).io.sramRead.req.valid && (accPipes(i).io.target_bank_id === bankId)
+        rMatch(i) := io.mem_req(i).rbank_id === bankId && io.mem_req(i).read.req.valid
       }
       val rHas = rMatch.asUInt.orR
       assert(PopCount(rMatch) <= 1.U, s"[MemBackend] More than one READ match to bank $bankIdx")
 
+      val selIdx     = OHToUInt(rMatch)
+      val connectIdx = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
+      connectIdx := selIdx
+
       when(rHas) {
-        val selIdx = OHToUInt(rMatch)
+
         // bank gets req from selected pipe using Mux1H
-        bank.io.sramRead.req.valid := Mux1H(rMatch, accPipes.map(_.io.sramRead.req.valid))
-        bank.io.sramRead.req.bits  := Mux1H(rMatch, accPipes.map(_.io.sramRead.req.bits))
+        bank.io.sramRead.req.valid := io.mem_req(selIdx).rbank_id === bankId
+        bank.io.sramRead.req.bits  := io.mem_req(selIdx).read.req.bits
         // selected pipe sees ready from bank
         rd_req_ready(selIdx)       := bank.io.sramRead.req.ready
-
-        // response path: selected pipe sees bank resp
-        rd_resp_valid(selIdx)       := bank.io.sramRead.resp.valid
-        rd_resp_data(selIdx)        := bank.io.sramRead.resp.bits.data
-        // bank sees ready from selected pipe
-        bank.io.sramRead.resp.ready := rd_resp_ready(selIdx)
       }.otherwise {
-        bank.io.sramRead.req.valid  := false.B
-        bank.io.sramRead.req.bits   := 0.U.asTypeOf(bank.io.sramRead.req.bits)
+        bank.io.sramRead.req.valid := false.B
+        bank.io.sramRead.req.bits  := 0.U.asTypeOf(bank.io.sramRead.req.bits)
+      }
+      when(bank.io.sramRead.resp.valid) {
+        // response path: selected pipe sees bank resp
+        io.mem_req(connectIdx).read.resp.valid     := bank.io.sramRead.resp.valid
+        io.mem_req(connectIdx).read.resp.bits.data := bank.io.sramRead.resp.bits.data
+        // bank sees ready from selected pipe
+        bank.io.sramRead.resp.ready                := io.mem_req(connectIdx).read.resp.ready
+      }.otherwise {
         bank.io.sramRead.resp.ready := false.B
       }
   }

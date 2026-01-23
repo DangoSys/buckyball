@@ -96,7 +96,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit
 // -----------------------------------------------------------------------------
-    when(io.bankReadResp(0).valid && io.bankReadResp(1).valid &&
+    when(io.bankReadResp(0).valid &&
       (!ld_ex_valid_reg || io.ld_ex_o.ready) && (state === busy)) {
       ld_ex_valid_reg := true.B
       ld_ex_op1_reg   := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
