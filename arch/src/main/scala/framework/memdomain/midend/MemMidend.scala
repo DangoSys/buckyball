@@ -46,9 +46,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
     // Map input channels to backend channels
     io.mem_req(ch).write <> io.balldomain.bankWrite(ch).io
     io.mem_req(ch).read <> io.balldomain.bankRead(ch).io
-    io.mem_req(ch).bank_id := io.balldomain.bankWrite(ch).bank_id
+    io.mem_req(ch).rbank_id := io.balldomain.bankWrite(ch).bank_id
+    io.mem_req(ch).wbank_id := io.balldomain.bankWrite(ch).bank_id
   }
   io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
   io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
-  io.mem_req(b.top.memBallChannelNum).bank_id := io.frontend.bankWrite.bank_id
+  io.mem_req(b.top.memBallChannelNum).rbank_id := io.frontend.bankWrite.bank_id
+  io.mem_req(b.top.memBallChannelNum).wbank_id := io.frontend.bankRead.bank_id
 }

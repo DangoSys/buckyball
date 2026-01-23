@@ -54,7 +54,7 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val xactBusy_fire   = WireInit(false.B)
   val xactBusy_add    = Mux(xactBusy_fire, (1.U << xactId).asUInt, 0.U)
-  val xactBusy_remove = ~Mux(io.tlb.resp.valid && !io.tlb.resp.bits.miss, (1.U << xactId).asUInt, 0.U)
+  val xactBusy_remove = ~Mux(io.tl.d.fire, (1.U << io.tl.d.bits.source).asUInt, 0.U)
   xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
 
   // Simplified: data is already aligned, directly construct TileLink request
@@ -109,10 +109,11 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   translate_q.io.enq <> tlb_q.io.deq
   translate_q.io.deq.ready := (io.tlb.resp.fire && !io.tlb.resp.bits.miss && io.tl.a.ready) || io.tlb.resp.bits.miss
 
+  tlb_q.io.deq.ready   := true.B;
   // TileLink A channel (request) connection
-  io.tl.a.valid        := translate_q.io.deq.valid && !io.tlb.resp.bits.miss
-  io.tl.a.bits         := translate_q.io.deq.bits.tl_a
-  io.tl.a.bits.address := io.tlb.resp.bits.paddr
+  io.tl.a.valid        := tlb_q.io.deq.fire
+  io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
+  io.tl.a.bits.address := tlb_q.io.deq.bits.vaddr
 
   // TileLink D channel (response) processing
   io.tl.d.ready := io.resp.ready
