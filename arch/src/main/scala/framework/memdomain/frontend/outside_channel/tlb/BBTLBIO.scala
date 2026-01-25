@@ -168,6 +168,6 @@ class BBTLBPTWIO(val b: GlobalConfig) extends Bundle {
 // TLB Client IO (used in TLBCluster)
 class BBTLBIO(val b: GlobalConfig) extends Bundle {
   val lgMaxSize = log2Ceil(b.core.coreDataBytes)
-  val req       = Flipped(Valid(new BBTLBReq(lgMaxSize, b.core.vaddrBits, b.core.xLen)))
-  val resp      = Valid(new BBTLBResp(lgMaxSize, b.core.paddrBits, b.core.vaddrBits))
+  val req       = Flipped(Decoupled(new BBTLBReq(lgMaxSize, b.core.vaddrBits, b.core.xLen)))
+  val resp      = Decoupled(new BBTLBResp(lgMaxSize, b.core.paddrBits, b.core.vaddrBits))
 }
