@@ -84,6 +84,7 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
 
       tlbArb.io.in(i).valid := client.req.valid && !l0_tlb_hit
       tlbArb.io.in(i).bits  := client.req.bits
+      client.req.ready      := tlbArb.io.in(i).ready
 
       val tlbReq     = tlbArb.io.in(i).bits
       val tlbReqFire = tlbArb.io.in(i).fire
@@ -97,7 +98,7 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
       when(io.exp(0).flush()) {
         last_translated_valid := false.B
       }
-
+      client.resp.bits.miss := tlb_io.resp.miss
       when(tlbReqFire) {
         client.resp.valid := !tlb_io.resp.miss
         client.resp.bits  := tlb_io.resp
@@ -105,7 +106,6 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
         client.resp.valid      := RegNext(!l0_tlb_hit)
         client.resp.bits       := DontCare
         client.resp.bits.paddr := RegNext(l0_tlb_paddr)
-        client.resp.bits.miss  := !RegNext(l0_tlb_hit)
       }
   }
 }

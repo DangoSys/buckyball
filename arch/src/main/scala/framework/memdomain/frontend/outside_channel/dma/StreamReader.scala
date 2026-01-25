@@ -101,17 +101,17 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
   tlb_q.io.enq <> untranslated_a
 
-  io.tlb.req.valid            := tlb_q.io.deq.fire
+  io.tlb.req.valid            := io.tlb.req.ready
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
-  io.tlb.req.bits.passthrough := true.B
+  io.tlb.req.bits.passthrough := false.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XRD
   io.tlb.req.bits.prv         := 3.U // Machine mode
   io.tlb.req.bits.v           := false.B
   io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
 
-  tlb_q.io.deq.ready := true.B;
+  tlb_q.io.deq.ready := !io.tlb.resp.bits.miss;
 
   /* val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true)) translate_q.io.enq <> tlb_q.io.deq
    * translate_q.io.deq.ready := io.tlb.resp.fire && !io.tlb.resp.bits.miss */
@@ -120,7 +120,8 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   //for now, we just use the vaddr as the physical address to simplify the implementation
   io.tl.a.valid        := tlb_q.io.deq.fire
   io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
-  io.tl.a.bits.address := tlb_q.io.deq.bits.vaddr
+  io.tl.a.bits.address := io.tlb.resp.bits.paddr
+  io.tlb.resp.ready    := true.B;
 
   // Iteration counter for tracking number of requests
   val iter_counter       = RegInit(0.U(10.W))

@@ -114,6 +114,7 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl.a.valid        := tlb_q.io.deq.fire
   io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
   io.tl.a.bits.address := tlb_q.io.deq.bits.vaddr
+  io.tlb.resp.ready    := true.B;
 
   // TileLink D channel (response) processing
   io.tl.d.ready := io.resp.ready
