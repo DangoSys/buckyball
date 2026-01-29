@@ -62,6 +62,7 @@ function(add_linux_target TARGET_NAME MLIR_FILE)
         ${BUDDY_TRANSLATE} --buddy-to-llvmir |
         ${BUDDY_LLC} -filetype=obj -mtriple=riscv64
           -mattr=+buddyext,+D -float-abi=hard
+          -relocation-model=static
           -o ${OBJ_FILE}
     DEPENDS ${MLIR_FILE}
     COMMENT "Compiling ${MLIR_FILE} to Linux object file"
@@ -70,7 +71,7 @@ function(add_linux_target TARGET_NAME MLIR_FILE)
   # Link xx-linux.o to xx-linux
   add_custom_command(
     OUTPUT ${EXECUTABLE}
-    COMMAND ${LINUX_CC} -O2 -static ${OBJ_FILE} -o ${EXECUTABLE}
+    COMMAND ${LINUX_CC} -O2 -static -Wl,--no-relax ${OBJ_FILE} -o ${EXECUTABLE}
     DEPENDS ${OBJ_FILE}
     COMMENT "Linking Linux executable: ${EXECUTABLE}"
   )

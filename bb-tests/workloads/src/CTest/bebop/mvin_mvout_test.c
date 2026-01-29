@@ -15,10 +15,11 @@ static elem_t output_matrix[DIM * DIM2] __attribute__((aligned(16)));
 int mvin_mvout_simple_test() {
   for (int i = 0; i < 4; i++) {
     init_u8_random_matrix(input_matrix, DIM, DIM2, 111);
+    bb_mem_alloc(0, 1, 1);
     bb_mvin((uintptr_t)input_matrix, 0, DIM2, 1);
     clear_u8_matrix(output_matrix, DIM, DIM2);
-    bb_fence();
     bb_mvout((uintptr_t)output_matrix, 0, DIM2, 1);
+    bb_mem_release(0);
     bb_fence();
     if (!compare_u8_matrices(output_matrix, input_matrix, DIM, DIM2)) {
       printf("Test mvin/mvout simple %d FAILED\n", i);
