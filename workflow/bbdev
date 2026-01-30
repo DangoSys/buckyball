@@ -77,6 +77,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar="ARGS",
         help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     )
+    verilator_group.add_argument(
+        "--cosim",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run verilator cosimulation. Args: "--binary <path> [--batch]"',
+    )
 
     # ===== vcs subcommand =========================================================================
     vcs_parser = subparsers.add_parser("vcs", help="vcs operations")

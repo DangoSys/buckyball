@@ -17,7 +17,7 @@ config = {
     "name": "make build",
     "description": "build verilator executable",
     "subscribes": ["verilator.build"],
-    "emits": ["verilator.sim"],
+    "emits": ["verilator.sim", "verilator.cosim"],
     "flows": ["verilator"],
 }
 
@@ -28,6 +28,7 @@ async def handler(data, context):
     build_dir = f"{arch_dir}/build"
     waveform_dir = f"{arch_dir}/waveform"
     log_dir = f"{arch_dir}/log"
+    cosim = data.get("cosim", False)
 
     # ==================================================================================
     # Execute operation
@@ -45,23 +46,31 @@ async def handler(data, context):
         + glob.glob(f"{build_dir}/**/*.cpp", recursive=True)
     )
 
-    # Setup paths
+    # Setup paths: fesvr from bebop/host/spike/riscv-isa-sim (install/include, install/lib)
+    bebop_isa_sim = f"{bbdir}/bebop/host/spike/riscv-isa-sim"
     inc_paths = [
         os.environ.get("RISCV", "") + "/include" if os.environ.get("RISCV") else "",
         f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2",
+        f"{bebop_isa_sim}/install/include",
         build_dir,
         f"{arch_dir}/src/csrc/include",
     ]
     inc_flags = " ".join([f"-I{p}" for p in inc_paths if p])
 
-    topname = "TestHarness"
+    if cosim:
+        topname = "ToyBuckyball"
+    else:
+        topname = "TestHarness"
 
     cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 "
+    if cosim:
+        cflags += " -DCOSIM"
     ldflags = (
-        f"-lreadline -ldramsim -lfesvr "
+        f"-lreadline -ldramsim -lfesvr -lstdc++ "
         f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
         f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
         f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib"
+        f"-L{bebop_isa_sim}/install/lib"
     )
 
     obj_dir = f"{build_dir}/obj_dir"
@@ -95,7 +104,7 @@ async def handler(data, context):
         stderr_prefix="verilator build",
     )
     result = stream_run_logger(
-        cmd=f"make -C {obj_dir} -f V{topname}.mk {obj_dir}/V{topname}",
+        cmd=f"make -C {obj_dir} -f V{topname}.mk V{topname}",
         logger=context.logger,
         cwd=bbdir,
         stdout_prefix="verilator build",
@@ -116,6 +125,13 @@ async def handler(data, context):
     # Continue routing
     # ==================================================================================
     if data.get("from_run_workflow"):
-        await context.emit({"topic": "verilator.sim", "data": {**data, "task": "run"}})
+        if cosim:
+            await context.emit(
+                {"topic": "verilator.cosim", "data": {**data, "task": "run"}}
+            )
+        else:
+            await context.emit(
+                {"topic": "verilator.sim", "data": {**data, "task": "run"}}
+            )
 
     return
