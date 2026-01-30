@@ -18,7 +18,7 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   @public
   val io = IO(new Bundle {
     val req    = Flipped(Decoupled(new BBTLBReq(lgMaxSize, vaddrBits, b.core.xLen)))
-    val resp   = Output(new BBTLBResp(lgMaxSize, paddrBits, vaddrBits))
+    val resp   = Decoupled(new BBTLBResp(lgMaxSize, paddrBits, vaddrBits))
     val ptw    = new BBTLBPTWIO(b)
     val sfence = Flipped(Valid(Bool())) // Simplified flush signal
     val kill   = Input(Bool())
@@ -136,25 +136,26 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
     Cat(hitEntry.ppn, pgIdx)
   )
 
-  io.resp.miss         := tlbMiss || (state === s_wait)
-  io.resp.paddr        := paddr(paddrBits - 1, 0)
-  io.resp.gpa          := 0.U
-  io.resp.gpa_is_pte   := false.B
-  io.resp.pf.ld        := hitEntry.pf
-  io.resp.pf.st        := hitEntry.pf
-  io.resp.pf.inst      := hitEntry.pf
-  io.resp.gf.ld        := false.B
-  io.resp.gf.st        := false.B
-  io.resp.gf.inst      := false.B
-  io.resp.ae.ld        := hitEntry.ae_final
-  io.resp.ae.st        := hitEntry.ae_final
-  io.resp.ae.inst      := hitEntry.ae_final
-  io.resp.ma.ld        := false.B
-  io.resp.ma.st        := false.B
-  io.resp.ma.inst      := false.B
-  io.resp.cacheable    := hitEntry.cacheable
-  io.resp.must_alloc   := false.B
-  io.resp.prefetchable := hitEntry.cacheable
-  io.resp.size         := io.req.bits.size
-  io.resp.cmd          := io.req.bits.cmd
+  io.resp.valid             := io.req.valid && state === s_ready
+  io.resp.bits.miss         := tlbMiss || (state === s_wait)
+  io.resp.bits.paddr        := paddr(paddrBits - 1, 0)
+  io.resp.bits.gpa          := 0.U
+  io.resp.bits.gpa_is_pte   := false.B
+  io.resp.bits.pf.ld        := hitEntry.pf
+  io.resp.bits.pf.st        := hitEntry.pf
+  io.resp.bits.pf.inst      := hitEntry.pf
+  io.resp.bits.gf.ld        := false.B
+  io.resp.bits.gf.st        := false.B
+  io.resp.bits.gf.inst      := false.B
+  io.resp.bits.ae.ld        := hitEntry.ae_final
+  io.resp.bits.ae.st        := hitEntry.ae_final
+  io.resp.bits.ae.inst      := hitEntry.ae_final
+  io.resp.bits.ma.ld        := false.B
+  io.resp.bits.ma.st        := false.B
+  io.resp.bits.ma.inst      := false.B
+  io.resp.bits.cacheable    := hitEntry.cacheable
+  io.resp.bits.must_alloc   := false.B
+  io.resp.bits.prefetchable := hitEntry.cacheable
+  io.resp.bits.size         := io.req.bits.size
+  io.resp.bits.cmd          := io.req.bits.cmd
 }

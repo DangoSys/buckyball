@@ -52,10 +52,10 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
   // Exception detection
   val isRead = tlbArbOut.bits.cmd(0) === 0.U
 
-  val exception = tlbArbOut.valid && !tlb_io.resp.miss && Mux(
+  val exception = tlbArbOut.valid && !tlb_io.resp.bits.miss && Mux(
     isRead,
-    tlb_io.resp.pf.ld || tlb_io.resp.ae.ld || tlb_io.resp.gf.ld,
-    tlb_io.resp.pf.st || tlb_io.resp.ae.st || tlb_io.resp.gf.st
+    tlb_io.resp.bits.pf.ld || tlb_io.resp.bits.ae.ld || tlb_io.resp.bits.gf.ld,
+    tlb_io.resp.bits.pf.st || tlb_io.resp.bits.ae.st || tlb_io.resp.bits.gf.st
   )
 
   when(exception) {
@@ -82,30 +82,29 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
         last_translated_valid && ((client.req.bits.vaddr >> pgIdxBits).asUInt === (last_translated_vpn >> pgIdxBits).asUInt)
       val l0_tlb_paddr = Cat(last_translated_ppn >> pgIdxBits, client.req.bits.vaddr(pgIdxBits - 1, 0))
 
-      tlbArb.io.in(i).valid := client.req.valid && !l0_tlb_hit
+      tlbArb.io.in(i).valid := client.req.valid
       tlbArb.io.in(i).bits  := client.req.bits
       client.req.ready      := tlbArb.io.in(i).ready
 
       val tlbReq     = tlbArb.io.in(i).bits
       val tlbReqFire = tlbArb.io.in(i).fire
 
-      when(tlbReqFire && !tlb_io.resp.miss) {
+      when(tlbReqFire && !tlb_io.resp.bits.miss) {
         last_translated_valid := true.B
         last_translated_vpn   := tlbReq.vaddr
-        last_translated_ppn   := tlb_io.resp.paddr
+        last_translated_ppn   := tlb_io.resp.bits.paddr
       }
 
       when(io.exp(0).flush()) {
         last_translated_valid := false.B
       }
-      client.resp.bits.miss := tlb_io.resp.miss
-      when(tlbReqFire) {
-        client.resp.valid := !tlb_io.resp.miss
-        client.resp.bits  := tlb_io.resp
+      client.resp.bits.miss := tlb_io.resp.bits.miss
+      when(client.req.valid || tlb.io.resp.valid) {
+        client.resp <> tlb_io.resp
       }.otherwise {
-        client.resp.valid      := RegNext(!l0_tlb_hit)
-        client.resp.bits       := DontCare
-        client.resp.bits.paddr := RegNext(l0_tlb_paddr)
+        client.resp.valid := false.B
+        client.resp.bits  := DontCare
+        tlb_io.resp.ready := false.B
       }
   }
 }
