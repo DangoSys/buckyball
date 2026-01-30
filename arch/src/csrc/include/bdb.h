@@ -8,12 +8,14 @@
 // verilator
 #include "verilated.h"
 // #include "verilated_vcd_c.h"
+
+#ifdef COSIM
+#include "VToyBuckyball.h"
+#else
 #include "VTestHarness.h"
+#endif
+
 #include "verilated_fst_c.h"
-
-// ================ DataType ====================
-
-// ================ RISCV CPU ===================
 
 // ================ BDB Config ===================
 // VCD file path

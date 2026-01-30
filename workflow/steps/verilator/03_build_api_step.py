@@ -14,7 +14,10 @@ config = {
 
 async def handler(req, context):
     body = req.get("body") or {}
-    data = {"jobs": body.get("jobs", 16)}
+    data = {
+        "jobs": body.get("jobs", 16),
+        "cosim": body.get("cosim", False),
+    }
     await context.emit({"topic": "verilator.build", "data": data})
 
     # ==================================================================================
