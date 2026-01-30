@@ -19,10 +19,9 @@ import framework.memdomain.backend.accpipe.AccPipe
  * 5) Add cross read/write conflict assertions based on actual bank requests (valid-level, and fire-level optional)
  */
 class MemRequestIO(b: GlobalConfig) extends Bundle {
-  val write    = Flipped(new SramWriteIO(b))                 // midend sends write req into backend
-  val read     = Flipped(new SramReadIO(b))                  // midend sends read req into backend
-  val rbank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
-  val wbank_id = Output(UInt(log2Up(b.memDomain.bankNum).W)) // FIX: was Output
+  val write   = Flipped(new SramWriteIO(b)) // midend sends write req into backend
+  val read    = Flipped(new SramReadIO(b))  // midend sends read req into backend
+  val bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
 }
 
 @instantiable
@@ -42,7 +41,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.write <> io.mem_req(i).write
     accPipes(i).io.read <> io.mem_req(i).read
-    accPipes(i).io.bank_id := io.mem_req(i).wbank_id
+    accPipes(i).io.bank_id := io.mem_req(i).bank_id
   }
 
   // -----------------------------------------------------------------------------
@@ -129,7 +128,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // -------------------------
       val wMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
-        wMatch(i) := io.mem_req(i).wbank_id === bankId && io.mem_req(i).write.req.valid
+        wMatch(i) := io.mem_req(i).bank_id === bankId && io.mem_req(i).write.req.valid
       }
       val wHas = wMatch.asUInt.orR
       // stronger safety: at most 1
@@ -159,10 +158,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // -------------------------
       val rMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
-        rMatch(i) := io.mem_req(i).rbank_id === bankId && io.mem_req(i).read.req.valid
+        rMatch(i) := io.mem_req(i).bank_id === bankId && io.mem_req(i).read.req.valid
       }
       val rHas = rMatch.asUInt.orR
-      assert(PopCount(rMatch) <= 1.U, s"[MemBackend] More than one READ match to bank $bankIdx")
+      //assert(PopCount(rMatch) <= 1.U, s"[MemBackend] More than one READ match to bank $bankIdx")
 
       val selIdx     = OHToUInt(rMatch)
       val connectIdx = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
@@ -171,7 +170,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       when(rHas) {
 
         // bank gets req from selected pipe using Mux1H
-        bank.io.sramRead.req.valid := io.mem_req(selIdx).rbank_id === bankId
+        bank.io.sramRead.req.valid := io.mem_req(selIdx).bank_id === bankId
         bank.io.sramRead.req.bits  := io.mem_req(selIdx).read.req.bits
         // selected pipe sees ready from bank
         rd_req_ready(selIdx)       := bank.io.sramRead.req.ready

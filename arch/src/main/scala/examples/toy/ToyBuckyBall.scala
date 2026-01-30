@@ -55,17 +55,16 @@ class ToyBuckyball(val b: GlobalConfig)(implicit p: Parameters)
 class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) with HasCoreParameters {
   import outer.b._
   val b: GlobalConfig = outer.b
-
+  val totalBallRead            = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite           = b.ballDomain.ballIdMappings.map(_.outBW).sum
   // Get TileLink edges from reader and writer nodes
   val (tl_reader, edge_reader) = outer.reader_node.out(0)
   val (tl_writer, edge_writer) = outer.writer_node.out(0)
 
-  val frontend:              Instance[Frontend]       = Instantiate(new Frontend(b))
-  val ballDomain:            Instance[BallDomain]     = Instantiate(new BallDomain(b))
-  val memDomain:             Instance[MemDomain]      = Instantiate(new MemDomain(b)(edge_reader))
-  val gpDomain:              Instance[GpDomain]       = Instantiate(new GpDomain(b))
-  val ballMemChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.ballMemChannelNum))
-  val memBallChannelCluster: Instance[ChannelCluster] = Instantiate(new ChannelCluster(b, b.top.memBallChannelNum))
+  val frontend:   Instance[Frontend]   = Instantiate(new Frontend(b))
+  val ballDomain: Instance[BallDomain] = Instantiate(new BallDomain(b))
+  val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b)(edge_reader))
+  val gpDomain:   Instance[GpDomain]   = Instantiate(new GpDomain(b))
 
   frontend.io.cmd.valid    := io.cmd.valid
   frontend.io.cmd.bits.cmd := io.cmd.bits
@@ -104,7 +103,7 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
 
   // Break potential combinational loops on bankRead by registering the req channel.
   // IDs are queued alongside the req bits to keep them aligned through backpressure.
-  for (i <- 0 until b.top.memBallChannelNum) {
+  for (i <- 0 until totalBallRead) {
     val bankReadReqWithIds = Wire(Decoupled(new Bundle {
       val bank_id = chiselTypeOf(ballDomain.bankRead(i).bank_id)
       val rob_id  = chiselTypeOf(ballDomain.bankRead(i).rob_id)
@@ -132,12 +131,6 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) w
   }
 
   ballDomain.bankWrite <> memDomain.io.ballDomain.bankWrite
-
-  // Connect BallMemChannelCluster
-  ballMemChannelCluster.io <> ballDomain.ballMemChannel
-
-  // Connect MemBallChannelCluster
-  memBallChannelCluster.io <> ballDomain.memBallChannel
 
   // Connect TileLink DMA ports from MemDomain to LazyModule nodes
   tl_reader <> memDomain.io.tl_reader

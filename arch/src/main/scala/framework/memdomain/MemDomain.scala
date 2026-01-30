@@ -16,6 +16,8 @@ import framework.memdomain.backend.MemBackend
 
 @instantiable
 class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
+  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   @public
   val io = IO(new Bundle {
@@ -36,8 +38,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // MemDomain receives requests from Ball Domain, so uses raw Bundle (Input for bank_id)
     // Use bbusProducerChannels and bbusConsumerChannels instead of bankNum to match BallDomain output
     val ballDomain = new Bundle {
-      val bankRead  = Vec(b.top.memBallChannelNum, new BankRead(b))
-      val bankWrite = Vec(b.top.ballMemChannelNum, new BankWrite(b))
+      val bankRead  = Vec(totalBallRead, new BankRead(b))
+      val bankWrite = Vec(totalBallWrite, new BankWrite(b))
 
     }
 
