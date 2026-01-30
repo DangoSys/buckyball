@@ -16,6 +16,8 @@ import framework.memdomain.backend.MemRequestIO
  */
 @instantiable
 class MemMidend(val b: GlobalConfig) extends Module {
+  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   @public
   val io = IO(new Bundle {
@@ -27,8 +29,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
     }
 
     val balldomain = new Bundle {
-      val bankRead  = Vec(b.top.memBallChannelNum, new BankRead(b))
-      val bankWrite = Vec(b.top.ballMemChannelNum, new BankWrite(b))
+      val bankRead  = Vec(totalBallRead, new BankRead(b))
+      val bankWrite = Vec(totalBallWrite, new BankWrite(b))
     }
 
     // Output to backend (MemManager) - MemManager expects Flipped, so we don't flip here
@@ -36,21 +38,82 @@ class MemMidend(val b: GlobalConfig) extends Module {
   })
 
   // -----------------------------------------------------------------------------
-  // Basic direct connection: route frontend requests to backend channels
+  // Mapping table for tracking balldomain requests
   // -----------------------------------------------------------------------------
-  // Map bbusChannel input channels to bankChannel output channels
-  // Each input channel is mapped to a backend channel based on modulo
-
-  for (ch <- 0 until b.top.memBallChannelNum) {
-
-    // Map input channels to backend channels
-    io.mem_req(ch).write <> io.balldomain.bankWrite(ch).io
-    io.mem_req(ch).read <> io.balldomain.bankRead(ch).io
-    io.mem_req(ch).rbank_id := io.balldomain.bankWrite(ch).bank_id
-    io.mem_req(ch).wbank_id := io.balldomain.bankWrite(ch).bank_id
+  class MappingTableEntry extends Bundle {
+    val valid  = Bool()
+    val isRead = Bool()
+    val id     = UInt(log2Ceil(math.max(totalBallRead, totalBallWrite)).W)
   }
+
+  val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel - 1)(0.U.asTypeOf(new MappingTableEntry))))
+
+  def addEntry(idx: UInt, isRead: Bool, id: UInt): Unit = {
+    mappingTable(idx).valid  := true.B
+    mappingTable(idx).isRead := isRead
+    mappingTable(idx).id     := id
+  }
+
+  def allocateChannel(): UInt = {
+    val freeChannels = mappingTable.map(entry => !entry.valid)
+    PriorityEncoder(freeChannels)
+  }
+
+  def isAllocated(isRead: Bool, id: UInt): Bool =
+    mappingTable.map(entry => entry.valid && entry.isRead === isRead && entry.id === id).reduce(_ || _)
+
+  for (i <- 0 until totalBallRead) {
+    //Default values
+    io.balldomain.bankRead(i).io.req.ready  := false.B
+    io.balldomain.bankRead(i).io.resp.valid := false.B;
+    io.balldomain.bankRead(i).io.resp.bits  := DontCare
+
+    when(io.balldomain.bankRead(i).io.req.valid && !isAllocated(true.B, i.U)) {
+      addEntry(allocateChannel(), true.B, i.U)
+    }
+  }
+
+  for (i <- 0 until totalBallWrite) {
+    //Default values
+    io.balldomain.bankWrite(i).io.req.ready  := false.B
+    io.balldomain.bankWrite(i).io.resp.valid := false.B;
+    io.balldomain.bankWrite(i).io.resp.bits  := DontCare
+    //disable for now
+
+    /* when(io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)) { addEntry(allocateChannel(),
+     * false.B, i.U) } */
+  }
+
+  //Connect balldomain to backend
+  for (i <- 0 until b.top.memBallChannelNum) {
+    //Default values
+    io.mem_req(i).read.req.valid   := false.B
+    io.mem_req(i).read.req.bits    := DontCare
+    io.mem_req(i).read.resp.ready  := false.B
+    io.mem_req(i).write.req.valid  := false.B
+    io.mem_req(i).write.req.bits   := DontCare
+    io.mem_req(i).write.resp.ready := false.B
+    io.mem_req(i).bank_id          := 0.U
+
+    val isRead    = mappingTable(i).isRead
+    val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
+    val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
+    val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
+    val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
+
+    when(mappingTable(i).valid) {
+      when(isRead) {
+        io.mem_req(i).read <> ballRead
+        io.mem_req(i).bank_id := rbank_id
+      }.otherwise {
+        io.mem_req(i).write <> ballWrite
+        io.mem_req(i).bank_id := wbank_id
+      }
+    }
+  }
+
+  //Connect frontend to backend
   io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
   io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
-  io.mem_req(b.top.memBallChannelNum).rbank_id := io.frontend.bankWrite.bank_id
-  io.mem_req(b.top.memBallChannelNum).wbank_id := io.frontend.bankRead.bank_id
+  io.mem_req(b.top.memBallChannelNum).bank_id := io.frontend.bankWrite.bank_id
 }

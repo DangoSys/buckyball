@@ -8,47 +8,32 @@ import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
-import framework.balldomain.bbus.memrouter.MemRouter
 import framework.balldomain.blink.{BankRead, BankWrite}
 import framework.top.channels.{Channel, ChannelClusterIO, ChannelIO}
-import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
  */
 @instantiable
 class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module]) extends Module {
-  val numBalls          = b.ballDomain.ballNum
-  val ballMemChannelNum = b.top.ballMemChannelNum
-  val memBallChannelNum = b.top.memBallChannelNum
-  val totalBallRead     = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val totalBallWrite    = b.ballDomain.ballIdMappings.map(_.outBW).sum
-  val memChannel        = b.top.ballMemChannelNum
+  val numBalls       = b.ballDomain.ballNum
+  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
+
   // Rs - bbus - balls
   @public
-  val cmdReq            = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp           = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   // balls - bbus
   @public
-  val bankRead          = IO(Vec(memChannel, Flipped(new BankRead(b))))
+  val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite         = IO(Vec(memChannel, Flipped(new BankWrite(b))))
-
-  // bbus - mem
-  // Channel interface using ChannelClusterIO
-  // For ballMemChannel: bbus outputs to channel.in, receives from channel.out
-  // So we need Flipped because direction is reversed from ChannelClusterIO's perspective
-  @public
-  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, ballMemChannelNum)))
-
-  @public
-  val memBallChannel = IO(Flipped(new ChannelClusterIO(b, memBallChannelNum)))
+  val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
 
   val balls = ballGenerators.map(gen => Module(gen()))
-  val cmdRouter:    Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
-  val memoryrouter: Instance[MemRouter]    = Instantiate(new MemRouter(b))
-  val pmc:          Instance[BallCyclePMC] = Instantiate(new BallCyclePMC(b))
+  val cmdRouter: Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
+  val pmc:       Instance[BallCyclePMC] = Instantiate(new BallCyclePMC(b))
 
 // -----------------------------------------------------------------------------
 // cmd router
@@ -72,36 +57,6 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
 
   cmdResp <> cmdRouter.io.cmdResp_o
 
-// Initialize ballMemChannel and memBallChannel ports with default values
-  for (i <- 0 until ballMemChannelNum) {
-    ballMemChannel.channelIn(i).data.valid  := false.B
-    ballMemChannel.channelIn(i).data.bits   := 0.U
-    ballMemChannel.channelOut(i).data.ready := false.B
-  }
-  ballMemChannel.peakChannelReq.valid := false.B
-  ballMemChannel.peakChannelReq.bits.needed_channel_num := 0.U
-  ballMemChannel.peakChannelReq.bits.bank_id            := 0.U
-  ballMemChannel.peakChannelReq.bits.rob_id             := 0.U
-  ballMemChannel.freeChannelResp.ready                  := true.B
-
-  for (i <- 0 until memBallChannelNum) {
-    memBallChannel.channelIn(i).data.valid  := false.B
-    memBallChannel.channelIn(i).data.bits   := 0.U
-    memBallChannel.channelOut(i).data.ready := false.B
-  }
-  memBallChannel.peakChannelReq.valid := false.B
-  memBallChannel.peakChannelReq.bits.needed_channel_num := 0.U
-  memBallChannel.peakChannelReq.bits.bank_id            := 0.U
-  memBallChannel.peakChannelReq.bits.rob_id             := 0.U
-  memBallChannel.freeChannelResp.ready                  := true.B
-// -----------------------------------------------------------------------------
-// memory router
-// -----------------------------------------------------------------------------
-  memoryrouter.io.bankRead_o <> bankRead
-  memoryrouter.io.bankWrite_o <> bankWrite
-  memoryrouter.io.peakChannelReq <> ballMemChannel.peakChannelReq
-  memoryrouter.io.freeChannelResp <> ballMemChannel.freeChannelResp
-
 // -----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
@@ -122,12 +77,12 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
     val outBW      = ballConfig.map(_.outBW).getOrElse(0)
 
     for (i <- 0 until inBW) {
-      memoryrouter.io.bankRead_i(readChannelIdx) <> ball.blink.bankRead(i)
+      bankRead(readChannelIdx) <> ball.blink.bankRead(i)
       readChannelIdx = readChannelIdx + 1
     }
 
     for (i <- 0 until outBW) {
-      memoryrouter.io.bankWrite_i(writeChannelIdx) <> ball.blink.bankWrite(i)
+      bankWrite(writeChannelIdx) <> ball.blink.bankWrite(i)
       writeChannelIdx = writeChannelIdx + 1
     }
   }

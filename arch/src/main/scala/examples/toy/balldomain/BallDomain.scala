@@ -11,11 +11,12 @@ import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import framework.balldomain.rs.BallReservationStation
 import framework.top.channels.{ChannelClusterIO, ChannelIO}
-import framework.balldomain.bbus.memrouter.{FreeChannelResp, PeakChannelReq}
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
-  val memChannel = b.top.ballMemChannelNum
+  val memChannel     = b.top.ballMemChannelNum
+  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   @public
   val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))
@@ -24,16 +25,10 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val global_complete_o = IO(Decoupled(new GlobalRsComplete(b)))
 
   @public
-  val bankRead = IO(Vec(memChannel, Flipped(new BankRead(b))))
+  val bankRead = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
 
   @public
-  val bankWrite = IO(Vec(memChannel, Flipped(new BankWrite(b))))
-
-  @public
-  val ballMemChannel = IO(Flipped(new ChannelClusterIO(b, memChannel)))
-
-  @public
-  val memBallChannel = IO(Flipped(new ChannelClusterIO(b, b.top.memBallChannelNum)))
+  val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
 
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
@@ -69,8 +64,6 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
-  bbus.ballMemChannel <> ballMemChannel
-  bbus.memBallChannel <> memBallChannel
 
 //---------------------------------------------------------------------------
 // Local RS completion signal -> Global RS (single channel, includes global rob_id)

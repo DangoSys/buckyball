@@ -90,7 +90,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
       io.bankReadReq(0).bits.addr := op1_addr + iter_counter
       io.bankReadReq(1).valid     := iter_counter < iter
       io.bankReadReq(1).bits.addr := op2_addr + iter_counter
-      iter_counter                := iter_counter + 1.U
+      iter_counter                := Mux(io.bankReadReq(0).ready, iter_counter, iter_counter + 1.U)
     }
 
 // -----------------------------------------------------------------------------
