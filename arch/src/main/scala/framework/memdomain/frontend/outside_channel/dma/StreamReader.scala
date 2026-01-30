@@ -101,7 +101,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
   tlb_q.io.enq <> untranslated_a
 
-  io.tlb.req.valid            := io.tlb.req.ready
+  io.tlb.req.valid            := tlb_q.io.deq.valid && (state === s_req_new_block)
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
   io.tlb.req.bits.passthrough := true.B //use paddr for now
@@ -111,14 +111,14 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.req.bits.v           := false.B
   io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
 
-  tlb_q.io.deq.ready := !io.tlb.resp.bits.miss;
+  tlb_q.io.deq.ready := io.tlb.resp.valid;
 
   /* val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true)) translate_q.io.enq <> tlb_q.io.deq
    * translate_q.io.deq.ready := io.tlb.resp.fire && !io.tlb.resp.bits.miss */
 
   // TileLink A channel (request) connection
   //for now, we just use the vaddr as the physical address to simplify the implementation
-  io.tl.a.valid        := tlb_q.io.deq.fire
+  io.tl.a.valid        := io.tlb.resp.valid && (state === s_req_new_block)
   io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
   io.tlb.resp.ready    := true.B;
@@ -173,7 +173,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // Use actual requested byte count
     bytesRequested := bytesRequested + read_size
     // Check if more requests need to be sent
-    when(bytesRequested + read_size >= req.len) {
+    when(bytesRequested >= req.len) {
       // All requests sent
       state := s_idle
     }.otherwise {

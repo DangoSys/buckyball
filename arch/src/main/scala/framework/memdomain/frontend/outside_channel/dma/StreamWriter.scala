@@ -44,9 +44,6 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   })
 
   val s_idle :: s_writing :: Nil = Enum(2)
-  val state                      = RegInit(s_idle)
-
-  val req = Reg(new BBWriteRequest(dataWidth))
 
   val xactBusy   = RegInit(0.U(nXacts.W))
   val xactOnehot = PriorityEncoderOH(~xactBusy)
@@ -59,21 +56,21 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   // Simplified: data is already aligned, directly construct TileLink request
   val lg_beat_bytes = log2Ceil(beatBytes)
-  val use_put_full  = req.mask === ~0.U(beatBytes.W)
+  val use_put_full  = io.req.bits.mask === ~0.U(beatBytes.W)
 
   val putFull = edge.Put(
     fromSource = xactId,
     toAddress = 0.U,
     lgSize = lg_beat_bytes.U,
-    data = req.data
+    data = io.req.bits.data
   )._2
 
   val putPartial = edge.Put(
     fromSource = xactId,
     toAddress = 0.U,
     lgSize = lg_beat_bytes.U,
-    data = req.data,
-    mask = req.mask
+    data = io.req.bits.data,
+    mask = io.req.bits.mask
   )._2
 
   val selected_put = Mux(use_put_full, putFull, putPartial)
@@ -87,15 +84,15 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val untranslated_a = Wire(Decoupled(new TLBundleAWithInfo))
   xactBusy_fire              := untranslated_a.fire
-  untranslated_a.valid       := state === s_writing && !xactBusy.andR
+  untranslated_a.valid       := !xactBusy.andR && io.req.valid
   untranslated_a.bits.tl_a   := selected_put
-  untranslated_a.bits.vaddr  := req.vaddr
-  untranslated_a.bits.status := req.status
+  untranslated_a.bits.vaddr  := io.req.bits.vaddr
+  untranslated_a.bits.status := io.req.bits.status
 
   val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
   tlb_q.io.enq <> untranslated_a
 
-  io.tlb.req.valid            := io.tlb.req.ready
+  io.tlb.req.valid            := tlb_q.io.deq.valid
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
   io.tlb.req.bits.passthrough := true.B //use paddr for now
@@ -104,14 +101,13 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.req.bits.prv         := 3.U    // Machine mode
   io.tlb.req.bits.v           := false.B
   io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
-  tlb_q.io.deq.ready          := !io.tlb.resp.bits.miss;
+  tlb_q.io.deq.ready          := io.tlb.resp.valid && tlb_q.io.deq.valid
 
-  tlb_q.io.deq.ready   := true.B;
   // TileLink A channel (request) connection
-  io.tl.a.valid        := tlb_q.io.deq.fire
+  io.tl.a.valid        := io.tlb.resp.valid && tlb_q.io.deq.valid
   io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
-  io.tlb.resp.ready    := true.B;
+  io.tlb.resp.ready    := true.B
 
   // TileLink D channel (response) processing
   io.tl.d.ready := io.resp.ready
@@ -125,15 +121,7 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl.e.valid := false.B
 
   // State machine
-  io.req.ready := state === s_idle
-  io.busy      := xactBusy.orR || (state =/= s_idle)
+  io.req.ready := !xactBusy.andR
+  io.busy      := xactBusy.orR
 
-  when(io.req.fire) {
-    req   := io.req.bits
-    state := s_writing
-  }
-
-  when(untranslated_a.fire) {
-    state := s_idle
-  }
 }

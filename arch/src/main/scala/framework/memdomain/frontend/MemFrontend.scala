@@ -109,21 +109,21 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // TLB connection - internal TLB cluster connected to DMA modules
   // Client 0: StreamWriter, Client 1: StreamReader
   // Insert pipeline registers to break combinational loops
-  tlbCluster.io.clients(1).req.valid := RegNext(reader.io.tlb.req.valid)
-  tlbCluster.io.clients(1).req.bits  := RegNext(reader.io.tlb.req.bits)
-  reader.io.tlb.req.ready            := RegNext(tlbCluster.io.clients(1).req.ready)
+  tlbCluster.io.clients(1).req.valid := reader.io.tlb.req.valid
+  tlbCluster.io.clients(1).req.bits  := reader.io.tlb.req.bits
+  reader.io.tlb.req.ready            := tlbCluster.io.clients(1).req.ready
 
-  reader.io.tlb.resp.valid            := RegNext(tlbCluster.io.clients(1).resp.valid)
-  reader.io.tlb.resp.bits             := RegNext(tlbCluster.io.clients(1).resp.bits)
-  tlbCluster.io.clients(1).resp.ready := RegNext(reader.io.tlb.resp.ready)
+  reader.io.tlb.resp.valid            := tlbCluster.io.clients(1).resp.valid
+  reader.io.tlb.resp.bits             := tlbCluster.io.clients(1).resp.bits
+  tlbCluster.io.clients(1).resp.ready := reader.io.tlb.resp.ready
 
-  tlbCluster.io.clients(0).req.valid := RegNext(writer.io.tlb.req.valid)
-  tlbCluster.io.clients(0).req.bits  := RegNext(writer.io.tlb.req.bits)
-  writer.io.tlb.req.ready            := RegNext(tlbCluster.io.clients(0).req.ready)
+  tlbCluster.io.clients(0).req.valid := writer.io.tlb.req.valid
+  tlbCluster.io.clients(0).req.bits  := writer.io.tlb.req.bits
+  writer.io.tlb.req.ready            := tlbCluster.io.clients(0).req.ready
 
-  writer.io.tlb.resp.valid            := RegNext(tlbCluster.io.clients(0).resp.valid)
-  writer.io.tlb.resp.bits             := RegNext(tlbCluster.io.clients(0).resp.bits)
-  tlbCluster.io.clients(0).resp.ready := RegNext(writer.io.tlb.resp.ready)
+  writer.io.tlb.resp.valid            := tlbCluster.io.clients(0).resp.valid
+  writer.io.tlb.resp.bits             := tlbCluster.io.clients(0).resp.bits
+  tlbCluster.io.clients(0).resp.ready := writer.io.tlb.resp.ready
 
   // Connect DMA flush signals to TLB exceptions
   reader.io.flush := io.tlbExp(0).flush()
