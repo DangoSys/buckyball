@@ -2,12 +2,17 @@
 #include "utils/debug.h"
 #include "utils/macro.h"
 
+#ifdef COSIM
+#include "monitor/cosim.h"
+#endif
+
 vluint64_t sim_time = 0;
 VerilatedContext *contextp = NULL;
 VerilatedFstC *tfp = NULL;
 
 #ifdef COSIM
 static VToyBuckyball *top;
+static CosimServer *cosim_server = NULL;
 #else
 static VTestHarness *top;
 #endif
@@ -47,6 +52,15 @@ void sim_init(int argc, char **argv) {
   top->reset = 0;
   top->clock = 0;
   step_and_dump_wave();
+
+#ifdef COSIM
+  // Initialize COSIM socket server
+  cosim_server = new CosimServer(top);
+  if (!cosim_server->init()) {
+    panic("Failed to initialize COSIM server");
+  }
+  Log("COSIM mode: waiting for Bebop connection...");
+#endif
 }
 
 void sim_exit() {
@@ -54,14 +68,30 @@ void sim_exit() {
   tfp->dump(contextp->time());
   tfp->close();
   printf("The wave data has been saved to the FST file: %s\n", fst_path);
+
+#ifdef COSIM
+  if (cosim_server) {
+    cosim_server->shutdown();
+    delete cosim_server;
+  }
+#endif
+
   exit(0);
 }
 
 void ball_exec_once() {
+#ifdef COSIM
+  // Update COSIM server (handle socket I/O and drive DUT signals)
+  if (cosim_server) {
+    cosim_server->update();
+  }
+#endif
+
   top->clock ^= 1;
   step_and_dump_wave();
   top->clock ^= 1;
   step_and_dump_wave();
+
 #ifndef COSIM
   if (top->io_success == 1) {
     printf("simulation success\n");
