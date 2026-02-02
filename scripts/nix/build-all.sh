@@ -13,16 +13,11 @@ usage() {
   echo ""
   echo "Helper script to fully initialize repository that wraps other scripts."
   echo "By default it initializes/installs things in the following order:"
-  echo "   1. Setup workflow management system"
-  echo "   2. Buckyball submodules"
-  echo "   3. Toolchain installation"
-  echo "   4. Compiler (buddy-mlir) pre-compile sources"
-  echo "   5. bb-tests (workloads) pre-compile sources"
-  echo "   6. Install Chipyard and Firesim"
-  echo "   7. Buckyball pre-compile sources"
-  echo "   8. Setup document management system"
-  echo "   9. Install func-sim"
-  echo "   10. Runs repository clean-up"
+  echo "   1. Compiler (buddy-mlir) pre-compile sources"
+  echo "   2. bb-tests (workloads) pre-compile sources"
+  echo "   3. Install document management system"
+  echo "   4. Install workflow management system"
+  echo "   5. Install pre-commit hooks"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -30,7 +25,6 @@ usage() {
   echo "  --help -h     : Display this message"
   echo "  --verbose -v  : Verbose printout"
   echo "  --skip -s N   : Skip step N in the list above. Use multiple times to skip multiple steps ('-s N -s M ...')."
-  echo "  --admin       : Add this option to install the admin tools (You dont need do this)."
 
   exit "$1"
 }
@@ -84,6 +78,7 @@ function begin_step
 
 begin_step "0-1" "submodules init"
 git submodule update --init
+cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
@@ -123,8 +118,7 @@ if run_step "1"; then
 			-DPython3_EXECUTABLE=$(which python3) \
 			-DPython_EXECUTABLE=$(which python3) \
 			-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-	ninja
-	#ninja check-buddy
+	ninja # check-buddy
 fi
 
 if run_step "2"; then
@@ -137,8 +131,8 @@ if run_step "3"; then
   begin_step "3" "bb-tests (workloads) pre-compile sources"
   cd ${BBDIR}/bb-tests
   mkdir -p build && cd build
-  cmake -G Ninja ../
-  ninja -j$(nproc)
+  cmake -G Ninja ..
+  ninja
 fi
 
 if run_step "4"; then
@@ -168,8 +162,8 @@ if run_step "6"; then
   cd ${BBDIR}/workflow && rm *.{md,tsx,rdb} || true
 fi
 
-if run_step "9"; then
-  begin_step "9" "Install pre-commit hooks"
+if run_step "7"; then
+  begin_step "7" "Install pre-commit hooks"
   pre-commit install
 fi
 
