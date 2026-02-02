@@ -78,7 +78,7 @@ cd buckyball
 ./scripts/nix/build-all.sh
 ```
 
-After this one-time installation, you can enter the environment anytime by running:
+After the first time installation, you can enter the environment anytime by running:
 ```bash
 nix develop
 ```
