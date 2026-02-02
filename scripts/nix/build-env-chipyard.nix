@@ -10,6 +10,5 @@
   # RISC-V Linux toolchain
   riscv-linux-gcc = pkgs.pkgsCross.riscv64.buildPackages.gcc;
 
-  # Build tool for Scala, Java and more
-  mill = pkgs.mill;
+
 }

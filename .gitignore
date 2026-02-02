@@ -5,7 +5,7 @@
 .cursor/
 .bsp/
 out/
-result/
+result
 
 CLAUDE.local.md
 node_modules/

@@ -72,18 +72,17 @@ bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-b
 ### Installation in nix
 We use Nix Flake as our alternative build system. If you have not installed nix, install it following the [guide](https://nix.dev/manual/nix/2.28/installation/installing-binary.html), and enable flake following the [wiki](https://nixos.wiki/wiki/Flakes#Enable_flakes). Or you can try the [installer](https://github.com/DeterminateSystems/nix-installer) provided by Determinate Systems, which enables flake by default.
 
+```bash
+git clone https://github.com/DangoSys/buckyball.git
+cd buckyball
+./scripts/nix/build-all.sh
+```
 
-> Nix Installation is still woeking in progress
+After this one-time installation, you can enter the environment anytime by running:
+```bash
+nix develop
+```
 
-<!-- ### Docker Quick Experience
-
-  We support providing a Docker environment for rapid deployment of buckyball.
-
-**Notice**:
-- Docker images are provided only for specific release versions.
-- Docker image may not be the latest version, source build is recommended.
-
-> We do not provide support for this version as it is not a stable release. -->
 
 ### Buckyball as a library
   We support providing a streamlined version of buckyball installation, integrated as a generator within Chipyard.
