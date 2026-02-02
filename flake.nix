@@ -26,13 +26,33 @@
               chipyard.verilator
               chipyard.riscv-embedded-gcc
               chipyard.riscv-linux-gcc
-              chipyard.mill
+
+              # python environment
+              python.python3Packages
 
               # Bebop tools
               bebop.rustc
               bebop.cargo
               bebop.rustfmt
               bebop.clippy
+
+              # Workflow dev tools
+              bbdev.nodejs
+              bbdev.gcc
+              bbdev.gnumake
+              bbdev.pkg-config
+
+              # Scala tools
+              scala.mill
+              scala.scalafmt
+              scala.coursier
+
+              # Documentation tools
+              doc.mdbook
+              doc.mdbook-linkcheck
+              doc.mdbook-pdf
+              doc.mdbook-toc
+              doc.mdbook-mermaid
             ];
           };
 
@@ -41,17 +61,25 @@
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then
                 export PATH="$PWD/result/bin:$PATH"
-                echo "Activated environment"
+                echo "================= Buckyball Environment Activated ========================="
               else
                 echo "Warning: result/bin not found. Run 'nix build' first."
               fi
-              echo "=========================================="
+
+              export BUDDY_MLIR_BUILD_DIR="$PWD/compiler/build"
+              export LLVM_MLIR_BUILD_DIR="$PWD/compiler/llvm/build"
+              export PYTHONPATH="$PWD/compiler/llvm/build/tools/mlir/python_packages/mlir_core:$PWD/compiler/build/python_packages:$PYTHONPATH"
+              export PATH="$PWD/workflow:$PATH"
+
               echo "Development environment loaded:"
               echo "Verilator: $(verilator --version 2>&1 | head -1)"
               echo "RISC-V Embedded GCC: $(riscv64-none-elf-gcc --version 2>&1 | head -1)"
               echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)"
               echo "Mill: $(mill --version 2>&1 | head -1)"
-              echo "=========================================="
+              echo "Cargo: $(cargo --version 2>&1 | head -1)"
+              echo "npm: $(npm --version 2>&1 | head -1)"
+              echo "bbdev: $(which bbdev)"
+              echo "==========================================================================="
             '';
           };
         }
