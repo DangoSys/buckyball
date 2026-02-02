@@ -39,9 +39,9 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
 
   // Convert global RS issue to Decoder input format
-  ballDecoder.raw_cmd_i.valid := global_issue_i.valid
-  ballDecoder.raw_cmd_i.bits  := global_issue_i.bits.cmd
-  global_issue_i.ready        := ballDecoder.raw_cmd_i.ready
+  ballDecoder.cmd_i.valid := global_issue_i.valid
+  ballDecoder.cmd_i.bits  := global_issue_i.bits.cmd
+  global_issue_i.ready    := ballDecoder.cmd_i.ready
 
 //---------------------------------------------------------------------------
 // Decoder -> Local BallRS (multi-channel issue to each Ball device)

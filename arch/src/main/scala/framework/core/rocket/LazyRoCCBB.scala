@@ -5,8 +5,6 @@ package framework.core.rocket
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.IntParam
-
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.tile._
 
@@ -26,14 +24,24 @@ import freechips.rocketchip.rocket.{
   TLBPTWIO
 }
 import freechips.rocketchip.tilelink.{TLClientNode, TLIdentityNode, TLMasterParameters, TLMasterPortParameters, TLNode}
-import freechips.rocketchip.util.InOrderArbiter
+import freechips.rocketchip.util.{BooleanToAugmentedBoolean, InOrderArbiter}
+
+case object BuildRoCCBB extends Field[Seq[Parameters => LazyRoCCBB]](Nil)
 
 // Custom simplified RoCC types without implicit Parameters
 class RoCCCommandBB(xLen: Int = 64) extends Bundle {
-  val inst   = new RoCCInstruction
-  val rs1    = Bits(xLen.W)
-  val rs2    = Bits(xLen.W)
-  val status = new MStatus
+  val raw_inst = UInt(32.W)
+  val funct    = UInt(7.W)
+  val rs2      = Bits(5.W)
+  val rs1      = Bits(5.W)
+  val xd       = Bool()
+  val xs1      = Bool()
+  val xs2      = Bool()
+  val rd       = Bits(5.W)
+  val opcode   = UInt(7.W)
+  val rs1Data  = UInt(xLen.W)
+  val rs2Data  = UInt(xLen.W)
+  // val status = new MStatus     // Reserved - removed as unused
 }
 
 class RoCCResponseBB(xLen: Int = 64) extends Bundle {
@@ -81,7 +89,13 @@ class LazyRoCCModuleImpBB(outer: LazyRoCCBB) extends LazyModuleImp(outer) {
 /** Mixins for including RoCC * */
 
 trait HasLazyRoCCBB extends CanHavePTW { this: BaseTile =>
-  val roccs    = p(BuildRoCC).map(_(p))
+  override def usingRoCC: Boolean = !p(BuildRoCCBB).isEmpty
+
+  override def dcacheArbPorts: Int =
+    1 + usingVM.toInt + usingDataScratchpad.toInt + p(BuildRoCCBB).size +
+      (tileParams.core.useVector && tileParams.core.vectorUseDCache).toInt
+
+  val roccs    = p(BuildRoCCBB).map(_(p))
   val roccCSRs = roccs.map(_.roccCSRs) // the set of custom CSRs requested by all roccs
   require(
     roccCSRs.flatten.map(_.id).toSet.size == roccCSRs.flatten.size,
@@ -98,7 +112,7 @@ trait HasLazyRoCCBB extends CanHavePTW { this: BaseTile =>
 trait HasLazyRoCCModuleBB extends CanHavePTWModule with HasCoreParameters { this: RocketTileModuleImpBB =>
 
   val (respArb, cmdRouter) = if (outer.roccs.nonEmpty) {
-    val respArb      = Module(new RRArbiter(new RoCCResponse()(outer.p), outer.roccs.size))
+    val respArb      = Module(new RRArbiter(new RoCCResponseBB(coreParams.xLen), outer.roccs.size))
     // Get usingRVVRoCC from tile parameters
     val usingRVVRoCC = outer.rocketParams.asInstanceOf[RocketTileParamsBB].usingRVVRoCC
     val cmdRouter    = Module(new RoccCommandRouterBB(outer.roccs.map(_.opcodes), usingRVVRoCC)(outer.p))
@@ -131,7 +145,7 @@ class RoccCommandRouterBB(opcodes: Seq[OpcodeSet], usingRVVRoCC: Boolean)(implic
   val cmd = Queue(io.in)
 
   // Check which opcodes match
-  val opcodeMatches = opcodes.map(opcode => opcode.matches(cmd.bits.inst.opcode))
+  val opcodeMatches = opcodes.map(opcode => opcode.matches(cmd.bits.opcode))
   val anyMatch      = opcodeMatches.reduce(_ || _)
 
   val cmdReadys = io.out.zip(opcodeMatches).zipWithIndex.map {

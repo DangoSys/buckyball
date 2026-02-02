@@ -1,3 +1,8 @@
 {
-  "placeholder": 0
+  "laneNumber": 4,
+  "chainingSize": 4,
+  "vLen": 1024,
+  "dLen": 128,
+  "eLen": 32,
+  "laneScale": 4
 }

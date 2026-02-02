@@ -1228,12 +1228,20 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
     // don't let D$ go to sleep if we're probably going to use it soon
     io.dmem.keep_clock_enabled := ibuf.io.inst(0).valid && id_ctrl.mem && !csr.io.csr_stall
 
-    io.rocc.cmd.valid       := wb_reg_valid && wb_ctrl.rocc && !replay_wb_common
-    io.rocc.exception       := wb_xcpt && csr.io.status.xs.orR
-    io.rocc.cmd.bits.status := csr.io.status
-    io.rocc.cmd.bits.inst   := wb_reg_inst.asTypeOf(new RoCCInstruction())
-    io.rocc.cmd.bits.rs1    := wb_reg_wdata
-    io.rocc.cmd.bits.rs2    := wb_reg_rs2
+    io.rocc.cmd.valid         := wb_reg_valid && wb_ctrl.rocc && !replay_wb_common
+    io.rocc.exception         := wb_xcpt && csr.io.status.xs.orR
+    io.rocc.cmd.bits.raw_inst := wb_reg_inst
+    val inst_bits = wb_reg_inst.asTypeOf(new RoCCInstruction())
+    io.rocc.cmd.bits.funct   := inst_bits.funct
+    io.rocc.cmd.bits.rs2     := inst_bits.rs2
+    io.rocc.cmd.bits.rs1     := inst_bits.rs1
+    io.rocc.cmd.bits.xd      := inst_bits.xd
+    io.rocc.cmd.bits.xs1     := inst_bits.xs1
+    io.rocc.cmd.bits.xs2     := inst_bits.xs2
+    io.rocc.cmd.bits.rd      := inst_bits.rd
+    io.rocc.cmd.bits.opcode  := inst_bits.opcode
+    io.rocc.cmd.bits.rs1Data := wb_reg_wdata
+    io.rocc.cmd.bits.rs2Data := wb_reg_rs2
 
     // gate the clock
     val unpause =

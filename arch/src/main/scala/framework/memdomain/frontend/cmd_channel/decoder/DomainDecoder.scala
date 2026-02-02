@@ -43,7 +43,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val raw_cmd_i        = Flipped(Decoupled(new PostGDCmd(b)))
+    val cmd_i            = Flipped(Decoupled(new PostGDCmd(b)))
     val mem_decode_cmd_o = Decoupled(new MemDecodeCmd(b))
   })
 
@@ -52,11 +52,11 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val bankIdLen   = log2Up(b.memDomain.bankNum)
 
   // Only process Mem instructions
-  io.raw_cmd_i.ready := io.mem_decode_cmd_o.ready
+  io.cmd_i.ready := io.mem_decode_cmd_o.ready
 
-  val func7 = io.raw_cmd_i.bits.raw_cmd.inst.funct
-  val rs1   = io.raw_cmd_i.bits.raw_cmd.rs1
-  val rs2   = io.raw_cmd_i.bits.raw_cmd.rs2
+  val func7 = io.cmd_i.bits.cmd.funct
+  val rs1   = io.cmd_i.bits.cmd.rs1Data
+  val rs2   = io.cmd_i.bits.cmd.rs2Data
 
   // Load/Store instruction decoding
   import LSDecodeFields._
@@ -97,7 +97,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   )
 
   assert(
-    !(io.raw_cmd_i.fire && !ls_decode_list(LSDecodeFields.VALID.id).asBool),
+    !(io.cmd_i.fire && !ls_decode_list(LSDecodeFields.VALID.id).asBool),
     s"MemDomainDecoder: Invalid command opcode, func7 = 0x%x\n",
     func7
   )
@@ -105,7 +105,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Output assignment
 // -----------------------------------------------------------------------------
-  io.mem_decode_cmd_o.valid := io.raw_cmd_i.valid && (io.raw_cmd_i.bits.domain_id === DomainId.MEM)
+  io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
   io.mem_decode_cmd_o.bits.is_load  := Mux(
     io.mem_decode_cmd_o.valid,

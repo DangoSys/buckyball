@@ -67,9 +67,9 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
 // -----------------------------------------------------------------------------
-  memDecoder.io.raw_cmd_i.valid := io.global_issue_i.valid
-  memDecoder.io.raw_cmd_i.bits  := io.global_issue_i.bits.cmd
-  io.global_issue_i.ready       := memDecoder.io.raw_cmd_i.ready
+  memDecoder.io.cmd_i.valid := io.global_issue_i.valid
+  memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation

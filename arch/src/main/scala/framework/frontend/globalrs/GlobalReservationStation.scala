@@ -61,7 +61,7 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   val fenceActive = RegInit(false.B)
   // Cannot use fire, would form a loop
-  val func7       = io.global_decode_cmd_i.bits.raw_cmd.inst.funct
+  val func7       = io.global_decode_cmd_i.bits.cmd.funct
   val isFenceCmd  = io.global_decode_cmd_i.valid && (func7 === FENCE_BITPAT)
   val robEmpty    = rob.io.empty
 
