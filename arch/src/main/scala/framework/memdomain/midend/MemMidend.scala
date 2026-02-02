@@ -5,24 +5,18 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import framework.top.GlobalConfig
 import framework.balldomain.blink.{BankRead, BankWrite}
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.memdomain.backend.MemRequestIO
 
-/**
- * MemMidend: Midend module for memory scheduling
- * Connects MemFrontend to MemManager
- *
- * Basic direct connection: routes requests from frontend to backend channels
- */
 @instantiable
 class MemMidend(val b: GlobalConfig) extends Module {
   val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val numChannels    = b.memDomain.bankChannel - 1 // Reserve one for frontend
 
   @public
   val io = IO(new Bundle {
 
-    // Input from frontend (Ball Domain read/write requests) - receiver perspective
     val frontend = new Bundle {
       val bankRead  = new BankRead(b)
       val bankWrite = new BankWrite(b)
@@ -33,12 +27,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
     }
 
-    // Output to backend (MemManager) - MemManager expects Flipped, so we don't flip here
     val mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
   })
 
   // -----------------------------------------------------------------------------
-  // Mapping table for tracking balldomain requests
+  // Mapping table
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid  = Bool()
@@ -46,46 +39,90 @@ class MemMidend(val b: GlobalConfig) extends Module {
     val id     = UInt(log2Ceil(math.max(totalBallRead, totalBallWrite)).W)
   }
 
-  val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel - 1)(0.U.asTypeOf(new MappingTableEntry))))
-
-  def addEntry(idx: UInt, isRead: Bool, id: UInt): Unit = {
-    mappingTable(idx).valid  := true.B
-    mappingTable(idx).isRead := isRead
-    mappingTable(idx).id     := id
-  }
-
-  def allocateChannel(): UInt = {
-    val freeChannels = mappingTable.map(entry => !entry.valid)
-    PriorityEncoder(freeChannels)
-  }
+  val mappingTable = RegInit(VecInit(Seq.fill(numChannels)(0.U.asTypeOf(new MappingTableEntry))))
 
   def isAllocated(isRead: Bool, id: UInt): Bool =
     mappingTable.map(entry => entry.valid && entry.isRead === isRead && entry.id === id).reduce(_ || _)
 
+  // -----------------------------------------------------------------------------
+  // Core logic: multi-channel parallel allocation
+  // -----------------------------------------------------------------------------
+
+  // 1. Get which channels are free at cycle start (Bitmap)
+  // use wire to propagate allocation within the cycle
+  val initialFreeMask = VecInit(mappingTable.map(!_.valid)).asUInt
+
+  var currentFreeMask = initialFreeMask
+
+  // Define request object collection for unified iteration
+  // Contains: (ReqValid, IsRead, ID, ReqReadyPtr)
+  case class RequestCandidate(
+    valid:  Bool,
+    isRead: Bool,
+    id:     Int,
+    ready:  Bool)
+
+  val candidates = scala.collection.mutable.ArrayBuffer[RequestCandidate]()
+
+  // Collect read requests
   for (i <- 0 until totalBallRead) {
-    //Default values
+    // Default value
     io.balldomain.bankRead(i).io.req.ready  := false.B
-    io.balldomain.bankRead(i).io.resp.valid := false.B;
+    io.balldomain.bankRead(i).io.resp.valid := false.B
     io.balldomain.bankRead(i).io.resp.bits  := DontCare
 
-    when(io.balldomain.bankRead(i).io.req.valid && !isAllocated(true.B, i.U)) {
-      addEntry(allocateChannel(), true.B, i.U)
-    }
+    candidates += RequestCandidate(
+      io.balldomain.bankRead(i).io.req.valid,
+      true.B,
+      i,
+      io.balldomain.bankRead(i).io.req.ready
+    )
   }
 
+  // Collect write requests
   for (i <- 0 until totalBallWrite) {
-    //Default values
     io.balldomain.bankWrite(i).io.req.ready  := false.B
-    io.balldomain.bankWrite(i).io.resp.valid := false.B;
+    io.balldomain.bankWrite(i).io.resp.valid := false.B
     io.balldomain.bankWrite(i).io.resp.bits  := DontCare
-    //disable for now
 
-    /* when(io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)) { addEntry(allocateChannel(),
-     * false.B, i.U) } */
+    candidates += RequestCandidate(
+      io.balldomain.bankWrite(i).io.req.valid,
+      false.B,
+      i,
+      io.balldomain.bankWrite(i).io.req.ready
+    )
+
   }
 
-  //Connect balldomain to backend
-  for (i <- 0 until b.top.memBallChannelNum) {
+  for (cand <- candidates) {
+    val needsAlloc = cand.valid && !isAllocated(cand.isRead, cand.id.U)
+    val hasSpace   = currentFreeMask.orR // 检查当前掩码中是否还有1
+
+    when(needsAlloc && hasSpace) {
+      // Find lowest '1' in current mask (first free channel)
+      val allocIdx = PriorityEncoder(currentFreeMask)
+
+      mappingTable(allocIdx).valid  := true.B
+      mappingTable(allocIdx).isRead := cand.isRead
+      mappingTable(allocIdx).id     := cand.id.U
+
+      cand.ready := true.B
+    }
+
+    // Key step: update mask, clear allocated bit
+    // Logic generates hardware: next request sees current Mask minus allocIdx
+    // Note: PriorityEncoder and shift operations are hardware logic
+    val allocIdxWire = PriorityEncoder(currentFreeMask)
+    // If needsAlloc is true, clear that bit; otherwise keep unchanged
+    val nextMask     = Mux(needsAlloc && hasSpace, currentFreeMask & ~(1.U(numChannels.W) << allocIdxWire), currentFreeMask)
+
+    currentFreeMask = nextMask
+  }
+
+  // -----------------------------------------------------------------------------
+  // Backend Connection
+  // -----------------------------------------------------------------------------
+  for (i <- 0 until numChannels) {
     //Default values
     io.mem_req(i).read.req.valid   := false.B
     io.mem_req(i).read.req.bits    := DontCare
@@ -95,14 +132,17 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).write.resp.ready := false.B
     io.mem_req(i).bank_id          := 0.U
 
-    val isRead    = mappingTable(i).isRead
-    val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
-    val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
-    val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
-    val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
+    val entry = mappingTable(i)
 
-    when(mappingTable(i).valid) {
-      when(isRead) {
+    // Only connect when entry is valid
+    when(entry.valid) {
+
+      val ballRead  = io.balldomain.bankRead(entry.id).io
+      val ballWrite = io.balldomain.bankWrite(entry.id).io
+      val rbank_id  = io.balldomain.bankRead(entry.id).bank_id
+      val wbank_id  = io.balldomain.bankWrite(entry.id).bank_id
+
+      when(entry.isRead) {
         io.mem_req(i).read <> ballRead
         io.mem_req(i).bank_id := rbank_id
       }.otherwise {
@@ -112,8 +152,28 @@ class MemMidend(val b: GlobalConfig) extends Module {
     }
   }
 
-  //Connect frontend to backend
-  io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
-  io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
-  io.mem_req(b.top.memBallChannelNum).bank_id := io.frontend.bankWrite.bank_id
+  // Connect frontend to the last channel
+  val frontendCh = b.top.memBallChannelNum
+  io.mem_req(frontendCh).write <> io.frontend.bankWrite.io
+  io.mem_req(frontendCh).read <> io.frontend.bankRead.io
+  io.mem_req(frontendCh).bank_id := io.frontend.bankWrite.bank_id
+
+  //Mapping table release
+  for (i <- 0 until numChannels) {
+    val releaseCounter = RegInit(0.U(5.W))
+
+    when(mappingTable(i).valid && !(io.mem_req(i).read.resp.valid ||
+      io.mem_req(i).write.resp.valid || io.mem_req(i).read.req.valid ||
+      io.mem_req(i).write.req.valid)) {
+      releaseCounter := releaseCounter + 1.U
+
+      when(releaseCounter === 16.U) {
+        releaseCounter         := 0.U
+        mappingTable(i).valid  := false.B
+        mappingTable(i).isRead := false.B
+        mappingTable(i).id     := 0.U
+      }
+
+    }
+  }
 }
