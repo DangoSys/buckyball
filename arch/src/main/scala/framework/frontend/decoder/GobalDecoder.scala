@@ -20,7 +20,7 @@ class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
 
 class PostGDCmd(b: GlobalConfig) extends Bundle {
   val domain_id = UInt(4.W)
-  val raw_cmd   = new RoCCCommandBB(b.core.xLen)
+  val cmd       = new RoCCCommandBB(b.core.xLen)
 }
 
 @instantiable
@@ -39,8 +39,8 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   // If reservation station is blocked, id_i is also blocked
   io.id_i.ready := io.id_o.ready
 
-  val func7  = io.id_i.bits.cmd.inst.funct
-  val opcode = io.id_i.bits.cmd.inst.opcode
+  val func7  = io.id_i.bits.cmd.funct
+  val opcode = io.id_i.bits.cmd.opcode
 
   // Instruction type determination: distinguish Ball, Mem, Fence, GP (RVV) instructions
   val is_mem_inst = (func7 === MVIN_BITPAT) ||
@@ -70,5 +70,5 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   // Output control
   io.id_o.valid          := io.id_i.valid
   io.id_o.bits.domain_id := domain_id
-  io.id_o.bits.raw_cmd   := io.id_i.bits.cmd
+  io.id_o.bits.cmd       := io.id_i.bits.cmd
 }

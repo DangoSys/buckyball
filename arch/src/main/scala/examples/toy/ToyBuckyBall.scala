@@ -8,10 +8,10 @@ import chisel3.util._
 import org.chipsalliance.cde.config._
 
 import freechips.rocketchip.diplomacy.LazyModule
-import freechips.rocketchip.tile.{HasCoreParameters, LazyRoCC, LazyRoCCModuleImp, OpcodeSet, TileKey}
+import freechips.rocketchip.tile.{HasCoreParameters, OpcodeSet, TileKey}
+import framework.core.rocket.{LazyRoCCBB, LazyRoCCModuleImpBB}
 import freechips.rocketchip.tilelink._
 
-import freechips.rocketchip.tile.{LazyRoCC, LazyRoCCModuleImp}
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 import framework.top.GlobalConfig
 import examples.toy.balldomain.BallDomain
@@ -21,12 +21,8 @@ import framework.memdomain.MemDomain
 import framework.top.channels.{Channel, ChannelCluster, ChannelIO}
 
 class ToyBuckyball(val b: GlobalConfig)(implicit p: Parameters)
-    extends LazyRoCC(opcodes = OpcodeSet.custom3, nPTWPorts = 1) {
+    extends LazyRoCCBB(opcodes = OpcodeSet.custom3, nPTWPorts = 1) {
 
-  // the width of core's register file
-  val xLen = p(TileKey).core.xLen
-
-  // DMA nodes for read and write paths
   val reader_node = TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
     name = "bb-dma-reader",
     sourceId = freechips.rocketchip.diplomacy.IdRange(0, b.memDomain.dma_n_xacts)
@@ -52,7 +48,7 @@ class ToyBuckyball(val b: GlobalConfig)(implicit p: Parameters)
   override val atlNode = TLIdentityNode()
 }
 
-class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImp(outer) with HasCoreParameters {
+class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImpBB(outer) with HasCoreParameters {
   import outer.b._
   val b: GlobalConfig = outer.b
   val totalBallRead            = b.ballDomain.ballIdMappings.map(_.inBW).sum

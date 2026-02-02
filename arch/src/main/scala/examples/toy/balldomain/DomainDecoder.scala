@@ -53,15 +53,15 @@ object BallDefaultConstants {
 class BallDomainDecoder(val b: GlobalConfig) extends Module {
   import BallDefaultConstants._
   @public
-  val raw_cmd_i         = IO(Flipped(Decoupled(new PostGDCmd(b))))
+  val cmd_i             = IO(Flipped(Decoupled(new PostGDCmd(b))))
   @public
   val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum)))
 
-  raw_cmd_i.ready := ball_decode_cmd_o.ready
+  cmd_i.ready := ball_decode_cmd_o.ready
 
-  val func7 = raw_cmd_i.bits.raw_cmd.inst.funct
-  val rs1   = raw_cmd_i.bits.raw_cmd.rs1
-  val rs2   = raw_cmd_i.bits.raw_cmd.rs2
+  val func7 = cmd_i.bits.cmd.funct
+  val rs1   = cmd_i.bits.cmd.rs1Data
+  val rs2   = cmd_i.bits.cmd.rs2Data
 
   // Ball instruction decoding
   import BallDecodeFields._
@@ -83,7 +83,7 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Output assignment
 // -----------------------------------------------------------------------------
-  ball_decode_cmd_o.valid := raw_cmd_i.valid && (raw_cmd_i.bits.domain_id === DomainId.BALL)
+  ball_decode_cmd_o.valid := cmd_i.valid && (cmd_i.bits.domain_id === DomainId.BALL)
 
   ball_decode_cmd_o.bits.bid := Mux(ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 

@@ -49,8 +49,8 @@ class DomainDecoder(val b: GlobalConfig) extends Module {
   val decode = Decoder.decode(decoderParam)
 
   // Decode the incoming instruction
-  // RoCCCommandBB has 'inst' field (RoCCInstruction Bundle), need to convert to UInt
-  val inst = io.inst_i.inst.asUInt
+  // RoCCCommandBB has 'raw_inst' field containing the raw 32-bit instruction
+  val inst = io.inst_i.raw_inst
   io.decoded_o := decode(inst)
 
 }

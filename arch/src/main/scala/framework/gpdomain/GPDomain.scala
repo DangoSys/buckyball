@@ -13,9 +13,8 @@ class GpDomain(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
     val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
     val global_complete_o = Decoupled(new GlobalRsComplete(b))
-
     // Status signal
-    val busy = Output(Bool())
+    val busy              = Output(Bool())
   })
 
   io.global_issue_i.ready := io.global_complete_o.ready
@@ -25,8 +24,8 @@ class GpDomain(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   val decoder: Instance[framework.gpdomain.sequencer.decoder.DomainDecoder] =
     Instantiate(new framework.gpdomain.sequencer.decoder.DomainDecoder(b))
-  // Extract raw_cmd from PostGDCmd
-  decoder.io.inst_i <> io.global_issue_i.bits.cmd.raw_cmd
+  // Extract raw_inst from PostGDCmd
+  decoder.io.inst_i <> io.global_issue_i.bits.cmd.cmd
   val decoded = decoder.io.decoded_o
 
   io.global_complete_o.valid       := io.global_issue_i.valid

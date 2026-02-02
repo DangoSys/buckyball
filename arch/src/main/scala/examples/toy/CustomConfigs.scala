@@ -3,20 +3,19 @@ package examples.toy
 import org.chipsalliance.cde.config.{Config, Field, Parameters}
 import chisel3._
 import freechips.rocketchip.diplomacy.LazyModule
-import freechips.rocketchip.subsystem.SystemBusKey
 import freechips.rocketchip.tile._
 import examples.toy.ToyBuckyball
 import framework.top.GlobalConfig
+import framework.core.rocket.BuildRoCCBB
 
 object BuckyballToyConfig {
-  // 简化：直接使用GlobalConfig()
   val defaultConfig = GlobalConfig()
 }
 
 class BuckyballCustomConfig(
   buckyballConfig: GlobalConfig = GlobalConfig())
     extends Config((site, here, up) => {
-      case BuildRoCC => up(BuildRoCC) ++ Seq {
+      case BuildRoCCBB => up(BuildRoCCBB) ++ Seq {
           (p: Parameters) =>
             implicit val q = p
             val buckyball  = LazyModule(new ToyBuckyball(buckyballConfig)(q))

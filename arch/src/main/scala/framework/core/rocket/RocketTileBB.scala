@@ -78,12 +78,12 @@ class RocketTileBB private (
     extends BaseTile(rocketParams, crossing, lookup, q)
     with SinksExternalInterrupts
     with SourcesExternalNotifications
-    with HasLazyRoCC // Use standard HasLazyRoCC instead of HasLazyRoCCBB
+    with HasLazyRoCCBB
     with HasHellaCache
     with HasICacheFrontend {
   // Private constructor ensures altered LazyModule.p is used implicitly
   def this(
-    params: RocketTileParamsBB,
+    params:     RocketTileParamsBB,
     crossing:   HierarchicalElementCrossingParamsLike,
     lookup:     LookupByHartIdImpl
   )(
@@ -189,21 +189,17 @@ class RocketTileBB private (
 class RocketTileModuleImpBB(outer: RocketTileBB)
     extends BaseTileModuleImp(outer)
     with HasFpuOptBB
-    with HasLazyRoCCModuleBB // Use HasLazyRoCCModuleBB but with standard RoCC types
+    with HasLazyRoCCModuleBB
     with HasICacheFrontendModule {
   Annotated.params(this, outer.rocketParams)
 
-  val core = Module(new RocketBB(outer)(outer.p))
-  // Create RocketBB with modified parameters that include BuildRoCCBB as BuildRoCC
-  // We override the useRoCC and dcacheArbPorts to include BuildRoCCBB
-  // if we override after in RocketTileBB it will be too late
-  // that other modules like dcache will use the original parameters
-  // =================================================================================
-  // implicit val modifiedP: Parameters = outer.p.alterMap(Map(
-  //   BuildRoCC -> (outer.p(BuildRoCC) ++ outer.p(BuildRoCCBB))
-  // ))
-  // val core = Module(new RocketBB(outer)(modifiedP))
-  // =================================================================================
+  val modifiedP = outer.p.alterMap(Map(
+    BuildRoCC -> (outer.p(BuildRoCC) ++ outer.p(BuildRoCCBB).map(f =>
+      (p: Parameters) => f(p).asInstanceOf[freechips.rocketchip.tile.LazyRoCC]
+    ))
+  ))
+
+  val core = Module(new RocketBB(outer)(modifiedP))
   outer.vector_unit.foreach { v =>
     core.io.vector.get <> v.module.io.core
     v.module.io.tlb <> outer.dcache.module.io.tlb_port
