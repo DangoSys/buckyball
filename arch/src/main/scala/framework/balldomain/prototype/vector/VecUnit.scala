@@ -91,7 +91,7 @@ class VecUnit(val b: GlobalConfig) extends Module {
   VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
   for (i <- 0 until outBW) {
     io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
-    io.bankWrite(i).bank_id           := VecStoreUnit.io.wr_bank_o
+    io.bankWrite(i).bank_id           := VecStoreUnit.io.wr_bank_o + i.U
     io.bankWrite(i).io.req.bits.wmode := true.B
   }
   VecCtrlUnit.io.cmdResp_i <> VecStoreUnit.io.cmdResp_o
