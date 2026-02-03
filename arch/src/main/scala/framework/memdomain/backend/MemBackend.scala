@@ -119,7 +119,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // - select at most one read requester (Mux1H)
   // - connect bank <-> selected accPipe using the per-pipe wires
   // -----------------------------------------------------------------------------
-    banks.zipWithIndex.foreach {
+  banks.zipWithIndex.foreach {
     case (bank, bankIdx) =>
       val bankId = bankIdx.U(log2Up(b.memDomain.bankNum).W)
 
@@ -129,10 +129,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
       val wMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
         wMatch(i) := (accPipes(i).io.target_bank_id === bankId) &&
-          accPipes(i).io.sramWrite.req.valid
+        accPipes(i).io.sramWrite.req.valid
       }
-      val wHas   = wMatch.asUInt.orR
-      val wSel   = OHToUInt(wMatch)
+      val wHas = wMatch.asUInt.orR
+      val wSel = OHToUInt(wMatch)
       assert(PopCount(wMatch) <= 1.U, s"[MemBackend] More than one WRITE match to bank $bankIdx")
 
       // owner regs for write resp
@@ -181,15 +181,15 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
       val selIdx     = OHToUInt(rMatch)
       val connectIdx = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
-      connectIdx := selIdx
-
+      connectIdx           := selIdx
+      // selected pipe sees ready from bank
+      rd_req_ready(selIdx) := bank.io.sramRead.req.ready
       when(rHas) {
 
         // bank gets req from selected pipe using Mux1H
         bank.io.sramRead.req.valid := io.mem_req(selIdx).bank_id === bankId
         bank.io.sramRead.req.bits  := io.mem_req(selIdx).read.req.bits
-        // selected pipe sees ready from bank
-        rd_req_ready(selIdx)       := bank.io.sramRead.req.ready
+
       }.otherwise {
         bank.io.sramRead.req.valid := false.B
         bank.io.sramRead.req.bits  := 0.U.asTypeOf(bank.io.sramRead.req.bits)

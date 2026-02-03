@@ -114,7 +114,7 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImpBB(outer)
     bankReadReqWithIds.bits.req         := ballDomain.bankRead(i).io.req.bits
     ballDomain.bankRead(i).io.req.ready := bankReadReqWithIds.ready
 
-    val bankReadReqQ = Queue(bankReadReqWithIds, 1)
+    val bankReadReqQ = Queue(bankReadReqWithIds, 8)
 
     memDomain.io.ballDomain.bankRead(i).io.req.valid := bankReadReqQ.valid
     memDomain.io.ballDomain.bankRead(i).io.req.bits  := bankReadReqQ.bits.req
