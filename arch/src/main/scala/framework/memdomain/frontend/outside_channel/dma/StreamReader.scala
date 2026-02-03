@@ -2,10 +2,9 @@ package framework.memdomain.frontend.outside_channel.dma
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XRD}
-import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
 import framework.builtin.utils.Util._
 import framework.memdomain.frontend.outside_channel.tlb.BBTLBIO
@@ -21,7 +20,7 @@ class BBReadRequest extends Bundle {
 class BBReadResponse(dataWidth: Int) extends Bundle {
   val data        = UInt(dataWidth.W)
   val last        = Bool()
-  val addrcounter = UInt(10.W)
+  val addrcounter = UInt(10.W) // will be beat index: 0,1,2,...
 }
 
 @instantiable
@@ -40,30 +39,24 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tlb   = Flipped(new BBTLBIO(b))
     val busy  = Output(Bool())
     val flush = Input(Bool())
-    // TileLink physical connection
     val tl    = new TLBundle(edge.bundle)
   })
 
   val s_idle :: s_req_new_block :: Nil = Enum(2)
-  val state                            = RegInit(s_idle)
+  val state = RegInit(s_idle)
 
-  val req            = Reg(new BBReadRequest())
-  // Number of bytes requested
-  val bytesRequested = Reg(UInt(16.W))
-  // Number of bytes received
-  val bytesReceived  = Reg(UInt(16.W))
-  val bytesLeft      = req.len - bytesRequested
+  val req = Reg(new BBReadRequest())
+
+  // Number of bytes requested (A sent)
+  val bytesRequested = RegInit(0.U(16.W))
+  // Number of bytes received (D accepted)
+  val bytesReceived  = RegInit(0.U(16.W))
+
+  val bytesLeft = req.len - bytesRequested
 
   // Select request size - simplified version, fixed use of beatBytes
   val read_size  = minOf(beatBytes.U, bytesLeft)
   val read_vaddr = req.vaddr + bytesRequested * req.stride
-
-  // Track byte range corresponding to each request for correct last signal calculation
-  // Starting byte position of current request
-  val req_byte_start = Reg(UInt(16.W))
-  // Ending byte position of current request
-  val req_byte_end   = Wire(UInt(16.W))
-  req_byte_end := req_byte_start + read_size
 
   // Transaction ID management
   val xactBusy   = RegInit(0.U(nXacts.W))
@@ -75,15 +68,14 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val xactBusy_remove = ~Mux(io.tl.d.fire, (1.U << io.tl.d.bits.source).asUInt, 0.U)
   xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
 
-  // TileLink request construction - return to single beat requests to avoid address alignment issues
+  // TileLink request construction - single beat
   val get = edge.Get(
     fromSource = xactId,
-    toAddress = 0.U,
-    // Request only one beat each time
-    lgSize = log2Ceil(beatBytes).U
+    toAddress  = 0.U,
+    lgSize     = log2Ceil(beatBytes).U
   )._2
 
-  // TLB processing pipeline - simplified based on Gemmini
+  // TLB processing pipeline
   class TLBundleAWithInfo extends Bundle {
     val tl_a   = get.cloneType
     val vaddr  = Output(UInt(vaddrBits.W))
@@ -97,55 +89,48 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   untranslated_a.bits.vaddr  := read_vaddr
   untranslated_a.bits.status := req.status
 
-  // Simplified: no retry mechanism, direct connection
+  // 1-deep queue to break comb paths
   val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
   tlb_q.io.enq <> untranslated_a
 
   io.tlb.req.valid            := tlb_q.io.deq.valid && (state === s_req_new_block)
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
-  io.tlb.req.bits.passthrough := true.B //use paddr for now
+  io.tlb.req.bits.passthrough := true.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XRD
-  io.tlb.req.bits.prv         := 3.U    // Machine mode
+  io.tlb.req.bits.prv         := 3.U
   io.tlb.req.bits.v           := false.B
   io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
 
-  tlb_q.io.deq.ready := io.tlb.resp.valid;
+  // consume tlb_q when tlb resp valid
+  tlb_q.io.deq.ready := io.tlb.resp.valid
 
-  /* val translate_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true)) translate_q.io.enq <> tlb_q.io.deq
-   * translate_q.io.deq.ready := io.tlb.resp.fire && !io.tlb.resp.bits.miss */
-
-  // TileLink A channel (request) connection
-  //for now, we just use the vaddr as the physical address to simplify the implementation
+  // TileLink A channel
   io.tl.a.valid        := io.tlb.resp.valid && (state === s_req_new_block)
   io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
-  io.tlb.resp.ready    := true.B;
+  io.tlb.resp.ready    := true.B
 
-  // Iteration counter for tracking number of requests
-  val iter_counter       = RegInit(0.U(10.W))
-  // Table for managing iteration counts
-  val iter_mangage_table = RegInit(VecInit(Seq.fill(16)(0.U(10.W))))
-  // Iteration count management - update after each request
-  when(io.tl.a.fire) {
-    iter_counter               := iter_counter + 1.U
-    iter_mangage_table(xactId) := iter_counter
-  }
-
-  // TileLink D channel (response) processing
+  // -----------------------------
+  // D channel -> resp
+  // -----------------------------
+  // Backpressure from resp to TileLink D
   io.tl.d.ready := io.resp.ready
 
-  io.resp.valid            := io.tl.d.valid
-  io.resp.bits.data        := io.tl.d.bits.data
-  // Use source as address counter
-  io.resp.bits.addrcounter := iter_mangage_table(io.tl.d.bits.source)
-  // Fix last signal: calculate using received byte count
-  // Total byte count after receiving current beat
+  io.resp.valid     := io.tl.d.valid
+  io.resp.bits.data := io.tl.d.bits.data
+
+  // ✅ FIX: addrcounter = beat index in receive order (0,1,2,...)
+  // Current beat index before consuming this beat:
+  val beatIndex = (bytesReceived >> log2Ceil(beatBytes)).asUInt
+  io.resp.bits.addrcounter := beatIndex(9, 0)
+
+  // last flag based on total bytes after this beat
   val resp_bytes_end = bytesReceived + beatBytes.U
   io.resp.bits.last := io.tl.d.valid && (resp_bytes_end >= req.len)
 
-  // Update received byte count
+  // Update received bytes when we actually accept a beat
   when(io.tl.d.fire) {
     bytesReceived := bytesReceived + beatBytes.U
   }
@@ -155,29 +140,27 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl.c.valid := false.B
   io.tl.e.valid := false.B
 
+  // -----------------------------
   // State machine
-  io.req.ready := state === s_idle
+  // -----------------------------
+  io.req.ready := (state === s_idle)
   io.busy      := xactBusy.orR || (state =/= s_idle)
 
   when(io.req.fire) {
     req            := io.req.bits
     bytesRequested := 0.U
-    // Reset received byte count
     bytesReceived  := 0.U
-    // Reset iteration counter
-    iter_counter   := 0.U
     state          := s_req_new_block
   }
 
-  when(untranslated_a.fire) {
-    // Use actual requested byte count
-    bytesRequested := bytesRequested + read_size
-    // Check if more requests need to be sent
-    when(bytesRequested >= req.len) {
-      // All requests sent
+  // IMPORTANT: bytesRequested should advance only when A actually fires
+  when(io.tl.a.fire) {
+    val nextBytesRequested = bytesRequested + read_size
+    bytesRequested := nextBytesRequested
+
+    when(nextBytesRequested >= req.len) {
       state := s_idle
     }.otherwise {
-      // Continue sending next request
       state := s_req_new_block
     }
   }
