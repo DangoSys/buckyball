@@ -119,38 +119,54 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // - select at most one read requester (Mux1H)
   // - connect bank <-> selected accPipe using the per-pipe wires
   // -----------------------------------------------------------------------------
-  banks.zipWithIndex.foreach {
+    banks.zipWithIndex.foreach {
     case (bank, bankIdx) =>
       val bankId = bankIdx.U(log2Up(b.memDomain.bankNum).W)
 
-      // -------------------------
-      // WRITE routing
-      // -------------------------
+      // =========================================================
+      // WRITE routing (req: combinational; resp: owner-registered)
+      // =========================================================
       val wMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
       for (i <- 0 until b.memDomain.bankChannel) {
-        wMatch(i) := io.mem_req(i).bank_id === bankId && io.mem_req(i).write.req.valid
+        wMatch(i) := (accPipes(i).io.target_bank_id === bankId) &&
+          accPipes(i).io.sramWrite.req.valid
       }
-      val wHas = wMatch.asUInt.orR
-      // stronger safety: at most 1
+      val wHas   = wMatch.asUInt.orR
+      val wSel   = OHToUInt(wMatch)
       assert(PopCount(wMatch) <= 1.U, s"[MemBackend] More than one WRITE match to bank $bankIdx")
 
-      when(wHas) {
-        val selIdx = OHToUInt(wMatch)
-        // bank gets req from selected pipe using Mux1H
-        bank.io.sramWrite.req.valid := Mux1H(wMatch, accPipes.map(_.io.sramWrite.req.valid))
-        bank.io.sramWrite.req.bits  := Mux1H(wMatch, accPipes.map(_.io.sramWrite.req.bits))
-        // selected pipe sees ready from bank
-        wr_req_ready(selIdx)        := bank.io.sramWrite.req.ready
+      // owner regs for write resp
+      val wOwnerValid = RegInit(false.B)
+      val wOwnerIdx   = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
 
-        // response path: selected pipe sees bank resp
-        wr_resp_valid(selIdx)        := bank.io.sramWrite.resp.valid
-        wr_resp_ok(selIdx)           := bank.io.sramWrite.resp.bits.ok
-        // bank sees ready from selected pipe
-        bank.io.sramWrite.resp.ready := wr_resp_ready(selIdx)
-      }.otherwise {
-        bank.io.sramWrite.req.valid  := false.B
-        bank.io.sramWrite.req.bits   := 0.U.asTypeOf(bank.io.sramWrite.req.bits)
-        bank.io.sramWrite.resp.ready := false.B
+      // default bank write req
+      bank.io.sramWrite.req.valid := false.B
+      bank.io.sramWrite.req.bits  := 0.U.asTypeOf(bank.io.sramWrite.req.bits)
+
+      // issue req from selected pipe
+      when(wHas) {
+        bank.io.sramWrite.req.valid := true.B
+        bank.io.sramWrite.req.bits  := Mux1H(wMatch, accPipes.map(_.io.sramWrite.req.bits))
+        // ready to selected pipe
+        wr_req_ready(wSel)          := bank.io.sramWrite.req.ready
+
+        when(bank.io.sramWrite.req.fire) {
+          wOwnerValid := true.B
+          wOwnerIdx   := wSel
+        }
+      }
+
+      // resp routes by owner (NOT by wHas)
+      // drive selected pipe resp wires
+      when(wOwnerValid) {
+        wr_resp_valid(wOwnerIdx) := bank.io.sramWrite.resp.valid
+        wr_resp_ok(wOwnerIdx)    := bank.io.sramWrite.resp.bits.ok
+      }
+      // ready from owner pipe
+      bank.io.sramWrite.resp.ready := Mux(wOwnerValid, wr_resp_ready(wOwnerIdx), false.B)
+
+      when(bank.io.sramWrite.resp.fire && wOwnerValid) {
+        wOwnerValid := false.B
       }
 
       // -------------------------

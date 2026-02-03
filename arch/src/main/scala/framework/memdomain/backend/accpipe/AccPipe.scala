@@ -60,9 +60,8 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // FSM
   // ---------------------------------------------------------------------------
-  val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil =
-    Enum(5)
-  val state                                                                                                    = RegInit(s_idle)
+  val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil = Enum(5)
+  val state = RegInit(s_idle)
 
   io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
 
@@ -99,7 +98,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val segW = b.memDomain.bankWidth / b.memDomain.bankMaskLen
     // Optional safety: if not divisible, elaboration will still succeed but behavior is wrong.
     // You can assert if you want:
-    // require(b.memDomain.bankWidth % b.memDomain.bankMaskLen == 0, "bankWidth must be divisible by bankMaskLen")
+    require(b.memDomain.bankWidth % b.memDomain.bankMaskLen == 0, "bankWidth must be divisible by bankMaskLen")
 
     val oldVec = oldU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
     val addVec = addU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
