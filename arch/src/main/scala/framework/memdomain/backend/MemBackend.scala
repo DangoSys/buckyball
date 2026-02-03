@@ -169,56 +169,49 @@ class MemBackend(val b: GlobalConfig) extends Module {
         wOwnerValid := false.B
       }
 
-      // -------------------------
-      // READ routing
-      // -------------------------
+      // =========================================================
+      // READ routing (req: combinational; resp: owner-registered)
+      // =========================================================
       val rMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
+      // owner regs for read resp
+      val rOwnerValid = RegInit(false.B)
+      val rOwnerIdx   = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
+      val canAcceptRead = !rOwnerValid
       for (i <- 0 until b.memDomain.bankChannel) {
-        rMatch(i) := io.mem_req(i).bank_id === bankId && io.mem_req(i).read.req.valid
+        rMatch(i) := canAcceptRead && (accPipes(i).io.target_bank_id === bankId) && accPipes(i).io.sramRead.req.valid
       }
       val rHas = rMatch.asUInt.orR
-      //assert(PopCount(rMatch) <= 1.U, s"[MemBackend] More than one READ match to bank $bankIdx")
+      val rSel = OHToUInt(rMatch)
+      // stronger safety: at most 1
+      assert(PopCount(rMatch) <= 1.U, s"[MemBackend] More than one READ match to bank $bankIdx")
 
-      val selIdx     = OHToUInt(rMatch)
-      val connectIdx = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
-      connectIdx           := selIdx
-      // selected pipe sees ready from bank
-      rd_req_ready(selIdx) := bank.io.sramRead.req.ready
+      // default bank read req
+      bank.io.sramRead.req.valid := false.B
+      bank.io.sramRead.req.bits  := 0.U.asTypeOf(bank.io.sramRead.req.bits)
+
+      // issue req from selected pipe
       when(rHas) {
+        bank.io.sramRead.req.valid := true.B
+        bank.io.sramRead.req.bits  := Mux1H(rMatch, accPipes.map(_.io.sramRead.req.bits))
+        // ready to selected pipe
+        rd_req_ready(rSel)         := bank.io.sramRead.req.ready
 
-        // bank gets req from selected pipe using Mux1H
-        bank.io.sramRead.req.valid := io.mem_req(selIdx).bank_id === bankId
-        bank.io.sramRead.req.bits  := io.mem_req(selIdx).read.req.bits
-
-      }.otherwise {
-        bank.io.sramRead.req.valid := false.B
-        bank.io.sramRead.req.bits  := 0.U.asTypeOf(bank.io.sramRead.req.bits)
+        when(bank.io.sramRead.req.fire) {
+          rOwnerValid := true.B
+          rOwnerIdx   := rSel
+        }
       }
-      when(bank.io.sramRead.resp.valid) {
-        // response path: selected pipe sees bank resp
-        io.mem_req(connectIdx).read.resp.valid     := bank.io.sramRead.resp.valid
-        io.mem_req(connectIdx).read.resp.bits.data := bank.io.sramRead.resp.bits.data
-        // bank sees ready from selected pipe
-        bank.io.sramRead.resp.ready                := io.mem_req(connectIdx).read.resp.ready
-      }.otherwise {
-        bank.io.sramRead.resp.ready := false.B
+
+      // resp routes by owner (NOT by rHas)
+      when(rOwnerValid) {
+        rd_resp_valid(rOwnerIdx) := bank.io.sramRead.resp.valid
+        rd_resp_data(rOwnerIdx)  := bank.io.sramRead.resp.bits.data
+      }
+      // bank sees ready from owner pipe
+      bank.io.sramRead.resp.ready := Mux(rOwnerValid, rd_resp_ready(rOwnerIdx), false.B)
+
+      when(bank.io.sramRead.resp.fire && rOwnerValid) {
+        rOwnerValid := false.B
       }
   }
-
-  // -----------------------------------------------------------------------------
-  // Optional: fire-level conflict assertions (stricter semantics)
-  // Enable if you prefer conflicts only when both actually handshake.
-  // -----------------------------------------------------------------------------
-  // val wrFire = VecInit(accPipes.map(_.io.sramWrite.req.fire))
-  // val rdFire = VecInit(accPipes.map(_.io.sramRead.req.fire))
-  // for (i <- 0 until b.memDomain.bankChannel) {
-  //   for (j <- (i + 1) until b.memDomain.bankChannel) {
-  //     val bi = accPipes(i).io.target_bank_id
-  //     val bj = accPipes(j).io.target_bank_id
-  //     when(wrFire(i) && wrFire(j)) { assert(bi =/= bj) }
-  //     when(rdFire(i) && rdFire(j)) { assert(bi =/= bj) }
-  //     when(wrFire(i) && rdFire(j)) { assert(bi =/= bj) }
-  //     when(rdFire(i) && wrFire(j)) { assert(bi =/= bj) }
-  //   }
-  // }
 }
