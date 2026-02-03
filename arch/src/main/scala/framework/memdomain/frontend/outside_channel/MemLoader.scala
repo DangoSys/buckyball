@@ -26,7 +26,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   })
 
   val s_idle :: s_dma_req :: s_dma_wait :: Nil = Enum(3)
-  val state = RegInit(s_idle)
+  val state                                    = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
@@ -72,8 +72,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.bankWrite.ball_id := 0.U
 
   // cmdResp defaults
-  io.cmdResp.valid := false.B
-  io.cmdResp.bits  := 0.U.asTypeOf(new MemRsComplete(b))
+  io.cmdResp.valid       := false.B
+  io.cmdResp.bits        := 0.U.asTypeOf(new MemRsComplete(b))
   io.cmdResp.bits.rob_id := rob_id_reg
 
   // -----------------------------
@@ -93,7 +93,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // DMA req accepted
   when(io.dmaReq.fire) {
-    state := s_dma_wait
+    state      := s_dma_wait
     resp_count := 0.U
   }
 
@@ -107,12 +107,12 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // When bankWrite request handshakes, consume pending beat
   when(io.bankWrite.io.req.fire) {
-    pending := false.B
+    pending    := false.B
     resp_count := resp_count + 1.U
 
     when(latLast) {
       // command complete only when last beat has been accepted by bank write
-      state := s_idle
+      state            := s_idle
       io.cmdResp.valid := true.B
     }
   }

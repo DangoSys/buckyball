@@ -67,7 +67,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
   // Collect read requests
   for (i <- 0 until totalBallRead) {
     // Default value
-    io.balldomain.bankRead(i).io.req.ready  := false.B
+    io.balldomain.bankRead(i).io.req.ready  := !mappingTable.map(_.valid).reduce(_ || _)
     io.balldomain.bankRead(i).io.resp.valid := false.B
     io.balldomain.bankRead(i).io.resp.bits  := DontCare
 
@@ -81,7 +81,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
   // Collect write requests
   for (i <- 0 until totalBallWrite) {
-    io.balldomain.bankWrite(i).io.req.ready  := false.B
+    io.balldomain.bankWrite(i).io.req.ready  := !mappingTable.map(_.valid).reduce(_ || _)
     io.balldomain.bankWrite(i).io.resp.valid := false.B
     io.balldomain.bankWrite(i).io.resp.bits  := DontCare
 

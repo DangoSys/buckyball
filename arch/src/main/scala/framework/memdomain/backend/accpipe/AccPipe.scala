@@ -61,7 +61,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // FSM
   // ---------------------------------------------------------------------------
   val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil = Enum(5)
-  val state = RegInit(s_idle)
+  val state                                                                                                    = RegInit(s_idle)
 
   io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
 
@@ -110,6 +110,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     resVec.asUInt
   }
 
+  io.read.req.ready := io.sramRead.req.ready
   // ---------------------------------------------------------------------------
   // FSM behavior
   // ---------------------------------------------------------------------------
@@ -138,7 +139,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
         io.sramRead.req.ready,
         Mux(writeDirect, io.sramWrite.req.ready, false.B)
       )
-      io.read.req.ready  := readValid && io.sramRead.req.ready
 
       // State transitions + latching on fire
       when(writeAccum && io.sramRead.req.fire) {
