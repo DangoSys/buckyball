@@ -142,6 +142,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
       val rbank_id  = io.balldomain.bankRead(entry.id).bank_id
       val wbank_id  = io.balldomain.bankWrite(entry.id).bank_id
 
+      
       when(entry.isRead) {
         io.mem_req(i).read <> ballRead
         io.mem_req(i).bank_id := rbank_id
@@ -156,7 +157,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
   val frontendCh = b.top.memBallChannelNum
   io.mem_req(frontendCh).write <> io.frontend.bankWrite.io
   io.mem_req(frontendCh).read <> io.frontend.bankRead.io
-  io.mem_req(frontendCh).bank_id := io.frontend.bankWrite.bank_id
+  io.mem_req(frontendCh).bank_id := Mux(io.frontend.bankRead.io.req.valid, io.frontend.bankRead.bank_id, io.frontend.bankWrite.bank_id)
+  
 
   //Mapping table release
   for (i <- 0 until numChannels) {
