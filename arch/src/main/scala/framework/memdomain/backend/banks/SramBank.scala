@@ -33,7 +33,7 @@ class SramBank(val b: GlobalConfig) extends Module {
   val rdata = mem.read(raddr, ren)
 
   io.sramRead.resp.valid     := RegNext(ren)
-  io.sramRead.resp.bits.data := RegNext(rdata.asUInt)
+  io.sramRead.resp.bits.data := rdata.asUInt
 
   // -----------------------------------------------------------------------------
   // Write path

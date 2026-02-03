@@ -43,7 +43,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   })
 
   val s_idle :: s_req_new_block :: Nil = Enum(2)
-  val state = RegInit(s_idle)
+  val state                            = RegInit(s_idle)
 
   val req = Reg(new BBReadRequest())
 
@@ -71,8 +71,8 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // TileLink request construction - single beat
   val get = edge.Get(
     fromSource = xactId,
-    toAddress  = 0.U,
-    lgSize     = log2Ceil(beatBytes).U
+    toAddress = 0.U,
+    lgSize = log2Ceil(beatBytes).U
   )._2
 
   // TLB processing pipeline

@@ -96,28 +96,27 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit
 // -----------------------------------------------------------------------------
-    when(io.bankReadResp(0).valid &&
-      (!ld_ex_valid_reg || io.ld_ex_o.ready) && (state === busy)) {
-      ld_ex_valid_reg := true.B
-      ld_ex_op1_reg   := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      ld_ex_op2_reg   := io.bankReadResp(1).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      ld_ex_iter_reg  := iter_counter
-    }.elsewhen(io.ld_ex_o.ready) {
-      ld_ex_valid_reg := false.B
+    when(io.bankReadResp(0).valid && io.bankReadResp(1).valid) {
+      io.ld_ex_o.valid     := true.B
+      io.ld_ex_o.bits.op1  := io.bankReadResp(0).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      io.ld_ex_o.bits.op2  := io.bankReadResp(1).bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      ld_ex_iter_reg       := ld_ex_iter_reg + 1.U
+      io.ld_ex_o.bits.iter := ld_ex_iter_reg
+    }.otherwise {
+      io.ld_ex_o.valid     := false.B
+      io.ld_ex_o.bits.iter := 0.U
+      io.ld_ex_o.bits.op1  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
+      io.ld_ex_o.bits.op2  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
     }
-
-    io.ld_ex_o.valid     := ld_ex_valid_reg
-    io.ld_ex_o.bits.op1  := ld_ex_op1_reg
-    io.ld_ex_o.bits.op2  := ld_ex_op2_reg
-    io.ld_ex_o.bits.iter := ld_ex_iter_reg
 
 // -----------------------------------------------------------------------------
 // Reset iter_counter and return to idle state
 // -----------------------------------------------------------------------------
 
-    when(state === busy && iter_counter === iter && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
-      state        := idle
-      iter_counter := 0.U
+    when(state === busy && ld_ex_iter_reg === iter && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
+      state          := idle
+      iter_counter   := 0.U
+      ld_ex_iter_reg := 0.U
     }
   }.otherwise {
     io.ld_ex_o.valid     := false.B

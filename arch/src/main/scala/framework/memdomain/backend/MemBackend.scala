@@ -172,10 +172,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // =========================================================
       // READ routing (req: combinational; resp: owner-registered)
       // =========================================================
-      val rMatch = Wire(Vec(b.memDomain.bankChannel, Bool()))
+      val rMatch        = Wire(Vec(b.memDomain.bankChannel, Bool()))
       // owner regs for read resp
-      val rOwnerValid = RegInit(false.B)
-      val rOwnerIdx   = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
+      val rOwnerValid   = RegInit(false.B)
+      val rOwnerIdx     = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
       val canAcceptRead = !rOwnerValid
       for (i <- 0 until b.memDomain.bankChannel) {
         rMatch(i) := canAcceptRead && (accPipes(i).io.target_bank_id === bankId) && accPipes(i).io.sramRead.req.valid
