@@ -126,10 +126,10 @@ class MemMidend(val b: GlobalConfig) extends Module {
     //Default values
     io.mem_req(i).read.req.valid   := false.B
     io.mem_req(i).read.req.bits    := DontCare
-    io.mem_req(i).read.resp.ready  := false.B
+    io.mem_req(i).read.resp.ready  := true.B
     io.mem_req(i).write.req.valid  := false.B
     io.mem_req(i).write.req.bits   := DontCare
-    io.mem_req(i).write.resp.ready := false.B
+    io.mem_req(i).write.resp.ready := true.B
     io.mem_req(i).bank_id          := 0.U
 
     val entry = mappingTable(i)

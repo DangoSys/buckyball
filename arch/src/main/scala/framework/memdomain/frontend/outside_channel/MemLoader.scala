@@ -16,38 +16,69 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    // Load instruction from ReservationStation
     val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
-    // Completion signal sent to ReservationStation
     val cmdResp = Decoupled(new MemRsComplete(b))
-    // Direct connection to DMA read interface
+
     val dmaReq  = Decoupled(new BBReadRequest())
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
 
-    // Connected to Bank write interface
     val bankWrite = Flipped(new BankWrite(b))
-
   })
 
   val s_idle :: s_dma_req :: s_dma_wait :: Nil = Enum(3)
-  val state                                    = RegInit(s_idle)
+  val state = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
-  // Cache mem_addr
   val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
-  // Cache iteration count
   val iter_reg     = Reg(UInt(10.W))
-  // Count number of responses received, supports up to 16 responses
-  val resp_count   = Reg(UInt(log2Up(16).W))
+  val resp_count   = RegInit(0.U(log2Up(16).W))
+  val wr_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
+  val stride_reg   = Reg(UInt(10.W))
 
-  // Cache decoded bank information
-  val wr_bank_reg = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  // Cache stride
-  val stride_reg  = Reg(UInt(10.W))
+  // -----------------------------
+  // pending latch for 1-beat DMA -> bankWrite
+  // -----------------------------
+  val pending = RegInit(false.B)
+  val latRow  = Reg(UInt(log2Up(b.memDomain.bankEntries).W))
+  val latData = Reg(UInt(b.memDomain.bankWidth.W))
+  val latLast = RegInit(false.B)
 
+  // -----------------------------
+  // defaults
+  // -----------------------------
+  io.cmdReq.ready := (state === s_idle)
+
+  io.dmaReq.valid       := (state === s_dma_req)
+  io.dmaReq.bits.vaddr  := mem_addr_reg
+  io.dmaReq.bits.len    := iter_reg * (b.memDomain.bankWidth / 8).U
+  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
+  io.dmaReq.bits.stride := stride_reg
+
+  // only accept DMA beat when waiting AND no pending beat buffered
+  io.dmaResp.ready := (state === s_dma_wait) && !pending
+
+  // bank write request driven from pending
+  io.bankWrite.io.req.valid      := pending
+  io.bankWrite.io.req.bits.addr  := latRow
+  io.bankWrite.io.req.bits.data  := latData
+  io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.bankWrite.io.req.bits.wmode := false.B
+
+  // IMPORTANT: always ready for write response (avoid deadlock)
+  io.bankWrite.io.resp.ready := true.B
+
+  io.bankWrite.rob_id  := rob_id_reg
+  io.bankWrite.bank_id := wr_bank_reg
+  io.bankWrite.ball_id := 0.U
+
+  // cmdResp defaults
+  io.cmdResp.valid := false.B
+  io.cmdResp.bits  := 0.U.asTypeOf(new MemRsComplete(b))
+  io.cmdResp.bits.rob_id := rob_id_reg
+
+  // -----------------------------
   // Receive load instruction
-  io.cmdReq.ready := state === s_idle
-
+  // -----------------------------
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
     state        := s_dma_req
     rob_id_reg   := io.cmdReq.bits.rob_id
@@ -56,50 +87,33 @@ class MemLoader(val b: GlobalConfig) extends Module {
     wr_bank_reg  := io.cmdReq.bits.cmd.bank_id
     stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
     resp_count   := 0.U
+    pending      := false.B
+    latLast      := false.B
   }
 
-  // Issue DMA read request - read iter_reg rows of data
-  io.dmaReq.valid       := state === s_dma_req
-  io.dmaReq.bits.vaddr  := mem_addr_reg
-  // Byte count of iter rows of data
-  io.dmaReq.bits.len    := iter_reg * (b.memDomain.bankWidth / 8).U
-  // Simplified: use default status
-  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
-  io.dmaReq.bits.stride := stride_reg
-
+  // DMA req accepted
   when(io.dmaReq.fire) {
-    state      := s_dma_wait
-    // Reset response counter
+    state := s_dma_wait
     resp_count := 0.U
   }
 
-  // Wait for DMA response
-  io.dmaResp.ready := state === s_dma_wait
-
+  // Latch DMA beat into pending buffer
   when(io.dmaResp.fire) {
-    resp_count := resp_count + 1.U
-    // Return to idle state when last response is received
-    when(io.dmaResp.bits.last) {
-      state := s_idle
-    }
+    pending := true.B
+    latRow  := io.dmaResp.bits.addrcounter
+    latData := io.dmaResp.bits.data
+    latLast := io.dmaResp.bits.last
   }
 
-  // Stream write to SRAM - write immediately upon receiving each response
-  // All responses write to the same bank, starting from row 0
-  val target_bank = wr_bank_reg
-  val target_row  = io.dmaResp.bits.addrcounter
+  // When bankWrite request handshakes, consume pending beat
+  when(io.bankWrite.io.req.fire) {
+    pending := false.B
+    resp_count := resp_count + 1.U
 
-  io.bankWrite.io.req.valid      := io.dmaResp.fire && (target_bank === target_bank)
-  io.bankWrite.io.req.bits.addr  := target_row
-  io.bankWrite.io.req.bits.data  := io.dmaResp.bits.data
-  io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-  io.bankWrite.io.req.bits.wmode := false.B
-  io.bankWrite.io.resp.ready     := false.B
-  io.bankWrite.rob_id            := rob_id_reg
-  io.bankWrite.bank_id           := target_bank
-  io.bankWrite.ball_id           := 0.U
-
-  // Send completion signal - only send when last response is received
-  io.cmdResp.valid       := io.dmaResp.fire && io.dmaResp.bits.last
-  io.cmdResp.bits.rob_id := rob_id_reg
+    when(latLast) {
+      // command complete only when last beat has been accepted by bank write
+      state := s_idle
+      io.cmdResp.valid := true.B
+    }
+  }
 }
