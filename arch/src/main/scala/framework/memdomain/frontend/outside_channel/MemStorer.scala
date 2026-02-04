@@ -5,7 +5,6 @@ import chisel3.util._
 import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
 import freechips.rocketchip.rocket.MStatus
-import framework.memdomain.backend.banks.SramReadIO
 import framework.memdomain.frontend.outside_channel.dma.{BBWriteRequest, BBWriteResponse}
 import framework.balldomain.blink.BankRead
 import chisel3.experimental.hierarchy.{instantiable, public}
@@ -13,269 +12,253 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 @instantiable
 class MemStorer(val b: GlobalConfig) extends Module {
   val rob_id_width = log2Up(b.frontend.rob_entries)
-  // Byte count of one row of data
-  val line_bytes   = b.memDomain.bankWidth / 8
-  // 16-byte alignment
-  val align_bytes  = 16
+
+  // One bank line bytes
+  private val line_bytes  = (b.memDomain.bankWidth / 8)
+  // We pack/send 16B aligned beats to DMA
+  private val align_bytes = 16
 
   @public
   val io = IO(new Bundle {
-    // Store instruction from ReservationStation
     val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
-    // Completion signal sent to ReservationStation
     val cmdResp = Decoupled(new MemRsComplete(b))
-    // Direct connection to DMA write interface
+
     val dmaReq  = Decoupled(new BBWriteRequest(b.memDomain.bankWidth))
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
 
-    // Connected to Bank read interface
     val bankRead = Flipped(new BankRead(b))
-
   })
 
-  val s_idle :: s_sram_req :: s_dma_wait :: Nil = Enum(3)
-  val state                                     = RegInit(s_idle)
+  // -----------------------------
+  // State
+  // -----------------------------
+  val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_done :: Nil = Enum(6)
+  val state = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
-  val iter_reg     = Reg(UInt(10.W))
-  val sram_count   = Reg(UInt(10.W))
-  // Cache stride
-  val stride_reg   = Reg(UInt(10.W))
-  // Cache decoded bank information
-  val rd_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
+  val mem_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val iter_reg     = RegInit(0.U(10.W))
+  val stride_reg   = RegInit(0.U(10.W))
+  val rd_bank_reg  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
 
-  // Data buffer related registers
-  // 16-byte buffer
-  val data_buffer        = Reg(UInt((align_bytes * 8).W))
-  // Number of valid bytes in buffer
-  val buffer_valid_bytes = Reg(UInt(log2Ceil(align_bytes + 1).W))
-  // Starting address corresponding to buffer
-  val buffer_start_addr  = Reg(UInt(b.memDomain.memAddrLen.W))
+  // which SRAM "row" we are reading (0..iter-1)
+  val sram_row = RegInit(0.U(10.W))
 
-  // Receive store instruction
-  io.cmdReq.ready := state === s_idle
+  // -----------------------------
+  // Pending buffer for SRAM resp
+  // -----------------------------
+  val pending     = RegInit(false.B)
+  val pendData    = Reg(UInt(b.memDomain.bankWidth.W))
+  val pendIsLast  = RegInit(false.B)
+
+  // -----------------------------
+  // Optional: simple 16B align/merge support (keep your original intent)
+  // We'll keep a small byte buffer for unaligned head/tail.
+  // -----------------------------
+  val data_buffer        = RegInit(0.U((align_bytes * 8).W)) // 16B
+  val buffer_valid_bytes = RegInit(0.U(log2Ceil(align_bytes + 1).W))
+  val buffer_start_addr  = RegInit(0.U(b.memDomain.memAddrLen.W))
+
+  // Convenience
+  val target_bank = rd_bank_reg
+
+  // -----------------------------
+  // Cmd accept
+  // -----------------------------
+  io.cmdReq.ready := (state === s_idle)
 
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
-    state              := s_sram_req
     rob_id_reg         := io.cmdReq.bits.rob_id
     mem_addr_reg       := io.cmdReq.bits.cmd.mem_addr
     iter_reg           := io.cmdReq.bits.cmd.iter
     rd_bank_reg        := io.cmdReq.bits.cmd.bank_id
-    sram_count         := 0.U
     stride_reg         := io.cmdReq.bits.cmd.special(10, 0)
-    // Initialize buffer state
+    sram_row           := 0.U
+
+    pending            := false.B
+    data_buffer        := 0.U
     buffer_valid_bytes := 0.U
+    buffer_start_addr  := 0.U
+
+    state              := s_issue_sram_req
   }
 
-  // Stream read SRAM data
-  // All reads come from the same bank, starting from row 0
-  val target_bank = rd_bank_reg
-  val target_row  = sram_count
+  // -----------------------------
+  // SRAM read request
+  // -----------------------------
+  io.bankRead.rob_id  := rob_id_reg
+  io.bankRead.bank_id := target_bank
+  io.bankRead.ball_id := 0.U
 
-  io.bankRead.io.req.valid     := (state === s_sram_req)
-  io.bankRead.io.req.bits.addr := target_row
-  io.bankRead.rob_id           := rob_id_reg
-  io.bankRead.bank_id          := target_bank
-  io.bankRead.ball_id          := 0.U
+  io.bankRead.io.req.valid     := (state === s_issue_sram_req)
+  io.bankRead.io.req.bits.addr := sram_row
 
-  // Bank response processing
-  val bank_resp_valid = io.bankRead.io.resp.valid
-  val bank_resp_data  = io.bankRead.io.resp.bits.data
+  // IMPORTANT:
+  // SRAMBank read resp is a 1-cycle pulse, so we must ALWAYS be ready to take it,
+  // but only if we don't already hold a pending beat.
+  io.bankRead.io.resp.ready := !pending
 
-  // Calculate memory address corresponding to current row
+  when(state === s_issue_sram_req) {
+    // Once request handshakes, wait for resp
+    when(io.bankRead.io.req.fire) {
+      state := s_wait_sram_resp
+    }
+  }
+
+  // -----------------------------
+  // Latch SRAM resp into pending (never drop it)
+  // -----------------------------
+  val bank_resp_fire = io.bankRead.io.resp.fire
+  when(bank_resp_fire) {
+    pending    := true.B
+    pendData   := io.bankRead.io.resp.bits.data
+    pendIsLast := (sram_row + 1.U >= iter_reg) && (iter_reg =/= 0.U) // last row beat
+    state      := s_have_sram_beat
+  }
+
+  // -----------------------------
+  // Address calculation (same as your pattern, but use sram_row)
+  // NOTE: you used a 2D style addressing with stride; keep same formula.
+  // -----------------------------
   val current_mem_addr =
-    mem_addr_reg + sram_count(1, 0) * line_bytes.U + ((sram_count >> 2) << 2) * stride_reg * line_bytes.U
-  // Lower 4 bits of address, 0 when 16-byte aligned
-  val addr_offset      = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
-  val aligned_addr     =
-    Cat(current_mem_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
-  val is_aligned       = addr_offset === 0.U
-  dontTouch(is_aligned)
-  dontTouch(aligned_addr)
+    mem_addr_reg +
+      sram_row(1, 0) * line_bytes.U +
+      ((sram_row >> 2) << 2) * stride_reg * line_bytes.U
 
-  // Data merge logic (line_bytes = 16 bytes)
-  val incoming_data  = bank_resp_data.asUInt
-  // Always 16 bytes
-  val incoming_bytes = 16.U
+  val addr_offset  = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
+  val aligned_addr = Cat(
+    current_mem_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)),
+    0.U(log2Ceil(align_bytes).W)
+  )
 
-  // Data merged into buffer
+  // -----------------------------
+  // Merge logic (kept compatible with your original behavior)
+  // incoming_data is always 16 bytes (bankWidth==128 in your waveforms)
+  // -----------------------------
+  val incoming_data  = pendData
+  val incoming_bytes = align_bytes.U
+
   val merged_data       = Wire(UInt((align_bytes * 8).W))
   val total_valid_bytes = Wire(UInt(log2Ceil(align_bytes * 2).W))
-  val is_last_iter      = (sram_count >= (iter_reg - 1.U) && iter_reg > 0.U) || iter_reg === 0.U
 
   when(buffer_valid_bytes === 0.U) {
-    // Buffer is empty
     when(addr_offset === 0.U) {
-      // Address is aligned, use data directly
       merged_data       := incoming_data
       total_valid_bytes := incoming_bytes
     }.otherwise {
-      // Address not aligned, first time: use low bits of new data as high bits of send data, pad low bits with 0
-      val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
+      // first unaligned: send high part, pad low with 0
+      val new_data_low    = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
       merged_data       := new_data_low << (addr_offset * 8.U)
       total_valid_bytes := align_bytes.U
     }
   }.otherwise {
-    // Buffer has data, concatenate: low bits of new data as high bits + buffer data as low bits
-    val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
+    val new_data_low    = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
     merged_data       := (new_data_low << (addr_offset * 8.U)) | data_buffer
-    // Always 16 bytes
     total_valid_bytes := align_bytes.U
   }
 
-  // Send logic: except for last iteration, can always fill 16 bytes
   val can_send_full_line = total_valid_bytes >= align_bytes.U
-  val send_bytes         = Mux(can_send_full_line, align_bytes.U, total_valid_bytes)
 
-  // Determine send address - always use aligned address
+  // send address (aligned)
   val send_addr = Mux(
     buffer_valid_bytes === 0.U,
     aligned_addr,
     Cat(buffer_start_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
   )
 
-  // DMA request logic
-  val should_send_normal          = bank_resp_valid && can_send_full_line
-  val should_send_first_unaligned = bank_resp_valid && (buffer_valid_bytes === 0.U && addr_offset =/= 0.U)
-  val should_send_last            = bank_resp_valid && is_last_iter && !can_send_full_line
-  val should_send                 = should_send_normal || should_send_first_unaligned || should_send_last
-
-  // Add a flag to track whether all data has been processed
-  // Completion detection logic - supports two cases:
-  // 1. Clean data completion (fully aligned case)
-  val aligned_completion              = buffer_valid_bytes === 0.U && is_last_iter
-  // 2. Remaining data needs to be sent (unaligned case)
-  // Has remaining data
-  val has_remaining_data_completion   = buffer_valid_bytes > 0.U && is_last_iter
-  val unaligned_completion_final_send = has_remaining_data_completion && !bank_resp_valid
-
-  // Generate mask
+  // send mask
   val send_mask = Wire(UInt(align_bytes.W))
   when(buffer_valid_bytes === 0.U && addr_offset =/= 0.U) {
-    // First unaligned: send high bits of new data, mask on high bits
     val valid_bytes = align_bytes.U - addr_offset
-    // 0xFF00 (if addr_offset=8)
     send_mask := ((1.U << valid_bytes) - 1.U) << addr_offset
   }.elsewhen(buffer_valid_bytes > 0.U && can_send_full_line) {
-    // Middle concatenation: send full 16 bytes
-    send_mask := ~0.U(align_bytes.W) // 0xFFFF
-  }.elsewhen(unaligned_completion_final_send) {
-    // Last send remaining buffer data: buffer data in low bits
-    send_mask := (1.U << buffer_valid_bytes) - 1.U // 0x00FF
+    send_mask := ~0.U(align_bytes.W)
   }.otherwise {
-    // Aligned case: full data
-    send_mask := ~0.U(align_bytes.W) // 0xFFFF
+    send_mask := ~0.U(align_bytes.W)
   }
 
-  // DMA request signal control logic - can only update when DMA is ready
-  val dma_req_valid_reg  = RegInit(false.B)
-  val dma_req_vaddr_reg  = RegInit(0.U(b.memDomain.memAddrLen.W))
-  val dma_req_data_reg   = RegInit(0.U((align_bytes * 8).W))
-  val dma_req_len_reg    = RegInit(0.U(8.W))
-  val dma_req_mask_reg   = RegInit(0.U(align_bytes.W))
-  val dma_req_status_reg = RegInit(0.U.asTypeOf(new MStatus))
+  // -----------------------------
+  // DMA request (Decoupled correct): hold valid until fire
+  // -----------------------------
+  val dma_v = RegInit(false.B)
+  val dma_addr = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val dma_data = RegInit(0.U((align_bytes * 8).W))
+  val dma_mask = RegInit(0.U(align_bytes.W))
 
-  // Calculate DMA request signals
-  val dma_req_valid_next  =
-    (should_send || unaligned_completion_final_send) && (state === s_sram_req || state === s_dma_wait)
-  val dma_req_vaddr_next  = Mux(unaligned_completion_final_send, buffer_start_addr, send_addr)
-  val dma_req_data_next   = Mux(unaligned_completion_final_send, data_buffer, merged_data)
-  val dma_req_len_next    = align_bytes.U
-  val dma_req_mask_next   = Mux(unaligned_completion_final_send, (1.U << buffer_valid_bytes) - 1.U, send_mask)
-  val dma_req_status_next = 0.U.asTypeOf(new MStatus)
+  io.dmaReq.valid       := dma_v
+  io.dmaReq.bits.vaddr  := dma_addr
+  io.dmaReq.bits.data   := dma_data
+  io.dmaReq.bits.len    := align_bytes.U
+  io.dmaReq.bits.mask   := dma_mask
+  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
 
-  // Only update registers when DMA is ready
-  when(io.dmaReq.ready) {
-    dma_req_valid_reg  := dma_req_valid_next
-    dma_req_vaddr_reg  := dma_req_vaddr_next
-    dma_req_data_reg   := dma_req_data_next
-    dma_req_len_reg    := dma_req_len_next
-    dma_req_mask_reg   := dma_req_mask_next
-    dma_req_status_reg := dma_req_status_next
-  }
-
-  // Connect to DMA interface
-  io.dmaReq.valid       := dma_req_valid_reg
-  io.dmaReq.bits.vaddr  := dma_req_vaddr_reg
-  io.dmaReq.bits.data   := dma_req_data_reg
-  io.dmaReq.bits.len    := dma_req_len_reg
-  io.dmaReq.bits.mask   := dma_req_mask_reg
-  io.dmaReq.bits.status := dma_req_status_reg
-
-  // Connect Bank response ready signal - based on DMA ready state
-  io.bankRead.io.resp.ready := io.dmaReq.ready && (state === s_sram_req || state === s_dma_wait)
-  // State transition and counter update
-  when(io.bankRead.io.req.fire) {
-    state := s_dma_wait
-  }
-
-  when(io.dmaReq.fire) {
-    when(!unaligned_completion_final_send) {
-      sram_count := sram_count + 1.U
-    }
-
-    // Update buffer state
-    when(addr_offset =/= 0.U && bank_resp_valid) {
-      // Unaligned case: cache high bits of new data
-      // Cache is the high bits part
-      val remaining_bytes = align_bytes.U - addr_offset
-      data_buffer        := incoming_data >> (addr_offset * 8.U)
-      buffer_valid_bytes := remaining_bytes
-      // Update buffer corresponding address (point to next 16-byte aligned address)
-      when(buffer_valid_bytes === 0.U) {
-        buffer_start_addr := aligned_addr + align_bytes.U
-      }.otherwise {
-        buffer_start_addr := buffer_start_addr + align_bytes.U
-      }
-    }.elsewhen(unaligned_completion_final_send) {
-      // Sent final remaining data, clear buffer
-      buffer_valid_bytes := 0.U
-    }.otherwise {
-      // In aligned case, if previous buffer data was merged and sent, need to clear buffer
-      when(buffer_valid_bytes > 0.U && can_send_full_line && bank_resp_valid) {
-        buffer_valid_bytes := 0.U
-      }
-    }
-
-    // Fix state transition logic
-    when(unaligned_completion_final_send) {
-      // Only return to idle after unaligned_completion_final_send completes
-      state := s_idle
-    }.elsewhen(aligned_completion) {
-      // All data has been sent
-      state := s_idle
-    }.elsewhen(sram_count + 1.U >= iter_reg && iter_reg > 0.U) {
-      // Iteration ended, but there may still be buffer data to send
-      when(buffer_valid_bytes > 0.U) {
-        // Maintain state, wait for unaligned_completion_final_send
-        state := s_dma_wait
-      }.otherwise {
-        state := s_idle
-      }
-    }.elsewhen(iter_reg === 0.U) {
-      state := s_idle
-    }.otherwise {
-      state := s_sram_req
-    }
-  }
-
-  // Wait for DMA to truly complete
+  // By default we don't care dmaResp in this simple model
   io.dmaResp.ready := true.B
 
-  // Fix completion signal logic - only issue completion signal after all data transfer is truly complete
-  val task_complete = RegInit(false.B)
-  when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
-    task_complete := false.B
-  }.elsewhen(io.dmaReq.fire && (unaligned_completion_final_send || aligned_completion)) {
-    task_complete := true.B
+  // When we have a pending SRAM beat, prepare one DMA beat (and keep it until fire)
+  when(state === s_have_sram_beat) {
+    // Only arm dma_v if not already armed
+    when(!dma_v) {
+      dma_v    := true.B
+      dma_addr := send_addr
+      dma_data := merged_data
+      dma_mask := send_mask
+      state    := s_push_dma
+    }
   }
 
-  io.cmdResp.valid       := task_complete && (state === s_idle)
+  // When DMA accepts the beat, consume pending and move forward
+  when(state === s_push_dma) {
+    when(io.dmaReq.fire) {
+      dma_v := false.B
+
+      // Update buffer state like your original:
+      when(addr_offset =/= 0.U) {
+        val remaining_bytes = align_bytes.U - addr_offset
+        data_buffer        := incoming_data >> (addr_offset * 8.U)
+        buffer_valid_bytes := remaining_bytes
+        when(buffer_valid_bytes === 0.U) {
+          buffer_start_addr := aligned_addr + align_bytes.U
+        }.otherwise {
+          buffer_start_addr := buffer_start_addr + align_bytes.U
+        }
+      }.otherwise {
+        // aligned: clear buffer if it was used
+        when(buffer_valid_bytes > 0.U && can_send_full_line) {
+          buffer_valid_bytes := 0.U
+          data_buffer        := 0.U
+        }
+      }
+
+      // Mark current beat consumed
+      pending := false.B
+
+      // advance row
+      when(iter_reg =/= 0.U) {
+        sram_row := sram_row + 1.U
+      }
+
+      // finish condition
+      when(pendIsLast || iter_reg === 0.U) {
+        state := s_done
+      }.otherwise {
+        state := s_issue_sram_req
+      }
+    }
+  }
+
+  // If we are waiting for SRAM resp (but resp will pulse), just stay here
+  when(state === s_wait_sram_resp) {
+    // nothing; latch happens in bank_resp_fire block above
+  }
+
+  // -----------------------------
+  // Completion
+  // -----------------------------
+  io.cmdResp.valid       := (state === s_done)
   io.cmdResp.bits.rob_id := rob_id_reg
 
-  // Reset flag after sending completion signal
   when(io.cmdResp.fire) {
-    task_complete := false.B
+    state := s_idle
   }
 }
