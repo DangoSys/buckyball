@@ -70,6 +70,8 @@
               export LLVM_MLIR_BUILD_DIR="$PWD/compiler/llvm/build"
               export PYTHONPATH="$PWD/compiler/llvm/build/tools/mlir/python_packages/mlir_core:$PWD/compiler/build/python_packages:$PYTHONPATH"
               export PATH="$PWD/workflow:$PATH"
+              export RISCV="$PWD/result"
+              export PATH="$PWD/thirdparty/libgloss/install/lib:$PATH"
 
               echo "Development environment loaded:"
               echo "Verilator: $(verilator --version 2>&1 | head -1)"
@@ -79,6 +81,8 @@
               echo "Cargo: $(cargo --version 2>&1 | head -1)"
               echo "npm: $(npm --version 2>&1 | head -1)"
               echo "bbdev: $(which bbdev)"
+              echo "RISCV: $RISCV"
+              echo "LIBGLOSS: $(whereis htif_nano.specs)"
               echo "==========================================================================="
             '';
           };

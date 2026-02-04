@@ -7,7 +7,7 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -std=gnu99 -ffast-math -fno-builtin-printf -fno-tree-loop-distribute-patterns
   -DBAREMETAL=1 -DPREALLOCATE=1 -DMULTITHREAD=1 -DPRINT_TILE=0
-  -specs=htif_nano.specs -I${CTEST_GEMMINI_WORKLOAD_DIR})
+  -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR} -I${CTEST_GEMMINI_WORKLOAD_DIR})
 
 # Link libraries
 set(LINK_LIBS -lm -lgcc)

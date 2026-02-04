@@ -26,7 +26,7 @@
 #   add_custom_command(
 
 #     OUTPUT ${EXECUTABLE}
-#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs
+#     COMMAND ${ELF_CC} -O2 -static -specs=${HTIF_DIR}/htif_nano.specs
 #         ${OBJ_FILE} -o ${EXECUTABLE}
 #     DEPENDS ${OBJ_FILE}
 #     COMMENT "Linking baremetal executable: ${EXECUTABLE}"
@@ -61,7 +61,7 @@
 #   add_custom_command(
 
 #     OUTPUT ${EXECUTABLE}
-#     COMMAND ${ELF_CC} -O2 -static -specs=htif_nano.specs
+#     COMMAND ${ELF_CC} -O2 -static -specs=${HTIF_DIR}/htif_nano.specs
 #         ${OBJ_FILE} -o ${EXECUTABLE}
 #     DEPENDS ${OBJ_FILE}
 #     COMMENT "Linking baremetal executable: ${EXECUTABLE}"

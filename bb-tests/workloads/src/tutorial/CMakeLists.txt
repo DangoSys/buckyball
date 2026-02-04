@@ -20,7 +20,7 @@ add_custom_target(tutorial-linux-build ALL DEPENDS
 set(ELF_CC "riscv64-unknown-elf-gcc")
 
 set(C_FLAGS -std=c11 -g -fno-common -O2 -static
-            -fno-builtin-printf -specs=htif_nano.specs)
+            -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR})
 
 add_custom_target(tutorial-baremetal-build ALL
     COMMAND ${ELF_CC} ${C_FLAGS} -o tutorial-baremetal ${TUTORIAL_WORKLOAD_DIR}/tutorial.c

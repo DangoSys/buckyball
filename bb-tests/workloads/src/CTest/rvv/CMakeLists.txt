@@ -5,7 +5,7 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 # Set baremetal compilation flags with RVV support
 #-------------------------------------------------------------------------------
 set(C_FLAGS -g -fno-common -O1 -static -march=rv64gcv -mabi=lp64d -mcmodel=medany
-  -fno-builtin-printf -specs=htif_nano.specs)
+  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR} )
 
 #-------------------------------------------------------------------------------
 # Define common compilation step functions
