@@ -5,7 +5,8 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 # Set baremetal compilation flags
 #-------------------------------------------------------------------------------
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf -specs=htif_nano.specs -I${CTEST_TOY_WORKLOAD_DIR})
+  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}  
+  -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
 # Define common compilation step functions

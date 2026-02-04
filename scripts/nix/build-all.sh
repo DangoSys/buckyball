@@ -78,7 +78,7 @@ function begin_step
 
 begin_step "0-1" "submodules init"
 git submodule update --init
-cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init
+cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init generators/* tools/*
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
@@ -93,7 +93,29 @@ if [ "${INSTALL_IN_NIX}" = "0" ]; then
 fi
 
 if run_step "1"; then
-  begin_step "1" "Compiler (buddy-mlir) pre-compile sources"
+  begin_step "1" "riscv-tools setup"
+  cd ${BBDIR}/thirdparty/libgloss
+  mkdir -p build && cd build
+  CC=riscv64-unknown-elf-gcc ../configure \
+    --prefix=${RISCV}/lib \
+    --host=riscv64-unknown-elf
+  make
+  make install
+  # INSTALL_DIR=${RISCV}/lib
+  # mkdir -p ${INSTALL_DIR}/lib
+  # find . -name "libgloss_htif.a" | while read -r lib; do
+  #   subdir=$(dirname "$lib" | sed 's|^\./||')
+  #   [ "$subdir" = "build" ] && subdir=""
+  #   dest=${INSTALL_DIR}/lib/${subdir}
+  #   mkdir -p "$dest"
+  #   cp "$lib" "$dest/"
+  #   cp ../util/htif_nano.specs ../util/htif.ld ../util/htif.specs \
+  #      ../util/htif_wrap.specs ../util/htif_argv.specs "$dest/" 2>/dev/null || true
+  # done
+fi
+
+if run_step "2"; then
+  begin_step "2" "Compiler (buddy-mlir) pre-compile sources"
   cd ${BBDIR}/compiler
 	git submodule update --init llvm
 
@@ -121,33 +143,33 @@ if run_step "1"; then
 	ninja # check-buddy
 fi
 
-if run_step "2"; then
-  begin_step "2" "Install bebop"
+if run_step "3"; then
+  begin_step "3" "Install bebop"
   # ${BBDIR}/scripts/install-bebop.sh
   echo "bebop is not installed"
 fi
 
-if run_step "3"; then
-  begin_step "3" "bb-tests (workloads) pre-compile sources"
+if run_step "4"; then
+  begin_step "4" "bb-tests (workloads) pre-compile sources"
   cd ${BBDIR}/bb-tests
   mkdir -p build && cd build
   cmake -G Ninja ..
   ninja
 fi
 
-if run_step "4"; then
-  begin_step "4" "Install requirements for sardine"
+if run_step "5"; then
+  begin_step "5" "Install requirements for sardine"
   npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline
 fi
 
 
-if run_step "5"; then
-  begin_step "5" "Install document management system"
+if run_step "6"; then
+  begin_step "6" "Install document management system"
   mdbook-mermaid install ${BBDIR}/docs/bb-note/
 fi
 
-if run_step "6"; then
-  begin_step "6" "Init workflow management system"
+if run_step "7"; then
+  begin_step "7" "Init workflow management system"
   cd ${BBDIR}/workflow
   export USE_SYSTEMD=no
   npm init -y
@@ -162,8 +184,8 @@ if run_step "6"; then
   cd ${BBDIR}/workflow && rm *.{md,tsx,rdb} || true
 fi
 
-if run_step "7"; then
-  begin_step "7" "Install pre-commit hooks"
+if run_step "8"; then
+  begin_step "8" "Install pre-commit hooks"
   pre-commit install
 fi
 

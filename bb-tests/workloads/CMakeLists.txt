@@ -24,6 +24,7 @@ set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
 set(ELF_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
 set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
+set(HTIF_DIR ${RISCV_GNU_TOOLCHAIN}/riscv64-unknown-elf/lib)
 
 set(BUILD_BIN_DIR ${WORKLOAD_DIR}/../build/workloads)
 set(OUTPUT_BIN_DIR ${WORKLOAD_DIR}/../output/workloads)
