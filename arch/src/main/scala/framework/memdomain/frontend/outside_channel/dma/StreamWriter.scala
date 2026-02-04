@@ -2,11 +2,9 @@ package framework.memdomain.frontend.outside_channel.dma
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XWR}
-
-import framework.builtin.utils.Util._
 import framework.memdomain.frontend.outside_channel.tlb.BBTLBIO
 import framework.top.GlobalConfig
 
@@ -26,12 +24,10 @@ class BBWriteResponse extends Bundle {
 class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val vaddrBits = b.core.vaddrBits
-
-  val nXacts    = b.memDomain.dma_n_xacts
   val beatBits  = b.memDomain.dma_buswidth
-  val maxBytes  = b.memDomain.dma_maxbytes
   val dataWidth = b.memDomain.dma_buswidth
   val beatBytes = beatBits / 8
+  val lgBeat    = log2Ceil(beatBytes)
 
   @public
   val io = IO(new Bundle {
@@ -43,85 +39,103 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tl    = new TLBundle(edge.bundle)
   })
 
-  val s_idle :: s_writing :: Nil = Enum(2)
+  // ---------------------------------------------------------------------------
+  // Strict single-outstanding writer with PROPER handshakes
+  // ---------------------------------------------------------------------------
+  // NOTE: current TLB/Cluster returns resp combinationally in the same cycle as req.valid
+  // (see StreamReader usage). So we must NOT "fire req then wait for resp".
+  val s_idle :: s_tlb_req :: s_wait_d :: s_resp :: Nil = Enum(4)
+  val state = RegInit(s_idle)
 
-  val xactBusy   = RegInit(0.U(nXacts.W))
-  val xactOnehot = PriorityEncoderOH(~xactBusy)
-  val xactId     = OHToUInt(xactOnehot)
+  val reqReg   = Reg(new BBWriteRequest(dataWidth))
 
-  val xactBusy_fire   = WireInit(false.B)
-  val xactBusy_add    = Mux(xactBusy_fire, (1.U << xactId).asUInt, 0.U)
-  val xactBusy_remove = ~Mux(io.tl.d.fire, (1.U << io.tl.d.bits.source).asUInt, 0.U)
-  xactBusy := (xactBusy | xactBusy_add) & xactBusy_remove.asUInt
+  // single outstanding => fixed source id 0
+  val xactId = 0.U(io.tl.a.bits.source.getWidth.W)
 
-  // Simplified: data is already aligned, directly construct TileLink request
-  val lg_beat_bytes = log2Ceil(beatBytes)
-  val use_put_full  = io.req.bits.mask === ~0.U(beatBytes.W)
+  // -----------------------
+  // Accept one request
+  // -----------------------
+  io.req.ready := (state === s_idle)
+
+  when(io.req.fire) {
+    reqReg := io.req.bits
+    state  := s_tlb_req
+  }
+
+  // -----------------------
+  // Construct TileLink Put from LATCHED request
+  // -----------------------
+  val use_put_full = reqReg.mask === ~0.U(beatBytes.W)
 
   val putFull = edge.Put(
     fromSource = xactId,
-    toAddress = 0.U,
-    lgSize = lg_beat_bytes.U,
-    data = io.req.bits.data
+    toAddress  = 0.U, // overwritten later
+    lgSize     = lgBeat.U,
+    data       = reqReg.data
   )._2
 
   val putPartial = edge.Put(
     fromSource = xactId,
-    toAddress = 0.U,
-    lgSize = lg_beat_bytes.U,
-    data = io.req.bits.data,
-    mask = io.req.bits.mask
+    toAddress  = 0.U, // overwritten later
+    lgSize     = lgBeat.U,
+    data       = reqReg.data,
+    mask       = reqReg.mask
   )._2
 
-  val selected_put = Mux(use_put_full, putFull, putPartial)
+  val putMsg = Wire(putFull.cloneType)
+  putMsg := Mux(use_put_full, putFull, putPartial)
 
-  // TLB processing pipeline
-  class TLBundleAWithInfo extends Bundle {
-    val tl_a   = selected_put.cloneType
-    val vaddr  = Output(UInt(vaddrBits.W))
-    val status = Output(new MStatus)
-  }
-
-  val untranslated_a = Wire(Decoupled(new TLBundleAWithInfo))
-  xactBusy_fire              := untranslated_a.fire
-  untranslated_a.valid       := !xactBusy.andR && io.req.valid
-  untranslated_a.bits.tl_a   := selected_put
-  untranslated_a.bits.vaddr  := io.req.bits.vaddr
-  untranslated_a.bits.status := io.req.bits.status
-
-  val tlb_q = Module(new Queue(new TLBundleAWithInfo, 1, pipe = true))
-  tlb_q.io.enq <> untranslated_a
-
-  io.tlb.req.valid            := tlb_q.io.deq.valid
+  // -----------------------
+  // TLB handshake (req.fire -> wait resp.valid)
+  // -----------------------
+  io.tlb.req.valid            := (state === s_tlb_req)
   io.tlb.req.bits             := DontCare
-  io.tlb.req.bits.vaddr       := tlb_q.io.deq.bits.vaddr
-  io.tlb.req.bits.passthrough := true.B //use paddr for now
+  io.tlb.req.bits.vaddr       := reqReg.vaddr
+  io.tlb.req.bits.passthrough := true.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XWR
-  io.tlb.req.bits.prv         := 3.U    // Machine mode
+  io.tlb.req.bits.prv         := 3.U
   io.tlb.req.bits.v           := false.B
-  io.tlb.req.bits.status      := tlb_q.io.deq.bits.status
-  tlb_q.io.deq.ready          := io.tlb.resp.valid && tlb_q.io.deq.valid
+  io.tlb.req.bits.status      := reqReg.status
 
-  // TileLink A channel (request) connection
-  io.tl.a.valid        := io.tlb.resp.valid && tlb_q.io.deq.valid
-  io.tl.a.bits         := tlb_q.io.deq.bits.tl_a
+  // We only "consume" the tlb response when we actually send A.
+  // This matches StreamReader: resp.valid is treated as a combinational translate result.
+  io.tlb.resp.ready := (state === s_tlb_req) && io.tl.a.ready
+
+  // -----------------------
+  // TileLink A channel (only when tlb resp is present)
+  // -----------------------
+  io.tl.a.valid        := (state === s_tlb_req) && io.tlb.resp.valid
+  io.tl.a.bits         := putMsg
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
-  io.tlb.resp.ready    := true.B
 
-  // TileLink D channel (response) processing
-  io.tl.d.ready := io.resp.ready
+  when(state === s_tlb_req && io.tl.a.fire) {
+    state := s_wait_d
+  }
 
-  io.resp.valid     := io.tl.d.valid
+  // -----------------------
+  // TileLink D channel (ack)
+  // -----------------------
+  io.tl.d.ready := (state === s_wait_d)
+
+  // upper response
+  io.resp.valid     := (state === s_resp)
   io.resp.bits.done := true.B
 
-  // Tie off unused TileLink channels
+  when(state === s_wait_d && io.tl.d.fire) {
+    state := s_resp
+  }
+
+  when(state === s_resp && io.resp.fire) {
+    state := s_idle
+  }
+
+  // -----------------------
+  // Tie off unused TL channels
+  // -----------------------
   io.tl.b.ready := true.B
   io.tl.c.valid := false.B
   io.tl.e.valid := false.B
 
-  // State machine
-  io.req.ready := !xactBusy.andR
-  io.busy      := xactBusy.orR
-
+  io.busy := (state =/= s_idle)
 }
