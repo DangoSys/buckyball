@@ -26,6 +26,8 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
 
+  bb_acc_config(0x0000003C);
+
   bb_fence();
   bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_fence();

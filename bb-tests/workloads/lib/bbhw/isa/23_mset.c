@@ -15,4 +15,6 @@
 
 #define bb_mem_alloc(bank_id, row, col) bb_mset(0, bank_id, 1, row, col)
 
+#define bb_acc_config(acc_mask)                                                \
+  BUCKYBALL_INSTRUCTION_R_R(0, FIELD(acc_mask, 0, 0), BB_MSET_FUNC7)
 #endif // _BB_MSET_H_

@@ -29,7 +29,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
+    val mem_req    = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
+    val acc_config = Input(UInt(b.memDomain.bankNum.W))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
@@ -42,6 +43,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.write <> io.mem_req(i).write
     accPipes(i).io.read <> io.mem_req(i).read
     accPipes(i).io.bank_id := io.mem_req(i).bank_id
+    val bank_id = io.mem_req(i).bank_id
+    accPipes(i).io.is_acc := io.acc_config(bank_id)
   }
 
   // -----------------------------------------------------------------------------
@@ -178,7 +181,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       val rOwnerIdx     = RegInit(0.U(log2Up(b.memDomain.bankChannel).W))
       val canAcceptRead = !rOwnerValid
       for (i <- 0 until b.memDomain.bankChannel) {
-        rMatch(i) := canAcceptRead && (accPipes(i).io.target_bank_id === bankId) && accPipes(i).io.sramRead.req.valid
+        rMatch(i) := (accPipes(i).io.target_bank_id === bankId) && accPipes(i).io.sramRead.req.valid
       }
       val rHas = rMatch.asUInt.orR
       val rSel = OHToUInt(rMatch)
@@ -210,8 +213,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
       // bank sees ready from owner pipe
       bank.io.sramRead.resp.ready := Mux(rOwnerValid, rd_resp_ready(rOwnerIdx), false.B)
 
-      when(bank.io.sramRead.resp.fire && rOwnerValid) {
-        rOwnerValid := false.B
-      }
+    /* when(bank.io.sramRead.resp.fire && rOwnerValid) { rOwnerValid := false.B } */
   }
 }

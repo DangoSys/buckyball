@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tile._
 import framework.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWriter}
-import framework.memdomain.frontend.outside_channel.{MemLoader, MemStorer}
+import framework.memdomain.frontend.outside_channel.{MemConfiger, MemLoader, MemStorer}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
@@ -46,6 +46,8 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
 
+    val acc_config = Output(UInt(b.memDomain.bankNum.W))
+
     // Busy signal
     val busy = Output(Bool())
   })
@@ -61,8 +63,9 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val tlbCluster = Instantiate(new BBTLBCluster(b)(edge))
 
   // DMA Reader and Writer modules - handle actual DMA transfers
-  val reader: Instance[StreamReader] = Instantiate(new StreamReader(b)(edge))
-  val writer: Instance[StreamWriter] = Instantiate(new StreamWriter(b)(edge))
+  val reader:   Instance[StreamReader] = Instantiate(new StreamReader(b)(edge))
+  val writer:   Instance[StreamWriter] = Instantiate(new StreamWriter(b)(edge))
+  val configer: Instance[MemConfiger]  = Instantiate(new MemConfiger(b))
 
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
@@ -70,6 +73,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memDecoder.io.cmd_i.valid := io.global_issue_i.valid
   memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
   io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
+  io.acc_config             := configer.io.acc_config
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation
@@ -85,8 +89,10 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 // -----------------------------------------------------------------------------
   memLoader.io.cmdReq <> memRs.io.issue_o.ld
   memStorer.io.cmdReq <> memRs.io.issue_o.st
+  configer.io.cmdReq <> memRs.io.issue_o.cf
   memRs.io.commit_i.ld <> memLoader.io.cmdResp
   memRs.io.commit_i.st <> memStorer.io.cmdResp
+  memRs.io.commit_i.cf <> configer.io.cmdResp
 
 //-----------------------------------------------------------------------------
 // PMC - Performance Monitor Counter
