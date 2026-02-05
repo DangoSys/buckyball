@@ -35,6 +35,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     // Control and status signals
     val bank_id        = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val is_acc         = Input(Bool())
     // in AccPipe IO bundle, add:
     val target_bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
 
@@ -126,6 +127,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
       // Downstream bank requests (valid depends only on upstream valid + state)
       io.sramRead.req.valid     := writeAccum || readValid
       io.sramRead.req.bits.addr := Mux(writeAccum, io.write.req.bits.addr, io.read.req.bits.addr)
+      io.read.resp <> io.sramRead.resp
 
       io.sramWrite.req.valid      := writeDirect
       io.sramWrite.req.bits.addr  := io.write.req.bits.addr
@@ -157,12 +159,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
         latData   := io.write.req.bits.data
         latMask   := io.write.req.bits.mask
         state     := s_wait_direct_write_resp
-      }.elsewhen(readValid && io.sramRead.req.fire) {
-        curBankId := io.bank_id
-        opIsRead  := true.B
-        opIsAccum := false.B
-        latAddr   := io.read.req.bits.addr
-        state     := s_wait_read_resp
       }
     }
 

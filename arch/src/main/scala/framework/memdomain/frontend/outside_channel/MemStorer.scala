@@ -14,7 +14,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val rob_id_width = log2Up(b.frontend.rob_entries)
 
   // One bank line bytes
-  private val line_bytes  = (b.memDomain.bankWidth / 8)
+  private val line_bytes  = b.memDomain.bankWidth / 8
   // We pack/send 16B aligned beats to DMA
   private val align_bytes = 16
 
@@ -33,7 +33,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // State
   // -----------------------------
   val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_done :: Nil = Enum(6)
-  val state = RegInit(s_idle)
+  val state                                                                                             = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
@@ -47,9 +47,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // Pending buffer for SRAM resp
   // -----------------------------
-  val pending     = RegInit(false.B)
-  val pendData    = Reg(UInt(b.memDomain.bankWidth.W))
-  val pendIsLast  = RegInit(false.B)
+  val pending    = RegInit(false.B)
+  val pendData   = Reg(UInt(b.memDomain.bankWidth.W))
+  val pendIsLast = RegInit(false.B)
 
   // -----------------------------
   // Optional: simple 16B align/merge support (keep your original intent)
@@ -68,19 +68,19 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.cmdReq.ready := (state === s_idle)
 
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
-    rob_id_reg         := io.cmdReq.bits.rob_id
-    mem_addr_reg       := io.cmdReq.bits.cmd.mem_addr
-    iter_reg           := io.cmdReq.bits.cmd.iter
-    rd_bank_reg        := io.cmdReq.bits.cmd.bank_id
-    stride_reg         := io.cmdReq.bits.cmd.special(10, 0)
-    sram_row           := 0.U
+    rob_id_reg   := io.cmdReq.bits.rob_id
+    mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
+    iter_reg     := io.cmdReq.bits.cmd.iter
+    rd_bank_reg  := io.cmdReq.bits.cmd.bank_id
+    stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
+    sram_row     := 0.U
 
     pending            := false.B
     data_buffer        := 0.U
     buffer_valid_bytes := 0.U
     buffer_start_addr  := 0.U
 
-    state              := s_issue_sram_req
+    state := s_issue_sram_req
   }
 
   // -----------------------------
@@ -125,7 +125,8 @@ class MemStorer(val b: GlobalConfig) extends Module {
       sram_row(1, 0) * line_bytes.U +
       ((sram_row >> 2) << 2) * stride_reg * line_bytes.U
 
-  val addr_offset  = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
+  val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
+
   val aligned_addr = Cat(
     current_mem_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)),
     0.U(log2Ceil(align_bytes).W)
@@ -147,12 +148,12 @@ class MemStorer(val b: GlobalConfig) extends Module {
       total_valid_bytes := incoming_bytes
     }.otherwise {
       // first unaligned: send high part, pad low with 0
-      val new_data_low    = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
+      val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
       merged_data       := new_data_low << (addr_offset * 8.U)
       total_valid_bytes := align_bytes.U
     }
   }.otherwise {
-    val new_data_low    = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
+    val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
     merged_data       := (new_data_low << (addr_offset * 8.U)) | data_buffer
     total_valid_bytes := align_bytes.U
   }
@@ -180,7 +181,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // DMA request (Decoupled correct): hold valid until fire
   // -----------------------------
-  val dma_v = RegInit(false.B)
+  val dma_v    = RegInit(false.B)
   val dma_addr = RegInit(0.U(b.memDomain.memAddrLen.W))
   val dma_data = RegInit(0.U((align_bytes * 8).W))
   val dma_mask = RegInit(0.U(align_bytes.W))

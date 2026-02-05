@@ -10,8 +10,10 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 
 // Detailed decode output for Mem domain
 class MemDecodeCmd(b: GlobalConfig) extends Bundle {
-  val is_load  = Bool()
-  val is_store = Bool()
+  val is_load   = Bool()
+  val is_store  = Bool()
+  val is_config = Bool()
+
   // Memory address
   val mem_addr = UInt(b.memDomain.memAddrLen.W)
   // Iteration count
@@ -67,12 +69,12 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     ls_default_decode,
     Array(
       MSET_BITPAT  -> List(
-        Y,
+        N,
         N,
         rs1(memAddrLen - 1, 0),
         rs2(bankIdLen - 1, 0),
         rs2(9 + bankIdLen, bankIdLen),
-        rs2(63, 10 + bankIdLen),
+        rs2(39, 0),
         Y
       ), // mset
       MVIN_BITPAT  -> List(
@@ -107,22 +109,27 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  io.mem_decode_cmd_o.bits.is_load  := Mux(
+  io.mem_decode_cmd_o.bits.is_load   := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.LD_EN.id).asBool,
     false.B
   )
-  io.mem_decode_cmd_o.bits.is_store := Mux(
+  io.mem_decode_cmd_o.bits.is_store  := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.ST_EN.id).asBool,
     false.B
   )
-  io.mem_decode_cmd_o.bits.mem_addr := Mux(
+  io.mem_decode_cmd_o.bits.is_config := Mux(
+    io.mem_decode_cmd_o.valid,
+    func7 === MSET_BITPAT,
+    false.B
+  )
+  io.mem_decode_cmd_o.bits.mem_addr  := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt,
     0.U(b.memDomain.memAddrLen.W)
   )
-  io.mem_decode_cmd_o.bits.iter     := Mux(
+  io.mem_decode_cmd_o.bits.iter      := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.ITER.id).asUInt,
     0.U(10.W)

@@ -23,12 +23,14 @@ class MemRsComplete(val b: GlobalConfig) extends Bundle {
 class MemIssueInterface(val b: GlobalConfig) extends Bundle {
   val ld = Decoupled(new MemRsIssue(b))
   val st = Decoupled(new MemRsIssue(b))
+  val cf = Decoupled(new MemRsIssue(b))
 }
 
 // Mem domain completion interface combination (Load + Store)
 class MemCommitInterface(val b: GlobalConfig) extends Bundle {
   val ld = Flipped(Decoupled(new MemRsComplete(b)))
   val st = Flipped(Decoupled(new MemRsComplete(b)))
+  val cf = Flipped(Decoupled(new MemRsComplete(b)))
 }
 
 // Local Mem reservation station - simple FIFO scheduler
@@ -82,15 +84,21 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
   io.issue_o.st.bits.cmd    := headEntry.cmd
   io.issue_o.st.bits.rob_id := headEntry.rob_id
 
+  // Config issue
+  io.issue_o.cf.valid       := fifo.io.deq.valid && headEntry.cmd.is_config
+  io.issue_o.cf.bits.cmd    := headEntry.cmd
+  io.issue_o.cf.bits.rob_id := headEntry.rob_id
+
   // FIFO deq.ready - can only dequeue when target unit is ready
   fifo.io.deq.ready :=
     (headEntry.cmd.is_load && io.issue_o.ld.ready) ||
-      (headEntry.cmd.is_store && io.issue_o.st.ready)
+      (headEntry.cmd.is_store && io.issue_o.st.ready) ||
+      (headEntry.cmd.is_config && io.issue_o.cf.ready)
 
 // -----------------------------------------------------------------------------
 // Completion signal processing - directly forward to global RS
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), 2))
+  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), 3))
 
   completeArb.io.in(0).valid := io.commit_i.ld.valid
   completeArb.io.in(0).bits  := io.commit_i.ld.bits.rob_id
@@ -99,6 +107,10 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
   completeArb.io.in(1).valid := io.commit_i.st.valid
   completeArb.io.in(1).bits  := io.commit_i.st.bits.rob_id
   io.commit_i.st.ready       := completeArb.io.in(1).ready
+
+  completeArb.io.in(2).valid := io.commit_i.cf.valid
+  completeArb.io.in(2).bits  := io.commit_i.cf.bits.rob_id
+  io.commit_i.cf.ready       := completeArb.io.in(2).ready
 
   // Forward completion signal (with global rob_id)
   io.complete_o.valid       := completeArb.io.out.valid

@@ -45,9 +45,9 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // NOTE: current TLB/Cluster returns resp combinationally in the same cycle as req.valid
   // (see StreamReader usage). So we must NOT "fire req then wait for resp".
   val s_idle :: s_tlb_req :: s_wait_d :: s_resp :: Nil = Enum(4)
-  val state = RegInit(s_idle)
+  val state                                            = RegInit(s_idle)
 
-  val reqReg   = Reg(new BBWriteRequest(dataWidth))
+  val reqReg = Reg(new BBWriteRequest(dataWidth))
 
   // single outstanding => fixed source id 0
   val xactId = 0.U(io.tl.a.bits.source.getWidth.W)
@@ -69,17 +69,17 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   val putFull = edge.Put(
     fromSource = xactId,
-    toAddress  = 0.U, // overwritten later
-    lgSize     = lgBeat.U,
-    data       = reqReg.data
+    toAddress = 0.U, // overwritten later
+    lgSize = lgBeat.U,
+    data = reqReg.data
   )._2
 
   val putPartial = edge.Put(
     fromSource = xactId,
-    toAddress  = 0.U, // overwritten later
-    lgSize     = lgBeat.U,
-    data       = reqReg.data,
-    mask       = reqReg.mask
+    toAddress = 0.U, // overwritten later
+    lgSize = lgBeat.U,
+    data = reqReg.data,
+    mask = reqReg.mask
   )._2
 
   val putMsg = Wire(putFull.cloneType)
