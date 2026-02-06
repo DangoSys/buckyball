@@ -25,7 +25,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val bankWrite = Flipped(new BankWrite(b))
   })
 
-  val s_idle :: s_dma_req :: s_dma_wait :: Nil = Enum(3)
+  val s_idle :: s_dma_req :: s_dma_wait :: s_done :: Nil = Enum(4)
   val state                                    = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
@@ -33,7 +33,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val iter_reg     = Reg(UInt(10.W))
   val resp_count   = RegInit(0.U(log2Up(16).W))
   val wr_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  val stride_reg   = Reg(UInt(10.W))
+  val stride_reg   = Reg(UInt(11.W))
 
   // -----------------------------
   // pending latch for 1-beat DMA -> bankWrite
@@ -71,8 +71,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.bankWrite.bank_id := wr_bank_reg
   io.bankWrite.ball_id := 0.U
 
-  // cmdResp defaults
-  io.cmdResp.valid       := false.B
+  // cmdResp (Decoupled): hold valid until accepted
+  io.cmdResp.valid       := (state === s_done)
   io.cmdResp.bits        := 0.U.asTypeOf(new MemRsComplete(b))
   io.cmdResp.bits.rob_id := rob_id_reg
 
@@ -85,6 +85,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
     iter_reg     := io.cmdReq.bits.cmd.iter
     wr_bank_reg  := io.cmdReq.bits.cmd.bank_id
+    // BBReadRequest.stride is 10 bits wide
     stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
     resp_count   := 0.U
     pending      := false.B
@@ -112,8 +113,11 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
     when(latLast) {
       // command complete only when last beat has been accepted by bank write
-      state            := s_idle
-      io.cmdResp.valid := true.B
+      state := s_done
     }
+  }
+
+  when(state === s_done && io.cmdResp.fire) {
+    state := s_idle
   }
 }

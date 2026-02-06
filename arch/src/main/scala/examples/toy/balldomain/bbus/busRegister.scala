@@ -8,6 +8,7 @@ import framework.balldomain.bbus.BBus
 import framework.balldomain.blink.HasBlink
 import framework.balldomain.prototype.vector.VecBall
 import framework.balldomain.prototype.relu.ReluBall
+import framework.balldomain.prototype.transpose.TransposeBall
 
 /**
  * BBusModule - Ball bus module that directly extends BBus
@@ -20,6 +21,7 @@ class BBusModule(b: GlobalConfig)
         val ballGenerator: () => HasBlink with Module = mapping.ballName match {
           case "VecBall"  => () => new VecBall(b)
           case "ReluBall" => () => new ReluBall(b)
+          case "TransposeBall" => () => new TransposeBall(b)
           case name       => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator
