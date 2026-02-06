@@ -248,7 +248,7 @@ If `bbdev verilator --verilog` reports an error after execution, this means hard
 ### Step 3: Run simulation
 
 ```
-bbdev verilator --run '--jobs 16 --binary ctest_relu_test_singlecore-baremetal --batch'
+bbdev verilator --run '--jobs 16 --binary ctest_relu_test_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ```
 
 If `bbdev verilator --verilog` reports an error after execution, this means the hardware system has timeout, deadlock and other issues, please check **I. Writing Chisel Hardware Module** related files.
