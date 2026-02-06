@@ -1,7 +1,8 @@
 {
-  "ballNum": 2,
+  "ballNum": 3,
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall", "inBW": 2, "outBW": 4},
-    {"ballId": 1, "ballName": "ReluBall", "inBW": 1, "outBW": 1}
+    {"ballId": 1, "ballName": "ReluBall", "inBW": 1, "outBW": 1},
+    {"ballId": 1, "ballName": "TransposeBall", "inBW": 1, "outBW": 1}
   ]
 }

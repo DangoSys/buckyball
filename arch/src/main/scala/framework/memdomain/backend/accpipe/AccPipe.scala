@@ -130,9 +130,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
       io.read.resp <> io.sramRead.resp
 
       io.sramWrite.req.valid      := writeDirect
-      io.sramWrite.req.bits.addr  := io.write.req.bits.addr
-      io.sramWrite.req.bits.data  := io.write.req.bits.data
-      io.sramWrite.req.bits.mask  := io.write.req.bits.mask
+      io.sramWrite.req.bits.addr  := 0.U
+      io.sramWrite.req.bits.data  := 0.U
+      io.sramWrite.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
       io.sramWrite.req.bits.wmode := false.B
 
       // Upstream ready is a function of the selected downstream ready
@@ -215,6 +215,10 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     is(s_wait_direct_write_resp) {
       // Direct write: forward resp
+      io.sramWrite.req.valid      := true.B
+      io.sramWrite.req.bits.addr  := io.write.req.bits.addr
+      io.sramWrite.req.bits.data  := io.write.req.bits.data
+      io.sramWrite.req.bits.mask  := io.write.req.bits.mask
       io.write.resp.valid     := io.sramWrite.resp.valid
       io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
       io.sramWrite.resp.ready := io.write.resp.ready
