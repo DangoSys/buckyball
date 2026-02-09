@@ -36,7 +36,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
     // Control and status signals
     val bank_id        = Input(UInt(log2Up(b.memDomain.bankNum).W))
     val is_acc         = Input(Bool())
-    // in AccPipe IO bundle, add:
     val target_bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
 
     val busy = Output(Bool())
@@ -46,7 +45,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // Latched transaction context
   // ---------------------------------------------------------------------------
   val curBankId = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  // target bank id for routing (combinational)
 
   val opIsRead  = RegInit(false.B) // true: read transaction; false: write transaction
   val opIsAccum = RegInit(false.B) // true only for write + wmode=1
@@ -61,12 +59,12 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // FSM
   // ---------------------------------------------------------------------------
-  val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil = Enum(5)
-  val state                                                                                                    = RegInit(s_idle)
+  val s_idle :: s_wait_read_resp :: s_issue_write_back :: s_wait_write_resp :: s_wait_direct_write_resp :: Nil =
+    Enum(5)
+  val state = RegInit(s_idle)
 
   io.target_bank_id := Mux(state === s_idle, io.bank_id, curBankId)
-
-  io.busy := (state =/= s_idle)
+  io.busy           := (state =/= s_idle)
 
   // ---------------------------------------------------------------------------
   // Defaults (avoid multi-drive)
@@ -97,9 +95,10 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   private def maskedAccumulate(oldU: UInt, addU: UInt, maskV: Vec[Bool]): UInt = {
     val segW = b.memDomain.bankWidth / b.memDomain.bankMaskLen
-    // Optional safety: if not divisible, elaboration will still succeed but behavior is wrong.
-    // You can assert if you want:
-    require(b.memDomain.bankWidth % b.memDomain.bankMaskLen == 0, "bankWidth must be divisible by bankMaskLen")
+    require(
+      b.memDomain.bankWidth % b.memDomain.bankMaskLen == 0,
+      "bankWidth must be divisible by bankMaskLen"
+    )
 
     val oldVec = oldU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
     val addVec = addU.asTypeOf(Vec(b.memDomain.bankMaskLen, UInt(segW.W)))
@@ -111,7 +110,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
     resVec.asUInt
   }
 
+  // Read req ready is driven by downstream read-req ready (when active)
   io.read.req.ready := io.sramRead.req.ready
+
   // ---------------------------------------------------------------------------
   // FSM behavior
   // ---------------------------------------------------------------------------
@@ -129,10 +130,11 @@ class AccPipe(val b: GlobalConfig) extends Module {
       io.sramRead.req.bits.addr := Mux(writeAccum, io.write.req.bits.addr, io.read.req.bits.addr)
       io.read.resp <> io.sramRead.resp
 
+      // FIX#1: direct write must pass-through addr/data/mask in the SAME cycle
       io.sramWrite.req.valid      := writeDirect
-      io.sramWrite.req.bits.addr  := 0.U
-      io.sramWrite.req.bits.data  := 0.U
-      io.sramWrite.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+      io.sramWrite.req.bits.addr  := io.write.req.bits.addr
+      io.sramWrite.req.bits.data  := io.write.req.bits.data
+      io.sramWrite.req.bits.mask  := io.write.req.bits.mask
       io.sramWrite.req.bits.wmode := false.B
 
       // Upstream ready is a function of the selected downstream ready
@@ -177,12 +179,10 @@ class AccPipe(val b: GlobalConfig) extends Module {
         io.sramRead.resp.ready := true.B
         when(io.sramRead.resp.fire) {
           oldData := io.sramRead.resp.bits.data
-          // Compute result right away and latch
           resData := maskedAccumulate(io.sramRead.resp.bits.data, latData, latMask)
           state   := s_issue_write_back
         }
       }.otherwise {
-        // Should not happen
         state := s_idle
       }
     }
@@ -193,7 +193,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
       io.sramWrite.req.bits.addr  := latAddr
       io.sramWrite.req.bits.data  := resData
       io.sramWrite.req.bits.mask  := latMask
-      io.sramWrite.req.bits.wmode := false.B // IMPORTANT: already accumulated in AccPipe
+      io.sramWrite.req.bits.wmode := false.B
 
       when(io.sramWrite.req.fire) {
         state := s_wait_write_resp
@@ -207,18 +207,13 @@ class AccPipe(val b: GlobalConfig) extends Module {
       io.sramWrite.resp.ready := io.write.resp.ready
 
       when(io.sramWrite.resp.fire) {
-        // Done
         opIsAccum := false.B
         state     := s_idle
       }
     }
 
     is(s_wait_direct_write_resp) {
-      // Direct write: forward resp
-      io.sramWrite.req.valid      := true.B
-      io.sramWrite.req.bits.addr  := io.write.req.bits.addr
-      io.sramWrite.req.bits.data  := io.write.req.bits.data
-      io.sramWrite.req.bits.mask  := io.write.req.bits.mask
+      // FIX#2: do NOT re-issue write req here; only wait/forward the response
       io.write.resp.valid     := io.sramWrite.resp.valid
       io.write.resp.bits.ok   := io.sramWrite.resp.bits.ok
       io.sramWrite.resp.ready := io.write.resp.ready

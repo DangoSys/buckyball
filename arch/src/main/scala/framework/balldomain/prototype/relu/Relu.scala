@@ -122,14 +122,17 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     }
 
     is(sRead) {
-      when(readCounter < InputNum.U) {
-        readCounter                     := readCounter + 1.U
-        io.bankRead(0).io.req.valid     := true.B
-        io.bankRead(0).io.req.bits.addr := raddr_reg + readCounter
+      io.bankRead(0).io.resp.ready := true.B
+
+      io.bankRead(0).io.req.valid := (readCounter < InputNum.U)
+      io.bankRead(0).io.req.bits.addr := raddr_reg + readCounter
+
+      when(io.bankRead(0).io.req.fire) {
+        readCounter := readCounter + 1.U
       }
 
       val dataWord = io.bankRead(0).io.resp.bits.data
-      io.bankRead(0).io.resp.ready := true.B
+
       when(io.bankRead(0).io.resp.fire) {
         for (col <- 0 until InputNum) {
           val hi     = (col + 1) * inputWidth - 1
@@ -142,7 +145,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
         respCounter := respCounter + 1.U
       }
 
-      when(respCounter === InputNum.U) {
+      when(respCounter === (InputNum-1).U) {
         state        := sWrite
         writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(0)(j)))
         for (i <- 0 until b.memDomain.bankMaskLen) {
@@ -152,21 +155,27 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     }
 
     is(sWrite) {
-      io.bankWrite(0).io.req.valid     := writeCounter < InputNum.U
+      val hasMore = writeCounter < InputNum.U
+
+      io.bankWrite(0).io.req.valid     := hasMore
       io.bankWrite(0).io.req.bits.addr := waddr_reg + writeCounter
       io.bankWrite(0).io.req.bits.data := writeDataReg
       io.bankWrite(0).io.req.bits.mask := writeMaskReg
-
-      when(writeCounter === (InputNum - 1).U) {
-        state := complete
-      }.otherwise {
-        writeCounter := writeCounter + 1.U
-        writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(writeCounter + 1.U)(j)))
+      io.bankWrite(0).io.resp.ready := true.B
+      
+      when(io.bankWrite(0).io.req.fire) {
+        when(writeCounter === (InputNum - 1).U) {
+          state := complete
+        }.otherwise {
+          val nextCnt = writeCounter + 1.U
+          writeCounter := nextCnt
+          writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(nextCnt)(j)))
+        }
       }
-
     }
 
     is(complete) {
+      io.bankWrite(0).io.resp.ready := true.B
       when(cycle_reg === 0.U) {
         io.cmdResp.valid       := true.B
         io.cmdResp.bits.rob_id := rob_id_reg
