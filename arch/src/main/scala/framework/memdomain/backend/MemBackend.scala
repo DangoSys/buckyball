@@ -135,7 +135,12 @@ class MemBackend(val b: GlobalConfig) extends Module {
         case (accPipe, accPipeId) =>
           when(mappingTable(pBankId).valid && (mappingTable(pBankId).channel_id === accPipeId.U)) {
             bank.io.sramRead <> accPipe.io.sramRead
+            bank.io.sramRead.req.valid := RegNext(accPipe.io.sramRead.req.valid)
+            bank.io.sramRead.req.bits  := RegNext(accPipe.io.sramRead.req.bits)
+
             bank.io.sramWrite <> accPipe.io.sramWrite
+            bank.io.sramWrite.req.valid := RegNext(accPipe.io.sramWrite.req.valid)
+            bank.io.sramWrite.req.bits  := RegNext(accPipe.io.sramWrite.req.bits)
 
           }
       }

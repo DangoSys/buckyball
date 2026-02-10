@@ -51,8 +51,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 int test_ones() {
-  init_ones_matrix(input_matrix_a, DIM, DIM);
-  init_ones_matrix(input_matrix_b, DIM, DIM);
+  init_sequence_matrix(input_matrix_a, DIM, DIM);
+  init_sequence_matrix(input_matrix_b, DIM, DIM);
   return run_test("All-ones matrices", input_matrix_a, input_matrix_b, DIM);
 }
 
