@@ -19,10 +19,10 @@ class BBusModule(b: GlobalConfig)
       b,
       b.ballDomain.ballIdMappings.map { mapping =>
         val ballGenerator: () => HasBlink with Module = mapping.ballName match {
-          case "VecBall"  => () => new VecBall(b)
-          case "ReluBall" => () => new ReluBall(b)
+          case "VecBall"       => () => new VecBall(b)
+          case "ReluBall"      => () => new ReluBall(b)
           case "TransposeBall" => () => new TransposeBall(b)
-          case name       => throw new IllegalArgumentException(s"Unknown ball name: $name")
+          case name            => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator
       }

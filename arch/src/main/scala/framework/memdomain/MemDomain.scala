@@ -84,5 +84,5 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
 
   midend.io.mem_req <> backend.io.mem_req
-  backend.io.acc_config <> frontend.io.acc_config
+  backend.io.config <> frontend.io.config
 }

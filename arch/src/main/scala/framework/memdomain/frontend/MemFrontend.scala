@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tile._
 import framework.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWriter}
-import framework.memdomain.frontend.outside_channel.{MemConfiger, MemLoader, MemStorer}
+import framework.memdomain.frontend.outside_channel.{MemConfiger, MemConfigerIO, MemLoader, MemStorer}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
@@ -46,7 +46,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
 
-    val acc_config = Output(UInt(b.memDomain.bankNum.W))
+    val config = Decoupled(new MemConfigerIO(b))
 
     // Busy signal
     val busy = Output(Bool())
@@ -73,7 +73,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memDecoder.io.cmd_i.valid := io.global_issue_i.valid
   memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
   io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
-  io.acc_config             := configer.io.acc_config
+  io.config <> configer.io.config
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation

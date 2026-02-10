@@ -74,7 +74,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs1(memAddrLen - 1, 0),
         rs2(bankIdLen - 1, 0),
         rs2(9 + bankIdLen, bankIdLen),
-        rs2(39, 0),
+        rs2(39 + bankIdLen, bankIdLen),
         Y
       ), // mset
       MVIN_BITPAT  -> List(

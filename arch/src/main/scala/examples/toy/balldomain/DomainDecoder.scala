@@ -71,7 +71,7 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
     func7,
     ball_default_decode,
     Array(
-      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 0.U, rs2(63, 16)),
+      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs2(7, 0), rs2(15, 8), 0.U, rs2(63, 16)),
       RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 1.U, rs2(63, 16)),
       TRANSPOSE     -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 2.U, rs2(63, 16)),
       IM2COL        -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs2(7, 0), rs1(15, 8), rs2(15, 8), 3.U, rs2(63, 16)),

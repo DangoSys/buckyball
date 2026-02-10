@@ -7,7 +7,6 @@ import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
 import framework.balldomain.prototype.transpose.Transpose
 import framework.top.GlobalConfig
 
-
 @instantiable
 class TransposeBall(val b: GlobalConfig) extends Module with HasBlink {
 
