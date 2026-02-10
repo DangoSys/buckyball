@@ -124,7 +124,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     is(sRead) {
       io.bankRead(0).io.resp.ready := true.B
 
-      io.bankRead(0).io.req.valid := (readCounter < InputNum.U)
+      io.bankRead(0).io.req.valid     := (readCounter < InputNum.U)
       io.bankRead(0).io.req.bits.addr := raddr_reg + readCounter
 
       when(io.bankRead(0).io.req.fire) {
@@ -145,7 +145,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
         respCounter := respCounter + 1.U
       }
 
-      when(respCounter === (InputNum-1).U) {
+      when(respCounter === (InputNum - 1).U) {
         state        := sWrite
         writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(0)(j)))
         for (i <- 0 until b.memDomain.bankMaskLen) {
@@ -161,8 +161,8 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
       io.bankWrite(0).io.req.bits.addr := waddr_reg + writeCounter
       io.bankWrite(0).io.req.bits.data := writeDataReg
       io.bankWrite(0).io.req.bits.mask := writeMaskReg
-      io.bankWrite(0).io.resp.ready := true.B
-      
+      io.bankWrite(0).io.resp.ready    := true.B
+
       when(io.bankWrite(0).io.req.fire) {
         when(writeCounter === (InputNum - 1).U) {
           state := complete
@@ -183,7 +183,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
           iterCnt := iterCnt + 1.U
         }
       }
-      state := idle
+      state                         := idle
     }
   }
 

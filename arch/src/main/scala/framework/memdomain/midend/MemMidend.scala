@@ -55,7 +55,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     val hits = VecInit((0 until numChannels).map { ch =>
       mappingTable(ch).valid && mappingTable(ch).isRead && (mappingTable(ch).id === rid.U)
     })
-    readMapped(rid) := hits.asUInt.orR
+    readMapped(rid)                         := hits.asUInt.orR
     if (numChannels == 1) readMappedCh(rid) := 0.U else readMappedCh(rid) := OHToUInt(hits)
   }
 
@@ -65,7 +65,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     val hits = VecInit((0 until numChannels).map { ch =>
       mappingTable(ch).valid && !mappingTable(ch).isRead && (mappingTable(ch).id === wid.U)
     })
-    writeMapped(wid) := hits.asUInt.orR
+    writeMapped(wid)                         := hits.asUInt.orR
     if (numChannels == 1) writeMappedCh(wid) := 0.U else writeMappedCh(wid) := OHToUInt(hits)
   }
 

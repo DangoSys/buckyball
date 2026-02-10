@@ -26,7 +26,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   })
 
   val s_idle :: s_dma_req :: s_dma_wait :: s_done :: Nil = Enum(4)
-  val state                                    = RegInit(s_idle)
+  val state                                              = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
