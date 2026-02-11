@@ -3,11 +3,11 @@ package framework.balldomain.prototype.transpose
 import chisel3._
 import chisel3.util._
 import chisel3.stage._
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{ instantiable, public }
 
 import framework.balldomain.prototype.vector._
-import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
+import framework.balldomain.rs.{ BallRsComplete, BallRsIssue }
+import framework.balldomain.blink.{ BallStatus, BankRead, BankWrite }
 import framework.top.GlobalConfig
 import framework.balldomain.prototype.transpose.configs.TransposeBallParam
 
@@ -18,11 +18,11 @@ class Transpose(val b: GlobalConfig) extends Module {
   val inputWidth = ballConfig.inputWidth
   val bankWidth  = b.memDomain.bankWidth
 
-  // Get bandwidth from config
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "TransposeBall")
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "TransposeBall")
     .getOrElse(throw new IllegalArgumentException("TransposeBall not found in config"))
-  val inBW        = ballMapping.inBW
-  val outBW       = ballMapping.outBW
+  val inBW  = ballMapping.inBW
+  val outBW = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {
@@ -33,10 +33,11 @@ class Transpose(val b: GlobalConfig) extends Module {
     val status    = new BallStatus
   })
 
+  // -------------------------------
+  // ROB / IDs
+  // -------------------------------
   val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  when(io.cmdReq.fire) {
-    rob_id_reg := io.cmdReq.bits.rob_id
-  }
+  when(io.cmdReq.fire) { rob_id_reg := io.cmdReq.bits.rob_id }
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id  := rob_id_reg
@@ -47,42 +48,47 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).ball_id := 0.U
   }
 
+  // -------------------------------
+  // State
+  // -------------------------------
   val idle :: compute :: Nil = Enum(2)
-  val state                  = RegInit(idle)
+  val state = RegInit(idle)
 
-  // Matrix storage register (veclane x veclane)
+  // -------------------------------
+  // Ping-pong row buffers:
+  // 2 blocks, each stores InputNum rows, each row has InputNum elems
+  // -------------------------------
   val regArray = Reg(Vec(2 * InputNum, Vec(InputNum, UInt(inputWidth.W))))
 
-  // Counters
-  val readCounter     = RegInit(0.U(10.W))
-  val respCounter     = RegInit(0.U(10.W))
-  val writeCounter    = RegInit(0.U(10.W))
-  val respWaitcounter = RegInit(0.U(10.W))
-  val writeHeadptr    = RegInit(0.U(10.W))
-  val writeTailptr    = RegInit(0.U(10.W))
+  // which block are we filling / draining
+  val fillSel     = RegInit(0.U(1.W)) // 0 or 1
+  val drainSel    = RegInit(0.U(1.W)) // 0 or 1
+  val blockFull   = RegInit(VecInit(Seq.fill(2)(false.B)))
+  val fillRowIdx  = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
+  val drainColIdx = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
+  val draining    = RegInit(false.B)
 
-  // Instruction registers
-  val robid_reg      = RegInit(0.U(10.W))
-  val waddr_reg      = RegInit(0.U(10.W))
-  val wbank_reg      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val raddr_reg      = RegInit(0.U(10.W))
-  val rbank_reg      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val iter_reg       = RegInit(0.U(10.W))
-  val write_iter_reg = RegInit(0.U(10.W))
-  val mode_reg       = RegInit(0.U(1.W))
+  // total progress counters (STRICTLY via fire)
+  val readReqCnt  = RegInit(0.U(32.W))
+  val readRespCnt = RegInit(0.U(32.W))
+  val writeReqCnt = RegInit(0.U(32.W))
 
-  // Precompute write data
-  val writeDataReg = Reg(UInt(bankWidth.W))
-  val writeMaskReg = Reg(Vec(b.memDomain.bankMaskLen, UInt(1.W)))
+  // command fields
+  val raddr_reg = RegInit(0.U(32.W))
+  val waddr_reg = RegInit(0.U(32.W))
+  val rbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val iter_reg  = RegInit(0.U(32.W))
 
-  val start_write = RegInit(false.B)
-  // SRAM default assignment
+  // -------------------------------
+  // Default IO assignments
+  // -------------------------------
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := 0.U
     io.bankRead(i).io.resp.ready    := false.B
+    io.bankRead(i).bank_id          := rbank_reg
   }
-
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid      := false.B
     io.bankWrite(i).io.req.bits.addr  := 0.U
@@ -90,91 +96,177 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
     io.bankWrite(i).io.req.bits.wmode := false.B
     io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).bank_id           := wbank_reg
   }
 
-  for (i <- 0 until inBW) {
-    io.bankRead(i).bank_id := rbank_reg
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).bank_id := wbank_reg
-  }
-
-  // cmd interface default assignment
-  io.cmdReq.ready        := state === idle
+  io.cmdReq.ready        := (state === idle)
   io.cmdResp.valid       := false.B
   io.cmdResp.bits.rob_id := rob_id_reg
 
-  when(state === idle && io.cmdReq.fire) {
-    state           := compute
-    readCounter     := 0.U
-    respCounter     := 0.U
-    respWaitcounter := io.cmdReq.bits.cmd.iter + respWaitcounter
+  // Always consume responses to avoid downstream backpressure deadlocks
+  io.bankRead(0).io.resp.ready  := (state === compute)
+  io.bankWrite(0).io.resp.ready := (state === compute)
 
-    robid_reg := io.cmdReq.bits.rob_id
-    waddr_reg := 0.U
-    wbank_reg := io.cmdReq.bits.cmd.wr_bank
-    raddr_reg := 0.U
-    rbank_reg := io.cmdReq.bits.cmd.op1_bank
-    iter_reg  := io.cmdReq.bits.cmd.iter
-    mode_reg  := io.cmdReq.bits.cmd.special(0)
-  }
-  // read req
-  when(((mode_reg === 1.U) && (state === compute) && RegNext(io.bankWrite(0).io.req.ready)) ||
-    ((mode_reg === 0.U) && (state === compute))) {
-    readCounter                     := readCounter + 1.U
-    io.bankRead(0).io.req.valid     := readCounter < iter_reg
-    io.bankRead(0).io.req.bits.addr := raddr_reg + readCounter
-    state                           := Mux((readCounter >= iter_reg - 1.U) && io.cmdResp.ready, idle, state)
-  }
-  io.cmdResp.valid       := (readCounter >= (iter_reg - 1.U)) && (state === compute)
-  io.cmdResp.bits.rob_id := robid_reg
+  // -------------------------------
+  // Helpers
+  // -------------------------------
+  def blockBase(sel: UInt): UInt = Mux(sel === 0.U, 0.U, InputNum.U)
 
-  // read resp
-  io.bankRead(0).io.resp.ready := true.B
-  val dataWord = io.bankRead(0).io.resp.bits.data
-  val row      = respCounter(4, 0)
-  when(io.bankRead(0).io.resp.fire && respWaitcounter > 0.U) {
-    for (col <- 0 until InputNum) {
-      val hi = (col + 1) * inputWidth - 1
-      val lo = col * inputWidth
-      regArray(row)(col) := dataWord(hi, lo)
+  // "space available" means at least one block is not full
+  val hasFreeBlock = !(blockFull(0) && blockFull(1))
+
+  // -------------------------------
+  // Main FSM
+  // -------------------------------
+  switch(state) {
+    is(idle) {
+      // reset runtime flags (not mandatory, but keeps things clean)
+      when(io.cmdReq.fire) {
+        state      := compute
+
+        raddr_reg  := 0.U
+        waddr_reg  := 0.U
+        rbank_reg  := io.cmdReq.bits.cmd.op1_bank
+        wbank_reg  := io.cmdReq.bits.cmd.wr_bank
+        iter_reg   := io.cmdReq.bits.cmd.iter
+
+        readReqCnt  := 0.U
+        readRespCnt := 0.U
+        writeReqCnt := 0.U
+
+        fillSel     := 0.U
+        drainSel    := 0.U
+        blockFull   := VecInit(Seq.fill(2)(false.B))
+        fillRowIdx  := 0.U
+        draining    := false.B
+        drainColIdx := 0.U
+      }
     }
-    respCounter := Mux(respCounter === iter_reg - 1.U, 0.U, respCounter + 1.U)
-    writeHeadptr    := Mux(writeHeadptr === 2.U * InputNum.U - 1.U, 0.U, writeHeadptr + 1.U)
-    respWaitcounter := Mux(
-      state === idle && io.cmdReq.fire,
-      io.cmdReq.bits.cmd.iter + respWaitcounter - 1.U,
-      respWaitcounter - 1.U
-    )
+
+    is(compute) {
+      // ---------------------------
+      // 1) READ REQ generation
+      // Only issue a read when:
+      // - still need reads (readReqCnt < iter_reg)
+      // - there is space in buffers (not both blocks full)
+      // - downstream ready handshake ok (via fire)
+      // ---------------------------
+      val wantRead = (readReqCnt < iter_reg) && hasFreeBlock
+      io.bankRead(0).io.req.valid     := wantRead
+      io.bankRead(0).io.req.bits.addr := raddr_reg + readReqCnt
+
+      when(io.bankRead(0).io.req.fire) {
+        readReqCnt := readReqCnt + 1.U
+      }
+
+      // ---------------------------
+      // 2) READ RESP handling (fill ping-pong block)
+      // Only advance fillRowIdx/blockFull on resp.fire
+      // ---------------------------
+      when(io.bankRead(0).io.resp.fire) {
+        val dataWord = io.bankRead(0).io.resp.bits.data
+        val base     = blockBase(fillSel)
+        val rowIdx   = base + fillRowIdx
+
+        for (col <- 0 until InputNum) {
+          val hi = (col + 1) * inputWidth - 1
+          val lo = col * inputWidth
+          regArray(rowIdx)(col) := dataWord(hi, lo)
+        }
+
+        readRespCnt := readRespCnt + 1.U
+
+        when(fillRowIdx === (InputNum - 1).U) {
+          // this block becomes full
+          blockFull(fillSel) := true.B
+          fillRowIdx         := 0.U
+
+          // switch to the other block if it is not full
+          when(!blockFull(~fillSel)) {
+            fillSel := ~fillSel
+          }
+        }.otherwise {
+          fillRowIdx := fillRowIdx + 1.U
+        }
+      }
+
+      // ---------------------------
+      // 3) Start draining (writing) when not already draining
+      // ---------------------------
+      when(!draining) {
+        when(blockFull(drainSel) && (writeReqCnt < iter_reg)) {
+          draining    := true.B
+          drainColIdx := 0.U
+        }.elsewhen(blockFull(~drainSel) && (writeReqCnt < iter_reg)) {
+          // if current drainSel block not full but the other is, swap
+          drainSel    := ~drainSel
+          draining    := true.B
+          drainColIdx := 0.U
+        }
+      }
+
+      // ---------------------------
+      // 4) WRITE REQ generation (transpose)
+      // Only advance drainColIdx / writeReqCnt on req.fire
+      // ---------------------------
+      when(draining) {
+        val base = blockBase(drainSel)
+
+        // compose one output row = one column of input block
+        val col = drainColIdx
+        val packed = Cat((0 until InputNum).reverse.map { r =>
+          regArray(base + r.U)(col)
+        })
+
+        val hasMoreWrite = (drainColIdx < InputNum.U) && (writeReqCnt < iter_reg)
+        io.bankWrite(0).io.req.valid     := hasMoreWrite
+        io.bankWrite(0).io.req.bits.addr := waddr_reg + writeReqCnt
+        io.bankWrite(0).io.req.bits.data := packed
+        io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
+
+        when(io.bankWrite(0).io.req.fire) {
+          writeReqCnt := writeReqCnt + 1.U
+
+          when(drainColIdx === (InputNum - 1).U) {
+            // finished draining this block
+            draining           := false.B
+            blockFull(drainSel) := false.B
+            drainSel           := ~drainSel
+
+            // move write base address by InputNum for next block’s outputs
+            waddr_reg := waddr_reg + InputNum.U
+            // move read base address too, purely optional; we already use readReqCnt for addr
+            // raddr_reg := raddr_reg + InputNum.U
+          }.otherwise {
+            drainColIdx := drainColIdx + 1.U
+          }
+        }
+      }
+
+      // ---------------------------
+      // 5) Completion condition (NO early complete)
+      // Must ensure:
+      // - all read req issued
+      // - all read resp received
+      // - all write req issued
+      // - no blocks full, not draining
+      // ---------------------------
+      val done =
+        (readReqCnt === iter_reg) &&
+          (readRespCnt === iter_reg) &&
+          (writeReqCnt === iter_reg) &&
+          !blockFull(0) && !blockFull(1) &&
+          !draining
+
+      io.cmdResp.valid       := done
+      io.cmdResp.bits.rob_id := rob_id_reg
+
+      when(done && io.cmdResp.fire) {
+        state := idle
+      }
+    }
   }
 
-  // write req
-  val wreg       = RegInit(0.U(10.W))
-  val array_full = ((writeTailptr < InputNum.U) && (writeHeadptr >= InputNum.U)) ||
-    ((writeTailptr >= InputNum.U) && (writeHeadptr < InputNum.U))
-  when(writeCounter === iter_reg - 1.U) {
-    start_write := false.B
-  }.elsewhen(array_full && !start_write) {
-    start_write    := true.B
-    wreg           := waddr_reg
-    write_iter_reg := iter_reg
-  }.otherwise {
-    start_write := start_write
-  }
-
-  when(start_write) {
-    io.bankWrite(0).io.req.valid     := true.B
-    io.bankWrite(0).io.req.bits.addr := wreg + writeCounter
-    io.bankWrite(0).io.req.bits.data := Mux(
-      writeCounter(4) === 0.U,
-      Cat((0 until InputNum).reverse.map(i => regArray(i)(writeCounter(3, 0)))),
-      Cat((0 until InputNum).reverse.map(i => regArray(i + InputNum)(writeCounter(3, 0))))
-    )
-    io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(~0.U(1.W)))
-    writeCounter                     := Mux(writeCounter === write_iter_reg - 1.U, 0.U, writeCounter + 1.U)
-    writeTailptr                     := Mux(writeTailptr === 2.U * InputNum.U - 1.U, 0.U, writeTailptr + 1.U)
-  }
-  // Status signals
-  io.status.idle    := state === idle
-  io.status.running := state === compute
+  io.status.idle    := (state === idle)
+  io.status.running := (state === compute)
 }
