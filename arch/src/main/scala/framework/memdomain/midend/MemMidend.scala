@@ -107,6 +107,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(ch).write.req.bits   := DontCare
     io.mem_req(ch).write.resp.ready := true.B
     io.mem_req(ch).bank_id          := 0.U
+    io.mem_req(ch).acc_group_id     := 0.U
   }
 
   // Default resp to ports (each port gets muxed resp from its selected channel)
@@ -200,6 +201,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
       io.mem_req(ch).read.req.bits   := io.balldomain.bankRead(ridSel).io.req.bits
       io.mem_req(ch).read.resp.ready := io.balldomain.bankRead(ridSel).io.resp.ready
       io.mem_req(ch).bank_id         := io.balldomain.bankRead(ridSel).bank_id
+      io.mem_req(ch).acc_group_id    := io.balldomain.bankRead(ridSel).acc_group_id
     }.elsewhen(serveWrite) {
       val widSel = Mux(chServeWriteMapped(ch), mappingTable(ch).id, chAllocWriteId(ch))
 
@@ -207,6 +209,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
       io.mem_req(ch).write.req.bits   := io.balldomain.bankWrite(widSel).io.req.bits
       io.mem_req(ch).write.resp.ready := io.balldomain.bankWrite(widSel).io.resp.ready
       io.mem_req(ch).bank_id          := io.balldomain.bankWrite(widSel).bank_id
+      io.mem_req(ch).acc_group_id     := io.balldomain.bankWrite(widSel).acc_group_id
     }
   }
 
@@ -232,10 +235,15 @@ class MemMidend(val b: GlobalConfig) extends Module {
   val frontendCh = b.top.memBallChannelNum
   io.mem_req(frontendCh).write <> io.frontend.bankWrite.io
   io.mem_req(frontendCh).read <> io.frontend.bankRead.io
-  io.mem_req(frontendCh).bank_id := Mux(
+  io.mem_req(frontendCh).bank_id      := Mux(
     io.frontend.bankRead.io.req.valid,
     io.frontend.bankRead.bank_id,
     io.frontend.bankWrite.bank_id
+  )
+  io.mem_req(frontendCh).acc_group_id := Mux(
+    io.frontend.bankRead.io.req.valid,
+    io.frontend.bankRead.acc_group_id,
+    io.frontend.bankWrite.acc_group_id
   )
 
   // Mapping table release
