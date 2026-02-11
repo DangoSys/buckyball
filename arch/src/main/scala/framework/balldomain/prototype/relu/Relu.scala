@@ -86,10 +86,12 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until inBW) {
-    io.bankRead(i).bank_id := rbank_reg
+    io.bankRead(i).bank_id      := rbank_reg
+    io.bankRead(i).acc_group_id := 0.U
   }
   for (i <- 0 until outBW) {
-    io.bankWrite(i).bank_id := wbank_reg
+    io.bankWrite(i).bank_id      := wbank_reg
+    io.bankWrite(i).acc_group_id := 0.U
   }
 
   io.cmdReq.ready        := state === idle
