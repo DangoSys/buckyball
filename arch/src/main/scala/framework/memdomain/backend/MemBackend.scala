@@ -9,9 +9,10 @@ import framework.memdomain.backend.banks.{SramBank, SramReadIO, SramWriteIO}
 import framework.memdomain.backend.accpipe.AccPipe
 
 class MemRequestIO(b: GlobalConfig) extends Bundle {
-  val write   = Flipped(new SramWriteIO(b)) // midend sends write req into backend
-  val read    = Flipped(new SramReadIO(b))  // midend sends read req into backend
-  val bank_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
+  val write        = Flipped(new SramWriteIO(b)) // midend sends write req into backend
+  val read         = Flipped(new SramReadIO(b))  // midend sends read req into backend
+  val bank_id      = Output(UInt(log2Up(b.memDomain.bankNum).W))
+  val acc_group_id = Output(UInt(3.W))
 }
 
 @instantiable
@@ -61,6 +62,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     entry.vbank_id     := 0.U
     entry.is_acc       := false.B
     entry.acc_group_id := 0.U
+    entry.channel_id   := 0.U
   }
 
   def getFreePbankId(): UInt = {
@@ -85,7 +87,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
-    accPipes(i).io.is_acc := false.B
   }
 
   io.config.ready := true.B
@@ -106,23 +107,12 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
 
-  when(io.config.valid && !io.config.bits.is_acc) {
+  when(io.config.valid) {
     when(io.config.bits.alloc) {
       val pbank_id = getFreePbankId()
-      addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_acc, 0.U)
+      addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_acc, io.config.bits.acc_group_id)
     }.otherwise {
       deleteEntry(io.config.bits.vbank_id)
-    }
-  }
-
-  when(io.config.valid && io.config.bits.is_acc) {}
-
-  for (i <- 0 until b.memDomain.bankChannel) {
-    for (j <- 0 until b.memDomain.bankNum) {
-      when((io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid) &&
-        mappingTable(j).valid && (mappingTable(j).vbank_id === io.mem_req(i).bank_id)) {
-        mappingTable(j).channel_id := i.U
-      }
     }
   }
 
@@ -135,14 +125,30 @@ class MemBackend(val b: GlobalConfig) extends Module {
         case (accPipe, accPipeId) =>
           when(mappingTable(pBankId).valid && (mappingTable(pBankId).channel_id === accPipeId.U)) {
             bank.io.sramRead <> accPipe.io.sramRead
-            bank.io.sramRead.req.valid := RegNext(accPipe.io.sramRead.req.valid)
-            bank.io.sramRead.req.bits  := RegNext(accPipe.io.sramRead.req.bits)
+            //bank.io.sramRead.req.valid := RegNext(accPipe.io.sramRead.req.valid)
+            //bank.io.sramRead.req.bits  := RegNext(accPipe.io.sramRead.req.bits)
 
             bank.io.sramWrite <> accPipe.io.sramWrite
-            bank.io.sramWrite.req.valid := RegNext(accPipe.io.sramWrite.req.valid)
-            bank.io.sramWrite.req.bits  := RegNext(accPipe.io.sramWrite.req.bits)
+            //bank.io.sramWrite.req.valid := RegNext(accPipe.io.sramWrite.req.valid)
+            //bank.io.sramWrite.req.bits  := RegNext(accPipe.io.sramWrite.req.bits)
 
           }
       }
   }
+
+  for (i <- 0 until b.memDomain.bankChannel) {
+    for (j <- 0 until b.memDomain.bankNum) {
+
+      when((io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid) &&
+        mappingTable(j).valid && (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+        (!mappingTable(j).is_acc ||
+          mappingTable(j).is_acc && (mappingTable(j).acc_group_id === io.mem_req(i).acc_group_id))) {
+
+        mappingTable(j).channel_id := i.U
+        banks(j).io.sramRead <> accPipes(i).io.sramRead
+        banks(j).io.sramWrite <> accPipes(i).io.sramWrite
+      }
+    }
+  }
+
 }

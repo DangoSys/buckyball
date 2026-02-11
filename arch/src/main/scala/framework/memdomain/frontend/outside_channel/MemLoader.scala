@@ -67,9 +67,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // IMPORTANT: always ready for write response (avoid deadlock)
   io.bankWrite.io.resp.ready := true.B
 
-  io.bankWrite.rob_id  := rob_id_reg
-  io.bankWrite.bank_id := wr_bank_reg
-  io.bankWrite.ball_id := 0.U
+  io.bankWrite.rob_id       := rob_id_reg
+  io.bankWrite.bank_id      := wr_bank_reg
+  io.bankWrite.ball_id      := 0.U
+  io.bankWrite.acc_group_id := 0.U
 
   // cmdResp (Decoupled): hold valid until accepted
   io.cmdResp.valid       := (state === s_done)

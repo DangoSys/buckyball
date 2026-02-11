@@ -101,18 +101,20 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImpBB(outer)
   // IDs are queued alongside the req bits to keep them aligned through backpressure.
   for (i <- 0 until totalBallRead) {
     val bankReadReqWithIds = Wire(Decoupled(new Bundle {
-      val bank_id = chiselTypeOf(ballDomain.bankRead(i).bank_id)
-      val rob_id  = chiselTypeOf(ballDomain.bankRead(i).rob_id)
-      val ball_id = chiselTypeOf(ballDomain.bankRead(i).ball_id)
-      val req     = chiselTypeOf(ballDomain.bankRead(i).io.req.bits)
+      val bank_id      = chiselTypeOf(ballDomain.bankRead(i).bank_id)
+      val rob_id       = chiselTypeOf(ballDomain.bankRead(i).rob_id)
+      val ball_id      = chiselTypeOf(ballDomain.bankRead(i).ball_id)
+      val acc_group_id = chiselTypeOf(ballDomain.bankRead(i).acc_group_id)
+      val req          = chiselTypeOf(ballDomain.bankRead(i).io.req.bits)
     }))
 
-    bankReadReqWithIds.valid            := ballDomain.bankRead(i).io.req.valid
-    bankReadReqWithIds.bits.bank_id     := ballDomain.bankRead(i).bank_id
-    bankReadReqWithIds.bits.rob_id      := ballDomain.bankRead(i).rob_id
-    bankReadReqWithIds.bits.ball_id     := ballDomain.bankRead(i).ball_id
-    bankReadReqWithIds.bits.req         := ballDomain.bankRead(i).io.req.bits
-    ballDomain.bankRead(i).io.req.ready := bankReadReqWithIds.ready
+    bankReadReqWithIds.valid             := ballDomain.bankRead(i).io.req.valid
+    bankReadReqWithIds.bits.bank_id      := ballDomain.bankRead(i).bank_id
+    bankReadReqWithIds.bits.rob_id       := ballDomain.bankRead(i).rob_id
+    bankReadReqWithIds.bits.ball_id      := ballDomain.bankRead(i).ball_id
+    bankReadReqWithIds.bits.acc_group_id := ballDomain.bankRead(i).acc_group_id
+    bankReadReqWithIds.bits.req          := ballDomain.bankRead(i).io.req.bits
+    ballDomain.bankRead(i).io.req.ready  := bankReadReqWithIds.ready
 
     val bankReadReqQ = Queue(bankReadReqWithIds, 8)
 
@@ -121,6 +123,7 @@ class ToyBuckyballModule(outer: ToyBuckyball) extends LazyRoCCModuleImpBB(outer)
     memDomain.io.ballDomain.bankRead(i).bank_id      := bankReadReqQ.bits.bank_id
     memDomain.io.ballDomain.bankRead(i).rob_id       := bankReadReqQ.bits.rob_id
     memDomain.io.ballDomain.bankRead(i).ball_id      := bankReadReqQ.bits.ball_id
+    memDomain.io.ballDomain.bankRead(i).acc_group_id := bankReadReqQ.bits.acc_group_id
     bankReadReqQ.ready                               := memDomain.io.ballDomain.bankRead(i).io.req.ready
 
     ballDomain.bankRead(i).io.resp <> memDomain.io.ballDomain.bankRead(i).io.resp
