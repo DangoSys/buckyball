@@ -3,11 +3,11 @@ package framework.balldomain.prototype.transpose
 import chisel3._
 import chisel3.util._
 import chisel3.stage._
-import chisel3.experimental.hierarchy.{ instantiable, public }
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 import framework.balldomain.prototype.vector._
-import framework.balldomain.rs.{ BallRsComplete, BallRsIssue }
-import framework.balldomain.blink.{ BallStatus, BankRead, BankWrite }
+import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
+import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
 import framework.balldomain.prototype.transpose.configs.TransposeBallParam
 
@@ -21,6 +21,7 @@ class Transpose(val b: GlobalConfig) extends Module {
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "TransposeBall")
     .getOrElse(throw new IllegalArgumentException("TransposeBall not found in config"))
+
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
 
@@ -37,7 +38,7 @@ class Transpose(val b: GlobalConfig) extends Module {
   // ROB / IDs
   // -------------------------------
   val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  when(io.cmdReq.fire) { rob_id_reg := io.cmdReq.bits.rob_id }
+  when(io.cmdReq.fire)(rob_id_reg := io.cmdReq.bits.rob_id)
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id  := rob_id_reg
@@ -52,7 +53,7 @@ class Transpose(val b: GlobalConfig) extends Module {
   // State
   // -------------------------------
   val idle :: compute :: Nil = Enum(2)
-  val state = RegInit(idle)
+  val state                  = RegInit(idle)
 
   // -------------------------------
   // Ping-pong row buffers:
@@ -61,8 +62,8 @@ class Transpose(val b: GlobalConfig) extends Module {
   val regArray = Reg(Vec(2 * InputNum, Vec(InputNum, UInt(inputWidth.W))))
 
   // which block are we filling / draining
-  val fillSel     = RegInit(0.U(1.W)) // 0 or 1
-  val drainSel    = RegInit(0.U(1.W)) // 0 or 1
+  val fillSel     = RegInit(0.U(1.W))                      // 0 or 1
+  val drainSel    = RegInit(0.U(1.W))                      // 0 or 1
   val blockFull   = RegInit(VecInit(Seq.fill(2)(false.B)))
   val fillRowIdx  = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
   val drainColIdx = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
@@ -88,6 +89,7 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.req.bits.addr := 0.U
     io.bankRead(i).io.resp.ready    := false.B
     io.bankRead(i).bank_id          := rbank_reg
+    io.bankRead(i).acc_group_id     := 0.U
   }
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid      := false.B
@@ -97,6 +99,7 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.bits.wmode := false.B
     io.bankWrite(i).io.resp.ready     := false.B
     io.bankWrite(i).bank_id           := wbank_reg
+    io.bankWrite(i).acc_group_id      := 0.U
   }
 
   io.cmdReq.ready        := (state === idle)
@@ -122,13 +125,13 @@ class Transpose(val b: GlobalConfig) extends Module {
     is(idle) {
       // reset runtime flags (not mandatory, but keeps things clean)
       when(io.cmdReq.fire) {
-        state      := compute
+        state := compute
 
-        raddr_reg  := 0.U
-        waddr_reg  := 0.U
-        rbank_reg  := io.cmdReq.bits.cmd.op1_bank
-        wbank_reg  := io.cmdReq.bits.cmd.wr_bank
-        iter_reg   := io.cmdReq.bits.cmd.iter
+        raddr_reg := 0.U
+        waddr_reg := 0.U
+        rbank_reg := io.cmdReq.bits.cmd.op1_bank
+        wbank_reg := io.cmdReq.bits.cmd.wr_bank
+        iter_reg  := io.cmdReq.bits.cmd.iter
 
         readReqCnt  := 0.U
         readRespCnt := 0.U
@@ -213,7 +216,7 @@ class Transpose(val b: GlobalConfig) extends Module {
         val base = blockBase(drainSel)
 
         // compose one output row = one column of input block
-        val col = drainColIdx
+        val col    = drainColIdx
         val packed = Cat((0 until InputNum).reverse.map { r =>
           regArray(base + r.U)(col)
         })
@@ -229,9 +232,9 @@ class Transpose(val b: GlobalConfig) extends Module {
 
           when(drainColIdx === (InputNum - 1).U) {
             // finished draining this block
-            draining           := false.B
+            draining            := false.B
             blockFull(drainSel) := false.B
-            drainSel           := ~drainSel
+            drainSel            := ~drainSel
 
             // move write base address by InputNum for next block’s outputs
             waddr_reg := waddr_reg + InputNum.U

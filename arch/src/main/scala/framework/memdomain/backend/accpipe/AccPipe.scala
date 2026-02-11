@@ -35,23 +35,10 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     // Control and status signals
     val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val is_acc  = Input(Bool())
-
-    val vbank_id     = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val acc_group_id = Output(UInt(2.W))
 
     val busy = Output(Bool())
   })
 
-  val vbank_id_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val acc_group_id_reg = RegInit(0.U(2.W))
-  io.vbank_id     := vbank_id_reg
-  io.acc_group_id := acc_group_id_reg
-
-  when(io.sramRead.req.valid || io.sramWrite.req.valid) {
-    vbank_id_reg     := io.bank_id
-    acc_group_id_reg := io.acc_group_id
-  }
   io.sramRead <> io.read
   io.sramWrite <> io.write
   io.busy := false.B
