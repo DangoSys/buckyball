@@ -22,7 +22,7 @@ class Im2colBall(val b: GlobalConfig) extends Module with HasBlink {
   def blink: BlinkIO = io
 
   // Instantiate Im2col
-  val im2colUnit :Instance[Im2col] = Instantiate(new Im2col(b))
+  val im2colUnit: Instance[Im2col] = Instantiate(new Im2col(b))
 
   // Connect command interface
   im2colUnit.io.cmdReq <> io.cmdReq
@@ -36,7 +36,6 @@ class Im2colBall(val b: GlobalConfig) extends Module with HasBlink {
   for (i <- 0 until outBW) {
     im2colUnit.io.bankWrite(i) <> io.bankWrite(i)
   }
-
 
   // Connect Status signals - directly obtained from internal unit
   io.status <> im2colUnit.io.status

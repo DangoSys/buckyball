@@ -35,11 +35,53 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     // Control and status signals
     val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val is_acc  = Input(Bool())
 
     val busy = Output(Bool())
   })
 
+  val read :: write :: Nil = Enum(2)
+  val state                = RegInit(read)
+
   io.sramRead <> io.read
   io.sramWrite <> io.write
+
+  when(io.is_acc) {
+    io.sramRead.req.bits.addr := io.read.req.bits.addr(log2Ceil(b.memDomain.bankEntries) - 1, 2)
+  }
+
+  val acc_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
+  val acc_mask_reg = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)))
+  val acc_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
+
+  switch(state) {
+    is(read) {
+      when(io.write.req.valid && io.write.req.bits.wmode) {
+        state                     := write
+        acc_data_reg              := io.write.req.bits.data
+        acc_mask_reg              := io.write.req.bits.mask
+        acc_addr_reg              := io.write.req.bits.addr
+        io.sramRead.req.bits.addr := io.write.req.bits.addr
+        io.sramRead.req.valid     := true.B
+
+        io.sramWrite.req.valid := false.B
+        io.sramWrite.req.bits  := DontCare
+      }
+    }
+    is(write) {
+      when(io.sramRead.resp.valid) {
+        state                       := read
+        io.sramWrite.req.bits.addr  := acc_addr_reg
+        io.sramWrite.req.bits.data  := acc_data_reg + io.sramRead.resp.bits.data
+        io.sramWrite.req.bits.mask  := acc_mask_reg
+        io.sramWrite.req.bits.wmode := true.B
+        io.sramWrite.req.valid      := true.B
+
+        io.sramRead.req.valid := false.B
+        io.sramRead.req.bits  := DontCare
+      }
+    }
+  }
+
   io.busy := false.B
 }
