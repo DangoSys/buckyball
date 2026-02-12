@@ -28,7 +28,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
 
   // -----------------------------------------------------------------------------
-  // Mapping table/ Free List
+  // Mapping table
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid        = Bool()
@@ -40,8 +40,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
 
-  def isAllocated(vbank_id: UInt): Bool =
-    mappingTable.map(_.vbank_id === vbank_id).reduce(_ || _)
+  def isAcc(vbank_id: UInt): Bool =
+    mappingTable.map(entry => entry.vbank_id === vbank_id && entry.is_acc).reduce(_ || _)
 
   def addEntry(
     vbank_id:     UInt,
@@ -87,6 +87,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
+    accPipes(i).io.is_acc := isAcc(io.mem_req(i).bank_id)
   }
 
   io.config.ready := true.B
