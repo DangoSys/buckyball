@@ -4,15 +4,19 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # flake-utils.url = "github:numtide/flake-utils";
+    bebop = {
+      url = "github:DangoSys/bebop/5f65c8f264b176845924c1ec17935ae4c3e103d7";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }@inputs:
-    let
-      overlay = import ./scripts/nix/overlay.nix;
-    in
+  outputs = { self, nixpkgs, flake-utils, bebop }@inputs:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
+          bebopPkgs = bebop.packages.${system};
+          overlay = import ./scripts/nix/overlay.nix { inherit bebopPkgs; };
           pkgs = import nixpkgs { overlays = [ overlay ]; inherit system; };
         in
         {
@@ -22,19 +26,24 @@
           packages.default = pkgs.buildEnv {
             name = "buckyball-environment";
             paths = with pkgs; [
-              # Chipyard tools
-              chipyard.verilator
-              chipyard.riscv-embedded-gcc
-              chipyard.riscv-linux-gcc
+              tools.verilator
+
+              # RISC-V toolchain
+              riscv.riscv-embedded-gcc
+              riscv.riscv-linux-gcc
 
               # python environment
               python.python3Packages
 
               # Bebop tools
-              bebop.rustc
-              bebop.cargo
-              bebop.rustfmt
-              bebop.clippy
+              pkgs.bebop.rustc
+              pkgs.bebop.cargo
+              pkgs.bebop.rustfmt
+              pkgs.bebop.clippy
+              pkgs.bebop.bebop
+              pkgs.bebop.bebopHost
+              pkgs.bebop.spike
+              pkgs.bebop.gem5
 
               # Workflow dev tools
               bbdev.nodejs
@@ -77,18 +86,19 @@
               echo "Verilator: $(verilator --version 2>&1 | head -1)"
               echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)"
               echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)"
+              echo "Bebop: $(which bebop)"
+              echo "Spike: $(which spike)"
+              echo "Bebop Gem5: $(which gem5.opt)"
               echo "Mill: $(mill --version 2>&1 | head -1)"
               echo "Cargo: $(cargo --version 2>&1 | head -1)"
               echo "npm: $(npm --version 2>&1 | head -1)"
               echo "bbdev: $(which bbdev)"
               echo "RISCV: $RISCV"
-              echo "LIBGLOSS: $(whereis htif_nano.specs)"
               echo "==========================================================================="
             '';
           };
         }
       ) // {
       inherit inputs;
-      overlays.default = overlay;
     };
 }

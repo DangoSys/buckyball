@@ -1,8 +1,32 @@
 { pkgs }:
 
+let
+  millVersion = "0.11.4";
+  millBinary = pkgs.fetchurl {
+    url = "https://github.com/com-lihaoyi/mill/releases/download/${millVersion}/${millVersion}";
+    sha256 = "1swayysb1baqk7zhrlzvikd4plqznaa0nkx2bwc57dvwxp06whz2";
+  };
+  mill = pkgs.stdenv.mkDerivation {
+    name = "mill-${millVersion}";
+    src = millBinary;
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    installPhase = ''
+      mkdir -p $out/bin
+      cp $src $out/bin/mill
+      chmod +x $out/bin/mill
+    '';
+    meta = with pkgs.lib; {
+      description = "Mill build tool ${millVersion}";
+      homepage = "https://github.com/com-lihaoyi/mill";
+      license = licenses.asl20;
+      platforms = platforms.all;
+    };
+  };
+in
 {
   # Build tool for Scala, Java and more
-  mill = pkgs.mill;
+  inherit mill;
 
   # Scala formatter
   scalafmt = pkgs.scalafmt;
