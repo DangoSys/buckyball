@@ -1,0 +1,6 @@
+{ pkgs }:
+
+{
+  verilator = pkgs.verilator;
+
+}

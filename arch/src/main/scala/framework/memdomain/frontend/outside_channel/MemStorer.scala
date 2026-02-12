@@ -94,7 +94,6 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.bankRead.io.req.valid     := (state === s_issue_sram_req)
   io.bankRead.io.req.bits.addr := sram_row
 
-  // IMPORTANT:
   // SRAMBank read resp is a 1-cycle pulse, so we must ALWAYS be ready to take it,
   // but only if we don't already hold a pending beat.
   io.bankRead.io.resp.ready := !pending

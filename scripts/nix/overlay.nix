@@ -1,7 +1,10 @@
+{ bebopPkgs }:
+
 final: prev:
 {
-  chipyard = final.callPackage ./build-env-chipyard.nix { };
-  bebop = final.callPackage ./build-env-bebop.nix { };
+  riscv = final.callPackage ./build-env-riscv.nix { };
+  tools = final.callPackage ./build-env-tools.nix { };
+  bebop = final.callPackage ./build-env-bebop.nix { inherit bebopPkgs; };
   bbdev = final.callPackage ./build-env-bbdev.nix { };
   python = final.callPackage ./build-env-python.nix { };
   scala = final.callPackage ./build-env-scala.nix { };

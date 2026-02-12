@@ -75,9 +75,6 @@ let
 in
 
 {
-  # Fast and robust (System)Verilog simulator/compiler and linter
-  verilator = pkgs.verilator;
-
   # RISC-V embedded toolchain (bare metal), with riscv64-unknown-elf-* symlinks
   # Now includes newlib-nano and libgloss-htif support
   riscv-embedded-gcc = pkgs.symlinkJoin {
@@ -107,6 +104,4 @@ in
       chmod +x $out/bin/$name
     done
   '';
-
-
 }

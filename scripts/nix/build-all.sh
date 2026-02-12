@@ -101,17 +101,6 @@ if run_step "1"; then
     --host=riscv64-unknown-elf
   make
   make install
-  # INSTALL_DIR=${RISCV}/lib
-  # mkdir -p ${INSTALL_DIR}/lib
-  # find . -name "libgloss_htif.a" | while read -r lib; do
-  #   subdir=$(dirname "$lib" | sed 's|^\./||')
-  #   [ "$subdir" = "build" ] && subdir=""
-  #   dest=${INSTALL_DIR}/lib/${subdir}
-  #   mkdir -p "$dest"
-  #   cp "$lib" "$dest/"
-  #   cp ../util/htif_nano.specs ../util/htif.ld ../util/htif.specs \
-  #      ../util/htif_wrap.specs ../util/htif_argv.specs "$dest/" 2>/dev/null || true
-  # done
 fi
 
 if run_step "2"; then
