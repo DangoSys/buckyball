@@ -75,9 +75,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    accPipes(i).io.write <> io.mem_req(i).write
-    accPipes(i).io.read <> io.mem_req(i).read
-    accPipes(i).io.bank_id := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req <> io.mem_req(i)
 
     accPipes(i).io.sramRead.req.ready  := true.B
     accPipes(i).io.sramRead.resp.valid := false.B
@@ -120,30 +118,15 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
   // -----------------------------------------------------------------------------
-  banks.zipWithIndex.foreach {
-    case (bank, pBankId) =>
-      accPipes.zipWithIndex.foreach {
-        case (accPipe, accPipeId) =>
-          when(mappingTable(pBankId).valid && (mappingTable(pBankId).channel_id === accPipeId.U)) {
-            bank.io.sramRead <> accPipe.io.sramRead
-            //bank.io.sramRead.req.valid := RegNext(accPipe.io.sramRead.req.valid)
-            //bank.io.sramRead.req.bits  := RegNext(accPipe.io.sramRead.req.bits)
-
-            bank.io.sramWrite <> accPipe.io.sramWrite
-            //bank.io.sramWrite.req.valid := RegNext(accPipe.io.sramWrite.req.valid)
-            //bank.io.sramWrite.req.bits  := RegNext(accPipe.io.sramWrite.req.bits)
-
-          }
-      }
-  }
 
   for (i <- 0 until b.memDomain.bankChannel) {
+    val hasReq = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
     for (j <- 0 until b.memDomain.bankNum) {
 
-      when((io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid) &&
-        mappingTable(j).valid && (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+      when((hasReq || RegNext(hasReq)) &&
+        mappingTable(j).valid && (mappingTable(j).vbank_id === accPipes(i).io.bank_id) &&
         (!mappingTable(j).is_acc ||
-          mappingTable(j).is_acc && (mappingTable(j).acc_group_id === io.mem_req(i).acc_group_id))) {
+          mappingTable(j).is_acc && (mappingTable(j).acc_group_id === accPipes(i).io.acc_group_id))) {
 
         mappingTable(j).channel_id := i.U
         banks(j).io.sramRead <> accPipes(i).io.sramRead

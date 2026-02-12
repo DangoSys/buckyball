@@ -6,6 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 
 import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
+import framework.memdomain.backend.MemRequestIO
 
 /**
  * AccPipe: Accumulator Pipeline
@@ -29,25 +30,41 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val sramRead  = Flipped(new SramReadIO(b))  // AccPipe -> bank: req out, resp in
     val sramWrite = Flipped(new SramWriteIO(b)) // AccPipe -> bank: req out, resp in
 
-    // Interface from midend (AccPipe is slave)
-    val read  = new SramReadIO(b)  // midend -> AccPipe: req in, resp out
-    val write = new SramWriteIO(b) // midend -> AccPipe: req in, resp out
-
-    // Control and status signals
-    val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val mem_req = Flipped(new MemRequestIO(b))
     val is_acc  = Input(Bool())
 
-    val busy = Output(Bool())
+    val busy         = Output(Bool())
+    val acc_group_id = Output(UInt(3.W))
+    val bank_id      = Output(UInt(b.memDomain.bankNum.W))
   })
 
   val read :: write :: Nil = Enum(2)
   val state                = RegInit(read)
 
-  io.sramRead <> io.read
-  io.sramWrite <> io.write
+  io.sramRead <> io.mem_req.read
+  io.sramWrite <> io.mem_req.write
 
+  //Read Acc
   when(io.is_acc) {
-    io.sramRead.req.bits.addr := io.read.req.bits.addr(log2Ceil(b.memDomain.bankEntries) - 1, 2)
+    io.sramRead.req.bits.addr := io.mem_req.read.req.bits.addr(log2Ceil(b.memDomain.bankEntries) - 1, 2)
+  }
+
+  //Acc_group_id output
+  val acc_group_id_reg = RegInit(0.U(3.W))
+  when(io.mem_req.read.req.valid || io.mem_req.write.req.valid) {
+    io.acc_group_id  := io.mem_req.acc_group_id
+    acc_group_id_reg := io.mem_req.acc_group_id
+  }.otherwise {
+    io.acc_group_id := acc_group_id_reg
+  }
+
+  //Bank_id output
+  val bank_id_reg = RegInit(0.U(b.memDomain.bankNum.W))
+  when(io.mem_req.read.req.valid || io.mem_req.write.req.valid) {
+    bank_id_reg := io.mem_req.bank_id
+    io.bank_id  := io.mem_req.bank_id
+  }.otherwise {
+    io.bank_id := bank_id_reg
   }
 
   val acc_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
@@ -55,20 +72,20 @@ class AccPipe(val b: GlobalConfig) extends Module {
   val acc_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
 
   switch(state) {
-    is(read) {
-      when(io.write.req.valid && io.write.req.bits.wmode) {
+    is(read) { //Stage 1: Read Acc Data
+      when(io.mem_req.write.req.valid && io.mem_req.write.req.bits.wmode) {
         state                     := write
-        acc_data_reg              := io.write.req.bits.data
-        acc_mask_reg              := io.write.req.bits.mask
-        acc_addr_reg              := io.write.req.bits.addr
-        io.sramRead.req.bits.addr := io.write.req.bits.addr
+        acc_data_reg              := io.mem_req.write.req.bits.data
+        acc_mask_reg              := io.mem_req.write.req.bits.mask
+        acc_addr_reg              := io.mem_req.write.req.bits.addr
+        io.sramRead.req.bits.addr := io.mem_req.write.req.bits.addr
         io.sramRead.req.valid     := true.B
 
         io.sramWrite.req.valid := false.B
         io.sramWrite.req.bits  := DontCare
       }
     }
-    is(write) {
+    is(write) { //Stage 2: Write Acc Data
       when(io.sramRead.resp.valid) {
         state                       := read
         io.sramWrite.req.bits.addr  := acc_addr_reg
