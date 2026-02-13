@@ -11,7 +11,7 @@ import requests
 
 from utils import find_available_port
 
-workflow_dir = os.path.dirname(os.path.abspath(__file__))
+workflow_dir = os.path.dirname(os.path.abspath(__file__)) + "/api"
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -362,7 +362,7 @@ if __name__ == "__main__":
         if cmd_info["command"] == "start":
             print(f"Starting dev server on port {args.port}")
             subprocess.run(
-                ["npx", "motia", "dev", "--port", str(args.port)],
+                ["pnpm", "dev", "--port", str(args.port)],
                 cwd=workflow_dir,
                 check=True,
             )
@@ -449,7 +449,7 @@ if __name__ == "__main__":
                 available_port = find_available_port(start_port=5100, end_port=5500)
             print(f"Starting server on port {available_port}...")
             proc = subprocess.Popen(
-                ["npx", "motia", "dev", "--port", str(available_port)], cwd=workflow_dir
+                ["pnpm", "dev", "--port", str(available_port)], cwd=workflow_dir
             )
 
             # Wait for service to start
