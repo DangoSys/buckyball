@@ -3,20 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # flake-utils.url = "github:numtide/flake-utils";
-    bebop = {
-      url = "github:DangoSys/bebop/5f65c8f264b176845924c1ec17935ae4c3e103d7";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils, bebop }@inputs:
+  outputs = { self, nixpkgs, flake-utils }@inputs:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          bebopPkgs = bebop.packages.${system};
-          overlay = import ./scripts/nix/overlay.nix { inherit bebopPkgs; };
+          overlay = import ./scripts/nix/overlay.nix;
           pkgs = import nixpkgs { overlays = [ overlay ]; inherit system; };
         in
         {
@@ -35,21 +29,24 @@
               # python environment
               python.python3Packages
 
-              # Bebop tools
-              pkgs.bebop.rustc
-              pkgs.bebop.cargo
-              pkgs.bebop.rustfmt
-              pkgs.bebop.clippy
-              pkgs.bebop.bebop
-              pkgs.bebop.bebopHost
-              pkgs.bebop.spike
-              pkgs.bebop.gem5
+              # Bebop dependencies (rust toolchain)
+              bebop.rustc
+              bebop.cargo
+              bebop.rustfmt
+              bebop.clippy
 
-              # Workflow dev tools
+              # bbdev dependencies
               bbdev.nodejs
+              bbdev.pnpm
               bbdev.gcc
               bbdev.gnumake
               bbdev.pkg-config
+
+              # C libraries (headers + link libs)
+              clibs.zlib-dev
+              clibs.zlib
+              clibs.readline-dev
+              clibs.readline
 
               # Scala tools
               scala.mill
@@ -75,12 +72,7 @@
                 echo "Warning: result/bin not found. Run 'nix build' first."
               fi
 
-              export BUDDY_MLIR_BUILD_DIR="$PWD/compiler/build"
-              export LLVM_MLIR_BUILD_DIR="$PWD/compiler/llvm/build"
-              export PYTHONPATH="$PWD/compiler/llvm/build/tools/mlir/python_packages/mlir_core:$PWD/compiler/build/python_packages:$PYTHONPATH"
-              export PATH="$PWD/workflow:$PATH"
-              export RISCV="$PWD/result"
-              export PATH="$PWD/thirdparty/libgloss/install/lib:$PATH"
+              source "$PWD/sourceme.sh"
 
               echo "Development environment loaded:"
               echo "Verilator: $(verilator --version 2>&1 | head -1)"

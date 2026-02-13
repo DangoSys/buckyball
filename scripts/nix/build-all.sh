@@ -6,26 +6,22 @@ set -o pipefail
 
 BBDIR=$(git rev-parse --show-toplevel)
 
-source ${BBDIR}/scripts/utils.sh
-
 usage() {
   echo "Usage: ${0} [OPTIONS] "
   echo ""
   echo "Helper script to fully initialize repository that wraps other scripts."
   echo "By default it initializes/installs things in the following order:"
-  echo "   1. Compiler (buddy-mlir) pre-compile sources"
-  echo "   2. bb-tests (workloads) pre-compile sources"
-  echo "   3. Install document management system"
-  echo "   4. Install workflow management system"
-  echo "   5. Install pre-commit hooks"
+  echo "   1. bbdev install"
+  echo "   2. Compiler installation"
+  echo "   3. RTL pre-compile sources"
+  echo "   4. workloads pre-compile sources"
+  echo "   5. pre-commit hooks installation"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
   echo "Options"
   echo "  --help -h     : Display this message"
-  echo "  --verbose -v  : Verbose printout"
   echo "  --skip -s N   : Skip step N in the list above. Use multiple times to skip multiple steps ('-s N -s M ...')."
-
   exit "$1"
 }
 
@@ -93,18 +89,20 @@ if [ "${INSTALL_IN_NIX}" = "0" ]; then
 fi
 
 if run_step "1"; then
-  begin_step "1" "riscv-tools setup"
-  cd ${BBDIR}/thirdparty/libgloss
-  mkdir -p build && cd build
-  CC=riscv64-unknown-elf-gcc ../configure \
-    --prefix=${RISCV}/lib \
-    --host=riscv64-unknown-elf
-  make
-  make install
+  begin_step "1" "bbdev install"
+
+  echo "Installing bbdev node dependencies..."
+  cd ${BBDIR}/bbdev/api
+  pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+
+  # Setup python_modules for Motia
+  # Python deps are managed by Nix (overlay.nix), just need the venv structure
+  echo "Setting up bbdev Python environment..."
+  python3 -m venv --without-pip --system-site-packages "${BBDIR}/bbdev/api/python_modules"
 fi
 
 if run_step "2"; then
-  begin_step "2" "Compiler (buddy-mlir) pre-compile sources"
+  begin_step "2" "Compiler installation"
   cd ${BBDIR}/compiler
 	git submodule update --init llvm
 
@@ -133,48 +131,17 @@ if run_step "2"; then
 fi
 
 if run_step "3"; then
-  begin_step "3" "Install bebop"
-  # ${BBDIR}/scripts/install-bebop.sh
-  echo "bebop is not installed"
+  begin_step "3" "arch pre-compile sources"
+  bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
 fi
 
 if run_step "4"; then
-  begin_step "4" "bb-tests (workloads) pre-compile sources"
-  cd ${BBDIR}/bb-tests
-  mkdir -p build && cd build
-  cmake -G Ninja ..
-  ninja
+  begin_step "4" "bb-tests pre-compile sources"
+  bbdev workload --build
 fi
 
 if run_step "5"; then
-  begin_step "5" "Install requirements for sardine"
-  npm install --prefix ${BBDIR}/bb-tests/sardine allure-commandline
-fi
-
-
-if run_step "6"; then
-  begin_step "6" "Install document management system"
-  mdbook-mermaid install ${BBDIR}/docs/bb-note/
-fi
-
-if run_step "7"; then
-  begin_step "7" "Init workflow management system"
-  cd ${BBDIR}/workflow
-  export USE_SYSTEMD=no
-  npm init -y
-  npm install motia@0.13.0-beta.161
-  npx motia create -t python
-
-  cd ${BBDIR}/workflow/steps && rm *.{py,json} || true
-  cd ${BBDIR}/workflow/steps && rm -r src/ || true
-  cd ${BBDIR}/workflow/steps && rm -r petstore/ || true
-  cd ${BBDIR}/workflow && rm -r src/ || true
-  cd ${BBDIR}/workflow && rm -r tutorial/ || true
-  cd ${BBDIR}/workflow && rm *.{md,tsx,rdb} || true
-fi
-
-if run_step "8"; then
-  begin_step "8" "Install pre-commit hooks"
+  begin_step "5" "pre-commit hooks installation"
   pre-commit install
 fi
 

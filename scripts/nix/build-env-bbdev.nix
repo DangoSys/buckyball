@@ -1,15 +1,12 @@
 { pkgs }:
 
 {
-  # Node.js environment
-  nodejs = pkgs.nodejs_20;
-  npm = pkgs.nodejs_20;
+  # Node.js environment (for bbdev Motia backend)
+  nodejs = pkgs.nodejs_22;
+  pnpm = pkgs.nodePackages.pnpm;
 
   # Build tools (for compiling native modules)
   gcc = pkgs.gcc;
   gnumake = pkgs.gnumake;
   pkg-config = pkgs.pkg-config;
-
-  # System dependencies
-  systemd = pkgs.systemd;
 }

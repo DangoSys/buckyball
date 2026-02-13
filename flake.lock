@@ -1,31 +1,5 @@
 {
   "nodes": {
-    "bebop": {
-      "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "gem5-src": "gem5-src",
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "spike-src": "spike-src"
-      },
-      "locked": {
-        "lastModified": 1770831670,
-        "narHash": "sha256-AyTkiYE6TIxq1KVi7EixdPScmtcY4LmbGpPUR0NvCII=",
-        "owner": "DangoSys",
-        "repo": "bebop",
-        "rev": "5f65c8f264b176845924c1ec17935ae4c3e103d7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "DangoSys",
-        "repo": "bebop",
-        "rev": "5f65c8f264b176845924c1ec17935ae4c3e103d7",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -39,24 +13,8 @@
         "type": "github"
       },
       "original": {
-        "id": "flake-utils",
-        "type": "indirect"
-      }
-    },
-    "gem5-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1754946347,
-        "narHash": "sha256-cvJMe6VEKUE1vnS/IvZR2pBDvgw5KMaUBjx6ouUgmo4=",
-        "owner": "gem5",
-        "repo": "gem5",
-        "rev": "ddd4ae35adb0a3df1f1ba11e9a973a5c2f8c2944",
-        "type": "github"
-      },
-      "original": {
-        "owner": "gem5",
-        "repo": "gem5",
-        "rev": "ddd4ae35adb0a3df1f1ba11e9a973a5c2f8c2944",
+        "owner": "numtide",
+        "repo": "flake-utils",
         "type": "github"
       }
     },
@@ -78,26 +36,8 @@
     },
     "root": {
       "inputs": {
-        "bebop": "bebop",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs"
-      }
-    },
-    "spike-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1766824496,
-        "narHash": "sha256-GysjOv1077ogF2ajkcQpw7TX4KKrbCIwz9jFst24LoI=",
-        "owner": "riscv-software-src",
-        "repo": "riscv-isa-sim",
-        "rev": "45fe6c110aed80d5689752236ba0a668f093ce48",
-        "type": "github"
-      },
-      "original": {
-        "owner": "riscv-software-src",
-        "repo": "riscv-isa-sim",
-        "rev": "45fe6c110aed80d5689752236ba0a668f093ce48",
-        "type": "github"
       }
     },
     "systems": {

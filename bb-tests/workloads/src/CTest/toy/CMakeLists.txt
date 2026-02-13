@@ -26,9 +26,6 @@ function(add_linux_test_target TEST_NAME SOURCE_FILE)
   target_include_directories(${EXECUTABLE} PRIVATE
     ${WORKLOAD_LIB_DIR}
   )
-  # Ensure dependent libraries are built first and link merged library files
-  add_dependencies(${EXECUTABLE} bbhw-linux)
-  target_link_libraries(${EXECUTABLE} ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-linux.a)
 endfunction()
 
 # Generate multicore baremetal version executables
@@ -42,16 +39,14 @@ function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     DEPENDS ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_TOY_WORKLOAD_DIR}/start.S
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     COMMENT "Building multicore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
   add_custom_target(${TEST_NAME}_multicore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Generate singlecore baremetal version executables
@@ -64,17 +59,14 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     DEPENDS ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
   add_custom_target(${TEST_NAME}_singlecore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal
-  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Create cross-platform test targets
@@ -127,11 +119,8 @@ add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_tiled_matmul tiled_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
-add_cross_platform_test_target(ctest_nnlut_test nnlut_test.c)
-add_cross_platform_test_target(ctest_snn_test snn_test.c)
 add_cross_platform_test_target(ctest_abft_systolic_test abft_systolic_test.c)
 add_cross_platform_test_target(ctest_conv_test conv_test.c)
-add_cross_platform_test_target(ctest_cim_test cim_test.c)
 add_cross_platform_test_target(ctest_transfer_test transfer_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
 
@@ -162,11 +151,8 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_transpose_matmul
   ctest_tiled_matmul
   ctest_relu_test
-  ctest_nnlut_test
-  ctest_snn_test
   ctest_abft_systolic_test
   ctest_conv_test
-  ctest_cim_test
   ctest_transfer_test
   ctest_vsetvli
   COMMENT "Building all workloads for Buckyball"

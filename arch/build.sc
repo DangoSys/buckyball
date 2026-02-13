@@ -933,7 +933,7 @@ object fpga_shells extends SbtModule {
 
 // Palladium FPGA subproject (external reference)
 object palladium extends SbtModule {
-  override def millSourcePath = os.pwd / os.up / "tools" / "palladium"
+  override def millSourcePath = os.pwd / os.up / "thirdparty" / "palladium"
   override def scalaVersion   = "2.13.12"
 
   // Add chipyard and fpga_shells as dependencies
