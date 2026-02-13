@@ -20,8 +20,10 @@ stdenv.mkDerivation {
     runHook preInstall
 
     # Install the api directory (Motia backend + utils + steps)
+    # Use --no-dereference to preserve symlinks, skip broken ones after copy
     mkdir -p $out/lib/bbdev
-    cp -r api/* $out/lib/bbdev/
+    cp -r --no-dereference api/* $out/lib/bbdev/
+    find $out/lib/bbdev -type l ! -exec test -e {} \; -delete
 
     # Install the bbdev CLI script
     mkdir -p $out/bin
@@ -31,7 +33,7 @@ stdenv.mkDerivation {
     # Patch workflow_dir to use BBDEV_API_DIR env var if set,
     # otherwise fall back to bbdev/api relative to CWD (project root)
     substituteInPlace $out/bin/.bbdev-unwrapped \
-      --replace 'workflow_dir = os.path.dirname(os.path.abspath(__file__))' \
+      --replace-fail 'workflow_dir = os.path.dirname(os.path.abspath(__file__))' \
                 'workflow_dir = os.environ.get("BBDEV_API_DIR", os.path.join(os.getcwd(), "bbdev", "api"))'
 
     # Wrap bbdev with Python env and Node.js in PATH
