@@ -79,6 +79,9 @@ void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   uint32_t op1_bank_id = 0;
   uint32_t wr_bank_id = 1;
 
+  bb_vbank_config(op1_bank_id, 0, 1);
+  bb_vbank_config(wr_bank_id, 0, 1);
+
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_fence();
 
