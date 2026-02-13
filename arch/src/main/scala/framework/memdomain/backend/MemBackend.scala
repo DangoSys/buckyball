@@ -76,9 +76,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    accPipes(i).io.write <> io.mem_req(i).write
-    accPipes(i).io.read <> io.mem_req(i).read
-    accPipes(i).io.bank_id := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req.write <> io.mem_req(i).write
+    accPipes(i).io.mem_req.read <> io.mem_req(i).read
+    accPipes(i).io.mem_req.bank_id := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req.acc_group_id := io.mem_req(i).acc_group_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready   := false.B
