@@ -13,6 +13,10 @@
         pkgs = import nixpkgs { inherit system overlays; };
       in
       {
+        # nix build
+        packages.bbdev = pkgs.bbdevCli;
+        packages.default = pkgs.bbdevCli;
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             # Node.js runtime (Motia is a Node.js framework)
