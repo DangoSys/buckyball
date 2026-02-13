@@ -1,0 +1,18 @@
+{
+  "name": "bbdev",
+  "version": "0.1.0",
+  "description": "Agent-friendly developer toolchain backend powered by Motia",
+  "scripts": {
+    "postinstall": "motia install",
+    "dev": "motia dev",
+    "dev:debug": "motia dev --debug",
+    "build": "motia build",
+    "start": "motia start",
+    "clean": "rm -rf dist node_modules python_modules .motia .mermaid"
+  },
+  "keywords": ["motia"],
+  "dependencies": {
+    "motia": "0.8.2-beta.139",
+    "zod": "^3.24.4"
+  }
+}
