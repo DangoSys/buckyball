@@ -1,6 +1,3 @@
-[submodule "bbdev"]
-	path = bbdev
-	url = https://github.com/DangoSys/bbdev.git
 [submodule "thirdparty/waveform-mcp"]
 	path = thirdparty/waveform-mcp
 	url = https://github.com/jiegec/waveform-mcp.git
