@@ -63,6 +63,9 @@ class VecEXUnit(val b: GlobalConfig) extends Module {
     threadId := 0.U // Use thread 0 for computation
     state    := busy
   }
+  when(io.ld_ex_i.fire) {
+    threadId := Mux(threadId === (config.numMulThreads - 1).U, 0.U, threadId + 1.U)
+  }
 
 // -----------------------------------------------------------------------------
 // Accept read results from load unit and perform computation

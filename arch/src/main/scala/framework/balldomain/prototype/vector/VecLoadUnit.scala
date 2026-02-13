@@ -85,7 +85,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Send SRAM read request
 // -----------------------------------------------------------------------------
-    when(state === busy && (!ld_ex_valid_reg || io.ld_ex_o.ready)) {
+    when(state === busy && io.ld_ex_o.ready) {
       io.bankReadReq(0).valid     := iter_counter < iter
       io.bankReadReq(0).bits.addr := op1_addr + iter_counter
       io.bankReadReq(1).valid     := iter_counter < iter
