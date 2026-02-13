@@ -4,15 +4,6 @@
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
-[submodule "workflow/vscode"]
-	path = workflow/vscode
-	url = https://github.com/DangoSys/buckyball-vscode.git
-[submodule "thirdparty/picker"]
-	path = thirdparty/picker
-	url = https://github.com/XS-MLVP/picker.git
-[submodule "tools/palladium"]
-	path = tools/palladium
-	url = https://github.com/SEU-ACAL/awesome-palladium.git
 [submodule "compiler"]
 	path = compiler
 	url = https://github.com/DangoSys/bb-compiler.git
@@ -22,3 +13,9 @@
 [submodule "bebop"]
 	path = bebop
 	url = https://github.com/DangoSys/bebop.git
+[submodule "bbdev"]
+	path = bbdev
+	url = https://github.com/DangoSys/bbdev.git
+[submodule "thirdparty/palladium"]
+	path = thirdparty/palladium
+	url = https://github.com/SEU-ACAL/awesome-palladium.git

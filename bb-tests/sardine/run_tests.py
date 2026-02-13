@@ -76,7 +76,7 @@ def run_pytest(args=None, use_allure=False):
     reports_dir.mkdir(exist_ok=True)
 
     # Build pytest command
-    cmd = ["python", "-m", "pytest", "-s", "-v", "-n", "auto"]
+    cmd = ["python3", "-m", "pytest", "-s", "-v", "-n", "auto"]
 
     # 检查 Allure 是否已安装
     if use_allure:

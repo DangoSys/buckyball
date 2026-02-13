@@ -21,66 +21,33 @@ The buckyball framework provides a complete hardware design, simulation verifica
 
 ## Quick Start
 
-### Environment Dependencies
+### Installation in nix
+We use Nix Flake as our mainly build system. If you have not installed nix, install it following the [guide](https://nix.dev/manual/nix/2.28/installation/installing-binary.html), and enable flake following the [wiki](https://nixos.wiki/wiki/Flakes#Enable_flakes). Or you can try the [installer](https://github.com/DeterminateSystems/nix-installer) provided by Determinate Systems, which enables flake by default.
 
-Before getting started, please ensure your system meets the following dependency requirements:
-
-**Required Software**:
-- Anaconda/Miniconda (Python environment management)
-- Ninja Build System
-- GTKWave (waveform viewer)
-- Bash Shell environment (doesn't need to be the primary shell)
-
-**Installing Dependencies**:
-```bash
-# Install Anaconda
-# Download from: https://www.anaconda.com/download/
-
-# Install system tools
-sudo apt install ninja-build gtkwave
-
-# Optional: FireSim passwordless configuration
-# Add to /etc/sudoers: user_name ALL=(ALL) NOPASSWD:ALL
-```
-
-### Source Build
 
 **1. Clone Repository**
+
 ```bash
 git clone https://github.com/DangoSys/buckyball.git
-cd buckyball
 ```
 
 **2. Initialize Environment**
 ```bash
-./scripts/init.sh
-```
-*Note: Initialization takes approximately 3 hours, including dependency downloads and compilation*
-
-**3. Environment Activation**
-```bash
-source buckyball/env.sh
-```
-
-**4. Verify Installation**
-
-Run Verilator simulation test to verify installation:
-```bash
-bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
-```
-
-### Installation in nix
-We use Nix Flake as our alternative build system. If you have not installed nix, install it following the [guide](https://nix.dev/manual/nix/2.28/installation/installing-binary.html), and enable flake following the [wiki](https://nixos.wiki/wiki/Flakes#Enable_flakes). Or you can try the [installer](https://github.com/DeterminateSystems/nix-installer) provided by Determinate Systems, which enables flake by default.
-
-```bash
-git clone https://github.com/DangoSys/buckyball.git
 cd buckyball
 ./scripts/nix/build-all.sh
 ```
 
 After the first time installation, you can enter the environment anytime by running:
+
 ```bash
 nix develop
+```
+
+**3. Verify Installation**
+
+Run Verilator simulation test to verify installation:
+```bash
+bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ```
 
 
@@ -93,7 +60,7 @@ nix develop
 > We do not provide support for this version as it is not a stable release.
 
 
-## Quick Tutorial
+## Tutorial
 You can start to learn ball and blink from [here](https://github.com/DangoSys/buckyball/blob/main/docs/bb-note/src/tutorial/tutorial.md)
 
 ## Additional Resources

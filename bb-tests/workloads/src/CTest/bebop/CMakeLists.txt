@@ -5,7 +5,7 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 # Set baremetal compilation flags
 #-------------------------------------------------------------------------------
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}  
+  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}
   -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
@@ -27,9 +27,6 @@ function(add_linux_test_target TEST_NAME SOURCE_FILE)
   target_include_directories(${EXECUTABLE} PRIVATE
     ${WORKLOAD_LIB_DIR}
   )
-  # Ensure dependent libraries are built first and link merged library files
-  add_dependencies(${EXECUTABLE} bbhw-linux)
-  target_link_libraries(${EXECUTABLE} ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-linux.a)
 endfunction()
 
 # Generate multicore baremetal version executables
@@ -43,16 +40,14 @@ function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_BEBOP_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     DEPENDS ${CTEST_BEBOP_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_TOY_WORKLOAD_DIR}/start.S
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     COMMENT "Building multicore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
   add_custom_target(${TEST_NAME}_multicore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Generate singlecore baremetal version executables
@@ -65,17 +60,14 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_BEBOP_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     DEPENDS ${CTEST_BEBOP_WORKLOAD_DIR}/${SOURCE_FILE}
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
-      ${CMAKE_BINARY_DIR}/workloads/lib/bbhw/libbbhw-baremetal.a
     COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
   add_custom_target(${TEST_NAME}_singlecore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal
-  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Create cross-platform test targets

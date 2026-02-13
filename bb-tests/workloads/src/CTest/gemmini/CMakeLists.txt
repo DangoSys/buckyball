@@ -33,11 +33,7 @@ function(add_linux_test_target TEST_NAME SOURCE_FILE)
     ${WORKLOAD_LIB_DIR}
     ${CTEST_GEMMINI_WORKLOAD_DIR}
   )
-  # Ensure dependent libraries are built first and link merged library files
-  add_dependencies(${EXECUTABLE} bbhw-linux)
-  target_link_libraries(${EXECUTABLE}
-    m
-  )
+  target_link_libraries(${EXECUTABLE} m)
 endfunction()
 
 # Generate multicore baremetal version executables
@@ -58,7 +54,7 @@ function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
   )
 
   add_custom_target(${TEST_NAME}_multicore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal)
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Generate singlecore baremetal version executables
@@ -77,8 +73,7 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   )
 
   add_custom_target(${TEST_NAME}_singlecore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE} bbhw-baremetal
-  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
 # Create cross-platform test targets
