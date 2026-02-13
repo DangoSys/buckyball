@@ -41,7 +41,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
 
   def isAcc(vbank_id: UInt): Bool =
-    mappingTable.map(entry => entry.vbank_id === vbank_id && entry.is_acc).reduce(_ || _)
+    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && entry.is_acc).reduce(_ || _)
 
   def addEntry(
     vbank_id:     UInt,
@@ -54,6 +54,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     entry.vbank_id     := vbank_id
     entry.is_acc       := is_acc
     entry.acc_group_id := acc_group_id
+    entry.channel_id   := 0.U
   }
 
   def deleteEntry(vbank_id: UInt): Unit = {
@@ -75,13 +76,16 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    accPipes(i).io.mem_req <> io.mem_req(i)
+    accPipes(i).io.write <> io.mem_req(i).write
+    accPipes(i).io.read <> io.mem_req(i).read
+    accPipes(i).io.bank_id := io.mem_req(i).bank_id
 
-    accPipes(i).io.sramRead.req.ready  := true.B
-    accPipes(i).io.sramRead.resp.valid := false.B
-    accPipes(i).io.sramRead.resp.bits  := DontCare
+    // Bank-side defaults (only driven when a bank is actually connected)
+    accPipes(i).io.sramRead.req.ready   := false.B
+    accPipes(i).io.sramRead.resp.valid  := false.B
+    accPipes(i).io.sramRead.resp.bits   := DontCare
 
-    accPipes(i).io.sramWrite.req.ready  := true.B
+    accPipes(i).io.sramWrite.req.ready  := false.B
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
@@ -118,17 +122,23 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
   // -----------------------------------------------------------------------------
-
   for (i <- 0 until b.memDomain.bankChannel) {
     val hasReq = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
     for (j <- 0 until b.memDomain.bankNum) {
 
-      when((hasReq || RegNext(hasReq)) &&
-        mappingTable(j).valid && (mappingTable(j).vbank_id === accPipes(i).io.bank_id) &&
+      val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
+      val hit_bank = mappingTable(j).valid && (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
         (!mappingTable(j).is_acc ||
-          mappingTable(j).is_acc && (mappingTable(j).acc_group_id === accPipes(i).io.acc_group_id))) {
+          (mappingTable(j).is_acc && (mappingTable(j).acc_group_id === io.mem_req(i).acc_group_id)))
 
-        mappingTable(j).channel_id := i.U
+      // Hold connection for one extra cycle to cover SramBank's 1-cycle resp pulse.
+      // Gate the hold with the latched channel_id to avoid a different channel stealing the resp.
+      val hold_one = RegNext(hit_bank && req_valid, init = false.B) && (mappingTable(j).channel_id === i.U)
+
+      when((hit_bank && req_valid) || hold_one) {
+        when(hit_bank && req_valid) {
+          mappingTable(j).channel_id := i.U
+        }
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }
