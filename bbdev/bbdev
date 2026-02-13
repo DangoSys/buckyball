@@ -449,11 +449,41 @@ if __name__ == "__main__":
                 available_port = find_available_port(start_port=5100, end_port=5500)
             print(f"Starting server on port {available_port}...")
             proc = subprocess.Popen(
-                ["pnpm", "dev", "--port", str(available_port)], cwd=workflow_dir
+                ["pnpm", "dev", "--port", str(available_port)],
+                cwd=workflow_dir,
+                start_new_session=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
 
+            # Forward stdout/stderr in background threads; stopped before
+            # shutdown to suppress BullMQ teardown errors and pnpm's
+            # ELIFECYCLE message (Motia framework limitation).
+            import threading
+
+            output_active = threading.Event()
+            output_active.set()
+
+            def forward_stream(stream, dest):
+                for line in iter(stream.readline, b""):
+                    if not output_active.is_set():
+                        break
+                    dest.write(line)
+                    dest.flush()
+
+            threading.Thread(
+                target=forward_stream,
+                args=(proc.stdout, sys.stdout.buffer),
+                daemon=True,
+            ).start()
+            threading.Thread(
+                target=forward_stream,
+                args=(proc.stderr, sys.stderr.buffer),
+                daemon=True,
+            ).start()
+
             # Wait for service to start
-            max_retries = 30
+            max_retries = 600
             for i in range(max_retries):
                 try:
                     # Disable proxy, connect directly to localhost
@@ -506,10 +536,22 @@ if __name__ == "__main__":
             )
 
             # 3. Shutdown service ================================
-            # Give observability plugin time to finish async operations (e.g., Redis writes)
+            output_active.clear()
+            import signal
+
             time.sleep(1)
-            proc.terminate()
-            proc.wait()
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait()
             print(
                 f"\nTask completed. Command running on http://localhost:{available_port} is finished"
             )

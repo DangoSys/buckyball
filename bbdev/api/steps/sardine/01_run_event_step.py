@@ -29,7 +29,7 @@ async def handler(data, context):
 
     sardine_dir = f"{bbdir}/bb-tests/sardine"
 
-    command = f"python run_tests.py --allure -m \"({data.get('workload', '')})\""
+    command = f"python3 run_tests.py --allure -m \"({data.get('workload', '')})\""
     context.logger.info(
         "Executing sardine command", {"command": command, "cwd": sardine_dir}
     )

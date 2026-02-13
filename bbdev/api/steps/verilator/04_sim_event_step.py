@@ -67,10 +67,14 @@ async def handler(data, context):
     # ==================================================================================
     # Execute simulation script with streaming output
     # ==================================================================================
-    # batch_param = "True" if batch else "False"
-    # sim_cmd = f"./scripts/sim.sh {bin_path} {binary_path} {log_dir}/stdout.log \
-    # {log_dir}/disasm.log {batch_param} {vcd_path} {log_path}"
+    bebop_isa_sim = f"{bbdir}/bebop/host/spike/riscv-isa-sim"
+    ld_lib_path = (
+        f"{bebop_isa_sim}/install/lib:"
+        f"{bbdir}/result/lib:"
+        f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2"
+    )
     sim_cmd = (
+        f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "
         f"{bin_path} +permissive +loadmem={binary_path} +loadmem_addr=800000000 "
         f"{'+batch ' if batch else ''} "
         f"+fst={fst_path} +log={log_path} +permissive-off "

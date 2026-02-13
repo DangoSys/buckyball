@@ -29,16 +29,13 @@
 
           shellHook = ''
             export PATH="$PWD:$PATH"
+            source "$PWD/init.sh"
 
             echo "bbdev dev environment ready"
             echo "  Node.js: $(node --version)"
             echo "  Python:  $(python3 --version)"
             echo "  pnpm:    $(pnpm --version)"
             echo "  bbdev:   $(which bbdev)"
-            echo ""
-            echo "Quick start:"
-            echo "  pnpm install     # install node deps + motia install"
-            echo "  pnpm dev         # start motia dev server"
           '';
         };
       }

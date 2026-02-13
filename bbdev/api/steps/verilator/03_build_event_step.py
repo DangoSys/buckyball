@@ -67,10 +67,11 @@ async def handler(data, context):
         cflags += " -DCOSIM"
     ldflags = (
         f"-lreadline -ldramsim -lfesvr -lstdc++ "
+        f"-L{bebop_isa_sim}/install/lib "
+        f"-L{bbdir}/result/lib "
         f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
         f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
-        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib "
-        f"-L{bebop_isa_sim}/install/lib"
+        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib"
     )
 
     obj_dir = f"{build_dir}/obj_dir"

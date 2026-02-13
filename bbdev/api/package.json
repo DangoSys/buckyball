@@ -10,9 +10,20 @@
     "start": "motia start",
     "clean": "rm -rf dist node_modules python_modules .motia .mermaid"
   },
-  "keywords": ["motia"],
+  "keywords": [
+    "motia"
+  ],
   "dependencies": {
-    "motia": "0.8.2-beta.139",
-    "zod": "^3.24.4"
+    "motia": "0.17.14-beta.196",
+    "zod": "^3.24.4",
+    "@motiadev/core": "0.17.14-beta.196",
+    "@motiadev/plugin-logs": "0.17.14-beta.196",
+    "@motiadev/plugin-states": "0.17.14-beta.196",
+    "@motiadev/plugin-endpoint": "0.17.14-beta.196",
+    "@motiadev/plugin-observability": "0.17.14-beta.196",
+    "@motiadev/plugin-bullmq": "0.17.14-beta.196",
+    "@motiadev/plugin-streams": "0.17.14-beta.196",
+    "@motiadev/plugin-cron": "0.17.14-beta.196",
+    "@motiadev/plugin-ws": "0.17.14-beta.196"
   }
 }
