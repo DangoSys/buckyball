@@ -22,6 +22,13 @@ class ex_st_req(b: GlobalConfig) extends Bundle {
   val iter     = UInt(10.W)
 }
 
+class BankWriteEntry(b: GlobalConfig) extends Bundle {
+  val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
+  val data  = UInt(b.memDomain.bankWidth.W)
+  val mask  = Vec(b.memDomain.bankMaskLen, Bool())
+  val wmode = Bool()
+}
+
 @instantiable
 class VecStoreUnit(val b: GlobalConfig) extends Module {
   val config   = VectorBallParam()
@@ -49,6 +56,8 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
+  val writeQueues = VecInit(Seq.fill(outBW)(Module(new Queue(new BankWriteEntry(b), 16)).io))
+
 // -----------------------------------------------------------------------------
 // Set registers when Ctrl instruction arrives
 // -----------------------------------------------------------------------------
@@ -63,36 +72,56 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   }
 
 // -----------------------------------------------------------------------------
-// Accept computation results from EX unit and perform write-back
+// Accept computation results from EX unit and push to write queues
 // -----------------------------------------------------------------------------
-  io.ex_st_i.ready := state === busy
-  io.bankWrite.foreach { acc =>
-    acc.req.valid      := false.B
-    acc.req.bits.addr  := 0.U
-    acc.req.bits.data  := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
-    acc.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.req.bits.wmode := false.B // Default: direct write mode
-    acc.resp.ready     := false.B // Default: not ready for response
+  io.ex_st_i.ready := state === busy && writeQueues.forall(_.enq.ready)
+
+  for (i <- 0 until outBW) {
+    writeQueues(i).enq.valid := false.B
+    writeQueues(i).enq.bits  := DontCare
   }
-  val waddr = wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
+
   when(io.ex_st_i.fire) {
-    // Use all outBW channels to share the data write
-    // Each channel gets a portion of the data
     for (i <- 0 until outBW) {
       val elementsPerChannel = InputNum / outBW
       val startIdx           = i * elementsPerChannel
       val endIdx             = startIdx + elementsPerChannel - 1
 
-      io.bankWrite(i).req.valid     := true.B
-      io.bankWrite(i).req.bits.addr := wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
+      val entry = Wire(new BankWriteEntry(b))
+      entry.addr  := wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
+      entry.data  := Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
+      entry.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+      entry.wmode := true.B
 
-      // Pack corresponding elements into a UInt
-      val channelData = Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
-      io.bankWrite(i).req.bits.data  := channelData
-      io.bankWrite(i).req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      io.bankWrite(i).req.bits.wmode := true.B // Accumulate mode
+      writeQueues(i).enq.valid := true.B
+      writeQueues(i).enq.bits  := entry
     }
     iter_counter := iter_counter + 1.U
+  }
+
+// -----------------------------------------------------------------------------
+// Drain write queues to bankWrite interface
+// -----------------------------------------------------------------------------
+  io.bankWrite.foreach { acc =>
+    acc.req.valid      := false.B
+    acc.req.bits.addr  := 0.U
+    acc.req.bits.data  := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
+    acc.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    acc.req.bits.wmode := false.B
+    acc.resp.ready     := false.B
+  }
+
+  for (i <- 0 until outBW) {
+    writeQueues(i).deq.ready := false.B
+
+    when(writeQueues(i).deq.valid) {
+      io.bankWrite(i).req.valid      := true.B
+      io.bankWrite(i).req.bits.addr  := writeQueues(i).deq.bits.addr
+      io.bankWrite(i).req.bits.data  := writeQueues(i).deq.bits.data
+      io.bankWrite(i).req.bits.mask  := writeQueues(i).deq.bits.mask
+      io.bankWrite(i).req.bits.wmode := writeQueues(i).deq.bits.wmode
+      writeQueues(i).deq.ready       := io.bankWrite(i).req.ready
+    }
   }
 
   // Output wr_bank for bank_id setting
@@ -101,7 +130,10 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Reset iter counter, commit cmdResp, return to idle state
 // -----------------------------------------------------------------------------
-  when(state === busy && iter_counter >= iter) {
+  val allQueuesEmpty  = writeQueues.forall(q => !q.deq.valid)
+  val allDataEnqueued = state === busy && iter_counter >= iter
+
+  when(allDataEnqueued && allQueuesEmpty) {
     state                    := idle
     io.cmdResp_o.valid       := true.B
     io.cmdResp_o.bits.commit := true.B
