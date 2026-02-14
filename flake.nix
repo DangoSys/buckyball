@@ -21,6 +21,7 @@
             name = "buckyball-environment";
             paths = with pkgs; [
               tools.verilator
+              tools.dramsim2
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc

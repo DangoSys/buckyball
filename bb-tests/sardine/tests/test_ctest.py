@@ -95,7 +95,7 @@ def test_ctest_workload_debug(
 
     time.sleep(test_index * 20)
     start_time = time.time()
-    command = f'source {sardine_dir}/../../env.sh && bbdev verilator --sim "--binary {workload_path} --batch"'
+    command = f'nix develop -c bbdev verilator --sim "--binary {workload_path} --batch"'
     logging.info(f"Running command: {command}")
 
     # 使用 command_run 执行命令，带提前退出检测
