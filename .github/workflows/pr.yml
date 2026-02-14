@@ -10,9 +10,6 @@ jobs:
     name: PR Test
     runs-on: cpu-server
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/determinate-nix-action@v3
-
       - name: Print information
         run: |
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -20,28 +17,33 @@ jobs:
           echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
           echo "🔎 Repository: ${{ github.repository }}"
 
-      - name: Pull from the repository
+      - uses: actions/checkout@v4
+
+      - name: Reset to clean state
         shell: zsh {0}
+        working-directory: ${{ github.workspace }}
         run: |
-          git fetch origin +refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr/${{ github.event.pull_request.number }}
           git clean -fd
           git reset --hard ${{ github.sha }}
 
       - name: Build Workloads
         shell: zsh {0}
+        working-directory: ${{ github.workspace }}
         run: |
-          bbdev workload --build
+          nix develop -c bbdev workload --build
 
       - name: Build Verilator
         shell: zsh {0}
+        working-directory: ${{ github.workspace }}
         run: |
-          bbdev verilator --clean
-          bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
-          bbdev verilator --build '--jobs 16'
+          nix develop -c bbdev verilator --clean
+          nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
+          nix develop -c bbdev verilator --build '--jobs 16'
 
       - name: Smoke Test
         shell: zsh {0}
+        working-directory: ${{ github.workspace }}
         run: |
-          bbdev sardine --run '--workload ctest'
+          nix develop -c bbdev sardine --run '--workload ctest'
 
       - run: echo "🍏 PR Test is ${{ job.status }}."
