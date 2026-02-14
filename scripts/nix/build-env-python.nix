@@ -13,8 +13,11 @@
     redis
     httpx-sse
     requests
+    pysocks
 
-    # pre-commit hooks
+    # pre-commit hooks (language: system use)
+    black
+    flake8
     pre-commit-hooks
 
     # compiler
