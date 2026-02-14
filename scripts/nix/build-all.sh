@@ -141,12 +141,18 @@ if run_step "3"; then
 fi
 
 if run_step "4"; then
-  begin_step "4" "bb-tests pre-compile sources"
-  bbdev workload --build
+  begin_step "4" "bebop install"
+  cd ${BBDIR}/bebop
+  ./scripts/install.sh
 fi
 
 if run_step "5"; then
-  begin_step "5" "pre-commit hooks installation"
+  begin_step "5" "bb-tests pre-compile sources"
+  bbdev workload --build
+fi
+
+if run_step "6"; then
+  begin_step "6" "pre-commit hooks installation"
   pre-commit install
 fi
 
