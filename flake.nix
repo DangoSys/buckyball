@@ -38,6 +38,7 @@
               # bbdev dependencies
               bbdev.nodejs
               bbdev.pnpm
+              bbdev.uv
               bbdev.gcc
               bbdev.gnumake
               bbdev.pkg-config
