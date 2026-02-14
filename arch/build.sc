@@ -772,15 +772,20 @@ object firrtl2 extends SbtModule {
   override def millSourcePath = os.pwd / "thirdparty" / "chipyard" / "tools" / "firrtl2"
   override def scalaVersion   = "2.13.12"
 
-  // Override sources to include generated ANTLR sources and BuildInfo
+  // Override sources to include generated ANTLR sources and BuildInfo (from sbt antlr4Generate/compile)
   override def sources = T.sources {
-    val baseSources  = super.sources()
-    // Include pre-generated sources from target directory
-    val generatedDir = millSourcePath / "src" / "target" / "scala-2.13" / "src_managed" / "main"
-    if (os.exists(generatedDir)) {
-      baseSources ++ Seq(PathRef(generatedDir))
-    } else {
-      baseSources
+    val baseSources = super.sources()
+    // Chipyard freshProject sets firrtl2 base to tools/firrtl2/src, so sbt puts target under src/ (normally is under here)
+    val underSrc = millSourcePath / "src" / "target" / "scala-2.13" / "src_managed" / "main"
+    // If sbt was run from tools/firrtl2 directly, target is under tools/firrtl2/
+    val underRoot = millSourcePath / "target" / "scala-2.13" / "src_managed" / "main"
+    val generatedDir = if (os.exists(underSrc)) Some(underSrc) else if (os.exists(underRoot)) Some(underRoot) else None
+    generatedDir match {
+      case Some(dir) => baseSources ++ Seq(PathRef(dir))
+      case None =>
+        throw new Exception(
+          "firrtl2.antlr not found. Run: cd arch/thirdparty/chipyard && sbt compile"
+        )
     }
   }
 
