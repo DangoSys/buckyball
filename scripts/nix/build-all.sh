@@ -74,7 +74,8 @@ function begin_step
 
 begin_step "0-1" "submodules init"
 git submodule update --init
-cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init generators/* tools/*
+# fpga/fpga-shells is needed by palladium
+cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init fpga/fpga-shells generators/* tools/* sims/firesim
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
@@ -132,6 +133,10 @@ fi
 
 if run_step "3"; then
   begin_step "3" "arch pre-compile sources"
+  # Generate firrtl2 ANTLR and compile firrtl2 in chipyard first (avoids antlr missing when arch compiles chipyard)
+  cd ${BBDIR}/arch/thirdparty/chipyard
+  sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "firrtl2/compile"
+  cd ${BBDIR}/arch
   bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
 fi
 

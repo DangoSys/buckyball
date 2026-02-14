@@ -50,6 +50,7 @@
 
               # Scala tools
               scala.mill
+              scala.sbt
               scala.scalafmt
               scala.coursier
 

@@ -28,6 +28,15 @@ in
   # Build tool for Scala, Java and more
   inherit mill;
 
+  # sbt 1.8.2 
+  sbt = (pkgs.sbt.override { jre = pkgs.jdk17; }).overrideAttrs (old: {
+    version = "1.8.2";
+    src = pkgs.fetchurl {
+      url = "https://github.com/sbt/sbt/releases/download/v1.8.2/sbt-1.8.2.tgz";
+      sha256 = "11j6vyxpiqbaxg5pzm6awmrdf6fkz3pw14zszrnxdnvll16k8r8z";
+    };
+  });
+
   # Scala formatter
   scalafmt = pkgs.scalafmt;
 
