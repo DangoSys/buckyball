@@ -17,33 +17,41 @@ jobs:
           echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
           echo "🔎 Repository: ${{ github.repository }}"
 
-      - uses: actions/checkout@v4
+      # - uses: actions/checkout@v4
+      # - uses: DeterminateSystems/determinate-nix-action@v3
 
       - name: Reset to clean state
         shell: zsh {0}
-        working-directory: ${{ github.workspace }}
         run: |
+          cd ~/Code/buckyball
+          git fetch origin
           git clean -fd
-          git reset --hard ${{ github.sha }}
+          git checkout ${{ github.head_ref }}
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix build
 
       - name: Build Workloads
         shell: zsh {0}
-        working-directory: ${{ github.workspace }}
         run: |
+          cd ~/Code/buckyball
           nix develop -c bbdev workload --build
 
       - name: Build Verilator
         shell: zsh {0}
-        working-directory: ${{ github.workspace }}
         run: |
+          cd ~/Code/buckyball
           nix develop -c bbdev verilator --clean
           nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev verilator --build '--jobs 16'
 
       - name: Smoke Test
         shell: zsh {0}
-        working-directory: ${{ github.workspace }}
         run: |
+          cd ~/Code/buckyball
           nix develop -c bbdev sardine --run '--workload ctest'
 
       - run: echo "🍏 PR Test is ${{ job.status }}."
