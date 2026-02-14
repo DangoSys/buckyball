@@ -92,14 +92,14 @@ fi
 if run_step "1"; then
   begin_step "1" "bbdev install"
 
+  # Create python_modules venv FIRST (uses Nix Python with pydantic/requests)
+  # Motia postinstall would run pip install -> SOCKS proxy fails. Use Nix instead.
+  echo "Setting up bbdev Python environment (from Nix)..."
+  python3 -m venv --without-pip --system-site-packages "${BBDIR}/bbdev/api/python_modules"
+
   echo "Installing bbdev node dependencies..."
   cd ${BBDIR}/bbdev/api
-  pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-
-  # Setup python_modules for Motia
-  # Python deps are managed by Nix (overlay.nix), just need the venv structure
-  echo "Setting up bbdev Python environment..."
-  python3 -m venv --without-pip --system-site-packages "${BBDIR}/bbdev/api/python_modules"
+  pnpm install --ignore-scripts --frozen-lockfile 2>/dev/null || pnpm install --ignore-scripts
 fi
 
 if run_step "2"; then

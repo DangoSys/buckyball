@@ -7,6 +7,7 @@
   # Python packages
   python3Packages = pkgs.python3.withPackages (ps: with ps; [
     # bbdev
+    pydantic
     python-dotenv
     httpx
     mcp
