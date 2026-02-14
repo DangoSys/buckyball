@@ -29,6 +29,8 @@
 
               # python environment
               python.python3Packages
+              pkgs."pre-commit"
+              pkgs.clang-tools  # clang-format for pre-commit (language: system)
 
               # Bebop dependencies (rust toolchain)
               bebop.rustc

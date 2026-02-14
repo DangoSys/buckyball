@@ -52,7 +52,7 @@ for epoch in range(epochs):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-    print(f"Epoch {epoch+1}/{epochs} - Loss: {running_loss/len(train_loader)}")
+    print(f"Epoch {epoch + 1}/{epochs} - Loss: {running_loss / len(train_loader)}")
 
 # Save the complete model
 torch.save(model, "lenet-model.pth")

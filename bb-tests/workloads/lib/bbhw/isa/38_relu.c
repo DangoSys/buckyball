@@ -11,4 +11,3 @@
                             BB_RELU_FUNC7)
 
 #endif // _BB_RELU_H_
-

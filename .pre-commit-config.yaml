@@ -6,6 +6,7 @@ repos:
     hooks:
       - id: clang-format
         name: clang-format C++ code
+        language: system
         files: \.(cpp|hpp|cc|cxx|h|c|hxx)$
         args: [--style=llvm]
 
@@ -13,7 +14,7 @@ repos:
     rev: 24.10.0
     hooks:
       - id: black
-        language_version: python3.10
+        language: system
 
   # a comprehensive tool for checking the style and quality of Python code.
   # It combines three popular Python tools:
@@ -24,6 +25,7 @@ repos:
     rev: 6.1.0
     hooks:
       - id: flake8
+        language: system
         args:
           - --max-line-length=120  # Adjust as per your style guide
           - --ignore=F821,F403,F405,F401,W503,E203,E402,E401,W605,E712,E711,F841
@@ -40,17 +42,22 @@ repos:
     rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
+        language: system
       - id: trailing-whitespace
+        language: system
       - id: check-merge-conflict
+        language: system
       - id: check-yaml
+        language: system
       - id: check-added-large-files
+        language: system
 
   # Scala formatting with scalafmt
   - repo: local
     hooks:
       - id: scalafmt
         name: Format Scala code with scalafmt
-        entry: bash -c 'cd arch && source ../env.sh && scalafmt --config .scalafmt.conf src/main/scala'
+        entry: bash -c 'cd arch && scalafmt --config .scalafmt.conf src/main/scala'
         language: system
         files: ^arch/src/main/scala/.*\.scala$
         pass_filenames: false

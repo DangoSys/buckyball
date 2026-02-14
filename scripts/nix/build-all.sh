@@ -154,6 +154,8 @@ fi
 if run_step "6"; then
   begin_step "6" "pre-commit hooks installation"
   pre-commit install
+  # Replace with wrapper so git commit gets nix env (result/bin in PATH)
+  cp "${BBDIR}/scripts/pre-commit-hook.sh" "${BBDIR}/.git/hooks/pre-commit"
 fi
 
 begin_step "END" "Setup completed successfully!"
