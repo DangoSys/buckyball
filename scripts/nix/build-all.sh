@@ -81,7 +81,7 @@ begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
 nix build
 
-if [ "${INSTALL_IN_NIX}" = "0" ]; then
+if [ "${INSTALL_IN_NIX}" != "1" ]; then
   SKIP_ARGS=""
   for skip in "${SKIP_LIST[@]}"; do
     SKIP_ARGS="${SKIP_ARGS} -s ${skip}"
@@ -99,7 +99,7 @@ if run_step "1"; then
 
   echo "Installing bbdev node dependencies..."
   cd ${BBDIR}/bbdev/api
-  pnpm install --ignore-scripts --frozen-lockfile 2>/dev/null || pnpm install --ignore-scripts
+  pnpm install --ignore-scripts --frozen-lockfile 2>/dev/null
 fi
 
 if run_step "2"; then
