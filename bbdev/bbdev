@@ -449,11 +449,13 @@ if __name__ == "__main__":
                 available_port = find_available_port(start_port=5100, end_port=5500)
             print(f"Starting server on port {available_port}...")
             proc = subprocess.Popen(
-                ["pnpm", "dev", "--port", str(available_port)], cwd=workflow_dir
+                ["pnpm", "dev", "--port", str(available_port)],
+                cwd=workflow_dir,
+                stderr=subprocess.DEVNULL  # Suppress stderr to hide BullMQ errors
             )
 
             # Wait for service to start
-            max_retries = 30
+            max_retries = 300
             for i in range(max_retries):
                 try:
                     # Disable proxy, connect directly to localhost
