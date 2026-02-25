@@ -17,10 +17,16 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   transpose_u8_matrix(a, a_transposed, DIM, 64);
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
-  bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
-  bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
   int acc_bank_id = 2; // virtual bank id
   bb_mem_alloc(acc_bank_id, 1, 4);
+
+  bb_vbank_config(op1_bank_id, 0, 1);
+  bb_vbank_config(op2_bank_id, 0, 1);
+  bb_vbank_config(acc_bank_id, 1, 1);
+
+  bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
+  bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
+
   bb_fence();
   bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_fence();

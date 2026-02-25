@@ -42,6 +42,7 @@
               bbdev.nodejs
               bbdev.pnpm
               bbdev.uv
+              bbdev.allure
               bbdev.gcc
               bbdev.gnumake
               bbdev.pkg-config
