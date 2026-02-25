@@ -4,9 +4,11 @@ import sys
 import argparse
 import subprocess
 import os
+import signal
 import shlex
 import json
 import time
+import shutil
 import requests
 
 from utils import find_available_port
@@ -441,6 +443,11 @@ if __name__ == "__main__":
             "uvm",
             "palladium",
         ]:
+            # 0. Clean up stale BullMQ/Redis data to prevent replaying old events
+            aof_dir = os.path.join(workflow_dir, ".motia", "appendonlydir")
+            if os.path.exists(aof_dir):
+                shutil.rmtree(aof_dir)
+
             # 1. Start service in background ================================
             # If port is specified, use the specified port; otherwise, automatically assign port
             if args.port:

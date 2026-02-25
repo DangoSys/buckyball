@@ -40,6 +40,7 @@ async def handler(data, context):
     )
 
     binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
+    context.logger.info(f"binary_path: {binary_path}")    
     success_result, failure_result = await check_result(
         context, returncode=(binary_path == None), continue_run=True
     )
