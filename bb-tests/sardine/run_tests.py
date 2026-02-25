@@ -29,39 +29,7 @@ def get_git_commit():
     return "unknown"
 
 
-def check_allure_installed():
-    """Check if Allure command line tool is installed."""
-    try:
-        result = subprocess.run(["allure", "--version"], capture_output=True, text=True)
-        return result.returncode == 0
-    except FileNotFoundError:
-        return False
-
-
-def install_allure():
-    """Install Allure command line tool."""
-    print("Installing Allure command line tool...")
-    try:
-        # Try installing using npm
-        result = subprocess.run(
-            ["npm", "install", "-g", "allure-commandline"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("Allure installed successfully via npm")
-            return True
-    except FileNotFoundError:
-        pass
-
-    print("Please install Allure manually:")
-    print("  npm install -g allure-commandline")
-    print("  or")
-    print("  https://docs.qameta.io/allure/#_installing_a_commandline")
-    return False
-
-
-def run_pytest(args=None, use_allure=False):
+def run_pytest(args=None):
     """Run pytest with given arguments."""
     args = args or []
 
@@ -78,19 +46,11 @@ def run_pytest(args=None, use_allure=False):
     # Build pytest command
     cmd = ["python3", "-m", "pytest", "-s", "-v", "-n", "auto"]
 
-    # 检查 Allure 是否已安装
-    if use_allure:
-        if not check_allure_installed():
-            if not install_allure():
-                print("Falling back to default HTML report")
-                use_allure = False
-
-        # Allure 配置
-        if use_allure:
-            allure_results_dir = reports_dir / "allure-results"
-            allure_results_dir.mkdir(exist_ok=True)
-            cmd.extend(["--alluredir", str(allure_results_dir), "--clean-alluredir"])
-            print(f"Allure results will be saved to: {allure_results_dir}")
+    # Allure 配置
+    allure_results_dir = reports_dir / "allure-results"
+    allure_results_dir.mkdir(exist_ok=True)
+    cmd.extend(["--alluredir", str(allure_results_dir), "--clean-alluredir"])
+    print(f"Allure results will be saved to: {allure_results_dir}")
 
     cmd.extend(args)
 
@@ -98,83 +58,54 @@ def run_pytest(args=None, use_allure=False):
     print(f"Working directory: {script_dir}")
     print(f"Git commit: {git_commit}")
 
-    # Run pytest
-    try:
-        result = subprocess.run(cmd, cwd=script_dir)
-
-        # Process reports whether tests succeed or fail
-        if use_allure:
-            # Generate Allure report
-            allure_results_dir = reports_dir / "allure-results"
-            allure_report_dir = reports_dir / f"{git_commit}"
-            current_report_dir = reports_dir / "allure"
-
-            print("Generating Allure report...")
-
-            # Generate versioned report
-            allure_cmd = [
-                "allure",
-                "generate",
-                str(allure_results_dir),
-                "-o",
-                str(allure_report_dir),
-                "--clean",
-            ]
-
-            allure_result = subprocess.run(allure_cmd, cwd=script_dir)
-            if allure_result.returncode == 0:
-                # Generate current run report (saved in allure directory)
-                current_cmd = [
-                    "allure",
-                    "generate",
-                    str(allure_results_dir),
-                    "-o",
-                    str(current_report_dir),
-                    "--clean",
-                ]
-
-                current_result = subprocess.run(current_cmd, cwd=script_dir)
-
-                print("Generated Allure reports:")
-                print(f"  - {allure_results_dir} (raw results)")
-                print(f"  - {allure_report_dir} (versioned HTML report)")
-                if current_result.returncode == 0:
-                    print(f"  - {current_report_dir} (current HTML report)")
-            else:
-                print("Failed to generate Allure report")
-
-        return result.returncode
-    except KeyboardInterrupt:
-        print("\nTest execution interrupted by user")
-        return 1
-    except Exception as e:
-        print(f"Error running tests: {e}")
-        return 1
+    result = subprocess.run(cmd, cwd=script_dir)
+    # Process reports whether tests succeed or fail
+    # Generate Allure report
+    allure_results_dir = reports_dir / "allure-results"
+    allure_report_dir = reports_dir / f"{git_commit}"
+    current_report_dir = reports_dir / "allure"
+    print("Generating Allure report...")
+    # Generate versioned report
+    allure_cmd = [
+        "allure",
+        "generate",
+        str(allure_results_dir),
+        "-o",
+        str(allure_report_dir),
+        "--clean",
+    ]
+    allure_result = subprocess.run(allure_cmd, cwd=script_dir)
+    if allure_result.returncode == 0:
+        # Generate current run report (saved in allure directory)
+        current_cmd = [
+            "allure",
+            "generate",
+            str(allure_results_dir),
+            "-o",
+            str(current_report_dir),
+            "--clean",
+        ]
+        current_result = subprocess.run(current_cmd, cwd=script_dir)
+        print("Generated Allure reports:")
+        print(f"  - {allure_results_dir} (raw results)")
+        print(f"  - {allure_report_dir} (versioned HTML report)")
+        if current_result.returncode == 0:
+            print(f"  - {current_report_dir} (current HTML report)")
+    return result.returncode
 
 
-def main():
-    """Main entry point."""
+if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] in ["-h", "--help"]:
             print("Sardine Test Runner with Allure Support")
             print()
             print("Usage:")
             print("  python run_tests.py [pytest arguments]")
-            print("  python run_tests.py --allure [pytest arguments]")
             print("  python run_tests.py --open-report")
             print()
             print("Examples:")
             print(
                 "  python run_tests.py                    # Run all tests with default HTML report"
-            )
-            print(
-                "  python run_tests.py --allure           # Run all tests with Allure report"
-            )
-            print(
-                "  python run_tests.py --allure -m smoke  # Run smoke tests with Allure report"
-            )
-            print(
-                "  python run_tests.py --allure -m verilator # Run verilator tests with Allure report"
             )
             print(
                 "  python run_tests.py --open-report      # Open latest Allure report in browser"
@@ -202,15 +133,8 @@ def main():
             print("  - Historical trends")
             print("  - Detailed failure analysis")
             print("  - Test categorization")
-            return 0
-
-        elif sys.argv[1] == "--allure":
-            # Pass all arguments after --allure to pytest
-            return run_pytest(sys.argv[2:], use_allure=True)
-
-    # Pass all arguments to pytest (default uses HTML report)
-    return run_pytest(sys.argv[1:])
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+            sys.exit(0)
+    print("Test started")
+    result = run_pytest(sys.argv[1:])
+    print(f"Test result: {result}")
+    sys.exit(result)

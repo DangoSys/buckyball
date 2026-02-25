@@ -15,6 +15,7 @@
     httpx-sse
     requests
     pysocks
+    allure-pytest
 
     # pre-commit hooks (language: system use)
     black
