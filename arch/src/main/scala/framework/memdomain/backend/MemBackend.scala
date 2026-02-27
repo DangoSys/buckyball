@@ -35,7 +35,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val vbank_id     = UInt(5.W)
     val is_acc       = Bool()
     val acc_group_id = UInt(3.W)
-    val channel_id   = UInt(log2Ceil(b.memDomain.bankChannel).W)
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
@@ -54,7 +53,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
     entry.vbank_id     := vbank_id
     entry.is_acc       := is_acc
     entry.acc_group_id := acc_group_id
-    entry.channel_id   := 0.U
   }
 
   def deleteEntry(vbank_id: UInt): Unit = {
@@ -63,7 +61,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
     entry.vbank_id     := 0.U
     entry.is_acc       := false.B
     entry.acc_group_id := 0.U
-    entry.channel_id   := 0.U
   }
 
   def getFreePbankId(): UInt = {
@@ -132,14 +129,9 @@ class MemBackend(val b: GlobalConfig) extends Module {
         (!mappingTable(j).is_acc ||
           (mappingTable(j).is_acc && (mappingTable(j).acc_group_id === io.mem_req(i).acc_group_id)))
 
-      // Hold connection for one extra cycle to cover SramBank's 1-cycle resp pulse.
-      // Gate the hold with the latched channel_id to avoid a different channel stealing the resp.
-      val hold_one = RegNext(hit_bank && req_valid, init = false.B) && (mappingTable(j).channel_id === i.U)
+      val hold_one = RegNext(hit_bank && req_valid, init = false.B)
 
       when((hit_bank && req_valid) || hold_one) {
-        when(hit_bank && req_valid) {
-          mappingTable(j).channel_id := i.U
-        }
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }
