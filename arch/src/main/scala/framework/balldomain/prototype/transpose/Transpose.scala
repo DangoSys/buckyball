@@ -89,7 +89,7 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.req.bits.addr := 0.U
     io.bankRead(i).io.resp.ready    := false.B
     io.bankRead(i).bank_id          := rbank_reg
-    io.bankRead(i).acc_group_id     := 0.U
+    io.bankRead(i).group_id     := 0.U
   }
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid      := false.B
@@ -99,7 +99,7 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.bits.wmode := false.B
     io.bankWrite(i).io.resp.ready     := false.B
     io.bankWrite(i).bank_id           := wbank_reg
-    io.bankWrite(i).acc_group_id      := 0.U
+    io.bankWrite(i).group_id      := 0.U
   }
 
   io.cmdReq.ready        := (state === idle)

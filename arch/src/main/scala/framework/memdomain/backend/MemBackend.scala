@@ -12,7 +12,7 @@ class MemRequestIO(b: GlobalConfig) extends Bundle {
   val write        = Flipped(new SramWriteIO(b)) // midend sends write req into backend
   val read         = Flipped(new SramReadIO(b))  // midend sends read req into backend
   val bank_id      = Output(UInt(log2Up(b.memDomain.bankNum).W))
-  val acc_group_id = Output(UInt(3.W))
+  val group_id = Output(UInt(3.W))
 }
 
 @instantiable
@@ -33,34 +33,34 @@ class MemBackend(val b: GlobalConfig) extends Module {
   class MappingTableEntry extends Bundle {
     val valid        = Bool()
     val vbank_id     = UInt(5.W)
-    val is_acc       = Bool()
-    val acc_group_id = UInt(3.W)
+    val is_multi       = Bool()
+    val group_id = UInt(3.W)
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
 
   def isAcc(vbank_id: UInt): Bool =
-    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && entry.is_acc).reduce(_ || _)
+    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && entry.is_multi).reduce(_ || _)
 
   def addEntry(
     vbank_id:     UInt,
     pbank_id:     UInt,
-    is_acc:       Bool,
-    acc_group_id: UInt
+    is_multi:       Bool,
+    group_id: UInt
   ): Unit = {
     val entry = mappingTable(pbank_id)
     entry.valid        := true.B
     entry.vbank_id     := vbank_id
-    entry.is_acc       := is_acc
-    entry.acc_group_id := acc_group_id
+    entry.is_multi       := is_multi
+    entry.group_id := group_id
   }
 
   def deleteEntry(vbank_id: UInt): Unit = {
     val entry = mappingTable(vbank_id)
     entry.valid        := false.B
     entry.vbank_id     := 0.U
-    entry.is_acc       := false.B
-    entry.acc_group_id := 0.U
+    entry.is_multi       := false.B
+    entry.group_id := 0.U
   }
 
   def getFreePbankId(): UInt = {
@@ -76,7 +76,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
     accPipes(i).io.mem_req.bank_id      := io.mem_req(i).bank_id
-    accPipes(i).io.mem_req.acc_group_id := io.mem_req(i).acc_group_id
+    accPipes(i).io.mem_req.group_id := io.mem_req(i).group_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -87,7 +87,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
-    accPipes(i).io.is_acc := isAcc(io.mem_req(i).bank_id)
+    accPipes(i).io.is_multi := isAcc(io.mem_req(i).bank_id)
   }
 
   io.config.ready := true.B
@@ -111,7 +111,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   when(io.config.valid) {
     when(io.config.bits.alloc) {
       val pbank_id = getFreePbankId()
-      addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_acc, io.config.bits.acc_group_id)
+      addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_multi, io.config.bits.group_id)
     }.otherwise {
       deleteEntry(io.config.bits.vbank_id)
     }
@@ -126,8 +126,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
       val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
       val hit_bank  = mappingTable(j).valid && (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
-        (!mappingTable(j).is_acc ||
-          (mappingTable(j).is_acc && (mappingTable(j).acc_group_id === io.mem_req(i).acc_group_id)))
+        (!mappingTable(j).is_multi ||
+          (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
 
       val hold_one = RegNext(hit_bank && req_valid, init = false.B)
 
