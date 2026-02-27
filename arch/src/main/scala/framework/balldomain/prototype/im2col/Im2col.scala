@@ -80,7 +80,7 @@ class Im2col(val b: GlobalConfig) extends Module {
     io.bankRead(i).bank_id          := rbank_reg
     io.bankRead(i).rob_id           := rob_id_reg
     io.bankRead(i).ball_id          := 0.U
-    io.bankRead(i).acc_group_id     := 0.U
+    io.bankRead(i).group_id     := 0.U
   }
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid      := false.B
@@ -92,7 +92,7 @@ class Im2col(val b: GlobalConfig) extends Module {
     io.bankWrite(i).bank_id           := wbank_reg
     io.bankWrite(i).rob_id            := rob_id_reg
     io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).acc_group_id      := 0.U
+    io.bankWrite(i).group_id      := 0.U
   }
   // cmd interface default assignment
   io.cmdReq.ready := true.B

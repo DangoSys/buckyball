@@ -13,7 +13,7 @@ static elem_t output_matrix[DIM * DIM] __attribute__((aligned(16)));
 
 int mvin_mvout_simple_test() {
   uint32_t bank_id = 0;
-  bb_vbank_config(bank_id, 0, 1);
+  bb_mem_alloc(bank_id, 1, 1);
 
   for (int i = 0; i < 4; i++) {
     init_u8_random_matrix(input_matrix, DIM, DIM, 111);

@@ -95,24 +95,24 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).write.req.bits   := DontCare
     io.mem_req(i).write.resp.ready := false.B
     io.mem_req(i).bank_id          := 0.U
-    io.mem_req(i).acc_group_id     := 0.U
+    io.mem_req(i).group_id     := 0.U
 
     val isRead    = mappingTable(i).isRead
     val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
     val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
     val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
     val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
-    val acc_group_id    = io.balldomain.bankWrite(mappingTable(i).id).acc_group_id
+    val group_id    = io.balldomain.bankWrite(mappingTable(i).id).group_id
 
     when(mappingTable(i).valid) {
       when(isRead) {
         io.mem_req(i).read <> ballRead
         io.mem_req(i).bank_id := rbank_id
-        io.mem_req(i).acc_group_id := acc_group_id
+        io.mem_req(i).group_id := group_id
       }.otherwise {
         io.mem_req(i).write <> ballWrite
         io.mem_req(i).bank_id := wbank_id
-        io.mem_req(i).acc_group_id := acc_group_id
+        io.mem_req(i).group_id := group_id
       }
     }
   }
@@ -125,10 +125,10 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.frontend.bankRead.bank_id,
     io.frontend.bankWrite.bank_id
   )
-  io.mem_req(b.top.memBallChannelNum).acc_group_id := Mux(
+  io.mem_req(b.top.memBallChannelNum).group_id := Mux(
     io.frontend.bankRead.io.req.valid,
-    io.frontend.bankRead.acc_group_id,
-    io.frontend.bankWrite.acc_group_id
+    io.frontend.bankRead.group_id,
+    io.frontend.bankWrite.group_id
   )
 
   // Mapping table release

@@ -31,10 +31,10 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val sramWrite = Flipped(new SramWriteIO(b)) // AccPipe -> bank: req out, resp in
 
     val mem_req = Flipped(new MemRequestIO(b))
-    val is_acc  = Input(Bool())
+    val is_multi  = Input(Bool())
 
     val busy         = Output(Bool())
-    val acc_group_id = Output(UInt(3.W))
+    val group_id = Output(UInt(3.W))
     val bank_id      = Output(UInt(b.memDomain.bankNum.W))
   })
 
@@ -45,17 +45,17 @@ class AccPipe(val b: GlobalConfig) extends Module {
   io.sramWrite <> io.mem_req.write
 
   //Read Acc
-  when(io.is_acc) {
+  when(io.is_multi) {
     io.sramRead.req.bits.addr := io.mem_req.read.req.bits.addr(log2Ceil(b.memDomain.bankEntries) - 1, 2)
   }
 
-  //Acc_group_id output
-  val acc_group_id_reg = RegInit(0.U(3.W))
+  //group_id output
+  val group_id_reg = RegInit(0.U(3.W))
   when(io.mem_req.read.req.valid || io.mem_req.write.req.valid) {
-    io.acc_group_id  := io.mem_req.acc_group_id
-    acc_group_id_reg := io.mem_req.acc_group_id
+    io.group_id  := io.mem_req.group_id
+    group_id_reg := io.mem_req.group_id
   }.otherwise {
-    io.acc_group_id := acc_group_id_reg
+    io.group_id := group_id_reg
   }
 
   //Bank_id output
