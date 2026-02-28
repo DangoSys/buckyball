@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 
-static elem_t input_matrix_a[DIM * 32] __attribute__((aligned(16)));
-static elem_t input_matrix_b[32 * DIM] __attribute__((aligned(16)));
+static elem_t input_matrix_a[DIM * 32] __attribute__((aligned(64)));
+static elem_t input_matrix_b[32 * DIM] __attribute__((aligned(64)));
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
@@ -36,9 +36,8 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 }
 
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
-  clear_u32_matrix(output_matrix, DIM, DIM);
-  cpu_matmul(a, b, expected_matrix, DIM, DIM, size);
   hw_matmul(test_name, a, b, output_matrix, size);
+  cpu_matmul(a, b, expected_matrix, DIM, DIM, size);
   if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
     printf("Test %s PASSED\n", test_name);
     return 1;
@@ -49,8 +48,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 int test_ones_16x32() {
-  init_ones_matrix(input_matrix_a, DIM, 32);
-  init_ones_matrix(input_matrix_b, 32, DIM);
+  init_sequence_matrix(input_matrix_a, DIM, 32);
+  init_sequence_matrix(input_matrix_b, 32, DIM);
   return run_test("All-ones matrices", input_matrix_a, input_matrix_b, 32);
 }
 

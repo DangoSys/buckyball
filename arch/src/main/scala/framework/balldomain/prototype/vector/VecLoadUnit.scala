@@ -49,10 +49,13 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val op2_iter_counter    = RegInit(0.U(10.W))
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
-  val ld_ex_valid_reg     = RegInit(false.B)
   val ld_ex_op1_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_op2_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_iter_reg      = RegInit(0.U(10.W))
+  val wait1_reg            = RegInit(false.B)
+  val wait2_reg            = RegInit(false.B)
+  val wait1_cnt          = RegInit(0.U(7.W))
+  val wait2_cnt          = RegInit(0.U(7.W))
 
   val bankRespQueue0 = Module(new Queue(new SramReadResp(b), entries = 8))
   val bankRespQueue1 = Module(new Queue(new SramReadResp(b), entries = 8))
@@ -87,14 +90,40 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Send SRAM read request
 // -----------------------------------------------------------------------------
-  when(state === busy && io.ld_ex_o.ready) {
+  //wait1_reg := Mux(io.run , 0.U, wait1_reg)
+
+  //wait2_reg := Mux(io.run , 0.U, wait2_reg)
+
+  when(state === busy && io.ld_ex_o.ready && !wait1_reg) {
     io.bankReadReq(0).valid     := op1_iter_counter < iter
     io.bankReadReq(0).bits.addr := op1_addr + op1_iter_counter
+    op1_iter_counter            := Mux(io.bankReadReq(0).ready, op1_iter_counter + 1.U, op1_iter_counter)
+    wait1_reg                   := Mux((op1_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
+  }
+
+  when(state === busy && io.ld_ex_o.ready && !wait2_reg) {
     io.bankReadReq(1).valid     := op1_iter_counter < iter
     io.bankReadReq(1).bits.addr := op2_addr + op1_iter_counter
-    op1_iter_counter            := Mux(io.bankReadReq(0).ready, op1_iter_counter + 1.U, op1_iter_counter)
     op2_iter_counter            := Mux(io.bankReadReq(1).ready, op2_iter_counter + 1.U, op2_iter_counter)
+    wait2_reg                   := Mux((op2_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
   }
+
+  when(wait1_reg){
+    wait1_cnt := wait1_cnt + 1.U
+    when(wait1_cnt === 32.U){
+      wait1_reg := false.B
+      wait1_cnt := 0.U
+    }
+  }
+
+  when(wait2_reg){
+    wait2_cnt := wait2_cnt + 1.U
+    when(wait2_cnt === 32.U){
+      wait2_reg := false.B
+      wait2_cnt := 0.U
+    }
+  }
+
 
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit

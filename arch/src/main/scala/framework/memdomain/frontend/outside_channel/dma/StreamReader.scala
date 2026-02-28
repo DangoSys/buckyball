@@ -75,7 +75,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   io.tl.a.valid :=
     io.tlb.resp.valid &&
-      !inflight
+      !inflight && state =/= s_idle
 
   io.tl.a.bits         := get
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
