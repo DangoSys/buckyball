@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 
 // Define neural network parameters
 #define INPUT_SIZE DIM
@@ -114,16 +114,7 @@ int test_neural_network() {
     weights2[i] = rand() % 128;
   }
 
-  // Clear output buffers
-  clear_u32_matrix(hidden_output, DIM, DIM);
-  clear_u32_matrix(expected_output, DIM, DIM);
-
-  // Generate expected results on CPU
-  printf("Running CPU Neural Network Forward Pass...\n");
-  cpu_nn_forward(input_data, weights1, weights2, hidden_output, expected_output,
-                 DIM);
-
-  // Clear hidden_output again for hardware computation
+  // Clear hidden_output for hardware computation
   clear_u32_matrix(hidden_output, DIM, DIM);
   clear_u32_matrix(final_output, DIM, DIM);
 
@@ -132,6 +123,15 @@ int test_neural_network() {
   hw_nn_forward(input_data, weights1, weights2, hidden_output, final_output,
                 DIM);
 
+  // Clear output buffers
+  clear_u32_matrix(hidden_output, DIM, DIM);
+  clear_u32_matrix(expected_output, DIM, DIM);
+
+  // Generate expected results on CPU
+  printf("Running CPU Neural Network Forward Pass...\n");
+  cpu_nn_forward(input_data, weights1, weights2, hidden_output, expected_output,
+                 DIM);
+                 
   // Compare hardware output with expected output
   printf("Comparing hardware output with expected output...\n");
   if (compare_u32_matrices(final_output, expected_output, DIM, DIM)) {

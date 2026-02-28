@@ -37,7 +37,6 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 }
 
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
-  clear_u32_matrix(output_matrix, DIM, DIM);
   cpu_matmul(a, b, expected_matrix, size, size, size);
   hw_matmul(test_name, a, b, output_matrix, size);
   if (compare_u32_matrices(output_matrix, expected_matrix, size, size)) {

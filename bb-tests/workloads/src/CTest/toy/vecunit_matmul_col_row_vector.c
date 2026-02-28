@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 #include <string.h>
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
