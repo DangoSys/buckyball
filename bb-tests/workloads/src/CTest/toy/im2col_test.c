@@ -9,16 +9,13 @@
 static elem_t input_matrix_a[DIM * 64] __attribute__((aligned(64)));
 static elem_t output_matrix_b[DIM * 1024] __attribute__((aligned(64)));
 
-void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size)
-{
+void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size) {
   // spad0: operand A, offset 0
   uint32_t op1_bank_id = 0;
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
-  int acc_bank_id = 2; // virtual bank id
-  bb_vbank_config(op1_bank_id, 0, 1);
-  bb_vbank_config(op2_bank_id, 0, 1);
-  bb_vbank_config(acc_bank_id, 1, 1);
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(op2_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_fence();
@@ -37,30 +34,24 @@ void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size)
   bb_fence();
 }
 
-int run_test(const char *test_name, elem_t *a, elem_t *b, int size)
-{
+int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   hw_im2col(test_name, a, b, size);
   return 1;
 }
 
-int test_im2col()
-{
+int test_im2col() {
   init_sequence_matrix(input_matrix_a, DIM, 32);
   return run_test("Im2col", input_matrix_a, output_matrix_b, DIM);
 }
 
-int main()
-{
+int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
   int passed = test_im2col();
-  if (passed)
-  {
+  if (passed) {
     printf("Im2col test PASSED\n");
-  }
-  else
-  {
+  } else {
     printf("Im2col test FAILED\n");
   }
 #ifdef MULTICORE
