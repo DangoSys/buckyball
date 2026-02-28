@@ -95,7 +95,7 @@ class Im2col(val b: GlobalConfig) extends Module {
     io.bankWrite(i).group_id      := 0.U
   }
   // cmd interface default assignment
-  io.cmdReq.ready := true.B
+  io.cmdReq.ready := state === idle
   io.cmdResp.valid       := false.B
   io.cmdResp.bits.rob_id := rob_id_reg
 
@@ -136,14 +136,15 @@ class Im2col(val b: GlobalConfig) extends Module {
     // Read part of data, fill ConvertBuffer
     is(read) {
       // Send read request
-      when(reqcounter < krow_reg) {
-        reqcounter                              := reqcounter + 1.U
-        io.bankRead(rbank_reg).io.req.valid     := true.B
-        io.bankRead(rbank_reg).io.req.bits.addr := raddr_reg + reqcounter + startrow_reg
+      io.bankRead(0).io.req.valid     := reqcounter < krow_reg
+      io.bankRead(0).io.req.bits.addr := raddr_reg + reqcounter + startrow_reg
+
+      when(io.bankRead(0).io.req.fire) {
+        reqcounter := reqcounter + 1.U
       }
       // Process read response and store in ConvertBuffer
-      when(io.bankRead(rbank_reg).io.resp.fire) {
-        ConvertBuffer(respcounter) := io.bankRead(rbank_reg).io.resp.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+      when(io.bankRead(0).io.resp.fire) {
+        ConvertBuffer(respcounter) := io.bankRead(0).io.resp.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
         respcounter                := respcounter + 1.U
       }
       // Determine whether to transition state
@@ -154,11 +155,10 @@ class Im2col(val b: GlobalConfig) extends Module {
     is(read_and_convert) {
       // Move pointer
       when(colptr <= colmax && rowptr <= rowmax) {
-        colptr                                   := Mux(colptr === colmax, startcol_reg, colptr + 1.U)
-        io.bankWrite(wbank_reg).io.req.valid     := true.B
-        io.bankWrite(wbank_reg).io.req.bits.addr := waddr_reg + rowcnt * (colmax + 1.U - startcol_reg) + colcnt
-        io.bankWrite(wbank_reg).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(~0.U(1.W)))
-        io.bankWrite(wbank_reg).io.req.bits.data := {
+        io.bankWrite(0).io.req.valid     := true.B
+        io.bankWrite(0).io.req.bits.addr := waddr_reg + rowcnt * (colmax + 1.U - startcol_reg) + colcnt
+        io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(~0.U(1.W)))
+        io.bankWrite(0).io.req.bits.data := {
 
           val window = Wire(Vec(InputNum, UInt(inputWidth.W)))
           // Initialize all to 0 first
@@ -184,15 +184,19 @@ class Im2col(val b: GlobalConfig) extends Module {
           // For example, for klen_reg=3, combine (00)(01)(02)(10)(11)(12)(20)(21)(22)
           Cat((0 until InputNum).map(i => window(i)).reverse)
         }
+
+        when(io.bankWrite(0).io.req.fire) {
+          colptr := Mux(colptr === colmax, startcol_reg, colptr + 1.U)
+        }
       }
       // Send read request early
       when(colptr === colmax - 1.U) {
-        io.bankRead(rbank_reg).io.req.valid     := true.B
-        io.bankRead(rbank_reg).io.req.bits.addr := raddr_reg + krow_reg + rowptr
+        io.bankRead(0).io.req.valid     := true.B
+        io.bankRead(0).io.req.bits.addr := raddr_reg + krow_reg + rowptr
       }
       // Process read response and store in ConvertBuffer
-      when(io.bankRead(rbank_reg).io.resp.fire) {
-        ConvertBuffer(rowcnt % krow_reg) := io.bankRead(rbank_reg).io.resp.bits.data.asTypeOf(Vec(
+      when(io.bankRead(0).io.resp.fire) {
+        ConvertBuffer(rowcnt % krow_reg) := io.bankRead(0).io.resp.bits.data.asTypeOf(Vec(
           InputNum,
           UInt(inputWidth.W)
         ))
