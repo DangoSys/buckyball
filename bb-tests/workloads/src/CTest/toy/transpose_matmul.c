@@ -18,18 +18,16 @@ static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
-               int size)
-{
+               int size) {
   // spad0: operand A, offset 0
   uint32_t op1_bank_id = 0;
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 4, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
   uint32_t col_stride = (size + DIM - 1) / DIM;
-  for (int i = 0; i < col_stride; i++)
-  {
+  for (int i = 0; i < col_stride; i++) {
     bb_mvin((uintptr_t)a + i * DIM, op2_bank_id + size + i * DIM, DIM,
             col_stride);
   }
@@ -44,25 +42,20 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 }
 
 int run_test(const char *test_name, elem_t *aligned_a, elem_t *a, elem_t *b,
-             int size)
-{
+             int size) {
   clear_u32_matrix(output_matrix, DIM, DIM);
   hw_matmul(test_name, aligned_a, b, output_matrix, size);
   cpu_matmul(a, b, expected_matrix, DIM, DIM, size);
-  if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM))
-  {
+  if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
     printf("Test %s PASSED\n", test_name);
     return 1;
-  }
-  else
-  {
+  } else {
     printf("Test %s FAILED\n", test_name);
     return 0;
   }
 }
 
-int test_transpose_matmul()
-{
+int test_transpose_matmul() {
   init_col_aligned_random_matrix(aligned_input_matrix_a, input_matrix_a, DIM,
                                  DIM, MATMUL_COL, 111);
   init_u8_random_matrix(input_matrix_b, MATMUL_COL, DIM, 222);
@@ -70,19 +63,15 @@ int test_transpose_matmul()
                   input_matrix_b, MATMUL_COL);
 }
 
-int main()
-{
+int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
   int passed = test_transpose_matmul();
-  if (passed)
-  {
+  if (passed) {
     printf("Transpose Matmul test PASSED\n");
     return 0;
-  }
-  else
-  {
+  } else {
     printf("Transpose Matmul test FAILED\n");
     return 1;
   }

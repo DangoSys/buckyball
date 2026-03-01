@@ -24,7 +24,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
-  bb_mem_alloc(acc_bank_id, 4, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
 
   bb_mvin((uintptr_t)a_transposed, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
@@ -60,7 +60,6 @@ int main() {
 #endif
   int passed = test_random();
 
-  
   if (passed) {
     printf("vecunit_matmul_random test PASSED\n");
     return 0;
@@ -68,7 +67,7 @@ int main() {
     printf("vecunit_matmul_random test FAILED\n");
     return 1;
   }
-  
+
 #ifdef MULTICORE
   exit(0);
 #endif

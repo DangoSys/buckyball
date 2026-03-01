@@ -67,7 +67,7 @@ void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
-  bb_mem_alloc(acc_bank_id, 4, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
 
   bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
@@ -131,7 +131,7 @@ int test_neural_network() {
   printf("Running CPU Neural Network Forward Pass...\n");
   cpu_nn_forward(input_data, weights1, weights2, hidden_output, expected_output,
                  DIM);
-                 
+
   // Compare hardware output with expected output
   printf("Comparing hardware output with expected output...\n");
   if (compare_u32_matrices(final_output, expected_output, DIM, DIM)) {
