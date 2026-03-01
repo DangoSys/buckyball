@@ -12,8 +12,7 @@ static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
-               int size)
-{
+               int size) {
   static elem_t a_transposed[32 * DIM] __attribute__((aligned(16)));
   transpose_u8_matrix(a, a_transposed, DIM, 32);
   // spad0: operand A, offset 0
@@ -25,7 +24,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
-  bb_mem_alloc(acc_bank_id, 4, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
 
   bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
@@ -36,42 +35,33 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_fence();
 }
 
-int run_test(const char *test_name, elem_t *a, elem_t *b, int size)
-{
+int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   cpu_matmul(a, b, expected_matrix, DIM, DIM, size);
   hw_matmul(test_name, a, b, output_matrix, size);
-  if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM))
-  {
+  if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
     printf("Test %s PASSED\n", test_name);
     return 1;
-  }
-  else
-  {
+  } else {
     printf("Test %s FAILED\n", test_name);
     return 0;
   }
 }
 
-int test_zero_random()
-{
+int test_zero_random() {
   clear_u8_matrix(input_matrix_a, DIM, 32);
   init_u8_random_matrix(input_matrix_b, 32, DIM, 444);
   return run_test("Zero × Random", input_matrix_a, input_matrix_b, 32);
 }
 
-int main()
-{
+int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
   int passed = test_zero_random();
-  if (passed)
-  {
+  if (passed) {
     printf("vecunit_matmul_16xn_zero_random test PASSED\n");
     return 0;
-  }
-  else
-  {
+  } else {
     printf("vecunit_matmul_16xn_zero_random test FAILED\n");
     return 1;
   }
