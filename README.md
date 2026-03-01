@@ -51,13 +51,13 @@ bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-b
 ```
 
 
-### Buckyball as a library
+<!-- ### Buckyball as a library
   We support providing a streamlined version of buckyball installation, integrated as a generator within Chipyard.
 
 **Notice**:
 - buckyball-as-a-lib are maintained only for specific release versions.
 
-> We do not provide support for this version as it is not a stable release.
+> We do not provide support for this version as it is not a stable release. -->
 
 
 ## Tutorial
@@ -67,9 +67,6 @@ You can start to learn ball and blink from [here](https://github.com/DangoSys/bu
 
 You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
 
-## Community
-
-Join our discussion on [Slack](https://dangosys-buckyball.slack.com/)
 
 ## Contributors
 Thank you for considering contributing to buckyball!
