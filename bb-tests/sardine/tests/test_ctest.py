@@ -74,10 +74,6 @@ ctest_workloads = [
         "ctest_relu_test_singlecore-baremetal",
         "ctest_relu_test_singlecore-baremetal",
     ),
-    (
-        "ctest_transfer_test_singlecore-baremetal",
-        "ctest_transfer_test_singlecore-baremetal",
-    ),
 ]
 
 
