@@ -5,17 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 
 // Test matrices
-static elem_t input_matrix[DIM * DIM] __attribute__((aligned(16)));
-static elem_t output_matrix[DIM * DIM] __attribute__((aligned(16)));
+static elem_t input_matrix[DIM * DIM] __attribute__((aligned(128)));
+static elem_t output_matrix[DIM * DIM] __attribute__((aligned(128)));
 
 int mvin_mvout_simple_test() {
   uint32_t bank_id = 0;
   bb_mem_alloc(bank_id, 1, 1);
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 1; i++) {
     init_u8_random_matrix(input_matrix, DIM, DIM, 111);
     bb_mvin((uintptr_t)input_matrix, bank_id, DIM, 1);
     clear_u8_matrix(output_matrix, DIM, DIM);

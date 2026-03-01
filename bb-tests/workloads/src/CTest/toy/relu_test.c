@@ -110,7 +110,7 @@ int main() {
 
   int passed = test_relu(5);
   if (passed) {
-    printf("ReLU test PASSED!!!\n");
+    printf("ReLU test PASSED\n");
   } else {
     printf("ReLU test FAILED\n");
   }
