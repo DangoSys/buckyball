@@ -78,6 +78,10 @@ ctest_workloads = [
         "ctest_transpose_test_singlecore-baremetal",
         "ctest_transpose_test_singlecore-baremetal",
     ),
+    (
+        "ctest_im2col_test_singlecore-baremetal",
+        "ctest_im2col_test_singlecore-baremetal",
+    ),
 ]
 
 
