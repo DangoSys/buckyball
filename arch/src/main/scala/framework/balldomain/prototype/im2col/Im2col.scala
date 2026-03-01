@@ -2,10 +2,8 @@ package framework.balldomain.prototype.im2col
 
 import chisel3._
 import chisel3.util._
-import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.balldomain.prototype.vector._
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
@@ -13,19 +11,24 @@ import framework.balldomain.prototype.im2col.configs.Im2colBallParam
 
 @instantiable
 class Im2col(val b: GlobalConfig) extends Module {
-  val ballConfig = Im2colBallParam()
-  val InputNum   = ballConfig.InputNum
-  val inputWidth = ballConfig.inputWidth
-  val bankWidth  = b.memDomain.bankWidth
+  private val maxK        = Im2colBallParam().InputNum
+  private val elemWidth   = Im2colBallParam().inputWidth
+  private val bankWidth   = b.memDomain.bankWidth
+  private val lanesPerBeat = 16
+  private val laneWidth    = bankWidth / lanesPerBeat
+  private val maxInCol     = 32
+  private val maxInColWords = (maxInCol + lanesPerBeat - 1) / lanesPerBeat
+  private val maxKernelElems = maxK * maxK
 
-  // Get bandwidth from config
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "Im2colBall")
+  require(laneWidth == elemWidth, s"[Im2col] laneWidth($laneWidth) must equal elemWidth($elemWidth)")
+
+  private val mapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "Im2colBall")
     .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
-  val inBW        = ballMapping.inBW
-  val outBW       = ballMapping.outBW
+  private val inBW  = mapping.inBW
+  private val outBW = mapping.outBW
 
-  @public
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
@@ -33,190 +36,271 @@ class Im2col(val b: GlobalConfig) extends Module {
     val status    = new BallStatus
   })
 
-  // State definitions
-  val idle :: read :: read_and_convert :: complete :: Nil = Enum(4)
-  // Current state register
-  val state                                               = RegInit(idle)
-  // Conversion buffer
-  val ConvertBuffer                                       = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(InputNum)(0.U(inputWidth.W))))))
-  // Row pointer marking top-left corner of convolution window
-  val rowptr                                              = RegInit(0.U(10.W))
-  // Column pointer marking top-left corner of convolution window
-  val colptr                                              = RegInit(0.U(5.W))
-  // Request counter in read state
-  val reqcounter                                          = RegInit(0.U(5.W))
-  // Response counter in read state
-  val respcounter                                         = RegInit(0.U(5.W))
-  // Store current instruction's RoB ID
-  val rob_id_reg                                          = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  // Store kernel row count
-  val krow_reg                                            = RegInit(0.U(log2Up(InputNum).W))
-  // Store kernel column count
-  val kcol_reg                                            = RegInit(0.U(log2Up(InputNum).W))
-  // Store input matrix row count
-  val inrow_reg                                           = RegInit(0.U(10.W))
-  // Store input matrix column count
-  val incol_reg                                           = RegInit(0.U((log2Up(InputNum) + 1).W))
-  // Store starting column number
-  val startcol_reg                                        = RegInit(0.U((log2Up(InputNum) + 1).W))
-  // Store starting row number
-  val startrow_reg                                        = RegInit(0.U(10.W))
-  // Store write starting address
-  val waddr_reg                                           = RegInit(0.U(10.W))
-  // Store write bank
-  val wbank_reg                                           = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  // Store read starting address
-  val raddr_reg                                           = RegInit(0.U(10.W))
-  // Store read bank
-  val rbank_reg                                           = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  // Batch iteration counter
-  val iterCnt                                             = RegInit(0.U(32.W))
+  require(inBW >= 1, "[Im2col] inBW must be >= 1")
+  require(outBW >= 1, "[Im2col] outBW must be >= 1")
 
-  // SRAM default assignment
+  val idle :: preload_rows :: generate_window :: write_window :: load_next_row :: complete :: Nil = Enum(6)
+  val state = RegInit(idle)
+
+  private val robIdReg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val rBankReg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val wBankReg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+
+  private val rBaseBeatReg = RegInit(0.U(32.W))
+  private val wBaseBeatReg = RegInit(0.U(32.W))
+
+  private val kRowReg     = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val kColReg     = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val inRowReg    = RegInit(0.U(16.W))
+  private val inColReg    = RegInit(0.U(16.W))
+  private val startRowReg = RegInit(0.U(16.W))
+  private val startColReg = RegInit(0.U(16.W))
+
+  private val rowPtrReg = RegInit(0.U(16.W))
+  private val colPtrReg = RegInit(0.U(16.W))
+
+  private val lineBuffer = RegInit(VecInit(Seq.fill(maxK)(VecInit(Seq.fill(maxInColWords)(0.U(bankWidth.W))))))
+  private val elemBuffer = RegInit(VecInit(Seq.fill(maxKernelElems)(0.U(elemWidth.W))))
+
+  private val rowFifo = Module(new RowSlotFIFO(maxK))
+  rowFifo.io.kRows   := kRowReg
+  rowFifo.io.init    := false.B
+  rowFifo.io.advance := false.B
+
+  private val ldRowIdxReg = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val ldBeatIdxReg = RegInit(0.U(log2Ceil(maxInColWords + 1).W))
+  private val ldOutstandingReg = RegInit(false.B)
+
+  private val genElemIdxReg = RegInit(0.U(log2Ceil(maxKernelElems + 1).W))
+  private val wrElemIdxReg = RegInit(0.U(log2Ceil(maxKernelElems + 1).W))
+  private val packCntReg = RegInit(0.U(log2Ceil(lanesPerBeat + 1).W))
+  private val packReg = RegInit(VecInit(Seq.fill(lanesPerBeat)(0.U(elemWidth.W))))
+
+  private def ceilDiv(a: UInt, d: Int): UInt = (a + (d - 1).U) / d.U
+  private val inColWords = ceilDiv(inColReg, lanesPerBeat)
+  private val totalKernelEls = kRowReg * kColReg
+
+  private val rowMax = inRowReg - kRowReg
+  private val colMax = inColReg - kColReg
+  private val rowEnd = rowPtrReg === (startRowReg + rowMax)
+  private val colEnd = colPtrReg === (startColReg + colMax)
+  private val isLastWindow = rowEnd && colEnd
+
+  private def laneFromBeat(beat: UInt, lane: UInt): UInt = {
+    val lanes = beat.asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
+    lanes(lane)
+  }
+
+  io.cmdReq.ready        := (state === idle)
+  io.cmdResp.valid       := false.B
+  io.cmdResp.bits.rob_id := robIdReg
+
+  io.status.idle    := (state === idle)
+  io.status.running := (state =/= idle) && (state =/= complete)
+
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := 0.U
-    io.bankRead(i).io.resp.ready    := (state === read) || (state === read_and_convert)
-    io.bankRead(i).bank_id          := rbank_reg
-    io.bankRead(i).rob_id           := rob_id_reg
+    io.bankRead(i).io.resp.ready    := false.B
+    io.bankRead(i).bank_id          := rBankReg
+    io.bankRead(i).rob_id           := robIdReg
     io.bankRead(i).ball_id          := 0.U
-    io.bankRead(i).group_id     := 0.U
+    io.bankRead(i).group_id         := 0.U
   }
+
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid      := false.B
     io.bankWrite(i).io.req.bits.addr  := 0.U
     io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
     io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := true.B
-    io.bankWrite(i).bank_id           := wbank_reg
-    io.bankWrite(i).rob_id            := rob_id_reg
+    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).bank_id           := wBankReg
+    io.bankWrite(i).rob_id            := robIdReg
     io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).group_id      := 0.U
+    io.bankWrite(i).group_id          := 0.U
   }
-  // cmd interface default assignment
-  io.cmdReq.ready := state === idle
-  io.cmdResp.valid       := false.B
-  io.cmdResp.bits.rob_id := rob_id_reg
 
-  val rowcnt = rowptr - startrow_reg
-  val colcnt = colptr - startcol_reg
-  val rowmax = inrow_reg - krow_reg
-  val colmax = incol_reg - kcol_reg
+  io.bankWrite(0).io.resp.ready := true.B
 
   switch(state) {
-    // Idle state, waiting for instruction
     is(idle) {
-      // Instruction arrives, initialize registers
       when(io.cmdReq.fire) {
-        state        := read
-        rowptr       := io.cmdReq.bits.cmd.special(37, 28)
-        colptr       := io.cmdReq.bits.cmd.special(27, 23)
-        reqcounter   := 0.U
-        respcounter  := 0.U
-        // Kernel column count
-        kcol_reg     := io.cmdReq.bits.cmd.special(3, 0)
-        // Kernel row count
-        krow_reg     := io.cmdReq.bits.cmd.special(7, 4)
-        // Input matrix column count
-        incol_reg    := io.cmdReq.bits.cmd.special(12, 8)
-        // Input matrix row count
-        inrow_reg    := io.cmdReq.bits.cmd.special(22, 13)
-        // Starting column number
-        startcol_reg := io.cmdReq.bits.cmd.special(27, 23)
-        // Starting row number
-        startrow_reg := io.cmdReq.bits.cmd.special(37, 28)
-        rob_id_reg   := io.cmdReq.bits.rob_id
-        waddr_reg    := 0.U
-        wbank_reg    := io.cmdReq.bits.cmd.op2_bank
-        raddr_reg    := 0.U
-        rbank_reg    := io.cmdReq.bits.cmd.op1_bank
+        robIdReg := io.cmdReq.bits.rob_id
+        rBankReg := io.cmdReq.bits.cmd.op1_bank
+        wBankReg := io.cmdReq.bits.cmd.wr_bank
+
+        kColReg := io.cmdReq.bits.cmd.special(3, 0)
+        kRowReg := io.cmdReq.bits.cmd.special(7, 4)
+        inColReg := io.cmdReq.bits.cmd.special(12, 8)
+        inRowReg := io.cmdReq.bits.cmd.special(22, 13)
+        startColReg := io.cmdReq.bits.cmd.special(27, 23)
+        startRowReg := io.cmdReq.bits.cmd.special(37, 28)
+
+        rowPtrReg := io.cmdReq.bits.cmd.special(37, 28)
+        colPtrReg := io.cmdReq.bits.cmd.special(27, 23)
+
+        rBaseBeatReg := 0.U
+        wBaseBeatReg := 0.U
+
+        ldRowIdxReg := 0.U
+        ldBeatIdxReg := 0.U
+        ldOutstandingReg := false.B
+        genElemIdxReg := 0.U
+        wrElemIdxReg := 0.U
+        packCntReg := 0.U
+
+        rowFifo.io.init := true.B
+
+        val cmdKCol = io.cmdReq.bits.cmd.special(3, 0)
+        val cmdKRow = io.cmdReq.bits.cmd.special(7, 4)
+        val cmdInCol = io.cmdReq.bits.cmd.special(12, 8)
+        val cmdInRow = io.cmdReq.bits.cmd.special(22, 13)
+        val invalidShape = (cmdKCol === 0.U) || (cmdKRow === 0.U) || (cmdInCol === 0.U) || (cmdInRow === 0.U) ||
+          (cmdInCol < cmdKCol) || (cmdInRow < cmdKRow)
+
+        when(invalidShape) {
+          state := complete
+        }.otherwise {
+          state := preload_rows
+        }
       }
     }
-    // Read part of data, fill ConvertBuffer
-    is(read) {
-      // Send read request
-      io.bankRead(0).io.req.valid     := reqcounter < krow_reg
-      io.bankRead(0).io.req.bits.addr := raddr_reg + reqcounter + startrow_reg
+
+    is(preload_rows) {
+      val doneRows = ldRowIdxReg === kRowReg
+      val canIssue = !doneRows && !ldOutstandingReg && (ldBeatIdxReg < inColWords)
+      val rowElem = rowPtrReg + ldRowIdxReg
+      val reqAddr = rBaseBeatReg + rowElem * inColWords + ldBeatIdxReg
+
+      io.bankRead(0).io.req.valid     := canIssue
+      io.bankRead(0).io.req.bits.addr := reqAddr
+      io.bankRead(0).io.resp.ready    := ldOutstandingReg
 
       when(io.bankRead(0).io.req.fire) {
-        reqcounter := reqcounter + 1.U
+        ldOutstandingReg := true.B
       }
-      // Process read response and store in ConvertBuffer
+
       when(io.bankRead(0).io.resp.fire) {
-        ConvertBuffer(respcounter) := io.bankRead(0).io.resp.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-        respcounter                := respcounter + 1.U
-      }
-      // Determine whether to transition state
-      state := Mux(respcounter === krow_reg, read_and_convert, read)
+        lineBuffer(ldRowIdxReg)(ldBeatIdxReg) := io.bankRead(0).io.resp.bits.data.asUInt
+        ldOutstandingReg := false.B
 
-    }
-    // Convert data and read remaining data, write back to spad
-    is(read_and_convert) {
-      // Move pointer
-      when(colptr <= colmax && rowptr <= rowmax) {
-        io.bankWrite(0).io.req.valid     := true.B
-        io.bankWrite(0).io.req.bits.addr := waddr_reg + rowcnt * (colmax + 1.U - startcol_reg) + colcnt
-        io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(~0.U(1.W)))
-        io.bankWrite(0).io.req.bits.data := {
-
-          val window = Wire(Vec(InputNum, UInt(inputWidth.W)))
-          // Initialize all to 0 first
-          for (i <- 0 until InputNum) {
-            window(i) := 0.U
-          }
-
-          // Fill window data
-          for {
-            i <- 0 until 4
-            j <- 0 until 4
-          } {
-            when(i.U < krow_reg && j.U < kcol_reg) {
-              val bufferRow = (rowcnt + i.U) % krow_reg
-              val bufferCol = (colptr + j.U) % incol_reg
-              window((i.U * kcol_reg) + j.U) := ConvertBuffer(bufferRow)(bufferCol)
-            }.otherwise {
-              window((i.U * kcol_reg) + j.U) := 0.U
-            }
-          }
-
-          // Rearrange data
-          // For example, for klen_reg=3, combine (00)(01)(02)(10)(11)(12)(20)(21)(22)
-          Cat((0 until InputNum).map(i => window(i)).reverse)
-        }
-
-        when(io.bankWrite(0).io.req.fire) {
-          colptr := Mux(colptr === colmax, startcol_reg, colptr + 1.U)
+        when(ldBeatIdxReg + 1.U === inColWords) {
+          ldBeatIdxReg := 0.U
+          ldRowIdxReg := ldRowIdxReg + 1.U
+        }.otherwise {
+          ldBeatIdxReg := ldBeatIdxReg + 1.U
         }
       }
-      // Send read request early
-      when(colptr === colmax - 1.U) {
-        io.bankRead(0).io.req.valid     := true.B
-        io.bankRead(0).io.req.bits.addr := raddr_reg + krow_reg + rowptr
+
+      when(doneRows && !ldOutstandingReg) {
+        genElemIdxReg := 0.U
+        state := generate_window
       }
-      // Process read response and store in ConvertBuffer
-      when(io.bankRead(0).io.resp.fire) {
-        ConvertBuffer(rowcnt % krow_reg) := io.bankRead(0).io.resp.bits.data.asTypeOf(Vec(
-          InputNum,
-          UInt(inputWidth.W)
-        ))
-        rowptr := rowptr + 1.U
-      }
-      // Determine whether to transition state
-      state := Mux(rowptr === rowmax && colptr === colmax, complete, read_and_convert)
     }
-    // Complete state, send completion signal
+
+    is(generate_window) {
+      val startLane = colPtrReg % lanesPerBeat.U
+      val safeKCol = Mux(kColReg === 0.U, 1.U, kColReg)
+
+      val t = genElemIdxReg
+      val kRowIdx = t / safeKCol
+      val kColIdx = t % safeKCol
+
+      val physicalSlot = RowSlotFIFO.logicalToPhysical(rowFifo.io.head, kRowIdx, kRowReg)
+      val laneSum = startLane + kColIdx
+      val beatIdx = laneSum / lanesPerBeat.U
+      val laneIdx = laneSum % lanesPerBeat.U
+      val beatWord = lineBuffer(physicalSlot)(beatIdx)
+
+      elemBuffer(t) := laneFromBeat(beatWord, laneIdx)
+
+      when(genElemIdxReg === (totalKernelEls - 1.U)) {
+        wrElemIdxReg := 0.U
+        state := write_window
+      }.otherwise {
+        genElemIdxReg := genElemIdxReg + 1.U
+      }
+    }
+
+    is(write_window) {
+      val windowDone = wrElemIdxReg === totalKernelEls
+      val packFull = packCntReg === lanesPerBeat.U
+
+      io.bankWrite(0).io.req.valid      := packFull
+      io.bankWrite(0).io.req.bits.addr  := wBaseBeatReg
+      io.bankWrite(0).io.req.bits.data  := Cat(packReg.reverse)
+      io.bankWrite(0).io.req.bits.wmode := true.B
+      io.bankWrite(0).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+
+      when(!windowDone && !packFull) {
+        packReg(packCntReg) := elemBuffer(wrElemIdxReg)
+        packCntReg := packCntReg + 1.U
+        wrElemIdxReg := wrElemIdxReg + 1.U
+      }
+
+      when(io.bankWrite(0).io.req.fire) {
+        wBaseBeatReg := wBaseBeatReg + 1.U
+        packCntReg := 0.U
+      }
+
+      when(windowDone) {
+        when(packFull && !io.bankWrite(0).io.req.fire) {
+          state := write_window
+        }.otherwise {
+          when(isLastWindow) {
+            state := complete
+          }.elsewhen(colEnd) {
+            colPtrReg := startColReg
+            rowPtrReg := rowPtrReg + 1.U
+
+            ldRowIdxReg := 0.U
+            ldBeatIdxReg := 0.U
+            ldOutstandingReg := false.B
+            state := load_next_row
+          }.otherwise {
+            colPtrReg := colPtrReg + 1.U
+            genElemIdxReg := 0.U
+            state := generate_window
+          }
+        }
+      }
+    }
+
+    is(load_next_row) {
+      val canIssue = !ldOutstandingReg && (ldBeatIdxReg < inColWords)
+      val rowElem = rowPtrReg + kRowReg - 1.U
+      val reqAddr = rBaseBeatReg + rowElem * inColWords + ldBeatIdxReg
+      val targetSlot = rowFifo.io.slotToOverwrite
+
+      io.bankRead(0).io.req.valid     := canIssue
+      io.bankRead(0).io.req.bits.addr := reqAddr
+      io.bankRead(0).io.resp.ready    := ldOutstandingReg
+
+      when(io.bankRead(0).io.req.fire) {
+        ldOutstandingReg := true.B
+      }
+
+      when(io.bankRead(0).io.resp.fire) {
+        lineBuffer(targetSlot)(ldBeatIdxReg) := io.bankRead(0).io.resp.bits.data.asUInt
+        ldOutstandingReg := false.B
+
+        when(ldBeatIdxReg + 1.U === inColWords) {
+          ldBeatIdxReg := 0.U
+          rowFifo.io.advance := true.B
+          genElemIdxReg := 0.U
+          state := generate_window
+        }.otherwise {
+          ldBeatIdxReg := ldBeatIdxReg + 1.U
+        }
+      }
+    }
+
     is(complete) {
-      io.cmdResp.valid       := true.B
-      io.cmdResp.bits.rob_id := rob_id_reg
-      state                  := idle
+      io.cmdResp.valid := true.B
       when(io.cmdResp.fire) {
-        iterCnt := iterCnt + 1.U
+        state := idle
       }
     }
   }
-
-  // Status signals
-  io.status.idle    := (state === idle)
-  io.status.running := (state === read_and_convert)
 }
