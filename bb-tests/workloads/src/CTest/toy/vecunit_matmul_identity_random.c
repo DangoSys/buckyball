@@ -12,7 +12,8 @@ static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
-               int size) {
+               int size)
+{
   static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
   transpose_u8_matrix(a, a_transposed, size, size);
   // spad0: operand A, offset 0
@@ -21,7 +22,6 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 4, 1);
@@ -36,34 +36,43 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_fence();
 }
 
-int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
+int run_test(const char *test_name, elem_t *a, elem_t *b, int size)
+{
   clear_u32_matrix(output_matrix, DIM, DIM);
   cpu_matmul(a, b, expected_matrix, size, size, size);
   hw_matmul(test_name, a, b, output_matrix, size);
-  if (compare_u32_matrices(output_matrix, expected_matrix, size, size)) {
+  if (compare_u32_matrices(output_matrix, expected_matrix, size, size))
+  {
     printf("Test %s PASSED\n", test_name);
     return 1;
-  } else {
+  }
+  else
+  {
     printf("Test %s FAILED\n", test_name);
     return 0;
   }
 }
 
-int test_identity_random() {
+int test_identity_random()
+{
   init_identity_matrix(input_matrix_a, DIM);
   init_random_matrix(input_matrix_b, DIM, DIM, 123);
   return run_test("Identity × Random", input_matrix_a, input_matrix_b, DIM);
 }
 
-int main() {
+int main()
+{
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
   int passed = test_identity_random();
-  if (passed) {
+  if (passed)
+  {
     printf("vecunit_matmul_identity_random test PASSED\n");
     return 0;
-  } else {
+  }
+  else
+  {
     printf("vecunit_matmul_identity_random test FAILED\n");
     return 1;
   }
