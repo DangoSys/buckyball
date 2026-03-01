@@ -8,16 +8,21 @@
 
 #define DIM (BANK_WIDTH / sizeof(elem_t))
 
-void init_matrix(elem_t *matrix, int rows, int cols, int seed) {
+void init_matrix(elem_t *matrix, int rows, int cols, int seed)
+{
   srand(seed);
-  for (int i = 0; i < rows * cols; i++) {
+  for (int i = 0; i < rows * cols; i++)
+  {
     matrix[i] =
         rand() % 4; // Initialize with random values in the range [0, 127]
   }
 }
-void flip_matrix(elem_t *matrix, int rows, int cols) {
-  for (int i = 0; i < rows / 2; i++) {
-    for (int j = 0; j < cols; j++) {
+void flip_matrix(elem_t *matrix, int rows, int cols)
+{
+  for (int i = 0; i < rows / 2; i++)
+  {
+    for (int j = 0; j < cols; j++)
+    {
       elem_t temp = matrix[i * cols + j];
       matrix[i * cols + j] = matrix[(rows - 1 - i) * cols + j];
       matrix[(rows - 1 - i) * cols + j] = temp;
@@ -31,7 +36,8 @@ static elem_t weight_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_output_matrix[DIM * DIM] __attribute__((aligned(64)));
 
-int main() {
+int main()
+{
 #ifdef MULTICORE
   multicore(MULTICORE); // Only allow specified hart to continue
 #endif
@@ -50,7 +56,7 @@ int main() {
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc(acc_bank_id, 4, 1);
 
   bb_mvin((uintptr_t)weight_matrix, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)input_matrix, op2_bank_id, DIM, 1);
@@ -60,9 +66,12 @@ int main() {
   // Move back from scratchpad to output
   bb_mvout((uintptr_t)output_matrix, op2_bank_id, DIM << 2, 1);
   bb_fence();
-  if (compare_u32_matrices(output_matrix, expected_output_matrix, DIM, DIM)) {
+  if (compare_u32_matrices(output_matrix, expected_output_matrix, DIM, DIM))
+  {
     printf("Test passed!\n");
-  } else {
+  }
+  else
+  {
     printf("Test failed!\n");
   }
   // print_matrix("Output", output_matrix, DIM, DIM);

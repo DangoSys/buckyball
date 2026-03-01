@@ -15,10 +15,13 @@ static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 // Utility function
 void print_result_matrix(const char *name, result_t *matrix, int rows,
-                         int cols) {
+                         int cols)
+{
   printf("Matrix %s:\n", name);
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
+  for (int i = 0; i < rows; i++)
+  {
+    for (int j = 0; j < cols; j++)
+    {
       printf("%4d ", (int32_t)matrix[i * cols + j]);
     }
     printf("\n");
@@ -26,22 +29,28 @@ void print_result_matrix(const char *name, result_t *matrix, int rows,
   printf("\n");
 }
 
-void init_matrixv2(elem_t *matrix, int rows, int cols, int seed, int value) {
-  for (int i = 0; i < rows * cols; i++) {
+void init_matrixv2(elem_t *matrix, int rows, int cols, int seed, int value)
+{
+  for (int i = 0; i < rows * cols; i++)
+  {
     matrix[i] = value;
   }
 }
 
-int compare_matrices(result_t *a, result_t *b, int rows, int cols) {
-  for (int i = 0; i < rows * cols; i++) {
-    if (a[i] != b[i]) {
+int compare_matrices(result_t *a, result_t *b, int rows, int cols)
+{
+  for (int i = 0; i < rows * cols; i++)
+  {
+    if (a[i] != b[i])
+    {
       return 0; // Matrices are different
     }
   }
   return 1; // Matrices are the same
 }
 
-int main() {
+int main()
+{
 #ifdef MULTICORE
   multicore(MULTICORE); // Only allow specified hart to continue
 #endif
@@ -58,7 +67,7 @@ int main() {
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc(acc_bank_id, 4, 1);
 
   bb_mvin((uintptr_t)input_matrix, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)weight_matrix, op2_bank_id, DIM, 1);
