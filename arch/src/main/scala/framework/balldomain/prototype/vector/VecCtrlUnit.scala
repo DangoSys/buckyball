@@ -53,6 +53,14 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
     is_acc        := false.B // Deprecated: use wmode instead
     mode          := io.cmdReq.bits.cmd.special(0)
 
+    printf(
+      "[VecCtrl] Received cmd: op1_bank=%d op2_bank=%d wr_bank=%d iter=%d\n",
+      io.cmdReq.bits.cmd.op1_bank,
+      io.cmdReq.bits.cmd.op2_bank,
+      io.cmdReq.bits.cmd.wr_bank,
+      io.cmdReq.bits.cmd.iter
+    )
+
     state := busy
   }
 

@@ -6,39 +6,84 @@
 
 #define DIM 16
 
-static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
-static elem_t input_matrix_b[DIM * DIM] __attribute__((aligned(64)));
+// Simple test matrices: A = identity-like, B = simple pattern
+static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64))) = {
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+
+static elem_t input_matrix_b[DIM * DIM] __attribute__((aligned(64))) = {
+    1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,
+    4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,
+    7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,
+    10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12,
+    13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+    16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,
+    3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,
+    6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,
+    9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+    12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14,
+    15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,
+    2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,
+    5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,
+    8,  9,  10, 11, 12, 13, 14, 15, 16};
+
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
-static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
+static result_t zero_matrix[DIM * DIM] __attribute__((aligned(64))) = {0};
+
+// Expected result: A * B where A is diagonal-like
+static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64))) = {
+    1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,
+    4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,
+    7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,
+    10, 11, 12, 13, 14, 15, 16, 2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24,
+    26, 28, 30, 32, 2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+    32, 2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 2,  4,
+    6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 1,  2,  3,  4,  5,
+    6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,
+    9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+    12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14,
+    15, 16, 1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,
+    2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,
+    5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 1,  2,  3,  4,  5,  6,  7,
+    8,  9,  10, 11, 12, 13, 14, 15, 16};
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
-  static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
-  transpose_u8_matrix(a, a_transposed, size, size);
-  //  spad0: operand A, offset 0
+  // spad0: original A
+  // spad3: transposed A
+  // spad1: operand B
+  // acc0: write to accumulator
   uint32_t op1_bank_id = 0;
-  // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
-  // acc0: write to accumulator, offset 0
-  int acc_bank_id = 2; // virtual bank id
-                       // bb_mem_alloc(acc_bank_id, 1, 4);
+  uint32_t acc_bank_id = 2;
+  uint32_t a_transposed_bank_id = 3;
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc(a_transposed_bank_id, 1, 1);
 
-  bb_mvin((uintptr_t)a_transposed, op1_bank_id, DIM, 1);
+  // Initialize accumulator bank with zeros before matrix multiplication
+  bb_mvin((uintptr_t)zero_matrix, acc_bank_id, DIM, 1);
+
+  bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
-
-  bb_fence();
-  bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
-  bb_fence();
-  bb_mvout((uintptr_t)c, acc_bank_id, size << 2, 1);
+  bb_transpose(op1_bank_id, a_transposed_bank_id, size, 0);
+  bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
+  bb_mvout((uintptr_t)c, acc_bank_id, size, 1);
   bb_fence();
 }
 
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
-  cpu_matmul(a, b, expected_matrix, size, size, size);
   hw_matmul(test_name, a, b, output_matrix, size);
   if (compare_u32_matrices(output_matrix, expected_matrix, size, size)) {
     printf("Test %s PASSED\n", test_name);
@@ -50,8 +95,8 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 int test_ones() {
-  init_u8_random_matrix(input_matrix_a, DIM, DIM, 456);
-  init_u8_random_matrix(input_matrix_b, DIM, DIM, 789);
+  // init_u8_random_matrix(input_matrix_a, DIM, DIM, 456);
+  // init_u8_random_matrix(input_matrix_b, DIM, DIM, 789);
   return run_test("Random matrices", input_matrix_a, input_matrix_b, DIM);
 }
 

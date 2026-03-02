@@ -6,8 +6,8 @@
 #define BB_RELU_FUNC7 38
 
 #define bb_relu(bank_id, wr_bank_id, iter)                                     \
-  BUCKYBALL_INSTRUCTION_R_R(FIELD(bank_id, 0, 7),                              \
-                            FIELD(wr_bank_id, 0, 7) | FIELD(iter, 8, 23),      \
-                            BB_RELU_FUNC7)
+  BUCKYBALL_INSTRUCTION_R_R(                                                   \
+      (BB_BANK0(bank_id) | BB_BANK2(wr_bank_id) | BB_RD0 | BB_WR),             \
+      (FIELD(iter, 0, 9)), BB_RELU_FUNC7)
 
 #endif // _BB_RELU_H_

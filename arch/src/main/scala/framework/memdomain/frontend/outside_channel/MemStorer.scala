@@ -27,6 +27,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
     val dmaResp = Flipped(Decoupled(new BBWriteResponse))
 
     val bankRead = Flipped(new BankRead(b))
+
+    // Query interface to get group count
+    val query_vbank_id    = Output(UInt(8.W))
+    val query_group_count = Input(UInt(4.W))
   })
 
   // -----------------------------
@@ -35,14 +39,16 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_done :: Nil = Enum(6)
   val state                                                                                             = RegInit(s_idle)
 
-  val rob_id_reg   = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
-  val iter_reg     = RegInit(0.U(10.W))
-  val stride_reg   = RegInit(0.U(10.W))
-  val rd_bank_reg  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rob_id_reg      = RegInit(0.U(rob_id_width.W))
+  val mem_addr_reg    = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val iter_reg        = RegInit(0.U(10.W))
+  val stride_reg      = RegInit(0.U(10.W))
+  val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val group_count_reg = RegInit(1.U(4.W)) // Store group count for current operation
 
-  // which SRAM "row" we are reading (0..iter-1)
-  val sram_row = RegInit(0.U(10.W))
+  // Address and group counters
+  val addr_counter  = RegInit(0.U(10.W)) // Row address counter
+  val group_counter = RegInit(0.U(4.W))  // Group counter within a row
 
   // -----------------------------
   // Pending buffer for SRAM resp
@@ -70,10 +76,16 @@ class MemStorer(val b: GlobalConfig) extends Module {
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
     rob_id_reg   := io.cmdReq.bits.rob_id
     mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
-    iter_reg     := io.cmdReq.bits.cmd.iter
     rd_bank_reg  := io.cmdReq.bits.cmd.bank_id
     stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
-    sram_row     := 0.U
+
+    // Query and save group count
+    group_count_reg := io.query_group_count
+    iter_reg        := io.cmdReq.bits.cmd.iter
+
+    // Initialize counters
+    addr_counter  := 0.U
+    group_counter := 0.U
 
     pending            := false.B
     data_buffer        := 0.U
@@ -83,16 +95,21 @@ class MemStorer(val b: GlobalConfig) extends Module {
     state := s_issue_sram_req
   }
 
+  // Drive query interface
+  // When idle and cmdReq is valid, query the incoming bank_id
+  // Otherwise use the registered bank_id
+  io.query_vbank_id := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, rd_bank_reg)
+
   // -----------------------------
   // SRAM read request
   // -----------------------------
-  io.bankRead.rob_id       := rob_id_reg
-  io.bankRead.bank_id      := target_bank
-  io.bankRead.ball_id      := 0.U
-  io.bankRead.group_id := sram_row(1, 0)
+  io.bankRead.rob_id   := rob_id_reg
+  io.bankRead.bank_id  := target_bank
+  io.bankRead.ball_id  := 0.U
+  io.bankRead.group_id := group_counter
 
   io.bankRead.io.req.valid     := (state === s_issue_sram_req)
-  io.bankRead.io.req.bits.addr := sram_row
+  io.bankRead.io.req.bits.addr := addr_counter
 
   // SRAMBank read resp is a 1-cycle pulse, so we must ALWAYS be ready to take it,
   // but only if we don't already hold a pending beat.
@@ -101,6 +118,15 @@ class MemStorer(val b: GlobalConfig) extends Module {
   when(state === s_issue_sram_req) {
     // Once request handshakes, wait for resp
     when(io.bankRead.io.req.fire) {
+      // Debug: print all reads
+      printf(
+        "[MemStorer] Issue: addr=%d group_id=%d bank_id=%d iter=%d group_count=%d\n",
+        addr_counter,
+        group_counter,
+        target_bank,
+        iter_reg,
+        group_count_reg
+      )
       state := s_wait_sram_resp
     }
   }
@@ -110,20 +136,24 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   val bank_resp_fire = io.bankRead.io.resp.fire
   when(bank_resp_fire) {
-    pending    := true.B
-    pendData   := io.bankRead.io.resp.bits.data
-    pendIsLast := (sram_row + 1.U >= iter_reg) && (iter_reg =/= 0.U) // last row beat
+    pending  := true.B
+    pendData := io.bankRead.io.resp.bits.data
+    // Last beat: last row and last group
+    val is_last_row   = addr_counter >= iter_reg - 1.U
+    val is_last_group = group_counter >= group_count_reg - 1.U
+    pendIsLast := is_last_row && is_last_group && (iter_reg =/= 0.U)
     state      := s_have_sram_beat
   }
 
   // -----------------------------
-  // Address calculation (same as your pattern, but use sram_row)
-  // NOTE: you used a 2D style addressing with stride; keep same formula.
+  // Address calculation
+  // For multi-bank: each row has group_count groups, each group is line_bytes
+  // So: offset = addr * (group_count * line_bytes) + group * line_bytes
   // -----------------------------
   val current_mem_addr =
     mem_addr_reg +
-      sram_row(1, 0) * line_bytes.U +
-      ((sram_row >> 2) << 2) * stride_reg * line_bytes.U
+      addr_counter * group_count_reg * line_bytes.U +
+      group_counter * line_bytes.U
 
   val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
 
@@ -234,15 +264,41 @@ class MemStorer(val b: GlobalConfig) extends Module {
       // Mark current beat consumed
       pending := false.B
 
-      // advance row
+      // Check if this was the last beat before advancing counters
+      val is_last_row   = addr_counter >= iter_reg - 1.U
+      val is_last_group = group_counter >= group_count_reg - 1.U
+      val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
+
+      // Debug
+      printf(
+        "[MemStorer] DMA fire: addr=%d group=%d is_last_row=%d is_last_group=%d all_done=%d\n",
+        addr_counter,
+        group_counter,
+        is_last_row,
+        is_last_group,
+        all_done
+      )
+
+      // Advance counters
       when(iter_reg =/= 0.U) {
-        sram_row := sram_row + 1.U
+        when(group_counter + 1.U < group_count_reg) {
+          // Move to next group in same row
+          group_counter := group_counter + 1.U
+          printf("[MemStorer] Next group: new_group=%d\n", group_counter + 1.U)
+        }.otherwise {
+          // Move to next row, reset group counter
+          group_counter := 0.U
+          addr_counter  := addr_counter + 1.U
+          printf("[MemStorer] Next row: new_addr=%d\n", addr_counter + 1.U)
+        }
       }
 
-      // finish condition
-      when(pendIsLast || iter_reg === 0.U) {
+      // Decide next state based on completion check done BEFORE counter update
+      when(pendIsLast || iter_reg === 0.U || all_done) {
+        printf("[MemStorer] Going to DONE\n")
         state := s_done
       }.otherwise {
+        printf("[MemStorer] Going to issue next req\n")
         state := s_issue_sram_req
       }
     }

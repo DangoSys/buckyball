@@ -53,33 +53,27 @@ void cpu_nn_forward(elem_t *input, elem_t *w1, elem_t *w2, result_t *hidden,
 
 // Execute hardware matrix multiplication
 void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
-  // Transpose left matrix
-  static elem_t a_transposed[DIM * DIM] __attribute__((aligned(64)));
-  transpose_u8_matrix(a, a_transposed, size, size);
-
-  // Move matrices to scratchpad
-  // spad0: operand A, offset 0
+  // spad0: original A
   uint32_t op1_bank_id = 0;
-  // spad1: operand B, offset 0
+  // spad1: operand B
   uint32_t op2_bank_id = 1;
-  // acc0: write to accumulator, offset 0
+  // acc0: write to accumulator
   int acc_bank_id = 2; // virtual bank id
+  // spad3: transposed A
+  uint32_t a_transposed_bank_id = 3;
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc(a_transposed_bank_id, 1, 1);
 
-  bb_mvin((uintptr_t)a_transposed, op1_bank_id, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_mvin((uintptr_t)c, acc_bank_id, size << 2, 1);
-  bb_fence();
+  bb_transpose(op1_bank_id, a_transposed_bank_id, size, 0);
+  bb_mvin((uintptr_t)c, acc_bank_id, size, 1);
 
-  // Execute matrix multiplication
-  bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
-  bb_fence();
-
-  // Move result back
-  bb_mvout((uintptr_t)c, acc_bank_id, size << 2, 1);
+  bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
+  bb_mvout((uintptr_t)c, acc_bank_id, size, 1);
   bb_fence();
 }
 

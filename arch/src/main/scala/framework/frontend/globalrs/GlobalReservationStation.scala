@@ -7,10 +7,11 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
+import framework.frontend.scoreboard.{BankAccessInfo, BankScoreboard}
 import framework.core.rocket.RoCCResponseBB
 
-// Global ROB entry - only contains basic information, does not include specific instruction decoding
-class GlobalRobEntry(b: GlobalConfig) extends Bundle {
+// Global ROB entry - contains instruction + bank access info
+class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
   val cmd    = new PostGDCmd(b)
   val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
@@ -22,8 +23,6 @@ class GlobalRsIssue(b: GlobalConfig) extends GlobalRobEntry(b)
 class GlobalRsComplete(b: GlobalConfig) extends Bundle {
   val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
-
-// No additional interface Bundle needed, defined directly in IO
 
 // Global reservation station - between GlobalDecoder and each Domain
 @instantiable
@@ -57,33 +56,33 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
   val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
 
 // -----------------------------------------------------------------------------
-// Fence handling - fence instructions require ROB to be empty before execution
+// Fence handling — fence does NOT enter ROB.
+// When a fence arrives, hold busy (stop CPU) until ROB drains completely.
 // -----------------------------------------------------------------------------
-  val fenceActive = RegInit(false.B)
-  // Cannot use fire, would form a loop
-  val func7       = io.global_decode_cmd_i.bits.cmd.funct
-  val isFenceCmd  = io.global_decode_cmd_i.valid && (func7 === FENCE_BITPAT)
-  val robEmpty    = rob.io.empty
+  val isFenceCmd = io.global_decode_cmd_i.valid && io.global_decode_cmd_i.bits.isFence
 
-  // Fence state machine: only activate when fence instruction is accepted (fire)
-  when(io.global_decode_cmd_i.fire && isFenceCmd && !fenceActive) {
+  // Fence active state: set when fence arrives, cleared when ROB is empty
+  val fenceActive = RegInit(false.B)
+  when(isFenceCmd && !fenceActive) {
     fenceActive := true.B
   }
-  when(fenceActive && robEmpty) {
+  when(fenceActive && rob.io.empty) {
     fenceActive := false.B
   }
 
 // -----------------------------------------------------------------------------
-// Inbound - instruction allocation (Fence instructions do not enter ROB)
+// Inbound - instruction allocation (only non-fence instructions enter ROB)
 // -----------------------------------------------------------------------------
-  // Filter out fence instructions (they don't need ROB tracking)
-  rob.io.alloc.valid := io.global_decode_cmd_i.valid && !isFenceCmd
+  rob.io.alloc.valid := io.global_decode_cmd_i.valid && !io.global_decode_cmd_i.bits.isFence && !fenceActive
   rob.io.alloc.bits  := io.global_decode_cmd_i.bits
 
-  // Backpressure logic:
-  // - Normal instructions: wait for ROB ready
-  // - Fence instructions: wait for ROB empty (to ensure ordering)
-  io.global_decode_cmd_i.ready := Mux(isFenceCmd, robEmpty, rob.io.alloc.ready)
+  // Backpressure: during fence, accept the fence cmd immediately but block further cmds
+  // until ROB drains. For normal cmds, wait for ROB ready.
+  io.global_decode_cmd_i.ready := Mux(
+    io.global_decode_cmd_i.bits.isFence,
+    !fenceActive,                      // Accept fence if not already processing one
+    rob.io.alloc.ready && !fenceActive // Normal cmd: ROB ready and no fence active
+  )
 
 // -----------------------------------------------------------------------------
 // Outbound - instruction issue (dispatch to corresponding domain based on domain_id)
@@ -143,11 +142,9 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Response generation
 // -----------------------------------------------------------------------------
-  // Buckyball does not generate RoCC responses for normal instructions
-  // Only performance counter or special commands would generate responses
-  // This matches Gemmini's behavior where io.resp is only connected to counters
   io.rs_rocc_o.resp.valid     := false.B
   io.rs_rocc_o.resp.bits.rd   := 0.U
   io.rs_rocc_o.resp.bits.data := 0.U
+  // busy when ROB is not empty OR fence is active (waiting for drain)
   io.rs_rocc_o.busy           := !rob.io.empty || fenceActive
 }

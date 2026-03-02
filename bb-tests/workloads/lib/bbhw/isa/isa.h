@@ -21,6 +21,17 @@ typedef int32_t result_t;
 #define FIELD(val, start_bit, end_bit)                                         \
   (((val) & ((1UL << ((end_bit) - (start_bit) + 1)) - 1)) << (start_bit))
 
+// Unified rs1 bank encoding flags (bits 24-26)
+// bit 24 = rd_bank_0_valid, bit 25 = rd_bank_1_valid, bit 26 = wr_bank_valid
+#define BB_RD0 (1UL << 24)
+#define BB_RD1 (1UL << 25)
+#define BB_WR (1UL << 26)
+
+// rs1 bank field helpers
+#define BB_BANK0(id) FIELD(id, 0, 7)
+#define BB_BANK1(id) FIELD(id, 8, 15)
+#define BB_BANK2(id) FIELD(id, 16, 23)
+
 // Generic RISC-V custom instruction macro
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, %c2, x0, %0, %1"               \
@@ -32,20 +43,10 @@ typedef int32_t result_t;
 #include "23_mset.c"
 #include "24_mvin.c"
 #include "25_mvout.c"
-#include "26_bbfp_mul.c"
-#include "27_matmul_ws.c"
 #include "31_fence.c"
 #include "32_mul_warp16.c"
 #include "33_im2col.c"
 #include "34_transpose.c"
 #include "38_relu.c"
-#include "39_bbus_config.c"
-#include "40_nnlut.c"
-#include "41_snn.c"
-#include "42_abft_systolic.c"
-#include "43_conv.c"
-#include "44_cim.c"
-#include "45_transfer.c"
-#include "7_flush.c"
 
 #endif // BUCKYBALL_ISA_H

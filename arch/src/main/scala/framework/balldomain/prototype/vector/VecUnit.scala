@@ -71,10 +71,10 @@ class VecUnit(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.req <> VecLoadUnit.io.bankReadReq(i)
     VecLoadUnit.io.bankReadResp(i) <> io.bankRead(i).io.resp
     if (i == 0) {
-      io.bankRead(i).bank_id      := VecLoadUnit.io.op1_bank_o
+      io.bankRead(i).bank_id  := VecLoadUnit.io.op1_bank_o
       io.bankRead(i).group_id := 0.U
     } else if (i == 1) {
-      io.bankRead(i).bank_id      := VecLoadUnit.io.op2_bank_o
+      io.bankRead(i).bank_id  := VecLoadUnit.io.op2_bank_o
       io.bankRead(i).group_id := 0.U
     }
   }
@@ -91,11 +91,29 @@ class VecUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
   VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
+
+  // Debug: print wr_bank_o
+  when(VecStoreUnit.io.ctrl_st_i.fire) {
+    printf("[VecUnit] VecStoreUnit wr_bank_o=%d\n", VecStoreUnit.io.wr_bank_o)
+  }
+
   for (i <- 0 until outBW) {
     io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
     io.bankWrite(i).bank_id           := VecStoreUnit.io.wr_bank_o
     io.bankWrite(i).io.req.bits.wmode := true.B
-    io.bankWrite(i).group_id      := i.U
+    io.bankWrite(i).group_id          := i.U
+
+    // Debug: print all channels
+    when(io.bankWrite(i).io.req.valid) {
+      printf(
+        "[VecUnit] bankWrite[%d]: bank_id=%d group_id=%d valid=%d ready=%d\n",
+        i.U,
+        io.bankWrite(i).bank_id,
+        io.bankWrite(i).group_id,
+        io.bankWrite(i).io.req.valid,
+        io.bankWrite(i).io.req.ready
+      )
+    }
   }
   VecCtrlUnit.io.cmdResp_i <> VecStoreUnit.io.cmdResp_o
 

@@ -48,6 +48,10 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
     val config = Decoupled(new MemConfigerIO(b))
 
+    // Query interface to backend for group count
+    val query_vbank_id    = Output(UInt(8.W))
+    val query_group_count = Input(UInt(4.W))
+
     // Busy signal
     val busy = Output(Bool())
   })
@@ -73,7 +77,15 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memDecoder.io.cmd_i.valid := io.global_issue_i.valid
   memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
   io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
+
+  // Config signal goes to backend
   io.config <> configer.io.config
+
+  // Connect query interfaces
+  // Use memLoader's query by default, memStorer will override when active
+  io.query_vbank_id              := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
+  memLoader.io.query_group_count := io.query_group_count
+  memStorer.io.query_group_count := io.query_group_count
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation

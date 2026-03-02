@@ -11,6 +11,7 @@ import freechips.rocketchip.tile._
 import framework.frontend.decoder.GISA._
 import framework.memdomain.frontend.cmd_channel.decoder.DISA._
 import framework.gpdomain.sequencer.decoder.DISA._
+import framework.frontend.scoreboard.BankAccessInfo
 
 import framework.core.rocket.RoCCCommandBB
 
@@ -18,13 +19,17 @@ class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
   val cmd = new RoCCCommandBB(b.core.xLen)
 }
 
-class PostGDCmd(b: GlobalConfig) extends Bundle {
-  val domain_id = UInt(4.W)
-  val cmd       = new RoCCCommandBB(b.core.xLen)
+class PostGDCmd(val b: GlobalConfig) extends Bundle {
+  val domain_id  = UInt(4.W)
+  val cmd        = new RoCCCommandBB(b.core.xLen)
+  val bankAccess = new BankAccessInfo(log2Up(b.memDomain.bankNum))
+  val isFence    = Bool()
 }
 
 @instantiable
 class GlobalDecoder(val b: GlobalConfig) extends Module {
+
+  val bankIdLen = b.frontend.bank_id_len
 
   @public
   val io = IO(new Bundle {
@@ -41,6 +46,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
 
   val func7  = io.id_i.bits.cmd.funct
   val opcode = io.id_i.bits.cmd.opcode
+  val rs1    = io.id_i.bits.cmd.rs1Data
 
   // Instruction type determination: distinguish Ball, Mem, Fence, GP (RVV) instructions
   val is_mem_inst = (func7 === MVIN_BITPAT) ||
@@ -67,8 +73,48 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     )
   )
 
+  // -------------------------------------------------------------------------
+  // Bank access info extraction — read valid flags from rs1[24:26]
+  //
+  // Unified rs1 layout (defined in isa.h):
+  //   rs1[7:0]   = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
+  //   rs1[15:8]  = bank_1  (rd_bank_1, dual-operand only)
+  //   rs1[23:16] = bank_2  (wr_bank for Ball instructions)
+  //   rs1[24]    = rd_bank_0_valid flag (BB_RD0)
+  //   rs1[25]    = rd_bank_1_valid flag (BB_RD1)
+  //   rs1[26]    = wr_bank_valid flag (BB_WR)
+  //   rs1[63:27] = instruction-specific (mem_addr for MVIN/MVOUT, etc.)
+  // -------------------------------------------------------------------------
+  val bankAccess = Wire(new BankAccessInfo(bankIdLen))
+
+  bankAccess.rd_bank_0_valid := rs1(24)
+  bankAccess.rd_bank_0_id    := rs1(bankIdLen - 1, 0)
+  bankAccess.rd_bank_1_valid := rs1(25)
+  bankAccess.rd_bank_1_id    := rs1(bankIdLen + 7, 8)
+  bankAccess.wr_bank_valid   := rs1(26)
+  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[7:0])
+  // For Ball instructions, wr_bank is bank_2 (rs1[23:16])
+  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 15, 16))
+
   // Output control
-  io.id_o.valid          := io.id_i.valid
-  io.id_o.bits.domain_id := domain_id
-  io.id_o.bits.cmd       := io.id_i.bits.cmd
+  io.id_o.valid           := io.id_i.valid
+  io.id_o.bits.domain_id  := domain_id
+  io.id_o.bits.cmd        := io.id_i.bits.cmd
+  io.id_o.bits.bankAccess := bankAccess
+  io.id_o.bits.isFence    := is_frontend_inst
+
+  // Debug: print bank access info for NPU instructions
+  when(io.id_o.fire && !is_frontend_inst && !is_gp_inst) {
+    printf(
+      "[GD] func7=%d rs1=0x%x rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      func7,
+      rs1,
+      bankAccess.rd_bank_0_valid,
+      bankAccess.rd_bank_0_id,
+      bankAccess.rd_bank_1_valid,
+      bankAccess.rd_bank_1_id,
+      bankAccess.wr_bank_valid,
+      bankAccess.wr_bank_id
+    )
+  }
 }

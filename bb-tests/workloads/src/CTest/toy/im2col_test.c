@@ -17,24 +17,20 @@
 #define LANES_PER_BEAT 16
 
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
-static elem_t output_matrix_b[EXPECTED_ROWS * EXPECTED_COLS] __attribute__((aligned(64)));
-static elem_t expected_matrix[EXPECTED_ROWS * EXPECTED_COLS] __attribute__((aligned(64)));
+static elem_t output_matrix_b[EXPECTED_ROWS * EXPECTED_COLS]
+    __attribute__((aligned(64)));
+static elem_t expected_matrix[EXPECTED_ROWS * EXPECTED_COLS]
+    __attribute__((aligned(64)));
 
-static int conv_num(void)
-{
+static int conv_num(void) {
   return (INROW - KROW + 1 - STARTROW) * (INCOL - KCOL + 1 - STARTCOL);
 }
 
-static int kernel_elems(void)
-{
-  return KROW * KCOL;
-}
+static int kernel_elems(void) { return KROW * KCOL; }
 
 static void build_expected_im2col_matrix(elem_t *input, elem_t *expected,
-                                         int inrow, int incol,
-                                         int krow, int kcol,
-                                         int startrow, int startcol)
-{
+                                         int inrow, int incol, int krow,
+                                         int kcol, int startrow, int startcol) {
   clear_i8_matrix(expected, EXPECTED_ROWS, EXPECTED_COLS);
 
   int row_end = inrow - krow;
@@ -42,15 +38,11 @@ static void build_expected_im2col_matrix(elem_t *input, elem_t *expected,
   int kernel = krow * kcol;
   int window_idx = 0;
 
-  for (int r = startrow; r <= row_end; r++)
-  {
-    for (int c = startcol; c <= col_end; c++)
-    {
+  for (int r = startrow; r <= row_end; r++) {
+    for (int c = startcol; c <= col_end; c++) {
       int elem_idx = 0;
-      for (int kr = 0; kr < krow; kr++)
-      {
-        for (int kc = 0; kc < kcol; kc++)
-        {
+      for (int kr = 0; kr < krow; kr++) {
+        for (int kc = 0; kc < kcol; kc++) {
           expected[window_idx * kernel + elem_idx] =
               input[(r + kr) * incol + (c + kc)];
           elem_idx++;
@@ -61,8 +53,7 @@ static void build_expected_im2col_matrix(elem_t *input, elem_t *expected,
   }
 }
 
-void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size)
-{
+void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size) {
   (void)test_name;
   (void)size;
 
@@ -74,7 +65,6 @@ void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size)
   bb_mem_alloc(op2_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)a, op1_bank_id, 32, 1);
-  bb_fence();
   uint64_t krow = KROW;
   uint64_t kcol = KCOL;
   uint64_t inrow = INROW;
@@ -85,13 +75,11 @@ void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size)
   // startcol);
   bb_im2col(op1_bank_id, op2_bank_id, krow, kcol, inrow, incol, startrow,
             startcol);
-  bb_fence();
   bb_mvout((uintptr_t)b, op2_bank_id, conv_num() / kernel_elems(), 1);
   bb_fence();
 }
 
-int run_test(const char *test_name, elem_t *a, elem_t *b, int size)
-{
+int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   int conv = conv_num();
   int elems = kernel_elems();
 
@@ -101,37 +89,28 @@ int run_test(const char *test_name, elem_t *a, elem_t *b, int size)
 
   hw_im2col(test_name, a, b, size);
 
-
-  if (compare_i8_matrices(b, expected_matrix, conv, elems))
-  {
+  if (compare_i8_matrices(b, expected_matrix, conv, elems)) {
     printf("%s compare test PASSED\n", test_name);
     return 1;
-  }
-  else
-  {
+  } else {
     printf("%s compare test FAILED\n", test_name);
     return 0;
   }
 }
 
-int test_im2col()
-{
+int test_im2col() {
   init_sequence_matrix(input_matrix_a, DIM, DIM);
   return run_test("Im2col", input_matrix_a, output_matrix_b, DIM);
 }
 
-int main()
-{
+int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
   int passed = test_im2col();
-  if (passed)
-  {
+  if (passed) {
     printf("Im2col test PASSED\n");
-  }
-  else
-  {
+  } else {
     printf("Im2col test FAILED\n");
   }
 #ifdef MULTICORE
