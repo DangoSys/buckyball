@@ -118,15 +118,6 @@ class MemStorer(val b: GlobalConfig) extends Module {
   when(state === s_issue_sram_req) {
     // Once request handshakes, wait for resp
     when(io.bankRead.io.req.fire) {
-      // Debug: print all reads
-      printf(
-        "[MemStorer] Issue: addr=%d group_id=%d bank_id=%d iter=%d group_count=%d\n",
-        addr_counter,
-        group_counter,
-        target_bank,
-        iter_reg,
-        group_count_reg
-      )
       state := s_wait_sram_resp
     }
   }
@@ -269,36 +260,22 @@ class MemStorer(val b: GlobalConfig) extends Module {
       val is_last_group = group_counter >= group_count_reg - 1.U
       val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
 
-      // Debug
-      printf(
-        "[MemStorer] DMA fire: addr=%d group=%d is_last_row=%d is_last_group=%d all_done=%d\n",
-        addr_counter,
-        group_counter,
-        is_last_row,
-        is_last_group,
-        all_done
-      )
-
       // Advance counters
       when(iter_reg =/= 0.U) {
         when(group_counter + 1.U < group_count_reg) {
           // Move to next group in same row
           group_counter := group_counter + 1.U
-          printf("[MemStorer] Next group: new_group=%d\n", group_counter + 1.U)
         }.otherwise {
           // Move to next row, reset group counter
           group_counter := 0.U
           addr_counter  := addr_counter + 1.U
-          printf("[MemStorer] Next row: new_addr=%d\n", addr_counter + 1.U)
         }
       }
 
       // Decide next state based on completion check done BEFORE counter update
       when(pendIsLast || iter_reg === 0.U || all_done) {
-        printf("[MemStorer] Going to DONE\n")
         state := s_done
       }.otherwise {
-        printf("[MemStorer] Going to issue next req\n")
         state := s_issue_sram_req
       }
     }

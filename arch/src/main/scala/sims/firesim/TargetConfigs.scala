@@ -14,7 +14,7 @@ class WithBootROM
       case BootROMLocated(x) =>
         val chipyardBootROM =
           new File(s"./thirdparty/chipyard/generators/testchipip/bootrom/bootrom.rv${site(MaxXLen)}.img")
-        val firesimBootROM = new File(
+        val firesimBootROM  = new File(
           s"./thirdparty/chipyard/target-rtl/chipyard/generators/testchipip/bootrom/bootrom.rv${site(MaxXLen)}.img"
         )
 

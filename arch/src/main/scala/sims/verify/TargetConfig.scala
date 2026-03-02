@@ -52,24 +52,25 @@ class TargetBall(ballType: BallType, b: GlobalConfig) extends Module with HasBli
 object BallTopMain extends App {
 
   // Select Ball type from command line arguments
-  val ballType = if (args.isEmpty) {
-    println("Usage: BallTopMain <ball-type> [firtool-opts...]")
-    println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball, nnlutball")
-    println("Using default: vecball")
-    VecBallType
-  } else {
-    args(0).toLowerCase match {
-      case "vecball"       => VecBallType
-      case "matrixball"    => MatrixBallType
-      case "transposeball" => TransposeBallType
-      case "im2colball"    => Im2colBallType
-      case "reluball"      => ReluBallType
-      case "nnlutball"     => NNLutBallType
-      case other           =>
-        println(s"Unknown ball type: $other, using vecball")
-        VecBallType
+  val ballType =
+    if (args.isEmpty) {
+      println("Usage: BallTopMain <ball-type> [firtool-opts...]")
+      println("Available ball types: vecball, matrixball, transposeball, im2colball, reluball, nnlutball")
+      println("Using default: vecball")
+      VecBallType
+    } else {
+      args(0).toLowerCase match {
+        case "vecball"       => VecBallType
+        case "matrixball"    => MatrixBallType
+        case "transposeball" => TransposeBallType
+        case "im2colball"    => Im2colBallType
+        case "reluball"      => ReluBallType
+        case "nnlutball"     => NNLutBallType
+        case other           =>
+          println(s"Unknown ball type: $other, using vecball")
+          VecBallType
+      }
     }
-  }
 
   val b: GlobalConfig = GlobalConfig()
 

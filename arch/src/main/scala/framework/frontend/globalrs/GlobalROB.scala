@@ -10,6 +10,7 @@ import framework.frontend.scoreboard.BankScoreboard
 
 // DPI-C BlackBox for instruction trace
 class ITraceDPI extends BlackBox with HasBlackBoxInline {
+
   val io = IO(new Bundle {
     val is_issue  = Input(UInt(8.W))
     val rob_id    = Input(UInt(32.W))
@@ -20,33 +21,35 @@ class ITraceDPI extends BlackBox with HasBlackBoxInline {
     val enable    = Input(Bool())
   })
 
-  setInline("ITraceDPI.v",
+  setInline(
+    "ITraceDPI.v",
     """
-    |import "DPI-C" function void dpi_itrace(
-    |  input byte unsigned is_issue,
-    |  input int unsigned rob_id,
-    |  input int unsigned domain_id,
-    |  input int unsigned funct,
-    |  input longint unsigned rs1,
-    |  input longint unsigned rs2
-    |);
-    |
-    |module ITraceDPI(
-    |  input [7:0] is_issue,
-    |  input [31:0] rob_id,
-    |  input [31:0] domain_id,
-    |  input [31:0] funct,
-    |  input [63:0] rs1,
-    |  input [63:0] rs2,
-    |  input enable
-    |);
-    |  always @(*) begin
-    |    if (enable) begin
-    |      dpi_itrace(is_issue, rob_id, domain_id, funct, rs1, rs2);
-    |    end
-    |  end
-    |endmodule
-    """.stripMargin)
+      |import "DPI-C" function void dpi_itrace(
+      |  input byte unsigned is_issue,
+      |  input int unsigned rob_id,
+      |  input int unsigned domain_id,
+      |  input int unsigned funct,
+      |  input longint unsigned rs1,
+      |  input longint unsigned rs2
+      |);
+      |
+      |module ITraceDPI(
+      |  input [7:0] is_issue,
+      |  input [31:0] rob_id,
+      |  input [31:0] domain_id,
+      |  input [31:0] funct,
+      |  input [63:0] rs1,
+      |  input [63:0] rs2,
+      |  input enable
+      |);
+      |  always @(*) begin
+      |    if (enable) begin
+      |      dpi_itrace(is_issue, rob_id, domain_id, funct, rs1, rs2);
+      |    end
+      |  end
+      |endmodule
+    """.stripMargin
+  )
 }
 
 @instantiable
@@ -134,11 +137,18 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     tailPtr      := Mux(tailPtr === (b.frontend.rob_entries - 1).U, 0.U, tailPtr + 1.U)
     robIdCounter := Mux(robIdCounter === (b.frontend.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
 
-    printf("[ROB ALLOC] rob_id=%d domain=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
-      robIdCounter, io.alloc.bits.domain_id, io.alloc.bits.cmd.funct,
-      io.alloc.bits.bankAccess.rd_bank_0_valid, io.alloc.bits.bankAccess.rd_bank_0_id,
-      io.alloc.bits.bankAccess.rd_bank_1_valid, io.alloc.bits.bankAccess.rd_bank_1_id,
-      io.alloc.bits.bankAccess.wr_bank_valid, io.alloc.bits.bankAccess.wr_bank_id)
+    printf(
+      "[ROB ALLOC] rob_id=%d domain=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      robIdCounter,
+      io.alloc.bits.domain_id,
+      io.alloc.bits.cmd.funct,
+      io.alloc.bits.bankAccess.rd_bank_0_valid,
+      io.alloc.bits.bankAccess.rd_bank_0_id,
+      io.alloc.bits.bankAccess.rd_bank_1_valid,
+      io.alloc.bits.bankAccess.rd_bank_1_id,
+      io.alloc.bits.bankAccess.wr_bank_valid,
+      io.alloc.bits.bankAccess.wr_bank_id
+    )
   }
 
 // =============================================================================
@@ -152,7 +162,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   when(io.complete.fire) {
     val completeId = io.complete.bits
-    robComplete(completeId) := true.B
+    robComplete(completeId)   := true.B
     // When complete, decrement issued count
     when(robIssued(completeId)) {
       issuedCount := issuedCount - 1.U
@@ -170,8 +180,12 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itrace.io.rs2       := robEntries(completeId).cmd.cmd.rs2
     itrace.io.enable    := true.B
 
-    printf("[ROB COMPLETE] rob_id=%d domain=%d func7=%d\n",
-      completeId, robEntries(completeId).cmd.domain_id, robEntries(completeId).cmd.cmd.funct)
+    printf(
+      "[ROB COMPLETE] rob_id=%d domain=%d func7=%d\n",
+      completeId,
+      robEntries(completeId).cmd.domain_id,
+      robEntries(completeId).cmd.cmd.funct
+    )
   }
 
 // =============================================================================
@@ -206,14 +220,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   // Debug: print when a candidate is blocked by hazard
   when(hasValid && scoreboard.hasHazard) {
-    printf("[ROB HAZARD] ptr=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
-      actualIssuePtr, robEntries(actualIssuePtr).cmd.cmd.funct,
+    printf(
+      "[ROB HAZARD] ptr=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      actualIssuePtr,
+      robEntries(actualIssuePtr).cmd.cmd.funct,
       robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_valid,
       robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_id,
       robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_valid,
       robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_id,
       robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_valid,
-      robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_id)
+      robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_id
+    )
   }
 
   // Can only issue if issue limit is not reached and no bank hazard
@@ -229,8 +246,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   scoreboard.issue.bits  := 0.U.asTypeOf(scoreboard.issue.bits)
 
   when(io.issue.fire) {
-    robIssued(issuePtr) := true.B
-    issuedCount         := issuedCount + 1.U
+    robIssued(issuePtr)    := true.B
+    issuedCount            := issuedCount + 1.U
     // Update scoreboard: claim bank resources
     scoreboard.issue.valid := true.B
     scoreboard.issue.bits  := robEntries(issuePtr).cmd.bankAccess
@@ -244,12 +261,19 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itrace.io.rs2       := robEntries(issuePtr).cmd.cmd.rs2
     itrace.io.enable    := true.B
 
-    printf("[ROB ISSUE] rob_id=%d domain=%d func7=%d ptr=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
-      robEntries(issuePtr).rob_id, robEntries(issuePtr).cmd.domain_id, robEntries(issuePtr).cmd.cmd.funct,
+    printf(
+      "[ROB ISSUE] rob_id=%d domain=%d func7=%d ptr=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      robEntries(issuePtr).rob_id,
+      robEntries(issuePtr).cmd.domain_id,
+      robEntries(issuePtr).cmd.cmd.funct,
       issuePtr,
-      robEntries(issuePtr).cmd.bankAccess.rd_bank_0_valid, robEntries(issuePtr).cmd.bankAccess.rd_bank_0_id,
-      robEntries(issuePtr).cmd.bankAccess.rd_bank_1_valid, robEntries(issuePtr).cmd.bankAccess.rd_bank_1_id,
-      robEntries(issuePtr).cmd.bankAccess.wr_bank_valid, robEntries(issuePtr).cmd.bankAccess.wr_bank_id)
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_0_valid,
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_0_id,
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_1_valid,
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_1_id,
+      robEntries(issuePtr).cmd.bankAccess.wr_bank_valid,
+      robEntries(issuePtr).cmd.bankAccess.wr_bank_id
+    )
   }
 
 // =============================================================================

@@ -37,8 +37,14 @@ in
     };
   });
 
-  # Scala formatter
-  scalafmt = pkgs.scalafmt;
+  # Scala formatter - use coursier to get 2.7.5
+  scalafmt = pkgs.writeShellApplication {
+    name = "scalafmt";
+    runtimeInputs = [ pkgs.coursier ];
+    text = ''
+      exec coursier launch org.scalameta:scalafmt-cli_2.13:2.7.5 -- "$@"
+    '';
+  };
 
   # Coursier - Scala dependency manager and launcher
   coursier = pkgs.coursier;

@@ -10,6 +10,7 @@ import framework.memdomain.backend.accpipe.AccPipe
 
 // DPI-C BlackBox for memory trace
 class MTraceDPI extends BlackBox with HasBlackBoxInline {
+
   val io = IO(new Bundle {
     val is_write = Input(UInt(8.W))
     val channel  = Input(UInt(32.W))
@@ -21,41 +22,43 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
     val enable   = Input(Bool())
   })
 
-  setInline("MTraceDPI.v",
+  setInline(
+    "MTraceDPI.v",
     """
-    |import "DPI-C" function void dpi_mtrace(
-    |  input byte unsigned is_write,
-    |  input int unsigned channel,
-    |  input int unsigned vbank_id,
-    |  input int unsigned group_id,
-    |  input int unsigned addr,
-    |  input longint unsigned data_lo,
-    |  input longint unsigned data_hi
-    |);
-    |
-    |module MTraceDPI(
-    |  input [7:0] is_write,
-    |  input [31:0] channel,
-    |  input [31:0] vbank_id,
-    |  input [31:0] group_id,
-    |  input [31:0] addr,
-    |  input [63:0] data_lo,
-    |  input [63:0] data_hi,
-    |  input enable
-    |);
-    |  always @(*) begin
-    |    if (enable) begin
-    |      dpi_mtrace(is_write, channel, vbank_id, group_id, addr, data_lo, data_hi);
-    |    end
-    |  end
-    |endmodule
-    """.stripMargin)
+      |import "DPI-C" function void dpi_mtrace(
+      |  input byte unsigned is_write,
+      |  input int unsigned channel,
+      |  input int unsigned vbank_id,
+      |  input int unsigned group_id,
+      |  input int unsigned addr,
+      |  input longint unsigned data_lo,
+      |  input longint unsigned data_hi
+      |);
+      |
+      |module MTraceDPI(
+      |  input [7:0] is_write,
+      |  input [31:0] channel,
+      |  input [31:0] vbank_id,
+      |  input [31:0] group_id,
+      |  input [31:0] addr,
+      |  input [63:0] data_lo,
+      |  input [63:0] data_hi,
+      |  input enable
+      |);
+      |  always @(*) begin
+      |    if (enable) begin
+      |      dpi_mtrace(is_write, channel, vbank_id, group_id, addr, data_lo, data_hi);
+      |    end
+      |  end
+      |endmodule
+    """.stripMargin
+  )
 }
 
 class MemRequestIO(b: GlobalConfig) extends Bundle {
-  val write        = Flipped(new SramWriteIO(b)) // midend sends write req into backend
-  val read         = Flipped(new SramReadIO(b))  // midend sends read req into backend
-  val bank_id      = Output(UInt(log2Up(b.memDomain.bankNum).W))
+  val write    = Flipped(new SramWriteIO(b)) // midend sends write req into backend
+  val read     = Flipped(new SramReadIO(b))  // midend sends read req into backend
+  val bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
   val group_id = Output(UInt(3.W))
 }
 
@@ -68,7 +71,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
-    val query_vbank_id = Input(UInt(8.W))
+    val query_vbank_id    = Input(UInt(8.W))
     val query_group_count = Output(UInt(4.W))
   })
 
@@ -92,9 +95,9 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // Mapping table
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
-    val valid        = Bool()
-    val vbank_id     = UInt(5.W)
-    val is_multi       = Bool()
+    val valid    = Bool()
+    val vbank_id = UInt(5.W)
+    val is_multi = Bool()
     val group_id = UInt(3.W)
   }
 
@@ -104,15 +107,15 @@ class MemBackend(val b: GlobalConfig) extends Module {
     mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && entry.is_multi).reduce(_ || _)
 
   def addEntry(
-    vbank_id:     UInt,
-    pbank_id:     UInt,
-    is_multi:       Bool,
+    vbank_id: UInt,
+    pbank_id: UInt,
+    is_multi: Bool,
     group_id: UInt
   ): Unit = {
     val entry = mappingTable(pbank_id)
-    entry.valid        := true.B
-    entry.vbank_id     := vbank_id
-    entry.is_multi       := is_multi
+    entry.valid    := true.B
+    entry.vbank_id := vbank_id
+    entry.is_multi := is_multi
     entry.group_id := group_id
   }
 
@@ -139,7 +142,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
-    accPipes(i).io.mem_req.bank_id      := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req.bank_id  := io.mem_req(i).bank_id
     accPipes(i).io.mem_req.group_id := io.mem_req(i).group_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
@@ -186,9 +189,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   val groupCounts = mappingTable.map { entry =>
     val matches = entry.valid && (entry.vbank_id === io.query_vbank_id)
-    val count = Mux(entry.is_multi, entry.group_id + 1.U, 1.U)
+    val count   = Mux(entry.is_multi, entry.group_id + 1.U, 1.U)
     Mux(matches, count, 0.U)
   }
+
   io.query_group_count := groupCounts.reduce((a, b) => Mux(a > b, a, b))
 
   // -----------------------------------------------------------------------------
@@ -229,13 +233,6 @@ class MemBackend(val b: GlobalConfig) extends Module {
           (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
 
       val hold_one = RegNext(hit_bank && req_valid, init = false.B)
-
-      // Debug: print when write request comes in
-      when(io.mem_req(i).write.req.valid && i.U < 4.U) {
-        printf("[Backend] ch=%d write req: vbank_id=%d group_id=%d\n", i.U, io.mem_req(i).bank_id, io.mem_req(i).group_id)
-        printf("[Backend]   pbank[%d]: valid=%d vbank=%d is_multi=%d group=%d hit=%d\n",
-          j.U, mappingTable(j).valid, mappingTable(j).vbank_id, mappingTable(j).is_multi, mappingTable(j).group_id, hit_bank)
-      }
 
       when((hit_bank && req_valid) || hold_one) {
         banks(j).io.sramRead <> accPipes(i).io.sramRead

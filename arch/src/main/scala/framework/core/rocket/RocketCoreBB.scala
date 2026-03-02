@@ -469,29 +469,30 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
             )
           else Nil))
 
-    val (ex_new_vl, ex_new_vconfig) = if (usingVector) {
-      val ex_new_vtype   = VType.fromUInt(MuxCase(
-        ex_rs(1),
-        Seq(
-          ex_reg_inst(31, 30).andR -> ex_reg_inst(29, 20),
-          !ex_reg_inst(31)         -> ex_reg_inst(30, 20)
+    val (ex_new_vl, ex_new_vconfig) =
+      if (usingVector) {
+        val ex_new_vtype   = VType.fromUInt(MuxCase(
+          ex_rs(1),
+          Seq(
+            ex_reg_inst(31, 30).andR -> ex_reg_inst(29, 20),
+            !ex_reg_inst(31)         -> ex_reg_inst(30, 20)
+          )
+        ))
+        val ex_avl         = Mux(
+          ex_ctrl.rxs1,
+          Mux(
+            ex_reg_inst(19, 15) === 0.U,
+            Mux(ex_reg_inst(11, 7) === 0.U, csr.io.vector.get.vconfig.vl, ex_new_vtype.vlMax),
+            ex_rs(0)
+          ),
+          ex_reg_inst(19, 15)
         )
-      ))
-      val ex_avl         = Mux(
-        ex_ctrl.rxs1,
-        Mux(
-          ex_reg_inst(19, 15) === 0.U,
-          Mux(ex_reg_inst(11, 7) === 0.U, csr.io.vector.get.vconfig.vl, ex_new_vtype.vlMax),
-          ex_rs(0)
-        ),
-        ex_reg_inst(19, 15)
-      )
-      val ex_new_vl      = ex_new_vtype.vl(ex_avl, csr.io.vector.get.vconfig.vl, false.B, false.B, false.B)
-      val ex_new_vconfig = Wire(new VConfig)
-      ex_new_vconfig.vtype := ex_new_vtype
-      ex_new_vconfig.vl    := ex_new_vl
-      (Some(ex_new_vl), Some(ex_new_vconfig))
-    } else { (None, None) }
+        val ex_new_vl      = ex_new_vtype.vl(ex_avl, csr.io.vector.get.vconfig.vl, false.B, false.B, false.B)
+        val ex_new_vconfig = Wire(new VConfig)
+        ex_new_vconfig.vtype := ex_new_vtype
+        ex_new_vconfig.vl    := ex_new_vl
+        (Some(ex_new_vl), Some(ex_new_vconfig))
+      } else { (None, None) }
 
     val alu = Module(new ALU)
     alu.io.dw  := ex_ctrl.alu_dw
@@ -991,7 +992,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
         val debug_rob = Module(new HardDebugROB(sz, 32))
         debug_rob.io.i_insn    := csr_trace_with_wdata
         debug_rob.io.should_wb := (wb_ctrl.wfd || (wb_ctrl.wxd && wb_waddr =/= 0.U)) &&
-        !csr.io.trace(0).exception
+          !csr.io.trace(0).exception
         debug_rob.io.has_wb    := wb_ctrl.wxd && wb_wen && !wb_set_sboard
         debug_rob.io.tag       := wb_waddr + Mux(wb_ctrl.wfd, 32.U, 0.U)
 
@@ -1067,15 +1068,16 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
     val fp_data_hazard_wb = id_ctrl.fp && wb_ctrl.wfd && checkHazards(fp_hazard_targets, _ === wb_waddr)
     val id_wb_hazard      = wb_reg_valid && (data_hazard_wb && wb_set_sboard || fp_data_hazard_wb)
 
-    val id_stall_fpu = if (usingFPU) {
-      val fp_sboard = new Scoreboard(32)
-      fp_sboard.set(((wb_dcache_miss || wb_ctrl.vec) && wb_ctrl.wfd || io.fpu.sboard_set) && wb_valid, wb_waddr)
-      val v_ll      = io.vector.map(v => v.resp.fire && v.resp.bits.fp).getOrElse(false.B)
-      fp_sboard.clear((dmem_resp_replay && dmem_resp_fpu) || v_ll, io.fpu.ll_resp_tag)
-      fp_sboard.clear(io.fpu.sboard_clr, io.fpu.sboard_clra)
+    val id_stall_fpu =
+      if (usingFPU) {
+        val fp_sboard = new Scoreboard(32)
+        fp_sboard.set(((wb_dcache_miss || wb_ctrl.vec) && wb_ctrl.wfd || io.fpu.sboard_set) && wb_valid, wb_waddr)
+        val v_ll      = io.vector.map(v => v.resp.fire && v.resp.bits.fp).getOrElse(false.B)
+        fp_sboard.clear((dmem_resp_replay && dmem_resp_fpu) || v_ll, io.fpu.ll_resp_tag)
+        fp_sboard.clear(io.fpu.sboard_clr, io.fpu.sboard_clra)
 
-      checkHazards(fp_hazard_targets, fp_sboard.read _)
-    } else false.B
+        checkHazards(fp_hazard_targets, fp_sboard.read _)
+      } else false.B
 
     val dcache_blocked = {
       // speculate that a blocked D$ will unblock the cycle after a Grant
@@ -1253,12 +1255,12 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
       long_latency_stall := csr.io.csr_stall || io.dmem.perf.blocked || id_reg_pause && !unpause
       clock_en           := clock_en_reg || ex_pc_valid || (!long_latency_stall && io.imem.resp.valid)
       clock_en_reg       :=
-        ex_pc_valid || mem_pc_valid || wb_pc_valid ||                          // instruction in flight
-        io.ptw.customCSRs.disableCoreClockGate ||                              // chicken bit
-        !div.io.req.ready ||                                                   // mul/div in flight
-        usingFPU.B && !io.fpu.fcsr_rdy ||                                      // long-latency FPU in flight
-        io.dmem.replay_next ||                                                 // long-latency load replaying
-        (!long_latency_stall && (ibuf.io.inst(0).valid || io.imem.resp.valid)) // instruction pending
+        ex_pc_valid || mem_pc_valid || wb_pc_valid ||                            // instruction in flight
+          io.ptw.customCSRs.disableCoreClockGate ||                              // chicken bit
+          !div.io.req.ready ||                                                   // mul/div in flight
+          usingFPU.B && !io.fpu.fcsr_rdy ||                                      // long-latency FPU in flight
+          io.dmem.replay_next ||                                                 // long-latency load replaying
+          (!long_latency_stall && (ibuf.io.inst(0).valid || io.imem.resp.valid)) // instruction pending
 
       assert(!(ex_pc_valid || mem_pc_valid || wb_pc_valid) || clock_en)
     }
@@ -1381,15 +1383,16 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
   def checkHazards(targets: Seq[(Bool, UInt)], cond: UInt => Bool) =
     targets.map(h => h._1 && cond(h._2)).reduce(_ || _)
 
-  def encodeVirtualAddress(a0: UInt, ea: UInt) = if (vaddrBitsExtended == vaddrBits) ea
-  else {
-    // efficient means to compress 64-bit VA into vaddrBits+1 bits
-    // (VA is bad if VA(vaddrBits) != VA(vaddrBits-1))
-    val b   = vaddrBitsExtended - 1
-    val a   = (a0 >> b).asSInt
-    val msb = Mux(a === 0.S || a === -1.S, ea(b), !ea(b - 1))
-    Cat(msb, ea(b - 1, 0))
-  }
+  def encodeVirtualAddress(a0: UInt, ea: UInt) =
+    if (vaddrBitsExtended == vaddrBits) ea
+    else {
+      // efficient means to compress 64-bit VA into vaddrBits+1 bits
+      // (VA is bad if VA(vaddrBits) != VA(vaddrBits-1))
+      val b   = vaddrBitsExtended - 1
+      val a   = (a0 >> b).asSInt
+      val msb = Mux(a === 0.S || a === -1.S, ea(b), !ea(b - 1))
+      Cat(msb, ea(b - 1, 0))
+    }
 
   class Scoreboard(n: Int, zero: Boolean = false) {
     def set(en:            Bool, addr: UInt): Unit = update(en, _next | mask(en, addr))

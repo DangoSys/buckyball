@@ -6,11 +6,11 @@ package framework.gpdomain.sequencer.decoder.attribute
 import framework.gpdomain.sequencer.decoder.T1DecodePattern
 
 trait ShiftUopType extends Uop
-object shiftUop0 extends ShiftUopType
-object shiftUop1 extends ShiftUopType
-object shiftUop2 extends ShiftUopType
-object shiftUop4 extends ShiftUopType
-object shiftUop6 extends ShiftUopType
+object shiftUop0   extends ShiftUopType
+object shiftUop1   extends ShiftUopType
+object shiftUop2   extends ShiftUopType
+object shiftUop4   extends ShiftUopType
+object shiftUop6   extends ShiftUopType
 
 object ShiftUop {
 
