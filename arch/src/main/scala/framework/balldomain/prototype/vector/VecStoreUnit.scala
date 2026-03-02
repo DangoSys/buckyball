@@ -69,13 +69,6 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
     iter_counter := 0.U
     data_valid   := false.B
     state        := busy
-
-    printf(
-      "[VecST_CTRL] Received ctrl: wr_bank=%d wr_bank_addr=%d iter=%d\n",
-      io.ctrl_st_i.bits.wr_bank,
-      io.ctrl_st_i.bits.wr_bank_addr,
-      io.ctrl_st_i.bits.iter
-    )
   }
 
 // -----------------------------------------------------------------------------
@@ -84,31 +77,6 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   io.ex_st_i.ready := (state === busy || state === write) && !data_valid
 
   when(io.ex_st_i.fire) {
-    // Debug: print first 8 results with all 16 elements
-    when(iter_counter < 8.U) {
-      printf(
-        "[VecST] iter=%d rst[0-15]=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d addr=%d\n",
-        iter_counter,
-        io.ex_st_i.bits.rst(0),
-        io.ex_st_i.bits.rst(1),
-        io.ex_st_i.bits.rst(2),
-        io.ex_st_i.bits.rst(3),
-        io.ex_st_i.bits.rst(4),
-        io.ex_st_i.bits.rst(5),
-        io.ex_st_i.bits.rst(6),
-        io.ex_st_i.bits.rst(7),
-        io.ex_st_i.bits.rst(8),
-        io.ex_st_i.bits.rst(9),
-        io.ex_st_i.bits.rst(10),
-        io.ex_st_i.bits.rst(11),
-        io.ex_st_i.bits.rst(12),
-        io.ex_st_i.bits.rst(13),
-        io.ex_st_i.bits.rst(14),
-        io.ex_st_i.bits.rst(15),
-        wr_bank_addr + iter_counter
-      )
-    }
-
     // Latch data
     data_valid := true.B
     data_addr  := wr_bank_addr + iter_counter
@@ -136,21 +104,10 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   when(state === write && data_valid) {
     val all_fired = channel_fired.reduce(_ && _)
 
-    printf("[VecST_WRITE] state=write data_valid=%d all_fired=%d iter_counter=%d\n", data_valid, all_fired, iter_counter)
-
     for (i <- 0 until outBW) {
       val elementsPerChannel = InputNum / outBW
       val startIdx           = i * elementsPerChannel
       val endIdx             = startIdx + elementsPerChannel - 1
-
-      // Debug: print each channel's status (always print, not just when !fired)
-      printf(
-        "[VecST_WRITE] ch[%d]: fired=%d valid=%d ready=%d\n",
-        i.U,
-        channel_fired(i),
-        io.bankWrite(i).req.valid,
-        io.bankWrite(i).req.ready
-      )
 
       // Only send request if this channel hasn't fired yet
       when(!channel_fired(i)) {
@@ -168,7 +125,6 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
     }
 
     when(all_fired) {
-      printf("[VecST_WRITE] All channels fired, advancing to next iter\n")
       data_valid   := false.B
       iter_counter := iter_counter + 1.U
 
@@ -179,10 +135,8 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
 
       // Check if this is the last iter
       when(iter_counter + 1.U >= iter) {
-        printf("[VecST_WRITE] Last iter, going to wait_last\n")
         state := wait_last
       }.otherwise {
-        printf("[VecST_WRITE] Going back to busy\n")
         state := busy
       }
     }

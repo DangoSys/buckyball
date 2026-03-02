@@ -15,44 +15,42 @@ jobs:
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
           echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
 
-      - name: Pull from the repository
+      - name: Reset to clean state
         shell: zsh {0}
         run: |
-          source ~/.zshrc
-          buckyball_exec
-          git fetch origin main
+          cd ~/Code/buckyball
+          setproxy
           git clean -fd
           git reset --hard ${{ github.sha }}
+          git checkout ${{ github.head_ref }}
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          setproxy
+          nix build
 
       - name: Build Workloads
         shell: zsh {0}
         run: |
-          source ~/.zshrc
-          buckyball_exec
-          rm -rf workflow/.motia || true
-          bbdev workload --build
+          cd ~/Code/buckyball
+          setproxy
+          nix develop -c bbdev workload --build
 
       - name: Build Verilator
         shell: zsh {0}
         run: |
-          source ~/.zshrc
-          buckyball_exec
-          rm -rf workflow/.motia || true
-          bbdev verilator --clean
-          rm -rf workflow/.motia || true
-          bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
-          rm -rf workflow/.motia || true
-          bbdev verilator --build '--jobs 16'
+          cd ~/Code/buckyball
+          nix develop -c bbdev verilator --clean
+          nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
+          nix develop -c bbdev verilator --build '--jobs 16'
 
       - name: Smoke Test
         shell: zsh {0}
         run: |
-          source ~/.zshrc
-          buckyball_exec
-          rm -rf workflow/.motia || true
-          bbdev sardine --run '--workload ctest'
-
-      - run: echo "🍏 CI Test is ${{ job.status }}."
+          cd ~/Code/buckyball
+          nix develop -c bbdev sardine --run '--workload ctest'
 
       # if check failed, revert the branch
       # - name: Revert Bad Commit
