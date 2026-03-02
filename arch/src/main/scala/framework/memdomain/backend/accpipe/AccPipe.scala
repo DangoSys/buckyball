@@ -30,12 +30,12 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val sramRead  = Flipped(new SramReadIO(b))  // AccPipe -> bank: req out, resp in
     val sramWrite = Flipped(new SramWriteIO(b)) // AccPipe -> bank: req out, resp in
 
-    val mem_req = Flipped(new MemRequestIO(b))
-    val is_multi  = Input(Bool())
+    val mem_req  = Flipped(new MemRequestIO(b))
+    val is_multi = Input(Bool())
 
-    val busy         = Output(Bool())
+    val busy     = Output(Bool())
     val group_id = Output(UInt(3.W))
-    val bank_id      = Output(UInt(b.memDomain.bankNum.W))
+    val bank_id  = Output(UInt(b.memDomain.bankNum.W))
   })
 
   val read :: write :: Nil = Enum(2)
