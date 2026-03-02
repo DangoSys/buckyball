@@ -50,36 +50,33 @@ class Transpose(val b: GlobalConfig) extends Module {
   }
 
   // -------------------------------
-  // State
+  // State: idle -> fill -> drain -> (fill or idle)
+  // For 16xN with stride = N/16:
+  //   fill(16) -> drain(16) -> fill(16) -> drain(16) -> ... -> idle
+  // Total: 32 * stride cycles
   // -------------------------------
-  val idle :: compute :: Nil = Enum(2)
-  val state                  = RegInit(idle)
+  val idle :: fill :: drain :: Nil = Enum(3)
+  val state                        = RegInit(idle)
 
   // -------------------------------
-  // Ping-pong row buffers:
-  // 2 blocks, each stores InputNum rows, each row has InputNum elems
+  // Single 16x16 register array
   // -------------------------------
-  val regArray = Reg(Vec(2 * InputNum, Vec(InputNum, UInt(inputWidth.W))))
+  val regArray = Reg(Vec(InputNum, Vec(InputNum, UInt(inputWidth.W))))
 
-  // which block are we filling / draining
-  val fillSel     = RegInit(0.U(1.W))                      // 0 or 1
-  val drainSel    = RegInit(0.U(1.W))                      // 0 or 1
-  val blockFull   = RegInit(VecInit(Seq.fill(2)(false.B)))
-  val fillRowIdx  = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
-  val drainColIdx = RegInit(0.U(log2Ceil(InputNum + 1).W)) // 0..InputNum
-  val draining    = RegInit(false.B)
-
-  // total progress counters (STRICTLY via fire)
-  val readReqCnt  = RegInit(0.U(32.W))
-  val readRespCnt = RegInit(0.U(32.W))
-  val writeReqCnt = RegInit(0.U(32.W))
-
-  // command fields
-  val raddr_reg = RegInit(0.U(32.W))
-  val waddr_reg = RegInit(0.U(32.W))
+  // Command fields
   val rbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val iter_reg  = RegInit(0.U(32.W))
+  val stride    = RegInit(1.U(32.W)) // iter / InputNum = addresses per row
+
+  // Counters
+  val fillIdx  = RegInit(0.U(log2Ceil(InputNum + 1).W)) // row being filled (0..15)
+  val drainIdx = RegInit(0.U(log2Ceil(InputNum + 1).W)) // column being drained (0..16)
+  val round    = RegInit(0.U(32.W))                     // which column-group (0..stride-1)
+
+  // Read request tracking
+  val readReqCnt  = RegInit(0.U(32.W))
+  val readRespCnt = RegInit(0.U(32.W))
 
   // -------------------------------
   // Default IO assignments
@@ -106,174 +103,109 @@ class Transpose(val b: GlobalConfig) extends Module {
   io.cmdResp.valid       := false.B
   io.cmdResp.bits.rob_id := rob_id_reg
 
-  // Always consume responses to avoid downstream backpressure deadlocks
-  io.bankRead(0).io.resp.ready  := (state === compute)
-  io.bankWrite(0).io.resp.ready := (state === compute)
+  io.bankRead(0).io.resp.ready  := (state =/= idle)
+  io.bankWrite(0).io.resp.ready := (state =/= idle)
 
   // -------------------------------
   // Helpers
   // -------------------------------
-  def blockBase(sel: UInt): UInt = Mux(sel === 0.U, 0.U, InputNum.U)
+  // Read address: strided to gather one column-group
+  // For round r, row i: addr = i * stride + r
+  def readAddr(row: UInt, r: UInt): UInt = row * stride + r
 
-  // "space available" means at least one block is not full
-  val hasFreeBlock = !(blockFull(0) && blockFull(1))
+  // Pack one column of regArray into a data word
+  def packColumn(col: UInt): UInt = {
+    Cat((0 until InputNum).reverse.map { r =>
+      regArray(r.U)(col)
+    })
+  }
 
   // -------------------------------
   // Main FSM
   // -------------------------------
   switch(state) {
     is(idle) {
-      // reset runtime flags (not mandatory, but keeps things clean)
       when(io.cmdReq.fire) {
-        state := compute
+        val iterVal   = io.cmdReq.bits.cmd.iter
+        val strideVal = iterVal >> log2Ceil(InputNum)
 
-        raddr_reg := 0.U
-        waddr_reg := 0.U
-        rbank_reg := io.cmdReq.bits.cmd.op1_bank
-        wbank_reg := io.cmdReq.bits.cmd.wr_bank
-        iter_reg  := io.cmdReq.bits.cmd.iter
-
+        rbank_reg   := io.cmdReq.bits.cmd.op1_bank
+        wbank_reg   := io.cmdReq.bits.cmd.wr_bank
+        iter_reg    := iterVal
+        stride      := Mux(strideVal === 0.U, 1.U, strideVal)
+        round       := 0.U
+        fillIdx     := 0.U
+        drainIdx    := 0.U
         readReqCnt  := 0.U
         readRespCnt := 0.U
-        writeReqCnt := 0.U
-
-        fillSel     := 0.U
-        drainSel    := 0.U
-        blockFull   := VecInit(Seq.fill(2)(false.B))
-        fillRowIdx  := 0.U
-        draining    := false.B
-        drainColIdx := 0.U
+        state       := fill
       }
     }
 
-    is(compute) {
-      // ---------------------------
-      // 1) READ REQ generation
-      // For 16xN transpose: input matrix has N/16 addresses per row (stride).
-      // We read one 16x16 column-group per round using strided addresses:
-      //   addr = row * stride + round
-      // where row = readReqCnt % InputNum, round = readReqCnt / InputNum
-      // ---------------------------
-      val stride    = iter_reg >> log2Ceil(InputNum)
-      val readRow   = readReqCnt(log2Ceil(InputNum) - 1, 0)
-      val readRound = readReqCnt >> log2Ceil(InputNum)
-
-      val wantRead = (readReqCnt < iter_reg) && hasFreeBlock
-      io.bankRead(0).io.req.valid     := wantRead
-      io.bankRead(0).io.req.bits.addr := raddr_reg + readRow * stride + readRound
-
+    // -------------------------------------------------------
+    // FILL: read 16 rows into regArray for current round
+    // -------------------------------------------------------
+    is(fill) {
+      // Send read requests
+      io.bankRead(0).io.req.valid     := (fillIdx < InputNum.U)
+      io.bankRead(0).io.req.bits.addr := readAddr(fillIdx, round)
       when(io.bankRead(0).io.req.fire) {
         readReqCnt := readReqCnt + 1.U
+        fillIdx    := fillIdx + 1.U
       }
 
-      // ---------------------------
-      // 2) READ RESP handling (fill ping-pong block)
-      // Only advance fillRowIdx/blockFull on resp.fire
-      // ---------------------------
+      // Handle responses: fill regArray row by row
       when(io.bankRead(0).io.resp.fire) {
         val dataWord = io.bankRead(0).io.resp.bits.data
-        val base     = blockBase(fillSel)
-        val rowIdx   = base + fillRowIdx
-
+        val respRow  = readRespCnt(log2Ceil(InputNum) - 1, 0)
         for (col <- 0 until InputNum) {
           val hi = (col + 1) * inputWidth - 1
           val lo = col * inputWidth
-          regArray(rowIdx)(col) := dataWord(hi, lo)
+          regArray(respRow)(col) := dataWord(hi, lo)
         }
-
         readRespCnt := readRespCnt + 1.U
 
-        when(fillRowIdx === (InputNum - 1).U) {
-          // this block becomes full
-          blockFull(fillSel) := true.B
-          fillRowIdx         := 0.U
-
-          // switch to the other block if it is not full
-          when(!blockFull(~fillSel)) {
-            fillSel := ~fillSel
-          }
-        }.otherwise {
-          fillRowIdx := fillRowIdx + 1.U
+        // All 16 responses received → buffer full, go to drain
+        when(readRespCnt(log2Ceil(InputNum) - 1, 0) === (InputNum - 1).U) {
+          drainIdx := 0.U
+          state    := drain
         }
       }
+    }
 
-      // ---------------------------
-      // 3) Start draining (writing) when not already draining
-      // ---------------------------
-      when(!draining) {
-        when(blockFull(drainSel) && (writeReqCnt < iter_reg)) {
-          draining    := true.B
-          drainColIdx := 0.U
-        }.elsewhen(blockFull(~drainSel) && (writeReqCnt < iter_reg)) {
-          // if current drainSel block not full but the other is, swap
-          drainSel    := ~drainSel
-          draining    := true.B
-          drainColIdx := 0.U
-        }
-      }
-
-      // ---------------------------
-      // 4) WRITE REQ generation (transpose)
-      // Only advance drainColIdx / writeReqCnt on req.fire
-      // ---------------------------
-      when(draining) {
-        val base = blockBase(drainSel)
-
-        // compose one output row = one column of input block
-        val col    = drainColIdx
-        val packed = Cat((0 until InputNum).reverse.map { r =>
-          regArray(base + r.U)(col)
-        })
-
-        val hasMoreWrite = (drainColIdx < InputNum.U) && (writeReqCnt < iter_reg)
-        io.bankWrite(0).io.req.valid     := hasMoreWrite
-        io.bankWrite(0).io.req.bits.addr := waddr_reg + drainColIdx
-        io.bankWrite(0).io.req.bits.data := packed
+    // -------------------------------------------------------
+    // DRAIN: write out 16 transposed columns, then fill next
+    //        round or signal completion
+    // -------------------------------------------------------
+    is(drain) {
+      when(drainIdx < InputNum.U) {
+        io.bankWrite(0).io.req.valid     := true.B
+        io.bankWrite(0).io.req.bits.addr := round * InputNum.U + drainIdx
+        io.bankWrite(0).io.req.bits.data := packColumn(drainIdx)
         io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
 
         when(io.bankWrite(0).io.req.fire) {
-          writeReqCnt := writeReqCnt + 1.U
-
-          when(drainColIdx === (InputNum - 1).U) {
-            // finished draining this block
-            draining            := false.B
-            blockFull(drainSel) := false.B
-            drainSel            := ~drainSel
-
-            // move write base address by InputNum for next block’s outputs
-            waddr_reg := waddr_reg + InputNum.U
-            // move read base address too, purely optional; we already use readReqCnt for addr
-            // raddr_reg := raddr_reg + InputNum.U
-          }.otherwise {
-            drainColIdx := drainColIdx + 1.U
-          }
+          drainIdx := drainIdx + 1.U
         }
-      }
-
-      // ---------------------------
-      // 5) Completion condition (NO early complete)
-      // Must ensure:
-      // - all read req issued
-      // - all read resp received
-      // - all write req issued
-      // - no blocks full, not draining
-      // ---------------------------
-      val done =
-        (readReqCnt === iter_reg) &&
-          (readRespCnt === iter_reg) &&
-          (writeReqCnt === iter_reg) &&
-          !blockFull(0) && !blockFull(1) &&
-          !draining
-
-      io.cmdResp.valid       := done
-      io.cmdResp.bits.rob_id := rob_id_reg
-
-      when(done && io.cmdResp.fire) {
-        state := idle
+      }.otherwise {
+        // All 16 columns written
+        when(round === stride - 1.U) {
+          // Last round → signal completion
+          io.cmdResp.valid       := true.B
+          io.cmdResp.bits.rob_id := rob_id_reg
+          when(io.cmdResp.fire) {
+            state := idle
+          }
+        }.otherwise {
+          // More rounds → advance round and fill next
+          round   := round + 1.U
+          fillIdx := 0.U
+          state   := fill
+        }
       }
     }
   }
 
   io.status.idle    := (state === idle)
-  io.status.running := (state === compute)
+  io.status.running := (state =/= idle)
 }
