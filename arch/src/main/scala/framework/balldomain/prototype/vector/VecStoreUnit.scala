@@ -79,7 +79,9 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   when(io.ex_st_i.fire) {
     // Latch data
     data_valid := true.B
-    data_addr  := wr_bank_addr + iter_counter
+    // Cycle through addresses 0-15: for 16xN matmul, MeshWarp outputs N results
+    // that need to be accumulated into 16 addresses via AccPipe's wmode
+    data_addr  := wr_bank_addr + (iter_counter & 15.U)
     data_vec   := io.ex_st_i.bits.rst
     state      := write
     // Reset channel_fired when receiving new data

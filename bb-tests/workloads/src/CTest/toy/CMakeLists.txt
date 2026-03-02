@@ -112,6 +112,7 @@ add_cross_platform_test_target(ctest_vecunit_matmul_16xn_zero_random vecunit_mat
 add_cross_platform_test_target(ctest_vecunit_simple_nn_forward_pass_test vecunit_simple_nn_forward_pass_test.c)
 add_cross_platform_test_target(ctest_im2col_test im2col_test.c)
 add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
+add_cross_platform_test_target(ctest_transpose_16xn_test transpose_16xn_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
@@ -136,6 +137,7 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_vecunit_simple_nn_forward_pass_test
   ctest_im2col_test
   ctest_transpose_test
+  ctest_transpose_16xn_test
   ctest_transpose_matmul
   ctest_relu_test
   ctest_vsetvli
