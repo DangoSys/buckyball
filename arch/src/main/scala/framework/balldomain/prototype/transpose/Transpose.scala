@@ -149,14 +149,18 @@ class Transpose(val b: GlobalConfig) extends Module {
     is(compute) {
       // ---------------------------
       // 1) READ REQ generation
-      // Only issue a read when:
-      // - still need reads (readReqCnt < iter_reg)
-      // - there is space in buffers (not both blocks full)
-      // - downstream ready handshake ok (via fire)
+      // For 16xN transpose: input matrix has N/16 addresses per row (stride).
+      // We read one 16x16 column-group per round using strided addresses:
+      //   addr = row * stride + round
+      // where row = readReqCnt % InputNum, round = readReqCnt / InputNum
       // ---------------------------
+      val stride    = iter_reg >> log2Ceil(InputNum)
+      val readRow   = readReqCnt(log2Ceil(InputNum) - 1, 0)
+      val readRound = readReqCnt >> log2Ceil(InputNum)
+
       val wantRead = (readReqCnt < iter_reg) && hasFreeBlock
       io.bankRead(0).io.req.valid     := wantRead
-      io.bankRead(0).io.req.bits.addr := raddr_reg + readReqCnt
+      io.bankRead(0).io.req.bits.addr := raddr_reg + readRow * stride + readRound
 
       when(io.bankRead(0).io.req.fire) {
         readReqCnt := readReqCnt + 1.U
@@ -223,7 +227,7 @@ class Transpose(val b: GlobalConfig) extends Module {
 
         val hasMoreWrite = (drainColIdx < InputNum.U) && (writeReqCnt < iter_reg)
         io.bankWrite(0).io.req.valid     := hasMoreWrite
-        io.bankWrite(0).io.req.bits.addr := waddr_reg + writeReqCnt
+        io.bankWrite(0).io.req.bits.addr := waddr_reg + drainColIdx
         io.bankWrite(0).io.req.bits.data := packed
         io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
 

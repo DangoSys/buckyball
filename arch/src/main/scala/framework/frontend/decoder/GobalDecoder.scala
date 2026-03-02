@@ -102,19 +102,4 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_o.bits.cmd        := io.id_i.bits.cmd
   io.id_o.bits.bankAccess := bankAccess
   io.id_o.bits.isFence    := is_frontend_inst
-
-  // Debug: print bank access info for NPU instructions
-  when(io.id_o.fire && !is_frontend_inst && !is_gp_inst) {
-    printf(
-      "[GD] func7=%d rs1=0x%x rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
-      func7,
-      rs1,
-      bankAccess.rd_bank_0_valid,
-      bankAccess.rd_bank_0_id,
-      bankAccess.rd_bank_1_valid,
-      bankAccess.rd_bank_1_id,
-      bankAccess.wr_bank_valid,
-      bankAccess.wr_bank_id
-    )
-  }
 }
