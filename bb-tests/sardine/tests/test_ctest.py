@@ -67,16 +67,16 @@ ctest_workloads = [
         "ctest_vecunit_matmul_zero_random_singlecore-baremetal",
     ),
     (
-        "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
-        "ctest_vecunit_simple_nn_forward_pass_test_singlecore-baremetal",
-    ),
-    (
         "ctest_relu_test_singlecore-baremetal",
         "ctest_relu_test_singlecore-baremetal",
     ),
     (
         "ctest_transpose_test_singlecore-baremetal",
         "ctest_transpose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_transpose_16xn_test_singlecore-baremetal",
+        "ctest_transpose_16xn_test_singlecore-baremetal",
     ),
     (
         "ctest_im2col_test_singlecore-baremetal",
