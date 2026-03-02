@@ -128,22 +128,23 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).bank_id          := 0.U
     io.mem_req(i).group_id         := 0.U
 
-    val isRead    = mappingTable(i).isRead
-    val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
-    val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
-    val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
-    val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
-    val group_id  = io.balldomain.bankWrite(mappingTable(i).id).group_id
+    val isRead     = mappingTable(i).isRead
+    val ballRead   = io.balldomain.bankRead(mappingTable(i).id).io
+    val ballWrite  = io.balldomain.bankWrite(mappingTable(i).id).io
+    val rbank_id   = io.balldomain.bankRead(mappingTable(i).id).bank_id
+    val wbank_id   = io.balldomain.bankWrite(mappingTable(i).id).bank_id
+    val rgroup_id  = io.balldomain.bankRead(mappingTable(i).id).group_id
+    val wgroup_id  = io.balldomain.bankWrite(mappingTable(i).id).group_id
 
     when(mappingTable(i).valid) {
       when(isRead) {
         io.mem_req(i).read <> ballRead
         io.mem_req(i).bank_id := rbank_id
-        io.mem_req(i).group_id := group_id
+        io.mem_req(i).group_id := rgroup_id
       }.otherwise {
         io.mem_req(i).write <> ballWrite
         io.mem_req(i).bank_id := wbank_id
-        io.mem_req(i).group_id := group_id
+        io.mem_req(i).group_id := wgroup_id
       }
     }
   }
