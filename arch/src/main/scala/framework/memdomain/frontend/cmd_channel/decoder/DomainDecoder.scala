@@ -51,7 +51,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 
   val bankAddrLen = log2Up(b.memDomain.bankEntries)
   val memAddrLen  = b.memDomain.memAddrLen
-  val bankIdLen   = log2Up(b.memDomain.bankNum)
+  val bankIdLen   = b.frontend.bank_id_len
 
   // Only process Mem instructions
   io.cmd_i.ready := io.mem_decode_cmd_o.ready
@@ -61,6 +61,12 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val rs2   = io.cmd_i.bits.cmd.rs2Data
 
   // Load/Store instruction decoding
+  // New unified encoding:
+  //   rs1[7:0]       = bank_id
+  //   rs1[26:24]     = bank access valid flags (used by scoreboard, ignored here)
+  //   rs1[63:27]     = mem_addr (for MVIN/MVOUT)
+  //   rs2[9:0]       = iter
+  //   rs2[63:10]     = special
   import LSDecodeFields._
   val ls_default_decode = List(N, N, DADDR, DADDR, DITER, DSPECIAL, N)
 
@@ -71,28 +77,28 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
       MSET_BITPAT  -> List(
         N,
         N,
-        rs1(memAddrLen - 1, 0),
-        rs2(bankIdLen - 1, 0),
-        rs2(9 + bankIdLen, bankIdLen),
-        rs2(39 + bankIdLen, bankIdLen),
+        0.U(memAddrLen.W),        // mem_addr: not used for MSET
+        rs1(bankIdLen - 1, 0),    // bank_id from rs1[bankIdLen-1:0]
+        rs2(9, 0),                // iter from rs2[9:0]
+        rs2(39, 0),               // special from rs2[39:0]
         Y
       ), // mset
       MVIN_BITPAT  -> List(
         Y,
         N,
-        rs1(memAddrLen - 1, 0),
-        rs2(bankIdLen - 1, 0),
-        rs2(9 + bankIdLen, bankIdLen),
-        rs2(63, 10 + bankIdLen),
+        rs1(memAddrLen + 26, 27), // mem_addr from rs1 upper bits
+        rs1(bankIdLen - 1, 0),    // bank_id from rs1[bankIdLen-1:0]
+        rs2(9, 0),                // iter from rs2[9:0]
+        rs2(63, 10),              // special from rs2[63:10]
         Y
       ), // mvin
       MVOUT_BITPAT -> List(
         N,
         Y,
-        rs1(memAddrLen - 1, 0),
-        rs2(bankIdLen - 1, 0),
-        rs2(9 + bankIdLen, bankIdLen),
-        rs2(63, 10 + bankIdLen),
+        rs1(memAddrLen + 26, 27), // mem_addr from rs1 upper bits
+        rs1(bankIdLen - 1, 0),    // bank_id from rs1[bankIdLen-1:0]
+        rs2(9, 0),                // iter from rs2[9:0]
+        rs2(63, 10),              // special from rs2[63:10]
         Y
       )  // mvout
     )

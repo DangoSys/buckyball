@@ -76,12 +76,11 @@ void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   bb_mem_alloc(wr_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
-  bb_fence();
 
   bb_relu(op1_bank_id, wr_bank_id, size);
-  bb_fence();
 
   bb_mvout((uintptr_t)b, wr_bank_id, size, 1);
+  bb_fence();
 }
 
 // =======================

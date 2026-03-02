@@ -52,10 +52,10 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val ld_ex_op1_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_op2_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_iter_reg      = RegInit(0.U(10.W))
-  val wait1_reg            = RegInit(false.B)
-  val wait2_reg            = RegInit(false.B)
-  val wait1_cnt          = RegInit(0.U(7.W))
-  val wait2_cnt          = RegInit(0.U(7.W))
+  val wait1_reg           = RegInit(false.B)
+  val wait2_reg           = RegInit(false.B)
+  val wait1_cnt           = RegInit(0.U(7.W))
+  val wait2_cnt           = RegInit(0.U(7.W))
 
   val bankRespQueue0 = Module(new Queue(new SramReadResp(b), entries = 8))
   val bankRespQueue1 = Module(new Queue(new SramReadResp(b), entries = 8))
@@ -99,31 +99,36 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.bankReadReq(0).bits.addr := op1_addr + op1_iter_counter
     op1_iter_counter            := Mux(io.bankReadReq(0).ready, op1_iter_counter + 1.U, op1_iter_counter)
     wait1_reg                   := Mux((op1_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
+    when(io.bankReadReq(0).fire) {
+      printf("[VecLD] op1 bank=%d addr=%d iter_cnt=%d\n", op1_bank, op1_addr + op1_iter_counter, op1_iter_counter)
+    }
   }
 
   when(state === busy && io.ld_ex_o.ready && !wait2_reg) {
-    io.bankReadReq(1).valid     := op1_iter_counter < iter
-    io.bankReadReq(1).bits.addr := op2_addr + op1_iter_counter
+    io.bankReadReq(1).valid     := op2_iter_counter < iter
+    io.bankReadReq(1).bits.addr := op2_addr + op2_iter_counter
     op2_iter_counter            := Mux(io.bankReadReq(1).ready, op2_iter_counter + 1.U, op2_iter_counter)
     wait2_reg                   := Mux((op2_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
+    when(io.bankReadReq(1).fire) {
+      printf("[VecLD] op2 bank=%d addr=%d iter_cnt=%d\n", op2_bank, op2_addr + op2_iter_counter, op2_iter_counter)
+    }
   }
 
-  when(wait1_reg){
+  when(wait1_reg) {
     wait1_cnt := wait1_cnt + 1.U
-    when(wait1_cnt === 32.U){
+    when(wait1_cnt === 32.U) {
       wait1_reg := false.B
       wait1_cnt := 0.U
     }
   }
 
-  when(wait2_reg){
+  when(wait2_reg) {
     wait2_cnt := wait2_cnt + 1.U
-    when(wait2_cnt === 32.U){
+    when(wait2_cnt === 32.U) {
       wait2_reg := false.B
       wait2_cnt := 0.U
     }
   }
-
 
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit
@@ -138,6 +143,22 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.ld_ex_o.bits.op2  := bankRespQueue1.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
     ld_ex_iter_reg       := ld_ex_iter_reg + 1.U
     io.ld_ex_o.bits.iter := ld_ex_iter_reg
+
+    // Debug: print first 8 elements of op1 and op2
+    when(ld_ex_iter_reg < 8.U) {
+      printf(
+        "[VecLD_DATA] iter=%d op1[0-3]=%d,%d,%d,%d op2[0-3]=%d,%d,%d,%d\n",
+        ld_ex_iter_reg,
+        io.ld_ex_o.bits.op1(0),
+        io.ld_ex_o.bits.op1(1),
+        io.ld_ex_o.bits.op1(2),
+        io.ld_ex_o.bits.op1(3),
+        io.ld_ex_o.bits.op2(0),
+        io.ld_ex_o.bits.op2(1),
+        io.ld_ex_o.bits.op2(2),
+        io.ld_ex_o.bits.op2(3)
+      )
+    }
   }.otherwise {
     io.ld_ex_o.valid     := false.B
     io.ld_ex_o.bits.iter := 0.U

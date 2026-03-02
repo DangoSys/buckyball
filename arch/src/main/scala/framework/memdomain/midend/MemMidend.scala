@@ -54,9 +54,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
     mappingTable(idx).id     := id
   }
 
-  def allocateChannel(): UInt = {
+  def allocateChannel(): (Bool, UInt) = {
     val freeChannels = mappingTable.map(entry => !entry.valid)
-    PriorityEncoder(freeChannels)
+    val hasFreeChan = freeChannels.reduce(_ || _)
+    val chanId = PriorityEncoder(freeChannels)
+    (hasFreeChan, chanId)
   }
 
   def isAllocated(isRead: Bool, id: UInt): Bool =
@@ -69,8 +71,31 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.balldomain.bankRead(i).io.resp.bits  := DontCare
 
     when(io.balldomain.bankRead(i).io.req.valid && !isAllocated(true.B, i.U)) {
-      addEntry(allocateChannel(), true.B, i.U)
+      val (hasFree, chanId) = allocateChannel()
+      when(hasFree) {
+        addEntry(chanId, true.B, i.U)
+      }
     }
+  }
+
+  // For ball writes, only allocate one request per cycle to avoid conflicts
+  // Find the first unallocated request and allocate it
+  val pendingWrites = VecInit((0 until totalBallWrite).map(i =>
+    io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)))
+  val hasPendingWrite = pendingWrites.asUInt.orR
+  val nextWriteToAllocate = PriorityEncoder(pendingWrites)
+
+  // Debug: print allocation decisions
+  when(hasPendingWrite) {
+    printf("[MemMidend] hasPending=1 nextToAlloc=%d pending=[", nextWriteToAllocate)
+    for (i <- 0 until totalBallWrite) {
+      printf("%d", pendingWrites(i))
+    }
+    printf("] mappingTable=[")
+    for (i <- 0 until b.top.memBallChannelNum - 1) {
+      printf("ch%d:v=%d,r=%d,id=%d ", i.U, mappingTable(i).valid, mappingTable(i).isRead, mappingTable(i).id)
+    }
+    printf("]\n")
   }
 
   for (i <- 0 until totalBallWrite) {
@@ -78,11 +103,17 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.balldomain.bankWrite(i).io.req.ready  := false.B
     io.balldomain.bankWrite(i).io.resp.valid := false.B;
     io.balldomain.bankWrite(i).io.resp.bits  := DontCare
-    //disable for now
 
-    when(io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)) {
-      addEntry(allocateChannel(), false.B, i.U)
+    // Only allocate if this is the selected request
+    when(hasPendingWrite && nextWriteToAllocate === i.U) {
+      val (hasFree, chanId) = allocateChannel()
+      when(hasFree) {
+        addEntry(chanId, false.B, i.U)
+        printf("[MemMidend] Allocated ballWrite[%d] to ch=%d\n", i.U, chanId)
+      }.otherwise {
+        printf("[MemMidend] No free channel for ballWrite[%d]\n", i.U)
       }
+    }
   }
 
   //Connect balldomain to backend
@@ -95,14 +126,14 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).write.req.bits   := DontCare
     io.mem_req(i).write.resp.ready := false.B
     io.mem_req(i).bank_id          := 0.U
-    io.mem_req(i).group_id     := 0.U
+    io.mem_req(i).group_id         := 0.U
 
     val isRead    = mappingTable(i).isRead
     val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
     val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
     val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
     val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
-    val group_id    = io.balldomain.bankWrite(mappingTable(i).id).group_id
+    val group_id  = io.balldomain.bankWrite(mappingTable(i).id).group_id
 
     when(mappingTable(i).valid) {
       when(isRead) {

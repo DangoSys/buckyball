@@ -6,8 +6,9 @@
 #define BB_MUL_WARP16_FUNC7 32
 
 #define bb_mul_warp16(op1_bank_id, op2_bank_id, wr_bank_id, iter, mode)        \
-  BUCKYBALL_INSTRUCTION_R_R(                                                   \
-      (FIELD(op1_bank_id, 0, 7) | FIELD(op2_bank_id, 8, 15)),                  \
-      (FIELD(wr_bank_id, 0, 7) | FIELD(iter, 8, 23)), BB_MUL_WARP16_FUNC7)
+  BUCKYBALL_INSTRUCTION_R_R((BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) |   \
+                             BB_BANK2(wr_bank_id) | BB_RD0 | BB_RD1 | BB_WR),  \
+                            (FIELD(iter, 0, 9) | FIELD(mode, 10, 63)),         \
+                            BB_MUL_WARP16_FUNC7)
 
 #endif // _BB_MUL_WARP16_H_

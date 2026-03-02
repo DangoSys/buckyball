@@ -71,14 +71,13 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
     func7,
     ball_default_decode,
     Array(
-      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs2(7, 0), rs2(15, 8), 0.U, rs2(63, 16)),
-      RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 1.U, rs2(63, 16)),
-      // Transpose only reads op1 and writes wr_bank; it does NOT consume op2.
-      // Enabling op2 here can stall/abort when op2_bank defaults to op1_bank.
-      TRANSPOSE     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(15, 8), rs2(15, 8), 2.U, rs2(63, 16)),
-      IM2COL        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(15, 8), DITER, 3.U, rs2(63, 16)),
-      CONCAT        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 5.U, rs2(63, 16)),
-      TRANSFER      -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs2(7, 0), rs2(15, 8), 6.U, rs2(63, 16))
+      // New unified encoding: wr_bank is always at rs1[23:16]
+      // iter/special shifted in rs2 since wr_bank no longer occupies rs2[7:0]
+      //                        op1 op2 wr  op1s op2s  op1_bank    op2_bank     wr_bank       iter          bid  special
+      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 0.U, rs2(63, 10)),
+      RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 1.U, rs2(63, 10)),
+      TRANSPOSE     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 2.U, rs2(63, 10)),
+      IM2COL        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0))
     )
   )
 

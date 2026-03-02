@@ -23,10 +23,14 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
 
     val bankWrite = Flipped(new BankWrite(b))
+
+    // Query interface to get group count
+    val query_vbank_id    = Output(UInt(8.W))
+    val query_group_count = Input(UInt(4.W))
   })
 
-  val s_idle :: s_dma_req :: s_dma_wait :: s_done :: Nil = Enum(4)
-  val state                                              = RegInit(s_idle)
+  val s_idle :: s_dma_req :: s_dma_wait :: s_wait_last_write :: s_done :: Nil = Enum(5)
+  val state                                                                   = RegInit(s_idle)
 
   val rob_id_reg   = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
@@ -34,6 +38,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val resp_count   = RegInit(0.U(log2Up(16).W))
   val wr_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   val stride_reg   = Reg(UInt(11.W))
+
+  // Group counter for multi-bank writes
+  val group_counter   = RegInit(0.U(4.W))
+  val group_count_reg = RegInit(0.U(4.W))
 
   // -----------------------------
   // pending latch for 1-beat DMA -> bankWrite
@@ -59,7 +67,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // bank write request driven from pending
   io.bankWrite.io.req.valid      := pending
-  io.bankWrite.io.req.bits.addr  := latRow
+  io.bankWrite.io.req.bits.addr  := latRow / group_count_reg
   io.bankWrite.io.req.bits.data  := latData
   io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
   io.bankWrite.io.req.bits.wmode := false.B
@@ -67,10 +75,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // IMPORTANT: always ready for write response (avoid deadlock)
   io.bankWrite.io.resp.ready := true.B
 
-  io.bankWrite.rob_id       := rob_id_reg
-  io.bankWrite.bank_id      := wr_bank_reg
-  io.bankWrite.ball_id      := 0.U
-  io.bankWrite.group_id := 0.U
+  io.bankWrite.rob_id   := rob_id_reg
+  io.bankWrite.bank_id  := wr_bank_reg
+  io.bankWrite.ball_id  := 0.U
+  io.bankWrite.group_id := group_counter
 
   // cmdResp (Decoupled): hold valid until accepted
   io.cmdResp.valid       := (state === s_done)
@@ -81,17 +89,26 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // Receive load instruction
   // -----------------------------
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
-    state        := s_dma_req
-    rob_id_reg   := io.cmdReq.bits.rob_id
-    mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
-    iter_reg     := io.cmdReq.bits.cmd.iter
-    wr_bank_reg  := io.cmdReq.bits.cmd.bank_id
+    state           := s_dma_req
+    rob_id_reg      := io.cmdReq.bits.rob_id
+    mem_addr_reg    := io.cmdReq.bits.cmd.mem_addr
+    wr_bank_reg     := io.cmdReq.bits.cmd.bank_id
     // BBReadRequest.stride is 10 bits wide
-    stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
-    resp_count   := 0.U
-    pending      := false.B
-    latLast      := false.B
+    stride_reg      := io.cmdReq.bits.cmd.special(10, 0)
+    resp_count      := 0.U
+    pending         := false.B
+    latLast         := false.B
+    group_counter   := 0.U
+    group_count_reg := io.query_group_count
+
+    // Query group count and multiply iter
+    iter_reg := io.cmdReq.bits.cmd.iter * io.query_group_count
   }
+
+  // Drive query interface
+  // When idle and cmdReq is valid, query the incoming bank_id
+  // Otherwise use the registered bank_id
+  io.query_vbank_id := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, wr_bank_reg)
 
   // DMA req accepted
   when(io.dmaReq.fire) {
@@ -112,10 +129,22 @@ class MemLoader(val b: GlobalConfig) extends Module {
     pending    := false.B
     resp_count := resp_count + 1.U
 
-    when(latLast) {
-      // command complete only when last beat has been accepted by bank write
-      state := s_done
+    // Update group_counter
+    when(group_counter + 1.U < group_count_reg) {
+      group_counter := group_counter + 1.U
+    }.otherwise {
+      group_counter := 0.U
     }
+
+    when(latLast) {
+      // Last beat request sent, now wait for write response
+      state := s_wait_last_write
+    }
+  }
+
+  // Wait for the last write response before completing
+  when(state === s_wait_last_write && io.bankWrite.io.resp.fire) {
+    state := s_done
   }
 
   when(state === s_done && io.cmdResp.fire) {

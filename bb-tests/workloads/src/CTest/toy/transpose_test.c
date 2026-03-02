@@ -34,6 +34,7 @@ static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64))) = {
     -13, -12, -11, 10, 11, 12, 13, 14, 15, 16, 17, 18, -27, -26, -25, -24, -23,
     -22, -21, 20, 21, 22, 23, 24, 25, 26, 27, 28, -37, -36, -35, -34, -33, -32,
     -31, 30, 31, 32, 33, 34, 35, 36, 37, 38};
+
 static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64))) = {
     // Row 1 of A^T (col 1 of A)
     -7, -17, -27, -37, -7, -17, -27, -37, -7, -17, -27, -37, -7, -17, -27, -37,
@@ -79,10 +80,9 @@ void hw_transpose(const char *test_name, elem_t *a, elem_t *b, int size) {
   bb_mem_alloc(op2_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
-  bb_fence();
   bb_transpose(op1_bank_id, op2_bank_id, size, 0);
-  bb_fence();
   bb_mvout((uintptr_t)b, op2_bank_id, size, 1);
+  bb_fence();
 }
 
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {

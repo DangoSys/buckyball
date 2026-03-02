@@ -7,7 +7,8 @@ import upickle.default._
  */
 case class FrontendParam(
   rob_entries:              Int,
-  rs_out_of_order_response: Boolean)
+  rs_out_of_order_response: Boolean,
+  bank_id_len:              Int)
 
 object FrontendParam {
   implicit val rw: ReadWriter[FrontendParam] = macroRW

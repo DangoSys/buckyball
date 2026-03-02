@@ -1,4 +1,5 @@
 {
   "rob_entries": 16,
-  "rs_out_of_order_response": true
+  "rs_out_of_order_response": true,
+  "bank_id_len": 8
 }

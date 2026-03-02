@@ -59,6 +59,10 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val midend:   Instance[MemMidend]   = Instantiate(new MemMidend(b))
   val backend:  Instance[MemBackend]  = Instantiate(new MemBackend(b))
 
+  // Connect query interface from frontend to backend
+  backend.io.query_vbank_id     := frontend.io.query_vbank_id
+  frontend.io.query_group_count := backend.io.query_group_count
+
   // -------------------------------------------------
   // Connection with outside (all in frontend)
   // -------------------------------------------------

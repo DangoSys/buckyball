@@ -6,9 +6,53 @@ import chisel3.experimental._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.frontend.decoder.PostGDCmd
+import framework.frontend.scoreboard.BankScoreboard
+
+// DPI-C BlackBox for instruction trace
+class ITraceDPI extends BlackBox with HasBlackBoxInline {
+  val io = IO(new Bundle {
+    val is_issue  = Input(UInt(8.W))
+    val rob_id    = Input(UInt(32.W))
+    val domain_id = Input(UInt(32.W))
+    val funct     = Input(UInt(32.W))
+    val rs1       = Input(UInt(64.W))
+    val rs2       = Input(UInt(64.W))
+    val enable    = Input(Bool())
+  })
+
+  setInline("ITraceDPI.v",
+    """
+    |import "DPI-C" function void dpi_itrace(
+    |  input byte unsigned is_issue,
+    |  input int unsigned rob_id,
+    |  input int unsigned domain_id,
+    |  input int unsigned funct,
+    |  input longint unsigned rs1,
+    |  input longint unsigned rs2
+    |);
+    |
+    |module ITraceDPI(
+    |  input [7:0] is_issue,
+    |  input [31:0] rob_id,
+    |  input [31:0] domain_id,
+    |  input [31:0] funct,
+    |  input [63:0] rs1,
+    |  input [63:0] rs2,
+    |  input enable
+    |);
+    |  always @(*) begin
+    |    if (enable) begin
+    |      dpi_itrace(is_issue, rob_id, domain_id, funct, rs1, rs2);
+    |    end
+    |  end
+    |endmodule
+    """.stripMargin)
+}
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
+
+  val bankIdLen = b.frontend.bank_id_len
 
   @public
   val io = IO(new Bundle {
@@ -34,6 +78,19 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val entry_complete = Output(Vec(b.frontend.rob_entries, Bool()))
   })
 
+  // Bank Scoreboard — instruction-agnostic hazard detection
+  val scoreboard: Instance[BankScoreboard] = Instantiate(new BankScoreboard(b.memDomain.bankNum, b.frontend.rob_entries))
+
+  // Instruction trace DPI-C module
+  val itrace = Module(new ITraceDPI)
+  itrace.io.is_issue  := 0.U
+  itrace.io.rob_id    := 0.U
+  itrace.io.domain_id := 0.U
+  itrace.io.funct     := 0.U
+  itrace.io.rs1       := 0.U
+  itrace.io.rs2       := 0.U
+  itrace.io.enable    := false.B
+
   // Circular ROB structure
   val robEntries    =
     RegInit(VecInit(Seq.fill(b.frontend.rob_entries)(0.U.asTypeOf(new GlobalRobEntry(b)))))
@@ -57,9 +114,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val isEmpty       = headPtr === tailPtr && !robValid(headPtr)
   val isFull        = headPtr === tailPtr && robValid(headPtr)
 
-// -----------------------------------------------------------------------------
+  // Helper: circular pointer arithmetic
+  def wrapPtr(v: UInt): UInt = Mux(v >= b.frontend.rob_entries.U, v - b.frontend.rob_entries.U, v)
+
+// =============================================================================
 // Inbound - instruction allocation
-// -----------------------------------------------------------------------------
+// Fence instructions are filtered out by GlobalReservationStation and never enter ROB.
+// =============================================================================
   io.alloc.ready := !isFull
 
   when(io.alloc.fire) {
@@ -72,12 +133,23 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     // Update tail pointer and rob_id counter (circular)
     tailPtr      := Mux(tailPtr === (b.frontend.rob_entries - 1).U, 0.U, tailPtr + 1.U)
     robIdCounter := Mux(robIdCounter === (b.frontend.rob_entries - 1).U, 0.U, robIdCounter + 1.U)
+
+    printf("[ROB ALLOC] rob_id=%d domain=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      robIdCounter, io.alloc.bits.domain_id, io.alloc.bits.cmd.funct,
+      io.alloc.bits.bankAccess.rd_bank_0_valid, io.alloc.bits.bankAccess.rd_bank_0_id,
+      io.alloc.bits.bankAccess.rd_bank_1_valid, io.alloc.bits.bankAccess.rd_bank_1_id,
+      io.alloc.bits.bankAccess.wr_bank_valid, io.alloc.bits.bankAccess.wr_bank_id)
   }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Completion signal processing
-// -----------------------------------------------------------------------------
+// =============================================================================
   io.complete.ready := true.B
+
+  // Default: scoreboard complete not active
+  scoreboard.complete.valid := false.B
+  scoreboard.complete.bits  := 0.U.asTypeOf(scoreboard.complete.bits)
+
   when(io.complete.fire) {
     val completeId = io.complete.bits
     robComplete(completeId) := true.B
@@ -85,12 +157,30 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     when(robIssued(completeId)) {
       issuedCount := issuedCount - 1.U
     }
+    // Update scoreboard: release bank resources
+    scoreboard.complete.valid := true.B
+    scoreboard.complete.bits  := robEntries(completeId).cmd.bankAccess
+
+    // Instruction trace: complete
+    itrace.io.is_issue  := 0.U
+    itrace.io.rob_id    := completeId
+    itrace.io.domain_id := robEntries(completeId).cmd.domain_id
+    itrace.io.funct     := robEntries(completeId).cmd.cmd.funct
+    itrace.io.rs1       := robEntries(completeId).cmd.cmd.rs1
+    itrace.io.rs2       := robEntries(completeId).cmd.cmd.rs2
+    itrace.io.enable    := true.B
+
+    printf("[ROB COMPLETE] rob_id=%d domain=%d func7=%d\n",
+      completeId, robEntries(completeId).cmd.domain_id, robEntries(completeId).cmd.cmd.funct)
   }
 
-// -----------------------------------------------------------------------------
-// Outbound - issue instructions in order (starting from head)
-// -----------------------------------------------------------------------------
-  // Find first valid and unissued instruction starting from head
+// =============================================================================
+// Outbound - issue instructions with hazard detection
+//
+// Scan from head to find the first issuable instruction that:
+//   1. is valid && !issued && !complete
+//   2. has no bank hazard (checked via scoreboard)
+// =============================================================================
   val canIssue = Wire(Bool())
   val issuePtr = Wire(UInt(log2Up(b.frontend.rob_entries).W))
 
@@ -98,40 +188,73 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   canIssue := false.B
   issuePtr := headPtr
 
-  // Scan from head to find first issuable instruction
   val scanValid = Wire(Vec(b.frontend.rob_entries, Bool()))
   for (i <- 0 until b.frontend.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= b.frontend.rob_entries.U, headPtr + i.U - b.frontend.rob_entries.U, headPtr + i.U)
+    val ptr = wrapPtr(headPtr + i.U)
     scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
   }
 
-  // Find first issuable position
+  // Find first candidate
   val firstValid = PriorityEncoder(scanValid.asUInt)
   val hasValid   = scanValid.asUInt.orR
 
-  val actualIssuePtr = Mux(
-    headPtr + firstValid >= b.frontend.rob_entries.U,
-    headPtr + firstValid - b.frontend.rob_entries.U,
-    headPtr + firstValid
-  )
+  val actualIssuePtr = wrapPtr(headPtr + firstValid)
 
-  // Can only issue if issue limit is not reached
+  // Scoreboard hazard query for the selected candidate
+  scoreboard.query := robEntries(actualIssuePtr).cmd.bankAccess
+  val noHazard = !scoreboard.hasHazard
+
+  // Debug: print when a candidate is blocked by hazard
+  when(hasValid && scoreboard.hasHazard) {
+    printf("[ROB HAZARD] ptr=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      actualIssuePtr, robEntries(actualIssuePtr).cmd.cmd.funct,
+      robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_valid,
+      robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_id,
+      robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_valid,
+      robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_id,
+      robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_valid,
+      robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_id)
+  }
+
+  // Can only issue if issue limit is not reached and no bank hazard
   val canIssueMore = issuedCount < maxIssueLimit
-  canIssue := hasValid && canIssueMore
+  canIssue := hasValid && canIssueMore && noHazard
   issuePtr := actualIssuePtr
 
   io.issue.valid := canIssue
   io.issue.bits  := robEntries(issuePtr)
 
+  // Default: scoreboard issue not active
+  scoreboard.issue.valid := false.B
+  scoreboard.issue.bits  := 0.U.asTypeOf(scoreboard.issue.bits)
+
   when(io.issue.fire) {
     robIssued(issuePtr) := true.B
     issuedCount         := issuedCount + 1.U
+    // Update scoreboard: claim bank resources
+    scoreboard.issue.valid := true.B
+    scoreboard.issue.bits  := robEntries(issuePtr).cmd.bankAccess
+
+    // Instruction trace: issue
+    itrace.io.is_issue  := 1.U
+    itrace.io.rob_id    := robEntries(issuePtr).rob_id
+    itrace.io.domain_id := robEntries(issuePtr).cmd.domain_id
+    itrace.io.funct     := robEntries(issuePtr).cmd.cmd.funct
+    itrace.io.rs1       := robEntries(issuePtr).cmd.cmd.rs1
+    itrace.io.rs2       := robEntries(issuePtr).cmd.cmd.rs2
+    itrace.io.enable    := true.B
+
+    printf("[ROB ISSUE] rob_id=%d domain=%d func7=%d ptr=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d wr=%d\n",
+      robEntries(issuePtr).rob_id, robEntries(issuePtr).cmd.domain_id, robEntries(issuePtr).cmd.cmd.funct,
+      issuePtr,
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_0_valid, robEntries(issuePtr).cmd.bankAccess.rd_bank_0_id,
+      robEntries(issuePtr).cmd.bankAccess.rd_bank_1_valid, robEntries(issuePtr).cmd.bankAccess.rd_bank_1_id,
+      robEntries(issuePtr).cmd.bankAccess.wr_bank_valid, robEntries(issuePtr).cmd.bankAccess.wr_bank_id)
   }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Instruction commit - commit all completed instructions out-of-order
-// -----------------------------------------------------------------------------
-  // Commit all completed instructions
+// =============================================================================
   for (i <- 0 until b.frontend.rob_entries) {
     when(robValid(i.U) && robComplete(i.U)) {
       robValid(i.U)    := false.B
@@ -141,31 +264,21 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   }
 
   // Update head pointer: skip all completed (about to be cleared) positions
-  // Find first "valid and incomplete" instruction position starting from head
   val nextHeadCandidates = Wire(Vec(b.frontend.rob_entries, Bool()))
   for (i <- 0 until b.frontend.rob_entries) {
-    val ptr = Mux(headPtr + i.U >= b.frontend.rob_entries.U, headPtr + i.U - b.frontend.rob_entries.U, headPtr + i.U)
-    // Entry is valid and incomplete (will not be committed)
+    val ptr = wrapPtr(headPtr + i.U)
     nextHeadCandidates(i) := robValid(ptr) && !robComplete(ptr)
   }
 
   val hasUncommitted = nextHeadCandidates.asUInt.orR
   val nextHeadOffset = PriorityEncoder(nextHeadCandidates.asUInt)
+  val nextHeadPtr    = wrapPtr(headPtr + nextHeadOffset)
 
-  val nextHeadPtr = Mux(
-    headPtr + nextHeadOffset >= b.frontend.rob_entries.U,
-    headPtr + nextHeadOffset - b.frontend.rob_entries.U,
-    headPtr + nextHeadOffset
-  )
-
-  // Update head pointer:
-  // - If there are uncompleted instructions, move head to first uncompleted position
-  // - If there are no uncompleted instructions (all complete), move head to tail (ROB is empty)
   headPtr := Mux(hasUncommitted, nextHeadPtr, tailPtr)
 
-// -----------------------------------------------------------------------------
-// Status signals - exposed to reservation station
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Status signals
+// =============================================================================
   io.empty          := isEmpty
   io.full           := isFull
   io.head_ptr       := headPtr

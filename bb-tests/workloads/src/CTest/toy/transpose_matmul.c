@@ -32,12 +32,9 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
             col_stride);
   }
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_fence();
   bb_transpose(op2_bank_id + size, op1_bank_id, size, 0);
-  bb_fence();
   bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
-  bb_fence();
-  bb_mvout((uintptr_t)c, acc_bank_id, DIM << 2, 1);
+  bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);
   bb_fence();
 }
 
