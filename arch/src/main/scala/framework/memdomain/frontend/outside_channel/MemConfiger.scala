@@ -29,6 +29,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   val idle :: config :: Nil = Enum(2)
   val state                 = RegInit(idle)
   val alloc_reg             = RegInit(false.B)
+  val row_reg               = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val col_reg               = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val vbank_id_reg          = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val rob_id_reg            = RegInit(0.U(rob_id_width.W))
