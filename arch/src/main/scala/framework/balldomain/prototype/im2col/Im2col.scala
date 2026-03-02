@@ -26,8 +26,8 @@ class Im2col(val b: GlobalConfig) extends Module {
     .find(_.ballName == "Im2colBall")
     .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
 
-  private val inBW    = mapping.inBW
-  private val outBW   = mapping.outBW
+  private val inBW  = mapping.inBW
+  private val outBW = mapping.outBW
 
   @public val io = IO(new Bundle {
     val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))

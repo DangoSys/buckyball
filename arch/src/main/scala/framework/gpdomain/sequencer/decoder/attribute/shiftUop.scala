@@ -6,11 +6,11 @@ package framework.gpdomain.sequencer.decoder.attribute
 import framework.gpdomain.sequencer.decoder.T1DecodePattern
 
 trait ShiftUopType extends Uop
-object shiftUop0   extends ShiftUopType
-object shiftUop1   extends ShiftUopType
-object shiftUop2   extends ShiftUopType
-object shiftUop4   extends ShiftUopType
-object shiftUop6   extends ShiftUopType
+object shiftUop0 extends ShiftUopType
+object shiftUop1 extends ShiftUopType
+object shiftUop2 extends ShiftUopType
+object shiftUop4 extends ShiftUopType
+object shiftUop6 extends ShiftUopType
 
 object ShiftUop {
 
@@ -21,9 +21,8 @@ object ShiftUop {
       t2 _ -> shiftUop2,
       t4 _ -> shiftUop4,
       t6 _ -> shiftUop6
-    ).collectFirst {
-      case (fn, tpe) if fn(t1DecodePattern) => tpe
-    }.getOrElse(UopDC)
+    ).collectFirst { case (fn, tpe) if fn(t1DecodePattern) => tpe }
+      .getOrElse(UopDC)
   }
 
   def t0(t1DecodePattern: T1DecodePattern): Boolean = {

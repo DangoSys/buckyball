@@ -44,10 +44,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
   io.sramRead <> io.mem_req.read
   io.sramWrite <> io.mem_req.write
 
-  //Read Acc
-  when(io.is_multi) {
-    io.sramRead.req.bits.addr := io.mem_req.read.req.bits.addr(log2Ceil(b.memDomain.bankEntries) - 1, 2)
-  }
+  // Each group has its own physical bank, so no address shifting is needed.
+  // The previous is_multi shift (addr >> 2) was incorrect: it caused mvout reads
+  // to access wrong physical addresses while matmul writes used unshifted addresses.
 
   //group_id output
   val group_id_reg = RegInit(0.U(3.W))

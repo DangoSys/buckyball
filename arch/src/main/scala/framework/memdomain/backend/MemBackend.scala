@@ -75,16 +75,18 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
 
-  // Memory trace DPI-C module
-  val mtrace = Module(new MTraceDPI)
-  mtrace.io.is_write := 0.U
-  mtrace.io.channel  := 0.U
-  mtrace.io.vbank_id := 0.U
-  mtrace.io.group_id := 0.U
-  mtrace.io.addr     := 0.U
-  mtrace.io.data_lo  := 0.U
-  mtrace.io.data_hi  := 0.U
-  mtrace.io.enable   := false.B
+  // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
+  val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
+  for (mt <- mtraces) {
+    mt.io.is_write := 0.U
+    mt.io.channel  := 0.U
+    mt.io.vbank_id := 0.U
+    mt.io.group_id := 0.U
+    mt.io.addr     := 0.U
+    mt.io.data_lo  := 0.U
+    mt.io.data_hi  := 0.U
+    mt.io.enable   := false.B
+  }
 
   // -----------------------------------------------------------------------------
   // Mapping table
@@ -115,11 +117,14 @@ class MemBackend(val b: GlobalConfig) extends Module {
   }
 
   def deleteEntry(vbank_id: UInt): Unit = {
-    val entry = mappingTable(vbank_id)
-    entry.valid        := false.B
-    entry.vbank_id     := 0.U
-    entry.is_multi       := false.B
-    entry.group_id := 0.U
+    for (i <- 0 until b.memDomain.bankNum) {
+      when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id) {
+        mappingTable(i).valid    := false.B
+        mappingTable(i).vbank_id := 0.U
+        mappingTable(i).is_multi := false.B
+        mappingTable(i).group_id := 0.U
+      }
+    }
   }
 
   def getFreePbankId(): UInt = {
@@ -194,26 +199,26 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
-      mtrace.io.is_write := 0.U
-      mtrace.io.channel  := i.U
-      mtrace.io.vbank_id := io.mem_req(i).bank_id
-      mtrace.io.group_id := io.mem_req(i).group_id
-      mtrace.io.addr     := io.mem_req(i).read.req.bits.addr
-      mtrace.io.data_lo  := 0.U
-      mtrace.io.data_hi  := 0.U
-      mtrace.io.enable   := true.B
+      mtraces(i).io.is_write := 0.U
+      mtraces(i).io.channel  := i.U
+      mtraces(i).io.vbank_id := io.mem_req(i).bank_id
+      mtraces(i).io.group_id := io.mem_req(i).group_id
+      mtraces(i).io.addr     := io.mem_req(i).read.req.bits.addr
+      mtraces(i).io.data_lo  := 0.U
+      mtraces(i).io.data_hi  := 0.U
+      mtraces(i).io.enable   := true.B
     }
 
     // Memory trace: write request
     when(io.mem_req(i).write.req.fire) {
-      mtrace.io.is_write := 1.U
-      mtrace.io.channel  := i.U
-      mtrace.io.vbank_id := io.mem_req(i).bank_id
-      mtrace.io.group_id := io.mem_req(i).group_id
-      mtrace.io.addr     := io.mem_req(i).write.req.bits.addr
-      mtrace.io.data_lo  := io.mem_req(i).write.req.bits.data(63, 0)
-      mtrace.io.data_hi  := io.mem_req(i).write.req.bits.data(127, 64)
-      mtrace.io.enable   := true.B
+      mtraces(i).io.is_write := 1.U
+      mtraces(i).io.channel  := i.U
+      mtraces(i).io.vbank_id := io.mem_req(i).bank_id
+      mtraces(i).io.group_id := io.mem_req(i).group_id
+      mtraces(i).io.addr     := io.mem_req(i).write.req.bits.addr
+      mtraces(i).io.data_lo  := io.mem_req(i).write.req.bits.data(63, 0)
+      mtraces(i).io.data_hi  := io.mem_req(i).write.req.bits.data(127, 64)
+      mtraces(i).io.enable   := true.B
     }
 
     for (j <- 0 until b.memDomain.bankNum) {
