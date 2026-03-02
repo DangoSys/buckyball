@@ -111,24 +111,25 @@ trait HasLazyRoCCBB extends CanHavePTW { this: BaseTile =>
 
 trait HasLazyRoCCModuleBB extends CanHavePTWModule with HasCoreParameters { this: RocketTileModuleImpBB =>
 
-  val (respArb, cmdRouter) = if (outer.roccs.nonEmpty) {
-    val respArb      = Module(new RRArbiter(new RoCCResponseBB(coreParams.xLen), outer.roccs.size))
-    // Get usingRVVRoCC from tile parameters
-    val usingRVVRoCC = outer.rocketParams.asInstanceOf[RocketTileParamsBB].usingRVVRoCC
-    val cmdRouter    = Module(new RoccCommandRouterBB(outer.roccs.map(_.opcodes), usingRVVRoCC)(outer.p))
-    outer.roccs.zipWithIndex.foreach {
-      case (rocc, i) =>
-        rocc.module.io.ptw ++=: ptwPorts
-        rocc.module.io.cmd <> cmdRouter.io.out(i)
-        val dcIF = Module(new SimpleHellaCacheIF()(outer.p))
-        dcIF.io.requestor <> rocc.module.io.mem
-        dcachePorts += dcIF.io.cache
-        respArb.io.in(i) <> Queue(rocc.module.io.resp)
+  val (respArb, cmdRouter) =
+    if (outer.roccs.nonEmpty) {
+      val respArb      = Module(new RRArbiter(new RoCCResponseBB(coreParams.xLen), outer.roccs.size))
+      // Get usingRVVRoCC from tile parameters
+      val usingRVVRoCC = outer.rocketParams.asInstanceOf[RocketTileParamsBB].usingRVVRoCC
+      val cmdRouter    = Module(new RoccCommandRouterBB(outer.roccs.map(_.opcodes), usingRVVRoCC)(outer.p))
+      outer.roccs.zipWithIndex.foreach {
+        case (rocc, i) =>
+          rocc.module.io.ptw ++=: ptwPorts
+          rocc.module.io.cmd <> cmdRouter.io.out(i)
+          val dcIF = Module(new SimpleHellaCacheIF()(outer.p))
+          dcIF.io.requestor <> rocc.module.io.mem
+          dcachePorts += dcIF.io.cache
+          respArb.io.in(i) <> Queue(rocc.module.io.resp)
+      }
+      (Some(respArb), Some(cmdRouter))
+    } else {
+      (None, None)
     }
-    (Some(respArb), Some(cmdRouter))
-  } else {
-    (None, None)
-  }
 
   val roccCSRIOs = outer.roccs.map(_.module.io.csrs)
 }
@@ -152,11 +153,12 @@ class RoccCommandRouterBB(opcodes: Seq[OpcodeSet], usingRVVRoCC: Boolean)(implic
     case ((out, matches), i) =>
       // In RVVRoCC mode: route unmatched opcodes to first RoCC (index 0)
       // Otherwise: only route if opcode matches
-      val shouldRoute = if (usingRVVRoCC && i == 0) {
-        matches || !anyMatch // First RoCC gets matched opcodes OR unmatched opcodes
-      } else {
-        matches // Other RoCCs only get their matched opcodes
-      }
+      val shouldRoute =
+        if (usingRVVRoCC && i == 0) {
+          matches || !anyMatch // First RoCC gets matched opcodes OR unmatched opcodes
+        } else {
+          matches // Other RoCCs only get their matched opcodes
+        }
 
       out.valid := cmd.valid && shouldRoute
       out.bits  := cmd.bits

@@ -96,7 +96,7 @@ class Sequencer(val b: GlobalConfig) extends Module {
     requestReg.bits.decodeResult     := decoded
     requestReg.bits.instructionIndex := instructionCounter
     requestReg.bits.vdIsV0           := (io.global_issue_i.bits.cmd.cmd.raw_inst(11, 7) === 0.U) &&
-    (io.global_issue_i.bits.cmd.cmd.raw_inst(6) || !io.global_issue_i.bits.cmd.cmd.raw_inst(5))
+      (io.global_issue_i.bits.cmd.cmd.raw_inst(6) || !io.global_issue_i.bits.cmd.cmd.raw_inst(5))
     requestReg.bits.writeByte        := 0.U // TODO: calculate based on vl and sew
 
     instructionCounter := nextInstructionCounter

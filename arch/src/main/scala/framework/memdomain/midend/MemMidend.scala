@@ -56,8 +56,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
   def allocateChannel(): (Bool, UInt) = {
     val freeChannels = mappingTable.map(entry => !entry.valid)
-    val hasFreeChan = freeChannels.reduce(_ || _)
-    val chanId = PriorityEncoder(freeChannels)
+    val hasFreeChan  = freeChannels.reduce(_ || _)
+    val chanId       = PriorityEncoder(freeChannels)
     (hasFreeChan, chanId)
   }
 
@@ -80,23 +80,10 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
   // For ball writes, only allocate one request per cycle to avoid conflicts
   // Find the first unallocated request and allocate it
-  val pendingWrites = VecInit((0 until totalBallWrite).map(i =>
-    io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)))
-  val hasPendingWrite = pendingWrites.asUInt.orR
+  val pendingWrites       =
+    VecInit((0 until totalBallWrite).map(i => io.balldomain.bankWrite(i).io.req.valid && !isAllocated(false.B, i.U)))
+  val hasPendingWrite     = pendingWrites.asUInt.orR
   val nextWriteToAllocate = PriorityEncoder(pendingWrites)
-
-  // Debug: print allocation decisions
-  when(hasPendingWrite) {
-    printf("[MemMidend] hasPending=1 nextToAlloc=%d pending=[", nextWriteToAllocate)
-    for (i <- 0 until totalBallWrite) {
-      printf("%d", pendingWrites(i))
-    }
-    printf("] mappingTable=[")
-    for (i <- 0 until b.top.memBallChannelNum - 1) {
-      printf("ch%d:v=%d,r=%d,id=%d ", i.U, mappingTable(i).valid, mappingTable(i).isRead, mappingTable(i).id)
-    }
-    printf("]\n")
-  }
 
   for (i <- 0 until totalBallWrite) {
     //Default values
@@ -109,9 +96,6 @@ class MemMidend(val b: GlobalConfig) extends Module {
       val (hasFree, chanId) = allocateChannel()
       when(hasFree) {
         addEntry(chanId, false.B, i.U)
-        printf("[MemMidend] Allocated ballWrite[%d] to ch=%d\n", i.U, chanId)
-      }.otherwise {
-        printf("[MemMidend] No free channel for ballWrite[%d]\n", i.U)
       }
     }
   }
@@ -128,22 +112,22 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).bank_id          := 0.U
     io.mem_req(i).group_id         := 0.U
 
-    val isRead     = mappingTable(i).isRead
-    val ballRead   = io.balldomain.bankRead(mappingTable(i).id).io
-    val ballWrite  = io.balldomain.bankWrite(mappingTable(i).id).io
-    val rbank_id   = io.balldomain.bankRead(mappingTable(i).id).bank_id
-    val wbank_id   = io.balldomain.bankWrite(mappingTable(i).id).bank_id
-    val rgroup_id  = io.balldomain.bankRead(mappingTable(i).id).group_id
-    val wgroup_id  = io.balldomain.bankWrite(mappingTable(i).id).group_id
+    val isRead    = mappingTable(i).isRead
+    val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
+    val ballWrite = io.balldomain.bankWrite(mappingTable(i).id).io
+    val rbank_id  = io.balldomain.bankRead(mappingTable(i).id).bank_id
+    val wbank_id  = io.balldomain.bankWrite(mappingTable(i).id).bank_id
+    val rgroup_id = io.balldomain.bankRead(mappingTable(i).id).group_id
+    val wgroup_id = io.balldomain.bankWrite(mappingTable(i).id).group_id
 
     when(mappingTable(i).valid) {
       when(isRead) {
         io.mem_req(i).read <> ballRead
-        io.mem_req(i).bank_id := rbank_id
+        io.mem_req(i).bank_id  := rbank_id
         io.mem_req(i).group_id := rgroup_id
       }.otherwise {
         io.mem_req(i).write <> ballWrite
-        io.mem_req(i).bank_id := wbank_id
+        io.mem_req(i).bank_id  := wbank_id
         io.mem_req(i).group_id := wgroup_id
       }
     }
@@ -152,7 +136,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
   //Connect frontend to backend
   io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
   io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
-    io.mem_req(b.top.memBallChannelNum).bank_id      := Mux(
+  io.mem_req(b.top.memBallChannelNum).bank_id  := Mux(
     io.frontend.bankRead.io.req.valid,
     io.frontend.bankRead.bank_id,
     io.frontend.bankWrite.bank_id

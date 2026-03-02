@@ -99,9 +99,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.bankReadReq(0).bits.addr := op1_addr + op1_iter_counter
     op1_iter_counter            := Mux(io.bankReadReq(0).ready, op1_iter_counter + 1.U, op1_iter_counter)
     wait1_reg                   := Mux((op1_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
-    when(io.bankReadReq(0).fire) {
-      printf("[VecLD] op1 bank=%d addr=%d iter_cnt=%d\n", op1_bank, op1_addr + op1_iter_counter, op1_iter_counter)
-    }
+    when(io.bankReadReq(0).fire) {}
   }
 
   when(state === busy && io.ld_ex_o.ready && !wait2_reg) {
@@ -109,9 +107,7 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.bankReadReq(1).bits.addr := op2_addr + op2_iter_counter
     op2_iter_counter            := Mux(io.bankReadReq(1).ready, op2_iter_counter + 1.U, op2_iter_counter)
     wait2_reg                   := Mux((op2_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
-    when(io.bankReadReq(1).fire) {
-      printf("[VecLD] op2 bank=%d addr=%d iter_cnt=%d\n", op2_bank, op2_addr + op2_iter_counter, op2_iter_counter)
-    }
+    when(io.bankReadReq(1).fire) {}
   }
 
   when(wait1_reg) {
@@ -143,22 +139,6 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     io.ld_ex_o.bits.op2  := bankRespQueue1.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
     ld_ex_iter_reg       := ld_ex_iter_reg + 1.U
     io.ld_ex_o.bits.iter := ld_ex_iter_reg
-
-    // Debug: print first 8 elements of op1 and op2
-    when(ld_ex_iter_reg < 8.U) {
-      printf(
-        "[VecLD_DATA] iter=%d op1[0-3]=%d,%d,%d,%d op2[0-3]=%d,%d,%d,%d\n",
-        ld_ex_iter_reg,
-        io.ld_ex_o.bits.op1(0),
-        io.ld_ex_o.bits.op1(1),
-        io.ld_ex_o.bits.op1(2),
-        io.ld_ex_o.bits.op1(3),
-        io.ld_ex_o.bits.op2(0),
-        io.ld_ex_o.bits.op2(1),
-        io.ld_ex_o.bits.op2(2),
-        io.ld_ex_o.bits.op2(3)
-      )
-    }
   }.otherwise {
     io.ld_ex_o.valid     := false.B
     io.ld_ex_o.bits.iter := 0.U
