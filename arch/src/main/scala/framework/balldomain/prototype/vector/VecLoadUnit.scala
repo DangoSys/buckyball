@@ -129,21 +129,25 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit
 // -----------------------------------------------------------------------------
-  val deq_ready = bankRespQueue0.io.deq.valid && bankRespQueue1.io.deq.valid
-  bankRespQueue0.io.deq.ready := deq_ready
-  bankRespQueue1.io.deq.ready := deq_ready
+  val both_valid = bankRespQueue0.io.deq.valid && bankRespQueue1.io.deq.valid
 
-  when(deq_ready) {
-    io.ld_ex_o.valid     := true.B
+  io.ld_ex_o.valid := both_valid
+  when(both_valid) {
     io.ld_ex_o.bits.op1  := bankRespQueue0.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
     io.ld_ex_o.bits.op2  := bankRespQueue1.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-    ld_ex_iter_reg       := ld_ex_iter_reg + 1.U
     io.ld_ex_o.bits.iter := ld_ex_iter_reg
   }.otherwise {
-    io.ld_ex_o.valid     := false.B
     io.ld_ex_o.bits.iter := 0.U
     io.ld_ex_o.bits.op1  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
     io.ld_ex_o.bits.op2  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
+  }
+
+  // Only dequeue and advance iter counter on successful handshake
+  bankRespQueue0.io.deq.ready := io.ld_ex_o.fire
+  bankRespQueue1.io.deq.ready := io.ld_ex_o.fire
+
+  when(io.ld_ex_o.fire) {
+    ld_ex_iter_reg := ld_ex_iter_reg + 1.U
   }
 
 // -----------------------------------------------------------------------------

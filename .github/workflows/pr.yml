@@ -28,6 +28,7 @@ jobs:
           git fetch origin
           git clean -fd
           git checkout ${{ github.head_ref }}
+          git pull
 
       - name: Nix build
         shell: zsh {0}
