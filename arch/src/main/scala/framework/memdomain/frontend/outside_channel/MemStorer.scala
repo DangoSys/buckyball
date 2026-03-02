@@ -86,9 +86,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // SRAM read request
   // -----------------------------
-  io.bankRead.rob_id       := rob_id_reg
-  io.bankRead.bank_id      := target_bank
-  io.bankRead.ball_id      := 0.U
+  io.bankRead.rob_id   := rob_id_reg
+  io.bankRead.bank_id  := target_bank
+  io.bankRead.ball_id  := 0.U
   io.bankRead.group_id := sram_row(1, 0)
 
   io.bankRead.io.req.valid     := (state === s_issue_sram_req)

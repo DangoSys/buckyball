@@ -4,17 +4,18 @@ import chisel3._
 import chisel3.util._
 
 class RowSlotFIFO(maxRows: Int) extends Module {
+
   val io = IO(new Bundle {
-    val kRows = Input(UInt(log2Ceil(maxRows + 1).W))
-    val init = Input(Bool())
-    val advance = Input(Bool())
-    val head = Output(UInt(log2Ceil(maxRows).W))
+    val kRows           = Input(UInt(log2Ceil(maxRows + 1).W))
+    val init            = Input(Bool())
+    val advance         = Input(Bool())
+    val head            = Output(UInt(log2Ceil(maxRows).W))
     val slotToOverwrite = Output(UInt(log2Ceil(maxRows).W))
   })
 
   private val headReg = RegInit(0.U(log2Ceil(maxRows).W))
 
-  io.head := headReg
+  io.head            := headReg
   io.slotToOverwrite := headReg
 
   when(io.init) {
@@ -29,8 +30,10 @@ class RowSlotFIFO(maxRows: Int) extends Module {
 }
 
 object RowSlotFIFO {
+
   def logicalToPhysical(head: UInt, logicalRow: UInt, kRows: UInt): UInt = {
     val sum = head + logicalRow
     Mux(sum >= kRows, sum - kRows, sum)
   }
+
 }

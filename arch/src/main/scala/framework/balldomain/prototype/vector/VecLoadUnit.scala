@@ -52,10 +52,10 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val ld_ex_op1_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_op2_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_iter_reg      = RegInit(0.U(10.W))
-  val wait1_reg            = RegInit(false.B)
-  val wait2_reg            = RegInit(false.B)
-  val wait1_cnt          = RegInit(0.U(7.W))
-  val wait2_cnt          = RegInit(0.U(7.W))
+  val wait1_reg           = RegInit(false.B)
+  val wait2_reg           = RegInit(false.B)
+  val wait1_cnt           = RegInit(0.U(7.W))
+  val wait2_cnt           = RegInit(0.U(7.W))
 
   val bankRespQueue0 = Module(new Queue(new SramReadResp(b), entries = 8))
   val bankRespQueue1 = Module(new Queue(new SramReadResp(b), entries = 8))
@@ -108,22 +108,21 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     wait2_reg                   := Mux((op2_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
   }
 
-  when(wait1_reg){
+  when(wait1_reg) {
     wait1_cnt := wait1_cnt + 1.U
-    when(wait1_cnt === 32.U){
+    when(wait1_cnt === 32.U) {
       wait1_reg := false.B
       wait1_cnt := 0.U
     }
   }
 
-  when(wait2_reg){
+  when(wait2_reg) {
     wait2_cnt := wait2_cnt + 1.U
-    when(wait2_cnt === 32.U){
+    when(wait2_cnt === 32.U) {
       wait2_reg := false.B
       wait2_cnt := 0.U
     }
   }
-
 
 // -----------------------------------------------------------------------------
 // SRAM returns data and passes to EX unit
