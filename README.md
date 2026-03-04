@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://github.com/DangoSys/buckyball/raw/main/docs/img/logo.png" width = "100%" height = "70%">
+    <img src="https://raw.githubusercontent.com/DangoSys/documents/refs/heads/main/content/zh/images/logo.png" width = "100%" height = "70%">
 </p>
 
 <div align="center" style="margin-top: -10pt;">

@@ -19,3 +19,6 @@
 [submodule "thirdparty/palladium"]
 	path = thirdparty/palladium
 	url = https://github.com/SEU-ACAL/awesome-palladium.git
+[submodule "docs"]
+	path = docs
+	url = https://github.com/DangoSys/documents.git

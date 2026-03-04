@@ -1,1 +1,0 @@
-../../../../../../../../../arch/src/main/scala/sims/firesim/README.md
