@@ -116,6 +116,7 @@ add_cross_platform_test_target(ctest_transpose_16xn_test transpose_16xn_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
+add_cross_platform_test_target(ctest_bfp_test bfp_test.c)
 
 # Create master build target
 add_custom_target(buckyball-CTest-build ALL DEPENDS
@@ -141,5 +142,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_transpose_matmul
   ctest_relu_test
   ctest_vsetvli
+  ctest_bfp_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

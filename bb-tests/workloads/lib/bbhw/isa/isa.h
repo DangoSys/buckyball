@@ -48,5 +48,6 @@ typedef int32_t result_t;
 #include "33_im2col.c"
 #include "34_transpose.c"
 #include "38_relu.c"
+#include "39_bfp.c"
 
 #endif // BUCKYBALL_ISA_H
