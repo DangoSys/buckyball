@@ -81,8 +81,26 @@ async def handler(data, context):
     sources = " ".join(vsrcs + csrcs)
     jobs = data.get("jobs", "")
 
+    # Fix nix runtime library paths: embed rpath so binary finds nix libstdc++/glibc
+    libstdcpp_path = subprocess.run(
+        "g++ -print-file-name=libstdc++.so", shell=True, capture_output=True, text=True
+    ).stdout.strip()
+    if libstdcpp_path and "/" in libstdcpp_path:
+        nix_lib_dir = os.path.dirname(os.path.realpath(libstdcpp_path))
+        ldflags += f" -Wl,-rpath,{nix_lib_dir}"
+
+    # Enable ccache for verilator C++ compilation via OBJCACHE
+    if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
+        os.environ["OBJCACHE"] = "ccache"
+
+    # Build acceleration: lld for faster linking (available in nix env)
+    use_lld = subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode == 0
+    if use_lld:
+        ldflags += " -fuse-ld=lld"
+
+    # -O1 instead of -O3: much faster C++ compilation, minimal simulation speed difference
     verilator_cmd = (
-        f"verilator -MMD --build -cc --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
+        f"verilator -MMD -cc --vpi --trace -O1 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
         f"--unroll-count 256 "
         f"-Wno-PINCONNECTEMPTY "
@@ -101,11 +119,18 @@ async def handler(data, context):
         cmd=verilator_cmd,
         logger=context.logger,
         cwd=bbdir,
-        stdout_prefix="verilator build",
-        stderr_prefix="verilator build",
+        stdout_prefix="verilator verilation",
+        stderr_prefix="verilator verilation",
     )
+    if result.returncode != 0:
+        success_result, failure_result = await check_result(
+            context, result.returncode, continue_run=False, extra_fields={"task": "build"}
+        )
+        return
+
+    make_jobs = jobs if jobs else str(os.cpu_count() or 16)
     result = stream_run_logger(
-        cmd=f"make -C {obj_dir} -f V{topname}.mk V{topname}",
+        cmd=f"make -j{make_jobs} VM_PARALLEL_BUILDS=1 -C {obj_dir} -f V{topname}.mk V{topname}",
         logger=context.logger,
         cwd=bbdir,
         stdout_prefix="verilator build",
