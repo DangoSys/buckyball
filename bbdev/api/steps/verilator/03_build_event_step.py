@@ -100,7 +100,7 @@ async def handler(data, context):
 
     # -O1 instead of -O3: much faster C++ compilation, minimal simulation speed difference
     verilator_cmd = (
-        f"verilator -MMD -cc --vpi --trace -O1 --x-assign fast --x-initial fast --noassert -Wno-fatal "
+        f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
         f"--unroll-count 256 "
         f"-Wno-PINCONNECTEMPTY "
