@@ -77,7 +77,8 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
       MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 0.U, rs2(63, 10)),
       RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 1.U, rs2(63, 10)),
       TRANSPOSE     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 2.U, rs2(63, 10)),
-      IM2COL        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0))
+      IM2COL        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0)),
+      SYSTOLIC      -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 4.U, rs2(63, 10))
     )
   )
 
