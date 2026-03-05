@@ -22,6 +22,8 @@
             paths = with pkgs; [
               tools.verilator
               tools.dramsim2
+              tools.ccache
+              tools.lld
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -79,6 +81,9 @@
               fi
 
               source "$PWD/sourceme.sh"
+
+              # Verilator build acceleration: ccache via OBJCACHE
+              export OBJCACHE=ccache
 
               echo "Development environment loaded:"
               echo "Verilator: $(verilator --version 2>&1 | head -1)"
