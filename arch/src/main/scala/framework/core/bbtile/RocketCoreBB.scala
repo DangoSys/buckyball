@@ -1,7 +1,7 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package framework.core.rocket
+package framework.core.bbtile
 
 import chisel3._
 import chisel3.util._
@@ -13,8 +13,7 @@ import freechips.rocketchip.util.property
 import scala.collection.mutable.ArrayBuffer
 import freechips.rocketchip.rocket._
 
-import framework.core.rocket.RoCCCoreIOBB
-import framework.core.rocket.id.RVVRoCCDecode
+import framework.core.bbtile.id.RVVRoCCDecode
 
 trait HasRocketCoreIOBB extends HasRocketCoreParameters {
   implicit val p: Parameters
@@ -23,7 +22,7 @@ trait HasRocketCoreIOBB extends HasRocketCoreParameters {
   val io = IO(new CoreBundle()(p) {
     val hartid       = Input(UInt(hartIdLen.W))
     val reset_vector = Input(UInt(resetVectorLen.W))
-    val interrupts   = Input(new CoreInterrupts(tileParams.asInstanceOf[RocketTileParamsBB].beuAddr.isDefined))
+    val interrupts   = Input(new CoreInterrupts(tileParams.asInstanceOf[BBTileParams].beuAddr.isDefined))
     val imem         = new FrontendIO
     val dmem         = new HellaCacheIO
     val ptw          = Flipped(new DatapathPTWIO())
@@ -39,11 +38,17 @@ trait HasRocketCoreIOBB extends HasRocketCoreParameters {
 
 }
 
-class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
+class RocketBB(tile: BBTile)(implicit p: Parameters)
     extends CoreModule()(p)
     with HasRocketCoreParameters
     with HasRocketCoreIOBB {
   def nTotalRoCCCSRs = tile.roccCSRs.flatten.size
+
+  // Override usingRoCC: BBTile doesn't use BuildRoCC/LazyRoCC, but when
+  // withBuckyball is enabled the core must still treat custom instructions as
+  // RoCC commands.
+  override val usingRoCC = tile.bbParams.withBuckyball
+
   import ALU._
 
   val clock_en_reg           = RegInit(true.B)
@@ -158,7 +163,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
 
     val pipelinedMul = usingMulDiv && mulDivParams.mulUnroll == xLen
 
-    val usingRVVRoCC = tile.rocketParams.usingRVVRoCC
+    val usingRVVRoCC = tile.bbParams.withBuckyball
 
     // Ensure usingVector and usingRVVRoCC are mutually exclusive
     require(
@@ -297,7 +302,7 @@ class RocketBB(tile: RocketTileBB)(implicit p: Parameters)
       perfEvents,
       coreParams.customCSRs.decls,
       tile.roccCSRs.flatten,
-      tile.rocketParams.beuAddr.isDefined
+      tile.bbParams.beuAddr.isDefined
     ))
 
     val id_csr_en      = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)

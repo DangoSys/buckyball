@@ -2,7 +2,7 @@ package framework.gpdomain.sequencer.decoder
 
 import chisel3._
 import chisel3.util._
-import framework.core.rocket.RoCCCommandBB
+import framework.core.bbtile.RoCCCommandBB
 import framework.top.GlobalConfig
 
 object DISA {

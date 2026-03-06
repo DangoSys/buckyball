@@ -32,8 +32,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_group_count = Output(UInt(4.W))
   })
 
-  val accPipes:  Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
-  val sharedMem: Instance[SharedMem]     = Instantiate(new SharedMem(b))
+  val accPipes:  Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
+  val sharedMem: Instance[SharedMem]    = Instantiate(new SharedMem(b))
 
   // Keep per-vbank logical group count so shared path can expose the same
   // query semantics expected by loader/storer loops.
@@ -101,14 +101,18 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     sharedReqArb.io.in(i).bits.is_write    := useWrite
     sharedReqArb.io.in(i).bits.vbank_id    := io.mem_req(i).bank_id
     sharedReqArb.io.in(i).bits.group_id    := io.mem_req(i).group_id
-    sharedReqArb.io.in(i).bits.addr := Mux(
+    sharedReqArb.io.in(i).bits.addr        := Mux(
       useRead,
       accPipes(i).io.sramRead.req.bits.addr,
       accPipes(i).io.sramWrite.req.bits.addr
     )
-    sharedReqArb.io.in(i).bits.mask  := Mux(useRead, VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)), accPipes(i).io.sramWrite.req.bits.mask)
-    sharedReqArb.io.in(i).bits.data  := Mux(useRead, 0.U, accPipes(i).io.sramWrite.req.bits.data)
-    sharedReqArb.io.in(i).bits.wmode := Mux(useRead, false.B, accPipes(i).io.sramWrite.req.bits.wmode)
+    sharedReqArb.io.in(i).bits.mask        := Mux(
+      useRead,
+      VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)),
+      accPipes(i).io.sramWrite.req.bits.mask
+    )
+    sharedReqArb.io.in(i).bits.data        := Mux(useRead, 0.U, accPipes(i).io.sramWrite.req.bits.data)
+    sharedReqArb.io.in(i).bits.wmode       := Mux(useRead, false.B, accPipes(i).io.sramWrite.req.bits.wmode)
 
     when(routeShared && useRead) {
       accPipes(i).io.sramRead.req.ready := sharedReqArb.io.in(i).ready
@@ -119,27 +123,27 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   // Keep one in-flight request per response type so source-channel mapping is exact.
-  val readReqPending   = RegInit(false.B)
-  val writeReqPending  = RegInit(false.B)
-  val readReqSrcCh     = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-  val writeReqSrcCh    = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
+  val readReqPending  = RegInit(false.B)
+  val writeReqPending = RegInit(false.B)
+  val readReqSrcCh    = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
+  val writeReqSrcCh   = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
 
-  val readRespBufValid  = RegInit(false.B)
-  val readRespBufSrcCh  = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-  val readRespBufData   = Reg(UInt(b.memDomain.bankWidth.W))
+  val readRespBufValid = RegInit(false.B)
+  val readRespBufSrcCh = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
+  val readRespBufData  = Reg(UInt(b.memDomain.bankWidth.W))
 
   val writeRespBufValid = RegInit(false.B)
   val writeRespBufSrcCh = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
   val writeRespBufOk    = Reg(Bool())
 
-  val arbIsWrite = sharedReqArb.io.out.bits.is_write
+  val arbIsWrite    = sharedReqArb.io.out.bits.is_write
   val canIssueRead  = !readReqPending && !readRespBufValid
   val canIssueWrite = !writeReqPending && !writeRespBufValid
 
-  sharedMem.io.read.req.valid          := sharedReqArb.io.out.valid && !arbIsWrite && canIssueRead
-  sharedMem.io.read.req.bits.vbank_id  := sharedReqArb.io.out.bits.vbank_id
-  sharedMem.io.read.req.bits.group_id  := sharedReqArb.io.out.bits.group_id
-  sharedMem.io.read.req.bits.addr      := sharedReqArb.io.out.bits.addr
+  sharedMem.io.read.req.valid         := sharedReqArb.io.out.valid && !arbIsWrite && canIssueRead
+  sharedMem.io.read.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id
+  sharedMem.io.read.req.bits.group_id := sharedReqArb.io.out.bits.group_id
+  sharedMem.io.read.req.bits.addr     := sharedReqArb.io.out.bits.addr
 
   sharedMem.io.write.req.valid         := sharedReqArb.io.out.valid && arbIsWrite && canIssueWrite
   sharedMem.io.write.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id

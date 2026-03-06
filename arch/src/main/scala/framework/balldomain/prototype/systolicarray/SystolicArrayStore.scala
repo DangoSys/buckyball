@@ -13,7 +13,6 @@ class ctrl_st_req(b: GlobalConfig) extends Bundle {
   val iter         = UInt(10.W)
 }
 
-
 class BankWriteEntry(b: GlobalConfig) extends Bundle {
   val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
   val data  = UInt(b.memDomain.bankWidth.W)
@@ -28,7 +27,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
-  val outBW = ballMapping.outBW
+  val outBW       = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {

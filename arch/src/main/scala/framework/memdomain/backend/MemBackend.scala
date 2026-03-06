@@ -26,7 +26,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   privateBackend.io.mem_req <> io.mem_req
   privateBackend.io.config <> io.config
   privateBackend.io.query_vbank_id := io.query_vbank_id
-  io.query_group_count := privateBackend.io.query_group_count
+  io.query_group_count             := privateBackend.io.query_group_count
 
   // Shared backend is intentionally not connected at top-level in this refactor
   // to avoid private-path regressions. It can be integrated in a later step.

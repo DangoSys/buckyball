@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
 import framework.frontend.scoreboard.{BankAccessInfo, BankScoreboard}
-import framework.core.rocket.RoCCResponseBB
+import framework.core.bbtile.RoCCResponseBB
 
 // Global ROB entry - contains instruction + bank access info
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
