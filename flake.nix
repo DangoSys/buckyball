@@ -26,6 +26,7 @@
               tools.lld
               tools.yosys
               tools.opensta
+              tools.lcov
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc

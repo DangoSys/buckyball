@@ -6,6 +6,9 @@
 #include "monitor/cosim.h"
 #endif
 
+#include <csignal>
+#include <cstdlib>
+
 vluint64_t sim_time = 0;
 VerilatedContext *contextp = NULL;
 VerilatedFstC *tfp = NULL;
@@ -18,6 +21,19 @@ static VTestHarness *top;
 #endif
 
 int bb_step = 1;
+
+#if VM_COVERAGE
+static void coverage_atexit() {
+  if (contextp) {
+    contextp->coveragep()->write();
+  }
+}
+
+static void coverage_signal_handler(int sig) {
+  coverage_atexit();
+  _exit(128 + sig);
+}
+#endif
 
 void step_and_dump_wave() {
   top->eval();
@@ -53,6 +69,12 @@ void sim_init(int argc, char **argv) {
   top->clock = 0;
   step_and_dump_wave();
 
+#if VM_COVERAGE
+  atexit(coverage_atexit);
+  signal(SIGTERM, coverage_signal_handler);
+  signal(SIGINT, coverage_signal_handler);
+#endif
+
 #ifdef COSIM
   // Initialize COSIM socket server
   cosim_server = new CosimServer(top);
@@ -74,11 +96,6 @@ void sim_exit() {
     cosim_server->shutdown();
     delete cosim_server;
   }
-#endif
-
-#if VM_COVERAGE
-  Verilated::mkdir("coverage");
-  contextp->coveragep()->write();
 #endif
 
   exit(0);
