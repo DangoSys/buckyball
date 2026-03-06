@@ -9,6 +9,8 @@ jobs:
   PR-Test:
     name: PR Test
     runs-on: cpu-server
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
       - name: Print information
         run: |
@@ -24,7 +26,6 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          setproxy
           git fetch origin
           git clean -fd
           git checkout ${{ github.head_ref }}
@@ -34,14 +35,12 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          setproxy
           nix build
 
       - name: Build Workloads
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          setproxy
           nix develop -c bbdev workload --build
 
       - name: Build Verilator
