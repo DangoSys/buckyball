@@ -89,4 +89,7 @@ in
 
   # Static timing analysis
   opensta = opensta;
+
+  # Coverage report (genhtml)
+  lcov = pkgs.lcov;
 }
