@@ -11,8 +11,8 @@ class SystolicArrayBall(val b: GlobalConfig) extends Module with HasBlink with H
 
   val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
-  val inBW  = ballCommonConfig.inBW
-  val outBW = ballCommonConfig.outBW
+  val inBW             = ballCommonConfig.inBW
+  val outBW            = ballCommonConfig.outBW
 
   @public
   val io = IO(new BlinkIO(b, inBW, outBW))

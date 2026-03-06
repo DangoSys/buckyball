@@ -6,7 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
 import framework.frontend.globalrs.{GlobalReservationStation, GlobalRsComplete, GlobalRsIssue}
 import framework.top.GlobalConfig
-import framework.core.rocket.{RoCCCommandBB, RoCCResponseBB}
+import framework.core.bbtile.{RoCCCommandBB, RoCCResponseBB}
 
 /**
  * Frontend Module

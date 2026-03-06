@@ -10,13 +10,13 @@ import framework.balldomain.prototype.systolicarray.configs.SystolicBallParam
 
 @instantiable
 class SystolicArrayLoad(val b: GlobalConfig) extends Module {
-  val config = SystolicBallParam()
-  val InputNum = 16
-  val bankWidth = b.memDomain.bankWidth
+  val config      = SystolicBallParam()
+  val InputNum    = 16
+  val bankWidth   = b.memDomain.bankWidth
   val inputWidth  = config.inputWidth
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
-  val inBW = ballMapping.inBW
+  val inBW        = ballMapping.inBW
 
   @public
   val io = IO(new Bundle {
@@ -38,7 +38,6 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
   val ld_ex_iter_reg      = RegInit(0.U(10.W))
-
 
   val bankRespQueue0 = Module(new Queue(new SramReadResp(b), entries = 8))
   val bankRespQueue1 = Module(new Queue(new SramReadResp(b), entries = 8))

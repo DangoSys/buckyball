@@ -17,8 +17,6 @@ class ctrl_ld_req(b: GlobalConfig) extends Bundle {
   val iter          = UInt(10.W)
 }
 
-
-
 @instantiable
 class SystolicArrayUnit(val b: GlobalConfig) extends Module {
   val InputNum   = 16
@@ -27,8 +25,8 @@ class SystolicArrayUnit(val b: GlobalConfig) extends Module {
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
-  val inBW  = ballMapping.inBW
-  val outBW = ballMapping.outBW
+  val inBW        = ballMapping.inBW
+  val outBW       = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {
