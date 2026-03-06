@@ -31,6 +31,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
     // Query interface to get group count
     val query_vbank_id    = Output(UInt(8.W))
     val query_group_count = Input(UInt(4.W))
+
+    // Propagate decoded shared/private access intent.
+    val is_shared = Output(Bool())
   })
 
   // -----------------------------
@@ -45,6 +48,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val stride_reg      = RegInit(0.U(10.W))
   val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val group_count_reg = RegInit(1.U(4.W)) // Store group count for current operation
+  val is_shared_reg   = RegInit(false.B)
 
   // Address and group counters
   val addr_counter  = RegInit(0.U(10.W)) // Row address counter
@@ -82,6 +86,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     // Query and save group count
     group_count_reg := io.query_group_count
     iter_reg        := io.cmdReq.bits.cmd.iter
+    is_shared_reg   := io.cmdReq.bits.cmd.is_shared
 
     // Initialize counters
     addr_counter  := 0.U
@@ -107,6 +112,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.bankRead.bank_id  := target_bank
   io.bankRead.ball_id  := 0.U
   io.bankRead.group_id := group_counter
+  io.is_shared         := is_shared_reg
 
   io.bankRead.io.req.valid     := (state === s_issue_sram_req)
   io.bankRead.io.req.bits.addr := addr_counter

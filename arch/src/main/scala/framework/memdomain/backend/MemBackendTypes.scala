@@ -10,4 +10,5 @@ class MemRequestIO(b: GlobalConfig) extends Bundle {
   val read     = Flipped(new SramReadIO(b))  // midend sends read req into backend
   val bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
   val group_id = Output(UInt(3.W))
+  val is_shared = Output(Bool())
 }

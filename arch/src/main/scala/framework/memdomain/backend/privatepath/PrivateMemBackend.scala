@@ -91,6 +91,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
     accPipes(i).io.mem_req.bank_id  := io.mem_req(i).bank_id
     accPipes(i).io.mem_req.group_id := io.mem_req(i).group_id
+    accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
