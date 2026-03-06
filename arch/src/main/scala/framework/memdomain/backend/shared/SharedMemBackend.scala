@@ -3,7 +3,7 @@ package framework.memdomain.backend.shared
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.memdomain.backend.MemRequestIO
+import framework.memdomain.backend.{MemRequestIO, MTraceDPI}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import framework.top.GlobalConfig
@@ -32,33 +32,38 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_group_count = Output(UInt(4.W))
   })
 
-  val accPipes:  Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
-  val sharedMem: Instance[SharedMem]    = Instantiate(new SharedMem(b))
+  val accPipes:  Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
+  val sharedMem: Instance[SharedMem]     = Instantiate(new SharedMem(b))
+  val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
+  val sharedAllocTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
 
-  // Keep per-vbank logical group count so shared path can expose the same
-  // query semantics expected by loader/storer loops.
-  val sharedGroupCountTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(4.W))))
+  for (mt <- mtraces) {
+    mt.io.is_write := 0.U
+    mt.io.channel  := 0.U
+    mt.io.vbank_id := 0.U
+    mt.io.group_id := 0.U
+    mt.io.addr     := 0.U
+    mt.io.data_lo  := 0.U
+    mt.io.data_hi  := 0.U
+    mt.io.enable   := false.B
+  }
 
   io.config.ready := true.B
-
   when(io.config.valid) {
     val cfgVbankIdx = io.config.bits.vbank_id(log2Up(b.memDomain.bankNum) - 1, 0)
-    when(io.config.bits.alloc) {
-      val nextCount = Mux(io.config.bits.is_multi, io.config.bits.group_id + 1.U, 1.U)
-      when(nextCount > sharedGroupCountTable(cfgVbankIdx)) {
-        sharedGroupCountTable(cfgVbankIdx) := nextCount
-      }
-    }.otherwise {
-      sharedGroupCountTable(cfgVbankIdx) := 0.U
+    when(io.config.bits.alloc === 2.U) {
+      sharedAllocTable(cfgVbankIdx) := true.B
+    }.elsewhen(io.config.bits.alloc === 0.U) {
+      sharedAllocTable(cfgVbankIdx) := false.B
     }
   }
 
-  val queryVbankIdx    = io.query_vbank_id(log2Up(b.memDomain.bankNum) - 1, 0)
-  val sharedGroupCount = sharedGroupCountTable(queryVbankIdx)
+  // Shared memory treats each vbank as single-group storage.
+  val queryVbankIdx = io.query_vbank_id(log2Up(b.memDomain.bankNum) - 1, 0)
   io.query_group_count := Mux(
-    b.memDomain.sharedEnable.B,
-    Mux(sharedGroupCount =/= 0.U, sharedGroupCount, b.memDomain.sharedDefaultGroupCount.U(4.W)),
-    0.U
+    b.memDomain.sharedEnable.B && sharedAllocTable(queryVbankIdx),
+    1.U(4.W),
+    0.U(4.W)
   )
 
   for (i <- 0 until b.memDomain.bankChannel) {
@@ -75,8 +80,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
-    // In shared backend, all vbank/group combinations are treated as multi-capable.
-    accPipes(i).io.is_multi := true.B
+    // Group dimension is intentionally disabled in shared backend.
+    accPipes(i).io.is_multi := false.B
   }
 
   sharedMem.io.read.req.valid   := false.B
@@ -89,19 +94,44 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // Shared request routing arbiter
   // ---------------------------------------------------------------------------
+  private def emitTrace(ch: Int, isWrite: UInt, addr: UInt, dataLo: UInt, dataHi: UInt, en: Bool): Unit = {
+    mtraces(ch).io.is_write := isWrite
+    mtraces(ch).io.channel  := ch.U
+    mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id
+    mtraces(ch).io.group_id := io.mem_req(ch).group_id
+    mtraces(ch).io.addr     := addr
+    mtraces(ch).io.data_lo  := dataLo
+    mtraces(ch).io.data_hi  := dataHi
+    mtraces(ch).io.enable   := en
+  }
+
   val sharedReqArb = Module(new RRArbiter(new SharedArbReq(b), b.memDomain.bankChannel))
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    val routeShared = b.memDomain.sharedEnable.B
+    val routeShared = b.memDomain.sharedEnable.B && sharedAllocTable(io.mem_req(i).bank_id)
     val useRead     = accPipes(i).io.sramRead.req.valid
     val useWrite    = !useRead && accPipes(i).io.sramWrite.req.valid
+
+    when(io.mem_req(i).read.req.fire) {
+      emitTrace(i, 0.U, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
+    }
+    when(io.mem_req(i).write.req.fire) {
+      emitTrace(
+        i,
+        1.U,
+        io.mem_req(i).write.req.bits.addr,
+        io.mem_req(i).write.req.bits.data(63, 0),
+        io.mem_req(i).write.req.bits.data(127, 64),
+        true.B
+      )
+    }
 
     sharedReqArb.io.in(i).valid            := routeShared && (useRead || useWrite)
     sharedReqArb.io.in(i).bits.src_channel := i.U
     sharedReqArb.io.in(i).bits.is_write    := useWrite
     sharedReqArb.io.in(i).bits.vbank_id    := io.mem_req(i).bank_id
-    sharedReqArb.io.in(i).bits.group_id    := io.mem_req(i).group_id
-    sharedReqArb.io.in(i).bits.addr        := Mux(
+    sharedReqArb.io.in(i).bits.group_id    := 0.U
+    sharedReqArb.io.in(i).bits.addr := Mux(
       useRead,
       accPipes(i).io.sramRead.req.bits.addr,
       accPipes(i).io.sramWrite.req.bits.addr
