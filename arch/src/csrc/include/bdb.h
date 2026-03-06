@@ -16,6 +16,9 @@
 #endif
 
 #include "verilated_fst_c.h"
+#if VM_COVERAGE
+#include "verilated_cov.h"
+#endif
 
 // ================ BDB Config ===================
 // VCD file path

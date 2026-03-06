@@ -135,6 +135,14 @@ if __name__ == "__main__":
             print("  - Test categorization")
             sys.exit(0)
     print("Test started")
-    result = run_pytest(sys.argv[1:])
+    # Filter out --coverage flag (handled by bbdev, not pytest)
+    # Set env var so test cases know to pass --coverage to verilator sim
+    pytest_args = []
+    for a in sys.argv[1:]:
+        if a == "--coverage":
+            os.environ["SARDINE_COVERAGE"] = "1"
+        else:
+            pytest_args.append(a)
+    result = run_pytest(pytest_args)
     print(f"Test result: {result}")
     sys.exit(result)

@@ -1,6 +1,7 @@
 import pytest
 import logging
 import time
+import os
 from pathlib import Path
 import subprocess
 
@@ -99,7 +100,8 @@ def test_ctest_workload_debug(
 
     time.sleep(test_index * 20)
     start_time = time.time()
-    command = f'bbdev verilator --sim "--binary {workload_path} --batch"'
+    coverage_flag = " --coverage" if os.environ.get("SARDINE_COVERAGE") else ""
+    command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'
     logging.info(f"Running command: {command}")
 
     # 使用 command_run 执行命令，带提前退出检测

@@ -22,6 +22,49 @@ let
       runHook postInstall
     '';
   };
+
+  # CUDD BDD library (required by OpenSTA)
+  cudd = pkgs.stdenv.mkDerivation {
+    pname = "cudd";
+    version = "3.0.0";
+    src = pkgs.fetchFromGitHub {
+      owner = "The-OpenROAD-Project";
+      repo = "cudd";
+      rev = "3.0.0";
+      hash = "sha256-ybsFPcggPsb6lfZbWbwxNTuZSOC7lLNY/iZSTvyFmdU=";
+    };
+    nativeBuildInputs = [ pkgs.autoreconfHook ];
+    configureFlags = [ "--prefix=$(out)" "CFLAGS=-fPIC" "CXXFLAGS=-fPIC" ];
+    installPhase = ''
+      runHook preInstall
+      make install
+      runHook postInstall
+    '';
+  };
+
+  # OpenSTA - gate-level static timing analysis
+  opensta = pkgs.stdenv.mkDerivation {
+    pname = "opensta";
+    version = "unstable-2025";
+    src = pkgs.fetchFromGitHub {
+      owner = "The-OpenROAD-Project";
+      repo = "OpenSTA";
+      rev = "5e9e9db7061fddf1b0b9c47c49c920c56da140e3";
+      hash = "sha256-SfxNh5PFWWTdTH0ZiiATV1F0qOBTh50+xM9roJMHtLg==";
+    };
+    nativeBuildInputs = with pkgs; [ cmake flex bison swig ];
+    buildInputs = with pkgs; [ tcl eigen zlib ];
+    cmakeFlags = [
+      "-DCUDD_DIR=${cudd}"
+      "-DUSE_TCL_READLINE=OFF"
+    ];
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/bin
+      find . -name sta -type f -executable -exec cp {} $out/bin/ \;
+      runHook postInstall
+    '';
+  };
 in
 {
   # Pin to Verilator 5.022 2024-02-24 (nixpkgs-unstable ships 5.044)
@@ -40,4 +83,10 @@ in
   # Build acceleration tools
   ccache = pkgs.ccache;
   lld = pkgs.lld;
+
+  # Synthesis tools
+  yosys = pkgs.yosys;
+
+  # Static timing analysis
+  opensta = opensta;
 }

@@ -16,7 +16,7 @@ index.html
 *.vcd
 *.fst
 *.log
-
+*.dot
 
 
 .clangd

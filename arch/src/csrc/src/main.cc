@@ -76,6 +76,11 @@ void sim_exit() {
   }
 #endif
 
+#if VM_COVERAGE
+  Verilated::mkdir("coverage");
+  contextp->coveragep()->write();
+#endif
+
   exit(0);
 }
 
