@@ -98,7 +98,6 @@ async def handler(data, context):
     if use_lld:
         ldflags += " -fuse-ld=lld"
 
-    # -O1 instead of -O3: much faster C++ compilation, minimal simulation speed difference
     verilator_cmd = (
         f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
