@@ -26,7 +26,10 @@ async def handler(req, context):
 
     body = req.get("body") or {}
 
-    data = {"workload": body.get("workload", "")}
+    data = {
+        "workload": body.get("workload", ""),
+        "coverage": body.get("coverage", False),
+    }
 
     sardine_dir = f"{bbdir}/bb-tests/sardine"
 

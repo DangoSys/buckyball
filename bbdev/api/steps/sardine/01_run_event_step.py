@@ -19,7 +19,7 @@ config = {
     "name": "running sardine",
     "description": "running sardine",
     "subscribes": ["sardine.run"],
-    "emits": [],
+    "emits": ["sardine.coverage_report"],
     "flows": ["sardine"],
 }
 
@@ -29,7 +29,12 @@ async def handler(data, context):
 
     sardine_dir = f"{bbdir}/bb-tests/sardine"
 
+    # Record start time so coverage report can filter to only this run's .dat files
+    run_start_time = time.time()
+
     command = f"python3 run_tests.py -m \"({data.get('workload', '')})\""
+    if data.get("coverage", False):
+        command += " --coverage"
     context.logger.info(
         "Executing sardine command", {"command": command, "cwd": sardine_dir}
     )
@@ -45,11 +50,20 @@ async def handler(data, context):
     # ==================================================================================
     # Return execution result
     # ==================================================================================
-    success_result, failure_result = await check_result(
-        context, result.returncode, continue_run=False
-    )
+    coverage = data.get("coverage", False)
 
-    # ==================================================================================
-    #  finish workflow
-    # ==================================================================================
+    if coverage:
+        # When coverage is enabled, always emit to coverage report step
+        # (even if some tests failed, coverage data is still valid)
+        success_result, failure_result = await check_result(
+            context, result.returncode, continue_run=True
+        )
+        await context.emit(
+            {"topic": "sardine.coverage_report", "data": {**data, "run_start_time": run_start_time}}
+        )
+    else:
+        success_result, failure_result = await check_result(
+            context, result.returncode, continue_run=False
+        )
+
     return

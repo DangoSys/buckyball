@@ -59,9 +59,7 @@ async def handler(data, context):
     # Coverage data output path
     coverage_flag = ""
     if coverage:
-        coverage_dir = f"{bbdir}/bb-tests/sardine/reports/coverage"
-        os.makedirs(coverage_dir, exist_ok=True)
-        coverage_dat_path = f"{coverage_dir}/{timestamp}-{binary_name}.dat"
+        coverage_dat_path = f"{log_dir}/coverage.dat"
         coverage_flag = f"+verilator+coverage+file+{coverage_dat_path}"
 
     bin_path = f"{build_dir}/obj_dir/V{topname}"

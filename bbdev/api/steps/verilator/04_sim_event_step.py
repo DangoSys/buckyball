@@ -36,6 +36,7 @@ async def handler(data, context):
 
     binary_name = data.get("binary", "")
     coverage = data.get("coverage", False)
+    context.logger.info(f"[DEBUG] sim step received coverage={coverage}, data keys={list(data.keys())}")
     success_result, failure_result = await check_result(
         context, returncode=(binary_name == None), continue_run=True
     )
@@ -60,9 +61,7 @@ async def handler(data, context):
     # Coverage data output path
     coverage_flag = ""
     if coverage:
-        coverage_dir = f"{bbdir}/bb-tests/sardine/reports/coverage"
-        os.makedirs(coverage_dir, exist_ok=True)
-        coverage_dat_path = f"{coverage_dir}/{timestamp}-{binary_name}.dat"
+        coverage_dat_path = f"{log_dir}/coverage.dat"
         coverage_flag = f"+verilator+coverage+file+{coverage_dat_path}"
 
     bin_path = f"{build_dir}/obj_dir/V{topname}"
@@ -91,6 +90,8 @@ async def handler(data, context):
         f"+fst={fst_path} +log={log_path} +permissive-off "
         f"{binary_path} > >(tee {log_dir}/stdout.log) 2> >(spike-dasm > {log_dir}/disasm.log)"
     )
+    context.logger.info(f"[DEBUG] sim_cmd coverage_flag='{coverage_flag}'")
+    context.logger.info(f"[DEBUG] full sim_cmd='{sim_cmd}'")
     script_dir = os.path.dirname(__file__)
 
     result = stream_run_logger(
