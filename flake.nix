@@ -24,6 +24,8 @@
               tools.dramsim2
               tools.ccache
               tools.lld
+              tools.yosys
+              tools.opensta
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -97,6 +99,8 @@
               echo "npm: $(npm --version 2>&1 | head -1)"
               echo "bbdev: $(which bbdev)"
               echo "RISCV: $RISCV"
+              echo "Yosys: $(yosys --version 2>&1 | head -1)"
+              echo "OpenSTA: $(sta -version 2>&1 | head -1)"
               echo "==========================================================================="
             '';
           };
