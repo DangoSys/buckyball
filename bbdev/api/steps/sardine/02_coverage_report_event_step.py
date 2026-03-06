@@ -54,7 +54,7 @@ async def handler(data, context):
         import shutil
         shutil.copy2(dat_files[0], merged_dat)
     else:
-        merge_cmd = f"verilator_coverage --merge {merged_dat} {' '.join(dat_files)}"
+        merge_cmd = f"verilator_coverage -write {merged_dat} {' '.join(dat_files)}"
         result = stream_run_logger(
             cmd=merge_cmd,
             logger=context.logger,
@@ -98,7 +98,7 @@ async def handler(data, context):
     lcov_info = f"{coverage_dir}/merged.info"
     html_dir = f"{coverage_dir}/html"
 
-    lcov_cmd = f"verilator_coverage --write-info {lcov_info} {merged_dat}"
+    lcov_cmd = f"verilator_coverage -write-info {lcov_info} {merged_dat}"
     result = stream_run_logger(
         cmd=lcov_cmd,
         logger=context.logger,

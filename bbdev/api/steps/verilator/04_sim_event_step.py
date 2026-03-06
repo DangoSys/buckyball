@@ -36,7 +36,6 @@ async def handler(data, context):
 
     binary_name = data.get("binary", "")
     coverage = data.get("coverage", False)
-    context.logger.info(f"[DEBUG] sim step received coverage={coverage}, data keys={list(data.keys())}")
     success_result, failure_result = await check_result(
         context, returncode=(binary_name == None), continue_run=True
     )
@@ -90,8 +89,6 @@ async def handler(data, context):
         f"+fst={fst_path} +log={log_path} +permissive-off "
         f"{binary_path} > >(tee {log_dir}/stdout.log) 2> >(spike-dasm > {log_dir}/disasm.log)"
     )
-    context.logger.info(f"[DEBUG] sim_cmd coverage_flag='{coverage_flag}'")
-    context.logger.info(f"[DEBUG] full sim_cmd='{sim_cmd}'")
     script_dir = os.path.dirname(__file__)
 
     result = stream_run_logger(
