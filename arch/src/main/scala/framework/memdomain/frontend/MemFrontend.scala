@@ -33,6 +33,8 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val interdma = new Bundle {
       val bankRead  = Flipped(new BankRead(b))
       val bankWrite = Flipped(new BankWrite(b))
+      val read_is_shared  = Output(Bool())
+      val write_is_shared = Output(Bool())
     }
 
     // TLB interfaces for internal DMA modules (Reader/Writer)
@@ -160,6 +162,8 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // Connect MemLoader and MemStorer to MemController's DMA interface
   memLoader.io.bankWrite <> io.interdma.bankWrite
   memStorer.io.bankRead <> io.interdma.bankRead
+  io.interdma.read_is_shared  := memStorer.io.is_shared
+  io.interdma.write_is_shared := memLoader.io.is_shared
 
   // Completion signal connected to global RS
   io.global_complete_o <> memRs.io.complete_o

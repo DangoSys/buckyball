@@ -27,6 +27,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
     // Query interface to get group count
     val query_vbank_id    = Output(UInt(8.W))
     val query_group_count = Input(UInt(4.W))
+
+    // Propagate decoded shared/private access intent.
+    val is_shared = Output(Bool())
   })
 
   val s_idle :: s_dma_req :: s_dma_wait :: s_wait_last_write :: s_done :: Nil = Enum(5)
@@ -38,6 +41,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val resp_count   = RegInit(0.U(log2Up(16).W))
   val wr_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   val stride_reg   = Reg(UInt(11.W))
+  val is_shared_reg = RegInit(false.B)
 
   // Group counter for multi-bank writes
   val group_counter   = RegInit(0.U(4.W))
@@ -79,6 +83,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.bankWrite.bank_id  := wr_bank_reg
   io.bankWrite.ball_id  := 0.U
   io.bankWrite.group_id := group_counter
+  io.is_shared          := is_shared_reg
 
   // cmdResp (Decoupled): hold valid until accepted
   io.cmdResp.valid       := (state === s_done)
@@ -100,6 +105,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     latLast         := false.B
     group_counter   := 0.U
     group_count_reg := io.query_group_count
+    is_shared_reg   := io.cmdReq.bits.cmd.is_shared
 
     // Query group count and multiply iter
     iter_reg := io.cmdReq.bits.cmd.iter * io.query_group_count
