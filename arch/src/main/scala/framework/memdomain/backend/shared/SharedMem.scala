@@ -33,10 +33,9 @@ class SharedMemWriteIO(val b: GlobalConfig) extends Bundle {
 
 @instantiable
 class SharedMem(val b: GlobalConfig) extends Module {
-  private val maxGroup       = 8
-  private val mask_len       = b.memDomain.bankMaskLen
-  private val mask_elem      = UInt((b.memDomain.bankWidth / mask_len).W)
-  private val minSharedLines = b.memDomain.bankNum * maxGroup * b.memDomain.bankEntries
+	private val maskLen        = b.memDomain.bankMaskLen
+	private val maskElem       = UInt((b.memDomain.bankWidth / maskLen).W)
+	private val minSharedLines = b.memDomain.bankNum * b.memDomain.bankEntries
 
   require(
     b.memDomain.sharedEntries >= minSharedLines,
@@ -49,15 +48,14 @@ class SharedMem(val b: GlobalConfig) extends Module {
     val write = new SharedMemWriteIO(b)
   })
 
-  val mem = SyncReadMem(b.memDomain.sharedEntries, Vec(mask_len, mask_elem))
+	val mem = SyncReadMem(b.memDomain.sharedEntries, Vec(maskLen, maskElem))
 
-  // Shared memory address mapping:
-  // shared_addr = ((vbank_id * MAX_GROUP + group_id) * bankEntries) + local_addr
-  private def toSharedAddr(vbank_id: UInt, group_id: UInt, local_addr: UInt): UInt = {
-    val vbankPart = vbank_id * (maxGroup * b.memDomain.bankEntries).U
-    val groupPart = group_id * b.memDomain.bankEntries.U
-    vbankPart + groupPart + local_addr
-  }
+	// Shared memory address mapping (group_id intentionally ignored):
+	// shared_addr = (vbank_id * bankEntries) + local_addr
+	private def toSharedAddr(vbank_id: UInt, _group_id: UInt, local_addr: UInt): UInt = {
+		val vbankPart = vbank_id * b.memDomain.bankEntries.U
+		vbankPart + local_addr
+	}
 
   io.read.req.ready  := !io.write.req.valid
   io.write.req.ready := !io.read.req.valid
@@ -65,11 +63,10 @@ class SharedMem(val b: GlobalConfig) extends Module {
   val readReqFire = io.read.req.fire
   val readAddr    = toSharedAddr(io.read.req.bits.vbank_id, io.read.req.bits.group_id, io.read.req.bits.addr)
 
-  when(readReqFire) {
-    assert(io.read.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")
-    assert(io.read.req.bits.group_id < maxGroup.U, "SharedMem: group_id out of range")
-    assert(io.read.req.bits.addr < b.memDomain.bankEntries.U, "SharedMem: local addr out of range")
-  }
+	when(readReqFire) {
+		assert(io.read.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")
+		assert(io.read.req.bits.addr < b.memDomain.bankEntries.U, "SharedMem: local addr out of range")
+	}
 
   val readData = mem.read(readAddr, readReqFire)
 
@@ -79,16 +76,15 @@ class SharedMem(val b: GlobalConfig) extends Module {
   val writeReqFire = io.write.req.fire
   val writeAddr    = toSharedAddr(io.write.req.bits.vbank_id, io.write.req.bits.group_id, io.write.req.bits.addr)
 
-  when(writeReqFire) {
-    assert(io.write.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")
-    assert(io.write.req.bits.group_id < maxGroup.U, "SharedMem: group_id out of range")
-    assert(io.write.req.bits.addr < b.memDomain.bankEntries.U, "SharedMem: local addr out of range")
-    mem.write(
-      writeAddr,
-      io.write.req.bits.data.asTypeOf(Vec(mask_len, mask_elem)),
-      io.write.req.bits.mask
-    )
-  }
+	when(writeReqFire) {
+		assert(io.write.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")
+		assert(io.write.req.bits.addr < b.memDomain.bankEntries.U, "SharedMem: local addr out of range")
+		mem.write(
+			writeAddr,
+			io.write.req.bits.data.asTypeOf(Vec(maskLen, maskElem)),
+			io.write.req.bits.mask
+		)
+	}
 
   io.write.resp.valid   := RegNext(writeReqFire, init = false.B)
   io.write.resp.bits.ok := RegNext(writeReqFire, init = false.B)

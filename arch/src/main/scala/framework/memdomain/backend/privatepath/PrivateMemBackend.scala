@@ -4,57 +4,10 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
-import framework.memdomain.backend.MemRequestIO
+import framework.memdomain.backend.{MemRequestIO, MTraceDPI}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank
 import framework.top.GlobalConfig
-
-// DPI-C BlackBox for memory trace
-class MTraceDPI extends BlackBox with HasBlackBoxInline {
-
-  val io = IO(new Bundle {
-    val is_write = Input(UInt(8.W))
-    val channel  = Input(UInt(32.W))
-    val vbank_id = Input(UInt(32.W))
-    val group_id = Input(UInt(32.W))
-    val addr     = Input(UInt(32.W))
-    val data_lo  = Input(UInt(64.W))
-    val data_hi  = Input(UInt(64.W))
-    val enable   = Input(Bool())
-  })
-
-  setInline(
-    "MTraceDPI.v",
-    """
-      |import "DPI-C" function void dpi_mtrace(
-      |  input byte unsigned is_write,
-      |  input int unsigned channel,
-      |  input int unsigned vbank_id,
-      |  input int unsigned group_id,
-      |  input int unsigned addr,
-      |  input longint unsigned data_lo,
-      |  input longint unsigned data_hi
-      |);
-      |
-      |module MTraceDPI(
-      |  input [7:0] is_write,
-      |  input [31:0] channel,
-      |  input [31:0] vbank_id,
-      |  input [31:0] group_id,
-      |  input [31:0] addr,
-      |  input [63:0] data_lo,
-      |  input [63:0] data_hi,
-      |  input enable
-      |);
-      |  always @(*) begin
-      |    if (enable) begin
-      |      dpi_mtrace(is_write, channel, vbank_id, group_id, addr, data_lo, data_hi);
-      |    end
-      |  end
-      |endmodule
-    """.stripMargin
-  )
-}
 
 @instantiable
 class PrivateMemBackend(val b: GlobalConfig) extends Module {
@@ -169,10 +122,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   when(io.config.valid) {
-    when(io.config.bits.alloc) {
+    when(io.config.bits.alloc === 1.U) {
       val pbank_id = getFreePbankId()
       addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_multi, io.config.bits.group_id)
-    }.otherwise {
+    }.elsewhen(io.config.bits.alloc === 0.U) {
       deleteEntry(io.config.bits.vbank_id)
     }
   }
@@ -191,31 +144,35 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
   // -----------------------------------------------------------------------------
+  private def emitTrace(ch: Int, isWrite: UInt, addr: UInt, dataLo: UInt, dataHi: UInt, en: Bool): Unit = {
+    mtraces(ch).io.is_write := isWrite
+    mtraces(ch).io.channel  := ch.U
+    mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id
+    mtraces(ch).io.group_id := io.mem_req(ch).group_id
+    mtraces(ch).io.addr     := addr
+    mtraces(ch).io.data_lo  := dataLo
+    mtraces(ch).io.data_hi  := dataHi
+    mtraces(ch).io.enable   := en
+  }
+
   for (i <- 0 until b.memDomain.bankChannel) {
     val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
 
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
-      mtraces(i).io.is_write := 0.U
-      mtraces(i).io.channel  := i.U
-      mtraces(i).io.vbank_id := io.mem_req(i).bank_id
-      mtraces(i).io.group_id := io.mem_req(i).group_id
-      mtraces(i).io.addr     := io.mem_req(i).read.req.bits.addr
-      mtraces(i).io.data_lo  := 0.U
-      mtraces(i).io.data_hi  := 0.U
-      mtraces(i).io.enable   := true.B
+      emitTrace(i, 0.U, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
     }
 
     // Memory trace: write request
     when(io.mem_req(i).write.req.fire) {
-      mtraces(i).io.is_write := 1.U
-      mtraces(i).io.channel  := i.U
-      mtraces(i).io.vbank_id := io.mem_req(i).bank_id
-      mtraces(i).io.group_id := io.mem_req(i).group_id
-      mtraces(i).io.addr     := io.mem_req(i).write.req.bits.addr
-      mtraces(i).io.data_lo  := io.mem_req(i).write.req.bits.data(63, 0)
-      mtraces(i).io.data_hi  := io.mem_req(i).write.req.bits.data(127, 64)
-      mtraces(i).io.enable   := true.B
+      emitTrace(
+        i,
+        1.U,
+        io.mem_req(i).write.req.bits.addr,
+        io.mem_req(i).write.req.bits.data(63, 0),
+        io.mem_req(i).write.req.bits.data(127, 64),
+        true.B
+      )
     }
 
     for (j <- 0 until b.memDomain.bankNum) {
