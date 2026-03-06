@@ -35,6 +35,7 @@ async def handler(data, context):
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
 
     binary_name = data.get("binary", "")
+    coverage = data.get("coverage", False)
     success_result, failure_result = await check_result(
         context, returncode=(binary_name == None), continue_run=True
     )
@@ -54,6 +55,14 @@ async def handler(data, context):
 
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(waveform_dir, exist_ok=True)
+
+    # Coverage data output path
+    coverage_flag = ""
+    if coverage:
+        coverage_dir = f"{bbdir}/bb-tests/sardine/reports/coverage"
+        os.makedirs(coverage_dir, exist_ok=True)
+        coverage_dat_path = f"{coverage_dir}/{timestamp}-{binary_name}.dat"
+        coverage_flag = f"+verilator+coverage+file+{coverage_dat_path}"
 
     bin_path = f"{build_dir}/obj_dir/V{topname}"
     batch = data.get("batch", False)
@@ -77,6 +86,7 @@ async def handler(data, context):
         f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "
         f"{bin_path} +permissive +loadmem={binary_path} +loadmem_addr=800000000 "
         f"{'+batch ' if batch else ''} "
+        f"{coverage_flag + ' ' if coverage_flag else ''}"
         f"+fst={fst_path} +log={log_path} +permissive-off "
         f"{binary_path} > >(tee {log_dir}/stdout.log) 2> >(spike-dasm > {log_dir}/disasm.log)"
     )
@@ -108,17 +118,21 @@ async def handler(data, context):
     # Return simulation result
     # ==================================================================================
     # This is the end point of the run workflow, status will no longer be set to processing
-    success_result, failure_result = await check_result(
-        context,
-        result.returncode,
-        continue_run=False,
-        extra_fields={
+    extra_fields = {
             "task": "sim",
             "binary": binary_path,
             "log_dir": log_dir,
             "waveform_dir": waveform_dir,
             "timestamp": timestamp,
-        },
+        }
+    if coverage:
+        extra_fields["coverage_dat"] = coverage_dat_path
+
+    success_result, failure_result = await check_result(
+        context,
+        result.returncode,
+        continue_run=False,
+        extra_fields=extra_fields,
     )
 
     # ==================================================================================

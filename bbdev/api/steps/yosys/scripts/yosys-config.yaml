@@ -1,0 +1,22 @@
+# Yosys synthesis configuration
+# Users can customize liberty library paths and synthesis options here
+
+# Liberty (.lib) file path for ASIC area estimation
+# If not specified, yosys will use generic gate-level statistics
+# Example:
+#   liberty: /path/to/your/standard_cell.lib
+liberty: 
+
+# Default top module name (override with --top)
+top: TargetBall
+
+# Default ball type (override with --balltype)
+balltype: vecball
+
+# OpenSTA timing analysis settings
+# Clock period in nanoseconds (used for STA constraint)
+# Default 10ns = 500MHz
+clock_period: 2.0
+
+# Clock port name in the design
+clock_name: clock

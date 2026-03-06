@@ -29,6 +29,7 @@ async def handler(data, context):
     waveform_dir = f"{arch_dir}/waveform"
     log_dir = f"{arch_dir}/log"
     cosim = data.get("cosim", False)
+    coverage = data.get("coverage", False)
 
     # ==================================================================================
     # Execute operation
@@ -102,6 +103,7 @@ async def handler(data, context):
         f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
         f"--unroll-count 256 "
+        f"{'--coverage-line ' if coverage else ''}"
         f"-Wno-PINCONNECTEMPTY "
         f"-Wno-ASSIGNDLY "
         f"-Wno-DECLFILENAME "

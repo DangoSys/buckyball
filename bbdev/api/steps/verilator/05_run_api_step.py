@@ -21,6 +21,7 @@ async def handler(req, context):
         "jobs": body.get("jobs", "16"),
         "batch": body.get("batch", False),
         "cosim": body.get("cosim", False),
+        "coverage": body.get("coverage", False),
         "from_run_workflow": True,
     }
 

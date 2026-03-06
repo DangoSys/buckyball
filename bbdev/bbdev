@@ -61,7 +61,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="?",
         const="",
         metavar="ARGS",
-        help='Build verilator simulation executable. Args: "[--job <num>]"',
+        help='Build verilator simulation executable. Args: "[--job <num>] [--coverage]"',
     )
     verilator_group.add_argument(
         "--sim",
@@ -69,7 +69,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="?",
         const="",
         metavar="ARGS",
-        help='Run verilator simulation. Args: "--binary <path> [--batch]"',
+        help='Run verilator simulation. Args: "--binary <path> [--batch] [--coverage]"',
     )
     verilator_group.add_argument(
         "--run",
@@ -77,7 +77,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="?",
         const="",
         metavar="ARGS",
-        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>] [--coverage]"',
     )
     verilator_group.add_argument(
         "--cosim",
@@ -132,7 +132,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="?",
         const="",
         metavar="ARGS",
-        help='Run sardine. Args: "--workload <path>"',
+        help='Run sardine. Args: "--workload <path> [--coverage]"',
     )
 
     # ===== agent subcommand =========================================================================
@@ -237,6 +237,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     uvm_group.add_argument(
         "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build uvm. "
+    )
+
+    # ===== yosys subcommand =====================================================================
+    yosys_parser = subparsers.add_parser("yosys", help="yosys synthesis operations")
+    yosys_group = yosys_parser.add_mutually_exclusive_group(required=True)
+    yosys_group.add_argument(
+        "--synth",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Run yosys synthesis for area estimation. Args: "[--balltype <vecball|reluball|...>] [--top <top_module>]"\n'
+             'Liberty library can be configured in bbdev/api/steps/yosys/scripts/yosys-config.yaml',
     )
 
     # ===== palladium subcommand ===================================================================
@@ -400,6 +413,7 @@ if __name__ == "__main__":
             "funcsim",
             "uvm",
             "palladium",
+            "yosys",
         ]:
             api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
             json_data = json.dumps(cmd_info["args"])
@@ -421,7 +435,7 @@ if __name__ == "__main__":
             print(f"Unknown command: {cmd_info['command']}")
             print(
                 "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm"
+                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys"
             )
             sys.exit(1)
     else:  # script mode
@@ -442,6 +456,7 @@ if __name__ == "__main__":
             "funcsim",
             "uvm",
             "palladium",
+            "yosys",
         ]:
             # 0. Clean up stale BullMQ/Redis data to prevent replaying old events
             aof_dir = os.path.join(workflow_dir, ".motia", "appendonlydir")
@@ -537,6 +552,6 @@ if __name__ == "__main__":
             print(f"Unknown command: {cmd_info['command']}")
             print(
                 "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm"
+                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys"
             )
             sys.exit(1)
