@@ -76,3 +76,9 @@
    - Cycle 数差值和百分比变化
    - 关键路径延迟变化
    - 频率变化
+
+## 故障排查
+
+如果 MCP 工具返回 HTTP 500 或 returncode=1：
+- 读取 `bbdev/server.log` — bbdev server 的运行日志，包含 Chisel 编译错误、mill 构建错误等详细堆栈信息
+- 该日志特别有助于诊断 elaborate 失败（如类型不匹配、缺少注册等编译期错误）

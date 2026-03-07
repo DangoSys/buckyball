@@ -20,6 +20,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.error import HTTPError
 
 from mcp.server.fastmcp import FastMCP
 
@@ -28,6 +29,8 @@ from mcp.server.fastmcp import FastMCP
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BBDEV_API_DIR = REPO_ROOT / "bbdev" / "api"
+BBDEV_LOG_DIR = REPO_ROOT / "bbdev" / "api" / "steps"
+BBDEV_SERVER_LOG = REPO_ROOT / "bbdev" / "server.log"
 
 REGISTRATION_FILES = {
     "default_json": REPO_ROOT
@@ -46,7 +49,7 @@ _bbdev_proc: Optional[subprocess.Popen] = None
 _bbdev_port: Optional[int] = None
 
 
-def _find_available_port(start: int = 5100, end: int = 5500) -> int:
+def _find_available_port(start: int = 5200, end: int = 5500) -> int:
     for port in range(start, end + 1):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -73,11 +76,12 @@ def _ensure_bbdev_server() -> int:
         shutil.rmtree(aof_dir)
 
     port = _find_available_port()
+    _log_file = open(BBDEV_SERVER_LOG, "a", encoding="utf-8")
     _bbdev_proc = subprocess.Popen(
         ["pnpm", "dev", "--port", str(port)],
         cwd=str(BBDEV_API_DIR),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=_log_file,
+        stderr=_log_file,
     )
     _bbdev_port = port
 
@@ -143,6 +147,20 @@ def _bbdev_call(
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
             return json.loads(body)
+    except urllib.error.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.read().decode("utf-8")
+        except Exception:
+            pass
+        return {
+            "success": False,
+            "failure": True,
+            "error": str(e),
+            "status_code": e.code,
+            "response_body": error_body,
+            "server_log": str(BBDEV_SERVER_LOG),
+        }
     except Exception as e:
         return {"success": False, "failure": True, "error": str(e)}
 

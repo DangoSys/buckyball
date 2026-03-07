@@ -3,7 +3,7 @@ package framework.core.configs
 import upickle.default._
 
 /**
- * Core参数
+ * Core Parameter
  */
 case class CoreParam(
   coreDataBytes: Int,

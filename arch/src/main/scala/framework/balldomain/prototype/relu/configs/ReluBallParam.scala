@@ -3,7 +3,7 @@ package framework.balldomain.prototype.relu.configs
 import upickle.default._
 
 /**
- * ReluBall参数
+ * ReluBall Parameter
  */
 case class ReluBallParam(
   InputNum:   Int,

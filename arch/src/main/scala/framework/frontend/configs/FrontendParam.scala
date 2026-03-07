@@ -3,7 +3,7 @@ package framework.frontend.configs
 import upickle.default._
 
 /**
- * Frontend参数 - 包含前端所有配置
+ * Frontend Parameter - 包含前端所有配置
  */
 case class FrontendParam(
   rob_entries:              Int,

@@ -3,7 +3,7 @@ package framework.balldomain.prototype.systolicarray.configs
 import upickle.default._
 
 /**
- * SystolicBall 参数
+ * SystolicBall  Parameter
  */
 case class SystolicBallParam(
   InputNum:      Int,

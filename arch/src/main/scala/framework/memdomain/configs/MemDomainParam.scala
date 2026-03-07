@@ -3,7 +3,7 @@ package framework.memdomain.configs
 import upickle.default._
 
 /**
- * MemDomain参数
+ * MemDomain Parameter
  */
 case class MemDomainParam(
   bankNum:                 Int,
