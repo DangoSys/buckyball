@@ -10,7 +10,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 
 // Detailed decode output for Mem domain
 class MemDecodeCmd(b: GlobalConfig) extends Bundle {
-  val is_shared   = Bool() // Whether this is a shared memory access (for synchronization)
+  val is_shared = Bool() // Whether this is a shared memory access (for synchronization)
   val is_load   = Bool()
   val is_store  = Bool()
   val is_config = Bool()
@@ -75,7 +75,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     func7,
     ls_default_decode,
     Array(
-      MSET_BITPAT  -> List(
+      MSET_BITPAT         -> List(
         N,
         N,
         N,
@@ -85,7 +85,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs2(39, 0),               // special from rs2[39:0]
         Y
       ), // mset
-      MVIN_BITPAT  -> List(
+      MVIN_BITPAT         -> List(
         N,
         Y,
         N,
@@ -95,7 +95,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs2(63, 10),              // special from rs2[63:10]
         Y
       ), // mvin
-      MVOUT_BITPAT -> List(
+      MVOUT_BITPAT        -> List(
         N,
         N,
         Y,
@@ -105,7 +105,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs2(63, 10),              // special from rs2[63:10]
         Y
       ), // mvout
-       SHARED_MVIN_BITPAT  -> List(
+      SHARED_MVIN_BITPAT  -> List(
         Y,
         Y,
         N,
@@ -139,7 +139,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  io.mem_decode_cmd_o.bits.is_shared   := Mux(
+  io.mem_decode_cmd_o.bits.is_shared := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.SHARED_EN.id).asBool,
     false.B

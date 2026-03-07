@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "buckyball-dev": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["scripts/claude/mcp_server.py"]
+    }
+  }
+}

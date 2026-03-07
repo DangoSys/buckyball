@@ -9,4 +9,6 @@ object DISA {
   val TRANSPOSE     = BitPat("b0100010") // 34
   val RELU          = BitPat("b0100110") // 38
   val SYSTOLIC      = BitPat("b0100111") // 39
+  val QUANT         = BitPat("b0101000") // 40
+  val DEQUANT       = BitPat("b0101001") // 41
 }

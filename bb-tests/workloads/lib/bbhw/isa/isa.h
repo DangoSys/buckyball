@@ -51,5 +51,7 @@ typedef int32_t result_t;
 #include "34_transpose.c"
 #include "38_relu.c"
 #include "39_bfp.c"
+#include "40_quant.c"
+#include "41_dequant.c"
 
 #endif // BUCKYBALL_ISA_H

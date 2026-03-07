@@ -109,7 +109,6 @@ add_cross_platform_test_target(ctest_vecunit_matmul_16xn_random1 vecunit_matmul_
 add_cross_platform_test_target(ctest_vecunit_matmul_16xn_random2 vecunit_matmul_16xn_random2.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_16xn_random3 vecunit_matmul_16xn_random3.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_16xn_zero_random vecunit_matmul_16xn_zero_random.c)
-add_cross_platform_test_target(ctest_vecunit_simple_nn_forward_pass_test vecunit_simple_nn_forward_pass_test.c)
 add_cross_platform_test_target(ctest_im2col_test im2col_test.c)
 add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_16xn_test transpose_16xn_test.c)
@@ -117,6 +116,8 @@ add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
 add_cross_platform_test_target(ctest_bfp_test bfp_test.c)
+add_cross_platform_test_target(ctest_quant_test quant_test.c)
+add_cross_platform_test_target(ctest_dequant_test dequant_test.c)
 
 # Create master build target
 add_custom_target(buckyball-CTest-build ALL DEPENDS
@@ -135,7 +136,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_vecunit_matmul_16xn_random2
   ctest_vecunit_matmul_16xn_random3
   ctest_vecunit_matmul_16xn_zero_random
-  ctest_vecunit_simple_nn_forward_pass_test
   ctest_im2col_test
   ctest_transpose_test
   ctest_transpose_16xn_test
@@ -143,5 +143,7 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_relu_test
   ctest_vsetvli
   ctest_bfp_test
+  ctest_quant_test
+  ctest_dequant_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

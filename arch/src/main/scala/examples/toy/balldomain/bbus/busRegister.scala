@@ -11,6 +11,8 @@ import framework.balldomain.prototype.relu.ReluBall
 import framework.balldomain.prototype.transpose.TransposeBall
 import framework.balldomain.prototype.im2col.Im2colBall
 import framework.balldomain.prototype.systolicarray.SystolicArrayBall
+import framework.balldomain.prototype.quant.QuantBall
+import framework.balldomain.prototype.dequant.DequantBall
 
 /**
  * BBusModule - Ball bus module that directly extends BBus
@@ -26,6 +28,8 @@ class BBusModule(b: GlobalConfig)
           case "TransposeBall"     => () => new TransposeBall(b)
           case "Im2colBall"        => () => new Im2colBall(b)
           case "SystolicArrayBall" => () => new SystolicArrayBall(b)
+          case "QuantBall"         => () => new QuantBall(b)
+          case "DequantBall"       => () => new DequantBall(b)
           case name                => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator
