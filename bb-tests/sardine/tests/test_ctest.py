@@ -92,8 +92,8 @@ ctest_workloads = [
         "ctest_dequant_test_singlecore-baremetal",
     ),
     (
-        "ctest_tlb_test-baremetal",
-        "ctest_tlb_test-baremetal",
+        "ctest_tlb_test_singlecore-baremetal",
+        "ctest_tlb_test_singlecore-baremetal",
     ),
 ]
 
