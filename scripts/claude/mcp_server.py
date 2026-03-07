@@ -4,22 +4,24 @@
 Provides:
 - validate: static registration invariant checks
 - bbdev_* tools: wrappers around bbdev HTTP API (server mode, auto-managed lifecycle)
+
+Uses the official `mcp` Python SDK for protocol compatibility with both
+Claude Code CLI and Cursor IDE.
 """
 
 from __future__ import annotations
 
 import atexit
 import json
-import os
 import re
 import shutil
-import signal
 import socket
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from mcp.server.fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -146,61 +148,7 @@ def _bbdev_call(
 
 
 # ---------------------------------------------------------------------------
-# MCP protocol helpers
-# ---------------------------------------------------------------------------
-def _write_message(payload: Dict[str, Any]) -> None:
-    data = json.dumps(payload).encode("utf-8")
-    header = f"Content-Length: {len(data)}\r\n\r\n".encode("ascii")
-    sys.stdout.buffer.write(header)
-    sys.stdout.buffer.write(data)
-    sys.stdout.buffer.flush()
-
-
-def _read_message() -> Optional[Dict[str, Any]]:
-    content_length = None
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line:
-            return None
-        line = line.decode("ascii", errors="ignore").strip()
-        if not line:
-            break
-        if line.lower().startswith("content-length:"):
-            content_length = int(line.split(":", 1)[1].strip())
-    if content_length is None:
-        return None
-    body = sys.stdin.buffer.read(content_length)
-    if not body:
-        return None
-    return json.loads(body.decode("utf-8"))
-
-
-def _response(
-    msg_id: Any, result: Any = None, error: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"jsonrpc": "2.0", "id": msg_id}
-    if error is not None:
-        payload["error"] = error
-    else:
-        payload["result"] = result
-    return payload
-
-
-def _ok(payload: Any) -> Dict[str, Any]:
-    return {
-        "content": [
-            {"type": "text", "text": json.dumps(payload, ensure_ascii=False, indent=2)}
-        ],
-        "isError": False,
-    }
-
-
-def _err(message: str) -> Dict[str, Any]:
-    return {"content": [{"type": "text", "text": message}], "isError": True}
-
-
-# ---------------------------------------------------------------------------
-# validate tool
+# Helpers
 # ---------------------------------------------------------------------------
 def _read_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as f:
@@ -228,14 +176,26 @@ def _extract_decoder_bids(text: str) -> List[int]:
     return bids
 
 
-def handle_validate(params: Dict[str, Any]) -> Dict[str, Any]:
+def _fmt(payload: Any) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# MCP Server (using official SDK)
+# ---------------------------------------------------------------------------
+mcp = FastMCP("buckyball-dev")
+
+
+@mcp.tool()
+def validate() -> str:
+    """Check 6 registration invariants: ballNum consistency, ballId strict increment, ballId no duplicates, funct7 no duplicates, busRegister matches default.json, decoder BIDs match default.json."""
     missing_files = []
     for name, path in REGISTRATION_FILES.items():
         if not path.exists():
             missing_files.append(str(path))
 
     if missing_files:
-        return _err(f"Missing registration files: {', '.join(missing_files)}")
+        return f"ERROR: Missing registration files: {', '.join(missing_files)}"
 
     cfg = _read_json(REGISTRATION_FILES["default_json"])
     mappings = cfg.get("ballIdMappings", [])
@@ -284,283 +244,109 @@ def handle_validate(params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     all_passed = all(c["pass"] for c in checks.values())
-    return _ok({"passed": all_passed, "checks": checks})
+    return _fmt({"passed": all_passed, "checks": checks})
 
 
-# ---------------------------------------------------------------------------
-# bbdev tool handlers
-# ---------------------------------------------------------------------------
-def handle_bbdev_workload_build(params: Dict[str, Any]) -> Dict[str, Any]:
+@mcp.tool()
+def bbdev_workload_build() -> str:
+    """Compile CTest workloads (bb-tests). Calls bbdev POST /workload/build."""
     result = _bbdev_call("/workload/build", {}, timeout=120)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_verilator_run(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {
-        "binary": params.get("binary", ""),
-        "config": params.get("config", "sims.verilator.BuckyballToyVerilatorConfig"),
-        "batch": params.get("batch", True),
-        "coverage": params.get("coverage", False),
+@mcp.tool()
+def bbdev_verilator_run(
+    binary: str,
+    config: str = "sims.verilator.BuckyballToyVerilatorConfig",
+    batch: bool = True,
+    coverage: bool = False,
+    jobs: Optional[int] = None,
+) -> str:
+    """Full verilator pipeline: clean -> verilog -> build -> sim. Calls bbdev POST /verilator/run."""
+    api_params: Dict[str, Any] = {
+        "binary": binary,
+        "config": config,
+        "batch": batch,
+        "coverage": coverage,
     }
-    if params.get("jobs"):
-        api_params["jobs"] = params["jobs"]
+    if jobs is not None:
+        api_params["jobs"] = jobs
     result = _bbdev_call("/verilator/run", api_params, timeout=1200)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_verilator_verilog(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {}
-    if params.get("config"):
-        api_params["config"] = params["config"]
-    if params.get("balltype"):
-        api_params["balltype"] = params["balltype"]
+@mcp.tool()
+def bbdev_verilator_verilog(
+    config: Optional[str] = None,
+    balltype: Optional[str] = None,
+) -> str:
+    """Generate Verilog from Chisel. Supports --balltype for single Ball elaboration. Calls bbdev POST /verilator/verilog."""
+    api_params: Dict[str, Any] = {}
+    if config:
+        api_params["config"] = config
+    if balltype:
+        api_params["balltype"] = balltype
     result = _bbdev_call("/verilator/verilog", api_params, timeout=600)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_verilator_build(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {"jobs": params.get("jobs", 16)}
-    if params.get("coverage"):
+@mcp.tool()
+def bbdev_verilator_build(
+    jobs: int = 16,
+    coverage: bool = False,
+) -> str:
+    """Build verilator simulation executable. Calls bbdev POST /verilator/build."""
+    api_params: Dict[str, Any] = {"jobs": jobs}
+    if coverage:
         api_params["coverage"] = True
     result = _bbdev_call("/verilator/build", api_params, timeout=600)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_verilator_sim(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {
-        "binary": params.get("binary", ""),
-        "batch": params.get("batch", True),
+@mcp.tool()
+def bbdev_verilator_sim(
+    binary: str,
+    batch: bool = True,
+    coverage: bool = False,
+) -> str:
+    """Run verilator simulation (assumes already built). Calls bbdev POST /verilator/sim."""
+    api_params: Dict[str, Any] = {
+        "binary": binary,
+        "batch": batch,
     }
-    if params.get("coverage"):
+    if coverage:
         api_params["coverage"] = True
     result = _bbdev_call("/verilator/sim", api_params, timeout=1200)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_sardine_run(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {"workload": params.get("workload", "ctest")}
-    if params.get("coverage"):
+@mcp.tool()
+def bbdev_sardine_run(
+    workload: str = "ctest",
+    coverage: bool = False,
+) -> str:
+    """Run sardine batch tests. Calls bbdev POST /sardine/run. With coverage=true, generates coverage report at bb-tests/sardine/reports/coverage/."""
+    api_params: Dict[str, Any] = {"workload": workload}
+    if coverage:
         api_params["coverage"] = True
     result = _bbdev_call("/sardine/run", api_params, timeout=1200)
-    return _ok(result)
+    return _fmt(result)
 
 
-def handle_bbdev_yosys_synth(params: Dict[str, Any]) -> Dict[str, Any]:
-    api_params = {}
-    if params.get("top"):
-        api_params["top"] = params["top"]
-    if params.get("config"):
-        api_params["config"] = params["config"]
+@mcp.tool()
+def bbdev_yosys_synth(
+    top: Optional[str] = None,
+    config: Optional[str] = None,
+) -> str:
+    """Run Yosys synthesis for area estimation + OpenSTA timing analysis. Generates hierarchy_report.txt, area_report.txt, and timing_report.txt in bbdev/api/steps/yosys/log/. Calls bbdev POST /yosys/synth."""
+    api_params: Dict[str, Any] = {}
+    if top:
+        api_params["top"] = top
+    if config:
+        api_params["config"] = config
     result = _bbdev_call("/yosys/synth", api_params, timeout=600)
-    return _ok(result)
-
-
-# ---------------------------------------------------------------------------
-# Tool registry
-# ---------------------------------------------------------------------------
-TOOLS = {
-    "validate": {
-        "description": "Check 6 registration invariants: ballNum consistency, ballId strict increment, "
-        "ballId no duplicates, funct7 no duplicates, busRegister matches default.json, "
-        "decoder BIDs match default.json.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
-        "handler": handle_validate,
-    },
-    "bbdev_workload_build": {
-        "description": "Compile CTest workloads (bb-tests). Calls bbdev POST /workload/build.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
-        "handler": handle_bbdev_workload_build,
-    },
-    "bbdev_verilator_run": {
-        "description": "Full verilator pipeline: clean -> verilog -> build -> sim. "
-        "Calls bbdev POST /verilator/run.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "binary": {
-                    "type": "string",
-                    "description": "Test binary name (e.g. ctest_relu_test_singlecore-baremetal)",
-                },
-                "config": {
-                    "type": "string",
-                    "description": "Elaborate config class (default: sims.verilator.BuckyballToyVerilatorConfig)",
-                },
-                "batch": {
-                    "type": "boolean",
-                    "description": "Run in batch mode (default: true)",
-                },
-                "coverage": {
-                    "type": "boolean",
-                    "description": "Enable coverage collection (default: false)",
-                },
-                "jobs": {"type": "integer", "description": "Parallel build jobs"},
-            },
-            "required": ["binary"],
-        },
-        "handler": handle_bbdev_verilator_run,
-    },
-    "bbdev_verilator_verilog": {
-        "description": "Generate Verilog from Chisel. Supports --balltype for single Ball elaboration. "
-        "Calls bbdev POST /verilator/verilog.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "config": {"type": "string", "description": "Elaborate config class"},
-                "balltype": {
-                    "type": "string",
-                    "description": "Single Ball type for standalone elaboration (e.g. reluball)",
-                },
-            },
-        },
-        "handler": handle_bbdev_verilator_verilog,
-    },
-    "bbdev_verilator_build": {
-        "description": "Build verilator simulation executable. Calls bbdev POST /verilator/build.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "jobs": {
-                    "type": "integer",
-                    "description": "Parallel build jobs (default: 16)",
-                },
-                "coverage": {
-                    "type": "boolean",
-                    "description": "Build with coverage support",
-                },
-            },
-        },
-        "handler": handle_bbdev_verilator_build,
-    },
-    "bbdev_verilator_sim": {
-        "description": "Run verilator simulation (assumes already built). Calls bbdev POST /verilator/sim.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "binary": {"type": "string", "description": "Test binary name"},
-                "batch": {
-                    "type": "boolean",
-                    "description": "Batch mode (default: true)",
-                },
-                "coverage": {"type": "boolean", "description": "Enable coverage"},
-            },
-            "required": ["binary"],
-        },
-        "handler": handle_bbdev_verilator_sim,
-    },
-    "bbdev_sardine_run": {
-        "description": "Run sardine batch tests. Calls bbdev POST /sardine/run. "
-        "With coverage=true, generates coverage report at bb-tests/sardine/reports/coverage/.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "workload": {
-                    "type": "string",
-                    "description": "Workload filter (default: ctest)",
-                },
-                "coverage": {
-                    "type": "boolean",
-                    "description": "Enable coverage collection and report",
-                },
-            },
-        },
-        "handler": handle_bbdev_sardine_run,
-    },
-    "bbdev_yosys_synth": {
-        "description": "Run Yosys synthesis for area estimation + OpenSTA timing analysis. "
-        "Generates hierarchy_report.txt, area_report.txt, and timing_report.txt "
-        "in bbdev/api/steps/yosys/log/. Calls bbdev POST /yosys/synth.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "top": {
-                    "type": "string",
-                    "description": "Top module name (default: BuckyballAccelerator)",
-                },
-                "config": {"type": "string", "description": "Elaborate config class"},
-            },
-        },
-        "handler": handle_bbdev_yosys_synth,
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# Main server loop
-# ---------------------------------------------------------------------------
-def serve() -> int:
-    while True:
-        msg = _read_message()
-        if msg is None:
-            return 0
-
-        msg_id = msg.get("id")
-        method = msg.get("method")
-        params = msg.get("params", {})
-
-        try:
-            if method == "initialize":
-                _write_message(
-                    _response(
-                        msg_id,
-                        {
-                            "protocolVersion": "2024-11-05",
-                            "serverInfo": {"name": "buckyball-dev", "version": "0.1.0"},
-                            "capabilities": {"tools": {}},
-                        },
-                    )
-                )
-                continue
-
-            if method == "notifications/initialized":
-                continue
-
-            if method == "tools/list":
-                tools = [
-                    {
-                        "name": name,
-                        "description": spec["description"],
-                        "inputSchema": spec["inputSchema"],
-                    }
-                    for name, spec in TOOLS.items()
-                ]
-                _write_message(_response(msg_id, {"tools": tools}))
-                continue
-
-            if method == "tools/call":
-                name = params.get("name")
-                arguments = params.get("arguments", {})
-                if name not in TOOLS:
-                    _write_message(
-                        _response(
-                            msg_id,
-                            error={"code": -32601, "message": f"Unknown tool: {name}"},
-                        )
-                    )
-                    continue
-                result = TOOLS[name]["handler"](arguments)
-                _write_message(_response(msg_id, result))
-                continue
-
-            _write_message(
-                _response(
-                    msg_id,
-                    error={"code": -32601, "message": f"Unknown method: {method}"},
-                )
-            )
-
-        except Exception as exc:
-            _write_message(
-                _response(msg_id, error={"code": -32000, "message": str(exc)})
-            )
+    return _fmt(result)
 
 
 if __name__ == "__main__":
-    raise SystemExit(serve())
+    mcp.run(transport="stdio")

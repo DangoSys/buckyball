@@ -78,9 +78,8 @@
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then
                 export PATH="$PWD/result/bin:$PATH"
-                echo "================= Buckyball Environment Activated ========================="
               else
-                echo "Warning: result/bin not found. Run 'nix build' first."
+                echo "Warning: result/bin not found. Run 'nix build' first." >&2
               fi
 
               source "$PWD/sourceme.sh"
@@ -88,21 +87,24 @@
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
 
-              echo "Development environment loaded:"
-              echo "Verilator: $(verilator --version 2>&1 | head -1)"
-              echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)"
-              echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)"
-              echo "Bebop: $(which bebop)"
-              echo "Spike: $(which spike)"
-              echo "Bebop Gem5: $(which gem5.opt)"
-              echo "Mill: $(mill --version 2>&1 | head -1)"
-              echo "Cargo: $(cargo --version 2>&1 | head -1)"
-              echo "npm: $(npm --version 2>&1 | head -1)"
-              echo "bbdev: $(which bbdev)"
-              echo "RISCV: $RISCV"
-              echo "Yosys: $(yosys --version 2>&1 | head -1)"
-              echo "OpenSTA: $(sta -version 2>&1 | head -1)"
-              echo "==========================================================================="
+              if [ -z "$BUCKYBALL_QUIET" ]; then
+                echo "================= Buckyball Environment Activated ========================="
+                echo "Development environment loaded:"
+                echo "Verilator: $(verilator --version 2>&1 | head -1)"
+                echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)"
+                echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)"
+                echo "Bebop: $(which bebop)"
+                echo "Spike: $(which spike)"
+                echo "Bebop Gem5: $(which gem5.opt)"
+                echo "Mill: $(mill --version 2>&1 | head -1)"
+                echo "Cargo: $(cargo --version 2>&1 | head -1)"
+                echo "npm: $(npm --version 2>&1 | head -1)"
+                echo "bbdev: $(which bbdev)"
+                echo "RISCV: $RISCV"
+                echo "Yosys: $(yosys --version 2>&1 | head -1)"
+                echo "OpenSTA: $(sta -version 2>&1 | head -1)"
+                echo "==========================================================================="
+              fi
             '';
           };
         }

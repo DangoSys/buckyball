@@ -2,7 +2,7 @@
 .metals/
 # .claude/
 .motia/
-.cursor/
+# .cursor/
 .bsp/
 out/
 result
@@ -21,3 +21,5 @@ index.html
 
 .clangd
 .kiro
+
+__pycache__/
