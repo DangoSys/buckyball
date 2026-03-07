@@ -74,13 +74,43 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
       // New unified encoding: wr_bank is always at rs1[23:16]
       // iter/special shifted in rs2 since wr_bank no longer occupies rs2[7:0]
       //                        op1 op2 wr  op1s op2s  op1_bank    op2_bank     wr_bank       iter          bid  special
-      MATMUL_WARP16 -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 0.U, rs2(63, 10)),
-      RELU          -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 1.U, rs2(63, 10)),
-      TRANSPOSE     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 2.U, rs2(63, 10)),
-      IM2COL        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0)),
-      SYSTOLIC      -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 4.U, rs2(63, 10)),
-      QUANT         -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 5.U, rs2(63, 10)),
-      DEQUANT       -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 6.U, rs2(63, 10))
+      MATMUL_WARP16               -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 0.U, rs2(63, 10)),
+      RELU                        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 1.U, rs2(63, 10)),
+      TRANSPOSE                   -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 2.U, rs2(63, 10)),
+      IM2COL                      -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0)),
+      SYSTOLIC                    -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 4.U, rs2(63, 10)),
+      QUANT                       -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 5.U, rs2(63, 10)),
+      DEQUANT                     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 6.U, rs2(63, 10)),
+      // Gemmini systolic array instructions — all share bid=7, sub-command in special[3:0]
+      GEMMINI_CONFIG              -> List(N, N, N, N, N, DADDR, DADDR, DADDR, DITER, 7.U, Cat(0.U(36.W), 0.U(4.W))),
+      GEMMINI_PRELOAD             -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 7.U, Cat(rs2(63, 10), 1.U(4.W))),
+      GEMMINI_COMPUTE_PRELOADED   -> List(
+        Y,
+        Y,
+        Y,
+        Y,
+        Y,
+        rs1(7, 0),
+        rs1(15, 8),
+        rs1(23, 16),
+        rs2(9, 0),
+        7.U,
+        Cat(rs2(63, 10), 2.U(4.W))
+      ),
+      GEMMINI_COMPUTE_ACCUMULATED -> List(
+        Y,
+        Y,
+        Y,
+        Y,
+        Y,
+        rs1(7, 0),
+        rs1(15, 8),
+        rs1(23, 16),
+        rs2(9, 0),
+        7.U,
+        Cat(rs2(63, 10), 3.U(4.W))
+      ),
+      GEMMINI_FLUSH               -> List(N, N, N, N, N, DADDR, DADDR, DADDR, DITER, 7.U, Cat(0.U(36.W), 4.U(4.W)))
     )
   )
 

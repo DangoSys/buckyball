@@ -1,5 +1,5 @@
 {
-  "ballNum": 7,
+  "ballNum": 8,
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall", "inBW": 2, "outBW": 4},
     {"ballId": 1, "ballName": "ReluBall", "inBW": 1, "outBW": 1},
@@ -7,6 +7,7 @@
     {"ballId": 3, "ballName": "Im2colBall", "inBW": 1, "outBW": 1},
     {"ballId": 4, "ballName": "SystolicArrayBall", "inBW": 2, "outBW": 4},
     {"ballId": 5, "ballName": "QuantBall", "inBW": 1, "outBW": 1},
-    {"ballId": 6, "ballName": "DequantBall", "inBW": 1, "outBW": 1}
+    {"ballId": 6, "ballName": "DequantBall", "inBW": 1, "outBW": 1},
+    {"ballId": 7, "ballName": "GemminiBall", "inBW": 2, "outBW": 4}
   ]
 }

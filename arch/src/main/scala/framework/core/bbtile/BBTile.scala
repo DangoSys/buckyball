@@ -365,6 +365,9 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     buckyball.io.tlbExp(0).flush_skip  := false.B
     buckyball.io.tlbExp(0).flush_retry := false.B
 
+    // CPU sfence → Buckyball TLB flush
+    buckyball.io.sfence := ptw.io.dpath.sfence.valid
+
     // RoCC mem: Buckyball doesn't use the HellaCacheIO mem port, but the
     // DCache arbiter still expects a port for it (dcacheArbPorts counts BuildRoCC.size).
     // Route through SimpleHellaCacheIF with tied-off requestor side.

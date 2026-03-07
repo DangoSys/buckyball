@@ -19,25 +19,21 @@ memref.global "private" @input_matrix : memref<4x16xi8> = dense<[[1, 2, 3, 4, 5,
 func.func @main() -> i8 {
   // === Main program ===
   %0 = arith.constant 0 : i8
-  %spadAddr = arith.constant 1040 : i64
-  %stride = arith.constant 16 : i64
+  %bankId = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
   %arrayA = memref.get_global @input_matrix : memref<4x16xi8>
   %arrayB = memref.alloc() : memref<4x16xi8>
-  // Use mvin to move data from memory to scratchpad
+  // Allocate bank 0 before mvin
+  buckyball.bb_mset %bankId : i64
+  // Use mvin to move data from memory to bank 0
   // CHECK: mvin
-  buckyball.bb_mvin %arrayA %spadAddr %stride : memref<4x16xi8> i64 i64
-  // Use mvout to move data from scratchpad back to output memory
+  buckyball.bb_mvin %arrayA %bankId %stride : memref<4x16xi8> i64 i64
+  // Use mvout to move data from bank 0 back to output memory
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %spadAddr : memref<4x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId : memref<4x16xi8> i64
   // Print moved output matrix
   buckyball.bb_print_memref %arrayB : memref<4x16xi8>
   // Release allocated memory
   memref.dealloc %arrayB : memref<4x16xi8>
-
-  // exit
-  %exit_code = arith.constant 0 : i32
-  func.call @exit(%exit_code) : (i32) -> ()
-  llvm.unreachable
+  return %0 : i8
 }
-
-func.func private @exit(i32) -> ()

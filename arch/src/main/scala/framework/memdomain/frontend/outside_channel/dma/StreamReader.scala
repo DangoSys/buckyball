@@ -66,7 +66,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := read_vaddr
-  io.tlb.req.bits.passthrough := true.B
+  io.tlb.req.bits.passthrough := false.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XRD
   io.tlb.req.bits.prv         := 3.U
@@ -74,7 +74,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.req.bits.status      := reqReg.status
 
   io.tl.a.valid :=
-    io.tlb.resp.valid &&
+    io.tlb.resp.valid && !io.tlb.resp.bits.miss &&
       !inflight && state =/= s_idle
 
   io.tl.a.bits         := get

@@ -91,7 +91,7 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.req.valid            := (state === s_tlb_req)
   io.tlb.req.bits             := DontCare
   io.tlb.req.bits.vaddr       := reqReg.vaddr
-  io.tlb.req.bits.passthrough := true.B
+  io.tlb.req.bits.passthrough := false.B
   io.tlb.req.bits.size        := 0.U
   io.tlb.req.bits.cmd         := M_XWR
   io.tlb.req.bits.prv         := 3.U
@@ -103,9 +103,9 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.resp.ready := (state === s_tlb_req) && io.tl.a.ready
 
   // -----------------------
-  // TileLink A channel (only when tlb resp is present)
+  // TileLink A channel (only when tlb resp is present and NOT a miss)
   // -----------------------
-  io.tl.a.valid        := (state === s_tlb_req) && io.tlb.resp.valid
+  io.tl.a.valid        := (state === s_tlb_req) && io.tlb.resp.valid && !io.tlb.resp.bits.miss
   io.tl.a.bits         := putMsg
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
 

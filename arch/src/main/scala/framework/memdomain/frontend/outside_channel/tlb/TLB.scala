@@ -14,6 +14,7 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   val pgIdxBits = b.core.pgIdxBits
   val vpnBits   = vaddrBits - pgIdxBits
   val ppnBits   = paddrBits - pgIdxBits
+  val pgLevels  = if (b.core.xLen == 32) 2 else 4 // Match Rocket PTW convention
 
   @public
   val io = IO(new Bundle {
@@ -25,7 +26,7 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   })
 
   // TLB entries storage
-  val tlbEntries = Reg(Vec(entries, new TLBEntry(vaddrBits, pgIdxBits, paddrBits)))
+  val tlbEntries = Reg(Vec(entries, new TLBEntry(vaddrBits, pgIdxBits, paddrBits, pgLevels = pgLevels)))
   val lru        = Reg(Vec(entries, UInt(log2Ceil(entries).W))) // Simple LRU counter
 
   // State machine
@@ -62,8 +63,8 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   // Find LRU entry for replacement
   val lruIdx = PriorityEncoder(lru.map(_ === 0.U))
 
-  // VM enable check (simplified: check if VM is enabled via status)
-  val vm_enabled = true.B // Simplified: assume VM is always enabled for now
+  // VM enable check: mode != 0 means virtual memory is on (Sv39/Sv48/etc.)
+  val vm_enabled = io.ptw.ptbr.mode =/= 0.U
 
   val tlbMiss = vm_enabled && !io.req.bits.passthrough && !tlbHit
 
@@ -99,7 +100,7 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
     entryData.pf        := io.ptw.resp.bits.pf
     entryData.ae_final  := io.ptw.resp.bits.ae_final
 
-    tlbEntries(refill_idx).insert(refill_vpn, entryData)
+    tlbEntries(refill_idx).insert(refill_vpn, io.ptw.resp.bits.level, entryData)
     // Update LRU
     lru(refill_idx) := (entries - 1).U
     for (i <- 0 until entries) {
@@ -123,17 +124,24 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
     state := s_ready
   }
 
-  // Response generation
-  val hitEntry = Mux(
+  // Response generation — use superpage-aware ppn from the hit entry
+  val hitEntryData = Mux(
     tlbHit,
     tlbEntries(hitIdx).data,
     WireDefault(new TLBEntryData(paddrBits, pgIdxBits), 0.U.asTypeOf(new TLBEntryData(paddrBits, pgIdxBits)))
   )
 
+  // For superpage entries, TLBEntry.ppn() replaces lower PPN bits with VPN bits
+  val hitPPN = Mux(
+    tlbHit,
+    tlbEntries(hitIdx).ppn(vpn),
+    0.U(ppnBits.W)
+  )
+
   val paddr = Mux(
     io.req.bits.passthrough || !vm_enabled,
     io.req.bits.vaddr,
-    Cat(hitEntry.ppn, pgIdx)
+    Cat(hitPPN, pgIdx)
   )
 
   io.resp.valid             := io.req.valid && state === s_ready
@@ -141,21 +149,21 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   io.resp.bits.paddr        := paddr(paddrBits - 1, 0)
   io.resp.bits.gpa          := 0.U
   io.resp.bits.gpa_is_pte   := false.B
-  io.resp.bits.pf.ld        := hitEntry.pf
-  io.resp.bits.pf.st        := hitEntry.pf
-  io.resp.bits.pf.inst      := hitEntry.pf
+  io.resp.bits.pf.ld        := hitEntryData.pf
+  io.resp.bits.pf.st        := hitEntryData.pf
+  io.resp.bits.pf.inst      := hitEntryData.pf
   io.resp.bits.gf.ld        := false.B
   io.resp.bits.gf.st        := false.B
   io.resp.bits.gf.inst      := false.B
-  io.resp.bits.ae.ld        := hitEntry.ae_final
-  io.resp.bits.ae.st        := hitEntry.ae_final
-  io.resp.bits.ae.inst      := hitEntry.ae_final
+  io.resp.bits.ae.ld        := hitEntryData.ae_final
+  io.resp.bits.ae.st        := hitEntryData.ae_final
+  io.resp.bits.ae.inst      := hitEntryData.ae_final
   io.resp.bits.ma.ld        := false.B
   io.resp.bits.ma.st        := false.B
   io.resp.bits.ma.inst      := false.B
-  io.resp.bits.cacheable    := hitEntry.cacheable
+  io.resp.bits.cacheable    := hitEntryData.cacheable
   io.resp.bits.must_alloc   := false.B
-  io.resp.bits.prefetchable := hitEntry.cacheable
+  io.resp.bits.prefetchable := hitEntryData.cacheable
   io.resp.bits.size         := io.req.bits.size
   io.resp.bits.cmd          := io.req.bits.cmd
 }

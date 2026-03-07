@@ -1,0 +1,10 @@
+{
+  "meshRows": 4,
+  "meshColumns": 4,
+  "tileRows": 4,
+  "tileColumns": 4,
+  "inputWidth": 8,
+  "accWidth": 32,
+  "tileLatency": 0,
+  "outputDelay": 0
+}
