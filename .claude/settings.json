@@ -2,8 +2,11 @@
   "mcpServers": {
     "buckyball-dev": {
       "type": "stdio",
-      "command": "python3",
-      "args": ["scripts/claude/mcp_server.py"]
+      "command": "nix",
+      "args": ["develop", "-c", "python3", "-u", "scripts/claude/mcp_server.py"],
+      "env": {
+        "BUCKYBALL_QUIET": "1"
+      }
     }
   }
 }
