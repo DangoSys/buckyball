@@ -3,7 +3,7 @@ package framework.balldomain.prototype.transpose.configs
 import upickle.default._
 
 /**
- * TransposeBall参数
+ * TransposeBall Parameter
  */
 case class TransposeBallParam(
   InputNum:   Int,

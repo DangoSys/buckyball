@@ -3,7 +3,7 @@ package framework.balldomain.prototype.im2col.configs
 import upickle.default._
 
 /**
- * Im2colBall参数
+ * Im2colBall Parameter
  */
 case class Im2colBallParam(
   InputNum:   Int,

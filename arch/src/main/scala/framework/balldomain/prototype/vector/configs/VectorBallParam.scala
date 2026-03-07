@@ -3,7 +3,7 @@ package framework.balldomain.prototype.vector.configs
 import upickle.default._
 
 /**
- * VectorBall参数
+ * VectorBall Parameter
  */
 case class VectorBallParam(
   InputNum:      Int,

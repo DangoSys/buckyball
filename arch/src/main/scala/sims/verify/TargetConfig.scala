@@ -6,10 +6,8 @@ import framework.top.GlobalConfig
 import framework.balldomain.blink.{BlinkIO, HasBlink}
 import framework.balldomain.prototype.vector.VecBall
 import framework.balldomain.prototype.relu.ReluBall
-// import framework.balldomain.prototype.matrix.MatrixBall
-// import framework.balldomain.prototype.transpose.TransposeBall
-// import framework.balldomain.prototype.im2col.Im2colBall
-// import framework.balldomain.prototype.nnlut.NNLutBall
+import framework.balldomain.prototype.im2col.Im2colBall
+import framework.balldomain.prototype.transpose.TransposeBall
 
 sealed trait BallType
 case object VecBallType       extends BallType
@@ -24,9 +22,9 @@ class TargetBall(ballType: BallType, b: GlobalConfig) extends Module with HasBli
   val ballName = ballType match {
     case VecBallType       => "VecBall"
     case ReluBallType      => "ReluBall"
+    case Im2colBallType    => "Im2colBall"
+    case TransposeBallType => "TransposeBall"
     case MatrixBallType    => throw new IllegalArgumentException("MatrixBall not implemented")
-    case Im2colBallType    => throw new IllegalArgumentException("Im2colBall not implemented")
-    case TransposeBallType => throw new IllegalArgumentException("TransposeBall not implemented")
     case NNLutBallType     => throw new IllegalArgumentException("NNLutBall not implemented")
     case _                 => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
@@ -41,9 +39,11 @@ class TargetBall(ballType: BallType, b: GlobalConfig) extends Module with HasBli
   def blink: BlinkIO = io
 
   val ball = ballType match {
-    case VecBallType  => Module(new VecBall(b))
-    case ReluBallType => Module(new ReluBall(b))
-    case _            => throw new scala.MatchError("TargetBall does not handle this ball type")
+    case VecBallType       => Module(new VecBall(b))
+    case ReluBallType      => Module(new ReluBall(b))
+    case Im2colBallType    => Module(new Im2colBall(b))
+    case TransposeBallType => Module(new TransposeBall(b))
+    case _                 => throw new scala.MatchError("TargetBall does not handle this ball type")
   }
 
   io <> ball.blink

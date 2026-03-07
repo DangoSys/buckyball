@@ -3,7 +3,7 @@ package framework.gpdomain.configs
 import upickle.default._
 
 /**
- * GpDomain参数
+ * GpDomain Parameter
  */
 case class GpDomainParam(
   /** Number of lanes in the GP domain */

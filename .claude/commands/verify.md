@@ -36,6 +36,7 @@
    - `arch/log/<timestamp>/stdout.log` — 程序标准输出，包含 PASSED/FAILED 和 printf 输出
    - `arch/log/<timestamp>/disasm.log` — 反汇编指令流，可以看到实际执行了哪些指令
    - `arch/log/<timestamp>/bdb.log` — **Buckyball 调试日志**，包含 Ball 内部状态变化、SRAM 读写请求/响应、FSM 状态转移等硬件级信息。这是定位 Ball 逻辑错误最重要的日志
+   - `bbdev/server.log` — bbdev server 的运行日志，包含 Chisel 编译错误、mill 构建错误等详细堆栈信息
 
 3. **分析 bdb.log 的方法**：
    - 搜索目标 Ball 的名称，找到相关的命令发射和完成事件
