@@ -24,8 +24,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
     // Input from frontend (Ball Domain read/write requests) - receiver perspective
     val frontend = new Bundle {
-      val bankRead  = new BankRead(b)
-      val bankWrite = new BankWrite(b)
+      val bankRead        = new BankRead(b)
+      val bankWrite       = new BankWrite(b)
       val read_is_shared  = Input(Bool())
       val write_is_shared = Input(Bool())
     }
@@ -139,12 +139,12 @@ class MemMidend(val b: GlobalConfig) extends Module {
   //Connect frontend to backend
   io.mem_req(b.top.memBallChannelNum).write <> io.frontend.bankWrite.io
   io.mem_req(b.top.memBallChannelNum).read <> io.frontend.bankRead.io
-  io.mem_req(b.top.memBallChannelNum).bank_id  := Mux(
+  io.mem_req(b.top.memBallChannelNum).bank_id   := Mux(
     io.frontend.bankRead.io.req.valid,
     io.frontend.bankRead.bank_id,
     io.frontend.bankWrite.bank_id
   )
-  io.mem_req(b.top.memBallChannelNum).group_id := Mux(
+  io.mem_req(b.top.memBallChannelNum).group_id  := Mux(
     io.frontend.bankRead.io.req.valid,
     io.frontend.bankRead.group_id,
     io.frontend.bankWrite.group_id

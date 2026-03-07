@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
-import framework.memdomain.backend.{MemRequestIO, MTraceDPI}
+import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank
 import framework.top.GlobalConfig
@@ -89,8 +89,8 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
-    accPipes(i).io.mem_req.bank_id  := io.mem_req(i).bank_id
-    accPipes(i).io.mem_req.group_id := io.mem_req(i).group_id
+    accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
 
     // Bank-side defaults (only driven when a bank is actually connected)
@@ -145,7 +145,14 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
   // -----------------------------------------------------------------------------
-  private def emitTrace(ch: Int, isWrite: UInt, addr: UInt, dataLo: UInt, dataHi: UInt, en: Bool): Unit = {
+  private def emitTrace(
+    ch:      Int,
+    isWrite: UInt,
+    addr:    UInt,
+    dataLo:  UInt,
+    dataHi:  UInt,
+    en:      Bool
+  ): Unit = {
     mtraces(ch).io.is_write := isWrite
     mtraces(ch).io.channel  := ch.U
     mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id

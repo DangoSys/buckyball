@@ -3,7 +3,7 @@ package framework.memdomain.backend.shared
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.memdomain.backend.{MemRequestIO, MTraceDPI}
+import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import framework.top.GlobalConfig
@@ -32,9 +32,9 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_group_count = Output(UInt(4.W))
   })
 
-  val accPipes:  Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
-  val sharedMem: Instance[SharedMem]     = Instantiate(new SharedMem(b))
-  val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
+  val accPipes:  Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
+  val sharedMem: Instance[SharedMem]    = Instantiate(new SharedMem(b))
+  val mtraces          = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
   val sharedAllocTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
 
   for (mt <- mtraces) {
@@ -69,8 +69,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
-    accPipes(i).io.mem_req.bank_id  := io.mem_req(i).bank_id
-    accPipes(i).io.mem_req.group_id := io.mem_req(i).group_id
+    accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
+    accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
 
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -95,7 +95,14 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // Shared request routing arbiter
   // ---------------------------------------------------------------------------
-  private def emitTrace(ch: Int, isWrite: UInt, addr: UInt, dataLo: UInt, dataHi: UInt, en: Bool): Unit = {
+  private def emitTrace(
+    ch:      Int,
+    isWrite: UInt,
+    addr:    UInt,
+    dataLo:  UInt,
+    dataHi:  UInt,
+    en:      Bool
+  ): Unit = {
     mtraces(ch).io.is_write := isWrite
     mtraces(ch).io.channel  := ch.U
     mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id
@@ -132,7 +139,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     sharedReqArb.io.in(i).bits.is_write    := useWrite
     sharedReqArb.io.in(i).bits.vbank_id    := io.mem_req(i).bank_id
     sharedReqArb.io.in(i).bits.group_id    := 0.U
-    sharedReqArb.io.in(i).bits.addr := Mux(
+    sharedReqArb.io.in(i).bits.addr        := Mux(
       useRead,
       accPipes(i).io.sramRead.req.bits.addr,
       accPipes(i).io.sramWrite.req.bits.addr

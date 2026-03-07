@@ -1,6 +1,6 @@
 .vscode/
 .metals/
-.claude/
+# .claude/
 .motia/
 .cursor/
 .bsp/

@@ -83,6 +83,14 @@ ctest_workloads = [
         "ctest_im2col_test_singlecore-baremetal",
         "ctest_im2col_test_singlecore-baremetal",
     ),
+    (
+        "ctest_quant_test_singlecore-baremetal",
+        "ctest_quant_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_dequant_test_singlecore-baremetal",
+        "ctest_dequant_test_singlecore-baremetal",
+    ),
 ]
 
 

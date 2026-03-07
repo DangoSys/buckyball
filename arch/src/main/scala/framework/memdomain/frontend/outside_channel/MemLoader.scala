@@ -35,12 +35,12 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val s_idle :: s_dma_req :: s_dma_wait :: s_wait_last_write :: s_done :: Nil = Enum(5)
   val state                                                                   = RegInit(s_idle)
 
-  val rob_id_reg   = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg = Reg(UInt(b.memDomain.memAddrLen.W))
-  val iter_reg     = Reg(UInt(10.W))
-  val resp_count   = RegInit(0.U(log2Up(16).W))
-  val wr_bank_reg  = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  val stride_reg   = Reg(UInt(11.W))
+  val rob_id_reg    = RegInit(0.U(rob_id_width.W))
+  val mem_addr_reg  = Reg(UInt(b.memDomain.memAddrLen.W))
+  val iter_reg      = Reg(UInt(10.W))
+  val resp_count    = RegInit(0.U(log2Up(16).W))
+  val wr_bank_reg   = Reg(UInt(log2Up(b.memDomain.bankNum).W))
+  val stride_reg    = Reg(UInt(11.W))
   val is_shared_reg = RegInit(false.B)
 
   // Group counter for multi-bank writes
