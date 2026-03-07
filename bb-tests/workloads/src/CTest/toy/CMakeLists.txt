@@ -118,6 +118,7 @@ add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
 add_cross_platform_test_target(ctest_bfp_test bfp_test.c)
 add_cross_platform_test_target(ctest_quant_test quant_test.c)
 add_cross_platform_test_target(ctest_dequant_test dequant_test.c)
+add_cross_platform_test_target(ctest_gemmini_matmul_test gemmini_matmul_test.c)
 
 # Create master build target
 add_custom_target(buckyball-CTest-build ALL DEPENDS
@@ -145,5 +146,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_bfp_test
   ctest_quant_test
   ctest_dequant_test
+  ctest_gemmini_matmul_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

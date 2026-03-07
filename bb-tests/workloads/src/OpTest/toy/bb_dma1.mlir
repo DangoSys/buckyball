@@ -19,26 +19,25 @@ func.func @main() -> i8 {
   %0 = arith.constant 0 : i8
   // 16-byte aligned scratchpad address
   %spadAddr16 = arith.constant 16 : i64
-  // 32-byte aligned scratchpad address
-  %spadAddr32 = arith.constant 32 : i64
+  %stride = arith.constant 16 : i64
 
   %arrayA = memref.get_global @input_matrix_aligned : memref<4x16xi8>
   %arrayB = memref.alloc() {alignment = 16} : memref<4x16xi8>
 
   // Print input matrix
   // Print target matrix before move [CHECK1]
-  buckyball.print %arrayA : memref<4x16xi8>
-  buckyball.print %arrayB : memref<4x16xi8>
+  buckyball.bb_print_memref %arrayA : memref<4x16xi8>
+  buckyball.bb_print_memref %arrayB : memref<4x16xi8>
 
   // Use mvin to move data from 16-byte aligned address to scratchpad
   // CHECK: mvin
   // Use mvout to move data from scratchpad to 16-byte aligned target address
-  buckyball.bb_mvin %arrayA %spadAddr16 : memref<4x16xi8> i64
+  buckyball.bb_mvin %arrayA %spadAddr16 %stride : memref<4x16xi8> i64 i64
   // CHECK: mvout
   buckyball.bb_mvout %arrayB %spadAddr16 : memref<4x16xi8> i64
 
   // Print output matrix after move [CHECK2]
-  buckyball.print %arrayB : memref<4x16xi8>
+  buckyball.bb_print_memref %arrayB : memref<4x16xi8>
 
   // Release allocated memory
   memref.dealloc %arrayB : memref<4x16xi8>
