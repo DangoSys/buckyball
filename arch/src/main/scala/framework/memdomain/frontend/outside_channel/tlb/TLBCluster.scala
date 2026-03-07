@@ -72,6 +72,14 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
 
   assert(!io.exp(0).flush_retry || !io.exp(0).flush_skip, "TLB: flushing with both retry and skip at same time")
 
+  // Track which client won the arbiter
+  val arbGranted = tlbArb.io.chosen
+
+  // TLB resp.ready: only the winning client controls backpressure
+  tlb_io.resp.ready := MuxLookup(arbGranted, false.B)(
+    io.clients.zipWithIndex.map { case (client, i) => i.U -> client.resp.ready }
+  )
+
   io.clients.zipWithIndex.foreach {
     case (client, i) =>
       val last_translated_valid = RegInit(false.B)
@@ -98,13 +106,10 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
       when(io.exp(0).flush()) {
         last_translated_valid := false.B
       }
-      client.resp.bits.miss := tlb_io.resp.bits.miss
-      when(client.req.valid || tlb.io.resp.valid) {
-        client.resp <> tlb_io.resp
-      }.otherwise {
-        client.resp.valid := false.B
-        client.resp.bits  := DontCare
-        tlb_io.resp.ready := false.B
-      }
+
+      // Response routing: only the winning client gets the TLB response
+      val isMyTurn = tlbArbOut.valid && arbGranted === i.U
+      client.resp.valid := isMyTurn && tlb_io.resp.valid
+      client.resp.bits  := Mux(isMyTurn, tlb_io.resp.bits, 0.U.asTypeOf(tlb_io.resp.bits))
   }
 }

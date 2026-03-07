@@ -15,8 +15,10 @@ function(add_singlecore_baremetal_target TARGET_NAME MLIR_FILE)
           -expand-strided-metadata
           -convert-linalg-to-loops
           -lower-buckyball
+          -convert-scf-to-cf
           -finalize-memref-to-llvm
           -convert-arith-to-llvm
+          -convert-cf-to-llvm
           -convert-func-to-llvm
           -reconcile-unrealized-casts |
         ${BUDDY_TRANSLATE} --buddy-to-llvmir |

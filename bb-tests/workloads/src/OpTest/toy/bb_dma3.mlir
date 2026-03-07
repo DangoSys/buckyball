@@ -17,9 +17,9 @@ func.func @main() -> i8 {
   %c2 = arith.constant 2 : index
   %c16 = arith.constant 16 : index
   %c127 = arith.constant 127 : index
-  // Scratchpad start address
-  %spadAddr = arith.constant 0 : i64
-  %stride = arith.constant 16 : i64
+  // Bank ID for storage
+  %bankId = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
 
   // ========== Row count configuration area (only modify here) ==========
   // Total number of rows
@@ -61,14 +61,17 @@ func.func @main() -> i8 {
   buckyball.bb_print_memref %arrayB_head : memref<2x16xi8, strided<[16, 1]>>
   buckyball.bb_print_memref %arrayB_tail : memref<2x16xi8, strided<[16, 1], offset: 16336>>
 
+  // Allocate bank 0 before mvin
+  buckyball.bb_mset %bankId : i64
+
   // Execute long read/write operations
   // Step 1: long read - read large amount of data from memory into scratchpad
   // CHECK: mvin
-  buckyball.bb_mvin %arrayA %spadAddr %stride : memref<1023x16xi8> i64 i64
+  buckyball.bb_mvin %arrayA %bankId %stride : memref<1023x16xi8> i64 i64
 
   // Step 2: long write - write large amount of data from scratchpad to memory
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %spadAddr : memref<1023x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId : memref<1023x16xi8> i64
 
   // Print first two rows and last two rows of output matrix after move [CHECK2]
   %arrayB_head_after = memref.subview %arrayB[0, 0] [2, 16] [1, 1] : memref<1023x16xi8> to memref<2x16xi8, strided<[16, 1]>>

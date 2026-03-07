@@ -11,4 +11,11 @@ object DISA {
   val SYSTOLIC      = BitPat("b0100111") // 39
   val QUANT         = BitPat("b0101000") // 40
   val DEQUANT       = BitPat("b0101001") // 41
+
+  // Gemmini systolic array instructions
+  val GEMMINI_CONFIG              = BitPat("b0101010") // 42
+  val GEMMINI_PRELOAD             = BitPat("b0101011") // 43
+  val GEMMINI_COMPUTE_PRELOADED   = BitPat("b0101100") // 44
+  val GEMMINI_COMPUTE_ACCUMULATED = BitPat("b0101101") // 45
+  val GEMMINI_FLUSH               = BitPat("b0101110") // 46
 }

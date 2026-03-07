@@ -39,6 +39,8 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val ptw    = Vec(1, new BBTLBPTWIO(b))
     // TLB exception interface
     val tlbExp = Vec(1, new BBTLBExceptionIO)
+    // CPU sfence signal — flushes Buckyball's TLB
+    val sfence = Input(Bool())
 
     // TileLink DMA bundles (from tile's diplomacy nodes)
     val tl_reader = new TLBundle(edge.bundle)
@@ -115,7 +117,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
   // --- TLB exception ---
   memDomain.io.tlbExp(0).flush_skip  := false.B
-  memDomain.io.tlbExp(0).flush_retry := false.B
+  memDomain.io.tlbExp(0).flush_retry := io.sfence
   io.tlbExp(0) <> memDomain.io.tlbExp(0)
 
   // --- TileLink DMA ---

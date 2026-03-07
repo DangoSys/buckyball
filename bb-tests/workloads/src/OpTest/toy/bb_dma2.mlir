@@ -17,11 +17,10 @@ memref.global "private" @input_matrix_b : memref<2x16xi8> = dense<[[100, 101, 10
 
 func.func @main() -> i8 {
   %0 = arith.constant 0 : i8
-  // Scratchpad address 1
-  %spadAddr1 = arith.constant 10 : i64
-  // Scratchpad address 2
-  %spadAddr2 = arith.constant 50 : i64
-  %stride = arith.constant 16 : i64
+  // Bank IDs
+  %bankId0 = arith.constant 0 : i64
+  %bankId1 = arith.constant 1 : i64
+  %stride = arith.constant 1 : i64
 
   %arrayA = memref.get_global @input_matrix_a : memref<2x16xi8>
   %arrayB = memref.get_global @input_matrix_b : memref<2x16xi8>
@@ -33,27 +32,31 @@ func.func @main() -> i8 {
   // Print temporary matrix before move [CHECK1]
   buckyball.bb_print_memref %arrayTemp : memref<2x16xi8>
 
+  // Allocate banks before use
+  buckyball.bb_mset %bankId0 : i64
+  buckyball.bb_mset %bankId1 : i64
+
   // Fast alternating mvin/mvout operation sequence
-  // Step 1: A -> scratchpad 1
+  // Step 1: A -> bank 0
   // CHECK: mvin
   // Step 2: scratchpad 1 -> temp
-  buckyball.bb_mvin %arrayA %spadAddr1 %stride : memref<2x16xi8> i64 i64
+  buckyball.bb_mvin %arrayA %bankId0 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayTemp %spadAddr1 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayTemp %bankId0 : memref<2x16xi8> i64
 
-  // Step 3: B -> scratchpad 2
+  // Step 3: B -> bank 1
   // CHECK: mvin
-  // Step 4: scratchpad 2 -> A
-  buckyball.bb_mvin %arrayB %spadAddr2 %stride : memref<2x16xi8> i64 i64
+  // Step 4: bank 1 -> A
+  buckyball.bb_mvin %arrayB %bankId1 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayA %spadAddr2 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayA %bankId1 : memref<2x16xi8> i64
 
-  // Step 5: temp -> scratchpad 1
+  // Step 5: temp -> bank 0
   // CHECK: mvin
-  // Step 6: scratchpad 1 -> B
-  buckyball.bb_mvin %arrayTemp %spadAddr1 %stride : memref<2x16xi8> i64 i64
+  // Step 6: bank 0 -> B
+  buckyball.bb_mvin %arrayTemp %bankId0 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %spadAddr1 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId0 : memref<2x16xi8> i64
 
   // Print swapped matrices [CHECK2]
   buckyball.bb_print_memref %arrayA : memref<2x16xi8>

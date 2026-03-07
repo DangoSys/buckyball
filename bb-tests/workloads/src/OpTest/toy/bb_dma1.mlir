@@ -17,9 +17,9 @@ memref.global "private" @input_matrix_aligned : memref<4x16xi8> = dense<[[0, 1, 
 
 func.func @main() -> i8 {
   %0 = arith.constant 0 : i8
-  // 16-byte aligned scratchpad address
-  %spadAddr16 = arith.constant 16 : i64
-  %stride = arith.constant 16 : i64
+  // Bank ID for data storage
+  %bankId = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
 
   %arrayA = memref.get_global @input_matrix_aligned : memref<4x16xi8>
   %arrayB = memref.alloc() {alignment = 16} : memref<4x16xi8>
@@ -29,12 +29,14 @@ func.func @main() -> i8 {
   buckyball.bb_print_memref %arrayA : memref<4x16xi8>
   buckyball.bb_print_memref %arrayB : memref<4x16xi8>
 
+  // Allocate bank 0 before mvin
+  buckyball.bb_mset %bankId : i64
   // Use mvin to move data from 16-byte aligned address to scratchpad
   // CHECK: mvin
   // Use mvout to move data from scratchpad to 16-byte aligned target address
-  buckyball.bb_mvin %arrayA %spadAddr16 %stride : memref<4x16xi8> i64 i64
+  buckyball.bb_mvin %arrayA %bankId %stride : memref<4x16xi8> i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %spadAddr16 : memref<4x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId : memref<4x16xi8> i64
 
   // Print output matrix after move [CHECK2]
   buckyball.bb_print_memref %arrayB : memref<4x16xi8>
