@@ -248,7 +248,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="?",
         const="",
         metavar="ARGS",
-        help='Run yosys synthesis for area estimation. Args: "[--balltype <vecball|reluball|...>] [--top <top_module>]"\n'
+        help='Run yosys synthesis for area estimation.\n'
+             'Args: "[--top <top_module>] [--config <elaborate_config>]"\n'
+             '  --top              : top module for synthesis (default from yosys-config.yaml)\n'
+             '  --config           : Elaborate config class (default: sims.verilator.BuckyballToyVerilatorConfig)\n'
              'Liberty library can be configured in bbdev/api/steps/yosys/scripts/yosys-config.yaml',
     )
 

@@ -21,9 +21,9 @@ async def handler(req, context):
     body = req.get("body") or {}
 
     data = {
-        "balltype": body.get("balltype"),
         "output_dir": body.get("output_dir", f"{bbdir}/arch/build/"),
         "top": body.get("top"),
+        "config": body.get("config"),
     }
     await context.emit({"topic": "yosys.synth", "data": data})
 

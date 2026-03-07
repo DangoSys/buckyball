@@ -39,31 +39,27 @@ async def handler(data, context):
 
     # Load yaml config as defaults, CLI args override
     yosys_cfg = load_yosys_config()
-    top_module = data.get("top") or yosys_cfg.get("top") or "TargetBall"
-    balltype = data.get("balltype") or yosys_cfg.get("balltype") or "vecball"
+    top_module = data.get("top") or yosys_cfg.get("top") or "BuckyballAccelerator"
     liberty = yosys_cfg.get("liberty")  # Path to .lib file, configured in yosys-config.yaml only
+    elaborate_config = data.get("config") or yosys_cfg.get("elaborate_config", "sims.verilator.BuckyballToyVerilatorConfig")
 
-    context.logger.info(f"Ball type: {balltype}, top module: {top_module}")
+    context.logger.info(f"Top module: {top_module}, Elaborate config: {elaborate_config}")
 
     # ==================================================================================
-    # Step 1: Generate Verilog via BallTopMain (pure design, no DPI-C sim wrappers)
-    # Using BallTopMain instead of Elaborate to avoid SimTSI/SimDRAM/SimJTAG files
-    # that contain DPI-C imports which Yosys cannot parse
+    # Step 1: Generate Verilog via Elaborate (full SoC), filter DPI-C files later
     # ==================================================================================
-    context.logger.info("Step 1: Cleaning build directory and generating Verilog...")
-
-    # Clean build directory first to remove stale files from previous Elaborate runs
     import shutil
     if os.path.exists(build_dir):
         shutil.rmtree(build_dir)
     os.makedirs(build_dir, exist_ok=True)
 
+    context.logger.info("Step 1: Generating Verilog via Elaborate...")
     verilog_command = (
-        f"mill -i __.test.runMain sims.verify.BallTopMain {balltype} "
+        f"mill -i __.test.runMain sims.verilator.Elaborate {elaborate_config} "
+        "--disable-annotation-unknown -strip-debug-info -O=debug "
+        "-lowering-options=disallowLocalVariables "
+        f"--split-verilog -o={build_dir}"
     )
-    verilog_command += "--disable-annotation-unknown -strip-debug-info -O=debug "
-    verilog_command += "-lowering-options=disallowLocalVariables "
-    verilog_command += f"--split-verilog -o={build_dir}"
 
     result = stream_run_logger(
         cmd=verilog_command,
@@ -94,10 +90,25 @@ async def handler(data, context):
     # ==================================================================================
     context.logger.info("Step 2: Running Yosys synthesis for area estimation...")
 
-    # Collect all Verilog/SystemVerilog sources
-    vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(
-        f"{build_dir}/**/*.sv", recursive=True
-    )
+    # Collect SystemVerilog sources only (.sv), skip .v files which may contain DPI-C imports
+    vsrcs = glob.glob(f"{build_dir}/**/*.sv", recursive=True)
+
+    # Filter out files with unsupported SystemVerilog syntax (e.g. '{ assignment patterns)
+    # These are mostly TileLink bus infra / monitors that Yosys can't parse
+    filtered_vsrcs = []
+    skipped = []
+    for f in vsrcs:
+        with open(f, "r") as fh:
+            content = fh.read()
+        if "'{" in content or 'import "DPI-C"' in content:
+            skipped.append(os.path.basename(f))
+        else:
+            filtered_vsrcs.append(f)
+    vsrcs = filtered_vsrcs
+
+    if skipped:
+        context.logger.info(f"Skipped {len(skipped)} files with unsupported syntax: {', '.join(skipped[:10])}{'...' if len(skipped) > 10 else ''}")
+    context.logger.info(f"Found {len(vsrcs)} synthesizable SystemVerilog source files")
 
     if not vsrcs:
         context.logger.error(f"No Verilog source files found in {build_dir}")
@@ -122,15 +133,20 @@ async def handler(data, context):
         f.write(f"{read_commands}\n")
         f.write(f"hierarchy -top {top_module}\n")
         f.write("proc\n")
-        f.write("flatten\n")
         f.write("opt\n")
         f.write(f"synth -top {top_module}\n")
 
         if liberty and os.path.exists(liberty):
-            # Map to standard cells using liberty file for accurate area
             context.logger.info(f"Using liberty file: {liberty}")
             f.write(f"dfflibmap -liberty {liberty}\n")
             f.write(f"abc -liberty {liberty}\n")
+
+            # Hierarchical area breakdown BEFORE flatten (per-module with liberty area)
+            f.write(f"tee -o {yosys_output_dir}/hierarchy_report.txt stat -liberty {liberty}\n")
+
+            # Flatten and report total area
+            f.write("flatten\n")
+            f.write("opt\n")
             f.write(f"stat -liberty {liberty}\n")
             f.write(f"tee -o {yosys_output_dir}/area_report.txt stat -liberty {liberty}\n")
             # Write mapped netlist for OpenSTA timing analysis
@@ -138,6 +154,10 @@ async def handler(data, context):
         else:
             if liberty:
                 context.logger.warn(f"Liberty file not found: {liberty}, falling back to generic stat")
+            # Hierarchical breakdown before flatten
+            f.write(f"tee -o {yosys_output_dir}/hierarchy_report.txt stat\n")
+            f.write("flatten\n")
+            f.write("opt\n")
             f.write("stat\n")
             f.write(f"tee -o {yosys_output_dir}/area_report.txt stat\n")
 
@@ -205,6 +225,12 @@ async def handler(data, context):
         with open(report_file, "r") as f:
             extra["area_report"] = f.read()
         context.logger.info(f"Area report saved to {report_file}")
+
+    hierarchy_file = f"{yosys_output_dir}/hierarchy_report.txt"
+    if os.path.exists(hierarchy_file):
+        with open(hierarchy_file, "r") as f:
+            extra["hierarchy_report"] = f.read()
+        context.logger.info(f"Hierarchy report saved to {hierarchy_file}")
 
     success_result, failure_result = await check_result(
         context,

@@ -7,11 +7,11 @@
 #   liberty: /path/to/your/standard_cell.lib
 liberty: 
 
-# Default top module name (override with --top)
-top: TargetBall
+# Default top module name (override with --top on CLI)
+top: BuckyballAccelerator
 
-# Default ball type (override with --balltype)
-balltype: vecball
+# Elaborate config class (override with --config on CLI)
+elaborate_config: sims.verilator.BuckyballToyVerilatorConfig
 
 # OpenSTA timing analysis settings
 # Clock period in nanoseconds (used for STA constraint)
