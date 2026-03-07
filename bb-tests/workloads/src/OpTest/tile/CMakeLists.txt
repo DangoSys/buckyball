@@ -9,9 +9,12 @@ function(add_singlecore_baremetal_target TARGET_NAME MLIR_FILE)
   set(EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_singlecore-baremetal")
 
   # Compile xx.mlir to xx-baremetal.o
+  # Tile-level tests need: linalg->tile->buckyball->llvm pipeline
   add_custom_command(
     OUTPUT ${OBJ_FILE}
     COMMAND ${BUDDY_OPT} ${MLIR_FILE}
+          -convert-linalg-to-tile
+          -convert-tile-to-buckyball
           -expand-strided-metadata
           -convert-linalg-to-loops
           -lower-buckyball
@@ -28,7 +31,7 @@ function(add_singlecore_baremetal_target TARGET_NAME MLIR_FILE)
     COMMENT "Compiling ${MLIR_FILE} to singlecore baremetal object"
   )
 
-  # Link (same as CTest singlecore: no start.S, use htif_nano.specs crt0)
+  # Link (use htif_nano.specs crt0)
   add_custom_command(
     OUTPUT ${EXECUTABLE}
     COMMAND ${ELF_CC} -O2 -static -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}
@@ -55,20 +58,12 @@ endfunction()
 #-------------------------------------------------------------------------------
 # Build list
 #-------------------------------------------------------------------------------
-add_optest_target(bb_mvin_mvout ${OPTEST_TOY_DIR}/bb_mvin_mvout.mlir)
-add_optest_target(bb_dma1 ${OPTEST_TOY_DIR}/bb_dma1.mlir)
-add_optest_target(bb_dma2 ${OPTEST_TOY_DIR}/bb_dma2.mlir)
-add_optest_target(bb_dma3 ${OPTEST_TOY_DIR}/bb_dma3.mlir)
-add_optest_target(bb_mul_warp16 ${OPTEST_TOY_DIR}/bb_mul_warp16.mlir)
-add_optest_target(bb_im2col ${OPTEST_TOY_DIR}/bb_im2col.mlir)
-add_optest_target(bb_quant_dequant ${OPTEST_TOY_DIR}/bb_quant_dequant.mlir)
+add_optest_target(tile_matmul ${OPTEST_TILE_DIR}/tile_matmul.mlir)
+add_optest_target(tile_transpose ${OPTEST_TILE_DIR}/tile_transpose.mlir)
+add_optest_target(tile_conv2d ${OPTEST_TILE_DIR}/tile_conv2d.mlir)
 
-add_custom_target(OpTest-toy ALL DEPENDS
-  bb_mvin_mvout
-  bb_dma1
-  bb_dma2
-  bb_dma3
-  bb_mul_warp16
-  bb_im2col
-  bb_quant_dequant
+add_custom_target(OpTest-tile ALL DEPENDS
+  tile_matmul
+  tile_transpose
+  tile_conv2d
 )

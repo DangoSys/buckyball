@@ -53,5 +53,10 @@ typedef int32_t result_t;
 #include "39_bfp.c"
 #include "40_quant.c"
 #include "41_dequant.c"
+#include "42_gemmini_config.c"
+#include "43_gemmini_preload.c"
+#include "44_gemmini_compute_preloaded.c"
+#include "45_gemmini_compute_accumulated.c"
+#include "46_gemmini_flush.c"
 
 #endif // BUCKYBALL_ISA_H

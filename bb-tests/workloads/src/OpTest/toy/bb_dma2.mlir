@@ -21,42 +21,43 @@ func.func @main() -> i8 {
   %spadAddr1 = arith.constant 10 : i64
   // Scratchpad address 2
   %spadAddr2 = arith.constant 50 : i64
+  %stride = arith.constant 16 : i64
 
   %arrayA = memref.get_global @input_matrix_a : memref<2x16xi8>
   %arrayB = memref.get_global @input_matrix_b : memref<2x16xi8>
   %arrayTemp = memref.alloc() {alignment = 16} : memref<2x16xi8>
 
   // Print input matrices A and B
-  buckyball.print %arrayA : memref<2x16xi8>
-  buckyball.print %arrayB : memref<2x16xi8>
+  buckyball.bb_print_memref %arrayA : memref<2x16xi8>
+  buckyball.bb_print_memref %arrayB : memref<2x16xi8>
   // Print temporary matrix before move [CHECK1]
-  buckyball.print %arrayTemp : memref<2x16xi8>
+  buckyball.bb_print_memref %arrayTemp : memref<2x16xi8>
 
   // Fast alternating mvin/mvout operation sequence
   // Step 1: A -> scratchpad 1
   // CHECK: mvin
   // Step 2: scratchpad 1 -> temp
-  buckyball.bb_mvin %arrayA %spadAddr1 : memref<2x16xi8> i64
+  buckyball.bb_mvin %arrayA %spadAddr1 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
   buckyball.bb_mvout %arrayTemp %spadAddr1 : memref<2x16xi8> i64
 
   // Step 3: B -> scratchpad 2
   // CHECK: mvin
   // Step 4: scratchpad 2 -> A
-  buckyball.bb_mvin %arrayB %spadAddr2 : memref<2x16xi8> i64
+  buckyball.bb_mvin %arrayB %spadAddr2 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
   buckyball.bb_mvout %arrayA %spadAddr2 : memref<2x16xi8> i64
 
   // Step 5: temp -> scratchpad 1
   // CHECK: mvin
   // Step 6: scratchpad 1 -> B
-  buckyball.bb_mvin %arrayTemp %spadAddr1 : memref<2x16xi8> i64
+  buckyball.bb_mvin %arrayTemp %spadAddr1 %stride : memref<2x16xi8> i64 i64
   // CHECK: mvout
   buckyball.bb_mvout %arrayB %spadAddr1 : memref<2x16xi8> i64
 
   // Print swapped matrices [CHECK2]
-  buckyball.print %arrayA : memref<2x16xi8>
-  buckyball.print %arrayB : memref<2x16xi8>
+  buckyball.bb_print_memref %arrayA : memref<2x16xi8>
+  buckyball.bb_print_memref %arrayB : memref<2x16xi8>
 
   // Release allocated memory
   memref.dealloc %arrayTemp : memref<2x16xi8>
