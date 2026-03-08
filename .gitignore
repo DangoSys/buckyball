@@ -1,8 +1,7 @@
 .vscode/
 .metals/
-# .claude/
 .motia/
-# .cursor/
+.cursor/
 .bsp/
 out/
 result

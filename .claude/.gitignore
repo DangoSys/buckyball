@@ -1,2 +1,3 @@
-agents/
-settings.local.json
+*
+!commands/
+!CLAUDE.md
