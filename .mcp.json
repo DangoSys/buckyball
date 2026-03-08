@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "buckyball-dev": {
+      "type": "stdio",
+      "command": "nix",
+      "args": [
+        "develop",
+        "-c",
+        "python3",
+        "-u",
+        "scripts/claude/mcp_server.py"
+      ],
+      "env": {
+        "NIX_QUIET": "1"
+      }
+    },
+    "waveform-mcp": {
+      "type": "stdio",
+      "command": "thirdparty/waveform-mcp/target/release/waveform-mcp",
+      "args": []
+    }
+  }
+}

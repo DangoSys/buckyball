@@ -87,7 +87,7 @@
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
 
-              if [ -z "$BUCKYBALL_QUIET" ]; then
+              if [ -z "$NIX_QUIET" ]; then
                 echo "================= Buckyball Environment Activated ========================="
                 echo "Development environment loaded:"
                 echo "Verilator: $(verilator --version 2>&1 | head -1)"
