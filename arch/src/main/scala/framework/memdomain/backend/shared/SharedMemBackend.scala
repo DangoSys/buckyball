@@ -30,6 +30,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
     val query_group_count = Output(UInt(4.W))
+
+    val hartid = Input(UInt(b.core.xLen.W))
   })
 
   val accPipes:  Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
@@ -179,11 +181,13 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   val canIssueWrite = !writeReqPending && !writeRespBufValid
 
   sharedMem.io.read.req.valid         := sharedReqArb.io.out.valid && !arbIsWrite && canIssueRead
+  sharedMem.io.read.req.bits.hartid   := io.hartid
   sharedMem.io.read.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id
   sharedMem.io.read.req.bits.group_id := sharedReqArb.io.out.bits.group_id
   sharedMem.io.read.req.bits.addr     := sharedReqArb.io.out.bits.addr
 
   sharedMem.io.write.req.valid         := sharedReqArb.io.out.valid && arbIsWrite && canIssueWrite
+  sharedMem.io.write.req.bits.hartid   := io.hartid
   sharedMem.io.write.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id
   sharedMem.io.write.req.bits.group_id := sharedReqArb.io.out.bits.group_id
   sharedMem.io.write.req.bits.addr     := sharedReqArb.io.out.bits.addr

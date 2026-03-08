@@ -4,7 +4,7 @@
   "bankEntries": 128,
   "bankMaskLen": 16,
   "sharedEnable": true,
-  "sharedEntries": 4096,
+  "sharedEntries": 16384,
   "sharedDefaultGroupCount": 1,
   "tlb_size": 4,
   "dma_n_xacts": 8,

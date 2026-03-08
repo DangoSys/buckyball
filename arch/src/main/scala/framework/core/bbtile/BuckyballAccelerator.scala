@@ -34,6 +34,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val resp      = Decoupled(new RoCCResponseBB(b.core.xLen))
     val busy      = Output(Bool())
     val interrupt = Output(Bool())
+    val hartid    = Input(UInt(b.core.xLen.W))
 
     // PTW interface (shared with Rocket core's PTW)
     val ptw    = Vec(1, new BBTLBPTWIO(b))
@@ -65,6 +66,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Frontend -> MemDomain ---
   memDomain.io.global_issue_i <> frontend.io.mem_issue_o
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o
+  memDomain.io.hartid := io.hartid
 
   // --- Frontend -> GpDomain ---
   gpDomain.io.global_issue_i <> frontend.io.gp_issue_o
