@@ -53,6 +53,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // TileLink physical connections for DMA
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
+
+    // Core/thread id used by shared memory addressing.
+    val hartid = Input(UInt(b.core.xLen.W))
   })
 
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
@@ -62,6 +65,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // Connect query interface from frontend to backend
   backend.io.query_vbank_id     := frontend.io.query_vbank_id
   frontend.io.query_group_count := backend.io.query_group_count
+  backend.io.hartid             := io.hartid
 
   // -------------------------------------------------
   // Connection with outside (all in frontend)

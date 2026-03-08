@@ -288,6 +288,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     val (tl_writer, _)           = outer.bb_writer_node.get.out(0)
 
     val buckyball = Module(new BuckyballAccelerator(outer.bbConfig)(edge_reader))
+    buckyball.io.hartid := outer.hartIdSinkNode.bundle
 
     // RoCC cmd/resp: direct wiring (both use RoCCCommandBB/RoCCResponseBB)
     buckyball.io.cmd <> core.io.rocc.cmd

@@ -19,6 +19,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
     val query_group_count = Output(UInt(4.W))
+
+    val hartid = Input(UInt(b.core.xLen.W))
   })
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
@@ -35,6 +37,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   // Query both backends; shared takes priority when this vbank is allocated as shared.
   privateBackend.io.query_vbank_id := io.query_vbank_id
   sharedBackend.io.query_vbank_id  := io.query_vbank_id
+  sharedBackend.io.hartid          := io.hartid
   io.query_group_count             := Mux(
     sharedBackend.io.query_group_count =/= 0.U,
     sharedBackend.io.query_group_count,
