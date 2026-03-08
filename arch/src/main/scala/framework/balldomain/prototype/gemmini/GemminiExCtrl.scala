@@ -192,12 +192,14 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
         total_rows    := Mux(io.cmdReq.bits.cmd.iter === 0.U, DIM.U, io.cmdReq.bits.cmd.iter)
 
         when(sub_cmd === GemminiSubCmd.CONFIG) {
-          // CONFIG: decode and apply immediately from live wires (still valid this cycle)
-          cfg_dataflow     := io.cmdReq.bits.cmd.rs1(2)
-          cfg_activation   := io.cmdReq.bits.cmd.rs1(4, 3)
-          cfg_a_transpose  := io.cmdReq.bits.cmd.rs1(8)
-          cfg_b_transpose  := io.cmdReq.bits.cmd.rs1(9)
-          cfg_in_shift     := io.cmdReq.bits.cmd.rs2(log2Up(config.accWidth) - 1, 0)
+          // CONFIG: decode from special field (rs2 with sub_cmd in [3:0])
+          // Config params start at bit 4: [4]=dataflow, [6:5]=activation, [7]=a_transpose, [8]=b_transpose,
+          // [40:9]=in_shift
+          cfg_dataflow     := io.cmdReq.bits.cmd.special(4)
+          cfg_activation   := io.cmdReq.bits.cmd.special(6, 5)
+          cfg_a_transpose  := io.cmdReq.bits.cmd.special(7)
+          cfg_b_transpose  := io.cmdReq.bits.cmd.special(8)
+          cfg_in_shift     := io.cmdReq.bits.cmd.special(log2Up(config.accWidth) + 8, 9)
           // Commit immediately
           io.cmdResp.valid := true.B
           // Stay in sIdle if resp fires, else we need a config state

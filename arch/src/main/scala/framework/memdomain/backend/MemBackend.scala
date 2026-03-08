@@ -25,7 +25,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
-  val sharedBackend: Instance[SharedMemBackend]   = Instantiate(new SharedMemBackend(b))
+  val sharedBackend:  Instance[SharedMemBackend]  = Instantiate(new SharedMemBackend(b))
 
   // Broadcast config so alloc/release is handled by the corresponding backend.
   privateBackend.io.config.valid := io.config.valid
@@ -52,12 +52,12 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val writeRouteShared = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    val useSharedReq = io.mem_req(i).is_shared
-    val useSharedReadResp = Mux(readPending(i), readRouteShared(i), useSharedReq)
+    val useSharedReq       = io.mem_req(i).is_shared
+    val useSharedReadResp  = Mux(readPending(i), readRouteShared(i), useSharedReq)
     val useSharedWriteResp = Mux(writePending(i), writeRouteShared(i), useSharedReq)
 
     when(io.mem_req(i).read.req.fire) {
-      readPending(i) := true.B
+      readPending(i)     := true.B
       readRouteShared(i) := useSharedReq
     }
     when(io.mem_req(i).read.resp.fire) {
@@ -65,7 +65,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     }
 
     when(io.mem_req(i).write.req.fire) {
-      writePending(i) := true.B
+      writePending(i)     := true.B
       writeRouteShared(i) := useSharedReq
     }
     when(io.mem_req(i).write.resp.fire) {
@@ -103,8 +103,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
     )
 
     // Response ready route (selected by latched request route when pending).
-    privateBackend.io.mem_req(i).read.resp.ready := io.mem_req(i).read.resp.ready && !useSharedReadResp
-    sharedBackend.io.mem_req(i).read.resp.ready  := io.mem_req(i).read.resp.ready && useSharedReadResp
+    privateBackend.io.mem_req(i).read.resp.ready  := io.mem_req(i).read.resp.ready && !useSharedReadResp
+    sharedBackend.io.mem_req(i).read.resp.ready   := io.mem_req(i).read.resp.ready && useSharedReadResp
     privateBackend.io.mem_req(i).write.resp.ready := io.mem_req(i).write.resp.ready && !useSharedWriteResp
     sharedBackend.io.mem_req(i).write.resp.ready  := io.mem_req(i).write.resp.ready && useSharedWriteResp
 
@@ -114,7 +114,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       sharedBackend.io.mem_req(i).read.resp.valid,
       privateBackend.io.mem_req(i).read.resp.valid
     )
-    io.mem_req(i).read.resp.bits := Mux(
+    io.mem_req(i).read.resp.bits  := Mux(
       useSharedReadResp,
       sharedBackend.io.mem_req(i).read.resp.bits,
       privateBackend.io.mem_req(i).read.resp.bits
@@ -125,7 +125,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       sharedBackend.io.mem_req(i).write.resp.valid,
       privateBackend.io.mem_req(i).write.resp.valid
     )
-    io.mem_req(i).write.resp.bits := Mux(
+    io.mem_req(i).write.resp.bits  := Mux(
       useSharedWriteResp,
       sharedBackend.io.mem_req(i).write.resp.bits,
       privateBackend.io.mem_req(i).write.resp.bits

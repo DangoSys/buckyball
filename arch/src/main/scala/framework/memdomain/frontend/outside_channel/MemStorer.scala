@@ -44,15 +44,15 @@ class MemStorer(val b: GlobalConfig) extends Module {
 
   val rob_id_reg      = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg    = RegInit(0.U(b.memDomain.memAddrLen.W))
-  val iter_reg        = RegInit(0.U(10.W))
+  val iter_reg        = RegInit(0.U(b.frontend.iter_len.W))
   val stride_reg      = RegInit(0.U(10.W))
   val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val group_count_reg = RegInit(1.U(4.W)) // Store group count for current operation
   val is_shared_reg   = RegInit(false.B)
 
   // Address and group counters
-  val addr_counter  = RegInit(0.U(10.W)) // Row address counter
-  val group_counter = RegInit(0.U(4.W))  // Group counter within a row
+  val addr_counter  = RegInit(0.U(b.frontend.iter_len.W)) // Row address counter
+  val group_counter = RegInit(0.U(4.W))                   // Group counter within a row
 
   // -----------------------------
   // Pending buffer for SRAM resp
@@ -81,7 +81,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     rob_id_reg   := io.cmdReq.bits.rob_id
     mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
     rd_bank_reg  := io.cmdReq.bits.cmd.bank_id
-    stride_reg   := io.cmdReq.bits.cmd.special(10, 0)
+    stride_reg   := io.cmdReq.bits.cmd.special(57, 39)
 
     // Query and save group count
     group_count_reg := io.query_group_count

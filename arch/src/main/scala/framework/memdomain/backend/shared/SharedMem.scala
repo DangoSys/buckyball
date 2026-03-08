@@ -57,7 +57,12 @@ class SharedMem(val b: GlobalConfig) extends Module {
   // Shared memory address mapping (group_id intentionally ignored):
   // shared_addr = (hart_slot * bankNum * bankEntries) + (vbank_id * bankEntries) + local_addr.
   // hart_slot is derived from hartid and bounded by available shared capacity.
-  private def toSharedAddr(hartid: UInt, vbank_id: UInt, _group_id: UInt, local_addr: UInt): UInt = {
+  private def toSharedAddr(
+    hartid:     UInt,
+    vbank_id:   UInt,
+    _group_id:  UInt,
+    local_addr: UInt
+  ): UInt = {
     val hartSlot  = if (hartSlots == 1) 0.U else (hartid(log2Ceil(hartSlots) - 1, 0) % hartSlots.U)
     val hartPart  = hartSlot * hartLines.U
     val vbankPart = vbank_id * b.memDomain.bankEntries.U
@@ -68,7 +73,8 @@ class SharedMem(val b: GlobalConfig) extends Module {
   io.write.req.ready := !io.read.req.valid
 
   val readReqFire = io.read.req.fire
-  val readAddr    = toSharedAddr(io.read.req.bits.hartid, io.read.req.bits.vbank_id, io.read.req.bits.group_id, io.read.req.bits.addr)
+  val readAddr    =
+    toSharedAddr(io.read.req.bits.hartid, io.read.req.bits.vbank_id, io.read.req.bits.group_id, io.read.req.bits.addr)
 
   when(readReqFire) {
     assert(io.read.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")
@@ -81,7 +87,13 @@ class SharedMem(val b: GlobalConfig) extends Module {
   io.read.resp.bits.data := readData.asUInt
 
   val writeReqFire = io.write.req.fire
-  val writeAddr    = toSharedAddr(io.write.req.bits.hartid, io.write.req.bits.vbank_id, io.write.req.bits.group_id, io.write.req.bits.addr)
+
+  val writeAddr = toSharedAddr(
+    io.write.req.bits.hartid,
+    io.write.req.bits.vbank_id,
+    io.write.req.bits.group_id,
+    io.write.req.bits.addr
+  )
 
   when(writeReqFire) {
     assert(io.write.req.bits.vbank_id < b.memDomain.bankNum.U, "SharedMem: vbank_id out of range")

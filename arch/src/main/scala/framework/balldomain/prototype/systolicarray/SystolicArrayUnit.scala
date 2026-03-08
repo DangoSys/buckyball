@@ -14,7 +14,7 @@ class ctrl_ld_req(b: GlobalConfig) extends Bundle {
   val op1_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
   val op2_bank      = UInt(log2Up(b.memDomain.bankNum).W)
   val op2_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
-  val iter          = UInt(10.W)
+  val iter          = UInt(b.frontend.iter_len.W)
 }
 
 @instantiable

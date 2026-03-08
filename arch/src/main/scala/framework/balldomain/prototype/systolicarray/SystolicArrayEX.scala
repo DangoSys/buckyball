@@ -8,14 +8,14 @@ import framework.top.GlobalConfig
 import framework.balldomain.prototype.systolicarray.configs.SystolicBallParam
 
 class ctrl_ex_req(b: GlobalConfig) extends Bundle {
-  val iter = UInt(10.W)
+  val iter = UInt(b.frontend.iter_len.W)
 }
 
 class ld_ex_req(b: GlobalConfig) extends Bundle {
   val config = SystolicBallParam()
   val op1    = Vec(config.lane, UInt(config.inputWidth.W))
   val op2    = Vec(config.lane, UInt(config.inputWidth.W))
-  val iter   = UInt(10.W)
+  val iter   = UInt(b.frontend.iter_len.W)
 }
 
 class ex_st_req(b: GlobalConfig) extends Bundle {
@@ -72,9 +72,9 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
-  val iter_counter  = RegInit(0.U(10.W))
+  val iter_counter  = RegInit(0.U(b.frontend.iter_len.W))
   val store_counter = RegInit(0.U(6.W))
-  val in_counter    = RegInit(0.U(10.W))
+  val in_counter    = RegInit(0.U(b.frontend.iter_len.W))
 
   // Use Reg with Vec type for proper register behavior
   val in_a_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))

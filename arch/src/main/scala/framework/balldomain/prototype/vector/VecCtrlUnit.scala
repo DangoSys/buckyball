@@ -23,7 +23,7 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
   })
 
   val rob_id_reg    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  val iter          = RegInit(0.U(10.W))
+  val iter          = RegInit(0.U(b.frontend.iter_len.W))
   val op1_bank      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val op1_bank_addr = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
   val op2_bank_addr = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility

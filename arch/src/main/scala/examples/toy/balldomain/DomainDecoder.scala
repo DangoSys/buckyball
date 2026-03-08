@@ -9,10 +9,10 @@ import examples.toy.balldomain.DISA._
 import framework.top.GlobalConfig
 
 // Detailed decode output for Ball domain
-class BallDecodeCmd(numBanks: Int) extends Bundle {
+class BallDecodeCmd(numBanks: Int, iterLen: Int) extends Bundle {
   val bid  = UInt(5.W)
   // Iteration count
-  val iter = UInt(10.W)
+  val iter = UInt(iterLen.W)
 
   // Ball-specific fields
   val op1_en        = Bool()
@@ -20,10 +20,10 @@ class BallDecodeCmd(numBanks: Int) extends Bundle {
   val wr_spad_en    = Bool()
   val op1_from_spad = Bool()
   val op2_from_spad = Bool()
-  // Instruction-specific subfield
-  val special       = UInt(40.W)
+  // Instruction-specific subfield (full rs2)
+  val special       = UInt(64.W)
 
-  // Ball operand bank IDs (now directly from rs1/rs2)
+  // Ball operand bank IDs
   val op1_bank = UInt(log2Up(numBanks).W)
   val op2_bank = UInt(log2Up(numBanks).W)
   val wr_bank  = UInt(log2Up(numBanks).W)
@@ -35,7 +35,7 @@ class BallDecodeCmd(numBanks: Int) extends Bundle {
 // Ball decode fields
 object BallDecodeFields extends Enumeration {
   type Field = Value
-  val OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD, OP1_SPADDR, OP2_SPADDR, WR_SPADDR, ITER, BID, SPECIAL =
+  val OP1_EN, OP2_EN, WR_SPAD, OP1_FROM_SPAD, OP2_FROM_SPAD, OP1_SPADDR, OP2_SPADDR, WR_SPADDR, BID, SPECIAL =
     Value
 }
 
@@ -43,19 +43,22 @@ object BallDecodeFields extends Enumeration {
 object BallDefaultConstants {
   val Y        = true.B
   val N        = false.B
-  val DADDR    = 0.U(14.W)
-  val DITER    = 0.U(10.W)
+  val DADDR    = 0.U(15.W)
   val DBID     = 0.U(5.W)
-  val DSPECIAL = 0.U(40.W)
+  val DSPECIAL = 0.U(64.W)
 }
 
 @instantiable
 class BallDomainDecoder(val b: GlobalConfig) extends Module {
   import BallDefaultConstants._
+
+  val bankIdLen = b.frontend.bank_id_len
+  val iterLen   = b.frontend.iter_len
+
   @public
   val cmd_i             = IO(Flipped(Decoupled(new PostGDCmd(b))))
   @public
-  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum)))
+  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum, iterLen)))
 
   cmd_i.ready := ball_decode_cmd_o.ready
 
@@ -63,39 +66,52 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   val rs1   = cmd_i.bits.cmd.rs1Data
   val rs2   = cmd_i.bits.cmd.rs2Data
 
+  // Unified rs1 layout:
+  //   rs1[14:0]  = BANK0 (op1 bank)
+  //   rs1[29:15] = BANK1 (op2 bank)
+  //   rs1[44:30] = BANK2 (wr bank)
+  //   rs1[45]    = BB_RD0
+  //   rs1[46]    = BB_RD1
+  //   rs1[47]    = BB_WR
+  //   rs1[63:48] = ITER
+  // rs2 = special (full 64-bit)
+
+  val op1_bank_raw = rs1(bankIdLen - 1, 0)
+  val op2_bank_raw = rs1(bankIdLen + 14, 15)
+  val wr_bank_raw  = rs1(bankIdLen + 29, 30)
+  val iter_raw     = rs1(63, 48)
+
   // Ball instruction decoding
   import BallDecodeFields._
-  val ball_default_decode = List(N, N, N, N, N, 0.U, 0.U, 0.U, DITER, DBID, DSPECIAL)
+  val ball_default_decode = List(N, N, N, N, N, 0.U, 0.U, 0.U, DBID, DSPECIAL)
 
   val ball_decode_list = ListLookup(
     func7,
     ball_default_decode,
     Array(
-      // New unified encoding: wr_bank is always at rs1[23:16]
-      // iter/special shifted in rs2 since wr_bank no longer occupies rs2[7:0]
-      //                        op1 op2 wr  op1s op2s  op1_bank    op2_bank     wr_bank       iter          bid  special
-      MATMUL_WARP16               -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 0.U, rs2(63, 10)),
-      RELU                        -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 1.U, rs2(63, 10)),
-      TRANSPOSE                   -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 2.U, rs2(63, 10)),
-      IM2COL                      -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), DITER, 3.U, rs2(63, 0)),
-      SYSTOLIC                    -> List(Y, Y, Y, Y, Y, rs1(7, 0), rs1(15, 8), rs1(23, 16), rs2(9, 0), 4.U, rs2(63, 10)),
-      QUANT                       -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 5.U, rs2(63, 10)),
-      DEQUANT                     -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 6.U, rs2(63, 10)),
+      // Unified encoding: banks from rs1[14:0]/[29:15]/[44:30], iter from rs1[63:48], special = rs2
+      //                        op1 op2 wr  op1s op2s  op1_bank       op2_bank        wr_bank        bid  special
       // Gemmini systolic array instructions — all share bid=7, sub-command in special[3:0]
-      GEMMINI_CONFIG              -> List(N, N, N, N, N, DADDR, DADDR, DADDR, DITER, 7.U, Cat(0.U(36.W), 0.U(4.W))),
-      GEMMINI_PRELOAD             -> List(Y, N, Y, Y, N, rs1(7, 0), DADDR, rs1(23, 16), rs2(9, 0), 7.U, Cat(rs2(63, 10), 1.U(4.W))),
+      MATMUL_WARP16               -> List(Y, Y, Y, Y, Y, op1_bank_raw, op2_bank_raw, wr_bank_raw, 0.U, rs2),
+      RELU                        -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 1.U, rs2),
+      TRANSPOSE                   -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 2.U, rs2),
+      IM2COL                      -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 3.U, rs2),
+      SYSTOLIC                    -> List(Y, Y, Y, Y, Y, op1_bank_raw, op2_bank_raw, wr_bank_raw, 4.U, rs2),
+      QUANT                       -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 5.U, rs2),
+      DEQUANT                     -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 6.U, rs2),
+      GEMMINI_CONFIG              -> List(N, N, N, N, N, DADDR, DADDR, DADDR, 7.U, Cat(rs2(63, 4), 0.U(4.W))),
+      GEMMINI_PRELOAD             -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 7.U, Cat(rs2(63, 4), 1.U(4.W))),
       GEMMINI_COMPUTE_PRELOADED   -> List(
         Y,
         Y,
         Y,
         Y,
         Y,
-        rs1(7, 0),
-        rs1(15, 8),
-        rs1(23, 16),
-        rs2(9, 0),
+        op1_bank_raw,
+        op2_bank_raw,
+        wr_bank_raw,
         7.U,
-        Cat(rs2(63, 10), 2.U(4.W))
+        Cat(rs2(63, 4), 2.U(4.W))
       ),
       GEMMINI_COMPUTE_ACCUMULATED -> List(
         Y,
@@ -103,14 +119,13 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
         Y,
         Y,
         Y,
-        rs1(7, 0),
-        rs1(15, 8),
-        rs1(23, 16),
-        rs2(9, 0),
+        op1_bank_raw,
+        op2_bank_raw,
+        wr_bank_raw,
         7.U,
-        Cat(rs2(63, 10), 3.U(4.W))
+        Cat(rs2(63, 4), 3.U(4.W))
       ),
-      GEMMINI_FLUSH               -> List(N, N, N, N, N, DADDR, DADDR, DADDR, DITER, 7.U, Cat(0.U(36.W), 4.U(4.W)))
+      GEMMINI_FLUSH               -> List(N, N, N, N, N, DADDR, DADDR, DADDR, 7.U, Cat(0.U(60.W), 4.U(4.W)))
     )
   )
 
@@ -121,10 +136,11 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
 
   ball_decode_cmd_o.bits.bid := Mux(ball_decode_cmd_o.valid, ball_decode_list(BallDecodeFields.BID.id).asUInt, DBID)
 
+  // iter is always from rs1[63:48]
   ball_decode_cmd_o.bits.iter          := Mux(
     ball_decode_cmd_o.valid,
-    ball_decode_list(BallDecodeFields.ITER.id).asUInt,
-    0.U(10.W)
+    iter_raw,
+    0.U(iterLen.W)
   )
   ball_decode_cmd_o.bits.special       := Mux(
     ball_decode_cmd_o.valid,
