@@ -10,7 +10,7 @@ import framework.top.GlobalConfig
 class ctrl_st_req(b: GlobalConfig) extends Bundle {
   val wr_bank      = UInt(log2Up(b.memDomain.bankNum).W)
   val wr_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
-  val iter         = UInt(10.W)
+  val iter         = UInt(b.frontend.iter_len.W)
 }
 
 class BankWriteEntry(b: GlobalConfig) extends Bundle {
@@ -40,8 +40,8 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
 
   val wr_bank             = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wr_bank_addr        = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val iter                = RegInit(0.U(10.W))
-  val iter_counter        = RegInit(0.U(10.W))
+  val iter                = RegInit(0.U(b.frontend.iter_len.W))
+  val iter_counter        = RegInit(0.U(b.frontend.iter_len.W))
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
@@ -55,7 +55,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
   when(io.ctrl_st_i.fire) {
     wr_bank      := io.ctrl_st_i.bits.wr_bank
     wr_bank_addr := io.ctrl_st_i.bits.wr_bank_addr
-    iter         := (io.ctrl_st_i.bits.iter + 15.U(10.W)) & (~15.U(10.W))
+    iter         := (io.ctrl_st_i.bits.iter + 15.U) & (~15.U(b.frontend.iter_len.W))
     iter_counter := 0.U
     state        := busy
   }

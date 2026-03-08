@@ -37,7 +37,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   val rob_id_reg    = RegInit(0.U(rob_id_width.W))
   val mem_addr_reg  = Reg(UInt(b.memDomain.memAddrLen.W))
-  val iter_reg      = Reg(UInt(10.W))
+  val iter_reg      = Reg(UInt(b.frontend.iter_len.W))
   val resp_count    = RegInit(0.U(log2Up(16).W))
   val wr_bank_reg   = Reg(UInt(log2Up(b.memDomain.bankNum).W))
   val stride_reg    = Reg(UInt(11.W))
@@ -98,8 +98,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
     rob_id_reg      := io.cmdReq.bits.rob_id
     mem_addr_reg    := io.cmdReq.bits.cmd.mem_addr
     wr_bank_reg     := io.cmdReq.bits.cmd.bank_id
-    // BBReadRequest.stride is 10 bits wide
-    stride_reg      := io.cmdReq.bits.cmd.special(10, 0)
+    // stride from rs2[57:39]
+    stride_reg      := io.cmdReq.bits.cmd.special(57, 39)
     resp_count      := 0.U
     pending         := false.B
     latLast         := false.B

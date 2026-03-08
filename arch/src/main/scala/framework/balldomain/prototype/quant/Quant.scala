@@ -72,11 +72,11 @@ class Quant(val b: GlobalConfig) extends Module {
   val respCounter  = RegInit(0.U(log2Ceil(InputNum * 4 + 1).W)) // response counter
   val writeCounter = RegInit(0.U(log2Ceil(InputNum + 1).W))
 
-  val raddr_reg = RegInit(0.U(10.W))
+  val raddr_reg = RegInit(0.U(b.frontend.iter_len.W))
   val rbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val waddr_reg = RegInit(0.U(10.W))
+  val waddr_reg = RegInit(0.U(b.frontend.iter_len.W))
   val wbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val iter_reg  = RegInit(0.U(10.W))
+  val iter_reg  = RegInit(0.U(b.frontend.iter_len.W))
   val scale_reg = RegInit(0.U(32.W))
 
   // For INT8: accumulate 4 responses into one output word
@@ -84,7 +84,7 @@ class Quant(val b: GlobalConfig) extends Module {
   val int8OutIdx   = RegInit(0.U(log2Ceil(InputNum + 1).W)) // output word index
 
   // Total read requests needed
-  val totalReads = Wire(UInt(10.W))
+  val totalReads = Wire(UInt(b.frontend.iter_len.W))
   if (isInt8) {
     totalReads := iter_reg << 2
   } else {

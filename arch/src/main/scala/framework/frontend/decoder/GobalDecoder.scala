@@ -74,27 +74,27 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   )
 
   // -------------------------------------------------------------------------
-  // Bank access info extraction — read valid flags from rs1[24:26]
+  // Bank access info extraction — read valid flags from rs1[45:47]
   //
   // Unified rs1 layout (defined in isa.h):
-  //   rs1[7:0]   = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
-  //   rs1[15:8]  = bank_1  (rd_bank_1, dual-operand only)
-  //   rs1[23:16] = bank_2  (wr_bank for Ball instructions)
-  //   rs1[24]    = rd_bank_0_valid flag (BB_RD0)
-  //   rs1[25]    = rd_bank_1_valid flag (BB_RD1)
-  //   rs1[26]    = wr_bank_valid flag (BB_WR)
-  //   rs1[63:27] = instruction-specific (mem_addr for MVIN/MVOUT, etc.)
+  //   rs1[14:0]  = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
+  //   rs1[29:15] = bank_1  (rd_bank_1, dual-operand only)
+  //   rs1[44:30] = bank_2  (wr_bank for Ball instructions)
+  //   rs1[45]    = rd_bank_0_valid flag (BB_RD0)
+  //   rs1[46]    = rd_bank_1_valid flag (BB_RD1)
+  //   rs1[47]    = wr_bank_valid flag (BB_WR)
+  //   rs1[63:48] = iter (16-bit)
   // -------------------------------------------------------------------------
   val bankAccess = Wire(new BankAccessInfo(bankIdLen))
 
-  bankAccess.rd_bank_0_valid := rs1(24)
+  bankAccess.rd_bank_0_valid := rs1(45)
   bankAccess.rd_bank_0_id    := rs1(bankIdLen - 1, 0)
-  bankAccess.rd_bank_1_valid := rs1(25)
-  bankAccess.rd_bank_1_id    := rs1(bankIdLen + 7, 8)
-  bankAccess.wr_bank_valid   := rs1(26)
-  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[7:0])
-  // For Ball instructions, wr_bank is bank_2 (rs1[23:16])
-  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 15, 16))
+  bankAccess.rd_bank_1_valid := rs1(46)
+  bankAccess.rd_bank_1_id    := rs1(bankIdLen + 14, 15)
+  bankAccess.wr_bank_valid   := rs1(47)
+  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[14:0])
+  // For Ball instructions, wr_bank is bank_2 (rs1[44:30])
+  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 29, 30))
 
   // Output control
   io.id_o.valid           := io.id_i.valid

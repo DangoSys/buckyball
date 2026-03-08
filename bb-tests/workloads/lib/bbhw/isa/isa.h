@@ -21,16 +21,19 @@ typedef int32_t result_t;
 #define FIELD(val, start_bit, end_bit)                                         \
   (((val) & ((1UL << ((end_bit) - (start_bit) + 1)) - 1)) << (start_bit))
 
-// Unified rs1 bank encoding flags (bits 24-26)
-// bit 24 = rd_bank_0_valid, bit 25 = rd_bank_1_valid, bit 26 = wr_bank_valid
-#define BB_RD0 (1UL << 24)
-#define BB_RD1 (1UL << 25)
-#define BB_WR (1UL << 26)
+// Unified rs1 bank encoding flags (bits 45-47)
+// bit 45 = rd_bank_0_valid, bit 46 = rd_bank_1_valid, bit 47 = wr_bank_valid
+#define BB_RD0 (1UL << 45)
+#define BB_RD1 (1UL << 46)
+#define BB_WR (1UL << 47)
 
-// rs1 bank field helpers
-#define BB_BANK0(id) FIELD(id, 0, 7)
-#define BB_BANK1(id) FIELD(id, 8, 15)
-#define BB_BANK2(id) FIELD(id, 16, 23)
+// rs1 bank field helpers (15-bit each)
+#define BB_BANK0(id) FIELD(id, 0, 14)
+#define BB_BANK1(id) FIELD(id, 15, 29)
+#define BB_BANK2(id) FIELD(id, 30, 44)
+
+// rs1 iter field (16-bit, bits 48-63)
+#define BB_ITER(n) FIELD(n, 48, 63)
 
 // Generic RISC-V custom instruction macro
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \

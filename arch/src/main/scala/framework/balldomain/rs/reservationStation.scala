@@ -8,7 +8,7 @@ import examples.toy.balldomain.BallDecodeCmd
 
 // Ball domain issue interface - includes global rob_id
 class BallRsIssue(b: GlobalConfig) extends Bundle {
-  val cmd    = new BallDecodeCmd(b.memDomain.bankNum)
+  val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
   // Global ROB ID
   val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
@@ -34,7 +34,7 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
 
   @public
   val ball_decode_cmd_i = IO(Flipped(new DecoupledIO(new Bundle {
-    val cmd    = new BallDecodeCmd(b.memDomain.bankNum)
+    val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
     // Global ROB ID
     val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
   })))
@@ -53,7 +53,7 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
   // Simple FIFO queue, only for buffering
   val fifo = Module(new Queue(
     new Bundle {
-      val cmd    = new BallDecodeCmd(b.memDomain.bankNum)
+      val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
       val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
     },
     entries = 4
