@@ -45,7 +45,9 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   val mtraces = Seq.fill(b.memDomain.bankChannel*4)(Module(new MTraceDPI))
   for (mt <- mtraces) {
     mt.io.is_write := 0.U
+    mt.io.is_shared := 0.U
     mt.io.channel  := 0.U
+    mt.io.hart_id  := 0.U
     mt.io.vbank_id := 0.U
     mt.io.group_id := 0.U
     mt.io.addr     := 0.U
@@ -175,7 +177,9 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     en:      Bool
   ): Unit = {
     mtraces(ch).io.is_write := isWrite
+    mtraces(ch).io.is_shared := io.mem_req(ch).is_shared.asUInt
     mtraces(ch).io.channel  := ch.U
+    mtraces(ch).io.hart_id  := io.mem_req(ch).hart_id
     mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id
     mtraces(ch).io.group_id := io.mem_req(ch).group_id
     mtraces(ch).io.addr     := addr
