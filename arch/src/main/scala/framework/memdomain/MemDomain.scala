@@ -65,7 +65,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // Connect query interface from frontend to backend
   backend.io.query_vbank_id     := frontend.io.query_vbank_id
   frontend.io.query_group_count := backend.io.query_group_count
-  backend.io.hartid             := io.hartid
+  frontend.io.hartid            := io.hartid
 
   // -------------------------------------------------
   // Connection with outside (all in frontend)
