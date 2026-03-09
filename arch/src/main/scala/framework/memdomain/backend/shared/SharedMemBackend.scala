@@ -5,40 +5,44 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
 import framework.memdomain.backend.accpipe.AccPipe
+import framework.memdomain.backend.banks.SramBank
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import framework.top.GlobalConfig
 
-class SharedArbReq(b: GlobalConfig) extends Bundle {
-  val src_channel = UInt(log2Up(b.memDomain.bankChannel).W)
-  val is_write    = Bool()
-  val vbank_id    = UInt(log2Up(b.memDomain.bankNum).W)
-  val group_id    = UInt(3.W)
-  val addr        = UInt(log2Ceil(b.memDomain.bankEntries).W)
-  val mask        = Vec(b.memDomain.bankMaskLen, Bool())
-  val data        = UInt(b.memDomain.bankWidth.W)
-  val wmode       = Bool()
-}
+// class SharedArbReq(b: GlobalConfig) extends Bundle {
+//   val src_channel = UInt(log2Up(b.memDomain.bankChannel).W)
+//   val is_write    = Bool()
+//   val hart_id     = UInt(b.core.xLen.W)
+//   val pbank_id    = UInt(log2Ceil(SharedMemLayout.TotalBank).W)
+//   val group_id    = UInt(3.W)
+//   val addr        = UInt(log2Ceil(b.memDomain.bankEntries).W)
+//   val mask        = Vec(b.memDomain.bankMaskLen, Bool())
+//   val data        = UInt(b.memDomain.bankWidth.W)
+//   val wmode       = Bool()
+// }
 
 @instantiable
 class SharedMemBackend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
+    val mem_req = Vec(b.memDomain.bankChannel*4, Flipped(new MemRequestIO(b)))
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
     val query_group_count = Output(UInt(4.W))
-
-    val hartid = Input(UInt(b.core.xLen.W))
   })
 
-  val accPipes:  Seq[Instance[AccPipe]] = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
-  val sharedMem: Instance[SharedMem]    = Instantiate(new SharedMem(b))
-  val mtraces          = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
-  val sharedAllocTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  // Shared backend is sized for 4 harts, but currently only hart-0 channels are connected.
+  private val activeHartCount    = 1
+  private val activeChannelCount = b.memDomain.bankChannel * activeHartCount
 
+  val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum*4)(Instantiate(new SramBank(b)))
+  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel*4)(Instantiate(new AccPipe(b)))
+
+  // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
+  val mtraces = Seq.fill(b.memDomain.bankChannel*4)(Module(new MTraceDPI))
   for (mt <- mtraces) {
     mt.io.is_write := 0.U
     mt.io.channel  := 0.U
@@ -50,31 +54,67 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mt.io.enable   := false.B
   }
 
-  io.config.ready := true.B
-  when(io.config.valid) {
-    val cfgVbankIdx = io.config.bits.vbank_id(log2Up(b.memDomain.bankNum) - 1, 0)
-    when(io.config.bits.alloc === 2.U) {
-      sharedAllocTable(cfgVbankIdx) := true.B
-    }.elsewhen(io.config.bits.alloc === 0.U) {
-      sharedAllocTable(cfgVbankIdx) := false.B
+  // -----------------------------------------------------------------------------
+  // Mapping table
+  // -----------------------------------------------------------------------------
+  class MappingTableEntry extends Bundle {
+    
+    val valid    = Bool()
+    val hart_id  = UInt(b.core.xLen.W)
+    val vbank_id = UInt(5.W)
+    val is_multi = Bool()
+    val group_id = UInt(3.W)
+  }
+
+  val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum*4)(0.U.asTypeOf(new MappingTableEntry))))
+
+  def isAcc(hart_id: UInt, vbank_id: UInt): Bool =
+    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && (entry.hart_id === hart_id) && entry.is_multi).reduce(_ || _)
+
+  def addEntry(
+    hart_id: UInt,
+    vbank_id: UInt,
+    pbank_id: UInt,
+    is_multi: Bool,
+    group_id: UInt
+  ): Unit = {
+    val entry = mappingTable(pbank_id)
+    entry.valid    := true.B
+    entry.hart_id  := hart_id
+    entry.vbank_id := vbank_id
+    entry.is_multi := is_multi
+    entry.group_id := group_id
+  }
+
+  def deleteEntry(hart_id: UInt, vbank_id: UInt): Unit = {
+    for (i <- 0 until b.memDomain.bankNum*4) {
+      when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
+        mappingTable(i).valid    := false.B
+        mappingTable(i).vbank_id := 0.U
+        mappingTable(i).is_multi := false.B
+        mappingTable(i).group_id := 0.U
+      }
     }
   }
 
-  // Shared memory treats each vbank as single-group storage.
-  val queryVbankIdx = io.query_vbank_id(log2Up(b.memDomain.bankNum) - 1, 0)
-  io.query_group_count := Mux(
-    b.memDomain.sharedEnable.B && sharedAllocTable(queryVbankIdx),
-    1.U(4.W),
-    0.U(4.W)
-  )
+  def getFreePbankId(): UInt = {
+    val freePbankId = mappingTable.indexWhere(_.valid === false.B)
+    freePbankId
+  }
 
-  for (i <- 0 until b.memDomain.bankChannel) {
+  // -----------------------------------------------------------------------------
+  // Default Value
+  // -----------------------------------------------------------------------------
+
+  for (i <- 0 until b.memDomain.bankChannel*4) {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
     accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
     accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
+    accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
 
+    // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
     accPipes(i).io.sramRead.resp.valid := false.B
     accPipes(i).io.sramRead.resp.bits  := DontCare
@@ -83,20 +123,49 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
-    // Group dimension is intentionally disabled in shared backend.
-    accPipes(i).io.is_multi := false.B
+    accPipes(i).io.is_multi := isAcc(io.mem_req(i).hart_id, io.mem_req(i).bank_id)
   }
 
-  sharedMem.io.read.req.valid   := false.B
-  sharedMem.io.read.req.bits    := DontCare
-  sharedMem.io.read.resp.ready  := false.B
-  sharedMem.io.write.req.valid  := false.B
-  sharedMem.io.write.req.bits   := DontCare
-  sharedMem.io.write.resp.ready := false.B
+  io.config.ready := true.B
 
-  // ---------------------------------------------------------------------------
-  // Shared request routing arbiter
-  // ---------------------------------------------------------------------------
+  banks.zipWithIndex.foreach {
+    case (bank, _) =>
+      bank.io.sramRead.req.valid  := false.B
+      bank.io.sramRead.req.bits   := DontCare
+      bank.io.sramRead.resp.ready := true.B
+
+      bank.io.sramWrite.req.valid  := false.B
+      bank.io.sramWrite.req.bits   := DontCare
+      bank.io.sramWrite.resp.ready := true.B
+  }
+
+  // -----------------------------------------------------------------------------
+  // Bank Alloc/Release
+  // -----------------------------------------------------------------------------
+
+  when(io.config.valid) {
+    when(io.config.bits.alloc) {
+      val pbank_id = getFreePbankId()
+      addEntry(io.config.bits.hart_id, io.config.bits.vbank_id, pbank_id, io.config.bits.is_multi, io.config.bits.group_id)
+    }.otherwise {
+      deleteEntry(io.config.bits.hart_id, io.config.bits.vbank_id)
+    }
+  }
+
+  // -----------------------------------------------------------------------------
+  // Query interface: return group count for a given vbank_id
+  // -----------------------------------------------------------------------------
+  val groupCounts = mappingTable.map { entry =>
+    val matches = entry.valid && (entry.vbank_id === io.query_vbank_id)
+    val count   = Mux(entry.is_multi, entry.group_id + 1.U, 1.U)
+    Mux(matches, count, 0.U)
+  }
+
+  io.query_group_count := groupCounts.reduce((a, b) => Mux(a > b, a, b))
+
+  // -----------------------------------------------------------------------------
+  // Connect AccPipe and Banks
+  // -----------------------------------------------------------------------------
   private def emitTrace(
     ch:      Int,
     isWrite: UInt,
@@ -115,16 +184,15 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mtraces(ch).io.enable   := en
   }
 
-  val sharedReqArb = Module(new RRArbiter(new SharedArbReq(b), b.memDomain.bankChannel))
+  for (i <- 0 until activeChannelCount) {
+    val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
 
-  for (i <- 0 until b.memDomain.bankChannel) {
-    val routeShared = b.memDomain.sharedEnable.B && sharedAllocTable(io.mem_req(i).bank_id)
-    val useRead     = accPipes(i).io.sramRead.req.valid
-    val useWrite    = !useRead && accPipes(i).io.sramWrite.req.valid
-
+    // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
       emitTrace(i, 0.U, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
     }
+
+    // Memory trace: write request
     when(io.mem_req(i).write.req.fire) {
       emitTrace(
         i,
@@ -136,122 +204,18 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       )
     }
 
-    sharedReqArb.io.in(i).valid            := routeShared && (useRead || useWrite)
-    sharedReqArb.io.in(i).bits.src_channel := i.U
-    sharedReqArb.io.in(i).bits.is_write    := useWrite
-    sharedReqArb.io.in(i).bits.vbank_id    := io.mem_req(i).bank_id
-    sharedReqArb.io.in(i).bits.group_id    := 0.U
-    sharedReqArb.io.in(i).bits.addr        := Mux(
-      useRead,
-      accPipes(i).io.sramRead.req.bits.addr,
-      accPipes(i).io.sramWrite.req.bits.addr
-    )
-    sharedReqArb.io.in(i).bits.mask        := Mux(
-      useRead,
-      VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)),
-      accPipes(i).io.sramWrite.req.bits.mask
-    )
-    sharedReqArb.io.in(i).bits.data        := Mux(useRead, 0.U, accPipes(i).io.sramWrite.req.bits.data)
-    sharedReqArb.io.in(i).bits.wmode       := Mux(useRead, false.B, accPipes(i).io.sramWrite.req.bits.wmode)
+    for (j <- 0 until b.memDomain.bankNum*4) {
+      val hit_bank = mappingTable(j).valid &&
+        (mappingTable(j).hart_id === io.mem_req(i).hart_id) &&
+        (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+        (!mappingTable(j).is_multi ||
+          (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
 
-    when(routeShared && useRead) {
-      accPipes(i).io.sramRead.req.ready := sharedReqArb.io.in(i).ready
-    }
-    when(routeShared && useWrite) {
-      accPipes(i).io.sramWrite.req.ready := sharedReqArb.io.in(i).ready
-    }
-  }
+      val hold_one = RegNext(hit_bank && req_valid, init = false.B)
 
-  // Keep one in-flight request per response type so source-channel mapping is exact.
-  val readReqPending  = RegInit(false.B)
-  val writeReqPending = RegInit(false.B)
-  val readReqSrcCh    = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-  val writeReqSrcCh   = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-
-  val readRespBufValid = RegInit(false.B)
-  val readRespBufSrcCh = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-  val readRespBufData  = Reg(UInt(b.memDomain.bankWidth.W))
-
-  val writeRespBufValid = RegInit(false.B)
-  val writeRespBufSrcCh = Reg(UInt(log2Up(b.memDomain.bankChannel).W))
-  val writeRespBufOk    = Reg(Bool())
-
-  val arbIsWrite    = sharedReqArb.io.out.bits.is_write
-  val canIssueRead  = !readReqPending && !readRespBufValid
-  val canIssueWrite = !writeReqPending && !writeRespBufValid
-
-  sharedMem.io.read.req.valid         := sharedReqArb.io.out.valid && !arbIsWrite && canIssueRead
-  sharedMem.io.read.req.bits.hartid   := io.hartid
-  sharedMem.io.read.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id
-  sharedMem.io.read.req.bits.group_id := sharedReqArb.io.out.bits.group_id
-  sharedMem.io.read.req.bits.addr     := sharedReqArb.io.out.bits.addr
-
-  sharedMem.io.write.req.valid         := sharedReqArb.io.out.valid && arbIsWrite && canIssueWrite
-  sharedMem.io.write.req.bits.hartid   := io.hartid
-  sharedMem.io.write.req.bits.vbank_id := sharedReqArb.io.out.bits.vbank_id
-  sharedMem.io.write.req.bits.group_id := sharedReqArb.io.out.bits.group_id
-  sharedMem.io.write.req.bits.addr     := sharedReqArb.io.out.bits.addr
-  sharedMem.io.write.req.bits.mask     := sharedReqArb.io.out.bits.mask
-  sharedMem.io.write.req.bits.data     := sharedReqArb.io.out.bits.data
-  sharedMem.io.write.req.bits.wmode    := sharedReqArb.io.out.bits.wmode
-
-  sharedReqArb.io.out.ready := Mux(
-    arbIsWrite,
-    canIssueWrite && sharedMem.io.write.req.ready,
-    canIssueRead && sharedMem.io.read.req.ready
-  )
-
-  when(sharedMem.io.read.req.fire) {
-    assert(!readReqPending, "SharedMemBackend: read request issued while previous read pending")
-    readReqPending := true.B
-    readReqSrcCh   := sharedReqArb.io.out.bits.src_channel
-  }
-
-  when(sharedMem.io.write.req.fire) {
-    assert(!writeReqPending, "SharedMemBackend: write request issued while previous write pending")
-    writeReqPending := true.B
-    writeReqSrcCh   := sharedReqArb.io.out.bits.src_channel
-  }
-
-  // Always absorb SharedMem pulses into local response buffers.
-  sharedMem.io.read.resp.ready  := !readRespBufValid
-  sharedMem.io.write.resp.ready := !writeRespBufValid
-
-  when(sharedMem.io.read.resp.fire) {
-    assert(readReqPending, "SharedMemBackend: read response arrived without pending request")
-    readRespBufValid := true.B
-    readRespBufSrcCh := readReqSrcCh
-    readRespBufData  := sharedMem.io.read.resp.bits.data
-    readReqPending   := false.B
-  }
-
-  when(sharedMem.io.write.resp.fire) {
-    assert(writeReqPending, "SharedMemBackend: write response arrived without pending request")
-    writeRespBufValid := true.B
-    writeRespBufSrcCh := writeReqSrcCh
-    writeRespBufOk    := sharedMem.io.write.resp.bits.ok
-    writeReqPending   := false.B
-  }
-
-  // ---------------------------------------------------------------------------
-  // Response demux back to requesting channel
-  // ---------------------------------------------------------------------------
-  for (i <- 0 until b.memDomain.bankChannel) {
-    when(readRespBufValid && (readRespBufSrcCh === i.U)) {
-      accPipes(i).io.sramRead.resp.valid     := true.B
-      accPipes(i).io.sramRead.resp.bits.data := readRespBufData
-
-      when(accPipes(i).io.sramRead.resp.fire) {
-        readRespBufValid := false.B
-      }
-    }
-
-    when(writeRespBufValid && (writeRespBufSrcCh === i.U)) {
-      accPipes(i).io.sramWrite.resp.valid   := true.B
-      accPipes(i).io.sramWrite.resp.bits.ok := writeRespBufOk
-
-      when(accPipes(i).io.sramWrite.resp.fire) {
-        writeRespBufValid := false.B
+      when((hit_bank && req_valid) || hold_one) {
+        banks(j).io.sramRead <> accPipes(i).io.sramRead
+        banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }
     }
   }

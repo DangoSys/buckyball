@@ -92,6 +92,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
     accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
+    accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -123,10 +124,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   when(io.config.valid) {
-    when(io.config.bits.alloc === 1.U) {
+    when(io.config.bits.alloc) {
       val pbank_id = getFreePbankId()
       addEntry(io.config.bits.vbank_id, pbank_id, io.config.bits.is_multi, io.config.bits.group_id)
-    }.elsewhen(io.config.bits.alloc === 0.U) {
+    }.otherwise {
       deleteEntry(io.config.bits.vbank_id)
     }
   }

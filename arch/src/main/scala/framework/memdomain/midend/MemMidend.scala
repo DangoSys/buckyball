@@ -30,6 +30,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
       val write_is_shared = Input(Bool())
     }
 
+    val hartid = Input(UInt(b.core.xLen.W))
+
     val balldomain = new Bundle {
       val bankRead  = Vec(totalBallRead, new BankRead(b))
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
@@ -114,6 +116,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).bank_id          := 0.U
     io.mem_req(i).group_id         := 0.U
     io.mem_req(i).is_shared        := false.B
+    io.mem_req(i).hart_id          := io.hartid
 
     val isRead    = mappingTable(i).isRead
     val ballRead  = io.balldomain.bankRead(mappingTable(i).id).io
@@ -154,6 +157,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.frontend.read_is_shared,
     io.frontend.write_is_shared
   )
+  io.mem_req(b.top.memBallChannelNum).hart_id := io.hartid
 
   // Mapping table release
   for (i <- 0 until b.top.memBallChannelNum - 1) {
