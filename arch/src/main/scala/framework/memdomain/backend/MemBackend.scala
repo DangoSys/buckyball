@@ -27,17 +27,20 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
   val sharedBackend:  Instance[SharedMemBackend]  = Instantiate(new SharedMemBackend(b))
 
+  val cfgWithHart = Wire(new MemConfigerIO(b))
+  cfgWithHart := io.config.bits
+  cfgWithHart.hart_id := io.hartid
+
   // Broadcast config so alloc/release is handled by the corresponding backend.
   privateBackend.io.config.valid := io.config.valid
-  privateBackend.io.config.bits  := io.config.bits
+  privateBackend.io.config.bits  := cfgWithHart
   sharedBackend.io.config.valid  := io.config.valid
-  sharedBackend.io.config.bits   := io.config.bits
+  sharedBackend.io.config.bits   := cfgWithHart
   io.config.ready                := privateBackend.io.config.ready && sharedBackend.io.config.ready
 
   // Query both backends; shared takes priority when this vbank is allocated as shared.
   privateBackend.io.query_vbank_id := io.query_vbank_id
   sharedBackend.io.query_vbank_id  := io.query_vbank_id
-  sharedBackend.io.hartid          := io.hartid
   io.query_group_count             := Mux(
     sharedBackend.io.query_group_count =/= 0.U,
     sharedBackend.io.query_group_count,
@@ -50,6 +53,23 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val writePending     = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
   val readRouteShared  = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
   val writeRouteShared = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
+
+  // Shared backend reserves channels for 4 harts; only hart-0 channels are currently wired.
+  val totalSharedChannels = b.memDomain.bankChannel * 4
+  for (i <- 0 until totalSharedChannels) {
+    sharedBackend.io.mem_req(i).bank_id   := 0.U
+    sharedBackend.io.mem_req(i).group_id  := 0.U
+    sharedBackend.io.mem_req(i).is_shared := false.B
+    sharedBackend.io.mem_req(i).hart_id   := 0.U
+
+    sharedBackend.io.mem_req(i).read.req.valid  := false.B
+    sharedBackend.io.mem_req(i).read.req.bits   := DontCare
+    sharedBackend.io.mem_req(i).read.resp.ready := false.B
+
+    sharedBackend.io.mem_req(i).write.req.valid  := false.B
+    sharedBackend.io.mem_req(i).write.req.bits   := DontCare
+    sharedBackend.io.mem_req(i).write.resp.ready := false.B
+  }
 
   for (i <- 0 until b.memDomain.bankChannel) {
     val useSharedReq       = io.mem_req(i).is_shared
@@ -76,9 +96,11 @@ class MemBackend(val b: GlobalConfig) extends Module {
     privateBackend.io.mem_req(i).bank_id   := io.mem_req(i).bank_id
     privateBackend.io.mem_req(i).group_id  := io.mem_req(i).group_id
     privateBackend.io.mem_req(i).is_shared := io.mem_req(i).is_shared
+    privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
     sharedBackend.io.mem_req(i).bank_id    := io.mem_req(i).bank_id
     sharedBackend.io.mem_req(i).group_id   := io.mem_req(i).group_id
     sharedBackend.io.mem_req(i).is_shared  := io.mem_req(i).is_shared
+    sharedBackend.io.mem_req(i).hart_id    := io.mem_req(i).hart_id
 
     // Read request route
     privateBackend.io.mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && !useSharedReq

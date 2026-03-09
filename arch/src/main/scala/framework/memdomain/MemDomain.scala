@@ -92,6 +92,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
   midend.io.frontend.read_is_shared  := frontend.io.interdma.read_is_shared
   midend.io.frontend.write_is_shared := frontend.io.interdma.write_is_shared
+  midend.io.hartid                   := io.hartid
 
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
