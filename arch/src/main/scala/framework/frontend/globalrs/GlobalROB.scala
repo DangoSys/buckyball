@@ -198,12 +198,6 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   scoreboard.query := robEntries(actualIssuePtr).cmd.bankAccess
   val noHazard = !scoreboard.hasHazard
 
-  /* when(hasValid && scoreboard.hasHazard) { printf( "[ROB HAZARD] ptr=%d func7=%d rd0v=%d rd0=%d rd1v=%d rd1=%d wrv=%d
-   * wr=%d\n", actualIssuePtr, robEntries(actualIssuePtr).cmd.cmd.funct,
-   * robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_valid, robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_0_id,
-   * robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_valid, robEntries(actualIssuePtr).cmd.bankAccess.rd_bank_1_id,
-   * robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_valid, robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_id ) } */
-
   // Can only issue if issue limit is not reached and no bank hazard
   val canIssueMore = issuedCount < maxIssueLimit
   canIssue := hasValid && canIssueMore && noHazard

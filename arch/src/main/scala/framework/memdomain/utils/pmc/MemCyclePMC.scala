@@ -26,6 +26,20 @@ class MemCyclePMC(val b: GlobalConfig) extends Module {
   val ldTotalCycles = RegInit(0.U(64.W))
   val stTotalCycles = RegInit(0.U(64.W))
 
+  // DPI-C trace modules for load and store
+  val ldPmcTrace = Module(new MemPMCTraceDPI)
+  val stPmcTrace = Module(new MemPMCTraceDPI)
+
+  ldPmcTrace.io.is_store := 0.U
+  ldPmcTrace.io.rob_id   := 0.U
+  ldPmcTrace.io.elapsed  := 0.U
+  ldPmcTrace.io.enable   := false.B
+
+  stPmcTrace.io.is_store := 1.U
+  stPmcTrace.io.rob_id   := 0.U
+  stPmcTrace.io.elapsed  := 0.U
+  stPmcTrace.io.enable   := false.B
+
   when(io.ldReq_i.valid) {
     startTime(io.ldReq_i.bits.rob_id) := cycleCounter
   }
@@ -38,14 +52,22 @@ class MemCyclePMC(val b: GlobalConfig) extends Module {
     val robId   = io.ldResp_o.bits.rob_id
     val elapsed = cycleCounter - startTime(robId)
     ldTotalCycles := ldTotalCycles + elapsed
-    printf("[PMC] Load completed, elapsed: %d cycles\n", elapsed)
+
+    // DPI-C trace output
+    ldPmcTrace.io.rob_id  := robId
+    ldPmcTrace.io.elapsed := elapsed
+    ldPmcTrace.io.enable  := true.B
   }
 
   when(io.stResp_o.valid) {
     val robId   = io.stResp_o.bits.rob_id
     val elapsed = cycleCounter - startTime(robId)
     stTotalCycles := stTotalCycles + elapsed
-    printf("[PMC] Store completed, elapsed: %d cycles\n", elapsed)
+
+    // DPI-C trace output
+    stPmcTrace.io.rob_id  := robId
+    stPmcTrace.io.elapsed := elapsed
+    stPmcTrace.io.enable  := true.B
   }
 
   io.ldTotalCycles := ldTotalCycles

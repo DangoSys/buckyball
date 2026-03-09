@@ -19,7 +19,7 @@ typedef int32_t result_t;
 
 // Field encoding macro with start and end bit
 #define FIELD(val, start_bit, end_bit)                                         \
-  (((val) & ((1UL << ((end_bit) - (start_bit) + 1)) - 1)) << (start_bit))
+  (((val) & ((2UL << ((end_bit) - (start_bit))) - 1)) << (start_bit))
 
 // Unified rs1 bank encoding flags (bits 45-47)
 // bit 45 = rd_bank_0_valid, bit 46 = rd_bank_1_valid, bit 47 = wr_bank_valid
