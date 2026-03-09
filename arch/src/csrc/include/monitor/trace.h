@@ -20,6 +20,16 @@ void dpi_mtrace(unsigned char is_write, // 1 = write, 0 = read
                 unsigned int group_id, unsigned int addr,
                 unsigned long long data_lo, unsigned long long data_hi);
 
+// DPI-C function for Ball PMC trace (pmctrace)
+// Called from BallCyclePMC when a Ball completes a task
+void dpi_pmctrace(unsigned int ball_id, unsigned int rob_id,
+                  unsigned long long elapsed);
+
+// DPI-C function for memory PMC trace (pmctrace)
+// Called from MemCyclePMC when a load/store completes
+void dpi_mem_pmctrace(unsigned char is_store, // 1 = store, 0 = load
+                      unsigned int rob_id, unsigned long long elapsed);
+
 #ifdef __cplusplus
 }
 #endif
