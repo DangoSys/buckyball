@@ -19,23 +19,17 @@ class MemBackend(val b: GlobalConfig) extends Module {
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
     val query_group_count = Output(UInt(4.W))
-
-    val hartid = Input(UInt(b.core.xLen.W))
   })
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
   val sharedBackend:  Instance[SharedMemBackend]  = Instantiate(new SharedMemBackend(b))
 
-  val cfgWithHart = Wire(new MemConfigerIO(b))
-  cfgWithHart := io.config.bits
-  cfgWithHart.hart_id := io.hartid
-
   // Broadcast config so alloc/release is handled by the corresponding backend.
   privateBackend.io.config.valid := io.config.valid
-  privateBackend.io.config.bits  := cfgWithHart
+  privateBackend.io.config.bits  := io.config.bits
   sharedBackend.io.config.valid  := io.config.valid
-  sharedBackend.io.config.bits   := cfgWithHart
+  sharedBackend.io.config.bits   := io.config.bits
   io.config.ready                := privateBackend.io.config.ready && sharedBackend.io.config.ready
 
   // Query both backends; shared takes priority when this vbank is allocated as shared.

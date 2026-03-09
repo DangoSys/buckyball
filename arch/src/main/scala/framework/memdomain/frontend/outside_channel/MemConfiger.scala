@@ -25,6 +25,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     val cmdResp = Decoupled(new MemRsComplete(b))
 
     val config = Decoupled(new MemConfigerIO(b))
+    val hartid = Input(UInt(b.core.xLen.W))
   })
 
   val idle :: config :: Nil = Enum(2)
@@ -40,7 +41,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.config.bits.alloc    := false.B
   io.config.bits.vbank_id := 0.U(8.W)
   io.config.bits.group_id := 0.U(3.W)
-  io.config.bits.hart_id  := 0.U(b.core.xLen.W)
+  io.config.bits.hart_id  := io.hartid
   io.config.valid         := false.B
   io.cmdResp.valid        := false.B
   io.cmdResp.bits.rob_id  := 0.U(rob_id_width.W)

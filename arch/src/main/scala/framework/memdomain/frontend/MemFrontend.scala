@@ -54,6 +54,8 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val query_vbank_id    = Output(UInt(8.W))
     val query_group_count = Input(UInt(4.W))
 
+    val hartid = Input(UInt(b.core.xLen.W))
+
     // Busy signal
     val busy = Output(Bool())
   })
@@ -104,6 +106,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memLoader.io.cmdReq <> memRs.io.issue_o.ld
   memStorer.io.cmdReq <> memRs.io.issue_o.st
   configer.io.cmdReq <> memRs.io.issue_o.cf
+  configer.io.hartid := io.hartid
   memRs.io.commit_i.ld <> memLoader.io.cmdResp
   memRs.io.commit_i.st <> memStorer.io.cmdResp
   memRs.io.commit_i.cf <> configer.io.cmdResp
