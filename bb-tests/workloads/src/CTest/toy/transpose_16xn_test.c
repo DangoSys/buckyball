@@ -14,8 +14,8 @@ void hw_transpose(elem_t *a, elem_t *b, int size) {
   uint32_t op1_bank_id = 0;
   uint32_t op2_bank_id = 1;
 
-  bb_mem_alloc_private(op1_bank_id, 1, 1);
-  bb_mem_alloc_private(op2_bank_id, 1, 1);
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(op2_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_transpose(op1_bank_id, op2_bank_id, size, 0);

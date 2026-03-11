@@ -17,9 +17,9 @@ void hw_gemmini_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   uint32_t op2_bank_id = 1; // B matrix
   int acc_bank_id = 2;      // C output (accumulator width)
 
-  bb_mem_alloc_private(op1_bank_id, 1, 1);
-  bb_mem_alloc_private(op2_bank_id, 1, 1);
-  bb_mem_alloc_private(acc_bank_id, 1, 4);
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(op2_bank_id, 1, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
 
   // Load A and B into SRAM banks
   bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);

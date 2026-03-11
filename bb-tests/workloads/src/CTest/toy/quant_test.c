@@ -103,8 +103,8 @@ void hw_quant(uint32_t *input, int32_t *output, int num_words) {
   uint32_t op1_bank_id = 0;
   uint32_t wr_bank_id = 1;
 
-  bb_mem_alloc_private(op1_bank_id, 1, 1);
-  bb_mem_alloc_private(wr_bank_id, 1, 1);
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(wr_bank_id, 1, 1);
 
   bb_mvin((uintptr_t)input, op1_bank_id, num_words, 1);
 

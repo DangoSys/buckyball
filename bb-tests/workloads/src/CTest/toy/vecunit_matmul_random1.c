@@ -67,10 +67,10 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   uint32_t acc_bank_id = 2;
   uint32_t a_transposed_bank_id = 3;
 
-  bb_mem_alloc_private(op1_bank_id, 1, 1);
-  bb_mem_alloc_private(op2_bank_id, 1, 1);
-  bb_mem_alloc_private(acc_bank_id, 1, 4);
-  bb_mem_alloc_private(a_transposed_bank_id, 1, 1);
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(op2_bank_id, 1, 1);
+  bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc(a_transposed_bank_id, 1, 1);
 
   // Initialize accumulator bank with zeros before matrix multiplication
   bb_mvin((uintptr_t)zero_matrix, acc_bank_id, DIM, 1);
