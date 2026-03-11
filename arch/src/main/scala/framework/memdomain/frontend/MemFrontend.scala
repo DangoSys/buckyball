@@ -52,6 +52,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
     // Query interface to backend for group count
     val query_vbank_id    = Output(UInt(8.W))
+    val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(4.W))
 
     val hartid = Input(UInt(b.core.xLen.W))
@@ -88,6 +89,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // Connect query interfaces
   // Use memLoader's query by default, memStorer will override when active
   io.query_vbank_id              := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
+  io.query_is_shared             := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_is_shared, memLoader.io.query_is_shared)
   memLoader.io.query_group_count := io.query_group_count
   memStorer.io.query_group_count := io.query_group_count
 

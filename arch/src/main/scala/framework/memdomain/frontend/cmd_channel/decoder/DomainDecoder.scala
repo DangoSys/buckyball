@@ -10,7 +10,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 
 // Detailed decode output for Mem domain
 class MemDecodeCmd(b: GlobalConfig) extends Bundle {
-  val is_shared = Bool() // Whether this is a shared memory access (for synchronization)
+  val is_shared = Bool() // Shared memory access marker derived from bank_id threshold.
   val is_load   = Bool()
   val is_store  = Bool()
   val is_config = Bool()
@@ -27,7 +27,7 @@ class MemDecodeCmd(b: GlobalConfig) extends Bundle {
 // LS decode fields (iter removed from decode table — always from rs1[63:48])
 object LSDecodeFields extends Enumeration {
   type Field = Value
-  val SHARED_EN, LD_EN, ST_EN, MEMADDR, BANK_ID, SPECIAL, VALID = Value
+  val LD_EN, ST_EN, MEMADDR, BANK_ID, SPECIAL, VALID = Value
 }
 
 // Default constants for Mem decoder
@@ -67,7 +67,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   //   rs2[38:0]  = mem_addr (for MVIN/MVOUT, 39-bit)
   //   rs2[63:0]  = special (full 64-bit)
   import LSDecodeFields._
-  val ls_default_decode = List(N, N, N, DADDR, DADDR, DSPECIAL, N)
+  val ls_default_decode = List(N, N, DADDR, DADDR, DSPECIAL, N)
 
   val ls_decode_list = ListLookup(
     func7,
@@ -76,14 +76,12 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
       MSET_BITPAT         -> List(
         N,
         N,
-        N,
         0.U(memAddrLen.W),      // mem_addr: not used for MSET
         rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
         rs2,                    // special = full rs2
         Y
       ), // mset
       MVIN_BITPAT         -> List(
-        N,
         Y,
         N,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
@@ -93,31 +91,12 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
       ), // mvin
       MVOUT_BITPAT        -> List(
         N,
-        N,
         Y,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
         rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
         rs2,                    // special = full rs2
         Y
-      ), // mvout
-      SHARED_MVIN_BITPAT  -> List(
-        Y,
-        Y,
-        N,
-        rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
-        rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
-        rs2,                    // special = full rs2
-        Y
-      ), // shared mvin
-      SHARED_MVOUT_BITPAT -> List(
-        Y,
-        N,
-        Y,
-        rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
-        rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
-        rs2,                    // special = full rs2
-        Y
-      )  // shared mvout
+      ) // mvout
     )
   )
 
@@ -132,11 +111,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  io.mem_decode_cmd_o.bits.is_shared := Mux(
-    io.mem_decode_cmd_o.valid,
-    ls_decode_list(LSDecodeFields.SHARED_EN.id).asBool,
-    false.B
-  )
+  val raw_bank_id = rs1(bankIdLen - 1, 0)
+  io.mem_decode_cmd_o.bits.is_shared := io.mem_decode_cmd_o.valid && (raw_bank_id > 31.U)
   io.mem_decode_cmd_o.bits.is_load   := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.LD_EN.id).asBool,

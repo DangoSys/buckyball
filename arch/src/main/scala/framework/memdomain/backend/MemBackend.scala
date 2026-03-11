@@ -18,6 +18,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
+    val query_is_shared   = Input(Bool())
     val query_group_count = Output(UInt(4.W))
   })
 
@@ -25,21 +26,18 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
   val sharedBackend:  Instance[SharedMemBackend]  = Instantiate(new SharedMemBackend(b))
 
-  // Broadcast config so alloc/release is handled by the corresponding backend.
-  privateBackend.io.config.valid := io.config.valid
+  // Route config to the selected backend only.
+  val cfgToShared = io.config.bits.is_shared
+  privateBackend.io.config.valid := io.config.valid && !cfgToShared
   privateBackend.io.config.bits  := io.config.bits
-  sharedBackend.io.config.valid  := io.config.valid
+  sharedBackend.io.config.valid  := io.config.valid && cfgToShared
   sharedBackend.io.config.bits   := io.config.bits
-  io.config.ready                := privateBackend.io.config.ready && sharedBackend.io.config.ready
+  io.config.ready                := Mux(cfgToShared, sharedBackend.io.config.ready, privateBackend.io.config.ready)
 
-  // Query both backends; shared takes priority when this vbank is allocated as shared.
+  // Query selected backend according to decoded shared/private intent.
   privateBackend.io.query_vbank_id := io.query_vbank_id
   sharedBackend.io.query_vbank_id  := io.query_vbank_id
-  io.query_group_count             := Mux(
-    sharedBackend.io.query_group_count =/= 0.U,
-    sharedBackend.io.query_group_count,
-    privateBackend.io.query_group_count
-  )
+  io.query_group_count             := Mux(io.query_is_shared, sharedBackend.io.query_group_count, privateBackend.io.query_group_count)
 
   // Per-channel request routing: is_shared=0 -> private, is_shared=1 -> shared.
   // Route selection is latched at request fire to keep response demux stable.

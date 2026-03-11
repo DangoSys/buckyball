@@ -43,8 +43,6 @@ typedef int32_t result_t;
                : "memory")
 
 // Include all instruction definitions
-#include "21_shared_mvin.c"
-#include "22_shared_mvout.c"
 #include "23_mset.c"
 #include "24_mvin.c"
 #include "25_mvout.c"

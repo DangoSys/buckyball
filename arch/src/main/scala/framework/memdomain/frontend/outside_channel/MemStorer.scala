@@ -30,6 +30,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
 
     // Query interface to get group count
     val query_vbank_id    = Output(UInt(8.W))
+    val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(4.W))
 
     // Propagate decoded shared/private access intent.
@@ -104,6 +105,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // When idle and cmdReq is valid, query the incoming bank_id
   // Otherwise use the registered bank_id
   io.query_vbank_id := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, rd_bank_reg)
+  io.query_is_shared := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.is_shared, is_shared_reg)
 
   // -----------------------------
   // SRAM read request
