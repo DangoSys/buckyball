@@ -29,7 +29,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
     bb_mvin((uintptr_t)a + i * DIM, op2_bank_id, size + i * DIM, col_stride);
   }
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc_private(acc_bank_id, 1, 4);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
   bb_mvin((uintptr_t)c, op2_bank_id, DIM, 1);
   bb_transpose(op2_bank_id, op1_bank_id, size, 0);
