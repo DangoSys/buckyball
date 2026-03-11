@@ -25,7 +25,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
   int acc_bank_id = 2; // virtual bank id
-  bb_mem_alloc(acc_bank_id, 1, 4);
+  bb_mem_alloc_private(acc_bank_id, 1, 4);
   uint32_t col_stride = (size + DIM - 1) / DIM;
   for (int i = 0; i < col_stride; i++) {
     bb_mvin((uintptr_t)a + i * DIM, op2_bank_id + size + i * DIM, DIM,

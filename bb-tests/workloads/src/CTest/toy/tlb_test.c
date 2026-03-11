@@ -76,7 +76,7 @@ int test_bare_mode(void) {
   disable_vm();
 
   uint32_t bank_id = 0;
-  bb_mem_alloc(bank_id, 1, 1);
+  bb_mem_alloc_private(bank_id, 1, 1);
 
   init_u8_random_matrix(input_matrix, DIM, DIM, 42);
   clear_u8_matrix(output_matrix, DIM, DIM);
@@ -105,7 +105,7 @@ int test_sv39_identity(void) {
   enable_sv39();
 
   uint32_t bank_id = 0;
-  bb_mem_alloc(bank_id, 1, 1);
+  bb_mem_alloc_private(bank_id, 1, 1);
 
   init_u8_random_matrix(input_matrix, DIM, DIM, 77);
   clear_u8_matrix(output_matrix, DIM, DIM);
@@ -136,7 +136,7 @@ int test_sfence_flush(void) {
   asm volatile("sfence.vma");
 
   uint32_t bank_id = 0;
-  bb_mem_alloc(bank_id, 1, 1);
+  bb_mem_alloc_private(bank_id, 1, 1);
 
   init_u8_random_matrix(input_matrix, DIM, DIM, 99);
   clear_u8_matrix(output_matrix, DIM, DIM);
@@ -167,7 +167,7 @@ int test_repeated_sfence(void) {
   for (int i = 0; i < 4; i++) {
     asm volatile("sfence.vma");
 
-    bb_mem_alloc(bank_id, 1, 1);
+    bb_mem_alloc_private(bank_id, 1, 1);
     init_u8_random_matrix(input_matrix, DIM, DIM, 100 + i);
     clear_u8_matrix(output_matrix, DIM, DIM);
 

@@ -39,6 +39,28 @@ class MemBackend(val b: GlobalConfig) extends Module {
   sharedBackend.io.query_vbank_id  := io.query_vbank_id
   io.query_group_count             := Mux(io.query_is_shared, sharedBackend.io.query_group_count, privateBackend.io.query_group_count)
 
+  // Track whether a vbank is currently allocated in shared backend.
+  // Ball requests do not carry explicit shared/private info, so they are routed by this table.
+  private val vbankIdxWidth      = log2Up(b.memDomain.bankNum)
+  val privateAllocByVbank        = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  val sharedAllocByVbank         = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  val cfgVbankIdx                = io.config.bits.vbank_id(vbankIdxWidth - 1, 0)
+  when(io.config.fire) {
+    when(io.config.bits.alloc) {
+      when(io.config.bits.is_shared) {
+        sharedAllocByVbank(cfgVbankIdx) := true.B
+      }.otherwise {
+        privateAllocByVbank(cfgVbankIdx) := true.B
+      }
+    }.otherwise {
+      when(io.config.bits.is_shared) {
+        sharedAllocByVbank(cfgVbankIdx) := false.B
+      }.otherwise {
+        privateAllocByVbank(cfgVbankIdx) := false.B
+      }
+    }
+  }
+
   // Per-channel request routing: is_shared=0 -> private, is_shared=1 -> shared.
   // Route selection is latched at request fire to keep response demux stable.
   val readPending      = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
@@ -64,7 +86,19 @@ class MemBackend(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    val useSharedReq       = io.mem_req(i).is_shared
+    val isBallChannel      = i < b.top.memBallChannelNum
+    val hasPrivateAlloc    = privateAllocByVbank(io.mem_req(i).bank_id)
+    val hasSharedAlloc     = sharedAllocByVbank(io.mem_req(i).bank_id)
+    val hasBallReq         = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
+    when(isBallChannel.B && hasBallReq) {
+      assert(
+        !(hasPrivateAlloc && hasSharedAlloc),
+        "MemBackend ambiguous Ball route: idx=%d has both private and shared allocations\n",
+        io.mem_req(i).bank_id
+      )
+    }
+    val ballRouteShared    = hasSharedAlloc && !hasPrivateAlloc
+    val useSharedReq       = Mux(isBallChannel.B, ballRouteShared, io.mem_req(i).is_shared)
     val useSharedReadResp  = Mux(readPending(i), readRouteShared(i), useSharedReq)
     val useSharedWriteResp = Mux(writePending(i), writeRouteShared(i), useSharedReq)
 
@@ -87,11 +121,11 @@ class MemBackend(val b: GlobalConfig) extends Module {
     // Metadata is passed to both backends; only selected backend receives valid req/resp-ready.
     privateBackend.io.mem_req(i).bank_id   := io.mem_req(i).bank_id
     privateBackend.io.mem_req(i).group_id  := io.mem_req(i).group_id
-    privateBackend.io.mem_req(i).is_shared := io.mem_req(i).is_shared
+    privateBackend.io.mem_req(i).is_shared := useSharedReq
     privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
     sharedBackend.io.mem_req(i).bank_id    := io.mem_req(i).bank_id
     sharedBackend.io.mem_req(i).group_id   := io.mem_req(i).group_id
-    sharedBackend.io.mem_req(i).is_shared  := io.mem_req(i).is_shared
+    sharedBackend.io.mem_req(i).is_shared  := useSharedReq
     sharedBackend.io.mem_req(i).hart_id    := io.mem_req(i).hart_id
 
     // Read request route
