@@ -1,4 +1,5 @@
 {
   "ballMemChannelNum": 6,
-  "memBallChannelNum": 6
+  "memBallChannelNum": 6,
+  "nCores": 1
 }

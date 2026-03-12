@@ -71,6 +71,7 @@ add_dependencies(sync-bin
   buckyball-gemmini-build
 	buckyball-rvv-build
 	OpTest-all
+  buckyball-goban-CTest-build
 	)
 
 add_custom_target(build-all ALL

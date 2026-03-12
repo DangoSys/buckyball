@@ -4,7 +4,8 @@ import upickle.default._
 
 case class TopConfig(
   ballMemChannelNum: Int,
-  memBallChannelNum: Int)
+  memBallChannelNum: Int,
+  nCores:            Int)
 
 object TopConfig {
   implicit val rw: ReadWriter[TopConfig] = macroRW

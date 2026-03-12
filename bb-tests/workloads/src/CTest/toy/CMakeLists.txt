@@ -4,8 +4,10 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 #-------------------------------------------------------------------------------
 # Set baremetal compilation flags
 #-------------------------------------------------------------------------------
+set(BBSIM_LD ${CTEST_TOY_WORKLOAD_DIR}/bbsim.ld)
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR} -I${CTEST_TOY_WORKLOAD_DIR})
+  -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+  -Wl,-T,${BBSIM_LD} -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
 # Define common compilation step functions
@@ -56,10 +58,12 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${C_FLAGS} -o ${EXECUTABLE}
+      ${CTEST_TOY_WORKLOAD_DIR}/crt0.S
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
     DEPENDS ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
+      ${CTEST_TOY_WORKLOAD_DIR}/crt0.S
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
     COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -120,6 +124,8 @@ add_cross_platform_test_target(ctest_quant_test quant_test.c)
 add_cross_platform_test_target(ctest_dequant_test dequant_test.c)
 add_cross_platform_test_target(ctest_gemmini_matmul_test gemmini_matmul_test.c)
 add_cross_platform_test_target(ctest_tlb_test tlb_test.c)
+add_cross_platform_test_target(ctest_bdb_counter_test bdb_counter_test.c)
+add_cross_platform_test_target(ctest_bdb_backdoor_test bdb_backdoor_test.c)
 
 # Create master build target
 add_custom_target(buckyball-CTest-build ALL DEPENDS
@@ -149,5 +155,7 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_dequant_test
   ctest_gemmini_matmul_test
   ctest_tlb_test
+  ctest_bdb_counter_test
+  ctest_bdb_backdoor_test
   COMMENT "Building all workloads for Buckyball"
   VERBATIM)

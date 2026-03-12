@@ -24,6 +24,7 @@ class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val cmd        = new RoCCCommandBB(b.core.xLen)
   val bankAccess = new BankAccessInfo(log2Up(b.memDomain.bankNum))
   val isFence    = Bool()
+  val isBarrier  = Bool()
 }
 
 @instantiable
@@ -54,13 +55,14 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     (func7 === MSET_BITPAT)
 
   val is_frontend_inst = func7 === FENCE_BITPAT
+  val is_barrier_inst  = func7 === BARRIER_BITPAT
 
   // RVV instructions: opcode 0x57 (vector compute), 0x07 (vector load), 0x27 (vector store)
   val is_gp_inst = (opcode === RVV_OPCODE_V) ||
     (opcode === RVV_OPCODE_VL) ||
     (opcode === RVV_OPCODE_VS)
 
-  val is_ball_inst = !is_mem_inst && !is_frontend_inst && !is_gp_inst
+  val is_ball_inst = !is_mem_inst && !is_frontend_inst && !is_barrier_inst && !is_gp_inst
 
   // Encode domain ID
   val domain_id = MuxCase(
@@ -102,4 +104,5 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_o.bits.cmd        := io.id_i.bits.cmd
   io.id_o.bits.bankAccess := bankAccess
   io.id_o.bits.isFence    := is_frontend_inst
+  io.id_o.bits.isBarrier  := is_barrier_inst
 }

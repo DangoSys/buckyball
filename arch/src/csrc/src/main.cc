@@ -1,10 +1,7 @@
 #include "bdb.h"
+#include "ioe/mmio.h"
 #include "utils/debug.h"
 #include "utils/macro.h"
-
-#ifdef COSIM
-#include "monitor/cosim.h"
-#endif
 
 #include <csignal>
 #include <cstdlib>
@@ -13,12 +10,7 @@ vluint64_t sim_time = 0;
 VerilatedContext *contextp = NULL;
 VerilatedFstC *tfp = NULL;
 
-#ifdef COSIM
-static VToyBuckyball *top;
-static CosimServer *cosim_server = NULL;
-#else
-static VTestHarness *top;
-#endif
+VBBSimHarness *top;
 
 int bb_step = 1;
 
@@ -47,11 +39,7 @@ void sim_init(int argc, char **argv) {
   contextp->commandArgs(argc, argv);
   tfp = new VerilatedFstC;
 
-#ifdef COSIM
-  top = new VToyBuckyball{contextp};
-#else
-  top = new VTestHarness{contextp};
-#endif
+  top = new VBBSimHarness{contextp};
 
   contextp->traceEverOn(true);
   top->trace(tfp, 0);
@@ -74,15 +62,6 @@ void sim_init(int argc, char **argv) {
   signal(SIGTERM, coverage_signal_handler);
   signal(SIGINT, coverage_signal_handler);
 #endif
-
-#ifdef COSIM
-  // Initialize COSIM socket server
-  cosim_server = new CosimServer(top);
-  if (!cosim_server->init()) {
-    panic("Failed to initialize COSIM server");
-  }
-  Log("COSIM mode: waiting for Bebop connection...");
-#endif
 }
 
 void sim_exit() {
@@ -90,36 +69,21 @@ void sim_exit() {
   tfp->dump(contextp->time());
   tfp->close();
   printf("The wave data has been saved to the FST file: %s\n", fst_path);
-
-#ifdef COSIM
-  if (cosim_server) {
-    cosim_server->shutdown();
-    delete cosim_server;
-  }
-#endif
-
   exit(0);
 }
 
 void ball_exec_once() {
-#ifdef COSIM
-  // Update COSIM server (handle socket I/O and drive DUT signals)
-  if (cosim_server) {
-    cosim_server->update();
-  }
-#endif
+  // posedge: clock=1, eval (FF outputs settle), read fire pulse from RTL slave
+  top->clock = 1;
+  top->eval();
+  mmio_tick();  // read io_mmio_fire; all AXI4 handshaking done in RTL
+  contextp->timeInc(1);
+  tfp->dump(contextp->time());
+  sim_time++;
 
-  top->clock ^= 1;
+  // negedge: clock=0, eval
+  top->clock = 0;
   step_and_dump_wave();
-  top->clock ^= 1;
-  step_and_dump_wave();
-
-#ifndef COSIM
-  if (top->io_success == 1) {
-    printf("simulation success\n");
-    sim_exit();
-  }
-#endif
 }
 
 //================ main =====================//

@@ -18,4 +18,8 @@ object DISA {
   val GEMMINI_COMPUTE_PRELOADED   = BitPat("b0101100") // 44
   val GEMMINI_COMPUTE_ACCUMULATED = BitPat("b0101101") // 45
   val GEMMINI_FLUSH               = BitPat("b0101110") // 46
+
+  // TraceBall instructions
+  val BDB_COUNTER  = BitPat("b0110000") // 48
+  val BDB_BACKDOOR = BitPat("b0110001") // 49
 }

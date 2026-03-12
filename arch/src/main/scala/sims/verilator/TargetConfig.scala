@@ -20,6 +20,12 @@ class BuckyballToyVerilatorConfig
         new examples.toy.BuckyballToyConfig
     )
 
+class BuckyballGobanVerilatorConfig
+    extends Config(
+      new WithCustomBootROM ++
+        new examples.goban.BuckyballGobanConfig
+    )
+
 class BuckyballGemminiVerilatorConfig
     extends Config(
       new WithCustomBootROM ++
@@ -53,6 +59,40 @@ object Elaborate extends App {
   ChiselStage.emitSystemVerilogFile(
     new chipyard.harness.TestHarness()(config.toInstance),
     // Remaining parameters passed to firtool
+    firtoolOpts = args.drop(1),
+    args = Array.empty
+  )
+}
+
+// BBSimElaborate: elaborates BBSimHarness instead of TestHarness.
+// Used for bdb-based simulation (no fesvr, ELF loaded via libelf).
+// Usage: BBSimElaborate sims.verilator.BuckyballToyBBSimConfig [firtool-opts...]
+object BBSimElaborate extends App {
+  if (args.isEmpty) {
+    println("Usage: BBSimElaborate <full.config.ClassName> [firtool-opts...]")
+    println("Example: BBSimElaborate sims.verilator.BuckyballToyBBSimConfig")
+    sys.exit(1)
+  }
+
+  val configClassName = args(0)
+  println(s"Elaborating BBSimHarness with config: $configClassName")
+
+  val config: Config =
+    try {
+      val configClass = Class.forName(configClassName)
+      configClass.getDeclaredConstructor().newInstance().asInstanceOf[Config]
+    } catch {
+      case e: ClassNotFoundException =>
+        println(s"Error: Config class not found: $configClassName")
+        sys.exit(1)
+      case e: Exception              =>
+        println(s"Error loading config class: ${e.getMessage}")
+        e.printStackTrace()
+        sys.exit(1)
+    }
+
+  ChiselStage.emitSystemVerilogFile(
+    new BBSimHarness()(config.toInstance),
     firtoolOpts = args.drop(1),
     args = Array.empty
   )

@@ -12,6 +12,7 @@ env.sh
 mill.*
 index.html
 
+*.jou
 *.vcd
 *.fst
 *.log

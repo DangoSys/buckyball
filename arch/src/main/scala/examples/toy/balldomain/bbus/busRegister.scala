@@ -14,6 +14,7 @@ import framework.balldomain.prototype.systolicarray.SystolicArrayBall
 import framework.balldomain.prototype.quant.QuantBall
 import framework.balldomain.prototype.dequant.DequantBall
 import framework.balldomain.prototype.gemmini.GemminiBall
+import framework.balldomain.prototype.trace.TraceBall
 
 /**
  * BBusModule - Ball bus module that directly extends BBus
@@ -32,6 +33,7 @@ class BBusModule(b: GlobalConfig)
           case "QuantBall"         => () => new QuantBall(b)
           case "DequantBall"       => () => new DequantBall(b)
           case "GemminiBall"       => () => new GemminiBall(b)
+          case "TraceBall"         => () => new TraceBall(b)
           case name                => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator

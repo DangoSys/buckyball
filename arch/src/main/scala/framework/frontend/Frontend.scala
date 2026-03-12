@@ -35,6 +35,10 @@ class Frontend(val b: GlobalConfig) extends Module {
     // RoCC response
     val resp = Decoupled(new RoCCResponseBB(b.core.xLen))
     val busy = Output(Bool())
+
+    // Barrier interface — passthrough to GlobalRS
+    val barrier_arrive  = Output(Bool())
+    val barrier_release = Input(Bool())
   })
 
   val gDecoder: Instance[GlobalDecoder]            = Instantiate(new GlobalDecoder(b))
@@ -56,5 +60,9 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   io.resp <> globalRs.io.rs_rocc_o.resp
   io.busy := globalRs.io.rs_rocc_o.busy
+
+  // Barrier passthrough
+  io.barrier_arrive             := globalRs.io.barrier_arrive
+  globalRs.io.barrier_release   := io.barrier_release
 
 }

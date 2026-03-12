@@ -23,7 +23,8 @@ object buckyball extends SbtModule { m =>
   override def moduleDeps = Seq(
     chipyard,
     firechip,
-    palladium
+    palladium,
+    pegasus
   )
 
   override def ivyDeps = Agg(
@@ -958,6 +959,32 @@ object palladium extends SbtModule {
   override def scalacOptions = Seq(
     "-deprecation",
     "-unchecked",
+    "-Ymacro-annotations"
+  )
+
+}
+
+// Pegasus FPGA framework Chisel sources
+// Physical location: pegasus/chisel/ (outside arch/)
+// Pure Chisel only — no Chipyard dependency (avoids circular dep with buckyball)
+// buckyball depends on pegasus (one-way)
+object pegasus extends SbtModule {
+  override def millSourcePath = os.pwd / os.up / "pegasus" / "chisel"
+  override def scalaVersion   = "2.13.12"
+
+  override def ivyDeps = Agg(
+    ivy"org.chipsalliance::chisel:6.5.0"
+  )
+
+  override def scalacPluginIvyDeps = Agg(
+    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
+  )
+
+  override def scalacOptions = Seq(
+    "-language:reflectiveCalls",
+    "-deprecation",
+    "-feature",
+    "-Xcheckinit",
     "-Ymacro-annotations"
   )
 

@@ -9,24 +9,15 @@ import framework.memdomain.backend.banks.SramBank
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import framework.top.GlobalConfig
 
-// class SharedArbReq(b: GlobalConfig) extends Bundle {
-//   val src_channel = UInt(log2Up(b.memDomain.bankChannel).W)
-//   val is_write    = Bool()
-//   val hart_id     = UInt(b.core.xLen.W)
-//   val pbank_id    = UInt(log2Ceil(SharedMemLayout.TotalBank).W)
-//   val group_id    = UInt(3.W)
-//   val addr        = UInt(log2Ceil(b.memDomain.bankEntries).W)
-//   val mask        = Vec(b.memDomain.bankMaskLen, Bool())
-//   val data        = UInt(b.memDomain.bankWidth.W)
-//   val wmode       = Bool()
-// }
-
 @instantiable
 class SharedMemBackend(val b: GlobalConfig) extends Module {
+  private val nCores       = b.top.nCores
+  private val totalBanks   = SharedMemLayout.totalBank(b)
+  private val totalChannel = SharedMemLayout.totalChannel(b)
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(b.memDomain.bankChannel*4, Flipped(new MemRequestIO(b)))
+    val mem_req = Vec(totalChannel, Flipped(new MemRequestIO(b)))
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
@@ -34,15 +25,11 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_group_count = Output(UInt(4.W))
   })
 
-  // Shared backend is sized for 4 harts, but currently only hart-0 channels are connected.
-  private val activeHartCount    = 1
-  private val activeChannelCount = b.memDomain.bankChannel * activeHartCount
-
-  val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum*4)(Instantiate(new SramBank(b)))
-  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel*4)(Instantiate(new AccPipe(b)))
+  val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
+  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(totalChannel)(Instantiate(new AccPipe(b)))
 
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
-  val mtraces = Seq.fill(b.memDomain.bankChannel*4)(Module(new MTraceDPI))
+  val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
   for (mt <- mtraces) {
     mt.io.is_write := 0.U
     mt.io.is_shared := 0.U
@@ -60,7 +47,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Mapping table
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
-    
     val valid    = Bool()
     val hart_id  = UInt(b.core.xLen.W)
     val vbank_id = UInt(5.W)
@@ -68,7 +54,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val group_id = UInt(3.W)
   }
 
-  val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum*4)(0.U.asTypeOf(new MappingTableEntry))))
+  val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
 
   def isAcc(hart_id: UInt, vbank_id: UInt): Bool =
     mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && (entry.hart_id === hart_id) && entry.is_multi).reduce(_ || _)
@@ -89,7 +75,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   def deleteEntry(hart_id: UInt, vbank_id: UInt): Unit = {
-    for (i <- 0 until b.memDomain.bankNum*4) {
+    for (i <- 0 until totalBanks) {
       when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
         mappingTable(i).valid    := false.B
         mappingTable(i).vbank_id := 0.U
@@ -108,7 +94,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Default Value
   // -----------------------------------------------------------------------------
 
-  for (i <- 0 until b.memDomain.bankChannel*4) {
+  for (i <- 0 until totalChannel) {
     accPipes(i).io.mem_req.write <> io.mem_req(i).write
     accPipes(i).io.mem_req.read <> io.mem_req(i).read
     accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
@@ -188,7 +174,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mtraces(ch).io.enable   := en
   }
 
-  for (i <- 0 until activeChannelCount) {
+  for (i <- 0 until totalChannel) {
     val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
 
     // Memory trace: read request
@@ -208,7 +194,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       )
     }
 
-    for (j <- 0 until b.memDomain.bankNum*4) {
+    for (j <- 0 until totalBanks) {
       val hit_bank = mappingTable(j).valid &&
         (mappingTable(j).hart_id === io.mem_req(i).hart_id) &&
         (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
