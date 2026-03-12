@@ -25,9 +25,8 @@ async def handler(data, context):
     bbdir = get_buckyball_path()
     build_dir = data.get("output_dir", f"{bbdir}/arch/build/")
     arch_dir = f"{bbdir}/arch"
-
-    # Get config name, must be provided
     config_name = data.get("config")
+    
     if not config_name or config_name == "None":
         context.logger.error("Configuration name is required but not provided")
         success_result, failure_result = await check_result(
@@ -65,10 +64,34 @@ async def handler(data, context):
         stderr_prefix="verilator verilog",
     )
 
-    # Remove unwanted file
-    topname_file = f"{arch_dir}/BBSimHarness.sv"
-    if os.path.exists(topname_file):
-        os.remove(topname_file)
+    # Remove testchipip C++ sources that depend on fesvr (which we don't have).
+    # SimTSI.v is kept so verilator can resolve the SimTSI module reference in BBSimHarness.sv;
+    # tsi_tick DPI symbol is satisfied by arch/src/csrc/src/monitor/ioe/tsi_stub.cc instead.
+    for unwanted in [
+        f"{build_dir}/testchip_htif.cc",
+        f"{build_dir}/testchip_htif.h",
+        f"{build_dir}/testchip_tsi.cc",
+        f"{build_dir}/testchip_tsi.h",
+        f"{build_dir}/SimTSI.cc",
+        f"{arch_dir}/BBSimHarness.sv",
+    ]:
+        if os.path.exists(unwanted):
+            os.remove(unwanted)
+
+    # Patch fesvr includes out of mm.h and mm.cc (copied from testchipip resources).
+    # They reference fesvr/memif.h which we don't have — our SimDRAM_bb.cc doesn't use it.
+    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
+        if os.path.exists(patch_file):
+            with open(patch_file, "r") as f:
+                content = f.read()
+            patched = "\n".join(
+                line for line in content.splitlines()
+                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
+            )
+            if patched != content:
+                with open(patch_file, "w") as f:
+                    f.write(patched)
+                context.logger.info(f"Patched fesvr includes from {patch_file}")
 
     # ==================================================================================
     # Return result to API
