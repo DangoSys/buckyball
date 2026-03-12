@@ -6,18 +6,20 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
 import framework.top.GlobalConfig
 
-/** TraceBall — Debug trace Ball providing cycle counters and SRAM backdoor.
-  *
-  * Uses two funct7 encodings:
-  *   - bdb_counter  (funct7=48): cycle counter management
-  *   - bdb_backdoor (funct7=49): SRAM backdoor read/write via DPI-C
-  */
+/**
+ * TraceBall — Debug trace Ball providing cycle counters and SRAM backdoor.
+ *
+ * Uses two funct7 encodings:
+ *   - bdb_counter  (funct7=48): cycle counter management
+ *   - bdb_backdoor (funct7=49): SRAM backdoor read/write via DPI-C
+ */
 @instantiable
 class TraceBall(val b: GlobalConfig) extends Module with HasBlink {
 
   val ballCommonConfig = b.ballDomain.ballIdMappings
     .find(_.ballName == "TraceBall")
     .getOrElse(throw new IllegalArgumentException("TraceBall not found in config"))
+
   val inBW  = ballCommonConfig.inBW
   val outBW = ballCommonConfig.outBW
 

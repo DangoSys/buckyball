@@ -8,25 +8,28 @@ import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.memdomain.backend.banks.SramBank
 import framework.top.GlobalConfig
 
-/** Trace — TraceBall inner processing unit.
-  *
-  * Handles two instruction types:
-  *   - bdb_counter (funct7=48): cycle counter management (START/STOP/READ)
-  *   - bdb_backdoor (funct7=49): SRAM backdoor read/write via DPI-C
-  *
-  * Backdoor write: C++ generates (row, data) via DPI-C each iteration,
-  *   RTL writes to external bank at (wbank_reg, row).
-  * Backdoor read: RTL reads external bank at (rbank_reg, row from DPI-C),
-  *   sends data back to C++ via DPI-C for logging.
-  *
-  * bank_id always comes from the instruction encoding (rs1),
-  * row and data come from DPI-C (C++ auto-increments row each call).
-  */
+/**
+ * Trace — TraceBall inner processing unit.
+ *
+ * Handles two instruction types:
+ *   - bdb_counter (funct7=48): cycle counter management (START/STOP/READ)
+ *   - bdb_backdoor (funct7=49): SRAM backdoor read/write via DPI-C
+ *
+ * Backdoor write: C++ generates (row, data) via DPI-C each iteration,
+ *   RTL writes to external bank at (wbank_reg, row).
+ * Backdoor read: RTL reads external bank at (rbank_reg, row from DPI-C),
+ *   sends data back to C++ via DPI-C for logging.
+ *
+ * bank_id always comes from the instruction encoding (rs1),
+ * row and data come from DPI-C (C++ auto-increments row each call).
+ */
 @instantiable
 class Trace(val b: GlobalConfig) extends Module {
+
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "TraceBall")
     .getOrElse(throw new IllegalArgumentException("TraceBall not found in config"))
+
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
 
@@ -55,7 +58,7 @@ class Trace(val b: GlobalConfig) extends Module {
   // ============================================================
   val idle :: sCounter :: sBdReadExt :: sBdReadExtResp :: sBdGetWriteData :: sBdWriteExt :: sBdWriteExtResp :: complete :: Nil =
     Enum(8)
-  val state = RegInit(idle)
+  val state                                                                                                                    = RegInit(idle)
 
   // ============================================================
   // Registers
@@ -95,9 +98,9 @@ class Trace(val b: GlobalConfig) extends Module {
   val privBank = Module(new SramBank(b))
 
   // Default: private bank idle
-  privBank.io.sramRead.req.valid     := false.B
-  privBank.io.sramRead.req.bits.addr := 0.U
-  privBank.io.sramRead.resp.ready    := false.B
+  privBank.io.sramRead.req.valid       := false.B
+  privBank.io.sramRead.req.bits.addr   := 0.U
+  privBank.io.sramRead.resp.ready      := false.B
   privBank.io.sramWrite.req.valid      := false.B
   privBank.io.sramWrite.req.bits.addr  := 0.U
   privBank.io.sramWrite.req.bits.data  := 0.U
@@ -142,20 +145,20 @@ class Trace(val b: GlobalConfig) extends Module {
   // External bank port defaults
   // ============================================================
   for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id         := rob_id_reg
-    io.bankRead(i).ball_id        := 0.U
-    io.bankRead(i).bank_id        := rbank_reg
-    io.bankRead(i).group_id       := 0.U
+    io.bankRead(i).rob_id           := rob_id_reg
+    io.bankRead(i).ball_id          := 0.U
+    io.bankRead(i).bank_id          := rbank_reg
+    io.bankRead(i).group_id         := 0.U
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := 0.U
     io.bankRead(i).io.resp.ready    := false.B
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id          := rob_id_reg
-    io.bankWrite(i).ball_id         := 0.U
-    io.bankWrite(i).bank_id         := wbank_reg
-    io.bankWrite(i).group_id        := 0.U
+    io.bankWrite(i).rob_id            := rob_id_reg
+    io.bankWrite(i).ball_id           := 0.U
+    io.bankWrite(i).bank_id           := wbank_reg
+    io.bankWrite(i).group_id          := 0.U
     io.bankWrite(i).io.req.valid      := false.B
     io.bankWrite(i).io.req.bits.addr  := 0.U
     io.bankWrite(i).io.req.bits.data  := 0.U

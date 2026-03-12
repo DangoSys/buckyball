@@ -73,7 +73,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     func7,
     ls_default_decode,
     Array(
-      MSET_BITPAT         -> List(
+      MSET_BITPAT  -> List(
         N,
         N,
         0.U(memAddrLen.W),      // mem_addr: not used for MSET
@@ -81,7 +81,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs2,                    // special = full rs2
         Y
       ), // mset
-      MVIN_BITPAT         -> List(
+      MVIN_BITPAT  -> List(
         Y,
         N,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
@@ -89,14 +89,14 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         rs2,                    // special = full rs2
         Y
       ), // mvin
-      MVOUT_BITPAT        -> List(
+      MVOUT_BITPAT -> List(
         N,
         Y,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
         rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
         rs2,                    // special = full rs2
         Y
-      ) // mvout
+      )  // mvout
     )
   )
 

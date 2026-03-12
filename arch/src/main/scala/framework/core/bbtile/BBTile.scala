@@ -122,14 +122,16 @@ class BBTile private (
     if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
       name = s"bb-dma-reader-$i",
       sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
-    )))))) else None
+    ))))))
+    else None
   }
 
   val bb_writer_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
     if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
       name = s"bb-dma-writer-$i",
       sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
-    )))))) else None
+    ))))))
+    else None
   }
 
   // Gather all DMA nodes into one xbar
@@ -361,7 +363,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     val accelerators = (0 until nCores).map { i =>
       val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
       val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
-      val acc = Module(new BuckyballAccelerator(outer.bbConfig)(edge))
+      val acc               = Module(new BuckyballAccelerator(outer.bbConfig)(edge))
       acc.io.hartid := outer.hartIdSinkNode.bundle + i.U
 
       // DMA TileLink
@@ -421,7 +423,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
     // Shared query — simplified: each accelerator queries independently,
     // but SharedMemBackend has one query port. Use accelerator 0's for now.
-    sharedBackend.io.query_vbank_id       := accelerators(0).io.shared_query_vbank_id
+    sharedBackend.io.query_vbank_id             := accelerators(0).io.shared_query_vbank_id
     accelerators(0).io.shared_query_group_count := sharedBackend.io.query_group_count
     for (i <- 1 until nCores) {
       accelerators(i).io.shared_query_group_count := sharedBackend.io.query_group_count
@@ -430,8 +432,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     // BarrierUnit (tile-level singleton)
     val barrierUnit = Module(new BarrierUnit(nCores))
     for (i <- 0 until nCores) {
-      barrierUnit.io.arrive(i)              := accelerators(i).io.barrier_arrive
-      accelerators(i).io.barrier_release    := barrierUnit.io.release(i)
+      barrierUnit.io.arrive(i)           := accelerators(i).io.barrier_arrive
+      accelerators(i).io.barrier_release := barrierUnit.io.release(i)
     }
 
   } else {

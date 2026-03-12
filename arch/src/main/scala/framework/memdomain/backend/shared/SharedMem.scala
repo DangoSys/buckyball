@@ -7,11 +7,11 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadResp, SramWriteResp}
 
 object SharedMemLayout {
-  def bankPerHart(b: GlobalConfig): Int = b.memDomain.bankNum
-  def maxHart(b: GlobalConfig):     Int = b.top.nCores
-  def totalBank(b: GlobalConfig):   Int = bankPerHart(b) * maxHart(b)
+  def bankPerHart(b:    GlobalConfig): Int = b.memDomain.bankNum
+  def maxHart(b:        GlobalConfig): Int = b.top.nCores
+  def totalBank(b:      GlobalConfig): Int = bankPerHart(b) * maxHart(b)
   def channelPerHart(b: GlobalConfig): Int = b.memDomain.bankChannel
-  def totalChannel(b: GlobalConfig):   Int = channelPerHart(b) * maxHart(b)
+  def totalChannel(b:   GlobalConfig): Int = channelPerHart(b) * maxHart(b)
 }
 
 class SharedMemReadReq(val b: GlobalConfig) extends Bundle {

@@ -140,12 +140,12 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
   // --- Shared memory passthrough ---
   io.shared_mem_req <> memDomain.io.shared_mem_req
-  io.shared_config  <> memDomain.io.shared_config
-  io.shared_query_vbank_id             := memDomain.io.shared_query_vbank_id
+  io.shared_config <> memDomain.io.shared_config
+  io.shared_query_vbank_id              := memDomain.io.shared_query_vbank_id
   memDomain.io.shared_query_group_count := io.shared_query_group_count
 
   // --- Barrier passthrough ---
-  io.barrier_arrive := frontend.io.barrier_arrive
+  io.barrier_arrive           := frontend.io.barrier_arrive
   frontend.io.barrier_release := io.barrier_release
 
   // --- Response & status ---

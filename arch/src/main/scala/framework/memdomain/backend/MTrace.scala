@@ -7,16 +7,16 @@ import chisel3.util._
 class MTraceDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
-    val is_write = Input(UInt(8.W))
+    val is_write  = Input(UInt(8.W))
     val is_shared = Input(UInt(8.W))
-    val channel  = Input(UInt(32.W))
-    val hart_id  = Input(UInt(64.W))
-    val vbank_id = Input(UInt(32.W))
-    val group_id = Input(UInt(32.W))
-    val addr     = Input(UInt(32.W))
-    val data_lo  = Input(UInt(64.W))
-    val data_hi  = Input(UInt(64.W))
-    val enable   = Input(Bool())
+    val channel   = Input(UInt(32.W))
+    val hart_id   = Input(UInt(64.W))
+    val vbank_id  = Input(UInt(32.W))
+    val group_id  = Input(UInt(32.W))
+    val addr      = Input(UInt(32.W))
+    val data_lo   = Input(UInt(64.W))
+    val data_hi   = Input(UInt(64.W))
+    val enable    = Input(Bool())
   })
 
   setInline(

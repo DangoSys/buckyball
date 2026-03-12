@@ -31,16 +31,16 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
   for (mt <- mtraces) {
-    mt.io.is_write := 0.U
+    mt.io.is_write  := 0.U
     mt.io.is_shared := 0.U
-    mt.io.channel  := 0.U
-    mt.io.hart_id  := 0.U
-    mt.io.vbank_id := 0.U
-    mt.io.group_id := 0.U
-    mt.io.addr     := 0.U
-    mt.io.data_lo  := 0.U
-    mt.io.data_hi  := 0.U
-    mt.io.enable   := false.B
+    mt.io.channel   := 0.U
+    mt.io.hart_id   := 0.U
+    mt.io.vbank_id  := 0.U
+    mt.io.group_id  := 0.U
+    mt.io.addr      := 0.U
+    mt.io.data_lo   := 0.U
+    mt.io.data_hi   := 0.U
+    mt.io.enable    := false.B
   }
 
   // -----------------------------------------------------------------------------
@@ -57,10 +57,12 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
 
   def isAcc(hart_id: UInt, vbank_id: UInt): Bool =
-    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && (entry.hart_id === hart_id) && entry.is_multi).reduce(_ || _)
+    mappingTable.map(entry =>
+      entry.valid && (entry.vbank_id === vbank_id) && (entry.hart_id === hart_id) && entry.is_multi
+    ).reduce(_ || _)
 
   def addEntry(
-    hart_id: UInt,
+    hart_id:  UInt,
     vbank_id: UInt,
     pbank_id: UInt,
     is_multi: Bool,
@@ -134,7 +136,13 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   when(io.config.valid) {
     when(io.config.bits.alloc) {
       val pbank_id = getFreePbankId()
-      addEntry(io.config.bits.hart_id, io.config.bits.vbank_id, pbank_id, io.config.bits.is_multi, io.config.bits.group_id)
+      addEntry(
+        io.config.bits.hart_id,
+        io.config.bits.vbank_id,
+        pbank_id,
+        io.config.bits.is_multi,
+        io.config.bits.group_id
+      )
     }.otherwise {
       deleteEntry(io.config.bits.hart_id, io.config.bits.vbank_id)
     }
@@ -162,16 +170,16 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     dataHi:  UInt,
     en:      Bool
   ): Unit = {
-    mtraces(ch).io.is_write := isWrite
+    mtraces(ch).io.is_write  := isWrite
     mtraces(ch).io.is_shared := io.mem_req(ch).is_shared.asUInt
-    mtraces(ch).io.channel  := ch.U
-    mtraces(ch).io.hart_id  := io.mem_req(ch).hart_id
-    mtraces(ch).io.vbank_id := io.mem_req(ch).bank_id
-    mtraces(ch).io.group_id := io.mem_req(ch).group_id
-    mtraces(ch).io.addr     := addr
-    mtraces(ch).io.data_lo  := dataLo
-    mtraces(ch).io.data_hi  := dataHi
-    mtraces(ch).io.enable   := en
+    mtraces(ch).io.channel   := ch.U
+    mtraces(ch).io.hart_id   := io.mem_req(ch).hart_id
+    mtraces(ch).io.vbank_id  := io.mem_req(ch).bank_id
+    mtraces(ch).io.group_id  := io.mem_req(ch).group_id
+    mtraces(ch).io.addr      := addr
+    mtraces(ch).io.data_lo   := dataLo
+    mtraces(ch).io.data_hi   := dataHi
+    mtraces(ch).io.enable    := en
   }
 
   for (i <- 0 until totalChannel) {

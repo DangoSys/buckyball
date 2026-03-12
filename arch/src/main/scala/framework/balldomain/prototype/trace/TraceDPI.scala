@@ -3,9 +3,10 @@ package framework.balldomain.prototype.trace
 import chisel3._
 import chisel3.util._
 
-/** DPI-C BlackBox for cycle counter trace.
-  * Outputs [CTRACE] lines to bdb.log.
-  */
+/**
+ * DPI-C BlackBox for cycle counter trace.
+ * Outputs [CTRACE] lines to bdb.log.
+ */
 class CTraceDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -46,9 +47,10 @@ class CTraceDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
-/** DPI-C BlackBox for backdoor get_read_addr.
-  * Returns packed [63:32]=bank_id, [31:0]=row.
-  */
+/**
+ * DPI-C BlackBox for backdoor get_read_addr.
+ * Returns packed [63:32]=bank_id, [31:0]=row.
+ */
 class BackdoorGetReadAddrDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -78,9 +80,10 @@ class BackdoorGetReadAddrDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
-/** DPI-C BlackBox for backdoor get_write_addr.
-  * Returns packed [63:32]=bank_id, [31:0]=row.
-  */
+/**
+ * DPI-C BlackBox for backdoor get_write_addr.
+ * Returns packed [63:32]=bank_id, [31:0]=row.
+ */
 class BackdoorGetWriteAddrDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -110,9 +113,10 @@ class BackdoorGetWriteAddrDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
-/** DPI-C BlackBox for backdoor get_write_data.
-  * Returns 128-bit data as two 64-bit outputs.
-  */
+/**
+ * DPI-C BlackBox for backdoor get_write_data.
+ * Returns 128-bit data as two 64-bit outputs.
+ */
 class BackdoorGetWriteDataDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -150,9 +154,10 @@ class BackdoorGetWriteDataDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
-/** DPI-C BlackBox for backdoor put_read_data.
-  * Reports read data back to C++ for logging.
-  */
+/**
+ * DPI-C BlackBox for backdoor put_read_data.
+ * Reports read data back to C++ for logging.
+ */
 class BackdoorPutReadDataDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -190,9 +195,10 @@ class BackdoorPutReadDataDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
-/** DPI-C BlackBox for backdoor put_write_done.
-  * Reports write completion back to C++ for logging.
-  */
+/**
+ * DPI-C BlackBox for backdoor put_write_done.
+ * Reports write completion back to C++ for logging.
+ */
 class BackdoorPutWriteDoneDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {

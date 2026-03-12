@@ -115,7 +115,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // Drive query interface
   // When idle and cmdReq is valid, query the incoming bank_id
   // Otherwise use the registered bank_id
-  io.query_vbank_id := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, wr_bank_reg)
+  io.query_vbank_id  := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, wr_bank_reg)
   io.query_is_shared := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.is_shared, is_shared_reg)
 
   // DMA req accepted

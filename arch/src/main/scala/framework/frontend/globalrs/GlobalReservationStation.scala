@@ -110,8 +110,8 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
   // normal cmds wait for ROB ready and no stall.
   io.global_decode_cmd_i.ready := Mux(
     isFrontendCmd,
-    !anyStall,                          // Accept fence/barrier if no stall active
-    rob.io.alloc.ready && !anyStall     // Normal cmd: ROB ready and no stall
+    !anyStall,                      // Accept fence/barrier if no stall active
+    rob.io.alloc.ready && !anyStall // Normal cmd: ROB ready and no stall
   )
 
 // -----------------------------------------------------------------------------
