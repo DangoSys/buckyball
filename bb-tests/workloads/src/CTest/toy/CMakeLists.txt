@@ -1,5 +1,4 @@
 set(ELF_CC "riscv64-unknown-elf-gcc")
-set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 
 #-------------------------------------------------------------------------------
 # Set baremetal compilation flags
@@ -10,24 +9,20 @@ set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -Wl,-T,${BBSIM_LD} -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
-# Define common compilation step functions
-#-------------------------------------------------------------------------------
-
-#-------------------------------------------------------------------------------
 # Generate executables for different platforms
 #-------------------------------------------------------------------------------
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
-set(CMAKE_CXX_COMPILER "riscv64-unknown-linux-gnu-g++")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=rv64gc")
+
 # Generate Linux version executables
 function(add_linux_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}-linux")
 
-  add_executable(${EXECUTABLE} ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE} ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c)
-  target_include_directories(${EXECUTABLE} PRIVATE
-    ${WORKLOAD_LIB_DIR}
-  )
+  add_executable(${EXECUTABLE}
+    ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
+    ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c)
+  target_include_directories(${EXECUTABLE} PRIVATE ${WORKLOAD_LIB_DIR})
+  set_target_properties(${EXECUTABLE} PROPERTIES LINKER_LANGUAGE C)
 endfunction()
 
 # Generate multicore baremetal version executables
