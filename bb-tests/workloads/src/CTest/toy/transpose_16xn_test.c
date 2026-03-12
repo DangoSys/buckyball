@@ -51,14 +51,14 @@ int main() {
 #endif
   int all_passed = 1;
 
-  all_passed &= run_test("transpose_16x16", 16);
-  all_passed &= run_test("transpose_16x32", 32);
+  all_passed &= run_test("transpose 16x16", 16);
+  all_passed &= run_test("transpose 16x32", 32);
 
   if (all_passed) {
-    printf("All transpose_16xn tests PASSED\n");
+    printf("All transpose 16xn tests PASSED\n");
     return 0;
   } else {
-    printf("Some transpose_16xn tests FAILED\n");
+    printf("Some transpose 16xn tests FAILED\n");
     return 1;
   }
 #ifdef MULTICORE

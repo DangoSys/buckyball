@@ -7,24 +7,23 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadResp, SramWriteResp}
 
 object SharedMemLayout {
-  val AccPipePerHart: Int = 8
-  val MaxHart:        Int = 4
-  val TotalAccPipe:   Int = AccPipePerHart * MaxHart
-
-  val BankPerHart: Int = 32
-  val TotalBank:   Int = BankPerHart * MaxHart
+  def bankPerHart(b: GlobalConfig): Int = b.memDomain.bankNum
+  def maxHart(b: GlobalConfig):     Int = b.top.nCores
+  def totalBank(b: GlobalConfig):   Int = bankPerHart(b) * maxHart(b)
+  def channelPerHart(b: GlobalConfig): Int = b.memDomain.bankChannel
+  def totalChannel(b: GlobalConfig):   Int = channelPerHart(b) * maxHart(b)
 }
 
 class SharedMemReadReq(val b: GlobalConfig) extends Bundle {
   val hartid   = UInt(b.core.xLen.W)
-  val pbank_id = UInt(log2Ceil(SharedMemLayout.TotalBank).W)
+  val pbank_id = UInt(log2Ceil(SharedMemLayout.totalBank(b)).W)
   val group_id = UInt(3.W)
   val addr     = UInt(log2Ceil(b.memDomain.bankEntries).W)
 }
 
 class SharedMemWriteReq(val b: GlobalConfig) extends Bundle {
   val hartid   = UInt(b.core.xLen.W)
-  val pbank_id = UInt(log2Ceil(SharedMemLayout.TotalBank).W)
+  val pbank_id = UInt(log2Ceil(SharedMemLayout.totalBank(b)).W)
   val group_id = UInt(3.W)
   val addr     = UInt(log2Ceil(b.memDomain.bankEntries).W)
   val mask     = Vec(b.memDomain.bankMaskLen, Bool())
@@ -46,7 +45,7 @@ class SharedMemWriteIO(val b: GlobalConfig) extends Bundle {
 class SharedMem(val b: GlobalConfig) extends Module {
   private val maskLen        = b.memDomain.bankMaskLen
   private val maskElem       = UInt((b.memDomain.bankWidth / maskLen).W)
-  private val totalBanks     = SharedMemLayout.TotalBank
+  private val totalBanks     = SharedMemLayout.totalBank(b)
   private val minSharedLines = totalBanks * b.memDomain.bankEntries
 
   require(

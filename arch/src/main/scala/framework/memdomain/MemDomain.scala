@@ -8,8 +8,9 @@ import framework.balldomain.blink.{BankRead, BankWrite}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.top.GlobalConfig
-
+import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.frontend.MemFrontend
+import framework.memdomain.frontend.outside_channel.{MemConfigerIO}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.memdomain.midend.MemMidend
 import framework.memdomain.backend.MemBackend
@@ -24,38 +25,34 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // -------------------------------------------------
     // Command Channel
     // -------------------------------------------------
-    // global RS -> MemDomain
     val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
-    // MemDomain -> global RS
     val global_complete_o = Decoupled(new GlobalRsComplete(b))
     val busy              = Output(Bool())
 
     // -------------------------------------------------
     // Inside Channel
     // -------------------------------------------------
-    // Bank interface for interaction with Ball Domain
-    // BankRead/BankWrite are used with Flipped at Ball Device side
-    // MemDomain receives requests from Ball Domain, so uses raw Bundle (Input for bank_id)
-    // Use bbusProducerChannels and bbusConsumerChannels instead of bankNum to match BallDomain output
     val ballDomain = new Bundle {
       val bankRead  = Vec(totalBallRead, new BankRead(b))
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
-
     }
 
     // -------------------------------------------------
     // Outside Channel
     // -------------------------------------------------
-    // PTW and TLB exception interfaces for external connection
     val ptw    = Vec(1, new BBTLBPTWIO(b))
     val tlbExp = Vec(1, new BBTLBExceptionIO)
-
-    // TileLink physical connections for DMA
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
-
-    // Core/thread id used by shared memory addressing.
     val hartid = Input(UInt(b.core.xLen.W))
+
+    // -------------------------------------------------
+    // Shared memory path — exposed for tile-level sharing
+    // -------------------------------------------------
+    val shared_mem_req          = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    val shared_config           = Decoupled(new MemConfigerIO(b))
+    val shared_query_vbank_id   = Output(UInt(8.W))
+    val shared_query_group_count = Input(UInt(4.W))
   })
 
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
@@ -68,25 +65,24 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   frontend.io.query_group_count := backend.io.query_group_count
   frontend.io.hartid            := io.hartid
 
+  // Shared query: backend delegates shared query to external SharedMemBackend
+  backend.io.shared_query_group_count := io.shared_query_group_count
+  io.shared_query_vbank_id            := backend.io.shared_query_vbank_id
+
   // -------------------------------------------------
   // Connection with outside (all in frontend)
   // -------------------------------------------------
-  // Global RS interface
   frontend.io.global_issue_i <> io.global_issue_i
   frontend.io.global_complete_o <> io.global_complete_o
   io.busy := frontend.io.busy
 
-  // TLB interface
-  // Note: frontend.io.tlb is connected internally to DMA modules
-  // Only PTW and TLB exception interfaces are exposed to outside
   frontend.io.ptw <> io.ptw
   frontend.io.tlbExp <> io.tlbExp
 
-  // TileLink physical connections for DMA (Reader/Writer are inside frontend)
   io.tl_reader <> frontend.io.tl_reader
   io.tl_writer <> frontend.io.tl_writer
 
-  // Ball Domain interface connects directly to midend (Ball devices' read/write requests)
+  // Ball Domain interface connects directly to midend
   midend.io.balldomain.bankRead <> io.ballDomain.bankRead
   midend.io.balldomain.bankWrite <> io.ballDomain.bankWrite
   midend.io.frontend.bankRead <> frontend.io.interdma.bankRead
@@ -97,4 +93,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
+
+  // Shared path passthrough
+  io.shared_mem_req <> backend.io.shared_mem_req
+  io.shared_config  <> backend.io.shared_config
 }

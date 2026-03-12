@@ -51,6 +51,9 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
       val busy = Output(Bool())
     }
 
+    // Barrier interface — connected to tile-level BarrierUnit via BuckyballAccelerator
+    val barrier_arrive  = Output(Bool())
+    val barrier_release = Input(Bool())
   })
 
   val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
@@ -71,17 +74,44 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
   }
 
 // -----------------------------------------------------------------------------
-// Inbound - instruction allocation (only non-fence instructions enter ROB)
+// Barrier handling — barrier does NOT enter ROB.
+// Two phases:
+//   1. barrierWaitROB: wait for own ROB to drain (implicit fence)
+//   2. barrierWaitRelease: arrive at BarrierUnit, wait for all cores
 // -----------------------------------------------------------------------------
-  rob.io.alloc.valid := io.global_decode_cmd_i.valid && !io.global_decode_cmd_i.bits.isFence && !fenceActive
+  val isBarrierCmd = io.global_decode_cmd_i.valid && io.global_decode_cmd_i.bits.isBarrier
+
+  val barrierWaitROB     = RegInit(false.B)
+  val barrierWaitRelease = RegInit(false.B)
+
+  when(isBarrierCmd && !barrierWaitROB && !barrierWaitRelease && !fenceActive) {
+    barrierWaitROB := true.B
+  }
+  when(barrierWaitROB && rob.io.empty) {
+    barrierWaitROB     := false.B
+    barrierWaitRelease := true.B
+  }
+  when(barrierWaitRelease && io.barrier_release) {
+    barrierWaitRelease := false.B
+  }
+
+  io.barrier_arrive := barrierWaitRelease
+
+// -----------------------------------------------------------------------------
+// Inbound - instruction allocation (fence/barrier do not enter ROB)
+// -----------------------------------------------------------------------------
+  val isFrontendCmd = io.global_decode_cmd_i.bits.isFence || io.global_decode_cmd_i.bits.isBarrier
+  val anyStall      = fenceActive || barrierWaitROB || barrierWaitRelease
+
+  rob.io.alloc.valid := io.global_decode_cmd_i.valid && !isFrontendCmd && !anyStall
   rob.io.alloc.bits  := io.global_decode_cmd_i.bits
 
-  // Backpressure: during fence, accept the fence cmd immediately but block further cmds
-  // until ROB drains. For normal cmds, wait for ROB ready.
+  // Backpressure: fence/barrier are consumed immediately (if not already active),
+  // normal cmds wait for ROB ready and no stall.
   io.global_decode_cmd_i.ready := Mux(
-    io.global_decode_cmd_i.bits.isFence,
-    !fenceActive,                      // Accept fence if not already processing one
-    rob.io.alloc.ready && !fenceActive // Normal cmd: ROB ready and no fence active
+    isFrontendCmd,
+    !anyStall,                          // Accept fence/barrier if no stall active
+    rob.io.alloc.ready && !anyStall     // Normal cmd: ROB ready and no stall
   )
 
 // -----------------------------------------------------------------------------
@@ -145,6 +175,6 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
   io.rs_rocc_o.resp.valid     := false.B
   io.rs_rocc_o.resp.bits.rd   := 0.U
   io.rs_rocc_o.resp.bits.data := 0.U
-  // busy when ROB is not empty OR fence is active (waiting for drain)
-  io.rs_rocc_o.busy           := !rob.io.empty || fenceActive
+  // busy when ROB is not empty OR fence/barrier is active
+  io.rs_rocc_o.busy           := !rob.io.empty || fenceActive || barrierWaitROB || barrierWaitRelease
 }

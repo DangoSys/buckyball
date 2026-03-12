@@ -9,6 +9,8 @@ import framework.top.GlobalConfig
 import framework.frontend.Frontend
 import framework.gpdomain.GpDomain
 import framework.memdomain.MemDomain
+import framework.memdomain.backend.MemRequestIO
+import framework.memdomain.frontend.outside_channel.{MemConfigerIO}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import examples.toy.balldomain.BallDomain
 
@@ -46,6 +48,16 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     // TileLink DMA bundles (from tile's diplomacy nodes)
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
+
+    // Shared memory path — exposed to tile level for multi-core SharedMemBackend
+    val shared_mem_req           = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    val shared_config            = Decoupled(new MemConfigerIO(b))
+    val shared_query_vbank_id    = Output(UInt(8.W))
+    val shared_query_group_count = Input(UInt(4.W))
+
+    // Barrier interface — connected to tile-level BarrierUnit
+    val barrier_arrive  = Output(Bool())
+    val barrier_release = Input(Bool())
   })
 
   // --- Instantiate domains ---
@@ -125,6 +137,16 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- TileLink DMA ---
   io.tl_reader <> memDomain.io.tl_reader
   io.tl_writer <> memDomain.io.tl_writer
+
+  // --- Shared memory passthrough ---
+  io.shared_mem_req <> memDomain.io.shared_mem_req
+  io.shared_config  <> memDomain.io.shared_config
+  io.shared_query_vbank_id             := memDomain.io.shared_query_vbank_id
+  memDomain.io.shared_query_group_count := io.shared_query_group_count
+
+  // --- Barrier passthrough ---
+  io.barrier_arrive := frontend.io.barrier_arrive
+  frontend.io.barrier_release := io.barrier_release
 
   // --- Response & status ---
   io.resp <> frontend.io.resp

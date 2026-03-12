@@ -125,7 +125,10 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
         7.U,
         Cat(rs2(63, 4), 3.U(4.W))
       ),
-      GEMMINI_FLUSH               -> List(N, N, N, N, N, DADDR, DADDR, DADDR, 7.U, Cat(0.U(60.W), 4.U(4.W)))
+      GEMMINI_FLUSH               -> List(N, N, N, N, N, DADDR, DADDR, DADDR, 7.U, Cat(0.U(60.W), 4.U(4.W))),
+      // TraceBall instructions
+      BDB_COUNTER                 -> List(N, N, N, N, N, DADDR, DADDR, DADDR, 8.U, rs2),
+      BDB_BACKDOOR                -> List(Y, N, Y, Y, N, op1_bank_raw, DADDR, wr_bank_raw, 8.U, rs2)
     )
   )
 

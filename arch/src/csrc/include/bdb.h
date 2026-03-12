@@ -3,34 +3,32 @@
 
 // DPI-C
 #include "verilated_dpi.h"
-// #include "Vtop__Dpi.h"
 #include "svdpi.h"
 // verilator
 #include "verilated.h"
-// #include "verilated_vcd_c.h"
 
-#ifdef COSIM
-#include "VToyBuckyball.h"
-#else
-#include "VTestHarness.h"
-#endif
-
+#include "VBBSimHarness.h"
 #include "verilated_fst_c.h"
 #if VM_COVERAGE
 #include "verilated_cov.h"
 #endif
 
+extern VBBSimHarness *top;
+
 // ================ BDB Config ===================
-// VCD file path
-extern const char *vcd_path;
 // Log file path
 extern const char *log_path;
 // FST file path
 extern const char *fst_path;
+// UART stdout file path
+extern const char *stdout_path;
+// Raw stdout fd saved before dup2 — UART writes here for real-time display
+extern int raw_stdout_fd;
 
 void init_monitor(int argc, char *argv[]);
 void bdb_mainloop();
 void ball_exec_once();
 void bdb_set_batch_mode();
+void sim_exit();
 
 #endif // _BDB_H_

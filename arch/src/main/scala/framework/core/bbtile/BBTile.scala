@@ -1,6 +1,7 @@
 package framework.core.bbtile
 
 import chisel3._
+import chisel3.util._
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
 import org.chipsalliance.cde.config._
@@ -36,16 +37,20 @@ import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
 import framework.top.GlobalConfig
 import framework.core.bbtile.id.RVVRoCCDecode
+import framework.memdomain.backend.MemRequestIO
+import framework.memdomain.backend.shared.SharedMemBackend
+import framework.memdomain.frontend.outside_channel.MemConfigerIO
 
 /**
  * BBTile — a composable tile containing Rocket core(s) + optional Buckyball accelerator(s).
  *
- * Design principles:
- *   - Extends BaseTile for CanAttachTile compatibility (diplomacy shell)
- *   - Mixes in HasHellaCache + HasICacheFrontend for Rocket core infrastructure (unavoidable)
- *   - Buckyball accelerator is composed as an independent module, NOT via LazyRoCCBB inheritance
- *   - RoCC cmd/resp are wired directly inside the tile
- *   - Accelerator TileLink DMA nodes are declared in the diplomacy shell
+ * When nCores=1 (default), behaviour is identical to the original single-core tile.
+ * When nCores>1, the tile contains N (RocketBB + BuckyballAccelerator) pairs that share
+ * a single SharedMemBackend and BarrierUnit.
+ *
+ * The trait-provided DCache/ICache/PTW serve core-0.  Cores 1..N-1 are wired entirely
+ * inside BBTileModuleImp (no extra diplomacy DCache/ICache — they share core-0's cache
+ * hierarchy via the same TL xbar for now; independent caches are a future enhancement).
  */
 class BBTile private (
   val bbParams: BBTileParams,
@@ -66,6 +71,8 @@ class BBTile private (
     implicit p: Parameters
   ) =
     this(params, crossing.crossingType, lookup, BBTile.injectBuildRoCC(p, params.withBuckyball))
+
+  val nCores = bbParams.nCores
 
   // RoCC CSRs — Buckyball doesn't use custom CSRs, so this is always empty
   val roccCSRs: Seq[Seq[CustomCSR]] = Nil
@@ -107,35 +114,32 @@ class BBTile private (
   tile_master_blocker.foreach(lm => connectTLSlave(lm.controlNode, xBytes))
 
   // ---------------------------------------------------------------------------
-  // Buckyball accelerator TileLink nodes (diplomacy layer)
+  // Buckyball accelerator TileLink nodes (diplomacy layer) — N pairs of DMA
   // ---------------------------------------------------------------------------
   val bbConfig = bbParams.buckyballConfig
 
-  val bb_reader_node =
+  val bb_reader_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
     if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
-      name = "bb-dma-reader",
+      name = s"bb-dma-reader-$i",
       sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
-    ))))))
-    else None
+    )))))) else None
+  }
 
-  val bb_writer_node =
+  val bb_writer_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
     if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
-      name = "bb-dma-writer",
+      name = s"bb-dma-writer-$i",
       sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
-    ))))))
-    else None
+    )))))) else None
+  }
 
-  val bb_xbar_node =
-    if (bbParams.withBuckyball) {
-      val xbar = TLXbar()
-      xbar := TLBuffer() := bb_reader_node.get
-      xbar := TLBuffer() := bb_writer_node.get
-      Some(xbar)
-    } else None
-
-  // Connect Buckyball DMA to tile master port (through width widget)
-  bb_xbar_node.foreach { xbar =>
-    tlOtherMastersNode :=* TLWidthWidget(bbConfig.memDomain.dma_buswidth / 8) := TLBuffer() := xbar
+  // Gather all DMA nodes into one xbar
+  if (bbParams.withBuckyball) {
+    val bb_xbar = TLXbar()
+    for (i <- 0 until nCores) {
+      bb_xbar := TLBuffer() := bb_reader_nodes(i).get
+      bb_xbar := TLBuffer() := bb_writer_nodes(i).get
+    }
+    tlOtherMastersNode :=* TLWidthWidget(bbConfig.memDomain.dma_buswidth / 8) := TLBuffer() := bb_xbar
   }
 
   // ---------------------------------------------------------------------------
@@ -145,10 +149,10 @@ class BBTile private (
   masterNode :=* tlOtherMastersNode
   DisableMonitors(implicit p => tlSlaveXbar.node :*= slaveNode)
 
-  // DCache port count: core + PTW(via usingVM) + DTIM + vector
+  // DCache port count: core + PTW(via usingVM) + DTIM + vector + RoCC tieoff
   nDCachePorts += 1 + (dtim_adapter.isDefined).toInt +
     bbParams.core.vector.map(_.useDCache.toInt).getOrElse(0) +
-    bbParams.withBuckyball.toInt // RoCC mem port (tied off but counted by dcacheArbPorts)
+    bbParams.withBuckyball.toInt
 
   // ---------------------------------------------------------------------------
   // Device tree properties
@@ -180,9 +184,9 @@ class BBTile private (
     Resource(cpuDevice, "reg").bind(ResourceAddress(bbParams.tileId))
   }
 
-  // Buckyball needs one PTW port for its TLB
+  // Buckyball needs one PTW port per accelerator
   if (bbParams.withBuckyball) {
-    nPTWPorts += 1
+    nPTWPorts += nCores
   }
 
   override lazy val module = new BBTileModuleImp(this)
@@ -211,6 +215,7 @@ class BBTile private (
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
   Annotated.params(this, outer.bbParams)
+  val nCores = outer.nCores
 
   // --- FPU (optional) ---
   val fpuOpt = outer.bbParams.core.fpu.map(params => Module(new FPU(params)(outer.p)))
@@ -281,26 +286,9 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   outer.dtim_adapter.foreach(lm => dcachePorts += lm.module.io.dmem)
 
   // ---------------------------------------------------------------------------
-  // Buckyball accelerator (composed, not inherited via LazyRoCCBB)
+  // Helper: wire a BuckyballAccelerator's PTW to tile's PTW subsystem
   // ---------------------------------------------------------------------------
-  if (outer.bbParams.withBuckyball) {
-    val (tl_reader, edge_reader) = outer.bb_reader_node.get.out(0)
-    val (tl_writer, _)           = outer.bb_writer_node.get.out(0)
-
-    val buckyball = Module(new BuckyballAccelerator(outer.bbConfig)(edge_reader))
-    buckyball.io.hartid := outer.hartIdSinkNode.bundle
-
-    // RoCC cmd/resp: direct wiring (both use RoCCCommandBB/RoCCResponseBB)
-    buckyball.io.cmd <> core.io.rocc.cmd
-    core.io.rocc.resp <> buckyball.io.resp
-    core.io.rocc.busy      := buckyball.io.busy
-    core.io.rocc.interrupt := buckyball.io.interrupt
-
-    // DMA TileLink
-    tl_reader <> buckyball.io.tl_reader
-    tl_writer <> buckyball.io.tl_writer
-
-    // PTW: Buckyball's BBTLBPTWIO <-> tile's TLBPTWIO (field-by-field adaptation)
+  def wireBBPtw(buckyball: BuckyballAccelerator): Unit = {
     val bbPtw = Wire(new TLBPTWIO)
     ptwPorts += bbPtw
     bbPtw.req.valid               := buckyball.io.ptw(0).req.valid
@@ -361,17 +349,45 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     }
     buckyball.io.ptw(0).customCSRs := DontCare
     bbPtw.customCSRs               := DontCare
+  }
 
-    // TLB exception
-    buckyball.io.tlbExp(0).flush_skip  := false.B
-    buckyball.io.tlbExp(0).flush_retry := false.B
+  // ---------------------------------------------------------------------------
+  // Buckyball accelerators — N instances sharing SharedMemBackend + BarrierUnit
+  // ---------------------------------------------------------------------------
+  if (outer.bbParams.withBuckyball) {
+    val bankChannel = outer.bbConfig.memDomain.bankChannel
 
-    // CPU sfence → Buckyball TLB flush
-    buckyball.io.sfence := ptw.io.dpath.sfence.valid
+    // Instantiate N accelerators
+    val accelerators = (0 until nCores).map { i =>
+      val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
+      val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
+      val acc = Module(new BuckyballAccelerator(outer.bbConfig)(edge))
+      acc.io.hartid := outer.hartIdSinkNode.bundle + i.U
 
-    // RoCC mem: Buckyball doesn't use the HellaCacheIO mem port, but the
-    // DCache arbiter still expects a port for it (dcacheArbPorts counts BuildRoCC.size).
-    // Route through SimpleHellaCacheIF with tied-off requestor side.
+      // DMA TileLink
+      tl_reader <> acc.io.tl_reader
+      tl_writer <> acc.io.tl_writer
+
+      // PTW
+      wireBBPtw(acc)
+
+      // TLB exception
+      acc.io.tlbExp(0).flush_skip  := false.B
+      acc.io.tlbExp(0).flush_retry := false.B
+
+      // CPU sfence → Buckyball TLB flush
+      acc.io.sfence := ptw.io.dpath.sfence.valid
+
+      acc
+    }
+
+    // Core-0 RoCC wiring (the single Rocket core drives accelerator 0)
+    accelerators(0).io.cmd <> core.io.rocc.cmd
+    core.io.rocc.resp <> accelerators(0).io.resp
+    core.io.rocc.busy      := accelerators(0).io.busy
+    core.io.rocc.interrupt := accelerators(0).io.interrupt
+
+    // RoCC mem: tied-off HellaCacheIF for the DCache arbiter port count
     val roccMemIF = Module(new SimpleHellaCacheIF())
     roccMemIF.io.requestor.req.valid          := false.B
     roccMemIF.io.requestor.req.bits           := DontCare
@@ -381,6 +397,43 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     roccMemIF.io.requestor.keep_clock_enabled := false.B
     dcachePorts += roccMemIF.io.cache
     core.io.rocc.mem                          := DontCare
+
+    // SharedMemBackend (tile-level singleton)
+    val sharedBackend = Module(new SharedMemBackend(outer.bbConfig))
+
+    // Connect each accelerator's shared ports to the SharedMemBackend
+    for (i <- 0 until nCores) {
+      for (ch <- 0 until bankChannel) {
+        val slot = i * bankChannel + ch
+        sharedBackend.io.mem_req(slot) <> accelerators(i).io.shared_mem_req(ch)
+      }
+      // Shared query: connect per-core query to shared backend
+      // (only one query port on SharedMemBackend — for now use accelerator 0's query;
+      //  each accelerator's MemBackend routes shared queries through its IO)
+    }
+
+    // Shared config arbiter: N accelerators → 1 SharedMemBackend config port
+    val cfgArb = Module(new Arbiter(new MemConfigerIO(outer.bbConfig), nCores))
+    for (i <- 0 until nCores) {
+      cfgArb.io.in(i) <> accelerators(i).io.shared_config
+    }
+    sharedBackend.io.config <> cfgArb.io.out
+
+    // Shared query — simplified: each accelerator queries independently,
+    // but SharedMemBackend has one query port. Use accelerator 0's for now.
+    sharedBackend.io.query_vbank_id       := accelerators(0).io.shared_query_vbank_id
+    accelerators(0).io.shared_query_group_count := sharedBackend.io.query_group_count
+    for (i <- 1 until nCores) {
+      accelerators(i).io.shared_query_group_count := sharedBackend.io.query_group_count
+    }
+
+    // BarrierUnit (tile-level singleton)
+    val barrierUnit = Module(new BarrierUnit(nCores))
+    for (i <- 0 until nCores) {
+      barrierUnit.io.arrive(i)              := accelerators(i).io.barrier_arrive
+      accelerators(i).io.barrier_release    := barrierUnit.io.release(i)
+    }
+
   } else {
     // No accelerator — tie off RoCC
     core.io.rocc.cmd.ready  := false.B

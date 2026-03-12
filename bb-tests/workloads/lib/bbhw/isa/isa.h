@@ -59,5 +59,8 @@ typedef int32_t result_t;
 #include "44_gemmini_compute_preloaded.c"
 #include "45_gemmini_compute_accumulated.c"
 #include "46_gemmini_flush.c"
+#include "48_bdb_counter.c"
+#include "49_bdb_backdoor.c"
+#include "50_barrier.c"
 
 #endif // BUCKYBALL_ISA_H

@@ -71,8 +71,6 @@ void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size) {
   uint64_t incol = INCOL;
   uint64_t startrow = STARTROW;
   uint64_t startcol = STARTCOL;
-  // bb_im2col(op1_bank_id, op2_bank_id, krow, kcol, inrow, incol, startrow,
-  // startcol);
   bb_im2col(op1_bank_id, op2_bank_id, krow, kcol, inrow, incol, startrow,
             startcol);
   bb_mvout((uintptr_t)b, op2_bank_id, conv_num() / kernel_elems(), 1);
