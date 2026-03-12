@@ -4,21 +4,19 @@ import chisel3._
 import chisel3.util._
 
 import org.chipsalliance.cde.config.{Config, Parameters}
-import freechips.rocketchip.subsystem.WithDefaultMMIOPort
 
 import chipyard.harness.{HarnessBinder, HasHarnessInstantiators}
 import chipyard.iobinders.{AXI4MMIOPort, UARTPort}
 
 // =============================================================================
-// WithBBSimMMIO: wire AXI4 MMIO port.
+// WithBBSimMMIO: wire AXI4 MMIO port to C++ mmio_tick().
 //
-// All registers run in port.io.clock domain (= harness clock = 1 GHz, thanks
-// to WithUniformBusFrequencies(1000)).  C++ samples three stable register
-// outputs each posedge:
-//   - firePulse  = RegNext(wFire)       — 1-cycle pulse, no debounce needed
-//   - latchedAddr = Reg latched on AW   — stable address
-//   - latchedData = RegEnable on wFire  — stable write data
-// bPending is set on wFire (not delayed) so the B response reaches the CPU
+// All registers run in port.io.clock domain (= 1 GHz, from WithUniformBusFrequencies).
+// C++ samples three stable register outputs each posedge:
+//   - firePulse  = RegNext(wFire)      — 1-cycle pulse, no debounce needed
+//   - latchedAddr = Reg latched on AW  — stable address
+//   - latchedData = RegEnable on wFire — stable write data
+// bPending is set on wFire (not delayed) so B response reaches the CPU
 // one cycle before C++ processes the event.
 // =============================================================================
 class WithBBSimMMIO
@@ -62,7 +60,6 @@ class WithBBSimMMIO
           port.io.bits.b.bits.resp := 0.U
 
           // --- Fire pulse for C++ mmio_tick() ---
-          // RegNext delays 1 cycle; addr/data are stable registers at that point.
           val firePulse = RegNext(wFire, false.B)
           th.io.mmio_fire      := firePulse
           th.io.mmio_fire_addr := latchedAddr
@@ -92,14 +89,15 @@ class WithNoUARTAdapter
     })
 
 // =============================================================================
-// BBSimConfig
+// BBSimConfig: harness-level config for BBSimHarness.
+// Concrete VerilatorConfigs (e.g. BuckyballToyVerilatorConfig) extend this
+// with WithDefaultMMIOPort + SoC config.
 // =============================================================================
 class BBSimConfig
     extends Config(
       new WithNoUARTAdapter ++
         new WithBBSimMMIO ++
-        new WithDefaultMMIOPort ++
-        new chipyard.config.WithUniformBusFrequencies(1000.0) ++ // match harness 1 GHz so MMIO clock = harness clock
+        new chipyard.config.WithUniformBusFrequencies(1000.0) ++
         new chipyard.harness.WithBlackBoxSimMem ++
         new chipyard.harness.WithSerialTLTiedOff ++
         new chipyard.harness.WithTieOffInterrupts ++
@@ -111,13 +109,6 @@ class BBSimConfig
         new chipyard.iobinders.WithAXI4MemPunchthrough ++
         new chipyard.iobinders.WithAXI4MMIOPunchthrough ++
         new chipyard.iobinders.WithNMITiedOff
-    )
-
-class BuckyballToyBBSimConfig
-    extends Config(
-      new BBSimConfig ++
-        new WithCustomBootROM ++
-        new examples.toy.BuckyballToyConfig
     )
 
 // =============================================================================

@@ -25,10 +25,14 @@ static void uart_putchar(char ch) {
 }
 
 // Called once per posedge after eval().
-// io_mmio_fire is RegNext(wFire) — a 1-cycle register pulse. addr and data
-// are stable registers latched on wFire, so they are always valid when fire=1.
+// Rising-edge detection guards against MMIO clock being slower than the
+// sim fast-clock — without it each character would be repeated multiple times.
 void mmio_tick() {
-  if (!top->io_mmio_fire)
+  static uint8_t prev_fire = 0;
+  uint8_t cur_fire = top->io_mmio_fire ? 1 : 0;
+  bool rising = (!prev_fire && cur_fire);
+  prev_fire = cur_fire;
+  if (!rising)
     return;
 
   uint64_t addr = top->io_mmio_fire_addr;
