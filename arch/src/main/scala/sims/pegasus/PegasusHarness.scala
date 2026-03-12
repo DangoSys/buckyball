@@ -20,9 +20,7 @@ import pegasus._
 // HarnessBinders connect ChipTop's exposed ports (AXI4MemPort, UARTPort, etc.)
 // to pegasusShell's interface signals.
 //
-class PegasusHarness(implicit val p: Parameters)
-    extends Module
-    with HasHarnessInstantiators {
+class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessInstantiators {
 
   val io = IO(new Bundle {
     // PCIe physical interface
@@ -35,7 +33,7 @@ class PegasusHarness(implicit val p: Parameters)
     val pcie_exp_rxn    = Input(UInt(16.W))
 
     // HBM2 reference clock (100 MHz)
-    val hbm_ref_clk     = Input(Clock())
+    val hbm_ref_clk = Input(Clock())
   })
 
   // --- Instantiate PegasusShell ---
@@ -43,8 +41,8 @@ class PegasusHarness(implicit val p: Parameters)
   pegasusShell.io.pcie_sys_clk    := io.pcie_sys_clk
   pegasusShell.io.pcie_sys_clk_gt := io.pcie_sys_clk_gt
   pegasusShell.io.pcie_sys_rst_n  := io.pcie_sys_rst_n
-  io.pcie_exp_txp                  := pegasusShell.io.pcie_exp_txp
-  io.pcie_exp_txn                  := pegasusShell.io.pcie_exp_txn
+  io.pcie_exp_txp                 := pegasusShell.io.pcie_exp_txp
+  io.pcie_exp_txn                 := pegasusShell.io.pcie_exp_txn
   pegasusShell.io.pcie_exp_rxp    := io.pcie_exp_rxp
   pegasusShell.io.pcie_exp_rxn    := io.pcie_exp_rxn
   pegasusShell.io.hbm_ref_clk     := io.hbm_ref_clk
@@ -74,8 +72,8 @@ class PegasusHarness(implicit val p: Parameters)
 
   // --- HasHarnessInstantiators required interface ---
   def referenceClockFreqMHz: Double = 200.0
-  def referenceClock: Clock         = pegasusShell.io.dut_clk
-  def referenceReset: Reset         = pegasusShell.io.dut_reset.asAsyncReset
+  def referenceClock:        Clock  = pegasusShell.io.dut_clk
+  def referenceReset:        Reset  = pegasusShell.io.dut_reset.asAsyncReset
 
   val success = WireInit(false.B)
 
@@ -122,4 +120,5 @@ class PegasusHarness(implicit val p: Parameters)
     axi.r.valid                      := pegasusShell.io.chip_mem_rvalid
     pegasusShell.io.chip_mem_rready  := axi.r.ready
   }
+
 }

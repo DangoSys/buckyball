@@ -62,7 +62,7 @@ class Frontend(val b: GlobalConfig) extends Module {
   io.busy := globalRs.io.rs_rocc_o.busy
 
   // Barrier passthrough
-  io.barrier_arrive             := globalRs.io.barrier_arrive
-  globalRs.io.barrier_release   := io.barrier_release
+  io.barrier_arrive           := globalRs.io.barrier_arrive
+  globalRs.io.barrier_release := io.barrier_release
 
 }

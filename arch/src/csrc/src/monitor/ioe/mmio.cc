@@ -1,12 +1,12 @@
 #include "ioe/mmio.h"
 #include "bdb.h"
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <unistd.h>
 
 #define SIM_EXIT_ADDR 0x60000000ULL
-#define UART_TX_ADDR  0x60020000ULL
+#define UART_TX_ADDR 0x60020000ULL
 
 static FILE *uart_fp = nullptr;
 
@@ -25,18 +25,27 @@ static void uart_putchar(char ch) {
 }
 
 // Called once per posedge after eval().
-// io_mmio_fire is a 1-cycle pulse (harness clock domain = C++ sampling clock).
+// wFire is combinational and may stay high for multiple cycles if the AXI4
+// master holds W valid. De-bounce on the rising edge (0→1 transition).
 void mmio_tick() {
-  if (!top->io_mmio_fire) return;
+  static uint8_t prev_fire = 0;
+  uint8_t cur_fire = top->io_mmio_fire ? 1 : 0;
+  bool rising = (!prev_fire && cur_fire);
+  prev_fire = cur_fire;
+  if (!rising)
+    return;
 
   uint64_t addr = top->io_mmio_fire_addr;
   uint64_t data = top->io_mmio_fire_data;
 
   if (addr == SIM_EXIT_ADDR) {
     int code = (int)(data & 0xFFFFFFFF);
-    if (code == 0) fprintf(stderr, "[MMIO] simulation success\n");
-    else           fprintf(stderr, "[MMIO] simulation exit code %d\n", code);
-    if (uart_fp) fclose(uart_fp);
+    if (code == 0)
+      fprintf(stderr, "[MMIO] simulation success\n");
+    else
+      fprintf(stderr, "[MMIO] simulation exit code %d\n", code);
+    if (uart_fp)
+      fclose(uart_fp);
     sim_exit();
   } else if (addr == UART_TX_ADDR) {
     uart_putchar((char)(data & 0xFF));

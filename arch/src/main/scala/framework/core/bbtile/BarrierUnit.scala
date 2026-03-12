@@ -14,6 +14,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
  */
 @instantiable
 class BarrierUnit(val nCores: Int) extends Module {
+
   @public
   val io = IO(new Bundle {
     val arrive  = Input(Vec(nCores, Bool()))
@@ -24,8 +25,8 @@ class BarrierUnit(val nCores: Int) extends Module {
   val allArrived = arrived.asUInt.andR
 
   for (i <- 0 until nCores) {
-    when(io.arrive(i)) { arrived(i) := true.B }
-    io.release(i) := allArrived
+    when(io.arrive(i))(arrived(i) := true.B)
+    io.release(i)                 := allArrived
   }
 
   when(allArrived) {

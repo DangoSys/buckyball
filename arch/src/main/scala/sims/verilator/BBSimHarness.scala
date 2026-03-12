@@ -6,7 +6,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.{Config, Parameters}
 import freechips.rocketchip.subsystem.WithDefaultMMIOPort
 
-import chipyard.harness.{HasHarnessInstantiators, HarnessBinder}
+import chipyard.harness.{HarnessBinder, HasHarnessInstantiators}
 import chipyard.iobinders.{AXI4MMIOPort, UARTPort}
 
 // =============================================================================
@@ -19,111 +19,111 @@ import chipyard.iobinders.{AXI4MMIOPort, UARTPort}
 //
 // AW/W/B/AR/R are handled entirely in RTL registers (no SimMMIOSlave needed).
 // =============================================================================
-class WithBBSimMMIO extends HarnessBinder({
-  case (th: BBSimHarness, port: AXI4MMIOPort, chipId: Int) => {
-    // Use the harness clock (1 GHz) for all registers so they are in the
-    // same domain as C++ mmio_tick() and no cross-domain issues arise.
-    // The AXI4Buffer inside chiptop0 runs on its own clock; the port signals
-    // are async from the harness perspective, but in Verilator simulation
-    // everything is single-threaded so there is no real metastability risk.
-    withClockAndReset(th.clock, th.reset) {
-      val addrBits = port.io.bits.aw.bits.addr.getWidth
-      val idBits   = port.io.bits.aw.bits.id.getWidth
+class WithBBSimMMIO
+    extends HarnessBinder({
+      case (th: BBSimHarness, port: AXI4MMIOPort, chipId: Int) => {
+        // State machine and B channel run on port.io.clock.
+        // WithUniformBusFrequencies(1000) ensures port.io.clock = harness clock = 1 GHz,
+        // so wFire is a true 1-cycle pulse and C++ sees it cleanly.
+        withClockAndReset(port.io.clock, th.reset) {
+          val addrBits = port.io.bits.aw.bits.addr.getWidth
+          val idBits   = port.io.bits.aw.bits.id.getWidth
 
-      val sIdle :: sGotAW :: Nil = Enum(2)
-      val state       = RegInit(sIdle)
-      val latchedAddr = Reg(UInt(addrBits.W))
-      val latchedId   = Reg(UInt(idBits.W))
-      val bPending    = RegInit(false.B)
-      val bId         = Reg(UInt(idBits.W))
+          val sIdle :: sGotAW :: Nil = Enum(2)
+          val state                  = RegInit(sIdle)
+          val latchedAddr            = Reg(UInt(addrBits.W))
+          val latchedId              = Reg(UInt(idBits.W))
+          val bPending               = RegInit(false.B)
+          val bId                    = Reg(UInt(idBits.W))
 
-      // --- AW channel ---
-      port.io.bits.aw.ready := (state === sIdle)
-      when(state === sIdle && port.io.bits.aw.valid) {
-        latchedAddr := port.io.bits.aw.bits.addr
-        latchedId   := port.io.bits.aw.bits.id
-        state       := sGotAW
+          // --- AW channel ---
+          port.io.bits.aw.ready := (state === sIdle)
+          when(state === sIdle && port.io.bits.aw.valid) {
+            latchedAddr := port.io.bits.aw.bits.addr
+            latchedId   := port.io.bits.aw.bits.id
+            state       := sGotAW
+          }
+
+          // --- W channel ---
+          port.io.bits.w.ready := (state === sGotAW)
+          val wFire = (state === sGotAW) && port.io.bits.w.valid
+          when(wFire) {
+            state    := sIdle
+            bPending := true.B
+            bId      := latchedId
+          }
+
+          // --- B channel ---
+          when(port.io.bits.b.valid && port.io.bits.b.ready) {
+            bPending := false.B
+          }
+          port.io.bits.b.valid     := bPending
+          port.io.bits.b.bits.id   := bId
+          port.io.bits.b.bits.resp := 0.U
+
+          // --- Expose fire for C++ mmio_tick() ---
+          // With WithUniformBusFrequencies(1000), port.io.clock = 1 GHz.
+          // wFire is combinational; C++ de-bounces on rising edge.
+          th.io.mmio_fire      := wFire
+          th.io.mmio_fire_addr := latchedAddr
+          th.io.mmio_fire_data := port.io.bits.w.bits.data
+
+          // --- AR channel: accept immediately, return 0 next cycle ---
+          port.io.bits.ar.ready := true.B
+          val rValid = RegNext(port.io.bits.ar.valid, false.B)
+          val rId    = RegNext(port.io.bits.ar.bits.id)
+          port.io.bits.r.valid     := rValid
+          port.io.bits.r.bits.data := 0.U
+          port.io.bits.r.bits.resp := 0.U
+          port.io.bits.r.bits.last := true.B
+          port.io.bits.r.bits.id   := rId
+        }
       }
-
-      // --- W channel ---
-      port.io.bits.w.ready := (state === sGotAW)
-      val wFire = (state === sGotAW) && port.io.bits.w.valid
-      val latchedData = RegEnable(port.io.bits.w.bits.data, wFire)
-      when(wFire) {
-        state    := sIdle
-        bPending := true.B
-        bId      := latchedId
-      }
-
-      // --- B channel ---
-      when(port.io.bits.b.valid && port.io.bits.b.ready) {
-        bPending := false.B
-      }
-      port.io.bits.b.valid     := bPending
-      port.io.bits.b.bits.id   := bId
-      port.io.bits.b.bits.resp := 0.U
-
-      // --- Expose fire for C++ mmio_tick() ---
-      // All registers run at harness clock (1 GHz) = C++ sampling rate.
-      // wFire is high for exactly 1 cycle (W accept), so no de-bounce needed.
-      th.io.mmio_fire      := wFire
-      th.io.mmio_fire_addr := latchedAddr
-      th.io.mmio_fire_data := port.io.bits.w.bits.data
-
-      // --- AR channel: accept immediately, return 0 next cycle ---
-      port.io.bits.ar.ready := true.B
-      val rValid = RegNext(port.io.bits.ar.valid, false.B)
-      val rId    = RegNext(port.io.bits.ar.bits.id)
-      port.io.bits.r.valid      := rValid
-      port.io.bits.r.bits.data  := 0.U
-      port.io.bits.r.bits.resp  := 0.U
-      port.io.bits.r.bits.last  := true.B
-      port.io.bits.r.bits.id    := rId
-    }
-  }
-})
+    })
 
 // =============================================================================
 // WithNoUARTAdapter: suppress UARTAdapter; tie RX high (idle line)
 // =============================================================================
-class WithNoUARTAdapter extends HarnessBinder({
-  case (th: HasHarnessInstantiators, port: UARTPort, chipId: Int) => {
-    port.io.rxd := true.B
-  }
-})
+class WithNoUARTAdapter
+    extends HarnessBinder({
+      case (th: HasHarnessInstantiators, port: UARTPort, chipId: Int) => {
+        port.io.rxd := true.B
+      }
+    })
 
 // =============================================================================
 // BBSimConfig
 // =============================================================================
-class BBSimConfig extends Config(
-  new WithNoUARTAdapter ++
-  new WithBBSimMMIO ++
-  new WithDefaultMMIOPort ++
-  new chipyard.harness.WithBlackBoxSimMem ++
-  new chipyard.harness.WithSerialTLTiedOff ++
-  new chipyard.harness.WithTieOffInterrupts ++
-  new chipyard.harness.WithGPIOTiedOff ++
-  new chipyard.harness.WithTieOffL2FBusAXI ++
-  new chipyard.harness.WithClockFromHarness ++
-  new chipyard.harness.WithResetFromHarness ++
-  new chipyard.harness.WithAbsoluteFreqHarnessClockInstantiator ++
-  new chipyard.iobinders.WithAXI4MemPunchthrough ++
-  new chipyard.iobinders.WithAXI4MMIOPunchthrough ++
-  new chipyard.iobinders.WithNMITiedOff
-)
+class BBSimConfig
+    extends Config(
+      new WithNoUARTAdapter ++
+        new WithBBSimMMIO ++
+        new WithDefaultMMIOPort ++
+        new chipyard.config.WithUniformBusFrequencies(1000.0) ++ // match harness 1 GHz so MMIO clock = harness clock
+        new chipyard.harness.WithBlackBoxSimMem ++
+        new chipyard.harness.WithSerialTLTiedOff ++
+        new chipyard.harness.WithTieOffInterrupts ++
+        new chipyard.harness.WithGPIOTiedOff ++
+        new chipyard.harness.WithTieOffL2FBusAXI ++
+        new chipyard.harness.WithClockFromHarness ++
+        new chipyard.harness.WithResetFromHarness ++
+        new chipyard.harness.WithAbsoluteFreqHarnessClockInstantiator ++
+        new chipyard.iobinders.WithAXI4MemPunchthrough ++
+        new chipyard.iobinders.WithAXI4MMIOPunchthrough ++
+        new chipyard.iobinders.WithNMITiedOff
+    )
 
-class BuckyballToyBBSimConfig extends Config(
-  new BBSimConfig ++
-  new WithCustomBootROM ++
-  new examples.toy.BuckyballToyConfig
-)
+class BuckyballToyBBSimConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.toy.BuckyballToyConfig
+    )
 
 // =============================================================================
 // BBSimHarness
 // =============================================================================
-class BBSimHarness(implicit val p: Parameters)
-    extends Module
-    with HasHarnessInstantiators {
+class BBSimHarness(implicit val p: Parameters) extends Module with HasHarnessInstantiators {
 
   val io = IO(new Bundle {
     val mmio_fire      = Output(Bool())
@@ -137,8 +137,8 @@ class BBSimHarness(implicit val p: Parameters)
   io.mmio_fire_data := 0.U
 
   def referenceClockFreqMHz: Double = 1000.0
-  def referenceClock: Clock         = clock
-  def referenceReset: Reset         = reset
+  def referenceClock:        Clock  = clock
+  def referenceReset:        Reset  = reset
 
   val success = WireInit(false.B)
 

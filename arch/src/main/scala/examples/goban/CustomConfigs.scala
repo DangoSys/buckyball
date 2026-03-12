@@ -15,6 +15,7 @@ import freechips.rocketchip.subsystem.InSubsystem
  * The ISA, Ball operators, and memory layout are identical to the toy configuration.
  */
 object GobanConfig {
+
   /** Number of cores inside each BBTile. */
   val nCores: Int = 4
 
@@ -23,18 +24,21 @@ object GobanConfig {
     val base = GlobalConfig()
     base.copy(top = base.top.copy(nCores = nCores))
   }
+
 }
 
 /** 1 BBTile × 4 cores (4 Rocket + 4 Buckyball, shared SharedMem + BarrierUnit) */
-class BuckyballGobanConfig extends Config(
-  new WithNBBTiles(1, buckyballConfig = GobanConfig()) ++
-  new chipyard.config.WithSystemBusWidth(128) ++
-  new chipyard.config.AbstractConfig
-)
+class BuckyballGobanConfig
+    extends Config(
+      new WithNBBTiles(1, buckyballConfig = GobanConfig()) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
 
 /** 2 BBTiles × 4 cores = 8 total cores */
-class BuckyballGoban2TileConfig extends Config(
-  new WithNBBTiles(2, buckyballConfig = GobanConfig()) ++
-  new chipyard.config.WithSystemBusWidth(128) ++
-  new chipyard.config.AbstractConfig
-)
+class BuckyballGoban2TileConfig
+    extends Config(
+      new WithNBBTiles(2, buckyballConfig = GobanConfig()) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )

@@ -48,10 +48,10 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Track whether a vbank is currently allocated in shared backend.
   // Ball requests do not carry explicit shared/private info, so they are routed by this table.
-  private val vbankIdxWidth      = log2Up(b.memDomain.bankNum)
-  val privateAllocByVbank        = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
-  val sharedAllocByVbank         = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
-  val cfgVbankIdx                = io.config.bits.vbank_id(vbankIdxWidth - 1, 0)
+  private val vbankIdxWidth = log2Up(b.memDomain.bankNum)
+  val privateAllocByVbank   = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  val sharedAllocByVbank    = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  val cfgVbankIdx           = io.config.bits.vbank_id(vbankIdxWidth - 1, 0)
   when(io.config.fire) {
     when(io.config.bits.alloc) {
       when(io.config.bits.is_shared) {

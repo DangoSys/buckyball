@@ -40,18 +40,18 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // -------------------------------------------------
     // Outside Channel
     // -------------------------------------------------
-    val ptw    = Vec(1, new BBTLBPTWIO(b))
-    val tlbExp = Vec(1, new BBTLBExceptionIO)
+    val ptw       = Vec(1, new BBTLBPTWIO(b))
+    val tlbExp    = Vec(1, new BBTLBExceptionIO)
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
-    val hartid = Input(UInt(b.core.xLen.W))
+    val hartid    = Input(UInt(b.core.xLen.W))
 
     // -------------------------------------------------
     // Shared memory path — exposed for tile-level sharing
     // -------------------------------------------------
-    val shared_mem_req          = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
-    val shared_config           = Decoupled(new MemConfigerIO(b))
-    val shared_query_vbank_id   = Output(UInt(8.W))
+    val shared_mem_req           = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    val shared_config            = Decoupled(new MemConfigerIO(b))
+    val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(4.W))
   })
 
@@ -96,5 +96,5 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   // Shared path passthrough
   io.shared_mem_req <> backend.io.shared_mem_req
-  io.shared_config  <> backend.io.shared_config
+  io.shared_config <> backend.io.shared_config
 }

@@ -157,7 +157,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.frontend.read_is_shared,
     io.frontend.write_is_shared
   )
-  io.mem_req(b.top.memBallChannelNum).hart_id := io.hartid
+  io.mem_req(b.top.memBallChannelNum).hart_id   := io.hartid
 
   // Mapping table release
   for (i <- 0 until b.top.memBallChannelNum - 1) {
