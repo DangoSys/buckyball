@@ -5,12 +5,13 @@ set(ELF_CC "riscv64-unknown-elf-gcc")
 # All cores run the ELF simultaneously; divergence is by mhartid.
 #-------------------------------------------------------------------------------
 set(CTEST_GOBAN_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/goban)
+set(GOBAN_LD ${CTEST_GOBAN_WORKLOAD_DIR}/goban.ld)
 
 set(GOBAN_C_FLAGS
   -g -fno-common -O2 -static
   -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf
-  -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}
+  -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+  -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
   -I${CTEST_GOBAN_WORKLOAD_DIR}
 )

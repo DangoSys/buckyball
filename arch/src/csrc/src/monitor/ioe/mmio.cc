@@ -25,14 +25,10 @@ static void uart_putchar(char ch) {
 }
 
 // Called once per posedge after eval().
-// wFire is combinational and may stay high for multiple cycles if the AXI4
-// master holds W valid. De-bounce on the rising edge (0→1 transition).
+// io_mmio_fire is RegNext(wFire) — a 1-cycle register pulse. addr and data
+// are stable registers latched on wFire, so they are always valid when fire=1.
 void mmio_tick() {
-  static uint8_t prev_fire = 0;
-  uint8_t cur_fire = top->io_mmio_fire ? 1 : 0;
-  bool rising = (!prev_fire && cur_fire);
-  prev_fire = cur_fire;
-  if (!rising)
+  if (!top->io_mmio_fire)
     return;
 
   uint64_t addr = top->io_mmio_fire_addr;
@@ -50,8 +46,4 @@ void mmio_tick() {
   } else if (addr == UART_TX_ADDR) {
     uart_putchar((char)(data & 0xFF));
   }
-}
-
-void mmio_tick_post() {
-  // No-op: handshake is now managed entirely in RTL.
 }

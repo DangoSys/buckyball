@@ -4,9 +4,10 @@ set(LINUX_CC "riscv64-unknown-linux-gnu-g++")
 #-------------------------------------------------------------------------------
 # Set baremetal compilation flags
 #-------------------------------------------------------------------------------
+set(BBSIM_LD ${CTEST_TOY_WORKLOAD_DIR}/bbsim.ld)
 set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}
-  -I${CTEST_TOY_WORKLOAD_DIR})
+  -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+  -Wl,-T,${BBSIM_LD} -I${CTEST_TOY_WORKLOAD_DIR})
 
 #-------------------------------------------------------------------------------
 # Define common compilation step functions
