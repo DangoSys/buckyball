@@ -267,6 +267,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help='Generate verilog files from chisel. Args example: "[--config sims.palladium.BuckyballToyP2EConfig]"',
     )
 
+    # ===== pegasus subcommand ===================================================================
+    pegasus_parser = subparsers.add_parser("pegasus", help="pegasus operations")
+    pegasus_group = pegasus_parser.add_mutually_exclusive_group(required=True)
+    pegasus_group.add_argument(
+        "--verilog",
+        type=str,
+        nargs="?",
+        const="",
+        metavar="ARGS",
+        help='Generate verilog files from chisel. Args example: "[--config sims.pegasus.PegasusConfig]"',
+    )
+
     # Parse arguments, allowing unknown arguments (so --port can work in subcommands)
     args, unknown = parser.parse_known_args(argv)
 
@@ -417,6 +429,7 @@ if __name__ == "__main__":
             "uvm",
             "palladium",
             "yosys",
+            "pegasus",
         ]:
             api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
             json_data = json.dumps(cmd_info["args"])
@@ -438,7 +451,7 @@ if __name__ == "__main__":
             print(f"Unknown command: {cmd_info['command']}")
             print(
                 "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys"
+                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys, pegasus"
             )
             sys.exit(1)
     else:  # script mode
@@ -460,6 +473,7 @@ if __name__ == "__main__":
             "uvm",
             "palladium",
             "yosys",
+            "pegasus",
         ]:
             # 0. Clean up stale BullMQ/Redis data to prevent replaying old events
             aof_dir = os.path.join(workflow_dir, ".motia", "appendonlydir")
@@ -555,6 +569,6 @@ if __name__ == "__main__":
             print(f"Unknown command: {cmd_info['command']}")
             print(
                 "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys"
+                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys, pegasus"
             )
             sys.exit(1)

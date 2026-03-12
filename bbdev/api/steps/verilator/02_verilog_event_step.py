@@ -52,7 +52,7 @@ async def handler(data, context):
             f"mill -i __.test.runMain sims.verify.BallTopMain {data.get('balltype')} "
         )
     else:
-        command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
+        command = f"mill -i __.test.runMain sims.verilator.BBSimElaborate {config_name} "
 
     command += "--disable-annotation-unknown -strip-debug-info -O=debug "
     command += f"--split-verilog -o={build_dir}"
@@ -66,7 +66,7 @@ async def handler(data, context):
     )
 
     # Remove unwanted file
-    topname_file = f"{arch_dir}/TestHarness.sv"
+    topname_file = f"{arch_dir}/BBSimHarness.sv"
     if os.path.exists(topname_file):
         os.remove(topname_file)
 

@@ -17,7 +17,7 @@ config = {
     "name": "make build",
     "description": "build verilator executable",
     "subscribes": ["verilator.build"],
-    "emits": ["verilator.sim", "verilator.cosim"],
+    "emits": ["verilator.sim"],
     "flows": ["verilator"],
 }
 
@@ -26,15 +26,11 @@ async def handler(data, context):
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = f"{arch_dir}/build"
-    waveform_dir = f"{arch_dir}/waveform"
-    log_dir = f"{arch_dir}/log"
-    cosim = data.get("cosim", False)
     coverage = data.get("coverage", False)
 
     # ==================================================================================
-    # Execute operation
-    # ==================================================================================
     # Find sources
+    # ==================================================================================
     vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(
         f"{build_dir}/**/*.sv", recursive=True
     )
@@ -47,33 +43,71 @@ async def handler(data, context):
         + glob.glob(f"{build_dir}/**/*.cpp", recursive=True)
     )
 
-    # Setup paths: fesvr from bebop/host/spike/riscv-isa-sim (install/include, install/lib)
-    bebop_isa_sim = f"{bbdir}/bebop/host/spike/riscv-isa-sim"
+    # Exclude testchipip's SimDRAM.cc — our SimDRAM_bb.cc overrides memory_init
+    csrcs = [f for f in csrcs if not f.endswith("SimDRAM.cc") or "src/csrc" in f]
+
+    # Patch fesvr includes out of build/mm.h and build/mm.cc.
+    # These files are auto-copied from testchipip by Verilator as SimDRAM.v
+    # companion sources. They reference fesvr/memif.h which we don't have
+    # (fesvr is removed). The memif_t dependency was only used by SimDRAM.cc's
+    # load_elf — our SimDRAM_bb.cc doesn't use it.
+    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
+        if os.path.exists(patch_file):
+            with open(patch_file, "r") as f:
+                content = f.read()
+            patched = "\n".join(
+                line for line in content.splitlines()
+                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
+            )
+            if patched != content:
+                with open(patch_file, "w") as f:
+                    f.write(patched)
+                context.logger.info(f"Patched fesvr includes from {patch_file}")
+
+    topname = "BBSimHarness"
+
+    # ==================================================================================
+    # Build flags
+    # ==================================================================================
+    dramsim2_dir = f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2"
+
+    # Find readline headers/libs in nix store (not in standard paths under nix)
+    rl_headers = glob.glob("/nix/store/*readline*-dev/include/readline/readline.h")
+    readline_inc = os.path.dirname(os.path.dirname(rl_headers[0])) if rl_headers else ""
+    rl_libs = glob.glob("/nix/store/*readline*/lib/libreadline.so")
+    readline_lib = os.path.dirname(rl_libs[0]) if rl_libs else ""
+
+    # Find zlib headers/libs in nix store
+    zlib_headers = glob.glob("/nix/store/*zlib*-dev/include/zlib.h")
+    if not zlib_headers:
+        zlib_headers = glob.glob("/nix/store/*zlib*/include/zlib.h")
+    zlib_inc = os.path.dirname(zlib_headers[0]) if zlib_headers else ""
+    zlib_libs = glob.glob("/nix/store/*zlib*/lib/libz.so")
+    zlib_lib = os.path.dirname(zlib_libs[0]) if zlib_libs else ""
+
     inc_paths = [
-        os.environ.get("RISCV", "") + "/include" if os.environ.get("RISCV") else "",
-        f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2",
-        f"{bebop_isa_sim}/install/include",
+        dramsim2_dir,
         build_dir,
         f"{arch_dir}/src/csrc/include",
     ]
+    if readline_inc:
+        inc_paths.append(readline_inc)
+    if zlib_inc:
+        inc_paths.append(zlib_inc)
     inc_flags = " ".join([f"-I{p}" for p in inc_paths if p])
 
-    if cosim:
-        topname = "ToyBuckyball"
-    else:
-        topname = "TestHarness"
+    # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
+    cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
 
-    cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 "
-    if cosim:
-        cflags += " -DCOSIM"
     ldflags = (
-        f"-lreadline -ldramsim -lfesvr -lstdc++ "
-        f"-L{bebop_isa_sim}/install/lib "
+        f"-lreadline -ldramsim -lstdc++ -lz "
         f"-L{bbdir}/result/lib "
-        f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
-        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
-        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib"
+        f"-L{dramsim2_dir} "
     )
+    if readline_lib:
+        ldflags += f"-L{readline_lib} -Wl,-rpath,{readline_lib} "
+    if zlib_lib:
+        ldflags += f"-L{zlib_lib} -Wl,-rpath,{zlib_lib} "
 
     obj_dir = f"{build_dir}/obj_dir"
     subprocess.run(f"rm -rf {obj_dir}", shell=True)
@@ -82,7 +116,7 @@ async def handler(data, context):
     sources = " ".join(vsrcs + csrcs)
     jobs = data.get("jobs", "")
 
-    # Fix nix runtime library paths: embed rpath so binary finds nix libstdc++/glibc
+    # Fix nix runtime library paths
     libstdcpp_path = subprocess.run(
         "g++ -print-file-name=libstdc++.so", shell=True, capture_output=True, text=True
     ).stdout.strip()
@@ -90,15 +124,18 @@ async def handler(data, context):
         nix_lib_dir = os.path.dirname(os.path.realpath(libstdcpp_path))
         ldflags += f" -Wl,-rpath,{nix_lib_dir}"
 
-    # Enable ccache for verilator C++ compilation via OBJCACHE
+    # Enable ccache if available
     if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
         os.environ["OBJCACHE"] = "ccache"
 
-    # Build acceleration: lld for faster linking (available in nix env)
+    # Use lld for faster linking if available
     use_lld = subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode == 0
     if use_lld:
         ldflags += " -fuse-ld=lld"
 
+    # ==================================================================================
+    # Run verilator
+    # ==================================================================================
     verilator_cmd = (
         f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
@@ -148,17 +185,9 @@ async def handler(data, context):
         extra_fields={"task": "build"},
     )
 
-    # ==================================================================================
-    # Continue routing
-    # ==================================================================================
     if data.get("from_run_workflow"):
-        if cosim:
-            await context.emit(
-                {"topic": "verilator.cosim", "data": {**data, "task": "run"}}
-            )
-        else:
-            await context.emit(
-                {"topic": "verilator.sim", "data": {**data, "task": "run"}}
-            )
+        await context.emit(
+            {"topic": "verilator.sim", "data": {**data, "task": "run"}}
+        )
 
     return
