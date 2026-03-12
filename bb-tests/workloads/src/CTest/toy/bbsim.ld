@@ -15,19 +15,26 @@ SECTIONS {
 
     .rodata : {
         *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
         *(.gnu.linkonce.r.*)
     }
 
     .data : {
         *(.data .data.*)
+        *(.sdata .sdata.*)
         *(.gnu.linkonce.d.*)
+        *(.gnu.linkonce.s.*)
         PROVIDE(_edata = .);
     }
 
+    /* All zero-init sections: crt0.S clears __bss_start .. __bss_end,
+       so heap (at _end) starts after ALL bss including sbss. */
     .bss (NOLOAD) : {
         PROVIDE(__bss_start = .);
         *(.bss .bss.*)
+        *(.sbss .sbss.*)
         *(.gnu.linkonce.b.*)
+        *(.gnu.linkonce.sb.*)
         *(COMMON)
         PROVIDE(__bss_end = .);
     }
