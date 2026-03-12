@@ -49,7 +49,7 @@ jobs:
         run: |
           cd ~/Code/buckyball
           nix develop -c bbdev verilator --clean
-          nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyBBSimConfig'
+          nix develop -c bbdev verilator --verilog '--config sims.verilator.sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev verilator --build '--jobs 16'
 
       - name: Smoke Test
