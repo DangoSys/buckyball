@@ -30,6 +30,7 @@ jobs:
           git clean -fd
           git checkout ${{ github.head_ref }}
           git pull
+          git submodule update
 
       - name: Nix build
         shell: zsh {0}

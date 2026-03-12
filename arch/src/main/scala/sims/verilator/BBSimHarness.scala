@@ -12,19 +12,18 @@ import chipyard.iobinders.{AXI4MMIOPort, UARTPort}
 // =============================================================================
 // WithBBSimMMIO: wire AXI4 MMIO port.
 //
-// All registers are created inside withClockAndReset(port.io.clock, ...) so
-// they run in the same clock domain as the AXI4Buffer B-FIFO inside chiptop0.
-// The AXI4MMIOPort uses ClockedIO, so port.io.clock is the SoC clock (1 GHz),
-// not the harnessBinderClock (100 MHz) that plain RegInit would use here.
-//
-// AW/W/B/AR/R are handled entirely in RTL registers (no SimMMIOSlave needed).
+// All registers run in port.io.clock domain (= harness clock = 1 GHz, thanks
+// to WithUniformBusFrequencies(1000)).  C++ samples three stable register
+// outputs each posedge:
+//   - firePulse  = RegNext(wFire)       — 1-cycle pulse, no debounce needed
+//   - latchedAddr = Reg latched on AW   — stable address
+//   - latchedData = RegEnable on wFire  — stable write data
+// bPending is set on wFire (not delayed) so the B response reaches the CPU
+// one cycle before C++ processes the event.
 // =============================================================================
 class WithBBSimMMIO
     extends HarnessBinder({
       case (th: BBSimHarness, port: AXI4MMIOPort, chipId: Int) => {
-        // State machine and B channel run on port.io.clock.
-        // WithUniformBusFrequencies(1000) ensures port.io.clock = harness clock = 1 GHz,
-        // so wFire is a true 1-cycle pulse and C++ sees it cleanly.
         withClockAndReset(port.io.clock, th.reset) {
           val addrBits = port.io.bits.aw.bits.addr.getWidth
           val idBits   = port.io.bits.aw.bits.id.getWidth
@@ -46,7 +45,8 @@ class WithBBSimMMIO
 
           // --- W channel ---
           port.io.bits.w.ready := (state === sGotAW)
-          val wFire = (state === sGotAW) && port.io.bits.w.valid
+          val wFire       = (state === sGotAW) && port.io.bits.w.valid
+          val latchedData = RegEnable(port.io.bits.w.bits.data, wFire)
           when(wFire) {
             state    := sIdle
             bPending := true.B
@@ -61,12 +61,12 @@ class WithBBSimMMIO
           port.io.bits.b.bits.id   := bId
           port.io.bits.b.bits.resp := 0.U
 
-          // --- Expose fire for C++ mmio_tick() ---
-          // With WithUniformBusFrequencies(1000), port.io.clock = 1 GHz.
-          // wFire is combinational; C++ de-bounces on rising edge.
-          th.io.mmio_fire      := wFire
+          // --- Fire pulse for C++ mmio_tick() ---
+          // RegNext delays 1 cycle; addr/data are stable registers at that point.
+          val firePulse = RegNext(wFire, false.B)
+          th.io.mmio_fire      := firePulse
           th.io.mmio_fire_addr := latchedAddr
-          th.io.mmio_fire_data := port.io.bits.w.bits.data
+          th.io.mmio_fire_data := latchedData
 
           // --- AR channel: accept immediately, return 0 next cycle ---
           port.io.bits.ar.ready := true.B

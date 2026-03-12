@@ -3,6 +3,10 @@
 # Generate executables for different platforms
 #-------------------------------------------------------------------------------
 
+# Resolve toy runtime paths
+set(BBSIM_LD ${CTEST_TOY_WORKLOAD_DIR}/bbsim.ld)
+set(CRT0_S   ${CTEST_TOY_WORKLOAD_DIR}/crt0.S)
+
 # singlecore baremetal
 function(add_singlecore_baremetal_target TARGET_NAME MLIR_FILE)
   set(OBJ_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TARGET_NAME}_singlecore-baremetal.o")
@@ -33,12 +37,14 @@ function(add_singlecore_baremetal_target TARGET_NAME MLIR_FILE)
     COMMENT "Compiling ${MLIR_FILE} to singlecore baremetal object"
   )
 
-  # Link (use htif_nano.specs crt0)
+  # Link with toy bbsim runtime (BBSimHarness MMIO)
   add_custom_command(
     OUTPUT ${EXECUTABLE}
-    COMMAND ${ELF_CC} -O2 -static -specs=${HTIF_DIR}/htif_nano.specs -L${HTIF_DIR}
-        ${OBJ_FILE} -o ${EXECUTABLE}
-    DEPENDS ${OBJ_FILE}
+    COMMAND ${ELF_CC} -O2 -static -march=rv64gc -mcmodel=medany -nostartfiles
+        -specs=nano.specs -specs=nosys.specs
+        -Wl,-T,${BBSIM_LD}
+        ${CRT0_S} ${OBJ_FILE} -o ${EXECUTABLE}
+    DEPENDS ${OBJ_FILE} ${CRT0_S} ${BBSIM_LD}
     COMMENT "Linking singlecore baremetal executable: ${EXECUTABLE}"
   )
 

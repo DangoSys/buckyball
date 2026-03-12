@@ -33,53 +33,14 @@ let
       })
     ];
   };
-
-  # Build libgloss-htif library from upstream
-  libgloss-htif = pkgs.stdenv.mkDerivation {
-    pname = "libgloss-htif";
-    version = "0.1";
-
-    src = pkgs.fetchFromGitHub {
-      owner = "ucb-bar";
-      repo = "libgloss-htif";
-      rev = "master";
-      sha256 = "sha256-FXuN1xK5133QqoHI4EG7mvhk7K8J6//ar7Y1+IUPER0=";
-    };
-
-    nativeBuildInputs = [ pkgsCrossWithNano.buildPackages.gcc ];
-
-    configureFlags = [
-      "--host=riscv64-unknown-elf"
-    ];
-
-    preConfigure = ''
-      export CC=riscv64-none-elf-gcc
-      export AR=riscv64-none-elf-ar
-      export RANLIB=riscv64-none-elf-ranlib
-    '';
-
-    enableParallelBuilding = true;
-
-    installPhase = ''
-      mkdir -p $out/riscv64-unknown-elf/lib
-
-      # Install library and specs files manually to bypass the Makefile check
-      install -m 644 libgloss_htif.a $out/riscv64-unknown-elf/lib/
-      install -m 644 util/htif.specs $out/riscv64-unknown-elf/lib/
-      install -m 644 util/htif_nano.specs $out/riscv64-unknown-elf/lib/
-      install -m 644 util/htif_wrap.specs $out/riscv64-unknown-elf/lib/
-      install -m 644 util/htif_argv.specs $out/riscv64-unknown-elf/lib/
-      install -m 644 util/htif.ld $out/riscv64-unknown-elf/lib/
-    '';
-  };
 in
 
 {
   # RISC-V embedded toolchain (bare metal), with riscv64-unknown-elf-* symlinks
-  # Now includes newlib-nano and libgloss-htif support
+  # Uses newlib-nano; baremetal runtime provided by bb-tests/workloads/src/CTest/toy/crt0.S
   riscv-embedded-gcc = pkgs.symlinkJoin {
     name = "riscv64-unknown-elf-gcc";
-    paths = [ pkgsCrossWithNano.buildPackages.gcc libgloss-htif ];
+    paths = [ pkgsCrossWithNano.buildPackages.gcc ];
     postBuild = ''
       cd $out/bin
       for f in riscv64-none-elf-*; do
