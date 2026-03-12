@@ -4,7 +4,7 @@ from utils.event_common import wait_for_result
 config = {
     "type": "api",
     "name": "Verilator Complete Workflow",
-    "description": "trigger complete verilator workflow",
+    "description": "trigger complete verilator workflow: clean → verilog → build → sim",
     "path": "/verilator/run",
     "method": "POST",
     "emits": ["verilator.run"],
@@ -17,7 +17,7 @@ async def handler(req, context):
 
     config = {
         "binary": body.get("binary", ""),
-        "config": body.get("config", "sims.verilator.BuckyballToyBBSimConfig"),
+        "config": body.get("config", "sims.verilator.BuckyballToyVerilatorConfig"),
         "jobs": body.get("jobs", "16"),
         "batch": body.get("batch", False),
         "coverage": body.get("coverage", False),
