@@ -43,6 +43,9 @@ object BankAccessInfo {
  *
  * bankRdCount: multi-bit counter (multiple concurrent readers allowed, RR is OK)
  * bankWrBusy:  1-bit flag (WAW rule guarantees at most 1 writer in-flight)
+ *
+ * Issue and complete may fire in the same cycle. Updates are computed
+ * combinationally so both increments and decrements take effect.
  */
 @instantiable
 class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
@@ -50,24 +53,19 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
   val bankIdLen = log2Up(bankNum)
   val cntWidth  = log2Ceil(robEntries + 1)
 
-  // Issue: increment counters for the accessed banks
   @public
   val issue     = IO(Flipped(Valid(new BankAccessInfo(bankIdLen))))
-  // Complete: decrement counters for the accessed banks
   @public
   val complete  = IO(Flipped(Valid(new BankAccessInfo(bankIdLen))))
-  // Hazard query: check if the given access would conflict
   @public
   val query     = IO(Input(new BankAccessInfo(bankIdLen)))
   @public
   val hasHazard = IO(Output(Bool()))
 
-  // Read counter: multi-bit, allows concurrent readers
   val bankRdCount = RegInit(VecInit(Seq.fill(bankNum)(0.U(cntWidth.W))))
-  // Write flag: 1-bit, WAW ensures at most 1 writer in-flight per bank
   val bankWrBusy  = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
 
-  // --- Hazard detection ---
+  // --- Hazard detection (reads current register state) ---
   val q          = query
   val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(q.rd_bank_0_id)
   val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(q.rd_bank_1_id)
@@ -79,31 +77,29 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
 
   hasHazard := rd0_hazard || rd1_hazard || wr_hazard
 
-  // --- Issue: increment counters ---
-  when(issue.valid) {
-    val info = issue.bits
-    when(info.rd_bank_0_valid) {
-      bankRdCount(info.rd_bank_0_id) := bankRdCount(info.rd_bank_0_id) + 1.U
-    }
-    when(info.rd_bank_1_valid) {
-      bankRdCount(info.rd_bank_1_id) := bankRdCount(info.rd_bank_1_id) + 1.U
-    }
-    when(info.wr_bank_valid) {
-      bankWrBusy(info.wr_bank_id) := true.B
-    }
-  }
+  // --- Compute per-bank deltas to handle simultaneous issue + complete ---
+  for (bank <- 0 until bankNum) {
+    val bankU = bank.U(bankIdLen.W)
 
-  // --- Complete: decrement counters ---
-  when(complete.valid) {
-    val info = complete.bits
-    when(info.rd_bank_0_valid) {
-      bankRdCount(info.rd_bank_0_id) := bankRdCount(info.rd_bank_0_id) - 1.U
-    }
-    when(info.rd_bank_1_valid) {
-      bankRdCount(info.rd_bank_1_id) := bankRdCount(info.rd_bank_1_id) - 1.U
-    }
-    when(info.wr_bank_valid) {
-      bankWrBusy(info.wr_bank_id) := false.B
+    // Read counter: +1 per issue read, -1 per complete read
+    val issRd0 = issue.valid && issue.bits.rd_bank_0_valid && (issue.bits.rd_bank_0_id === bankU)
+    val issRd1 = issue.valid && issue.bits.rd_bank_1_valid && (issue.bits.rd_bank_1_id === bankU)
+    val cmpRd0 = complete.valid && complete.bits.rd_bank_0_valid && (complete.bits.rd_bank_0_id === bankU)
+    val cmpRd1 = complete.valid && complete.bits.rd_bank_1_valid && (complete.bits.rd_bank_1_id === bankU)
+
+    val rdInc = issRd0.asUInt +& issRd1.asUInt
+    val rdDec = cmpRd0.asUInt +& cmpRd1.asUInt
+    bankRdCount(bank) := bankRdCount(bank) + rdInc - rdDec
+
+    // Write flag: issue sets, complete clears. If both happen to same bank,
+    // complete takes priority (the completing instruction frees the bank).
+    val issWr = issue.valid && issue.bits.wr_bank_valid && (issue.bits.wr_bank_id === bankU)
+    val cmpWr = complete.valid && complete.bits.wr_bank_valid && (complete.bits.wr_bank_id === bankU)
+
+    when(issWr && !cmpWr) {
+      bankWrBusy(bank) := true.B
+    }.elsewhen(cmpWr) {
+      bankWrBusy(bank) := false.B
     }
   }
 }
