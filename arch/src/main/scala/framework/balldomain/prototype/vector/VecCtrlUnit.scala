@@ -22,17 +22,19 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
     val cmdResp_i = Flipped(Valid(new Bundle { val commit = Bool() })) // from store unit
   })
 
-  val rob_id_reg    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  val iter          = RegInit(0.U(b.frontend.iter_len.W))
-  val op1_bank      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op1_bank_addr = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val op2_bank_addr = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val op2_bank      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank_addr  = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val is_acc        = RegInit(false.B)   // Deprecated: use wmode instead
-  val has_send      = RegInit(false.B)
-  val mode          = RegInit(0.U(1.W))
+  val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val iter           = RegInit(0.U(b.frontend.iter_len.W))
+  val op1_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_bank_addr  = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
+  val op2_bank_addr  = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
+  val op2_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wr_bank        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wr_bank_addr   = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
+  val is_acc         = RegInit(false.B)   // Deprecated: use wmode instead
+  val has_send       = RegInit(false.B)
+  val mode           = RegInit(0.U(1.W))
 
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
@@ -42,16 +44,18 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 
   when(io.cmdReq.fire) {
-    iter          := io.cmdReq.bits.cmd.iter
-    rob_id_reg    := io.cmdReq.bits.rob_id
-    op1_bank      := io.cmdReq.bits.cmd.op1_bank
-    op1_bank_addr := 0.U     // New ISA: all operations start from row 0
-    op2_bank      := io.cmdReq.bits.cmd.op2_bank
-    op2_bank_addr := 0.U     // New ISA: all operations start from row 0
-    wr_bank       := io.cmdReq.bits.cmd.wr_bank
-    wr_bank_addr  := 0.U     // New ISA: all operations start from row 0
-    is_acc        := false.B // Deprecated: use wmode instead
-    mode          := io.cmdReq.bits.cmd.special(0)
+    iter           := io.cmdReq.bits.cmd.iter
+    rob_id_reg     := io.cmdReq.bits.rob_id
+    is_sub_reg     := io.cmdReq.bits.is_sub
+    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+    op1_bank       := io.cmdReq.bits.cmd.op1_bank
+    op1_bank_addr  := 0.U     // New ISA: all operations start from row 0
+    op2_bank       := io.cmdReq.bits.cmd.op2_bank
+    op2_bank_addr  := 0.U     // New ISA: all operations start from row 0
+    wr_bank        := io.cmdReq.bits.cmd.wr_bank
+    wr_bank_addr   := 0.U     // New ISA: all operations start from row 0
+    is_acc         := false.B // Deprecated: use wmode instead
+    mode           := io.cmdReq.bits.cmd.special(0)
 
     state := busy
   }
@@ -101,13 +105,17 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 
   when(io.cmdResp_i.valid) {
-    io.cmdResp_o.valid       := true.B
-    io.cmdResp_o.bits.rob_id := rob_id_reg
-    state                    := idle
-    has_send                 := false.B
+    io.cmdResp_o.valid           := true.B
+    io.cmdResp_o.bits.rob_id     := rob_id_reg
+    io.cmdResp_o.bits.is_sub     := is_sub_reg
+    io.cmdResp_o.bits.sub_rob_id := sub_rob_id_reg
+    state                        := idle
+    has_send                     := false.B
   }.otherwise {
-    io.cmdResp_o.valid       := false.B
-    io.cmdResp_o.bits.rob_id := 0.U
+    io.cmdResp_o.valid           := false.B
+    io.cmdResp_o.bits.rob_id     := 0.U
+    io.cmdResp_o.bits.is_sub     := false.B
+    io.cmdResp_o.bits.sub_rob_id := 0.U
   }
 
   io.cmdReq.ready := state === idle

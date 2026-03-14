@@ -3,7 +3,7 @@ package framework.balldomain.prototype.vector
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.prototype.vector.VecUnit
 import framework.top.GlobalConfig
 
@@ -39,4 +39,6 @@ class VecBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
 
   io.status <> vecUnit.io.status
 
+  io.subRobReq.valid := false.B
+  io.subRobReq.bits  := SubRobRow.tieOff(b)
 }

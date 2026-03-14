@@ -63,7 +63,9 @@ class Trace(val b: GlobalConfig) extends Module {
   // ============================================================
   // Registers
   // ============================================================
-  val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
 
   // Command decode registers
   val isRead_reg  = RegInit(false.B) // BB_RD0 flag
@@ -170,9 +172,11 @@ class Trace(val b: GlobalConfig) extends Module {
   // ============================================================
   // Command interface
   // ============================================================
-  io.cmdReq.ready        := state === idle
-  io.cmdResp.valid       := false.B
-  io.cmdResp.bits.rob_id := rob_id_reg
+  io.cmdReq.ready            := state === idle
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   // ============================================================
   // State machine
@@ -180,7 +184,9 @@ class Trace(val b: GlobalConfig) extends Module {
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        rob_id_reg := io.cmdReq.bits.rob_id
+        rob_id_reg     := io.cmdReq.bits.rob_id
+        is_sub_reg     := io.cmdReq.bits.is_sub
+        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
 
         val cmd = io.cmdReq.bits.cmd
         val rs2 = cmd.rs2

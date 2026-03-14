@@ -3,7 +3,7 @@ package framework.balldomain.prototype.relu
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.prototype.relu.PipelinedRelu
 import framework.top.GlobalConfig
 
@@ -40,4 +40,6 @@ class ReluBall(val b: GlobalConfig) extends Module with HasBlink {
 
   io.status <> reluUnit.io.status
 
+  io.subRobReq.valid := false.B
+  io.subRobReq.bits  := SubRobRow.tieOff(b)
 }

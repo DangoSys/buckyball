@@ -75,6 +75,11 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   ballDomain.global_issue_i <> frontend.io.ball_issue_o
   frontend.io.ball_complete_i <> ballDomain.global_complete_o
 
+  // --- BallDomain -> Frontend (SubROB requests) ---
+  for (i <- 0 until b.ballDomain.ballNum) {
+    frontend.io.ball_subrob_req_i(i) <> ballDomain.subRobReq(i)
+  }
+
   // --- Frontend -> MemDomain ---
   memDomain.io.global_issue_i <> frontend.io.mem_issue_o
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o

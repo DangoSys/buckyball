@@ -13,4 +13,5 @@ class BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int) extends Bundle with HasBal
   val cmdResp   = Decoupled(new BallRsComplete(b))
   val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
   val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
+  val subRobReq = Decoupled(new SubRobRow(b))
 }

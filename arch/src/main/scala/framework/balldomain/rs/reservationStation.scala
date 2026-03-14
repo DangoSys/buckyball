@@ -8,14 +8,18 @@ import examples.toy.balldomain.BallDecodeCmd
 
 // Ball domain issue interface - includes global rob_id
 class BallRsIssue(b: GlobalConfig) extends Bundle {
-  val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
+  val cmd        = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
   // Global ROB ID
-  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
 }
 
 // Ball domain completion interface
 class BallRsComplete(b: GlobalConfig) extends Bundle {
-  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
 }
 
 // Generic Ball domain issue interface - supports dynamic number of Ball devices
@@ -34,9 +38,11 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
 
   @public
   val ball_decode_cmd_i = IO(Flipped(new DecoupledIO(new Bundle {
-    val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
+    val cmd        = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
     // Global ROB ID
-    val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+    val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+    val is_sub     = Bool()
+    val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
   })))
 
   // Rs -> BallController (multi-channel issue)
@@ -53,8 +59,10 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
   // Simple FIFO queue, only for buffering
   val fifo = Module(new Queue(
     new Bundle {
-      val cmd    = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
-      val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+      val cmd        = new BallDecodeCmd(b.memDomain.bankNum, b.frontend.iter_len)
+      val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+      val is_sub     = Bool()
+      val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
     },
     entries = 4
   )) // Small buffer is sufficient
@@ -79,14 +87,18 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.ballDomain.ballNum) {
     if (i < numConfiguredBalls) {
       val configuredBallId = b.ballDomain.ballIdMappings(i).ballId.U
-      issue_o.balls(i).valid       := fifo.io.deq.valid && headEntry.cmd.bid === configuredBallId
-      issue_o.balls(i).bits.cmd    := headEntry.cmd
-      issue_o.balls(i).bits.rob_id := headEntry.rob_id
+      issue_o.balls(i).valid           := fifo.io.deq.valid && headEntry.cmd.bid === configuredBallId
+      issue_o.balls(i).bits.cmd        := headEntry.cmd
+      issue_o.balls(i).bits.rob_id     := headEntry.rob_id
+      issue_o.balls(i).bits.is_sub     := headEntry.is_sub
+      issue_o.balls(i).bits.sub_rob_id := headEntry.sub_rob_id
     } else {
       // Unused slots - no valid signal
-      issue_o.balls(i).valid       := false.B
-      issue_o.balls(i).bits.cmd    := DontCare
-      issue_o.balls(i).bits.rob_id := DontCare
+      issue_o.balls(i).valid           := false.B
+      issue_o.balls(i).bits.cmd        := DontCare
+      issue_o.balls(i).bits.rob_id     := DontCare
+      issue_o.balls(i).bits.is_sub     := DontCare
+      issue_o.balls(i).bits.sub_rob_id := DontCare
     }
   }
 
@@ -106,17 +118,17 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Completion signal processing - directly forward to global RS
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), b.ballDomain.ballNum))
+  val completeArb = Module(new Arbiter(new BallRsComplete(b), b.ballDomain.ballNum))
 
   // Connect completion signals from all Ball devices to arbiter
   for (i <- 0 until b.ballDomain.ballNum) {
     completeArb.io.in(i).valid := commit_i.balls(i).valid
-    completeArb.io.in(i).bits  := commit_i.balls(i).bits.rob_id
+    completeArb.io.in(i).bits  := commit_i.balls(i).bits
     commit_i.balls(i).ready    := completeArb.io.in(i).ready
   }
 
   // Forward completion signal (with global rob_id)
   complete_o.valid         := completeArb.io.out.valid
-  complete_o.bits.rob_id   := completeArb.io.out.bits
+  complete_o.bits          := completeArb.io.out.bits
   completeArb.io.out.ready := complete_o.ready
 }

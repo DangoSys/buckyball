@@ -3,7 +3,7 @@ package framework.balldomain.prototype.im2col
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.prototype.im2col.Im2col
 import framework.top.GlobalConfig
 
@@ -40,4 +40,7 @@ class Im2colBall(val b: GlobalConfig) extends Module with HasBlink {
   // Connect Status signals - directly obtained from internal unit
   io.status <> im2colUnit.io.status
 
+  // Ball does not use SubROB: tie off subRobReq
+  io.subRobReq.valid := false.B
+  io.subRobReq.bits  := SubRobRow.tieOff(b)
 }

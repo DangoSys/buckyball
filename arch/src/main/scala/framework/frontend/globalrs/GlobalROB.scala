@@ -27,6 +27,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val issued_count   = Output(UInt(log2Up(robDepth + 1).W))
     val entry_valid    = Output(Vec(robDepth, Bool()))
     val entry_complete = Output(Vec(robDepth, Bool()))
+
+    val subRobActive = Input(Bool())
   })
 
   // ---------------------------------------------------------------------------
@@ -122,7 +124,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val noHazard = !scoreboard.hasHazard
   val canIssue = hasValid && noHazard
 
-  io.issue.valid := canIssue
+  io.issue.valid := canIssue && !io.subRobActive
   io.issue.bits  := robEntries(actualIssuePtr)
 
   scoreboard.issue.valid := false.B
