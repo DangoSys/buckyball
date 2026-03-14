@@ -8,7 +8,7 @@ import freechips.rocketchip.tile._
 import framework.top.GlobalConfig
 import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
-import framework.balldomain.blink.{BankRead, BankWrite}
+import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.rs.BallReservationStation
 import framework.top.channels.{ChannelClusterIO, ChannelIO}
 
@@ -30,6 +30,9 @@ class BallDomain(val b: GlobalConfig) extends Module {
   @public
   val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
 
+  @public
+  val subRobReq = IO(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+
   val bbus:        Instance[BBusModule]             = Instantiate(new BBusModule(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
   val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))
@@ -48,10 +51,12 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
 
   // Connect decoded instruction and global rob_id
-  ballRs.ball_decode_cmd_i.valid       := ballDecoder.ball_decode_cmd_o.valid
-  ballRs.ball_decode_cmd_i.bits.cmd    := ballDecoder.ball_decode_cmd_o.bits
-  ballRs.ball_decode_cmd_i.bits.rob_id := global_issue_i.bits.rob_id
-  ballDecoder.ball_decode_cmd_o.ready  := ballRs.ball_decode_cmd_i.ready
+  ballRs.ball_decode_cmd_i.valid           := ballDecoder.ball_decode_cmd_o.valid
+  ballRs.ball_decode_cmd_i.bits.cmd        := ballDecoder.ball_decode_cmd_o.bits
+  ballRs.ball_decode_cmd_i.bits.rob_id     := global_issue_i.bits.rob_id
+  ballRs.ball_decode_cmd_i.bits.is_sub     := global_issue_i.bits.is_sub
+  ballRs.ball_decode_cmd_i.bits.sub_rob_id := global_issue_i.bits.sub_rob_id
+  ballDecoder.ball_decode_cmd_o.ready      := ballRs.ball_decode_cmd_i.ready
 
 //---------------------------------------------------------------------------
 // Local BallRS -> BBus (multi-channel)
@@ -65,9 +70,18 @@ class BallDomain(val b: GlobalConfig) extends Module {
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
 
+  // BBus -> SubROB
+  for (i <- 0 until b.ballDomain.ballNum) {
+    subRobReq(i) <> bbus.subRobReq(i)
+  }
+
 //---------------------------------------------------------------------------
 // Local RS completion signal -> Global RS (single channel, includes global rob_id)
 //---------------------------------------------------------------------------
-  global_complete_o <> ballRs.complete_o
+  global_complete_o.valid           := ballRs.complete_o.valid
+  global_complete_o.bits.rob_id     := ballRs.complete_o.bits.rob_id
+  global_complete_o.bits.is_sub     := ballRs.complete_o.bits.is_sub
+  global_complete_o.bits.sub_rob_id := ballRs.complete_o.bits.sub_rob_id
+  ballRs.complete_o.ready           := global_complete_o.ready
 
 }

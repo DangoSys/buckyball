@@ -3,7 +3,7 @@ package framework.balldomain.prototype.gemmini
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.top.GlobalConfig
 
 @instantiable
@@ -54,4 +54,7 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   }
 
   io.status <> exCtrl.io.status
+
+  io.subRobReq.valid := false.B
+  io.subRobReq.bits  := SubRobRow.tieOff(b)
 }

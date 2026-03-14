@@ -37,27 +37,33 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   val col_reg               = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val vbank_id_reg          = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val rob_id_reg            = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg            = RegInit(false.B)
+  val sub_rob_id_reg        = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val counter               = RegInit(0.U(4.W))
 
-  io.config.bits.is_multi  := false.B
-  io.config.bits.is_shared := false.B
-  io.config.bits.alloc     := false.B
-  io.config.bits.vbank_id  := 0.U(8.W)
-  io.config.bits.group_id  := 0.U(3.W)
-  io.config.bits.hart_id   := io.hartid
-  io.config.valid          := false.B
-  io.cmdResp.valid         := false.B
-  io.cmdResp.bits.rob_id   := 0.U(rob_id_width.W)
+  io.config.bits.is_multi    := false.B
+  io.config.bits.is_shared   := false.B
+  io.config.bits.alloc       := false.B
+  io.config.bits.vbank_id    := 0.U(8.W)
+  io.config.bits.group_id    := 0.U(3.W)
+  io.config.bits.hart_id     := io.hartid
+  io.config.valid            := false.B
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := 0.U(rob_id_width.W)
+  io.cmdResp.bits.is_sub     := false.B
+  io.cmdResp.bits.sub_rob_id := 0.U
 
   when(state === idle) {
     when(io.cmdReq.valid) {
       when(io.cmdReq.bits.cmd.special(9, 5) > 1.U) { //is multi bank (col > 1)
-        state         := config
-        col_reg       := io.cmdReq.bits.cmd.special(9, 5)
-        alloc_reg     := io.cmdReq.bits.cmd.special(10)
-        is_shared_reg := io.cmdReq.bits.cmd.is_shared
-        vbank_id_reg  := io.cmdReq.bits.cmd.bank_id
-        rob_id_reg    := io.cmdReq.bits.rob_id
+        state          := config
+        col_reg        := io.cmdReq.bits.cmd.special(9, 5)
+        alloc_reg      := io.cmdReq.bits.cmd.special(10)
+        is_shared_reg  := io.cmdReq.bits.cmd.is_shared
+        vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
+        rob_id_reg     := io.cmdReq.bits.rob_id
+        is_sub_reg     := io.cmdReq.bits.is_sub
+        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
 
       }.otherwise { //not multi bank
         io.config.bits.alloc     := io.cmdReq.bits.cmd.special(10)
@@ -65,8 +71,10 @@ class MemConfiger(val b: GlobalConfig) extends Module {
         io.config.bits.vbank_id  := io.cmdReq.bits.cmd.bank_id
         io.config.valid          := true.B
 
-        io.cmdResp.valid       := true.B
-        io.cmdResp.bits.rob_id := io.cmdReq.bits.rob_id
+        io.cmdResp.valid           := true.B
+        io.cmdResp.bits.rob_id     := io.cmdReq.bits.rob_id
+        io.cmdResp.bits.is_sub     := io.cmdReq.bits.is_sub
+        io.cmdResp.bits.sub_rob_id := io.cmdReq.bits.sub_rob_id
       }
     }
 
@@ -83,10 +91,12 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     }
 
     when(counter >= col_reg) {
-      state                  := idle
-      counter                := 0.U
-      io.cmdResp.valid       := true.B
-      io.cmdResp.bits.rob_id := rob_id_reg
+      state                      := idle
+      counter                    := 0.U
+      io.cmdResp.valid           := true.B
+      io.cmdResp.bits.rob_id     := rob_id_reg
+      io.cmdResp.bits.is_sub     := is_sub_reg
+      io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
     }
   }
   io.cmdReq.ready := state === idle

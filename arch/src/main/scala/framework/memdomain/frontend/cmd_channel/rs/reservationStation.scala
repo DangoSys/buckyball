@@ -9,14 +9,18 @@ import framework.top.GlobalConfig
 
 // Mem domain issue interface - includes global rob_id
 class MemRsIssue(val b: GlobalConfig) extends Bundle {
-  val cmd    = new MemDecodeCmd(b)
+  val cmd        = new MemDecodeCmd(b)
   // Global ROB ID
-  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
 }
 
 // Mem domain completion interface
 class MemRsComplete(val b: GlobalConfig) extends Bundle {
-  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
 }
 
 // Mem domain issue interface combination (Load + Store)
@@ -42,9 +46,11 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
 
     // Decoded instruction input (with global rob_id)
     val mem_decode_cmd_i = Flipped(new DecoupledIO(new Bundle {
-      val cmd    = new MemDecodeCmd(b)
+      val cmd        = new MemDecodeCmd(b)
       // Global ROB ID
-      val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+      val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+      val is_sub     = Bool()
+      val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
     }))
 
     // Rs -> MemLoader/MemStorer
@@ -58,8 +64,10 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
   // Simple FIFO queue, only for buffering
   val fifo = Module(new Queue(
     new Bundle {
-      val cmd    = new MemDecodeCmd(b)
-      val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+      val cmd        = new MemDecodeCmd(b)
+      val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+      val is_sub     = Bool()
+      val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
     },
     entries = 4
   )) // Small buffer is sufficient
@@ -75,19 +83,25 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
   val headEntry = fifo.io.deq.bits
 
   // Load issue
-  io.issue_o.ld.valid       := fifo.io.deq.valid && headEntry.cmd.is_load
-  io.issue_o.ld.bits.cmd    := headEntry.cmd
-  io.issue_o.ld.bits.rob_id := headEntry.rob_id
+  io.issue_o.ld.valid           := fifo.io.deq.valid && headEntry.cmd.is_load
+  io.issue_o.ld.bits.cmd        := headEntry.cmd
+  io.issue_o.ld.bits.rob_id     := headEntry.rob_id
+  io.issue_o.ld.bits.is_sub     := headEntry.is_sub
+  io.issue_o.ld.bits.sub_rob_id := headEntry.sub_rob_id
 
   // Store issue
-  io.issue_o.st.valid       := fifo.io.deq.valid && headEntry.cmd.is_store
-  io.issue_o.st.bits.cmd    := headEntry.cmd
-  io.issue_o.st.bits.rob_id := headEntry.rob_id
+  io.issue_o.st.valid           := fifo.io.deq.valid && headEntry.cmd.is_store
+  io.issue_o.st.bits.cmd        := headEntry.cmd
+  io.issue_o.st.bits.rob_id     := headEntry.rob_id
+  io.issue_o.st.bits.is_sub     := headEntry.is_sub
+  io.issue_o.st.bits.sub_rob_id := headEntry.sub_rob_id
 
   // Config issue
-  io.issue_o.cf.valid       := fifo.io.deq.valid && headEntry.cmd.is_config
-  io.issue_o.cf.bits.cmd    := headEntry.cmd
-  io.issue_o.cf.bits.rob_id := headEntry.rob_id
+  io.issue_o.cf.valid           := fifo.io.deq.valid && headEntry.cmd.is_config
+  io.issue_o.cf.bits.cmd        := headEntry.cmd
+  io.issue_o.cf.bits.rob_id     := headEntry.rob_id
+  io.issue_o.cf.bits.is_sub     := headEntry.is_sub
+  io.issue_o.cf.bits.sub_rob_id := headEntry.sub_rob_id
 
   // FIFO deq.ready - can only dequeue when target unit is ready
   fifo.io.deq.ready :=
@@ -98,22 +112,22 @@ class MemReservationStation(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Completion signal processing - directly forward to global RS
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), 3))
+  val completeArb = Module(new Arbiter(new MemRsComplete(b), 3))
 
   completeArb.io.in(0).valid := io.commit_i.ld.valid
-  completeArb.io.in(0).bits  := io.commit_i.ld.bits.rob_id
+  completeArb.io.in(0).bits  := io.commit_i.ld.bits
   io.commit_i.ld.ready       := completeArb.io.in(0).ready
 
   completeArb.io.in(1).valid := io.commit_i.st.valid
-  completeArb.io.in(1).bits  := io.commit_i.st.bits.rob_id
+  completeArb.io.in(1).bits  := io.commit_i.st.bits
   io.commit_i.st.ready       := completeArb.io.in(1).ready
 
   completeArb.io.in(2).valid := io.commit_i.cf.valid
-  completeArb.io.in(2).bits  := io.commit_i.cf.bits.rob_id
+  completeArb.io.in(2).bits  := io.commit_i.cf.bits
   io.commit_i.cf.ready       := completeArb.io.in(2).ready
 
   // Forward completion signal (with global rob_id)
-  io.complete_o.valid       := completeArb.io.out.valid
-  io.complete_o.bits.rob_id := completeArb.io.out.bits
-  completeArb.io.out.ready  := io.complete_o.ready
+  io.complete_o.valid      := completeArb.io.out.valid
+  io.complete_o.bits       := completeArb.io.out.bits
+  completeArb.io.out.ready := io.complete_o.ready
 }

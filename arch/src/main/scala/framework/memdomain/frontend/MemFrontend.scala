@@ -97,10 +97,12 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 // MemDecoder -> MemReservationStation
 // -----------------------------------------------------------------------------
   // Connect decoded instruction and global rob_id
-  memRs.io.mem_decode_cmd_i.valid       := memDecoder.io.mem_decode_cmd_o.valid
-  memRs.io.mem_decode_cmd_i.bits.cmd    := memDecoder.io.mem_decode_cmd_o.bits
-  memRs.io.mem_decode_cmd_i.bits.rob_id := io.global_issue_i.bits.rob_id
-  memDecoder.io.mem_decode_cmd_o.ready  := memRs.io.mem_decode_cmd_i.ready
+  memRs.io.mem_decode_cmd_i.valid           := memDecoder.io.mem_decode_cmd_o.valid
+  memRs.io.mem_decode_cmd_i.bits.cmd        := memDecoder.io.mem_decode_cmd_o.bits
+  memRs.io.mem_decode_cmd_i.bits.rob_id     := io.global_issue_i.bits.rob_id
+  memRs.io.mem_decode_cmd_i.bits.is_sub     := io.global_issue_i.bits.is_sub
+  memRs.io.mem_decode_cmd_i.bits.sub_rob_id := io.global_issue_i.bits.sub_rob_id
+  memDecoder.io.mem_decode_cmd_o.ready      := memRs.io.mem_decode_cmd_i.ready
 
 // -----------------------------------------------------------------------------
 // MemReservationStation -> MemLoader/MemStorer
@@ -171,7 +173,11 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.interdma.write_is_shared := memLoader.io.is_shared
 
   // Completion signal connected to global RS
-  io.global_complete_o <> memRs.io.complete_o
+  io.global_complete_o.valid           := memRs.io.complete_o.valid
+  io.global_complete_o.bits.rob_id     := memRs.io.complete_o.bits.rob_id
+  io.global_complete_o.bits.is_sub     := memRs.io.complete_o.bits.is_sub
+  io.global_complete_o.bits.sub_rob_id := memRs.io.complete_o.bits.sub_rob_id
+  memRs.io.complete_o.ready            := io.global_complete_o.ready
 
   // Busy signal
   // Simple busy signal

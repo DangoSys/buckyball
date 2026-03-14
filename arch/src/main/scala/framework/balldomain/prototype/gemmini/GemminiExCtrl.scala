@@ -98,7 +98,9 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     Enum(11)
   val state                                                                                                                                               = RegInit(sIdle)
 
-  val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
 
   // Saved rs1/rs2 from the command (latched at sIdle when cmdReq fires)
   val saved_rs1     = Reg(UInt(64.W))
@@ -142,8 +144,10 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
   // =========================================================================
   io.cmdReq.ready := state === sIdle
 
-  io.cmdResp.valid       := false.B
-  io.cmdResp.bits.rob_id := rob_id_reg
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   for (i <- 0 until inBW) {
     io.bankReadReq(i).valid     := false.B
@@ -182,14 +186,16 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     is(sIdle) {
       io.cmdReq.ready := true.B
       when(io.cmdReq.fire) {
-        rob_id_reg    := io.cmdReq.bits.rob_id
-        op1_bank      := io.cmdReq.bits.cmd.op1_bank
-        op2_bank      := io.cmdReq.bits.cmd.op2_bank
-        wr_bank       := io.cmdReq.bits.cmd.wr_bank
-        saved_rs1     := io.cmdReq.bits.cmd.rs1
-        saved_rs2     := io.cmdReq.bits.cmd.rs2
-        saved_sub_cmd := sub_cmd
-        total_rows    := Mux(io.cmdReq.bits.cmd.iter === 0.U, DIM.U, io.cmdReq.bits.cmd.iter)
+        rob_id_reg     := io.cmdReq.bits.rob_id
+        is_sub_reg     := io.cmdReq.bits.is_sub
+        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+        op1_bank       := io.cmdReq.bits.cmd.op1_bank
+        op2_bank       := io.cmdReq.bits.cmd.op2_bank
+        wr_bank        := io.cmdReq.bits.cmd.wr_bank
+        saved_rs1      := io.cmdReq.bits.cmd.rs1
+        saved_rs2      := io.cmdReq.bits.cmd.rs2
+        saved_sub_cmd  := sub_cmd
+        total_rows     := Mux(io.cmdReq.bits.cmd.iter === 0.U, DIM.U, io.cmdReq.bits.cmd.iter)
 
         when(sub_cmd === GemminiSubCmd.CONFIG) {
           // CONFIG: decode from special field (rs2 with sub_cmd in [3:0])

@@ -8,7 +8,7 @@ import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
-import framework.balldomain.blink.{BankRead, BankWrite}
+import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.top.channels.{Channel, ChannelClusterIO, ChannelIO}
 
 /**
@@ -30,6 +30,9 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
   val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  // balls - bbus - SubROB
+  @public
+  val subRobReq = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
 
   val balls = ballGenerators.map(gen => Module(gen()))
   val cmdRouter: Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
@@ -85,6 +88,11 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
       bankWrite(writeChannelIdx) <> ball.blink.bankWrite(i)
       writeChannelIdx = writeChannelIdx + 1
     }
+  }
+
+  // Connect balls' subRobReq
+  for (i <- 0 until numBalls) {
+    subRobReq(i) <> balls(i).blink.subRobReq
   }
 
 }

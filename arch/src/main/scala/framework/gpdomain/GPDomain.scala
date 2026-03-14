@@ -28,8 +28,10 @@ class GpDomain(val b: GlobalConfig) extends Module {
   decoder.io.inst_i <> io.global_issue_i.bits.cmd.cmd
   val decoded = decoder.io.decoded_o
 
-  io.global_complete_o.valid       := io.global_issue_i.valid
-  io.global_complete_o.bits.rob_id := io.global_issue_i.bits.rob_id
+  io.global_complete_o.valid           := io.global_issue_i.valid
+  io.global_complete_o.bits.rob_id     := io.global_issue_i.bits.rob_id
+  io.global_complete_o.bits.is_sub     := io.global_issue_i.bits.is_sub
+  io.global_complete_o.bits.sub_rob_id := io.global_issue_i.bits.sub_rob_id
 
   io.busy := false.B
 

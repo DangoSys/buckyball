@@ -36,13 +36,15 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val s_idle :: s_dma_req :: s_dma_wait :: s_wait_last_write :: s_done :: Nil = Enum(5)
   val state                                                                   = RegInit(s_idle)
 
-  val rob_id_reg    = RegInit(0.U(rob_id_width.W))
-  val mem_addr_reg  = Reg(UInt(b.memDomain.memAddrLen.W))
-  val iter_reg      = Reg(UInt(b.frontend.iter_len.W))
-  val resp_count    = RegInit(0.U(log2Up(16).W))
-  val wr_bank_reg   = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  val stride_reg    = Reg(UInt(11.W))
-  val is_shared_reg = RegInit(false.B)
+  val rob_id_reg     = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val mem_addr_reg   = Reg(UInt(b.memDomain.memAddrLen.W))
+  val iter_reg       = Reg(UInt(b.frontend.iter_len.W))
+  val resp_count     = RegInit(0.U(log2Up(16).W))
+  val wr_bank_reg    = Reg(UInt(log2Up(b.memDomain.bankNum).W))
+  val stride_reg     = Reg(UInt(11.W))
+  val is_shared_reg  = RegInit(false.B)
 
   // Group counter for multi-bank writes
   val group_counter   = RegInit(0.U(4.W))
@@ -87,9 +89,11 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.is_shared          := is_shared_reg
 
   // cmdResp (Decoupled): hold valid until accepted
-  io.cmdResp.valid       := (state === s_done)
-  io.cmdResp.bits        := 0.U.asTypeOf(new MemRsComplete(b))
-  io.cmdResp.bits.rob_id := rob_id_reg
+  io.cmdResp.valid           := (state === s_done)
+  io.cmdResp.bits            := 0.U.asTypeOf(new MemRsComplete(b))
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   // -----------------------------
   // Receive load instruction
@@ -97,6 +101,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
     state           := s_dma_req
     rob_id_reg      := io.cmdReq.bits.rob_id
+    is_sub_reg      := io.cmdReq.bits.is_sub
+    sub_rob_id_reg  := io.cmdReq.bits.sub_rob_id
     mem_addr_reg    := io.cmdReq.bits.cmd.mem_addr
     wr_bank_reg     := io.cmdReq.bits.cmd.bank_id
     // stride from rs2[57:39]

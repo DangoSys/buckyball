@@ -44,6 +44,8 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val state                                                                                             = RegInit(s_idle)
 
   val rob_id_reg      = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg      = RegInit(false.B)
+  val sub_rob_id_reg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val mem_addr_reg    = RegInit(0.U(b.memDomain.memAddrLen.W))
   val iter_reg        = RegInit(0.U(b.frontend.iter_len.W))
   val stride_reg      = RegInit(0.U(10.W))
@@ -79,10 +81,12 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.cmdReq.ready := (state === s_idle)
 
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
-    rob_id_reg   := io.cmdReq.bits.rob_id
-    mem_addr_reg := io.cmdReq.bits.cmd.mem_addr
-    rd_bank_reg  := io.cmdReq.bits.cmd.bank_id
-    stride_reg   := io.cmdReq.bits.cmd.special(57, 39)
+    rob_id_reg     := io.cmdReq.bits.rob_id
+    is_sub_reg     := io.cmdReq.bits.is_sub
+    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+    mem_addr_reg   := io.cmdReq.bits.cmd.mem_addr
+    rd_bank_reg    := io.cmdReq.bits.cmd.bank_id
+    stride_reg     := io.cmdReq.bits.cmd.special(57, 39)
 
     // Query and save group count
     group_count_reg := io.query_group_count
@@ -297,8 +301,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // Completion
   // -----------------------------
-  io.cmdResp.valid       := (state === s_done)
-  io.cmdResp.bits.rob_id := rob_id_reg
+  io.cmdResp.valid           := (state === s_done)
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   when(io.cmdResp.fire) {
     state := s_idle

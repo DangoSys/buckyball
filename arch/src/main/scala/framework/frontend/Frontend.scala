@@ -7,6 +7,7 @@ import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
 import framework.frontend.globalrs.{GlobalReservationStation, GlobalRsComplete, GlobalRsIssue}
 import framework.top.GlobalConfig
 import framework.core.bbtile.{RoCCCommandBB, RoCCResponseBB}
+import framework.balldomain.blink.SubRobRow
 
 /**
  * Frontend Module
@@ -31,6 +32,9 @@ class Frontend(val b: GlobalConfig) extends Module {
     val ball_complete_i = Flipped(Decoupled(new GlobalRsComplete(b)))
     val mem_complete_i  = Flipped(Decoupled(new GlobalRsComplete(b)))
     val gp_complete_i   = Flipped(Decoupled(new GlobalRsComplete(b)))
+
+    // Ball -> SubROB request passthrough
+    val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
 
     // RoCC response
     val resp = Decoupled(new RoCCResponseBB(b.core.xLen))
@@ -57,6 +61,11 @@ class Frontend(val b: GlobalConfig) extends Module {
   globalRs.io.ball_complete_i <> io.ball_complete_i
   globalRs.io.mem_complete_i <> io.mem_complete_i
   globalRs.io.gp_complete_i <> io.gp_complete_i
+
+  // Wire SubROB request from BallDomain through to GlobalRS
+  for (i <- 0 until b.ballDomain.ballNum) {
+    globalRs.io.ball_subrob_req_i(i) <> io.ball_subrob_req_i(i)
+  }
 
   io.resp <> globalRs.io.rs_rocc_o.resp
   io.busy := globalRs.io.rs_rocc_o.busy

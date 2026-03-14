@@ -48,6 +48,8 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   // --- Registers ---
   private val robIdReg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val isSubReg     = RegInit(false.B)
+  private val subRobIdReg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   private val rBankReg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val wBankReg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val rBaseBeatReg = RegInit(0.U(32.W))
@@ -75,11 +77,13 @@ class Im2col(val b: GlobalConfig) extends Module {
   private val isLastWindow = rowEnd && colEnd
 
   // --- Top-level IO defaults ---
-  io.cmdReq.ready        := (state === idle)
-  io.cmdResp.valid       := false.B
-  io.cmdResp.bits.rob_id := robIdReg
-  io.status.idle         := (state === idle)
-  io.status.running      := (state =/= idle) && (state =/= complete)
+  io.cmdReq.ready            := (state === idle)
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := robIdReg
+  io.cmdResp.bits.is_sub     := isSubReg
+  io.cmdResp.bits.sub_rob_id := subRobIdReg
+  io.status.idle             := (state === idle)
+  io.status.running          := (state =/= idle) && (state =/= complete)
 
   // --- Wire up LineBufferManager ---
   for (i <- 0 until inBW) {
@@ -116,9 +120,11 @@ class Im2col(val b: GlobalConfig) extends Module {
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        robIdReg := io.cmdReq.bits.rob_id
-        rBankReg := io.cmdReq.bits.cmd.op1_bank
-        wBankReg := io.cmdReq.bits.cmd.wr_bank
+        robIdReg    := io.cmdReq.bits.rob_id
+        isSubReg    := io.cmdReq.bits.is_sub
+        subRobIdReg := io.cmdReq.bits.sub_rob_id
+        rBankReg    := io.cmdReq.bits.cmd.op1_bank
+        wBankReg    := io.cmdReq.bits.cmd.wr_bank
 
         kColReg     := io.cmdReq.bits.cmd.special(3, 0)
         kRowReg     := io.cmdReq.bits.cmd.special(7, 4)

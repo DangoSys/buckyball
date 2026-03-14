@@ -9,6 +9,7 @@ import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
 import framework.frontend.scoreboard.{BankAccessInfo, BankScoreboard}
 import framework.core.bbtile.RoCCResponseBB
+import framework.balldomain.blink.SubRobRow
 
 // Global ROB entry - contains instruction + bank access info
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
@@ -17,11 +18,16 @@ class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
 }
 
 // Global RS issue interface
-class GlobalRsIssue(b: GlobalConfig) extends GlobalRobEntry(b)
+class GlobalRsIssue(b: GlobalConfig) extends GlobalRobEntry(b) {
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
+}
 
 // Global RS completion interface
 class GlobalRsComplete(b: GlobalConfig) extends Bundle {
-  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
+  val is_sub     = Bool()
+  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
 }
 
 // Global reservation station - between GlobalDecoder and each Domain
@@ -45,6 +51,9 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
     val mem_complete_i      = Flipped(Decoupled(new GlobalRsComplete(b)))
     val gp_complete_i       = Flipped(Decoupled(new GlobalRsComplete(b)))
 
+    // Ball -> SubROB: write a row of sub-instructions
+    val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+
     // RoCC response
     val rs_rocc_o = new Bundle {
       val resp = new DecoupledIO(new RoCCResponseBB(b.core.xLen))
@@ -56,7 +65,8 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
     val barrier_release = Input(Bool())
   })
 
-  val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
+  val rob:    Instance[GlobalROB] = Instantiate(new GlobalROB(b))
+  val subRob: Instance[SubROB]    = Instantiate(new SubROB(b))
 
 // -----------------------------------------------------------------------------
 // Fence handling — fence does NOT enter ROB.
@@ -115,59 +125,129 @@ class GlobalReservationStation(val b: GlobalConfig) extends Module {
   )
 
 // -----------------------------------------------------------------------------
+// SubROB write arbiter
+// -----------------------------------------------------------------------------
+  val subRobWriteArb = Module(new Arbiter(new SubRobRow(b), b.ballDomain.ballNum))
+  for (i <- 0 until b.ballDomain.ballNum) {
+    subRobWriteArb.io.in(i) <> io.ball_subrob_req_i(i)
+  }
+  subRob.io.write <> subRobWriteArb.io.out
+
+// -----------------------------------------------------------------------------
 // Outbound - instruction issue (dispatch to corresponding domain based on domain_id)
+// SubROB issues take priority over main ROB issues.
 // -----------------------------------------------------------------------------
   val is_ball_domain = rob.io.issue.bits.cmd.domain_id === DomainId.BALL
   val is_mem_domain  = rob.io.issue.bits.cmd.domain_id === DomainId.MEM
   val is_gp_domain   = rob.io.issue.bits.cmd.domain_id === DomainId.GP
 
-  // Ball domain issue
-  io.ball_issue_o.valid := rob.io.issue.valid && is_ball_domain
-  io.ball_issue_o.bits  := rob.io.issue.bits
+  val subRobIssueValid = subRob.io.issue.valid
+  val subRobCmd        = subRob.io.issue.bits // PostGDCmd
 
-  // Mem domain issue
-  io.mem_issue_o.valid := rob.io.issue.valid && is_mem_domain
-  io.mem_issue_o.bits  := rob.io.issue.bits
+  // Build a GlobalRsIssue for the sub-instruction
+  val subRobIssueEntry = Wire(new GlobalRsIssue(b))
+  subRobIssueEntry.cmd        := subRobCmd
+  subRobIssueEntry.rob_id     := subRob.io.issueMasterRobId
+  subRobIssueEntry.is_sub     := true.B
+  subRobIssueEntry.sub_rob_id := subRob.io.issueSubId
 
-  // GP domain issue
-  io.gp_issue_o.valid := rob.io.issue.valid && is_gp_domain
-  io.gp_issue_o.bits  := rob.io.issue.bits
+  val subRobIssBall = subRobCmd.domain_id === DomainId.BALL
+  val subRobIssMem  = subRobCmd.domain_id === DomainId.MEM
+  val subRobIssGp   = subRobCmd.domain_id === DomainId.GP
 
-  // Set ROB ready signal - can only issue when target domain is ready
-  rob.io.issue.ready :=
+  // Build main ROB issue entry with is_sub/sub_rob_id cleared
+  val mainIssueEntry = Wire(new GlobalRsIssue(b))
+  mainIssueEntry.cmd        := rob.io.issue.bits.cmd
+  mainIssueEntry.rob_id     := rob.io.issue.bits.rob_id
+  mainIssueEntry.is_sub     := false.B
+  mainIssueEntry.sub_rob_id := 0.U
+
+  // Ball issue: SubROB priority
+  io.ball_issue_o.valid := Mux(
+    subRobIssueValid && subRobIssBall,
+    true.B,
+    rob.io.issue.valid && is_ball_domain && !subRobIssueValid
+  )
+  io.ball_issue_o.bits  := Mux(subRobIssueValid && subRobIssBall, subRobIssueEntry, mainIssueEntry)
+
+  // Mem issue: SubROB priority
+  io.mem_issue_o.valid := Mux(
+    subRobIssueValid && subRobIssMem,
+    true.B,
+    rob.io.issue.valid && is_mem_domain && !subRobIssueValid
+  )
+  io.mem_issue_o.bits  := Mux(subRobIssueValid && subRobIssMem, subRobIssueEntry, mainIssueEntry)
+
+  // GP issue: SubROB priority
+  io.gp_issue_o.valid := Mux(
+    subRobIssueValid && subRobIssGp,
+    true.B,
+    rob.io.issue.valid && is_gp_domain && !subRobIssueValid
+  )
+  io.gp_issue_o.bits  := Mux(subRobIssueValid && subRobIssGp, subRobIssueEntry, mainIssueEntry)
+
+  // SubROB issue ready
+  subRob.io.issue.ready :=
+    (subRobIssBall && io.ball_issue_o.ready) ||
+      (subRobIssMem && io.mem_issue_o.ready) ||
+      (subRobIssGp && io.gp_issue_o.ready)
+
+  // Main ROB issue ready: yield when SubROB is issuing
+  rob.io.issue.ready := !subRobIssueValid && (
     (is_ball_domain && io.ball_issue_o.ready) ||
       (is_mem_domain && io.mem_issue_o.ready) ||
       (is_gp_domain && io.gp_issue_o.ready)
+  )
+
+  // Tell GlobalROB to suppress its own issue when SubROB is active
+  rob.io.subRobActive := subRobIssueValid
 
 // -----------------------------------------------------------------------------
 // Completion signal processing
 // -----------------------------------------------------------------------------
-  val completeArb = Module(new Arbiter(UInt(log2Up(b.frontend.rob_entries).W), 3))
+  val completeArb = Module(new Arbiter(new GlobalRsComplete(b), 3))
 
   // Connect Ball, Mem, and GP domain completion signals to arbiter
   completeArb.io.in(0).valid := io.ball_complete_i.valid
-  completeArb.io.in(0).bits  := io.ball_complete_i.bits.rob_id
+  completeArb.io.in(0).bits  := io.ball_complete_i.bits
   io.ball_complete_i.ready   := completeArb.io.in(0).ready
 
   completeArb.io.in(1).valid := io.mem_complete_i.valid
-  completeArb.io.in(1).bits  := io.mem_complete_i.bits.rob_id
+  completeArb.io.in(1).bits  := io.mem_complete_i.bits
   io.mem_complete_i.ready    := completeArb.io.in(1).ready
 
   completeArb.io.in(2).valid := io.gp_complete_i.valid
-  completeArb.io.in(2).bits  := io.gp_complete_i.bits.rob_id
+  completeArb.io.in(2).bits  := io.gp_complete_i.bits
   io.gp_complete_i.ready     := completeArb.io.in(2).ready
 
-  // Decide whether to filter completion signals based on configuration
+  val completeBits = completeArb.io.out.bits
+
+  // Route sub-completions to SubROB, main completions to main ROB
+  subRob.io.subComplete.valid := completeArb.io.out.valid && completeBits.is_sub
+  subRob.io.subComplete.bits  := completeBits.sub_rob_id
+
+  subRob.io.masterComplete.ready := true.B // main ROB always ready to accept masterComplete
+
+  val normalComplete = completeArb.io.out.valid && !completeBits.is_sub
+
   if (b.frontend.rs_out_of_order_response) {
-    // Out-of-order mode: accept all completion signals, ROB commits out-of-order internally
-    rob.io.complete <> completeArb.io.out
+    rob.io.complete.valid := normalComplete || subRob.io.masterComplete.valid
+    rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
   } else {
-    // Sequential mode: only accept completion signals where rob_id == head_ptr
-    val isHeadComplete = completeArb.io.out.bits === rob.io.head_ptr
-    rob.io.complete.valid    := completeArb.io.out.valid && isHeadComplete
-    rob.io.complete.bits     := completeArb.io.out.bits
-    completeArb.io.out.ready := rob.io.complete.ready && isHeadComplete
+    val isHeadComplete = Mux(
+      subRob.io.masterComplete.valid,
+      subRob.io.masterComplete.bits === rob.io.head_ptr,
+      completeBits.rob_id === rob.io.head_ptr
+    )
+    rob.io.complete.valid := (normalComplete || subRob.io.masterComplete.valid) && isHeadComplete
+    rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
   }
+
+  completeArb.io.out.ready := Mux(
+    completeBits.is_sub,
+    subRob.io.subComplete.ready,
+    rob.io.complete.ready
+  )
 
 // -----------------------------------------------------------------------------
 // Response generation

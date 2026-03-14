@@ -3,7 +3,7 @@ package framework.balldomain.prototype.systolicarray
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.top.GlobalConfig
 
 @instantiable
@@ -34,4 +34,7 @@ class SystolicArrayBall(val b: GlobalConfig) extends Module with HasBlink with H
   }
 
   io.status <> systolicArrayUnit.io.status
+
+  io.subRobReq.valid := false.B
+  io.subRobReq.bits  := SubRobRow.tieOff(b)
 }

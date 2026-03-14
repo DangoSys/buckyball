@@ -37,8 +37,14 @@ class Transpose(val b: GlobalConfig) extends Module {
   // -------------------------------
   // ROB / IDs
   // -------------------------------
-  val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  when(io.cmdReq.fire)(rob_id_reg := io.cmdReq.bits.rob_id)
+  val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  when(io.cmdReq.fire) {
+    rob_id_reg     := io.cmdReq.bits.rob_id
+    is_sub_reg     := io.cmdReq.bits.is_sub
+    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+  }
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id  := rob_id_reg
@@ -99,9 +105,11 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).group_id          := 0.U
   }
 
-  io.cmdReq.ready        := (state === idle)
-  io.cmdResp.valid       := false.B
-  io.cmdResp.bits.rob_id := rob_id_reg
+  io.cmdReq.ready            := (state === idle)
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   io.bankRead(0).io.resp.ready  := (state =/= idle)
   io.bankWrite(0).io.resp.ready := (state =/= idle)
