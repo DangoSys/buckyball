@@ -82,14 +82,21 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl_reader <> frontend.io.tl_reader
   io.tl_writer <> frontend.io.tl_writer
 
-  // Ball Domain interface connects directly to midend
-  midend.io.balldomain.bankRead <> io.ballDomain.bankRead
-  midend.io.balldomain.bankWrite <> io.ballDomain.bankWrite
-  midend.io.frontend.bankRead <> frontend.io.interdma.bankRead
-  midend.io.frontend.bankWrite <> frontend.io.interdma.bankWrite
-  midend.io.frontend.read_is_shared  := frontend.io.interdma.read_is_shared
-  midend.io.frontend.write_is_shared := frontend.io.interdma.write_is_shared
-  midend.io.hartid                   := io.hartid
+  // Ball Domain interface connects to midend unified bankRead/bankWrite
+  // Indices [0, totalBallRead) are balldomain; last index is frontend (DMA)
+  for (i <- 0 until totalBallRead) {
+    midend.io.bankRead(i).bankRead <> io.ballDomain.bankRead(i)
+    midend.io.bankRead(i).is_shared := false.B
+  }
+  for (i <- 0 until totalBallWrite) {
+    midend.io.bankWrite(i).bankWrite <> io.ballDomain.bankWrite(i)
+    midend.io.bankWrite(i).is_shared := false.B
+  }
+  midend.io.bankRead(totalBallRead).bankRead <> frontend.io.interdma.bankRead
+  midend.io.bankRead(totalBallRead).is_shared := frontend.io.interdma.read_is_shared
+  midend.io.bankWrite(totalBallWrite).bankWrite <> frontend.io.interdma.bankWrite
+  midend.io.bankWrite(totalBallWrite).is_shared := frontend.io.interdma.write_is_shared
+  midend.io.hartid := io.hartid
 
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
