@@ -1,7 +1,7 @@
 {
   "rob_entries": 16,
   "rs_out_of_order_response": true,
-  "bank_id_len": 15,
-  "iter_len": 16,
+  "bank_id_len": 10,
+  "iter_len": 34,
   "sub_rob_depth": 64
 }

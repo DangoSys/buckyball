@@ -4,8 +4,9 @@ import chisel3._
 import chisel3.util._
 
 object GISA {
-  val FENCE_BITPAT   = BitPat("b0011111") // 31 (0x1F)
-  val BARRIER_BITPAT = BitPat("b0110010") // 50 (0x32)
+  // enable=000, opcode group for no-bank-access instructions
+  val FENCE_BITPAT   = BitPat("b0000000") // 0 (0x00) — enable=000, opcode=0
+  val BARRIER_BITPAT = BitPat("b0000001") // 1 (0x01) — enable=000, opcode=1
 }
 
 // Domain ID constants

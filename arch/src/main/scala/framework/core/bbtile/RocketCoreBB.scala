@@ -1240,6 +1240,7 @@ class RocketBB(tile: BBTile)(implicit p: Parameters)
     io.rocc.cmd.bits.raw_inst := wb_reg_inst
     val inst_bits = wb_reg_inst.asTypeOf(new RoCCInstruction())
     io.rocc.cmd.bits.funct   := inst_bits.funct
+    io.rocc.cmd.bits.funct3  := wb_reg_inst(14, 12)
     io.rocc.cmd.bits.rs2     := inst_bits.rs2
     io.rocc.cmd.bits.rs1     := inst_bits.rs1
     io.rocc.cmd.bits.xd      := inst_bits.xd

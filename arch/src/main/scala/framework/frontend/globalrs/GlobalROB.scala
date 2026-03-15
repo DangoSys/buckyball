@@ -40,13 +40,14 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // Instruction trace (DPI-C, defined in ITraceDPI.scala)
   // ---------------------------------------------------------------------------
   val itrace = Module(new ITraceDPI)
-  itrace.io.is_issue  := 0.U
-  itrace.io.rob_id    := 0.U
-  itrace.io.domain_id := 0.U
-  itrace.io.funct     := 0.U
-  itrace.io.rs1       := 0.U
-  itrace.io.rs2       := 0.U
-  itrace.io.enable    := false.B
+  itrace.io.is_issue    := 0.U
+  itrace.io.rob_id      := 0.U
+  itrace.io.domain_id   := 0.U
+  itrace.io.funct       := 0.U
+  itrace.io.rs1         := 0.U
+  itrace.io.rs2         := 0.U
+  itrace.io.bank_enable := 0.U
+  itrace.io.enable      := false.B
 
   // ---------------------------------------------------------------------------
   // Storage
@@ -98,13 +99,14 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.complete.valid := true.B
     scoreboard.complete.bits  := robEntries(cid).cmd.bankAccess
 
-    itrace.io.is_issue  := 0.U
-    itrace.io.rob_id    := cid
-    itrace.io.domain_id := robEntries(cid).cmd.domain_id
-    itrace.io.funct     := robEntries(cid).cmd.cmd.funct
-    itrace.io.rs1       := robEntries(cid).cmd.cmd.rs1
-    itrace.io.rs2       := robEntries(cid).cmd.cmd.rs2
-    itrace.io.enable    := true.B
+    itrace.io.is_issue    := 0.U
+    itrace.io.rob_id      := cid
+    itrace.io.domain_id   := robEntries(cid).cmd.domain_id
+    itrace.io.funct       := robEntries(cid).cmd.cmd.funct
+    itrace.io.rs1         := robEntries(cid).cmd.cmd.rs1
+    itrace.io.rs2         := robEntries(cid).cmd.cmd.rs2
+    itrace.io.bank_enable := robEntries(cid).cmd.cmd.funct(6, 4)
+    itrace.io.enable      := true.B
   }
 
   // ---------------------------------------------------------------------------
@@ -136,13 +138,14 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).cmd.bankAccess
 
-    itrace.io.is_issue  := 1.U
-    itrace.io.rob_id    := robEntries(actualIssuePtr).rob_id
-    itrace.io.domain_id := robEntries(actualIssuePtr).cmd.domain_id
-    itrace.io.funct     := robEntries(actualIssuePtr).cmd.cmd.funct
-    itrace.io.rs1       := robEntries(actualIssuePtr).cmd.cmd.rs1
-    itrace.io.rs2       := robEntries(actualIssuePtr).cmd.cmd.rs2
-    itrace.io.enable    := true.B
+    itrace.io.is_issue    := 1.U
+    itrace.io.rob_id      := robEntries(actualIssuePtr).rob_id
+    itrace.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
+    itrace.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
+    itrace.io.rs1         := robEntries(actualIssuePtr).cmd.cmd.rs1
+    itrace.io.rs2         := robEntries(actualIssuePtr).cmd.cmd.rs2
+    itrace.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
+    itrace.io.enable      := true.B
   }
 
   // ---------------------------------------------------------------------------

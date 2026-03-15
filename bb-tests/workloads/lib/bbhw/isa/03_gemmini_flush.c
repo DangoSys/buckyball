@@ -3,7 +3,7 @@
 
 #include "isa.h"
 
-#define BB_GEMMINI_FLUSH_FUNC7 46
+#define BB_GEMMINI_FLUSH_FUNC7 3
 
 // Flush the systolic array state
 #define bb_gemmini_flush()                                                     \

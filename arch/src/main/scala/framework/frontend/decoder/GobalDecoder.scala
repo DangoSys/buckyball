@@ -46,6 +46,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_i.ready := io.id_o.ready
 
   val func7  = io.id_i.bits.cmd.funct
+  val funct3 = io.id_i.bits.cmd.funct3
   val opcode = io.id_i.bits.cmd.opcode
   val rs1    = io.id_i.bits.cmd.rs1Data
 
@@ -76,27 +77,38 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   )
 
   // -------------------------------------------------------------------------
-  // Bank access info extraction — read valid flags from rs1[45:47]
+  // Bank access info extraction — enable flags from funct7[6:4]
   //
   // Unified rs1 layout (defined in isa.h):
-  //   rs1[14:0]  = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
-  //   rs1[29:15] = bank_1  (rd_bank_1, dual-operand only)
-  //   rs1[44:30] = bank_2  (wr_bank for Ball instructions)
-  //   rs1[45]    = rd_bank_0_valid flag (BB_RD0)
-  //   rs1[46]    = rd_bank_1_valid flag (BB_RD1)
-  //   rs1[47]    = wr_bank_valid flag (BB_WR)
-  //   rs1[63:48] = iter (16-bit)
+  //   rs1[9:0]   = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
+  //   rs1[19:10] = bank_1  (rd_bank_1, dual-operand only)
+  //   rs1[29:20] = bank_2  (wr_bank for Ball instructions)
+  //   rs1[63:30] = iter (34-bit)
+  //
+  // funct7[6:4] enable encoding:
+  //   000 = no bank access
+  //   001 = 1 read (bank0)
+  //   010 = 1 write (bank2)
+  //   011 = 1 read + 1 write (bank0 read, bank2 write)
+  //   100 = 2 read + 1 write (bank0+bank1 read, bank2 write)
+  //   101,110,111 = no bank access (extended opcode space)
   // -------------------------------------------------------------------------
   val bankAccess = Wire(new BankAccessInfo(bankIdLen))
+  val enableBits = func7(6, 4)
 
-  bankAccess.rd_bank_0_valid := rs1(45)
+  // Decode enable from funct7[6:4]
+  val hasRd0 = enableBits === 1.U || enableBits === 3.U || enableBits === 4.U
+  val hasRd1 = enableBits === 4.U
+  val hasWr  = enableBits === 2.U || enableBits === 3.U || enableBits === 4.U
+
+  bankAccess.rd_bank_0_valid := hasRd0
   bankAccess.rd_bank_0_id    := rs1(bankIdLen - 1, 0)
-  bankAccess.rd_bank_1_valid := rs1(46)
-  bankAccess.rd_bank_1_id    := rs1(bankIdLen + 14, 15)
-  bankAccess.wr_bank_valid   := rs1(47)
-  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[14:0])
-  // For Ball instructions, wr_bank is bank_2 (rs1[44:30])
-  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 29, 30))
+  bankAccess.rd_bank_1_valid := hasRd1
+  bankAccess.rd_bank_1_id    := rs1(bankIdLen + 9, 10)
+  bankAccess.wr_bank_valid   := hasWr
+  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[9:0])
+  // For Ball instructions, wr_bank is bank_2 (rs1[29:20])
+  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 19, 20))
 
   // Output control
   io.id_o.valid           := io.id_i.valid

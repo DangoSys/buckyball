@@ -30,6 +30,7 @@ object SubRobRow {
       w.slots(i).cmd.domain_id    := 0.U
       w.slots(i).cmd.cmd.raw_inst := 0.U
       w.slots(i).cmd.cmd.funct    := 0.U
+      w.slots(i).cmd.cmd.funct3   := 0.U
       w.slots(i).cmd.cmd.rs2      := 0.U
       w.slots(i).cmd.cmd.rs1      := 0.U
       w.slots(i).cmd.cmd.xd       := false.B

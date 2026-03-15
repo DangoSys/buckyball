@@ -61,9 +61,9 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val rs2   = io.cmd_i.bits.cmd.rs2Data
 
   // Unified encoding:
-  //   rs1[14:0]  = bank_id (BANK0)
-  //   rs1[45:47] = bank access valid flags (used by scoreboard, ignored here)
-  //   rs1[63:48] = iter
+  //   rs1[9:0]   = bank_id (BANK0)
+  //   rs1[63:30] = iter (34-bit)
+  //   funct7[6:4] = enable (bank access flags, decoded by GlobalDecoder)
   //   rs2[38:0]  = mem_addr (for MVIN/MVOUT, 39-bit)
   //   rs2[63:0]  = special (full 64-bit)
   import LSDecodeFields._
@@ -77,7 +77,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         N,
         N,
         0.U(memAddrLen.W),      // mem_addr: not used for MSET
-        rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
+        rs1(bankIdLen - 1, 0),  // bank_id from rs1[9:0]
         rs2,                    // special = full rs2
         Y
       ), // mset
@@ -85,7 +85,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         Y,
         N,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
-        rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
+        rs1(bankIdLen - 1, 0),  // bank_id from rs1[9:0]
         rs2,                    // special = full rs2
         Y
       ), // mvin
@@ -93,7 +93,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
         N,
         Y,
         rs2(memAddrLen - 1, 0), // mem_addr from rs2[38:0]
-        rs1(bankIdLen - 1, 0),  // bank_id from rs1[14:0]
+        rs1(bankIdLen - 1, 0),  // bank_id from rs1[9:0]
         rs2,                    // special = full rs2
         Y
       )  // mvout
@@ -133,10 +133,10 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt,
     0.U(b.memDomain.memAddrLen.W)
   )
-  // iter is always from rs1[63:48]
+  // iter is always from rs1[63:30]
   io.mem_decode_cmd_o.bits.iter      := Mux(
     io.mem_decode_cmd_o.valid,
-    rs1(63, 48),
+    rs1(63, 30),
     0.U(iterLen.W)
   )
 

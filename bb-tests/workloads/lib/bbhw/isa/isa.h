@@ -21,46 +21,46 @@ typedef int32_t result_t;
 #define FIELD(val, start_bit, end_bit)                                         \
   (((val) & ((2UL << ((end_bit) - (start_bit))) - 1)) << (start_bit))
 
-// Unified rs1 bank encoding flags (bits 45-47)
-// bit 45 = rd_bank_0_valid, bit 46 = rd_bank_1_valid, bit 47 = wr_bank_valid
-#define BB_RD0 (1UL << 45)
-#define BB_RD1 (1UL << 46)
-#define BB_WR (1UL << 47)
+// rs1 bank field helpers (10-bit each)
+#define BB_BANK0(id) FIELD(id, 0, 9)
+#define BB_BANK1(id) FIELD(id, 10, 19)
+#define BB_BANK2(id) FIELD(id, 20, 29)
 
-// rs1 bank field helpers (15-bit each)
-#define BB_BANK0(id) FIELD(id, 0, 14)
-#define BB_BANK1(id) FIELD(id, 15, 29)
-#define BB_BANK2(id) FIELD(id, 30, 44)
+// rs1 iter field (34-bit, bits 30-63)
+#define BB_ITER(n) FIELD(n, 30, 63)
 
-// rs1 iter field (16-bit, bits 48-63)
-#define BB_ITER(n) FIELD(n, 48, 63)
+// funct7 encoding: [6:4]=enable, [3:0]=opcode
+// enable: 000=none, 001=1rd, 010=1wr, 011=1rd+1wr, 100=2rd+1wr
+//         101/110/111 = none (extended opcode space)
 
-// Generic RISC-V custom instruction macro
+// Generic RISC-V custom instruction macro (funct3 always 0x3 = CUSTOM3_RS1_RS2)
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
-  asm volatile(".insn r " STR(CUSTOM_3) ", 0x3, %c2, x0, %0, %1"               \
+  asm volatile(".insn r " STR(CUSTOM_3) ", 3, %c2, x0, %0, %1"                 \
                :                                                               \
                : "r"(rs1_val), "r"(rs2_val), "i"(func7)                        \
                : "memory")
 
 // Include all instruction definitions
-#include "23_mset.c"
-#include "24_mvin.c"
-#include "25_mvout.c"
-#include "31_fence.c"
-#include "32_mul_warp16.c"
-#include "33_im2col.c"
-#include "34_transpose.c"
-#include "38_relu.c"
-#include "39_bfp.c"
-#include "40_quant.c"
-#include "41_dequant.c"
-#include "42_gemmini_config.c"
-#include "43_gemmini_preload.c"
-#include "44_gemmini_compute_preloaded.c"
-#include "45_gemmini_compute_accumulated.c"
-#include "46_gemmini_flush.c"
-#include "48_bdb_counter.c"
-#include "49_bdb_backdoor.c"
-#include "50_barrier.c"
+#include "00_fence.c"
+#include "01_barrier.c"
+#include "02_gemmini_config.c"
+#include "03_gemmini_flush.c"
+#include "04_bdb_counter.c"
+#include "105_gemmini_loop_conv_ws.c"
+#include "16_mvout.c"
+#include "32_mset.c"
+#include "33_mvin.c"
+#include "48_im2col.c"
+#include "49_transpose.c"
+#include "50_relu.c"
+#include "51_quant.c"
+#include "52_dequant.c"
+#include "53_gemmini_preload.c"
+#include "54_bdb_backdoor.c"
+#include "64_mul_warp16.c"
+#include "65_bfp.c"
+#include "66_gemmini_compute_preloaded.c"
+#include "67_gemmini_compute_accumulated.c"
+#include "87_gemmini_loop_ws.c"
 
 #endif // BUCKYBALL_ISA_H

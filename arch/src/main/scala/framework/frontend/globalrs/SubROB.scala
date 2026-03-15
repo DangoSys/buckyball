@@ -68,17 +68,21 @@ class SubROB(val b: GlobalConfig) extends Module {
   // States:
   //   sIdle      - nothing to do (rowCount == 0)
   //   sReadReq   - issue SRAM read request for readPtr row
-  //   sReadResp  - SRAM data valid; dispatch valid slots one per cycle
+  //   sReadWait  - wait 1 cycle for sramRaw to be latched into sramData
+  //   sReadResp  - sramData valid; dispatch valid slots one per cycle
   //   sWaitSlots - all slots issued; wait for all subCompletes
   //   sWaitMaster - all rows done; fire masterComplete then return to sIdle
-  val sIdle :: sReadReq :: sReadResp :: sWaitSlots :: sWaitMaster :: Nil = Enum(5)
-  val state                                                              = RegInit(sIdle)
+  val sIdle :: sReadReq :: sReadWait :: sReadResp :: sWaitSlots :: sWaitMaster :: Nil = Enum(6)
+  val state                                                                           = RegInit(sIdle)
 
-  // SyncReadMem: request on cycle N → data valid on cycle N+1
-  val sramReadEn  = state === sReadReq
-  val sramData    = sram.read(readPtr, sramReadEn)
-  val sramDataReg = RegNext(sramData)
-  val readPtrReg  = RegNext(readPtr)
+  // SyncReadMem: read issued in sReadReq (cycle N), data valid on cycle N+1.
+  // We latch it into sramData with RegEnable so it stays stable during sReadResp
+  // and sWaitSlots, even when the read port is not enabled.
+  val sramReadEn = state === sReadReq
+  val sramRaw    = sram.read(readPtr, sramReadEn)
+  val dataFresh  = RegNext(sramReadEn, false.B) // pulse on first cycle of sReadResp
+  val sramData   = RegEnable(sramRaw, dataFresh)
+  val readPtrReg = RegEnable(readPtr, sramReadEn)
 
   // Per-row tracking registers (reset when moving to next row)
   // slotIssued: have we already sent this slot to a domain?
@@ -87,16 +91,16 @@ class SubROB(val b: GlobalConfig) extends Module {
   val slotDone   = RegInit(VecInit(Seq.fill(4)(false.B)))
 
   // Combinational: which slots still need to be issued?
-  val slotNeedsIssue = VecInit((0 until 4).map(i => sramDataReg.slots(i).valid && !slotIssued(i)))
+  val slotNeedsIssue = VecInit((0 until 4).map(i => sramData.slots(i).valid && !slotIssued(i)))
   val hasSlotToIssue = slotNeedsIssue.asUInt.orR
   val firstSlotIdx   = PriorityEncoder(slotNeedsIssue.asUInt)
 
   // Combinational: are all valid slots done?
-  val allSlotsDone = VecInit((0 until 4).map(i => !sramDataReg.slots(i).valid || slotDone(i))).asUInt.andR
+  val allSlotsDone = VecInit((0 until 4).map(i => !sramData.slots(i).valid || slotDone(i))).asUInt.andR
 
   // Issue output (valid only in sReadResp when there's a slot to issue)
   io.issue.valid      := (state === sReadResp) && hasSlotToIssue
-  io.issue.bits       := sramDataReg.slots(firstSlotIdx).cmd
+  io.issue.bits       := sramData.slots(firstSlotIdx).cmd
   io.issueSubId       := readPtrReg * 4.U + firstSlotIdx
   io.issueMasterRobId := masterRobId
 
@@ -132,7 +136,12 @@ class SubROB(val b: GlobalConfig) extends Module {
       when(occupied)(state := sReadReq)
     }
     is(sReadReq) {
-      // SRAM read issued, data will be valid next cycle
+      // SRAM read issued, data available on sramRaw next cycle
+      state := sReadWait
+    }
+    is(sReadWait) {
+      // sramRaw is valid; RegEnable latches it into sramData at this clock edge.
+      // sramData will be stable starting next cycle (sReadResp).
       state := sReadResp
     }
     is(sReadResp) {
@@ -143,13 +152,13 @@ class SubROB(val b: GlobalConfig) extends Module {
       // Check if all slots have been issued
       // After marking current slot issued, recalculate
       val allIssued = VecInit((0 until 4).map(i =>
-        !sramDataReg.slots(i).valid || slotIssued(i) ||
+        !sramData.slots(i).valid || slotIssued(i) ||
           (io.issue.fire && firstSlotIdx === i.U)
       )).asUInt.andR
 
       when(allIssued) {
         // Check fast path: all already done (e.g., empty row or immediate completion)
-        val allDoneNow = VecInit((0 until 4).map(i => !sramDataReg.slots(i).valid || slotDone(i))).asUInt.andR
+        val allDoneNow = VecInit((0 until 4).map(i => !sramData.slots(i).valid || slotDone(i))).asUInt.andR
         when(allDoneNow) {
           // Fast path: skip sWaitSlots
           advanceRow()
