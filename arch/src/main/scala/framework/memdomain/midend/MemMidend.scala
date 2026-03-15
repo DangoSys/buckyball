@@ -90,7 +90,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
   }
 
   // Allocate channels for writes: one per cycle to avoid conflicts
-  val pendingWrites =
+  val pendingWrites       =
     VecInit((0 until totalWrite).map(i => io.bankWrite(i).bankWrite.io.req.valid && !isAllocated(false.B, i.U)))
   val hasPendingWrite     = pendingWrites.asUInt.orR
   val nextWriteToAllocate = PriorityEncoder(pendingWrites)
@@ -136,13 +136,13 @@ class MemMidend(val b: GlobalConfig) extends Module {
     when(mappingTable(i).valid) {
       when(isRead) {
         io.mem_req(i).read <> ballRead
-        io.mem_req(i).bank_id  := rbank_id
-        io.mem_req(i).group_id := rgroup_id
+        io.mem_req(i).bank_id   := rbank_id
+        io.mem_req(i).group_id  := rgroup_id
         io.mem_req(i).is_shared := r_shared
       }.otherwise {
         io.mem_req(i).write <> ballWrite
-        io.mem_req(i).bank_id  := wbank_id
-        io.mem_req(i).group_id := wgroup_id
+        io.mem_req(i).bank_id   := wbank_id
+        io.mem_req(i).group_id  := wgroup_id
         io.mem_req(i).is_shared := w_shared
       }
     }

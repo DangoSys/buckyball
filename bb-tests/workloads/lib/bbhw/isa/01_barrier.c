@@ -3,7 +3,7 @@
 
 #include "isa.h"
 
-#define BB_BARRIER_FUNC7 50
+#define BB_BARRIER_FUNC7 1
 
 /**
  * bb_barrier() - hardware multi-core barrier synchronization.

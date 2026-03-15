@@ -3,7 +3,7 @@
 
 #include "isa.h"
 
-#define BB_GEMMINI_CONFIG_FUNC7 42
+#define BB_GEMMINI_CONFIG_FUNC7 2
 
 // Configure Gemmini systolic array
 // All config parameters go in rs2 (special), starting from bit 4
