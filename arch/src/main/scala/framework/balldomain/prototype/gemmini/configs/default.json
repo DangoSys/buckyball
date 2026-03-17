@@ -1,8 +1,8 @@
 {
-  "meshRows": 4,
-  "meshColumns": 4,
-  "tileRows": 4,
-  "tileColumns": 4,
+  "meshRows": 16,
+  "meshColumns": 16,
+  "tileRows": 1,
+  "tileColumns": 1,
   "inputWidth": 8,
   "accWidth": 32,
   "tileLatency": 0,

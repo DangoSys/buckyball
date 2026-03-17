@@ -36,9 +36,9 @@ int main() {
   bb_fence();
 
   if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
-    printf("Test PASSED\n");
+    printf("Gemmini OS RISC b_transpose Test PASSED\n");
     return 0;
   }
-  printf("Test FAILED\n");
+  printf("Gemmini OS RISC b_transpose Test FAILED\n");
   return 1;
 }

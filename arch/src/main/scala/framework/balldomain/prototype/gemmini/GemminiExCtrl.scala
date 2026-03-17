@@ -117,12 +117,13 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
   io.wr_bank_o  := wr_bank
 
   // Iteration counters
-  val read_row_cnt  = RegInit(0.U(log2Up(DIM + 1).W))
-  val feed_row_cnt  = RegInit(0.U(log2Up(DIM + 1).W))
-  val skip_rows_cnt = RegInit(0.U(log2Up(DIM + 1).W)) // OS mode: count COMPUTE resp rows to discard
-  val store_row_cnt = RegInit(0.U(log2Up(DIM + 1).W))
-  val total_rows    = RegInit(DIM.U(log2Up(DIM + 1).W))
-  val req_sent      = RegInit(false.B)                // whether mesh.io.req has fired for this matmul
+  val read_row_cnt    = RegInit(0.U(log2Up(DIM + 1).W))
+  val feed_row_cnt    = RegInit(0.U(log2Up(DIM + 1).W))
+  val skip_rows_cnt   = RegInit(0.U(log2Up(DIM + 1).W)) // OS mode: count COMPUTE resp rows to discard
+  val store_row_cnt   = RegInit(0.U(log2Up(DIM + 1).W))
+  val total_rows      = RegInit(DIM.U(log2Up(DIM + 1).W))
+  val req_sent        = RegInit(false.B)                // whether mesh.io.req has fired for this matmul
+  val preload_pad_cnt = RegInit(0.U(log2Up(DIM + 1).W)) // WS+b_transpose: extra transposer drain rows
 
   // Sub-command from special field (live wire, only valid when cmdReq is valid)
   val sub_cmd = io.cmdReq.bits.cmd.special(3, 0)
@@ -216,10 +217,11 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
           // Since cmdReq.fire and cmdResp can both happen in same cycle:
           state            := sCommit
         }.elsewhen(sub_cmd === GemminiSubCmd.PRELOAD) {
-          read_row_cnt := 0.U
-          feed_row_cnt := 0.U
-          req_sent     := false.B
-          state        := sPreloadRead
+          read_row_cnt    := 0.U
+          feed_row_cnt    := 0.U
+          preload_pad_cnt := 0.U
+          req_sent        := false.B
+          state           := sPreloadRead
         }.elsewhen(sub_cmd === GemminiSubCmd.COMPUTE_PRELOADED || sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED) {
           read_row_cnt    := 0.U
           feed_row_cnt    := 0.U
@@ -240,18 +242,38 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     //          in sPreloadFeed to pre-fill the AlwaysOutTransposer for later use
     //          in COMPUTE. The transposer accumulates A during PRELOAD, then
     //          naturally outputs A rows during COMPUTE (after dir switch).
-    // WS mode: read weights (B/D) from op1_bank into rdQueue0
+    // WS mode: read weights (B/D) from op1_bank into rdQueue0 in REVERSE row order.
+    //   MeshWithDelays uses a shift-chain for d: d[0] enters PE[0] first, then
+    //   propagates down via out_c. After DIM PROPAGATE cycles, PE[r].c1 = d[DIM-1-r].
+    //   To get PE[r].c1 = B[r][c] (correct WS weight layout), we must feed d in
+    //   reverse: d[0]=B[DIM-1], d[1]=B[DIM-2], ..., d[DIM-1]=B[0].
+    //   Reading SRAM in reverse (addr DIM-1 down to 0) achieves this.
     // -----------------------------------------------------------------------
     is(sPreloadRead) {
-      // Both OS and WS: read op1_bank (A for OS, B/D for WS)
-      when(read_row_cnt < total_rows) {
-        io.bankReadReq(0).valid     := true.B
-        io.bankReadReq(0).bits.addr := read_row_cnt
-        when(io.bankReadReq(0).ready) {
-          read_row_cnt := read_row_cnt + 1.U
+      when(cfg_dataflow === Dataflow.OS.id.U) {
+        // OS mode: read A in forward order
+        when(read_row_cnt < total_rows) {
+          io.bankReadReq(0).valid     := true.B
+          io.bankReadReq(0).bits.addr := read_row_cnt
+          when(io.bankReadReq(0).ready) {
+            read_row_cnt := read_row_cnt + 1.U
+          }
+        }.otherwise {
+          state := sPreloadFeed
         }
       }.otherwise {
-        state := sPreloadFeed
+        // WS mode: read weights. For WS+b_transpose we feed B rows 0..DIM-1 so the
+        // transposer outputs B's columns in order (col 0 = B[0][0],B[1][0],..). For WS
+        // without transpose, reverse row order is used for c1 <- d mapping.
+        when(read_row_cnt < total_rows) {
+          io.bankReadReq(0).valid     := true.B
+          io.bankReadReq(0).bits.addr := Mux(cfg_b_transpose, read_row_cnt, total_rows - 1.U - read_row_cnt)
+          when(io.bankReadReq(0).ready) {
+            read_row_cnt := read_row_cnt + 1.U
+          }
+        }.otherwise {
+          state := sPreloadFeed
+        }
       }
     }
 
@@ -265,17 +287,25 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     //   in_prop XOR: 0 XOR 0 = 0 → PE prop=0 (COMPUTE): c1 stays, b accumulated
     // -----------------------------------------------------------------------
     is(sPreloadFeed) {
+      val wsNeedTransposeDrain = cfg_dataflow =/= Dataflow.OS.id.U && cfg_b_transpose
+      val preload_rows         = Wire(UInt(mesh.io.req.bits.total_rows.getWidth.W))
+      preload_rows := total_rows
+      when(wsNeedTransposeDrain) {
+        preload_rows := total_rows +& total_rows
+      }
+      val preload_flush = 0.U
+
       // Step 1: fire mesh.io.req (once)
       when(!req_sent) {
         mesh.io.req.valid                     := true.B
         mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
-        mesh.io.req.bits.pe_control.propagate := ~cfg_dataflow // OS: propagate=1, WS: propagate=0 for preload
+        mesh.io.req.bits.pe_control.propagate := 1.U // OS: propagate=1 (PROPAGATE, preload A into transposer); WS: propagate=1 (PROPAGATE, c1=d stores weight)
         mesh.io.req.bits.pe_control.shift     := cfg_in_shift
         mesh.io.req.bits.a_transpose          := cfg_a_transpose
         mesh.io.req.bits.bd_transpose         := cfg_b_transpose
-        mesh.io.req.bits.total_rows           := total_rows
+        mesh.io.req.bits.total_rows           := preload_rows
         mesh.io.req.bits.tag.rob              := rob_id_reg
-        mesh.io.req.bits.flush                := 0.U
+        mesh.io.req.bits.flush                := preload_flush
         when(mesh.io.req.fire) {
           req_sent := true.B
         }
@@ -296,26 +326,38 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
             mesh.io.d.valid := true.B
             mesh.io.d.bits  := 0.U.asTypeOf(mesh.D_TYPE)
           }.otherwise {
-            // WS mode: preload weights via b input
+            // WS mode: preload weights via d input (PE WS PROPAGATE: c1 = d)
             mesh.io.a.valid := true.B
             mesh.io.a.bits  := 0.U.asTypeOf(mesh.A_TYPE)
             mesh.io.b.valid := true.B
-            mesh.io.b.bits  := VecInit(row_data.grouped(config.tileColumns).map(g => VecInit(g)).toSeq)
+            mesh.io.b.bits  := 0.U.asTypeOf(mesh.B_TYPE)
             mesh.io.d.valid := true.B
-            mesh.io.d.bits  := 0.U.asTypeOf(mesh.D_TYPE)
+            mesh.io.d.bits  := VecInit(row_data.grouped(config.tileColumns).map(g => VecInit(g)).toSeq)
           }
           when(mesh.io.a.ready && mesh.io.b.ready && mesh.io.d.ready) {
             rdQueue0.io.deq.ready := true.B
             feed_row_cnt          := feed_row_cnt + 1.U
           }
         }
+      }.elsewhen(req_sent && wsNeedTransposeDrain && preload_pad_cnt < total_rows) {
+        mesh.io.a.valid := true.B
+        mesh.io.a.bits  := 0.U.asTypeOf(mesh.A_TYPE)
+        mesh.io.b.valid := true.B
+        mesh.io.b.bits  := 0.U.asTypeOf(mesh.B_TYPE)
+        mesh.io.d.valid := true.B
+        mesh.io.d.bits  := 0.U.asTypeOf(mesh.D_TYPE)
+        when(mesh.io.a.ready && mesh.io.b.ready && mesh.io.d.ready) {
+          preload_pad_cnt := preload_pad_cnt + 1.U
+        }
       }
 
       // Step 3: all rows fed → commit
       when(req_sent && feed_row_cnt >= total_rows) {
-        io.cmdResp.valid := true.B
-        when(io.cmdResp.fire) {
-          state := sIdle
+        when(!wsNeedTransposeDrain || preload_pad_cnt >= total_rows) {
+          io.cmdResp.valid := true.B
+          when(io.cmdResp.fire) {
+            state := sIdle
+          }
         }
       }
     }
@@ -366,25 +408,23 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     //   A comes from rdQueue0 (op1_bank), D from rdQueue1 (op2_bank)
     // -----------------------------------------------------------------------
     is(sComputeFeed) {
-      // Collect/skip mesh output:
-      // WS mode: outputs A*B here (collect)
-      // OS mode: outputs c2=0 (garbage, discard but count for synchronization)
+      // Collect/skip mesh output during COMPUTE feed phase.
+      // WS mode: PRELOAD residual resp may still be trickling out here (the last few
+      //   resp from PRELOAD's PROPAGATE phase overlap with the start of sComputeFeed).
+      //   Discard all resp seen here; count them in skip_rows_cnt so that sDrain
+      //   knows how many PRELOAD resp have already been flushed.
+      // OS mode: COMPUTE resp (c2=0, garbage); discard and count in skip_rows_cnt.
       when(mesh.io.resp.valid) {
-        when(cfg_dataflow =/= Dataflow.OS.id.U) {
-          outBuf(outBufRows) := mesh.io.resp.bits.data
-          outBufRows         := outBufRows + 1.U
-        }.otherwise {
-          // OS mode: discard COMPUTE response (c2=0), just count
-          skip_rows_cnt := skip_rows_cnt + 1.U
-        }
+        skip_rows_cnt := skip_rows_cnt + 1.U
       }
 
       // Step 1: fire mesh.io.req (once)
       when(!req_sent) {
         mesh.io.req.valid                     := true.B
         mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
-        // OS: propagate=1 → in_prop XOR: 1→0, PE prop=0 (COMPUTE), c1 accumulates A*B
-        // WS: propagate=1 → in_prop XOR: 0→1, PE prop=1 (PROPAGATE), outputs accumulated c1
+        // MeshWithDelays applies req.propagate with XOR semantics on in_prop.
+        // After PRELOAD (req.propagate=1), WS compute must also send 1 to toggle
+        // effective PE mode from PROPAGATE -> COMPUTE.
         mesh.io.req.bits.pe_control.propagate := 1.U
         mesh.io.req.bits.pe_control.shift     := cfg_in_shift
         mesh.io.req.bits.a_transpose          := cfg_a_transpose
@@ -418,18 +458,18 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
             }
           }
         }.otherwise {
-          // WS mode: A from rdQueue0 (op1_bank), D from rdQueue1 (op2_bank)
+          // WS mode: activations from rdQueue0 via mesh.io.a, bias from rdQueue1 via mesh.io.b, d=0.
+          // Keep normal 3-way handshake to avoid mesh backpressure lockup.
           when(rdQueue0.io.deq.valid && rdQueue1.io.deq.valid) {
-            val a_row  = rdQueue0.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
-            val bd_row = rdQueue1.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
+            val act_row  = rdQueue0.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
+            val bias_row = rdQueue1.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
 
             mesh.io.a.valid := true.B
-            mesh.io.a.bits  := VecInit(a_row.grouped(config.tileRows).map(g => VecInit(g)).toSeq)
-            // WS: d carries input activations, b = 0
+            mesh.io.a.bits  := VecInit(act_row.grouped(config.tileRows).map(g => VecInit(g)).toSeq)
             mesh.io.b.valid := true.B
-            mesh.io.b.bits  := 0.U.asTypeOf(mesh.B_TYPE)
+            mesh.io.b.bits  := VecInit(bias_row.grouped(config.tileColumns).map(g => VecInit(g)).toSeq)
             mesh.io.d.valid := true.B
-            mesh.io.d.bits  := VecInit(bd_row.grouped(config.tileColumns).map(g => VecInit(g)).toSeq)
+            mesh.io.d.bits  := 0.U.asTypeOf(mesh.D_TYPE)
 
             when(mesh.io.a.ready && mesh.io.b.ready && mesh.io.d.ready) {
               rdQueue0.io.deq.ready := true.B
@@ -443,8 +483,7 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
       // Step 3: all rows fed; OS mode waits until COMPUTE responses are discarded
       when(req_sent && feed_row_cnt >= total_rows) {
         when(cfg_dataflow === Dataflow.OS.id.U) {
-          // OS mode: wait until all COMPUTE resp (c2=0) have been counted/discarded
-          // skip_rows_cnt is incremented whenever resp.valid is true (above)
+          // OS mode: wait until all COMPUTE resp (c2=0, garbage) have been discarded
           when(skip_rows_cnt >= total_rows) {
             // OS mode: mesh outputs C rows in REVERSE order (last tile row first).
             // Initialize outBufRows to total_rows-1 so first resp → outBuf[total_rows-1],
@@ -455,8 +494,11 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
             state           := sComputeFlush
           }
         }.otherwise {
-          // WS: output already collected during feed
-          state := sDrain
+          // WS: COMPUTE resp will appear in sDrain after the pipeline drains.
+          // skip_rows_cnt already tracks how many PRELOAD resp have been seen here;
+          // sDrain will skip the remaining PRELOAD resp (total_rows - skip_rows_cnt).
+          outBufRows := 0.U
+          state      := sDrain
         }
       }
     }
@@ -522,7 +564,7 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
           outBufRows         := outBufRows - 1.U
           outBufCollected    := outBufCollected + 1.U
         }.otherwise {
-          // WS mode: forward collection
+          // WS mode: collect responses directly.
           outBuf(outBufRows) := mesh.io.resp.bits.data
           outBufRows         := outBufRows + 1.U
         }
@@ -550,9 +592,18 @@ class GemminiExCtrl(val b: GlobalConfig) extends Module {
     // -----------------------------------------------------------------------
     is(sStore) {
       when(store_row_cnt < total_rows) {
-        val row      = outBuf(store_row_cnt)
-        val flat_row = VecInit(row.flatten)                // Vec of DIM SInt(accWidth)
-        val row_bits = Cat(flat_row.reverse.map(_.asUInt)) // DIM * accWidth total bits
+        val row        = outBuf(store_row_cnt)
+        // MeshWithDelays d path reverses element order within each write-port chunk.
+        // For WS+b_transpose we reverse each chunk so stored order is col0..col15.
+        val flat_raw   = VecInit(row.flatten)
+        val tileW      = b.memDomain.bankWidth / config.accWidth
+        val flat_order = VecInit((0 until DIM).map { i =>
+          val t = i / tileW
+          val j = t * tileW + (tileW - 1 - (i % tileW))
+          Mux(cfg_dataflow =/= Dataflow.OS.id.U && cfg_b_transpose, flat_raw(j), flat_raw(i))
+        })
+        val flat_row   = VecInit(flat_order.map(x => (x >> cfg_in_shift).asSInt))
+        val row_bits   = Cat(flat_row.reverse.map(_.asUInt))
 
         val bitsPerPort = b.memDomain.bankWidth
 
