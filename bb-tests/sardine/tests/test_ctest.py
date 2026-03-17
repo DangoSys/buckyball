@@ -16,6 +16,62 @@ ctest_workload_dir = (
 # Define all ctest workloads with absolute paths and corresponding IDs
 ctest_workloads = [
     (
+        "ctest_tlb_test_singlecore-baremetal",
+        "ctest_tlb_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_risc_basic_test_singlecore-baremetal",
+        "ctest_gemmini_os_risc_basic_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
+        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
+        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
+        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
+        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
+        "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
+        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
+        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
+        "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
+        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
+        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
+        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
+    ),
+    (
+        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
+        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
+    ),
+    (
         "ctest_mvin_mvout_test_singlecore-baremetal",
         "ctest_mvin_mvout_test_singlecore-baremetal",
     ),
@@ -90,62 +146,6 @@ ctest_workloads = [
     (
         "ctest_dequant_test_singlecore-baremetal",
         "ctest_dequant_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_tlb_test_singlecore-baremetal",
-        "ctest_tlb_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_basic_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_basic_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
-        "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
-        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
     ),
 ]
 
@@ -162,7 +162,7 @@ def test_ctest_workload_debug(
 ):
     caplog.set_level(logging.INFO)
 
-    time.sleep(test_index * 20)
+    time.sleep(test_index * 15)
     start_time = time.time()
     coverage_flag = " --coverage" if os.environ.get("SARDINE_COVERAGE") else ""
     command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'

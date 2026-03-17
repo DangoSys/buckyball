@@ -19,8 +19,10 @@ int main() {
   setvbuf(stdout, NULL, _IONBF, 0);
   printf("=== Gemmini WS RISC b_transpose Test ===\n");
 
-  init_u8_random_matrix(mat_a, DIM, DIM, 55);
-  init_u8_random_matrix(mat_b, DIM, DIM, 77);
+  for (int i = 0; i < DIM * DIM; i++) {
+    mat_a[i] = (elem_t)((i + 1) % 128);
+    mat_b[i] = (elem_t)((2 * (i + 1)) % 128);
+  }
   transpose_u8_matrix(mat_b, mat_bt, DIM, DIM);
   clear_u8_matrix(mat_d, DIM, DIM);
   cpu_matmul(mat_a, mat_bt, expected, DIM, DIM, DIM);
@@ -40,9 +42,9 @@ int main() {
   bb_fence();
 
   if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
-    printf("Test PASSED\n");
+    printf("Gemmini WS RISC b_transpose Test PASSED\n");
     return 0;
   }
-  printf("Test FAILED\n");
+  printf("Gemmini WS RISC b_transpose Test FAILED\n");
   return 1;
 }

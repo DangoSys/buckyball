@@ -63,9 +63,9 @@ int main() {
   bb_fence();
 
   if (compare_u32_matrices(output, expected, 1, OUT_CH)) {
-    printf("Test PASSED\n");
+    printf("Gemmini WS CISC Loop Conv Test PASSED\n");
     return 0;
   }
-  printf("Test FAILED\n");
+  printf("Gemmini WS CISC Loop Conv Test FAILED\n");
   return 1;
 }
