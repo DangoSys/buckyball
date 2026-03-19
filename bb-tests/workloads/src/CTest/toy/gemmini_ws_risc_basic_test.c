@@ -15,17 +15,14 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  setvbuf(stdout, NULL, _IONBF, 0);
   printf("=== Gemmini WS RISC Basic Test ===\n");
 
-  // Deterministic: mat_a[i] = i+1, mat_b[i] = 2*(i+1) (mod 128)
   for (int i = 0; i < DIM * DIM; i++) {
     mat_a[i] = (elem_t)((i + 1) % 128);
     mat_b[i] = (elem_t)((2 * (i + 1)) % 128);
   }
   clear_u8_matrix(mat_d, DIM, DIM);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
-  printf("expected[0] = %d\n", (int)expected[0]);
 
   // WS: bank_w=weights(B), bank_a=activations(A), bank_d=bias(0), bank_c=output
   uint32_t bank_w = 0, bank_a = 1, bank_d = 2, bank_c = 3;
@@ -46,12 +43,5 @@ int main() {
     printf("Gemmini WS RISC Basic Test PASSED\n");
     return 0;
   }
-  // // Print first few mismatches
-  // for (int i = 0; i < DIM * DIM && i < 8; i++) {
-  //   if (mat_c[i] != expected[i])
-  //     printf("  [%d] got=%d expected=%d\n", i, (int)mat_c[i],
-  //     (int)expected[i]);
-  // }
-  // printf("Test FAILED\n");
   return 1;
 }

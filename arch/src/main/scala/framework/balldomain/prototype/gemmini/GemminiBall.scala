@@ -46,6 +46,8 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   val funct7 = io.cmdReq.bits.cmd.funct7
 
+  val rs2Data = io.cmdReq.bits.cmd.special
+
   val isConfig     = funct7 === 0x02.U // GEMMINI_CONFIG (enable=000, opcode=2)
   val isPreload    = funct7 === 0x35.U // GEMMINI_PRELOAD (enable=011, opcode=5)
   val isComputePre = funct7 === 0x42.U // GEMMINI_COMPUTE_PRELOADED (enable=100, opcode=2)
@@ -61,8 +63,8 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   // ExUnit path (non-Loop: CONFIG/PRELOAD/COMPUTE/FLUSH)
   // =========================================================================
-  exCtrl.io.cmdReq.valid := io.cmdReq.valid && isExUnit
-  exCtrl.io.cmdReq.bits  := io.cmdReq.bits
+  exCtrl.exio.cmdReq.valid := io.cmdReq.valid && isExUnit
+  exCtrl.exio.cmdReq.bits  := io.cmdReq.bits
 
   // =========================================================================
   // Config latch path (immediate cmdResp)
@@ -70,8 +72,6 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   val configRespValid = RegInit(false.B)
   val configRespBits  = Reg(new BallRsComplete(b))
   configRespValid := false.B // default: pulse
-
-  val rs2Data = io.cmdReq.bits.cmd.special
 
   when(io.cmdReq.fire && isLoopWsConfig) {
     configRespValid           := true.B
@@ -185,7 +185,7 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   io.cmdReq.ready := Mux(
     isExUnit,
-    exCtrl.io.cmdReq.ready,
+    exCtrl.exio.cmdReq.ready,
     Mux(
       isLoopWsConfig || isLoopConvConfig,
       true.B,
@@ -200,7 +200,7 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   // cmdResp: mux between exUnit and config immediate response
   // =========================================================================
-  io.cmdResp <> exCtrl.io.cmdResp
+  io.cmdResp <> exCtrl.exio.cmdResp
   when(configRespValid) {
     io.cmdResp.valid := true.B
     io.cmdResp.bits  := configRespBits
@@ -210,24 +210,24 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // Bank connections (unchanged from original)
   // =========================================================================
   for (i <- 0 until inBW) {
-    io.bankRead(i).io.req <> exCtrl.io.bankReadReq(i)
-    exCtrl.io.bankReadResp(i) <> io.bankRead(i).io.resp
+    io.bankRead(i).io.req <> exCtrl.exio.bankReadReq(i)
+    exCtrl.exio.bankReadResp(i) <> io.bankRead(i).io.resp
     io.bankRead(i).rob_id   := rob_id_reg
     io.bankRead(i).ball_id  := 0.U
     io.bankRead(i).group_id := 0.U
   }
-  io.bankRead(0).bank_id := exCtrl.io.op1_bank_o
+  io.bankRead(0).bank_id := exCtrl.exio.op1_bank_o
   if (inBW > 1) {
-    io.bankRead(1).bank_id := exCtrl.io.op2_bank_o
+    io.bankRead(1).bank_id := exCtrl.exio.op2_bank_o
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io <> exCtrl.io.bankWrite(i)
-    io.bankWrite(i).bank_id  := exCtrl.io.wr_bank_o
+    io.bankWrite(i).io <> exCtrl.exio.bankWrite(i)
+    io.bankWrite(i).bank_id  := exCtrl.exio.wr_bank_o
     io.bankWrite(i).rob_id   := rob_id_reg
     io.bankWrite(i).ball_id  := 0.U
     io.bankWrite(i).group_id := i.U
   }
 
-  io.status <> exCtrl.io.status
+  io.status <> exCtrl.exio.status
 }
