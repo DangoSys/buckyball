@@ -16,7 +16,7 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  setvbuf(stdout, NULL, _IONBF, 0);
+
   printf("=== Gemmini WS RISC in_shift Test ===\n");
 
   for (int i = 0; i < DIM * DIM; i++) {

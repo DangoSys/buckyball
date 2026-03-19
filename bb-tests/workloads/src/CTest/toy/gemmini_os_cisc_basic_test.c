@@ -6,6 +6,7 @@
 #define DIM 16
 
 static elem_t mat_a[DIM * DIM] __attribute__((aligned(64)));
+static elem_t mat_a_t[DIM * DIM] __attribute__((aligned(64)));
 static elem_t mat_b[DIM * DIM] __attribute__((aligned(64)));
 static result_t mat_c[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected[DIM * DIM] __attribute__((aligned(64)));
@@ -14,16 +15,19 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  setvbuf(stdout, NULL, _IONBF, 0);
+
   printf("=== Gemmini OS CISC Basic Test ===\n");
 
   init_u8_random_matrix(mat_a, DIM, DIM, 42);
   init_u8_random_matrix(mat_b, DIM, DIM, 84);
+  // OS mode (transposer disabled): mesh computes A_loaded^T * B.
+  // Pre-transpose A so result = mat_a_t^T * mat_b = mat_a * mat_b.
+  transpose_u8_matrix(mat_a, mat_a_t, DIM, DIM);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
 
   bb_gemmini_config(0, 0, 0, 0, 0);
   bb_gemmini_loop_ws_config_bounds(1, 1, 1);
-  bb_gemmini_loop_ws_config_addr_a((uintptr_t)mat_a);
+  bb_gemmini_loop_ws_config_addr_a((uintptr_t)mat_a_t);
   bb_gemmini_loop_ws_config_addr_b((uintptr_t)mat_b);
   bb_gemmini_loop_ws_config_addr_d(0);
   bb_gemmini_loop_ws_config_addr_c((uintptr_t)mat_c);

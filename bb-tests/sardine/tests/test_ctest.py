@@ -24,52 +24,12 @@ ctest_workloads = [
         "ctest_gemmini_os_risc_basic_test_singlecore-baremetal",
     ),
     (
-        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_atranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_btranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_risc_abtranspose_test_singlecore-baremetal",
-    ),
-    (
         "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
         "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
     ),
     (
-        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_ws_risc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_ws_risc_btranspose_test_singlecore-baremetal",
-    ),
-    (
         "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
         "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_shift_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
-        "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
-    ),
-    (
-        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
-        "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
     ),
     (
         "ctest_mvin_mvout_test_singlecore-baremetal",

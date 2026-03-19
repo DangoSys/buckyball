@@ -15,7 +15,7 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  setvbuf(stdout, NULL, _IONBF, 0);
+
   printf("=== Gemmini OS RISC a_transpose Test ===\n");
 
   init_u8_random_matrix(mat_a, DIM, DIM, 42);

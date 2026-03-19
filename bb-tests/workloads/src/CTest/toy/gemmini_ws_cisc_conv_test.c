@@ -31,7 +31,7 @@ int main() {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  setvbuf(stdout, NULL, _IONBF, 0);
+
   printf("=== Gemmini WS CISC Loop Conv Test ===\n");
 
   // Initialize: input = 1x16 row vector, weight = 16x16 matrix
