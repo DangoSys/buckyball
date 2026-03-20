@@ -53,6 +53,9 @@ class SubROB(val b: GlobalConfig) extends Module {
   io.write.ready := !isFull && ballMatch
 
   when(io.write.fire) {
+    when(occupied) {
+      assert(io.write.bits.master_rob_id === masterRobId, "SubROB row master_rob_id mismatch")
+    }
     sram.write(writePtr, io.write.bits)
     writePtr := nextPtr(writePtr)
     rowCount := rowCount + 1.U
@@ -108,7 +111,13 @@ class SubROB(val b: GlobalConfig) extends Module {
   io.subComplete.ready := true.B
   when(io.subComplete.fire) {
     val subId   = io.subComplete.bits
+    val subRow  = subId / 4.U
     val slotIdx = subId(1, 0)
+    assert(
+      state === sReadResp || state === sWaitSlots || state === sWaitMaster,
+      "SubROB subComplete arrived in invalid state"
+    )
+    assert(subRow === readPtrReg, "SubROB subComplete points to non-active row")
     slotDone(slotIdx) := true.B
   }
 

@@ -9,6 +9,7 @@ case class FrontendParam(
   rob_entries:              Int,
   rs_out_of_order_response: Boolean,
   bank_id_len:              Int,
+  vbank_id_upper_bound:     Int,
   iter_len:                 Int,
   sub_rob_depth:            Int)
 

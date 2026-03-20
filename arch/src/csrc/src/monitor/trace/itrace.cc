@@ -1,4 +1,5 @@
 #include "monitor/trace.h"
+#include "monitor/trace_cfg.h"
 #include "utils/debug.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -37,24 +38,43 @@ static const char *bank_enable_str(unsigned char enable) {
   }
 }
 
+static void u64_hex(char *buf, size_t n, unsigned long long v) {
+  int ret = snprintf(buf, n, "0x%016llx", v);
+  if (ret < 0 || (size_t)ret >= n) {
+    panic("snprintf failed in itrace u64_hex");
+  }
+}
+
 // DPI-C function for instruction trace (itrace)
 // Called when an instruction is issued or completed in GlobalROB
 extern "C" void dpi_itrace(unsigned char is_issue, // 1 = issue, 0 = complete
                            unsigned int rob_id, unsigned int domain_id,
                            unsigned int funct, unsigned long long rs1,
                            unsigned long long rs2, unsigned char bank_enable) {
+  if (!bdb_trace_on(BDB_TR_ITRACE)) {
+    return;
+  }
   init_itrace();
 
   if (itrace_fp) {
+    char rs1_hex[19];
+    char rs2_hex[19];
+    u64_hex(rs1_hex, sizeof(rs1_hex), rs1);
+    u64_hex(rs2_hex, sizeof(rs2_hex), rs2);
     if (is_issue) {
       fprintf(itrace_fp,
-              "[ITRACE] ISSUE   rob_id=%u domain=%u funct=0x%02x "
-              "bank=%s rs1=0x%016llx rs2=0x%016llx\n",
-              rob_id, domain_id, funct, bank_enable_str(bank_enable), rs1, rs2);
+              "{\"type\":\"itrace\",\"event\":\"issue\",\"rob_id\":%u,"
+              "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
+              "\"bank\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
+              rob_id, domain_id, funct, bank_enable,
+              bank_enable_str(bank_enable), rs1_hex, rs2_hex);
     } else {
       fprintf(itrace_fp,
-              "[ITRACE] COMPLETE rob_id=%u domain=%u funct=0x%02x bank=%s\n",
-              rob_id, domain_id, funct, bank_enable_str(bank_enable));
+              "{\"type\":\"itrace\",\"event\":\"complete\",\"rob_id\":%u,"
+              "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
+              "\"bank\":\"%s\"}\n",
+              rob_id, domain_id, funct, bank_enable,
+              bank_enable_str(bank_enable));
     }
     fflush(itrace_fp);
   }

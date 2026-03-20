@@ -7,7 +7,7 @@ import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 import framework.top.GlobalConfig
 import examples.toy.balldomain.bbus.BBusModule
-import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.rs.BallReservationStation
 
@@ -18,10 +18,10 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
   @public
-  val global_issue_i = IO(Flipped(Decoupled(new GlobalRsIssue(b))))
+  val global_issue_i = IO(Flipped(Decoupled(new GlobalSchedIssue(b))))
 
   @public
-  val global_complete_o = IO(Decoupled(new GlobalRsComplete(b)))
+  val global_complete_o = IO(Decoupled(new GlobalSchedComplete(b)))
 
   @public
   val bankRead = IO(Vec(totalBallRead, Flipped(new BankRead(b))))

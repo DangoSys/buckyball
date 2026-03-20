@@ -6,14 +6,19 @@ import chisel3.experimental._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.frontend.decoder.PostGDCmd
-import framework.frontend.scoreboard.BankScoreboard
+import framework.frontend.scoreboard.{BankAliasTable, BankScoreboard}
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
 
-  val robDepth  = b.frontend.rob_entries
-  val idWidth   = log2Up(robDepth)
-  val bankIdLen = b.frontend.bank_id_len
+  val robDepth     = b.frontend.rob_entries
+  val idWidth      = log2Up(robDepth)
+  val scoreBankNum = 1 << b.frontend.bank_id_len
+
+  require(
+    b.frontend.vbank_id_upper_bound < b.memDomain.bankNum,
+    s"vbank_id_upper_bound(${b.frontend.vbank_id_upper_bound}) must be < memDomain.bankNum(${b.memDomain.bankNum})"
+  )
 
   @public
   val io = IO(new Bundle {
@@ -32,9 +37,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   })
 
   // ---------------------------------------------------------------------------
-  // Bank Scoreboard
+  // BAT + Bank Scoreboard
   // ---------------------------------------------------------------------------
-  val scoreboard: Instance[BankScoreboard] = Instantiate(new BankScoreboard(b.memDomain.bankNum, robDepth))
+  val bat: Instance[BankAliasTable] = Instantiate(
+    new BankAliasTable(
+      bankIdLen = b.frontend.bank_id_len,
+      vbankUpper = b.frontend.vbank_id_upper_bound,
+      robEntries = robDepth
+    )
+  )
+
+  val scoreboard: Instance[BankScoreboard] = Instantiate(new BankScoreboard(scoreBankNum, robDepth))
 
   // ---------------------------------------------------------------------------
   // Instruction trace (DPI-C, defined in ITraceDPI.scala)
@@ -71,15 +84,26 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // Allocate: enqueue decoded instruction into ROB
   // rob_id == tailPtr at allocation time (no separate counter needed)
   // ---------------------------------------------------------------------------
-  io.alloc.ready := !isFull
+  io.alloc.ready      := !isFull
+  bat.io.alloc.valid  := io.alloc.fire
+  bat.io.alloc.rob_id := tailPtr
+  bat.io.alloc.raw    := io.alloc.bits.bankAccess
+
+  val commitMask = Wire(Vec(robDepth, Bool()))
+  for (i <- 0 until robDepth) {
+    commitMask(i) := false.B
+  }
+  bat.io.free.valid := commitMask.asUInt.orR
+  bat.io.free.mask := commitMask
 
   when(io.alloc.fire) {
-    robEntries(tailPtr).cmd    := io.alloc.bits
-    robEntries(tailPtr).rob_id := tailPtr
-    robValid(tailPtr)          := true.B
-    robIssued(tailPtr)         := false.B
-    robComplete(tailPtr)       := false.B
-    tailPtr                    := nextPtr(tailPtr)
+    robEntries(tailPtr).cmd               := io.alloc.bits
+    robEntries(tailPtr).renamedBankAccess := bat.io.alloc_renamed
+    robEntries(tailPtr).rob_id            := tailPtr
+    robValid(tailPtr)                     := true.B
+    robIssued(tailPtr)                    := false.B
+    robComplete(tailPtr)                  := false.B
+    tailPtr                               := nextPtr(tailPtr)
   }
 
   // ---------------------------------------------------------------------------
@@ -97,7 +121,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       issuedCount := issuedCount - 1.U
     }
     scoreboard.complete.valid := true.B
-    scoreboard.complete.bits  := robEntries(cid).cmd.bankAccess
+    scoreboard.complete.bits  := robEntries(cid).renamedBankAccess
 
     itrace.io.is_issue    := 0.U
     itrace.io.rob_id      := cid
@@ -122,7 +146,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val firstValid     = PriorityEncoder(scanValid.asUInt)
   val actualIssuePtr = wrapPtr(headPtr + firstValid)
 
-  scoreboard.query := robEntries(actualIssuePtr).cmd.bankAccess
+  scoreboard.query := robEntries(actualIssuePtr).renamedBankAccess
   val noHazard = !scoreboard.hasHazard
   val canIssue = hasValid && noHazard
 
@@ -136,7 +160,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     robIssued(actualIssuePtr) := true.B
     issuedCount               := issuedCount + 1.U
     scoreboard.issue.valid    := true.B
-    scoreboard.issue.bits     := robEntries(actualIssuePtr).cmd.bankAccess
+    scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
     itrace.io.is_issue    := 1.U
     itrace.io.rob_id      := robEntries(actualIssuePtr).rob_id
@@ -155,7 +179,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   for (i <- 0 until robDepth) {
     val beingAllocated = io.alloc.fire && (tailPtr === i.U)
     val beingCompleted = io.complete.fire && (io.complete.bits === i.U)
-    when(robValid(i) && robComplete(i) && !beingAllocated && !beingCompleted) {
+    commitMask(i) := robValid(i) && robComplete(i) && !beingAllocated && !beingCompleted
+    when(commitMask(i)) {
       robValid(i)    := false.B
       robIssued(i)   := false.B
       robComplete(i) := false.B

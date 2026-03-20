@@ -9,7 +9,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import chisel3.util._
 import chisel3.util.experimental.decode.DecodeBundle
 import framework.top.GlobalConfig
-import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.gpdomain.sequencer.decoder.{Decoder, DomainDecoder}
 
 /**
@@ -39,8 +39,8 @@ class Sequencer(val b: GlobalConfig) extends Module {
   @public
   val io = IO(new Bundle {
     // Interface with global RS
-    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
-    val global_complete_o = Decoupled(new GlobalRsComplete(b))
+    val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
+    val global_complete_o = Decoupled(new GlobalSchedComplete(b))
 
     // TODO: Interface with lanes (placeholder)
     // val laneRequest = Vec(laneNumber, Decoupled(new LaneRequest(...)))

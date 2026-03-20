@@ -7,7 +7,7 @@ import framework.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWri
 import framework.memdomain.frontend.outside_channel.{MemConfiger, MemConfigerIO, MemLoader, MemStorer}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
-import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
@@ -25,9 +25,9 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   @public
   val io = IO(new Bundle {
     // Issue interface from global RS (single channel)
-    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
+    val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     // Report completion to global RS (single channel)
-    val global_complete_o = Decoupled(new GlobalRsComplete(b))
+    val global_complete_o = Decoupled(new GlobalSchedComplete(b))
 
     // Bank read/write interface - used by load/store
     val interdma = new Bundle {

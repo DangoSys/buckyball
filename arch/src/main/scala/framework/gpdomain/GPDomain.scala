@@ -2,7 +2,7 @@ package framework.gpdomain
 
 import chisel3._
 import chisel3.util._
-import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 
@@ -11,8 +11,8 @@ class GpDomain(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
-    val global_complete_o = Decoupled(new GlobalRsComplete(b))
+    val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
+    val global_complete_o = Decoupled(new GlobalSchedComplete(b))
     // Status signal
     val busy              = Output(Bool())
   })

@@ -4,14 +4,14 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
-import framework.frontend.globalrs.{GlobalReservationStation, GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, GlobalScheduler}
 import framework.top.GlobalConfig
 import framework.core.bbtile.{RoCCCommandBB, RoCCResponseBB}
 import framework.balldomain.blink.SubRobRow
 
 /**
  * Frontend Module
- * Encapsulates GlobalDecoder and GlobalReservationStation
+ * Encapsulates GlobalDecoder and global scheduler
  */
 @instantiable
 class Frontend(val b: GlobalConfig) extends Module {
@@ -25,13 +25,13 @@ class Frontend(val b: GlobalConfig) extends Module {
     }))
 
     // Issue to domains
-    val ball_issue_o    = Decoupled(new GlobalRsIssue(b))
-    val mem_issue_o     = Decoupled(new GlobalRsIssue(b))
-    val gp_issue_o      = Decoupled(new GlobalRsIssue(b))
+    val ball_issue_o    = Decoupled(new GlobalSchedIssue(b))
+    val mem_issue_o     = Decoupled(new GlobalSchedIssue(b))
+    val gp_issue_o      = Decoupled(new GlobalSchedIssue(b))
     // Complete from domains
-    val ball_complete_i = Flipped(Decoupled(new GlobalRsComplete(b)))
-    val mem_complete_i  = Flipped(Decoupled(new GlobalRsComplete(b)))
-    val gp_complete_i   = Flipped(Decoupled(new GlobalRsComplete(b)))
+    val ball_complete_i = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val mem_complete_i  = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val gp_complete_i   = Flipped(Decoupled(new GlobalSchedComplete(b)))
 
     // Ball -> SubROB request passthrough
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
@@ -45,33 +45,33 @@ class Frontend(val b: GlobalConfig) extends Module {
     val barrier_release = Input(Bool())
   })
 
-  val gDecoder: Instance[GlobalDecoder]            = Instantiate(new GlobalDecoder(b))
-  val globalRs: Instance[GlobalReservationStation] = Instantiate(new GlobalReservationStation(b))
+  val gDecoder:  Instance[GlobalDecoder]   = Instantiate(new GlobalDecoder(b))
+  val scheduler: Instance[GlobalScheduler] = Instantiate(new GlobalScheduler(b))
 
   gDecoder.io.id_i.valid    := io.cmd.valid
   gDecoder.io.id_i.bits.cmd := io.cmd.bits.cmd
   io.cmd.ready              := gDecoder.io.id_i.ready
 
-  globalRs.io.global_decode_cmd_i <> gDecoder.io.id_o
+  scheduler.io.decode_cmd_i <> gDecoder.io.id_o
 
-  io.ball_issue_o <> globalRs.io.ball_issue_o
-  io.mem_issue_o <> globalRs.io.mem_issue_o
-  io.gp_issue_o <> globalRs.io.gp_issue_o
+  io.ball_issue_o <> scheduler.io.ball_issue_o
+  io.mem_issue_o <> scheduler.io.mem_issue_o
+  io.gp_issue_o <> scheduler.io.gp_issue_o
 
-  globalRs.io.ball_complete_i <> io.ball_complete_i
-  globalRs.io.mem_complete_i <> io.mem_complete_i
-  globalRs.io.gp_complete_i <> io.gp_complete_i
+  scheduler.io.ball_complete_i <> io.ball_complete_i
+  scheduler.io.mem_complete_i <> io.mem_complete_i
+  scheduler.io.gp_complete_i <> io.gp_complete_i
 
-  // Wire SubROB request from BallDomain through to GlobalRS
+  // Wire SubROB request from BallDomain through to scheduler
   for (i <- 0 until b.ballDomain.ballNum) {
-    globalRs.io.ball_subrob_req_i(i) <> io.ball_subrob_req_i(i)
+    scheduler.io.ball_subrob_req_i(i) <> io.ball_subrob_req_i(i)
   }
 
-  io.resp <> globalRs.io.rs_rocc_o.resp
-  io.busy := globalRs.io.rs_rocc_o.busy
+  io.resp <> scheduler.io.scheduler_rocc_o.resp
+  io.busy := scheduler.io.scheduler_rocc_o.busy
 
   // Barrier passthrough
-  io.barrier_arrive           := globalRs.io.barrier_arrive
-  globalRs.io.barrier_release := io.barrier_release
+  io.barrier_arrive            := scheduler.io.barrier_arrive
+  scheduler.io.barrier_release := io.barrier_release
 
 }
