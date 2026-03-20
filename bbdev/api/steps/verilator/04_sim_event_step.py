@@ -65,12 +65,17 @@ async def handler(data, context):
 
     log_path    = f"{log_dir}/bdb.ndjson"
     stdout_path = f"{log_dir}/stdout.log"
+    meta_path   = f"{log_dir}/sim_meta.txt"
     fst_path    = f"{waveform_dir}/waveform.fst"
 
     # ==================================================================================
     # Execute simulation
     # BBSimHarness uses +elf= for ELF loading (via SimDRAM_bb.cc / libelf)
     # No fesvr, no +loadmem_addr needed
+    #
+    # disasm.log: only stderr -> spike-dasm (Rocket commit printf is stderr here;
+    # merging stdout with 2>&1 can break: full stdio buffering + non-DASM bytes).
+    # BDB_SIM_META moves NDJSON banner to sim_meta.txt so it does not pollute disasm.
     # ==================================================================================
     ld_lib_path = (
         f"{bbdir}/result/lib:"
@@ -78,6 +83,7 @@ async def handler(data, context):
     )
     sim_cmd = (
         f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "
+        f"export BDB_SIM_META=\"{meta_path}\"; "
         f"{bin_path} +permissive "
         f"+elf={binary_path} "
         f"{'+batch ' if batch else ''}"
@@ -111,6 +117,7 @@ async def handler(data, context):
         "log_dir": log_dir,
         "waveform_dir": waveform_dir,
         "timestamp": timestamp,
+        "sim_meta": meta_path,
     }
     if coverage:
         extra_fields["coverage_dat"] = coverage_dat_path
