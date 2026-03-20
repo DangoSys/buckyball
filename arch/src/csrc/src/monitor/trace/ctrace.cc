@@ -1,4 +1,5 @@
 #include "monitor/trace.h"
+#include "monitor/trace_cfg.h"
 #include "utils/debug.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -42,6 +43,14 @@ static void init_ctrace() {
   }
 }
 
+static void u128_hex(char *buf, size_t n, unsigned long long hi,
+                     unsigned long long lo) {
+  int ret = snprintf(buf, n, "0x%016llX%016llX", hi, lo);
+  if (ret < 0 || (size_t)ret >= n) {
+    panic("snprintf failed in ctrace u128_hex");
+  }
+}
+
 // ================================================================
 // Cycle counter DPI-C
 // ================================================================
@@ -49,23 +58,30 @@ static void init_ctrace() {
 extern "C" void dpi_ctrace(unsigned char subcmd, unsigned int ctr_id,
                            unsigned long long tag, unsigned long long elapsed,
                            unsigned long long cycle) {
+  if (!bdb_trace_on(BDB_TR_CTRACE)) {
+    return;
+  }
   init_ctrace();
 
   if (ctrace_fp) {
     switch (subcmd) {
     case 0: // CTR_START
-      fprintf(ctrace_fp, "[CTRACE] CTR_START  ctr=%u tag=0x%llX cycle=%llu\n",
+      fprintf(ctrace_fp,
+              "{\"type\":\"ctrace\",\"event\":\"ctr_start\",\"ctr_id\":%u,"
+              "\"tag\":\"0x%llX\",\"cycle\":%llu}\n",
               ctr_id, tag, cycle);
       break;
     case 1: // CTR_STOP
       fprintf(ctrace_fp,
-              "[CTRACE] CTR_STOP   ctr=%u tag=0x%llX elapsed=%llu cycle=%llu\n",
+              "{\"type\":\"ctrace\",\"event\":\"ctr_stop\",\"ctr_id\":%u,"
+              "\"tag\":\"0x%llX\",\"elapsed\":%llu,\"cycle\":%llu}\n",
               ctr_id, tag, elapsed, cycle);
       break;
     case 2: // CTR_READ
       fprintf(ctrace_fp,
-              "[CTRACE] CTR_READ   ctr=%u current=%llu cycle=%llu\n", ctr_id,
-              elapsed, cycle);
+              "{\"type\":\"ctrace\",\"event\":\"ctr_read\",\"ctr_id\":%u,"
+              "\"current\":%llu,\"cycle\":%llu}\n",
+              ctr_id, elapsed, cycle);
       break;
     }
     fflush(ctrace_fp);
@@ -104,32 +120,42 @@ extern "C" void dpi_backdoor_get_write_data(unsigned long long *data_lo,
   *data_hi = bd_write_data_hi;
 }
 
-// RTL calls this after reading SRAM — logs the data to bdb.log
+// RTL calls this after reading SRAM — logs the data to NDJSON trace file
 extern "C" void dpi_backdoor_put_read_data(unsigned int bank_id,
                                            unsigned int row,
                                            unsigned long long data_lo,
                                            unsigned long long data_hi) {
+  if (!bdb_trace_on(BDB_TR_BANKTRACE)) {
+    return;
+  }
   init_ctrace();
   if (ctrace_fp) {
+    char data_hex[35];
+    u128_hex(data_hex, sizeof(data_hex), data_hi, data_lo);
     fprintf(ctrace_fp,
-            "[BANK-TRACE] BACKDOOR_READ  bank=%u row=%u "
-            "data=0x%016llX%016llX\n",
-            bank_id, row, data_hi, data_lo);
+            "{\"type\":\"banktrace\",\"event\":\"backdoor_read\","
+            "\"bank_id\":%u,\"row\":%u,\"data\":\"%s\"}\n",
+            bank_id, row, data_hex);
     fflush(ctrace_fp);
   }
 }
 
-// RTL calls this after writing SRAM — logs the write to bdb.log
+// RTL calls this after writing SRAM — logs the write to NDJSON trace file
 extern "C" void dpi_backdoor_put_write_done(unsigned int bank_id,
                                             unsigned int row,
                                             unsigned long long data_lo,
                                             unsigned long long data_hi) {
+  if (!bdb_trace_on(BDB_TR_BANKTRACE)) {
+    return;
+  }
   init_ctrace();
   if (ctrace_fp) {
+    char data_hex[35];
+    u128_hex(data_hex, sizeof(data_hex), data_hi, data_lo);
     fprintf(ctrace_fp,
-            "[BANK-TRACE] BACKDOOR_WRITE bank=%u row=%u "
-            "data=0x%016llX%016llX\n",
-            bank_id, row, data_hi, data_lo);
+            "{\"type\":\"banktrace\",\"event\":\"backdoor_write\","
+            "\"bank_id\":%u,\"row\":%u,\"data\":\"%s\"}\n",
+            bank_id, row, data_hex);
     fflush(ctrace_fp);
   }
 }

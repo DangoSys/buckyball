@@ -2,6 +2,7 @@
   "rob_entries": 16,
   "rs_out_of_order_response": true,
   "bank_id_len": 10,
+  "vbank_id_upper_bound": 31,
   "iter_len": 34,
   "sub_rob_depth": 64
 }

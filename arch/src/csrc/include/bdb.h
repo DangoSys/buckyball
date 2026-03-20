@@ -2,12 +2,13 @@
 #define _BDB_H_
 
 // DPI-C
-#include "verilated_dpi.h"
 #include "svdpi.h"
+#include "verilated_dpi.h"
 // verilator
 #include "verilated.h"
 
 #include "VBBSimHarness.h"
+#include "monitor/trace_cfg.h"
 #include "verilated_fst_c.h"
 #if VM_COVERAGE
 #include "verilated_cov.h"

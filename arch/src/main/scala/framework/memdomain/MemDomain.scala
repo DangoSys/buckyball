@@ -6,7 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import freechips.rocketchip.tile._
 import framework.balldomain.blink.{BankRead, BankWrite}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
-import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.top.GlobalConfig
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.frontend.MemFrontend
@@ -25,8 +25,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     // -------------------------------------------------
     // Command Channel
     // -------------------------------------------------
-    val global_issue_i    = Flipped(Decoupled(new GlobalRsIssue(b)))
-    val global_complete_o = Decoupled(new GlobalRsComplete(b))
+    val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
+    val global_complete_o = Decoupled(new GlobalSchedComplete(b))
     val busy              = Output(Bool())
 
     // -------------------------------------------------

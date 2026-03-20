@@ -1,4 +1,5 @@
 #include "monitor/trace.h"
+#include "monitor/trace_cfg.h"
 #include "utils/debug.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -21,10 +22,15 @@ static void init_pmctrace() {
 // Called when a Ball completes a task, reports elapsed cycles
 extern "C" void dpi_pmctrace(unsigned int ball_id, unsigned int rob_id,
                              unsigned long long elapsed) {
+  if (!bdb_trace_on(BDB_TR_PMCTRACE)) {
+    return;
+  }
   init_pmctrace();
 
   if (pmctrace_fp) {
-    fprintf(pmctrace_fp, "[PMCTRACE] BALL ball_id=%u rob_id=%u elapsed=%llu\n",
+    fprintf(pmctrace_fp,
+            "{\"type\":\"pmctrace\",\"event\":\"ball\",\"ball_id\":%u,"
+            "\"rob_id\":%u,\"elapsed\":%llu}\n",
             ball_id, rob_id, elapsed);
     fflush(pmctrace_fp);
   }
@@ -34,15 +40,22 @@ extern "C" void dpi_pmctrace(unsigned int ball_id, unsigned int rob_id,
 // Called when a load/store completes, reports elapsed cycles
 extern "C" void dpi_mem_pmctrace(unsigned char is_store, unsigned int rob_id,
                                  unsigned long long elapsed) {
+  if (!bdb_trace_on(BDB_TR_PMCTRACE)) {
+    return;
+  }
   init_pmctrace();
 
   if (pmctrace_fp) {
     if (is_store) {
-      fprintf(pmctrace_fp, "[PMCTRACE] STORE rob_id=%u elapsed=%llu\n", rob_id,
-              elapsed);
+      fprintf(pmctrace_fp,
+              "{\"type\":\"pmctrace\",\"event\":\"store\","
+              "\"rob_id\":%u,\"elapsed\":%llu}\n",
+              rob_id, elapsed);
     } else {
-      fprintf(pmctrace_fp, "[PMCTRACE] LOAD  rob_id=%u elapsed=%llu\n", rob_id,
-              elapsed);
+      fprintf(pmctrace_fp,
+              "{\"type\":\"pmctrace\",\"event\":\"load\","
+              "\"rob_id\":%u,\"elapsed\":%llu}\n",
+              rob_id, elapsed);
     }
     fflush(pmctrace_fp);
   }
