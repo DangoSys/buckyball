@@ -74,6 +74,7 @@ async def handler(data, context):
     ])
 
     # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
+    # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event_step.py).
     cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
 
     ldflags = (
@@ -84,7 +85,7 @@ async def handler(data, context):
     )
 
     obj_dir = f"{build_dir}/obj_dir"
-    subprocess.run(f"rm -rf {obj_dir}", shell=True)
+    # subprocess.run(f"rm -rf {obj_dir}", shell=True)
     os.makedirs(obj_dir, exist_ok=True)
 
     sources = " ".join(vsrcs + csrcs)

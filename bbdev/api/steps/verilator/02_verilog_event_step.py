@@ -53,8 +53,18 @@ async def handler(data, context):
     else:
         command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
 
-    command += "--disable-annotation-unknown -strip-debug-info -O=debug "
-    command += f"--split-verilog -o={build_dir}"
+    # Firtool options (CIRCT). Current set; optional Chipyard-style options below.
+    command += "--disable-annotation-unknown "
+    command += "--strip-debug-info "
+    command += "-O=debug "
+    # command += f"-repl-seq-mem -repl-seq-mem-file={build_dir}/mem.conf "
+    command += f"--split-verilog -o={build_dir} "
+    # Optional: --disable-annotation-classless (ignore classless annotations)
+    # Optional: -repl-seq-mem -repl-seq-mem-file=<path>.conf (SRAM macro replacement)
+    # Optional: --disable-all-randomization (disable mem/reg init; may break semantics)
+    # Optional: --disable-opt (no optimization) or -O=release (default is release)
+    # Optional: --output-annotation-file=<path> (emit annotations after lower-to-hw)
+    # Optional: --no-dedup (disable module dedup); --strip-fir-debug-info (FIR locators)
 
     result = stream_run_logger(
         cmd=command,

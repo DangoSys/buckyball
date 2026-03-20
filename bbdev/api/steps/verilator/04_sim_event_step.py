@@ -63,7 +63,7 @@ async def handler(data, context):
     bin_path = f"{build_dir}/obj_dir/V{topname}"
     batch = data.get("batch", False)
 
-    log_path    = f"{log_dir}/bdb.log"
+    log_path    = f"{log_dir}/bdb.ndjson"
     stdout_path = f"{log_dir}/stdout.log"
     fst_path    = f"{waveform_dir}/waveform.fst"
 
@@ -82,7 +82,7 @@ async def handler(data, context):
         f"+elf={binary_path} "
         f"{'+batch ' if batch else ''}"
         f"{coverage_flag + ' ' if coverage_flag else ''}"
-        f"+fst={fst_path} +log={log_path} +stdout={stdout_path} +permissive-off "
+        f"+fst={fst_path} +log={log_path} +stdout={stdout_path} +trace=all +permissive-off "
         f"{binary_path} 2> >(spike-dasm > {log_dir}/disasm.log)"
     )
     script_dir = os.path.dirname(__file__)
