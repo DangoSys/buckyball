@@ -28,10 +28,11 @@ extern "C" void dpi_pmctrace(unsigned int ball_id, unsigned int rob_id,
   init_pmctrace();
 
   if (pmctrace_fp) {
-    fprintf(pmctrace_fp,
-            "{\"type\":\"pmctrace\",\"event\":\"ball\",\"ball_id\":%u,"
-            "\"rob_id\":%u,\"elapsed\":%llu}\n",
-            ball_id, rob_id, elapsed);
+    fprintf(
+        pmctrace_fp,
+        "{\"type\":\"pmctrace\",\"clk\":%llu,\"event\":\"ball\",\"ball_id\":%u,"
+        "\"rob_id\":%u,\"elapsed\":%llu}\n",
+        (unsigned long long)bdb_rtl_clk, ball_id, rob_id, elapsed);
     fflush(pmctrace_fp);
   }
 }
@@ -48,14 +49,14 @@ extern "C" void dpi_mem_pmctrace(unsigned char is_store, unsigned int rob_id,
   if (pmctrace_fp) {
     if (is_store) {
       fprintf(pmctrace_fp,
-              "{\"type\":\"pmctrace\",\"event\":\"store\","
+              "{\"type\":\"pmctrace\",\"clk\":%llu,\"event\":\"store\","
               "\"rob_id\":%u,\"elapsed\":%llu}\n",
-              rob_id, elapsed);
+              (unsigned long long)bdb_rtl_clk, rob_id, elapsed);
     } else {
       fprintf(pmctrace_fp,
-              "{\"type\":\"pmctrace\",\"event\":\"load\","
+              "{\"type\":\"pmctrace\",\"clk\":%llu,\"event\":\"load\","
               "\"rob_id\":%u,\"elapsed\":%llu}\n",
-              rob_id, elapsed);
+              (unsigned long long)bdb_rtl_clk, rob_id, elapsed);
     }
     fflush(pmctrace_fp);
   }

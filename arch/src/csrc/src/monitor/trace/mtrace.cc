@@ -44,16 +44,20 @@ extern "C" void dpi_mtrace(unsigned char is_write, // 1 = write, 0 = read
     if (is_write) {
       u128_hex(data_hex, sizeof(data_hex), data_hi, data_lo);
       fprintf(mtrace_fp,
-              "{\"type\":\"mtrace\",\"event\":\"write\",\"channel\":%u,"
+              "{\"type\":\"mtrace\",\"clk\":%llu,\"event\":\"write\","
+              "\"channel\":%u,"
               "\"hart_id\":%llu,\"is_shared\":%u,\"vbank_id\":%u,"
               "\"group_id\":%u,\"addr\":\"0x%08x\",\"data\":\"%s\"}\n",
-              channel, hart_id, is_shared, vbank_id, group_id, addr, data_hex);
+              (unsigned long long)bdb_rtl_clk, channel, hart_id, is_shared,
+              vbank_id, group_id, addr, data_hex);
     } else {
-      fprintf(mtrace_fp,
-              "{\"type\":\"mtrace\",\"event\":\"read\",\"channel\":%u,"
-              "\"hart_id\":%llu,\"is_shared\":%u,\"vbank_id\":%u,"
-              "\"group_id\":%u,\"addr\":\"0x%08x\"}\n",
-              channel, hart_id, is_shared, vbank_id, group_id, addr);
+      fprintf(
+          mtrace_fp,
+          "{\"type\":\"mtrace\",\"clk\":%llu,\"event\":\"read\",\"channel\":%u,"
+          "\"hart_id\":%llu,\"is_shared\":%u,\"vbank_id\":%u,"
+          "\"group_id\":%u,\"addr\":\"0x%08x\"}\n",
+          (unsigned long long)bdb_rtl_clk, channel, hart_id, is_shared,
+          vbank_id, group_id, addr);
     }
     fflush(mtrace_fp);
   }

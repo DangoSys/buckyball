@@ -16,6 +16,7 @@
     requests
     pysocks
     allure-pytest
+    matplotlib
 
     # pre-commit hooks (language: system use)
     black

@@ -26,6 +26,10 @@ extern const char *stdout_path;
 // Raw stdout fd saved before dup2 — UART writes here for real-time display
 extern int raw_stdout_fd;
 
+// If set (bbdev sim), NDJSON banner goes here; stdout may be piped to
+// spike-dasm.
+const char *bdb_sim_meta_path(void);
+
 void init_monitor(int argc, char *argv[]);
 void bdb_mainloop();
 void ball_exec_once();

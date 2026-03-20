@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+// Harness clock cycle index (BBSimHarness posedge); must run before other trace
+// DPI in same eval.
+void dpi_bdb_set_clk(unsigned long long c);
+
 // DPI-C function for instruction trace (itrace)
 // Called from GlobalROB when instructions are issued or completed
 void dpi_itrace(unsigned char is_issue, // 1 = issue, 0 = complete
