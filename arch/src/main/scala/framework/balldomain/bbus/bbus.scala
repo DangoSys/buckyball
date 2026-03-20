@@ -9,7 +9,6 @@ import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
-import framework.top.channels.{Channel, ChannelClusterIO, ChannelIO}
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices

@@ -10,7 +10,6 @@ import examples.toy.balldomain.bbus.BBusModule
 import framework.frontend.globalrs.{GlobalRsComplete, GlobalRsIssue}
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.rs.BallReservationStation
-import framework.top.channels.{ChannelClusterIO, ChannelIO}
 
 @instantiable
 class BallDomain(val b: GlobalConfig) extends Module {
