@@ -45,7 +45,9 @@ void sim_init(int argc, char **argv) {
   top->trace(tfp, 0);
 
   tfp->open(fst_path);
-  Log("The waveform will be saved to the FST file: %s", fst_path);
+  if (bdb_sim_meta_path() == nullptr) {
+    Log("The waveform will be saved to the FST file: %s", fst_path);
+  }
 
   top->reset = 1;
   top->clock = 0;
@@ -68,7 +70,9 @@ void sim_exit() {
   contextp->timeInc(1);
   tfp->dump(contextp->time());
   tfp->close();
-  printf("The wave data has been saved to the FST file: %s\n", fst_path);
+  if (bdb_sim_meta_path() == nullptr) {
+    printf("The wave data has been saved to the FST file: %s\n", fst_path);
+  }
   exit(0);
 }
 
@@ -76,7 +80,7 @@ void ball_exec_once() {
   // posedge: clock=1, eval (FF outputs settle), read fire pulse from RTL slave
   top->clock = 1;
   top->eval();
-  mmio_tick();  // read io_mmio_fire; all AXI4 handshaking done in RTL
+  mmio_tick(); // read io_mmio_fire; all AXI4 handshaking done in RTL
   contextp->timeInc(1);
   tfp->dump(contextp->time());
   sim_time++;

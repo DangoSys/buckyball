@@ -127,6 +127,10 @@ class BBSimHarness(implicit val p: Parameters) extends Module with HasHarnessIns
   io.mmio_fire_addr := 0.U
   io.mmio_fire_data := 0.U
 
+  val bdbClkDpi = Module(new BdbClkDPI)
+  bdbClkDpi.io.clock := clock
+  bdbClkDpi.io.reset := reset.asBool
+
   def referenceClockFreqMHz: Double = 1000.0
   def referenceClock:        Clock  = clock
   def referenceReset:        Reset  = reset

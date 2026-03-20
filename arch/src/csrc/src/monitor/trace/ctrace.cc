@@ -67,21 +67,24 @@ extern "C" void dpi_ctrace(unsigned char subcmd, unsigned int ctr_id,
     switch (subcmd) {
     case 0: // CTR_START
       fprintf(ctrace_fp,
-              "{\"type\":\"ctrace\",\"event\":\"ctr_start\",\"ctr_id\":%u,"
+              "{\"type\":\"ctrace\",\"clk\":%llu,\"event\":\"ctr_start\",\"ctr_"
+              "id\":%u,"
               "\"tag\":\"0x%llX\",\"cycle\":%llu}\n",
-              ctr_id, tag, cycle);
+              (unsigned long long)bdb_rtl_clk, ctr_id, tag, cycle);
       break;
     case 1: // CTR_STOP
       fprintf(ctrace_fp,
-              "{\"type\":\"ctrace\",\"event\":\"ctr_stop\",\"ctr_id\":%u,"
+              "{\"type\":\"ctrace\",\"clk\":%llu,\"event\":\"ctr_stop\",\"ctr_"
+              "id\":%u,"
               "\"tag\":\"0x%llX\",\"elapsed\":%llu,\"cycle\":%llu}\n",
-              ctr_id, tag, elapsed, cycle);
+              (unsigned long long)bdb_rtl_clk, ctr_id, tag, elapsed, cycle);
       break;
     case 2: // CTR_READ
       fprintf(ctrace_fp,
-              "{\"type\":\"ctrace\",\"event\":\"ctr_read\",\"ctr_id\":%u,"
+              "{\"type\":\"ctrace\",\"clk\":%llu,\"event\":\"ctr_read\",\"ctr_"
+              "id\":%u,"
               "\"current\":%llu,\"cycle\":%llu}\n",
-              ctr_id, elapsed, cycle);
+              (unsigned long long)bdb_rtl_clk, ctr_id, elapsed, cycle);
       break;
     }
     fflush(ctrace_fp);
@@ -133,9 +136,9 @@ extern "C" void dpi_backdoor_put_read_data(unsigned int bank_id,
     char data_hex[35];
     u128_hex(data_hex, sizeof(data_hex), data_hi, data_lo);
     fprintf(ctrace_fp,
-            "{\"type\":\"banktrace\",\"event\":\"backdoor_read\","
+            "{\"type\":\"banktrace\",\"clk\":%llu,\"event\":\"backdoor_read\","
             "\"bank_id\":%u,\"row\":%u,\"data\":\"%s\"}\n",
-            bank_id, row, data_hex);
+            (unsigned long long)bdb_rtl_clk, bank_id, row, data_hex);
     fflush(ctrace_fp);
   }
 }
@@ -153,9 +156,9 @@ extern "C" void dpi_backdoor_put_write_done(unsigned int bank_id,
     char data_hex[35];
     u128_hex(data_hex, sizeof(data_hex), data_hi, data_lo);
     fprintf(ctrace_fp,
-            "{\"type\":\"banktrace\",\"event\":\"backdoor_write\","
+            "{\"type\":\"banktrace\",\"clk\":%llu,\"event\":\"backdoor_write\","
             "\"bank_id\":%u,\"row\":%u,\"data\":\"%s\"}\n",
-            bank_id, row, data_hex);
+            (unsigned long long)bdb_rtl_clk, bank_id, row, data_hex);
     fflush(ctrace_fp);
   }
 }

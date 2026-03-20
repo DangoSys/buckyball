@@ -14,6 +14,7 @@ enum {
 };
 
 extern uint32_t bdb_trace_mask;
+extern uint64_t bdb_rtl_clk;
 
 static inline int bdb_trace_on(uint32_t bit) {
   return (bdb_trace_mask & bit) != 0;

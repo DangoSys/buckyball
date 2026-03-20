@@ -19,6 +19,14 @@ uint32_t bdb_trace_mask = BDB_TR_ALL;
 // display.
 int raw_stdout_fd = -1;
 
+const char *bdb_sim_meta_path(void) {
+  const char *m = getenv("BDB_SIM_META");
+  if (m != nullptr && m[0] != '\0') {
+    return m;
+  }
+  return nullptr;
+}
+
 static int parse_args(int argc, char *argv[]) {
   auto parse_trace_list = [](const char *list) {
     if (list == nullptr || *list == '\0') {
@@ -100,16 +108,37 @@ static void init_log(const char *log_file) {
     Assert(fp, "Can not open '%s'", log_file);
     fclose(fp); // truncate/create file; trace writers append NDJSON later
   }
+  const char *meta = bdb_sim_meta_path();
   if (log_file) {
-    fprintf(stderr, "NDJSON trace is written to %s\n", log_file);
-    fprintf(stderr,
-            "Trace mask=0x%X [itrace=%d mtrace=%d pmctrace=%d ctrace=%d "
-            "banktrace=%d]\n",
-            bdb_trace_mask, bdb_trace_on(BDB_TR_ITRACE),
-            bdb_trace_on(BDB_TR_MTRACE), bdb_trace_on(BDB_TR_PMCTRACE),
-            bdb_trace_on(BDB_TR_CTRACE), bdb_trace_on(BDB_TR_BANKTRACE));
+    if (meta != nullptr) {
+      FILE *mf = fopen(meta, "w");
+      Assert(mf, "Can not open BDB_SIM_META '%s'", meta);
+      fprintf(mf, "NDJSON trace is written to %s\n", log_file);
+      fprintf(mf,
+              "Trace mask=0x%X [itrace=%d mtrace=%d pmctrace=%d ctrace=%d "
+              "banktrace=%d]\n",
+              bdb_trace_mask, bdb_trace_on(BDB_TR_ITRACE),
+              bdb_trace_on(BDB_TR_MTRACE), bdb_trace_on(BDB_TR_PMCTRACE),
+              bdb_trace_on(BDB_TR_CTRACE), bdb_trace_on(BDB_TR_BANKTRACE));
+      fclose(mf);
+    } else {
+      fprintf(stderr, "NDJSON trace is written to %s\n", log_file);
+      fprintf(stderr,
+              "Trace mask=0x%X [itrace=%d mtrace=%d pmctrace=%d ctrace=%d "
+              "banktrace=%d]\n",
+              bdb_trace_mask, bdb_trace_on(BDB_TR_ITRACE),
+              bdb_trace_on(BDB_TR_MTRACE), bdb_trace_on(BDB_TR_PMCTRACE),
+              bdb_trace_on(BDB_TR_CTRACE), bdb_trace_on(BDB_TR_BANKTRACE));
+    }
   } else {
-    fprintf(stderr, "NDJSON trace path is not set\n");
+    if (meta != nullptr) {
+      FILE *mf = fopen(meta, "w");
+      Assert(mf, "Can not open BDB_SIM_META '%s'", meta);
+      fprintf(mf, "NDJSON trace path is not set\n");
+      fclose(mf);
+    } else {
+      fprintf(stderr, "NDJSON trace path is not set\n");
+    }
   }
 }
 
@@ -129,5 +158,7 @@ void init_monitor(int argc, char *argv[]) {
   parse_args(argc, argv);
   init_log(log_path);
   init_io();
-  welcome();
+  if (bdb_sim_meta_path() == nullptr) {
+    welcome();
+  }
 }

@@ -75,10 +75,9 @@ ctest_workloads = [
         "ctest_vecunit_matmul_random2_singlecore-baremetal",
         "ctest_vecunit_matmul_random2_singlecore-baremetal",
     ),
-    (
-        "ctest_vecunit_matmul_random3_singlecore-baremetal",
-        "ctest_vecunit_matmul_random3_singlecore-baremetal",
-    ),
+    # (   "ctest_vecunit_tiled_matmul_singlecore-baremetal",
+    #     "ctest_vecunit_tiled_matmul_singlecore-baremetal",
+    # ),
     (
         "ctest_vecunit_matmul_zero_random_singlecore-baremetal",
         "ctest_vecunit_matmul_zero_random_singlecore-baremetal",

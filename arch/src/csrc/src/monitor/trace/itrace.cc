@@ -62,19 +62,21 @@ extern "C" void dpi_itrace(unsigned char is_issue, // 1 = issue, 0 = complete
     u64_hex(rs1_hex, sizeof(rs1_hex), rs1);
     u64_hex(rs2_hex, sizeof(rs2_hex), rs2);
     if (is_issue) {
-      fprintf(itrace_fp,
-              "{\"type\":\"itrace\",\"event\":\"issue\",\"rob_id\":%u,"
-              "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
-              "\"bank\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
-              rob_id, domain_id, funct, bank_enable,
-              bank_enable_str(bank_enable), rs1_hex, rs2_hex);
+      fprintf(
+          itrace_fp,
+          "{\"type\":\"itrace\",\"clk\":%llu,\"event\":\"issue\",\"rob_id\":%u,"
+          "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
+          "\"bank\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
+          (unsigned long long)bdb_rtl_clk, rob_id, domain_id, funct,
+          bank_enable, bank_enable_str(bank_enable), rs1_hex, rs2_hex);
     } else {
       fprintf(itrace_fp,
-              "{\"type\":\"itrace\",\"event\":\"complete\",\"rob_id\":%u,"
+              "{\"type\":\"itrace\",\"clk\":%llu,\"event\":\"complete\",\"rob_"
+              "id\":%u,"
               "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
               "\"bank\":\"%s\"}\n",
-              rob_id, domain_id, funct, bank_enable,
-              bank_enable_str(bank_enable));
+              (unsigned long long)bdb_rtl_clk, rob_id, domain_id, funct,
+              bank_enable, bank_enable_str(bank_enable));
     }
     fflush(itrace_fp);
   }
