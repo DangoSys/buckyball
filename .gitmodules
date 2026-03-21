@@ -10,9 +10,6 @@
 [submodule "arch/thirdparty/t1"]
 	path = arch/thirdparty/t1
 	url = https://github.com/DangoSys/t1.git
-[submodule "bebop"]
-	path = bebop
-	url = https://github.com/DangoSys/bebop.git
 [submodule "bbdev"]
 	path = bbdev
 	url = https://github.com/DangoSys/bbdev.git

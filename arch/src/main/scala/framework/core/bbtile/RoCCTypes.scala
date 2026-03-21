@@ -9,6 +9,7 @@ import freechips.rocketchip.rocket.HellaCacheIO
 /** RoCC command bundle */
 class RoCCCommandBB(xLen: Int = 64) extends Bundle {
   val raw_inst = UInt(32.W)
+  val pc       = UInt(xLen.W)
   val funct    = UInt(7.W)
   val funct3   = UInt(3.W)
   val rs2      = Bits(5.W)

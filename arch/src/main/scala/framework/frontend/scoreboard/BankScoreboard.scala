@@ -61,21 +61,29 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
   val query     = IO(Input(new BankAccessInfo(bankIdLen)))
   @public
   val hasHazard = IO(Output(Bool()))
+  @public
+  val queryVec  = IO(Input(Vec(robEntries, new BankAccessInfo(bankIdLen))))
+  @public
+  val hazardVec = IO(Output(Vec(robEntries, Bool())))
 
   val bankRdCount = RegInit(VecInit(Seq.fill(bankNum)(0.U(cntWidth.W))))
   val bankWrBusy  = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
 
   // --- Hazard detection (reads current register state) ---
-  val q          = query
-  val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(q.rd_bank_0_id)
-  val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(q.rd_bank_1_id)
+  private def hazardOf(q: BankAccessInfo): Bool = {
+    val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(q.rd_bank_0_id)
+    val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(q.rd_bank_1_id)
+    val wr_hazard  = q.wr_bank_valid && (
+      bankRdCount(q.wr_bank_id) =/= 0.U ||
+        bankWrBusy(q.wr_bank_id)
+    )
+    rd0_hazard || rd1_hazard || wr_hazard
+  }
 
-  val wr_hazard = q.wr_bank_valid && (
-    bankRdCount(q.wr_bank_id) =/= 0.U ||
-      bankWrBusy(q.wr_bank_id)
-  )
-
-  hasHazard := rd0_hazard || rd1_hazard || wr_hazard
+  hasHazard := hazardOf(query)
+  for (i <- 0 until robEntries) {
+    hazardVec(i) := hazardOf(queryVec(i))
+  }
 
   // --- Compute per-bank deltas to handle simultaneous issue + complete ---
   for (bank <- 0 until bankNum) {

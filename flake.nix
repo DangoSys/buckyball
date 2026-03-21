@@ -37,11 +37,11 @@
               pkgs."pre-commit"
               pkgs.clang-tools  # clang-format for pre-commit (language: system)
 
-              # Bebop dependencies (rust toolchain)
-              bebop.rustc
-              bebop.cargo
-              bebop.rustfmt
-              bebop.clippy
+              # Rust toolchain
+              rustTools.rustc
+              rustTools.cargo
+              rustTools.rustfmt
+              rustTools.clippy
 
               # bbdev dependencies
               bbdev.nodejs
@@ -93,9 +93,6 @@
                 echo "Verilator: $(verilator --version 2>&1 | head -1)"
                 echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)"
                 echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)"
-                echo "Bebop: $(which bebop)"
-                echo "Spike: $(which spike)"
-                echo "Bebop Gem5: $(which gem5.opt)"
                 echo "Mill: $(mill --version 2>&1 | head -1)"
                 echo "Cargo: $(cargo --version 2>&1 | head -1)"
                 echo "npm: $(npm --version 2>&1 | head -1)"

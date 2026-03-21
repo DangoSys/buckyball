@@ -46,37 +46,48 @@ static void u64_hex(char *buf, size_t n, unsigned long long v) {
 }
 
 // DPI-C function for instruction trace (itrace)
-// Called when an instruction is issued or completed in GlobalROB
-extern "C" void dpi_itrace(unsigned char is_issue, // 1 = issue, 0 = complete
-                           unsigned int rob_id, unsigned int domain_id,
-                           unsigned int funct, unsigned long long rs1,
-                           unsigned long long rs2, unsigned char bank_enable) {
+// Called when an instruction is allocated/issued/completed in GlobalROB
+extern "C" void
+dpi_itrace(unsigned char is_issue, // 2 = alloc, 1 = issue, 0 = complete
+           unsigned int rob_id, unsigned int domain_id, unsigned int funct,
+           unsigned long long pc, unsigned long long rs1,
+           unsigned long long rs2, unsigned char bank_enable) {
   if (!bdb_trace_on(BDB_TR_ITRACE)) {
     return;
   }
   init_itrace();
 
   if (itrace_fp) {
+    char pc_hex[19];
     char rs1_hex[19];
     char rs2_hex[19];
+    u64_hex(pc_hex, sizeof(pc_hex), pc);
     u64_hex(rs1_hex, sizeof(rs1_hex), rs1);
     u64_hex(rs2_hex, sizeof(rs2_hex), rs2);
-    if (is_issue) {
+    if (is_issue == 2) {
+      fprintf(
+          itrace_fp,
+          "{\"type\":\"itrace\",\"clk\":%llu,\"event\":\"alloc\",\"rob_id\":%u,"
+          "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
+          "\"bank\":\"%s\",\"pc\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
+          (unsigned long long)bdb_rtl_clk, rob_id, domain_id, funct,
+          bank_enable, bank_enable_str(bank_enable), pc_hex, rs1_hex, rs2_hex);
+    } else if (is_issue == 1) {
       fprintf(
           itrace_fp,
           "{\"type\":\"itrace\",\"clk\":%llu,\"event\":\"issue\",\"rob_id\":%u,"
           "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
-          "\"bank\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
+          "\"bank\":\"%s\",\"pc\":\"%s\",\"rs1\":\"%s\",\"rs2\":\"%s\"}\n",
           (unsigned long long)bdb_rtl_clk, rob_id, domain_id, funct,
-          bank_enable, bank_enable_str(bank_enable), rs1_hex, rs2_hex);
+          bank_enable, bank_enable_str(bank_enable), pc_hex, rs1_hex, rs2_hex);
     } else {
       fprintf(itrace_fp,
               "{\"type\":\"itrace\",\"clk\":%llu,\"event\":\"complete\",\"rob_"
               "id\":%u,"
               "\"domain_id\":%u,\"funct\":\"0x%02x\",\"bank_enable\":%u,"
-              "\"bank\":\"%s\"}\n",
+              "\"bank\":\"%s\",\"pc\":\"%s\"}\n",
               (unsigned long long)bdb_rtl_clk, rob_id, domain_id, funct,
-              bank_enable, bank_enable_str(bank_enable));
+              bank_enable, bank_enable_str(bank_enable), pc_hex);
     }
     fflush(itrace_fp);
   }
