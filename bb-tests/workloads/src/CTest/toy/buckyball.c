@@ -274,11 +274,15 @@ unsigned long long read_cycle(void) {
   return c;
 }
 
+// MMIO stubs are for baremetal/BBSim only.
+// Linux user-mode tests (`*-linux` under `spike pk`) must use libc/syscall exit
+// path.
+#if !defined(__linux__)
 // MMIO address map (BBSimHarness, WithDefaultMMIOPort base=0x6000_0000):
 //   0x6000_0000 : simulation exit  — write triggers sim_exit()
 //   0x6002_0000 : UART0 TX         — write low byte → putchar in C++
 #define MMIO_SIM_EXIT ((volatile uint32_t *)0x60000000UL)
-#define MMIO_UART_TX  ((volatile uint32_t *)0x60020000UL)
+#define MMIO_UART_TX ((volatile uint32_t *)0x60020000UL)
 
 // _write: route stdout/stderr through MMIO UART so printf works in simulation.
 // nosys.specs provides a weak _write stub; we override it here.
@@ -294,5 +298,7 @@ int _write(int fd, const char *buf, int len) {
 // this and calls sim_exit().
 void __attribute__((noreturn)) _exit(int code) {
   *MMIO_SIM_EXIT = (uint32_t)code;
-  while (1) {} // wait for C++ to process the MMIO write and call sim_exit()
+  while (1) {
+  } // wait for C++ to process the MMIO write and call sim_exit()
 }
+#endif
