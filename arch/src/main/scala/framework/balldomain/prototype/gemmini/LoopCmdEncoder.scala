@@ -37,6 +37,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
     // Defaults — all unused RoCCCommandBB fields zero
     slot.cmd.domain_id    := 0.U
     slot.cmd.cmd.raw_inst := 0.U
+    slot.cmd.cmd.pc       := 0.U
     slot.cmd.cmd.funct    := 0.U
     slot.cmd.cmd.funct3   := 0.U
     slot.cmd.cmd.rs2      := 0.U

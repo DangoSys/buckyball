@@ -161,5 +161,5 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Busy watchdog ---
   val busy_counter = RegInit(0.U(32.W))
   busy_counter := Mux(frontend.io.busy, busy_counter + 1.U, 0.U)
-  assert(busy_counter < 10000.U, "BuckyballAccelerator: busy for too long!")
+  assert(busy_counter < 100000.U, "BuckyballAccelerator: busy for too long!")
 }

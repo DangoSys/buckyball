@@ -1,7 +1,8 @@
 final: prev:
 {
   bbdev = final.callPackage ./build-env-bbdev.nix { };
-  bebop = final.callPackage ./build-env-bebop.nix { };
+  # Named rustTools to avoid shadowing nixpkgs `rust` (used by rust hooks)
+  rustTools = final.callPackage ./build-env-rust.nix { };
   clibs = final.callPackage ./build-env-clibs.nix { };
   doc = final.callPackage ./build-env-doc.nix { };
   python = final.callPackage ./build-env-python.nix { };

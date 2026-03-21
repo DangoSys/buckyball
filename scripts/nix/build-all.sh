@@ -14,10 +14,9 @@ usage() {
   echo "   1. bbdev install"
   echo "   2. Compiler installation"
   echo "   3. RTL pre-compile sources"
-  echo "   4. bebop install"
-  echo "   5. bb-tests pre-compile sources"
-  echo "   6. waveform-mcp build"
-  echo "   7. pre-commit hooks installation"
+  echo "   4. bb-tests pre-compile sources"
+  echo "   5. waveform-mcp build"
+  echo "   6. pre-commit hooks installation"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -143,24 +142,18 @@ if run_step "3"; then
 fi
 
 if run_step "4"; then
-  begin_step "4" "bebop install"
-  cd ${BBDIR}/bebop
-  ./scripts/install.sh
-fi
-
-if run_step "5"; then
-  begin_step "5" "bb-tests pre-compile sources"
+  begin_step "4" "bb-tests pre-compile sources"
   bbdev workload --build
 fi
 
-if run_step "6"; then
-  begin_step "6" "waveform-mcp build"
+if run_step "5"; then
+  begin_step "5" "waveform-mcp build"
   cd ${BBDIR}/thirdparty/waveform-mcp
   cargo build --release
 fi
 
-if run_step "7"; then
-  begin_step "7" "pre-commit hooks installation"
+if run_step "6"; then
+  begin_step "6" "pre-commit hooks installation"
   cd ${BBDIR}
   pre-commit install
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)

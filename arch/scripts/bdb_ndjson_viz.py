@@ -40,14 +40,19 @@ def clk_of(rec: dict[str, Any], fallback: int | None) -> int | None:
 
 def build_rob_intervals(
     records: list[dict[str, Any]],
-) -> tuple[list[tuple[int, int, int, int, str]], bool]:
+) -> tuple[list[tuple[int, int, int, int, str]], list[tuple[int, int, int, int]], bool]:
     """
-    Build RoB active windows from itrace issue/complete pairs.
-    Returns (t0, t1, domain_id, rob_id), used_real_clk.
+    Build RoB intervals from itrace events.
+    Returns:
+      - active windows: issue->complete (t0, t1, domain_id, rob_id, funct_label)
+      - in-rob windows: alloc->complete (t0, t1, domain_id, rob_id)
+      - used_real_clk
     """
     fmap = build_funct_map(default_isa_dir())
-    open_by_key: dict[tuple[int, int], tuple[int, str]] = {}
-    out: list[tuple[int, int, int, int, str]] = []
+    issue_open: dict[tuple[int, int], tuple[int, str]] = {}
+    alloc_open: dict[tuple[int, int], int] = {}
+    active_out: list[tuple[int, int, int, int, str]] = []
+    inrob_out: list[tuple[int, int, int, int]] = []
     used_clk = False
     seq = 0
 
@@ -77,19 +82,30 @@ def build_rob_intervals(
             except SystemExit:
                 funct_lbl = str(rec["funct"])
 
-        if ev == "issue":
-            open_by_key[key] = (int(t), funct_lbl)
-        elif ev == "complete" and key in open_by_key:
-            t0, flbl = open_by_key.pop(key)
-            t1 = int(t)
-            if t1 < t0:
-                t0, t1 = t1, t0
-            if t1 == t0:
-                t1 += 1
-            out.append((t0, t1, dom, rid, flbl))
+        if ev == "alloc":
+            alloc_open[key] = int(t)
+        elif ev == "issue":
+            issue_open[key] = (int(t), funct_lbl)
+        elif ev == "complete":
+            if key in issue_open:
+                t0, flbl = issue_open.pop(key)
+                t1 = int(t)
+                if t1 < t0:
+                    t0, t1 = t1, t0
+                if t1 == t0:
+                    t1 += 1
+                active_out.append((t0, t1, dom, rid, flbl))
+            if key in alloc_open:
+                t0 = alloc_open.pop(key)
+                t1 = int(t)
+                if t1 < t0:
+                    t0, t1 = t1, t0
+                if t1 == t0:
+                    t1 += 1
+                inrob_out.append((t0, t1, dom, rid))
         seq += 1
 
-    return out, used_clk
+    return active_out, inrob_out, used_clk
 
 
 def plot_timeline(
@@ -106,17 +122,42 @@ def plot_timeline(
     if not records:
         raise SystemExit("empty trace")
 
-    rob_itv, used_clk = build_rob_intervals(records)
-    if not rob_itv:
+    rob_itv, inrob_itv, used_clk = build_rob_intervals(records)
+    if not rob_itv and not inrob_itv:
         raise SystemExit("no itrace issue/complete pairs found")
-    g0 = min(t0 for t0, _, _, _, _ in rob_itv)
-    g1 = max(t1 for _, t1, _, _, _ in rob_itv)
+    all_t0: list[int] = []
+    all_t1: list[int] = []
+    if rob_itv:
+        all_t0.extend(t0 for t0, _, _, _, _ in rob_itv)
+        all_t1.extend(t1 for _, t1, _, _, _ in rob_itv)
+    if inrob_itv:
+        all_t0.extend(t0 for t0, _, _, _ in inrob_itv)
+        all_t1.extend(t1 for _, t1, _, _ in inrob_itv)
+    g0 = min(all_t0)
+    g1 = max(all_t1)
     if g1 <= g0:
         g1 = g0 + 1
 
     fig, ax = plt.subplots(1, 1, figsize=(14, 6))
-    rows = sorted({(dom, rid) for _, _, dom, rid, _ in rob_itv})
+    rows = sorted(
+        {(dom, rid) for _, _, dom, rid, _ in rob_itv}
+        | {(dom, rid) for _, _, dom, rid in inrob_itv}
+    )
     y_of = {k: i for i, k in enumerate(rows)}
+
+    # Draw in-ROB occupancy (alloc->complete) as light gray background.
+    for t0, t1, dom, rid in inrob_itv:
+        y = y_of[(dom, rid)]
+        ax.barh(
+            y,
+            width=t1 - t0,
+            left=t0,
+            height=0.80,
+            color="#d9d9d9",
+            alpha=0.55,
+            edgecolor="none",
+            zorder=0,
+        )
 
     for t0, t1, dom, rid, flbl in rob_itv:
         y = y_of[(dom, rid)]
@@ -128,6 +169,7 @@ def plot_timeline(
             linestyles="-",
             linewidth=0.6,
             alpha=0.6,
+            zorder=1,
         )
         ax.barh(
             y,
@@ -138,6 +180,7 @@ def plot_timeline(
             alpha=0.9,
             edgecolor="black",
             linewidth=0.3,
+            zorder=2,
         )
         if (t1 - t0) > 10 and flbl:
             ax.text(
@@ -148,6 +191,7 @@ def plot_timeline(
                 va="center",
                 fontsize=7,
                 color="white",
+                zorder=3,
             )
 
     ax.set_xlim(g0, g1)

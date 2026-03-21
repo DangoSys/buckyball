@@ -52,15 +52,21 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // Instruction trace (DPI-C, defined in ITraceDPI.scala)
   // ---------------------------------------------------------------------------
-  val itrace = Module(new ITraceDPI)
-  itrace.io.is_issue    := 0.U
-  itrace.io.rob_id      := 0.U
-  itrace.io.domain_id   := 0.U
-  itrace.io.funct       := 0.U
-  itrace.io.rs1         := 0.U
-  itrace.io.rs2         := 0.U
-  itrace.io.bank_enable := 0.U
-  itrace.io.enable      := false.B
+  val itraceAlloc = Module(new ITraceDPI)
+  val itraceIssue = Module(new ITraceDPI)
+  val itraceComp  = Module(new ITraceDPI)
+
+  for (t <- Seq(itraceAlloc, itraceIssue, itraceComp)) {
+    t.io.is_issue    := 0.U
+    t.io.rob_id      := 0.U
+    t.io.domain_id   := 0.U
+    t.io.funct       := 0.U
+    t.io.pc          := 0.U
+    t.io.rs1         := 0.U
+    t.io.rs2         := 0.U
+    t.io.bank_enable := 0.U
+    t.io.enable      := false.B
+  }
 
   // ---------------------------------------------------------------------------
   // Storage
@@ -97,6 +103,16 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   bat.io.free.mask := commitMask
 
   when(io.alloc.fire) {
+    itraceAlloc.io.is_issue    := 2.U
+    itraceAlloc.io.rob_id      := tailPtr
+    itraceAlloc.io.domain_id   := io.alloc.bits.domain_id
+    itraceAlloc.io.funct       := io.alloc.bits.cmd.funct
+    itraceAlloc.io.pc          := io.alloc.bits.cmd.pc
+    itraceAlloc.io.rs1         := io.alloc.bits.cmd.rs1
+    itraceAlloc.io.rs2         := io.alloc.bits.cmd.rs2
+    itraceAlloc.io.bank_enable := io.alloc.bits.cmd.funct(6, 4)
+    itraceAlloc.io.enable      := true.B
+
     robEntries(tailPtr).cmd               := io.alloc.bits
     robEntries(tailPtr).renamedBankAccess := bat.io.alloc_renamed
     robEntries(tailPtr).rob_id            := tailPtr
@@ -123,32 +139,35 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.complete.valid := true.B
     scoreboard.complete.bits  := robEntries(cid).renamedBankAccess
 
-    itrace.io.is_issue    := 0.U
-    itrace.io.rob_id      := cid
-    itrace.io.domain_id   := robEntries(cid).cmd.domain_id
-    itrace.io.funct       := robEntries(cid).cmd.cmd.funct
-    itrace.io.rs1         := robEntries(cid).cmd.cmd.rs1
-    itrace.io.rs2         := robEntries(cid).cmd.cmd.rs2
-    itrace.io.bank_enable := robEntries(cid).cmd.cmd.funct(6, 4)
-    itrace.io.enable      := true.B
+    itraceComp.io.is_issue    := 0.U
+    itraceComp.io.rob_id      := cid
+    itraceComp.io.domain_id   := robEntries(cid).cmd.domain_id
+    itraceComp.io.funct       := robEntries(cid).cmd.cmd.funct
+    itraceComp.io.pc          := robEntries(cid).cmd.cmd.pc
+    itraceComp.io.rs1         := robEntries(cid).cmd.cmd.rs1
+    itraceComp.io.rs2         := robEntries(cid).cmd.cmd.rs2
+    itraceComp.io.bank_enable := robEntries(cid).cmd.cmd.funct(6, 4)
+    itraceComp.io.enable      := true.B
   }
 
   // ---------------------------------------------------------------------------
   // Issue: scan from head for first issuable entry (valid && !issued && !complete)
   // ---------------------------------------------------------------------------
   val scanValid = Wire(Vec(robDepth, Bool()))
+  val scanReady = Wire(Vec(robDepth, Bool()))
   for (i <- 0 until robDepth) {
     val ptr = wrapPtr(headPtr + i.U)
-    scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
+    scanValid(i)           := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
+    scoreboard.queryVec(i) := robEntries(ptr).renamedBankAccess
+    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i)
   }
 
-  val hasValid       = scanValid.asUInt.orR
-  val firstValid     = PriorityEncoder(scanValid.asUInt)
-  val actualIssuePtr = wrapPtr(headPtr + firstValid)
+  val hasReady       = scanReady.asUInt.orR
+  val firstReady     = PriorityEncoder(scanReady.asUInt)
+  val actualIssuePtr = wrapPtr(headPtr + firstReady)
 
   scoreboard.query := robEntries(actualIssuePtr).renamedBankAccess
-  val noHazard = !scoreboard.hasHazard
-  val canIssue = hasValid && noHazard
+  val canIssue = hasReady
 
   io.issue.valid := canIssue && !io.subRobActive
   io.issue.bits  := robEntries(actualIssuePtr)
@@ -162,14 +181,15 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
-    itrace.io.is_issue    := 1.U
-    itrace.io.rob_id      := robEntries(actualIssuePtr).rob_id
-    itrace.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
-    itrace.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
-    itrace.io.rs1         := robEntries(actualIssuePtr).cmd.cmd.rs1
-    itrace.io.rs2         := robEntries(actualIssuePtr).cmd.cmd.rs2
-    itrace.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
-    itrace.io.enable      := true.B
+    itraceIssue.io.is_issue    := 1.U
+    itraceIssue.io.rob_id      := robEntries(actualIssuePtr).rob_id
+    itraceIssue.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
+    itraceIssue.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
+    itraceIssue.io.pc          := robEntries(actualIssuePtr).cmd.cmd.pc
+    itraceIssue.io.rs1         := robEntries(actualIssuePtr).cmd.cmd.rs1
+    itraceIssue.io.rs2         := robEntries(actualIssuePtr).cmd.cmd.rs2
+    itraceIssue.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
+    itraceIssue.io.enable      := true.B
   }
 
   // ---------------------------------------------------------------------------

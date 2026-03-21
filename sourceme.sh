@@ -31,11 +31,6 @@ export PATH="${BBDIR}/thirdparty/libgloss/install/lib:$PATH"
 export PATH="${RESULT_PATH}/riscv64-unknown-elf/lib:${PATH}"
 export PATH="${RESULT_PATH}/bin:${PATH}"
 
-# bebop / spike / gem5 (local builds)
-export PATH="${BBDIR}/bebop/bebop/target/release:${PATH}"
-export PATH="${BBDIR}/bebop/host/spike/riscv-isa-sim/install/bin:${PATH}"
-export PATH="${BBDIR}/bebop/host/gem5/gem5/build/RISCV:${PATH}"
-
 # bbdev CLI and Python utils
 export PATH="${BBDIR}/bbdev:${PATH}"
 export PYTHONPATH="${BBDIR}/bbdev/api:${PYTHONPATH}"

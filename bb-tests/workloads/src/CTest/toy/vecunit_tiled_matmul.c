@@ -5,8 +5,9 @@
 #include <stdlib.h>
 
 #define DIM 16
-#define KDIM 64
-#define KTILE 16
+#define KDIM 1024
+#define KTILE 512
+#define MUL_REPEAT 4
 
 _Static_assert(KDIM % KTILE == 0, "KDIM must be divisible by KTILE");
 _Static_assert(KDIM % DIM == 0, "KDIM must be divisible by DIM");
@@ -30,11 +31,13 @@ void hw_matmul_tiled(const char *test_name, elem_t *a, elem_t *b, result_t *c) {
 
   bb_mvin((uintptr_t)zero_matrix, acc_bank_id, DIM, 1);
 
-  for (int k0 = 0; k0 < KDIM; k0 += KTILE) {
+  for (int k0 = 0; k0 < KDIM / KTILE; k0 += KTILE) {
     bb_mvin((uintptr_t)(a + k0), op1_bank_id, KTILE, 1);
     bb_mvin((uintptr_t)(b + k0 * DIM), op2_bank_id, KTILE, 1);
     bb_transpose(op1_bank_id, a_transposed_bank_id, KTILE, 0);
-    bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, KTILE, 0);
+    for (int rep = 0; rep < MUL_REPEAT; rep++) {
+      bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, KTILE, 0);
+    }
   }
 
   bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);
@@ -54,7 +57,7 @@ void init_diag_ones(elem_t *a, elem_t *b, result_t *expected) {
     b[k * DIM + i] = 1;
   }
 
-  int diag_val = KDIM / DIM;
+  int diag_val = (KDIM / DIM) * MUL_REPEAT;
   for (int r = 0; r < DIM; r++) {
     expected[r * DIM + r] = diag_val;
   }

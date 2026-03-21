@@ -1243,6 +1243,7 @@ class RocketBB(tile: BBTile)(implicit p: Parameters)
     io.rocc.cmd.bits.funct3  := wb_reg_inst(14, 12)
     io.rocc.cmd.bits.rs2     := inst_bits.rs2
     io.rocc.cmd.bits.rs1     := inst_bits.rs1
+    io.rocc.cmd.bits.pc      := wb_reg_pc
     io.rocc.cmd.bits.xd      := inst_bits.xd
     io.rocc.cmd.bits.xs1     := inst_bits.xs1
     io.rocc.cmd.bits.xs2     := inst_bits.xs2
