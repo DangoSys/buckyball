@@ -22,3 +22,7 @@
 [submodule "thirdparty/waveform-mcp"]
 	path = thirdparty/waveform-mcp
 	url = https://github.com/jiegec/waveform-mcp.git
+[submodule "bebop"]
+	path = bebop
+	url = https://github.com/DangoSys/bebop
+	branch = next
