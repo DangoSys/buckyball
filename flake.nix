@@ -57,6 +57,10 @@
               clibs.zlib
               clibs.readline-dev
               clibs.readline
+              clibs.jpeg-dev
+              clibs.jpeg
+              clibs.png-dev
+              clibs.png
 
               # Scala tools
               scala.mill
@@ -75,6 +79,16 @@
 
           # nix develop
           devShells.default = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              clibs.zlib-dev
+              clibs.zlib
+              clibs.readline-dev
+              clibs.readline
+              clibs.jpeg-dev
+              clibs.jpeg
+              clibs.png-dev
+              clibs.png
+            ];
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then
                 export PATH="$PWD/result/bin:$PATH"
@@ -100,6 +114,7 @@
                 echo "RISCV: $RISCV"
                 echo "Yosys: $(yosys --version 2>&1 | head -1)"
                 echo "OpenSTA: $(sta -version 2>&1 | head -1)"
+                echo "Buddy MLIR: $(which buddy-opt)"
                 echo "==========================================================================="
               fi
             '';

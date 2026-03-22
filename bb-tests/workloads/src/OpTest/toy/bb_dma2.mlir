@@ -20,6 +20,7 @@ func.func @main() -> i8 {
   // Bank IDs
   %bankId0 = arith.constant 0 : i64
   %bankId1 = arith.constant 1 : i64
+  %depth = arith.constant 2 : i64
   %stride = arith.constant 1 : i64
 
   %arrayA = memref.get_global @input_matrix_a : memref<2x16xi8>
@@ -40,23 +41,23 @@ func.func @main() -> i8 {
   // Step 1: A -> bank 0
   // CHECK: mvin
   // Step 2: scratchpad 1 -> temp
-  buckyball.bb_mvin %arrayA %bankId0 %stride : memref<2x16xi8> i64 i64
+  buckyball.bb_mvin %arrayA %bankId0 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayTemp %bankId0 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayTemp %bankId0 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
 
   // Step 3: B -> bank 1
   // CHECK: mvin
   // Step 4: bank 1 -> A
-  buckyball.bb_mvin %arrayB %bankId1 %stride : memref<2x16xi8> i64 i64
+  buckyball.bb_mvin %arrayB %bankId1 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayA %bankId1 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayA %bankId1 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
 
   // Step 5: temp -> bank 0
   // CHECK: mvin
   // Step 6: bank 0 -> B
-  buckyball.bb_mvin %arrayTemp %bankId0 %stride : memref<2x16xi8> i64 i64
+  buckyball.bb_mvin %arrayTemp %bankId0 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %bankId0 : memref<2x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId0 %depth %stride : memref<2x16xi8> i64 i64 i64 i64
 
   // Print swapped matrices [CHECK2]
   buckyball.bb_print_memref %arrayA : memref<2x16xi8>
