@@ -20,6 +20,7 @@ func.func @main() -> i8 {
   // === Main program ===
   %0 = arith.constant 0 : i8
   %bankId = arith.constant 0 : i64
+  %depth = arith.constant 4 : i64
   %stride = arith.constant 1 : i64
   %arrayA = memref.get_global @input_matrix : memref<4x16xi8>
   %arrayB = memref.alloc() : memref<4x16xi8>
@@ -27,10 +28,10 @@ func.func @main() -> i8 {
   buckyball.bb_mset %bankId : i64
   // Use mvin to move data from memory to bank 0
   // CHECK: mvin
-  buckyball.bb_mvin %arrayA %bankId %stride : memref<4x16xi8> i64 i64
+  buckyball.bb_mvin %arrayA %bankId %depth %stride : memref<4x16xi8> i64 i64 i64 i64
   // Use mvout to move data from bank 0 back to output memory
   // CHECK: mvout
-  buckyball.bb_mvout %arrayB %bankId : memref<4x16xi8> i64
+  buckyball.bb_mvout %arrayB %bankId %depth %stride : memref<4x16xi8> i64 i64 i64 i64
   // Print moved output matrix
   buckyball.bb_print_memref %arrayB : memref<4x16xi8>
   // Release allocated memory

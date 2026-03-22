@@ -4,6 +4,7 @@
 .cursor/
 .bsp/
 out/
+.Xil/
 result
 
 CLAUDE.local.md
