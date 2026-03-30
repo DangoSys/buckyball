@@ -11,6 +11,11 @@ object EmitBebopSpikeCosimVerilog {
       firtoolOpts = Array.empty,
       args = Array("-td", dir),
     )
+    ChiselStage.emitSystemVerilogFile(
+      new VecComputeTop,
+      firtoolOpts = Array.empty,
+      args = Array("-td", dir),
+    )
     println(s"EmitBebopSpikeCosimVerilog: wrote under $dir")
   }
 }

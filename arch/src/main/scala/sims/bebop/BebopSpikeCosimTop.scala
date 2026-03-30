@@ -19,6 +19,7 @@ class BebopSpikeCosimTop extends RawModule {
   val bankDigestPeek = IO(Output(UInt(64.W)))
 
   val execRet = BebopCosimBlocks.execRet(funct, xs1, xs2)
-  result := Mux(execRet === 0.U, Cat(0.U(57.W), funct), 0.U(64.W))
+  val known = BebopCosimBlocks.isKnownFunct(funct)
+  result := Mux(known && execRet === 0.U, Cat(0.U(57.W), funct), 0.U(64.W))
   bankDigestPeek := BebopCosimBlocks.bankDigestPeek(funct, xs1, xs2)
 }
