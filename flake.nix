@@ -24,6 +24,10 @@
               tools.dramsim2
               tools.ccache
               tools.lld
+              tools.cmake
+              tools.java
+              tools.dtc
+              tools.spike
               tools.yosys
               tools.opensta
               tools.lcov
