@@ -26,3 +26,6 @@
 	path = bebop
 	url = https://github.com/DangoSys/bebop
 	branch = next
+[submodule "thirdparty/edein"]
+	path = thirdparty/edein
+	url = https://github.com/DangoSys/Edein.git
