@@ -21,7 +21,9 @@ class VecComputeTop extends Module {
     val done  = Output(Bool())
   })
 
-  val mul = Module(new MulOp(cfg))
+  val mul = Module(new MulOp(cfg) {
+    override def desiredName = "MulOpVecComputeTop"
+  })
 
   val op1Reg = Reg(Vec(16, UInt(8.W)))
   val op2Reg = Reg(Vec(16, UInt(8.W)))
