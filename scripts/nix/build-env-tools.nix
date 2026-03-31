@@ -83,6 +83,10 @@ in
   # Build acceleration tools
   ccache = pkgs.ccache;
   lld = pkgs.lld;
+  cmake = pkgs.cmake;
+  java = pkgs.jdk;
+  dtc = pkgs.dtc;
+  spike = pkgs.spike;
 
   # Synthesis tools
   yosys = pkgs.yosys;
