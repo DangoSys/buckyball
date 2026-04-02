@@ -1,0 +1,13 @@
+[project]
+name = "bbdev"
+version = "0.1.0"
+description = "Agent-friendly developer toolchain backend powered by Motia"
+requires-python = ">=3.10"
+dependencies = [
+  "motia[otel]==1.0.0rc17",
+  "iii-sdk==0.2.0",
+  "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]

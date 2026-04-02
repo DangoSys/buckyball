@@ -3,23 +3,36 @@ Common utility functions for all event steps.
 """
 
 
-async def check_result(context, returncode, continue_run=False, extra_fields=None):
+def get_origin_trace_id(input_data, ctx):
+    """Get the origin trace_id from input_data (passed by API step) or fall back to ctx.trace_id.
+
+    iii 0.7+ assigns a new trace_id per handler invocation, so the API step's
+    trace_id must be forwarded explicitly via input_data["_trace_id"].
+    """
+    if isinstance(input_data, dict) and "_trace_id" in input_data:
+        return input_data["_trace_id"]
+    return ctx.trace_id
+
+
+async def check_result(ctx, returncode, continue_run=False, extra_fields=None, trace_id=None):
     """
     Check returncode, create appropriate result objects and set state.
 
     Args:
-        context: The event context object
+        ctx: The flow context object
         returncode: The return code (int)
         continue_run: If True, set processing state instead of success/failure
         extra_fields: Optional dictionary of extra fields to include in result body
+        trace_id: Optional trace_id to use as state scope (defaults to ctx.trace_id)
 
     Returns:
         tuple: (success_result, failure_result) - one will be None based on returncode and continue_run
     """
     extra_fields = extra_fields or {}
+    scope = trace_id or ctx.trace_id
 
     if continue_run:
-        await context.state.set(context.trace_id, "processing", True)
+        await ctx.state.set(scope, "processing", True)
         return None, None
     elif returncode != 0:
         failure_result = {
@@ -32,7 +45,7 @@ async def check_result(context, returncode, continue_run=False, extra_fields=Non
                 **extra_fields,
             },
         }
-        await context.state.set(context.trace_id, "failure", failure_result)
+        await ctx.state.set(scope, "failure", failure_result)
         return None, failure_result
     else:
         success_result = {
@@ -45,67 +58,5 @@ async def check_result(context, returncode, continue_run=False, extra_fields=Non
                 **extra_fields,
             },
         }
-        await context.state.set(context.trace_id, "success", success_result)
+        await ctx.state.set(scope, "success", success_result)
         return success_result, None
-
-
-# ==================================================================================
-#  API waits for event return result
-#
-#  Expected return result format:
-#  {
-#    "status": 200/400/500,
-#    "body": {
-#      "success": true/false,
-#      "failure": true/false,
-#      "processing": true/false,
-#      "return_code": 0,
-#      other fields
-#    }
-#  }
-#
-#  Since the Motia framework wraps data in the data field, it needs to be unpacked
-#       if isinstance(result, dict) and 'data' in result:
-#          return result['data']
-#       return result
-# ==================================================================================
-
-
-async def wait_for_result(context):
-    """
-    Check for task completion state (success or failure).
-    Returns result if found, None if still processing.
-
-    Args:
-        context: The event context object
-
-    Returns:
-        dict or None: The result data if task completed, None if still processing
-    """
-    # Check for success result
-    success_result = await context.state.get(context.trace_id, "success")
-    if success_result and success_result.get("data"):
-        # Filter out invalid null state
-        if success_result == {"data": None} or (
-            isinstance(success_result, dict)
-            and success_result.get("data") is None
-            and len(success_result) == 1
-        ):
-            await context.state.delete(context.trace_id, "success")
-            return None
-        context.logger.info("task completed")
-
-        if isinstance(success_result, dict) and "data" in success_result:
-            return success_result["data"]
-        return success_result
-
-    # Check for error status
-    failure_result = await context.state.get(context.trace_id, "failure")
-    if failure_result and failure_result.get("data"):
-        context.logger.error("task failed", failure_result)
-
-        if isinstance(failure_result, dict) and "data" in failure_result:
-            return failure_result["data"]
-        return failure_result
-
-    return None

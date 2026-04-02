@@ -8,12 +8,139 @@ import signal
 import shlex
 import json
 import time
-import shutil
+import tempfile
+import threading
 import requests
 
-from utils import find_available_port
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
+from utils.port import reserve_port
 
-workflow_dir = os.path.dirname(os.path.abspath(__file__)) + "/api"
+workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
+
+NO_PROXY = {"http": None, "https": None, "all": None}
+
+# Subcommand definitions: {name: {operation: help_text, ...}}
+# Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
+WORKFLOW_COMMANDS = {
+    "verilator": {
+        "clean": True,
+        "verilog": 'Generate verilog files. Args: "[--balltype <type>] [--job <num>] [--batch]"',
+        "build": 'Build simulation executable. Args: "[--job <num>]"',
+        "sim": 'Run simulation. Args: "--binary <path> [--batch]"',
+        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+        "cosim": 'Run cosimulation. Args: "--binary <path> [--batch]"',
+    },
+    "vcs": {
+        "clean": True,
+        "verilog": True,
+        "build": 'Build simulation executable. Args: "[--job <num>]"',
+        "sim": 'Run simulation. Args: "--binary <path> [--batch]"',
+        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+    },
+    "sardine": {
+        "run": 'Run sardine. Args: "--workload <path>"',
+    },
+    "agent": {
+        "chat": 'Run agent. Args: "--message <message>", "--model <model>"',
+    },
+    "workload": {
+        "build": "Build workload.",
+    },
+    "doc": {
+        "deploy": True,
+    },
+    "marshal": {
+        "build": "Build marshal.",
+        "launch": "Launch marshal.",
+    },
+    "firesim": {
+        "buildbitstream": "Build bitstream.",
+        "infrasetup": "Infrasetup.",
+        "runworkload": "Run workload.",
+    },
+    "compiler": {
+        "build": "Build compiler.",
+    },
+    "funcsim": {
+        "build": "Build funcsim.",
+        "sim": "Sim funcsim.",
+    },
+    "uvm": {
+        "builddut": "Build dut.",
+        "build": "Build uvm.",
+    },
+    "palladium": {
+        "verilog": 'Generate verilog files. Args: "[--config sims.palladium.BuckyballToyP2EConfig]"',
+    },
+}
+
+ALL_COMMANDS = ["start", "stop"] + list(WORKFLOW_COMMANDS)
+
+
+def make_iii_config(port: int, worker_port: int, quiet: bool = False) -> str:
+    """Create a temporary config.yaml with unique HTTP and Worker ports, return the path."""
+    base_config = os.path.join(workflow_dir, "config.yaml")
+    with open(base_config, "r") as f:
+        content = f.read()
+    # Replace top-level engine WebSocket port and WorkerModule port (both default 49134),
+    # then RestApiModule HTTP port (default 3111).
+    content = content.replace("port: 49134", f"port: {worker_port}")
+    content = content.replace("port: 3111", f"port: {port}", 1)
+    if quiet:
+        content = content.replace(
+            "exporter: memory",
+            "exporter: memory\n      level: warn\n      logs_console_output: false",
+        )
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", prefix="iii-config-", dir=workflow_dir, delete=False
+    )
+    tmp.write(content)
+    tmp.close()
+    return tmp.name
+
+
+def cleanup_config(config_path: str):
+    """Remove temp config file, ignoring if already deleted."""
+    try:
+        os.unlink(config_path)
+    except FileNotFoundError:
+        pass
+
+
+def _kill_proc_tree(pid: int):
+    """Kill a process and all its descendants via /proc.
+    Kills children first (bottom-up) so they are still in the process tree
+    and discoverable before their parent dies."""
+    def _get_children(parent_pid):
+        children = []
+        try:
+            for entry in os.listdir("/proc"):
+                if not entry.isdigit():
+                    continue
+                try:
+                    with open(f"/proc/{entry}/stat") as f:
+                        stat = f.read().split()
+                    if int(stat[3]) == parent_pid:
+                        child_pid = int(entry)
+                        children.append(child_pid)
+                        children.extend(_get_children(child_pid))
+                except (FileNotFoundError, IndexError, ValueError, PermissionError):
+                    continue
+        except FileNotFoundError:
+            pass
+        return children
+
+    # children first, then parent — so children are still discoverable in /proc
+    children = _get_children(pid)
+    for p in reversed(children):
+        try:
+            os.kill(p, signal.SIGTERM)
+        except (ProcessLookupError, OSError):
+            pass
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (ProcessLookupError, OSError):
+        pass
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -23,552 +150,331 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    # Global parameters
-    parser.add_argument(
-        "--port", type=int, default=None, help="Port for dev server (default: None)"
+    # Global parameters shared across all subcommands
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--port", type=int, default=None, help="Port for dev server (default: auto)"
     )
-    parser.add_argument("--server", action="store_true", help="server mode")
+    common.add_argument("--server", action="store_true", help="Server mode")
 
-    # Subcommand parser
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # ===== start subcommand ==============================================================================
-    start_parser = subparsers.add_parser("start", help="Start dev server")
+    # start / stop
+    subparsers.add_parser("start", parents=[common], help="Start dev server")
+    stop_parser = subparsers.add_parser("stop", parents=[common], help="Stop dev server")
+    stop_parser.add_argument("--all", action="store_true", help="Stop all servers")
 
-    # ===== stop subcommand ==============================================================================
-    stop_parser = subparsers.add_parser("stop", help="Stop dev server")
-    stop_group = stop_parser.add_mutually_exclusive_group(required=False)
-    stop_group.add_argument("--all", action="store_true", help="Stop all servers")
+    # Build workflow subcommands from WORKFLOW_COMMANDS table
+    for cmd_name, operations in WORKFLOW_COMMANDS.items():
+        cmd_parser = subparsers.add_parser(
+            cmd_name, parents=[common], help=f"{cmd_name} operations"
+        )
+        group = cmd_parser.add_mutually_exclusive_group(required=True)
+        for op_name, op_help in operations.items():
+            if op_help is True:
+                group.add_argument(f"--{op_name}", action="store_true", help=f"{op_name.capitalize()}.")
+            else:
+                group.add_argument(
+                    f"--{op_name}",
+                    type=str,
+                    nargs="?",
+                    const="",
+                    metavar="ARGS",
+                    help=op_help,
+                )
 
-    # ===== verilator subcommand =========================================================================
-    verilator_parser = subparsers.add_parser("verilator", help="Verilator operations")
-    # Mutually exclusive option group for verilator - only one operation can be selected
-    verilator_group = verilator_parser.add_mutually_exclusive_group(required=True)
-    verilator_group.add_argument(
-        "--clean", action="store_true", help="Clean verilator build directory"
-    )
-    verilator_group.add_argument(
-        "--verilog",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Generate verilog files from chisel. Args: "[--balltype <balltype>] [--job <num>] [--batch]"',
-    )
-    verilator_group.add_argument(
-        "--build",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Build verilator simulation executable. Args: "[--job <num>] [--coverage]"',
-    )
-    verilator_group.add_argument(
-        "--sim",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run verilator simulation. Args: "--binary <path> [--batch] [--coverage]"',
-    )
-    verilator_group.add_argument(
-        "--run",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>] [--coverage]"',
-    )
-    verilator_group.add_argument(
-        "--cosim",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run verilator cosimulation. Args: "--binary <path> [--batch]"',
-    )
-
-    # ===== vcs subcommand =========================================================================
-    vcs_parser = subparsers.add_parser("vcs", help="vcs operations")
-    # Mutually exclusive option group for vcs - only one operation can be selected
-    vcs_group = vcs_parser.add_mutually_exclusive_group(required=True)
-    vcs_group.add_argument(
-        "--clean", action="store_true", help="Clean vcs build directory"
-    )
-    vcs_group.add_argument(
-        "--verilog", action="store_true", help="Generate verilog files"
-    )
-    vcs_group.add_argument(
-        "--build",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Build vcs simulation executable. Args: "[--job <num>]"',
-    )
-    vcs_group.add_argument(
-        "--sim",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run vcs simulation. Args: "--binary <path> [--batch]"',
-    )
-    vcs_group.add_argument(
-        "--run",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
-    )
-
-    # ===== sardine subcommand =========================================================================
-    sardine_parser = subparsers.add_parser("sardine", help="sardine operations")
-    sardine_group = sardine_parser.add_mutually_exclusive_group(required=True)
-    sardine_group.add_argument(
-        "--run",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run sardine. Args: "--workload <path> [--coverage]"',
-    )
-
-    # ===== agent subcommand =========================================================================
-    agent_parser = subparsers.add_parser("agent", help="agent operations")
-    agent_group = agent_parser.add_mutually_exclusive_group(required=True)
-    agent_group.add_argument(
-        "--chat",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run agent. Args: "--message <message>", "--model <model>"',
-    )
-
-    # ===== workload subcommand =========================================================================
-    workload_parser = subparsers.add_parser("workload", help="workload operations")
-    workload_group = workload_parser.add_mutually_exclusive_group(required=True)
-    workload_group.add_argument(
-        "--build",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Build workload. ",
-    )
-
-    # ===== doc subcommand =========================================================================
-    doc_parser = subparsers.add_parser("doc", help="doc operations")
-    doc_group = doc_parser.add_mutually_exclusive_group(required=True)
-    doc_group.add_argument("--deploy", action="store_true", help="Deploy doc. ")
-
-    # ===== marshal subcommand =========================================================================
-    marshal_parser = subparsers.add_parser("marshal", help="marshal operations")
-    marshal_group = marshal_parser.add_mutually_exclusive_group(required=True)
-    marshal_group.add_argument(
-        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build marshal. "
-    )
-    marshal_group.add_argument(
-        "--launch",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Launch marshal. ",
-    )
-
-    # ===== firesim subcommand =========================================================================
-    firesim_parser = subparsers.add_parser("firesim", help="firesim operations")
-    firesim_group = firesim_parser.add_mutually_exclusive_group(required=True)
-    firesim_group.add_argument(
-        "--buildbitstream",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Build bitstream. ",
-    )
-    firesim_group.add_argument(
-        "--infrasetup",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Infrasetup. ",
-    )
-    firesim_group.add_argument(
-        "--runworkload",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Run workload. ",
-    )
-
-    # ===== compiler subcommand =========================================================================
-    compiler_parser = subparsers.add_parser("compiler", help="compiler operations")
-    compiler_group = compiler_parser.add_mutually_exclusive_group(required=True)
-    compiler_group.add_argument(
-        "--build",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help="Build compiler. ",
-    )
-
-    # ===== funcsim subcommand =========================================================================
-    funcsim_parser = subparsers.add_parser("funcsim", help="funcsim operations")
-    funcsim_group = funcsim_parser.add_mutually_exclusive_group(required=True)
-    funcsim_group.add_argument(
-        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build funcsim. "
-    )
-    funcsim_group.add_argument(
-        "--sim", type=str, nargs="?", const="", metavar="ARGS", help="Sim funcsim. "
-    )
-
-    # ===== uvm subcommand =========================================================================
-    uvm_parser = subparsers.add_parser("uvm", help="uvm operations")
-    uvm_group = uvm_parser.add_mutually_exclusive_group(required=True)
-    uvm_group.add_argument(
-        "--builddut", type=str, nargs="?", const="", metavar="ARGS", help="Build dut. "
-    )
-    uvm_group.add_argument(
-        "--build", type=str, nargs="?", const="", metavar="ARGS", help="Build uvm. "
-    )
-
-    # ===== yosys subcommand =====================================================================
-    yosys_parser = subparsers.add_parser("yosys", help="yosys synthesis operations")
-    yosys_group = yosys_parser.add_mutually_exclusive_group(required=True)
-    yosys_group.add_argument(
-        "--synth",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Run yosys synthesis for area estimation.\n'
-             'Args: "[--top <top_module>] [--config <elaborate_config>]"\n'
-             '  --top              : top module for synthesis (default from yosys-config.yaml)\n'
-             '  --config           : Elaborate config class (default: sims.verilator.BuckyballToyVerilatorConfig)\n'
-             'Liberty library can be configured in bbdev/api/steps/yosys/scripts/yosys-config.yaml',
-    )
-
-    # ===== palladium subcommand ===================================================================
-    palladium_parser = subparsers.add_parser("palladium", help="palladium operations")
-    palladium_group = palladium_parser.add_mutually_exclusive_group(required=True)
-    palladium_group.add_argument(
-        "--verilog",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Generate verilog files from chisel. Args example: "[--config sims.palladium.BuckyballToyP2EConfig]"',
-    )
-
-    # ===== pegasus subcommand ===================================================================
-    pegasus_parser = subparsers.add_parser("pegasus", help="pegasus operations")
-    pegasus_group = pegasus_parser.add_mutually_exclusive_group(required=True)
-    pegasus_group.add_argument(
-        "--verilog",
-        type=str,
-        nargs="?",
-        const="",
-        metavar="ARGS",
-        help='Generate verilog files from chisel. Args example: "[--config sims.pegasus.PegasusConfig]"',
-    )
-
-    # Parse arguments, allowing unknown arguments (so --port can work in subcommands)
-    args, unknown = parser.parse_known_args(argv)
-
-    # If --port and --server are in unknown arguments, handle them manually
-    while unknown:
-        found = False
-        for i in range(len(unknown)):
-            if unknown[i] == "--port":
-                try:
-                    args.port = int(unknown[i + 1])
-                    unknown = unknown[i + 2 :]  # Remove processed arguments
-                    found = True
-                    break
-                except (ValueError, IndexError):
-                    break
-            if unknown[i] == "--server":
-                args.server = True
-                unknown = unknown[i + 1 :]  # Remove processed arguments
-                found = True
-                break
-        if not found:
-            break
-    # If there are other unknown arguments, throw error
-    if unknown:
-        parser.error(f"unrecognized arguments: {' '.join(unknown)}")
-
-    return args
+    return parser.parse_args(argv)
 
 
-def extract_command_info(args):
-    """Generic command info extractor, applicable to all commands"""
-    # Basic return structure
-    result = {"command": getattr(args, "command", None), "operation": None, "args": {}}
+def extract_command_info(args: argparse.Namespace) -> dict:
+    """Extract command, operation, and parsed sub-arguments from argparse Namespace."""
+    result = {"command": args.command, "operation": None, "args": {}}
 
-    # Dynamically extract operation type (iterate through all attributes of args)
-    for attr_name in dir(args):
-        # Skip built-in attributes and known non-operation attributes
-        if attr_name.startswith("_") or attr_name in ["command", "port"]:
+    for attr_name, attr_value in vars(args).items():
+        if attr_name in ("command", "port", "server"):
+            continue
+        if attr_value is None or attr_value is False:
             continue
 
-        attr_value = getattr(args, attr_name)
-        # Find attributes with value True or non-empty string (skip None and False)
-        if attr_value is not None and attr_value is not False:
-            result["operation"] = attr_name
-            if attr_value is True:
-                # Boolean operations, such as --clean, --verilog
-                result["args"] = {}
-            else:
-                # Operations with arguments, such as --sim "arg_string"
-                # Parse argument string
-                args_dict = {}
-                if attr_value:
-                    try:
-                        # use shlex to parse args
-                        arg_tokens = shlex.split(attr_value)
-                        i = 0
-                        while i < len(arg_tokens):
-                            token = arg_tokens[i]
-                            if token.startswith("--"):
-                                # long option
-                                option_name = token[2:]  # remove --
-                                if i + 1 < len(arg_tokens) and not arg_tokens[
-                                    i + 1
-                                ].startswith("-"):
-                                    # next token is value
-                                    args_dict[option_name] = arg_tokens[i + 1]
-                                    i += 2
-                                else:
-                                    # boolean flag
-                                    args_dict[option_name] = True
-                                    i += 1
-                            elif token.startswith("-") and len(token) == 2:
-                                # short option
-                                option_name = token[1:]  # remove -
-                                if i + 1 < len(arg_tokens) and not arg_tokens[
-                                    i + 1
-                                ].startswith("-"):
-                                    # next token is value
-                                    args_dict[option_name] = arg_tokens[i + 1]
-                                    i += 2
-                                else:
-                                    # boolean flag
-                                    args_dict[option_name] = True
-                                    i += 1
-                            else:
-                                # position argument, skip
-                                i += 1
-                    except ValueError as e:
-                        print(f"Error parsing arguments: {e}")
-                result["args"] = args_dict
-            break
+        result["operation"] = attr_name
+        if attr_value is True or attr_value == "":
+            result["args"] = {}
+        else:
+            result["args"] = _parse_sub_args(attr_value)
+        break
 
     return result
+
+
+def _parse_sub_args(arg_string: str) -> dict:
+    """Parse a sub-argument string like '--binary /path --batch' into a dict."""
+    args_dict = {}
+    try:
+        tokens = shlex.split(arg_string)
+    except ValueError as e:
+        print(f"Error parsing arguments: {e}")
+        return args_dict
+
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token.startswith("--"):
+            key = token[2:]
+            if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                args_dict[key] = tokens[i + 1]
+                i += 2
+            else:
+                args_dict[key] = True
+                i += 1
+        elif token.startswith("-") and len(token) == 2:
+            key = token[1:]
+            if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                args_dict[key] = tokens[i + 1]
+                i += 2
+            else:
+                args_dict[key] = True
+                i += 1
+        else:
+            i += 1
+    return args_dict
+
+
+def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
+    """Poll an HTTP endpoint until check_fn(response) returns True, or timeout."""
+    for _ in range(timeout):
+        try:
+            resp = requests.get(url, timeout=1, proxies=NO_PROXY)
+            if check_fn(resp):
+                return True
+        except requests.exceptions.ConnectionError:
+            pass
+        except requests.exceptions.RequestException:
+            return True  # non-connection error means server is reachable
+        time.sleep(1)
+    print(error_msg)
+    return False
+
+
+def forward_iii_output(pipe, active_event: threading.Event, quiet: bool = False):
+    """Forward task output to stdout. In quiet mode, suppress engine INFO/WARN logs."""
+    for line in iter(pipe.readline, ""):
+        if not active_event.is_set():
+            continue
+        if quiet:
+            # Pass through: ANSI-colored step output and ERROR lines; drop engine INFO/WARN
+            if line.startswith("\033[") or "[ERROR]" in line:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+        else:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+    pipe.close()
+
+
+def read_state_file(path: str):
+    """Read JSON from an iii state file (JSON + binary padding). Returns parsed dict or None."""
+    try:
+        with open(path, "r", errors="ignore") as f:
+            raw = f.read()
+        state_data, _ = json.JSONDecoder().raw_decode(raw)
+        return state_data
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def run_server_mode(args, cmd_info):
+    """Handle --server mode: interact with an already-running (or new) iii server."""
+    command = cmd_info["command"]
+
+    if command == "start":
+        print(f"Starting dev server on port {args.port}")
+        config_path = make_iii_config(args.port, 49134) if args.port else os.path.join(workflow_dir, "config.yaml")
+        try:
+            subprocess.run(["iii", "-c", config_path], cwd=workflow_dir, check=True)
+        finally:
+            if args.port:
+                cleanup_config(config_path)
+
+    elif command == "stop":
+        if cmd_info["operation"] == "all":
+            print("Stopping all servers")
+            subprocess.run(
+                "kill -9 $(ps aux | grep '[i]ii' | awk '{print $2}')",
+                shell=True, check=False, text=True,
+            )
+        else:
+            print(f"Stopping server on port {args.port}")
+            subprocess.run(
+                f"kill -TERM $(lsof -t -i :{args.port})",
+                shell=True, check=False, text=True,
+            )
+
+    elif command in WORKFLOW_COMMANDS:
+        api_path = f"/{command}/{cmd_info['operation']}"
+        resp = requests.post(
+            f"http://localhost:{args.port}{api_path}",
+            json=cmd_info["args"],
+            timeout=30,
+            proxies=NO_PROXY,
+        )
+        print(resp.text)
+
+    else:
+        print(f"Unknown command: {command}")
+        print(f"Available commands: {', '.join(ALL_COMMANDS)}")
+        sys.exit(1)
+
+
+def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
+    """Submit a task to iii and poll for its result. Returns exit code (0=ok, 1=fail)."""
+    base_url = f"http://localhost:{port}"
+    print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
+    try:
+        submit_resp = requests.post(
+            f"{base_url}{api_path}",
+            json=cmd_info["args"],
+            timeout=30,
+            proxies=NO_PROXY,
+        )
+        submit_data = submit_resp.json()
+    except Exception as e:
+        print(f"Error: Failed to submit task: {e}")
+        return 1
+
+    if submit_resp.status_code >= 400:
+        print(f"Error: {submit_data}")
+        return 1
+
+    trace_id = submit_data.get("trace_id", "")
+    if not trace_id:
+        print(f"Error: No trace_id in response: {submit_data}")
+        return 1
+
+    # Poll for result
+    state_file = os.path.join(workflow_dir, "data", "state_store.db", f"{trace_id}.bin")
+    poll_timeout = 600  # 10 minute max
+    task_result = None
+    for _ in range(poll_timeout // 2):
+        state_data = read_state_file(state_file)
+        if state_data:
+            if "success" in state_data:
+                task_result = state_data["success"].get("body", state_data["success"])
+                break
+            elif "failure" in state_data:
+                task_result = state_data["failure"].get("body", state_data["failure"])
+                break
+        time.sleep(2)
+    else:
+        print("Error: Task polling timed out after 10 minutes")
+        return 1
+
+    print(f"\nTask completed on http://localhost:{port}")
+    if task_result and not task_result.get("success", False):
+        print("Error: Task failed")
+        return 1
+    return 0
+
+
+def run_script_mode(args, cmd_info):
+    """Handle script mode: start iii, run one task, then shut down."""
+    command = cmd_info["command"]
+
+    if command in ("start", "stop"):
+        print(f"'{command}' does nothing in script mode")
+        return
+
+    if command not in WORKFLOW_COMMANDS:
+        print(f"Unknown command: {command}")
+        print(f"Available commands: {', '.join(ALL_COMMANDS)}")
+        sys.exit(1)
+
+    api_path = f"/{command}/{cmd_info['operation']}"
+
+    # Reserve both ports atomically to prevent TOCTOU races with concurrent bbdev instances.
+    # Sockets stay bound until the engine has taken over (HTTP is up), then are released.
+    if args.port:
+        available_port = args.port
+        http_sock = None
+    else:
+        available_port, http_sock = reserve_port(start_port=5100, end_port=5500)
+    worker_port, worker_sock = reserve_port(start_port=49134, end_port=49500)
+    print(f"Starting server on port {available_port}...")
+
+    # Clean stale state files from previous runs
+    state_dir = os.path.join(workflow_dir, "data", "state_store.db")
+    if os.path.isdir(state_dir):
+        for f in os.listdir(state_dir):
+            if f.endswith(".bin"):
+                try:
+                    os.unlink(os.path.join(state_dir, f))
+                except OSError:
+                    pass
+
+    config_path = make_iii_config(available_port, worker_port, quiet=True)
+    iii_output_active = threading.Event()
+    iii_output_active.set()
+
+    # Release reserved sockets just before engine starts so it can bind the same ports.
+    if http_sock:
+        http_sock.close()
+    worker_sock.close()
+
+    # Set III_URL so motia SDK connects to the correct worker port
+    iii_env = {**os.environ, "III_URL": f"ws://localhost:{worker_port}"}
+    proc = subprocess.Popen(
+        ["iii", "-c", config_path],
+        cwd=workflow_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=iii_env,
+    )
+
+    output_thread = threading.Thread(
+        target=forward_iii_output, args=(proc.stdout, iii_output_active, True), daemon=True
+    )
+    output_thread.start()
+
+    try:
+        base_url = f"http://localhost:{available_port}"
+
+        # Phase 1: wait for iii engine HTTP
+        if not wait_for_http(
+            f"{base_url}/",
+            check_fn=lambda r: True,
+            timeout=30,
+            error_msg="Server failed to start within 30 seconds",
+        ):
+            sys.exit(1)
+
+        # Phase 2: wait for route registration
+        if not wait_for_http(
+            f"{base_url}{api_path}",
+            check_fn=lambda r: r.status_code != 404,
+            timeout=120,
+            error_msg="Routes failed to register within timeout",
+        ):
+            sys.exit(1)
+
+        print(f"Server is ready on port {available_port}")
+        rc = _submit_and_poll(available_port, api_path, cmd_info)
+        if rc != 0:
+            sys.exit(rc)
+
+    finally:
+        # Cleanup: kill iii and all its descendant processes, then remove temp config
+        iii_output_active.clear()
+        time.sleep(0.5)
+        _kill_proc_tree(proc.pid)
+        proc.wait()
+        cleanup_config(config_path)
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     cmd_info = extract_command_info(args)
 
-    # print(f"Command: {cmd_info['command']}")
-    # print(f"Operation: {cmd_info['operation']}")
-    # print(f"Arguments: {cmd_info['args']}")
-
-    # ==================================================================================
-    # Two modes: server mode and script mode
-    #
-    # server mode: Manually start/stop server, can visualize and access workflows through browser
-    # script mode: Automatically assign port, start service when task begins, stop service when task ends
-    # ==================================================================================
     if args.server:
-        if cmd_info["command"] == "start":
-            print(f"Starting dev server on port {args.port}")
-            subprocess.run(
-                ["pnpm", "dev", "--port", str(args.port)],
-                cwd=workflow_dir,
-                check=True,
-            )
-
-        elif cmd_info["command"] == "stop":
-            if cmd_info["operation"] == "all":
-                print("Stopping all servers")
-                subprocess.run(
-                    "kill -9 $(ps aux | grep '[m]otia' | awk '{print $2}')",
-                    shell=True,
-                    check=False,
-                    text=True,
-                )
-            else:
-                print(f"Stopping server on port {args.port}")
-                subprocess.run(
-                    f"kill -TERM $(lsof -t -i :{args.port})",
-                    shell=True,
-                    check=False,
-                    text=True,
-                )
-
-        elif cmd_info["command"] in [
-            "verilator",
-            "vcs",
-            "sardine",
-            "agent",
-            "workload",
-            "doc",
-            "marshal",
-            "firesim",
-            "compiler",
-            "funcsim",
-            "uvm",
-            "palladium",
-            "yosys",
-            "pegasus",
-        ]:
-            api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-            json_data = json.dumps(cmd_info["args"])
-            subprocess.run(
-                [
-                    "curl",
-                    "-X",
-                    "POST",
-                    f"http://localhost:{args.port}{api_path}",
-                    "-H",
-                    "Content-Type: application/json",
-                    "-d",
-                    json_data,
-                ],
-                cwd=workflow_dir,
-                check=True,
-            )
-        else:
-            print(f"Unknown command: {cmd_info['command']}")
-            print(
-                "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys, pegasus"
-            )
-            sys.exit(1)
-    else:  # script mode
-        if cmd_info["command"] == "start":
-            print(" 'start' do nothing in script mode")
-        elif cmd_info["command"] == "stop":
-            print(" 'stop' do nothing in script mode")
-        elif cmd_info["command"] in [
-            "verilator",
-            "vcs",
-            "sardine",
-            "agent",
-            "workload",
-            "doc",
-            "marshal",
-            "firesim",
-            "compiler",
-            "funcsim",
-            "uvm",
-            "palladium",
-            "yosys",
-            "pegasus",
-        ]:
-            # 0. Clean up stale BullMQ/Redis data to prevent replaying old events
-            aof_dir = os.path.join(workflow_dir, ".motia", "appendonlydir")
-            if os.path.exists(aof_dir):
-                shutil.rmtree(aof_dir)
-
-            # 1. Start service in background ================================
-            # If port is specified, use the specified port; otherwise, automatically assign port
-            if args.port:
-                available_port = args.port
-            else:
-                available_port = find_available_port(start_port=5100, end_port=5500)
-            print(f"Starting server on port {available_port}...")
-            proc = subprocess.Popen(
-                ["pnpm", "dev", "--port", str(available_port)],
-                cwd=workflow_dir,
-                stderr=subprocess.DEVNULL  # Suppress stderr to hide BullMQ errors
-            )
-
-            # Wait for service to start
-            max_retries = 300
-            for i in range(max_retries):
-                try:
-                    # Disable proxy, connect directly to localhost
-                    # response = requests.get(f"http://localhost:{available_port}", timeout=1)
-                    response = requests.get(
-                        f"http://localhost:{available_port}",
-                        timeout=1,
-                        proxies={"http": None, "https": None, "all": None},
-                    )
-                    if response.status_code == 200:
-                        print(f"Server is ready on port {available_port}")
-                        break
-                except requests.exceptions.RequestException:
-                    pass
-                time.sleep(3)
-            else:
-                print("Server failed to start within 30 seconds")
-                subprocess.run(
-                    f"kill -TERM $(lsof -t -i :{available_port})",
-                    shell=True,
-                    check=False,
-                    text=True,
-                )
-                proc.terminate()
-                proc.wait()
-                sys.exit(1)
-
-            # 2. Execute API call ================================
-            api_path = f"/{cmd_info['command']}/{cmd_info['operation']}"
-            json_data = json.dumps(cmd_info["args"])
-            print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
-            # Disable proxy, connect directly to localhost
-            result = subprocess.run(
-                [
-                    "curl",
-                    "-sS",
-                    "--noproxy",
-                    "localhost",
-                    "-X",
-                    "POST",
-                    f"http://localhost:{available_port}{api_path}",
-                    "-H",
-                    "Content-Type: application/json",
-                    "-d",
-                    json_data,
-                ],
-                cwd=workflow_dir,
-                capture_output=True,
-                text=True,
-            )
-
-            # 3. Shutdown service ================================
-            # Give observability plugin time to finish async operations (e.g., Redis writes)
-            time.sleep(1)
-            proc.terminate()
-            proc.wait()
-            print(
-                f"\nTask completed. Command running on http://localhost:{available_port} is finished"
-            )
-
-            # Check the success field returned by API
-            try:
-                response = json.loads(result.stdout)
-                if not response.get("success", False):
-                    print("Error: Task failed")
-                    sys.exit(1)
-            except Exception:
-                print("Error: Invalid API response")
-                sys.exit(1)
-
-        else:
-            print(f"Unknown command: {cmd_info['command']}")
-            print(
-                "Available commands: start, stop, verilator, vcs, sardine, agent, \
-                workload, doc, marshal, firesim, compiler, funcsim, uvm, yosys, pegasus"
-            )
-            sys.exit(1)
+        run_server_mode(args, cmd_info)
+    else:
+        run_script_mode(args, cmd_info)

@@ -15,11 +15,7 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Node.js runtime (Motia is a Node.js framework)
-            nodejs_22
-            nodePackages.pnpm
-
-            # Python with project dependencies (managed by Nix, not requirements.txt)
+            # Python with system-level dependencies (managed by Nix)
             bbdevPythonPkgs
 
             # System tools
@@ -29,12 +25,18 @@
 
           shellHook = ''
             export PATH="$PWD:$PATH"
-            source "$PWD/init.sh"
+
+            # Create venv for pip-managed packages (motia, iii-sdk)
+            VENV_DIR="$PWD/api/.venv"
+            if [ ! -d "$VENV_DIR" ]; then
+              echo "Creating Python venv..."
+              python3 -m venv "$VENV_DIR" --system-site-packages
+              "$VENV_DIR/bin/pip" install -q motia[otel]==1.0.0rc17 iii-sdk==0.2.0
+            fi
+            export PATH="$VENV_DIR/bin:$PATH"
 
             echo "bbdev dev environment ready"
-            echo "  Node.js: $(node --version)"
             echo "  Python:  $(python3 --version)"
-            echo "  pnpm:    $(pnpm --version)"
             echo "  bbdev:   $(which bbdev)"
           '';
         };
