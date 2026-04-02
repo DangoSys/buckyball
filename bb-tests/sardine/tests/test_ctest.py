@@ -121,7 +121,7 @@ def test_ctest_workload_debug(
 ):
     caplog.set_level(logging.INFO)
 
-    time.sleep(test_index * 15)
+    time.sleep(test_index * 5)
     start_time = time.time()
     coverage_flag = " --coverage" if os.environ.get("SARDINE_COVERAGE") else ""
     command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'

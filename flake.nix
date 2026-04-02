@@ -48,8 +48,7 @@
               rustTools.clippy
 
               # bbdev dependencies
-              bbdev.nodejs
-              bbdev.pnpm
+              bbdev.iii
               bbdev.uv
               bbdev.allure
               bbdev.gcc
