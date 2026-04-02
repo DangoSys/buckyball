@@ -23,10 +23,16 @@ async def handler(req, context):
     # Get config name, must be provided
     config_name = body.get("config")
     if not config_name or config_name == "None":
+        error_msg = "Configuration name is required. Please specify --config parameter."
+        context.logger.error(error_msg, {"config_name": config_name})
         return {
-            "status": "error",
-            "message": "Configuration name is required. Please specify --config parameter.",
-            "example": 'bbdev verilator --verilog "--config sims.verilator.BuckyballToyVerilatorConfig"',
+            "status": 400,
+            "body": {
+                "success": False,
+                "failure": True,
+                "returncode": 400,
+                "message": "Configuration name is required. Please specify --config parameter.",
+            },
         }
 
     data = {
