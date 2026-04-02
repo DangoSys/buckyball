@@ -43,7 +43,8 @@ mlir_tile_workloads = [
 def test_mlir_optest(command_run, caplog, workload_path, workload_id, test_index):
     caplog.set_level(logging.INFO)
 
-    time.sleep(test_index * 20)
+    # no longer needed: bbdev uses dynamic port allocation
+    time.sleep(test_index * 5)
     start_time = time.time()
     coverage_flag = " --coverage" if os.environ.get("SARDINE_COVERAGE") else ""
     command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'
@@ -87,7 +88,7 @@ def test_mlir_optest(command_run, caplog, workload_path, workload_id, test_index
 def test_mlir_tile_optest(command_run, caplog, workload_path, workload_id, test_index):
     caplog.set_level(logging.INFO)
 
-    time.sleep(test_index * 20)
+    time.sleep(test_index * 5)
     start_time = time.time()
     coverage_flag = " --coverage" if os.environ.get("SARDINE_COVERAGE") else ""
     command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'

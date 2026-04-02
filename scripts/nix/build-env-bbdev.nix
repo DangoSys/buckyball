@@ -1,11 +1,35 @@
 { pkgs }:
 
-{
-  # Node.js environment (for bbdev Motia backend)
-  nodejs = pkgs.nodejs_22;
-  pnpm = pkgs.nodePackages.pnpm;
+let
+  iiiVersion = "0.10.0";
+  iiiBinary = pkgs.stdenv.mkDerivation {
+    pname = "iii";
+    version = iiiVersion;
 
-  # UV (motia install uses it for Python deps; avoid auto-install via broken pip)
+    src = pkgs.fetchurl {
+      url = "https://github.com/iii-hq/iii/releases/download/iii/v${iiiVersion}/iii-x86_64-unknown-linux-gnu.tar.gz";
+      sha256 = "sha256-XMSqKQKHL4XCQTw5r9BNbdcPS4c6HZkg4GW0XXVKg00=";
+    };
+
+    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+    buildInputs = [ pkgs.stdenv.cc.cc.lib ];
+
+    unpackPhase = ''
+      tar xzf $src
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin
+      cp iii $out/bin/iii
+      chmod +x $out/bin/iii
+    '';
+  };
+in
+{
+  # iii engine binary
+  iii = iiiBinary;
+
+  # UV (for creating .venv and installing motia + deps)
   uv = pkgs.uv;
   # Allure CLI for sardine Allure reports
   allure = pkgs.allure;
