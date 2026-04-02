@@ -28,14 +28,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = f"{arch_dir}/build"
-    waveform_dir = f"{arch_dir}/waveform"
-    log_dir = f"{arch_dir}/log"
+    coverage = input_data.get("coverage", False)
     cosim = input_data.get("cosim", False)
 
     # ==================================================================================
-    # Execute operation
-    # ==================================================================================
     # Find sources
+    # ==================================================================================
     vsrcs = glob.glob(f"{build_dir}/**/*.v", recursive=True) + glob.glob(
         f"{build_dir}/**/*.sv", recursive=True
     )
@@ -48,32 +46,50 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         + glob.glob(f"{build_dir}/**/*.cpp", recursive=True)
     )
 
-    # Setup paths: fesvr from bebop/host/spike/riscv-isa-sim (install/include, install/lib)
-    bebop_isa_sim = f"{bbdir}/bebop/host/spike/riscv-isa-sim"
-    inc_paths = [
-        os.environ.get("RISCV", "") + "/include" if os.environ.get("RISCV") else "",
-        f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2",
-        f"{bebop_isa_sim}/install/include",
-        build_dir,
-        f"{arch_dir}/src/csrc/include",
-    ]
-    inc_flags = " ".join([f"-I{p}" for p in inc_paths if p])
+    # Exclude testchipip's SimDRAM.cc — our SimDRAM_bb.cc overrides memory_init
+    csrcs = [f for f in csrcs if not f.endswith("SimDRAM.cc") or "src/csrc" in f]
+
+    # Exclude testchipip's TSI/HTIF C++ sources (deleted in verilog step, but guard anyway).
+    # tsi_tick DPI symbol is provided by tsi_stub.cc in src/csrc instead.
+    _tsi_htif = {"testchip_tsi.cc", "testchip_htif.cc", "SimTSI.cc"}
+    csrcs = [f for f in csrcs if os.path.basename(f) not in _tsi_htif]
 
     if cosim:
         topname = "ToyBuckyball"
     else:
-        topname = "TestHarness"
+        topname = "BBSimHarness"
 
-    cflags = f"{inc_flags} -DTOP_NAME='\"V{topname}\"' -std=c++17 "
+    # ==================================================================================
+    # Build flags
+    # ==================================================================================
+    result_dir = f"{bbdir}/result"
+
+    def pkg_config(flag, pkg):
+        r = subprocess.run(["pkg-config", flag, pkg], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    readline_inc = pkg_config("--variable=includedir", "readline")
+    readline_lib = pkg_config("--variable=libdir", "readline")
+    zlib_lib = pkg_config("--variable=libdir", "zlib")
+
+    inc_flags = " ".join([
+        f"-I{result_dir}/include",
+        f"-I{build_dir}",
+        f"-I{arch_dir}/src/csrc/include",
+        f"-I{readline_inc}",
+    ])
+
+    # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
+    # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event.step.py).
+    cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
     if cosim:
         cflags += " -DCOSIM"
+
     ldflags = (
-        f"-lreadline -ldramsim -lfesvr -lstdc++ "
-        f"-L{bebop_isa_sim}/install/lib "
-        f"-L{bbdir}/result/lib "
-        f"-L{arch_dir}/thirdparty/chipyard/tools/DRAMSim2 "
-        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build "
-        f"-L{arch_dir}/thirdparty/chipyard/toolchains/riscv-tools/riscv-isa-sim/build/lib"
+        f"-lreadline -ldramsim -lstdc++ -lz "
+        f"-L{result_dir}/lib "
+        f"-L{readline_lib} -Wl,-rpath,{readline_lib} "
+        f"-L{zlib_lib} -Wl,-rpath,{zlib_lib} "
     )
 
     obj_dir = f"{build_dir}/obj_dir"
@@ -83,10 +99,31 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     sources = " ".join(vsrcs + csrcs)
     jobs = input_data.get("jobs", "")
 
+    # Fix nix runtime library paths
+    libstdcpp_path = subprocess.run(
+        "g++ -print-file-name=libstdc++.so", shell=True, capture_output=True, text=True
+    ).stdout.strip()
+    if libstdcpp_path and "/" in libstdcpp_path:
+        nix_lib_dir = os.path.dirname(os.path.realpath(libstdcpp_path))
+        ldflags += f" -Wl,-rpath,{nix_lib_dir}"
+
+    # Enable ccache if available
+    if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
+        os.environ["OBJCACHE"] = "ccache"
+
+    # Use lld for faster linking if available
+    use_lld = subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode == 0
+    if use_lld:
+        ldflags += " -fuse-ld=lld"
+
+    # ==================================================================================
+    # Run verilator
+    # ==================================================================================
     verilator_cmd = (
-        f"verilator -MMD --build -cc --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
+        f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
         f"--unroll-count 256 "
+        f"{'--coverage-line ' if coverage else ''}"
         f"-Wno-PINCONNECTEMPTY "
         f"-Wno-ASSIGNDLY "
         f"-Wno-DECLFILENAME "
@@ -103,11 +140,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cmd=verilator_cmd,
         logger=ctx.logger,
         cwd=bbdir,
-        stdout_prefix="verilator build",
-        stderr_prefix="verilator build",
+        stdout_prefix="verilator verilation",
+        stderr_prefix="verilator verilation",
     )
+    if result.returncode != 0:
+        await check_result(
+            ctx, result.returncode, continue_run=False, extra_fields={"task": "build"},
+            trace_id=origin_tid,
+        )
+        return
+
+    make_jobs = jobs if jobs else str(os.cpu_count() or 16)
     result = stream_run_logger(
-        cmd=f"make -C {obj_dir} -f V{topname}.mk V{topname}",
+        cmd=f"make -j{make_jobs} VM_PARALLEL_BUILDS=1 -C {obj_dir} -f V{topname}.mk V{topname}",
         logger=ctx.logger,
         cwd=bbdir,
         stdout_prefix="verilator build",
@@ -117,11 +162,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     # Return result to API
     # ==================================================================================
-    success_result, failure_result = await check_result(
+    await check_result(
         ctx,
         result.returncode,
         continue_run=input_data.get("from_run_workflow", False),
-        extra_fields={"task": "build"}, trace_id=origin_tid,
+        extra_fields={"task": "build"},
+        trace_id=origin_tid,
     )
 
     # ==================================================================================

@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 
 from motia import FlowContext, queue
@@ -26,9 +27,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/")
     arch_dir = f"{bbdir}/arch"
-
-    # Get config name, must be provided
     config_name = input_data.get("config")
+
     if not config_name or config_name == "None":
         ctx.logger.error("Configuration name is required but not provided")
         success_result, failure_result = await check_result(
@@ -39,7 +39,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "task": "validation",
                 "error": "Configuration name is required. Please specify --config parameter.",
                 "example": 'bbdev verilator --verilog "--config sims.verilator.BuckyballToyVerilatorConfig"',
-            }, trace_id=origin_tid)
+            },
+            trace_id=origin_tid,
+        )
         return failure_result
 
     ctx.logger.info(f"Using configuration: {config_name}")
@@ -54,8 +56,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     else:
         command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
 
-    command += "--disable-annotation-unknown -strip-debug-info -O=debug "
-    command += f"--split-verilog -o={build_dir}"
+    # Firtool options (CIRCT). Current set; optional Chipyard-style options below.
+    command += "--disable-annotation-unknown "
+    command += "--strip-debug-info "
+    command += "-O=debug "
+    # command += f"-repl-seq-mem -repl-seq-mem-file={build_dir}/mem.conf "
+    command += f"--split-verilog -o={build_dir} "
+    # Optional: --disable-annotation-classless (ignore classless annotations)
+    # Optional: -repl-seq-mem -repl-seq-mem-file=<path>.conf (SRAM macro replacement)
+    # Optional: --disable-all-randomization (disable mem/reg init; may break semantics)
+    # Optional: --disable-opt (no optimization) or -O=release (default is release)
+    # Optional: --output-annotation-file=<path> (emit annotations after lower-to-hw)
+    # Optional: --no-dedup (disable module dedup); --strip-fir-debug-info (FIR locators)
 
     result = stream_run_logger(
         cmd=command,
@@ -65,10 +77,34 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="verilator verilog",
     )
 
-    # Remove unwanted file
-    topname_file = f"{arch_dir}/TestHarness.sv"
-    if os.path.exists(topname_file):
-        os.remove(topname_file)
+    # Remove testchipip C++ sources that depend on fesvr (which we don't have).
+    # SimTSI.v is kept so verilator can resolve the SimTSI module reference in BBSimHarness.sv;
+    # tsi_tick DPI symbol is satisfied by arch/src/csrc/src/monitor/ioe/tsi_stub.cc instead.
+    for unwanted in [
+        f"{build_dir}/testchip_htif.cc",
+        f"{build_dir}/testchip_htif.h",
+        f"{build_dir}/testchip_tsi.cc",
+        f"{build_dir}/testchip_tsi.h",
+        f"{build_dir}/SimTSI.cc",
+        f"{arch_dir}/BBSimHarness.sv",
+    ]:
+        if os.path.exists(unwanted):
+            os.remove(unwanted)
+
+    # Patch fesvr includes out of mm.h and mm.cc (copied from testchipip resources).
+    # They reference fesvr/memif.h which we don't have — our SimDRAM_bb.cc doesn't use it.
+    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
+        if os.path.exists(patch_file):
+            with open(patch_file, "r") as f:
+                content = f.read()
+            patched = "\n".join(
+                line for line in content.splitlines()
+                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
+            )
+            if patched != content:
+                with open(patch_file, "w") as f:
+                    f.write(patched)
+                ctx.logger.info(f"Patched fesvr includes from {patch_file}")
 
     # ==================================================================================
     # Return result to API
@@ -77,13 +113,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx,
         result.returncode,
         continue_run=input_data.get("from_run_workflow", False),
-        extra_fields={"task": "verilog"}, trace_id=origin_tid,
+        extra_fields={"task": "verilog"},
+        trace_id=origin_tid,
     )
 
     # ==================================================================================
     # Continue routing
-    # Routing to verilog or finish workflow
-    # For run workflow, continue to verilog; for standalone clean, complete
     # ==================================================================================
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(

@@ -25,63 +25,73 @@ config = {
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
-    origin_tid = get_origin_trace_id(input_data, ctx)
     # ==================================================================================
     # Get simulation parameters
     # ==================================================================================
+    origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = f"{arch_dir}/build"
 
-    # Generate timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
 
     binary_name = input_data.get("binary", "")
+    coverage = input_data.get("coverage", False)
     success_result, failure_result = await check_result(
-        ctx, returncode=(binary_name == None), continue_run=True, trace_id=origin_tid,
+        ctx, returncode=(binary_name is None), continue_run=True, trace_id=origin_tid,
     )
 
     binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
     ctx.logger.info(f"binary_path: {binary_path}")
     success_result, failure_result = await check_result(
-        ctx, returncode=(binary_path == None), continue_run=True, trace_id=origin_tid,
+        ctx, returncode=(binary_path is None), continue_run=True, trace_id=origin_tid,
     )
     if failure_result:
         ctx.logger.error("binary not found", failure_result)
         return
 
-    # Create log and waveform directory
+    topname = "BBSimHarness"
     log_dir = f"{arch_dir}/log/{timestamp}-{binary_name}"
     waveform_dir = f"{arch_dir}/waveform/{timestamp}-{binary_name}"
-    topname = "TestHarness"
 
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(waveform_dir, exist_ok=True)
 
+    coverage_flag = ""
+    if coverage:
+        coverage_dat_path = f"{log_dir}/coverage.dat"
+        coverage_flag = f"+verilator+coverage+file+{coverage_dat_path}"
+
     bin_path = f"{build_dir}/obj_dir/V{topname}"
     batch = input_data.get("batch", False)
 
-    # Create log and waveform file
-    log_path = f"{log_dir}/bdb.log"
-    fst_path = f"{waveform_dir}/waveform.fst"
-    # Remove old waveform file
-    subprocess.run(f"rm -f {waveform_dir}/waveform.vcd", shell=True, check=True)
+    log_path    = f"{log_dir}/bdb.ndjson"
+    stdout_path = f"{log_dir}/stdout.log"
+    meta_path   = f"{log_dir}/sim_meta.txt"
+    fst_path    = f"{waveform_dir}/waveform.fst"
 
     # ==================================================================================
-    # Execute simulation script with streaming output
+    # Execute simulation
+    # BBSimHarness uses +elf= for ELF loading (via SimDRAM_bb.cc / libelf)
+    # No fesvr, no +loadmem_addr needed
+    #
+    # disasm.log: only stderr -> spike-dasm (Rocket commit printf is stderr here;
+    # merging stdout with 2>&1 can break: full stdio buffering + non-DASM bytes).
+    # BDB_SIM_META moves NDJSON banner to sim_meta.txt so it does not pollute disasm.
     # ==================================================================================
-    bebop_isa_sim = f"{bbdir}/bebop/host/spike/riscv-isa-sim"
     ld_lib_path = (
-        f"{bebop_isa_sim}/install/lib:"
         f"{bbdir}/result/lib:"
         f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2"
     )
     sim_cmd = (
         f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "
-        f"{bin_path} +permissive +loadmem={binary_path} +loadmem_addr=800000000 "
-        f"{'+batch ' if batch else ''} "
-        f"+fst={fst_path} +log={log_path} +permissive-off "
-        f"{binary_path} > >(tee {log_dir}/stdout.log) 2> >(spike-dasm > {log_dir}/disasm.log)"
+        f"export BDB_SIM_META=\"{meta_path}\"; "
+        f"{bin_path} +permissive "
+        f"+elf={binary_path} "
+        f"{'+batch ' if batch else ''}"
+        f"{coverage_flag + ' ' if coverage_flag else ''}"
+        f"+fst={fst_path} +log={log_path} +stdout={stdout_path} +trace=all +permissive-off "
+        f"{binary_path} 2> >(spike-dasm > {log_dir}/disasm.log)"
     )
     script_dir = os.path.dirname(__file__)
 
@@ -94,36 +104,32 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         executable="bash",
     )
     success_result, failure_result = await check_result(
-        ctx, returncode=result.returncode, continue_run=True, trace_id=origin_tid)
+        ctx, returncode=result.returncode, continue_run=True, trace_id=origin_tid,
+    )
     if failure_result:
         ctx.logger.error("sim failed", failure_result)
         return
 
-    if os.path.exists(f"{waveform_dir}/waveform.fst.heir"):
-        subprocess.run(
-            f"gtkwave -f {waveform_dir}/waveform.fst -H {waveform_dir}/waveform.fst.heir",
-            shell=True,
-            check=True,
-        )
-
     # ==================================================================================
     # Return simulation result
     # ==================================================================================
-    # This is the end point of the run workflow, status will no longer be set to processing
-    success_result, failure_result = await check_result(
+    extra_fields = {
+        "task": "sim",
+        "binary": binary_path,
+        "log_dir": log_dir,
+        "waveform_dir": waveform_dir,
+        "timestamp": timestamp,
+        "sim_meta": meta_path,
+    }
+    if coverage:
+        extra_fields["coverage_dat"] = coverage_dat_path
+
+    await check_result(
         ctx,
         result.returncode,
         continue_run=False,
-        extra_fields={
-            "task": "sim",
-            "binary": binary_path,
-            "log_dir": log_dir,
-            "waveform_dir": waveform_dir,
-            "timestamp": timestamp,
-        }, trace_id=origin_tid)
-
-    # ==================================================================================
-    #  Finish workflow
-    # ==================================================================================
+        extra_fields=extra_fields,
+        trace_id=origin_tid,
+    )
 
     return
