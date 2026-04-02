@@ -1,7 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
 from utils.path import get_buckyball_path
-from utils.event_common import wait_for_result
 
 config = {
     "name": "Yosys Synth",
@@ -22,9 +21,4 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "config": body.get("config"),
     }
     await ctx.enqueue({"topic": "yosys.synth", "data": {**data, "_trace_id": ctx.trace_id}})
-
-    # ==================================================================================
-    #  Wait for synthesis result
-    # ==================================================================================
-    result = await wait_for_result(ctx)
-    return result
+    return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

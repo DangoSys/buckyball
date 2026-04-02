@@ -255,16 +255,40 @@ def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
     return False
 
 
+_ENGINE_INFRA_MODULES = (
+    "iii::modules::worker",
+    "iii::modules::config",
+    "iii::modules::rest_api",
+    "iii::modules::api",
+    "iii::modules::queue",
+    "iii::modules::state",
+    "iii::modules::pubsub",
+    "iii::modules::shell",
+    "iii::modules::telemetry",
+    "iii::builtins",
+    "iii::trigger",
+    "iii::function",
+    "function_name",
+    "service_name",
+    "iii::services",
+    "iii::workers",
+    "motia.runtime",
+    "motia.tracing",
+    "motia.cli",
+)
+
+
 def forward_iii_output(pipe, active_event: threading.Event, quiet: bool = False):
-    """Forward task output to stdout. In quiet mode, suppress engine INFO/WARN logs."""
+    """Forward task output to stdout. In quiet mode, suppress engine infrastructure logs."""
     for line in iter(pipe.readline, ""):
         if not active_event.is_set():
             continue
         if quiet:
-            # Pass through: ANSI-colored step output and ERROR lines; drop engine INFO/WARN
-            if line.startswith("\033[") or "[ERROR]" in line:
-                sys.stdout.write(line)
-                sys.stdout.flush()
+            # Suppress engine infrastructure INFO/WARN; pass everything else
+            if any(mod in line for mod in _ENGINE_INFRA_MODULES):
+                continue
+            sys.stdout.write(line)
+            sys.stdout.flush()
         else:
             sys.stdout.write(line)
             sys.stdout.flush()
