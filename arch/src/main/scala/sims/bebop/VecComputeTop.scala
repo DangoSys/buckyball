@@ -55,12 +55,12 @@ class VecComputeTop extends Module {
     }
   }
 
-  mul.io.in.valid := inFire
+  mul.io.in.valid    := inFire
   mul.io.in.bits.in1 := op1Reg
   mul.io.in.bits.in2 := op2Reg
-  mul.io.out.ready := true.B
+  mul.io.out.ready   := true.B
 
-  io.res := mul.io.out.bits.out
+  io.res   := mul.io.out.bits.out
   io.valid := active && mul.io.out.valid
-  io.done := doneR
+  io.done  := doneR
 }

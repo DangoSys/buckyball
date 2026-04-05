@@ -5,6 +5,7 @@
   "tileColumns": 1,
   "inputWidth": 8,
   "accWidth": 32,
+  "spatialOutputWidth": 20,
   "tileLatency": 0,
-  "outputDelay": 0
+  "outputDelay": 1
 }
