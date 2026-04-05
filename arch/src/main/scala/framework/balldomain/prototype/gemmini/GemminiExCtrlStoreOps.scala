@@ -9,7 +9,7 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
   protected def handleComputeFlushState(): Unit = {
     when(mesh.io.resp.fire && mesh.io.resp.bits.total_rows === total_rows) {
       when(outBufCollected < total_rows && mesh.io.resp.bits.tag.rob =/= 0xff.U) {
-        outBuf(total_rows - 1.U - outBufCollected) := mesh.io.resp.bits.data
+        outBuf(total_rows - 1.U - outBufCollected) := widenMeshToAcc(mesh.io.resp.bits.data)
         outBufCollected                            := outBufCollected + 1.U
       }.otherwise {}
     }
@@ -41,12 +41,12 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
     when(mesh.io.resp.valid) {
       when(cfg_dataflow === Dataflow.OS.id.U) {
         when(mesh.io.resp.bits.total_rows === total_rows) {
-          outBuf(outBufRows) := mesh.io.resp.bits.data
+          outBuf(outBufRows) := widenMeshToAcc(mesh.io.resp.bits.data)
           outBufRows         := outBufRows - 1.U
           outBufCollected    := outBufCollected + 1.U
         }
       }.otherwise {
-        outBuf(outBufRows) := mesh.io.resp.bits.data
+        outBuf(outBufRows) := widenMeshToAcc(mesh.io.resp.bits.data)
         outBufRows         := outBufRows + 1.U
       }
     }

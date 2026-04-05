@@ -3,7 +3,8 @@ package sims.bebop
 import chisel3._
 import chisel3.util.Cat
 
-/** Verilator cosim top: RoCC insn → rd + optional `bankDigestPeek` for future BEMU bank hash compare.
+/**
+ * Verilator cosim top: RoCC insn → rd + optional `bankDigestPeek` for future BEMU bank hash compare.
  *
  * `execRet` comes from [[BebopCosimBlocks.execRet]] (per-funct). rd rule matches
  * `bebop/src/emu/iss/iss.rs`: `rd = if v == 0 { funct } else { 0 }`.
@@ -19,7 +20,7 @@ class BebopSpikeCosimTop extends RawModule {
   val bankDigestPeek = IO(Output(UInt(64.W)))
 
   val execRet = BebopCosimBlocks.execRet(funct, xs1, xs2)
-  val known = BebopCosimBlocks.isKnownFunct(funct)
-  result := Mux(known && execRet === 0.U, Cat(0.U(57.W), funct), 0.U(64.W))
+  val known   = BebopCosimBlocks.isKnownFunct(funct)
+  result         := Mux(known && execRet === 0.U, Cat(0.U(57.W), funct), 0.U(64.W))
   bankDigestPeek := BebopCosimBlocks.bankDigestPeek(funct, xs1, xs2)
 }

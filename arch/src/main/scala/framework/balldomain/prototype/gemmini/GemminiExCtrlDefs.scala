@@ -20,9 +20,9 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val inBW        = ballMapping.inBW
   val outBW       = ballMapping.outBW
 
-  val inputType  = SInt(config.inputWidth.W)
-  val accType    = SInt(config.accWidth.W)
-  val outputType = SInt(config.accWidth.W)
+  val inputType      = SInt(config.inputWidth.W)
+  val accType        = SInt(config.accWidth.W)
+  val meshOutputType = SInt(config.spatialOutputWidth.W)
 
   val ctrlIo = IO(new Bundle {
     val cmdReq       = Flipped(Decoupled(new BallRsIssue(b)))
@@ -40,7 +40,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val mesh = Module(new MeshWithDelays(
     inputType = inputType,
-    outputType = outputType,
+    outputType = meshOutputType,
     accType = accType,
     tagType = new SimpleTag,
     df = Dataflow.BOTH,
@@ -52,9 +52,11 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     meshRows = config.meshRows,
     meshColumns = config.meshColumns,
     leftBanks = 1,
-    upBanks = 1,
-    n_simultaneous_matmuls = 5
+    upBanks = 1
   ))
+
+  protected def widenMeshToAcc(src: Vec[Vec[SInt]]): Vec[Vec[SInt]] =
+    VecInit(src.map(col => VecInit(col.map(_.asTypeOf(accType)))))
 
   val cfg_dataflow     = RegInit(0.U(1.W))
   val cfg_in_shift     = RegInit(0.U(log2Up(config.accWidth).W))
@@ -95,7 +97,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   rdQueue0.io.enq <> io.bankReadResp(0)
   rdQueue1.io.enq <> io.bankReadResp(1)
 
-  val outBuf          = Reg(Vec(DIM, Vec(config.meshColumns, Vec(config.tileColumns, outputType))))
+  val outBuf          = Reg(Vec(DIM, Vec(config.meshColumns, Vec(config.tileColumns, accType))))
   val outBufRows      = RegInit(0.U(log2Up(DIM + 1).W))
   val outBufCollected = RegInit(0.U(log2Up(DIM + 1).W))
 

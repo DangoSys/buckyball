@@ -3,14 +3,15 @@ package framework.balldomain.prototype.gemmini.configs
 import upickle.default._
 
 case class GemminiBallParam(
-  meshRows:    Int,
-  meshColumns: Int,
-  tileRows:    Int,
-  tileColumns: Int,
-  inputWidth:  Int,
-  accWidth:    Int,
-  tileLatency: Int,
-  outputDelay: Int) {
+  meshRows:           Int,
+  meshColumns:        Int,
+  tileRows:           Int,
+  tileColumns:        Int,
+  inputWidth:         Int,
+  accWidth:           Int,
+  spatialOutputWidth: Int,
+  tileLatency:        Int,
+  outputDelay:        Int) {
 
   val totalRows:    Int = meshRows * tileRows
   val totalColumns: Int = meshColumns * tileColumns
