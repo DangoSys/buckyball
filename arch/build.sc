@@ -10,6 +10,7 @@ import mill.bsp._
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion   = "2.13.12"
+  private val hasPegasus      = os.exists(os.pwd / os.up / "pegasus" / "chisel")
 
   override def scalacOptions = Seq(
     "-language:reflectiveCalls",
@@ -23,9 +24,8 @@ object buckyball extends SbtModule { m =>
   override def moduleDeps = Seq(
     chipyard,
     firechip,
-    palladium,
-    pegasus
-  )
+    palladium
+  ) ++ (if (hasPegasus) Seq(pegasus) else Seq.empty)
 
   override def ivyDeps = Agg(
     // ivy"org.chipsalliance::chisel:6.5.0",
