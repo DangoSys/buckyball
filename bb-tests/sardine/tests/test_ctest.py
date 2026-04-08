@@ -127,7 +127,7 @@ def test_ctest_workload_debug(
     command = f'bbdev verilator --sim "--binary {workload_path} --batch{coverage_flag}"'
     logging.info(f"Running command: {command}")
 
-    # 使用 command_run 执行命令，带提前退出检测
+    # Run command via command_run with early-exit detection.
     early_exit_pattern = (
         r"Task completed\. Command running on http://localhost:\d+ is finished"
     )

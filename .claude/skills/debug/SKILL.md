@@ -1,116 +1,116 @@
 ---
 name: debug
-description: 系统性调试 Buckyball 仿真失败。当仿真返回 FAILED、CTest 测试不通过、Chisel 编译报错，或用户报告 Ball 行为异常时使用此 skill。涵盖日志分析、波形分析、常见故障模式匹配。即使用户只是说"仿真失败了"或"跑不过"也应触发。
+description: Systematically debug Buckyball simulation failures. Use this skill when simulation returns FAILED, CTest fails, Chisel compilation errors appear, or users report abnormal Ball behavior. It covers log analysis, waveform analysis, and common failure pattern matching.
 ---
 
-**重要：编译、仿真等操作必须通过 MCP 工具调用，禁止直接使用 bbdev CLI 或 nix develop 命令。**
+**Important: build and simulation operations must be called through MCP tools. Do not use bbdev CLI or nix develop directly.**
 
-## 第一步 — 定位日志
+## Step 1 - Locate Logs
 
-1. 找到日志目录：
-   - MCP 工具返回的 JSON 中包含 `log_dir` 字段
-   - 如果没有，用 `ls -t arch/log/ | head -5` 找最近的日志目录
-2. 确认关键日志文件存在：
-   - `stdout.log` — 程序标准输出（PASSED/FAILED、printf）
-   - `disasm.log` — 反汇编指令流
-   - `bdb.log` — Buckyball 硬件调试日志（最重要）
-   - `bbdev/server.log` — bbdev server 日志（编译错误在这里）
+1. Find the log directory:
+   - MCP tool JSON output includes `log_dir`
+   - If absent, use `ls -t arch/log/ | head -5` to find recent log dirs
+2. Confirm key log files exist:
+   - `stdout.log` - program stdout (`PASSED`/`FAILED`, `printf`)
+   - `disasm.log` - disassembled instruction stream
+   - `bdb.log` - Buckyball hardware debug log (most important)
+   - `bbdev/server.log` - bbdev server log (compilation errors usually appear here)
 
-## 第二步 — 分层分析
+## Step 2 - Layered Analysis
 
-按照从高层到底层的顺序分析，先排除简单问题：
+Analyze from high level to low level, ruling out simple issues first.
 
-### Level 1: 编译错误（bbdev/server.log）
+### Level 1: Compilation errors (`bbdev/server.log`)
 
-如果 MCP 工具返回 HTTP 500 或 returncode=1，先看 server.log：
-- Chisel 编译错误（类型不匹配、缺少注册等）
-- mill 构建错误（依赖问题）
-- CTest 编译错误（C 语法、链接问题）
+If MCP tools return HTTP 500 or `returncode=1`, inspect `server.log` first:
+- Chisel compile errors (type mismatch, missing registration, etc.)
+- mill build errors (dependency issues)
+- CTest compile errors (C syntax/link errors)
 
-### Level 2: 程序输出（stdout.log）
+### Level 2: Program output (`stdout.log`)
 
-- 搜索 `PASSED` / `FAILED` 确认测试结果
-- 搜索 `printf` 输出，检查实际值 vs 预期值
-- 搜索 `panic` / `abort` / `trap` 看是否有异常
+- Search for `PASSED` / `FAILED` to confirm test results
+- Search for `printf` outputs and compare actual vs expected values
+- Search for `panic` / `abort` / `trap` to detect exceptions
 
-### Level 3: 指令流（disasm.log）
+### Level 3: Instruction stream (`disasm.log`)
 
-- 确认 Ball 的 custom 指令确实被执行了（搜索 `custom3`）
-- 检查指令顺序是否正确（mvin → ball_op → mvout → fence）
-- 检查是否有 trap 或 exception
+- Confirm custom Ball instructions were executed (search `custom3`)
+- Check instruction order (`mvin -> ball_op -> mvout -> fence`)
+- Check for traps or exceptions
 
-### Level 4: 硬件跟踪（bdb.log）
+### Level 4: Hardware tracing (`bdb.log`)
 
-这是定位 Ball 逻辑错误最重要的日志，包含三种 trace：
+This is the most important log for Ball logic bugs. It contains three traces:
 
-**[ITRACE] 指令 trace：**
-- `ISSUE rob_id=X domain=Y funct=0xZZ` — 指令发射
-- `COMPLETE rob_id=X` — 指令完成
-- 检查：指令是否被发射？是否完成？完成顺序是否正确？
+**[ITRACE] instruction trace:**
+- `ISSUE rob_id=X domain=Y funct=0xZZ` - instruction issued
+- `COMPLETE rob_id=X` - instruction completed
+- Check: issued? completed? completion order correct?
 
-**[MTRACE] 内存 trace：**
-- `READ ch=X vbank=Y group=Z addr=0xAA` — SRAM 读
-- `WRITE ch=X vbank=Y group=Z addr=0xAA data=0x...` — SRAM 写
-- 检查：读写地址是否正确？数据是否正确？bank_id 是否匹配？
+**[MTRACE] memory trace:**
+- `READ ch=X vbank=Y group=Z addr=0xAA` - SRAM read
+- `WRITE ch=X vbank=Y group=Z addr=0xAA data=0x...` - SRAM write
+- Check: addresses correct? data correct? `bank_id` matches?
 
-**[PMCTRACE] 性能计数 trace：**
-- `BALL ball_id=X rob_id=Y elapsed=Z` — Ball 操作耗时
-- `LOAD/STORE rob_id=X elapsed=Y` — 内存操作耗时
-- 检查：elapsed 是否合理？是否有异常长的操作？
+**[PMCTRACE] performance trace:**
+- `BALL ball_id=X rob_id=Y elapsed=Z` - Ball operation latency
+- `LOAD/STORE rob_id=X elapsed=Y` - memory operation latency
+- Check: elapsed reasonable? any unusually long operations?
 
-### Level 5: 波形分析（waveform-mcp）
+### Level 5: Waveform analysis (`waveform-mcp`)
 
-如果日志分析无法定位问题，使用 waveform-mcp 做 cycle-level 分析。详见 `/waveform` skill。
+If logs are not enough, use waveform-mcp for cycle-level analysis. See `/waveform` skill.
 
-## 第三步 — 常见故障模式
+## Step 3 - Common Failure Patterns
 
-### 1. Ball 没有响应（cmdResp 永远不 fire）
-**症状：** 仿真超时或死锁，bdb.log 中有 ISSUE 但没有 COMPLETE
-**原因：**
-- FSM 卡在某个状态（检查 state 转移条件）
-- SRAM resp.valid 没被处理（忘了 resp.ready := true.B）
-- cmdResp.valid 没有被拉高
+### 1. Ball not responding (`cmdResp` never fires)
+**Symptoms:** timeout or deadlock; `bdb.log` has `ISSUE` but no `COMPLETE`
+**Causes:**
+- FSM stuck in a state (check transition conditions)
+- `SRAM resp.valid` not consumed (for example, missing `resp.ready := true.B`)
+- `cmdResp.valid` never asserted
 
-### 2. 数据全零
-**症状：** CTest 报 FAILED，输出矩阵全是 0
-**原因：**
-- 写操作 addr 错误（waddr 没有递增）
-- 写操作 mask 全零（忘了设置 mask := 1）
-- bank_id 错误（写到了错误的 bank）
+### 2. All-zero output data
+**Symptoms:** CTest FAILED; output matrix is all zeros
+**Causes:**
+- write address bug (`waddr` not incremented)
+- write mask all zero (for example, forgot `mask := 1`)
+- wrong `bank_id` (writes into wrong bank)
 
-### 3. 数据不变（输出 == 输入）
-**症状：** CTest 报 FAILED，输出矩阵等于输入矩阵
-**原因：**
-- 计算逻辑没有生效（跳过了 compute 状态）
-- 读到的数据没有被处理就直接写回了
+### 3. Output unchanged (`output == input`)
+**Symptoms:** CTest FAILED; output equals input
+**Causes:**
+- compute logic not executed (compute state skipped)
+- read data written back without processing
 
-### 4. 部分数据错误
-**症状：** CTest 报 FAILED，部分行正确部分行错误
-**原因：**
-- iter 次数计算错误（少读/少写了几行）
-- 地址偏移量计算错误（行之间的 stride）
-- 边界条件处理错误
+### 4. Partial data errors
+**Symptoms:** CTest FAILED; some rows correct, others wrong
+**Causes:**
+- `iter` count miscalculated (missing reads/writes for some rows)
+- address offset bug (row stride error)
+- boundary condition bug
 
-### 5. SRAM 时序错误
-**症状：** 数据看起来"偏移了一行"
-**原因：**
-- SRAM 读延迟是 1 cycle，但代码在 req.fire 的同一个 cycle 就取了 resp.bits.data
-- 正确做法：req.fire 后等一个 cycle，在下一个 cycle resp.valid 时读取数据
+### 5. SRAM timing error
+**Symptoms:** data appears shifted by one row
+**Causes:**
+- SRAM read latency is 1 cycle, but code reads `resp.bits.data` in the same cycle as `req.fire`
+- Correct behavior: wait one cycle and read when `resp.valid` is high
 
-### 6. bank_id 冲突
-**症状：** assertion failure 或数据错乱
-**原因：**
-- op1_bank 和 wr_bank 使用了同一个 bank（读写冲突）
-- 多个 Ball 同时访问同一个 bank
+### 6. `bank_id` conflict
+**Symptoms:** assertion failure or corrupted data
+**Causes:**
+- `op1_bank` and `wr_bank` use the same bank (read/write conflict)
+- multiple Balls access the same bank concurrently
 
-### 7. rob_id 不匹配
-**症状：** 指令完成顺序混乱
-**原因：**
-- cmdResp.bits.rob_id 没有返回正确的 rob_id
-- rob_id 没有在 cmdReq.fire 时被 latch
+### 7. `rob_id` mismatch
+**Symptoms:** completion order looks incorrect
+**Causes:**
+- `cmdResp.bits.rob_id` is wrong
+- `rob_id` was not latched on `cmdReq.fire`
 
-## 第四步 — 修复 + 验证
+## Step 4 - Fix and Verify
 
-1. 结合日志/波形分析定位到的问题，修改 Chisel 源码
-2. 重新通过 MCP 工具编译和仿真验证修复结果
-3. 如果修复引入新问题，回到第二步重新分析
+1. Modify Chisel source code based on issues found in logs/waveforms
+2. Rebuild and rerun simulation through MCP tools to verify fixes
+3. If new failures appear, return to Step 2 and reanalyze

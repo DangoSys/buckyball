@@ -46,7 +46,7 @@ def run_pytest(args=None):
     # Build pytest command
     cmd = ["python3", "-m", "pytest", "-s", "-v", "-n", "auto"]
 
-    # Allure 配置
+    # Allure configuration
     allure_results_dir = reports_dir / "allure-results"
     allure_results_dir.mkdir(exist_ok=True)
     cmd.extend(["--alluredir", str(allure_results_dir), "--clean-alluredir"])

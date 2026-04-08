@@ -1,111 +1,111 @@
 # Buckyball
 
-基于 RISC-V 的 DSA（Domain Specific Architecture）框架。Chisel 6.5.0，Nix Flake 构建。
+A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6.5.0 and Nix Flake.
 
-## 项目结构
+## Project Structure
 
-- `arch/src/main/scala/framework/` — 框架核心
-  - `balldomain/prototype/` — Ball 算子实现（每个 Ball 一个子目录）
-  - `balldomain/blink/` — Blink 协议定义（BlinkIO、BankRead/Write、BallStatus）
-  - `balldomain/configs/` — BallDomainParam + default.json（ballIdMappings）
-  - `balldomain/bbus/` — BBus 总线
-  - `balldomain/rs/` — BallRsIssue / BallRsComplete（命令/完成接口）
-  - `memdomain/backend/banks/` — SramReadIO / SramWriteIO
-  - `core/bbtile/` — BBTile 集成（Rocket core + Buckyball）
-  - `top/` — GlobalConfig（顶层参数汇聚）
-- `arch/src/main/scala/examples/toy/balldomain/` — toy 配置
-  - `DISA.scala` — 指令 opcode（funct7 BitPat）
-  - `DomainDecoder.scala` — 指令解码表（ListLookup）
-  - `bbus/busRegister.scala` — Ball 生成器注册（match case）
-- `arch/src/main/scala/sims/` — 仿真配置
-  - `verilator/` — Verilator 配置
-  - `verify/` — 单 Ball elaboration（BallTopMain）
-- `bb-tests/` — 测试
-  - `workloads/lib/bbhw/isa/` — ISA C 宏（每条指令一个 .c 文件）
-  - `workloads/src/CTest/toy/` — C 测试用例
-  - `sardine/` — pytest 测试框架
-- `bbdev/` — 开发工具链（Motia 工作流后端）
+- `arch/src/main/scala/framework/` — framework core
+  - `balldomain/prototype/` — Ball operator implementations (one subdirectory per Ball)
+  - `balldomain/blink/` — Blink protocol definitions (`BlinkIO`, `BankRead/Write`, `BallStatus`)
+  - `balldomain/configs/` — `BallDomainParam` + `default.json` (`ballIdMappings`)
+  - `balldomain/bbus/` — BBus interconnect
+  - `balldomain/rs/` — `BallRsIssue` / `BallRsComplete` (issue/complete interfaces)
+  - `memdomain/backend/banks/` — `SramReadIO` / `SramWriteIO`
+  - `core/bbtile/` — BBTile integration (Rocket core + Buckyball)
+  - `top/` — `GlobalConfig` (top-level parameter aggregation)
+- `arch/src/main/scala/examples/toy/balldomain/` — toy config
+  - `DISA.scala` — instruction opcodes (`funct7` BitPat)
+  - `DomainDecoder.scala` — instruction decode table (`ListLookup`)
+  - `bbus/busRegister.scala` — Ball generator registration (`match case`)
+- `arch/src/main/scala/sims/` — simulation configs
+  - `verilator/` — Verilator config
+  - `verify/` — single-Ball elaboration (`BallTopMain`)
+- `bb-tests/` — tests
+  - `workloads/lib/bbhw/isa/` — ISA C macros (one `.c` file per instruction)
+  - `workloads/src/CTest/toy/` — C test cases
+  - `sardine/` — pytest test framework
+- `bbdev/` — developer toolchain (Motia workflow backend)
 
-## Blink 协议
+## Blink Protocol
 
-Ball 通过 Blink 协议接入 BBus。每个 Ball 实现 `HasBlink` trait。
+Balls connect to BBus through the Blink protocol. Every Ball implements the `HasBlink` trait.
 
 ```
 BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int):
-  cmdReq:    Flipped(Decoupled(BallRsIssue))     // 命令输入（含 BallDecodeCmd + rob_id）
-  cmdResp:   Decoupled(BallRsComplete)            // 完成输出（含 rob_id）
-  bankRead:  Vec(inBW, Flipped(BankRead))         // SRAM 读端口
-  bankWrite: Vec(outBW, Flipped(BankWrite))       // SRAM 写端口
-  status:    BallStatus { idle, running }          // 状态信号
+  cmdReq:    Flipped(Decoupled(BallRsIssue))     // command input (includes BallDecodeCmd + rob_id)
+  cmdResp:   Decoupled(BallRsComplete)           // completion output (includes rob_id)
+  bankRead:  Vec(inBW, Flipped(BankRead))        // SRAM read ports
+  bankWrite: Vec(outBW, Flipped(BankWrite))      // SRAM write ports
+  status:    BallStatus { idle, running }        // status signals
 
-BankRead/BankWrite 元数据字段（均为 Input）:
+BankRead/BankWrite metadata fields (all Input):
   bank_id, rob_id, ball_id, group_id
 
-SramReadIO:  req.valid/ready + req.bits.addr  →  resp.valid + resp.bits.data
-SramWriteIO: req.valid/ready + req.bits(addr, data, mask, wmode)  →  resp.valid + resp.bits.ok
+SramReadIO:  req.valid/ready + req.bits.addr  ->  resp.valid + resp.bits.data
+SramWriteIO: req.valid/ready + req.bits(addr, data, mask, wmode)  ->  resp.valid + resp.bits.ok
 ```
 
-关键时序：SRAM 读延迟 = 1 cycle（req.fire 后下一周期 resp.valid 拉高）。
+Key timing rule: SRAM read latency is 1 cycle (`resp.valid` is asserted in the next cycle after `req.fire`).
 
-## 注册不变量
+## Registration Invariants
 
-添加或修改 Ball 注册时，以下 6 项必须同时满足：
+When adding or modifying Ball registrations, all six conditions below must hold:
 
-1. `default.json` 的 `ballNum` == `ballIdMappings` 数组长度
-2. `ballId` 严格递增（0, 1, 2, ...），不跳号
-3. `ballId` 无重复
-4. `DISA.scala` 中 funct7 无重复
-5. `busRegister.scala` 中的 case 名称集合 == `default.json` 中的 ballName 集合
-6. `DomainDecoder.scala` 中的 BID 值集合 == `default.json` 中的 ballId 集合
+1. `ballNum` in `default.json` equals the length of `ballIdMappings`
+2. `ballId` is strictly increasing (`0, 1, 2, ...`) with no gaps
+3. No duplicated `ballId`
+4. No duplicated `funct7` values in `DISA.scala`
+5. Case names in `busRegister.scala` equal `ballName` set in `default.json`
+6. BID values in `DomainDecoder.scala` equal `ballId` set in `default.json`
 
-用 `/check` skill 可以自动检查所有不变量并可选自动修复。
+Use the `/check` skill to validate all invariants and optionally auto-fix issues.
 
-## MCP 工具
+## MCP Tools
 
-项目配置了 `buckyball-dev` MCP Server，提供以下工具。
+The project configures the `buckyball-dev` MCP server with the following tools.
 
-**重要：编译、仿真、综合、测试等操作必须通过 MCP 工具调用，禁止直接使用 bbdev CLI 或 nix develop 命令。**
-bbdev CLI 是给人类程序员用的，MCP 工具是给 agent 用的——MCP 工具内部会自动管理 bbdev server 生命周期并通过 HTTP API 调用。
+**Important: build, simulation, synthesis, and tests must be invoked via MCP tools. Do not call `bbdev` CLI or `nix develop` directly.**
+`bbdev` CLI is for human developers, while MCP tools are for agents. MCP tools manage bbdev server lifecycle and call it through HTTP APIs.
 
-### 校验
-- `validate` — 检查 6 项注册不变量
+### Validation
+- `validate` — check all 6 registration invariants
 
-### bbdev API 封装（自动管理 server 生命周期）
-- `bbdev_workload_build` — 编译 CTest
-- `bbdev_verilator_run(binary, config?, batch?, coverage?)` — 全流程 clean→verilog→build→sim
-- `bbdev_verilator_verilog(config, balltype?)` — 生成 Verilog；`config` 必传，`balltype` 可选（单 Ball elaborate）
-- `bbdev_verilator_build(jobs?, coverage?)` — 编译 Verilator 仿真器
-- `bbdev_verilator_sim(binary, batch?, coverage?)` — 跑仿真（需先 build）
-- `bbdev_sardine_run(workload?, coverage?)` — 批量测试
-- `bbdev_yosys_synth(top?, config?)` — Yosys 综合 + OpenSTA 时序分析
+### bbdev API wrappers (with automatic server lifecycle management)
+- `bbdev_workload_build` — build CTests
+- `bbdev_verilator_run(binary, config?, batch?, coverage?)` — full flow: clean -> verilog -> build -> sim
+- `bbdev_verilator_verilog(config, balltype?)` — generate Verilog; `config` is required, `balltype` optional (single-Ball elaboration)
+- `bbdev_verilator_build(jobs?, coverage?)` — build Verilator simulator
+- `bbdev_verilator_sim(binary, batch?, coverage?)` — run simulation (requires prior build)
+- `bbdev_sardine_run(workload?, coverage?)` — run batch tests
+- `bbdev_yosys_synth(top?, config?)` — Yosys synthesis + OpenSTA timing analysis
 
-默认 config 值：`sims.verilator.BuckyballToyVerilatorConfig`
-仿真 binary 命名格式：`ctest_<name>_test_singlecore-baremetal`
+Default config value: `sims.verilator.BuckyballToyVerilatorConfig`
+Simulation binary naming format: `ctest_<name>_test_singlecore-baremetal`
 
-### 分析报告路径
-- 面积报告：`bbdev/api/steps/yosys/log/hierarchy_report.txt`（子模块分解）、`area_report.txt`（顶层）
-- 时序报告：`bbdev/api/steps/yosys/log/timing_report.txt`
-- 覆盖率报告：`bb-tests/sardine/reports/coverage/html/`
-- 仿真日志：`arch/log/<timestamp>/stdout.log`、`disasm.log`
-- bdb 调试日志：`arch/log/<timestamp>/bdb.log`，包含三种 DPI-C trace：
-  - `[ITRACE]` — 指令发射/完成
-  - `[MTRACE]` — SRAM 读写
-  - `[PMCTRACE]` — Ball/Mem 性能计数（elapsed cycles）
+### Analysis report paths
+- Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
+- Timing report: `bbdev/api/steps/yosys/log/timing_report.txt`
+- Coverage report: `bb-tests/sardine/reports/coverage/html/`
+- Simulation logs: `arch/log/<timestamp>/stdout.log`, `disasm.log`
+- bdb debug log: `arch/log/<timestamp>/bdb.log`, with three DPI-C traces:
+  - `[ITRACE]` — instruction issue/complete
+  - `[MTRACE]` — SRAM reads/writes
+  - `[PMCTRACE]` — Ball/Mem performance counters (elapsed cycles)
 
 ## Skills
 
-项目 skill 位于 `.claude/skills/` 下：
-- `/ball` — 创建新 Ball 算子（全流程：实现→注册→ISA→CTest→仿真）
-- `/check` — 注册状态校验 + 自动修复
-- `/verify` — Ball 功能验证（编译→仿真→覆盖率→PMC 分析）
-- `/optimize` — RTL 模块面积/延迟优化（适用于任意模块，不限 Ball）
-- `/debug` — 仿真调试（日志分析→波形→故障模式库）
-- `/waveform` — 波形分析（waveform-mcp 使用指南）
+Project skills are under `.claude/skills/`:
+- `/ball` — create a new Ball operator (full flow: implementation -> registration -> ISA -> CTest -> simulation)
+- `/check` — registration consistency check + auto-fix
+- `/verify` — Ball functional verification (build -> simulation -> coverage -> PMC analysis)
+- `/optimize` — RTL area/latency optimization (applies to any module, not only Balls)
+- `/debug` — simulation debugging (log analysis -> waveform -> failure pattern matching)
+- `/waveform` — waveform analysis (`waveform-mcp` usage guide)
 
-## 约定
+## Conventions
 
-- 改 Ball 实现时不要碰注册文件，改注册文件时不要碰实现文件
-- Chisel 版本 6.5.0，不要使用 6.6+ 新 API
-- CTest 用 `add_cross_platform_test_target` 注册到 CMakeLists.txt
-- **禁止直接调用 `bbdev` CLI 或 `nix develop -c bbdev ...`**，必须通过 MCP 工具调用
-- Ball wrapper 类名必须和 `default.json` 中 `ballName` 一致
+- Do not edit registration files while changing Ball implementation; do not edit implementation files while changing registration
+- Chisel version is 6.5.0; do not use 6.6+ APIs
+- Register CTests in CMakeLists via `add_cross_platform_test_target`
+- **Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly**; use MCP tools
+- Ball wrapper class names must match `ballName` in `default.json`

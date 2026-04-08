@@ -23,7 +23,7 @@ object GpDomainParam {
   implicit val rw: ReadWriter[GpDomainParam] = macroRW
 
   /**
-   * 从默认的局部JSON文件加载
+   * Load from the default local JSON file.
    */
   def apply(): GpDomainParam = {
     val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/gpdomain/configs/default.json").mkString

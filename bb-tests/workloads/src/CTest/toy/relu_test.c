@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM 16 // 强制 16x16
+#define DIM 16 // fixed 16x16
 
 // =======================
-// 固定输入矩阵（4行周期）
+// Fixed input matrix (4 cycle pattern)
 // =======================
 static elem_t input_matrix[DIM * DIM] __attribute__((aligned(64))) = {
     // ---- Cycle 1 ----
@@ -40,7 +40,7 @@ static elem_t input_matrix[DIM * DIM] __attribute__((aligned(64))) = {
     -31, 30, 31, 32, 33, 34, 35, 36, 37, 38};
 
 // =======================
-// 直接写死 ReLU 结果
+// Hardcoded ReLU output
 // =======================
 static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64))) = {
     // ---- Cycle 1 ----
@@ -66,7 +66,7 @@ static elem_t expected_matrix[DIM * DIM] __attribute__((aligned(64))) = {
 static elem_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 // =======================
-// HW ReLU Flow（保持不变）
+// HW ReLU flow (unchanged)
 // =======================
 void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
   uint32_t op1_bank_id = 0;
@@ -84,7 +84,7 @@ void hw_relu(const char *test_name, elem_t *a, elem_t *b, int size) {
 }
 
 // =======================
-// 测试函数（去掉 CPU 计算）
+// Test function (without CPU-side calculation)
 // =======================
 int run_test(const char *test_name, elem_t *a, int size) {
   clear_i8_matrix(output_matrix, size, size);

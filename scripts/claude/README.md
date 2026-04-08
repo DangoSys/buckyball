@@ -1,97 +1,97 @@
 # Buckyball Claude Code Workflow
 
-Claude Code 作为交互前端，bbdev 作为执行后端。Claude 通过 MCP Server 调用 bbdev 的 HTTP API（server 模式，自动管理生命周期）。
+Claude Code is the interactive frontend, and bbdev is the execution backend. Claude calls bbdev HTTP APIs through the MCP server (server mode with automatic lifecycle management).
 
-## 三个 Workflow
+## Three Workflows
 
-| # | 触发 | 功能 |
+| # | Trigger | Function |
 |---|------|------|
-| 1 | `/ball <Name>` | 新建 Ball：实现 → 注册 → ISA 宏 → CTest → 编译 → 仿真验证 |
-| 2 | `/verify <Name>` | 验证 Ball：完整性检查 → 补全 → 编译 → 仿真 → 覆盖率分析 |
-| 3 | `/optimize <Name>` | 优化 Ball：面积(yosys) + 时序(OpenSTA) + 延迟(仿真cycle) → 优化 → 回归验证 |
+| 1 | `/ball <Name>` | Create a new Ball: implementation -> registration -> ISA macro -> CTest -> build -> simulation verification |
+| 2 | `/verify <Name>` | Verify a Ball: completeness check -> fill missing parts -> build -> simulation -> coverage analysis |
+| 3 | `/optimize <Name>` | Optimize a Ball: area (Yosys) + timing (OpenSTA) + latency (simulation cycles) -> optimize -> regression verification |
 
-## 架构
+## Architecture
 
 ```
-用户 ──→ Claude Code (slash commands + CLAUDE.md)
+User ──→ Claude Code (slash commands + CLAUDE.md)
               │
-              ├── 读写代码：Read/Edit/Write
-              ├── 静态校验：MCP validate
-              └── 编译/仿真/综合/测试：MCP bbdev_* → bbdev HTTP API
+              ├── Code read/write: Read/Edit/Write
+              ├── Static validation: MCP validate
+              └── Build/sim/synth/test: MCP bbdev_* -> bbdev HTTP API
                     │
-                    └── bbdev server (Motia workflow 后端，MCP 自动管理生命周期)
-                          ├── POST /verilator/run     全流程 clean→verilog→build→sim
-                          ├── POST /verilator/verilog  生成 Verilog（支持 --balltype）
-                          ├── POST /verilator/build    编译 Verilator（支持 --coverage）
-                          ├── POST /verilator/sim      跑仿真（支持 --coverage）
-                          ├── POST /workload/build     编译 CTest
-                          ├── POST /sardine/run        批量测试（支持 --coverage → 覆盖率报告）
-                          └── POST /yosys/synth        Yosys 综合 + OpenSTA 时序分析
+                    └── bbdev server (Motia workflow backend, lifecycle managed by MCP)
+                          ├── POST /verilator/run      Full flow: clean->verilog->build->sim
+                          ├── POST /verilator/verilog  Generate Verilog (supports --balltype)
+                          ├── POST /verilator/build    Build Verilator (supports --coverage)
+                          ├── POST /verilator/sim      Run simulation (supports --coverage)
+                          ├── POST /workload/build     Build CTest
+                          ├── POST /sardine/run        Batch tests (supports --coverage -> coverage report)
+                          └── POST /yosys/synth        Yosys synthesis + OpenSTA timing analysis
 ```
 
-## 文件清单
+## File List
 
-| 文件 | 说明 |
+| File | Description |
 |------|------|
-| `scripts/claude/mcp_server.py` | MCP Server：validate + bbdev API 封装 + server 生命周期管理 |
-| `.claude/settings.json` | MCP 配置 |
-| `CLAUDE.md` | 全局指令：项目结构、Blink 协议、注册不变量、工具使用 |
-| `.claude/commands/ball.md` | `/ball <Name>` 新建 Ball 全流程 |
-| `.claude/commands/verify.md` | `/verify <Name>` 验证 Ball |
-| `.claude/commands/optimize.md` | `/optimize <Name>` 优化 Ball |
-| `.claude/commands/check.md` | `/check` 静态校验 |
+| `scripts/claude/mcp_server.py` | MCP server: validate + bbdev API wrappers + server lifecycle management |
+| `.claude/settings.json` | MCP configuration |
+| `CLAUDE.md` | Global instructions: project structure, Blink protocol, registration invariants, tool usage |
+| `.claude/commands/ball.md` | Full flow for creating a Ball via `/ball <Name>` |
+| `.claude/commands/verify.md` | Ball verification via `/verify <Name>` |
+| `.claude/commands/optimize.md` | Ball optimization via `/optimize <Name>` |
+| `.claude/commands/check.md` | Static validation via `/check` |
 
-## MCP Server 工具列表
+## MCP Server Tool List
 
-### 校验
-| 工具 | 功能 |
+### Validation
+| Tool | Function |
 |------|------|
-| `validate` | 检查 6 项注册不变量（ballId 递增/funct7 唯一/bid 对齐等） |
+| `validate` | Check 6 registration invariants (`ballId` increasing, unique `funct7`, BID alignment, etc.) |
 
-### bbdev API 封装
-| 工具 | API | 说明 |
+### bbdev API Wrappers
+| Tool | API | Description |
 |------|-----|------|
-| `bbdev_workload_build` | `/workload/build` | 编译 CTest |
-| `bbdev_verilator_run` | `/verilator/run` | 全流程 clean→verilog→build→sim |
-| `bbdev_verilator_verilog` | `/verilator/verilog` | 生成 Verilog |
-| `bbdev_verilator_build` | `/verilator/build` | 编译 Verilator |
-| `bbdev_verilator_sim` | `/verilator/sim` | 跑仿真 |
-| `bbdev_sardine_run` | `/sardine/run` | 批量测试 |
-| `bbdev_yosys_synth` | `/yosys/synth` | Yosys 综合 + OpenSTA |
+| `bbdev_workload_build` | `/workload/build` | Build CTest |
+| `bbdev_verilator_run` | `/verilator/run` | Full flow: clean->verilog->build->sim |
+| `bbdev_verilator_verilog` | `/verilator/verilog` | Generate Verilog |
+| `bbdev_verilator_build` | `/verilator/build` | Build Verilator |
+| `bbdev_verilator_sim` | `/verilator/sim` | Run simulation |
+| `bbdev_sardine_run` | `/sardine/run` | Batch tests |
+| `bbdev_yosys_synth` | `/yosys/synth` | Yosys synthesis + OpenSTA |
 
-## bbdev Server 生命周期
+## bbdev Server Lifecycle
 
-MCP Server 自动管理 bbdev server：
-- 首次调用 bbdev_* 时自动启动（`pnpm dev --port <port>`）
-- 启动前清理 BullMQ AOF 防止重放旧事件
-- 端口从 5100-5500 自动选择
-- 健康检查通过后才返回
-- 每次调用前检查存活，挂了自动重启
-- MCP Server 退出时自动清理
+MCP server manages bbdev server automatically:
+- Auto-start on first `bbdev_*` call (`pnpm dev --port <port>`)
+- Clean BullMQ AOF before startup to avoid replaying stale events
+- Auto-select port from 5100-5500
+- Return only after health check passes
+- Check liveness before each call, auto-restart if down
+- Clean up automatically when MCP server exits
 
-## Workflow 详细流程
+## Detailed Workflow
 
-### `/ball <Name>` — 新建 Ball
+### `/ball <Name>` - Create Ball
 
-1. **需求收集**：读 default.json/DISA.scala 确定 ballId/funct7，问用户功能/inBW/outBW/op2
-2. **实现 Ball**：参考现有 Ball 代码，在 prototype/ 下创建 wrapper/core/config
-3. **注册**：更新 default.json + busRegister + DISA + DomainDecoder
-4. **ISA 宏**：创建 C 宏文件，更新 isa.h
-5. **CTest**：创建测试 .c，注册 CMakeLists.txt，追加 sardine 列表
-6. **验证**：validate → bbdev_workload_build → bbdev_verilator_run → PASS/FAIL
+1. **Requirement collection**: read `default.json`/`DISA.scala` to determine `ballId`/`funct7`, then confirm function/inBW/outBW/op2 with user
+2. **Implement Ball**: reference existing Ball code and create wrapper/core/config under `prototype/`
+3. **Register**: update `default.json` + `busRegister` + `DISA` + `DomainDecoder`
+4. **ISA macro**: create C macro file and update `isa.h`
+5. **CTest**: create test `.c`, register in `CMakeLists.txt`, append sardine list
+6. **Verification**: `validate` -> `bbdev_workload_build` -> `bbdev_verilator_run` -> PASS/FAIL
 
-### `/verify <Name>` — 验证 Ball
+### `/verify <Name>` - Verify Ball
 
-1. **完整性检查**：注册/ISA 宏/CTest/sardine 条目是否完整，缺什么补什么
-2. **编译 + 仿真**：bbdev_workload_build → bbdev_verilator_run
-3. **覆盖率分析**：bbdev_sardine_run(coverage=true) → 读覆盖率报告 → 建议补测试
-4. **失败分析**：读仿真 log → 分析 Chisel 代码 → 提修复方案
+1. **Completeness check**: verify registration/ISA macro/CTest/sardine entries, fill missing parts
+2. **Build + simulation**: `bbdev_workload_build` -> `bbdev_verilator_run`
+3. **Coverage analysis**: `bbdev_sardine_run(coverage=true)` -> inspect report -> propose extra tests
+4. **Failure analysis**: read simulation logs -> analyze Chisel code -> propose fixes
 
-### `/optimize <Name>` — 优化 Ball
+### `/optimize <Name>` - Optimize Ball
 
-1. **基线测量**：bbdev_yosys_synth（面积+时序）+ bbdev_verilator_run（cycle 数）
-2. **面积分析**：从 hierarchy_report 提取子模块面积，识别面积大户
-3. **时序/延迟分析**：timing_report 关键路径 + 仿真 cycle 数 + FSM 源码分析
-4. **优化方案**：量化的方案列表（手段/面积变化/延迟变化/频率影响/trade-off）
-5. **实施**：修改 Chisel 代码
-6. **优化后测量**：再跑 yosys + verilator，输出前后对比报告
+1. **Baseline measurement**: `bbdev_yosys_synth` (area + timing) + `bbdev_verilator_run` (cycle count)
+2. **Area analysis**: extract submodule area from `hierarchy_report`, identify large contributors
+3. **Timing/latency analysis**: critical paths in `timing_report` + simulation cycle count + FSM source analysis
+4. **Optimization plan**: quantified options (method/area delta/latency delta/frequency impact/trade-off)
+5. **Implementation**: modify Chisel code
+6. **Post-opt measurement**: rerun Yosys + Verilator and output before/after report

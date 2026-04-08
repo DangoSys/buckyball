@@ -1,116 +1,116 @@
 ---
 name: optimize
-description: 分析并优化名为 $ARGUMENTS 的 RTL 模块的延迟和面积。适用于任何 RTL 模块（Ball、MemFrontend、BBus、GlobalROB 等），不限于 Ball 算子。当用户要求优化某个模块的面积、延迟、时序、性能，或说"XX 太大了"、"XX 太慢了"、"分析一下 XX 的面积"时使用此 skill。
+description: Analyze and optimize latency and area for the RTL module named $ARGUMENTS. Applies to any RTL module (Ball, MemFrontend, BBus, GlobalROB, etc.), not limited to Ball operators.
 ---
 
-**重要：综合、仿真等操作必须通过 MCP 工具调用，禁止直接使用 bbdev CLI 或 nix develop 命令。**
+**Important: synthesis and simulation operations must be invoked through MCP tools. Do not call bbdev CLI or nix develop directly.**
 
-## 阶段 1 — 基线测量
+## Phase 1 - Baseline Measurement
 
-1. 调用 MCP 工具 `bbdev_yosys_synth` 跑 Yosys 综合 + OpenSTA 时序分析
-2. 读取面积报告：`bbdev/api/steps/yosys/log/hierarchy_report.txt`（子模块分解）
-3. 读取时序报告：`bbdev/api/steps/yosys/log/timing_report.txt`（关键路径）
+1. Run MCP tool `bbdev_yosys_synth` for Yosys synthesis + OpenSTA timing analysis
+2. Read area report: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown)
+3. Read timing report: `bbdev/api/steps/yosys/log/timing_report.txt` (critical paths)
 
-### hierarchy_report.txt 解析指引
+### How to parse `hierarchy_report.txt`
 
-报告格式为 Yosys `stat -top` 输出，关键字段：
-- `Chip area for module` 行后面是每个子模块的面积分解
-- `Number of cells` — 单元数量
-- `Sequential` — 寄存器面积（flip-flops）
-- `Combinational` — 组合逻辑面积
-- 搜索目标模块名定位其层次结构
+This report uses Yosys `stat -top` format. Key fields:
+- `Chip area for module` followed by submodule area breakdown
+- `Number of cells` - cell count
+- `Sequential` - register area (flip-flops)
+- `Combinational` - combinational logic area
+- search target module name to locate hierarchy
 
-### timing_report.txt 解析指引
+### How to parse `timing_report.txt`
 
-OpenSTA 输出格式：
-- `Startpoint:` / `Endpoint:` — 关键路径起止点
-- `Path Delay` — 路径延迟
-- `Slack` — 时序裕量（负值表示违约）
-- 搜索目标模块名看是否在关键路径上
+OpenSTA output format:
+- `Startpoint:` / `Endpoint:` - critical path endpoints
+- `Path Delay` - path delay
+- `Slack` - timing margin (negative means violation)
+- search target module name to see whether it is on critical paths
 
-### 延迟测量
+### Latency measurement
 
-**如果是 Ball 模块：**
-1. 检查仿真 bdb.log 中的 PMC trace 数据（`[PMCTRACE] BALL ball_id=X`），提取 elapsed cycles
-2. 如果 CTest 中有 `read_rdcycle()` 计时代码，也可以从 stdout.log 获取 cycle 数
-3. 如果两者都没有，可以用 waveform-mcp 精确测量：
-   - 用 `find_conditional_events` 找 `cmdReq.valid && cmdReq.ready` 的时刻
-   - 用 `find_conditional_events` 找 `cmdResp.valid` 的时刻
-   - 两者之差即为操作延迟
+**For Ball modules:**
+1. Extract elapsed cycles from PMC traces in `bdb.log` (`[PMCTRACE] BALL ball_id=X`)
+2. If CTest uses `read_rdcycle()`, also collect cycle counts from `stdout.log`
+3. If neither is available, measure precisely with waveform-mcp:
+   - find `cmdReq.valid && cmdReq.ready` timestamps via `find_conditional_events`
+   - find `cmdResp.valid` timestamps
+   - difference is operation latency
 
-**如果是其他模块：**
-1. 用 waveform-mcp 在波形上测量关键操作的 cycle 数
-2. 或在 CTest 中加入 `read_rdcycle()` 前后对比代码
+**For non-Ball modules:**
+1. Use waveform-mcp to measure cycle counts of key operations
+2. Or add `read_rdcycle()` instrumentation in CTests
 
-## 阶段 2 — 面积分析
+## Phase 2 - Area Analysis
 
-从 hierarchy_report.txt 提取目标模块及其子模块的面积数据：
-- 总面积（Chip area）
-- Sequential 占比（寄存器面积）
-- Combinational 占比（组合逻辑面积）
-- 子模块面积排名
+Extract area data for target module and submodules from `hierarchy_report.txt`:
+- total area (`Chip area`)
+- sequential ratio (register area)
+- combinational ratio (logic area)
+- submodule area ranking
 
-识别面积大户：
-- Sequential 占比高 → 寄存器多，考虑是否可用 SRAM 替代
-- Combinational 占比高 → 逻辑复杂，考虑是否可以简化或共享
+Identify major area contributors:
+- high sequential ratio -> many registers; consider SRAM replacement
+- high combinational ratio -> complex logic; consider simplification/sharing
 
-对比同类模块面积，找出效率差距。
+Compare with similar modules to identify efficiency gaps.
 
-## 阶段 3 — 时序/延迟分析
+## Phase 3 - Timing/Latency Analysis
 
-1. 从 timing_report.txt 看关键路径是否经过该模块，以及路径延迟
-2. 从 PMC trace 或波形数据看操作延迟（cycle 数）
-3. 如果是 Ball 或有 FSM 的模块，读取 Chisel 源码分析 FSM：
-   - 绘制 FSM 状态转移图
-   - 计算每个状态的 cycle 数（最佳/最坏情况）
-   - 识别瓶颈状态（哪个状态耗时最多）
-   - 分析 SRAM 读写模式（串行 vs 流水 vs 多端口并行）
+1. Check whether critical paths pass through target module and inspect path delays in `timing_report.txt`
+2. Measure operation latency from PMC traces or waveform data
+3. For Ball/FSM modules, analyze FSM in Chisel source:
+   - draw FSM state transitions
+   - estimate cycles per state (best/worst case)
+   - identify bottleneck states
+   - analyze SRAM access pattern (serial vs pipelined vs multi-port parallel)
 
-## 阶段 4 — 优化方案
+## Phase 4 - Optimization Proposals
 
-提出可量化的优化方案，每个方案包含：
-- 优化手段描述
-- 预期面积变化（参考 hierarchy_report 数据量化）
-- 预期延迟变化（cycle 数）
-- 预期频率影响
-- trade-off 说明
+Provide quantifiable optimization options. Each option should include:
+- optimization method
+- expected area delta (quantified from hierarchy report)
+- expected latency delta (cycles)
+- expected frequency impact
+- trade-off explanation
 
-常见优化模式：
+Common optimization patterns:
 
-**降延迟**：
-- 读写流水化：让写操作和下一轮读操作重叠，面积略增，延迟显著降
-- 多 bank 端口并行读：利用 inBW > 1 同时读多行，面积不变，延迟与端口数成比例降
-- 去中间等待状态：合并不必要的 FSM 状态，面积略降
-- 边读边算：计算嵌入读响应周期，利用 SRAM 1-cycle 延迟的下降沿做计算
+**Reduce latency:**
+- read/write pipelining: overlap writes with next-round reads; slight area increase, notable latency drop
+- multi-bank parallel read: use `inBW > 1` to read multiple rows concurrently; area stable, latency drops with port count
+- remove idle wait states: merge unnecessary FSM states; slight area reduction
+- compute while reading: overlap computation with SRAM response timing
 
-**降面积**：
-- regArray 改 SRAM：大块寄存器阵列换成 SRAM 端口访问，面积显著降，可能增延迟
-- 共享计算单元：多操作时分复用同一计算单元，面积降，延迟可能增
-- 减少 counter 位宽：根据实际范围缩减位宽，面积微降
+**Reduce area:**
+- replace large reg arrays with SRAM accesses; strong area reduction, possible latency increase
+- share compute units across operations (time-multiplexing); lower area, possible latency increase
+- reduce counter bit-width based on real bounds; small area reduction
 
-**提频率**：
-- 拆分组合逻辑长路径：在关键路径中间插入寄存器，面积略增，可能增 1 cycle 延迟
+**Improve frequency:**
+- split long combinational paths by adding pipeline regs; slight area increase, possibly +1 cycle latency
 
-列出方案后让用户选择。
+Present options and let the user choose.
 
-## 阶段 5 — 实施
+## Phase 5 - Implementation
 
-根据用户选择的方案修改 Chisel 代码。
+Apply the selected optimization in Chisel code.
 
-## 阶段 6 — 优化后测量
+## Phase 6 - Post-Optimization Measurement
 
-1. 再次调用 `bbdev_yosys_synth`，对比 hierarchy_report
-2. 如果有 CTest，再次调用 `bbdev_verilator_run` 跑仿真，对比 PMC trace 中的 cycle 数
-3. 调用 `validate` 确认注册一致性未被破坏
-4. 输出优化前后对比报告：
+1. Run `bbdev_yosys_synth` again and compare hierarchy reports
+2. If CTest exists, rerun simulation with `bbdev_verilator_run` and compare cycle counts in PMC traces
+3. Run `validate` to ensure registration consistency is preserved
+4. Output before/after comparison report:
 
-| 指标 | 优化前 | 优化后 | 变化 |
+| Metric | Before | After | Delta |
 |------|--------|--------|------|
-| 面积 | X      | Y      | -Z%  |
-| Cycle 数 | A  | B      | -C%  |
-| 关键路径延迟 | D | E   | -F%  |
+| Area | X | Y | -Z% |
+| Cycles | A | B | -C% |
+| Critical path delay | D | E | -F% |
 
-## 故障排查
+## Troubleshooting
 
-如果 MCP 工具返回 HTTP 500 或 returncode=1：
-- 读取 `bbdev/server.log` 获取详细错误信息
+If MCP tools return HTTP 500 or `returncode=1`:
+- read `bbdev/server.log` for detailed error information

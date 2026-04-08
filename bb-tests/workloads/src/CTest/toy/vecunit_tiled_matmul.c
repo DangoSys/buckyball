@@ -21,8 +21,8 @@ static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t zero_matrix[DIM * DIM] __attribute__((aligned(64))) = {0};
 
-/// C = A * B with A row-major DIM×KDIM, B row-major KDIM×DIM; K 维按 KTILE
-/// 分块累加到 acc。
+/// C = A * B with A row-major DIMxKDIM and B row-major KDIMxDIM; K is tiled by
+/// KTILE and accumulated into acc.
 void hw_matmul_tiled(const char *test_name, elem_t *a, elem_t *b, result_t *c) {
   (void)test_name;
   uint32_t op1_bank_id = 0;

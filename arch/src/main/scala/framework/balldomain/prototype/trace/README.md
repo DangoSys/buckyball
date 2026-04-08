@@ -1,103 +1,103 @@
-# TraceBall — 调试追踪 Ball
+# TraceBall — debug/trace Ball
 
-## 概述
+## Overview
 
-TraceBall 是一个不做计算的特殊 Ball，通过 Buckyball 指令通道提供运行时调试能力。它有两个核心功能：
+TraceBall is a non-computing Ball that exposes runtime debug features through the Buckyball instruction channel. It has two main roles:
 
-1. **Cycle Counter（计数器管理）**— 通过指令 set/release 多个独立的 cycle 计数器，用于测量任意代码区间的执行周期
-2. **Bank Backdoor（SRAM 后门读写）**— 通过 DPI-C 注入数据写入 SRAM bank，或读取 SRAM bank 数据通过 DPI-C 输出
+1. **Cycle counter** — set/release multiple independent cycle counters via instructions to measure elapsed cycles over arbitrary code regions
+2. **Bank backdoor** — inject data into SRAM banks or read bank data out via DPI-C
 
-所有 DPI-C 接口仅存在于 TraceBall 内部，不影响其他模块。
+All DPI-C hooks live inside TraceBall only and do not affect other modules.
 
 ---
 
-## 指令编码
+## Instruction encoding
 
-TraceBall 使用 **两个 funct7 编码**。
+TraceBall uses **two funct7 encodings**.
 
-### 指令 1：`bdb_counter` (funct7 = 48, 0x30)
+### Instruction 1: `bdb_counter` (funct7 = 48, 0x30)
 
-Cycle counter 管理。**不访问 SRAM，不需要 bank 端口，1 cycle 完成。**
+Cycle counter control. **Does not touch SRAM, needs no bank ports, completes in 1 cycle.**
 
-rs1 布局：
-- rs1 = 任意（不使用，不需要设 BB_RD0/BB_WR 标志）
+rs1 layout:
+- rs1 = don’t care (unused; no need to set BB_RD0/BB_WR)
 
-rs2 布局（64-bit）：
+rs2 layout (64-bit):
 ```
-rs2[3:0]   = subcmd    子命令 (0=START, 1=STOP, 2=READ)
-rs2[7:4]   = ctr_id    计数器编号 (0-15，最多 16 个独立计数器)
+rs2[3:0]   = subcmd    subcommand (0=START, 1=STOP, 2=READ)
+rs2[7:4]   = ctr_id    counter id (0–15, up to 16 independent counters)
 rs2[63:8]  = payload
 ```
 
-子命令定义：
+Subcommands:
 
-| subcmd | 名称 | 行为 | payload 含义 |
-|--------|------|------|-------------|
-| 0 | `CTR_START` | 启动计数器 ctr_id，记录当前 cycle 为起始点 | payload = tag（用户自定义标签，会输出到 trace） |
-| 1 | `CTR_STOP` | 停止计数器 ctr_id，输出 elapsed cycles 到 DPI-C trace，然后释放计数器 | payload = 忽略 |
-| 2 | `CTR_READ` | 读取计数器 ctr_id 当前值（不停止），输出到 DPI-C trace | payload = 忽略 |
+| subcmd | name | behavior | payload meaning |
+|--------|------|----------|-----------------|
+| 0 | `CTR_START` | Start counter `ctr_id`, record current cycle as start | payload = tag (user tag, echoed in trace) |
+| 1 | `CTR_STOP` | Stop `ctr_id`, emit elapsed cycles to DPI-C trace, then free the counter | payload = ignored |
+| 2 | `CTR_READ` | Read current value of `ctr_id` (does not stop), emit to DPI-C trace | payload = ignored |
 
-DPI-C 输出格式（写入 bdb.log）：
+DPI-C trace format (written to bdb.log):
 ```
 [CTRACE] CTR_START  ctr=0 tag=0xDEAD cycle=10042
 [CTRACE] CTR_STOP   ctr=0 tag=0xDEAD elapsed=387 cycle=10429
 [CTRACE] CTR_READ   ctr=0 current=200 cycle=10242
 ```
 
-### 指令 2：`bdb_backdoor` (funct7 = 49, 0x31)
+### Instruction 2: `bdb_backdoor` (funct7 = 49, 0x31)
 
-SRAM 后门读写，**所有参数（bank_id, row, data）由 DPI-C 提供**。**需要 bank 端口（inBW=1, outBW=1）。**
+SRAM backdoor read/write; **all parameters (bank_id, row, data) come from DPI-C**. **Requires bank ports (inBW=1, outBW=1).**
 
-rs1 布局：
+rs1 layout:
 ```
-rs1[45]     = BB_RD0    读模式：从 DPI-C 获取地址，读 SRAM，输出数据到 DPI-C
-rs1[47]     = BB_WR     写模式：从 DPI-C 获取地址+数据，写 SRAM
-rs1[63:48]  = iter      操作次数（0 = 单次，>0 = 循环 iter 次）
+rs1[45]     = BB_RD0    read: get address from DPI-C, read SRAM, send data to DPI-C
+rs1[47]     = BB_WR     write: get address+data from DPI-C, write SRAM
+rs1[63:48]  = iter      repeat count (0 = once, >0 = loop `iter` times)
 ```
 
-rs2 布局：
-- rs2 = 任意（不使用）
+rs2 layout:
+- rs2 = don’t care (unused)
 
-操作模式：
+Modes:
 
-| rs1 flag | 行为 | DPI-C 交互 |
-|----------|------|-----------|
-| BB_RD0 | 读模式 | RTL 调用 `dpi_backdoor_get_read_addr()` 获取 (bank_id, row)，读 SRAM，调用 `dpi_backdoor_put_read_data()` 输出数据 |
-| BB_WR | 写模式 | RTL 调用 `dpi_backdoor_get_write_req()` 获取 (bank_id, row, data)，写 SRAM |
+| rs1 flag | behavior | DPI-C interaction |
+|----------|----------|-------------------|
+| BB_RD0 | read | RTL calls `dpi_backdoor_get_read_addr()` for (bank_id, row), reads SRAM, `dpi_backdoor_put_read_data()` for data |
+| BB_WR | write | RTL calls `dpi_backdoor_get_write_req()` for (bank_id, row, data), writes SRAM |
 
-DPI-C 输出格式：
+DPI-C trace format:
 ```
 [BANK-TRACE] BACKDOOR_READ  bank=2 row=5 data=0x00010002000300040005000600070008
 [BANK-TRACE] BACKDOOR_WRITE bank=3 row=10 data=0xDEADBEEFDEADBEEFDEADBEEFDEADBEEF
 ```
 
 
-## 使用示例
+## Examples
 
-### 测量算子执行周期
+### Measure kernel cycles
 
 ```c
-// 测量一次 matmul 的 cycle
-bdb_counter_start(0, 0xA001);         // 计数器 0，tag=matmul
+// One matmul region
+bdb_counter_start(0, 0xA001);         // counter 0, tag=matmul
 bb_mul_warp16(A, B, C, 16);
 bb_fence();
-bdb_counter_stop(0);                  // 输出 elapsed
+bdb_counter_stop(0);                  // prints elapsed
 
-// 测量嵌套区间
-bdb_counter_start(0, 0xB001);         // 外层：整个 conv
-  bdb_counter_start(1, 0xB002);       // 内层：im2col
+// Nested regions
+bdb_counter_start(0, 0xB001);         // outer: whole conv
+  bdb_counter_start(1, 0xB002);       // inner: im2col
   bb_im2col(...);
   bb_fence();
   bdb_counter_stop(1);
 
-  bdb_counter_start(2, 0xB003);       // 内层：matmul
+  bdb_counter_start(2, 0xB003);       // inner: matmul
   bb_mul_warp16(...);
   bb_fence();
   bdb_counter_stop(2);
-bdb_counter_stop(0);                  // 外层结束
+bdb_counter_stop(0);                    // outer end
 ```
 
-bdb.log 输出：
+bdb.log sample:
 ```
 [CTRACE] CTR_START  ctr=0 tag=0xB001 cycle=0
 [CTRACE] CTR_START  ctr=1 tag=0xB002 cycle=0
@@ -107,26 +107,23 @@ bdb.log 输出：
 [CTRACE] CTR_STOP   ctr=0 tag=0xB001 elapsed=456 cycle=456
 ```
 
-### SRAM 后门注入测试数据
+### Backdoor test data into SRAM
 
-TraceBall内有一个私有bank，不会被配置看到
+TraceBall has a private bank that is not visible to normal configuration.
 
 ```c
-// 不走 DMA，直接通过 DPI-C 注入测试数据到 bank 0
-// （C++ 先通过 DPI-C 注入数据到TraceBall内的bank）
-bb_alloc(0, 1, 1)
-bdb_backdoor_mvin(16);     // 注入 16 行到 私有bank
-bdb_backdoor_write(0, 16);     // 将私有bank的数据 注入 16 行到 bank 0
+// No DMA: inject test data into bank 0 via DPI-C
+// (C++ first injects into TraceBall’s internal bank via DPI-C)
+bb_alloc(0, 1, 1);
+bdb_backdoor_mvin(16);            // inject 16 rows into private bank
+bdb_backdoor_write(0, 16);        // move 16 rows from private bank to bank 0
 
-// 跑 Transpose
 bb_transpose(0, 1, 16);
-// 检查部分结果
-bdb_backdoor_peek(0, 15);      // 检查最后一行
+bdb_backdoor_peek(0, 15);         // inspect last row
 
-// 读出全部结果
-bdb_backdoor_read(1, 16);     // dump bank 1 的 16 行到 trace
+bdb_backdoor_read(1, 16);         // dump 16 rows from bank 1 to trace
 ```
 
 
 
-注意，所有RTL修改都在traceball内部，不允许动外部bank等地方
+All RTL changes stay inside TraceBall; do not modify external banks or shared infrastructure there.

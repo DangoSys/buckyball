@@ -13,7 +13,7 @@ class BBReadRequest extends Bundle {
   val vaddr  = UInt(64.W)
   val len    = UInt(16.W)
   val status = new MStatus
-  val stride = UInt(10.W) // 暂时不用
+  val stride = UInt(10.W) // currently unused
 }
 
 class BBReadResponse(dataWidth: Int) extends Bundle {
