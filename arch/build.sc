@@ -10,7 +10,7 @@ import mill.bsp._
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion   = "2.13.12"
-  private val hasPegasus      = os.exists(os.pwd / os.up / "pegasus" / "chisel")
+  private val hasPegasus      = os.exists(os.pwd / os.up / "thirdparty" / "pegasus" / "chisel")
 
   override def scalacOptions = Seq(
     "-language:reflectiveCalls",
@@ -969,7 +969,7 @@ object palladium extends SbtModule {
 // Pure Chisel only — no Chipyard dependency (avoids circular dep with buckyball)
 // buckyball depends on pegasus (one-way)
 object pegasus extends SbtModule {
-  override def millSourcePath = os.pwd / os.up / "pegasus" / "chisel"
+  override def millSourcePath = os.pwd / os.up / "thirdparty" / "pegasus" / "chisel"
   override def scalaVersion   = "2.13.12"
 
   override def ivyDeps = Agg(
