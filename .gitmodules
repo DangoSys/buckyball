@@ -1,15 +1,9 @@
-[submodule "thirdparty/circt"]
-	path = thirdparty/circt
-	url = https://github.com/llvm/circt.git
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
 [submodule "compiler"]
 	path = compiler
 	url = https://github.com/DangoSys/bb-compiler.git
-[submodule "arch/thirdparty/t1"]
-	path = arch/thirdparty/t1
-	url = https://github.com/DangoSys/t1.git
 [submodule "bbdev"]
 	path = bbdev
 	url = https://github.com/DangoSys/bbdev.git
