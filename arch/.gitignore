@@ -15,4 +15,4 @@ build/
 
 log/
 
-.kiro/
+*.sv
