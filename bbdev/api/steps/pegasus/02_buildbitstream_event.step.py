@@ -23,8 +23,8 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    generated_dir = input_data.get("generated_dir", f"{bbdir}/pegasus/vivado/generated")
-    output_dir = input_data.get("output_dir", f"{bbdir}/pegasus/vivado/build")
+    generated_dir = input_data.get("generated_dir", f"{bbdir}/thirdparty/pegasus/vivado/generated")
+    output_dir = input_data.get("output_dir", f"{bbdir}/thirdparty/pegasus/vivado/build")
     top_module = input_data.get("top", "PegasusHarness")
 
     ctx.logger.info(f"[pegasus] Generated dir: {generated_dir}")
@@ -56,7 +56,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
 
     bit_cmd = (
-        f"bash {bbdir}/pegasus/vivado/build-bitstream.sh "
+        f"bash {bbdir}/thirdparty/pegasus/vivado/build-bitstream.sh "
         f"--source_dir {generated_dir} "
         f"--output_dir {output_dir} "
         f"--top {top_module}"
