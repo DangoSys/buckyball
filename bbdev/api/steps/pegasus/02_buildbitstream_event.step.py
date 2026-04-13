@@ -25,7 +25,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     generated_dir = input_data.get("generated_dir", f"{bbdir}/thirdparty/pegasus/vivado/generated")
     output_dir = input_data.get("output_dir", f"{bbdir}/thirdparty/pegasus/vivado/build")
-    top_module = input_data.get("top", "PegasusHarness")
+    top_module = input_data.get("top", "PegasusTop")
 
     ctx.logger.info(f"[pegasus] Generated dir: {generated_dir}")
     ctx.logger.info(f"[pegasus] Output dir: {output_dir}")
