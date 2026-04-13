@@ -83,7 +83,6 @@ class WithPegasusHarness
         new chipyard.harness.WithTieOffL2FBusAXI ++
         new chipyard.harness.WithClockFromHarness ++
         new chipyard.harness.WithResetFromHarness ++
-        new chipyard.harness.WithAbsoluteFreqHarnessClockInstantiator ++
         new chipyard.iobinders.WithAXI4MemPunchthrough ++
         new chipyard.iobinders.WithAXI4MMIOPunchthrough ++
         new chipyard.iobinders.WithNMITiedOff

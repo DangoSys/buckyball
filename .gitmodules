@@ -29,3 +29,6 @@
 [submodule "thirdparty/edein"]
 	path = thirdparty/edein
 	url = https://github.com/DangoSys/Edein.git
+[submodule "thirdparty/pegasus"]
+	path = thirdparty/pegasus
+	url = https://github.com/DangoSys/pegasus.git
