@@ -8,5 +8,6 @@ final: prev:
   python = final.callPackage ./build-env-python.nix { };
   riscv = final.callPackage ./build-env-riscv.nix { };
   scala = final.callPackage ./build-env-scala.nix { };
+  systemTools = final.callPackage ./build-env-system.nix { };
   tools = final.callPackage ./build-env-tools.nix { };
 }

@@ -77,6 +77,10 @@
               doc.mdbook-pdf
               doc.mdbook-toc
               doc.mdbook-mermaid
+
+              # System utilities
+              systemTools.rsync
+              systemTools.nodejs
             ];
           };
 
