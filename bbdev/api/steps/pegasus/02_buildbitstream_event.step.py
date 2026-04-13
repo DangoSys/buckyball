@@ -12,8 +12,8 @@ from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
-    "name": "Pegasus Buildbitstream",
-    "description": "build pegasus bitstream",
+    "name": "generate pegasus bitstream",
+    "description": "generate pegasus bitstream",
     "flows": ["pegasus"],
     "triggers": [queue("pegasus.buildbitstream")],
     "enqueues": [],
