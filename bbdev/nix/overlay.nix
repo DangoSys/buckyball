@@ -4,5 +4,8 @@ final: prev: {
   bbdevPythonPkgs = final.python312.withPackages (ps: with ps; [
     pydantic
     requests
+    gitpython
+    humanfriendly
+    doit
   ]);
 }

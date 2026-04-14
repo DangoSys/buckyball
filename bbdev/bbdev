@@ -49,9 +49,8 @@ WORKFLOW_COMMANDS = {
     "doc": {
         "deploy": True,
     },
-    "marshal": {
-        "build": "Build marshal.",
-        "launch": "Launch marshal.",
+    "kernel": {
+        "build": "Build RISC-V kernel + rootfs for Pegasus (cmake kernel-build).",
     },
     "firesim": {
         "buildbitstream": "Build bitstream.",
@@ -75,6 +74,8 @@ WORKFLOW_COMMANDS = {
     "pegasus": {
         "verilog": 'Generate SystemVerilog for Pegasus FPGA. Args: "[--config sims.pegasus.PegasusConfig]"',
         "buildbitstream": "Build Vivado bitstream for AU280.",
+        "flashbitstream": 'Flash bitstream onto AU280. Args: "[--bitstream <path>] [--serial <url>]"',
+        "runworkload": 'Run workload on AU280. Args: "[--workload <name>] [--board <name>] [--timeout <s>] [--uart <dev>]"',
     },
 }
 
