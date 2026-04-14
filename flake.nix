@@ -55,6 +55,9 @@
               bbdev.gnumake
               bbdev.pkg-config
 
+              # Kernel build tools (RISC-V kernel + rootfs for Pegasus)
+              kernel.e2fsprogs
+
               # C libraries (headers + link libs)
               clibs.zlib-dev
               clibs.zlib
@@ -81,12 +84,15 @@
               # System utilities
               systemTools.rsync
               systemTools.nodejs
+
+              git
             ];
           };
 
           # nix develop
           devShells.default = pkgs.mkShell {
             buildInputs = with pkgs; [
+              git
               clibs.zlib-dev
               clibs.zlib
               clibs.readline-dev

@@ -37,7 +37,6 @@ in
 
 {
   # RISC-V embedded toolchain (bare metal), with riscv64-unknown-elf-* symlinks
-  # Uses newlib-nano; baremetal runtime provided by bb-tests/workloads/src/CTest/toy/crt0.S
   riscv-embedded-gcc = pkgs.symlinkJoin {
     name = "riscv64-unknown-elf-gcc";
     paths = [ pkgsCrossWithNano.buildPackages.gcc ];
@@ -51,7 +50,8 @@ in
     '';
   };
 
-  # RISC-V Linux toolchain
+  # RISC-V Linux toolchain: inject static libc -L only for gcc/g++. Wrapping ar/nm/…
+  # breaks Kbuild/busybox (ar must not see linker -L flags).
   riscv-linux-gcc = let
     cc = pkgs.pkgsCross.riscv64.stdenv.cc;
     libcStatic = pkgs.pkgsCross.riscv64.stdenv.cc.libc.static;
@@ -60,9 +60,16 @@ in
     for f in ${cc}/bin/riscv64-unknown-linux-gnu-*; do
       [ -e "$f" ] || continue
       name=$(basename "$f")
-      echo '#!${pkgs.stdenv.shell}' > $out/bin/$name
-      echo 'exec "'"$f"'" -L${libcStatic}/lib "$@"' >> $out/bin/$name
-      chmod +x $out/bin/$name
+      case "$name" in
+        riscv64-unknown-linux-gnu-gcc|riscv64-unknown-linux-gnu-g++|riscv64-unknown-linux-gnu-c++)
+          echo '#!${pkgs.stdenv.shell}' > $out/bin/$name
+          echo 'exec "'"$f"'" -L${libcStatic}/lib "$@"' >> $out/bin/$name
+          chmod +x $out/bin/$name
+          ;;
+        *)
+          ln -s "$f" $out/bin/$name
+          ;;
+      esac
     done
   '';
 }

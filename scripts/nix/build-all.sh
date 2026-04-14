@@ -140,6 +140,12 @@ fi
 if run_step "4"; then
   begin_step "4" "bb-tests pre-compile sources"
   bbdev workload --build
+
+  # FireMarshal nested submodules — same entrypoint as Chipyard:
+  #   arch/thirdparty/chipyard/software/firemarshal/init-submodules.sh
+  # (identical script here: wlutil/busybox, linux, opensbi, buildroot, boards/firechip/drivers/*)
+  cd "${BBDIR}/thirdparty/firemarshal"
+  bash -e ./init-submodules.sh
 fi
 
 if run_step "5"; then

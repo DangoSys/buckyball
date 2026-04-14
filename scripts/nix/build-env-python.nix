@@ -50,5 +50,10 @@
     pytest-cov
     allure-pytest
     colorlog
+
+    # firemarshal
+    gitpython
+    humanfriendly
+    doit
   ]);
 }
