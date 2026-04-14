@@ -10,4 +10,5 @@ final: prev:
   scala = final.callPackage ./build-env-scala.nix { };
   systemTools = final.callPackage ./build-env-system.nix { };
   tools = final.callPackage ./build-env-tools.nix { };
+  kernel = final.callPackage ./build-env-kernel.nix { };
 }

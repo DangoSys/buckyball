@@ -20,12 +20,15 @@
 	path = bebop
 	url = https://github.com/DangoSys/bebop
 	branch = next
-[submodule "thirdparty/edein"]
-	path = thirdparty/edein
-	url = https://github.com/DangoSys/Edein.git
 [submodule "thirdparty/pegasus"]
 	path = thirdparty/pegasus
 	url = https://github.com/DangoSys/pegasus.git
-[submodule "bluefolk"]
-	path = bluefolk
-	url = https://github.com/DangoSys/bluefolk.git
+[submodule "bb-tests/workloads/lib/kernel"]
+	path = bb-tests/workloads/lib/kernel
+	url = https://github.com/DangoSys/bbkernel.git
+[submodule "bb-tests/thirdparty/busybox"]
+	path = bb-tests/thirdparty/busybox
+	url = https://github.com/mirror/busybox.git
+[submodule "bb-tests/thirdparty/linux"]
+	path = bb-tests/thirdparty/linux
+	url = https://github.com/firesim/linux.git
