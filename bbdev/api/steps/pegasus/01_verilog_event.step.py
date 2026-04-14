@@ -29,9 +29,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/pegasus_top/")
     soc_dir   = f"{bbdir}/arch/build/pegasus/"   # DigitalTop + all SoC RTL
 
-    ctx.logger.info(f"[pegasus] Elaborating PegasusTop")
-    ctx.logger.info(f"[pegasus] Top output directory: {build_dir}")
-    ctx.logger.info(f"[pegasus] SoC RTL directory: {soc_dir}")
+    ctx.logger.info(f" Elaborating PegasusTop")
+    ctx.logger.info(f" Top output directory: {build_dir}")
+    ctx.logger.info(f" SoC RTL directory: {soc_dir}")
 
     os.makedirs(build_dir, exist_ok=True)
 
@@ -53,7 +53,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="pegasus soc verilog",
     )
     if soc_result.returncode != 0:
-        ctx.logger.error("[pegasus] SoC elaboration failed")
+        ctx.logger.error(" SoC elaboration failed")
         await check_result(ctx, soc_result.returncode, continue_run=False,
                            extra_fields={"task": "verilog", "step": "soc"}, trace_id=origin_tid)
         return
@@ -144,7 +144,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         n_soc = copy_rtl_dir(soc_dir, skip_set=HARNESS_SKIP)
         # Copy top-level wrappers (overrides any same-named file from soc_dir)
         n_top = copy_rtl_dir(build_dir)
-        ctx.logger.info(f"[pegasus] Copied {n_soc} SoC files + {n_top} top files to {vivado_gen_dir}")
+        ctx.logger.info(f" Copied {n_soc} SoC files + {n_top} top files to {vivado_gen_dir}")
 
     success_result, failure_result = await check_result(
         ctx,

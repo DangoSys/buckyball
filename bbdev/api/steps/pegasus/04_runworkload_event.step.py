@@ -48,10 +48,10 @@ def _build_driver(bbdir: str, logger) -> str | None:
     binary     = os.path.join(build_dir, "pegasus-driver")
 
     if os.path.exists(binary):
-        logger.info(f"[pegasus] driver already built: {binary}")
+        logger.info(f" driver already built: {binary}")
         return binary
 
-    logger.info("[pegasus] building pegasus-driver ...")
+    logger.info(" building pegasus-driver ...")
     os.makedirs(build_dir, exist_ok=True)
 
     cmake_result = stream_run_logger(
@@ -62,7 +62,7 @@ def _build_driver(bbdir: str, logger) -> str | None:
         stderr_prefix="cmake",
     )
     if cmake_result.returncode != 0:
-        logger.error("[pegasus] cmake configure failed")
+        logger.error(" cmake configure failed")
         return None
 
     build_result = stream_run_logger(
@@ -73,10 +73,10 @@ def _build_driver(bbdir: str, logger) -> str | None:
         stderr_prefix="make",
     )
     if build_result.returncode != 0:
-        logger.error("[pegasus] driver build failed")
+        logger.error(" driver build failed")
         return None
 
-    logger.info(f"[pegasus] driver built: {binary}")
+    logger.info(f" driver built: {binary}")
     return binary
 
 
@@ -99,12 +99,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── 1. Resolve image paths ────────────────────────────────────────────
     kernel, rootfs = _resolve_images(bbdir, workload, board)
-    ctx.logger.info(f"[pegasus] kernel: {kernel}")
-    ctx.logger.info(f"[pegasus] rootfs: {rootfs}")
+    ctx.logger.info(f" kernel: {kernel}")
+    ctx.logger.info(f" rootfs: {rootfs}")
 
     for path in (kernel, rootfs):
         if not os.path.exists(path):
-            ctx.logger.error(f"[pegasus] image not found: {path} — run 'bbdev marshal --build' first")
+            ctx.logger.error(f" image not found: {path} — run 'bbdev marshal --build' first")
             await check_result(ctx, 1, continue_run=False,
                                extra_fields={"error": "image_not_found", "path": path},
                                trace_id=origin_tid)
@@ -125,7 +125,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f" --rootfs {rootfs}"
         f" --h2c {h2c_dev}"
     )
-    ctx.logger.info("[pegasus] loading images into HBM2 ...")
+    ctx.logger.info(" loading images into HBM2 ...")
     load_result = stream_run_logger(
         cmd=load_cmd,
         logger=ctx.logger,
@@ -146,7 +146,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f" --log {uart_log}"
         f" --timeout {timeout}"
     )
-    ctx.logger.info(f"[pegasus] starting CPU, collecting UART → {uart_log}")
+    ctx.logger.info(f" starting CPU, collecting UART → {uart_log}")
     run_result = stream_run_logger(
         cmd=run_cmd,
         logger=ctx.logger,

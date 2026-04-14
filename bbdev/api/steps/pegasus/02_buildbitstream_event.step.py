@@ -27,13 +27,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     output_dir = input_data.get("output_dir", f"{bbdir}/thirdparty/pegasus/vivado/build")
     top_module = input_data.get("top", "PegasusTop")
 
-    ctx.logger.info(f"[pegasus] Generated dir: {generated_dir}")
-    ctx.logger.info(f"[pegasus] Output dir: {output_dir}")
+    ctx.logger.info(f" Generated dir: {generated_dir}")
+    ctx.logger.info(f" Output dir: {output_dir}")
 
     os.makedirs(output_dir, exist_ok=True)
 
     if not os.path.isdir(generated_dir):
-        ctx.logger.error(f"[pegasus] generated dir not found: {generated_dir}")
+        ctx.logger.error(f" generated dir not found: {generated_dir}")
         success_result, failure_result = await check_result(
             ctx,
             1,
@@ -45,7 +45,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     has_rtl = any(name.endswith(".sv") or name.endswith(".v") for name in os.listdir(generated_dir))
     if not has_rtl:
-        ctx.logger.error(f"[pegasus] no verilog files found in: {generated_dir}")
+        ctx.logger.error(f" no verilog files found in: {generated_dir}")
         success_result, failure_result = await check_result(
             ctx,
             1,

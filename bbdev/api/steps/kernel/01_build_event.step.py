@@ -16,7 +16,7 @@ config = {
     "description": "build RISC-V kernel + rootfs for Pegasus via bb-tests/workloads/lib/kernel",
     "flows": ["kernel"],
     "triggers": [queue("kernel.build")],
-    "enqueues": ["kernel.complete", "kernel.error"],
+    "enqueues": [],
 }
 
 
@@ -36,8 +36,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="marshal build",
     )
     if result.returncode != 0:
-        _, failure_result = await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
-        await ctx.enqueue({"topic": "marshal.error", "data": {**input_data, "result": failure_result, "returncode": result.returncode}})
+        await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
         return
 
     # cmake build
@@ -49,19 +48,5 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="marshal build",
     )
 
-    success_result, failure_result = await check_result(
-        ctx, result.returncode, continue_run=False, trace_id=origin_tid)
+    await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
 
-    if result.returncode == 0:
-        output_dir = os.path.join(kernel_src, "output")
-        await ctx.enqueue({
-            "topic": "kernel.complete",
-            "data": {**input_data, "task": "kernel", "result": success_result,
-                     "kernel": os.path.join(output_dir, "pegasus-bin"),
-                     "rootfs": os.path.join(output_dir, "pegasus.img")},
-        })
-    else:
-        await ctx.enqueue({
-            "topic": "kernel.error",
-            "data": {**input_data, "task": "kernel", "result": failure_result, "returncode": result.returncode},
-        })
