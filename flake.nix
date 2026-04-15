@@ -67,6 +67,8 @@
               clibs.jpeg
               clibs.png-dev
               clibs.png
+              clibs.elfutils-dev
+              clibs.elfutils
 
               # Scala tools
               scala.mill
@@ -101,6 +103,8 @@
               clibs.jpeg
               clibs.png-dev
               clibs.png
+              clibs.elfutils-dev
+              clibs.elfutils
             ];
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then

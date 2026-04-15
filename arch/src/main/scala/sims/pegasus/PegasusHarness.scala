@@ -19,7 +19,7 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
     val pcie_exp_txn    = Output(UInt(16.W))
     val pcie_exp_rxp    = Input(UInt(16.W))
     val pcie_exp_rxn    = Input(UInt(16.W))
-    val hbm_ref_clk     = Input(Clock())
+    // DDR4 physical pins are auto-handled by Vivado board interface — no ports here.
   })
 
   val pegasusShell = Module(new PegasusShell)
@@ -30,7 +30,7 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
   io.pcie_exp_txn                 := pegasusShell.io.pcie_exp_txn
   pegasusShell.io.pcie_exp_rxp    := io.pcie_exp_rxp
   pegasusShell.io.pcie_exp_rxn    := io.pcie_exp_rxn
-  pegasusShell.io.hbm_ref_clk     := io.hbm_ref_clk
+  // DDR4 sys_clk no longer connected from harness — board interface handles physical pins.
 
   pegasusShell.io.uart_tx := true.B
 
@@ -63,16 +63,16 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
 
   def connectChipMem(port: AXI4MemPort): Unit = {
     val axi = port.io.bits
-    pegasusShell.io.chip_mem_awid    := axi.aw.bits.id.asTypeOf(UInt(6.W))
-    pegasusShell.io.chip_mem_awaddr  := axi.aw.bits.addr.asTypeOf(UInt(33.W))
+    pegasusShell.io.chip_mem_awid    := axi.aw.bits.id.asTypeOf(UInt(4.W))
+    pegasusShell.io.chip_mem_awaddr  := axi.aw.bits.addr.asTypeOf(UInt(32.W))
     pegasusShell.io.chip_mem_awlen   := axi.aw.bits.len
     pegasusShell.io.chip_mem_awsize  := axi.aw.bits.size
     pegasusShell.io.chip_mem_awburst := axi.aw.bits.burst
     pegasusShell.io.chip_mem_awvalid := axi.aw.valid
     axi.aw.ready                     := pegasusShell.io.chip_mem_awready
 
-    pegasusShell.io.chip_mem_wdata  := axi.w.bits.data.asTypeOf(UInt(256.W))
-    pegasusShell.io.chip_mem_wstrb  := axi.w.bits.strb.asTypeOf(UInt(32.W))
+    pegasusShell.io.chip_mem_wdata  := axi.w.bits.data.asTypeOf(UInt(64.W))
+    pegasusShell.io.chip_mem_wstrb  := axi.w.bits.strb.asTypeOf(UInt(8.W))
     pegasusShell.io.chip_mem_wlast  := axi.w.bits.last
     pegasusShell.io.chip_mem_wvalid := axi.w.valid
     axi.w.ready                     := pegasusShell.io.chip_mem_wready
@@ -82,8 +82,8 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
     axi.b.valid                     := pegasusShell.io.chip_mem_bvalid
     pegasusShell.io.chip_mem_bready := axi.b.ready
 
-    pegasusShell.io.chip_mem_arid    := axi.ar.bits.id.asTypeOf(UInt(6.W))
-    pegasusShell.io.chip_mem_araddr  := axi.ar.bits.addr.asTypeOf(UInt(33.W))
+    pegasusShell.io.chip_mem_arid    := axi.ar.bits.id.asTypeOf(UInt(4.W))
+    pegasusShell.io.chip_mem_araddr  := axi.ar.bits.addr.asTypeOf(UInt(32.W))
     pegasusShell.io.chip_mem_arlen   := axi.ar.bits.len
     pegasusShell.io.chip_mem_arsize  := axi.ar.bits.size
     pegasusShell.io.chip_mem_arburst := axi.ar.bits.burst
