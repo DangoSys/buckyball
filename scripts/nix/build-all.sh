@@ -85,9 +85,9 @@ git submodule update --init --progress --jobs 8  \
   docs \
   thirdparty/palladium \
   thirdparty/pegasus \
-  thirdparty/waveform-mcp 
+  thirdparty/waveform-mcp
 # fpga/fpga-shells is needed by palladium
-cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim 
+cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
@@ -151,12 +151,6 @@ fi
 if run_step "4"; then
   begin_step "4" "bb-tests pre-compile sources"
   bbdev workload --build
-
-  # FireMarshal nested submodules — same entrypoint as Chipyard:
-  #   arch/thirdparty/chipyard/software/firemarshal/init-submodules.sh
-  # (identical script here: wlutil/busybox, linux, opensbi, buildroot, boards/firechip/drivers/*)
-  cd "${BBDIR}/thirdparty/firemarshal"
-  bash -e ./init-submodules.sh
 fi
 
 if run_step "5"; then
