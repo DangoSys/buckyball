@@ -22,6 +22,7 @@ def stream_run(
     on_stderr: Optional[Callable[[str], None]] = None,
     stdout_prefix: str = "STDOUT",
     stderr_prefix: str = "STDERR",
+    env: Optional[dict] = None,
 ) -> StreamResult:
     """
     Execute command and stream output in real-time
@@ -78,6 +79,7 @@ def stream_run(
         text=True,
         bufsize=1,
         executable=executable,
+        env=env,
     )
 
     stdout_lines = []
@@ -125,6 +127,7 @@ def stream_run_logger(
     stdout_prefix: str = "STDOUT",
     stderr_prefix: str = "STDERR",
     verbose: bool = False,
+    env: Optional[dict] = None,
 ) -> StreamResult:
     """
     Convenience function for streaming output using logger
@@ -169,4 +172,5 @@ def stream_run_logger(
         on_stderr=log_stderr,
         stdout_prefix=stdout_prefix,
         stderr_prefix=stderr_prefix,
+        env=env,
     )

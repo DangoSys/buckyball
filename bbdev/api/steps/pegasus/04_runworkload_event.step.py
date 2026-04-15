@@ -54,12 +54,20 @@ def _build_driver(bbdir: str, logger) -> str | None:
     logger.info(" building pegasus-driver ...")
     os.makedirs(build_dir, exist_ok=True)
 
+    # Ensure pkg-config can find nix-managed libraries (libelf from elfutils)
+    result_dir = os.path.join(bbdir, "result")
+    pkg_config_path = os.environ.get("PKG_CONFIG_PATH", "")
+    nix_pc = os.path.join(result_dir, "lib", "pkgconfig")
+    if nix_pc not in pkg_config_path:
+        pkg_config_path = f"{nix_pc}:{pkg_config_path}" if pkg_config_path else nix_pc
+
     cmake_result = stream_run_logger(
-        cmd=f"cmake .. -DCMAKE_BUILD_TYPE=Release",
+        cmd="cmake .. -DCMAKE_BUILD_TYPE=Release",
         logger=logger,
         cwd=build_dir,
         stdout_prefix="cmake",
         stderr_prefix="cmake",
+        env={**os.environ, "PKG_CONFIG_PATH": pkg_config_path},
     )
     if cmake_result.returncode != 0:
         logger.error(" cmake configure failed")
@@ -88,7 +96,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     board       = input_data.get("board",    "chipyard")
     timeout     = int(input_data.get("timeout", 300))
     uart_dev    = input_data.get("uart",     "/dev/ttyUSB0")
-    control_dev = input_data.get("control",  "/dev/xdma0_control")
+    control_dev = input_data.get("control",  "/dev/xdma0_user")
     h2c_dev     = input_data.get("h2c",      "/dev/xdma0_h2c_0")
 
     # Log output directory
@@ -104,7 +112,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     for path in (kernel, rootfs):
         if not os.path.exists(path):
-            ctx.logger.error(f" image not found: {path} — run 'bbdev marshal --build' first")
+            ctx.logger.error(f" image not found: {path} — run 'bbdev kernel --build' first")
             await check_result(ctx, 1, continue_run=False,
                                extra_fields={"error": "image_not_found", "path": path},
                                trace_id=origin_tid)
@@ -120,7 +128,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── 3. Load image into HBM2 ───────────────────────────────────────────
     load_cmd = (
-        f"{driver} load"
+        f"sudo {driver} load"
         f" --kernel {kernel}"
         f" --rootfs {rootfs}"
         f" --h2c {h2c_dev}"
@@ -140,7 +148,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── 4. Start CPU and collect UART ─────────────────────────────────────
     run_cmd = (
-        f"{driver} run"
+        f"sudo {driver} run"
         f" --control {control_dev}"
         f" --uart {uart_dev}"
         f" --log {uart_log}"

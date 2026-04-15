@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 from motia import FlowContext, queue
 
@@ -26,6 +27,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     kernel_build = os.path.join(bbdir, "bb-tests", "build", "kernel")
+    output_dir = os.path.join(bbdir, "bb-tests", "output", "kernel")
+
+    # Clear previous output before rebuild
+    if os.path.isdir(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     # cmake configure
     configure_cmd = f"cmake -B {kernel_build} -S {kernel_src}"
