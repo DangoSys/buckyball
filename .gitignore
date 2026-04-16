@@ -20,6 +20,14 @@ index.html
 *.dot
 *.txt
 
+# Vivado / Webtalk session files (root-level)
+/vivado*.jou
+/vivado*.log
+/webtalk*.jou
+/webtalk*.log
+/iter_*.txt
+/log.txt
+
 .clangd
 .kiro
 
