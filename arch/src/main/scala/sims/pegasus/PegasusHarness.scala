@@ -30,7 +30,8 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
   io.pcie_exp_txn                 := pegasusShell.io.pcie_exp_txn
   pegasusShell.io.pcie_exp_rxp    := io.pcie_exp_rxp
   pegasusShell.io.pcie_exp_rxn    := io.pcie_exp_rxn
-  // DDR4 sys_clk no longer connected from harness — board interface handles physical pins.
+  pegasusShell.io.c0_sys_clk_p    := false.B
+  pegasusShell.io.c0_sys_clk_n    := false.B
 
   pegasusShell.io.uart_tx := true.B
 

@@ -18,7 +18,19 @@ class PegasusTop extends BlackBox with HasBlackBoxInline {
     val pcie_exp_txn    = Output(UInt(16.W))
     val pcie_exp_rxp    = Input(UInt(16.W))
     val pcie_exp_rxn    = Input(UInt(16.W))
-    // DDR4 physical pins are auto-handled by Vivado board interface — no ports here.
+    val c0_sys_clk_p    = Input(Bool())
+    val c0_sys_clk_n    = Input(Bool())
+    val c0_ddr4_act_n   = Output(Bool())
+    val c0_ddr4_adr     = Output(UInt(17.W))
+    val c0_ddr4_ba      = Output(UInt(2.W))
+    val c0_ddr4_bg      = Output(UInt(2.W))
+    val c0_ddr4_cke     = Output(UInt(1.W))
+    val c0_ddr4_odt     = Output(UInt(1.W))
+    val c0_ddr4_cs_n    = Output(UInt(1.W))
+    val c0_ddr4_ck_t    = Output(UInt(1.W))
+    val c0_ddr4_ck_c    = Output(UInt(1.W))
+    val c0_ddr4_reset_n = Output(Bool())
+    val c0_ddr4_parity  = Output(Bool())
     val uart_txd        = Output(Bool())
   })
 
@@ -32,7 +44,22 @@ class PegasusTop extends BlackBox with HasBlackBoxInline {
       |  output [15:0] pcie_exp_txn,
       |  input  [15:0] pcie_exp_rxp,
       |  input  [15:0] pcie_exp_rxn,
-      |  // DDR4 physical pins handled by Vivado board interface — no RTL ports here.
+      |  input         c0_sys_clk_p,
+      |  input         c0_sys_clk_n,
+      |  output        c0_ddr4_act_n,
+      |  output [16:0] c0_ddr4_adr,
+      |  output [1:0]  c0_ddr4_ba,
+      |  output [1:0]  c0_ddr4_bg,
+      |  output [0:0]  c0_ddr4_cke,
+      |  output [0:0]  c0_ddr4_odt,
+      |  output [0:0]  c0_ddr4_cs_n,
+      |  output [0:0]  c0_ddr4_ck_t,
+      |  output [0:0]  c0_ddr4_ck_c,
+      |  output        c0_ddr4_reset_n,
+      |  output        c0_ddr4_parity,
+      |  inout  [71:0] c0_ddr4_dq,
+      |  inout  [17:0] c0_ddr4_dqs_c,
+      |  inout  [17:0] c0_ddr4_dqs_t,
       |  output        uart_txd
       |);
       |
@@ -71,7 +98,22 @@ class PegasusTop extends BlackBox with HasBlackBoxInline {
       |    .pcie_exp_txn    (pcie_exp_txn),
       |    .pcie_exp_rxp    (pcie_exp_rxp),
       |    .pcie_exp_rxn    (pcie_exp_rxn),
-      |    // DDR4 physical pins: no connections — handled by Vivado board interface.
+      |    .c0_sys_clk_p    (c0_sys_clk_p),
+      |    .c0_sys_clk_n    (c0_sys_clk_n),
+      |    .c0_ddr4_act_n   (c0_ddr4_act_n),
+      |    .c0_ddr4_adr     (c0_ddr4_adr),
+      |    .c0_ddr4_ba      (c0_ddr4_ba),
+      |    .c0_ddr4_bg      (c0_ddr4_bg),
+      |    .c0_ddr4_cke     (c0_ddr4_cke),
+      |    .c0_ddr4_odt     (c0_ddr4_odt),
+      |    .c0_ddr4_cs_n    (c0_ddr4_cs_n),
+      |    .c0_ddr4_ck_t    (c0_ddr4_ck_t),
+      |    .c0_ddr4_ck_c    (c0_ddr4_ck_c),
+      |    .c0_ddr4_reset_n (c0_ddr4_reset_n),
+      |    .c0_ddr4_parity  (c0_ddr4_parity),
+      |    .c0_ddr4_dq      (c0_ddr4_dq),
+      |    .c0_ddr4_dqs_c   (c0_ddr4_dqs_c),
+      |    .c0_ddr4_dqs_t   (c0_ddr4_dqs_t),
       |    .dut_clk         (soc_clk),
       |    .dut_reset       (soc_reset),
       |    .uart_tx         (1'b1),
@@ -171,7 +213,19 @@ object ElaboratePegasusTop extends App {
       val pcie_exp_txn    = Output(UInt(16.W))
       val pcie_exp_rxp    = Input(UInt(16.W))
       val pcie_exp_rxn    = Input(UInt(16.W))
-      // DDR4 physical pins are auto-handled by Vivado board interface — no ports here.
+      val c0_sys_clk_p    = Input(Bool())
+      val c0_sys_clk_n    = Input(Bool())
+      val c0_ddr4_act_n   = Output(Bool())
+      val c0_ddr4_adr     = Output(UInt(17.W))
+      val c0_ddr4_ba      = Output(UInt(2.W))
+      val c0_ddr4_bg      = Output(UInt(2.W))
+      val c0_ddr4_cke     = Output(UInt(1.W))
+      val c0_ddr4_odt     = Output(UInt(1.W))
+      val c0_ddr4_cs_n    = Output(UInt(1.W))
+      val c0_ddr4_ck_t    = Output(UInt(1.W))
+      val c0_ddr4_ck_c    = Output(UInt(1.W))
+      val c0_ddr4_reset_n = Output(Bool())
+      val c0_ddr4_parity  = Output(Bool())
       val uart_txd        = Output(Bool())
     })
 
@@ -181,8 +235,21 @@ object ElaboratePegasusTop extends App {
     top.io.pcie_sys_rst_n  := io.pcie_sys_rst_n
     top.io.pcie_exp_rxp    := io.pcie_exp_rxp
     top.io.pcie_exp_rxn    := io.pcie_exp_rxn
+    top.io.c0_sys_clk_p    := io.c0_sys_clk_p
+    top.io.c0_sys_clk_n    := io.c0_sys_clk_n
     io.pcie_exp_txp        := top.io.pcie_exp_txp
     io.pcie_exp_txn        := top.io.pcie_exp_txn
+    io.c0_ddr4_act_n       := top.io.c0_ddr4_act_n
+    io.c0_ddr4_adr         := top.io.c0_ddr4_adr
+    io.c0_ddr4_ba          := top.io.c0_ddr4_ba
+    io.c0_ddr4_bg          := top.io.c0_ddr4_bg
+    io.c0_ddr4_cke         := top.io.c0_ddr4_cke
+    io.c0_ddr4_odt         := top.io.c0_ddr4_odt
+    io.c0_ddr4_cs_n        := top.io.c0_ddr4_cs_n
+    io.c0_ddr4_ck_t        := top.io.c0_ddr4_ck_t
+    io.c0_ddr4_ck_c        := top.io.c0_ddr4_ck_c
+    io.c0_ddr4_reset_n     := top.io.c0_ddr4_reset_n
+    io.c0_ddr4_parity      := top.io.c0_ddr4_parity
     io.uart_txd            := top.io.uart_txd
   }
 
