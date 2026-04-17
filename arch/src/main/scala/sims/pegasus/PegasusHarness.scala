@@ -23,15 +23,15 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
   })
 
   val pegasusShell = Module(new PegasusShell)
-  pegasusShell.io.pcie_sys_clk    := io.pcie_sys_clk
-  pegasusShell.io.pcie_sys_clk_gt := io.pcie_sys_clk_gt
-  pegasusShell.io.pcie_sys_rst_n  := io.pcie_sys_rst_n
-  io.pcie_exp_txp                 := pegasusShell.io.pcie_exp_txp
-  io.pcie_exp_txn                 := pegasusShell.io.pcie_exp_txn
-  pegasusShell.io.pcie_exp_rxp    := io.pcie_exp_rxp
-  pegasusShell.io.pcie_exp_rxn    := io.pcie_exp_rxn
-  pegasusShell.io.c0_sys_clk_p    := false.B
-  pegasusShell.io.c0_sys_clk_n    := false.B
+  pegasusShell.io.pcie_sys_clk                                              := io.pcie_sys_clk
+  pegasusShell.io.pcie_sys_clk_gt                                           := io.pcie_sys_clk_gt
+  pegasusShell.io.pcie_sys_rst_n                                            := io.pcie_sys_rst_n
+  io.pcie_exp_txp                                                           := pegasusShell.io.pcie_exp_txp
+  io.pcie_exp_txn                                                           := pegasusShell.io.pcie_exp_txn
+  pegasusShell.io.pcie_exp_rxp                                              := io.pcie_exp_rxp
+  pegasusShell.io.pcie_exp_rxn                                              := io.pcie_exp_rxn
+  pegasusShell.io.elements.get("c0_sys_clk_p").foreach(_.asInstanceOf[Bool] := false.B)
+  pegasusShell.io.elements.get("c0_sys_clk_n").foreach(_.asInstanceOf[Bool] := false.B)
 
   pegasusShell.io.uart_tx := true.B
 
