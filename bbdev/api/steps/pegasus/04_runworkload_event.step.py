@@ -24,7 +24,7 @@ from utils.event_common import check_result, get_origin_trace_id
 
 config = {
     "name": "pegasus-runworkload",
-    "description": "Load Linux image into HBM2 and run on AU280",
+    "description": "Load Linux image into DDR and run on AU280",
     "flows": ["pegasus"],
     "triggers": [queue("pegasus.runworkload")],
     "enqueues": [],
@@ -126,14 +126,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                            trace_id=origin_tid)
         return
 
-    # ── 3. Load image into HBM2 ───────────────────────────────────────────
+    # ── 3. Load image into DDR ───────────────────────────────────────────
     load_cmd = (
         f"sudo {driver} load"
         f" --kernel {kernel}"
         f" --rootfs {rootfs}"
         f" --h2c {h2c_dev}"
     )
-    ctx.logger.info(" loading images into HBM2 ...")
+    ctx.logger.info(" loading images into DDR ...")
     load_result = stream_run_logger(
         cmd=load_cmd,
         logger=ctx.logger,
