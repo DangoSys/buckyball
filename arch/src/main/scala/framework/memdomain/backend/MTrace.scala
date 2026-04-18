@@ -12,6 +12,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
     val channel   = Input(UInt(32.W))
     val hart_id   = Input(UInt(64.W))
     val vbank_id  = Input(UInt(32.W))
+    val pbank_id  = Input(UInt(32.W))
     val group_id  = Input(UInt(32.W))
     val addr      = Input(UInt(32.W))
     val data_lo   = Input(UInt(64.W))
@@ -28,6 +29,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input int unsigned channel,
       |  input longint unsigned hart_id,
       |  input int unsigned vbank_id,
+      |  input int unsigned pbank_id,
       |  input int unsigned group_id,
       |  input int unsigned addr,
       |  input longint unsigned data_lo,
@@ -40,6 +42,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [31:0] channel,
       |  input [63:0] hart_id,
       |  input [31:0] vbank_id,
+      |  input [31:0] pbank_id,
       |  input [31:0] group_id,
       |  input [31:0] addr,
       |  input [63:0] data_lo,
@@ -48,7 +51,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
       |);
       |  always @(*) begin
       |    if (enable) begin
-      |      dpi_mtrace(is_write, is_shared, channel, hart_id, vbank_id, group_id, addr, data_lo, data_hi);
+      |      dpi_mtrace(is_write, is_shared, channel, hart_id, vbank_id, pbank_id, group_id, addr, data_lo, data_hi);
       |    end
       |  end
       |endmodule
