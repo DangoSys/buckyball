@@ -36,6 +36,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mt.io.channel   := 0.U
     mt.io.hart_id   := 0.U
     mt.io.vbank_id  := 0.U
+    mt.io.pbank_id  := 0.U
     mt.io.group_id  := 0.U
     mt.io.addr      := 0.U
     mt.io.data_lo   := 0.U
@@ -165,6 +166,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   private def emitTrace(
     ch:      Int,
     isWrite: UInt,
+    pbankId: UInt,
     addr:    UInt,
     dataLo:  UInt,
     dataHi:  UInt,
@@ -175,6 +177,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mtraces(ch).io.channel   := ch.U
     mtraces(ch).io.hart_id   := io.mem_req(ch).hart_id
     mtraces(ch).io.vbank_id  := io.mem_req(ch).bank_id
+    mtraces(ch).io.pbank_id  := pbankId
     mtraces(ch).io.group_id  := io.mem_req(ch).group_id
     mtraces(ch).io.addr      := addr
     mtraces(ch).io.data_lo   := dataLo
@@ -185,9 +188,22 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   for (i <- 0 until totalChannel) {
     val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
 
+    val tracePbankId = Wire(UInt(32.W))
+    tracePbankId := 0.U
+    for (j <- 0 until totalBanks) {
+      val trace_hit_bank = mappingTable(j).valid &&
+        (mappingTable(j).hart_id === io.mem_req(i).hart_id) &&
+        (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+        (!mappingTable(j).is_multi ||
+          (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
+      when(trace_hit_bank) {
+        tracePbankId := j.U
+      }
+    }
+
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
-      emitTrace(i, 0.U, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
+      emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
     }
 
     // Memory trace: write request
@@ -195,6 +211,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       emitTrace(
         i,
         1.U,
+        tracePbankId,
         io.mem_req(i).write.req.bits.addr,
         io.mem_req(i).write.req.bits.data(63, 0),
         io.mem_req(i).write.req.bits.data(127, 64),

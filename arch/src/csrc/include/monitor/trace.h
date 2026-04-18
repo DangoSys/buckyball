@@ -23,7 +23,7 @@ void dpi_itrace(unsigned char is_issue, // 2 = alloc, 1 = issue, 0 = complete
 void dpi_mtrace(unsigned char is_write, // 1 = write, 0 = read
                 unsigned char is_shared, unsigned int channel,
                 unsigned long long hart_id, unsigned int vbank_id,
-                unsigned int group_id, unsigned int addr,
+                unsigned int pbank_id, unsigned int group_id, unsigned int addr,
                 unsigned long long data_lo, unsigned long long data_hi);
 
 // DPI-C function for Ball PMC trace (pmctrace)
