@@ -55,6 +55,7 @@ typedef int32_t result_t;
 #include "51_quant.c"
 #include "52_dequant.c"
 #include "53_gemmini_preload.c"
+#include "55_mxfp.c"
 #include "64_mul_warp16.c"
 #include "65_bfp.c"
 #include "66_gemmini_compute_preloaded.c"
