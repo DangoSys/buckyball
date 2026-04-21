@@ -21,6 +21,7 @@ object DISA {
   val DEQUANT         = BitPat("b0110100") // 52 (0x34)
   val GEMMINI_PRELOAD = BitPat("b0110101") // 53 (0x35)
   val BDB_BACKDOOR    = BitPat("b0110110") // 54 (0x36)
+  val MXFP            = BitPat("b0110111") // 55 (0x37)
 
   // enable=000 (no bank access): opcode 2-4
   val GEMMINI_CONFIG = BitPat("b0000010") // 2 (0x02)

@@ -1,5 +1,5 @@
 {
-  "ballNum": 9,
+  "ballNum": 10,
   "ballIdMappings": [
     {"ballId": 0, "ballName": "VecBall", "inBW": 2, "outBW": 4},
     {"ballId": 1, "ballName": "ReluBall", "inBW": 1, "outBW": 1},
@@ -9,6 +9,7 @@
     {"ballId": 5, "ballName": "QuantBall", "inBW": 1, "outBW": 1},
     {"ballId": 6, "ballName": "DequantBall", "inBW": 1, "outBW": 1},
     {"ballId": 7, "ballName": "GemminiBall", "inBW": 2, "outBW": 4},
-    {"ballId": 8, "ballName": "TraceBall", "inBW": 1, "outBW": 1}
+    {"ballId": 8, "ballName": "TraceBall", "inBW": 1, "outBW": 1},
+    {"ballId": 9, "ballName": "MxfpBall", "inBW": 1, "outBW": 1}
   ]
 }
