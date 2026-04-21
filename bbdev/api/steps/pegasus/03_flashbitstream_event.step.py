@@ -11,6 +11,8 @@ import sys
 import time
 import socket
 import subprocess
+import glob
+import re
 
 from motia import FlowContext, queue
 
@@ -31,10 +33,12 @@ config = {
 }
 
 PCI_DEVICES = "/sys/bus/pci/devices"
+XILINX_VENDOR = "0x10ee"
+XDMA_DEVICE_IDS = {"0x903f"}
 
 
 def _find_xdma_bdf() -> str | None:
-    """Return the extended BDF (e.g. '0000:65:00.0') of the first xdma device."""
+    """Return the extended BDF (e.g. '0000:65:00.0') bound to xdma driver."""
     for entry in os.listdir(PCI_DEVICES):
         driver_link = os.path.join(PCI_DEVICES, entry, "driver")
         if not os.path.islink(driver_link):
@@ -42,6 +46,20 @@ def _find_xdma_bdf() -> str | None:
         driver_name = os.path.basename(os.readlink(driver_link))
         if driver_name == "xdma":
             return entry   # e.g. '0000:65:00.0'
+    return None
+
+
+def _find_xdma_pci_bdf() -> str | None:
+    """Return first XDMA-like Xilinx PCIe endpoint even if driver is not bound."""
+    for entry in os.listdir(PCI_DEVICES):
+        vendor_file = os.path.join(PCI_DEVICES, entry, "vendor")
+        device_file = os.path.join(PCI_DEVICES, entry, "device")
+        if not (os.path.exists(vendor_file) and os.path.exists(device_file)):
+            continue
+        vendor = open(vendor_file, "r", encoding="utf-8").read().strip().lower()
+        device = open(device_file, "r", encoding="utf-8").read().strip().lower()
+        if vendor == XILINX_VENDOR and device in XDMA_DEVICE_IDS:
+            return entry
     return None
 
 
@@ -127,11 +145,115 @@ def _pcie_reconnect(bridge: str | None, device_bdf: str | None, logger) -> None:
     logger.info(" global PCIe rescan")
     _sysfs_write("/sys/bus/pci/rescan", "1", logger)
     time.sleep(2)
-    # re-enable memory-mapped transfers on new BDF (re-detect after rescan)
-    new_bdf = _find_xdma_bdf()
-    if new_bdf:
-        logger.info(f" enabling MEM transfers on {new_bdf}")
-        _setpci(new_bdf, "COMMAND.W", "0002")
+    # Re-detect after rescan: prefer xdma-bound BDF, fall back to raw PCIe endpoint.
+    new_bdf = _find_xdma_bdf() or _find_xdma_pci_bdf()
+    if not new_bdf:
+        for _ in range(5):
+            _sysfs_write("/sys/bus/pci/rescan", "1", logger)
+            time.sleep(1)
+            new_bdf = _find_xdma_bdf() or _find_xdma_pci_bdf()
+            if new_bdf:
+                break
+    if not new_bdf:
+        raise RuntimeError("xdma pci endpoint not found after PCIe rescan")
+    logger.info(f" enabling MEM+BUSMSTR on {new_bdf}")
+    _setpci(new_bdf, "COMMAND.W", "0006")
+
+
+def _run_checked(cmd: str) -> None:
+    subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+
+
+def _reload_xdma(logger) -> None:
+    """Align XDMA lifecycle with FireSim: unload/load with poll_mode=1."""
+    logger.info(" reloading xdma kernel module")
+    loaded = subprocess.run(
+        "lsmod | grep -wq xdma", shell=True
+    ).returncode == 0
+    if loaded:
+        _run_checked("sudo rmmod xdma")
+    _run_checked("sudo sh -c 'insmod $(find /lib/modules/$(uname -r) -name \"xdma.ko\") poll_mode=1'")
+    _run_checked("sudo chmod a+rw /dev/xdma*")
+    devs = glob.glob("/dev/xdma*_h2c_0")
+    if not devs:
+        raise RuntimeError("xdma driver loaded but /dev/xdma*_h2c_0 not found")
+    logger.info(f" xdma ready: {devs[0]}")
+
+
+def _parse_mig_state(output: str) -> str:
+    text = output.lower()
+    if "calibration is still in-progress" in text:
+        return "busy"
+
+    pairs = re.findall(r"^MIG_PROP\s+([^=]+)=(.*)$", output, flags=re.M)
+    if not pairs:
+        return "unknown"
+
+    norm = [(k.strip().lower(), v.strip().lower()) for k, v in pairs]
+    prop_map = {k: v for k, v in norm}
+
+    init_done = prop_map.get("init_calib_complete")
+    if init_done is not None:
+        if init_done in {"1", "true", "yes"}:
+            return "ready"
+        if init_done in {"0", "false", "no"}:
+            return "busy"
+
+    if any(re.search(r"(in[-_ ]progress|busy)", v) for _, v in norm):
+        return "busy"
+
+    fail_status = prop_map.get("calibration_fail.status")
+    has_pass = any(k.startswith("cal_status.") and v == "pass" for k, v in norm)
+    if has_pass and fail_status in {"false", "0", "no"}:
+        return "ready"
+
+    status_ready = any(
+        ("status" in k or "calib" in k) and re.search(r"(done|pass|complete|success)", v)
+        for k, v in norm
+    )
+    if status_ready:
+        return "ready"
+
+    return "unknown"
+
+
+def _wait_ddr_calibration(hw_server_url: str, serial: str, timeout_sec: int, tcl_script: str, logger) -> None:
+    if timeout_sec <= 0:
+        logger.info(" skip DDR calibration polling because timeout <= 0")
+        return
+    deadline = time.time() + timeout_sec
+    poll_sec = 5
+    logger.info(f" polling DDR calibration status for up to {timeout_sec}s")
+    while True:
+        cmd = (
+            f"vivado -mode tcl -source {tcl_script}"
+            f" -tclargs -hw_server {hw_server_url}"
+        )
+        if serial:
+            cmd += f" -serial {serial}"
+        result = stream_run_logger(
+            cmd=cmd,
+            logger=logger,
+            stdout_prefix="pegasus mig",
+            stderr_prefix="pegasus mig",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"mig status query failed: rc={result.returncode} stdout={result.stdout} stderr={result.stderr}"
+            )
+        merged = f"{result.stdout}\n{result.stderr}"
+        state = _parse_mig_state(merged)
+        if state == "ready":
+            logger.info(" DDR calibration reported complete")
+            return
+        if state == "unknown":
+            raise RuntimeError("DDR calibration state unknown: no explicit MIG calibration status")
+        now = time.time()
+        if now >= deadline:
+            raise RuntimeError("DDR calibration did not complete before timeout")
+        remain = int(max(0, deadline - now))
+        logger.info(f" DDR calibration still in progress, {remain}s remaining")
+        time.sleep(min(poll_sec, max(1, deadline - now)))
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -151,8 +273,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         os.path.join(bbdir, "thirdparty", "pegasus", "vivado", "build", "PegasusTop.bit"),
     )
     serial = input_data.get("serial", "")   # empty = auto (first target)
+    ddr_settle_sec = int(input_data.get("ddr_settle_sec", 180))
     tcl_script = os.path.join(
         bbdir, "thirdparty", "pegasus", "vivado", "scripts", "program_fpga.tcl"
+    )
+    mig_status_tcl = os.path.join(
+        bbdir, "thirdparty", "pegasus", "vivado", "scripts", "query_mig_status.tcl"
     )
 
     if not os.path.exists(bitstream):
@@ -162,7 +288,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # ── 1. detect PCIe BDF ────────────────────────────────────────────────
-    extended_bdf = input_data.get("bus_id") or _find_xdma_bdf()
+    extended_bdf = input_data.get("bus_id") or _find_xdma_bdf() or _find_xdma_pci_bdf()
     bridge = _bridge_bdf(extended_bdf) if extended_bdf else None
     ctx.logger.info(f" XDMA device: {extended_bdf}, bridge: {bridge}")
 
@@ -189,11 +315,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # ── 3. PCIe remove → rescan so new bitstream's PCIe IP re-enumerates ─
-    if extended_bdf:
-        _pcie_disconnect(extended_bdf, bridge, ctx.logger)
+    try:
+        if extended_bdf:
+            _pcie_disconnect(extended_bdf, bridge, ctx.logger)
+        else:
+            ctx.logger.info(" no xdma device found before flash, skip disconnect and try global rescan")
         _pcie_reconnect(bridge, extended_bdf, ctx.logger)
-    else:
-        ctx.logger.warn(" no xdma device found, skipping PCIe remove/rescan")
+        _reload_xdma(ctx.logger)
+        _wait_ddr_calibration(hw_server_url, serial, ddr_settle_sec, mig_status_tcl, ctx.logger)
+    except Exception as e:
+        ctx.logger.error(f" post-flash PCIe/XDMA bring-up failed: {e}")
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "post_flash_xdma_recover_failed", "detail": str(e)},
+            trace_id=origin_tid,
+        )
+        return
 
     await check_result(
         ctx,

@@ -42,14 +42,10 @@ def _resolve_images(bbdir: str, workload: str, board: str) -> tuple[str, str]:
 
 
 def _build_driver(bbdir: str, logger) -> str | None:
-    """Build pegasus-driver if not already built. Returns binary path or None."""
+    """Build pegasus-driver with native incremental build. Returns binary path or None."""
     driver_src = os.path.join(bbdir, "thirdparty", "pegasus", "driver")
     build_dir  = os.path.join(driver_src, "build")
     binary     = os.path.join(build_dir, "pegasus-driver")
-
-    if os.path.exists(binary):
-        logger.info(f" driver already built: {binary}")
-        return binary
 
     logger.info(" building pegasus-driver ...")
     os.makedirs(build_dir, exist_ok=True)
