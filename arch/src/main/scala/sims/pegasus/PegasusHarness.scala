@@ -12,29 +12,29 @@ import pegasus.PegasusShell
 class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessInstantiators {
 
   val io = IO(new Bundle {
-    val pcie_sys_clk    = Input(Clock())
-    val pcie_sys_clk_gt = Input(Clock())
-    val pcie_sys_rst_n  = Input(Bool())
-    val pcie_exp_txp    = Output(UInt(16.W))
-    val pcie_exp_txn    = Output(UInt(16.W))
-    val pcie_exp_rxp    = Input(UInt(16.W))
-    val pcie_exp_rxn    = Input(UInt(16.W))
-    // DDR4 physical pins are auto-handled by Vivado board interface — no ports here.
+    val pcie_refclk_p  = Input(Bool())
+    val pcie_refclk_n  = Input(Bool())
+    val pcie_sys_rst_n = Input(Bool())
+    val pcie_exp_txp   = Output(UInt(16.W))
+    val pcie_exp_txn   = Output(UInt(16.W))
+    val pcie_exp_rxp   = Input(UInt(16.W))
+    val pcie_exp_rxn   = Input(UInt(16.W))
   })
 
   val pegasusShell = Module(new PegasusShell)
-  pegasusShell.io.pcie_sys_clk                                              := io.pcie_sys_clk
-  pegasusShell.io.pcie_sys_clk_gt                                           := io.pcie_sys_clk_gt
-  pegasusShell.io.pcie_sys_rst_n                                            := io.pcie_sys_rst_n
-  io.pcie_exp_txp                                                           := pegasusShell.io.pcie_exp_txp
-  io.pcie_exp_txn                                                           := pegasusShell.io.pcie_exp_txn
-  pegasusShell.io.pcie_exp_rxp                                              := io.pcie_exp_rxp
-  pegasusShell.io.pcie_exp_rxn                                              := io.pcie_exp_rxn
-  pegasusShell.io.elements.get("c0_sys_clk_p").foreach(_.asInstanceOf[Bool] := false.B)
-  pegasusShell.io.elements.get("c0_sys_clk_n").foreach(_.asInstanceOf[Bool] := false.B)
+  pegasusShell.io.pcie_refclk_p  := io.pcie_refclk_p
+  pegasusShell.io.pcie_refclk_n  := io.pcie_refclk_n
+  pegasusShell.io.pcie_sys_rst_n := io.pcie_sys_rst_n
+  io.pcie_exp_txp                := pegasusShell.io.pcie_exp_txp
+  io.pcie_exp_txn                := pegasusShell.io.pcie_exp_txn
+  pegasusShell.io.pcie_exp_rxp   := io.pcie_exp_rxp
+  pegasusShell.io.pcie_exp_rxn   := io.pcie_exp_rxn
+  pegasusShell.io.c0_sys_clk_p   := false.B
+  pegasusShell.io.c0_sys_clk_n   := false.B
 
   pegasusShell.io.uart_tx := true.B
 
+  // Default tie-offs for chip_mem (overridden by connectChipMem)
   pegasusShell.io.chip_mem_awid    := 0.U
   pegasusShell.io.chip_mem_awaddr  := 0.U
   pegasusShell.io.chip_mem_awlen   := 0.U
@@ -54,7 +54,27 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
   pegasusShell.io.chip_mem_arvalid := false.B
   pegasusShell.io.chip_mem_rready  := false.B
 
-  def referenceClockFreqMHz: Double = 200.0
+  // Default tie-offs for mmio (overridden by connectChipMMIO)
+  pegasusShell.io.mmio_awid    := 0.U
+  pegasusShell.io.mmio_awaddr  := 0.U
+  pegasusShell.io.mmio_awlen   := 0.U
+  pegasusShell.io.mmio_awsize  := 0.U
+  pegasusShell.io.mmio_awburst := 0.U
+  pegasusShell.io.mmio_awvalid := false.B
+  pegasusShell.io.mmio_wdata   := 0.U
+  pegasusShell.io.mmio_wstrb   := 0.U
+  pegasusShell.io.mmio_wlast   := false.B
+  pegasusShell.io.mmio_wvalid  := false.B
+  pegasusShell.io.mmio_bready  := false.B
+  pegasusShell.io.mmio_arid    := 0.U
+  pegasusShell.io.mmio_araddr  := 0.U
+  pegasusShell.io.mmio_arlen   := 0.U
+  pegasusShell.io.mmio_arsize  := 0.U
+  pegasusShell.io.mmio_arburst := 0.U
+  pegasusShell.io.mmio_arvalid := false.B
+  pegasusShell.io.mmio_rready  := false.B
+
+  def referenceClockFreqMHz: Double = 250.0
   def referenceClock:        Clock  = pegasusShell.io.dut_clk
   def referenceReset:        Reset  = pegasusShell.io.dut_reset.asAsyncReset
 

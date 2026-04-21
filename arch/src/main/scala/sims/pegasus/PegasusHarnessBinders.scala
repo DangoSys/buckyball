@@ -23,33 +23,42 @@ class WithPegasusUART
 class WithPegasusAXIMMIO
     extends HarnessBinder({
       case (th: PegasusHarness, port: AXI4MMIOPort, chipId: Int) =>
-        withClockAndReset(port.io.clock, th.reset) {
-          val idBits = port.io.bits.aw.bits.id.getWidth
-          val bId    = RegInit(0.U(idBits.W))
-          val bValid = RegInit(false.B)
+        val axi   = port.io.bits
+        val shell = th.pegasusShell.io
+        // Connect mmio_axi4 to shell's MMIO SCU
+        shell.mmio_awid    := axi.aw.bits.id.asTypeOf(UInt(4.W))
+        shell.mmio_awaddr  := axi.aw.bits.addr.asTypeOf(UInt(32.W))
+        shell.mmio_awlen   := axi.aw.bits.len
+        shell.mmio_awsize  := axi.aw.bits.size
+        shell.mmio_awburst := axi.aw.bits.burst
+        shell.mmio_awvalid := axi.aw.valid
+        axi.aw.ready       := shell.mmio_awready
 
-          port.io.bits.aw.ready := !bValid
-          port.io.bits.w.ready  := !bValid
-          when(!bValid && port.io.bits.aw.valid && port.io.bits.w.valid) {
-            bId    := port.io.bits.aw.bits.id
-            bValid := true.B
-          }
-          when(port.io.bits.b.valid && port.io.bits.b.ready) {
-            bValid := false.B
-          }
+        shell.mmio_wdata  := axi.w.bits.data.asTypeOf(UInt(64.W))
+        shell.mmio_wstrb  := axi.w.bits.strb.asTypeOf(UInt(8.W))
+        shell.mmio_wlast  := axi.w.bits.last
+        shell.mmio_wvalid := axi.w.valid
+        axi.w.ready       := shell.mmio_wready
 
-          port.io.bits.b.valid     := bValid
-          port.io.bits.b.bits.id   := bId
-          port.io.bits.b.bits.resp := 0.U
+        axi.b.bits.id     := shell.mmio_bid.asTypeOf(axi.b.bits.id)
+        axi.b.bits.resp   := shell.mmio_bresp
+        axi.b.valid       := shell.mmio_bvalid
+        shell.mmio_bready := axi.b.ready
 
-          port.io.bits.ar.ready    := true.B
-          port.io.bits.r.valid     := RegNext(port.io.bits.ar.valid, false.B)
-          port.io.bits.r.bits.id   := RegNext(port.io.bits.ar.bits.id)
-          port.io.bits.r.bits.data := 0.U
-          port.io.bits.r.bits.resp := 0.U
-          port.io.bits.r.bits.last := true.B
-          port.io.bits.r.bits.user := 0.U.asTypeOf(port.io.bits.r.bits.user)
-        }
+        shell.mmio_arid    := axi.ar.bits.id.asTypeOf(UInt(4.W))
+        shell.mmio_araddr  := axi.ar.bits.addr.asTypeOf(UInt(32.W))
+        shell.mmio_arlen   := axi.ar.bits.len
+        shell.mmio_arsize  := axi.ar.bits.size
+        shell.mmio_arburst := axi.ar.bits.burst
+        shell.mmio_arvalid := axi.ar.valid
+        axi.ar.ready       := shell.mmio_arready
+
+        axi.r.bits.id     := shell.mmio_rid.asTypeOf(axi.r.bits.id)
+        axi.r.bits.data   := shell.mmio_rdata.asTypeOf(axi.r.bits.data)
+        axi.r.bits.resp   := shell.mmio_rresp
+        axi.r.bits.last   := shell.mmio_rlast
+        axi.r.valid       := shell.mmio_rvalid
+        shell.mmio_rready := axi.r.ready
     })
 
 class WithPegasusTiedOffJTAG
@@ -80,7 +89,6 @@ class WithPegasusHarness
         new chipyard.harness.WithSerialTLTiedOff ++
         new chipyard.harness.WithTieOffInterrupts ++
         new chipyard.harness.WithGPIOTiedOff ++
-        new chipyard.harness.WithTieOffL2FBusAXI ++
         new chipyard.harness.WithClockFromHarness ++
         new chipyard.harness.WithResetFromHarness ++
         new chipyard.iobinders.WithAXI4MemPunchthrough ++
