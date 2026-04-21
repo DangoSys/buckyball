@@ -74,7 +74,7 @@ class PegasusHarness(implicit val p: Parameters) extends Module with HasHarnessI
   pegasusShell.io.mmio_arvalid := false.B
   pegasusShell.io.mmio_rready  := false.B
 
-  def referenceClockFreqMHz: Double = 250.0
+  def referenceClockFreqMHz: Double = 150.0
   def referenceClock:        Clock  = pegasusShell.io.dut_clk
   def referenceReset:        Reset  = pegasusShell.io.dut_reset.asAsyncReset
 
