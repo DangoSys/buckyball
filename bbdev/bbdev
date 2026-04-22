@@ -68,9 +68,6 @@ WORKFLOW_COMMANDS = {
         "builddut": "Build dut.",
         "build": "Build uvm.",
     },
-    "palladium": {
-        "verilog": 'Generate verilog files. Args: "[--config sims.palladium.BuckyballToyP2EConfig]"',
-    },
     "pegasus": {
         "verilog": 'Generate SystemVerilog for Pegasus FPGA. Args: "[--config sims.pegasus.PegasusConfig]"',
         "buildbitstream": "Build Vivado bitstream for AU280.",
