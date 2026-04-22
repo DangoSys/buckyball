@@ -1,2 +1,5 @@
 add_subdirectory(bbhw)
-add_subdirectory(kernel)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/kernel/CMakeLists.txt")
+  add_subdirectory(kernel)
+endif()
