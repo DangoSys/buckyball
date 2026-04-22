@@ -135,6 +135,7 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
       GEMMINI_CONFIG                    -> List(N, N, DADDR, DADDR, DADDR, 7.U, Cat(rs2(63, 4), 0.U(4.W))),
       GEMMINI_FLUSH                     -> List(N, N, DADDR, DADDR, DADDR, 7.U, Cat(0.U(60.W), 4.U(4.W))),
       BDB_COUNTER                       -> List(N, N, DADDR, DADDR, DADDR, 8.U, rs2),
+      MXFP                              -> List(Y, N, op1_bank_raw, DADDR, wr_bank_raw, 9.U, rs2),
       // enable=101 (no bank, extended): Loop WS config/trigger
       GEMMINI_LOOP_WS_CONFIG_BOUNDS     -> List(N, N, DADDR, DADDR, DADDR, 7.U, rs2),
       GEMMINI_LOOP_WS_CONFIG_ADDR_A     -> List(N, N, DADDR, DADDR, DADDR, 7.U, rs2),

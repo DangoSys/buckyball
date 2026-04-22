@@ -15,7 +15,7 @@ import framework.balldomain.prototype.quant.QuantBall
 import framework.balldomain.prototype.dequant.DequantBall
 import framework.balldomain.prototype.gemmini.GemminiBall
 import framework.balldomain.prototype.trace.TraceBall
-
+import framework.balldomain.prototype.mxfp.MxfpBall
 /**
  * BBusModule - Ball bus module that directly extends BBus
  */
@@ -34,6 +34,7 @@ class BBusModule(b: GlobalConfig)
           case "DequantBall"       => () => new DequantBall(b)
           case "GemminiBall"       => () => new GemminiBall(b)
           case "TraceBall"         => () => new TraceBall(b)
+          case "MxfpBall"          => () => new MxfpBall(b)
           case name                => throw new IllegalArgumentException(s"Unknown ball name: $name")
         }
         ballGenerator
