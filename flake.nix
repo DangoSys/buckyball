@@ -86,15 +86,14 @@
               # System utilities
               systemTools.rsync
               systemTools.nodejs
-
-              git
+              systemTools.git
+              # systemTools.npm
             ];
           };
 
           # nix develop
           devShells.default = pkgs.mkShell {
             buildInputs = with pkgs; [
-              git
               clibs.zlib-dev
               clibs.zlib
               clibs.readline-dev
