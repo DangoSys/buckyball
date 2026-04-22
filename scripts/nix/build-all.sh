@@ -78,9 +78,8 @@ function begin_step
 }
 
 begin_step "0-1" "submodules init"
-# git submodule update --init --progress --jobs 8
-cd ${BBDIR}
-git submodule update --init --progress --jobs 8 \
+
+git -C ${BBDIR} submodule update --init --progress --jobs 8 \
   arch/thirdparty/chipyard \
   bb-tests/workloads/lib/kernel \
   bbdev \
@@ -89,20 +88,17 @@ git submodule update --init --progress --jobs 8 \
   docs \
   thirdparty/pegasus \
   thirdparty/waveform-mcp
+# I dont know why below is need for buckyball submodules, but it is
+git -C ${BBDIR} submodule update --init --checkout --force thirdparty/pegasus
 
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim
 # I dont know why below is need for chipyard submodules, but it is
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde tools/rocket-dsp-utils generators/rocc-acc-utils generators/bar-fetchers
-git -C ${BBDIR}/arch/thirdparty/chipyard/tools/cde status --short --branch 
-git -C ${BBDIR}/arch/thirdparty/chipyard/tools/rocket-dsp-utils status --short --branch 
-git -C ${BBDIR}/arch/thirdparty/chipyard/generators/rocc-acc-utils status --short --branch 
-git -C ${BBDIR}/arch/thirdparty/chipyard/generators/bar-fetchers status --short --branch 
 ##########################################
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
 nix build
-
 if [ "${INSTALL_IN_NIX}" != "1" ]; then
   SKIP_ARGS=""
   for skip in "${SKIP_LIST[@]}"; do
