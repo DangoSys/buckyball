@@ -23,8 +23,7 @@ object buckyball extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    firechip,
-    palladium
+    firechip
   ) ++ (if (hasPegasus) Seq(pegasus) else Seq.empty)
 
   override def ivyDeps = Agg(
@@ -933,33 +932,6 @@ object fpga_shells extends SbtModule {
 
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-  )
-
-}
-
-// Palladium FPGA subproject (external reference)
-object palladium extends SbtModule {
-  override def millSourcePath = os.pwd / os.up / "thirdparty" / "palladium"
-  override def scalaVersion   = "2.13.12"
-
-  // Add chipyard and fpga_shells as dependencies
-  override def moduleDeps = Seq(
-    chipyard,
-    fpga_shells
-  )
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.5.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-  )
-
-  override def scalacOptions = Seq(
-    "-deprecation",
-    "-unchecked",
-    "-Ymacro-annotations"
   )
 
 }

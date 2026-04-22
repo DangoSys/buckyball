@@ -7,9 +7,6 @@
 [submodule "bbdev"]
 	path = bbdev
 	url = https://github.com/DangoSys/bbdev.git
-[submodule "thirdparty/palladium"]
-	path = thirdparty/palladium
-	url = https://github.com/SEU-ACAL/awesome-palladium.git
 [submodule "docs"]
 	path = docs
 	url = https://github.com/DangoSys/documents.git
