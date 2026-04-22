@@ -42,7 +42,7 @@ in
     name = "scalafmt";
     runtimeInputs = [ pkgs.coursier ];
     text = ''
-      exec coursier launch org.scalameta:scalafmt-cli_2.13:2.7.5 -- "$@"
+      exec cs launch org.scalameta:scalafmt-cli_2.13:2.7.5 -- "$@"
     '';
   };
 

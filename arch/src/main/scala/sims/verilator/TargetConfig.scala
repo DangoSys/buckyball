@@ -30,6 +30,22 @@ class BuckyballGobanVerilatorConfig
         new examples.goban.BuckyballGobanConfig
     )
 
+class BuckyballKonbiVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithDefaultMMIOPort ++
+        new WithCustomBootROM ++
+        new examples.konbi.BuckyballKonbiConfig
+    )
+
+class BuckyballPolyVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithDefaultMMIOPort ++
+        new WithCustomBootROM ++
+        new examples.poly.BuckyballPolyConfig
+    )
+
 object Elaborate extends App {
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")

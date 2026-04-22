@@ -1,0 +1,5 @@
+{
+  "tileConfigs": [
+    "examples.toy.tiles.toytile.ToyTileConfig"
+  ]
+}

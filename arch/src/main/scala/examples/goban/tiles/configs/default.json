@@ -1,0 +1,5 @@
+{
+  "tileConfigs": [
+    "examples.goban.tiles.gobantile.GobanTileConfig"
+  ]
+}

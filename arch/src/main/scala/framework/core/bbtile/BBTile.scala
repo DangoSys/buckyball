@@ -42,15 +42,10 @@ import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 
 /**
- * BBTile — a composable tile containing Rocket core(s) + optional Buckyball accelerator(s).
+ * BBTile — a composable tile containing one Rocket core + optional per-core-index Buckyball slots.
  *
- * When nCores=1 (default), behaviour is identical to the original single-core tile.
- * When nCores>1, the tile contains N (RocketBB + BuckyballAccelerator) pairs that share
- * a single SharedMemBackend and BarrierUnit.
- *
- * The trait-provided DCache/ICache/PTW serve core-0.  Cores 1..N-1 are wired entirely
- * inside BBTileModuleImp (no extra diplomacy DCache/ICache — they share core-0's cache
- * hierarchy via the same TL xbar for now; independent caches are a future enhancement).
+ * nCores controls buckyball slot count and shared backend sizing.
+ * Rocket is still a single core today; RoCC is wired to slot-0.
  */
 class BBTile private (
   val bbParams: BBTileParams,
@@ -70,9 +65,31 @@ class BBTile private (
   )(
     implicit p: Parameters
   ) =
-    this(params, crossing.crossingType, lookup, BBTile.injectBuildRoCC(p, params.withBuckyball))
+    this(params, crossing.crossingType, lookup, BBTile.injectBuildRoCC(p, params.withAnyBuckyball))
 
-  val nCores = bbParams.nCores
+  val nCores           = bbParams.nCores
+  val bbPerCore        = bbParams.resolvedBuckyballPerCore
+  require(bbPerCore.size == nCores, s"bbPerCore size (${bbPerCore.size}) must equal nCores ($nCores)")
+  val bbEnabledCoreIds = bbPerCore.zipWithIndex.collect { case (Some(_), i) => i }
+  val hasBuckyball     = bbEnabledCoreIds.nonEmpty
+  val bbSharedConfig   = bbPerCore.collectFirst { case Some(cfg) => cfg }
+  if (hasBuckyball) {
+    require(
+      bbEnabledCoreIds.contains(0),
+      "core-0 must enable buckyball because RoCC cmd/resp is currently wired to core-0 only"
+    )
+    val cfg0 = bbSharedConfig.get
+    require(cfg0.top.nCores == nCores, s"buckyball top.nCores (${cfg0.top.nCores}) must equal tile nCores ($nCores)")
+    bbEnabledCoreIds.foreach { i =>
+      val cfg = bbPerCore(i).get
+      require(
+        cfg.top.nCores == nCores,
+        s"core-$i buckyball top.nCores (${cfg.top.nCores}) must equal tile nCores ($nCores)"
+      )
+      require(cfg.memDomain.bankChannel == cfg0.memDomain.bankChannel, s"core-$i bankChannel mismatch")
+      require(cfg.memDomain.dma_buswidth == cfg0.memDomain.dma_buswidth, s"core-$i dma_buswidth mismatch")
+    }
+  }
 
   // RoCC CSRs — Buckyball doesn't use custom CSRs, so this is always empty
   val roccCSRs: Seq[Seq[CustomCSR]] = Nil
@@ -116,32 +133,31 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // Buckyball accelerator TileLink nodes (diplomacy layer) — N pairs of DMA
   // ---------------------------------------------------------------------------
-  val bbConfig = bbParams.buckyballConfig
-
   val bb_reader_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
-    if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
+    if (bbPerCore(i).isDefined) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
       name = s"bb-dma-reader-$i",
-      sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
+      sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbPerCore(i).get.memDomain.dma_n_xacts)
     ))))))
     else None
   }
 
   val bb_writer_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
-    if (bbParams.withBuckyball) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
+    if (bbPerCore(i).isDefined) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
       name = s"bb-dma-writer-$i",
-      sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbConfig.memDomain.dma_n_xacts)
+      sourceId = freechips.rocketchip.diplomacy.IdRange(0, bbPerCore(i).get.memDomain.dma_n_xacts)
     ))))))
     else None
   }
 
   // Gather all DMA nodes into one xbar
-  if (bbParams.withBuckyball) {
+  if (hasBuckyball) {
+    val cfg0    = bbSharedConfig.get
     val bb_xbar = TLXbar()
-    for (i <- 0 until nCores) {
+    for (i <- bbEnabledCoreIds) {
       bb_xbar := TLBuffer() := bb_reader_nodes(i).get
       bb_xbar := TLBuffer() := bb_writer_nodes(i).get
     }
-    tlOtherMastersNode :=* TLWidthWidget(bbConfig.memDomain.dma_buswidth / 8) := TLBuffer() := bb_xbar
+    tlOtherMastersNode :=* TLWidthWidget(cfg0.memDomain.dma_buswidth / 8) := TLBuffer() := bb_xbar
   }
 
   // ---------------------------------------------------------------------------
@@ -154,7 +170,7 @@ class BBTile private (
   // DCache port count: core + PTW(via usingVM) + DTIM + vector + RoCC tieoff
   nDCachePorts += 1 + (dtim_adapter.isDefined).toInt +
     bbParams.core.vector.map(_.useDCache.toInt).getOrElse(0) +
-    bbParams.withBuckyball.toInt
+    hasBuckyball.toInt
 
   // ---------------------------------------------------------------------------
   // Device tree properties
@@ -187,8 +203,8 @@ class BBTile private (
   }
 
   // Buckyball needs one PTW port per accelerator
-  if (bbParams.withBuckyball) {
-    nPTWPorts += nCores
+  if (hasBuckyball) {
+    nPTWPorts += bbEnabledCoreIds.size
   }
 
   override lazy val module = new BBTileModuleImp(this)
@@ -223,7 +239,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   val fpuOpt = outer.bbParams.core.fpu.map(params => Module(new FPU(params)(outer.p)))
 
   // --- Rocket core (using our fork that accepts BBTile) ---
-  val core = Module(new RocketBB(outer)(outer.p))
+  val core = Module(new RocketBB(outer, outer.bbPerCore.head.isDefined)(outer.p))
 
   // Vector unit connections
   outer.vector_unit.foreach { v =>
@@ -356,38 +372,47 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   // ---------------------------------------------------------------------------
   // Buckyball accelerators — N instances sharing SharedMemBackend + BarrierUnit
   // ---------------------------------------------------------------------------
-  if (outer.bbParams.withBuckyball) {
-    val bankChannel = outer.bbConfig.memDomain.bankChannel
+  def tieOffMemReq(req: MemRequestIO): Unit = {
+    req.write.req.valid  := false.B
+    req.write.req.bits   := DontCare
+    req.write.resp.ready := true.B
+    req.read.req.valid   := false.B
+    req.read.req.bits    := DontCare
+    req.read.resp.ready  := true.B
+    req.bank_id          := 0.U
+    req.group_id         := 0.U
+    req.is_shared        := false.B
+    req.hart_id          := 0.U
+  }
 
-    // Instantiate N accelerators
+  if (outer.hasBuckyball) {
+    val cfg0        = outer.bbSharedConfig.get
+    val bankChannel = cfg0.memDomain.bankChannel
+
+    // Instantiate accelerators for enabled cores only
     val accelerators = (0 until nCores).map { i =>
-      val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
-      val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
-      val acc               = Module(new BuckyballAccelerator(outer.bbConfig)(edge))
-      acc.io.hartid := outer.hartIdSinkNode.bundle + i.U
+      outer.bbPerCore(i).map { cfg =>
+        val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
+        val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
+        val acc               = Module(new BuckyballAccelerator(cfg)(edge))
+        acc.io.hartid := outer.hartIdSinkNode.bundle + i.U
 
-      // DMA TileLink
-      tl_reader <> acc.io.tl_reader
-      tl_writer <> acc.io.tl_writer
-
-      // PTW
-      wireBBPtw(acc)
-
-      // TLB exception
-      acc.io.tlbExp(0).flush_skip  := false.B
-      acc.io.tlbExp(0).flush_retry := false.B
-
-      // CPU sfence → Buckyball TLB flush
-      acc.io.sfence := ptw.io.dpath.sfence.valid
-
-      acc
+        tl_reader <> acc.io.tl_reader
+        tl_writer <> acc.io.tl_writer
+        wireBBPtw(acc)
+        acc.io.tlbExp(0).flush_skip  := false.B
+        acc.io.tlbExp(0).flush_retry := false.B
+        acc.io.sfence                := ptw.io.dpath.sfence.valid
+        acc
+      }
     }
 
     // Core-0 RoCC wiring (the single Rocket core drives accelerator 0)
-    accelerators(0).io.cmd <> core.io.rocc.cmd
-    core.io.rocc.resp <> accelerators(0).io.resp
-    core.io.rocc.busy      := accelerators(0).io.busy
-    core.io.rocc.interrupt := accelerators(0).io.interrupt
+    val core0Acc = accelerators(0).get
+    core0Acc.io.cmd <> core.io.rocc.cmd
+    core.io.rocc.resp <> core0Acc.io.resp
+    core.io.rocc.busy      := core0Acc.io.busy
+    core.io.rocc.interrupt := core0Acc.io.interrupt
 
     // RoCC mem: tied-off HellaCacheIF for the DCache arbiter port count
     val roccMemIF = Module(new SimpleHellaCacheIF())
@@ -401,39 +426,39 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     core.io.rocc.mem                          := DontCare
 
     // SharedMemBackend (tile-level singleton)
-    val sharedBackend = Module(new SharedMemBackend(outer.bbConfig))
+    val sharedBackend = Module(new SharedMemBackend(cfg0))
 
     // Connect each accelerator's shared ports to the SharedMemBackend
     for (i <- 0 until nCores) {
       for (ch <- 0 until bankChannel) {
         val slot = i * bankChannel + ch
-        sharedBackend.io.mem_req(slot) <> accelerators(i).io.shared_mem_req(ch)
+        accelerators(i) match {
+          case Some(acc) => sharedBackend.io.mem_req(slot) <> acc.io.shared_mem_req(ch)
+          case None      => tieOffMemReq(sharedBackend.io.mem_req(slot))
+        }
       }
-      // Shared query: connect per-core query to shared backend
-      // (only one query port on SharedMemBackend — for now use accelerator 0's query;
-      //  each accelerator's MemBackend routes shared queries through its IO)
     }
 
-    // Shared config arbiter: N accelerators → 1 SharedMemBackend config port
-    val cfgArb = Module(new Arbiter(new MemConfigerIO(outer.bbConfig), nCores))
-    for (i <- 0 until nCores) {
-      cfgArb.io.in(i) <> accelerators(i).io.shared_config
+    // Shared config arbiter: enabled accelerators -> 1 SharedMemBackend config port
+    val enabledAccelerators = outer.bbEnabledCoreIds.map(i => accelerators(i).get)
+    val cfgArb              = Module(new Arbiter(new MemConfigerIO(cfg0), enabledAccelerators.size))
+    for ((acc, i) <- enabledAccelerators.zipWithIndex) {
+      cfgArb.io.in(i) <> acc.io.shared_config
     }
     sharedBackend.io.config <> cfgArb.io.out
 
-    // Shared query — simplified: each accelerator queries independently,
-    // but SharedMemBackend has one query port. Use accelerator 0's for now.
-    sharedBackend.io.query_vbank_id             := accelerators(0).io.shared_query_vbank_id
-    accelerators(0).io.shared_query_group_count := sharedBackend.io.query_group_count
-    for (i <- 1 until nCores) {
-      accelerators(i).io.shared_query_group_count := sharedBackend.io.query_group_count
+    sharedBackend.io.query_vbank_id := core0Acc.io.shared_query_vbank_id
+    for (i <- 0 until nCores) {
+      accelerators(i).foreach { acc =>
+        acc.io.shared_query_group_count := sharedBackend.io.query_group_count
+      }
     }
 
     // BarrierUnit (tile-level singleton)
-    val barrierUnit = Module(new BarrierUnit(nCores))
-    for (i <- 0 until nCores) {
-      barrierUnit.io.arrive(i)           := accelerators(i).io.barrier_arrive
-      accelerators(i).io.barrier_release := barrierUnit.io.release(i)
+    val barrierUnit = Module(new BarrierUnit(enabledAccelerators.size))
+    for ((acc, i) <- enabledAccelerators.zipWithIndex) {
+      barrierUnit.io.arrive(i) := acc.io.barrier_arrive
+      acc.io.barrier_release   := barrierUnit.io.release(i)
     }
 
   } else {

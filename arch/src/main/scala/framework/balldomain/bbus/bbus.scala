@@ -11,10 +11,15 @@ import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 
 /**
- * BBus - Ball bus, manages connections and arbitration of multiple Ball devices
+ * BBus - Ball bus, manages connections and arbitration of multiple Ball devices.
+ *
+ * Ball generators are produced reflectively from `b.ballDomain.ballIdMappings`:
+ * each mapping carries a `ballClass` FQCN whose constructor `(GlobalConfig)` is
+ * invoked. Framework does not maintain or interpret the list of balls; the
+ * config layer is the single source of truth.
  */
 @instantiable
-class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module]) extends Module {
+class BBus(val b: GlobalConfig) extends Module {
   val numBalls       = b.ballDomain.ballNum
   val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
@@ -33,7 +38,14 @@ class BBus(val b: GlobalConfig, ballGenerators: Seq[() => HasBlink with Module])
   @public
   val subRobReq = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
 
-  val balls = ballGenerators.map(gen => Module(gen()))
+  val balls = b.ballDomain.ballIdMappings.map { mapping =>
+    Module {
+      val cls  = Class.forName(mapping.ballClass)
+      val ctor = cls.getConstructor(classOf[GlobalConfig])
+      ctor.newInstance(b).asInstanceOf[HasBlink with Module]
+    }
+  }
+
   val cmdRouter: Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
   val pmc:       Instance[BallCyclePMC] = Instantiate(new BallCyclePMC(b))
 
