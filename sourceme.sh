@@ -24,7 +24,6 @@ export LLVM_MLIR_BUILD_DIR="${BBDIR}/compiler/llvm/build"
 export PYTHONPATH="${BBDIR}/compiler/llvm/build/tools/mlir/python_packages/mlir_core:${BBDIR}/compiler/build/python_packages:$PYTHONPATH"
 export BUDDY_BINARY_DIR="${BBDIR}/compiler/build/bin"
 export RISCV="${BBDIR}/result"
-export PATH="${BBDIR}/thirdparty/libgloss/install/lib:$PATH"
 export PATH="${BUDDY_BINARY_DIR}:${PATH}"
 
 #===----------------------------------------------------------------------------===
