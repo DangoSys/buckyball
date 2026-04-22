@@ -12,7 +12,7 @@ import framework.memdomain.MemDomain
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.frontend.outside_channel.{MemConfigerIO}
 import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
-import examples.toy.balldomain.BallDomain
+import framework.balldomain.BallDomain
 
 /**
  * Standalone Buckyball accelerator module.

@@ -38,7 +38,7 @@ trait HasRocketCoreIOBB extends HasRocketCoreParameters {
 
 }
 
-class RocketBB(tile: BBTile)(implicit p: Parameters)
+class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     extends CoreModule()(p)
     with HasRocketCoreParameters
     with HasRocketCoreIOBB {
@@ -47,7 +47,7 @@ class RocketBB(tile: BBTile)(implicit p: Parameters)
   // Override usingRoCC: BBTile doesn't use BuildRoCC/LazyRoCC, but when
   // withBuckyball is enabled the core must still treat custom instructions as
   // RoCC commands.
-  override val usingRoCC = tile.bbParams.withBuckyball
+  override val usingRoCC = coreHasBuckyball
 
   import ALU._
 
@@ -163,7 +163,7 @@ class RocketBB(tile: BBTile)(implicit p: Parameters)
 
     val pipelinedMul = usingMulDiv && mulDivParams.mulUnroll == xLen
 
-    val usingRVVRoCC = tile.bbParams.withBuckyball
+    val usingRVVRoCC = coreHasBuckyball
 
     // Ensure usingVector and usingRVVRoCC are mutually exclusive
     require(

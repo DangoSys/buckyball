@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
-import examples.toy.balldomain.BallDecodeCmd
+import framework.balldomain.decoder.BallDecodeCmd
 
 // Ball domain issue interface - includes global rob_id
 class BallRsIssue(b: GlobalConfig) extends Bundle {

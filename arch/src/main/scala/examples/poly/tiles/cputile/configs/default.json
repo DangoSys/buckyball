@@ -1,0 +1,5 @@
+{
+  "coreConfigs": [
+    "examples.poly.tiles.cputile.core.CpuCoreConfig"
+  ]
+}

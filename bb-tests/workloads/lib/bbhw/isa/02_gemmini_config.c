@@ -6,8 +6,8 @@
 #define BB_GEMMINI_CONFIG_FUNC7 2
 
 // Configure Gemmini systolic array
-// All config parameters go in rs2 (special), starting from bit 4
-// (bits [3:0] reserved for sub-command tag in decoder)
+// All config parameters go in rs2 (special), starting from bit 4.
+// rs2[3:0] is the sub-command field and remains 0 for this instruction.
 // dataflow: 0=OS, 1=WS
 // activation: 0=none, 1=relu
 // a_transpose, b_transpose: transpose flags

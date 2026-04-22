@@ -4,6 +4,7 @@
 #include "isa.h"
 
 #define BB_GEMMINI_COMPUTE_PRELOADED_FUNC7 66
+#define BB_GEMMINI_COMPUTE_PRELOADED_RS2 2ULL
 
 // Compute matmul using preloaded data: C = A * B + D(preloaded)
 // op1_bank_id: bank for A matrix
@@ -14,6 +15,7 @@
                                      iter)                                     \
   BUCKYBALL_INSTRUCTION_R_R((BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) |   \
                              BB_BANK2(wr_bank_id) | BB_ITER(iter)),            \
-                            0, BB_GEMMINI_COMPUTE_PRELOADED_FUNC7)
+                            BB_GEMMINI_COMPUTE_PRELOADED_RS2,                  \
+                            BB_GEMMINI_COMPUTE_PRELOADED_FUNC7)
 
 #endif // _BB_GEMMINI_COMPUTE_PRELOADED_H_

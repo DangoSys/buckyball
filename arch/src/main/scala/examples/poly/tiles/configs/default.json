@@ -1,0 +1,7 @@
+{
+  "tileConfigs": [
+    "examples.poly.tiles.cputile.CpuTileConfig",
+    "examples.poly.tiles.lightdnntile.LightDnnTileConfig",
+    "examples.poly.tiles.llmtile.LlmTileConfig"
+  ]
+}

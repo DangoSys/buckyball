@@ -1,7 +1,7 @@
 package examples.toy
 
 import org.chipsalliance.cde.config.Config
-import framework.core.bbtile.WithNBBTiles
+import examples.toy.tiles.WithNToyTiles
 
 import freechips.rocketchip.subsystem.{InCluster, InSubsystem}
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
@@ -15,7 +15,7 @@ import scala.collection.immutable.ListMap
 /** Single BBTile: 1 Rocket core + 1 Buckyball accelerator */
 class BuckyballToyConfig
     extends Config(
-      new WithNBBTiles(1) ++
+      new WithNToyTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
     )
@@ -23,7 +23,7 @@ class BuckyballToyConfig
 /** Single Rocket core only (no Buckyball) */
 class RocketOnlyConfig
     extends Config(
-      new WithNBBTiles(1, withBuckyball = false) ++
+      new WithNToyTiles(withBuckyball = false) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
     )
