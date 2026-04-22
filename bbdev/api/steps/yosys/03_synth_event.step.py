@@ -1,4 +1,3 @@
-import glob
 import os
 import sys
 import yaml
@@ -29,7 +28,6 @@ def load_yosys_config():
             return yaml.safe_load(f) or {}
     return {}
 
-
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -39,30 +37,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     top_module = input_data.get("top") or yosys_cfg.get("top") or "BuckyballAccelerator"
     liberty = yosys_cfg.get("liberty")
 
-    vsrcs = glob.glob(f"{build_dir}/**/*.sv", recursive=True)
-
-    filtered_vsrcs = []
-    skipped = []
-    for f in vsrcs:
-        with open(f, "r") as fh:
-            content = fh.read()
-        if "'{" in content or 'import "DPI-C"' in content:
-            skipped.append(os.path.basename(f))
-        else:
-            filtered_vsrcs.append(f)
-    vsrcs = filtered_vsrcs
-
-    if skipped:
-        ctx.logger.info(
-            f"Skipped {len(skipped)} files with unsupported syntax: {', '.join(skipped[:10])}{'...' if len(skipped) > 10 else ''}"
+    source_list_path = os.path.join(build_dir, "yosys_sources.list")
+    if not os.path.exists(source_list_path):
+        success_result, failure_result = await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "synth", "error": "missing yosys_sources.list, run yosys verilog first"},
+            trace_id=origin_tid,
         )
+        return failure_result
+
+    with open(source_list_path, "r") as f:
+        vsrcs = [line.strip() for line in f.readlines() if line.strip()]
 
     if not vsrcs:
         success_result, failure_result = await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"task": "synth", "error": "No Verilog source files found"},
+            extra_fields={"task": "synth", "error": "empty yosys_sources.list"},
             trace_id=origin_tid,
         )
         return failure_result

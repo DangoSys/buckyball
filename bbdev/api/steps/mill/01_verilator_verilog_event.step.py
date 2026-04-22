@@ -21,6 +21,32 @@ config = {
 }
 
 
+def prepare_verilator_verilog(build_dir: str, arch_dir: str, logger):
+    for unwanted in [
+        f"{build_dir}/testchip_htif.cc",
+        f"{build_dir}/testchip_htif.h",
+        f"{build_dir}/testchip_tsi.cc",
+        f"{build_dir}/testchip_tsi.h",
+        f"{build_dir}/SimTSI.cc",
+        f"{arch_dir}/BBSimHarness.sv",
+    ]:
+        if os.path.exists(unwanted):
+            os.remove(unwanted)
+
+    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
+        if os.path.exists(patch_file):
+            with open(patch_file, "r") as f:
+                content = f.read()
+            patched = "\n".join(
+                line for line in content.splitlines()
+                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
+            )
+            if patched != content:
+                with open(patch_file, "w") as f:
+                    f.write(patched)
+                logger.info(f"Patched fesvr includes from {patch_file}")
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -65,29 +91,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="verilator verilog",
     )
 
-    for unwanted in [
-        f"{build_dir}/testchip_htif.cc",
-        f"{build_dir}/testchip_htif.h",
-        f"{build_dir}/testchip_tsi.cc",
-        f"{build_dir}/testchip_tsi.h",
-        f"{build_dir}/SimTSI.cc",
-        f"{arch_dir}/BBSimHarness.sv",
-    ]:
-        if os.path.exists(unwanted):
-            os.remove(unwanted)
-
-    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
-        if os.path.exists(patch_file):
-            with open(patch_file, "r") as f:
-                content = f.read()
-            patched = "\n".join(
-                line for line in content.splitlines()
-                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
-            )
-            if patched != content:
-                with open(patch_file, "w") as f:
-                    f.write(patched)
-                ctx.logger.info(f"Patched fesvr includes from {patch_file}")
+    prepare_verilator_verilog(build_dir, arch_dir, ctx.logger)
 
     success_result, failure_result = await check_result(
         ctx,

@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import glob
 import yaml
 
 from motia import FlowContext, queue
@@ -29,6 +30,20 @@ def load_dc_config():
         with open(config_path, "r") as f:
             return yaml.safe_load(f) or {}
     return {}
+
+
+def prepare_dc_verilog(build_dir: str):
+    vsrcs = sorted(
+        glob.glob(f"{build_dir}/**/*.sv", recursive=True)
+        + glob.glob(f"{build_dir}/**/*.v", recursive=True)
+    )
+    if not vsrcs:
+        raise RuntimeError("no dc verilog source generated")
+    source_list_path = os.path.join(build_dir, "dc_sources.list")
+    with open(source_list_path, "w") as f:
+        for path in vsrcs:
+            f.write(path + "\n")
+    return source_list_path
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -73,11 +88,23 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
 
+    try:
+        source_list_path = prepare_dc_verilog(build_dir)
+    except Exception as e:
+        _, failure_result = await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "verilog", "error": str(e)},
+            trace_id=origin_tid,
+        )
+        return failure_result
+
     await check_result(
         ctx,
         result.returncode,
         continue_run=input_data.get("from_run_workflow", False),
-        extra_fields={"task": "verilog"},
+        extra_fields={"task": "verilog", "source_list": source_list_path},
         trace_id=origin_tid,
     )
 

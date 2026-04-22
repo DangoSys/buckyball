@@ -20,6 +20,74 @@ config = {
 }
 
 
+def prepare_pegasus_verilog_output(bbdir: str, arch_dir: str, soc_dir: str, build_dir: str, logger):
+    for stray in ["PegasusTop.v", "PegasusTopWrapper.sv", "PegasusShell.v"]:
+        stray_path = f"{arch_dir}/{stray}"
+        if os.path.exists(stray_path):
+            os.remove(stray_path)
+
+    vivado_gen_dir = f"{bbdir}/thirdparty/pegasus/vivado/generated"
+    if not os.path.isdir(build_dir):
+        return vivado_gen_dir
+
+    import re
+    import shutil
+    os.makedirs(vivado_gen_dir, exist_ok=True)
+    for f in os.listdir(vivado_gen_dir):
+        if f.endswith(".sv") or f.endswith(".v"):
+            os.remove(os.path.join(vivado_gen_dir, f))
+
+    harness_skip = {"PegasusHarness.sv", "ChipTop.sv"}
+
+    def build_dpi_stub(src_path: str) -> str:
+        text = open(src_path, "r", encoding="utf-8").read()
+        m = re.search(r"module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\);\s*", text, re.S)
+        if m is None:
+            raise RuntimeError(f"invalid DPI module format: {src_path}")
+        mod_name = m.group(1)
+        ports_block = m.group(2).rstrip()
+        outputs = []
+        for line in ports_block.splitlines():
+            s = line.strip()
+            if not s.startswith("output"):
+                continue
+            s = s.rstrip(",")
+            s = re.sub(r"^output\s+", "", s)
+            s = re.sub(r"^\[[^\]]+\]\s+", "", s)
+            for name in s.split(","):
+                n = name.strip()
+                if n:
+                    outputs.append(n)
+        stub = [f"module {mod_name}(", ports_block, ");"]
+        for out_name in outputs:
+            stub.append(f"  assign {out_name} = '0;")
+        stub.append("endmodule")
+        stub.append("")
+        return "\n".join(stub)
+
+    def copy_rtl_dir(src_dir: str, skip_set: set = None) -> int:
+        copied = 0
+        for f in os.listdir(src_dir):
+            if not (f.endswith(".sv") or f.endswith(".v")):
+                continue
+            if skip_set and f in skip_set:
+                continue
+            src = os.path.join(src_dir, f)
+            if "DPI" in f:
+                stub_name = f"stub_{os.path.splitext(f)[0].replace('DPI', '')}.sv"
+                with open(os.path.join(vivado_gen_dir, stub_name), "w") as wf:
+                    wf.write(build_dpi_stub(src))
+            else:
+                shutil.copy2(src, os.path.join(vivado_gen_dir, f))
+            copied += 1
+        return copied
+
+    n_soc = copy_rtl_dir(soc_dir, skip_set=harness_skip)
+    n_top = copy_rtl_dir(build_dir)
+    logger.info(f" Copied {n_soc} SoC files + {n_top} top files to {vivado_gen_dir}")
+    return vivado_gen_dir
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -71,68 +139,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="pegasus verilog",
     )
 
-    for stray in ["PegasusTop.v", "PegasusTopWrapper.sv", "PegasusShell.v"]:
-        stray_path = f"{arch_dir}/{stray}"
-        if os.path.exists(stray_path):
-            os.remove(stray_path)
-
     vivado_gen_dir = f"{bbdir}/thirdparty/pegasus/vivado/generated"
-    if result.returncode == 0 and os.path.isdir(build_dir):
-        import re
-        import shutil
-        os.makedirs(vivado_gen_dir, exist_ok=True)
-        for f in os.listdir(vivado_gen_dir):
-            if f.endswith(".sv") or f.endswith(".v"):
-                os.remove(os.path.join(vivado_gen_dir, f))
-
-        HARNESS_SKIP = {"PegasusHarness.sv", "ChipTop.sv"}
-
-        def build_dpi_stub(src_path: str) -> str:
-            text = open(src_path, "r", encoding="utf-8").read()
-            m = re.search(r"module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\);\s*", text, re.S)
-            if m is None:
-                raise RuntimeError(f"invalid DPI module format: {src_path}")
-            mod_name = m.group(1)
-            ports_block = m.group(2).rstrip()
-            outputs = []
-            for line in ports_block.splitlines():
-                s = line.strip()
-                if not s.startswith("output"):
-                    continue
-                s = s.rstrip(",")
-                s = re.sub(r"^output\s+", "", s)
-                s = re.sub(r"^\[[^\]]+\]\s+", "", s)
-                for name in s.split(","):
-                    n = name.strip()
-                    if n:
-                        outputs.append(n)
-            stub = [f"module {mod_name}(", ports_block, ");"]
-            for out_name in outputs:
-                stub.append(f"  assign {out_name} = '0;")
-            stub.append("endmodule")
-            stub.append("")
-            return "\n".join(stub)
-
-        def copy_rtl_dir(src_dir: str, skip_set: set = None) -> int:
-            copied = 0
-            for f in os.listdir(src_dir):
-                if not (f.endswith(".sv") or f.endswith(".v")):
-                    continue
-                if skip_set and f in skip_set:
-                    continue
-                src = os.path.join(src_dir, f)
-                if "DPI" in f:
-                    stub_name = f"stub_{os.path.splitext(f)[0].replace('DPI', '')}.sv"
-                    with open(os.path.join(vivado_gen_dir, stub_name), "w") as wf:
-                        wf.write(build_dpi_stub(src))
-                else:
-                    shutil.copy2(src, os.path.join(vivado_gen_dir, f))
-                copied += 1
-            return copied
-
-        n_soc = copy_rtl_dir(soc_dir, skip_set=HARNESS_SKIP)
-        n_top = copy_rtl_dir(build_dir)
-        ctx.logger.info(f" Copied {n_soc} SoC files + {n_top} top files to {vivado_gen_dir}")
+    if result.returncode == 0:
+        vivado_gen_dir = prepare_pegasus_verilog_output(
+            bbdir=bbdir,
+            arch_dir=arch_dir,
+            soc_dir=soc_dir,
+            build_dir=build_dir,
+            logger=ctx.logger,
+        )
 
     success_result, failure_result = await check_result(
         ctx,
