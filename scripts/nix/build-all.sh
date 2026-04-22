@@ -30,9 +30,9 @@ SKIP_LIST=()
 VERBOSE_FLAG=""
 INSTALL_IN_NIX=0
 
-while [ "$1" != "" ];
+while [ "$#" -gt 0 ];
 do
-  case $1 in
+  case "$1" in
     -h | --help )
       usage 3 ;;
     --verbose | -v)
@@ -40,7 +40,11 @@ do
       set -x ;;
     --skip | -s)
       shift
-      SKIP_LIST+=(${1}) ;;
+      if [ "$#" -eq 0 ]; then
+        echo "Error: --skip requires a step number" >&2
+        usage 1
+      fi
+      SKIP_LIST+=("$1") ;;
     --install-in-nix)
       INSTALL_IN_NIX=1 ;;
     * )
@@ -76,18 +80,24 @@ function begin_step
 begin_step "0-1" "submodules init"
 # git submodule update --init --progress --jobs 8
 cd ${BBDIR}
-git submodule update --init --progress --jobs 8  \
+git submodule update --init --progress --jobs 8 \
   arch/thirdparty/chipyard \
   bb-tests/workloads/lib/kernel \
   bbdev \
   bebop \
   compiler \
   docs \
-  thirdparty/palladium \
   thirdparty/pegasus \
   thirdparty/waveform-mcp
-# fpga/fpga-shells is needed by palladium
-cd ${BBDIR}/arch/thirdparty/chipyard && git submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim
+
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim
+# I dont know why below is need for chipyard submodules, but it is
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde tools/rocket-dsp-utils generators/rocc-acc-utils generators/bar-fetchers
+git -C ${BBDIR}/arch/thirdparty/chipyard/tools/cde status --short --branch 
+git -C ${BBDIR}/arch/thirdparty/chipyard/tools/rocket-dsp-utils status --short --branch 
+git -C ${BBDIR}/arch/thirdparty/chipyard/generators/rocc-acc-utils status --short --branch 
+git -C ${BBDIR}/arch/thirdparty/chipyard/generators/bar-fetchers status --short --branch 
+##########################################
 
 begin_step "0-2" "Nix environment setup"
 cd ${BBDIR}
@@ -113,7 +123,7 @@ fi
 if run_step "2"; then
   begin_step "2" "Compiler installation"
   cd ${BBDIR}/compiler
-	git submodule update --init llvm
+	git submodule update --init --progress llvm
 
 	mkdir -p llvm/build && cd llvm/build
 	cmake -G Ninja ../llvm \
