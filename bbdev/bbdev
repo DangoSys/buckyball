@@ -78,7 +78,7 @@ WORKFLOW_COMMANDS = {
         "runworkload": 'Run workload on AU280. Args: "[--workload <name>] [--board <name>] [--timeout <s>] [--uart <dev>]"',
     },
     "dc": {
-        "run": 'Run Design Compiler synthesis. Args: "--srcdir <design_dir> [--top <top_module>] [--keep-hierarchy] [--balltype <type>] [--config <cfg>] [--output-dir <dir>]"',
+        "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
     },
 }
 
@@ -172,21 +172,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     stop_parser = subparsers.add_parser("stop", parents=[common], help="Stop dev server")
     stop_parser.add_argument("--all", action="store_true", help="Stop all servers")
 
-    # dc direct mode (no --run wrapper):
-    # bbdev dc --srcdir ... [--top ...] [--keep-hierarchy]
-    #          [--balltype ...] [--config ...] [--output-dir ...]
-    dc_parser = subparsers.add_parser("dc", parents=[common], help="Run DC synthesis")
-    dc_parser.add_argument("--srcdir", type=str, required=True, help="Design source directory relative to repo root")
-    dc_parser.add_argument("--top", type=str, default=None, help="Top module name")
-    dc_parser.add_argument("--keep-hierarchy", action="store_true", help="Keep hierarchy during compile")
-    dc_parser.add_argument("--balltype", type=str, default=None, help="Optional Ball type for pre-verilog generation, e.g. ReluBall")
-    dc_parser.add_argument("--config", type=str, default="sims.verilator.BuckyballToyVerilatorConfig", help="Verilog generation config when --balltype is set")
-    dc_parser.add_argument("--output-dir", type=str, default=None, help="Verilog output dir under arch/, e.g. ReluBall_1")
-
     # Build workflow subcommands from WORKFLOW_COMMANDS table
     for cmd_name, operations in WORKFLOW_COMMANDS.items():
-        if cmd_name == "dc":
-            continue
         cmd_parser = subparsers.add_parser(
             cmd_name, parents=[common], help=f"{cmd_name} operations"
         )
@@ -209,20 +196,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def extract_command_info(args: argparse.Namespace) -> dict:
     """Extract command, operation, and parsed sub-arguments from argparse Namespace."""
-    if args.command == "dc":
-        return {
-            "command": "dc",
-            "operation": "run",
-            "args": {
-                "srcdir": args.srcdir,
-                "top": args.top,
-                "keep_hierarchy": bool(args.keep_hierarchy),
-                "balltype": args.balltype,
-                "config": args.config,
-                "output_dir": args.output_dir,
-            },
-        }
-
     result = {"command": args.command, "operation": None, "args": {}}
 
     for attr_name, attr_value in vars(args).items():

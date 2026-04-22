@@ -1,0 +1,25 @@
+# Design Compiler synthesis configuration
+
+# Default top module name
+top: BuckyballAccelerator
+
+# Elaborate config class for Chisel verilog generation
+elaborate_config: sims.verilator.BuckyballToyVerilatorConfig
+
+# Standard cell .db libraries (target_library = link_library)
+target_libraries:
+  - /data0/tools/lib/db/scc28nhkcp_hdc35p140_rvt_ffg_v0p99_0c_basic.db
+  - /data0/tools/lib/db/scc28nhkcp_hdc35p140_rvt_ffg_v0p99_0c_ccs.db
+  - /data0/tools/lib/db/scc28nhkcp_hdc35p140_rvt_ffg_v0p99_0c_ecsm.db
+
+# Clock constraints (ns)
+clock_name: clock
+clock_period: 2.0
+clock_uncertainty: 0.6
+clock_transition: 0.08
+
+# IO timing constraints (ns)
+input_delay: 1.2
+output_delay: 0.6
+input_transition: 0.2
+output_load: 0.08
