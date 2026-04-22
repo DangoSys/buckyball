@@ -4,7 +4,6 @@ import sys
 
 from motia import FlowContext, queue
 
-# Add the utils directory to the Python path
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
@@ -46,9 +45,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     ctx.logger.info(f"Using configuration: {config_name}")
 
-    # ==================================================================================
-    # Execute operation
-    # ==================================================================================
     if input_data.get("balltype"):
         command = (
             f"mill -i __.test.runMain sims.verify.BallTopMain {input_data.get('balltype')} "
@@ -56,18 +52,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     else:
         command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
 
-    # Firtool options (CIRCT). Current set; optional Chipyard-style options below.
     command += "--disable-annotation-unknown "
     command += "--strip-debug-info "
     command += "-O=debug "
-    # command += f"-repl-seq-mem -repl-seq-mem-file={build_dir}/mem.conf "
     command += f"--split-verilog -o={build_dir} "
-    # Optional: --disable-annotation-classless (ignore classless annotations)
-    # Optional: -repl-seq-mem -repl-seq-mem-file=<path>.conf (SRAM macro replacement)
-    # Optional: --disable-all-randomization (disable mem/reg init; may break semantics)
-    # Optional: --disable-opt (no optimization) or -O=release (default is release)
-    # Optional: --output-annotation-file=<path> (emit annotations after lower-to-hw)
-    # Optional: --no-dedup (disable module dedup); --strip-fir-debug-info (FIR locators)
 
     result = stream_run_logger(
         cmd=command,
@@ -77,9 +65,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="verilator verilog",
     )
 
-    # Remove testchipip C++ sources that depend on fesvr (which we don't have).
-    # SimTSI.v is kept so verilator can resolve the SimTSI module reference in BBSimHarness.sv;
-    # tsi_tick DPI symbol is satisfied by arch/src/csrc/src/monitor/ioe/tsi_stub.cc instead.
     for unwanted in [
         f"{build_dir}/testchip_htif.cc",
         f"{build_dir}/testchip_htif.h",
@@ -91,8 +76,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if os.path.exists(unwanted):
             os.remove(unwanted)
 
-    # Patch fesvr includes out of mm.h and mm.cc (copied from testchipip resources).
-    # They reference fesvr/memif.h which we don't have — our SimDRAM_bb.cc doesn't use it.
     for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
         if os.path.exists(patch_file):
             with open(patch_file, "r") as f:
@@ -106,9 +89,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                     f.write(patched)
                 ctx.logger.info(f"Patched fesvr includes from {patch_file}")
 
-    # ==================================================================================
-    # Return result to API
-    # ==================================================================================
     success_result, failure_result = await check_result(
         ctx,
         result.returncode,
@@ -117,9 +97,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         trace_id=origin_tid,
     )
 
-    # ==================================================================================
-    # Continue routing
-    # ==================================================================================
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(
             {"topic": "verilator.build", "data": {**input_data, "task": "run"}}

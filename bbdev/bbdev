@@ -77,6 +77,11 @@ WORKFLOW_COMMANDS = {
     "dc": {
         "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
     },
+    "yosys": {
+        "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
+        "verilog": 'Generate verilog for yosys flow. Args: "[--config <cfg>] [--output-dir <dir>]"',
+        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>]"',
+    },
 }
 
 ALL_COMMANDS = ["start", "stop"] + list(WORKFLOW_COMMANDS)

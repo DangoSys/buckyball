@@ -3,11 +3,11 @@ from motia import ApiRequest, ApiResponse, FlowContext, api
 from utils.path import get_buckyball_path
 
 config = {
-    "name": "Yosys Synth",
-    "description": "run yosys synthesis for area estimation",
-    "flows": ["yosys"],
-    "triggers": [api("POST", "/yosys/synth")],
-    "enqueues": ["yosys.synth"],
+    "name": "dc-verilog-api",
+    "description": "generate verilog for dc flow",
+    "flows": ["dc"],
+    "triggers": [api("POST", "/dc/verilog")],
+    "enqueues": ["dc.verilog"],
 }
 
 
@@ -20,5 +20,5 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "top": body.get("top"),
         "config": body.get("config"),
     }
-    await ctx.enqueue({"topic": "yosys.synth", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue({"topic": "dc.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

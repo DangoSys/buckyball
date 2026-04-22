@@ -13,7 +13,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     data = {
         "jobs": body.get("jobs", 16),
-        "cosim": body.get("cosim", False),
     }
     await ctx.enqueue({"topic": "verilator.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

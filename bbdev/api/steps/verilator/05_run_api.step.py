@@ -17,7 +17,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "config": body.get("config", "sims.verilator.BuckyballToyVerilatorConfig"),
         "jobs": body.get("jobs", "16"),
         "batch": body.get("batch", False),
-        "cosim": body.get("cosim", False),
         "from_run_workflow": True,
     }
 

@@ -19,7 +19,7 @@ config = {
     "description": "build verilator executable",
     "flows": ["verilator"],
     "triggers": [queue("verilator.build")],
-    "enqueues": ["verilator.sim", "verilator.cosim"],
+    "enqueues": ["verilator.sim"],
 }
 
 
@@ -29,7 +29,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     arch_dir = f"{bbdir}/arch"
     build_dir = f"{arch_dir}/build"
     coverage = input_data.get("coverage", False)
-    cosim = input_data.get("cosim", False)
 
     # ==================================================================================
     # Find sources
@@ -54,10 +53,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     _tsi_htif = {"testchip_tsi.cc", "testchip_htif.cc", "SimTSI.cc"}
     csrcs = [f for f in csrcs if os.path.basename(f) not in _tsi_htif]
 
-    if cosim:
-        topname = "ToyBuckyball"
-    else:
-        topname = "BBSimHarness"
+    topname = "BBSimHarness"
 
     # ==================================================================================
     # Build flags
@@ -82,8 +78,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
     # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event.step.py).
     cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
-    if cosim:
-        cflags += " -DCOSIM"
 
     ldflags = (
         f"-lreadline -ldramsim -lstdc++ -lz "
@@ -174,13 +168,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Continue routing
     # ==================================================================================
     if input_data.get("from_run_workflow"):
-        if cosim:
-            await ctx.enqueue(
-                {"topic": "verilator.cosim", "data": {**input_data, "task": "run"}}
-            )
-        else:
-            await ctx.enqueue(
-                {"topic": "verilator.sim", "data": {**input_data, "task": "run"}}
-            )
+        await ctx.enqueue(
+            {"topic": "verilator.sim", "data": {**input_data, "task": "run"}}
+        )
 
     return

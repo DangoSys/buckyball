@@ -19,6 +19,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "output_dir": body.get("output_dir", f"{bbdir}/arch/build/"),
         "top": body.get("top"),
         "config": body.get("config"),
+        "from_run_workflow": True,
     }
     await ctx.enqueue({"topic": "dc.run", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

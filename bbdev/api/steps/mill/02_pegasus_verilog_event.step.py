@@ -27,7 +27,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/pegasus/")
 
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/pegasus_top/")
-    soc_dir   = f"{bbdir}/arch/build/pegasus/"   # DigitalTop + all SoC RTL
+    soc_dir = f"{bbdir}/arch/build/pegasus/"
 
     ctx.logger.info(f" Elaborating PegasusTop")
     ctx.logger.info(f" Top output directory: {build_dir}")
@@ -35,9 +35,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     os.makedirs(build_dir, exist_ok=True)
 
-    # Step 1: Elaborate the full SoC (DigitalTop + all sub-modules)
-    # This is the same as before, using ElaboratePegasus which runs PegasusHarness
-    # but we only need its generated RTL files (DigitalTop.sv, BBTile.sv, etc.)
     soc_command = (
         f"mill -i __.test.runMain sims.pegasus.ElaboratePegasus "
         f"--disable-annotation-unknown "
@@ -58,7 +55,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                            extra_fields={"task": "verilog", "step": "soc"}, trace_id=origin_tid)
         return
 
-    # Step 2: Elaborate PegasusTop + PegasusShell (the FPGA top-level wrapper)
     command = (
         f"mill -i __.test.runMain sims.pegasus.ElaboratePegasusTop "
         f"--disable-annotation-unknown "
@@ -75,17 +71,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="pegasus verilog",
     )
 
-    # Clean up stray top-level files if emitted next to arch/
     for stray in ["PegasusTop.v", "PegasusTopWrapper.sv", "PegasusShell.v"]:
         stray_path = f"{arch_dir}/{stray}"
         if os.path.exists(stray_path):
             os.remove(stray_path)
 
-    # Copy generated SV/V files to pegasus/vivado/generated/ for Vivado build.
-    # Sources:
-    #   soc_dir   -> DigitalTop + all SoC sub-modules (DPI files stubbed out)
-    #   build_dir -> PegasusTop.v, PegasusShell.v, PegasusTopWrapper.sv (top-level wrappers)
-    # PegasusHarness.sv, ChipTop.sv and harness-layer files from soc_dir are skipped.
     vivado_gen_dir = f"{bbdir}/thirdparty/pegasus/vivado/generated"
     if result.returncode == 0 and os.path.isdir(build_dir):
         import re
@@ -140,9 +130,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 copied += 1
             return copied
 
-        # Copy SoC RTL (skip harness-layer files)
         n_soc = copy_rtl_dir(soc_dir, skip_set=HARNESS_SKIP)
-        # Copy top-level wrappers (overrides any same-named file from soc_dir)
         n_top = copy_rtl_dir(build_dir)
         ctx.logger.info(f" Copied {n_soc} SoC files + {n_top} top files to {vivado_gen_dir}")
 
