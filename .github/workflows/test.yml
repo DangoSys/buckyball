@@ -51,7 +51,7 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-        # nix develop -c bbdev sardine --run '--workload ctest'
+          nix develop -c bbdev sardine --run '--workload ctest' --dir arch/log
 
       # if check failed, revert the branch
       # - name: Revert Bad Commit
