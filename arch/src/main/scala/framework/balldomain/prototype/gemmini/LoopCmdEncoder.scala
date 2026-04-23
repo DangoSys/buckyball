@@ -95,7 +95,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
           slot.cmd.cmd.rs1Data                := lsub.bits.op1_bank |
             (lsub.bits.wr_bank << 20) |
             (lsub.bits.iter << 30)
-          slot.cmd.cmd.rs2Data                := 0.U
+          slot.cmd.cmd.rs2Data                := 1.U
           slot.cmd.bankAccess.rd_bank_0_valid := true.B
           slot.cmd.bankAccess.rd_bank_0_id    := lsub.bits.op1_bank
           slot.cmd.bankAccess.wr_bank_valid   := true.B
@@ -112,7 +112,11 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
             (lsub.bits.op2_bank << 10) |
             (lsub.bits.wr_bank << 20) |
             (lsub.bits.iter << 30)
-          slot.cmd.cmd.rs2Data                := 0.U
+          slot.cmd.cmd.rs2Data                := Mux(
+            lsub.bits.compute_mode === 0.U,
+            2.U,
+            3.U
+          )
           slot.cmd.bankAccess.rd_bank_0_valid := true.B
           slot.cmd.bankAccess.rd_bank_0_id    := lsub.bits.op1_bank
           slot.cmd.bankAccess.rd_bank_1_valid := true.B
