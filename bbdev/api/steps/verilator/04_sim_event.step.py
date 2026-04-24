@@ -72,7 +72,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ==================================================================================
     # Execute simulation
-    # BBSimHarness uses +elf= for ELF loading (via SimDRAM_bb.cc / libelf)
+    # BBSimHarness uses +elf= for ELF loading (via BBSimDRAM.cc / libelf)
     # No fesvr, no +loadmem_addr needed
     #
     # disasm.log: only stderr -> spike-dasm (Rocket commit printf is stderr here;

@@ -22,16 +22,9 @@ config = {
 
 
 def prepare_verilator_verilog(build_dir: str, arch_dir: str, logger):
-    for unwanted in [
-        f"{build_dir}/testchip_htif.cc",
-        f"{build_dir}/testchip_htif.h",
-        f"{build_dir}/testchip_tsi.cc",
-        f"{build_dir}/testchip_tsi.h",
-        f"{build_dir}/SimTSI.cc",
-        f"{arch_dir}/BBSimHarness.sv",
-    ]:
-        if os.path.exists(unwanted):
-            os.remove(unwanted)
+    unwanted_harness = f"{arch_dir}/BBSimHarness.sv"
+    if os.path.exists(unwanted_harness):
+        os.remove(unwanted_harness)
 
     for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
         if os.path.exists(patch_file):

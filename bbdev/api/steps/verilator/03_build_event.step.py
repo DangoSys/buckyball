@@ -45,13 +45,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         + glob.glob(f"{build_dir}/**/*.cpp", recursive=True)
     )
 
-    # Exclude testchipip's SimDRAM.cc — our SimDRAM_bb.cc overrides memory_init
-    csrcs = [f for f in csrcs if not f.endswith("SimDRAM.cc") or "src/csrc" in f]
-
-    # Exclude testchipip's TSI/HTIF C++ sources (deleted in verilog step, but guard anyway).
-    # tsi_tick DPI symbol is provided by tsi_stub.cc in src/csrc instead.
-    _tsi_htif = {"testchip_tsi.cc", "testchip_htif.cc", "SimTSI.cc"}
-    csrcs = [f for f in csrcs if os.path.basename(f) not in _tsi_htif]
+    unexpected_tsi = [
+        f
+        for f in csrcs
+        if os.path.basename(f) in {"testchip_tsi.cc", "testchip_htif.cc", "SimTSI.cc"}
+    ]
+    if unexpected_tsi:
+        raise RuntimeError(
+            "Unexpected TSI sources in BBSim build: " + ", ".join(unexpected_tsi)
+        )
 
     topname = "BBSimHarness"
 
