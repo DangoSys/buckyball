@@ -6,7 +6,24 @@ import chisel3.util._
 import org.chipsalliance.cde.config.{Config, Parameters}
 
 import chipyard.harness.{HarnessBinder, HasHarnessInstantiators}
-import chipyard.iobinders.{AXI4MMIOPort, UARTPort}
+import chipyard.iobinders.{AXI4MMIOPort, AXI4MemPort, UARTPort}
+
+class WithBBSimMem
+    extends HarnessBinder({
+      case (th: HasHarnessInstantiators, port: AXI4MemPort, chipId: Int) => {
+        val memSize   = port.params.master.size
+        val memBase   = port.params.master.base
+        val lineSize  = 64
+        val clockFreq = port.clockFreqMHz
+        val mem       = Module(
+          new BBSimDRAM(memSize, lineSize, clockFreq, memBase, port.edge.bundle, chipId)
+        ).suggestName("bbsimdram")
+
+        mem.io.clock := port.io.clock
+        mem.io.reset := th.harnessBinderReset.asAsyncReset
+        mem.io.axi <> port.io.bits
+      }
+    })
 
 // =============================================================================
 // WithBBSimMMIO: wire AXI4 MMIO port to C++ mmio_tick().
@@ -98,7 +115,7 @@ class BBSimConfig
       new WithNoUARTAdapter ++
         new WithBBSimMMIO ++
         new chipyard.config.WithUniformBusFrequencies(1000.0) ++
-        new chipyard.harness.WithBlackBoxSimMem ++
+        new WithBBSimMem ++
         new chipyard.harness.WithSerialTLTiedOff ++
         new chipyard.harness.WithTieOffInterrupts ++
         new chipyard.harness.WithGPIOTiedOff ++
