@@ -1,7 +1,4 @@
-// SimDRAM_bb.cc — Override memory_init from testchipip's SimDRAM.cc
-// Replaces fesvr load_elf with libelf-based ELF loader.
-// This file is compiled into the simulation and takes precedence over
-// the version embedded in the SimDRAM Verilog blackbox resource.
+// BBSim-owned DPI memory backend for BBSimDRAM.v.
 
 #include <cassert>
 #include <cstdio>
@@ -20,46 +17,42 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "mm_dramsim2.h"
+#include "ioe/mm_dramsim2.h"
 
-// Global state — defined here since testchipip's SimDRAM.cc is excluded from
-// build.
-bool use_dramsim = false;
-std::string ini_dir = "dramsim2_ini";
-std::vector<std::map<long long int, backing_data_t>> backing_mem_data = {};
-
+static bool use_dramsim = false;
+static std::vector<std::map<long long int, backing_data_t>> mem_data = {};
 static std::string elf_file = "";
 
-// ---------------------------------------------------------------------------
-// load_elf_to_mem: parse ELF64 and copy PT_LOAD segments into backing data
-// ---------------------------------------------------------------------------
 static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
                             uint64_t mem_size) {
   int fd = open(path, O_RDONLY);
   if (fd < 0) {
-    fprintf(stderr, "[SimDRAM_bb] Cannot open ELF: %s\n", path);
+    fprintf(stderr, "[BBSimDRAM] Cannot open ELF: %s\n", path);
     abort();
   }
 
   struct stat st;
-  fstat(fd, &st);
-  size_t file_size = st.st_size;
+  if (fstat(fd, &st) != 0) {
+    fprintf(stderr, "[BBSimDRAM] fstat failed for ELF: %s\n", path);
+    abort();
+  }
 
+  size_t file_size = st.st_size;
   uint8_t *file_buf =
       (uint8_t *)mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
   close(fd);
   if (file_buf == MAP_FAILED) {
-    fprintf(stderr, "[SimDRAM_bb] mmap failed for ELF: %s\n", path);
+    fprintf(stderr, "[BBSimDRAM] mmap failed for ELF: %s\n", path);
     abort();
   }
 
   Elf64_Ehdr *ehdr = (Elf64_Ehdr *)file_buf;
   if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) {
-    fprintf(stderr, "[SimDRAM_bb] Not a valid ELF file: %s\n", path);
+    fprintf(stderr, "[BBSimDRAM] Not a valid ELF file: %s\n", path);
     abort();
   }
   if (ehdr->e_ident[EI_CLASS] != ELFCLASS64) {
-    fprintf(stderr, "[SimDRAM_bb] Only ELF64 supported\n");
+    fprintf(stderr, "[BBSimDRAM] Only ELF64 supported\n");
     abort();
   }
 
@@ -75,11 +68,12 @@ static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
     uint64_t vaddr = ph->p_paddr;
     if (vaddr < mem_base || vaddr + ph->p_memsz > mem_base + mem_size) {
       fprintf(stderr,
-              "[SimDRAM_bb] Segment paddr=0x%lx size=0x%lx outside mem [0x%lx, "
+              "[BBSimDRAM] Segment paddr=0x%lx size=0x%lx outside mem [0x%lx, "
               "0x%lx)\n",
               vaddr, ph->p_memsz, mem_base, mem_base + mem_size);
       abort();
     }
+
     uint64_t offset = vaddr - mem_base;
     memcpy(data + offset, file_buf + ph->p_offset, ph->p_filesz);
     if (ph->p_memsz > ph->p_filesz)
@@ -88,16 +82,13 @@ static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
   }
 
   munmap(file_buf, file_size);
-  printf("[SimDRAM_bb] Loaded ELF '%s': %zu bytes\n", path, loaded);
+  printf("[BBSimDRAM] Loaded ELF '%s': %zu bytes\n", path, loaded);
 }
 
-// ---------------------------------------------------------------------------
-// memory_init — DPI-C from SimDRAM.v, called once at simulation start
-// ---------------------------------------------------------------------------
-extern "C" void *memory_init(int chip_id, long long int mem_size,
-                             long long int word_size, long long int line_size,
-                             long long int id_bits, long long int clock_hz,
-                             long long int mem_base) {
+extern "C" void *
+bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
+                  long long int line_size, long long int id_bits,
+                  long long int clock_hz, long long int mem_base) {
   mm_t *mm;
   s_vpi_vlog_info info;
 
@@ -118,17 +109,16 @@ extern "C" void *memory_init(int chip_id, long long int mem_size,
       local_ini_dir = arg.substr(strlen("+dramsim_ini_dir="));
   }
 
-  while (chip_id >= (int)backing_mem_data.size())
-    backing_mem_data.push_back(std::map<long long int, backing_data_t>());
+  while (chip_id >= (int)mem_data.size())
+    mem_data.push_back(std::map<long long int, backing_data_t>());
 
-  if (backing_mem_data[chip_id].find(mem_base) !=
-      backing_mem_data[chip_id].end()) {
-    assert(backing_mem_data[chip_id][mem_base].size == (size_t)mem_size);
+  if (mem_data[chip_id].find(mem_base) != mem_data[chip_id].end()) {
+    assert(mem_data[chip_id][mem_base].size == (size_t)mem_size);
   } else {
     uint8_t *data = (uint8_t *)mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
                                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (data == MAP_FAILED) {
-      fprintf(stderr, "[SimDRAM_bb] mmap for backing store failed\n");
+      fprintf(stderr, "[BBSimDRAM] mmap for backing store failed\n");
       abort();
     }
     memset(data, 0, mem_size);
@@ -137,26 +127,22 @@ extern "C" void *memory_init(int chip_id, long long int mem_size,
       load_elf_to_mem(elf_file.c_str(), data, (uint64_t)mem_base,
                       (uint64_t)mem_size);
 
-    backing_mem_data[chip_id][mem_base] = {data, (size_t)mem_size};
+    mem_data[chip_id][mem_base] = {data, (size_t)mem_size};
   }
 
   if (use_dramsim) {
-    mm = (mm_t *)(new mm_dramsim2_t(mem_base, mem_size, word_size, line_size,
-                                    backing_mem_data[chip_id][mem_base],
-                                    memory_ini, system_ini, local_ini_dir,
-                                    1 << id_bits, clock_hz));
+    mm = (mm_t *)(new mm_dramsim2_t(
+        mem_base, mem_size, word_size, line_size, mem_data[chip_id][mem_base],
+        memory_ini, system_ini, local_ini_dir, 1 << id_bits, clock_hz));
   } else {
     mm = (mm_t *)(new mm_magic_t(mem_base, mem_size, word_size, line_size,
-                                 backing_mem_data[chip_id][mem_base]));
+                                 mem_data[chip_id][mem_base]));
   }
 
   return mm;
 }
 
-// ---------------------------------------------------------------------------
-// memory_tick — DPI-C from SimDRAM.v / SimAXIMem.v, called each cycle
-// ---------------------------------------------------------------------------
-extern "C" void memory_tick(
+extern "C" void bbsim_memory_tick(
     void *channel, unsigned char reset, unsigned char ar_valid,
     unsigned char *ar_ready, long long int ar_addr, int ar_id, int ar_size,
     int ar_len, unsigned char aw_valid, unsigned char *aw_ready,

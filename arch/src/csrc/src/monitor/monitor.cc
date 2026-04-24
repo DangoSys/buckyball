@@ -89,7 +89,7 @@ static int parse_args(int argc, char *argv[]) {
       printf("\n");
       exit(0);
     }
-    // +elf= is parsed by SimDRAM_bb.cc via vpi_get_vlog_info (Verilator
+    // +elf= is parsed by BBSimDRAM.cc via vpi_get_vlog_info (Verilator
     // plusargs)
   }
 
