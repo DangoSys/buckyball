@@ -76,7 +76,7 @@ function begin_step
 begin_step "0-1" "submodules init"
 # git submodule update --init --progress --jobs 8
 cd ${BBDIR}
-git submodule update --init --progress --jobs 8  \
+git submodule update --init --progress \
   arch/thirdparty/chipyard \
   bb-tests/workloads/lib/kernel \
   bbdev \
@@ -88,7 +88,7 @@ git submodule update --init --progress --jobs 8  \
 # I dont know why below is need for buckyball submodules, but it is
 git -C ${BBDIR} submodule update --init --checkout --force thirdparty/pegasus
 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress --jobs 8 fpga/fpga-shells generators/* tools/* sims/firesim
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells generators/* tools/* sims/firesim
 # I dont know why below is need for chipyard submodules, but it is
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde tools/rocket-dsp-utils generators/rocc-acc-utils generators/bar-fetchers
 ##########################################

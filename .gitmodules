@@ -1,8 +1,8 @@
 [submodule "arch/thirdparty/chipyard"]
 	path = arch/thirdparty/chipyard
 	url = https://github.com/ucb-bar/chipyard.git
-[submodule "compiler"]
-	path = compiler
+[submodule "buddy-mlir"]
+	path = compiler/thirdparty/buddy-mlir
 	url = https://github.com/DangoSys/bb-compiler.git
 [submodule "bbdev"]
 	path = bbdev
