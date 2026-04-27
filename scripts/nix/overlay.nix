@@ -4,6 +4,7 @@ final: prev:
   # Named rustTools to avoid shadowing nixpkgs `rust` (used by rust hooks)
   rustTools = final.callPackage ./build-env-rust.nix { };
   clibs = final.callPackage ./build-env-clibs.nix { };
+  compiler = final.callPackage ./build-env-compiler.nix { };
   doc = final.callPackage ./build-env-doc.nix { };
   python = final.callPackage ./build-env-python.nix { };
   riscv = final.callPackage ./build-env-riscv.nix { };

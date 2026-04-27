@@ -70,6 +70,10 @@
               clibs.elfutils-dev
               clibs.elfutils
 
+              # Compiler tools
+              compiler.flatbuffers
+              compiler.numactl
+
               # Scala tools
               scala.mill
               scala.sbt
@@ -104,6 +108,9 @@
               clibs.png
               clibs.elfutils-dev
               clibs.elfutils
+
+              compiler.flatbuffers
+              compiler.numactl
             ];
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then
