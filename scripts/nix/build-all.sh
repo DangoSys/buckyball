@@ -30,9 +30,9 @@ SKIP_LIST=()
 VERBOSE_FLAG=""
 INSTALL_IN_NIX=0
 
-while [ "$#" -gt 0 ];
+while [ "$1" != "" ];
 do
-  case "$1" in
+  case $1 in
     -h | --help )
       usage 3 ;;
     --verbose | -v)
@@ -40,11 +40,7 @@ do
       set -x ;;
     --skip | -s)
       shift
-      if [ "$#" -eq 0 ]; then
-        echo "Error: --skip requires a step number" >&2
-        usage 1
-      fi
-      SKIP_LIST+=("$1") ;;
+      SKIP_LIST+=(${1}) ;;
     --install-in-nix)
       INSTALL_IN_NIX=1 ;;
     * )
@@ -78,13 +74,14 @@ function begin_step
 }
 
 begin_step "0-1" "submodules init"
-
-git -C ${BBDIR} submodule update --init --progress --jobs 8 \
+# git submodule update --init --progress --jobs 8
+cd ${BBDIR}
+git submodule update --init --progress --jobs 8  \
   arch/thirdparty/chipyard \
   bb-tests/workloads/lib/kernel \
   bbdev \
   bebop \
-  compiler \
+  compiler/thirdparty/buddy-mlir \
   docs \
   thirdparty/pegasus \
   thirdparty/waveform-mcp
@@ -118,31 +115,31 @@ fi
 
 if run_step "2"; then
   begin_step "2" "Compiler installation"
-  cd ${BBDIR}/compiler
-	git submodule update --init --progress llvm
+  cd ${BBDIR}/compiler/thirdparty/buddy-mlir
+  git submodule update --init llvm
 
-	mkdir -p llvm/build && cd llvm/build
-	cmake -G Ninja ../llvm \
-			-DLLVM_ENABLE_PROJECTS="mlir;clang" \
-			-DLLVM_TARGETS_TO_BUILD="host;RISCV" \
-			-DLLVM_ENABLE_ASSERTIONS=ON \
-			-DCMAKE_BUILD_TYPE=RELEASE \
-			-DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-			-DPython3_EXECUTABLE=$(which python3)
-	ninja #check-mlir check-clang
+  mkdir -p llvm/build && cd llvm/build
+  cmake -G Ninja ../llvm \
+    -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+    -DLLVM_TARGETS_TO_BUILD="host;RISCV" \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=RELEASE \
+    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+    -DPython3_EXECUTABLE=$(which python3)
+  ninja #check-mlir check-clang
 
-	cd ${BBDIR}/compiler
-	mkdir -p build && cd build
-	cmake -G Ninja .. \
-			-DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
-			-DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
-			-DLLVM_ENABLE_ASSERTIONS=ON \
-			-DCMAKE_BUILD_TYPE=RELEASE \
-			-DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
-			-DPython3_EXECUTABLE=$(which python3) \
-			-DPython_EXECUTABLE=$(which python3) \
-			-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-	ninja # check-buddy
+  cd ${BBDIR}/compiler/thirdparty/buddy-mlir
+  mkdir -p build && cd build
+  cmake -G Ninja .. \
+    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
+    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
+    -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DCMAKE_BUILD_TYPE=RELEASE \
+    -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
+    -DPython3_EXECUTABLE=$(which python3) \
+    -DPython_EXECUTABLE=$(which python3) \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+  ninja # check-buddy
 fi
 
 if run_step "3"; then
