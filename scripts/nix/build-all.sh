@@ -131,6 +131,7 @@ if run_step "2"; then
   cd ${BBDIR}/compiler/thirdparty/buddy-mlir
   mkdir -p build && cd build
   cmake -G Ninja .. \
+    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/compiler/src \
     -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \
