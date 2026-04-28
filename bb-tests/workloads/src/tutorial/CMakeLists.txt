@@ -4,7 +4,7 @@ project(tutorial C)
 # build linux version workload
 #-------------------------------------------------------------------------------
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc -static")
 
 add_executable(tutorial-linux ${TUTORIAL_WORKLOAD_DIR}/tutorial.c)
 

@@ -180,7 +180,9 @@ struct BuckyballFenceLowering : public ConvertOpToLLVMPattern<FenceOp> {
   LogicalResult
   matchAndRewrite(FenceOp op, OpAdaptor,
                   ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<FenceIntrOp>(op);
+    Location loc = op.getLoc();
+    Value zero = cstI64(rewriter, loc, 0);
+    rewriter.replaceOpWithNewOp<FenceIntrOp>(op, zero, zero);
     return success();
   }
 };
@@ -483,6 +485,52 @@ struct BuckyballDequantLowering : public ConvertOpToLLVMPattern<DequantOp> {
   }
 };
 
+//===----------------------------------------------------------------------===//
+// ReLU — bb_relu (funct7=50)
+// ISA: bb_relu(input_bank_id, output_bank_id, depth, stride)
+// rs1 = BB_BANK0(input_bank_id) | BB_BANK2(output_bank_id) | BB_ITER(depth)
+// rs2 = FIELD(stride, 0, 63)
+//===----------------------------------------------------------------------===//
+
+struct BuckyballReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
+  using ConvertOpToLLVMPattern<ReluOp>::ConvertOpToLLVMPattern;
+
+  LogicalResult
+  matchAndRewrite(ReluOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
+                                 cstI64(rewriter, loc, 0),
+                                 adaptor.getOutputBankId(), adaptor.getDepth());
+    Value rs2 = adaptor.getStride();
+    rewriter.replaceOpWithNewOp<ReluIntrOp>(op, rs1, rs2);
+    return success();
+  }
+};
+
+//===----------------------------------------------------------------------===//
+// Systolic — bb_bbfp_mul (funct7=65)
+// ISA: bb_bbfp_mul(op1_bank_id, op2_bank_id, result_bank_id, config)
+// rs1 = BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) |
+// BB_BANK2(result_bank_id) rs2 = FIELD(config, 0, 63)
+//===----------------------------------------------------------------------===//
+
+struct BuckyballSystolicLowering : public ConvertOpToLLVMPattern<SystolicOp> {
+  using ConvertOpToLLVMPattern<SystolicOp>::ConvertOpToLLVMPattern;
+
+  LogicalResult
+  matchAndRewrite(SystolicOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value rs1 = packRs1BanksIter(
+        rewriter, loc, adaptor.getOp1BankId(), adaptor.getOp2BankId(),
+        adaptor.getResultBankId(), cstI64(rewriter, loc, 0));
+    Value rs2 = adaptor.getConfig();
+    rewriter.replaceOpWithNewOp<SystolicIntrOp>(op, rs1, rs2);
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -510,18 +558,21 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
   patterns.add<BuckyballIm2colLowering>(converter);
   patterns.add<BuckyballQuantLowering>(converter);
   patterns.add<BuckyballDequantLowering>(converter);
+  patterns.add<BuckyballReluLowering>(converter);
+  patterns.add<BuckyballSystolicLowering>(converter);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target) {
   target.addLegalOp<FenceIntrOp, MvinIntrOp, MvoutIntrOp, MulWarp16IntrOp,
                     TransposeIntrOp, Im2colIntrOp, QuantIntrOp, DequantIntrOp,
-                    ReluIntrOp, MsetIntrOp>();
+                    ReluIntrOp, MsetIntrOp, SystolicIntrOp>();
   target.addIllegalOp<FenceOp, MsetOp, MvinOp, MvoutOp, MatMulOp, MulWarp16Op,
-                      TransposeOp, Im2colOp, QuantOp, DequantOp, BankAllocOp,
-                      BankReleaseOp, BankMvinOp, BankMvoutOp, BankMulWarp16Op,
-                      BankTransposeOp, BankIm2colOp, BankQuantOp,
-                      BankDequantOp>();
+                      TransposeOp, Im2colOp, QuantOp, DequantOp, ReluOp,
+                      SystolicOp, BankAllocOp, BankReleaseOp, BankMvinOp,
+                      BankMvoutOp, BankMulWarp16Op, BankTransposeOp,
+                      BankIm2colOp, BankQuantOp, BankDequantOp>();
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalDialect<arith::ArithDialect>();
+  target.addLegalDialect<LLVM::LLVMDialect>();
 }

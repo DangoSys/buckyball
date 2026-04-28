@@ -1,7 +1,7 @@
 /* bbsim.ld — baremetal linker script for BBSimHarness (DRAM at 0x8000_0000) */
-/* Bootrom jumps directly to 0x80000000 (ELF entry), no _start needed.      */
+/* Bootrom jumps directly to 0x80000000 (ELF entry), _start must be first.  */
 OUTPUT_ARCH("riscv")
-ENTRY(main)
+ENTRY(_start)
 
 SECTIONS {
     . = 0x80000000;

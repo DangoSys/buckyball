@@ -26,111 +26,50 @@
 // Base class for intrinsic operations
 //===----------------------------------------------------------------------===//
 
-class Buckyball_IntrOp<string mnemonic, list<Trait> traits = []> :
-  Buckyball_Op<mnemonic, traits> {}
+class Buckyball_IntrOpBase<string mnemonic, list<Trait> traits = []> :
+  LLVM_IntrOpBase</*Dialect dialect=*/Buckyball_Dialect,
+                  /*string opName=*/"intr." # mnemonic,
+                  /*string enumName=*/"riscv_bb_" # !subst(".", "_", mnemonic),
+                  /*list<int> overloadedResults=*/[],
+                  /*list<int> overloadedOperands=*/[],
+                  /*list<Trait> traits=*/traits,
+                  /*int numResults=*/0>;
 
 //===----------------------------------------------------------------------===//
 // Common intrinsic operations
 //===----------------------------------------------------------------------===//
 
-def MsetIntrOp : Buckyball_IntrOp<"mset_intr"> {
-  let summary = "LLVM intrinsic for bb_mset instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_mset LLVM intrinsic.
-    Maps to bb_mset custom instruction (funct7=32).
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def MsetIntrOp : Buckyball_IntrOpBase<"mset">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def FenceIntrOp : Buckyball_IntrOp<"fence_intr"> {
-  let summary = "LLVM intrinsic for bb_fence instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_fence LLVM intrinsic.
-    Maps to bb_fence custom instruction (funct7=0).
-  }];
-  let arguments = (ins);
-  let assemblyFormat = "attr-dict";
-}
+def FenceIntrOp : Buckyball_IntrOpBase<"fence">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def MvinIntrOp : Buckyball_IntrOp<"mvin_intr"> {
-  let summary = "LLVM intrinsic for bb_mvin instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_mvin LLVM intrinsic.
-    Maps to bb_mvin custom instruction (funct7=33).
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def MvinIntrOp : Buckyball_IntrOpBase<"mvin">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def MvoutIntrOp : Buckyball_IntrOp<"mvout_intr"> {
-  let summary = "LLVM intrinsic for bb_mvout instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_mvout LLVM intrinsic.
-    Maps to bb_mvout custom instruction (funct7=16).
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def MvoutIntrOp : Buckyball_IntrOpBase<"mvout">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def MulWarp16IntrOp : Buckyball_IntrOp<"mul_warp16_intr"> {
-  let summary = "LLVM intrinsic for bb_mul_warp16 instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_mul_warp16 LLVM intrinsic.
-    Maps to bb_mul_warp16 custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def MulWarp16IntrOp : Buckyball_IntrOpBase<"mul.warp16">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def TransposeIntrOp : Buckyball_IntrOp<"transpose_intr"> {
-  let summary = "LLVM intrinsic for bb_transpose instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_transpose LLVM intrinsic.
-    Maps to bb_transpose custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def TransposeIntrOp : Buckyball_IntrOpBase<"transpose">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def Im2colIntrOp : Buckyball_IntrOp<"im2col_intr"> {
-  let summary = "LLVM intrinsic for bb_im2col instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_im2col LLVM intrinsic.
-    Maps to bb_im2col custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def QuantIntrOp : Buckyball_IntrOp<"quant_intr"> {
-  let summary = "LLVM intrinsic for bb_quant instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_quant LLVM intrinsic.
-    Maps to bb_quant custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def QuantIntrOp : Buckyball_IntrOpBase<"quant">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def DequantIntrOp : Buckyball_IntrOp<"dequant_intr"> {
-  let summary = "LLVM intrinsic for bb_dequant instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_dequant LLVM intrinsic.
-    Maps to bb_dequant custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def DequantIntrOp : Buckyball_IntrOpBase<"dequant">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def ReluIntrOp : Buckyball_IntrOp<"relu_intr"> {
-  let summary = "LLVM intrinsic for bb_relu instruction";
-  let description = [{
-    Wrapper for int_riscv_bb_relu LLVM intrinsic.
-    Maps to bb_relu custom instruction.
-  }];
-  let arguments = (ins I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$rs1 `,` $rs2 attr-dict";
-}
+def ReluIntrOp : Buckyball_IntrOpBase<"relu">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
+
+def SystolicIntrOp : Buckyball_IntrOpBase<"bbfp.mul">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 #endif // BUCKYBALL_INTRINSICS

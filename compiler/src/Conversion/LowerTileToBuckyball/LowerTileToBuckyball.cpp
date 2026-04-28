@@ -32,6 +32,8 @@
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
 
+#include "Utils/BankUtils.h"
+
 using namespace mlir;
 using namespace buddy;
 
@@ -275,9 +277,31 @@ public:
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
 
-        // TODO: TransposeOp now uses bankId-only interface, not memref
-        // This needs to be rewritten to use bank allocation + mvin/mvout
-        // rewriter.create<buckyball::TransposeOp>(loc, inTile, outTile);
+        // Allocate source and destination banks
+        Value srcBank = buckyball::allocBank(rewriter, loc, rLen, cLen);
+        Value dstBank = buckyball::allocBank(rewriter, loc, cLen, rLen);
+
+        // Move data from memref to source bank
+        int64_t depth = rLen * cLen / lane;
+        Value srcBankAfterMvin =
+            buckyball::mvinBank(rewriter, loc, inTile, srcBank, depth);
+
+        // Execute transpose operation
+        Value iterVal = buckyball::createI64Const(rewriter, loc, rLen);
+        Value modeVal = buckyball::createI64Const(rewriter, loc, 0);
+        Value dstBankAfterTranspose =
+            rewriter.create<buckyball::BankTransposeOp>(
+                loc, dstBank.getType(), srcBankAfterMvin, dstBank, iterVal,
+                modeVal);
+
+        // Move result from destination bank to memref
+        int64_t outDepth = cLen * rLen / lane;
+        buckyball::mvoutBank(rewriter, loc, outTile, dstBankAfterTranspose,
+                             outDepth);
+
+        // Release banks
+        buckyball::releaseBank(rewriter, loc, srcBankAfterMvin);
+        buckyball::releaseBank(rewriter, loc, dstBankAfterTranspose);
       }
     }
 
@@ -395,12 +419,29 @@ public:
         Value startColVal = rewriter.create<arith::ConstantOp>(
             loc, i64Type, rewriter.getI64IntegerAttr(startCol));
 
-        // TODO: Im2colOp now uses bankId-only interface, not memref
-        // This needs to be rewritten to use bank allocation + mvin/mvout
-        // rewriter.create<buckyball::Im2colOp>(loc, collapseIn, patchBuf,
-        // kRowVal,
-        //                                      kColVal, inRowVal, inColVal,
-        //                                      startRowVal, startColVal);
+        // Allocate source and destination banks
+        Value srcBank = buckyball::allocBank(rewriter, loc, H, W * C / lane);
+        Value dstBank =
+            buckyball::allocBank(rewriter, loc, ohowLen, patchColsPad / lane);
+
+        // Move input data to source bank
+        int64_t inDepth = H * W * C / lane;
+        Value srcBankAfterMvin =
+            buckyball::mvinBank(rewriter, loc, collapseIn, srcBank, inDepth);
+
+        // Execute im2col operation
+        Value dstBankAfterIm2col = rewriter.create<buckyball::BankIm2colOp>(
+            loc, dstBank.getType(), srcBankAfterMvin, dstBank, kRowVal, kColVal,
+            inRowVal, inColVal, startRowVal, startColVal);
+
+        // Move result to patch buffer
+        int64_t outDepth = ohowLen * patchColsPad / lane;
+        buckyball::mvoutBank(rewriter, loc, patchBuf, dstBankAfterIm2col,
+                             outDepth);
+
+        // Release banks
+        buckyball::releaseBank(rewriter, loc, srcBankAfterMvin);
+        buckyball::releaseBank(rewriter, loc, dstBankAfterIm2col);
 
         // Reshape filter [KH, KW, C, OC] → [KH*KW*C, OC] for matmul
         Value filterReshaped = rewriter.create<memref::CollapseShapeOp>(
