@@ -24,7 +24,6 @@
     {"mnemonic": "GEMMINI_PRELOAD",                 "funct7": 53,  "bid": 7},
     {"mnemonic": "GEMMINI_COMPUTE_PRELOADED",       "funct7": 66,  "bid": 7},
     {"mnemonic": "GEMMINI_COMPUTE_ACCUMULATED",     "funct7": 67,  "bid": 7},
-    {"mnemonic": "BDB_COUNTER",                     "funct7": 4,   "bid": 8},
-    {"mnemonic": "BDB_BACKDOOR",                    "funct7": 54,  "bid": 8}
+    {"mnemonic": "BDB_COUNTER",                     "funct7": 4,   "bid": 8}
   ]
 }

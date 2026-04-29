@@ -42,19 +42,6 @@ void dpi_ctrace(unsigned char subcmd, // 0=START, 1=STOP, 2=READ
                 unsigned int ctr_id, unsigned long long tag,
                 unsigned long long elapsed, unsigned long long cycle);
 
-// DPI-C functions for bank backdoor (TraceBall)
-// RTL calls these to get parameters from C++ testbench
-unsigned long long dpi_backdoor_get_read_addr(void);
-unsigned long long dpi_backdoor_get_write_addr(void);
-void dpi_backdoor_get_write_data(unsigned long long *data_lo,
-                                 unsigned long long *data_hi);
-void dpi_backdoor_put_read_data(unsigned int bank_id, unsigned int row,
-                                unsigned long long data_lo,
-                                unsigned long long data_hi);
-void dpi_backdoor_put_write_done(unsigned int bank_id, unsigned int row,
-                                 unsigned long long data_lo,
-                                 unsigned long long data_hi);
-
 #ifdef __cplusplus
 }
 #endif

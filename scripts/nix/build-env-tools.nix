@@ -1,7 +1,7 @@
 { pkgs }:
 
 let
-  # DRAMSim2 from firesim (rev matches chipyard pin); -fPIC for PIE linking under Nix
+  # DRAMSim2 from firesim (rev matches chipyard pin); -fPIE for PIE linking under Nix
   dramsim2 = pkgs.stdenv.mkDerivation {
     pname = "dramsim2";
     version = "2023-05-10";
@@ -12,7 +12,7 @@ let
       hash = "sha256-Vfb+MeWdUESc7gt6GhL6jBO1Uuvx8s1BdfhCikTyTh8=";
     };
     buildPhase = ''
-      make CXXFLAGS="-DNO_STORAGE -Wall -DDEBUG_BUILD -O3 -fPIC" libdramsim.a
+      make CXXFLAGS="-DNO_STORAGE -Wall -DDEBUG_BUILD -O3 -fPIE" libdramsim.a
     '';
     installPhase = ''
       runHook preInstall

@@ -42,7 +42,6 @@
     {"mnemonic": "GEMMINI_LOOP_CONV_WS_CONFIG_8",   "funct7": 103, "bid": 7},
     {"mnemonic": "GEMMINI_LOOP_CONV_WS_CONFIG_9",   "funct7": 104, "bid": 7},
     {"mnemonic": "GEMMINI_LOOP_CONV_WS",            "funct7": 105, "bid": 7},
-    {"mnemonic": "BDB_COUNTER",                     "funct7": 4,   "bid": 8},
-    {"mnemonic": "BDB_BACKDOOR",                    "funct7": 54,  "bid": 8}
+    {"mnemonic": "BDB_COUNTER",                     "funct7": 4,   "bid": 8}
   ]
 }

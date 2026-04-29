@@ -295,15 +295,10 @@ def bbdev_verilator_run(
 
 @mcp.tool()
 def bbdev_verilator_verilog(
-    config: Optional[str] = None,
-    balltype: Optional[str] = None,
+    config: str,
 ) -> str:
-    """Generate Verilog from Chisel. Supports --balltype for single Ball elaboration. Calls bbdev POST /verilator/verilog."""
-    api_params: Dict[str, Any] = {}
-    if config:
-        api_params["config"] = config
-    if balltype:
-        api_params["balltype"] = balltype
+    """Generate Verilog from Chisel. Calls bbdev POST /verilator/verilog."""
+    api_params: Dict[str, Any] = {"config": config}
     result = _bbdev_call("/verilator/verilog", api_params, timeout=600)
     return _fmt(result)
 

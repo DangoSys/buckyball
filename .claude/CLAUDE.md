@@ -19,7 +19,6 @@ A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6
   - `bbus/busRegister.scala` — Ball generator registration (`match case`)
 - `arch/src/main/scala/sims/` — simulation configs
   - `verilator/` — Verilator config
-  - `verify/` — single-Ball elaboration (`BallTopMain`)
 - `bb-tests/` — tests
   - `workloads/lib/bbhw/isa/` — ISA C macros (one `.c` file per instruction)
   - `workloads/src/CTest/toy/` — C test cases
@@ -73,7 +72,7 @@ The project configures the `buckyball-dev` MCP server with the following tools.
 ### bbdev API wrappers (with automatic server lifecycle management)
 - `bbdev_workload_build` — build CTests
 - `bbdev_verilator_run(binary, config?, batch?, coverage?)` — full flow: clean -> verilog -> build -> sim
-- `bbdev_verilator_verilog(config, balltype?)` — generate Verilog; `config` is required, `balltype` optional (single-Ball elaboration)
+- `bbdev_verilator_verilog(config)` — generate Verilog; `config` is required
 - `bbdev_verilator_build(jobs?, coverage?)` — build Verilator simulator
 - `bbdev_verilator_sim(binary, batch?, coverage?)` — run simulation (requires prior build)
 - `bbdev_sardine_run(workload?, coverage?)` — run batch tests

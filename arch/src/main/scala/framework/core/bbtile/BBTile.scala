@@ -25,6 +25,7 @@ import freechips.rocketchip.tilelink.{
   TLBuffer,
   TLClientNode,
   TLClientParameters,
+  TLFragmenter,
   TLIdentityNode,
   TLMasterPortParameters,
   TLWidthWidget,
@@ -40,6 +41,7 @@ import framework.core.bbtile.id.RVVRoCCDecode
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import sims.p2e.scu.{P2ESCUKey, TLP2ESCU}
 
 /**
  * BBTile — a composable tile containing one Rocket core + optional per-core-index Buckyball slots.
@@ -65,7 +67,7 @@ class BBTile private (
   )(
     implicit p: Parameters
   ) =
-    this(params, crossing.crossingType, lookup, BBTile.injectBuildRoCC(p, params.withAnyBuckyball))
+    this(params, crossing.crossingType, lookup, BBTile.injectBuildRoCC(p, params.withAnyBuckyball, params.nCores))
 
   val nCores           = bbParams.nCores
   val bbPerCore        = bbParams.resolvedBuckyballPerCore
@@ -133,6 +135,18 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // Buckyball accelerator TileLink nodes (diplomacy layer) — N pairs of DMA
   // ---------------------------------------------------------------------------
+  val extraFrontends: Seq[Frontend] = (1 until nCores).map { _ =>
+    val f = LazyModule(new Frontend(bbParams.icache.get, bbParams.tileId))
+    tlMasterXbar.node                               := TLWidthWidget(bbParams.icache.get.rowBits / 8) := f.masterNode
+    connectTLSlave(f.slaveNode, bbParams.core.fetchBytes)
+    f.icache.hartIdSinkNodeOpt.foreach(_            := hartIdNexusNode)
+    f.icache.mmioAddressPrefixSinkNodeOpt.foreach(_ := mmioAddressPrefixNexusNode)
+    f.resetVectorSinkNode                           := resetVectorNexusNode
+    f
+  }
+
+  nPTWPorts += extraFrontends.size
+
   val bb_reader_nodes: Seq[Option[TLClientNode]] = (0 until nCores).map { i =>
     if (bbPerCore(i).isDefined) Some(TLClientNode(Seq(TLMasterPortParameters.v1(Seq(TLClientParameters(
       name = s"bb-dma-reader-$i",
@@ -163,12 +177,21 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // TileLink topology
   // ---------------------------------------------------------------------------
+  p(P2ESCUKey).foreach { params =>
+    val p2eScu = LazyModule(new TLP2ESCU(params, xBytes, bbParams.tileId))
+    p2eScu.node := TLFragmenter(
+      xBytes,
+      cacheBlockBytes,
+      nameSuffix = Some(s"P2ESCU_${bbParams.tileId}")
+    )           := tlOtherMastersNode
+  }
+
   tlOtherMastersNode := tile_master_blocker.map(_.node := tlMasterXbar.node).getOrElse(tlMasterXbar.node)
   masterNode :=* tlOtherMastersNode
   DisableMonitors(implicit p => tlSlaveXbar.node :*= slaveNode)
 
   // DCache port count: core + PTW(via usingVM) + DTIM + vector + RoCC tieoff
-  nDCachePorts += 1 + (dtim_adapter.isDefined).toInt +
+  nDCachePorts += nCores + (dtim_adapter.isDefined).toInt +
     bbParams.core.vector.map(_.useDCache.toInt).getOrElse(0) +
     hasBuckyball.toInt
 
@@ -236,10 +259,14 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   val nCores = outer.nCores
 
   // --- FPU (optional) ---
-  val fpuOpt = outer.bbParams.core.fpu.map(params => Module(new FPU(params)(outer.p)))
+  val fpuOpts = Seq.fill(nCores)(outer.bbParams.core.fpu.map(params => Module(new FPU(params)(outer.p))))
 
   // --- Rocket core (using our fork that accepts BBTile) ---
-  val core = Module(new RocketBB(outer, outer.bbPerCore.head.isDefined)(outer.p))
+  val cores = (0 until nCores).map { i =>
+    Module(new RocketBB(outer, outer.bbPerCore(i).isDefined)(outer.p))
+  }
+
+  val core = cores.head
 
   // Vector unit connections
   outer.vector_unit.foreach { v =>
@@ -247,7 +274,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     v.module.io.tlb <> outer.dcache.module.io.tlb_port
   }
 
-  core.io.reset_vector := DontCare
+  core.io.reset_vector                 := DontCare
+  cores.tail.foreach(_.io.reset_vector := DontCare)
 
   // Report conditions
   outer.reportHalt(List(outer.dcache.module.io.errors))
@@ -255,38 +283,44 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     !outer.dcache.module.io.cpu.clock_enabled &&
       !outer.frontend.module.io.cpu.clock_enabled &&
       !ptw.io.dpath.clock_enabled &&
-      core.io.cease
+      cores.map(_.io.cease).reduce(_ && _)
   ))
-  outer.reportWFI(Some(core.io.wfi))
+  outer.reportWFI(Some(cores.map(_.io.wfi).reduce(_ && _)))
 
   // Interrupts
-  outer.decodeCoreInterrupts(core.io.interrupts)
+  cores.foreach(c => outer.decodeCoreInterrupts(c.io.interrupts))
   outer.bus_error_unit.foreach { beu =>
-    core.io.interrupts.buserror.get := beu.module.io.interrupt
-    beu.module.io.errors.dcache     := outer.dcache.module.io.errors
-    beu.module.io.errors.icache     := outer.frontend.module.io.errors
+    cores.foreach(_.io.interrupts.buserror.get := beu.module.io.interrupt)
+    beu.module.io.errors.dcache                := outer.dcache.module.io.errors
+    beu.module.io.errors.icache                := outer.frontend.module.io.errors
   }
-  core.io.interrupts.nmi.foreach(nmi => nmi := outer.nmiSinkNode.get.bundle)
+  cores.foreach(_.io.interrupts.nmi.foreach(nmi => nmi := outer.nmiSinkNode.get.bundle))
 
   // Trace and misc
   outer.traceSourceNode.bundle <> core.io.trace
-  core.io.traceStall := outer.traceAuxSinkNode.bundle.stall
+  cores.foreach(_.io.traceStall := outer.traceAuxSinkNode.bundle.stall)
   outer.bpwatchSourceNode.bundle <> core.io.bpwatch
-  core.io.hartid     := outer.hartIdSinkNode.bundle
+  cores.zipWithIndex.foreach { case (c, i) => c.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U }
 
   // Core pipeline connections
   outer.frontend.module.io.cpu <> core.io.imem
-  dcachePorts += core.io.dmem
+  for ((f, i) <- outer.extraFrontends.zipWithIndex) {
+    f.module.io.cpu <> cores(i + 1).io.imem
+    ptwPorts += f.module.io.ptw
+  }
+  cores.foreach(c => dcachePorts += c.io.dmem)
 
   // FPU
-  fpuOpt.foreach { fpu =>
-    core.io.fpu :<>= fpu.io.waiveAs[FPUCoreIO](_.cp_req, _.cp_resp)
-    fpu.io.cp_req.valid  := false.B
-    fpu.io.cp_req.bits   := DontCare
-    fpu.io.cp_resp.ready := false.B
-  }
-  if (fpuOpt.isEmpty) {
-    core.io.fpu := DontCare
+  for ((c, fpuOpt) <- cores.zip(fpuOpts)) {
+    fpuOpt.foreach { fpu =>
+      c.io.fpu :<>= fpu.io.waiveAs[FPUCoreIO](_.cp_req, _.cp_resp)
+      fpu.io.cp_req.valid  := false.B
+      fpu.io.cp_req.bits   := DontCare
+      fpu.io.cp_resp.ready := false.B
+    }
+    if (fpuOpt.isEmpty) {
+      c.io.fpu := DontCare
+    }
   }
 
   // Vector unit DCache port
@@ -299,6 +333,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   core.io.ptw <> ptw.io.dpath
+  cores.tail.foreach(_.io.ptw := DontCare)
 
   // DTIM adapter
   outer.dtim_adapter.foreach(lm => dcachePorts += lm.module.io.dmem)
@@ -395,7 +430,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
         val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
         val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
         val acc               = Module(new BuckyballAccelerator(cfg)(edge))
-        acc.io.hartid := outer.hartIdSinkNode.bundle + i.U
+        acc.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U
 
         tl_reader <> acc.io.tl_reader
         tl_writer <> acc.io.tl_writer
@@ -407,12 +442,22 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
     }
 
-    // Core-0 RoCC wiring (the single Rocket core drives accelerator 0)
-    val core0Acc = accelerators(0).get
-    core0Acc.io.cmd <> core.io.rocc.cmd
-    core.io.rocc.resp <> core0Acc.io.resp
-    core.io.rocc.busy      := core0Acc.io.busy
-    core.io.rocc.interrupt := core0Acc.io.interrupt
+    val enabledAccelerators = outer.bbEnabledCoreIds.map(i => accelerators(i).get)
+    for (i <- 0 until nCores) {
+      accelerators(i) match {
+        case Some(acc) =>
+          acc.io.cmd <> cores(i).io.rocc.cmd
+          cores(i).io.rocc.resp <> acc.io.resp
+          cores(i).io.rocc.busy      := acc.io.busy
+          cores(i).io.rocc.interrupt := acc.io.interrupt
+        case None      =>
+          cores(i).io.rocc.cmd.ready  := false.B
+          cores(i).io.rocc.resp.valid := false.B
+          cores(i).io.rocc.resp.bits  := DontCare
+          cores(i).io.rocc.busy       := false.B
+          cores(i).io.rocc.interrupt  := false.B
+      }
+    }
 
     // RoCC mem: tied-off HellaCacheIF for the DCache arbiter port count
     val roccMemIF = Module(new SimpleHellaCacheIF())
@@ -423,7 +468,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     roccMemIF.io.requestor.s2_kill            := false.B
     roccMemIF.io.requestor.keep_clock_enabled := false.B
     dcachePorts += roccMemIF.io.cache
-    core.io.rocc.mem                          := DontCare
+    cores.foreach(_.io.rocc.mem               := DontCare)
 
     // SharedMemBackend (tile-level singleton)
     val sharedBackend = Module(new SharedMemBackend(cfg0))
@@ -440,14 +485,13 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     }
 
     // Shared config arbiter: enabled accelerators -> 1 SharedMemBackend config port
-    val enabledAccelerators = outer.bbEnabledCoreIds.map(i => accelerators(i).get)
-    val cfgArb              = Module(new Arbiter(new MemConfigerIO(cfg0), enabledAccelerators.size))
+    val cfgArb = Module(new Arbiter(new MemConfigerIO(cfg0), enabledAccelerators.size))
     for ((acc, i) <- enabledAccelerators.zipWithIndex) {
       cfgArb.io.in(i) <> acc.io.shared_config
     }
     sharedBackend.io.config <> cfgArb.io.out
 
-    sharedBackend.io.query_vbank_id := core0Acc.io.shared_query_vbank_id
+    sharedBackend.io.query_vbank_id := enabledAccelerators.head.io.shared_query_vbank_id
     for (i <- 0 until nCores) {
       accelerators(i).foreach { acc =>
         acc.io.shared_query_group_count := sharedBackend.io.query_group_count
@@ -463,12 +507,14 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
   } else {
     // No accelerator — tie off RoCC
-    core.io.rocc.cmd.ready  := false.B
-    core.io.rocc.resp.valid := false.B
-    core.io.rocc.resp.bits  := DontCare
-    core.io.rocc.busy       := DontCare
-    core.io.rocc.interrupt  := DontCare
-    core.io.rocc.mem        := DontCare
+    cores.foreach { c =>
+      c.io.rocc.cmd.ready  := false.B
+      c.io.rocc.resp.valid := false.B
+      c.io.rocc.resp.bits  := DontCare
+      c.io.rocc.busy       := DontCare
+      c.io.rocc.interrupt  := DontCare
+      c.io.rocc.mem        := DontCare
+    }
   }
 
   // --- Finalize DCache arbiter and PTW connections (after all ports added) ---
@@ -489,9 +535,9 @@ object BBTile {
    * HasRocketCoreParameters mixins (CSR, decode, etc.), without actually
    * using the LazyRoCC mechanism.
    */
-  def injectBuildRoCC(p: Parameters, withBuckyball: Boolean): Parameters =
+  def injectBuildRoCC(p: Parameters, withBuckyball: Boolean, nCores: Int): Parameters =
     if (withBuckyball)
-      p.alterPartial { case BuildRoCC => Seq((_: Parameters) => null.asInstanceOf[LazyRoCC]) }
+      p.alterPartial { case BuildRoCC => Seq.fill(nCores)((_: Parameters) => null.asInstanceOf[LazyRoCC]) }
     else p
 
 }

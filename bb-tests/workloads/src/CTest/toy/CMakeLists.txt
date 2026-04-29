@@ -119,7 +119,6 @@ add_cross_platform_test_target(ctest_quant_test quant_test.c)
 add_cross_platform_test_target(ctest_dequant_test dequant_test.c)
 add_cross_platform_test_target(ctest_tlb_test tlb_test.c)
 add_cross_platform_test_target(ctest_bdb_counter_test bdb_counter_test.c)
-add_cross_platform_test_target(ctest_bdb_backdoor_test bdb_backdoor_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_basic_test gemmini_os_risc_basic_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_shift_test gemmini_os_risc_shift_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_atranspose_test gemmini_os_risc_atranspose_test.c)
@@ -162,7 +161,6 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_dequant_test
   ctest_tlb_test
   ctest_bdb_counter_test
-  ctest_bdb_backdoor_test
   ctest_gemmini_os_risc_basic_test
   ctest_gemmini_os_risc_shift_test
   ctest_gemmini_os_risc_atranspose_test

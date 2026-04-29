@@ -8,41 +8,30 @@ This directory contains simulation configurations and interfaces for various sim
 sims/
 ├── firesim/
 │   └── TargetConfigs.scala    - FireSim FPGA simulation configuration
-├── verilator/
-│   └── Elaborate.scala        - Verilator simulation top-level generation
-└── verify/
-    └── TargetConfig.scala     - Verification configurations
+└── verilator/
+    └── TargetConfig.scala     - Verilator simulation top-level generation
 ```
 
 ## Verilator Simulation (verilator/)
 
-### Elaborate.scala
+### TargetConfig.scala
 
 Top-level generator for Verilator simulation:
 
 ```scala
 object Elaborate extends App {
-  // Select Ball type from command line arguments
-  val ballType = args.headOption.getOrElse("toy")
-
-  val config = ballType match {
-    case "toy" => new ToyBuckyballConfig
-    case "vec" => new WithBlink(TargetBall.VecBall)
-    case "matrix" => new WithBlink(TargetBall.MatrixBall)
-    case "transpose" => new WithBlink(TargetBall.TransposeBall)
-    case "im2col" => new WithBlink(TargetBall.Im2colBall)
-    case "relu" => new WithBlink(TargetBall.ReluBall)
-    case _ => new ToyBuckyballConfig
+  if (args.isEmpty) {
+    println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
+    sys.exit(1)
   }
 
-  val gen = () => LazyModule(new TestHarness()(config)).module
+  val configClass = Class.forName(args(0))
+  val config = configClass.getDeclaredConstructor().newInstance().asInstanceOf[Config]
 
-  (new ChiselStage).execute(
-    args.tail,  // Remaining args passed to firtool
-    Seq(
-      ChiselGeneratorAnnotation(gen),
-      TargetDirAnnotation("generated-src/verilator")
-    )
+  ChiselStage.emitSystemVerilogFile(
+    new BBSimHarness()(config.toInstance),
+    firtoolOpts = args.drop(1),
+    args = Array.empty
   )
 }
 ```
@@ -85,32 +74,6 @@ class FireSimBuckyballConfig extends Config(
 - Multi-core system performance evaluation
 - I/O-intensive application verification
 
-## Verification Configurations (verify/)
-
-### TargetConfig.scala
-
-Configurations for single Ball device verification:
-
-```scala
-sealed trait TargetBall
-object TargetBall {
-  case object VecBall extends TargetBall
-  case object MatrixBall extends TargetBall
-  case object TransposeBall extends TargetBall
-  case object Im2colBall extends TargetBall
-  case object ReluBall extends TargetBall
-}
-```
-
-**WithBlink Configuration**: Empty configuration class for composing with Ball-specific configs
-
-**Usage**:
-```bash
-# Verify specific Ball device
-mill arch.runMain sims.verilator.Elaborate matrix
-mill arch.runMain sims.verilator.Elaborate transpose
-```
-
 ## Build and Usage
 
 ### Verilator Simulation Build
@@ -118,20 +81,18 @@ mill arch.runMain sims.verilator.Elaborate transpose
 ```bash
 # Generate Verilog
 cd arch
-mill arch.runMain sims.verilator.Elaborate [ball_type]
+mill arch.runMain sims.verilator.Elaborate sims.verilator.BuckyballToyVerilatorConfig
 
 # Build simulator (in sims/verilator directory)
 cd ../../sims/verilator
 make CONFIG=ToyBuckyball
 ```
 
-**Available Ball Types**:
-- `toy`: Complete toy system (default)
-- `vec`: Vector Ball only
-- `matrix`: Matrix Ball only
-- `transpose`: Transpose Ball only
-- `im2col`: Im2col Ball only
-- `relu`: ReLU Ball only
+**Available Verilator Configurations**:
+- `sims.verilator.BuckyballToyVerilatorConfig`
+- `sims.verilator.BuckyballGobanVerilatorConfig`
+- `sims.verilator.BuckyballKonbiVerilatorConfig`
+- `sims.verilator.BuckyballPolyVerilatorConfig`
 
 ### FireSim Deployment
 

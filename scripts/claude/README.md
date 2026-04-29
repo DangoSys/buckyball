@@ -21,7 +21,7 @@ User ──→ Claude Code (slash commands + CLAUDE.md)
                     │
                     └── bbdev server (Motia workflow backend, lifecycle managed by MCP)
                           ├── POST /verilator/run      Full flow: clean->verilog->build->sim
-                          ├── POST /verilator/verilog  Generate Verilog (supports --balltype)
+                          ├── POST /verilator/verilog  Generate Verilog
                           ├── POST /verilator/build    Build Verilator (supports --coverage)
                           ├── POST /verilator/sim      Run simulation (supports --coverage)
                           ├── POST /workload/build     Build CTest

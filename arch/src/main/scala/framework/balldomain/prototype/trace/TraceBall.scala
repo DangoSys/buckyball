@@ -7,11 +7,10 @@ import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink,
 import framework.top.GlobalConfig
 
 /**
- * TraceBall — Debug trace Ball providing cycle counters and SRAM backdoor.
+ * TraceBall — Debug trace Ball providing cycle counters.
  *
- * Uses two funct7 encodings:
- *   - bdb_counter  (funct7=48): cycle counter management
- *   - bdb_backdoor (funct7=49): SRAM backdoor read/write via DPI-C
+ * Uses funct7 encoding:
+ *   - bdb_counter (funct7=4): cycle counter management
  */
 @instantiable
 class TraceBall(val b: GlobalConfig) extends Module with HasBlink {

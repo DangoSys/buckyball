@@ -6,6 +6,7 @@
 out/
 .Xil/
 result
+.codex/
 
 CLAUDE.local.md
 node_modules/
@@ -32,3 +33,6 @@ index.html
 .kiro
 .tmpCRC/
 __pycache__/
+
+package-lock.json
+package.json
