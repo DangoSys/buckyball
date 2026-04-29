@@ -8,7 +8,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path
+from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -27,7 +27,11 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    build_dir = f"{bbdir}/arch/build"
+    build_dir = get_verilator_build_dir(
+        bbdir,
+        input_data.get("config"),
+        input_data.get("output_dir"),
+    )
     # ==================================================================================
     # Execute operation
     # ==================================================================================
@@ -55,7 +59,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(
-            {"topic": "verilator.verilog", "data": {**input_data, "task": "run"}}
+            {"topic": "verilator.verilog", "data": {**input_data, "output_dir": build_dir, "task": "run"}}
         )
 
     return

@@ -23,11 +23,11 @@ NO_PROXY = {"http": None, "https": None, "all": None}
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
 WORKFLOW_COMMANDS = {
     "verilator": {
-        "clean": True,
-        "verilog": 'Generate verilog files. Args: "[--balltype <type>] [--job <num>] [--batch]"',
-        "build": 'Build simulation executable. Args: "[--job <num>]"',
-        "sim": 'Run simulation. Args: "--binary <path> [--batch]"',
-        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+        "clean": 'Clean build directory. Args: "[--config <cfg>] [--output-dir <dir>]"',
+        "verilog": 'Generate verilog files. Args: "[--config <cfg>] [--output-dir <dir>] [--balltype <type>]"',
+        "build": 'Build simulation executable. Args: "[--job <num>] [--config <cfg>] [--output-dir <dir>]"',
+        "sim": 'Run simulation. Args: "--binary <path> [--batch] [--config <cfg>] [--output-dir <dir>]"',
+        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>] [--config <cfg>] [--output-dir <dir>]"',
         "cosim": 'Run cosimulation. Args: "--binary <path> [--batch]"',
     },
     "vcs": {
@@ -73,6 +73,10 @@ WORKFLOW_COMMANDS = {
         "buildbitstream": "Build Vivado bitstream for AU280.",
         "flashbitstream": 'Flash bitstream onto AU280. Args: "[--bitstream <path>] [--serial <url>]"',
         "runworkload": 'Run workload on AU280. Args: "[--workload <name>] [--board <name>] [--timeout <s>] [--uart <dev>]"',
+    },
+    "p2e": {
+        "clean": 'Clean P2E build directory. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
+        "verilog": 'Generate SystemVerilog for P2E DDR4 backdoor. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
     },
     "dc": {
         "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
@@ -264,7 +268,8 @@ def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
     print(error_msg)
     return False
 
-
+# If you find that bbdev has failed without any logs, 
+# you can disable these log filters. These contain the bbdev runtime logs.
 _ENGINE_INFRA_MODULES = (
     "iii::modules::worker",
     "iii::modules::config",

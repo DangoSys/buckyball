@@ -1,6 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import get_buckyball_path
+from utils.path import get_buckyball_path, get_verilator_build_dir
 
 config = {
     "name": "verilator-verilog-api",
@@ -30,7 +30,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "config": config_name,
         "balltype": body.get("balltype"),
-        "output_dir": body.get("output_dir", f"{bbdir}/arch/build/"),
+        "output_dir": get_verilator_build_dir(bbdir, config_name, body.get("output_dir")),
     }
     await ctx.enqueue({"topic": "verilator.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})
