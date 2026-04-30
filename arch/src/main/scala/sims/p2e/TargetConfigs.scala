@@ -7,6 +7,7 @@ import org.chipsalliance.cde.config.Config
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
 import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMMIOPort, WithCustomMemPort}
 import sims.p2e.scu.WithP2ESCU
+import chipyard.config.WithNoDebug
 
 class WithP2EBootROM
     extends Config((site, here, up) => {
@@ -30,6 +31,7 @@ class P2EBaseConfig
     extends Config(
       new WithP2EHarness ++
         new WithP2ESCU ++
+        new WithNoDebug ++ // Disable Debug module for P2E
         new WithCustomMMIOPort(
           base_addr = BigInt("60040000", 16),
           base_size = BigInt("1ffc0000", 16),

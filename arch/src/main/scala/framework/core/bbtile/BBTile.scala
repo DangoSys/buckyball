@@ -42,6 +42,8 @@ import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import sims.p2e.scu.{P2ESCUKey, TLP2ESCU}
+import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
+import freechips.rocketchip.tilelink.{TLCacheCork, TLFilter}
 
 /**
  * BBTile — a composable tile containing one Rocket core + optional per-core-index Buckyball slots.
@@ -175,6 +177,42 @@ class BBTile private (
   }
 
   // ---------------------------------------------------------------------------
+  // Per-tile private L2 cache (optional)
+  // ---------------------------------------------------------------------------
+  val tileL2 = bbParams.l2cache.map { l2params =>
+    val l2 = LazyModule(new InclusiveCache(
+      CacheParameters(
+        level = 2,
+        ways = l2params.ways,
+        sets = l2params.sets,
+        blockBytes = p(freechips.rocketchip.subsystem.CacheBlockBytes),
+        beatBytes = masterPortBeatBytes,
+        hintsSkipProbe = false
+      ),
+      InclusiveCacheMicroParameters(
+        writeBytes = l2params.writeBytes,
+        portFactor = l2params.portFactor,
+        memCycles = l2params.memCycles,
+        innerBuf = l2params.bufInnerInterior,
+        outerBuf = l2params.bufOuterInterior
+      ),
+      None // No control port for per-tile L2
+    ))
+    l2.suggestName(s"tile_l2_${bbParams.tileId}")
+
+    // Create buffers and cork for L2
+    val l2_inner_buffer = l2params.bufInnerExterior()
+    val l2_outer_buffer = l2params.bufOuterExterior()
+    val cork            = LazyModule(new TLCacheCork)
+
+    l2_inner_buffer.suggestName(s"tile_l2_${bbParams.tileId}_inner_buffer")
+    l2_outer_buffer.suggestName(s"tile_l2_${bbParams.tileId}_outer_buffer")
+    cork.suggestName(s"tile_l2_${bbParams.tileId}_cork")
+
+    (l2, l2_inner_buffer, l2_outer_buffer, cork)
+  }
+
+  // ---------------------------------------------------------------------------
   // TileLink topology
   // ---------------------------------------------------------------------------
   p(P2ESCUKey).foreach { params =>
@@ -187,7 +225,21 @@ class BBTile private (
   }
 
   tlOtherMastersNode := tile_master_blocker.map(_.node := tlMasterXbar.node).getOrElse(tlMasterXbar.node)
-  masterNode :=* tlOtherMastersNode
+
+  // Route through L2 if present, otherwise connect directly to masterNode
+  tileL2 match {
+    case Some((l2, innerBuf, outerBuf, cork)) =>
+      // Topology: tlOtherMastersNode -> innerBuf -> L2 -> outerBuf -> cork -> masterNode
+      innerBuf.node :*= tlOtherMastersNode
+      l2.node :*= innerBuf.node
+      outerBuf.node :*= l2.node
+      cork.node :*= outerBuf.node
+      masterNode :=* cork.node
+    case None                                 =>
+      // Direct connection (original behavior)
+      masterNode :=* tlOtherMastersNode
+  }
+
   DisableMonitors(implicit p => tlSlaveXbar.node :*= slaveNode)
 
   // DCache port count: core + PTW(via usingVM) + DTIM + vector + RoCC tieoff
