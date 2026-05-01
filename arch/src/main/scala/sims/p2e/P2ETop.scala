@@ -149,6 +149,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  localparam MMIO_ID_BITS   = 4;
       |
       |  wire c0_init_calib_complete;
+      |  wire init_calib_complete_unused;  // Unused output from DDR4 controller
       |  wire soc_reset = !sys_rstn || !c0_init_calib_complete;
       |  assign init_calib_complete = c0_init_calib_complete;
       |
@@ -215,14 +216,15 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  DigitalTop soc (
       |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock (user_clk),
       |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_reset (soc_reset),
-      |    .resetctrl_hartIsInReset_0 (1'b0),
-      |    .debug_clock               (user_clk),
-      |    .debug_reset               (soc_reset),
-      |    .debug_systemjtag_reset    (soc_reset),
-      |    .debug_systemjtag_jtag_TCK (1'b0),
-      |    .debug_systemjtag_jtag_TMS (1'b1),
-      |    .debug_systemjtag_jtag_TDI (1'b1),
-      |    .debug_dmactiveAck         (1'b0),
+      |    // Debug ports removed - WithNoDebug config doesn't generate these ports
+      |    // .resetctrl_hartIsInReset_0 (1'b0),
+      |    // .debug_clock               (user_clk),
+      |    // .debug_reset               (soc_reset),
+      |    // .debug_systemjtag_reset    (soc_reset),
+      |    // .debug_systemjtag_jtag_TCK (1'b0),
+      |    // .debug_systemjtag_jtag_TMS (1'b1),
+      |    // .debug_systemjtag_jtag_TDI (1'b1),
+      |    // .debug_dmactiveAck         (1'b0),
       |    .mem_axi4_0_aw_ready       (mem_awready),
       |    .mem_axi4_0_aw_valid       (mem_awvalid),
       |    .mem_axi4_0_aw_bits_id     (mem_awid),
@@ -352,7 +354,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .init_start               (1'b1),
       |    .init_cfg                 (1'b0),
       |    .init_busy                (),
-      |    .init_calib_complete      (),
+      |    .init_calib_complete      (init_calib_complete_unused),
       |    .c0_init_calib_complete   (c0_init_calib_complete),
       |    .axi_clk                  (user_clk),
       |    .s0_ddr4_s_axi_awid       (mem_awid),
