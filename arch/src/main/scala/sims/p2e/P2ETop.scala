@@ -456,10 +456,12 @@ class P2ETop extends RawModule {
   io.c0_ddr4_ck_t        := top.io.c0_ddr4_ck_t
   io.c0_ddr4_ck_c        := top.io.c0_ddr4_ck_c
   io.c0_ddr4_reset_n     := top.io.c0_ddr4_reset_n
-  attach(io.c0_ddr4_dm_dbi_n, top.io.c0_ddr4_dm_dbi_n)
-  attach(io.c0_ddr4_dq, top.io.c0_ddr4_dq)
-  attach(io.c0_ddr4_dqs_c, top.io.c0_ddr4_dqs_c)
-  attach(io.c0_ddr4_dqs_t, top.io.c0_ddr4_dqs_t)
+  // DDR4 inout ports are managed by netlist macro (xepic_ddr4_dc1)
+  // Do not connect them to avoid VCOM terminal register requirement
+  // attach(io.c0_ddr4_dm_dbi_n, top.io.c0_ddr4_dm_dbi_n)
+  // attach(io.c0_ddr4_dq, top.io.c0_ddr4_dq)
+  // attach(io.c0_ddr4_dqs_c, top.io.c0_ddr4_dqs_c)
+  // attach(io.c0_ddr4_dqs_t, top.io.c0_ddr4_dqs_t)
   io.c0_ddr4_ui_clk      := top.io.c0_ddr4_ui_clk
   io.init_calib_complete := top.io.init_calib_complete
   io.ddr4_en_vtt         := top.io.ddr4_en_vtt
