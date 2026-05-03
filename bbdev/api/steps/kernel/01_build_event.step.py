@@ -12,6 +12,12 @@ from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 
+# Import bin_to_hex converter
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
+from bin_to_hex import bin_to_hex
+
 config = {
     "name": "kernel-build",
     "description": "build RISC-V kernel + rootfs for Pegasus via bb-tests/workloads/lib/kernel",
@@ -55,5 +61,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="marshal build",
     )
 
-    await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
+    if result.returncode != 0:
+        await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
+        return
+
+    # Convert bin to hex for P2E memory backdoor
+    bin_file = os.path.join(output_dir, "pegasus-bin")
+    hex_file = os.path.join(output_dir, "pegasus.hex")
+
+    if os.path.exists(bin_file):
+        ctx.logger.info(f"Converting {bin_file} to Verilog hex format...")
+        success = bin_to_hex(bin_file, hex_file)
+        if not success:
+            ctx.logger.warning("Failed to convert bin to hex, but continuing...")
+
+    await check_result(ctx, 0, continue_run=False, trace_id=origin_tid)
 
