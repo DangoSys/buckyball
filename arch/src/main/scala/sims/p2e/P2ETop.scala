@@ -113,6 +113,33 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  end
       |endmodule
       |
+      |// P2E Memory Address Translator
+      |// Translates CPU's virtual address space (0x80000000-based) to DDR physical address space (0x0-based)
+      |//
+      |// Background:
+      |//   - CPU uses 0x80000000 as RAM base address (standard RISC-V convention)
+      |//   - DDR physical memory starts at address 0x0
+      |//   - TileLink-to-AXI4 converter does NOT subtract the base address
+      |//   - This module fixes the address mapping by clearing bit 31
+      |//
+      |// Address mapping:
+      |//   CPU 0x80000000 -> DDR 0x00000000
+      |//   CPU 0x80000004 -> DDR 0x00000004
+      |//   ...
+      |//   CPU 0xFFFFFFFF -> DDR 0x7FFFFFFF
+      |//
+      |module p2e_mem_addr_translator #(
+      |  parameter ADDR_IN_BITS  = 32,  // Input address width from DigitalTop
+      |  parameter ADDR_OUT_BITS = 64   // Output address width for DDR controller
+      |)(
+      |  input  [ADDR_IN_BITS-1:0]  addr_in,   // Address from CPU (e.g., 0x80000000)
+      |  output [ADDR_OUT_BITS-1:0] addr_out   // Address to DDR (e.g., 0x00000000)
+      |);
+      |  // Clear bit 31 (MSB of 32-bit address) to map 0x8xxxxxxx -> 0x0xxxxxxx
+      |  // Then zero-extend to 64-bit for DDR controller
+      |  assign addr_out = {{(ADDR_OUT_BITS-ADDR_IN_BITS+1){1'b0}}, addr_in[ADDR_IN_BITS-2:0]};
+      |endmodule
+      |
       |module P2ETopBlackBox(
       |  input         user_clk,
       |  input         sys_rstn,
@@ -153,8 +180,12 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire soc_reset = !sys_rstn || !c0_init_calib_complete;
       |  assign init_calib_complete = c0_init_calib_complete;
       |
+      |  // Memory AXI interface signals
+      |  // Note: DigitalTop outputs 32-bit addresses, but DDR controller expects 64-bit
+      |  // We use address translator modules to handle the width conversion and base address mapping
       |  wire [MEM_ID_BITS-1:0]     mem_awid;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;
+      |  wire [31:0]                mem_awaddr_soc;  // 32-bit address from DigitalTop
+      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_awlen;
       |  wire [2:0]                 mem_awsize;
       |  wire [1:0]                 mem_awburst;
@@ -170,7 +201,8 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mem_bvalid;
       |  wire                       mem_bready;
       |  wire [MEM_ID_BITS-1:0]     mem_arid;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;
+      |  wire [31:0]                mem_araddr_soc;  // 32-bit address from DigitalTop
+      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_arlen;
       |  wire [2:0]                 mem_arsize;
       |  wire [1:0]                 mem_arburst;
@@ -182,6 +214,23 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mem_rlast;
       |  wire                       mem_rvalid;
       |  wire                       mem_rready;
+      |
+      |  // Memory address translators: CPU virtual address -> DDR physical address
+      |  p2e_mem_addr_translator #(
+      |    .ADDR_IN_BITS(32),
+      |    .ADDR_OUT_BITS(64)
+      |  ) mem_awaddr_xlate (
+      |    .addr_in(mem_awaddr_soc),
+      |    .addr_out(mem_awaddr)
+      |  );
+      |
+      |  p2e_mem_addr_translator #(
+      |    .ADDR_IN_BITS(32),
+      |    .ADDR_OUT_BITS(64)
+      |  ) mem_araddr_xlate (
+      |    .addr_in(mem_araddr_soc),
+      |    .addr_out(mem_araddr)
+      |  );
       |
       |  wire [MMIO_ID_BITS-1:0]    mmio_awid;
       |  wire [MMIO_ADDR_BITS-1:0]  mmio_awaddr;
@@ -228,7 +277,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_aw_ready       (mem_awready),
       |    .mem_axi4_0_aw_valid       (mem_awvalid),
       |    .mem_axi4_0_aw_bits_id     (mem_awid),
-      |    .mem_axi4_0_aw_bits_addr   (mem_awaddr),
+      |    .mem_axi4_0_aw_bits_addr   (mem_awaddr_soc),
       |    .mem_axi4_0_aw_bits_len    (mem_awlen),
       |    .mem_axi4_0_aw_bits_size   (mem_awsize),
       |    .mem_axi4_0_aw_bits_burst  (mem_awburst),
@@ -244,7 +293,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_ar_ready       (mem_arready),
       |    .mem_axi4_0_ar_valid       (mem_arvalid),
       |    .mem_axi4_0_ar_bits_id     (mem_arid),
-      |    .mem_axi4_0_ar_bits_addr   (mem_araddr),
+      |    .mem_axi4_0_ar_bits_addr   (mem_araddr_soc),
       |    .mem_axi4_0_ar_bits_len    (mem_arlen),
       |    .mem_axi4_0_ar_bits_size   (mem_arsize),
       |    .mem_axi4_0_ar_bits_burst  (mem_arburst),
