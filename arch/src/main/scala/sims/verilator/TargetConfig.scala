@@ -46,6 +46,14 @@ class BuckyballPolyVerilatorConfig
         new examples.poly.BuckyballPolyConfig
     )
 
+class BuckyballGoban24Tile16CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithDefaultMMIOPort ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban24Tile16CoreConfigWithL2
+    )
+
 object Elaborate extends App {
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
