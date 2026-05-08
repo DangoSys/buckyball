@@ -101,3 +101,58 @@ class BuckyballGoban2TileConfigWithLargeL2
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
     )
+
+// ==============================================================================
+// Large-Scale Multi-Tile Configuration (24 tiles × 16 cores)
+// ==============================================================================
+
+/**
+ * Helper config fragment to load 24-tile configuration from JSON.
+ *
+ * Reads tiles24x16core.json which defines 24 tiles, each with 16 cores.
+ * Each tile has its own private L2 cache, and all tiles share a system-level L3.
+ */
+class WithGoban24Tiles16CoresPerTile(withBuckyball: Boolean = true)
+    extends Config(WithGoban24Tiles16CoresPerTile.assemble(withBuckyball))
+
+object WithGoban24Tiles16CoresPerTile {
+
+  def assemble(withBuckyball: Boolean): org.chipsalliance.cde.config.Parameters = {
+    val jsonStr     = scala.io.Source.fromFile("src/main/scala/examples/goban/tiles/configs/tiles24x16core.json").mkString
+    val tilesConfig = upickle.default.read[examples.goban.tiles.configs.TilesConfig](jsonStr)
+    val tileConfigs = tilesConfig.tileConfigs
+
+    require(
+      tileConfigs.size == 24,
+      s"tiles24x16core.json must list exactly 24 tile configs, found ${tileConfigs.size}"
+    )
+
+    val fragments: Seq[org.chipsalliance.cde.config.Config] = tileConfigs.map { name =>
+      val perCore  = framework.builtin.configloader.ConfigLoader.loadApply[Seq[Option[framework.top.GlobalConfig]]](name)
+      val resolved = if (withBuckyball) perCore else perCore.map(_ => None)
+      new framework.core.bbtile.WithBBTile(
+        withBuckyball = resolved.exists(_.isDefined),
+        nCoresPerTile = perCore.size,
+        buckyballPerCore = Some(resolved)
+      )
+    }
+
+    fragments.reduce[org.chipsalliance.cde.config.Parameters](_ ++ _)
+  }
+
+}
+
+/**
+ * 24-tile × 16-core configuration with per-tile private L2 cache.
+ *
+ * - 24 BBTiles, each with 16 Buckyball cores (384 cores total)
+ * - Each tile has 1MB private L2 cache (8-way)
+ * - All tiles share system-level L3 cache for coherence
+ */
+class BuckyballGoban24Tile16CoreConfigWithL2
+    extends Config(
+      new WithGobanPerTileL2(ways = 8, capacityKB = 1024) ++
+        new WithGoban24Tiles16CoresPerTile ++
+        new chipyard.config.WithSystemBusWidth(256) ++
+        new chipyard.config.AbstractConfig
+    )
