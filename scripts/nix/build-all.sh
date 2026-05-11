@@ -83,14 +83,17 @@ git submodule update --init --progress \
   bebop \
   compiler/thirdparty/buddy-mlir \
   docs \
-  thirdparty/pegasus \
   thirdparty/waveform-mcp
-# I dont know why below is need for buckyball submodules, but it is
-git -C ${BBDIR} submodule update --init --checkout --force thirdparty/pegasus
 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells generators/* tools/* sims/firesim
 # I dont know why below is need for chipyard submodules, but it is
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde tools/rocket-dsp-utils generators/rocc-acc-utils generators/bar-fetchers
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/* 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/* 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/rocket-dsp-utils 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocc-acc-utils 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/bar-fetchers
 ##########################################
 
 begin_step "0-2" "Nix environment setup"
