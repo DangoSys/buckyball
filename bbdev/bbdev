@@ -53,6 +53,7 @@ WORKFLOW_COMMANDS = {
         "build": "Build RISC-V kernel + rootfs for Pegasus (cmake kernel-build).",
     },
     "firesim": {
+        "enumeratefpgas": "Enumerate FPGAs.",
         "buildbitstream": "Build bitstream.",
         "infrasetup": "Infrasetup.",
         "runworkload": "Run workload.",

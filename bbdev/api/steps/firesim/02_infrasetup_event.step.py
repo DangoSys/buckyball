@@ -24,7 +24,7 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    script_dir = f"{bbdir}/workflow/steps/firesim/scripts"
+    script_dir = f"{bbdir}/bbdev/api/steps/firesim/scripts"
     yaml_dir = f"{script_dir}/yaml"
     # ==================================================================================
     # Execute operation
