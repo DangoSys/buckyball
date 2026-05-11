@@ -86,13 +86,14 @@ git submodule update --init --progress \
   thirdparty/waveform-mcp
 
 # I dont know why below is need for chipyard submodules, but it is
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/* 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/* 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/*
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/*
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/rocket-dsp-utils 
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocc-acc-utils 
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/firrtl2
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/rocket-dsp-utils
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocc-acc-utils
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/bar-fetchers
 ##########################################
 
@@ -119,7 +120,7 @@ fi
 if run_step "2"; then
   begin_step "2" "Compiler installation"
   cd ${BBDIR}/compiler/thirdparty/buddy-mlir
-  git submodule update --init llvm
+  git submodule update --init --progress llvm
 
   mkdir -p llvm/build && cd llvm/build
   cmake -G Ninja ../llvm \

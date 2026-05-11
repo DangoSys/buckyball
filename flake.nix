@@ -55,7 +55,7 @@
               bbdev.gnumake
               bbdev.pkg-config
 
-              # Kernel build tools (RISC-V kernel + rootfs for Pegasus)
+              # Kernel build tools (RISC-V kernel + rootfs)
               kernel.e2fsprogs
 
               # C libraries (headers + link libs)

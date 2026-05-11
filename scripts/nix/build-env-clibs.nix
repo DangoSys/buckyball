@@ -13,7 +13,7 @@
   # buddy DIP imgcodecs (grfmt_png.h)
   png-dev = pkgs.libpng.dev;
   png = pkgs.libpng;
-  # pegasus-driver: ELF parsing for kernel loading
+  # ELF parsing for kernel loading
   elfutils-dev = pkgs.elfutils.dev;
   elfutils = pkgs.elfutils;
 }

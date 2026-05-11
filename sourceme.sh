@@ -39,3 +39,6 @@ export PYTHONPATH="${BBDIR}/bbdev/api:${PYTHONPATH}"
 
 # sardine
 export PYTHONPATH="${BBDIR}/lib/python3.13/site-packages:${PYTHONPATH}"
+
+# firesim manager
+export PATH="${BBDIR}/arch/thirdparty/chipyard/sims/firesim/deploy:${PATH}"

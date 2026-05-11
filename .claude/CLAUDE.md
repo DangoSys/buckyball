@@ -77,8 +77,6 @@ The project configures the `buckyball-dev` MCP server with the following tools.
 - `bbdev_verilator_sim(binary, batch?, coverage?)` — run simulation (requires prior build)
 - `bbdev_sardine_run(workload?, coverage?)` — run batch tests
 - `bbdev_yosys_synth(top?, config?)` — Yosys synthesis + OpenSTA timing analysis
-- `bbdev_pegasus_flashbitstream(bitstream?, serial?, bus_id?)` — flash bitstream onto AU280 via Vivado + PCIe remove/rescan
-- `bbdev_pegasus_runworkload(workload?, board?, timeout?, uart?, control?, h2c?)` — load kernel+rootfs into HBM2 and run on AU280; UART log at `arch/log/<timestamp>/pegasus_uart.log`
 
 Default config value: `sims.verilator.BuckyballToyVerilatorConfig`
 Simulation binary naming format: `ctest_<name>_test_singlecore-baremetal`
