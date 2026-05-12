@@ -90,11 +90,20 @@ git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/*
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/*
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/stage
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/firrtl2
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/rocket-dsp-utils
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocc-acc-utils
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/bar-fetchers
+
+# FireSim sim/ has its own submodules (cde, rocket-chip, diplomacy, berkeley-hardfloat)
+rm -rf ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/cde \
+       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/rocket-chip \
+       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/diplomacy \
+       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/berkeley-hardfloat
+git -C ${BBDIR}/arch/thirdparty/chipyard/sims/firesim submodule update --init --progress \
+  sim/cde sim/rocket-chip sim/diplomacy sim/berkeley-hardfloat
 ##########################################
 
 begin_step "0-2" "Nix environment setup"
@@ -149,9 +158,20 @@ fi
 
 if run_step "3"; then
   begin_step "3" "arch pre-compile sources"
-  # Generate firrtl2 ANTLR and compile firrtl2 in chipyard first (avoids antlr missing when arch compiles chipyard)
+
+  # Pre-compile chipyard dependencies in order
+  # These must be compiled separately before arch/buckyball can use them
   cd ${BBDIR}/arch/thirdparty/chipyard
+
+  # 1. cde provides org.chipsalliance.cde.config (required by rocketchip and firesim)
+  # sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "cde/compile"
+
+  # 2. firrtl2 generates ANTLR parsers (required by chipyard)
   sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "firrtl2/compile"
+
+  # 3. chipyard includes tools/stage sources (required by firesim)
+  # sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "chipyard/compile"
+
   cd ${BBDIR}/arch
   bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
 fi

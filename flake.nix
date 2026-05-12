@@ -69,6 +69,10 @@
               clibs.png
               clibs.elfutils-dev
               clibs.elfutils
+              clibs.gmp-dev
+              clibs.gmp
+              clibs.libdwarf-dev
+              clibs.libdwarf
 
               # Compiler tools
               compiler.flatbuffers
@@ -108,6 +112,10 @@
               clibs.png
               clibs.elfutils-dev
               clibs.elfutils
+              clibs.gmp-dev
+              clibs.gmp
+              clibs.libdwarf-dev
+              clibs.libdwarf
 
               compiler.flatbuffers
               compiler.numactl

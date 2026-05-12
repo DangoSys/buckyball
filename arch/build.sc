@@ -10,7 +10,6 @@ import mill.bsp._
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion   = "2.13.12"
-  private val hasPegasus      = os.exists(os.pwd / os.up / "thirdparty" / "pegasus" / "chisel")
 
   override def scalacOptions = Seq(
     "-language:reflectiveCalls",
@@ -24,7 +23,7 @@ object buckyball extends SbtModule { m =>
   override def moduleDeps = Seq(
     chipyard,
     firechip
-  ) ++ (if (hasPegasus) Seq(pegasus) else Seq.empty)
+  )
 
   override def ivyDeps = Agg(
     // ivy"org.chipsalliance::chisel:6.5.0",
@@ -932,32 +931,6 @@ object fpga_shells extends SbtModule {
 
   override def scalacPluginIvyDeps = Agg(
     ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-  )
-
-}
-
-// Pegasus FPGA framework Chisel sources
-// Physical location: pegasus/chisel/ (outside arch/)
-// Pure Chisel only — no Chipyard dependency (avoids circular dep with buckyball)
-// buckyball depends on pegasus (one-way)
-object pegasus extends SbtModule {
-  override def millSourcePath = os.pwd / os.up / "thirdparty" / "pegasus" / "chisel"
-  override def scalaVersion   = "2.13.12"
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.5.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.5.0"
-  )
-
-  override def scalacOptions = Seq(
-    "-language:reflectiveCalls",
-    "-deprecation",
-    "-feature",
-    "-Xcheckinit",
-    "-Ymacro-annotations"
   )
 
 }
