@@ -38,6 +38,23 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     env = setup_firesim_env()
 
     # ==================================================================================
+    # Fix AU280 board_part version (1.2 -> 1.0) for Vivado compatibility
+    # ==================================================================================
+    au280_tcl = f"{bbdir}/arch/thirdparty/chipyard/sims/firesim/platforms/xilinx_alveo_u280/cl_firesim/scripts/au280.tcl"
+    if os.path.exists(au280_tcl):
+        with open(au280_tcl, "r") as f:
+            content = f.read()
+        # Replace xilinx.com:au280:part0:1.2 with xilinx.com:au280:part0:1.0
+        fixed_content = content.replace(
+            "xilinx.com:au280:part0:1.2",
+            "xilinx.com:au280:part0:1.0"
+        )
+        if content != fixed_content:
+            with open(au280_tcl, "w") as f:
+                f.write(fixed_content)
+            ctx.logger.info("Fixed AU280 board_part version: 1.2 -> 1.0")
+
+    # ==================================================================================
     # Execute operation
     # ==================================================================================
     command = f"firesim buildbitstream "
