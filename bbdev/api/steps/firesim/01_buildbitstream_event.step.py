@@ -12,6 +12,13 @@ from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 
+# Add scripts directory to path for firesim_env import
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
+
+from firesim_env import setup_firesim_env
+
 config = {
     "name": "firesim-buildbitstream",
     "description": "build bitstream",
@@ -26,6 +33,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     script_dir = f"{bbdir}/bbdev/api/steps/firesim/scripts"
     yaml_dir = f"{script_dir}/yaml"
+
+    # Setup FireSim environment variables and SSH agent
+    env = setup_firesim_env()
+
     # ==================================================================================
     # Execute operation
     # ==================================================================================
@@ -39,6 +50,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         logger=ctx.logger,
         stdout_prefix="firesim buildbitstream",
         stderr_prefix="firesim buildbitstream",
+        env=env,
     )
 
     # ==================================================================================

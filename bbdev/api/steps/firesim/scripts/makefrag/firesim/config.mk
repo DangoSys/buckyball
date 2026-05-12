@@ -4,7 +4,9 @@
 # Only used in this projects makefrags
 makefile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 makefile_dir := $(patsubst %/,%,$(dir $(makefile_path)))
-chipyard_dir := $(abspath $(makefile_dir)/../../../../../../arch/thirdparty/chipyard)
+# makefile_dir = .../bbdev/api/steps/firesim/scripts/makefrag/firesim/
+# Need to go up 7 levels to reach buckyball root
+chipyard_dir := $(abspath $(makefile_dir)/../../../../../../../arch/thirdparty/chipyard)
 
 # These point at the main class of the target's Chisel generator
 DESIGN_PACKAGE ?= firechip.chip
@@ -23,8 +25,8 @@ PLATFORM_CONFIG ?= BaseF1Config
 TARGET_SBT_PROJECT := buckyball
 
 # Point to our project directory
-TARGET_SBT_DIR := $(abspath $(makefile_dir)/../../../../../../arch)
-TARGET_SOURCE_DIRS := $(abspath $(makefile_dir)/../../../../../../arch/src/main/scala)
+TARGET_SBT_DIR := $(abspath $(makefile_dir)/../../../../../../../arch)
+TARGET_SOURCE_DIRS := $(abspath $(makefile_dir)/../../../../../../../arch/src/main/scala)
 
 # SBT launcher
 SBT ?= java -jar $(chipyard_dir)/scripts/sbt-launch.jar $(SBT_OPTS)
