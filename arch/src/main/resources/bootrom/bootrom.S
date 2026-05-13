@@ -23,9 +23,9 @@ _start:
     csrc    mip, a0
 
 1:
-    # Enable machine software and timer interrupts
-    # MSIP (bit 3 = 0x8) + MTIE (bit 7 = 0x80) = 0x88
-    li      a0, 0x88
+    # Enable machine software interrupt only
+    # MSIP (bit 3 = 0x8)
+    li      a0, 0x8
     csrw    mie, a0
     csrs    mstatus, a0
 
