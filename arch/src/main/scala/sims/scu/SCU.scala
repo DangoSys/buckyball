@@ -38,8 +38,8 @@ class SCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
   setInline(
     s"SCUWriteDPI_$hartId.v",
     s"""
-       |import "DPI-C" context function void p2e_uart_write(input bit [31:0] hart_id, input bit [7:0] ch);
-       |import "DPI-C" context function void p2e_sim_exit(input bit [31:0] hart_id, input bit [31:0] code);
+       |import "DPI-C" context function void scu_uart_write(input int unsigned hart_id, input int unsigned ch);
+       |import "DPI-C" context function void scu_sim_exit(input int unsigned hart_id, input int unsigned code);
        |
        |module SCUWriteDPI_$hartId(
        |  input        clock,
@@ -54,17 +54,14 @@ class SCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
        |    scu_${hartId}_hart_id = $hartId;
        |  endfunction
        |
-       |  bit uart_ack;
-       |  bit exit_ack;
-       |
        |  always @(posedge clock) begin
        |    if (!reset) begin
        |      if (uart_valid) begin
-       |        scu_uart_write($hartId, {24'h0, uart_data}, uart_ack);
+       |        scu_uart_write($hartId, {24'h0, uart_data});
        |      end
        |
        |      if (exit_valid) begin
-       |        scu_sim_exit($hartId, exit_code, exit_ack);
+       |        scu_sim_exit($hartId, exit_code);
        |      end
        |    end
        |  end

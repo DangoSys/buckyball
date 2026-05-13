@@ -1,6 +1,6 @@
-# Buckyball P2E Bootrom Makefile
-# Input: p2e.S
-# Output: p2e.bootrom.img
+# Buckyball Bootrom Makefile
+# Input: bootrom.S
+# Output: bootrom.img
 
 # Toolchain (will be provided by nix develop)
 CC = riscv64-none-elf-gcc
@@ -11,9 +11,9 @@ CFLAGS = -march=rv64ima_zicsr -mabi=lp64 -nostdlib -static
 LDFLAGS = -Wl,--build-id=none -Wl,-Ttext=0x10000
 
 # Files
-SRC = p2e.S
-ELF = p2e.bootrom.elf
-IMG = p2e.bootrom.img
+SRC = bootrom.S
+ELF = bootrom.elf
+IMG = bootrom.img
 
 .PHONY: all clean
 
