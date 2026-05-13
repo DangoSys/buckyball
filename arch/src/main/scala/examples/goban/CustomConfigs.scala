@@ -9,7 +9,7 @@ class BuckyballGobanConfig
     extends Config(
       new WithNGobanTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 /** 2 BBTiles × 4 slots = 8 total slots */
@@ -18,7 +18,7 @@ class BuckyballGoban2TileConfig
       new WithNGobanTiles ++
         new WithNGobanTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 // ==============================================================================
@@ -68,7 +68,7 @@ class BuckyballGobanConfigWithL2
       new WithGobanPerTileL2(ways = 8, capacityKB = 512) ++
         new WithNGobanTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 /**
@@ -84,7 +84,7 @@ class BuckyballGoban2TileConfigWithL2
         new WithNGobanTiles ++
         new WithNGobanTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 /**
@@ -99,7 +99,7 @@ class BuckyballGoban2TileConfigWithLargeL2
         new WithNGobanTiles ++
         new WithNGobanTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 // ==============================================================================
@@ -154,5 +154,5 @@ class BuckyballGoban24Tile16CoreConfigWithL2
       new WithGobanPerTileL2(ways = 8, capacityKB = 1024) ++
         new WithGoban24Tiles16CoresPerTile ++
         new chipyard.config.WithSystemBusWidth(256) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )

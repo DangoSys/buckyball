@@ -23,6 +23,7 @@ import freechips.rocketchip.resources.{
 import freechips.rocketchip.interrupts.IntIdentityNode
 import freechips.rocketchip.tilelink.{
   TLBuffer,
+  TLCacheCork,
   TLClientNode,
   TLClientParameters,
   TLFragmenter,
@@ -41,6 +42,7 @@ import framework.core.bbtile.id.RVVRoCCDecode
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
 import sims.scu.{SCUKey, TLSCU}
 
 /**

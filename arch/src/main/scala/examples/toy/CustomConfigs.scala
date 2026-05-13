@@ -18,7 +18,7 @@ class BuckyballToyConfig
     extends Config(
       new WithNToyTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 /** Single Rocket core only (no Buckyball) */
@@ -26,7 +26,7 @@ class BuckyballToyRocketOnlyConfig
     extends Config(
       new WithNToyTiles(withBuckyball = false) ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )
 
 // Increase BootROM size for large core counts

@@ -16,3 +16,4 @@ build/
 log/
 
 *.sv
+gemmini_params.h
