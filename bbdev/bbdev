@@ -75,9 +75,22 @@ WORKFLOW_COMMANDS = {
         "flashbitstream": 'Flash bitstream onto AU280. Args: "[--bitstream <path>] [--serial <url>]"',
         "runworkload": 'Run workload on AU280. Args: "[--workload <name>] [--board <name>] [--timeout <s>] [--uart <dev>]"',
     },
-    "p2e": {
-        "clean": 'Clean P2E build directory. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
-        "verilog": 'Generate SystemVerilog for P2E DDR4 backdoor. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
+    "bebop-bemu": {
+        "build": "Build Bebop emulator.",
+        "sim": 'Run Bebop emulator simulation. Args: "--binary <path> [--batch]"',
+    },
+    "bebop-verilator": {
+        "clean": 'Clean Bebop Verilator build directory. Args: "[--config <cfg>] [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop Verilog files. Args: "[--config <cfg>] [--output-dir <dir>]"',
+        "build": 'Build Bebop Verilator simulation executable. Args: "[--jobs <num>] [--config <cfg>] [--output-dir <dir>]"',
+        "sim": 'Run Bebop Verilator simulation. Args: "--binary <path> [--batch] [--config <cfg>] [--output-dir <dir>]"',
+        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--batch] [--jobs <num>] [--config <cfg>] [--output-dir <dir>]"',
+    },
+    "bebop-p2e": {
+        "clean": 'Clean Bebop P2E build directory. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
+        "buildbitstream": "Build Bebop P2E bitstream.",
+        "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
     },
     "dc": {
         "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
@@ -350,7 +363,7 @@ def run_server_mode(args, cmd_info):
             )
 
     elif command in WORKFLOW_COMMANDS:
-        api_path = f"/{command}/{cmd_info['operation']}"
+        api_path = f"/{command.replace('-', '/')}/{cmd_info['operation']}"
         resp = requests.post(
             f"http://localhost:{args.port}{api_path}",
             json=cmd_info["args"],
@@ -428,7 +441,7 @@ def run_script_mode(args, cmd_info):
         print(f"Available commands: {', '.join(ALL_COMMANDS)}")
         sys.exit(1)
 
-    api_path = f"/{command}/{cmd_info['operation']}"
+    api_path = f"/{command.replace('-', '/')}/{cmd_info['operation']}"
 
     # Reserve both ports atomically to prevent TOCTOU races with concurrent bbdev instances.
     # Sockets stay bound until the engine has taken over (HTTP is up), then are released.

@@ -4,11 +4,11 @@ from utils.path import get_buckyball_path
 from utils.path import get_verilator_build_dir
 
 config = {
-    "name": "p2e-verilog-api",
+    "name": "bebop-p2e-verilog-api",
     "description": "Generate SystemVerilog for P2E DDR4 backdoor",
-    "flows": ["p2e"],
-    "triggers": [api("POST", "/p2e/verilog")],
-    "enqueues": ["p2e.verilog"],
+    "flows": ["bebop"],
+    "triggers": [api("POST", "/bebop/p2e/verilog")],
+    "enqueues": ["bebop.p2e.verilog"],
 }
 
 
@@ -23,5 +23,5 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "config": config_name,
         "output_dir": output_dir,
     }
-    await ctx.enqueue({"topic": "p2e.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue({"topic": "bebop.p2e.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -7,21 +7,21 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path
-from utils.path import get_verilator_build_dir
+from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
-    "name": "make p2e verilog",
-    "description": "Generate DigitalTop RTL and P2E DDR4 backdoor wrapper",
-    "flows": ["p2e"],
-    "triggers": [queue("p2e.verilog")],
+    "name": "bebop-p2e-verilog",
+    "description": "Generate P2E Verilog via mill",
+    "flows": ["bebop"],
+    "triggers": [queue("bebop.p2e.verilog")],
     "enqueues": [],
 }
 
 
 def cleanup_strays(arch_dir: str):
+    """Remove stray generated files from arch directory"""
     for stray in ["P2EHarness.sv", "P2ETop.v", "P2ETopWrapper.sv"]:
         path = os.path.join(arch_dir, stray)
         if os.path.exists(path):
@@ -29,6 +29,7 @@ def cleanup_strays(arch_dir: str):
 
 
 def normalize_p2e_timescale(build_dir: str, logger):
+    """Add timescale directive to generated Verilog files"""
     patched = 0
     for root, _, files in os.walk(build_dir):
         for name in files:
@@ -70,6 +71,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--split-verilog -o={build_dir}"
     )
 
+    # Generate digital top Verilog
     digital_command = (
         f"mill -i __.test.runMain sims.p2e.Elaborate {config_name} "
         f"{common_firtool_opts}"
@@ -78,8 +80,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cmd=digital_command,
         logger=ctx.logger,
         cwd=arch_dir,
-        stdout_prefix="p2e digital verilog",
-        stderr_prefix="p2e digital verilog",
+        stdout_prefix="bebop p2e digital verilog",
+        stderr_prefix="bebop p2e digital verilog",
     )
     if digital_result.returncode != 0:
         cleanup_strays(arch_dir)
@@ -92,6 +94,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
+    # Generate P2E top wrapper Verilog
     top_command = (
         f"mill -i __.test.runMain sims.p2e.ElaborateP2ETop "
         f"{common_firtool_opts}"
@@ -100,8 +103,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cmd=top_command,
         logger=ctx.logger,
         cwd=arch_dir,
-        stdout_prefix="p2e top verilog",
-        stderr_prefix="p2e top verilog",
+        stdout_prefix="bebop p2e top verilog",
+        stderr_prefix="bebop p2e top verilog",
     )
 
     cleanup_strays(arch_dir)

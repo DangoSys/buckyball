@@ -70,6 +70,7 @@ def stream_run(
             stream.close()
 
     # Start process
+    # Use errors='replace' to handle non-UTF-8 bytes from simulation UART output
     process = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -77,6 +78,8 @@ def stream_run(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding='utf-8',
+        errors='replace',  # Replace invalid UTF-8 bytes with � instead of crashing
         bufsize=1,
         executable=executable,
         env=env,

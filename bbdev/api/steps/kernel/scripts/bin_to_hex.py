@@ -4,12 +4,15 @@ import subprocess
 import sys
 import os
 
-def bin_to_hex(bin_file, hex_file, objcopy_path="riscv64-unknown-elf-objcopy"):
+def bin_to_hex(bin_file, hex_file, objcopy_path="riscv64-unknown-elf-objcopy", base_address=0):
     """
     将 RISC-V bin 文件转换为 Verilog readmemh 格式
     地址格式：@0xNNNNNNNN
+    base_address: 基地址偏移，生成的地址会减去这个值（例如 0x80000000）
     """
     print(f"Converting {bin_file} -> {hex_file}")
+    if base_address != 0:
+        print(f"Base address offset: 0x{base_address:08X}")
 
     # Step 1: bin -> Intel HEX
     temp_hex = f"{bin_file}.tmp.hex"
@@ -65,7 +68,14 @@ def bin_to_hex(bin_file, hex_file, objcopy_path="riscv64-unknown-elf-objcopy"):
             for addr in sorted_addresses:
                 # New address section if not continuous
                 if current_address is None or addr != current_address + 1:
-                    f.write(f"@0x{addr:08X}\n")
+                    relative_addr = addr - base_address
+                    if relative_addr < 0:
+                        print(f"Warning: address 0x{addr:08X} is below base 0x{base_address:08X}, skipping")
+                        continue
+                    if relative_addr == 0:
+                        f.write(f"@0\n")
+                    else:
+                        f.write(f"@0x{relative_addr:X}\n")
                     current_address = addr
                 else:
                     current_address = addr
@@ -86,18 +96,27 @@ def bin_to_hex(bin_file, hex_file, objcopy_path="riscv64-unknown-elf-objcopy"):
             os.remove(temp_hex)
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: bin_to_hex.py <input_bin> <output_hex>")
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
+        print("Usage: bin_to_hex.py <input_bin> <output_hex> [base_address]")
+        print("  base_address: optional hex address to subtract (e.g., 0x80000000)")
         sys.exit(1)
 
     bin_file = sys.argv[1]
     hex_file = sys.argv[2]
+    base_address = 0
+
+    if len(sys.argv) == 4:
+        base_str = sys.argv[3]
+        if base_str.startswith('0x') or base_str.startswith('0X'):
+            base_address = int(base_str, 16)
+        else:
+            base_address = int(base_str, 10)
 
     if not os.path.exists(bin_file):
         print(f"Error: File not found: {bin_file}")
         sys.exit(1)
 
-    success = bin_to_hex(bin_file, hex_file)
+    success = bin_to_hex(bin_file, hex_file, base_address=base_address)
     sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
