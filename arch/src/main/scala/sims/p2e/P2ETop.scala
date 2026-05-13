@@ -113,6 +113,34 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  end
       |endmodule
       |
+      |// P2E Memory Address Translator
+      |// Translates CPU's virtual address space (0x80000000-based) to DDR physical address space (0x0-based)
+      |//
+      |// Background:
+      |//   - CPU uses 0x80000000 as RAM base address (standard RISC-V convention)
+      |//   - DDR physical memory starts at address 0x0
+      |//   - TileLink-to-AXI4 converter does NOT subtract the base address
+      |//   - This module subtracts the base address (0x80000000) to map to DDR physical space
+      |//
+      |// Address mapping (56-bit physical address space):
+      |//   CPU 0x0000000080000000 -> DDR 0x0000000000000000
+      |//   CPU 0x0000000080000004 -> DDR 0x0000000000000004
+      |//   ...
+      |//   CPU 0x000000047FFFFFFF -> DDR 0x00000003FFFFFFFF (16GB)
+      |//
+      |module p2e_mem_addr_translator #(
+      |  parameter ADDR_IN_BITS  = 56,  // Input address width from DigitalTop (56-bit physical address)
+      |  parameter ADDR_OUT_BITS = 64,  // Output address width for DDR controller
+      |  parameter BASE_ADDR     = 64'h0000000080000000  // Base address to subtract
+      |)(
+      |  input  [ADDR_IN_BITS-1:0]  addr_in,   // Address from CPU (e.g., 0x0000000080000000)
+      |  output [ADDR_OUT_BITS-1:0] addr_out   // Address to DDR (e.g., 0x0000000000000000)
+      |);
+      |  // Subtract base address and zero-extend to 64-bit for DDR controller
+      |  wire [63:0] addr_in_extended = {{(64-ADDR_IN_BITS){1'b0}}, addr_in};
+      |  assign addr_out = addr_in_extended - BASE_ADDR;
+      |endmodule
+      |
       |module P2ETopBlackBox(
       |  input         user_clk,
       |  input         sys_rstn,
@@ -153,8 +181,12 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire soc_reset = !sys_rstn || !c0_init_calib_complete;
       |  assign init_calib_complete = c0_init_calib_complete;
       |
+      |  // Memory AXI interface signals
+      |  // Note: DigitalTop outputs 56-bit physical addresses, DDR controller expects 64-bit
+      |  // We use address translator modules to handle the width conversion and base address mapping
       |  wire [MEM_ID_BITS-1:0]     mem_awid;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;
+      |  wire [55:0]                mem_awaddr_soc;  // 56-bit address from DigitalTop
+      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_awlen;
       |  wire [2:0]                 mem_awsize;
       |  wire [1:0]                 mem_awburst;
@@ -170,7 +202,8 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mem_bvalid;
       |  wire                       mem_bready;
       |  wire [MEM_ID_BITS-1:0]     mem_arid;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;
+      |  wire [55:0]                mem_araddr_soc;  // 56-bit address from DigitalTop
+      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_arlen;
       |  wire [2:0]                 mem_arsize;
       |  wire [1:0]                 mem_arburst;
@@ -183,6 +216,27 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mem_rvalid;
       |  wire                       mem_rready;
       |
+      |  // Memory address translators: CPU virtual address -> DDR physical address
+      |  p2e_mem_addr_translator #(
+      |    .ADDR_IN_BITS(56),
+      |    .ADDR_OUT_BITS(64),
+      |    .BASE_ADDR(64'h0000000080000000)
+      |  ) mem_awaddr_xlate (
+      |    .addr_in(mem_awaddr_soc),
+      |    .addr_out(mem_awaddr)
+      |  );
+      |
+      |  p2e_mem_addr_translator #(
+      |    .ADDR_IN_BITS(56),
+      |    .ADDR_OUT_BITS(64),
+      |    .BASE_ADDR(64'h0000000080000000)
+      |  ) mem_araddr_xlate (
+      |    .addr_in(mem_araddr_soc),
+      |    .addr_out(mem_araddr)
+      |  );
+      |
+      |  // MMIO wires removed - P2E config doesn't generate mmio_axi4_0 port
+      |  /*
       |  wire [MMIO_ID_BITS-1:0]    mmio_awid;
       |  wire [MMIO_ADDR_BITS-1:0]  mmio_awaddr;
       |  wire [7:0]                 mmio_awlen;
@@ -212,6 +266,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mmio_rlast;
       |  wire                       mmio_rvalid;
       |  wire                       mmio_rready;
+      |  */
       |
       |  DigitalTop soc (
       |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock (user_clk),
@@ -228,7 +283,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_aw_ready       (mem_awready),
       |    .mem_axi4_0_aw_valid       (mem_awvalid),
       |    .mem_axi4_0_aw_bits_id     (mem_awid),
-      |    .mem_axi4_0_aw_bits_addr   (mem_awaddr),
+      |    .mem_axi4_0_aw_bits_addr   (mem_awaddr_soc),
       |    .mem_axi4_0_aw_bits_len    (mem_awlen),
       |    .mem_axi4_0_aw_bits_size   (mem_awsize),
       |    .mem_axi4_0_aw_bits_burst  (mem_awburst),
@@ -244,7 +299,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_ar_ready       (mem_arready),
       |    .mem_axi4_0_ar_valid       (mem_arvalid),
       |    .mem_axi4_0_ar_bits_id     (mem_arid),
-      |    .mem_axi4_0_ar_bits_addr   (mem_araddr),
+      |    .mem_axi4_0_ar_bits_addr   (mem_araddr_soc),
       |    .mem_axi4_0_ar_bits_len    (mem_arlen),
       |    .mem_axi4_0_ar_bits_size   (mem_arsize),
       |    .mem_axi4_0_ar_bits_burst  (mem_arburst),
@@ -253,43 +308,20 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_r_bits_id      (mem_rid),
       |    .mem_axi4_0_r_bits_data    (mem_rdata),
       |    .mem_axi4_0_r_bits_resp    (mem_rresp),
-      |    .mem_axi4_0_r_bits_last    (mem_rlast),
-      |    .mmio_axi4_0_aw_ready      (mmio_awready),
-      |    .mmio_axi4_0_aw_valid      (mmio_awvalid),
-      |    .mmio_axi4_0_aw_bits_id    (mmio_awid),
-      |    .mmio_axi4_0_aw_bits_addr  (mmio_awaddr),
-      |    .mmio_axi4_0_aw_bits_len   (mmio_awlen),
-      |    .mmio_axi4_0_aw_bits_size  (mmio_awsize),
-      |    .mmio_axi4_0_aw_bits_burst (mmio_awburst),
-      |    .mmio_axi4_0_w_ready       (mmio_wready),
-      |    .mmio_axi4_0_w_valid       (mmio_wvalid),
-      |    .mmio_axi4_0_w_bits_data   (mmio_wdata),
-      |    .mmio_axi4_0_w_bits_strb   (mmio_wstrb),
-      |    .mmio_axi4_0_w_bits_last   (mmio_wlast),
-      |    .mmio_axi4_0_b_valid       (mmio_bvalid),
-      |    .mmio_axi4_0_b_ready       (mmio_bready),
-      |    .mmio_axi4_0_b_bits_id     (mmio_bid),
-      |    .mmio_axi4_0_b_bits_resp   (mmio_bresp),
-      |    .mmio_axi4_0_ar_ready      (mmio_arready),
-      |    .mmio_axi4_0_ar_valid      (mmio_arvalid),
-      |    .mmio_axi4_0_ar_bits_id    (mmio_arid),
-      |    .mmio_axi4_0_ar_bits_addr  (mmio_araddr),
-      |    .mmio_axi4_0_ar_bits_len   (mmio_arlen),
-      |    .mmio_axi4_0_ar_bits_size  (mmio_arsize),
-      |    .mmio_axi4_0_ar_bits_burst (mmio_arburst),
-      |    .mmio_axi4_0_r_valid       (mmio_rvalid),
-      |    .mmio_axi4_0_r_ready       (mmio_rready),
-      |    .mmio_axi4_0_r_bits_id     (mmio_rid),
-      |    .mmio_axi4_0_r_bits_data   (mmio_rdata),
-      |    .mmio_axi4_0_r_bits_resp   (mmio_rresp),
-      |    .mmio_axi4_0_r_bits_last   (mmio_rlast),
-      |    .serial_tl_0_in_valid      (1'b0),
-      |    .serial_tl_0_in_bits_phit  (32'h0),
-      |    .serial_tl_0_out_ready     (1'b0),
-      |    .serial_tl_0_clock_in      (1'b0),
-      |    .custom_boot               (1'b0)
+      |    .mem_axi4_0_r_bits_last    (mem_rlast)
+      |    // MMIO, SerialTL, and custom_boot ports removed - P2E config doesn't generate these
+      |    // .mmio_axi4_0_aw_ready      (mmio_awready),
+      |    // .mmio_axi4_0_aw_valid      (mmio_awvalid),
+      |    // ... (all mmio_axi4_0_* ports)
+      |    // .serial_tl_0_in_valid      (1'b0),
+      |    // .serial_tl_0_in_bits_phit  (32'h0),
+      |    // .serial_tl_0_out_ready     (1'b0),
+      |    // .serial_tl_0_clock_in      (1'b0),
+      |    // .custom_boot               (1'b0)
       |  );
       |
+      |  // MMIO stub removed - P2E config doesn't generate mmio_axi4_0 port
+      |  /*
       |  p2e_mmio_zero_slave #(
       |    .ADDR_BITS(MMIO_ADDR_BITS),
       |    .DATA_BITS(MMIO_DATA_BITS),
@@ -327,6 +359,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .r_resp   (mmio_rresp),
       |    .r_last   (mmio_rlast)
       |  );
+      |  */
       |
       |  xepic_ddr4_dc1 ddr (
       |    .sys_rstn                 (sys_rstn),

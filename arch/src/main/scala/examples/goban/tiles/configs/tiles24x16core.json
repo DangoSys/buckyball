@@ -1,0 +1,28 @@
+{
+  "tileConfigs": [
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig",
+    "examples.goban.tiles.gobantile.GobanTile16CoreConfig"
+  ]
+}

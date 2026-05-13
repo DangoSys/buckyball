@@ -41,9 +41,7 @@ import framework.core.bbtile.id.RVVRoCCDecode
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
-import sims.p2e.scu.{P2ESCUKey, TLP2ESCU}
-import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
-import freechips.rocketchip.tilelink.{TLCacheCork, TLFilter}
+import sims.scu.{SCUKey, TLSCU}
 
 /**
  * BBTile — a composable tile containing one Rocket core + optional per-core-index Buckyball slots.
@@ -215,13 +213,11 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // TileLink topology
   // ---------------------------------------------------------------------------
-  p(P2ESCUKey).foreach { params =>
-    val p2eScu = LazyModule(new TLP2ESCU(params, xBytes, bbParams.tileId))
-    p2eScu.node := TLFragmenter(
-      xBytes,
-      cacheBlockBytes,
-      nameSuffix = Some(s"P2ESCU_${bbParams.tileId}")
-    )           := tlOtherMastersNode
+  // SCU: tile-local MMIO device, connected to tlSlaveXbar (like DTIM/BEU)
+  // This allows CPU to access SCU while Buckyball DMA goes directly to L2 via tlOtherMastersNode
+  p(SCUKey).foreach { params =>
+    val scu = LazyModule(new TLSCU(params, xBytes, bbParams.tileId))
+    connectTLSlave(scu.node, xBytes)
   }
 
   tlOtherMastersNode := tile_master_blocker.map(_.node := tlMasterXbar.node).getOrElse(tlMasterXbar.node)

@@ -1,0 +1,20 @@
+{
+  "coreConfigs": [
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig",
+    "examples.goban.tiles.gobantile.gobancore.GobanCoreConfig"
+  ]
+}
