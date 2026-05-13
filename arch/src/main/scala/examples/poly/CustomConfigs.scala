@@ -13,5 +13,5 @@ class BuckyballPolyConfig
     extends Config(
       new WithNPolyTiles ++
         new chipyard.config.WithSystemBusWidth(128) ++
-        new chipyard.config.AbstractConfig
+        new sims.base.BuckyballBaseConfig
     )

@@ -19,7 +19,6 @@ index.html
 *.fst
 *.log
 *.dot
-*.txt
 
 # Vivado / Webtalk session files (root-level)
 /vivado*.jou
