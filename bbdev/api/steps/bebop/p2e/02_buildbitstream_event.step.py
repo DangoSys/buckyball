@@ -4,7 +4,7 @@ bebop p2e buildbitstream event handler
 Builds the FPGA bitstream via bebop CLI:
   1. Resolve verilog source directory (VSRC_PATH) from config
   2. Build bebop with p2e feature (vvacDir generated under build_dir via OUT_PATH)
-  3. Run bebop p2e --buildbitstream with build_dir and output_dir
+  3. Run bebop p2e --buildbitstream with build_dir (all outputs land in build_dir)
 """
 import os
 import sys
@@ -33,7 +33,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    arch_dir = f"{bbdir}/arch"
 
     config_name = input_data.get("config", "sims.p2e.P2EToyConfig")
     vsrc_dir = get_verilator_build_dir(bbdir, config_name, input_data.get("vsrc_dir"))
@@ -48,11 +47,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     build_dir = input_data.get("build_dir") or f"{bebop_dir}/build/{config_name}-{timestamp}"
-    output_dir = input_data.get("output_dir") or f"{arch_dir}/build/p2e-bitstream-{timestamp}"
-    log_dir = os.path.join(output_dir, "log")
     os.makedirs(build_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
 
     # ── Build bebop with p2e feature ──────────────────────────────────────
     build_cmd = (
@@ -83,8 +78,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"cargo run --features p2e "
         f"-- p2e "
         f"--buildbitstream "
-        f"--build-dir=\"{build_dir}\" "
-        f"--output-dir=\"{output_dir}\""
+        f"--build-dir=\"{build_dir}\""
     )
     ctx.logger.info(f"Running bebop p2e buildbitstream: {run_cmd}")
     run_result = stream_run_logger(
@@ -95,7 +89,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop p2e build-bitstream",
     )
 
-    bitstream_path = os.path.join(output_dir, "fpgaCompDir", "bitstream.bit")
+    bitstream_path = os.path.join(build_dir, "fpgaCompDir", "bitstream.bit")
     await check_result(
         ctx,
         run_result.returncode,
@@ -105,8 +99,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "config": config_name,
             "vsrc_dir": vsrc_dir,
             "build_dir": build_dir,
-            "output_dir": output_dir,
-            "log_dir": log_dir,
             "bitstream": bitstream_path,
             "timestamp": timestamp,
         },
