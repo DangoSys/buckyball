@@ -77,10 +77,11 @@ void sim_exit() {
 }
 
 void ball_exec_once() {
-  // posedge: clock=1, eval (FF outputs settle), read fire pulse from RTL slave
+  // posedge: clock=1, eval (FF outputs settle)
   top->clock = 1;
   top->eval();
-  mmio_tick(); // read io_mmio_fire; all AXI4 handshaking done in RTL
+  // SCU DPI-C functions (scu_uart_write, scu_sim_exit) are called automatically
+  // from RTL
   contextp->timeInc(1);
   tfp->dump(contextp->time());
   sim_time++;

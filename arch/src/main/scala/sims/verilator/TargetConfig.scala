@@ -5,7 +5,7 @@ import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
 
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
-import freechips.rocketchip.subsystem.{InSubsystem, WithDefaultMMIOPort}
+import freechips.rocketchip.subsystem.InSubsystem
 
 class WithCustomBootROM
     extends Config((site, here, up) => {
@@ -14,10 +14,19 @@ class WithCustomBootROM
         ))
     })
 
+// =============================================================================
+// Verilator-specific configs
+// The full base (clocking, buses, no UART/MMIO/SerialTL/ClockTap) comes from
+// BuckyballBaseConfig which is included in the example SoC config.
+//
+// Verilator adds:
+//   - BBSimConfig       : Verilator harness binders (mem model, etc.)
+//   - WithCustomBootROM : Verilator bootrom image
+// =============================================================================
+
 class BuckyballToyVerilatorConfig
     extends Config(
       new BBSimConfig ++
-        new WithDefaultMMIOPort ++
         new WithCustomBootROM ++
         new examples.toy.BuckyballToyConfig
     )
@@ -25,7 +34,6 @@ class BuckyballToyVerilatorConfig
 class BuckyballGobanVerilatorConfig
     extends Config(
       new BBSimConfig ++
-        new WithDefaultMMIOPort ++
         new WithCustomBootROM ++
         new examples.goban.BuckyballGobanConfig
     )
@@ -33,7 +41,6 @@ class BuckyballGobanVerilatorConfig
 class BuckyballKonbiVerilatorConfig
     extends Config(
       new BBSimConfig ++
-        new WithDefaultMMIOPort ++
         new WithCustomBootROM ++
         new examples.konbi.BuckyballKonbiConfig
     )
@@ -41,10 +48,16 @@ class BuckyballKonbiVerilatorConfig
 class BuckyballPolyVerilatorConfig
     extends Config(
       new BBSimConfig ++
-        new WithDefaultMMIOPort ++
         new WithCustomBootROM ++
         new examples.poly.BuckyballPolyConfig
     )
+
+// class BuckyballGoban24Tile16CoreVerilatorConfig
+//     extends Config(
+//       new BBSimConfig ++
+//         new WithCustomBootROM ++
+//         new examples.goban.BuckyballGoban24Tile16CoreConfigWithL2
+//     )
 
 object Elaborate extends App {
   if (args.isEmpty) {
