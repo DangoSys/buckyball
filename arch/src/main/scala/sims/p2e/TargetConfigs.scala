@@ -5,8 +5,9 @@ import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
 
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
-import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMemPort}
-import sims.scu.WithSCU
+import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMMIOPort, WithCustomMemPort}
+import sims.p2e.scu.WithP2ESCU
+import chipyard.config.WithNoDebug
 
 class WithP2EBootROM
     extends Config((site, here, up) => {
@@ -40,7 +41,15 @@ class WithP2EDDR4MemPort
 class P2EBaseConfig
     extends Config(
       new WithP2EHarness ++
-        new WithSCU ++
+        new WithP2ESCU ++
+        new WithNoDebug ++ // Disable Debug module for P2E
+        new WithCustomMMIOPort(
+          base_addr = BigInt("60040000", 16),
+          base_size = BigInt("1ffc0000", 16),
+          data_width = 64,
+          id_bits = 4,
+          maxXferBytes = 64
+        ) ++
         new WithP2EDDR4MemPort ++
         new WithP2EBootROM
     )

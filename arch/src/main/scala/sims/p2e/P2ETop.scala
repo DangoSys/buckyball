@@ -120,25 +120,24 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |//   - CPU uses 0x80000000 as RAM base address (standard RISC-V convention)
       |//   - DDR physical memory starts at address 0x0
       |//   - TileLink-to-AXI4 converter does NOT subtract the base address
-      |//   - This module subtracts the base address (0x80000000) to map to DDR physical space
+      |//   - This module fixes the address mapping by clearing bit 31
       |//
-      |// Address mapping (56-bit physical address space):
-      |//   CPU 0x0000000080000000 -> DDR 0x0000000000000000
-      |//   CPU 0x0000000080000004 -> DDR 0x0000000000000004
+      |// Address mapping:
+      |//   CPU 0x80000000 -> DDR 0x00000000
+      |//   CPU 0x80000004 -> DDR 0x00000004
       |//   ...
-      |//   CPU 0x000000047FFFFFFF -> DDR 0x00000003FFFFFFFF (16GB)
+      |//   CPU 0xFFFFFFFF -> DDR 0x7FFFFFFF
       |//
       |module p2e_mem_addr_translator #(
-      |  parameter ADDR_IN_BITS  = 56,  // Input address width from DigitalTop (56-bit physical address)
-      |  parameter ADDR_OUT_BITS = 64,  // Output address width for DDR controller
-      |  parameter BASE_ADDR     = 64'h0000000080000000  // Base address to subtract
+      |  parameter ADDR_IN_BITS  = 32,  // Input address width from DigitalTop
+      |  parameter ADDR_OUT_BITS = 64   // Output address width for DDR controller
       |)(
-      |  input  [ADDR_IN_BITS-1:0]  addr_in,   // Address from CPU (e.g., 0x0000000080000000)
-      |  output [ADDR_OUT_BITS-1:0] addr_out   // Address to DDR (e.g., 0x0000000000000000)
+      |  input  [ADDR_IN_BITS-1:0]  addr_in,   // Address from CPU (e.g., 0x80000000)
+      |  output [ADDR_OUT_BITS-1:0] addr_out   // Address to DDR (e.g., 0x00000000)
       |);
-      |  // Subtract base address and zero-extend to 64-bit for DDR controller
-      |  wire [63:0] addr_in_extended = {{(64-ADDR_IN_BITS){1'b0}}, addr_in};
-      |  assign addr_out = addr_in_extended - BASE_ADDR;
+      |  // Clear bit 31 (MSB of 32-bit address) to map 0x8xxxxxxx -> 0x0xxxxxxx
+      |  // Then zero-extend to 64-bit for DDR controller
+      |  assign addr_out = {{(ADDR_OUT_BITS-ADDR_IN_BITS+1){1'b0}}, addr_in[ADDR_IN_BITS-2:0]};
       |endmodule
       |
       |module P2ETopBlackBox(
@@ -182,10 +181,10 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  assign init_calib_complete = c0_init_calib_complete;
       |
       |  // Memory AXI interface signals
-      |  // Note: DigitalTop outputs 56-bit physical addresses, DDR controller expects 64-bit
+      |  // Note: DigitalTop outputs 32-bit addresses, but DDR controller expects 64-bit
       |  // We use address translator modules to handle the width conversion and base address mapping
       |  wire [MEM_ID_BITS-1:0]     mem_awid;
-      |  wire [55:0]                mem_awaddr_soc;  // 56-bit address from DigitalTop
+      |  wire [31:0]                mem_awaddr_soc;  // 32-bit address from DigitalTop
       |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_awlen;
       |  wire [2:0]                 mem_awsize;
@@ -202,7 +201,7 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  wire                       mem_bvalid;
       |  wire                       mem_bready;
       |  wire [MEM_ID_BITS-1:0]     mem_arid;
-      |  wire [55:0]                mem_araddr_soc;  // 56-bit address from DigitalTop
+      |  wire [31:0]                mem_araddr_soc;  // 32-bit address from DigitalTop
       |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;      // 64-bit address to DDR (after translation)
       |  wire [7:0]                 mem_arlen;
       |  wire [2:0]                 mem_arsize;
@@ -218,25 +217,21 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |
       |  // Memory address translators: CPU virtual address -> DDR physical address
       |  p2e_mem_addr_translator #(
-      |    .ADDR_IN_BITS(56),
-      |    .ADDR_OUT_BITS(64),
-      |    .BASE_ADDR(64'h0000000080000000)
+      |    .ADDR_IN_BITS(32),
+      |    .ADDR_OUT_BITS(64)
       |  ) mem_awaddr_xlate (
       |    .addr_in(mem_awaddr_soc),
       |    .addr_out(mem_awaddr)
       |  );
       |
       |  p2e_mem_addr_translator #(
-      |    .ADDR_IN_BITS(56),
-      |    .ADDR_OUT_BITS(64),
-      |    .BASE_ADDR(64'h0000000080000000)
+      |    .ADDR_IN_BITS(32),
+      |    .ADDR_OUT_BITS(64)
       |  ) mem_araddr_xlate (
       |    .addr_in(mem_araddr_soc),
       |    .addr_out(mem_araddr)
       |  );
       |
-      |  // MMIO wires removed - P2E config doesn't generate mmio_axi4_0 port
-      |  /*
       |  wire [MMIO_ID_BITS-1:0]    mmio_awid;
       |  wire [MMIO_ADDR_BITS-1:0]  mmio_awaddr;
       |  wire [7:0]                 mmio_awlen;

@@ -38,8 +38,8 @@ class SCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
   setInline(
     s"SCUWriteDPI_$hartId.v",
     s"""
-       |import "DPI-C" context function void scu_uart_write(input int unsigned hart_id, input int unsigned ch, output bit ack);
-       |import "DPI-C" context function void scu_sim_exit(input int unsigned hart_id, input int unsigned code, output bit ack);
+       |import "DPI-C" context function void p2e_uart_write(input bit [31:0] hart_id, input bit [7:0] ch);
+       |import "DPI-C" context function void p2e_sim_exit(input bit [31:0] hart_id, input bit [31:0] code);
        |
        |module SCUWriteDPI_$hartId(
        |  input        clock,
