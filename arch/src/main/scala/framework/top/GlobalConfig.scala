@@ -10,6 +10,7 @@ import framework.balldomain.prototype.vector.configs.VectorBallParam
 import framework.balldomain.prototype.relu.configs.ReluBallParam
 import framework.core.configs.CoreParam
 import framework.top.configs.TopConfig
+import framework.core.bbtile.configs.RocketCoreParam
 
 case class GlobalConfig(
   memDomain:  MemDomainParam,
@@ -19,7 +20,8 @@ case class GlobalConfig(
   vectorBall: VectorBallParam,
   reluBall:   ReluBallParam,
   core:       CoreParam,
-  top:        TopConfig)
+  top:        TopConfig,
+  rocketCore: RocketCoreParam)
     extends SerializableModuleParameter
 
 object GlobalConfig {
@@ -34,7 +36,8 @@ object GlobalConfig {
       vectorBall = VectorBallParam(),
       reluBall = ReluBallParam(),
       core = CoreParam(),
-      top = TopConfig()
+      top = TopConfig(),
+      rocketCore = RocketCoreParam()
     )
   }
 

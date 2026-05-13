@@ -17,7 +17,10 @@ object ToyCoreConfig {
   def apply(): GlobalConfig = {
     val coreParam       = ToyCoreParam()
     val ballDomainParam = ConfigLoader.loadApply[BallDomainParam](coreParam.balldomain)
-    GlobalConfig().copy(ballDomain = ballDomainParam)
+    GlobalConfig().copy(
+      ballDomain = ballDomainParam,
+      rocketCore = coreParam.rocketCore
+    )
   }
 
 }

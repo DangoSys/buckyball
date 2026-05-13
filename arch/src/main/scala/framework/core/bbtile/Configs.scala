@@ -5,6 +5,7 @@ import freechips.rocketchip.rocket.{BTBParams, DCacheParams, ICacheParams, MulDi
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.tile.{FPUParams, RocketTileBoundaryBufferParams}
 import framework.top.GlobalConfig
+import framework.core.bbtile.configs.RocketCoreParam
 
 /**
  * Config fragment to add N BBTiles.
@@ -22,6 +23,31 @@ object WithNBBTiles {
         case InCluster(clusterId) => CCBUS(clusterId)
       }
     )
+
+  /**
+   * Resolve the per-tile rocketCore param from buckyballPerCore.
+   *
+   * Multi-core within a tile currently shares one RocketCoreParam (BBTileParams
+   * has tile-level core/dcache/icache fields). All Some(_) entries must agree.
+   * Falls back to RocketCoreParam() when nothing is defined.
+   */
+  def resolveRocketCore(
+    buckyballPerCore: Seq[Option[GlobalConfig]],
+    buckyballConfig:  GlobalConfig
+  ): RocketCoreParam = {
+    val defined = buckyballPerCore.flatten.map(_.rocketCore)
+    if (defined.isEmpty) {
+      buckyballConfig.rocketCore
+    } else {
+      val head = defined.head
+      require(
+        defined.forall(_ == head),
+        "All cores within a BBTile must currently share the same rocketCore config; " +
+          "heterogeneous per-core Rocket params is not yet supported."
+      )
+      head
+    }
+  }
 
 }
 
@@ -45,36 +71,19 @@ class WithBBTile(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
+        val rocketCore               = WithNBBTiles.resolveRocketCore(resolvedBuckyballPerCore, buckyballConfig)
+        val rowBits                  = site(SystemBusKey).beatBits
+        val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
           nCores = nCoresPerTile,
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
           l2cache = l2cache,
-          core = RocketCoreParams(
-            mulDiv = Some(MulDivParams(
-              mulUnroll = 8,
-              mulEarlyOut = true,
-              divEarlyOut = true
-            )),
-            useZba = true,
-            useZbb = true,
-            useZbs = true,
-            fpu = Some(FPUParams(minFLen = 16))
-          ),
-          dcache = Some(DCacheParams(
-            nSets = 64,
-            nWays = 8,
-            rowBits = site(SystemBusKey).beatBits,
-            nMSHRs = 0,
-            blockBytes = site(CacheBlockBytes)
-          )),
-          icache = Some(ICacheParams(
-            nSets = 64,
-            nWays = 8,
-            rowBits = site(SystemBusKey).beatBits,
-            blockBytes = site(CacheBlockBytes)
-          ))
+          core = RocketCoreParam.toRocketCoreParams(rocketCore),
+          dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
+          icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),
+          btb = RocketCoreParam.toBTBParams(rocketCore)
         )
         BBTileAttachParams(
           tileParams.copy(tileId = idOffset),
@@ -104,36 +113,19 @@ class WithNBBTiles(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
+        val rocketCore               = WithNBBTiles.resolveRocketCore(resolvedBuckyballPerCore, buckyballConfig)
+        val rowBits                  = site(SystemBusKey).beatBits
+        val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
           nCores = nCoresPerTile,
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
           l2cache = l2cache,
-          core = RocketCoreParams(
-            mulDiv = Some(MulDivParams(
-              mulUnroll = 8,
-              mulEarlyOut = true,
-              divEarlyOut = true
-            )),
-            useZba = true,
-            useZbb = true,
-            useZbs = true,
-            fpu = Some(FPUParams(minFLen = 16))
-          ),
-          dcache = Some(DCacheParams(
-            nSets = 64,
-            nWays = 8,
-            rowBits = site(SystemBusKey).beatBits,
-            nMSHRs = 0,
-            blockBytes = site(CacheBlockBytes)
-          )),
-          icache = Some(ICacheParams(
-            nSets = 64,
-            nWays = 8,
-            rowBits = site(SystemBusKey).beatBits,
-            blockBytes = site(CacheBlockBytes)
-          ))
+          core = RocketCoreParam.toRocketCoreParams(rocketCore),
+          dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
+          icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),
+          btb = RocketCoreParam.toBTBParams(rocketCore)
         )
         List.tabulate(n)(i =>
           BBTileAttachParams(
