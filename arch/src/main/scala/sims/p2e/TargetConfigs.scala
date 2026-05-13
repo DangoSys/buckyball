@@ -5,9 +5,8 @@ import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
 
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
-import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMMIOPort, WithCustomMemPort}
-import sims.p2e.scu.WithP2ESCU
-import chipyard.config.WithNoDebug
+import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMemPort}
+import sims.scu.WithSCU
 
 class WithP2EBootROM
     extends Config((site, here, up) => {
@@ -20,25 +19,28 @@ class WithP2EDDR4MemPort
     extends Config(
       new WithCustomMemPort(
         base_addr = BigInt("80000000", 16),
-        base_size = BigInt("10000000", 16),
+        base_size = BigInt("400000000", 16),
         data_width = 256,
         id_bits = 11,
         maxXferBytes = 256
       )
     )
 
+// =============================================================================
+// P2EBaseConfig: P2E platform-specific fragments only.
+// The full base (clocking, buses, BootROM, etc.) comes from BuckyballBaseConfig
+// which is included in the example SoC config (e.g. BuckyballToyConfig).
+//
+// P2E adds:
+//   - WithP2EHarness    : P2E harness binders (DDR4 wiring, etc.)
+//   - WithSCU        : per-tile UART/exit via DPI-C (intercepted in BBTile)
+//   - WithP2EDDR4MemPort: DDR4 memory port @ 0x80000000, 16 GiB
+//   - WithP2EBootROM    : P2E bootrom image
+// =============================================================================
 class P2EBaseConfig
     extends Config(
       new WithP2EHarness ++
-        new WithP2ESCU ++
-        new WithNoDebug ++ // Disable Debug module for P2E
-        new WithCustomMMIOPort(
-          base_addr = BigInt("60040000", 16),
-          base_size = BigInt("1ffc0000", 16),
-          data_width = 64,
-          id_bits = 4,
-          maxXferBytes = 64
-        ) ++
+        new WithSCU ++
         new WithP2EDDR4MemPort ++
         new WithP2EBootROM
     )

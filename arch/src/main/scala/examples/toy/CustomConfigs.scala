@@ -22,7 +22,7 @@ class BuckyballToyConfig
     )
 
 /** Single Rocket core only (no Buckyball) */
-class RocketOnlyConfig
+class BuckyballToyRocketOnlyConfig
     extends Config(
       new WithNToyTiles(withBuckyball = false) ++
         new chipyard.config.WithSystemBusWidth(128) ++

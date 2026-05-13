@@ -1,4 +1,4 @@
-package sims.p2e.scu
+package sims.scu
 
 import chisel3._
 import chisel3.util.HasBlackBoxInline
@@ -10,21 +10,21 @@ import freechips.rocketchip.regmapper._
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.tilelink._
 
-case class P2ESCUParams(
+case class SCUParams(
   address: BigInt = BigInt("60000000", 16),
   size:    BigInt = BigInt("40000", 16))
 
-case object P2ESCUKey extends Field[Option[P2ESCUParams]](None)
+case object SCUKey extends Field[Option[SCUParams]](None)
 
-class WithP2ESCU(
+class WithSCU(
   address: BigInt = BigInt("60000000", 16),
   size:    BigInt = BigInt("40000", 16))
     extends Config((site, here, up) => {
-      case P2ESCUKey => Some(P2ESCUParams(address = address, size = size))
+      case SCUKey => Some(SCUParams(address = address, size = size))
     })
 
-class P2ESCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
-  override def desiredName = s"P2ESCUWriteDPI_$hartId"
+class SCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
+  override def desiredName = s"SCUWriteDPI_$hartId"
 
   val io = IO(new Bundle {
     val clock      = Input(Clock())
@@ -36,12 +36,12 @@ class P2ESCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
   })
 
   setInline(
-    s"P2ESCUWriteDPI_$hartId.v",
+    s"SCUWriteDPI_$hartId.v",
     s"""
-       |import "DPI-C" context function void p2e_uart_write(input bit [31:0] hart_id, input bit [7:0] ch);
-       |import "DPI-C" context function void p2e_sim_exit(input bit [31:0] hart_id, input bit [31:0] code);
+       |import "DPI-C" context function void scu_uart_write(input int unsigned hart_id, input int unsigned ch);
+       |import "DPI-C" context function void scu_sim_exit(input int unsigned hart_id, input int unsigned code);
        |
-       |module P2ESCUWriteDPI_$hartId(
+       |module SCUWriteDPI_$hartId(
        |  input        clock,
        |  input        reset,
        |  input        uart_valid,
@@ -49,19 +49,19 @@ class P2ESCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
        |  input        exit_valid,
        |  input [31:0] exit_code
        |);
-       |  export "DPI-C" function p2e_scu_${hartId}_hart_id;
-       |  function int p2e_scu_${hartId}_hart_id();
-       |    p2e_scu_${hartId}_hart_id = $hartId;
+       |  export "DPI-C" function scu_${hartId}_hart_id;
+       |  function int scu_${hartId}_hart_id();
+       |    scu_${hartId}_hart_id = $hartId;
        |  endfunction
        |
        |  always @(posedge clock) begin
        |    if (!reset) begin
        |      if (uart_valid) begin
-       |        p2e_uart_write($hartId, uart_data);
+       |        scu_uart_write($hartId, {24'h0, uart_data});
        |      end
        |
        |      if (exit_valid) begin
-       |        p2e_sim_exit($hartId, exit_code);
+       |        scu_sim_exit($hartId, exit_code);
        |      end
        |    end
        |  end
@@ -70,12 +70,12 @@ class P2ESCUWriteDPI(hartId: Int) extends BlackBox with HasBlackBoxInline {
   )
 }
 
-class TLP2ESCU(params: P2ESCUParams, beatBytes: Int, hartId: Int)(implicit p: Parameters) extends LazyModule {
+class TLSCU(params: SCUParams, beatBytes: Int, hartId: Int)(implicit p: Parameters) extends LazyModule {
   require(params.size > 0)
   require(params.size.isValidInt)
-  require((params.size & (params.size - 1)) == 0, "P2E SCU size must be a power of two")
+  require((params.size & (params.size - 1)) == 0, "SCU size must be a power of two")
 
-  val device = new SimpleDevice(s"p2e-scu-$hartId", Seq("buckyball,p2e-scu"))
+  val device = new SimpleDevice(s"scu-$hartId", Seq("buckyball,scu"))
 
   val node = TLRegisterNode(
     address = Seq(AddressSet(params.address, params.size - 1)),
@@ -90,7 +90,7 @@ class TLP2ESCU(params: P2ESCUParams, beatBytes: Int, hartId: Int)(implicit p: Pa
     val exitValid = WireDefault(false.B)
     val exitCode  = WireDefault(0.U(32.W))
 
-    val dpi = Module(new P2ESCUWriteDPI(hartId))
+    val dpi = Module(new SCUWriteDPI(hartId))
     dpi.io.clock      := clock
     dpi.io.reset      := reset.asBool
     dpi.io.uart_valid := RegNext(uartValid, false.B)
@@ -98,22 +98,28 @@ class TLP2ESCU(params: P2ESCUParams, beatBytes: Int, hartId: Int)(implicit p: Pa
     dpi.io.exit_valid := RegNext(exitValid, false.B)
     dpi.io.exit_code  := RegNext(exitCode, 0.U)
 
+    val simExitReg = RegInit(0.U(32.W))
+
     val simExitWrite = RegWriteFn { (valid, data) =>
-      exitValid := valid
-      exitCode  := data(31, 0)
+      exitValid  := valid
+      exitCode   := data(31, 0)
+      simExitReg := data(31, 0)
       true.B
     }
+
+    val uartTxReg = RegInit(0.U(8.W))
 
     val uartWrite = RegWriteFn { (valid, data) =>
       uartValid := valid
       uartData  := data(7, 0)
+      uartTxReg := data(7, 0)
       true.B
     }
 
     node.regmap(
-      0x00000 -> Seq(RegField.w(32, simExitWrite)),
-      0x20000 -> Seq(RegField.w(8, uartWrite)),
-      0x20005 -> Seq(RegField.r(8, "h60".U))
+      0x00000 -> Seq(RegField(32, simExitReg, simExitWrite)), // read/write
+      0x20000 -> Seq(RegField(8, uartTxReg, uartWrite)),      // read/write
+      0x20005 -> Seq(RegField.r(8, "h60".U))                  // read-only status
     )
   }
 
