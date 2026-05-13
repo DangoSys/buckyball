@@ -1,3 +1,36 @@
 {
-  "balldomain": "examples.toy.tiles.toytile.toycore.balldomain.configs.BallDomainConfig"
+  "balldomain": "examples.toy.tiles.toytile.toycore.balldomain.configs.BallDomainConfig",
+  "rocketCore": {
+    "xLen": 64,
+    "pgLevels": 3,
+    "useVM": true,
+    "useZba": true,
+    "useZbb": true,
+    "useZbs": true,
+    "mulDiv": {
+      "enable": true,
+      "mulUnroll": 8,
+      "mulEarlyOut": true,
+      "divEarlyOut": true
+    },
+    "fpu": {
+      "enable": true,
+      "minFLen": 16,
+      "fLen": 64
+    },
+    "dcache": {
+      "nSets": 32,
+      "nWays": 4,
+      "nMSHRs": 4
+    },
+    "icache": {
+      "nSets": 64,
+      "nWays": 8
+    },
+    "btb": {
+      "enable": true,
+      "nEntries": 28,
+      "nRAS": 6
+    }
+  }
 }

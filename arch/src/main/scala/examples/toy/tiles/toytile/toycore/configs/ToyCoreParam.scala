@@ -1,9 +1,11 @@
 package examples.toy.tiles.toytile.toycore.configs
 
 import upickle.default._
+import framework.core.bbtile.configs.RocketCoreParam
 
 case class ToyCoreConfig(
-  balldomain: String)
+  balldomain: String,
+  rocketCore: RocketCoreParam)
 
 object ToyCoreConfig {
   implicit val rw: ReadWriter[ToyCoreConfig] = macroRW
