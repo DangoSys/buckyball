@@ -27,18 +27,14 @@ static void uart_putchar(char ch) {
 
 // DPI-C function: called from RTL when software writes to SCU UART TX register
 // (address 0x6002_0000, offset +0x20000 from SCU base)
-// ack is an output parameter that the host writes to acknowledge receipt.
-// On P2E hardware, the FPGA waits for this response before continuing.
-extern "C" void scu_uart_write(uint32_t hart_id, uint32_t ch,
-                               unsigned char *ack) {
+extern "C" void scu_uart_write(uint32_t hart_id, uint32_t ch) {
+  (void)hart_id;
   uart_putchar((char)(ch & 0xff));
-  *ack = 1;
 }
 
 // DPI-C function: called from RTL when software writes to SCU sim_exit register
 // (address 0x6000_0000, offset +0x00000 from SCU base)
-extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code,
-                             unsigned char *ack) {
+extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code) {
   if (code == 0)
     fprintf(stderr, "[SCU] hart %u: simulation success\n", hart_id);
   else
@@ -47,6 +43,5 @@ extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code,
   if (uart_fp)
     fclose(uart_fp);
 
-  *ack = 1;
   sim_exit();
 }
