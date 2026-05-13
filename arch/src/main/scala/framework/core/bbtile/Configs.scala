@@ -31,7 +31,8 @@ class WithBBTile(
   buckyballConfig:  GlobalConfig = GlobalConfig(),
   crossing:         Option[RocketCrossingParams] = None,
   nCoresPerTile:    Int = 1,
-  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None)
+  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
+  l2cache:          Option[L2CacheParams] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -49,6 +50,7 @@ class WithBBTile(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
+          l2cache = l2cache,
           core = RocketCoreParams(
             mulDiv = Some(MulDivParams(
               mulUnroll = 8,
@@ -88,7 +90,8 @@ class WithNBBTiles(
   buckyballConfig:  GlobalConfig = GlobalConfig(),
   crossing:         Option[RocketCrossingParams] = None,
   nCoresPerTile:    Int = 1,
-  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None)
+  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
+  l2cache:          Option[L2CacheParams] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -106,6 +109,7 @@ class WithNBBTiles(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
+          l2cache = l2cache,
           core = RocketCoreParams(
             mulDiv = Some(MulDivParams(
               mulUnroll = 8,
