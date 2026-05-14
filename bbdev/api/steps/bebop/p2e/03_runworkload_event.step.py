@@ -91,7 +91,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Run bebop p2e --runworkload ───────────────────────────────────────
     run_cmd = (
         f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
-        f"cargo run --features p2e -- p2e "
+        f"cargo run --features p2e "
+        f"--config=\"env.OUT_PATH='{build_dir}'\" "
+        f"-- p2e "
         f"--runworkload "
         f"--image=\"{image_path}\" "
         f"--bitstream=\"{bitstream}\" "
