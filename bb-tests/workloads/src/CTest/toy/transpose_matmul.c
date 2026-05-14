@@ -4,44 +4,43 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DIM (BANK_WIDTH / sizeof(elem_t))
+#define DIM 16
 
 // Column count n for 16xn matrix multiplication
 #define MATMUL_COL 50
-// 16-byte alignment of n
-#define MAX_ALIGNED_MATMUL_COL 64
-static elem_t aligned_input_matrix_a[DIM * MAX_ALIGNED_MATMUL_COL]
-    __attribute__((aligned(16)));
-static elem_t input_matrix_a[DIM * MATMUL_COL] __attribute__((aligned(16)));
+static elem_t input_matrix_a[DIM * MATMUL_COL] __attribute__((aligned(64)));
 static elem_t input_matrix_b[MATMUL_COL * DIM] __attribute__((aligned(16)));
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
+  (void)test_name;
   // spad0: operand A, offset 0
   uint32_t op1_bank_id = 0;
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
   int acc_bank_id = 2; // virtual bank id
+  // spad3: transposed A
+  uint32_t a_transposed_bank_id = 3;
+
+  bb_mem_alloc(op1_bank_id, 1, 1);
+  bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 1, 4);
-  uint32_t col_stride = (size + DIM - 1) / DIM;
-  for (int i = 0; i < col_stride; i++) {
-    bb_mvin((uintptr_t)a + i * DIM, op2_bank_id + size + i * DIM, DIM,
-            col_stride);
-  }
+  bb_mem_alloc(a_transposed_bank_id, 1, 1);
+
+  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_transpose(op2_bank_id + size, op1_bank_id, size, 0);
-  bb_mul_warp16(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
+  bb_transpose(op1_bank_id, a_transposed_bank_id, size, 0);
+  bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);
   bb_fence();
 }
 
-int run_test(const char *test_name, elem_t *aligned_a, elem_t *a, elem_t *b,
-             int size) {
+int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   clear_u32_matrix(output_matrix, DIM, DIM);
-  hw_matmul(test_name, aligned_a, b, output_matrix, size);
+  hw_matmul(test_name, a, b, output_matrix, size);
   cpu_matmul(a, b, expected_matrix, DIM, DIM, size);
   if (compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
     printf("Test %s PASSED\n", test_name);
@@ -53,11 +52,10 @@ int run_test(const char *test_name, elem_t *aligned_a, elem_t *a, elem_t *b,
 }
 
 int test_transpose_matmul() {
-  init_col_aligned_random_matrix(aligned_input_matrix_a, input_matrix_a, DIM,
-                                 DIM, MATMUL_COL, 111);
+  init_u8_random_matrix(input_matrix_a, DIM, MATMUL_COL, 111);
   init_u8_random_matrix(input_matrix_b, MATMUL_COL, DIM, 222);
-  return run_test("Transpose Matmul", aligned_input_matrix_a, input_matrix_a,
-                  input_matrix_b, MATMUL_COL);
+  return run_test("Transpose Matmul", input_matrix_a, input_matrix_b,
+                  MATMUL_COL);
 }
 
 int main() {
