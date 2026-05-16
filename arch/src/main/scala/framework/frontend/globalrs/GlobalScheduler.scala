@@ -190,5 +190,5 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   io.scheduler_rocc_o.resp.valid     := false.B
   io.scheduler_rocc_o.resp.bits.rd   := 0.U
   io.scheduler_rocc_o.resp.bits.data := 0.U
-  io.scheduler_rocc_o.busy           := !rob.io.empty || fenceActive || barrierWaitROB || barrierWaitRelease
+  io.scheduler_rocc_o.busy           := rob.io.full || fenceActive || barrierWaitROB || barrierWaitRelease
 }
