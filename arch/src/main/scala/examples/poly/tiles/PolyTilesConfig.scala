@@ -1,7 +1,7 @@
 package examples.poly.tiles
 
 import org.chipsalliance.cde.config.{Config, Parameters}
-import framework.core.bbtile.WithBBTile
+import framework.system.tile.WithBBTile
 import framework.top.GlobalConfig
 import examples.poly.configs.PolyConfig
 import framework.builtin.configloader.ConfigLoader
@@ -16,6 +16,10 @@ import examples.poly.tiles.configs.TilesConfig
  * is inferred from the `Option`s the tile assembler returns: a tile whose
  * cores are all `None` produces a Rocket-only BBTile, otherwise the
  * accelerator slots are wired up.
+ *
+ * NOTE: New architecture only supports single-Core single-SM per tile.
+ * Multi-core (heterogeneous) configs are expanded to multiple single-core tiles.
+ * TODO: Support multi-Core per tile when new architecture is extended.
  */
 class WithNPolyTiles extends Config(WithNPolyTiles.assemble)
 
@@ -30,13 +34,17 @@ object WithNPolyTiles {
         s"but poly/configs/default.json declares nTiles=$nTiles"
     )
 
-    val fragments: Seq[Config] = tileConfigs.map { name =>
+    // New architecture: one WithBBTile per core (single-Core single-SM for now)
+    val fragments: Seq[Config] = tileConfigs.flatMap { name =>
       val perCore = ConfigLoader.loadApply[Seq[Option[GlobalConfig]]](name)
-      new WithBBTile(
-        withBuckyball = perCore.exists(_.isDefined),
-        nCoresPerTile = perCore.size,
-        buckyballPerCore = Some(perCore)
-      )
+
+      // Create one tile per core
+      perCore.map { globalConfigOpt =>
+        new WithBBTile(
+          withBuckyball = globalConfigOpt.isDefined,
+          globalConfig = globalConfigOpt.getOrElse(GlobalConfig())
+        )
+      }
     }
 
     fragments.reduce[Parameters](_ ++ _)

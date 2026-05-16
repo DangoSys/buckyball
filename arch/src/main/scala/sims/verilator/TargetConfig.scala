@@ -31,6 +31,14 @@ class BuckyballToyVerilatorConfig
         new examples.toy.BuckyballToyConfig
     )
 
+/** NEW ARCHITECTURE: Toy config using framework.system.tile (Core-SM hierarchy) */
+class BuckyballToyNewArchVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.toy.BuckyballToyNewArchConfig
+    )
+
 class BuckyballGobanVerilatorConfig
     extends Config(
       new BBSimConfig ++

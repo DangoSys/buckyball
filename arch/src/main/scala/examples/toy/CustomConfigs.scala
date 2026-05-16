@@ -2,7 +2,7 @@ package examples.toy
 
 import org.chipsalliance.cde.config.Config
 import examples.toy.tiles.WithNToyTiles
-import framework.core.bbtile.{L2CacheParams, WithBBTile}
+import framework.system.tile.{L2CacheParams, WithBBTile}
 
 import freechips.rocketchip.subsystem.{InCluster, InSubsystem}
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
@@ -25,6 +25,29 @@ class BuckyballToyConfig
 class BuckyballToyRocketOnlyConfig
     extends Config(
       new WithNToyTiles(withBuckyball = false) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/**
+ * NEW ARCHITECTURE: Single BBTile using framework.system.tile (Core-SM hierarchy).
+ *
+ * This config bypasses the JSON-driven tile assembly and uses the new
+ * framework.system.tile.WithBBTile directly. Single Core, single SM.
+ */
+class BuckyballToyNewArchConfig
+    extends Config(
+      new framework.system.tile.WithBBTile() ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/**
+ * NEW ARCHITECTURE: Single Rocket core only (no Buckyball).
+ */
+class BuckyballToyNewArchRocketOnlyConfig
+    extends Config(
+      new framework.system.tile.WithBBTile(withBuckyball = false) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -54,10 +77,10 @@ class WithPerTileL2(
   capacityKB: Int = 256,
   memCycles:  Int = 10)
     extends Config((site, here, up) => {
-      case framework.core.bbtile.BBTileAttachParams(tileParams, crossing) =>
+      case framework.system.tile.BBTileAttachParams(tileParams, crossing) =>
         val cacheBlockBytes = site(freechips.rocketchip.subsystem.CacheBlockBytes)
         val sets            = (capacityKB * 1024) / (cacheBlockBytes * ways)
-        framework.core.bbtile.BBTileAttachParams(
+        framework.system.tile.BBTileAttachParams(
           tileParams.copy(
             l2cache = Some(L2CacheParams(
               ways = ways,

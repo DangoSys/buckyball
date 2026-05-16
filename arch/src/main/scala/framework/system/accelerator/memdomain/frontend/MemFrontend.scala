@@ -1,0 +1,193 @@
+package framework.system.accelerator.memdomain.frontend
+
+import chisel3._
+import chisel3.util._
+import freechips.rocketchip.tile._
+import framework.system.accelerator.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWriter}
+import framework.system.accelerator.memdomain.frontend.outside_channel.{MemConfiger, MemConfigerIO, MemLoader, MemStorer}
+import framework.system.accelerator.memdomain.frontend.outside_channel.tlb.{
+  BBTLBCluster,
+  BBTLBExceptionIO,
+  BBTLBIO,
+  BBTLBPTWIO
+}
+import freechips.rocketchip.amba.axi4.{AXI4Bundle, AXI4BundleParameters}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
+import framework.balldomain.blink.{BankRead, BankWrite}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import framework.top.GlobalConfig
+import framework.system.link.BBAxi4Params
+import framework.system.accelerator.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder
+import framework.system.accelerator.memdomain.frontend.cmd_channel.rs.MemReservationStation
+import framework.system.accelerator.memdomain.utils.pmc.MemCyclePMC
+
+/**
+ * MemFrontend:
+ * Provides DMA interface and Ball Domain interface
+ */
+@instantiable
+class MemFrontend(val b: GlobalConfig) extends Module {
+
+  val axiParams: AXI4BundleParameters = BBAxi4Params(b)
+
+  @public
+  val io = IO(new Bundle {
+    // Issue interface from global RS (single channel)
+    val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
+    // Report completion to global RS (single channel)
+    val global_complete_o = Decoupled(new GlobalSchedComplete(b))
+
+    // Bank read/write interface - used by load/store
+    val interdma = new Bundle {
+      val bankRead        = Flipped(new BankRead(b))
+      val bankWrite       = Flipped(new BankWrite(b))
+      val read_is_shared  = Output(Bool())
+      val write_is_shared = Output(Bool())
+    }
+
+    // TLB interfaces for internal DMA modules (Reader/Writer)
+    // These are NOT exposed to outside - only PTW and TLB exception are exposed
+    // PTW interface - needs to connect to upper level PTW (shared TLB has only 1 PTW)
+    val ptw    = Vec(1, new BBTLBPTWIO(b))
+    // TLB exception interface - exposed to upper level for handling flush, etc. (shared TLB has only 1 exp)
+    val tlbExp = Vec(1, new BBTLBExceptionIO)
+
+    // AXI4 physical connections for DMA (Reader/Writer)
+    val axi_reader = AXI4Bundle(axiParams)
+    val axi_writer = AXI4Bundle(axiParams)
+
+    val config = Decoupled(new MemConfigerIO(b))
+
+    // Query interface to backend for group count
+    val query_vbank_id    = Output(UInt(8.W))
+    val query_is_shared   = Output(Bool())
+    val query_group_count = Input(UInt(4.W))
+
+    val hartid = Input(UInt(b.core.xLen.W))
+
+    // Busy signal
+    val busy = Output(Bool())
+  })
+
+  val memDecoder: Instance[MemDomainDecoder]      = Instantiate(new MemDomainDecoder(b))
+  val memRs:      Instance[MemReservationStation] = Instantiate(new MemReservationStation(b))
+  val memLoader:  Instance[MemLoader]             = Instantiate(new MemLoader(b))
+  val memStorer:  Instance[MemStorer]             = Instantiate(new MemStorer(b))
+  val pmc:        Instance[MemCyclePMC]           = Instantiate(new MemCyclePMC(b))
+
+  // TLB cluster - internal TLB management for DMA modules
+  // Supports 2 clients: StreamReader (client 1) and StreamWriter (client 0)
+  val tlbCluster = Instantiate(new BBTLBCluster(b))
+
+  // DMA Reader and Writer modules - handle actual DMA transfers
+  val reader:   Instance[StreamReader] = Instantiate(new StreamReader(b))
+  val writer:   Instance[StreamWriter] = Instantiate(new StreamWriter(b))
+  val configer: Instance[MemConfiger]  = Instantiate(new MemConfiger(b))
+
+// -----------------------------------------------------------------------------
+// Global RS -> MemDecoder
+// -----------------------------------------------------------------------------
+  memDecoder.io.cmd_i.valid := io.global_issue_i.valid
+  memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
+
+  // Config signal goes to backend
+  io.config <> configer.io.config
+
+  // Connect query interfaces
+  // Use memLoader's query by default, memStorer will override when active
+  io.query_vbank_id              := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
+  io.query_is_shared             := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_is_shared, memLoader.io.query_is_shared)
+  memLoader.io.query_group_count := io.query_group_count
+  memStorer.io.query_group_count := io.query_group_count
+
+// -----------------------------------------------------------------------------
+// MemDecoder -> MemReservationStation
+// -----------------------------------------------------------------------------
+  // Connect decoded instruction and global rob_id
+  memRs.io.mem_decode_cmd_i.valid           := memDecoder.io.mem_decode_cmd_o.valid
+  memRs.io.mem_decode_cmd_i.bits.cmd        := memDecoder.io.mem_decode_cmd_o.bits
+  memRs.io.mem_decode_cmd_i.bits.rob_id     := io.global_issue_i.bits.rob_id
+  memRs.io.mem_decode_cmd_i.bits.is_sub     := io.global_issue_i.bits.is_sub
+  memRs.io.mem_decode_cmd_i.bits.sub_rob_id := io.global_issue_i.bits.sub_rob_id
+  memDecoder.io.mem_decode_cmd_o.ready      := memRs.io.mem_decode_cmd_i.ready
+
+// -----------------------------------------------------------------------------
+// MemReservationStation -> MemLoader/MemStorer
+// -----------------------------------------------------------------------------
+  memLoader.io.cmdReq <> memRs.io.issue_o.ld
+  memStorer.io.cmdReq <> memRs.io.issue_o.st
+  configer.io.cmdReq <> memRs.io.issue_o.cf
+  configer.io.hartid := io.hartid
+  memRs.io.commit_i.ld <> memLoader.io.cmdResp
+  memRs.io.commit_i.st <> memStorer.io.cmdResp
+  memRs.io.commit_i.cf <> configer.io.cmdResp
+
+//-----------------------------------------------------------------------------
+// PMC - Performance Monitor Counter
+// -----------------------------------------------------------------------------
+  pmc.io.ldReq_i.valid  := memRs.io.issue_o.ld.fire
+  pmc.io.ldReq_i.bits   := memRs.io.issue_o.ld.bits
+  pmc.io.stReq_i.valid  := memRs.io.issue_o.st.fire
+  pmc.io.stReq_i.bits   := memRs.io.issue_o.st.bits
+  pmc.io.ldResp_o.valid := memLoader.io.cmdResp.fire
+  pmc.io.ldResp_o.bits  := memLoader.io.cmdResp.bits
+  pmc.io.stResp_o.valid := memStorer.io.cmdResp.fire
+  pmc.io.stResp_o.bits  := memStorer.io.cmdResp.bits
+
+  // Connect Reader and Writer to MemLoader and MemStorer
+  memLoader.io.dmaReq <> reader.io.req
+  reader.io.resp <> memLoader.io.dmaResp
+  memStorer.io.dmaReq <> writer.io.req
+  writer.io.resp <> memStorer.io.dmaResp
+
+  // TLB connection - internal TLB cluster connected to DMA modules
+  // Client 0: StreamWriter, Client 1: StreamReader
+  // Insert pipeline registers to break combinational loops
+  tlbCluster.io.clients(1).req.valid := reader.io.tlb.req.valid
+  tlbCluster.io.clients(1).req.bits  := reader.io.tlb.req.bits
+  reader.io.tlb.req.ready            := tlbCluster.io.clients(1).req.ready
+
+  reader.io.tlb.resp.valid            := tlbCluster.io.clients(1).resp.valid
+  reader.io.tlb.resp.bits             := tlbCluster.io.clients(1).resp.bits
+  tlbCluster.io.clients(1).resp.ready := reader.io.tlb.resp.ready
+
+  tlbCluster.io.clients(0).req.valid := writer.io.tlb.req.valid
+  tlbCluster.io.clients(0).req.bits  := writer.io.tlb.req.bits
+  writer.io.tlb.req.ready            := tlbCluster.io.clients(0).req.ready
+
+  writer.io.tlb.resp.valid            := tlbCluster.io.clients(0).resp.valid
+  writer.io.tlb.resp.bits             := tlbCluster.io.clients(0).resp.bits
+  tlbCluster.io.clients(0).resp.ready := writer.io.tlb.resp.ready
+
+  // Connect DMA flush signals to TLB exceptions
+  reader.io.flush := io.tlbExp(0).flush()
+  writer.io.flush := io.tlbExp(0).flush()
+
+  // PTW interface - connect to upper level page table walker
+  io.ptw <> tlbCluster.io.ptw
+
+  // TLB exception interface - connect to upper level for flush handling
+  tlbCluster.io.exp <> io.tlbExp
+
+  // Connect AXI4 physical ports from Reader/Writer to external interface
+  io.axi_reader <> reader.io.axi
+  io.axi_writer <> writer.io.axi
+
+  // Connect MemLoader and MemStorer to MemController's DMA interface
+  memLoader.io.bankWrite <> io.interdma.bankWrite
+  memStorer.io.bankRead <> io.interdma.bankRead
+  io.interdma.read_is_shared  := memStorer.io.is_shared
+  io.interdma.write_is_shared := memLoader.io.is_shared
+
+  // Completion signal connected to global RS
+  io.global_complete_o.valid           := memRs.io.complete_o.valid
+  io.global_complete_o.bits.rob_id     := memRs.io.complete_o.bits.rob_id
+  io.global_complete_o.bits.is_sub     := memRs.io.complete_o.bits.is_sub
+  io.global_complete_o.bits.sub_rob_id := memRs.io.complete_o.bits.sub_rob_id
+  memRs.io.complete_o.ready            := io.global_complete_o.ready
+
+  // Busy signal
+  // Simple busy signal
+  io.busy := !memRs.io.complete_o.ready
+}
