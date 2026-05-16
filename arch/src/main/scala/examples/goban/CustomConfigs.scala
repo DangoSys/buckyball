@@ -2,7 +2,7 @@ package examples.goban
 
 import org.chipsalliance.cde.config.Config
 import examples.goban.tiles.WithNGobanTiles
-import framework.core.bbtile.L2CacheParams
+import framework.system.tile.L2CacheParams
 
 /** 1 BBTile × 4 buckyball slots (shared SharedMem + BarrierUnit) */
 class BuckyballGobanConfig
@@ -39,10 +39,10 @@ class WithGobanPerTileL2(
   capacityKB: Int = 512,
   memCycles:  Int = 10)
     extends Config((site, here, up) => {
-      case framework.core.bbtile.BBTileAttachParams(tileParams, crossing) =>
+      case framework.system.tile.BBTileAttachParams(tileParams, crossing) =>
         val cacheBlockBytes = site(freechips.rocketchip.subsystem.CacheBlockBytes)
         val sets            = (capacityKB * 1024) / (cacheBlockBytes * ways)
-        framework.core.bbtile.BBTileAttachParams(
+        framework.system.tile.BBTileAttachParams(
           tileParams.copy(
             l2cache = Some(L2CacheParams(
               ways = ways,
@@ -127,14 +127,20 @@ object WithGoban24Tiles16CoresPerTile {
       s"tiles24x16core.json must list exactly 24 tile configs, found ${tileConfigs.size}"
     )
 
-    val fragments: Seq[org.chipsalliance.cde.config.Config] = tileConfigs.map { name =>
+    // New architecture: one WithBBTile per core (single-Core single-SM for now)
+    // 24 tiles x 16 cores becomes 384 single-core tiles in the new architecture.
+    // TODO: Support multi-Core per tile when new architecture is extended.
+    val fragments: Seq[org.chipsalliance.cde.config.Config] = tileConfigs.flatMap { name =>
       val perCore  = framework.builtin.configloader.ConfigLoader.loadApply[Seq[Option[framework.top.GlobalConfig]]](name)
       val resolved = if (withBuckyball) perCore else perCore.map(_ => None)
-      new framework.core.bbtile.WithBBTile(
-        withBuckyball = resolved.exists(_.isDefined),
-        nCoresPerTile = perCore.size,
-        buckyballPerCore = Some(resolved)
-      )
+
+      // Create one tile per core
+      resolved.map { globalConfigOpt =>
+        new framework.system.tile.WithBBTile(
+          withBuckyball = globalConfigOpt.isDefined,
+          globalConfig = globalConfigOpt.getOrElse(framework.top.GlobalConfig())
+        )
+      }
     }
 
     fragments.reduce[org.chipsalliance.cde.config.Parameters](_ ++ _)

@@ -8,9 +8,9 @@ import framework.gpdomain.configs.GpDomainParam
 import framework.balldomain.configs.BallDomainParam
 import framework.balldomain.prototype.vector.configs.VectorBallParam
 import framework.balldomain.prototype.relu.configs.ReluBallParam
-import framework.core.configs.CoreParam
+import framework.system.configs.CoreParam
 import framework.top.configs.TopConfig
-import framework.core.bbtile.configs.RocketCoreParam
+import framework.system.configs.RocketCoreParam
 
 case class GlobalConfig(
   memDomain:  MemDomainParam,

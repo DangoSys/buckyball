@@ -1,7 +1,7 @@
 package examples.toy.tiles.toytile.toycore.configs
 
 import upickle.default._
-import framework.core.bbtile.configs.RocketCoreParam
+import framework.system.configs.RocketCoreParam
 
 case class ToyCoreConfig(
   balldomain: String,

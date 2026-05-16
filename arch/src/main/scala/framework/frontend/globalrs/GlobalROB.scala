@@ -102,6 +102,14 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   bat.io.free.valid := commitMask.asUInt.orR
   bat.io.free.mask := commitMask
 
+  // Mark write alias as busy in scoreboard at alloc time (not issue time).
+  // BAT updates v2a at alloc, so subsequent reads of the
+  // same vbank will be renamed to the new alias immediately. If we only set
+  // bankWrBusy at issue, the window between alloc and issue lets dependent
+  // reads slip through the hazard check and issue out-of-order.
+  scoreboard.alloc.valid := io.alloc.fire && io.alloc.bits.bankAccess.wr_bank_valid
+  scoreboard.alloc.bits  := bat.io.alloc_renamed
+
   when(io.alloc.fire) {
     itraceAlloc.io.is_issue    := 2.U
     itraceAlloc.io.rob_id      := tailPtr
