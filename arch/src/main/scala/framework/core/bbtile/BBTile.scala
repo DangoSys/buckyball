@@ -43,7 +43,6 @@ import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.frontend.outside_channel.MemConfigerIO
 import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
-import sims.scu.{SCUKey, TLSCU}
 
 /**
  * BBTile — a composable tile containing one Rocket core + optional per-core-index Buckyball slots.
@@ -215,12 +214,8 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // TileLink topology
   // ---------------------------------------------------------------------------
-  // SCU: tile-local MMIO device, connected to tlSlaveXbar (like DTIM/BEU)
-  // This allows CPU to access SCU while Buckyball DMA goes directly to L2 via tlOtherMastersNode
-  p(SCUKey).foreach { params =>
-    val scu = LazyModule(new TLSCU(params, xBytes, bbParams.tileId))
-    connectTLSlave(scu.node, xBytes)
-  }
+  // SCU moved to subsystem level (CBUS) as a global multi-hart device.
+  // See sims/scu/SCU.scala and WithSCU config.
 
   tlOtherMastersNode := tile_master_blocker.map(_.node := tlMasterXbar.node).getOrElse(tlMasterXbar.node)
 
