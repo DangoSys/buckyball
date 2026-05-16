@@ -4,10 +4,10 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-/**
- * Bank access information extracted from instruction encoding.
- * This is instruction-agnostic — the scoreboard only sees read/write bank sets.
- */
+//====----------------------------------------------------------====//
+//  Bank access information extracted from instruction encoding.
+//  It's instruction-agnostic: the scoreboard only sees read/write bank_id.
+//====----------------------------------------------------------====//
 class BankAccessInfo(val bankIdLen: Int) extends Bundle {
   val rd_bank_0_valid = Bool()
   val rd_bank_0_id    = UInt(bankIdLen.W)
@@ -19,7 +19,6 @@ class BankAccessInfo(val bankIdLen: Int) extends Bundle {
 
 object BankAccessInfo {
 
-  /** Create a zero-valued (no access) BankAccessInfo */
   def none(bankIdLen: Int): BankAccessInfo = {
     val w = Wire(new BankAccessInfo(bankIdLen))
     w.rd_bank_0_valid := false.B
@@ -33,26 +32,39 @@ object BankAccessInfo {
 
 }
 
-/**
- * Bank Scoreboard — tracks in-flight read/write operations per bank.
- *
- * Hazard rules:
- *   - Read bank X  → requires bankWrBusy(X) == false       (RAW)
- *   - Write bank X → requires bankRdCount(X) == 0           (WAR)
- *                     AND     bankWrBusy(X) == false         (WAW)
- *
- * bankRdCount: multi-bit counter (multiple concurrent readers allowed, RR is OK)
- * bankWrBusy:  1-bit flag (WAW rule guarantees at most 1 writer in-flight)
- *
- * Issue and complete may fire in the same cycle. Updates are computed
- * combinationally so both increments and decrements take effect.
- */
+//====----------------------------------------------------------====//
+//  Bank Scoreboard: tracks in-flight read/write operations per bank.
+//
+//  Hazard rules:
+//   - Read bank X  → requires bankWrBusy(X) == false       (RAW)
+//   - Write bank X → requires bankRdCount(X) == 0           (WAR)
+//                     AND     bankWrBusy(X) == false         (WAW)
+//
+//  bankRdCount: multi-bit counter (multiple concurrent readers allowed, RR is OK)
+//  bankWrBusy:  1-bit flag (WAW rule guarantees at most 1 writer in-flight)
+//
+//  Lifecycle:
+//   - alloc:    sets bankWrBusy for the renamed write alias. This must happen
+//               at alloc time (not issue) because the BAT updates v2a at alloc,
+//               and subsequent reads of the same vbank will be renamed to the
+//               new alias immediately. If we only set bankWrBusy at issue, the
+//               window between alloc and issue lets dependent reads slip through
+//               the hazard check and issue out-of-order.
+//   - issue:    increments bankRdCount for the renamed read aliases.
+//   - complete: decrements bankRdCount and clears bankWrBusy.
+//
+//  Issue and complete may fire in the same cycle. Updates are computed
+//  combinationally so both increments and decrements take effect.
+//====----------------------------------------------------------====//
+
 @instantiable
 class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
 
   val bankIdLen = log2Up(bankNum)
   val cntWidth  = log2Ceil(robEntries + 1)
 
+  @public
+  val alloc     = IO(Flipped(Valid(new BankAccessInfo(bankIdLen))))
   @public
   val issue     = IO(Flipped(Valid(new BankAccessInfo(bankIdLen))))
   @public
@@ -73,11 +85,11 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
   private def hazardOf(q: BankAccessInfo): Bool = {
     val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(q.rd_bank_0_id)
     val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(q.rd_bank_1_id)
-    val wr_hazard  = q.wr_bank_valid && (
-      bankRdCount(q.wr_bank_id) =/= 0.U ||
-        bankWrBusy(q.wr_bank_id)
-    )
-    rd0_hazard || rd1_hazard || wr_hazard
+    // Write hazard is NOT checked here. BAT eliminates WAW/WAR by giving each
+    // write a unique alias that no other instruction uses. Checking wr_hazard
+    // would falsely block the writer itself, since alloc marks the writer's
+    // own alias as busy in the same cycle the entry enters the ROB.
+    rd0_hazard || rd1_hazard
   }
 
   hasHazard := hazardOf(query)
@@ -99,12 +111,12 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
     val rdDec = cmpRd0.asUInt +& cmpRd1.asUInt
     bankRdCount(bank) := bankRdCount(bank) + rdInc - rdDec
 
-    // Write flag: issue sets, complete clears. If both happen to same bank,
-    // complete takes priority (the completing instruction frees the bank).
-    val issWr = issue.valid && issue.bits.wr_bank_valid && (issue.bits.wr_bank_id === bankU)
-    val cmpWr = complete.valid && complete.bits.wr_bank_valid && (complete.bits.wr_bank_id === bankU)
+    // Write flag: alloc sets (alias is reserved as soon as it is renamed),
+    // complete clears. If both happen to same bank, complete takes priority.
+    val allocWr = alloc.valid && alloc.bits.wr_bank_valid && (alloc.bits.wr_bank_id === bankU)
+    val cmpWr   = complete.valid && complete.bits.wr_bank_valid && (complete.bits.wr_bank_id === bankU)
 
-    when(issWr && !cmpWr) {
+    when(allocWr && !cmpWr) {
       bankWrBusy(bank) := true.B
     }.elsewhen(cmpWr) {
       bankWrBusy(bank) := false.B
