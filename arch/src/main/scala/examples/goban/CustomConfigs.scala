@@ -43,6 +43,24 @@ class BuckyballGoban1Tile64CoreConfig
         new sims.base.BuckyballBaseConfig
     )
 
+/** 4 BBTile × 16 Buckyball cores. */
+// this config is incoherent
+class BuckyballGoban4Tile16CoreConfig
+    extends Config(
+      new WithBuckyballTiles("src/main/scala/examples/goban/configs/4t16c.toml") ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/** 8 BBTile × 8 Buckyball cores. */
+// this config is incoherent
+class BuckyballGoban8Tile8CoreConfig
+    extends Config(
+      new WithBuckyballTiles("src/main/scala/examples/goban/configs/8t8c.toml") ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
 /** 24 BBTiles × 16 Buckyball cores each = 384 total. */
 class BuckyballGoban24Tile16CoreConfig
     extends Config(

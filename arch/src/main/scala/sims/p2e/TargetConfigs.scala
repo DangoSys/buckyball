@@ -51,6 +51,41 @@ class P2EToyConfig
         new examples.toy.BuckyballToyConfig
     )
 
+//===----------------------------------------------------------------------===//
+// Goban P2E configs
+//===----------------------------------------------------------------------===//
+class BuckyballGoban2CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban2CoreConfig
+    )
+
+class BuckyballGoban4CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban4CoreConfig
+    )
+
+class BuckyballGoban8CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban8CoreConfig
+    )
+
+class BuckyballGoban64CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban1Tile64CoreConfig
+    )
+
+class BuckyballGoban24Tile16CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban24Tile16CoreConfig
+    )
+
+//===----------------------------------------------------------------------===//
+
 object Elaborate extends App {
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")

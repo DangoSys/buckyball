@@ -1,0 +1,8 @@
+# Goban - 4 tile × 16 cores
+
+[top]
+nTiles = 4
+
+[tileTemplate]
+include = "tiles/16core-incoherent.toml"
+count = 4

@@ -42,3 +42,71 @@ class FireSimBuckyballToyConfig
         new firechip.chip.WithFireSimConfigTweaks ++
         new examples.toy.BuckyballToyConfig
     )
+
+//===----------------------------------------------------------------------===//
+// Chipyard firesim configs
+//===----------------------------------------------------------------------===//
+class ChipyardRocketFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new chipyard.RocketConfig
+    )
+
+class ChipyardGemminiRocketFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new chipyard.GemminiRocketConfig
+    )
+
+class Chipyard2CoreFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new chipyard.DualRocketConfig
+    )
+
+class Chipyard4CoreFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new chipyard.QuadRocketConfig
+    )
+
+class Chipyard8CoreFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new freechips.rocketchip.rocket.WithNHugeCores(8) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard4CoreGemminiFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(4) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard8CoreGemminiFiresimConfig
+    extends Config(
+      new WithBootROM ++
+        new firechip.chip.WithDefaultFireSimBridges ++
+        new firechip.chip.WithFireSimConfigTweaks ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(8) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
+
+//===----------------------------------------------------------------------===//

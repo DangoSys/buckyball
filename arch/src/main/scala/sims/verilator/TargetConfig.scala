@@ -45,11 +45,25 @@ class BuckyballGoban8CoreVerilatorConfig
         new examples.goban.BuckyballGoban8CoreConfig
     )
 
-class BuckyballGoban1Tile64CoreVerilatorConfig
+class BuckyballGoban64CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
         new examples.goban.BuckyballGoban1Tile64CoreConfig
+    )
+
+class BuckyballGoban4Tile16CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban4Tile16CoreConfig
+    )
+
+class BuckyballGoban8Tile8CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban8Tile8CoreConfig
     )
 
 class BuckyballGoban24Tile16CoreVerilatorConfig
@@ -64,6 +78,81 @@ class BuckyballGoban24Tile16CoreVerilatorConfig
 //===----------------------------------------------------------------------===//
 // Chipyard Verilator configs
 //===----------------------------------------------------------------------===//
+class ChipyardRocketVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new chipyard.RocketConfig
+    )
+
+class ChipyardGemminiRocketVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new chipyard.GemminiRocketConfig
+    )
+
+class Chipyard2CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new chipyard.DualRocketConfig
+    )
+
+class Chipyard4CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new chipyard.QuadRocketConfig
+    )
+
+class Chipyard8CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new freechips.rocketchip.rocket.WithNHugeCores(8) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard4CoreGemminiVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(4) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard8CoreGemminiVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(8) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard32CoreGemminiVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(32) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
+
+class Chipyard64CoreGemminiVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(64) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new chipyard.config.AbstractConfig
+    )
 
 //===----------------------------------------------------------------------===//
 

@@ -1,4 +1,4 @@
-# Goban Tile (16 identical cores)
+# Goban Tile (8 identical cores)
 
 [privateDCache]
 enable = true
@@ -10,4 +10,4 @@ memCycles = 10
 
 [coreTemplate]
 include = "cores/default.toml"
-count = 16
+count = 8
