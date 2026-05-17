@@ -78,7 +78,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     command += "--disable-annotation-unknown "
     command += "--strip-debug-info "
-    command += "-O=debug "
+    command += "-O=release "
     command += f"--split-verilog -o={build_dir} "
 
     result = stream_run_logger(
