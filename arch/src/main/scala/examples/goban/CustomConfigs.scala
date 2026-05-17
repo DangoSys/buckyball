@@ -35,6 +35,14 @@ class BuckyballGoban16CoreConfig
         new sims.base.BuckyballBaseConfig
     )
 
+/** 1 BBTile × 64 Buckyball cores. */
+class BuckyballGoban1Tile64CoreConfig
+    extends Config(
+      new WithBuckyballTiles("src/main/scala/examples/goban/configs/1t64c.toml") ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
 /** 24 BBTiles × 16 Buckyball cores each = 384 total. */
 class BuckyballGoban24Tile16CoreConfig
     extends Config(

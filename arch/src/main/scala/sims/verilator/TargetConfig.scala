@@ -45,6 +45,13 @@ class BuckyballGoban8CoreVerilatorConfig
         new examples.goban.BuckyballGoban8CoreConfig
     )
 
+class BuckyballGoban1Tile64CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban1Tile64CoreConfig
+    )
+
 class BuckyballGoban24Tile16CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
