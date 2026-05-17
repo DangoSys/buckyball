@@ -4,5 +4,5 @@
 nTiles = 24
 
 [tileTemplate]
-include = "tiles/16core.toml"
+include = "tiles/16core-incoherent.toml"
 count = 24

@@ -6,7 +6,7 @@ import framework.system.tile.WithBuckyballTiles
 /** 1 BBTile × 2 Buckyball cores. */
 class BuckyballGoban2CoreConfig
     extends Config(
-      new WithBuckyballTiles("src/main/scala/examples/goban/configs/goban_2core.toml") ++
+      new WithBuckyballTiles("src/main/scala/examples/goban/configs/1t2c.toml") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -14,7 +14,7 @@ class BuckyballGoban2CoreConfig
 /** 1 BBTile × 4 Buckyball cores (default). */
 class BuckyballGoban4CoreConfig
     extends Config(
-      new WithBuckyballTiles("src/main/scala/examples/goban/configs/goban.toml") ++
+      new WithBuckyballTiles("src/main/scala/examples/goban/configs/1t4c.toml") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -36,7 +36,7 @@ class BuckyballGoban16CoreConfig
     )
 
 /** 24 BBTiles × 16 Buckyball cores each = 384 total. */
-class BuckyballGoban24x16Config
+class BuckyballGoban24Tile16CoreConfig
     extends Config(
       new WithBuckyballTiles("src/main/scala/examples/goban/configs/24t16c.toml") ++
         new chipyard.config.WithSystemBusWidth(256) ++

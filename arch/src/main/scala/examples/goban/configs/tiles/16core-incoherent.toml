@@ -1,7 +1,7 @@
-# Chiplet Tile (4 cores with private DCache enabled)
+# Goban Tile (16 identical cores)
 
 [privateDCache]
-enable = true
+enable = false
 ways = 4
 capacityKB = 256
 writeBytes = 8
@@ -10,4 +10,4 @@ memCycles = 10
 
 [coreTemplate]
 include = "cores/default.toml"
-count = 4
+count = 16

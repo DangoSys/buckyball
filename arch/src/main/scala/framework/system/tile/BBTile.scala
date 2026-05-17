@@ -26,13 +26,14 @@ import freechips.rocketchip.tilelink.{
   TLCacheCork,
   TLClientNode,
   TLClientParameters,
+  TLFilter,
   TLFragmenter,
   TLIdentityNode,
   TLMasterPortParameters,
   TLWidthWidget,
   TLXbar
 }
-import freechips.rocketchip.subsystem.HierarchicalElementCrossingParamsLike
+import freechips.rocketchip.subsystem.{ExtMem, HierarchicalElementCrossingParamsLike}
 import freechips.rocketchip.prci.{ClockCrossingType, ClockSinkParameters, RationalCrossing}
 import freechips.rocketchip.util.{Annotated, InOrderArbiter}
 import freechips.rocketchip.util.BooleanToAugmentedBoolean
@@ -138,8 +139,13 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   // Buckyball accelerator TileLink nodes (diplomacy layer) — N pairs of DMA
   // ---------------------------------------------------------------------------
-  val extraFrontends: Seq[Frontend] = (1 until nCores).map { _ =>
-    val f = LazyModule(new Frontend(bbParams.icache.get, bbParams.tileId))
+  val extraFrontends: Seq[Frontend] = (1 until nCores).map { coreIdx =>
+    // ICache needs a static ID for metadata (TileLink node naming).
+    // Use the same formula as runtime hartId assignment (BBTile.scala:385):
+    //   c.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U
+    // This ensures each Frontend has a globally unique identifier.
+    val staticHartId = bbParams.tileId * nCores + coreIdx
+    val f            = LazyModule(new Frontend(bbParams.icache.get, staticHartId))
     tlMasterXbar.node                               := TLWidthWidget(bbParams.icache.get.rowBits / 8) := f.masterNode
     connectTLSlave(f.slaveNode, bbParams.core.fetchBytes)
     f.icache.hartIdSinkNodeOpt.foreach(_            := hartIdNexusNode)
@@ -224,23 +230,57 @@ class BBTile private (
   // Route through private DCache if present, otherwise connect directly to masterNode
   tilePrivateDCache match {
     case Some((dcache, innerBuf, outerBuf, cork)) =>
-      // Topology:
-      //   tlOtherMastersNode (multiple inward bindings: tlMasterXbar + widget)
-      //     -> dcacheXbar (merge fan-in to a single port)
-      //     -> innerBuf -> privateDCache -> outerBuf -> cork -> masterNode
+      // Topology: split tile traffic into two parallel paths to masterNode:
+      //   - cacheable (DRAM): goes through privateDCache (acting as last-level cache)
+      //   - uncacheable (MMIO/bootrom/error/etc.): bypasses privateDCache
       //
-      // The xbar is needed because `innerBuf` is an adapter node with exactly
-      // one port, but `tlOtherMastersNode` is an identity node that forwards
-      // multiple inward bindings. Without the xbar diplomacy can't resolve
-      // the port count mismatch.
-      val dcacheXbar = LazyModule(new TLXbar)
+      //   tlOtherMastersNode
+      //     :=* dcacheXbar (merge fan-in)
+      //         ├── innerBuf -> dcache -> cacheableFilter -> outerBuf -> cork ──┐
+      //         │                                                                ├─> masterNode
+      //         └── uncacheableFilter ─────────────────────────────────────────┘
+      //
+      // Why split:
+      //   InclusiveCache forces `supportsAcquireB` on all downstream managers and
+      //   only upgrades regionType to CACHED if it was already >= UNCACHED. For
+      //   managers with regionType < UNCACHED (e.g. the built-in error device at
+      //   0x3000-0x3fff with regionType=VOLATILE), this combination violates
+      //   `require(!supportsAcquireB || regionType >= UNCACHED)` in TLSlaveParameters.
+      //
+      // Why cacheableFilter must be DOWNSTREAM of dcache:
+      //   TLFilter's managerFn modifies the manager list seen by the upstream side.
+      //   Placing cacheableFilter downstream of dcache means dcache's outward edge
+      //   sees only cacheable (DRAM) managers, satisfying the constraint above.
+      //   Placing it upstream would only filter what the upstream xbar sees,
+      //   not what dcache sees.
+      //
+      // Why the system-level InclusiveCache must be disabled:
+      //   InclusiveCache requires lastLevel = !managers.exists(_.regionType > UNCACHED).
+      //   A system-level InclusiveCache downstream would convert DRAM's regionType
+      //   to CACHED, violating lastLevel. So privateDCache=true is paired with
+      //   disabling the system-level InclusiveCache (see WithBuckyballTiles).
+      val cacheable = AddressSet(p(ExtMem).get.master.base, p(ExtMem).get.master.size - 1)
+
+      val dcacheXbar        = LazyModule(new TLXbar)
+      val cacheableFilter   = LazyModule(new TLFilter(mfilter = TLFilter.mSelectIntersect(cacheable)))
+      val uncacheableFilter = LazyModule(new TLFilter(mfilter = TLFilter.mSubtract(Seq(cacheable))))
       dcacheXbar.suggestName(s"tile_private_dcache_${bbParams.tileId}_xbar")
+      cacheableFilter.suggestName(s"tile_private_dcache_${bbParams.tileId}_cacheable_filter")
+      uncacheableFilter.suggestName(s"tile_private_dcache_${bbParams.tileId}_uncacheable_filter")
+
       dcacheXbar.node :=* tlOtherMastersNode
-      innerBuf.node := dcacheXbar.node
-      dcache.node   := innerBuf.node
-      outerBuf.node := dcache.node
-      cork.node     := outerBuf.node
+
+      // Cacheable path through privateDCache -> masterNode
+      innerBuf.node        := dcacheXbar.node
+      dcache.node          := innerBuf.node
+      cacheableFilter.node := dcache.node
+      outerBuf.node        := cacheableFilter.node
+      cork.node            := outerBuf.node
       masterNode :=* cork.node
+
+      // Uncacheable path bypasses privateDCache -> masterNode
+      uncacheableFilter.node := dcacheXbar.node
+      masterNode :=* uncacheableFilter.node
     case None                                     =>
       // Direct connection (original behavior)
       masterNode :=* tlOtherMastersNode

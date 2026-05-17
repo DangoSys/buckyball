@@ -45,31 +45,18 @@ class BuckyballGoban8CoreVerilatorConfig
         new examples.goban.BuckyballGoban8CoreConfig
     )
 
-//===----------------------------------------------------------------------===//
-
-//===----------------------------------------------------------------------===//
-// Chiplet Verilator configs
-//===----------------------------------------------------------------------===//
-class BuckyballChiplet2CoreVerilatorConfig
+class BuckyballGoban24Tile16CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
-        new examples.chiplet.BuckyballChiplet2CoreConfig
+        new examples.goban.BuckyballGoban24Tile16CoreConfig
     )
 
-class BuckyballChiplet4CoreVerilatorConfig
-    extends Config(
-      new BBSimConfig ++
-        new WithCustomBootROM ++
-        new examples.chiplet.BuckyballChiplet4CoreConfig
-    )
+//===----------------------------------------------------------------------===//
 
-class BuckyballChiplet8CoreVerilatorConfig
-    extends Config(
-      new BBSimConfig ++
-        new WithCustomBootROM ++
-        new examples.chiplet.BuckyballChiplet8CoreConfig
-    )
+//===----------------------------------------------------------------------===//
+// Chipyard Verilator configs
+//===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
 
