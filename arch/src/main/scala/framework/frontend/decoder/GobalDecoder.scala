@@ -13,7 +13,7 @@ import framework.memdomain.frontend.cmd_channel.decoder.DISA._
 import framework.gpdomain.sequencer.decoder.DISA._
 import framework.frontend.scoreboard.BankAccessInfo
 
-import framework.core.bbtile.RoCCCommandBB
+import framework.system.core.rocket.RoCCCommandBB
 
 class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
   val cmd = new RoCCCommandBB(b.core.xLen)

@@ -1,0 +1,12 @@
+# Toy Tile Configuration (1 core)
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[[cores]]
+include = "cores/default.toml"

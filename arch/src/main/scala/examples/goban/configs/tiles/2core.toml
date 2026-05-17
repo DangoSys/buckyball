@@ -1,0 +1,13 @@
+# Goban Tile (2 identical cores)
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[coreTemplate]
+include = "cores/default.toml"
+count = 2

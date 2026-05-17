@@ -1,9 +1,0 @@
-{
-  "coreConfigs": [
-    "examples.konbi.tiles.konbitile.prefillcore.Core0Config",
-    "examples.konbi.tiles.konbitile.prefillcore.Core0Config",
-    "examples.konbi.tiles.konbitile.decodecore.Core1Config",
-    "examples.konbi.tiles.konbitile.decodecore.Core1Config",
-    "examples.konbi.tiles.konbitile.decodecore.Core1Config"
-  ]
-}

@@ -1,0 +1,49 @@
+# Chiplet Ball Domain (same Ball lineup as toy)
+
+ballNum = 9
+
+ballIdMappings = [
+  { ballId = 0, ballName = "VecBall", ballClass = "framework.balldomain.prototype.vector.VecBall", inBW = 2, outBW = 4 },
+  { ballId = 1, ballName = "ReluBall", ballClass = "framework.balldomain.prototype.relu.ReluBall", inBW = 1, outBW = 1 },
+  { ballId = 2, ballName = "TransposeBall", ballClass = "framework.balldomain.prototype.transpose.TransposeBall", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "Im2colBall", ballClass = "framework.balldomain.prototype.im2col.Im2colBall", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "SystolicArrayBall", ballClass = "framework.balldomain.prototype.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 },
+  { ballId = 5, ballName = "QuantBall", ballClass = "framework.balldomain.prototype.quant.QuantBall", inBW = 1, outBW = 1 },
+  { ballId = 6, ballName = "DequantBall", ballClass = "framework.balldomain.prototype.dequant.DequantBall", inBW = 1, outBW = 1 },
+  { ballId = 7, ballName = "GemminiBall", ballClass = "framework.balldomain.prototype.gemmini.GemminiBall", inBW = 2, outBW = 4 },
+  { ballId = 8, ballName = "TraceBall", ballClass = "framework.balldomain.prototype.trace.TraceBall", inBW = 1, outBW = 1 }
+]
+
+ballISA = [
+  { mnemonic = "MATMUL_WARP16", funct7 = 64, bid = 0 },
+  { mnemonic = "RELU", funct7 = 50, bid = 1 },
+  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 2 },
+  { mnemonic = "IM2COL", funct7 = 48, bid = 3 },
+  { mnemonic = "SYSTOLIC", funct7 = 65, bid = 4 },
+  { mnemonic = "QUANT", funct7 = 51, bid = 5 },
+  { mnemonic = "DEQUANT", funct7 = 52, bid = 6 },
+  { mnemonic = "GEMMINI_CONFIG", funct7 = 2, bid = 7 },
+  { mnemonic = "GEMMINI_FLUSH", funct7 = 3, bid = 7 },
+  { mnemonic = "GEMMINI_PRELOAD", funct7 = 53, bid = 7 },
+  { mnemonic = "GEMMINI_COMPUTE_PRELOADED", funct7 = 66, bid = 7 },
+  { mnemonic = "GEMMINI_COMPUTE_ACCUMULATED", funct7 = 67, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_BOUNDS", funct7 = 80, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_A", funct7 = 81, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_B", funct7 = 82, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_D", funct7 = 83, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_C", funct7 = 84, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_AB", funct7 = 85, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_DC", funct7 = 86, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_WS", funct7 = 87, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_1", funct7 = 96, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_2", funct7 = 97, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_3", funct7 = 98, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_4", funct7 = 99, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_5", funct7 = 100, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_6", funct7 = 101, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_7", funct7 = 102, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_8", funct7 = 103, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_9", funct7 = 104, bid = 7 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS", funct7 = 105, bid = 7 },
+  { mnemonic = "BDB_COUNTER", funct7 = 4, bid = 8 }
+]

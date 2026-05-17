@@ -14,16 +14,6 @@ class WithCustomBootROM
         ))
     })
 
-// =============================================================================
-// Verilator-specific configs
-// The full base (clocking, buses, no UART/MMIO/SerialTL/ClockTap) comes from
-// BuckyballBaseConfig which is included in the example SoC config.
-//
-// Verilator adds:
-//   - BBSimConfig       : Verilator harness binders (mem model, etc.)
-//   - WithCustomBootROM : Verilator bootrom image
-// =============================================================================
-
 class BuckyballToyVerilatorConfig
     extends Config(
       new BBSimConfig ++
@@ -31,33 +21,57 @@ class BuckyballToyVerilatorConfig
         new examples.toy.BuckyballToyConfig
     )
 
-class BuckyballGobanVerilatorConfig
+//===----------------------------------------------------------------------===//
+// Goban Verilator configs
+//===----------------------------------------------------------------------===//
+class BuckyballGoban2CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
-        new examples.goban.BuckyballGobanConfig
+        new examples.goban.BuckyballGoban2CoreConfig
     )
 
-class BuckyballKonbiVerilatorConfig
+class BuckyballGoban4CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
-        new examples.konbi.BuckyballKonbiConfig
+        new examples.goban.BuckyballGoban4CoreConfig
     )
 
-class BuckyballPolyVerilatorConfig
+class BuckyballGoban8CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
-        new examples.poly.BuckyballPolyConfig
+        new examples.goban.BuckyballGoban8CoreConfig
     )
 
-// class BuckyballGoban24Tile16CoreVerilatorConfig
-//     extends Config(
-//       new BBSimConfig ++
-//         new WithCustomBootROM ++
-//         new examples.goban.BuckyballGoban24Tile16CoreConfigWithL2
-//     )
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Chiplet Verilator configs
+//===----------------------------------------------------------------------===//
+class BuckyballChiplet2CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.chiplet.BuckyballChiplet2CoreConfig
+    )
+
+class BuckyballChiplet4CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.chiplet.BuckyballChiplet4CoreConfig
+    )
+
+class BuckyballChiplet8CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.chiplet.BuckyballChiplet8CoreConfig
+    )
+
+//===----------------------------------------------------------------------===//
 
 object Elaborate extends App {
   if (args.isEmpty) {

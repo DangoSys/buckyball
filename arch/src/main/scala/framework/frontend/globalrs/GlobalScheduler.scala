@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.decoder.GISA._
 import framework.frontend.scoreboard.BankAccessInfo
-import framework.core.bbtile.RoCCResponseBB
+import framework.system.core.rocket.RoCCResponseBB
 import framework.balldomain.blink.SubRobRow
 
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {

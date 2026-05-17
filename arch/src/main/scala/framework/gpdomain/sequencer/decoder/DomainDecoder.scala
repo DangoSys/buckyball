@@ -3,7 +3,7 @@ package framework.gpdomain.sequencer.decoder
 import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
-import framework.core.bbtile.RoCCCommandBB
+import framework.system.core.rocket.RoCCCommandBB
 import framework.gpdomain.sequencer.decoder.{Decoder, DecoderParam}
 import chisel3.experimental.hierarchy.{instantiable, public}
 

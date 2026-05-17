@@ -1,0 +1,11 @@
+# Goban Ball Domain - SystolicArrayBall only
+
+ballNum = 1
+
+ballIdMappings = [
+  { ballId = 0, ballName = "SystolicArrayBall", ballClass = "framework.balldomain.prototype.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 }
+]
+
+ballISA = [
+  { mnemonic = "SYSTOLIC", funct7 = 65, bid = 0 }
+]

@@ -1,0 +1,7 @@
+# Chiplet - 1 tile × 1 core (default)
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/default.toml"

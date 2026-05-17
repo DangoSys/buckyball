@@ -33,7 +33,9 @@ object buckyball extends SbtModule { m =>
     // ivy"org.chipsalliance::circt:1.0.0",
     // ivy"org.chipsalliance::circt-mlir:1.0.0"
     ivy"org.yaml:snakeyaml:2.0",
-    ivy"com.lihaoyi::sourcecode:0.3.0"
+    ivy"com.lihaoyi::sourcecode:0.3.0",
+    ivy"com.lihaoyi::upickle:3.3.1",
+    ivy"tech.sparse::toml-scala:0.2.2"
   )
 
   override def scalacPluginIvyDeps = Agg(

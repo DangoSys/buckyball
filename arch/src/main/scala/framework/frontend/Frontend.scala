@@ -6,7 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, GlobalScheduler}
 import framework.top.GlobalConfig
-import framework.core.bbtile.{RoCCCommandBB, RoCCResponseBB}
+import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.balldomain.blink.SubRobRow
 
 /**

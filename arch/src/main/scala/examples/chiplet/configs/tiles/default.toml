@@ -1,0 +1,12 @@
+# Chiplet Tile (default: 1 core with private DCache enabled)
+
+[privateDCache]
+enable = true
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[[cores]]
+include = "cores/default.toml"

@@ -1,0 +1,7 @@
+# Goban - 1 tile × 4 cores (default)
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/default.toml"

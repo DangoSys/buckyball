@@ -1,0 +1,8 @@
+# Goban - 24 tiles × 16 cores each (384 cores total)
+
+[top]
+nTiles = 24
+
+[tileTemplate]
+include = "tiles/16core.toml"
+count = 24

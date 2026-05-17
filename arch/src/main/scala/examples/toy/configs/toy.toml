@@ -1,0 +1,8 @@
+# Toy Example - Top Level Configuration
+# Single tile with 1 Buckyball core
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/default.toml"

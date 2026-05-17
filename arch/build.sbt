@@ -60,7 +60,8 @@ lazy val buckyball = (project in file("."))
         libraryDependencies ++= Seq(
           "edu.berkeley.cs" %% "rocketchip" % "1.6",
           "com.lihaoyi" %% "os-lib" % "0.10.0",
-          "com.lihaoyi" %% "upickle" % "3.3.1"
+          "com.lihaoyi" %% "upickle" % "3.3.1",
+          "tech.sparse" %% "toml-scala" % "0.2.2"
         )
       )
   )
