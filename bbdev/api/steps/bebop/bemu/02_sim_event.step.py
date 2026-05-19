@@ -53,10 +53,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(log_dir, exist_ok=True)
 
     # ── Run bebop bemu ────────────────────────────────────────────────────
+    pk_flag = " --pk" if input_data.get("pk") else ""
     run_cmd = (
         f"cargo run --features bemu -- bemu "
         f"--elf=\"{binary_path}\" "
         f"--log-dir=\"{log_dir}\""
+        f"{pk_flag}"
     )
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
     run_result = stream_run_logger(

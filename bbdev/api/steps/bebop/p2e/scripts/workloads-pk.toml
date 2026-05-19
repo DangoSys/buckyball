@@ -1,0 +1,24 @@
+# =============================================================================
+# Bebop p2e workload list - PK (proxy kernel) tests
+# =============================================================================
+# search_path is relative to bb-tests/output (or absolute path).
+# Each entry under tests is the file STEM (without extension).
+
+[workloads]
+search_path = "workloads/src/CTest/toy"
+tests = [
+    "ctest_bdb_counter_test-linux",
+    "ctest_bfp_test-linux",
+    "ctest_dequant_test-linux",
+    "ctest_gemmini_os_cisc_basic_test-linux",
+    "ctest_gemmini_os_cisc_atranspose_test-linux",
+    "ctest_gemmini_os_cisc_btranspose_test-linux",
+    "ctest_gemmini_os_cisc_shift_test-linux",
+    "ctest_gemmini_os_risc_basic_test-linux",
+    "ctest_gemmini_os_risc_atranspose_test-linux",
+    "ctest_gemmini_os_risc_btranspose_test-linux",
+    "ctest_gemmini_os_risc_abtranspose_test-linux",
+    "ctest_gemmini_os_risc_shift_test-linux",
+    "ctest_gemmini_ws_cisc_conv_test-linux",
+    "ctest_gemmini_ws_risc_basic_test-linux",
+]

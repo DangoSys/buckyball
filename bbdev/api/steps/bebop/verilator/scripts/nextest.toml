@@ -1,0 +1,19 @@
+# =============================================================================
+# Nextest configuration for bebop verilator regression
+# =============================================================================
+#
+# verilator = RTL simulation, parallel execution (fill all cores).
+# Loaded by bbdev when invoking `bbdev bebop-verilator --batch`.
+
+[profile.default]
+failure-output = "immediate"
+success-output = "never"
+status-level = "all"
+fail-fast = false
+slow-timeout = { period = "360s", terminate-after = 5 }
+retries = 0
+junit = { path = "target/nextest/junit-bbdev-verilator.xml", report-name = "bbdev-verilator-batch" }
+
+[[profile.default.overrides]]
+filter = "binary(test_verilator)"
+slow-timeout = { period = "360s", terminate-after = 5 }

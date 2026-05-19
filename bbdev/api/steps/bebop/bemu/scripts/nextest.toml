@@ -1,0 +1,19 @@
+# =============================================================================
+# Nextest configuration for bebop bemu regression
+# =============================================================================
+#
+# bemu = lightweight emulator tests, parallel execution (fill all cores).
+# Loaded by bbdev when invoking `bbdev bebop-bemu --batch`.
+
+[profile.default]
+failure-output = "immediate"
+success-output = "never"
+status-level = "all"
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 5 }
+retries = 0
+junit = { path = "target/nextest/junit-bbdev-bemu.xml", report-name = "bbdev-bemu-batch" }
+
+[[profile.default.overrides]]
+filter = "binary(test_bemu)"
+slow-timeout = { period = "60s", terminate-after = 5 }

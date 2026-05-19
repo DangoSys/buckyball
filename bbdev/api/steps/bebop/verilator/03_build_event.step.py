@@ -30,7 +30,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
 
-    arch_config = input_data.get("config", "sims.verilator.BuckyballToyVerilatorConfig")
+    arch_config = input_data.get("config")
+    if not arch_config:
+        ctx.logger.error("Missing required parameter: config must be specified")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_config"},
+            trace_id=origin_tid,
+        )
+        return
+
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
 

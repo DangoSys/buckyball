@@ -15,7 +15,13 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = req.body or {}
 
-    config_name = body.get("config", "sims.verilator.BuckyballToyVerilatorConfig")
+    config_name = body.get("config")
+    if not config_name:
+        return ApiResponse(
+            status=400,
+            body={"error": "Missing required parameter: --config must be specified"}
+        )
+
     build_dir = get_verilator_build_dir(bbdir, config_name, body.get("output_dir"))
 
     data = {

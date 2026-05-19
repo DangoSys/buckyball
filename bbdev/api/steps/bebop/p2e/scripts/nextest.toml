@@ -1,0 +1,23 @@
+# =============================================================================
+# Nextest configuration for bebop p2e regression
+# =============================================================================
+#
+# p2e = FPGA workload tests, serial execution (single FPGA resource).
+# Loaded by bbdev when invoking `bbdev bebop-p2e --batch`.
+
+[profile.default]
+failure-output = "immediate"
+success-output = "never"
+status-level = "all"
+fail-fast = false
+slow-timeout = { period = "360s", terminate-after = 5 }
+retries = 0
+junit = { path = "target/nextest/junit-bbdev-p2e.xml", report-name = "bbdev-p2e-batch" }
+
+[test-groups.p2e-serial]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = "binary(test_p2e)"
+test-group = "p2e-serial"
+slow-timeout = { period = "360s", terminate-after = 5 }
