@@ -26,3 +26,6 @@
 [submodule "bb-tests/thirdparty/linux"]
 	path = bb-tests/thirdparty/linux
 	url = https://github.com/firesim/linux.git
+[submodule "thirdparty/bluefolk"]
+	path = thirdparty/bluefolk
+	url = https://github.com/DangoSys/bluefolk.git

@@ -188,7 +188,13 @@ if run_step "5"; then
 fi
 
 if run_step "6"; then
-  begin_step "6" "pre-commit hooks installation"
+  begin_step "6" "bebop build"
+  cd ${BBDIR}/bebop
+  nix build
+fi
+
+if run_step "7"; then
+  begin_step "7" "pre-commit hooks installation"
   cd ${BBDIR}
   pre-commit install
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)
