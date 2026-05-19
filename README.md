@@ -46,19 +46,16 @@ nix develop
 **3. Verify Installation**
 
 Run Verilator simulation test to verify installation:
+
 ```bash
 bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ```
 
+**4. Try faster simulation using bebop**
 
-<!-- ### Buckyball as a library
-  We support providing a streamlined version of buckyball installation, integrated as a generator within Chipyard.
-
-**Notice**:
-- buckyball-as-a-lib are maintained only for specific release versions.
-
-> We do not provide support for this version as it is not a stable release. -->
-
+```bash
+bbdev bebop-verilator --run '--binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
+```
 
 ## Tutorial
 You can start to learn ball and blink from [here](https://github.com/DangoSys/documents/blob/main/content/en/Tutorial/Building%20Your%20Own%20Hardware%20Designs.md)
