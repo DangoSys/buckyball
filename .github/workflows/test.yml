@@ -68,59 +68,28 @@ jobs:
           nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests'
 
-      - name: Detect bbdev JUnit reports
-        if: always()
-        id: junit
+      - name: Check JUnit reports
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          if compgen -G "bebop/target/nextest/junit-bbdev-*.xml" > /dev/null; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
+          bbdev_reports=(bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml(N))
+          if (( ${#bbdev_reports[@]} == 0 )); then
+            echo "bbdev junit reports not found: bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml" >&2
+            exit 1
           fi
 
       - name: Publish bbdev batch test report
-        if: always() && steps.junit.outputs.found == 'true'
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "bebop/target/nextest/junit-bbdev-*.xml"
+          report_paths: "bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml"
           check_name: "bbdev batch nextest report"
           detailed_summary: true
 
       - name: Upload bbdev JUnit artifacts
-        if: always() && steps.junit.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: bbdev-nextest-junit
-          path: bebop/target/nextest/junit-bbdev-*.xml
-
-      - name: Detect bebop JUnit reports
-        if: always()
-        id: bebop_junit
-        shell: zsh {0}
-        run: |
-          cd ~/Code/buckyball
-          if compgen -G "bebop/target/nextest/junit-bebop-*.xml" > /dev/null; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish bebop test report
-        if: always() && steps.bebop_junit.outputs.found == 'true'
-        uses: mikepenz/action-junit-report@v4
-        with:
-          report_paths: "bebop/target/nextest/junit-bebop-*.xml"
-          check_name: "bebop nextest report"
-          detailed_summary: true
-
-      - name: Upload bebop JUnit artifacts
-        if: always() && steps.bebop_junit.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: bebop-nextest-junit
-          path: bebop/target/nextest/junit-bebop-*.xml
+          path: bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml
 
       # if check failed, revert the branch
       # - name: Revert Bad Commit
