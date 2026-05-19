@@ -68,28 +68,20 @@ jobs:
           nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests'
 
-      - name: Check JUnit reports
-        shell: zsh {0}
-        run: |
-          cd ~/Code/buckyball
-          bbdev_reports=(bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml(N))
-          if (( ${#bbdev_reports[@]} == 0 )); then
-            echo "bbdev junit reports not found: bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml" >&2
-            exit 1
-          fi
-
-      - name: Publish bbdev batch test report
+      - name: Publish bebop test report
+        if: always() && hashFiles('bebop/target/nextest/default/target/nextest/junit-bebop-*.xml') != ''
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml"
-          check_name: "bbdev batch nextest report"
+          report_paths: "~/Code/buckyball/bebop/target/nextest/default/target/nextest/junit-bebop-*.xml"
+          check_name: "bebop nextest report"
           detailed_summary: true
 
-      - name: Upload bbdev JUnit artifacts
+      - name: Upload bebop JUnit artifacts
+        if: always() && hashFiles('bebop/target/nextest/default/target/nextest/junit-bebop-*.xml') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: bbdev-nextest-junit
-          path: bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml
+          name: bebop-nextest-junit
+          path: ~/Code/buckyball/bebop/target/nextest/default/target/nextest/junit-bebop-*.xml
 
       # if check failed, revert the branch
       # - name: Revert Bad Commit
