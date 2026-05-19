@@ -60,6 +60,7 @@ jobs:
           cd ~/Code/buckyball
           setproxy
 
+          nix develop -c bbdev bebop-bemu --build
           nix develop -c bbdev bebop-bemu --batch '--test elf-tests'
           nix develop -c bbdev bebop-bemu --batch '--test pk-tests'
 
@@ -68,7 +69,6 @@ jobs:
         run: |
           cd ~/Code/buckyball
           setproxy
-          nix develop -c bbdev bebop-bemu --build
           nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
