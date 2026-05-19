@@ -42,6 +42,7 @@ WORKFLOW_COMMANDS = {
     },
     "workload": {
         "build": "Build workload.",
+        "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
         "build": "Build RISC-V kernel + rootfs for Pegasus (cmake kernel-build).",

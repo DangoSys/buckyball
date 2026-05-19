@@ -20,7 +20,7 @@ from bin_to_hex import bin_to_hex
 
 config = {
     "name": "kernel-build",
-    "description": "build RISC-V kernel + rootfs for Pegasus via bb-tests/workloads/lib/kernel",
+    "description": "build RISC-V kernel + rootfs for image via bb-tests/workloads/lib/kernel",
     "flows": ["kernel"],
     "triggers": [queue("kernel.build")],
     "enqueues": [],
@@ -66,8 +66,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert bin to hex for P2E memory backdoor
-    bin_file = os.path.join(output_dir, "pegasus-bin")
-    hex_file = os.path.join(output_dir, "pegasus.hex")
+    bin_file = os.path.join(output_dir, "image.bin")
+    hex_file = os.path.join(output_dir, "image.hex")
 
     if os.path.exists(bin_file):
         ctx.logger.info(f"Converting {bin_file} to Verilog hex format...")
