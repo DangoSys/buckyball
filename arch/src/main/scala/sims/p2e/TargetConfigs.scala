@@ -75,7 +75,7 @@ class BuckyballGoban8CoreP2EConfig
 class BuckyballGoban64CoreP2EConfig
     extends Config(
       new P2EBaseConfig ++
-        new examples.goban.BuckyballGoban1Tile64CoreConfig
+        new examples.goban.BuckyballGoban64CoreConfig
     )
 
 class BuckyballGoban24Tile16CoreP2EConfig

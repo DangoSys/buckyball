@@ -1,0 +1,7 @@
+# Goban - 1 tile × 32 cores
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/32core.toml"
