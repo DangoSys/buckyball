@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   CI-Test:
     name: CI Test
@@ -21,37 +25,81 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
+          setproxy
           git fetch origin
           git clean -fd
           git checkout ${{ github.head_ref }}
           git pull
-          git submodule update bbdev bebop compiler
+          git submodule update bbdev bebop compiler/thirdparty/buddy-mlir
 
       - name: Nix build
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
+          setproxy
           nix build
 
       - name: Build Workloads
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
+          setproxy
           nix develop -c bbdev workload --build
 
-      - name: Build Verilator
-        shell: zsh {0}
-        run: |
-          cd ~/Code/buckyball
-          nix develop -c bbdev verilator --clean
-          nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
-          nix develop -c bbdev verilator --build '--jobs 16'
+      # - name: Build Verilator
+      #   shell: zsh {0}
+      #   run: |
+      #     cd ~/Code/buckyball
+      #     nix develop -c bbdev verilator --clean
+      #     nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
+      #     nix develop -c bbdev verilator --build '--jobs 16'
 
-      - name: Smoke Test
+      - name: bemu Tests
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          nix develop -c bbdev sardine --run '--workload ctest' --dir arch/log
+          setproxy
+
+          nix develop -c bbdev bebop-bemu --batch '--test elf-tests'
+          nix develop -c bbdev bebop-bemu --batch '--test pk-tests'
+
+      - name: verilator Tests
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          setproxy
+          nix develop -c bbdev bebop-bemu --build
+          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballToyVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests'
+
+      - name: Detect bbdev JUnit reports
+        if: always()
+        id: junit
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          if compgen -G "bebop/target/nextest/junit-bbdev-*.xml" > /dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish bbdev batch test report
+        if: always() && steps.junit.outputs.found == 'true'
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: "bebop/target/nextest/junit-bbdev-*.xml"
+          check_name: "bbdev batch nextest report"
+          detailed_summary: true
+
+      - name: Upload bbdev JUnit artifacts
+        if: always() && steps.junit.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbdev-nextest-junit
+          path: bebop/target/nextest/junit-bbdev-*.xml
 
       # if check failed, revert the branch
       # - name: Revert Bad Commit

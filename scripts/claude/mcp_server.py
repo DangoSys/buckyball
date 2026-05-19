@@ -279,6 +279,11 @@ def bbdev_verilator_run(
     batch: bool = True,
     coverage: bool = False,
     jobs: Optional[int] = None,
+    itrace: bool = False,
+    mtrace: bool = False,
+    pmctrace: bool = False,
+    ctrace: bool = False,
+    banktrace: bool = False,
 ) -> str:
     """Full verilator pipeline: clean -> verilog -> build -> sim. Calls bbdev POST /verilator/run."""
     api_params: Dict[str, Any] = {
@@ -286,6 +291,11 @@ def bbdev_verilator_run(
         "config": config,
         "batch": batch,
         "coverage": coverage,
+        "itrace": itrace,
+        "mtrace": mtrace,
+        "pmctrace": pmctrace,
+        "ctrace": ctrace,
+        "banktrace": banktrace,
     }
     if jobs is not None:
         api_params["jobs"] = jobs
@@ -321,11 +331,21 @@ def bbdev_verilator_sim(
     binary: str,
     batch: bool = True,
     coverage: bool = False,
+    itrace: bool = False,
+    mtrace: bool = False,
+    pmctrace: bool = False,
+    ctrace: bool = False,
+    banktrace: bool = False,
 ) -> str:
     """Run verilator simulation (assumes already built). Calls bbdev POST /verilator/sim."""
     api_params: Dict[str, Any] = {
         "binary": binary,
         "batch": batch,
+        "itrace": itrace,
+        "mtrace": mtrace,
+        "pmctrace": pmctrace,
+        "ctrace": ctrace,
+        "banktrace": banktrace,
     }
     if coverage:
         api_params["coverage"] = True
