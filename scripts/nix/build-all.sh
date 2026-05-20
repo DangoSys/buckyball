@@ -191,6 +191,7 @@ if run_step "6"; then
   begin_step "6" "bebop build"
   cd ${BBDIR}/bebop
   nix build
+  nix develop -c echo "bebop built successfully"
 fi
 
 if run_step "7"; then
