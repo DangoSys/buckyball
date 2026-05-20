@@ -141,6 +141,67 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  assign addr_out = addr_in_extended - BASE_ADDR;
       |endmodule
       |
+      |// AXI4 AR/AW channel register slice (full AXI handshake, single cycle latency)
+      |// Breaks long combinational paths between SoC and DDR controller across SLR boundary.
+      |// Conforms to AXI: addr/control are stable while valid is high; ready/valid handshake preserved.
+      |module p2e_axi_addr_reg_slice #(
+      |  parameter ADDR_BITS = 64,
+      |  parameter ID_BITS   = 11
+      |)(
+      |  input                    clock,
+      |  input                    reset,
+      |  // Slave (input) side
+      |  input  [ID_BITS-1:0]     s_id,
+      |  input  [ADDR_BITS-1:0]   s_addr,
+      |  input  [7:0]             s_len,
+      |  input  [2:0]             s_size,
+      |  input  [1:0]             s_burst,
+      |  input                    s_valid,
+      |  output                   s_ready,
+      |  // Master (output) side
+      |  output [ID_BITS-1:0]     m_id,
+      |  output [ADDR_BITS-1:0]   m_addr,
+      |  output [7:0]             m_len,
+      |  output [2:0]             m_size,
+      |  output [1:0]             m_burst,
+      |  output                   m_valid,
+      |  input                    m_ready
+      |);
+      |  // Single-stage skid buffer: holds one transaction.
+      |  // Allows full throughput when downstream is keeping up.
+      |  reg [ID_BITS-1:0]   r_id;
+      |  reg [ADDR_BITS-1:0] r_addr;
+      |  reg [7:0]           r_len;
+      |  reg [2:0]           r_size;
+      |  reg [1:0]           r_burst;
+      |  reg                 r_valid;
+      |
+      |  assign s_ready = !r_valid || m_ready;
+      |  assign m_valid = r_valid;
+      |  assign m_id    = r_id;
+      |  assign m_addr  = r_addr;
+      |  assign m_len   = r_len;
+      |  assign m_size  = r_size;
+      |  assign m_burst = r_burst;
+      |
+      |  always @(posedge clock) begin
+      |    if (reset) begin
+      |      r_valid <= 1'b0;
+      |    end else begin
+      |      if (s_ready) begin
+      |        r_valid <= s_valid;
+      |        if (s_valid) begin
+      |          r_id    <= s_id;
+      |          r_addr  <= s_addr;
+      |          r_len   <= s_len;
+      |          r_size  <= s_size;
+      |          r_burst <= s_burst;
+      |        end
+      |      end
+      |    end
+      |  end
+      |endmodule
+      |
       |module P2ETopBlackBox(
       |  input         user_clk,
       |  input         sys_rstn,
@@ -235,6 +296,71 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .addr_out(mem_araddr)
       |  );
       |
+      |  // ========================================================================
+      |  // AXI AW/AR register slices (1-cycle pipeline) to break cross-SLR paths
+      |  // Inserted between SoC (L2 cache + translator) and DDR controller.
+      |  // Conforms to AXI: full valid/ready handshake, addr stable when valid.
+      |  // ========================================================================
+      |  wire [MEM_ID_BITS-1:0]     mem_awid_pipe;
+      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr_pipe;
+      |  wire [7:0]                 mem_awlen_pipe;
+      |  wire [2:0]                 mem_awsize_pipe;
+      |  wire [1:0]                 mem_awburst_pipe;
+      |  wire                       mem_awvalid_pipe;
+      |  wire                       mem_awready_pipe;
+      |
+      |  wire [MEM_ID_BITS-1:0]     mem_arid_pipe;
+      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr_pipe;
+      |  wire [7:0]                 mem_arlen_pipe;
+      |  wire [2:0]                 mem_arsize_pipe;
+      |  wire [1:0]                 mem_arburst_pipe;
+      |  wire                       mem_arvalid_pipe;
+      |  wire                       mem_arready_pipe;
+      |
+      |  p2e_axi_addr_reg_slice #(
+      |    .ADDR_BITS(MEM_ADDR_BITS),
+      |    .ID_BITS(MEM_ID_BITS)
+      |  ) aw_pipe (
+      |    .clock   (user_clk),
+      |    .reset   (soc_reset),
+      |    .s_id    (mem_awid),
+      |    .s_addr  (mem_awaddr),
+      |    .s_len   (mem_awlen),
+      |    .s_size  (mem_awsize),
+      |    .s_burst (mem_awburst),
+      |    .s_valid (mem_awvalid),
+      |    .s_ready (mem_awready),
+      |    .m_id    (mem_awid_pipe),
+      |    .m_addr  (mem_awaddr_pipe),
+      |    .m_len   (mem_awlen_pipe),
+      |    .m_size  (mem_awsize_pipe),
+      |    .m_burst (mem_awburst_pipe),
+      |    .m_valid (mem_awvalid_pipe),
+      |    .m_ready (mem_awready_pipe)
+      |  );
+      |
+      |  p2e_axi_addr_reg_slice #(
+      |    .ADDR_BITS(MEM_ADDR_BITS),
+      |    .ID_BITS(MEM_ID_BITS)
+      |  ) ar_pipe (
+      |    .clock   (user_clk),
+      |    .reset   (soc_reset),
+      |    .s_id    (mem_arid),
+      |    .s_addr  (mem_araddr),
+      |    .s_len   (mem_arlen),
+      |    .s_size  (mem_arsize),
+      |    .s_burst (mem_arburst),
+      |    .s_valid (mem_arvalid),
+      |    .s_ready (mem_arready),
+      |    .m_id    (mem_arid_pipe),
+      |    .m_addr  (mem_araddr_pipe),
+      |    .m_len   (mem_arlen_pipe),
+      |    .m_size  (mem_arsize_pipe),
+      |    .m_burst (mem_arburst_pipe),
+      |    .m_valid (mem_arvalid_pipe),
+      |    .m_ready (mem_arready_pipe)
+      |  );
+      |
       |  // MMIO wires removed - P2E config doesn't generate mmio_axi4_0 port
       |  /*
       |  wire [MMIO_ID_BITS-1:0]    mmio_awid;
@@ -271,15 +397,6 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |  DigitalTop soc (
       |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock (user_clk),
       |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_reset (soc_reset),
-      |    // Debug ports removed - WithNoDebug config doesn't generate these ports
-      |    // .resetctrl_hartIsInReset_0 (1'b0),
-      |    // .debug_clock               (user_clk),
-      |    // .debug_reset               (soc_reset),
-      |    // .debug_systemjtag_reset    (soc_reset),
-      |    // .debug_systemjtag_jtag_TCK (1'b0),
-      |    // .debug_systemjtag_jtag_TMS (1'b1),
-      |    // .debug_systemjtag_jtag_TDI (1'b1),
-      |    // .debug_dmactiveAck         (1'b0),
       |    .mem_axi4_0_aw_ready       (mem_awready),
       |    .mem_axi4_0_aw_valid       (mem_awvalid),
       |    .mem_axi4_0_aw_bits_id     (mem_awid),
@@ -309,15 +426,6 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .mem_axi4_0_r_bits_data    (mem_rdata),
       |    .mem_axi4_0_r_bits_resp    (mem_rresp),
       |    .mem_axi4_0_r_bits_last    (mem_rlast)
-      |    // MMIO, SerialTL, and custom_boot ports removed - P2E config doesn't generate these
-      |    // .mmio_axi4_0_aw_ready      (mmio_awready),
-      |    // .mmio_axi4_0_aw_valid      (mmio_awvalid),
-      |    // ... (all mmio_axi4_0_* ports)
-      |    // .serial_tl_0_in_valid      (1'b0),
-      |    // .serial_tl_0_in_bits_phit  (32'h0),
-      |    // .serial_tl_0_out_ready     (1'b0),
-      |    // .serial_tl_0_clock_in      (1'b0),
-      |    // .custom_boot               (1'b0)
       |  );
       |
       |  // MMIO stub removed - P2E config doesn't generate mmio_axi4_0 port
@@ -390,17 +498,17 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .init_calib_complete      (init_calib_complete_unused),
       |    .c0_init_calib_complete   (c0_init_calib_complete),
       |    .axi_clk                  (user_clk),
-      |    .s0_ddr4_s_axi_awid       (mem_awid),
-      |    .s0_ddr4_s_axi_awaddr     (mem_awaddr),
-      |    .s0_ddr4_s_axi_awlen      (mem_awlen),
-      |    .s0_ddr4_s_axi_awsize     (mem_awsize),
-      |    .s0_ddr4_s_axi_awburst    (mem_awburst),
+      |    .s0_ddr4_s_axi_awid       (mem_awid_pipe),
+      |    .s0_ddr4_s_axi_awaddr     (mem_awaddr_pipe),
+      |    .s0_ddr4_s_axi_awlen      (mem_awlen_pipe),
+      |    .s0_ddr4_s_axi_awsize     (mem_awsize_pipe),
+      |    .s0_ddr4_s_axi_awburst    (mem_awburst_pipe),
       |    .s0_ddr4_s_axi_awlock     (1'b0),
       |    .s0_ddr4_s_axi_awcache    (4'b0011),
       |    .s0_ddr4_s_axi_awprot     (3'b000),
       |    .s0_ddr4_s_axi_awqos      (4'b0000),
-      |    .s0_ddr4_s_axi_awvalid    (mem_awvalid),
-      |    .s0_ddr4_s_axi_awready    (mem_awready),
+      |    .s0_ddr4_s_axi_awvalid    (mem_awvalid_pipe),
+      |    .s0_ddr4_s_axi_awready    (mem_awready_pipe),
       |    .s0_ddr4_s_axi_wdata      (mem_wdata),
       |    .s0_ddr4_s_axi_wstrb      (mem_wstrb),
       |    .s0_ddr4_s_axi_wlast      (mem_wlast),
@@ -410,17 +518,17 @@ class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
       |    .s0_ddr4_s_axi_bid        (mem_bid),
       |    .s0_ddr4_s_axi_bresp      (mem_bresp),
       |    .s0_ddr4_s_axi_bvalid     (mem_bvalid),
-      |    .s0_ddr4_s_axi_arid       (mem_arid),
-      |    .s0_ddr4_s_axi_araddr     (mem_araddr),
-      |    .s0_ddr4_s_axi_arlen      (mem_arlen),
-      |    .s0_ddr4_s_axi_arsize     (mem_arsize),
-      |    .s0_ddr4_s_axi_arburst    (mem_arburst),
+      |    .s0_ddr4_s_axi_arid       (mem_arid_pipe),
+      |    .s0_ddr4_s_axi_araddr     (mem_araddr_pipe),
+      |    .s0_ddr4_s_axi_arlen      (mem_arlen_pipe),
+      |    .s0_ddr4_s_axi_arsize     (mem_arsize_pipe),
+      |    .s0_ddr4_s_axi_arburst    (mem_arburst_pipe),
       |    .s0_ddr4_s_axi_arlock     (1'b0),
       |    .s0_ddr4_s_axi_arcache    (4'b0011),
       |    .s0_ddr4_s_axi_arprot     (3'b000),
       |    .s0_ddr4_s_axi_arqos      (4'b0000),
-      |    .s0_ddr4_s_axi_arvalid    (mem_arvalid),
-      |    .s0_ddr4_s_axi_arready    (mem_arready),
+      |    .s0_ddr4_s_axi_arvalid    (mem_arvalid_pipe),
+      |    .s0_ddr4_s_axi_arready    (mem_arready_pipe),
       |    .s0_ddr4_s_axi_rready     (mem_rready),
       |    .s0_ddr4_s_axi_rid        (mem_rid),
       |    .s0_ddr4_s_axi_rdata      (mem_rdata),
@@ -489,12 +597,6 @@ class P2ETop extends RawModule {
   io.c0_ddr4_ck_t        := top.io.c0_ddr4_ck_t
   io.c0_ddr4_ck_c        := top.io.c0_ddr4_ck_c
   io.c0_ddr4_reset_n     := top.io.c0_ddr4_reset_n
-  // DDR4 inout ports are managed by netlist macro (xepic_ddr4_dc1)
-  // Do not connect them to avoid VCOM terminal register requirement
-  // attach(io.c0_ddr4_dm_dbi_n, top.io.c0_ddr4_dm_dbi_n)
-  // attach(io.c0_ddr4_dq, top.io.c0_ddr4_dq)
-  // attach(io.c0_ddr4_dqs_c, top.io.c0_ddr4_dqs_c)
-  // attach(io.c0_ddr4_dqs_t, top.io.c0_ddr4_dqs_t)
   io.c0_ddr4_ui_clk      := top.io.c0_ddr4_ui_clk
   io.init_calib_complete := top.io.init_calib_complete
   io.ddr4_en_vtt         := top.io.ddr4_en_vtt

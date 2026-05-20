@@ -43,14 +43,6 @@ jobs:
           cd ~/Code/buckyball
           nix develop -c bbdev workload --build
 
-      # - name: Build Verilator
-      #   shell: zsh {0}
-      #   run: |
-      #     cd ~/Code/buckyball
-      #     nix develop -c bbdev verilator --clean
-      #     nix develop -c bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
-      #     nix develop -c bbdev verilator --build '--jobs 16'
-
       - name: bemu Tests
         shell: zsh {0}
         run: |

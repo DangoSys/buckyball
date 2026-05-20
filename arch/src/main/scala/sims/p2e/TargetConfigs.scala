@@ -15,6 +15,17 @@ class WithP2EBootROM
         ))
     })
 
+/**
+ * Linux BootROM for P2E: jumps to OpenSBI fw_payload at 0x80000000.
+ * Use this instead of WithP2EBootROM when running Linux.
+ */
+class WithLinuxBootROM
+    extends Config((site, here, up) => {
+      case BootROMLocated(InSubsystem) => Some(BootROMParams(
+          contentFileName = "src/main/resources/linux/bootrom.rv64.img"
+        ))
+    })
+
 class WithP2EDDR4MemPort
     extends Config(
       new WithCustomMemPort(
@@ -48,6 +59,18 @@ class P2EBaseConfig
 class P2EToyConfig
     extends Config(
       new P2EBaseConfig ++
+        new examples.toy.BuckyballToyConfig
+    )
+
+/**
+ * Linux variant of P2EToyConfig.
+ * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Pair with OpenSBI fw_payload built by `bbdev kernel --build`.
+ */
+class P2EToyLinuxConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig ++
         new examples.toy.BuckyballToyConfig
     )
 

@@ -29,3 +29,10 @@
 [submodule "thirdparty/bluefolk"]
 	path = thirdparty/bluefolk
 	url = https://github.com/DangoSys/bluefolk.git
+[submodule "bb-tests/thirdparty/opensbi"]
+	path = bb-tests/thirdparty/opensbi
+	url = https://github.com/riscv-software-src/opensbi.git
+	branch = master
+[submodule "bb-tests/workloads/src/ModelTest/e2e"]
+	path = bb-tests/workloads/src/ModelTest/e2e
+	url = https://github.com/buddy-compiler/buddy-examples.git

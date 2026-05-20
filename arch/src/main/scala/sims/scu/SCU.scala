@@ -74,14 +74,17 @@ class WithSCU(
           totalSizeBytes = totalSizeBytes,
           maxHarts = maxHarts
         ))
-      case chipyard.BuildSystem => (p: Parameters) => new DigitalTopWithSCU()(p)
+      case chipyard.BuildSystem => (p: Parameters) => new DigitalTop()(p)
     })
 
 /**
  * DigitalTop subclass that mixes in CanHavePeripherySCU. This avoids modifying
  * any chipyard source files.
+ *
+ * Note: Keep the class name as DigitalTop (not DigitalTopWithSCU) to maintain
+ * compatibility with P2ETopBlackBox.v which instantiates "DigitalTop soc".
  */
-class DigitalTopWithSCU(implicit p: Parameters) extends chipyard.DigitalTop with CanHavePeripherySCU
+class DigitalTop(implicit p: Parameters) extends chipyard.DigitalTop with CanHavePeripherySCU
 
 /**
  * Single DPI-C bridge module for all harts. The hart_id is supplied as an
