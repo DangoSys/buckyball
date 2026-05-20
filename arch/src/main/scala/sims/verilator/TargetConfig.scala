@@ -89,6 +89,9 @@ class ChipyardRocketVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new chipyard.RocketConfig
     )
 
@@ -96,6 +99,9 @@ class ChipyardGemminiRocketVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new chipyard.GemminiRocketConfig
     )
 
@@ -103,6 +109,9 @@ class Chipyard2CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new chipyard.DualRocketConfig
     )
 
@@ -110,6 +119,9 @@ class Chipyard4CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new chipyard.QuadRocketConfig
     )
 
@@ -117,6 +129,9 @@ class Chipyard8CoreVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new freechips.rocketchip.rocket.WithNHugeCores(8) ++
         new chipyard.config.AbstractConfig
     )
@@ -125,6 +140,9 @@ class Chipyard4CoreGemminiVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(4) ++
         new chipyard.config.WithSystemBusWidth(128) ++
@@ -135,6 +153,9 @@ class Chipyard8CoreGemminiVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(8) ++
         new chipyard.config.WithSystemBusWidth(128) ++
@@ -145,6 +166,9 @@ class Chipyard32CoreGemminiVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(32) ++
         new chipyard.config.WithSystemBusWidth(128) ++
@@ -155,6 +179,9 @@ class Chipyard64CoreGemminiVerilatorConfig
     extends Config(
       new BBSimConfig ++
         new WithCustomBootROM ++
+        new testchipip.serdes.WithNoSerialTL ++
+        new chipyard.config.WithNoUART ++
+        new chipyard.config.WithNoDebug ++
         new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(64) ++
         new chipyard.config.WithSystemBusWidth(128) ++
