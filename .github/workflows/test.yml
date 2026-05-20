@@ -86,10 +86,16 @@ jobs:
           report_paths: "~/Code/buckyball/bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml"
           check_name: "bebop nextest report"
           detailed_summary: true
+          include_passed: true
 
       - name: Upload bebop JUnit artifacts
         if: always() && steps.junit.outputs.found == 'true'
         uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
           name: bebop-nextest-junit
           path: "~/Code/buckyball/bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml"
