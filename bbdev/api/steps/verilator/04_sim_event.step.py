@@ -29,11 +29,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Get simulation parameters
     # ==================================================================================
     origin_tid = get_origin_trace_id(input_data, ctx)
+    config_name = input_data.get("config")
+    if not config_name or config_name == "None":
+        raise ValueError("Missing required input: config")
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = get_verilator_build_dir(
         bbdir,
-        input_data.get("config"),
+        config_name,
         input_data.get("output_dir"),
     )
     ctx.logger.info(f"Using build directory: {build_dir}")
