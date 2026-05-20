@@ -67,13 +67,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Infer build_dir from bitstream path
-    # bitstream is typically: <build_dir>/fpgaCompDir/part_b0_f0/pnrDir/xepic_vvac_top_0_0.bit
-    # so build_dir is 4 levels up
+    # bitstream is typically: <build_dir>/fpgaCompDir/bitstream.bit
+    # so build_dir is 2 levels up
     build_dir = input_data.get("build_dir")
     if not build_dir:
         bitstream_abs = os.path.abspath(bitstream)
-        # Go up: pnrDir -> part_b0_f0 -> fpgaCompDir -> build_dir
-        build_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(bitstream_abs))))
+        # Go up: fpgaCompDir -> build_dir
+        build_dir = os.path.dirname(os.path.dirname(bitstream_abs))
 
     if not os.path.isdir(build_dir):
         ctx.logger.error(f"build_dir not found (inferred from bitstream): {build_dir}")

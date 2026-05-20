@@ -1,104 +1,54 @@
 #!/usr/bin/env python3
 
-import subprocess
 import sys
 import os
 
-def bin_to_hex(bin_file, hex_file, objcopy_path="riscv64-unknown-elf-objcopy", base_address=0):
+
+def bin_to_hex(bin_file, hex_file, base_address=0):
     """
-    将 RISC-V bin 文件转换为 Verilog readmemh 格式
-    地址格式：@0xNNNNNNNN
-    base_address: 基地址偏移，生成的地址会减去这个值（例如 0x80000000）
+    Convert a raw binary file to Verilog readmemh format.
+
+    The output uses one byte per line with `@0xADDR` markers for the starting
+    offset (relative to base_address). The input is treated as a contiguous
+    byte stream starting at base_address; the resulting `@` offset is always 0
+    because raw binaries have no internal address information.
+
+    base_address is kept in the signature for API compatibility and is only
+    used to print the absolute address range.
     """
     print(f"Converting {bin_file} -> {hex_file}")
     if base_address != 0:
         print(f"Base address offset: 0x{base_address:08X}")
 
-    # Step 1: bin -> Intel HEX
-    temp_hex = f"{bin_file}.tmp.hex"
     try:
-        cmd = [objcopy_path, "-O", "ihex", bin_file, temp_hex]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        with open(bin_file, "rb") as f:
+            data = f.read()
 
-        if result.returncode != 0:
-            print(f"Error: objcopy failed: {result.stderr}")
+        if not data:
+            print("Error: Input file is empty")
             return False
 
-        # Step 2: Parse Intel HEX and convert to readmemh format
-        memory_data = {}
-        current_base_address = 0
-
-        with open(temp_hex, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or not line.startswith(':'):
-                    continue
-
-                record = line[1:]
-                if len(record) < 8:
-                    continue
-
-                byte_count = int(record[0:2], 16)
-                address = int(record[2:6], 16)
-                record_type = int(record[6:8], 16)
-
-                if record_type == 0x00:  # Data record
-                    data_start = 8
-                    for i in range(byte_count):
-                        if data_start + 2 <= len(record) - 2:
-                            byte_data = record[data_start:data_start+2]
-                            memory_address = current_base_address + address + i
-                            memory_data[memory_address] = int(byte_data, 16)
-                            data_start += 2
-
-                elif record_type == 0x04:  # Extended linear address
-                    if byte_count == 2 and len(record) >= 12:
-                        high_address = int(record[8:12], 16)
-                        current_base_address = high_address << 16
-
-        if not memory_data:
-            print("Error: No valid data found")
-            return False
-
-        # Step 3: Write readmemh format
-        with open(hex_file, 'w') as f:
-            sorted_addresses = sorted(memory_data.keys())
-            current_address = None
-
-            for addr in sorted_addresses:
-                # New address section if not continuous
-                if current_address is None or addr != current_address + 1:
-                    relative_addr = addr - base_address
-                    if relative_addr < 0:
-                        print(f"Warning: address 0x{addr:08X} is below base 0x{base_address:08X}, skipping")
-                        continue
-                    if relative_addr == 0:
-                        f.write(f"@0\n")
-                    else:
-                        f.write(f"@0x{relative_addr:X}\n")
-                    current_address = addr
-                else:
-                    current_address = addr
-
-                byte_value = memory_data[addr]
-                f.write(f"{byte_value:02X}\n")
+        with open(hex_file, "w") as f:
+            f.write("@0\n")
+            for byte in data:
+                f.write(f"{byte:02X}\n")
 
         print(f"Successfully generated {hex_file}")
-        print(f"Address range: 0x{sorted_addresses[0]:08X} - 0x{sorted_addresses[-1]:08X}")
-        print(f"Total bytes: {len(memory_data)}")
+        print(
+            f"Address range: 0x{base_address:08X} - 0x{base_address + len(data) - 1:08X}"
+        )
+        print(f"Total bytes: {len(data)}")
         return True
 
     except Exception as e:
         print(f"Error: Conversion failed - {e}")
         return False
-    finally:
-        if os.path.exists(temp_hex):
-            os.remove(temp_hex)
+
 
 def main():
     if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Usage: bin_to_hex.py <input_bin> <output_hex> [base_address]")
-        print("  base_address: optional hex address to subtract (e.g., 0x80000000)")
+        print("  base_address: optional hex address for reporting (e.g., 0x80000000)")
         sys.exit(1)
 
     bin_file = sys.argv[1]
@@ -107,7 +57,7 @@ def main():
 
     if len(sys.argv) == 4:
         base_str = sys.argv[3]
-        if base_str.startswith('0x') or base_str.startswith('0X'):
+        if base_str.startswith("0x") or base_str.startswith("0X"):
             base_address = int(base_str, 16)
         else:
             base_address = int(base_str, 10)
@@ -118,6 +68,7 @@ def main():
 
     success = bin_to_hex(bin_file, hex_file, base_address=base_address)
     sys.exit(0 if success else 1)
+
 
 if __name__ == "__main__":
     main()
