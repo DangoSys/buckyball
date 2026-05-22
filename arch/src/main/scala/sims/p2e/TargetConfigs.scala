@@ -75,6 +75,38 @@ class P2EToyLinuxConfig
     )
 
 //===----------------------------------------------------------------------===//
+// Gemmini P2E configs
+//===----------------------------------------------------------------------===//
+/**
+ * P2E Gemmini config without Debug module.
+ * Uses the same Gemmini + Rocket configuration as chipyard.GemminiRocketConfig
+ * but replaces AbstractConfig with BuckyballBaseConfig to avoid Debug/UART/SerialTL.
+ */
+class P2EGemminiConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(1) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/**
+ * Linux variant of P2EGemminiConfig.
+ * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Pair with OpenSBI fw_payload built by `bbdev kernel --build`.
+ */
+class P2EGemminiLinuxConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig ++
+        new gemmini.DefaultGemminiConfig ++
+        new freechips.rocketchip.rocket.WithNHugeCores(1) ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+//===----------------------------------------------------------------------===//
 // Goban P2E configs
 //===----------------------------------------------------------------------===//
 class BuckyballGoban2CoreP2EConfig

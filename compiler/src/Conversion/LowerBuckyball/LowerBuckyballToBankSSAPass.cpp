@@ -87,34 +87,85 @@ public:
       return rewriter.notifyMatchFailure(
           op, "C requires static strided<[row,1]> and row % 16 == 0");
 
-    uint64_t depthA = m * (k / 16);
-    uint64_t depthB = k * (n / 16);
-    uint64_t depthC = m * (n / 16);
+    // Depth calculations for fp32 input (cols=4 mode)
+    // fp32: each chunk is 16 elements * 4 bytes = 64 bytes
+    uint64_t depthA_fp32 = m * (k / 16);
+    uint64_t depthB_fp32 = k * (n / 16);
+    uint64_t depthC_fp32 = m * (n / 16);
 
-    auto a0 =
-        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-    auto b0 =
-        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-    auto c0 =
-        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-    c0->setAttr("col", rewriter.getI64IntegerAttr(4));
+    // After quant fp32→i8, depth stays the same (4 fp32 banks → 1 i8 bank)
+    uint64_t depthA_i8 = depthA_fp32;
+    uint64_t depthB_i8 = depthB_fp32;
+    uint64_t depthC_i8 = depthC_fp32;
 
+    // Scale for quantization: hardcoded 1.0f for now
+    // TODO: get scale from MatMulOp attributes or global config
+    uint32_t scale_bits = 0x3f800000; // 1.0f in IEEE 754
+    auto scale = cstI64(rewriter, loc, scale_bits);
+
+    // Allocate fp32 banks for input (cols=4)
+    auto a0_fp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    a0_fp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+    auto b0_fp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    b0_fp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+
+    // Allocate i8 banks for quantized input (cols=1)
+    auto a0_i8 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    auto b0_i8 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+
+    // Allocate i32 accumulator bank (cols=4)
+    auto c0_i32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    c0_i32->setAttr("col", rewriter.getI64IntegerAttr(4));
+
+    // Allocate fp32 bank for dequantized output (cols=4)
+    auto c0_fp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    c0_fp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+
+    // Load fp32 A and B from DRAM
     auto a1 = rewriter.create<buckyball::BankMvinOp>(
-        loc, rewriter.getI64Type(), aMem, a0.getBank(),
-        cstI64(rewriter, loc, depthA), cstI64(rewriter, loc, strideA));
+        loc, rewriter.getI64Type(), aMem, a0_fp32.getBank(),
+        cstI64(rewriter, loc, depthA_fp32), cstI64(rewriter, loc, strideA));
     auto b1 = rewriter.create<buckyball::BankMvinOp>(
-        loc, rewriter.getI64Type(), bMem, b0.getBank(),
-        cstI64(rewriter, loc, depthB), cstI64(rewriter, loc, strideB));
-    auto c1 = rewriter.create<buckyball::BankMulWarp16Op>(
-        loc, rewriter.getI64Type(), a1.getBankOut(), b1.getBankOut(),
-        c0.getBank(), cstI64(rewriter, loc, k), cstI64(rewriter, loc, 0));
-    auto c2 = rewriter.create<buckyball::BankMvoutOp>(
-        loc, rewriter.getI64Type(), cMem, c1.getWrBankOut(),
-        cstI64(rewriter, loc, depthC), cstI64(rewriter, loc, strideC));
+        loc, rewriter.getI64Type(), bMem, b0_fp32.getBank(),
+        cstI64(rewriter, loc, depthB_fp32), cstI64(rewriter, loc, strideB));
 
+    // Quantize fp32 → i8
+    auto a2 = rewriter.create<buckyball::BankQuantOp>(
+        loc, rewriter.getI64Type(), a1.getBankOut(), a0_i8.getBank(),
+        cstI64(rewriter, loc, depthA_i8), scale);
+    auto b2 = rewriter.create<buckyball::BankQuantOp>(
+        loc, rewriter.getI64Type(), b1.getBankOut(), b0_i8.getBank(),
+        cstI64(rewriter, loc, depthB_i8), scale);
+
+    // Matrix multiply i8 × i8 → i32
+    auto c1 = rewriter.create<buckyball::BankMulWarp16Op>(
+        loc, rewriter.getI64Type(), a2.getOutBankOut(), b2.getOutBankOut(),
+        c0_i32.getBank(), cstI64(rewriter, loc, k), cstI64(rewriter, loc, 0));
+
+    // Dequantize i32 → fp32
+    auto c2 = rewriter.create<buckyball::BankDequantOp>(
+        loc, rewriter.getI64Type(), c1.getWrBankOut(), c0_fp32.getBank(),
+        cstI64(rewriter, loc, depthC_i8), scale);
+
+    // Store fp32 C back to DRAM
+    auto c3 = rewriter.create<buckyball::BankMvoutOp>(
+        loc, rewriter.getI64Type(), cMem, c2.getOutBankOut(),
+        cstI64(rewriter, loc, depthC_fp32), cstI64(rewriter, loc, strideC));
+
+    // Release all banks
     rewriter.create<buckyball::BankReleaseOp>(loc, a1.getBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, a2.getOutBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, b1.getBankOut());
-    rewriter.create<buckyball::BankReleaseOp>(loc, c2.getBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, b2.getOutBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, c1.getWrBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, c2.getOutBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, c3.getBankOut());
 
     rewriter.eraseOp(op);
     return success();

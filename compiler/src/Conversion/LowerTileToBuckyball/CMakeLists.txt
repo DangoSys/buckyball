@@ -4,4 +4,5 @@ add_mlir_library(LowerTileToBuckyballPass
   LINK_LIBS PUBLIC
   BuddyTile
   BuddyBuckyball
+  MLIRLinalgDialect
   )

@@ -64,6 +64,7 @@ in
     idna
     diffusers
     nanobind
+    ultralytics
 
     # testing (sardine)
     pytest

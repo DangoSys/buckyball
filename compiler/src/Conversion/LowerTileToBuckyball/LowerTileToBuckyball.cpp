@@ -20,6 +20,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -101,6 +102,62 @@ public:
     size_t K = aShape[aShape.size() - 1];
     size_t N = bShape[bShape.size() - 1];
 
+    // Hardware constraint: K and N must be multiples of 16
+    // If not aligned, allocate padded buffers and copy
+    bool needPadding = (K % 16 != 0) || (N % 16 != 0);
+    size_t K_pad = ceilDiv(K, 16) * 16;
+    size_t N_pad = ceilDiv(N, 16) * 16;
+
+    Value aMemArrayPadded = aMemArray;
+    Value bMemArrayPadded = bMemArray;
+    Value cMemArrayPadded = cMemArray;
+
+    if (needPadding) {
+      auto elemType = aType.getElementType();
+
+      // Allocate padded buffers
+      auto aPadType = MemRefType::get({(int64_t)M, (int64_t)K_pad}, elemType);
+      auto bPadType =
+          MemRefType::get({(int64_t)K_pad, (int64_t)N_pad}, elemType);
+      auto cPadType = MemRefType::get({(int64_t)M, (int64_t)N_pad}, elemType);
+
+      aMemArrayPadded = rewriter.create<memref::AllocOp>(loc, aPadType);
+      bMemArrayPadded = rewriter.create<memref::AllocOp>(loc, bPadType);
+      cMemArrayPadded = rewriter.create<memref::AllocOp>(loc, cPadType);
+
+      // Zero-fill padded buffers
+      Value zero = rewriter.create<arith::ConstantOp>(
+          loc, elemType, rewriter.getZeroAttr(elemType));
+      rewriter.create<linalg::FillOp>(loc, zero, aMemArrayPadded);
+      rewriter.create<linalg::FillOp>(loc, zero, bMemArrayPadded);
+      rewriter.create<linalg::FillOp>(loc, zero, cMemArrayPadded);
+
+      // Copy original data to padded buffers (only valid region)
+      Value aView = rewriter.create<memref::SubViewOp>(
+          loc, aMemArrayPadded,
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                    rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(M),
+                                    rewriter.getIndexAttr(K)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                    rewriter.getIndexAttr(1)});
+      rewriter.create<memref::CopyOp>(loc, aMemArray, aView);
+
+      Value bView = rewriter.create<memref::SubViewOp>(
+          loc, bMemArrayPadded,
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                    rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(K),
+                                    rewriter.getIndexAttr(N)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                    rewriter.getIndexAttr(1)});
+      rewriter.create<memref::CopyOp>(loc, bMemArray, bView);
+    }
+
+    // Update dimensions for tiling (use padded dimensions if needed)
+    size_t K_tiling = needPadding ? K_pad : K;
+    size_t N_tiling = needPadding ? N_pad : N;
+
     // Block counts per axis: each unit is lane×lane×warp elements (see
     // mTileSize below).
     const size_t mMeta = lane;
@@ -109,8 +166,8 @@ public:
 
     // Pad dimensions to multiples of meta lengths
     const size_t mPad = ceilDiv(M, mMeta) * mMeta;
-    const size_t nPad = ceilDiv(N, nMeta) * nMeta;
-    const size_t kPad = ceilDiv(K, kMeta) * kMeta;
+    const size_t nPad = ceilDiv(N_tiling, nMeta) * nMeta;
+    const size_t kPad = ceilDiv(K_tiling, kMeta) * kMeta;
 
     // Tile lengths: grow K first so kTileSize is fixed when checking mvin B
     // depth on N; then N (c mvout + mvin B), then M (mvin A). Order avoids
@@ -153,12 +210,12 @@ public:
         for (size_t n0 = 0; n0 < nTileNum; n0++) {
           size_t mStart = m0 * mTileSize, kStart = k0 * kTileSize,
                  nStart = n0 * nTileSize;
-          size_t mLen = std::min(mTileSize, mPad - mStart);
-          size_t kLen = std::min(kTileSize, kPad - kStart);
-          size_t nLen = std::min(nTileSize, nPad - nStart);
+          size_t mLen = std::min(mTileSize, M - mStart);
+          size_t kLen = std::min(kTileSize, K_tiling - kStart);
+          size_t nLen = std::min(nTileSize, N_tiling - nStart);
 
           Value aTile = rewriter.create<memref::SubViewOp>(
-              loc, aMemArray,
+              loc, aMemArrayPadded,
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(mStart),
                                         rewriter.getIndexAttr(kStart)},
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(mLen),
@@ -166,7 +223,7 @@ public:
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                         rewriter.getIndexAttr(1)});
           Value bTile = rewriter.create<memref::SubViewOp>(
-              loc, bMemArray,
+              loc, bMemArrayPadded,
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(kStart),
                                         rewriter.getIndexAttr(nStart)},
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(kLen),
@@ -174,7 +231,7 @@ public:
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                         rewriter.getIndexAttr(1)});
           Value cTile = rewriter.create<memref::SubViewOp>(
-              loc, cMemArray,
+              loc, cMemArrayPadded,
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(mStart),
                                         rewriter.getIndexAttr(nStart)},
               SmallVector<OpFoldResult>{rewriter.getIndexAttr(mLen),
@@ -185,6 +242,24 @@ public:
           rewriter.create<buckyball::MatMulOp>(loc, aTile, bTile, cTile);
         }
       }
+    }
+
+    // Copy back C from padded buffer to original output
+    if (needPadding) {
+      Value cView = rewriter.create<memref::SubViewOp>(
+          loc, cMemArrayPadded,
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                    rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(M),
+                                    rewriter.getIndexAttr(N)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                    rewriter.getIndexAttr(1)});
+      rewriter.create<memref::CopyOp>(loc, cView, cMemArray);
+
+      // Deallocate padded buffers
+      rewriter.create<memref::DeallocOp>(loc, aMemArrayPadded);
+      rewriter.create<memref::DeallocOp>(loc, bMemArrayPadded);
+      rewriter.create<memref::DeallocOp>(loc, cMemArrayPadded);
     }
 
     rewriter.eraseOp(tileMatMulOp);
@@ -204,16 +279,11 @@ private:
 namespace {
 
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
-  // Transpose needs both input and output in bank: 2 * rows * cols
-  size_t computeBankRows(size_t rowsTileLen, size_t colsTileLen) const {
-    return rowsTileLen * colsTileLen * 2;
-  }
-
 public:
   explicit TileTransposeLowering(MLIRContext *context, int64_t lane,
-                                 int64_t /*warp*/, int64_t bankDepth,
+                                 int64_t /*warp*/, int64_t /*bankDepth*/,
                                  int64_t /*bankNum*/)
-      : OpRewritePattern(context), lane(lane), bankDepth(bankDepth) {}
+      : OpRewritePattern(context), lane(lane) {}
 
   LogicalResult matchAndRewrite(tile::TileTransposeOp tileTransposeOp,
                                 PatternRewriter &rewriter) const override {
@@ -235,30 +305,30 @@ public:
       return tileTransposeOp.emitError(
           "Output shape must be transposed of input shape");
 
-    const size_t rowMeta = lane, colMeta = lane;
-    const size_t rowPad = ceilDiv(Rows, rowMeta) * rowMeta;
-    const size_t colPad = ceilDiv(Cols, colMeta) * colMeta;
+    // Hardware constraint: transpose processes 16 rows at a time
+    // iter parameter: number of columns (max 64 for i8)
+    constexpr size_t kTransposeRows = 16;
+    constexpr size_t kMaxTransposeCols = 64;
 
-    size_t rowTileLen = 1, colTileLen = 1;
+    // Tile columns to fit hardware limit
+    size_t colTileSize = std::min(Cols, kMaxTransposeCols);
+    // Align to lane for efficient mvin/mvout
+    colTileSize = (colTileSize / lane) * lane;
+    if (colTileSize == 0)
+      colTileSize = lane;
 
-    while ((rowTileLen + 1) * rowMeta <= rowPad &&
-           computeBankRows(rowTileLen + 1, colTileLen) <= (size_t)bankDepth)
-      rowTileLen++;
-
-    while ((colTileLen + 1) * colMeta <= colPad &&
-           computeBankRows(rowTileLen, colTileLen + 1) <= (size_t)bankDepth)
-      colTileLen++;
-
-    const size_t rowTileSize = rowTileLen * rowMeta;
-    const size_t colTileSize = colTileLen * colMeta;
-    const size_t rowTileNum = ceilDiv(rowPad, rowTileSize);
-    const size_t colTileNum = ceilDiv(colPad, colTileSize);
+    size_t rowTileNum = ceilDiv(Rows, kTransposeRows);
+    size_t colTileNum = ceilDiv(Cols, colTileSize);
 
     for (size_t r0 = 0; r0 < rowTileNum; r0++) {
       for (size_t c0 = 0; c0 < colTileNum; c0++) {
-        size_t rStart = r0 * rowTileSize, cStart = c0 * colTileSize;
-        size_t rLen = std::min(rowTileSize, rowPad - rStart);
-        size_t cLen = std::min(colTileSize, colPad - cStart);
+        size_t rStart = r0 * kTransposeRows;
+        size_t cStart = c0 * colTileSize;
+        size_t rLen = std::min(kTransposeRows, Rows - rStart);
+        size_t cLen = std::min(colTileSize, Cols - cStart);
+
+        // Hardware requires exactly 16 rows; pad if needed
+        size_t rLenPadded = (rLen < kTransposeRows) ? kTransposeRows : rLen;
 
         Value inTile = rewriter.create<memref::SubViewOp>(
             loc, inputMemArray,
@@ -277,17 +347,20 @@ public:
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
 
-        // Allocate source and destination banks
-        Value srcBank = buckyball::allocBank(rewriter, loc, rLen, cLen);
-        Value dstBank = buckyball::allocBank(rewriter, loc, cLen, rLen);
+        // Allocate banks: use default (row=1, col=1) for i8 data
+        Value srcBank =
+            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+        Value dstBank =
+            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
 
         // Move data from memref to source bank
-        int64_t depth = rLen * cLen / lane;
+        // depth = number of lane-width rows = rLenPadded * cLen / lane
+        int64_t depth = rLenPadded * cLen / lane;
         Value srcBankAfterMvin =
             buckyball::mvinBank(rewriter, loc, inTile, srcBank, depth);
 
-        // Execute transpose operation
-        Value iterVal = buckyball::createI64Const(rewriter, loc, rLen);
+        // Execute transpose: iter = number of columns
+        Value iterVal = buckyball::createI64Const(rewriter, loc, cLen);
         Value modeVal = buckyball::createI64Const(rewriter, loc, 0);
         Value dstBankAfterTranspose =
             rewriter.create<buckyball::BankTransposeOp>(
@@ -295,6 +368,7 @@ public:
                 modeVal);
 
         // Move result from destination bank to memref
+        // Output is cLen × rLenPadded, but we only mvout cLen × rLen
         int64_t outDepth = cLen * rLen / lane;
         buckyball::mvoutBank(rewriter, loc, outTile, dstBankAfterTranspose,
                              outDepth);
@@ -310,7 +384,7 @@ public:
   }
 
 private:
-  int64_t lane, bankDepth;
+  int64_t lane;
 };
 
 } // namespace
@@ -537,9 +611,10 @@ public:
                           llvm::cl::init(8)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<tile::TileDialect, buckyball::BuckyballDialect,
-                    func::FuncDialect, memref::MemRefDialect,
-                    arith::ArithDialect, scf::SCFDialect>();
+    registry
+        .insert<tile::TileDialect, buckyball::BuckyballDialect,
+                func::FuncDialect, memref::MemRefDialect, arith::ArithDialect,
+                scf::SCFDialect, linalg::LinalgDialect>();
   }
 
   void runOnOperation() override;
@@ -553,7 +628,7 @@ void LowerTileToBuckyballPass::runOnOperation() {
   ConversionTarget target(*context);
   target.addLegalDialect<buckyball::BuckyballDialect, memref::MemRefDialect,
                          arith::ArithDialect, scf::SCFDialect,
-                         func::FuncDialect>();
+                         func::FuncDialect, linalg::LinalgDialect>();
   target.addIllegalDialect<tile::TileDialect>();
 
   RewritePatternSet patterns(context);

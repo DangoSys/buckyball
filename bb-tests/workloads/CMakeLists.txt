@@ -41,8 +41,12 @@ add_custom_target(create-dirs
 )
 
 add_custom_target(sync-bin
-  COMMAND rsync -av --exclude="CMakeFiles"
-          --include="*/" --include="*-baremetal" --include="*-linux"
+  COMMAND rsync -av
+          --exclude="CMakeFiles"
+          --include="*/"
+          --include="*-baremetal"
+          --include="*-linux"
+          --include="*-run"
           --exclude="*"
           ${BUILD_BIN_DIR}/ ${OUTPUT_BIN_DIR}/
   COMMENT "Syncing binary files to output directory"
