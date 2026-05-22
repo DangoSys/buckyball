@@ -69,24 +69,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     fw_payload_bin = os.path.join(output_dir, "fw_payload.bin")
     fw_payload_hex = os.path.join(output_dir, "fw_payload.hex")
 
-    if os.path.exists(fw_payload_bin):
-        ctx.logger.info(f"Converting {fw_payload_bin} to Verilog hex format for p2e...")
-        # fw_payload loads at 0x80000000, so base_address=0x80000000 to generate relative offsets
-        success = bin_to_hex(fw_payload_bin, fw_payload_hex, base_address=0x80000000)
-        if not success:
-            ctx.logger.error("Failed to convert fw_payload to hex, but continuing...")
-    else:
-        ctx.logger.info("fw_payload.bin not found, skipping hex generation (baremetal kernel build?)")
+    if not os.path.exists(fw_payload_bin):
+        ctx.logger.error("fw_payload.bin not found")
+        await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
+        return
 
-    # Also convert legacy image.bin for backward compatibility
-    bin_file = os.path.join(output_dir, "image.bin")
-    hex_file = os.path.join(output_dir, "image.hex")
-
-    if os.path.exists(bin_file):
-        ctx.logger.info(f"Converting {bin_file} to Verilog hex format...")
-        success = bin_to_hex(bin_file, hex_file, base_address=0x80000000)
-        if not success:
-            ctx.logger.error("Failed to convert bin to hex, but continuing...")
+    ctx.logger.info(f"Converting {fw_payload_bin} to Verilog hex format for P2E...")
+    success = bin_to_hex(fw_payload_bin, fw_payload_hex, base_address=0x80000000)
+    if not success:
+        ctx.logger.error("Failed to convert fw_payload to hex")
+        await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
+        return
 
     await check_result(ctx, 0, continue_run=False, trace_id=origin_tid)
 
