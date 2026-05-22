@@ -18,6 +18,8 @@ from utils.port import reserve_port
 workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
 
 NO_PROXY = {"http": None, "https": None, "all": None}
+WORKER_PORT_START = 49200
+WORKER_PORT_END = 49500
 
 # Subcommand definitions: {name: {operation: help_text, ...}}
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
@@ -325,7 +327,13 @@ def run_server_mode(args, cmd_info):
 
     if command == "start":
         print(f"Starting dev server on port {args.port}")
-        config_path = make_iii_config(args.port, 49134) if args.port else os.path.join(workflow_dir, "config.yaml")
+        if args.port:
+            worker_port, worker_sock = reserve_port(start_port=WORKER_PORT_START, end_port=WORKER_PORT_END)
+            worker_sock.close()
+            config_path = make_iii_config(args.port, worker_port)
+            print(f"Using worker port {worker_port}")
+        else:
+            config_path = os.path.join(workflow_dir, "config.yaml")
         try:
             subprocess.run(["iii", "-c", config_path], cwd=workflow_dir, check=True)
         finally:
@@ -434,7 +442,7 @@ def run_script_mode(args, cmd_info):
         http_sock = None
     else:
         available_port, http_sock = reserve_port(start_port=5100, end_port=5500)
-    worker_port, worker_sock = reserve_port(start_port=49134, end_port=49500)
+    worker_port, worker_sock = reserve_port(start_port=WORKER_PORT_START, end_port=WORKER_PORT_END)
     print(f"Starting server on port {available_port}...")
 
     # Clean stale state files from previous runs
