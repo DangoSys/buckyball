@@ -16,7 +16,7 @@ add_custom_target(tutorial-linux-build ALL DEPENDS tutorial-linux
 # build baremetal version workload (BBSimHarness, same flags as toy)
 #-------------------------------------------------------------------------------
 set(ELF_CC "riscv64-unknown-elf-gcc")
-set(BBSIM_LD ${CTEST_TOY_WORKLOAD_DIR}/bbsim.ld)
+set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
 
 set(C_FLAGS -std=gnu11 -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
     -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
@@ -25,12 +25,12 @@ set(C_FLAGS -std=gnu11 -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
 add_custom_target(tutorial-baremetal-build ALL
     COMMAND ${ELF_CC} ${C_FLAGS}
         -o tutorial-baremetal
-        ${CTEST_TOY_WORKLOAD_DIR}/crt0.S
+        ${BBSW_BAREMETAL_DIR}/crt0.S
         ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
         ${TUTORIAL_WORKLOAD_DIR}/tutorial.c
     DEPENDS
         ${TUTORIAL_WORKLOAD_DIR}/tutorial.c
-        ${CTEST_TOY_WORKLOAD_DIR}/crt0.S
+        ${BBSW_BAREMETAL_DIR}/crt0.S
         ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
     COMMENT "Building baremetal workloads for tutorial"
     VERBATIM)

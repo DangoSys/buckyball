@@ -5,6 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(WORKLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(WORKLOAD_SRC_DIR ${WORKLOAD_DIR}/src)
 set(WORKLOAD_LIB_DIR ${WORKLOAD_DIR}/lib)
+set(BBSW_BAREMETAL_DIR ${WORKLOAD_LIB_DIR}/bbsw/baremetal)
 
 set(RISCV_GNU_TOOLCHAIN $ENV{RISCV})
 set(BUDDY_MLIR_DIR $ENV{BUDDY_MLIR_BUILD_DIR}/../)
@@ -57,6 +58,7 @@ add_dependencies(sync-bin
   buckyball-CTest-build
   OpTest-all
   buckyball-goban-CTest-build
+  embench-all
 )
 
 add_custom_target(build-all ALL
