@@ -39,9 +39,6 @@ WORKFLOW_COMMANDS = {
         "sim": 'Run simulation. Args: "--binary <path> [--batch]"',
         "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     },
-    "sardine": {
-        "run": 'Run sardine. Args: "--workload <path>"',
-    },
     "workload": {
         "build": "Build workload.",
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",

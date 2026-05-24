@@ -20,7 +20,6 @@ def main():
     "test_api_dc_run.py",
     "test_api_dc_verilog.py",
     "test_api_dc_synth.py",
-    "test_api_sardine_run.py",
     "test_api_kernel_build.py",
     "test_api_firesim_enumeratefpgas.py",
     "test_api_firesim_buildbitstream.py",

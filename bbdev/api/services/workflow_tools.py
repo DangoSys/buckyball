@@ -18,8 +18,7 @@ class WorkflowAPITool(Tool):
     - /verilator/verilog: Generate Verilog
     - /verilator/build: Build verilator (params: jobs)
     - /verilator/sim: Run simulation (params: binary, batch)
-    - /workload/build: Build workload (params: args)
-    - /sardine/run: Run sardine tests (params: workload)"""
+    - /workload/build: Build workload (params: args)"""
 
     def get_parameters(self) -> Dict[str, Any]:
         return {
