@@ -50,7 +50,6 @@
               # bbdev dependencies
               bbdev.iii
               bbdev.uv
-              bbdev.allure
               bbdev.gcc
               bbdev.gnumake
               bbdev.pkg-config
