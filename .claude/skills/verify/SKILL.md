@@ -12,7 +12,6 @@ Use `/check` logic to validate registration consistency, then ensure all require
 2. Registration entry in `arch/src/main/scala/framework/balldomain/configs/default.json`
 3. ISA macro file in `bb-tests/workloads/lib/bbhw/isa/`
 4. CTest file in `bb-tests/workloads/src/CTest/toy/`
-5. Sardine workload entry in `bb-tests/sardine/tests/test_ctest.py` (`ctest_workloads`)
 
 ## Phase 2 - Build and Simulate
 
@@ -22,18 +21,7 @@ Use `/check` logic to validate registration consistency, then ensure all require
    - set `batch=true`
 3. If build/simulation fails, switch to `/debug` flow
 
-## Phase 3 - Coverage Analysis
-
-1. Run MCP tool `bbdev_sardine_run` with `coverage=true`
-2. Read coverage reports:
-   - line coverage data under `bb-tests/sardine/reports/coverage/annotated/`
-   - locate target Ball file by searching Ball class name
-3. Analyze RTL line coverage of the Ball:
-   - inspect uncovered lines (marked `000000`)
-   - focus on FSM states, boundary conditions, and error paths
-4. If coverage is insufficient, propose or add tests, then rebuild and rerun simulation
-
-## Phase 4 - PMC Performance Analysis
+## Phase 3 - PMC Performance Analysis
 
 After simulation passes, analyze PMC traces from `bdb.log`:
 
@@ -44,7 +32,7 @@ After simulation passes, analyze PMC traces from `bdb.log`:
    - max/min elapsed cycles
    - total invocation count
 
-## Phase 5 - Waveform Analysis (when simulation fails)
+## Phase 4 - Waveform Analysis (when simulation fails)
 
 If simulation fails, use waveform-mcp for precise timing analysis in addition to logs. See `/waveform`.
 

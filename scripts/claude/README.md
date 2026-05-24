@@ -25,7 +25,6 @@ User ──→ Claude Code (slash commands + CLAUDE.md)
                           ├── POST /verilator/build    Build Verilator (supports --coverage)
                           ├── POST /verilator/sim      Run simulation (supports --coverage)
                           ├── POST /workload/build     Build CTest
-                          ├── POST /sardine/run        Batch tests (supports --coverage -> coverage report)
                           └── POST /yosys/synth        Yosys synthesis + OpenSTA timing analysis
 ```
 
@@ -56,7 +55,6 @@ User ──→ Claude Code (slash commands + CLAUDE.md)
 | `bbdev_verilator_verilog` | `/verilator/verilog` | Generate Verilog |
 | `bbdev_verilator_build` | `/verilator/build` | Build Verilator |
 | `bbdev_verilator_sim` | `/verilator/sim` | Run simulation |
-| `bbdev_sardine_run` | `/sardine/run` | Batch tests |
 | `bbdev_yosys_synth` | `/yosys/synth` | Yosys synthesis + OpenSTA |
 
 ## bbdev Server Lifecycle
@@ -77,15 +75,14 @@ MCP server manages bbdev server automatically:
 2. **Implement Ball**: reference existing Ball code and create wrapper/core/config under `prototype/`
 3. **Register**: update `default.json` + `busRegister` + `DISA` + `DomainDecoder`
 4. **ISA macro**: create C macro file and update `isa.h`
-5. **CTest**: create test `.c`, register in `CMakeLists.txt`, append sardine list
+5. **CTest**: create test `.c`, register in `CMakeLists.txt`
 6. **Verification**: `validate` -> `bbdev_workload_build` -> `bbdev_verilator_run` -> PASS/FAIL
 
 ### `/verify <Name>` - Verify Ball
 
-1. **Completeness check**: verify registration/ISA macro/CTest/sardine entries, fill missing parts
+1. **Completeness check**: verify registration/ISA macro/CTest entries, fill missing parts
 2. **Build + simulation**: `bbdev_workload_build` -> `bbdev_verilator_run`
-3. **Coverage analysis**: `bbdev_sardine_run(coverage=true)` -> inspect report -> propose extra tests
-4. **Failure analysis**: read simulation logs -> analyze Chisel code -> propose fixes
+3. **Failure analysis**: read simulation logs -> analyze Chisel code -> propose fixes
 
 ### `/optimize <Name>` - Optimize Ball
 

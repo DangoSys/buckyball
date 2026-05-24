@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "allure-commandline": "^2.36.0",
-    "httpx": "^3.0.1"
-  }
-}

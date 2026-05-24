@@ -51,7 +51,6 @@ Create `<funct7_decimal>_<name>.c` under `bb-tests/workloads/lib/bbhw/isa/`, the
 
 1. Create `<name>_test.c` under `bb-tests/workloads/src/CTest/toy/`
 2. Register in `bb-tests/workloads/src/CTest/toy/CMakeLists.txt` using `add_cross_platform_test_target`
-3. Append workload entry in `bb-tests/sardine/tests/test_ctest.py` (`ctest_workloads`)
 
 ## Phase 6 - Validate, Build, and Simulate
 

@@ -31,8 +31,6 @@ in
 
   # UV (for creating .venv and installing motia + deps)
   uv = pkgs.uv;
-  # Allure CLI for sardine Allure reports
-  allure = pkgs.allure;
 
   # Build tools (for compiling native modules)
   gcc = pkgs.gcc;

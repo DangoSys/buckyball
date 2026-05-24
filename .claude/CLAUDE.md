@@ -22,7 +22,6 @@ A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6
 - `bb-tests/` — tests
   - `workloads/lib/bbhw/isa/` — ISA C macros (one `.c` file per instruction)
   - `workloads/src/CTest/toy/` — C test cases
-  - `sardine/` — pytest test framework
 - `bbdev/` — developer toolchain (Motia workflow backend)
 
 ## Blink Protocol
@@ -75,7 +74,6 @@ The project configures the `buckyball-dev` MCP server with the following tools.
 - `bbdev_verilator_verilog(config)` — generate Verilog; `config` is required
 - `bbdev_verilator_build(jobs?, coverage?)` — build Verilator simulator
 - `bbdev_verilator_sim(binary, batch?, coverage?)` — run simulation (requires prior build)
-- `bbdev_sardine_run(workload?, coverage?)` — run batch tests
 - `bbdev_yosys_synth(top?, config?)` — Yosys synthesis + OpenSTA timing analysis
 
 Default config value: `sims.verilator.BuckyballToyVerilatorConfig`
@@ -84,7 +82,6 @@ Simulation binary naming format: `ctest_<name>_test_singlecore-baremetal`
 ### Analysis report paths
 - Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
 - Timing report: `bbdev/api/steps/yosys/log/timing_report.txt`
-- Coverage report: `bb-tests/sardine/reports/coverage/html/`
 - Simulation logs: `arch/log/<timestamp>/stdout.log`, `disasm.log`
 - bdb debug log: `arch/log/<timestamp>/bdb.log`, with three DPI-C traces:
   - `[ITRACE]` — instruction issue/complete
@@ -96,7 +93,7 @@ Simulation binary naming format: `ctest_<name>_test_singlecore-baremetal`
 Project skills are under `.claude/skills/`:
 - `/ball` — create a new Ball operator (full flow: implementation -> registration -> ISA -> CTest -> simulation)
 - `/check` — registration consistency check + auto-fix
-- `/verify` — Ball functional verification (build -> simulation -> coverage -> PMC analysis)
+- `/verify` — Ball functional verification (build -> simulation -> PMC analysis)
 - `/optimize` — RTL area/latency optimization (applies to any module, not only Balls)
 - `/debug` — simulation debugging (log analysis -> waveform -> failure pattern matching)
 - `/waveform` — waveform analysis (`waveform-mcp` usage guide)

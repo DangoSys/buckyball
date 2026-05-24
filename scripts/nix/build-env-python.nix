@@ -66,7 +66,7 @@ in
     nanobind
     ultralytics
 
-    # testing (sardine)
+    # testing
     pytest
     pytest-html
     pytest-xdist

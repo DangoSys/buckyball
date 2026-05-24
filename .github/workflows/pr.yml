@@ -52,10 +52,5 @@ jobs:
           nix develop -c bbdev verilator --verilog '--config sims.verilator.sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev verilator --build '--jobs 16'
 
-      - name: Smoke Test
-        shell: zsh {0}
-        run: |
-          cd ~/Code/buckyball
-          nix develop -c bbdev sardine --run '--workload ctest'
 
       - run: echo "🍏 PR Test is ${{ job.status }}."

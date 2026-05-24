@@ -206,7 +206,9 @@ mcp = FastMCP("buckyball-dev")
 
 @mcp.tool()
 def validate() -> str:
-    """Check 6 registration invariants: ballNum consistency, ballId strict increment, ballId no duplicates, funct7 no duplicates, busRegister matches default.json, decoder BIDs match default.json."""
+    """Check 6 registration invariants: ballNum consistency, ballId strict increment,
+    ballId no duplicates, funct7 no duplicates, busRegister matches default.json,
+    decoder BIDs match default.json."""
     missing_files = []
     for name, path in REGISTRATION_FILES.items():
         if not path.exists():
@@ -354,24 +356,13 @@ def bbdev_verilator_sim(
 
 
 @mcp.tool()
-def bbdev_sardine_run(
-    workload: str = "ctest",
-    coverage: bool = False,
-) -> str:
-    """Run sardine batch tests. Calls bbdev POST /sardine/run. With coverage=true, generates coverage report at bb-tests/sardine/reports/coverage/."""
-    api_params: Dict[str, Any] = {"workload": workload}
-    if coverage:
-        api_params["coverage"] = True
-    result = _bbdev_call("/sardine/run", api_params, timeout=1200)
-    return _fmt(result)
-
-
-@mcp.tool()
 def bbdev_yosys_synth(
     top: Optional[str] = None,
     config: Optional[str] = None,
 ) -> str:
-    """Run Yosys synthesis for area estimation + OpenSTA timing analysis. Generates hierarchy_report.txt, area_report.txt, and timing_report.txt in bbdev/api/steps/yosys/log/. Calls bbdev POST /yosys/synth."""
+    """Run Yosys synthesis for area estimation + OpenSTA timing analysis.
+    Generates hierarchy_report.txt, area_report.txt, and timing_report.txt in
+    bbdev/api/steps/yosys/log/. Calls bbdev POST /yosys/synth."""
     api_params: Dict[str, Any] = {}
     if top:
         api_params["top"] = top
