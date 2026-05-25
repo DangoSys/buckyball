@@ -9,6 +9,7 @@ import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExce
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
+import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder
@@ -49,6 +50,12 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tl_writer = new TLBundle(edge.bundle)
 
     val config = Decoupled(new MemConfigerIO(b))
+
+    // MMIO outputs (to MmioPool via MemDomain)
+    val mmioAlloc           = Valid(new MmioAllocReq(b))
+    val is_mvin_mmio_active = Output(Bool())
+    val mmio_addr           = Output(UInt(17.W))
+    val mmio_col            = Output(UInt(8.W))
 
     // Query interface to backend for group count
     val query_vbank_id    = Output(UInt(8.W))
@@ -171,6 +178,12 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memStorer.io.bankRead <> io.interdma.bankRead
   io.interdma.read_is_shared  := memStorer.io.is_shared
   io.interdma.write_is_shared := memLoader.io.is_shared
+
+  // MMIO signals from MemConfiger and MemLoader, exposed to MemDomain
+  io.mmioAlloc           := configer.io.mmioAlloc
+  io.is_mvin_mmio_active := memLoader.io.is_mvin_mmio_active
+  io.mmio_addr           := memLoader.io.mmio_addr
+  io.mmio_col            := memLoader.io.mmio_col
 
   // Completion signal connected to global RS
   io.global_complete_o.valid           := memRs.io.complete_o.valid

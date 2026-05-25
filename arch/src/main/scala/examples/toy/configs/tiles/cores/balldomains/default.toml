@@ -8,11 +8,11 @@ ballIdMappings = [
   { ballId = 2, ballName = "TransposeBall", ballClass = "framework.balldomain.prototype.transpose.TransposeBall", inBW = 1, outBW = 1 },
   { ballId = 3, ballName = "Im2colBall", ballClass = "framework.balldomain.prototype.im2col.Im2colBall", inBW = 1, outBW = 1 },
   { ballId = 4, ballName = "SystolicArrayBall", ballClass = "framework.balldomain.prototype.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 },
-  { ballId = 5, ballName = "QuantBall", ballClass = "framework.balldomain.prototype.quant.QuantBall", inBW = 1, outBW = 1 },
-  { ballId = 6, ballName = "DequantBall", ballClass = "framework.balldomain.prototype.dequant.DequantBall", inBW = 1, outBW = 1 },
+  { ballId = 5, ballName = "Fp2IntBall", ballClass = "framework.balldomain.prototype.fp2int.Fp2IntBall", inBW = 1, outBW = 1 },
+  { ballId = 6, ballName = "Int2FpBall", ballClass = "framework.balldomain.prototype.int2fp.Int2FpBall", inBW = 1, outBW = 1 },
   { ballId = 7, ballName = "GemminiBall", ballClass = "framework.balldomain.prototype.gemmini.GemminiBall", inBW = 2, outBW = 4 },
   { ballId = 8, ballName = "TraceBall", ballClass = "framework.balldomain.prototype.trace.TraceBall", inBW = 1, outBW = 1 },
-  { ballId = 9, ballName = "MxfpBall", ballClass = "framework.balldomain.prototype.mxfp.MxfpBall", inBW = 1, outBW = 1 }
+  { ballId = 9, ballName = "Mxfp2IntBall", ballClass = "framework.balldomain.prototype.mxfp2int.Mxfp2IntBall", inBW = 1, outBW = 1 }
 ]
 
 ballISA = [
@@ -21,8 +21,8 @@ ballISA = [
   { mnemonic = "TRANSPOSE", funct7 = 49, bid = 2 },
   { mnemonic = "IM2COL", funct7 = 48, bid = 3 },
   { mnemonic = "SYSTOLIC", funct7 = 65, bid = 4 },
-  { mnemonic = "QUANT", funct7 = 51, bid = 5 },
-  { mnemonic = "DEQUANT", funct7 = 52, bid = 6 },
+  { mnemonic = "FP2INT", funct7 = 51, bid = 5 },
+  { mnemonic = "INT2FP", funct7 = 52, bid = 6 },
   { mnemonic = "GEMMINI_CONFIG", funct7 = 2, bid = 7 },
   { mnemonic = "GEMMINI_FLUSH", funct7 = 3, bid = 7 },
   { mnemonic = "GEMMINI_PRELOAD", funct7 = 53, bid = 7 },
@@ -47,5 +47,5 @@ ballISA = [
   { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_9", funct7 = 104, bid = 7 },
   { mnemonic = "GEMMINI_LOOP_CONV_WS", funct7 = 105, bid = 7 },
   { mnemonic = "BDB_COUNTER", funct7 = 4, bid = 8 },
-  { mnemonic = "MXFP", funct7 = 55, bid = 9 }
+  { mnemonic = "MXFP2INT", funct7 = 55, bid = 9 }
 ]

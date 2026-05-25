@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
+import framework.balldomain.blink.mmio.MmioRead
 import framework.balldomain.rs.BallRsComplete
 import framework.top.GlobalConfig
 
@@ -230,4 +231,6 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   }
 
   io.status <> exCtrl.exio.status
+
+  MmioRead.tieOff(io.mmioRead)
 }

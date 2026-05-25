@@ -24,6 +24,12 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
     val bankWrite = Flipped(new BankWrite(b))
 
+    // MMIO routing hint: tells upper level (MemDomain) to route bankWrite to MmioPool
+    // When is_mvin_mmio_active is true, mmio_addr/col carry MMIO destination info
+    val is_mvin_mmio_active = Output(Bool())
+    val mmio_addr           = Output(UInt(17.W)) // rs2[55:39]: MMIO byte address
+    val mmio_col            = Output(UInt(8.W))  // rs2[63:56]: valid bytes per row
+
     // Query interface to get group count
     val query_vbank_id    = Output(UInt(8.W))
     val query_is_shared   = Output(Bool())
@@ -49,6 +55,15 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // Group counter for multi-bank writes
   val group_counter   = RegInit(0.U(4.W))
   val group_count_reg = RegInit(0.U(4.W))
+
+  // MMIO routing info (latched at cmdReq.fire, exposed to upper level)
+  val is_mvin_mmio_reg = RegInit(false.B)
+  val mmio_addr_reg    = RegInit(0.U(17.W))
+  val mmio_col_reg     = RegInit(0.U(8.W))
+
+  io.is_mvin_mmio_active := is_mvin_mmio_reg
+  io.mmio_addr           := mmio_addr_reg
+  io.mmio_col            := mmio_col_reg
 
   // -----------------------------
   // pending latch for 1-beat DMA -> bankWrite
@@ -96,26 +111,36 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   // -----------------------------
-  // Receive load instruction
+  // Receive load instruction (both mvin and mvin_mmio go through is_load path)
   // -----------------------------
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_load) {
-    state           := s_dma_req
-    rob_id_reg      := io.cmdReq.bits.rob_id
-    is_sub_reg      := io.cmdReq.bits.is_sub
-    sub_rob_id_reg  := io.cmdReq.bits.sub_rob_id
-    mem_addr_reg    := io.cmdReq.bits.cmd.mem_addr
-    wr_bank_reg     := io.cmdReq.bits.cmd.bank_id
-    // stride from rs2[57:39]
-    stride_reg      := io.cmdReq.bits.cmd.special(57, 39)
-    resp_count      := 0.U
-    pending         := false.B
-    latLast         := false.B
-    group_counter   := 0.U
-    group_count_reg := io.query_group_count
-    is_shared_reg   := io.cmdReq.bits.cmd.is_shared
+    state          := s_dma_req
+    rob_id_reg     := io.cmdReq.bits.rob_id
+    is_sub_reg     := io.cmdReq.bits.is_sub
+    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+    mem_addr_reg   := io.cmdReq.bits.cmd.mem_addr
+    wr_bank_reg    := io.cmdReq.bits.cmd.bank_id
+    resp_count     := 0.U
+    pending        := false.B
+    latLast        := false.B
+    group_counter  := 0.U
+    is_shared_reg  := io.cmdReq.bits.cmd.is_shared
 
-    // Query group count and multiply iter
-    iter_reg := io.cmdReq.bits.cmd.iter * io.query_group_count
+    // Latch mvin_mmio routing info (exposed to upper level via is_mvin_mmio_active)
+    is_mvin_mmio_reg := io.cmdReq.bits.cmd.is_mvin_mmio
+    when(io.cmdReq.bits.cmd.is_mvin_mmio) {
+      // mvin_mmio: rs1[63:30]=row (iter), rs2[55:39]=mmio_addr, rs2[63:56]=col
+      mmio_addr_reg   := io.cmdReq.bits.cmd.special(55, 39)
+      mmio_col_reg    := io.cmdReq.bits.cmd.special(63, 56)
+      iter_reg        := io.cmdReq.bits.cmd.iter
+      group_count_reg := 1.U
+      stride_reg      := 0.U
+    }.otherwise {
+      // Regular mvin: stride from rs2[57:39]
+      stride_reg      := io.cmdReq.bits.cmd.special(57, 39)
+      group_count_reg := io.query_group_count
+      iter_reg        := io.cmdReq.bits.cmd.iter * io.query_group_count
+    }
   }
 
   // Drive query interface

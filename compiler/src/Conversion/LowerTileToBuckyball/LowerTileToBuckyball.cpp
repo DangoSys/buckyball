@@ -204,45 +204,69 @@ public:
     const size_t nTileNum = ceilDiv(nPad, nTileSize);
     const size_t kTileNum = ceilDiv(kPad, kTileSize);
 
-    // Generate tiled computation
-    for (size_t k0 = 0; k0 < kTileNum; k0++) {
-      for (size_t m0 = 0; m0 < mTileNum; m0++) {
-        for (size_t n0 = 0; n0 < nTileNum; n0++) {
-          size_t mStart = m0 * mTileSize, kStart = k0 * kTileSize,
-                 nStart = n0 * nTileSize;
-          size_t mLen = std::min(mTileSize, M - mStart);
-          size_t kLen = std::min(kTileSize, K_tiling - kStart);
-          size_t nLen = std::min(nTileSize, N_tiling - nStart);
-
-          Value aTile = rewriter.create<memref::SubViewOp>(
-              loc, aMemArrayPadded,
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(mStart),
-                                        rewriter.getIndexAttr(kStart)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(mLen),
-                                        rewriter.getIndexAttr(kLen)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                        rewriter.getIndexAttr(1)});
-          Value bTile = rewriter.create<memref::SubViewOp>(
-              loc, bMemArrayPadded,
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(kStart),
-                                        rewriter.getIndexAttr(nStart)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(kLen),
-                                        rewriter.getIndexAttr(nLen)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                        rewriter.getIndexAttr(1)});
-          Value cTile = rewriter.create<memref::SubViewOp>(
-              loc, cMemArrayPadded,
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(mStart),
-                                        rewriter.getIndexAttr(nStart)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(mLen),
-                                        rewriter.getIndexAttr(nLen)},
-              SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                        rewriter.getIndexAttr(1)});
-
-          rewriter.create<buckyball::MatMulOp>(loc, aTile, bTile, cTile);
-        }
-      }
+    // Generate tiled computation using scf.for loops (runtime iteration)
+    // instead of C++ unrolling. The previous unrolled version generated
+    // mTileNum*nTileNum*kTileNum buckyball.MatMulOps at compile time —
+    // 4096 ops / 77K+ instructions for 1024x1024 inputs.
+    //
+    // Each iteration emits one buckyball.MatMulOp, which the next pass
+    // (-lower-buckyball-to-bank-ssa) expands into bank ops. AssignBuckyball-
+    // BanksPass recursively walks into scf.for bodies to handle the bank ops.
+    //
+    // Requires mPad/nPad/kPad to be exact multiples of tile sizes.
+    if (mPad % mTileSize != 0 || nPad % nTileSize != 0 ||
+        kPad % kTileSize != 0) {
+      return tileMatMulOp.emitError()
+             << "padded dims (m=" << mPad << ", n=" << nPad << ", k=" << kPad
+             << ") must be multiples of tile sizes (m=" << mTileSize
+             << ", n=" << nTileSize << ", k=" << kTileSize
+             << "); partial tiles not yet supported";
     }
+
+    OpBuilder::InsertionGuard guard(rewriter);
+
+    Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value mStepVal = rewriter.create<arith::ConstantIndexOp>(loc, mTileSize);
+    Value nStepVal = rewriter.create<arith::ConstantIndexOp>(loc, nTileSize);
+    Value kStepVal = rewriter.create<arith::ConstantIndexOp>(loc, kTileSize);
+    Value mUpperVal = rewriter.create<arith::ConstantIndexOp>(loc, mPad);
+    Value nUpperVal = rewriter.create<arith::ConstantIndexOp>(loc, nPad);
+    Value kUpperVal = rewriter.create<arith::ConstantIndexOp>(loc, kPad);
+
+    // Outer-to-inner: k -> m -> n (preserves original C++ loop nesting order)
+    auto kLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, kUpperVal, kStepVal);
+    rewriter.setInsertionPointToStart(kLoop.getBody());
+    Value kIv = kLoop.getInductionVar();
+
+    auto mLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, mUpperVal, mStepVal);
+    rewriter.setInsertionPointToStart(mLoop.getBody());
+    Value mIv = mLoop.getInductionVar();
+
+    auto nLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, nUpperVal, nStepVal);
+    rewriter.setInsertionPointToStart(nLoop.getBody());
+    Value nIv = nLoop.getInductionVar();
+
+    // Subviews use dynamic offsets (induction variables) and static sizes
+    Value aTile = rewriter.create<memref::SubViewOp>(
+        loc, aMemArrayPadded, SmallVector<OpFoldResult>{mIv, kIv},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(mTileSize),
+                                  rewriter.getIndexAttr(kTileSize)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
+    Value bTile = rewriter.create<memref::SubViewOp>(
+        loc, bMemArrayPadded, SmallVector<OpFoldResult>{kIv, nIv},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(kTileSize),
+                                  rewriter.getIndexAttr(nTileSize)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
+    Value cTile = rewriter.create<memref::SubViewOp>(
+        loc, cMemArrayPadded, SmallVector<OpFoldResult>{mIv, nIv},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(mTileSize),
+                                  rewriter.getIndexAttr(nTileSize)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
+
+    rewriter.create<buckyball::MatMulOp>(loc, aTile, bTile, cTile);
 
     // Copy back C from padded buffer to original output
     if (needPadding) {

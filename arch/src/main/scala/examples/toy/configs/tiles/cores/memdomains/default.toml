@@ -1,0 +1,31 @@
+# Toy Core Memory Domain Configuration (default)
+# Private (per-core) memory parameters. Shared memory lives in the tile TOML.
+
+[bank]
+num = 32
+width = 128
+entries = 128
+maskLen = 16
+channel = 7
+
+[dma]
+nXacts = 8
+maxBytes = 64
+busWidth = 128
+maxInFlightMemReqs = 16
+
+[tlb]
+size = 4
+
+[tma]
+readChannel = 4
+writeChannel = 4
+
+[mmio]
+bankNum = 16
+bankEntries = 64
+bankWidth = 128
+readWidth = 8
+
+[mem]
+addrLen = 39

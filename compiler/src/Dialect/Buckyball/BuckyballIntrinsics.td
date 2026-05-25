@@ -60,10 +60,10 @@ def TransposeIntrOp : Buckyball_IntrOpBase<"transpose">,
 def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def QuantIntrOp : Buckyball_IntrOpBase<"quant">,
+def Fp2IntIntrOp : Buckyball_IntrOpBase<"fp2int">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def DequantIntrOp : Buckyball_IntrOpBase<"dequant">,
+def Int2FpIntrOp : Buckyball_IntrOpBase<"defp2int">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 def ReluIntrOp : Buckyball_IntrOpBase<"relu">,

@@ -1,6 +1,7 @@
 # Goban Core Configuration (default)
 
 balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
 
 [rocketCore]
 xLen = 64

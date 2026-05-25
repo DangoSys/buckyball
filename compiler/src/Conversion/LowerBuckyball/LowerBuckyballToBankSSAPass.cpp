@@ -158,14 +158,14 @@ public:
         loc, rewriter.getI64Type(), cMem, c2.getOutBankOut(),
         cstI64(rewriter, loc, depthC_fp32), cstI64(rewriter, loc, strideC));
 
-    // Release all banks
+    // Release all banks (skip c3 to avoid double-free of c0_fp32 — c2 already
+    // released it via c2.getOutBankOut() which aliases c0_fp32.getBank())
     rewriter.create<buckyball::BankReleaseOp>(loc, a1.getBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, a2.getOutBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, b1.getBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, b2.getOutBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, c1.getWrBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, c2.getOutBankOut());
-    rewriter.create<buckyball::BankReleaseOp>(loc, c3.getBankOut());
 
     rewriter.eraseOp(op);
     return success();

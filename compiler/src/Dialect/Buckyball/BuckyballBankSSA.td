@@ -89,7 +89,7 @@ def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
       "$inBank $outBank $krow $kcol $inrow $incol $startrow $startcol attr-dict `:` type($inBank) type($outBank) type($krow) type($kcol) type($inrow) type($incol) type($startrow) type($startcol)";
 }
 
-def BankQuantOp : Buckyball_Op<"bank_quant"> {
+def BankFp2IntOp : Buckyball_Op<"bank_fp2int"> {
   let summary = "Quantization using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
   let results = (outs I64:$outBankOut);
@@ -97,7 +97,7 @@ def BankQuantOp : Buckyball_Op<"bank_quant"> {
       "$inBank $outBank $iter $scale attr-dict `:` type($inBank) type($outBank) type($iter) type($scale)";
 }
 
-def BankDequantOp : Buckyball_Op<"bank_dequant"> {
+def BankInt2FpOp : Buckyball_Op<"bank_int2fp"> {
   let summary = "Dequantization using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
   let results = (outs I64:$outBankOut);

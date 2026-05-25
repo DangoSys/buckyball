@@ -24,6 +24,9 @@ class BallDecodeCmd(numBanks: Int, iterLen: Int) extends Bundle {
   val op2_bank = UInt(log2Up(numBanks).W)
   val wr_bank  = UInt(log2Up(numBanks).W)
 
+  // MMIO metadata bank: which main bank's MMIO region to access
+  val meta_bank = UInt(log2Up(numBanks).W)
+
   val rs1 = UInt(64.W)
   val rs2 = UInt(64.W)
 }

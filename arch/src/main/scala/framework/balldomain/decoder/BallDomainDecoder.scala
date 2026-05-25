@@ -68,6 +68,11 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   ball_decode_cmd_o.bits.op1_from_spad := ball_decode_cmd_o.valid && hasRd0
   ball_decode_cmd_o.bits.op2_from_spad := ball_decode_cmd_o.valid && hasRd1
 
+  // MMIO meta_bank: default to wr_bank (typical case: Ball's output bank
+  // is bound to a per-output-block MMIO scale region).
+  // Balls that need different binding can override via their decode logic.
+  ball_decode_cmd_o.bits.meta_bank := Mux(ball_decode_cmd_o.valid && hasWr, wr_bank_raw, 0.U)
+
   ball_decode_cmd_o.bits.rs1 := rs1
   ball_decode_cmd_o.bits.rs2 := rs2
 

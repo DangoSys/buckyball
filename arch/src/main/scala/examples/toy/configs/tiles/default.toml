@@ -8,5 +8,10 @@ writeBytes = 8
 portFactor = 2
 memCycles = 10
 
+[sharedMem]
+enable = true
+entries = 16384
+defaultGroupCount = 1
+
 [[cores]]
 include = "cores/default.toml"

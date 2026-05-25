@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
+import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 class MemConfigerIO(val b: GlobalConfig) extends Bundle {
@@ -27,6 +28,9 @@ class MemConfiger(val b: GlobalConfig) extends Module {
 
     val config = Decoupled(new MemConfigerIO(b))
     val hartid = Input(UInt(b.core.xLen.W))
+
+    // MMIO alloc/dealloc port
+    val mmioAlloc = Valid(new MmioAllocReq(b))
   })
 
   val idle :: config :: Nil = Enum(2)
@@ -53,9 +57,33 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.is_sub     := false.B
   io.cmdResp.bits.sub_rob_id := 0.U
 
+  // MMIO alloc defaults
+  io.mmioAlloc.valid          := false.B
+  io.mmioAlloc.bits.main_bank := 0.U
+  io.mmioAlloc.bits.mmio_addr := 0.U
+  io.mmioAlloc.bits.size_rows := 0.U
+
   when(state === idle) {
     when(io.cmdReq.valid) {
-      when(io.cmdReq.bits.cmd.special(9, 5) > 1.U) { //is multi bank (col > 1)
+      // Check if this is mmio_set instruction
+      when(io.cmdReq.bits.cmd.is_mmio_set) {
+        // mmio_set: rs1[9:0]=main_bank, rs2[15:0]=mmio_addr, rs2[23:16]=size_rows
+        val main_bank = io.cmdReq.bits.cmd.bank_id
+        val mmio_addr = io.cmdReq.bits.cmd.special(15, 0)
+        val size_rows = io.cmdReq.bits.cmd.special(23, 16)
+
+        io.mmioAlloc.valid          := true.B
+        io.mmioAlloc.bits.main_bank := main_bank
+        io.mmioAlloc.bits.mmio_addr := mmio_addr
+        io.mmioAlloc.bits.size_rows := size_rows
+
+        // Immediate response (no state transition)
+        io.cmdResp.valid           := true.B
+        io.cmdResp.bits.rob_id     := io.cmdReq.bits.rob_id
+        io.cmdResp.bits.is_sub     := io.cmdReq.bits.is_sub
+        io.cmdResp.bits.sub_rob_id := io.cmdReq.bits.sub_rob_id
+
+      }.elsewhen(io.cmdReq.bits.cmd.special(9, 5) > 1.U) { //is multi bank (col > 1)
         state          := config
         col_reg        := io.cmdReq.bits.cmd.special(9, 5)
         alloc_reg      := io.cmdReq.bits.cmd.special(10)

@@ -4,6 +4,7 @@ import toml.{Toml, Value}
 import framework.system.tile.PrivateDCacheParams
 import framework.system.core.configs.RocketCoreParam
 import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMapping}
+import framework.memdomain.configs.MemDomainParam
 import framework.top.GlobalConfig
 import java.nio.file.{Path, Paths}
 
@@ -141,11 +142,13 @@ object TomlConfigLoader {
       }
     }
 
+    val sharedMem = parseSharedMem(tileTable)
+
     val cores: Seq[Option[GlobalConfig]] = tileTable.get("coreTemplate") match {
       case Some(templateValue) =>
         val (templateTable, newBase) = resolveInclude(asTable(templateValue, "coreTemplate"), baseDir)
         val count                    = getInt(templateTable, "count")
-        val coreConfig               = parseCore(templateTable - "count", newBase)
+        val coreConfig               = parseCore(templateTable - "count", newBase, sharedMem)
         Seq.fill(count)(coreConfig)
 
       case None =>
@@ -154,7 +157,7 @@ object TomlConfigLoader {
             coresArray.map { coreValue =>
               val coreTable           = asTable(coreValue, "core entry")
               val (resolved, newBase) = resolveInclude(coreTable, baseDir)
-              parseCore(resolved, newBase)
+              parseCore(resolved, newBase, sharedMem)
             }
           case None                        =>
             throw new RuntimeException("Tile must define either [[cores]] array or [coreTemplate]")
@@ -171,7 +174,11 @@ object TomlConfigLoader {
     TileTopology(coresWithNCores, privateDCache)
   }
 
-  private def parseCore(coreTable: Map[String, Value], baseDir: Path): Option[GlobalConfig] = {
+  private def parseCore(
+    coreTable: Map[String, Value],
+    baseDir:   Path,
+    sharedMem: SharedMemFields
+  ): Option[GlobalConfig] = {
     // A core entry with `balldomain` becomes a Buckyball-bearing core.
     // Omitting `balldomain` (or empty string) drops the accelerator slot.
     val balldomainOpt = coreTable.get("balldomain").flatMap {
@@ -185,11 +192,21 @@ object TomlConfigLoader {
     }
 
     balldomainOpt.map { balldomain =>
+      val memdomain = coreTable.get("memdomain") match {
+        case Some(Value.Str(s)) if s.nonEmpty => parseMemDomain(parseFile(baseDir.resolve(s).toString), sharedMem)
+        case Some(Value.Tbl(t))               =>
+          val (resolved, _) = resolveInclude(t, baseDir)
+          parseMemDomainTable(resolved, sharedMem)
+        case _                                =>
+          throw new RuntimeException("Core with balldomain must define 'memdomain' (string path or table)")
+      }
+
       val rocketCoreTable = getTable(coreTable, "rocketCore").getOrElse(
         throw new RuntimeException("Core with balldomain must have [rocketCore] section")
       )
       GlobalConfig().copy(
         ballDomain = balldomain,
+        memDomain = memdomain,
         rocketCore = parseRocketCore(rocketCoreTable)
       )
     }
@@ -273,6 +290,61 @@ object TomlConfigLoader {
       )
     }
     BallDomainParam(ballNum = ballNum, ballIdMappings = ballIdMappings, ballISA = ballISA)
+  }
+
+  /** Loader-private bundle of tile-shared memory fields. */
+  private case class SharedMemFields(
+    sharedEnable:            Boolean,
+    sharedEntries:           Int,
+    sharedDefaultGroupCount: Int)
+
+  private def parseSharedMem(table: Map[String, Value]): SharedMemFields = {
+    val t = getTable(table, "sharedMem").getOrElse(
+      throw new RuntimeException("Tile must define [sharedMem] section")
+    )
+    SharedMemFields(
+      sharedEnable = getBool(t, "enable"),
+      sharedEntries = getInt(t, "entries"),
+      sharedDefaultGroupCount = getInt(t, "defaultGroupCount")
+    )
+  }
+
+  /** Parse a memdomain file (or inline table) into a complete MemDomainParam. */
+  private def parseMemDomain(value: Value, shared: SharedMemFields): MemDomainParam = {
+    val table = asTable(value, "memdomain root")
+    parseMemDomainTable(table, shared)
+  }
+
+  private def parseMemDomainTable(table: Map[String, Value], shared: SharedMemFields): MemDomainParam = {
+    val bank = getTable(table, "bank").getOrElse(throw new RuntimeException("memdomain must define [bank]"))
+    val dma  = getTable(table, "dma").getOrElse(throw new RuntimeException("memdomain must define [dma]"))
+    val tlb  = getTable(table, "tlb").getOrElse(throw new RuntimeException("memdomain must define [tlb]"))
+    val tma  = getTable(table, "tma").getOrElse(throw new RuntimeException("memdomain must define [tma]"))
+    val mmio = getTable(table, "mmio").getOrElse(throw new RuntimeException("memdomain must define [mmio]"))
+    val mem  = getTable(table, "mem").getOrElse(throw new RuntimeException("memdomain must define [mem]"))
+
+    MemDomainParam(
+      bankNum = getInt(bank, "num"),
+      bankWidth = getInt(bank, "width"),
+      bankEntries = getInt(bank, "entries"),
+      bankMaskLen = getInt(bank, "maskLen"),
+      sharedEnable = shared.sharedEnable,
+      sharedEntries = shared.sharedEntries,
+      sharedDefaultGroupCount = shared.sharedDefaultGroupCount,
+      tlb_size = getInt(tlb, "size"),
+      dma_n_xacts = getInt(dma, "nXacts"),
+      dma_maxbytes = getInt(dma, "maxBytes"),
+      bankChannel = getInt(bank, "channel"),
+      max_in_flight_mem_reqs = getInt(dma, "maxInFlightMemReqs"),
+      dma_buswidth = getInt(dma, "busWidth"),
+      memAddrLen = getInt(mem, "addrLen"),
+      tmaReadChannel = getInt(tma, "readChannel"),
+      tmaWriteChannel = getInt(tma, "writeChannel"),
+      mmioBankNum = getInt(mmio, "bankNum"),
+      mmioBankEntries = getInt(mmio, "bankEntries"),
+      mmioBankWidth = getInt(mmio, "bankWidth"),
+      mmioReadWidth = getInt(mmio, "readWidth")
+    )
   }
 
   // ---------------------------------------------------------------------------

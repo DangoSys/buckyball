@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
+import framework.balldomain.blink.mmio.MmioRead
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 class BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int) extends Bundle with HasBallStatus {
@@ -14,4 +15,8 @@ class BlinkIO(b: GlobalConfig, inBW: Int, outBW: Int) extends Bundle with HasBal
   val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
   val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
   val subRobReq = Decoupled(new SubRobRow(b))
+
+  // MMIO read channel (one per Ball, used for metadata access).
+  // Balls that don't consume MMIO should tie this off via MmioRead.tieOff.
+  val mmioRead = Flipped(new MmioRead(b))
 }

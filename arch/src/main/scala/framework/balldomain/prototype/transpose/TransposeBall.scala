@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
+import framework.balldomain.blink.mmio.MmioRead
 import framework.balldomain.prototype.transpose.Transpose
 import framework.top.GlobalConfig
 
@@ -37,4 +38,7 @@ class TransposeBall(val b: GlobalConfig) extends Module with HasBlink {
 
   io.subRobReq.valid := false.B
   io.subRobReq.bits  := SubRobRow.tieOff(b)
+
+  // MMIO: this Ball does not consume MMIO metadata
+  MmioRead.tieOff(io.mmioRead)
 }

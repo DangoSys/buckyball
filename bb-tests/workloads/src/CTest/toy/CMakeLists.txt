@@ -113,11 +113,11 @@ add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_16xn_test transpose_16xn_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
-add_cross_platform_test_target(ctest_mxfp_test mxfp_test.c)
+add_cross_platform_test_target(ctest_mxfp2int_test mxfp2int_test.c)
 add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
 add_cross_platform_test_target(ctest_bfp_test bfp_test.c)
-add_cross_platform_test_target(ctest_quant_test quant_test.c)
-add_cross_platform_test_target(ctest_dequant_test dequant_test.c)
+add_cross_platform_test_target(ctest_fp2int_test fp2int_test.c)
+add_cross_platform_test_target(ctest_int2fp_test int2fp_test.c)
 add_cross_platform_test_target(ctest_tlb_test tlb_test.c)
 add_cross_platform_test_target(ctest_bdb_counter_test bdb_counter_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_basic_test gemmini_os_risc_basic_test.c)
@@ -156,11 +156,11 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_transpose_16xn_test
   ctest_transpose_matmul
   ctest_relu_test
-  ctest_mxfp_test
+  ctest_mxfp2int_test
   ctest_vsetvli
   ctest_bfp_test
-  ctest_quant_test
-  ctest_dequant_test
+  ctest_fp2int_test
+  ctest_int2fp_test
   ctest_tlb_test
   ctest_bdb_counter_test
   ctest_gemmini_os_risc_basic_test

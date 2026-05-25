@@ -123,6 +123,9 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
   ballDomain.bankWrite <> memDomain.io.ballDomain.bankWrite
 
+  // --- BallDomain <-> MemDomain (MMIO read path) ---
+  ballDomain.mmioRead <> memDomain.io.ballDomain.mmioRead
+
   // --- PTW ---
   io.ptw(0).req <> memDomain.io.ptw(0).req
   memDomain.io.ptw(0).resp <> io.ptw(0).resp

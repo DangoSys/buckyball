@@ -8,6 +8,7 @@ import framework.balldomain.bbus.BBus
 import framework.balldomain.decoder.BallDomainDecoder
 import framework.balldomain.rs.BallReservationStation
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
+import framework.balldomain.blink.mmio.MmioRead
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 
 /**
@@ -30,6 +31,8 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val bankRead          = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
   val bankWrite         = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  @public
+  val mmioRead          = IO(Vec(b.ballDomain.ballNum, Flipped(new MmioRead(b))))
   @public
   val subRobReq         = IO(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
 
@@ -65,6 +68,7 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //---------------------------------------------------------------------------
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
+  bbus.mmioRead <> mmioRead
 
   for (i <- 0 until b.ballDomain.ballNum) {
     subRobReq(i) <> bbus.subRobReq(i)

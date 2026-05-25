@@ -9,6 +9,7 @@ import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
+import framework.balldomain.blink.mmio.MmioRead
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices.
@@ -34,6 +35,8 @@ class BBus(val b: GlobalConfig) extends Module {
   val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
   val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  @public
+  val mmioRead  = IO(Vec(numBalls, Flipped(new MmioRead(b))))
   // balls - bbus - SubROB
   @public
   val subRobReq = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
@@ -104,6 +107,11 @@ class BBus(val b: GlobalConfig) extends Module {
   // Connect balls' subRobReq
   for (i <- 0 until numBalls) {
     subRobReq(i) <> balls(i).blink.subRobReq
+  }
+
+  // Connect balls' mmioRead (one per Ball)
+  for (i <- 0 until numBalls) {
+    mmioRead(i) <> balls(i).blink.mmioRead
   }
 
 }

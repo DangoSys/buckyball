@@ -31,8 +31,8 @@ include "ReluBall.td"
 include "TransposeBall.td"
 include "Im2colBall.td"
 include "SystolicArrayBall.td"
-include "QuantBall.td"
-include "DequantBall.td"
+include "Fp2IntBall.td"
+include "Int2FpBall.td"
 
 // Additional operations (MatMul, Print, Counter)
 include "BuckyballOps.td"
