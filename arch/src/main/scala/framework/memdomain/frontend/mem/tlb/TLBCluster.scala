@@ -1,4 +1,4 @@
-package framework.memdomain.frontend.outside_channel.tlb
+package framework.memdomain.frontend.mem.tlb
 
 import chisel3._
 import chisel3.util._

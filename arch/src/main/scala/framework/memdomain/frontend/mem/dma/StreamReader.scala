@@ -1,4 +1,4 @@
-package framework.memdomain.frontend.outside_channel.dma
+package framework.memdomain.frontend.mem.dma
 
 import chisel3._
 import chisel3.util._
@@ -6,7 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XRD}
 
-import framework.memdomain.frontend.outside_channel.tlb.BBTLBIO
+import framework.memdomain.frontend.mem.tlb.BBTLBIO
 import framework.top.GlobalConfig
 
 class BBReadRequest extends Bundle {

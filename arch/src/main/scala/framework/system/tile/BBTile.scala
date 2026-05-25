@@ -44,7 +44,7 @@ import framework.system.core.rocket.id.RVVRoCCDecode
 import framework.system.core.accelerator.BuckyballAccelerator
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
-import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import framework.memdomain.frontend.mem.MemConfigerIO
 import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
 
 /**

@@ -12,8 +12,8 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.mmio.MmioPool
 import framework.memdomain.frontend.MemFrontend
-import framework.memdomain.frontend.outside_channel.{MemConfigerIO}
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
+import framework.memdomain.frontend.mem.{MemConfigerIO}
+import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.memdomain.midend.MemMidend
 import framework.memdomain.backend.MemBackend
 
@@ -24,34 +24,26 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   @public
   val io = IO(new Bundle {
-    // -------------------------------------------------
-    // Command Channel
-    // -------------------------------------------------
+// Command Channel
     val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     val global_complete_o = Decoupled(new GlobalSchedComplete(b))
     val busy              = Output(Bool())
 
-    // -------------------------------------------------
-    // Inside Channel
-    // -------------------------------------------------
+// Inside Channel
     val ballDomain = new Bundle {
       val bankRead  = Vec(totalBallRead, new BankRead(b))
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
       val mmioRead  = Vec(b.ballDomain.ballNum, new MmioRead(b))
     }
 
-    // -------------------------------------------------
-    // Outside Channel
-    // -------------------------------------------------
+// Outside Channel
     val ptw       = Vec(1, new BBTLBPTWIO(b))
     val tlbExp    = Vec(1, new BBTLBExceptionIO)
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
     val hartid    = Input(UInt(b.core.xLen.W))
 
-    // -------------------------------------------------
-    // Shared memory path — exposed for tile-level sharing
-    // -------------------------------------------------
+// Shared memory path
     val shared_mem_req           = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_vbank_id    = Output(UInt(8.W))
@@ -73,9 +65,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   backend.io.shared_query_group_count := io.shared_query_group_count
   io.shared_query_vbank_id            := backend.io.shared_query_vbank_id
 
-  // -------------------------------------------------
-  // Connection with outside (all in frontend)
-  // -------------------------------------------------
+//===----------------------------------------------------------------------===//
+// Connection with outside (all in frontend)
+//===----------------------------------------------------------------------===//
   frontend.io.global_issue_i <> io.global_issue_i
   frontend.io.global_complete_o <> io.global_complete_o
   io.busy := frontend.io.busy
@@ -105,9 +97,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
 
-  // -------------------------------------------------
-  // MMIO subsystem wiring
-  // -------------------------------------------------
+//===----------------------------------------------------------------------===//
+// MMIO subsystem wiring
+//===----------------------------------------------------------------------===//
   // Alloc/dealloc from MemConfiger (mmio_set instruction)
   mmioPool.io.alloc := frontend.io.mmioAlloc
 

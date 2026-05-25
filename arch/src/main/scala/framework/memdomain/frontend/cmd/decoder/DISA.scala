@@ -1,4 +1,4 @@
-package framework.memdomain.frontend.cmd_channel.decoder
+package framework.memdomain.frontend.cmd.decoder
 
 import chisel3._
 import chisel3.util._

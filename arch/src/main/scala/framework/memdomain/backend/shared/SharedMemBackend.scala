@@ -6,7 +6,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank
-import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
 
 @instantiable

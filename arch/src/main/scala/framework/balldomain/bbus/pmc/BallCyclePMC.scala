@@ -45,7 +45,6 @@ class BallCyclePMC(val b: GlobalConfig) extends Module {
       val elapsed = cycleCounter - startTime(robId)
       ballTotalCycles(i) := ballTotalCycles(i) + elapsed
 
-      // DPI-C trace output
       pmcTraces(i).io.ball_id := i.U
       pmcTraces(i).io.rob_id  := robId
       pmcTraces(i).io.elapsed := elapsed

@@ -3,7 +3,7 @@ package framework.memdomain.backend
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import chisel3.util._
-import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
 import framework.memdomain.backend.privatepath.PrivateMemBackend
 

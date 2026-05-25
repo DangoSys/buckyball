@@ -1,10 +1,10 @@
-package framework.memdomain.frontend.cmd_channel.decoder
+package framework.memdomain.frontend.cmd.decoder
 
 import chisel3._
 import chisel3.util._
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.top.GlobalConfig
-import framework.memdomain.frontend.cmd_channel.decoder.DISA._
+import framework.memdomain.frontend.cmd.decoder.DISA._
 import freechips.rocketchip.tile._
 import chisel3.experimental.hierarchy.{instantiable, public}
 

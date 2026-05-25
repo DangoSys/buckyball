@@ -1,9 +1,9 @@
-package framework.memdomain.frontend.cmd_channel.rs
+package framework.memdomain.frontend.cmd.rs
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
-import framework.memdomain.frontend.cmd_channel.decoder.MemDecodeCmd
+import framework.memdomain.frontend.cmd.decoder.MemDecodeCmd
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
 

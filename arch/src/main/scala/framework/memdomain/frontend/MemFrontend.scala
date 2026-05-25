@@ -3,17 +3,17 @@ package framework.memdomain.frontend
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.tile._
-import framework.memdomain.frontend.outside_channel.dma.{StreamReader, StreamWriter}
-import framework.memdomain.frontend.outside_channel.{MemConfiger, MemConfigerIO, MemLoader, MemStorer}
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
+import framework.memdomain.frontend.mem.dma.{StreamReader, StreamWriter}
+import framework.memdomain.frontend.mem.{MemConfiger, MemConfigerIO, MemLoader, MemStorer}
+import framework.memdomain.frontend.mem.tlb.{BBTLBCluster, BBTLBExceptionIO, BBTLBIO, BBTLBPTWIO}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
 import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
-import framework.memdomain.frontend.cmd_channel.decoder.MemDomainDecoder
-import framework.memdomain.frontend.cmd_channel.rs.MemReservationStation
+import framework.memdomain.frontend.cmd.decoder.MemDomainDecoder
+import framework.memdomain.frontend.cmd.rs.MemReservationStation
 import framework.memdomain.utils.pmc.MemCyclePMC
 
 /**

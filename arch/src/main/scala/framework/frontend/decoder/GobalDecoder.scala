@@ -9,7 +9,7 @@ import framework.top.GlobalConfig
 import freechips.rocketchip.tile._
 
 import framework.frontend.decoder.GISA._
-import framework.memdomain.frontend.cmd_channel.decoder.DISA._
+import framework.memdomain.frontend.cmd.decoder.DISA._
 import framework.gpdomain.sequencer.decoder.DISA._
 import framework.frontend.scoreboard.BankAccessInfo
 

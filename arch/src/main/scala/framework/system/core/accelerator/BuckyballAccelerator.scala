@@ -11,8 +11,8 @@ import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.gpdomain.GpDomain
 import framework.memdomain.MemDomain
 import framework.memdomain.backend.MemRequestIO
-import framework.memdomain.frontend.outside_channel.{MemConfigerIO}
-import framework.memdomain.frontend.outside_channel.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
+import framework.memdomain.frontend.mem.{MemConfigerIO}
+import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.balldomain.BallDomain
 
 /**

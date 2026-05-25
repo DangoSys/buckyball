@@ -3,7 +3,7 @@ package framework.memdomain.backend.privatepath
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.memdomain.frontend.outside_channel.MemConfigerIO
+import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank

@@ -1,9 +1,9 @@
-package framework.memdomain.frontend.outside_channel
+package framework.memdomain.frontend.mem
 
 import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
-import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
+import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public}
 

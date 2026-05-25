@@ -3,7 +3,7 @@ package framework.memdomain.utils.pmc
 import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
-import framework.memdomain.frontend.cmd_channel.rs.{MemRsComplete, MemRsIssue}
+import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 @instantiable
