@@ -73,8 +73,10 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val state               = RegInit(idle)
 
   val iter_counter  = RegInit(0.U(b.frontend.iter_len.W))
-  val store_counter = RegInit(0.U(6.W))
+  val store_counter = RegInit(0.U(log2Ceil(config.lane + 1).W))
   val in_counter    = RegInit(0.U(b.frontend.iter_len.W))
+  val drainThreshold      = (2 * arraySize + 8).U
+  val inputReadyThreshold = if (arraySize <= 16) arraySize else 16
 
   // Use Reg with Vec type for proper register behavior
   val in_a_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))
@@ -86,7 +88,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   io.ld_ex_i.ready   := io.ex_st_o.ready
 
   io.ex_st_o.valid       := false.B
-  io.ex_st_o.bits.result := VecInit(Seq.fill(arraySize)(0.U(inputWidth.W)))
+  io.ex_st_o.bits.result := VecInit(Seq.fill(arraySize)(0.U(outputWidth.W)))
 
   for (row <- 0 until arraySize) {
     for (col <- 0 until arraySize) {
@@ -106,7 +108,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   }
 
   // PEs connection
-  when(in_counter === arraySize.U) {
+  when(in_counter === inputReadyThreshold.U) {
     iter_counter := iter_counter + 1.U
 
     for (row <- 0 until arraySize) {
@@ -173,7 +175,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   }
 
   // output data from PEs
-  when(iter_counter >= 40.U) {
+  when(iter_counter >= drainThreshold) {
     when(store_counter < arraySize.U) {
       io.ex_st_o.valid       := true.B
       io.ex_st_o.bits.result := VecInit(pes(store_counter).map(_.out_c))

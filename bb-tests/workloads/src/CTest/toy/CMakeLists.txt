@@ -112,6 +112,10 @@ add_cross_platform_test_target(ctest_im2col_test im2col_test.c)
 add_cross_platform_test_target(ctest_transpose_test transpose_test.c)
 add_cross_platform_test_target(ctest_transpose_16xn_test transpose_16xn_test.c)
 add_cross_platform_test_target(ctest_transpose_matmul transpose_matmul.c)
+add_cross_platform_test_target(ctest_systolic_matmul_4x4_ones systolic_matmul_4x4_ones.c)
+add_cross_platform_test_target(ctest_systolic_matmul_8x8_ones systolic_matmul_8x8_ones.c)
+add_cross_platform_test_target(ctest_systolic_matmul_16x16_ones systolic_matmul_16x16_ones.c)
+add_cross_platform_test_target(ctest_systolic_matmul_32x32_ones systolic_matmul_32x32_ones.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 add_cross_platform_test_target(ctest_mmio_minimal_test mmio_minimal_test.c)
 add_cross_platform_test_target(ctest_mxfp2int_test mxfp2int_test.c)
@@ -156,6 +160,10 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_transpose_test
   ctest_transpose_16xn_test
   ctest_transpose_matmul
+  ctest_systolic_matmul_4x4_ones
+  ctest_systolic_matmul_8x8_ones
+  ctest_systolic_matmul_16x16_ones
+  ctest_systolic_matmul_32x32_ones
   ctest_relu_test
   ctest_mxfp2int_test
   ctest_vsetvli

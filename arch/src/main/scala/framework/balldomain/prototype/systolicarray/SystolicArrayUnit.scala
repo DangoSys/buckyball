@@ -9,6 +9,8 @@ import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadReq, SramReadResp, SramWriteIO}
 
+import framework.balldomain.prototype.systolicarray.configs.SystolicBallParam
+
 class ctrl_ld_req(b: GlobalConfig) extends Bundle {
   val op1_bank      = UInt(log2Up(b.memDomain.bankNum).W)
   val op1_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
@@ -19,9 +21,10 @@ class ctrl_ld_req(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class SystolicArrayUnit(val b: GlobalConfig) extends Module {
-  val InputNum   = 16
-  val inputWidth = 8
-  val accWidth   = 32
+  val config     = SystolicBallParam()
+  val InputNum   = config.lane
+  val inputWidth = config.inputWidth
+  val accWidth   = config.outputWidth
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
@@ -66,12 +69,19 @@ class SystolicArrayUnit(val b: GlobalConfig) extends Module {
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req <> load.io.bankReadReq(i)
     load.io.bankReadResp(i) <> io.bankRead(i).io.resp
-    if (i == 0) {
-      io.bankRead(i).bank_id  := load.io.op1_bank_o
-      io.bankRead(i).group_id := 0.U
-    } else if (i == 1) {
-      io.bankRead(i).bank_id  := load.io.op2_bank_o
-      io.bankRead(i).group_id := 0.U
+    io.bankRead(i).group_id := 0.U
+    if (inBW <= 2) {
+      if (i == 0) {
+        io.bankRead(i).bank_id := load.io.op1_bank_o
+      } else if (i == 1) {
+        io.bankRead(i).bank_id := load.io.op2_bank_o
+      }
+    } else {
+      if (i < inBW / 2) {
+        io.bankRead(i).bank_id := load.io.op1_bank_o
+      } else {
+        io.bankRead(i).bank_id := load.io.op2_bank_o
+      }
     }
   }
 

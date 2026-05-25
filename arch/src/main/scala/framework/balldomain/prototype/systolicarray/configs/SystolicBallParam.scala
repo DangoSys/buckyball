@@ -16,10 +16,13 @@ case class SystolicBallParam(
 object SystolicBallParam {
   implicit val rw: ReadWriter[SystolicBallParam] = macroRW
 
-  def apply(): SystolicBallParam = {
-    val jsonStr = scala.io.Source.fromFile(
-      "src/main/scala/framework/balldomain/prototype/systolicarray/configs/default.json"
-    ).mkString
+  private val configDir =
+    "src/main/scala/framework/balldomain/prototype/systolicarray/configs"
+
+  def apply(): SystolicBallParam = fromJson("default")
+
+  def fromJson(name: String): SystolicBallParam = {
+    val jsonStr = scala.io.Source.fromFile(s"$configDir/$name.json").mkString
     read[SystolicBallParam](jsonStr)
   }
 

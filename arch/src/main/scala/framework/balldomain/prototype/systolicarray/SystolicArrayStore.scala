@@ -6,6 +6,7 @@ import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.memdomain.backend.banks.SramWriteIO
 import framework.top.GlobalConfig
+import framework.balldomain.prototype.systolicarray.configs.SystolicBallParam
 
 class ctrl_st_req(b: GlobalConfig) extends Bundle {
   val wr_bank      = UInt(log2Up(b.memDomain.bankNum).W)
@@ -22,12 +23,19 @@ class BankWriteEntry(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class SystolicArrayStore(val b: GlobalConfig) extends Module {
-  val accWidth = 32
-  val InputNum = 16
+  val config   = SystolicBallParam()
+  val InputNum = config.lane
+  val accWidth = config.outputWidth
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
     .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
   val outBW       = ballMapping.outBW
+
+  require(InputNum % outBW == 0)
+  require(
+    InputNum / outBW * accWidth <= b.memDomain.bankWidth,
+    s"SystolicArrayBall outBW=$outBW is too small for lane=$InputNum (need at least ${InputNum * accWidth / b.memDomain.bankWidth} write ports)"
+  )
 
   @public
   val io = IO(new Bundle {
@@ -55,7 +63,8 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
   when(io.ctrl_st_i.fire) {
     wr_bank      := io.ctrl_st_i.bits.wr_bank
     wr_bank_addr := io.ctrl_st_i.bits.wr_bank_addr
-    iter         := (io.ctrl_st_i.bits.iter + 15.U) & (~15.U(b.frontend.iter_len.W))
+    val laneMask = (InputNum - 1).U(b.frontend.iter_len.W)
+    iter         := (io.ctrl_st_i.bits.iter + laneMask) & (~laneMask).asUInt
     iter_counter := 0.U
     state        := busy
   }
@@ -120,7 +129,8 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
 // Reset iter counter, commit cmdResp, return to idle state
 // -----------------------------------------------------------------------------
   val allQueuesEmpty  = writeQueues.forall(q => !q.deq.valid)
-  val allDataEnqueued = state === busy && iter_counter >= iter
+  val inputReadyThreshold = if (InputNum <= 16) InputNum else 16
+  val allDataEnqueued = state === busy && iter_counter >= inputReadyThreshold.U
 
   when(allDataEnqueued && allQueuesEmpty) {
     state                    := idle
