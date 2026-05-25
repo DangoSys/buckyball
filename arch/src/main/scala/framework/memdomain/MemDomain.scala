@@ -145,6 +145,13 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   midend.io.bankWrite(totalBallWrite).bankWrite.group_id     := loaderBankWrite.group_id
   midend.io.bankWrite(totalBallWrite).is_shared              := frontend.io.interdma.write_is_shared
 
+  // Request ready mux: select MMIO or main bank ready
+  loaderBankWrite.io.req.ready := Mux(
+    destIsMmio,
+    mmioPool.io.write.req.ready,
+    midend.io.bankWrite(totalBallWrite).bankWrite.io.req.ready
+  )
+
   // Response mux: select MMIO or main bank response
   loaderBankWrite.io.resp.valid := Mux(
     destIsMmio,
