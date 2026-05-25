@@ -38,4 +38,6 @@ tests = [
     "ctest_gemmini_os_risc_shift_test-linux",
     "ctest_gemmini_ws_cisc_conv_test-linux",
     "ctest_gemmini_ws_risc_basic_test-linux",
+    "ctest_mmio_minimal_test-linux",
+    "ctest_mxfp2int_test-linux",
 ]

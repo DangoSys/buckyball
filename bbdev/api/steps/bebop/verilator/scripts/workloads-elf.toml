@@ -37,6 +37,8 @@ tests = [
     "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
     "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
     "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
+    "ctest_mmio_minimal_test_singlecore-baremetal",
+    "ctest_mxfp2int_test_singlecore-baremetal",
 
     "ctest_tlb_test_singlecore-baremetal",
 ]
