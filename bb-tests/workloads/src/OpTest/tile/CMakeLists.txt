@@ -34,11 +34,13 @@ add_custom_command(
     COMMAND ${ELF_CC} ${C_FLAGS}
         -o ${CMAKE_CURRENT_BINARY_DIR}/optest_tile_matmul_singlecore-baremetal
         ${BBSW_BAREMETAL_DIR}/crt0.S
+        ${BBSW_BAREMETAL_DIR}/syscalls.c
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
         ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
         ${BBSW_BAREMETAL_DIR}/crt0.S
+        ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking optest_tile_matmul_singlecore-baremetal"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM

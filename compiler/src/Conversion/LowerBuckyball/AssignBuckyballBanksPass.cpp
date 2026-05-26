@@ -263,7 +263,7 @@ public:
         uint64_t rs1 = fieldBits(*in, 0, 9) | fieldBits(*out, 20, 29) |
                        fieldBits(*iter, 30, 63);
         Value rs2 = q.getScale();
-        b.create<buckyball::QuantIntrOp>(loc, cstI64(b, loc, rs1), rs2);
+        b.create<buckyball::Fp2IntIntrOp>(loc, cstI64(b, loc, rs1), rs2);
         q.getOutBankOut().replaceAllUsesWith(q.getOutBank());
         op.erase();
         continue;
@@ -281,7 +281,7 @@ public:
         uint64_t rs1 = fieldBits(*in, 0, 9) | fieldBits(*out, 20, 29) |
                        fieldBits(*iter, 30, 63);
         Value rs2 = dq.getScale();
-        b.create<buckyball::DequantIntrOp>(loc, cstI64(b, loc, rs1), rs2);
+        b.create<buckyball::Int2FpIntrOp>(loc, cstI64(b, loc, rs1), rs2);
         dq.getOutBankOut().replaceAllUsesWith(dq.getOutBank());
         op.erase();
         continue;

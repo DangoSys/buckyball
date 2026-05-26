@@ -63,7 +63,7 @@ def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,
 def Fp2IntIntrOp : Buckyball_IntrOpBase<"fp2int">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def Int2FpIntrOp : Buckyball_IntrOpBase<"defp2int">,
+def Int2FpIntrOp : Buckyball_IntrOpBase<"int2fp">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 def ReluIntrOp : Buckyball_IntrOpBase<"relu">,

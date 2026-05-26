@@ -450,37 +450,37 @@ struct BuckyballIm2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
 };
 
 //===----------------------------------------------------------------------===//
-// Quant / Dequant — 51_fp2int.c, 52_int2fp.c (rs2 = fp32 bits, bits [31:0])
+// Fp2Int / Int2Fp — 51_fp2int.c, 52_int2fp.c (rs2 = fp32 bits, bits [31:0])
 //===----------------------------------------------------------------------===//
 
-struct BuckyballFp2IntLowering : public ConvertOpToLLVMPattern<QuantOp> {
-  using ConvertOpToLLVMPattern<QuantOp>::ConvertOpToLLVMPattern;
+struct BuckyballFp2IntLowering : public ConvertOpToLLVMPattern<Fp2IntOp> {
+  using ConvertOpToLLVMPattern<Fp2IntOp>::ConvertOpToLLVMPattern;
 
   LogicalResult
-  matchAndRewrite(QuantOp op, OpAdaptor adaptor,
+  matchAndRewrite(Fp2IntOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
     Value rs2 = adaptor.getScale();
-    rewriter.replaceOpWithNewOp<QuantIntrOp>(op, rs1, rs2);
+    rewriter.replaceOpWithNewOp<Fp2IntIntrOp>(op, rs1, rs2);
     return success();
   }
 };
 
-struct BuckyballInt2FpLowering : public ConvertOpToLLVMPattern<DequantOp> {
-  using ConvertOpToLLVMPattern<DequantOp>::ConvertOpToLLVMPattern;
+struct BuckyballInt2FpLowering : public ConvertOpToLLVMPattern<Int2FpOp> {
+  using ConvertOpToLLVMPattern<Int2FpOp>::ConvertOpToLLVMPattern;
 
   LogicalResult
-  matchAndRewrite(DequantOp op, OpAdaptor adaptor,
+  matchAndRewrite(Int2FpOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
     Value rs2 = adaptor.getScale();
-    rewriter.replaceOpWithNewOp<DequantIntrOp>(op, rs1, rs2);
+    rewriter.replaceOpWithNewOp<Int2FpIntrOp>(op, rs1, rs2);
     return success();
   }
 };
@@ -565,10 +565,10 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target) {
   target.addLegalOp<FenceIntrOp, MvinIntrOp, MvoutIntrOp, MulWarp16IntrOp,
-                    TransposeIntrOp, Im2colIntrOp, QuantIntrOp, DequantIntrOp,
+                    TransposeIntrOp, Im2colIntrOp, Fp2IntIntrOp, Int2FpIntrOp,
                     ReluIntrOp, MsetIntrOp, SystolicIntrOp>();
   target.addIllegalOp<FenceOp, MsetOp, MvinOp, MvoutOp, MatMulOp, MulWarp16Op,
-                      TransposeOp, Im2colOp, QuantOp, DequantOp, ReluOp,
+                      TransposeOp, Im2colOp, Fp2IntOp, Int2FpOp, ReluOp,
                       SystolicOp, BankAllocOp, BankReleaseOp, BankMvinOp,
                       BankMvoutOp, BankMulWarp16Op, BankTransposeOp,
                       BankIm2colOp, BankFp2IntOp, BankInt2FpOp>();
