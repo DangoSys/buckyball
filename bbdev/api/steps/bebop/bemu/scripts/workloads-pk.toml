@@ -6,7 +6,7 @@
 # Each entry under tests is the file STEM (without extension).
 
 [workloads]
-search_path = "workloads/src/CTest/toy"
+search_path = "workloads/src"
 tests = [
     "ctest_mvin_mvout_test-linux",
     "ctest_vecunit_matmul_16xn_ones-linux",
@@ -40,4 +40,8 @@ tests = [
     "ctest_gemmini_ws_risc_basic_test-linux",
     "ctest_mmio_minimal_test-linux",
     "ctest_mxfp2int_test-linux",
+
+    "optest_buckyball_matmul_64x16_16x64-linux",
+    "optest_buckyball_matmul_1024x16_16x1024-linux",
+    "optest_tile_matmul_127x17_17x127-linux",
 ]
