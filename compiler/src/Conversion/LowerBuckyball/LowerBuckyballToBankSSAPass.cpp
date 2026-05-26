@@ -79,8 +79,8 @@ public:
         cTy.getShape()[1] != static_cast<int64_t>(n))
       return rewriter.notifyMatchFailure(op, "output dimensions must match");
     if (m % 16 != 0 || k % 16 != 0 || n % 16 != 0)
-      return rewriter.notifyMatchFailure(op,
-                                         "M, K and N must be multiples of 16");
+      return rewriter.notifyMatchFailure(
+          op, "buckyball.matmul requires M, K and N to be multiples of 16");
 
     uint64_t strideB = 0;
     uint64_t strideC = 0;

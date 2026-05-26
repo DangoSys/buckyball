@@ -13,7 +13,10 @@ add_subdirectory(tile)
 add_subdirectory(linalg)
 
 add_custom_target(OpTest-all ALL DEPENDS
-    optest_buckyball_matmul_singlecore_baremetal
-    optest_tile_matmul_singlecore_baremetal
+    optest_buckyball_matmul_64x16_16x64_singlecore_baremetal
+    optest_buckyball_matmul_64x16_16x64_linux
+    optest_buckyball_matmul_1024x16_16x1024_singlecore_baremetal
+    optest_buckyball_matmul_1024x16_16x1024_linux
+    optest_tile_matmul_127x17_17x127
     optest_linalg_matmul_singlecore_baremetal
 )

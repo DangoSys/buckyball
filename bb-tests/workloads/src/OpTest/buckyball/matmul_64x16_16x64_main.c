@@ -1,20 +1,28 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static void fail(void) {
+#ifdef BAREMETAL
   volatile uint32_t *sim_exit = (volatile uint32_t *)0x60000000;
   *sim_exit = 1;
   while (1) {
   }
+#else
+  exit(1);
+#endif
 }
 
 // Called from MLIR @main after matmul completes.
 // Uses the lowered memref ABI:
 //   allocated, aligned, offset, sizes[0], sizes[1], strides[0], strides[1]
 // Expected C[i][j] = 16.0f for all elements.
-void check_result(int32_t *allocated, int32_t *aligned, int64_t offset,
-                  int64_t size0, int64_t size1, int64_t stride0,
-                  int64_t stride1) {
+#ifdef __cplusplus
+extern "C"
+#endif
+    void check_result(int32_t *allocated, int32_t *aligned, int64_t offset,
+                      int64_t size0, int64_t size1, int64_t stride0,
+                      int64_t stride1) {
   (void)allocated;
 
   if (size0 != 64 || size1 != 64 || stride0 != 64 || stride1 != 1) {

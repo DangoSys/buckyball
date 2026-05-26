@@ -94,19 +94,27 @@ public:
 
     auto aType = cast<MemRefType>(aMemArray.getType());
     auto bType = cast<MemRefType>(bMemArray.getType());
+    auto cType = cast<MemRefType>(cMemArray.getType());
 
     // A[M][K], B[K][N], C[M][N]
     auto aShape = aType.getShape();
     auto bShape = bType.getShape();
+    auto cShape = cType.getShape();
     size_t M = aShape[aShape.size() - 2];
     size_t K = aShape[aShape.size() - 1];
     size_t N = bShape[bShape.size() - 1];
 
-    // Hardware constraint: K and N must be multiples of 16
-    // If not aligned, allocate padded buffers and copy
-    bool needPadding = (K % 16 != 0) || (N % 16 != 0);
+    if (bShape[bShape.size() - 2] != (int64_t)K ||
+        cShape[cShape.size() - 2] != (int64_t)M ||
+        cShape[cShape.size() - 1] != (int64_t)N)
+      return tileMatMulOp.emitError("matmul input/output shapes mismatch");
+
+    // Buckyball matmul consumes Mx16 @ 16xN tiles. Pad at tile level so the
+    // lower Buckyball layer only sees regular tiles.
+    size_t M_pad = ceilDiv(M, 16) * 16;
     size_t K_pad = ceilDiv(K, 16) * 16;
     size_t N_pad = ceilDiv(N, 16) * 16;
+    bool needPadding = (M_pad != M) || (K_pad != K) || (N_pad != N);
 
     Value aMemArrayPadded = aMemArray;
     Value bMemArrayPadded = bMemArray;
@@ -116,10 +124,12 @@ public:
       auto elemType = aType.getElementType();
 
       // Allocate padded buffers
-      auto aPadType = MemRefType::get({(int64_t)M, (int64_t)K_pad}, elemType);
+      auto aPadType =
+          MemRefType::get({(int64_t)M_pad, (int64_t)K_pad}, elemType);
       auto bPadType =
           MemRefType::get({(int64_t)K_pad, (int64_t)N_pad}, elemType);
-      auto cPadType = MemRefType::get({(int64_t)M, (int64_t)N_pad}, elemType);
+      auto cPadType =
+          MemRefType::get({(int64_t)M_pad, (int64_t)N_pad}, elemType);
 
       aMemArrayPadded = rewriter.create<memref::AllocOp>(loc, aPadType);
       bMemArrayPadded = rewriter.create<memref::AllocOp>(loc, bPadType);
@@ -155,6 +165,7 @@ public:
     }
 
     // Update dimensions for tiling (use padded dimensions if needed)
+    size_t M_tiling = needPadding ? M_pad : M;
     size_t K_tiling = needPadding ? K_pad : K;
     size_t N_tiling = needPadding ? N_pad : N;
 
@@ -165,7 +176,7 @@ public:
     const size_t kMeta = warp;
 
     // Pad dimensions to multiples of meta lengths
-    const size_t mPad = ceilDiv(M, mMeta) * mMeta;
+    const size_t mPad = ceilDiv(M_tiling, mMeta) * mMeta;
     const size_t nPad = ceilDiv(N_tiling, nMeta) * nMeta;
     const size_t kPad = ceilDiv(K_tiling, kMeta) * kMeta;
 
@@ -267,6 +278,8 @@ public:
                                   rewriter.getIndexAttr(1)});
 
     rewriter.create<buckyball::MatMulOp>(loc, aTile, bTile, cTile);
+
+    rewriter.setInsertionPointAfter(kLoop);
 
     // Copy back C from padded buffer to original output
     if (needPadding) {
