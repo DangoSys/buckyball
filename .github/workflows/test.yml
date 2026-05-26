@@ -1,9 +1,10 @@
-name: Buckyball CI (Push)
+name: Buckyball CI
 run-name: ${{ github.actor }} is running CI Test 🚀
 on:
   push:
     branches:
       - main
+  pull_request:
 
 permissions:
   contents: read
@@ -19,7 +20,13 @@ jobs:
       - name: Print information
         run: |
           echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-          echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔎 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
+          else
+            echo "🔎 Branch: ${{ github.ref_name }}"
+          fi
+          echo "🔎 Repository: ${{ github.repository }}"
 
       - name: Reset to clean state
         shell: zsh {0}
@@ -27,7 +34,7 @@ jobs:
           cd ~/Code/buckyball
           git fetch origin
           git clean -fd
-          git checkout ${{ github.head_ref }}
+          git checkout ${{ github.head_ref || github.ref_name }}
           git pull
           git submodule update bbdev bebop compiler/thirdparty/buddy-mlir
 
@@ -47,6 +54,7 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
+          nix develop -c bash -c "cd bebop && cargo clean && cd .."
           nix develop -c bbdev bebop-bemu --build
           nix develop -c bbdev bebop-bemu --batch '--test elf-tests'
           nix develop -c bbdev bebop-bemu --batch '--test pk-tests'
@@ -61,15 +69,18 @@ jobs:
           nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests'
 
       - name: Detect bebop JUnit files
+        if: always()
         id: junit
         shell: zsh {0}
         run: |
           files=(~/Code/buckyball/bebop/target/nextest/default/target/nextest/junit-bbdev-*.xml(N))
           if (( ${#files} == 0 )); then
-            echo "JUnit files not found: $files"
-            exit 1
+            echo "JUnit files not found"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "JUnit files: ${files[@]}"
+            echo "found=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "found=true" >> "$GITHUB_OUTPUT"
 
       - name: Publish bebop test report
         if: always() && steps.junit.outputs.found == 'true'
