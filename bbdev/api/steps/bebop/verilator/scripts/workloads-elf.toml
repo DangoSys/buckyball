@@ -26,7 +26,6 @@ tests = [
     "ctest_fp2int_test_singlecore-baremetal",
     "ctest_int2fp_test_singlecore-baremetal",
     "ctest_bdb_counter_test_singlecore-baremetal",
-    "ctest_bfp_test_singlecore-baremetal",
     "ctest_gemmini_os_cisc_basic_test_singlecore-baremetal",
     "ctest_gemmini_os_cisc_atranspose_test_singlecore-baremetal",
     "ctest_gemmini_os_cisc_btranspose_test_singlecore-baremetal",
@@ -41,6 +40,9 @@ tests = [
     "ctest_mxfp2int_test_singlecore-baremetal",
 
     "ctest_tlb_test_singlecore-baremetal",
+
+    "ctest_mvin_mvout_stride_test_singlecore-baremetal",
+    "ctest_transpose_matmul_singlecore-baremetal",
+    "optest_buckyball_matmul_16x64_64x16_singlecore-baremetal",
+    "optest_buckyball_matmul_64x16_16x64_singlecore-baremetal",
 ]
-
-

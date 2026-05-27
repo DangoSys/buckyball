@@ -9,6 +9,7 @@
 search_path = "workloads/src"
 tests = [
     "ctest_mvin_mvout_test-linux",
+    "ctest_mvin_mvout_stride_test-linux",
     "ctest_vecunit_matmul_16xn_ones-linux",
     "ctest_vecunit_matmul_16xn_random1-linux",
     "ctest_vecunit_matmul_16xn_random2-linux",

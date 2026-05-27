@@ -69,6 +69,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_cmd = (
         f"cargo run --features verilator "
         f"--config=\"env.ARCH_CONFIG='{arch_config}'\" "
+        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\" "
         f"-- verilator "
         f"--elf=\"{binary_path}\" "
         f"--log-dir=\"{log_dir}\" "

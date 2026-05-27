@@ -78,6 +78,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         },
         trace_id=origin_tid,
     )
+    if build_result.returncode != 0:
+        return
 
     # Continue routing to sim if from run workflow
     if input_data.get("from_run_workflow"):
