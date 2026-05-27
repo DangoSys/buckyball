@@ -62,6 +62,8 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val cfg_in_shift     = RegInit(0.U(log2Up(config.accWidth).W))
   val cfg_a_transpose  = RegInit(false.B)
   val cfg_bd_transpose = RegInit(false.B)
+  val zero_op2         = RegInit(false.B)
+  val zero_op1_tail    = RegInit(false.B)
 
   val sIdle :: sPreloadRead :: sPreloadFeed :: sComputeRead :: sComputeFeed :: sComputeFlush :: sFlush :: sDrain :: sStore :: sCommit :: Nil =
     Enum(10)
@@ -89,6 +91,9 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val store_row_cnt = RegInit(0.U(log2Up(DIM + 1).W))
   val total_rows    = RegInit(DIM.U(log2Up(DIM + 1).W))
   val req_sent      = RegInit(false.B)
+  val read_done     = RegInit(VecInit(Seq.fill(inBW)(false.B)))
+  val xpose_ready   = RegInit(false.B)
+  val xpose_row_cnt = RegInit(0.U(log2Up(DIM + 1).W))
 
   val sub_cmd = io.cmdReq.bits.cmd.special(3, 0)
 
@@ -100,6 +105,8 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val outBuf          = Reg(Vec(DIM, Vec(config.meshColumns, Vec(config.tileColumns, accType))))
   val outBufRows      = RegInit(0.U(log2Up(DIM + 1).W))
   val outBufCollected = RegInit(0.U(log2Up(DIM + 1).W))
+  val op1Buf          = Reg(Vec(DIM, Vec(DIM, inputType)))
+  val op2Buf          = Reg(Vec(DIM, Vec(DIM, inputType)))
 
   val port_written = RegInit(VecInit(Seq.fill(outBW)(false.B)))
 }

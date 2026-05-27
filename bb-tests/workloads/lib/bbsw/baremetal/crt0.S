@@ -27,9 +27,10 @@ bss_done:
 
     call main
 
-    /* if main returns, write 0 to sim_exit */
+    /* if main returns, write its return code to sim_exit */
+    mv   t0, a0
     li   a0, 0x60000000
-    sw   zero, 0(a0)
+    sw   t0, 0(a0)
 1:  j    1b
 
 /* Trap handler: print mcause and mepc, then exit */

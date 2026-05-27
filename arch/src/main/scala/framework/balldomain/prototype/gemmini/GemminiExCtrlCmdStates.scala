@@ -16,6 +16,8 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
       op2_bank       := io.cmdReq.bits.cmd.op2_bank
       wr_bank        := io.cmdReq.bits.cmd.wr_bank
       total_rows     := Mux(io.cmdReq.bits.cmd.iter === 0.U, DIM.U, io.cmdReq.bits.cmd.iter)
+      zero_op2       := io.cmdReq.bits.cmd.special(4)
+      zero_op1_tail  := io.cmdReq.bits.cmd.special(5)
 
       when(sub_cmd === GemminiSubCmd.CONFIG) {
         cfg_dataflow     := io.cmdReq.bits.cmd.special(4)
@@ -30,12 +32,15 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
         req_sent     := false.B
         state        := sPreloadRead
       }.elsewhen(sub_cmd === GemminiSubCmd.COMPUTE_PRELOADED || sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED) {
-        read_row_cnt    := 0.U
-        feed_row_cnt    := 0.U
-        outBufRows      := 0.U
-        outBufCollected := 0.U
-        req_sent        := false.B
-        state           := sComputeRead
+        read_row_cnt        := 0.U
+        feed_row_cnt        := 0.U
+        outBufRows          := 0.U
+        outBufCollected     := 0.U
+        req_sent            := false.B
+        xpose_ready         := false.B
+        xpose_row_cnt       := 0.U
+        read_done.foreach(_ := false.B)
+        state               := sComputeRead
       }.elsewhen(sub_cmd === GemminiSubCmd.FLUSH) {
         state := sFlush
       }

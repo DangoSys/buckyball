@@ -12,12 +12,22 @@ trait GemminiExCtrlComputeReadState { this: GemminiExCtrl =>
       rdQueue0.io.deq.ready := true.B
       rdQueue1.io.deq.ready := true.B
     }.elsewhen(read_row_cnt < total_rows) {
-      io.bankReadReq(0).valid     := true.B
+      val op1Zero = zero_op1_tail && read_row_cnt =/= 0.U
+      io.bankReadReq(0).valid     := !op1Zero && !read_done(0)
       io.bankReadReq(0).bits.addr := read_row_cnt
-      io.bankReadReq(1).valid     := true.B
+      io.bankReadReq(1).valid     := !zero_op2 && !read_done(1)
       io.bankReadReq(1).bits.addr := read_row_cnt
-      when(io.bankReadReq(0).ready && io.bankReadReq(1).ready) {
-        read_row_cnt := read_row_cnt + 1.U
+      when(io.bankReadReq(0).fire) {
+        read_done(0) := true.B
+      }
+      when(io.bankReadReq(1).fire) {
+        read_done(1) := true.B
+      }
+      when(
+        (op1Zero || read_done(0) || io.bankReadReq(0).fire) && (zero_op2 || read_done(1) || io.bankReadReq(1).fire)
+      ) {
+        read_row_cnt        := read_row_cnt + 1.U
+        read_done.foreach(_ := false.B)
       }
     }.otherwise {
       state := sComputeFeed

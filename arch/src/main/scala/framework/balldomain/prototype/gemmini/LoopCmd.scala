@@ -14,16 +14,19 @@ object LoopSubCmdType {
 }
 
 class LoopSubCmd(val b: GlobalConfig) extends Bundle {
-  val cmdType      = UInt(3.W)
-  val bank_id      = UInt(log2Up(b.memDomain.bankNum).W)
-  val dram_addr    = UInt(b.memDomain.memAddrLen.W)
-  val iter         = UInt(b.frontend.iter_len.W)
-  val bank_row     = UInt(5.W)
-  val bank_col     = UInt(5.W)
-  val op1_bank     = UInt(log2Up(b.memDomain.bankNum).W)
-  val op2_bank     = UInt(log2Up(b.memDomain.bankNum).W)
-  val wr_bank      = UInt(log2Up(b.memDomain.bankNum).W)
-  val compute_mode = UInt(2.W)
+  val cmdType       = UInt(3.W)
+  val bank_id       = UInt(log2Up(b.memDomain.bankNum).W)
+  val dram_addr     = UInt(b.memDomain.memAddrLen.W)
+  val stride        = UInt(19.W)
+  val iter          = UInt(b.frontend.iter_len.W)
+  val bank_row      = UInt(5.W)
+  val bank_col      = UInt(5.W)
+  val op1_bank      = UInt(log2Up(b.memDomain.bankNum).W)
+  val op2_bank      = UInt(log2Up(b.memDomain.bankNum).W)
+  val wr_bank       = UInt(log2Up(b.memDomain.bankNum).W)
+  val compute_mode  = UInt(2.W)
+  val zero_op2      = Bool()
+  val zero_op1_tail = Bool()
 }
 
 class LoopCmd(val b: GlobalConfig) extends Bundle {

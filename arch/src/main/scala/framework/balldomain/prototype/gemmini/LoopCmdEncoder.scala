@@ -80,7 +80,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
           slot.cmd.domain_id                := DomainId.MEM
           slot.cmd.cmd.funct                := 0x21.U // MVIN (enable=010, opcode=1)
           slot.cmd.cmd.rs1Data              := lsub.bits.bank_id | (lsub.bits.iter << 30)
-          slot.cmd.cmd.rs2Data              := lsub.bits.dram_addr
+          slot.cmd.cmd.rs2Data              := lsub.bits.dram_addr | (lsub.bits.stride << 39)
           slot.cmd.bankAccess.wr_bank_valid := true.B
           slot.cmd.bankAccess.wr_bank_id    := lsub.bits.bank_id
         }
@@ -88,7 +88,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
           slot.cmd.domain_id                  := DomainId.MEM
           slot.cmd.cmd.funct                  := 0x10.U // MVOUT (enable=001, opcode=0)
           slot.cmd.cmd.rs1Data                := lsub.bits.bank_id | (lsub.bits.iter << 30)
-          slot.cmd.cmd.rs2Data                := lsub.bits.dram_addr
+          slot.cmd.cmd.rs2Data                := lsub.bits.dram_addr | (lsub.bits.stride << 39)
           slot.cmd.bankAccess.rd_bank_0_valid := true.B
           slot.cmd.bankAccess.rd_bank_0_id    := lsub.bits.bank_id
         }
@@ -119,10 +119,11 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
             lsub.bits.compute_mode === 0.U,
             2.U,
             3.U
-          )
+          ) | (lsub.bits.zero_op2 << 4) |
+            (lsub.bits.zero_op1_tail << 5)
           slot.cmd.bankAccess.rd_bank_0_valid := true.B
           slot.cmd.bankAccess.rd_bank_0_id    := lsub.bits.op1_bank
-          slot.cmd.bankAccess.rd_bank_1_valid := true.B
+          slot.cmd.bankAccess.rd_bank_1_valid := !lsub.bits.zero_op2
           slot.cmd.bankAccess.rd_bank_1_id    := lsub.bits.op2_bank
           slot.cmd.bankAccess.wr_bank_valid   := true.B
           slot.cmd.bankAccess.wr_bank_id      := lsub.bits.wr_bank

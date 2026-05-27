@@ -36,13 +36,8 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
       mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
       mesh.io.req.bits.pe_control.propagate := 1.U
       mesh.io.req.bits.pe_control.shift     := cfg_in_shift
-      // Buckyball sends preload/compute as separate commands, so the
-      // AlwaysOutTransposer inside MeshWithDelays cannot be primed with
-      // compute-A during preload (unlike Chipyard's interleaved flow).
-      // Negate here so MeshWithDelays' internal !a_transpose yields false,
-      // keeping the transposer inactive.  Software must pre-transpose A.
-      mesh.io.req.bits.a_transpose          := Mux(cfg_dataflow === Dataflow.OS.id.U, !cfg_a_transpose, cfg_a_transpose)
-      mesh.io.req.bits.bd_transpose         := cfg_bd_transpose
+      mesh.io.req.bits.a_transpose          := Mux(cfg_dataflow === Dataflow.OS.id.U, true.B, cfg_a_transpose)
+      mesh.io.req.bits.bd_transpose         := Mux(cfg_dataflow === Dataflow.OS.id.U, false.B, cfg_bd_transpose)
       mesh.io.req.bits.total_rows           := total_rows
       mesh.io.req.bits.tag.rob              := robIdAsTag8(rob_id_reg)
       mesh.io.req.bits.flush                := 0.U

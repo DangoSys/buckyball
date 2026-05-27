@@ -22,6 +22,7 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
   val DIM       = config.blockSize
   val elemSize  = config.inputWidth / 8
   val accBytes  = config.accWidth / 8
+  val bankBytes = b.memDomain.bankWidth / 8
   val bankIdLen = log2Up(b.memDomain.bankNum)
 
   @public
@@ -83,25 +84,37 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
   }
 
   // Helper to build an MVIN slot
-  def mvinSlot(bankId: UInt, addr: UInt, iter: UInt): Valid[LoopSubCmd] = {
+  def mvinSlot(
+    bankId: UInt,
+    addr:   UInt,
+    iter:   UInt,
+    stride: UInt
+  ): Valid[LoopSubCmd] = {
     val v = Wire(Valid(new LoopSubCmd(b)))
     v.valid          := true.B
     v.bits           := 0.U.asTypeOf(new LoopSubCmd(b))
     v.bits.cmdType   := LoopSubCmdType.MVIN
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
+    v.bits.stride    := stride
     v.bits.iter      := iter
     v
   }
 
   // Helper to build an MVOUT slot
-  def mvoutSlot(bankId: UInt, addr: UInt, iter: UInt): Valid[LoopSubCmd] = {
+  def mvoutSlot(
+    bankId: UInt,
+    addr:   UInt,
+    iter:   UInt,
+    stride: UInt
+  ): Valid[LoopSubCmd] = {
     val v = Wire(Valid(new LoopSubCmd(b)))
     v.valid          := true.B
     v.bits           := 0.U.asTypeOf(new LoopSubCmd(b))
     v.bits.cmdType   := LoopSubCmdType.MVOUT
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
+    v.bits.stride    := stride
     v.bits.iter      := iter
     v
   }
@@ -118,6 +131,12 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
 
   def addrC(i: UInt, j: UInt): UInt =
     cfg.dram_addr_c + i * cfg.stride_c + j * (DIM * accBytes).U
+
+  def inMemStride(bytes: UInt): UInt =
+    (bytes / bankBytes.U)(18, 0)
+
+  def outMemStride(bytes: UInt): UInt =
+    (bytes / (bankBytes * 4).U)(18, 0)
 
   // Next iterator values (advance k, then j, then i)
   val next_k = Wire(UInt(16.W))
@@ -169,8 +188,8 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Row 1: [MVIN_A(0), MVIN_B(0), --, --]
     is(sPrimeLoad) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvinSlot(cfg.bank_a, addrA(0.U, 0.U), DIM.U)
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_b, addrB(0.U, 0.U), DIM.U)
+      io.cmd.bits.slots(0) := mvinSlot(cfg.bank_a, addrA(0.U, 0.U), DIM.U, inMemStride(cfg.stride_a))
+      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_b, addrB(0.U, 0.U), DIM.U, inMemStride(cfg.stride_b))
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
@@ -216,9 +235,9 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Main loop Row 2: [MVOUT(cur), MVIN_A(next), MVIN_B(next), --]
     is(sMainRow2) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U)
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_a, addrA(next_i, next_k), DIM.U)
-      io.cmd.bits.slots(2) := mvinSlot(cfg.bank_b, addrB(next_k, next_j), DIM.U)
+      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U, outMemStride(cfg.stride_c))
+      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_a, addrA(next_i, next_k), DIM.U, inMemStride(cfg.stride_a))
+      io.cmd.bits.slots(2) := mvinSlot(cfg.bank_b, addrB(next_k, next_j), DIM.U, inMemStride(cfg.stride_b))
       io.cmd.bits.slots(3) := emptySlot()
 
       when(io.cmd.fire) {
@@ -234,7 +253,7 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Drain: emit final MVOUT for last iteration
     is(sDrainLast) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U)
+      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U, outMemStride(cfg.stride_c))
       io.cmd.bits.slots(1) := emptySlot()
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()

@@ -187,32 +187,38 @@ public:
     // illegal mvin depths before N/M growth is considered.
     size_t mTileLen = 1, nTileLen = 1, kTileLen = 1;
 
-    while ((kTileLen + 1) * kMeta <= kPad &&
-           computeBankRows(1, 1, kTileLen + 1) <= (size_t)bankDepth &&
-           aMvinDepthLines(mMeta, (kTileLen + 1) * kMeta) <=
-               kMaxI8MvinDepthLines &&
-           bMvinDepthLines((kTileLen + 1) * kMeta, nMeta) <=
-               kMaxI8MvinDepthLines)
-      kTileLen++;
+    for (size_t cand = kTileLen + 1; cand * kMeta <= kPad; ++cand) {
+      size_t candSize = cand * kMeta;
+      if (computeBankRows(1, 1, cand) > (size_t)bankDepth ||
+          aMvinDepthLines(mMeta, candSize) > kMaxI8MvinDepthLines ||
+          bMvinDepthLines(candSize, nMeta) > kMaxI8MvinDepthLines)
+        break;
+      if (kPad % candSize == 0)
+        kTileLen = cand;
+    }
 
     const size_t kTileSize = kTileLen * kMeta;
 
-    while ((nTileLen + 1) * nMeta <= nPad &&
-           computeBankRows(1, nTileLen + 1, kTileLen) <= (size_t)bankDepth &&
-           cMvoutDepthLines(mMeta, (nTileLen + 1) * nMeta) <=
-               kMaxAccMvoutDepthLines &&
-           bMvinDepthLines(kTileSize, (nTileLen + 1) * nMeta) <=
-               kMaxI8MvinDepthLines)
-      nTileLen++;
+    for (size_t cand = nTileLen + 1; cand * nMeta <= nPad; ++cand) {
+      size_t candSize = cand * nMeta;
+      if (computeBankRows(1, cand, kTileLen) > (size_t)bankDepth ||
+          cMvoutDepthLines(mMeta, candSize) > kMaxAccMvoutDepthLines ||
+          bMvinDepthLines(kTileSize, candSize) > kMaxI8MvinDepthLines)
+        break;
+      if (nPad % candSize == 0)
+        nTileLen = cand;
+    }
 
-    while ((mTileLen + 1) * mMeta <= mPad &&
-           computeBankRows(mTileLen + 1, nTileLen, kTileLen) <=
-               (size_t)bankDepth &&
-           cMvoutDepthLines((mTileLen + 1) * mMeta, nTileLen * nMeta) <=
-               kMaxAccMvoutDepthLines &&
-           aMvinDepthLines((mTileLen + 1) * mMeta, kTileSize) <=
-               kMaxI8MvinDepthLines)
-      mTileLen++;
+    for (size_t cand = mTileLen + 1; cand * mMeta <= mPad; ++cand) {
+      size_t candSize = cand * mMeta;
+      if (computeBankRows(cand, nTileLen, kTileLen) > (size_t)bankDepth ||
+          cMvoutDepthLines(candSize, nTileLen * nMeta) >
+              kMaxAccMvoutDepthLines ||
+          aMvinDepthLines(candSize, kTileSize) > kMaxI8MvinDepthLines)
+        break;
+      if (mPad % candSize == 0)
+        mTileLen = cand;
+    }
 
     const size_t mTileSize = mTileLen * mMeta;
     const size_t nTileSize = nTileLen * nMeta;

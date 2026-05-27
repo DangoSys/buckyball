@@ -7,7 +7,6 @@
 #define SHIFT 4
 
 static elem_t mat_a[DIM * DIM] __attribute__((aligned(64)));
-static elem_t mat_a_t[DIM * DIM] __attribute__((aligned(64)));
 static elem_t mat_b[DIM * DIM] __attribute__((aligned(64)));
 static result_t mat_c[DIM * DIM] __attribute__((aligned(64)));
 static result_t expected[DIM * DIM] __attribute__((aligned(64)));
@@ -21,9 +20,6 @@ int main() {
 
   init_u8_random_matrix(mat_a, DIM, DIM, 42);
   init_u8_random_matrix(mat_b, DIM, DIM, 84);
-  // OS mode (transposer disabled): mesh computes A_loaded^T * B.
-  // Pre-transpose A so result = mat_a_t^T * mat_b = mat_a * mat_b.
-  transpose_u8_matrix(mat_a, mat_a_t, DIM, DIM);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
   for (int i = 0; i < DIM * DIM; i++)
     expected[i] >>= SHIFT;
@@ -32,7 +28,7 @@ int main() {
   bb_mem_alloc(bank_a, 1, 1);
   bb_mem_alloc(bank_b, 1, 1);
   bb_mem_alloc(bank_c, 1, 4);
-  bb_mvin((uintptr_t)mat_a_t, bank_a, DIM, 1);
+  bb_mvin((uintptr_t)mat_a, bank_a, DIM, 1);
   bb_mvin((uintptr_t)mat_b, bank_b, DIM, 1);
   bb_gemmini_config(0, 0, 0, 0, SHIFT);
   bb_gemmini_preload(bank_a, bank_c, DIM);

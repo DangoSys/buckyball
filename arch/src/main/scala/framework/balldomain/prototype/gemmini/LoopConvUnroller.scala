@@ -19,10 +19,11 @@ import framework.balldomain.prototype.gemmini.configs.GemminiBallParam
  */
 @instantiable
 class LoopConvUnroller(val b: GlobalConfig) extends Module {
-  val config   = GemminiBallParam()
-  val DIM      = config.blockSize
-  val elemSize = config.inputWidth / 8
-  val accBytes = config.accWidth / 8
+  val config    = GemminiBallParam()
+  val DIM       = config.blockSize
+  val elemSize  = config.inputWidth / 8
+  val accBytes  = config.accWidth / 8
+  val bankBytes = b.memDomain.bankWidth / 8
 
   @public
   val io = IO(new Bundle {
@@ -95,16 +96,33 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
     v
   }
 
-  def mvinSlot(bankId: UInt, addr: UInt): Valid[LoopSubCmd] = {
+  def mvinSlot(
+    bankId: UInt,
+    addr:   UInt,
+    iter:   UInt,
+    stride: UInt
+  ): Valid[LoopSubCmd] = {
     val v = Wire(Valid(new LoopSubCmd(b)))
     v.valid          := true.B
     v.bits           := 0.U.asTypeOf(new LoopSubCmd(b))
     v.bits.cmdType   := LoopSubCmdType.MVIN
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
-    v.bits.iter      := DIM.U
+    v.bits.stride    := stride
+    v.bits.iter      := iter
     v
   }
+
+  def outRows(): UInt = 1.U
+
+  def inMemStride(bytes: UInt): UInt =
+    (bytes / bankBytes.U).pad(19)(18, 0)
+
+  def outMemStride(bytes: UInt): UInt =
+    (bytes / (bankBytes * 4).U).pad(19)(18, 0)
+
+  def weightTileStride(): UInt =
+    cfg.out_channels * elemSize.U
 
   // Advance k-iterators (kch → kcol → krow), then output iterators (och → ocol → orow → batch)
   def advanceIter(): Unit = {
@@ -164,10 +182,10 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
       val inputSlot = Mux(
         addrGen.io.isPadding,
         emptySlot(), // Skip MVIN if padding (load zeros implicitly)
-        mvinSlot(cfg.bank_input, addrGen.io.inputAddr)
+        mvinSlot(cfg.bank_input, addrGen.io.inputAddr, outRows(), inMemStride(cfg.input_stride))
       )
       io.cmd.bits.slots(0) := inputSlot
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_weight, addrGen.io.weightAddr)
+      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_weight, addrGen.io.weightAddr, DIM.U, inMemStride(weightTileStride()))
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
@@ -187,14 +205,16 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
       preSlot.bits.iter     := DIM.U
 
       val compSlot = Wire(Valid(new LoopSubCmd(b)))
-      compSlot.valid             := true.B
-      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(b))
-      compSlot.bits.cmdType      := LoopSubCmdType.COMPUTE
-      compSlot.bits.op1_bank     := cfg.bank_weight
-      compSlot.bits.op2_bank     := cfg.bank_input
-      compSlot.bits.wr_bank      := cfg.bank_output
-      compSlot.bits.compute_mode := Mux(isFirstK, 0.U, 1.U) // PRELOADED first, then ACCUMULATED
-      compSlot.bits.iter         := DIM.U
+      compSlot.valid              := true.B
+      compSlot.bits               := 0.U.asTypeOf(new LoopSubCmd(b))
+      compSlot.bits.cmdType       := LoopSubCmdType.COMPUTE
+      compSlot.bits.op1_bank      := cfg.bank_input
+      compSlot.bits.op2_bank      := cfg.bank_weight
+      compSlot.bits.wr_bank       := cfg.bank_output
+      compSlot.bits.compute_mode  := Mux(isFirstK, 0.U, 1.U) // PRELOADED first, then ACCUMULATED
+      compSlot.bits.iter          := DIM.U
+      compSlot.bits.zero_op2      := cfg.no_bias
+      compSlot.bits.zero_op1_tail := true.B
 
       io.cmd.bits.slots(0) := preSlot
       io.cmd.bits.slots(1) := compSlot
@@ -220,7 +240,8 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
       mvSlot.bits.cmdType   := LoopSubCmdType.MVOUT
       mvSlot.bits.bank_id   := cfg.bank_output
       mvSlot.bits.dram_addr := addrGen.io.outputAddr
-      mvSlot.bits.iter      := DIM.U
+      mvSlot.bits.stride    := outMemStride(cfg.output_stride)
+      mvSlot.bits.iter      := outRows()
 
       io.cmd.bits.slots(0) := mvSlot
       io.cmd.bits.slots(1) := emptySlot()

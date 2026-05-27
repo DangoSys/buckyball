@@ -47,7 +47,7 @@ int main() {
   //   input_stride  = in_ch * elemSize = 16 * 1 = 16  (bytes per spatial step)
   //   weight_stride = in_ch * out_ch * elemSize = 16 * 16 * 1 = 256  (bytes per
   //   kernel step) output_stride = out_ch * accBytes = 16 * 4 = 64
-  bb_gemmini_config(0, 0, 0, 0, 0);
+  bb_gemmini_config(1, 0, 0, 0, 0);
   bb_gemmini_loop_conv_ws_config_1(BATCH, IN_DIM, IN_CH);
   bb_gemmini_loop_conv_ws_config_2(OUT_CH, OUT_DIM, 1, 0);
   bb_gemmini_loop_conv_ws_config_3(KERNEL_DIM, 0, 0, 0);

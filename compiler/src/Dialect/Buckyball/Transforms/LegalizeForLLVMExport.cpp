@@ -259,8 +259,7 @@ struct BuckyballMvoutLowering : public ConvertOpToLLVMPattern<MvoutOp> {
 
 //===----------------------------------------------------------------------===//
 // MatMul — mvin A, mvin B, mul_warp16 (iter = K), mvout C
-// Shapes A[M,K], B[K,N], C[M,N]; K and N must be multiples of 16 (i8 cols=1
-// line size).
+// Shapes A[M,K], B[K,N], C[M,N]; M, K and N must be multiples of 16.
 //===----------------------------------------------------------------------===//
 
 struct BuckyballMatMulLowering : public ConvertOpToLLVMPattern<MatMulOp> {
@@ -289,9 +288,9 @@ struct BuckyballMatMulLowering : public ConvertOpToLLVMPattern<MatMulOp> {
     if (K != Kb)
       return rewriter.notifyMatchFailure(op, "inner dimensions must match");
 
-    if (K % 16 != 0 || N % 16 != 0)
+    if (M % 16 != 0 || K % 16 != 0 || N % 16 != 0)
       return rewriter.notifyMatchFailure(
-          op, "K and N must be multiples of 16 for this lowering");
+          op, "M, K and N must be multiples of 16 for this lowering");
 
     const uint64_t aBank = 0, bBank = 1, cBank = 2;
     uint64_t depthA = M * (K / 16);
