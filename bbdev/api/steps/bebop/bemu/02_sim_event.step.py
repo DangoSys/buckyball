@@ -47,6 +47,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     ctx.logger.info(f"binary_path: {binary_path}")
+    binary_dir = os.path.dirname(binary_path)
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     log_dir = input_data.get("log_dir") or f"{arch_dir}/log/{timestamp}-{binary_name}-bemu"
@@ -55,7 +56,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Run bebop bemu ────────────────────────────────────────────────────
     pk_flag = " --pk" if input_data.get("pk") else ""
     run_cmd = (
-        f"cargo run --features bemu -- bemu "
+        f"cargo run --manifest-path \"{bebop_dir}/Cargo.toml\" --features bemu -- bemu "
         f"--elf=\"{binary_path}\" "
         f"--log-dir=\"{log_dir}\""
         f"{pk_flag}"
@@ -64,7 +65,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_result = stream_run_logger(
         cmd=run_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=binary_dir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
     )

@@ -14,6 +14,9 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = request.body or {}
-    data = {"workload": body.get("workload", "")}
+    data = {
+        "workload": body.get("workload", ""),
+        "model": body.get("model", ""),
+    }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 
 from motia import FlowContext, queue
@@ -27,11 +26,27 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     workload_dir = f"{bbdir}/bb-tests"
     build_dir = f"{workload_dir}/build"
+    model = input_data.get("model", "")
 
-    # os.mkdir(f"{workload_dir}/build", exist_ok=True)
-    subprocess.run(f"rm -rf {build_dir} && mkdir -p {build_dir}", shell=True)
+    model_targets = {
+        "lenet": "buddy-buckyball-lenet-run",
+    }
+    target = ""
+    if model:
+        target = model_targets.get(model.lower())
+        if target is None:
+            ctx.logger.error(f"Unknown model: {model}")
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={"error": "unknown_model", "model": model},
+                trace_id=origin_tid,
+            )
+            return
 
-    command = f"cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}"
+    os.makedirs(build_dir, exist_ok=True)
+
+    ninja_target = f" {target}" if target else ""
+    command = f"cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}{ninja_target}"
     ctx.logger.info(
         "Executing workload command", {"command": command, "cwd": build_dir}
     )
