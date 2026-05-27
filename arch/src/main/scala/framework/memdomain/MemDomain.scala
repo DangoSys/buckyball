@@ -11,6 +11,7 @@ import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.top.GlobalConfig
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.mmio.MmioPool
+import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.MemFrontend
 import framework.memdomain.frontend.mem.{MemConfigerIO}
 import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
@@ -44,7 +45,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val hartid    = Input(UInt(b.core.xLen.W))
 
 // Shared memory path
-    val shared_mem_req           = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(4.W))

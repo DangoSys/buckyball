@@ -6,6 +6,7 @@ import chisel3.util._
 import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
 import framework.memdomain.backend.privatepath.PrivateMemBackend
+import framework.memdomain.backend.shared.SharedMemLayout
 
 @instantiable
 class MemBackend(val b: GlobalConfig) extends Module {
@@ -16,8 +17,8 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Shared path — exposed to tile level for multi-core sharing.
-    // bankChannel ports: one per midend channel of this core.
-    val shared_mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    // Number of shared ports per core comes from TOML sharedInputChannels / nCores.
+    val shared_mem_req = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config  = Decoupled(new MemConfigerIO(b))
 
     // Query interface: shared query goes out, private query handled internally.
@@ -32,6 +33,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
+  private val sharedChannelPerHart = SharedMemLayout.channelPerHart(b)
 
   // Route config to the selected backend only.
   val cfgToShared = io.config.bits.is_shared
@@ -76,7 +78,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val writeRouteShared = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(false.B)))
 
   // Shared IO defaults
-  for (i <- 0 until b.memDomain.bankChannel) {
+  for (i <- 0 until sharedChannelPerHart) {
     io.shared_mem_req(i).bank_id   := 0.U
     io.shared_mem_req(i).group_id  := 0.U
     io.shared_mem_req(i).is_shared := false.B
@@ -104,7 +106,16 @@ class MemBackend(val b: GlobalConfig) extends Module {
       )
     }
     val ballRouteShared    = hasSharedAlloc && !hasPrivateAlloc
-    val useSharedReq       = Mux(isBallChannel.B, ballRouteShared, io.mem_req(i).is_shared)
+    val useSharedReqRaw    = Mux(isBallChannel.B, ballRouteShared, io.mem_req(i).is_shared)
+    val canUseSharedPort   = i < sharedChannelPerHart
+    val hasReq             = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
+    when(useSharedReqRaw && !canUseSharedPort.B && hasReq) {
+      assert(
+        false.B,
+        p"shared request on unsupported channel i=$i (sharedChannelPerHart=$sharedChannelPerHart, bankChannel=${b.memDomain.bankChannel})"
+      )
+    }
+    val useSharedReq       = useSharedReqRaw && canUseSharedPort.B
     val useSharedReadResp  = Mux(readPending(i), readRouteShared(i), useSharedReq)
     val useSharedWriteResp = Mux(writePending(i), writeRouteShared(i), useSharedReq)
 
@@ -129,60 +140,72 @@ class MemBackend(val b: GlobalConfig) extends Module {
     privateBackend.io.mem_req(i).group_id  := io.mem_req(i).group_id
     privateBackend.io.mem_req(i).is_shared := useSharedReq
     privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
-    io.shared_mem_req(i).bank_id           := io.mem_req(i).bank_id
-    io.shared_mem_req(i).group_id          := io.mem_req(i).group_id
-    io.shared_mem_req(i).is_shared         := useSharedReq
-    io.shared_mem_req(i).hart_id           := io.mem_req(i).hart_id
 
     // Read request route
     privateBackend.io.mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && !useSharedReq
     privateBackend.io.mem_req(i).read.req.bits  := io.mem_req(i).read.req.bits
-    io.shared_mem_req(i).read.req.valid         := io.mem_req(i).read.req.valid && useSharedReq
-    io.shared_mem_req(i).read.req.bits          := io.mem_req(i).read.req.bits
-    io.mem_req(i).read.req.ready                := Mux(
-      useSharedReq,
-      io.shared_mem_req(i).read.req.ready,
-      privateBackend.io.mem_req(i).read.req.ready
-    )
 
     // Write request route
     privateBackend.io.mem_req(i).write.req.valid := io.mem_req(i).write.req.valid && !useSharedReq
     privateBackend.io.mem_req(i).write.req.bits  := io.mem_req(i).write.req.bits
-    io.shared_mem_req(i).write.req.valid         := io.mem_req(i).write.req.valid && useSharedReq
-    io.shared_mem_req(i).write.req.bits          := io.mem_req(i).write.req.bits
-    io.mem_req(i).write.req.ready                := Mux(
-      useSharedReq,
-      io.shared_mem_req(i).write.req.ready,
-      privateBackend.io.mem_req(i).write.req.ready
-    )
 
     // Response ready route (selected by latched request route when pending).
     privateBackend.io.mem_req(i).read.resp.ready  := io.mem_req(i).read.resp.ready && !useSharedReadResp
-    io.shared_mem_req(i).read.resp.ready          := io.mem_req(i).read.resp.ready && useSharedReadResp
     privateBackend.io.mem_req(i).write.resp.ready := io.mem_req(i).write.resp.ready && !useSharedWriteResp
-    io.shared_mem_req(i).write.resp.ready         := io.mem_req(i).write.resp.ready && useSharedWriteResp
 
-    // Response valid/bits mux back to midend.
-    io.mem_req(i).read.resp.valid := Mux(
-      useSharedReadResp,
-      io.shared_mem_req(i).read.resp.valid,
-      privateBackend.io.mem_req(i).read.resp.valid
-    )
-    io.mem_req(i).read.resp.bits  := Mux(
-      useSharedReadResp,
-      io.shared_mem_req(i).read.resp.bits,
-      privateBackend.io.mem_req(i).read.resp.bits
-    )
+    if (i < sharedChannelPerHart) {
+      io.shared_mem_req(i).bank_id   := io.mem_req(i).bank_id
+      io.shared_mem_req(i).group_id  := io.mem_req(i).group_id
+      io.shared_mem_req(i).is_shared := useSharedReq
+      io.shared_mem_req(i).hart_id   := io.mem_req(i).hart_id
 
-    io.mem_req(i).write.resp.valid := Mux(
-      useSharedWriteResp,
-      io.shared_mem_req(i).write.resp.valid,
-      privateBackend.io.mem_req(i).write.resp.valid
-    )
-    io.mem_req(i).write.resp.bits  := Mux(
-      useSharedWriteResp,
-      io.shared_mem_req(i).write.resp.bits,
-      privateBackend.io.mem_req(i).write.resp.bits
-    )
+      io.shared_mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && useSharedReq
+      io.shared_mem_req(i).read.req.bits  := io.mem_req(i).read.req.bits
+      io.mem_req(i).read.req.ready        := Mux(
+        useSharedReq,
+        io.shared_mem_req(i).read.req.ready,
+        privateBackend.io.mem_req(i).read.req.ready
+      )
+
+      io.shared_mem_req(i).write.req.valid := io.mem_req(i).write.req.valid && useSharedReq
+      io.shared_mem_req(i).write.req.bits  := io.mem_req(i).write.req.bits
+      io.mem_req(i).write.req.ready        := Mux(
+        useSharedReq,
+        io.shared_mem_req(i).write.req.ready,
+        privateBackend.io.mem_req(i).write.req.ready
+      )
+
+      io.shared_mem_req(i).read.resp.ready  := io.mem_req(i).read.resp.ready && useSharedReadResp
+      io.shared_mem_req(i).write.resp.ready := io.mem_req(i).write.resp.ready && useSharedWriteResp
+
+      io.mem_req(i).read.resp.valid := Mux(
+        useSharedReadResp,
+        io.shared_mem_req(i).read.resp.valid,
+        privateBackend.io.mem_req(i).read.resp.valid
+      )
+      io.mem_req(i).read.resp.bits  := Mux(
+        useSharedReadResp,
+        io.shared_mem_req(i).read.resp.bits,
+        privateBackend.io.mem_req(i).read.resp.bits
+      )
+
+      io.mem_req(i).write.resp.valid := Mux(
+        useSharedWriteResp,
+        io.shared_mem_req(i).write.resp.valid,
+        privateBackend.io.mem_req(i).write.resp.valid
+      )
+      io.mem_req(i).write.resp.bits  := Mux(
+        useSharedWriteResp,
+        io.shared_mem_req(i).write.resp.bits,
+        privateBackend.io.mem_req(i).write.resp.bits
+      )
+    } else {
+      io.mem_req(i).read.req.ready   := privateBackend.io.mem_req(i).read.req.ready
+      io.mem_req(i).write.req.ready  := privateBackend.io.mem_req(i).write.req.ready
+      io.mem_req(i).read.resp.valid  := privateBackend.io.mem_req(i).read.resp.valid
+      io.mem_req(i).read.resp.bits   := privateBackend.io.mem_req(i).read.resp.bits
+      io.mem_req(i).write.resp.valid := privateBackend.io.mem_req(i).write.resp.valid
+      io.mem_req(i).write.resp.bits  := privateBackend.io.mem_req(i).write.resp.bits
+    }
   }
 }

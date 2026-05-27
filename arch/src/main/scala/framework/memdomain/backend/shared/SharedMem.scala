@@ -7,11 +7,32 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadResp, SramWriteResp}
 
 object SharedMemLayout {
-  def bankPerHart(b:    GlobalConfig): Int = b.memDomain.bankNum
-  def maxHart(b:        GlobalConfig): Int = b.top.nCores
-  def totalBank(b:      GlobalConfig): Int = bankPerHart(b) * maxHart(b)
-  def channelPerHart(b: GlobalConfig): Int = b.memDomain.bankChannel
-  def totalChannel(b:   GlobalConfig): Int = channelPerHart(b) * maxHart(b)
+  def bankPerHart(b: GlobalConfig): Int = b.memDomain.bankNum
+  def maxHart(b:     GlobalConfig): Int = b.top.nCores
+  def totalBank(b:   GlobalConfig): Int = bankPerHart(b) * maxHart(b)
+
+  def channelPerHart(b: GlobalConfig): Int = {
+    require(b.top.nCores > 0, s"nCores(${b.top.nCores}) must be > 0")
+    require(
+      b.memDomain.sharedInputChannels > 0,
+      s"sharedInputChannels(${b.memDomain.sharedInputChannels}) must be > 0"
+    )
+    require(
+      b.memDomain.sharedInputChannels % b.top.nCores == 0,
+      s"sharedInputChannels(${b.memDomain.sharedInputChannels}) must be divisible by nCores(${b.top.nCores})"
+    )
+    if (b.memDomain.sharedInputChannels > 32) {
+      require(
+        b.memDomain.sharedInputChannels == b.top.nCores,
+        s"sharedInputChannels(${b.memDomain.sharedInputChannels}) must equal nCores(${b.top.nCores}) when > 32"
+      )
+    }
+    val ch = b.memDomain.sharedInputChannels / b.top.nCores
+    require(ch > 0, s"channelPerHart($ch) must be > 0")
+    ch
+  }
+
+  def totalChannel(b: GlobalConfig): Int = b.memDomain.sharedInputChannels
 }
 
 class SharedMemReadReq(val b: GlobalConfig) extends Bundle {
