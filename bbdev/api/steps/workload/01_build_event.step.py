@@ -30,6 +30,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     model_targets = {
         "lenet": "buddy-buckyball-lenet-run",
+        "mobilenet": "buddy-buckyball-mobilenetv3-run",
+        "resnet": "buddy-buckyball-resnet-run",
+        "yolo": "buddy-buckyball-yolo26-run",
     }
     target = ""
     if model:
@@ -46,7 +49,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(build_dir, exist_ok=True)
 
     ninja_target = f" {target}" if target else ""
-    command = f"cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}{ninja_target}"
+    command = f"cd {bbdir} && nix develop -c bash -c 'cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}{ninja_target}'"
     ctx.logger.info(
         "Executing workload command", {"command": command, "cwd": build_dir}
     )
