@@ -44,6 +44,7 @@ import framework.system.core.rocket.id.RVVRoCCDecode
 import framework.system.core.accelerator.BuckyballAccelerator
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
+import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.mem.MemConfigerIO
 import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
 
@@ -519,8 +520,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   if (outer.hasBuckyball) {
-    val cfg0        = outer.bbSharedConfig.get
-    val bankChannel = cfg0.memDomain.bankChannel
+    val cfg0          = outer.bbSharedConfig.get
+    val sharedPerCore = SharedMemLayout.channelPerHart(cfg0)
 
     // Instantiate accelerators for enabled cores only
     val accelerators = (0 until nCores).map { i =>
@@ -573,8 +574,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
     // Connect each accelerator's shared ports to the SharedMemBackend
     for (i <- 0 until nCores) {
-      for (ch <- 0 until bankChannel) {
-        val slot = i * bankChannel + ch
+      for (ch <- 0 until sharedPerCore) {
+        val slot = i * sharedPerCore + ch
         accelerators(i) match {
           case Some(acc) => sharedBackend.io.mem_req(slot) <> acc.io.shared_mem_req(ch)
           case None      => tieOffMemReq(sharedBackend.io.mem_req(slot))

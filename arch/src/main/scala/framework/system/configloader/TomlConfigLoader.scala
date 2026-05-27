@@ -296,6 +296,7 @@ object TomlConfigLoader {
   private case class SharedMemFields(
     sharedEnable:            Boolean,
     sharedEntries:           Int,
+    sharedInputChannels:     Int,
     sharedDefaultGroupCount: Int)
 
   private def parseSharedMem(table: Map[String, Value]): SharedMemFields = {
@@ -305,6 +306,7 @@ object TomlConfigLoader {
     SharedMemFields(
       sharedEnable = getBool(t, "enable"),
       sharedEntries = getInt(t, "entries"),
+      sharedInputChannels = getInt(t, "inputChannels"),
       sharedDefaultGroupCount = getInt(t, "defaultGroupCount")
     )
   }
@@ -330,6 +332,7 @@ object TomlConfigLoader {
       bankMaskLen = getInt(bank, "maskLen"),
       sharedEnable = shared.sharedEnable,
       sharedEntries = shared.sharedEntries,
+      sharedInputChannels = shared.sharedInputChannels,
       sharedDefaultGroupCount = shared.sharedDefaultGroupCount,
       tlb_size = getInt(tlb, "size"),
       dma_n_xacts = getInt(dma, "nXacts"),

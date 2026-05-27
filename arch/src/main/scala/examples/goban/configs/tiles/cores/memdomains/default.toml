@@ -2,7 +2,7 @@
 # Private (per-core) memory parameters. Shared memory lives in the tile TOML.
 
 [bank]
-num = 32
+num = 16
 width = 128
 entries = 128
 maskLen = 16

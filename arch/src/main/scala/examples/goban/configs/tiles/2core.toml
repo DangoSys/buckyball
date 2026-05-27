@@ -11,6 +11,7 @@ memCycles = 10
 [sharedMem]
 enable = true
 entries = 16384
+inputChannels = 14
 defaultGroupCount = 1
 memCycles = 10
 

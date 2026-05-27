@@ -11,6 +11,7 @@ import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.gpdomain.GpDomain
 import framework.memdomain.MemDomain
 import framework.memdomain.backend.MemRequestIO
+import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.mem.{MemConfigerIO}
 import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.balldomain.BallDomain
@@ -51,7 +52,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val tl_writer = new TLBundle(edge.bundle)
 
     // Shared memory path — exposed to tile level for multi-core SharedMemBackend
-    val shared_mem_req           = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
+    val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(4.W))
