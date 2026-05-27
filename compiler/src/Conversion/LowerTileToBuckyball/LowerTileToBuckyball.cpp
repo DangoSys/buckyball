@@ -615,10 +615,11 @@ public:
         Value startColVal = rewriter.create<arith::ConstantOp>(
             loc, i64Type, rewriter.getI64IntegerAttr(startCol));
 
-        // Allocate source and destination banks
-        Value srcBank = buckyball::allocBank(rewriter, loc, H, W * C / lane);
-        Value dstBank =
-            buckyball::allocBank(rewriter, loc, ohowLen, patchColsPad / lane);
+        // Allocate one physical bank for each im2col operand. The mvin/mvout
+        // depth carries the logical row count; bank_alloc row/col describes
+        // physical bank array shape, per compiler.md.
+        Value srcBank = buckyball::allocBank(rewriter, loc, 1, 1);
+        Value dstBank = buckyball::allocBank(rewriter, loc, 1, 1);
 
         // Move input data to source bank
         int64_t inDepth = H * W * C / lane;
@@ -670,10 +671,19 @@ public:
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
 
-        // MatMul: patch[ohowLen, patchCols] x filter[patchCols, OC] →
-        // out[ohowLen, OC]
-        rewriter.create<buckyball::MatMulOp>(loc, patchBuf, filterReshaped,
-                                             outTile);
+        Value patchValid = rewriter.create<memref::SubViewOp>(
+            loc, patchBuf,
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                      rewriter.getIndexAttr(0)},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(ohowLen),
+                                      rewriter.getIndexAttr(patchCols)},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                      rewriter.getIndexAttr(1)});
+
+        // Route through TileMatMul so non-16-aligned K/OC are padded and tiled
+        // by the matmul lowering instead of leaking illegal Buckyball matmuls.
+        rewriter.create<tile::TileMatMulOp>(loc, patchValid, filterReshaped,
+                                            outTile);
 
         // Free temporary buffer
         rewriter.create<memref::DeallocOp>(loc, patchBuf);

@@ -144,6 +144,30 @@ function(add_buckyball_matmul_contract_test name)
     )
 endfunction()
 
+function(add_buckyball_contract_test name)
+    set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
+    set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_intrinsics.mlir)
+
+    add_custom_command(
+        OUTPUT ${OUT}
+        COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+            "--assign-physical-banks=bank_num=32"
+            -lower-bank-ssa-to-intrinsics
+            > ${OUT}
+        DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+        COMMENT "Building Buckyball contract IR for ${name}"
+        VERBATIM
+    )
+
+    add_custom_target(optest_buckyball_${name}_contract
+        COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
+        DEPENDS ${OUT}
+        COMMENT "Checking Buckyball contract for ${name}"
+        VERBATIM
+    )
+endfunction()
+
 add_buckyball_matmul_contract_test(matmul_16x64_64x16)
 add_buckyball_matmul_test(matmul_64x16_16x64)
 add_buckyball_matmul_test(matmul_1024x16_16x1024)
+add_buckyball_contract_test(bank_im2col_contract)

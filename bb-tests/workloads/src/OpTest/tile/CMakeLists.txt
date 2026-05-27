@@ -161,5 +161,29 @@ function(add_tile_matmul_contract_test name)
   )
 endfunction()
 
+function(add_tile_contract_test name)
+  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
+  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_bank_ssa.mlir)
+
+  add_custom_command(
+    OUTPUT ${OUT}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      > ${OUT}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+    COMMENT "Building Tile contract IR for ${name}"
+    VERBATIM
+  )
+
+  add_custom_target(optest_tile_${name}_contract
+    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
+    DEPENDS ${OUT}
+    COMMENT "Checking Tile contract for ${name}"
+    VERBATIM
+  )
+endfunction()
+
 add_tile_matmul_test(matmul_127x17_17x127)
 add_tile_matmul_contract_test(matmul_16x2048_2048x16_contract)
+add_tile_contract_test(conv2d_nhwc_hwcf_contract)
