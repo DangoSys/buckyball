@@ -108,7 +108,7 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
     bankRespQueue2.io.enq <> io.bankReadResp(2)
     bankRespQueue3.io.enq <> io.bankReadResp(3)
 
-    when(state === busy && ld_ex_iter_reg < iter && op1_iter_counter < (iter /inBW.U * 2.U)) {
+    when(state === busy && ld_ex_iter_reg < iter && op1_iter_counter < (iter / inBW.U * 2.U)) {
       io.bankReadReq(0).valid     := true.B
       io.bankReadReq(0).bits.addr := op1_addr + op1_iter_counter
       io.bankReadReq(1).valid     := true.B
@@ -126,11 +126,11 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
 
     io.ld_ex_o.valid := all_valid
     when(all_valid) {
-      io.ld_ex_o.bits.op1 := Cat(
+      io.ld_ex_o.bits.op1  := Cat(
         bankRespQueue1.io.deq.bits.data,
         bankRespQueue0.io.deq.bits.data
       ).asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      io.ld_ex_o.bits.op2 := Cat(
+      io.ld_ex_o.bits.op2  := Cat(
         bankRespQueue3.io.deq.bits.data,
         bankRespQueue2.io.deq.bits.data
       ).asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
@@ -170,11 +170,11 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
 
     io.ld_ex_o.valid := both_valid && readPhase
     when(both_valid && readPhase) {
-      io.ld_ex_o.bits.op1 := Cat(
+      io.ld_ex_o.bits.op1  := Cat(
         bankRespQueue0.io.deq.bits.data,
         op1Half
       ).asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-      io.ld_ex_o.bits.op2 := Cat(
+      io.ld_ex_o.bits.op2  := Cat(
         bankRespQueue1.io.deq.bits.data,
         op2Half
       ).asTypeOf(Vec(InputNum, UInt(inputWidth.W)))

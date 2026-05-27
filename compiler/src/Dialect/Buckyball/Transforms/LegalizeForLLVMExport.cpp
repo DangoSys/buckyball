@@ -352,6 +352,8 @@ struct BuckyballMatMulLowering : public ConvertOpToLLVMPattern<MatMulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C = packRs2MemStride(rewriter, loc, cPtr, strideCN);
     rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
+    Value zero = cstI64(rewriter, loc, 0);
+    rewriter.create<FenceIntrOp>(loc, zero, zero);
 
     emitMset(rewriter, loc, aBank, 0, 0, 0);
     emitMset(rewriter, loc, bBank, 0, 0, 0);

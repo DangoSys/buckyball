@@ -42,6 +42,9 @@ object SubRobRow {
       w.slots(i).cmd.cmd.rs1Data  := 0.U
       w.slots(i).cmd.cmd.rs2Data  := 0.U
       w.slots(i).cmd.bankAccess   := BankAccessInfo.none(bankIdLen)
+      w.slots(i).cmd.op1_col      := 0.U
+      w.slots(i).cmd.op2_col      := 0.U
+      w.slots(i).cmd.wr_col       := 0.U
       w.slots(i).cmd.isFence      := false.B
       w.slots(i).cmd.isBarrier    := false.B
     }

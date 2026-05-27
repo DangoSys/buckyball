@@ -7,6 +7,7 @@ set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
 set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
+set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 
 function(add_tile_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
@@ -17,6 +18,56 @@ function(add_tile_matmul_test name)
 
   add_custom_command(
     OUTPUT ${OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_1_buckyball.mlir
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_2_bank_ssa.mlir
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      "--assign-physical-banks=bank_num=32"
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_3_physical_banks.mlir
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      "--assign-physical-banks=bank_num=32"
+      -lower-bank-ssa-to-intrinsics
+      -lower-buckyball
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_4_buckyball_intrinsics.mlir
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      "--assign-physical-banks=bank_num=32"
+      -lower-bank-ssa-to-intrinsics
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -convert-scf-to-cf
+      -lower-buckyball
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_5_llvm.mlir
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+      "--assign-physical-banks=bank_num=32"
+      -lower-bank-ssa-to-intrinsics
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -convert-scf-to-cf
+      -lower-buckyball
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts |
+    ${BUDDY_TRANSLATE} --buddy-to-llvmir
+      > ${CMAKE_CURRENT_BINARY_DIR}/${name}_6.ll
     COMMAND ${BUDDY_OPT} ${MLIR_SRC}
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
@@ -34,7 +85,7 @@ function(add_tile_matmul_test name)
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
     ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -mattr=+buddyext,+D
       -float-abi=hard -o ${OBJ}
-    DEPENDS ${MLIR_SRC}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building ${name}.o from Tile MLIR"
     VERBATIM
   )
@@ -88,4 +139,27 @@ function(add_tile_matmul_test name)
   )
 endfunction()
 
+function(add_tile_matmul_contract_test name)
+  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
+  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_1_buckyball.mlir)
+
+  add_custom_command(
+    OUTPUT ${OUT}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      "-convert-tile-to-buckyball=bank_depth=128"
+      > ${OUT}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+    COMMENT "Building Tile contract IR for ${name}"
+    VERBATIM
+  )
+
+  add_custom_target(optest_tile_${name}_contract
+    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
+    DEPENDS ${OUT}
+    COMMENT "Checking Tile matmul contract for ${name}"
+    VERBATIM
+  )
+endfunction()
+
 add_tile_matmul_test(matmul_127x17_17x127)
+add_tile_matmul_contract_test(matmul_16x2048_2048x16_contract)

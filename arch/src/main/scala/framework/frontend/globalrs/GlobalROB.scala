@@ -5,8 +5,9 @@ import chisel3.util._
 import chisel3.experimental._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
-import framework.frontend.decoder.PostGDCmd
-import framework.frontend.scoreboard.{BankAliasTable, BankScoreboard}
+import framework.frontend.decoder.{DomainId, PostGDCmd}
+import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
+import framework.memdomain.frontend.cmd.decoder.DISA.{MMIO_SET_BITPAT, MSET_BITPAT}
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
@@ -79,28 +80,82 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val headPtr     = RegInit(0.U(idWidth.W))
   val tailPtr     = RegInit(0.U(idWidth.W))
   val issuedCount = RegInit(0.U(log2Up(robDepth + 1).W))
+  val bankCols    = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(5.W))))
 
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
   val isFull  = headPtr === tailPtr && robValid(headPtr)
 
   def nextPtr(p: UInt): UInt = Mux(p === (robDepth - 1).U, 0.U, p + 1.U)
   def wrapPtr(v: UInt): UInt = Mux(v >= robDepth.U, v - robDepth.U, v)
+  def robIdx(v:  UInt): UInt = v(idWidth - 1, 0)
+
+  def isMappingConfig(entry: GlobalRobEntry): Bool =
+    entry.cmd.domain_id === DomainId.MEM &&
+      ((entry.cmd.cmd.funct === MSET_BITPAT) || (entry.cmd.cmd.funct === MMIO_SET_BITPAT))
+
+  def touchesBank(access: BankAccessInfo, bank: UInt): Bool =
+    (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
+      (access.rd_bank_1_valid && access.rd_bank_1_id === bank) ||
+      (access.wr_bank_valid && access.wr_bank_id === bank)
+
+  def bankOverlap(a: BankAccessInfo, b: BankAccessInfo): Bool =
+    (a.rd_bank_0_valid && touchesBank(b, a.rd_bank_0_id)) ||
+      (a.rd_bank_1_valid && touchesBank(b, a.rd_bank_1_id)) ||
+      (a.wr_bank_valid && touchesBank(b, a.wr_bank_id))
+
+  def accessUsesBank(access: BankAccessInfo, bank: UInt): Bool =
+    (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
+      (access.rd_bank_1_valid && access.rd_bank_1_id === bank) ||
+      (access.wr_bank_valid && access.wr_bank_id === bank)
+
+  def hasRawHazard(younger: BankAccessInfo, older: BankAccessInfo): Bool = {
+    val youngerReadOlderWrite  =
+      older.wr_bank_valid &&
+        ((younger.rd_bank_0_valid && younger.rd_bank_0_id === older.wr_bank_id) ||
+          (younger.rd_bank_1_valid && younger.rd_bank_1_id === older.wr_bank_id))
+    val youngerWriteOlderRead  =
+      younger.wr_bank_valid &&
+        ((older.rd_bank_0_valid && younger.wr_bank_id === older.rd_bank_0_id) ||
+          (older.rd_bank_1_valid && younger.wr_bank_id === older.rd_bank_1_id))
+    val youngerWriteOlderWrite =
+      younger.wr_bank_valid && older.wr_bank_valid && younger.wr_bank_id === older.wr_bank_id
+    youngerReadOlderWrite || youngerWriteOlderRead || youngerWriteOlderWrite
+  }
 
   // ---------------------------------------------------------------------------
   // Allocate: enqueue decoded instruction into ROB
   // rob_id == tailPtr at allocation time (no separate counter needed)
   // ---------------------------------------------------------------------------
-  io.alloc.ready      := !isFull
-  bat.io.alloc.valid  := io.alloc.fire
-  bat.io.alloc.rob_id := tailPtr
-  bat.io.alloc.raw    := io.alloc.bits.bankAccess
-
   val commitMask = Wire(Vec(robDepth, Bool()))
   for (i <- 0 until robDepth) {
     commitMask(i) := false.B
   }
   bat.io.free.valid := commitMask.asUInt.orR
   bat.io.free.mask := commitMask
+
+  val commitScan = Wire(Vec(robDepth, Bool()))
+  val commitKeep = Wire(Vec(robDepth + 1, Bool()))
+  commitKeep(0) := true.B
+  for (i <- 0 until robDepth) {
+    val ptr = robIdx(wrapPtr(headPtr + i.U))
+    commitScan(i)     := commitKeep(i) && robValid(ptr) && robComplete(ptr)
+    commitKeep(i + 1) := commitScan(i)
+  }
+  val hasCommit = commitScan.asUInt.orR
+  val tailAlias = Wire(UInt(b.frontend.bank_id_len.W))
+  tailAlias := (b.frontend.vbank_id_upper_bound + 1).U + tailPtr
+
+  val tailAliasLive = WireDefault(false.B)
+  for (i <- 0 until robDepth) {
+    when(robValid(i) && !robComplete(i) && accessUsesBank(robEntries(i).renamedBankAccess, tailAlias)) {
+      tailAliasLive := true.B
+    }
+  }
+
+  io.alloc.ready      := !isFull && !hasCommit && !tailAliasLive
+  bat.io.alloc.valid  := io.alloc.fire
+  bat.io.alloc.rob_id := tailPtr
+  bat.io.alloc.raw    := io.alloc.bits.bankAccess
 
   // Mark write alias as busy in scoreboard at alloc time (not issue time).
   scoreboard.alloc.valid := io.alloc.fire && io.alloc.bits.bankAccess.wr_bank_valid
@@ -134,12 +189,12 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   scoreboard.complete.valid := false.B
   scoreboard.complete.bits  := 0.U.asTypeOf(scoreboard.complete.bits)
 
+  val issueFired          = WireDefault(false.B)
+  val completeIssuedEntry = io.complete.fire && robIssued(io.complete.bits)
+
   when(io.complete.fire) {
     val cid = io.complete.bits
     robComplete(cid)          := true.B
-    when(robIssued(cid)) {
-      issuedCount := issuedCount - 1.U
-    }
     scoreboard.complete.valid := true.B
     scoreboard.complete.bits  := robEntries(cid).renamedBankAccess
 
@@ -160,67 +215,106 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val scanValid = Wire(Vec(robDepth, Bool()))
   val scanReady = Wire(Vec(robDepth, Bool()))
   for (i <- 0 until robDepth) {
-    val ptr = wrapPtr(headPtr + i.U)
-    scanValid(i)           := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
+    val ptr       = robIdx(wrapPtr(headPtr + i.U))
+    val cfgHazard = WireDefault(false.B)
+    for (j <- 0 until i) {
+      val olderPtr         = robIdx(wrapPtr(headPtr + j.U))
+      val olderLive        = robValid(olderPtr) && !robComplete(olderPtr)
+      val olderUncommitted = robValid(olderPtr)
+      val cfgPair          = isMappingConfig(robEntries(ptr)) || isMappingConfig(robEntries(olderPtr))
+      when(olderLive && hasRawHazard(robEntries(ptr).cmd.bankAccess, robEntries(olderPtr).cmd.bankAccess)) {
+        cfgHazard := true.B
+      }
+      when(olderUncommitted && cfgPair && bankOverlap(
+        robEntries(ptr).cmd.bankAccess,
+        robEntries(olderPtr).cmd.bankAccess
+      )) {
+        cfgHazard := true.B
+      }
+    }
+    scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
     scoreboard.queryVec(i) := robEntries(ptr).renamedBankAccess
-    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i)
+    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) && !cfgHazard
   }
 
   val hasReady       = scanReady.asUInt.orR
   val firstReady     = PriorityEncoder(scanReady.asUInt)
-  val actualIssuePtr = wrapPtr(headPtr + firstReady)
+  val actualIssuePtr = robIdx(wrapPtr(headPtr + firstReady))
 
   scoreboard.query := robEntries(actualIssuePtr).renamedBankAccess
   val canIssue = hasReady
 
+  val issueEntry = Wire(new GlobalRobEntry(b))
+  issueEntry             := robEntries(actualIssuePtr)
+  issueEntry.cmd.op1_col := Mux(
+    issueEntry.cmd.bankAccess.rd_bank_0_valid,
+    bankCols(issueEntry.cmd.bankAccess.rd_bank_0_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    0.U
+  )
+  issueEntry.cmd.op2_col := Mux(
+    issueEntry.cmd.bankAccess.rd_bank_1_valid,
+    bankCols(issueEntry.cmd.bankAccess.rd_bank_1_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    0.U
+  )
+  issueEntry.cmd.wr_col  := Mux(
+    issueEntry.cmd.bankAccess.wr_bank_valid,
+    bankCols(issueEntry.cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    0.U
+  )
+
   io.issue.valid := canIssue && !io.subRobActive
-  io.issue.bits  := robEntries(actualIssuePtr)
+  io.issue.bits  := issueEntry
 
   scoreboard.issue.valid := false.B
   scoreboard.issue.bits  := 0.U.asTypeOf(scoreboard.issue.bits)
 
   when(io.issue.fire) {
     robIssued(actualIssuePtr) := true.B
-    issuedCount               := issuedCount + 1.U
+    issueFired                := true.B
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
     itraceIssue.io.is_issue    := 1.U
-    itraceIssue.io.rob_id      := robEntries(actualIssuePtr).rob_id
-    itraceIssue.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
-    itraceIssue.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
-    itraceIssue.io.pc          := robEntries(actualIssuePtr).cmd.cmd.pc
-    itraceIssue.io.rs1         := robEntries(actualIssuePtr).cmd.cmd.rs1
-    itraceIssue.io.rs2         := robEntries(actualIssuePtr).cmd.cmd.rs2
-    itraceIssue.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
+    itraceIssue.io.rob_id      := issueEntry.rob_id
+    itraceIssue.io.domain_id   := issueEntry.cmd.domain_id
+    itraceIssue.io.funct       := issueEntry.cmd.cmd.funct
+    itraceIssue.io.pc          := issueEntry.cmd.cmd.pc
+    itraceIssue.io.rs1         := issueEntry.cmd.cmd.rs1
+    itraceIssue.io.rs2         := issueEntry.cmd.cmd.rs2
+    itraceIssue.io.bank_enable := issueEntry.cmd.cmd.funct(6, 4)
     itraceIssue.io.enable      := true.B
   }
+
+  issuedCount := issuedCount + issueFired.asUInt - completeIssuedEntry.asUInt
 
   // ---------------------------------------------------------------------------
   // Commit: clear completed entries.
   // Explicitly skip entries being allocated or completed this cycle.
   // ---------------------------------------------------------------------------
   for (i <- 0 until robDepth) {
-    val beingAllocated = io.alloc.fire && (tailPtr === i.U)
-    val beingCompleted = io.complete.fire && (io.complete.bits === i.U)
-    commitMask(i) := robValid(i) && robComplete(i) && !beingAllocated && !beingCompleted
+    val hits = (0 until robDepth).map { off =>
+      val ptr = robIdx(wrapPtr(headPtr + off.U))
+      commitScan(off) && ptr === i.U
+    }
+    commitMask(i) := hits.reduce(_ || _)
     when(commitMask(i)) {
+      when(robEntries(i).cmd.domain_id === DomainId.MEM && robEntries(i).cmd.cmd.funct === MSET_BITPAT) {
+        val bank = robEntries(i).cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)
+        val col  = robEntries(i).cmd.cmd.rs2Data(9, 5)
+        when(robEntries(i).cmd.cmd.rs2Data(10)) {
+          bankCols(bank) := col
+        }.otherwise {
+          bankCols(bank) := 0.U
+        }
+      }
       robValid(i)    := false.B
       robIssued(i)   := false.B
       robComplete(i) := false.B
     }
   }
 
-  // Update head pointer: advance past all committed entries
-  val nextHeadCandidates = Wire(Vec(robDepth, Bool()))
-  for (i <- 0 until robDepth) {
-    val ptr = wrapPtr(headPtr + i.U)
-    nextHeadCandidates(i) := robValid(ptr) && !robComplete(ptr)
-  }
-
-  val hasUncommitted = nextHeadCandidates.asUInt.orR
-  val nextHeadOffset = PriorityEncoder(nextHeadCandidates.asUInt)
-  headPtr := Mux(hasUncommitted, wrapPtr(headPtr + nextHeadOffset), tailPtr)
+  val commitCount = PopCount(commitScan)
+  headPtr := wrapPtr(headPtr + commitCount)
 
   // ---------------------------------------------------------------------------
   // Status outputs

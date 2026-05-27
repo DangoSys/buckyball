@@ -72,9 +72,9 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
-  val iter_counter  = RegInit(0.U(b.frontend.iter_len.W))
-  val store_counter = RegInit(0.U(log2Ceil(config.lane + 1).W))
-  val in_counter    = RegInit(0.U(b.frontend.iter_len.W))
+  val iter_counter        = RegInit(0.U(b.frontend.iter_len.W))
+  val store_counter       = RegInit(0.U(log2Ceil(config.lane + 1).W))
+  val in_counter          = RegInit(0.U(b.frontend.iter_len.W))
   val drainThreshold      = (2 * arraySize + 8).U
   val inputReadyThreshold = if (arraySize <= 16) arraySize else 16
 

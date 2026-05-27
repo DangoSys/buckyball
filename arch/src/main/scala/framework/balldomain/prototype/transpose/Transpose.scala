@@ -146,6 +146,11 @@ class Transpose(val b: GlobalConfig) extends Module {
         drainIdx    := 0.U
         readReqCnt  := 0.U
         readRespCnt := 0.U
+        assert(io.cmdReq.bits.cmd.iter > 0.U, "Transpose iter must be > 0")
+        assert(
+          io.cmdReq.bits.cmd.op1_col === 1.U && io.cmdReq.bits.cmd.wr_col === 1.U,
+          "Transpose unsupported bank layout"
+        )
         state       := fill
       }
     }

@@ -13,7 +13,8 @@ class BBReadRequest extends Bundle {
   val vaddr  = UInt(64.W)
   val len    = UInt(16.W)
   val status = new MStatus
-  val stride = UInt(10.W) // currently unused
+  val stride = UInt(19.W)
+  val groups = UInt(4.W)
 }
 
 class BBReadResponse(dataWidth: Int) extends Bundle {
@@ -50,8 +51,13 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val bytesRequested = RegInit(0.U(16.W))
   val bytesReceived  = RegInit(0.U(16.W))
 
-  val inflight   = RegInit(false.B)
-  val read_vaddr = reqReg.vaddr + bytesRequested
+  val inflight = RegInit(false.B)
+
+  val beatIdx    = bytesRequested >> log2Ceil(beatBytes)
+  val rowIdx     = beatIdx / reqReg.groups
+  val groupIdx   = beatIdx % reqReg.groups
+  val readOffset = (rowIdx * reqReg.groups * reqReg.stride + groupIdx) * beatBytes.U
+  val read_vaddr = reqReg.vaddr + readOffset
 
   val get = edge.Get(
     fromSource = 0.U,

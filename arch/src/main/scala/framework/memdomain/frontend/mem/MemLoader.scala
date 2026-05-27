@@ -39,7 +39,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val is_shared = Output(Bool())
   })
 
-  val s_idle :: s_dma_req :: s_dma_wait :: s_wait_last_write :: s_done :: Nil = Enum(5)
+  val s_idle :: s_dma_req :: s_dma_wait :: s_wait_write_resp :: s_done :: Nil = Enum(5)
   val state                                                                   = RegInit(s_idle)
 
   val rob_id_reg     = RegInit(0.U(rob_id_width.W))
@@ -49,7 +49,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val iter_reg       = Reg(UInt(b.frontend.iter_len.W))
   val resp_count     = RegInit(0.U(log2Up(16).W))
   val wr_bank_reg    = Reg(UInt(log2Up(b.memDomain.bankNum).W))
-  val stride_reg     = Reg(UInt(11.W))
+  val stride_reg     = Reg(UInt(19.W))
   val is_shared_reg  = RegInit(false.B)
 
   // Group counter for multi-bank writes
@@ -69,7 +69,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // pending latch for 1-beat DMA -> bankWrite
   // -----------------------------
   val pending = RegInit(false.B)
-  val latRow  = Reg(UInt(log2Up(b.memDomain.bankEntries).W))
+  val latBeat = Reg(UInt(10.W))
   val latData = Reg(UInt(b.memDomain.bankWidth.W))
   val latLast = RegInit(false.B)
 
@@ -83,13 +83,14 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.dmaReq.bits.len    := iter_reg * (b.memDomain.bankWidth / 8).U
   io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
   io.dmaReq.bits.stride := stride_reg
+  io.dmaReq.bits.groups := group_count_reg
 
   // only accept DMA beat when waiting AND no pending beat buffered
   io.dmaResp.ready := (state === s_dma_wait) && !pending
 
   // bank write request driven from pending
   io.bankWrite.io.req.valid      := pending
-  io.bankWrite.io.req.bits.addr  := latRow / group_count_reg
+  io.bankWrite.io.req.bits.addr  := latBeat / group_count_reg
   io.bankWrite.io.req.bits.data  := latData
   io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
   io.bankWrite.io.req.bits.wmode := false.B
@@ -134,7 +135,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
       mmio_col_reg    := io.cmdReq.bits.cmd.special(63, 56)
       iter_reg        := io.cmdReq.bits.cmd.iter
       group_count_reg := 1.U
-      stride_reg      := 0.U
+      stride_reg      := 1.U
     }.otherwise {
       // Regular mvin: stride from rs2[57:39]
       stride_reg      := io.cmdReq.bits.cmd.special(57, 39)
@@ -158,7 +159,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // Latch DMA beat into pending buffer
   when(io.dmaResp.fire) {
     pending := true.B
-    latRow  := io.dmaResp.bits.addrcounter
+    latBeat := io.dmaResp.bits.addrcounter
     latData := io.dmaResp.bits.data
     latLast := io.dmaResp.bits.last
   }
@@ -168,22 +169,21 @@ class MemLoader(val b: GlobalConfig) extends Module {
     pending    := false.B
     resp_count := resp_count + 1.U
 
-    // Update group_counter
+    when(latLast) {
+      state := s_wait_write_resp
+    }.otherwise {
+      state := s_wait_write_resp
+    }
+  }
+
+  // Wait for each write response before accepting the next DMA beat.
+  when(state === s_wait_write_resp && io.bankWrite.io.resp.fire) {
     when(group_counter + 1.U < group_count_reg) {
       group_counter := group_counter + 1.U
     }.otherwise {
       group_counter := 0.U
     }
-
-    when(latLast) {
-      // Last beat request sent, now wait for write response
-      state := s_wait_last_write
-    }
-  }
-
-  // Wait for the last write response before completing
-  when(state === s_wait_last_write && io.bankWrite.io.resp.fire) {
-    state := s_done
+    state := Mux(latLast, s_done, s_dma_wait)
   }
 
   when(state === s_done && io.cmdResp.fire) {

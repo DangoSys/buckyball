@@ -95,6 +95,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LINK_FLAGS}")
 #-------------------------------------------------------------------------------
 add_cross_platform_test_target(ctest_mvin_mvout_acc_test mvin_mvout_acc_test.c)
 add_cross_platform_test_target(ctest_mvin_mvout_test mvin_mvout_test.c)
+add_cross_platform_test_target(ctest_mvin_mvout_stride_test mvin_mvout_stride_test.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_ones vecunit_matmul_ones.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_identity_random vecunit_matmul_identity_random.c)
 add_cross_platform_test_target(ctest_vecunit_matmul_row_col_vector vecunit_matmul_row_col_vector.c)
@@ -143,6 +144,7 @@ add_cross_platform_test_target(ctest_gemmini_ws_cisc_conv_test gemmini_ws_cisc_c
 add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_mvin_mvout_acc_test
   ctest_mvin_mvout_test
+  ctest_mvin_mvout_stride_test
   ctest_vecunit_matmul_ones
   ctest_vecunit_matmul_identity_random
   ctest_vecunit_matmul_row_col_vector

@@ -128,9 +128,9 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Reset iter counter, commit cmdResp, return to idle state
 // -----------------------------------------------------------------------------
-  val allQueuesEmpty  = writeQueues.forall(q => !q.deq.valid)
+  val allQueuesEmpty      = writeQueues.forall(q => !q.deq.valid)
   val inputReadyThreshold = if (InputNum <= 16) InputNum else 16
-  val allDataEnqueued = state === busy && iter_counter >= inputReadyThreshold.U
+  val allDataEnqueued     = state === busy && iter_counter >= inputReadyThreshold.U
 
   when(allDataEnqueued && allQueuesEmpty) {
     state                    := idle

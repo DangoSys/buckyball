@@ -7,6 +7,7 @@ set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
 set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
     ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
+set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 
 function(add_buckyball_matmul_test name)
     set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
@@ -77,7 +78,7 @@ function(add_buckyball_matmul_test name)
         ${BUDDY_TRANSLATE} --buddy-to-llvmir |
         ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -mattr=+buddyext,+D -float-abi=hard
             -o ${OBJ}
-        DEPENDS ${MLIR_SRC}
+        DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
         COMMENT "Building ${name}.o from Buckyball MLIR"
         VERBATIM
     )
@@ -131,5 +132,18 @@ function(add_buckyball_matmul_test name)
     )
 endfunction()
 
+function(add_buckyball_matmul_contract_test name)
+    add_buckyball_matmul_test(${name})
+    add_custom_target(optest_buckyball_${name}_contract
+        COMMAND ${FILECHECK}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir
+            --input-file=${CMAKE_CURRENT_BINARY_DIR}/${name}_1_bank_ssa.mlir
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
+        COMMENT "Checking Buckyball matmul ISA contract for ${name}"
+        VERBATIM
+    )
+endfunction()
+
+add_buckyball_matmul_contract_test(matmul_16x64_64x16)
 add_buckyball_matmul_test(matmul_64x16_16x64)
 add_buckyball_matmul_test(matmul_1024x16_16x1024)

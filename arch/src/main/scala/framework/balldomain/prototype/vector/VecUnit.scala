@@ -2,28 +2,31 @@ package framework.balldomain.prototype.vector
 
 import chisel3._
 import chisel3.util._
-import chisel3.stage._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.balldomain.prototype.vector._
-import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
-import framework.top.GlobalConfig
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.balldomain.prototype.vector.configs.VectorBallParam
+import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
+import framework.top.GlobalConfig
 
 @instantiable
 class VecUnit(val b: GlobalConfig) extends Module {
-  val ballConfig = VectorBallParam()
-  val InputNum   = ballConfig.lane
-  val inputWidth = ballConfig.inputWidth
-  val accWidth   = ballConfig.outputWidth
-  val bankWidth  = b.memDomain.bankWidth
+  val cfg        = VectorBallParam()
+  val lane       = cfg.lane
+  val inputWidth = cfg.inputWidth
+  val accWidth   = cfg.outputWidth
 
-  // Get bandwidth from config (use first VecBall mapping)
+  require(lane == 16, "VecUnit mul_warp16 requires lane=16")
+  require(inputWidth == 8, "VecUnit mul_warp16 requires int8 inputs")
+  require(accWidth == 32, "VecUnit mul_warp16 requires int32 accumulators")
+
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
     .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
   val inBW        = ballMapping.inBW
   val outBW       = ballMapping.outBW
+
+  require(inBW >= 2, "VecUnit mul_warp16 requires two read ports")
+  require(outBW >= 4, "VecUnit mul_warp16 requires four write ports")
 
   @public
   val io = IO(new Bundle {
@@ -34,108 +37,233 @@ class VecUnit(val b: GlobalConfig) extends Module {
     val status    = new BallStatus
   })
 
-  // Register to store rob_id when command is received
-  val rob_id_reg = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  when(io.cmdReq.fire) {
-    rob_id_reg := io.cmdReq.bits.rob_id
-  }
+  val sIdle :: sReadReq :: sReadResp :: sWriteReq :: sWriteResp :: sDone :: Nil = Enum(6)
+  val state                                                                     = RegInit(sIdle)
 
-  // Set rob_id and ball_id for all bankRead and bankWrite channels from register
+  val robIdReg    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val isSubReg    = RegInit(false.B)
+  val subRobIdReg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+
+  val op1Bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op2Bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wrBank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val iterReg = RegInit(0.U(b.frontend.iter_len.W))
+
+  val readRow  = RegInit(0.U(b.frontend.iter_len.W))
+  val writeRow = RegInit(0.U(log2Ceil(lane + 1).W))
+
+  val aReqDone    = RegInit(false.B)
+  val bReqDone    = RegInit(false.B)
+  val aRespDone   = RegInit(false.B)
+  val bRespDone   = RegInit(false.B)
+  val aWord       = RegInit(0.U(b.memDomain.bankWidth.W))
+  val bWord       = RegInit(0.U(b.memDomain.bankWidth.W))
+  val writeIssued = RegInit(VecInit(Seq.fill(4)(false.B)))
+  val writeAcked  = RegInit(VecInit(Seq.fill(4)(false.B)))
+
+  val acc = Reg(Vec(lane, Vec(lane, UInt(accWidth.W))))
+
+  io.cmdReq.ready            := state === sIdle
+  io.cmdResp.valid           := state === sDone
+  io.cmdResp.bits.rob_id     := robIdReg
+  io.cmdResp.bits.is_sub     := isSubReg
+  io.cmdResp.bits.sub_rob_id := subRobIdReg
+
   for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id  := rob_id_reg
-    io.bankRead(i).ball_id := 0.U
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id  := rob_id_reg
-    io.bankWrite(i).ball_id := 0.U
-  }
-
-  val VecCtrlUnit:  Instance[VecCtrlUnit]  = Instantiate(new VecCtrlUnit(b))
-  val VecLoadUnit:  Instance[VecLoadUnit]  = Instantiate(new VecLoadUnit(b))
-  val VecEX:        Instance[VecEXUnit]    = Instantiate(new VecEXUnit(b))
-  val VecStoreUnit: Instance[VecStoreUnit] = Instantiate(new VecStoreUnit(b))
-
-// -----------------------------------------------------------------------------
-// VECCTRLUNIT
-// -----------------------------------------------------------------------------
-
-  VecCtrlUnit.io.cmdReq <> io.cmdReq
-  io.cmdResp <> VecCtrlUnit.io.cmdResp_o
-
-// -----------------------------------------------------------------------------
-// VECLOADUNIT
-// -----------------------------------------------------------------------------
-
-  VecLoadUnit.io.ctrl_ld_i <> VecCtrlUnit.io.ctrl_ld_o
-  for (i <- 0 until inBW) {
-    io.bankRead(i).io.req <> VecLoadUnit.io.bankReadReq(i)
-    VecLoadUnit.io.bankReadResp(i) <> io.bankRead(i).io.resp
-    if (i == 0) {
-      io.bankRead(i).bank_id  := VecLoadUnit.io.op1_bank_o
-      io.bankRead(i).group_id := 0.U
-    } else if (i == 1) {
-      io.bankRead(i).bank_id  := VecLoadUnit.io.op2_bank_o
-      io.bankRead(i).group_id := 0.U
-    }
-  }
-
-// -----------------------------------------------------------------------------
-// VECEX
-// -----------------------------------------------------------------------------
-
-  VecEX.io.ctrl_ex_i <> VecCtrlUnit.io.ctrl_ex_o
-  VecEX.io.ld_ex_i <> VecLoadUnit.io.ld_ex_o
-
-// -----------------------------------------------------------------------------
-// VECSTOREUNIT
-// -----------------------------------------------------------------------------
-  VecStoreUnit.io.ctrl_st_i <> VecCtrlUnit.io.ctrl_st_o
-  VecStoreUnit.io.ex_st_i <> VecEX.io.ex_st_o
-
-  // Debug: print wr_bank_o
-  when(VecStoreUnit.io.ctrl_st_i.fire) {
-    printf("[VecUnit] VecStoreUnit wr_bank_o=%d\n", VecStoreUnit.io.wr_bank_o)
+    io.bankRead(i).rob_id           := robIdReg
+    io.bankRead(i).ball_id          := 0.U
+    io.bankRead(i).bank_id          := 0.U
+    io.bankRead(i).group_id         := 0.U
+    io.bankRead(i).io.req.valid     := false.B
+    io.bankRead(i).io.req.bits.addr := 0.U
+    io.bankRead(i).io.resp.ready    := false.B
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io <> VecStoreUnit.io.bankWrite(i)
-    io.bankWrite(i).bank_id           := VecStoreUnit.io.wr_bank_o
-    io.bankWrite(i).io.req.bits.wmode := true.B
+    io.bankWrite(i).rob_id            := robIdReg
+    io.bankWrite(i).ball_id           := 0.U
+    io.bankWrite(i).bank_id           := wrBank
     io.bankWrite(i).group_id          := i.U
+    io.bankWrite(i).io.req.valid      := false.B
+    io.bankWrite(i).io.req.bits.addr  := 0.U
+    io.bankWrite(i).io.req.bits.data  := 0.U
+    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    io.bankWrite(i).io.req.bits.wmode := true.B
+    io.bankWrite(i).io.resp.ready     := false.B
+  }
 
-    // Debug: print all channels
-    when(io.bankWrite(i).io.req.valid) {
-      printf(
-        "[VecUnit] bankWrite[%d]: bank_id=%d group_id=%d valid=%d ready=%d\n",
-        i.U,
-        io.bankWrite(i).bank_id,
-        io.bankWrite(i).group_id,
-        io.bankWrite(i).io.req.valid,
-        io.bankWrite(i).io.req.ready
-      )
+  def rowVec(word: UInt): Vec[UInt] =
+    word.asTypeOf(Vec(lane, UInt(inputWidth.W)))
+
+  def writeData(group: Int): UInt = {
+    val row   = writeRow(log2Ceil(lane) - 1, 0)
+    val elems = (0 until 4).map { laneIdx =>
+      acc(row)(group * 4 + laneIdx)
+    }
+    Cat(elems.reverse)
+  }
+
+  switch(state) {
+    is(sIdle) {
+      when(io.cmdReq.fire) {
+        robIdReg    := io.cmdReq.bits.rob_id
+        isSubReg    := io.cmdReq.bits.is_sub
+        subRobIdReg := io.cmdReq.bits.sub_rob_id
+        op1Bank     := io.cmdReq.bits.cmd.op1_bank
+        op2Bank     := io.cmdReq.bits.cmd.op2_bank
+        wrBank      := io.cmdReq.bits.cmd.wr_bank
+        iterReg     := io.cmdReq.bits.cmd.iter
+        readRow     := 0.U
+        writeRow    := 0.U
+        aReqDone    := false.B
+        bReqDone    := false.B
+        aRespDone   := false.B
+        bRespDone   := false.B
+        writeIssued := VecInit(Seq.fill(4)(false.B))
+        writeAcked  := VecInit(Seq.fill(4)(false.B))
+        for (i <- 0 until lane) {
+          for (j <- 0 until lane) {
+            acc(i)(j) := 0.U
+          }
+        }
+        assert(io.cmdReq.bits.cmd.iter > 0.U, "VecUnit mul_warp16 iter must be > 0")
+        assert(
+          io.cmdReq.bits.cmd.op1_col === 1.U && io.cmdReq.bits.cmd.op2_col === 1.U &&
+            io.cmdReq.bits.cmd.wr_col === 4.U,
+          "VecUnit mul_warp16 unsupported bank layout"
+        )
+        state := sReadReq
+      }
+    }
+
+    is(sReadReq) {
+      io.bankRead(0).bank_id          := op1Bank
+      io.bankRead(0).io.req.valid     := !aReqDone
+      io.bankRead(0).io.req.bits.addr := readRow
+      io.bankRead(1).bank_id          := op2Bank
+      io.bankRead(1).io.req.valid     := !bReqDone
+      io.bankRead(1).io.req.bits.addr := readRow
+
+      when(io.bankRead(0).io.req.fire) {
+        aReqDone := true.B
+      }
+      when(io.bankRead(1).io.req.fire) {
+        bReqDone := true.B
+      }
+      when((aReqDone || io.bankRead(0).io.req.fire) && (bReqDone || io.bankRead(1).io.req.fire)) {
+        aRespDone := false.B
+        bRespDone := false.B
+        state     := sReadResp
+      }
+    }
+
+    is(sReadResp) {
+      io.bankRead(0).bank_id       := op1Bank
+      io.bankRead(1).bank_id       := op2Bank
+      io.bankRead(0).io.resp.ready := !aRespDone
+      io.bankRead(1).io.resp.ready := !bRespDone
+
+      val aFire  = io.bankRead(0).io.resp.fire
+      val bFire  = io.bankRead(1).io.resp.fire
+      val nextA  = Mux(aFire, io.bankRead(0).io.resp.bits.data, aWord)
+      val nextB  = Mux(bFire, io.bankRead(1).io.resp.bits.data, bWord)
+      val haveA  = aRespDone || aFire
+      val haveB  = bRespDone || bFire
+      val aElems = rowVec(nextA)
+      val bElems = rowVec(nextB)
+
+      when(aFire) {
+        aWord := io.bankRead(0).io.resp.bits.data
+      }
+      when(bFire) {
+        bWord := io.bankRead(1).io.resp.bits.data
+      }
+      when(haveA) {
+        aRespDone := true.B
+      }
+      when(haveB) {
+        bRespDone := true.B
+      }
+
+      when(haveA && haveB) {
+        for (i <- 0 until lane) {
+          for (j <- 0 until lane) {
+            val prod = aElems(i).asSInt * bElems(j).asSInt
+            acc(i)(j) := (acc(i)(j).asSInt + prod).asUInt
+          }
+        }
+
+        when(readRow === iterReg - 1.U) {
+          writeRow    := 0.U
+          writeIssued := VecInit(Seq.fill(4)(false.B))
+          writeAcked  := VecInit(Seq.fill(4)(false.B))
+          state       := sWriteReq
+        }.otherwise {
+          readRow  := readRow + 1.U
+          aReqDone := false.B
+          bReqDone := false.B
+          state    := sReadReq
+        }
+      }
+    }
+
+    is(sWriteReq) {
+      for (group <- 0 until 4) {
+        io.bankWrite(group).bank_id           := wrBank
+        io.bankWrite(group).group_id          := group.U
+        io.bankWrite(group).io.req.valid      := !writeIssued(group)
+        io.bankWrite(group).io.req.bits.addr  := writeRow
+        io.bankWrite(group).io.req.bits.data  := writeData(group)
+        io.bankWrite(group).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+        io.bankWrite(group).io.req.bits.wmode := true.B
+
+        when(io.bankWrite(group).io.req.fire) {
+          writeIssued(group) := true.B
+        }
+      }
+
+      val allIssued = (0 until 4)
+        .map(group => writeIssued(group) || io.bankWrite(group).io.req.fire)
+        .reduce(_ && _)
+      when(allIssued) {
+        writeAcked := VecInit(Seq.fill(4)(false.B))
+        state      := sWriteResp
+      }
+    }
+
+    is(sWriteResp) {
+      for (group <- 0 until 4) {
+        io.bankWrite(group).bank_id       := wrBank
+        io.bankWrite(group).group_id      := group.U
+        io.bankWrite(group).io.resp.ready := !writeAcked(group)
+
+        when(io.bankWrite(group).io.resp.fire) {
+          writeAcked(group) := true.B
+        }
+      }
+
+      val allAcked = (0 until 4)
+        .map(group => writeAcked(group) || io.bankWrite(group).io.resp.fire)
+        .reduce(_ && _)
+      when(allAcked) {
+        when(writeRow === (lane - 1).U) {
+          state := sDone
+        }.otherwise {
+          writeRow    := writeRow + 1.U
+          writeIssued := VecInit(Seq.fill(4)(false.B))
+          writeAcked  := VecInit(Seq.fill(4)(false.B))
+          state       := sWriteReq
+        }
+      }
+    }
+
+    is(sDone) {
+      when(io.cmdResp.fire) {
+        state := sIdle
+      }
     }
   }
-  VecCtrlUnit.io.cmdResp_i <> VecStoreUnit.io.cmdResp_o
 
-// -----------------------------------------------------------------------------
-// Status tracking
-// -----------------------------------------------------------------------------
-  val iterCnt   = RegInit(0.U(32.W))
-  val hasInput  = RegInit(false.B)
-  val hasOutput = RegInit(false.B)
-
-  when(io.cmdReq.fire) {
-    hasInput := true.B
-  }
-  when(io.cmdResp.fire) {
-    hasOutput := false.B
-    hasInput  := false.B
-    iterCnt   := iterCnt + 1.U
-  }
-  when(io.cmdResp.valid && !hasOutput) {
-    hasOutput := true.B
-  }
-
-  io.status.idle    := !hasInput && !hasOutput
-  io.status.running := hasOutput
+  io.status.idle    := state === sIdle
+  io.status.running := state =/= sIdle && state =/= sDone
 }

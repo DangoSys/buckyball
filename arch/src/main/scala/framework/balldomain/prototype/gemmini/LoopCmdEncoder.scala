@@ -50,6 +50,9 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
     slot.cmd.cmd.rs1Data  := 0.U
     slot.cmd.cmd.rs2Data  := 0.U
     slot.cmd.bankAccess   := BankAccessInfo.none(bankIdLen)
+    slot.cmd.op1_col      := 0.U
+    slot.cmd.op2_col      := 0.U
+    slot.cmd.wr_col       := 0.U
     slot.cmd.isFence      := false.B
     slot.cmd.isBarrier    := false.B
 

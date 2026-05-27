@@ -18,6 +18,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
@@ -101,93 +102,98 @@ public:
     uint64_t depthB = k;
     uint64_t depthC = tile;
 
-    for (uint64_t m0 = 0; m0 < m; m0 += tile) {
-      for (uint64_t n0 = 0; n0 < n; n0 += tile) {
-        Value aTile = rewriter.create<memref::SubViewOp>(
-            loc, aMem,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(m0),
-                                      rewriter.getIndexAttr(0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(tile),
-                                      rewriter.getIndexAttr(k)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-        Value bTile = rewriter.create<memref::SubViewOp>(
-            loc, bMem,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
-                                      rewriter.getIndexAttr(n0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(k),
-                                      rewriter.getIndexAttr(tile)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-        Value cTile = rewriter.create<memref::SubViewOp>(
-            loc, cMem,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(m0),
-                                      rewriter.getIndexAttr(n0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(tile),
-                                      rewriter.getIndexAttr(tile)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
+    OpBuilder::InsertionGuard guard(rewriter);
+    Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value mUpper = rewriter.create<arith::ConstantIndexOp>(loc, m);
+    Value nUpper = rewriter.create<arith::ConstantIndexOp>(loc, n);
+    Value step = rewriter.create<arith::ConstantIndexOp>(loc, tile);
 
-        auto aFp32 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        aFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
-        auto bFp32 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        bFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
-        auto aI8 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        auto bI8 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        auto aI8T =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    auto mLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, mUpper, step);
+    rewriter.setInsertionPointToStart(mLoop.getBody());
+    Value mIv = mLoop.getInductionVar();
 
-        auto aLoad = rewriter.create<buckyball::BankMvinOp>(
-            loc, rewriter.getI64Type(), aTile, aFp32.getBank(),
-            cstI64(rewriter, loc, depthA), cstI64(rewriter, loc, 1));
-        auto bLoad = rewriter.create<buckyball::BankMvinOp>(
-            loc, rewriter.getI64Type(), bTile, bFp32.getBank(),
-            cstI64(rewriter, loc, depthB), cstI64(rewriter, loc, strideB));
+    auto nLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, nUpper, step);
+    rewriter.setInsertionPointToStart(nLoop.getBody());
+    Value nIv = nLoop.getInductionVar();
 
-        auto aQuant = rewriter.create<buckyball::BankFp2IntOp>(
-            loc, rewriter.getI64Type(), aLoad.getBankOut(), aI8.getBank(),
-            cstI64(rewriter, loc, depthA), scale);
-        auto bQuant = rewriter.create<buckyball::BankFp2IntOp>(
-            loc, rewriter.getI64Type(), bLoad.getBankOut(), bI8.getBank(),
-            cstI64(rewriter, loc, depthB), scale);
+    Value aTile = rewriter.create<memref::SubViewOp>(
+        loc, aMem, SmallVector<OpFoldResult>{mIv, rewriter.getIndexAttr(0)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(tile),
+                                  rewriter.getIndexAttr(k)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
+    Value bTile = rewriter.create<memref::SubViewOp>(
+        loc, bMem, SmallVector<OpFoldResult>{rewriter.getIndexAttr(0), nIv},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(k),
+                                  rewriter.getIndexAttr(tile)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
+    Value cTile = rewriter.create<memref::SubViewOp>(
+        loc, cMem, SmallVector<OpFoldResult>{mIv, nIv},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(tile),
+                                  rewriter.getIndexAttr(tile)},
+        SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                  rewriter.getIndexAttr(1)});
 
-        rewriter.create<buckyball::BankReleaseOp>(loc, aLoad.getBankOut());
-        rewriter.create<buckyball::BankReleaseOp>(loc, bLoad.getBankOut());
+    auto aFp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    aFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+    auto bFp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    bFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+    auto aI8 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    auto bI8 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    auto aI8T =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
 
-        auto aTrans = rewriter.create<buckyball::BankTransposeOp>(
-            loc, rewriter.getI64Type(), aQuant.getOutBankOut(), aI8T.getBank(),
-            cstI64(rewriter, loc, k), cstI64(rewriter, loc, 0));
-        rewriter.create<buckyball::BankReleaseOp>(loc, aQuant.getOutBankOut());
+    auto aLoad = rewriter.create<buckyball::BankMvinOp>(
+        loc, rewriter.getI64Type(), aTile, aFp32.getBank(),
+        cstI64(rewriter, loc, depthA), cstI64(rewriter, loc, 1));
+    auto bLoad = rewriter.create<buckyball::BankMvinOp>(
+        loc, rewriter.getI64Type(), bTile, bFp32.getBank(),
+        cstI64(rewriter, loc, depthB), cstI64(rewriter, loc, strideB));
 
-        auto cI32 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        cI32->setAttr("col", rewriter.getI64IntegerAttr(4));
-        auto cFp32 =
-            rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
-        cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+    auto aQuant = rewriter.create<buckyball::BankFp2IntOp>(
+        loc, rewriter.getI64Type(), aLoad.getBankOut(), aI8.getBank(),
+        cstI64(rewriter, loc, depthA), scale);
+    auto bQuant = rewriter.create<buckyball::BankFp2IntOp>(
+        loc, rewriter.getI64Type(), bLoad.getBankOut(), bI8.getBank(),
+        cstI64(rewriter, loc, depthB), scale);
 
-        auto cMul = rewriter.create<buckyball::BankMulWarp16Op>(
-            loc, rewriter.getI64Type(), aTrans.getOutBankOut(),
-            bQuant.getOutBankOut(), cI32.getBank(), cstI64(rewriter, loc, k),
-            cstI64(rewriter, loc, 0));
-        rewriter.create<buckyball::BankReleaseOp>(loc, aTrans.getOutBankOut());
-        rewriter.create<buckyball::BankReleaseOp>(loc, bQuant.getOutBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, aLoad.getBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, bLoad.getBankOut());
 
-        auto cDequant = rewriter.create<buckyball::BankInt2FpOp>(
-            loc, rewriter.getI64Type(), cMul.getWrBankOut(), cFp32.getBank(),
-            cstI64(rewriter, loc, depthC), scale);
-        rewriter.create<buckyball::BankReleaseOp>(loc, cMul.getWrBankOut());
+    auto aTrans = rewriter.create<buckyball::BankTransposeOp>(
+        loc, rewriter.getI64Type(), aQuant.getOutBankOut(), aI8T.getBank(),
+        cstI64(rewriter, loc, k), cstI64(rewriter, loc, 0));
+    rewriter.create<buckyball::BankReleaseOp>(loc, aQuant.getOutBankOut());
 
-        auto cStore = rewriter.create<buckyball::BankMvoutOp>(
-            loc, rewriter.getI64Type(), cTile, cDequant.getOutBankOut(),
-            cstI64(rewriter, loc, depthC), cstI64(rewriter, loc, strideC));
-        rewriter.create<buckyball::BankReleaseOp>(loc, cStore.getBankOut());
-      }
-    }
+    auto cI32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    cI32->setAttr("col", rewriter.getI64IntegerAttr(4));
+    auto cFp32 =
+        rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
+    cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
+
+    auto cMul = rewriter.create<buckyball::BankMulWarp16Op>(
+        loc, rewriter.getI64Type(), aTrans.getOutBankOut(),
+        bQuant.getOutBankOut(), cI32.getBank(), cstI64(rewriter, loc, k),
+        cstI64(rewriter, loc, 0));
+    rewriter.create<buckyball::BankReleaseOp>(loc, aTrans.getOutBankOut());
+    rewriter.create<buckyball::BankReleaseOp>(loc, bQuant.getOutBankOut());
+
+    auto cDequant = rewriter.create<buckyball::BankInt2FpOp>(
+        loc, rewriter.getI64Type(), cMul.getWrBankOut(), cFp32.getBank(),
+        cstI64(rewriter, loc, depthC), scale);
+    rewriter.create<buckyball::BankReleaseOp>(loc, cMul.getWrBankOut());
+
+    auto cStore = rewriter.create<buckyball::BankMvoutOp>(
+        loc, rewriter.getI64Type(), cTile, cDequant.getOutBankOut(),
+        cstI64(rewriter, loc, depthC), cstI64(rewriter, loc, strideC));
+    rewriter.create<buckyball::FenceOp>(loc);
+    rewriter.create<buckyball::BankReleaseOp>(loc, cStore.getBankOut());
 
     rewriter.eraseOp(op);
     return success();
@@ -210,6 +216,11 @@ public:
   StringRef getArgument() const final { return "lower-buckyball-to-bank-ssa"; }
   StringRef getDescription() const final {
     return "Lower bb_matmul to explicit bank-SSA ops.";
+  }
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<arith::ArithDialect, memref::MemRefDialect, scf::SCFDialect,
+                    buckyball::BuckyballDialect>();
   }
 
   void runOnOperation() override {

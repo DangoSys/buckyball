@@ -23,6 +23,9 @@ class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val domain_id  = UInt(4.W)
   val cmd        = new RoCCCommandBB(b.core.xLen)
   val bankAccess = new BankAccessInfo(log2Up(b.memDomain.bankNum))
+  val op1_col    = UInt(5.W)
+  val op2_col    = UInt(5.W)
+  val wr_col     = UInt(5.W)
   val isFence    = Bool()
   val isBarrier  = Bool()
 }
@@ -117,6 +120,9 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_o.bits.domain_id  := domain_id
   io.id_o.bits.cmd        := io.id_i.bits.cmd
   io.id_o.bits.bankAccess := bankAccess
+  io.id_o.bits.op1_col    := 0.U
+  io.id_o.bits.op2_col    := 0.U
+  io.id_o.bits.wr_col     := 0.U
   io.id_o.bits.isFence    := is_frontend_inst
   io.id_o.bits.isBarrier  := is_barrier_inst
 }

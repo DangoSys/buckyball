@@ -8,41 +8,24 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
 import framework.memdomain.backend.MemRequestIO
 
-/**
- * AccPipe: Accumulator Pipeline
- * - Direct write (wmode=0): write.req -> bank write -> forward resp
- * - Accum write (wmode=1): bank read -> (old + new with mask) -> bank write -> forward resp
- * - Read: bank read -> forward resp
- *
- * This version:
- * - Uses correct IO directions based on your SramReadIO/SramWriteIO definitions
- * - Uses strict Decoupled handshakes
- * - Latches op type/address/data/mask
- * - Latches old_data on read resp fire (no cross-state resp.bits usage)
- */
 @instantiable
 class AccPipe(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    // Interface to SramBank
-    // Your SramReadIO/SramWriteIO are SLAVE-shaped (req is Flipped), so master must Flipped(...)
-    val sramRead  = Flipped(new SramReadIO(b))  // AccPipe -> bank: req out, resp in
-    val sramWrite = Flipped(new SramWriteIO(b)) // AccPipe -> bank: req out, resp in
+    val sramRead  = Flipped(new SramReadIO(b))
+    val sramWrite = Flipped(new SramWriteIO(b))
 
     val mem_req  = Flipped(new MemRequestIO(b))
     val is_multi = Input(Bool())
 
     val busy     = Output(Bool())
     val group_id = Output(UInt(3.W))
-    val bank_id  = Output(UInt(b.memDomain.bankNum.W))
+    val bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
   })
 
-  val read :: write :: Nil = Enum(2)
-  val state                = RegInit(read)
-
-  io.sramRead <> io.mem_req.read
-  io.sramWrite <> io.mem_req.write
+  val idle :: accReadResp :: accWriteReq :: accWriteResp :: Nil = Enum(4)
+  val state                                                     = RegInit(idle)
 
   // Each group has its own physical bank, so no address shifting is needed.
   // The previous is_multi shift (addr >> 2) was incorrect: it caused mvout reads
@@ -50,54 +33,111 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
   //group_id output
   val group_id_reg = RegInit(0.U(3.W))
-  when(io.mem_req.read.req.valid || io.mem_req.write.req.valid) {
-    io.group_id  := io.mem_req.group_id
-    group_id_reg := io.mem_req.group_id
-  }.otherwise {
-    io.group_id := group_id_reg
-  }
+  io.group_id := group_id_reg
 
   //Bank_id output
-  val bank_id_reg = RegInit(0.U(b.memDomain.bankNum.W))
-  when(io.mem_req.read.req.valid || io.mem_req.write.req.valid) {
-    bank_id_reg := io.mem_req.bank_id
-    io.bank_id  := io.mem_req.bank_id
-  }.otherwise {
-    io.bank_id := bank_id_reg
-  }
+  val bank_id_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  io.bank_id := bank_id_reg
 
   val acc_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
   val acc_mask_reg = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B)))
   val acc_addr_reg = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val old_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
+  val rd_hold      = RegInit(false.B)
+  val rd_data_reg  = RegInit(0.U(b.memDomain.bankWidth.W))
+  val wr_hold      = RegInit(false.B)
+  val wr_ok_reg    = RegInit(false.B)
 
-  switch(state) {
-    is(read) { //Stage 1: Read Acc Data
-      when(io.mem_req.write.req.valid && io.mem_req.write.req.bits.wmode) {
-        state                     := write
-        acc_data_reg              := io.mem_req.write.req.bits.data
-        acc_mask_reg              := io.mem_req.write.req.bits.mask
-        acc_addr_reg              := io.mem_req.write.req.bits.addr
-        io.sramRead.req.bits.addr := io.mem_req.write.req.bits.addr
-        io.sramRead.req.valid     := true.B
+  def laneAdd(a: UInt, old: UInt): UInt = {
+    val lanes = b.memDomain.bankWidth / 32
+    Cat((0 until lanes).reverse.map { i =>
+      val hi = (i + 1) * 32 - 1
+      val lo = i * 32
+      a(hi, lo) + old(hi, lo)
+    })
+  }
 
-        io.sramWrite.req.valid := false.B
-        io.sramWrite.req.bits  := DontCare
-      }
+  val canStart    = state === idle && !rd_hold && !wr_hold &&
+    !io.sramRead.resp.valid && !io.sramWrite.resp.valid
+  val hasWriteReq = io.mem_req.write.req.valid
+  val accReq      = canStart && hasWriteReq && io.mem_req.write.req.bits.wmode
+  val wrReq       = canStart && hasWriteReq && !io.mem_req.write.req.bits.wmode
+  val rdReq       = canStart && !hasWriteReq && io.mem_req.read.req.valid
+
+  io.sramRead.req.valid     := rdReq || accReq
+  io.sramRead.req.bits.addr := Mux(accReq, io.mem_req.write.req.bits.addr, io.mem_req.read.req.bits.addr)
+  io.sramRead.resp.ready    := state === idle || state === accReadResp
+
+  io.sramWrite.req.valid      := wrReq || state === accWriteReq
+  io.sramWrite.req.bits.addr  := Mux(state === accWriteReq, acc_addr_reg, io.mem_req.write.req.bits.addr)
+  io.sramWrite.req.bits.data  := Mux(
+    state === accWriteReq,
+    laneAdd(acc_data_reg, old_data_reg),
+    io.mem_req.write.req.bits.data
+  )
+  io.sramWrite.req.bits.mask  := Mux(state === accWriteReq, acc_mask_reg, io.mem_req.write.req.bits.mask)
+  io.sramWrite.req.bits.wmode := Mux(state === accWriteReq, true.B, io.mem_req.write.req.bits.wmode)
+  io.sramWrite.resp.ready     := true.B
+
+  io.mem_req.read.req.ready      := canStart && !hasWriteReq && io.sramRead.req.ready
+  io.mem_req.read.resp.valid     := rd_hold || (state === idle && io.sramRead.resp.valid)
+  io.mem_req.read.resp.bits.data := Mux(rd_hold, rd_data_reg, io.sramRead.resp.bits.data)
+
+  io.mem_req.write.req.ready    := Mux(
+    io.mem_req.write.req.bits.wmode,
+    canStart && io.sramRead.req.ready,
+    canStart && io.sramWrite.req.ready
+  )
+  io.mem_req.write.resp.valid   := wr_hold || io.sramWrite.resp.valid
+  io.mem_req.write.resp.bits.ok := Mux(wr_hold, wr_ok_reg, io.sramWrite.resp.bits.ok)
+
+  when(rd_hold) {
+    when(io.mem_req.read.resp.ready) {
+      rd_hold := false.B
     }
-    is(write) { //Stage 2: Write Acc Data
-      when(io.sramRead.resp.valid) {
-        state                       := read
-        io.sramWrite.req.bits.addr  := acc_addr_reg
-        io.sramWrite.req.bits.data  := acc_data_reg + io.sramRead.resp.bits.data
-        io.sramWrite.req.bits.mask  := acc_mask_reg
-        io.sramWrite.req.bits.wmode := true.B
-        io.sramWrite.req.valid      := true.B
+  }.elsewhen(state === idle && io.sramRead.resp.valid && !io.mem_req.read.resp.ready) {
+    rd_hold     := true.B
+    rd_data_reg := io.sramRead.resp.bits.data
+  }
 
-        io.sramRead.req.valid := false.B
-        io.sramRead.req.bits  := DontCare
+  when(wr_hold) {
+    when(io.mem_req.write.resp.ready) {
+      wr_hold := false.B
+    }
+  }.elsewhen(io.sramWrite.resp.valid && !io.mem_req.write.resp.ready) {
+    wr_hold   := true.B
+    wr_ok_reg := io.sramWrite.resp.bits.ok
+  }
+
+  when(state === idle) {
+    when(io.mem_req.read.req.fire) {
+      group_id_reg := io.mem_req.group_id
+      bank_id_reg  := io.mem_req.bank_id
+    }
+    when(io.mem_req.write.req.fire) {
+      group_id_reg := io.mem_req.group_id
+      bank_id_reg  := io.mem_req.bank_id
+      when(io.mem_req.write.req.bits.wmode) {
+        acc_data_reg := io.mem_req.write.req.bits.data
+        acc_mask_reg := io.mem_req.write.req.bits.mask
+        acc_addr_reg := io.mem_req.write.req.bits.addr
+        state        := accReadResp
       }
     }
   }
 
-  io.busy := false.B
+  when(state === accReadResp && io.sramRead.resp.fire) {
+    old_data_reg := io.sramRead.resp.bits.data
+    state        := accWriteReq
+  }
+
+  when(state === accWriteReq && io.sramWrite.req.fire) {
+    state := accWriteResp
+  }
+
+  when(state === accWriteResp && io.sramWrite.resp.valid) {
+    state := idle
+  }
+
+  io.busy := state =/= idle
 }

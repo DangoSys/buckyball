@@ -40,15 +40,16 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // State
   // -----------------------------
-  val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_done :: Nil = Enum(6)
-  val state                                                                                             = RegInit(s_idle)
+  val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_wait_dma_resp :: s_done :: Nil =
+    Enum(7)
+  val state                                                                                                                = RegInit(s_idle)
 
   val rob_id_reg      = RegInit(0.U(rob_id_width.W))
   val is_sub_reg      = RegInit(false.B)
   val sub_rob_id_reg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val mem_addr_reg    = RegInit(0.U(b.memDomain.memAddrLen.W))
   val iter_reg        = RegInit(0.U(b.frontend.iter_len.W))
-  val stride_reg      = RegInit(0.U(10.W))
+  val stride_reg      = RegInit(0.U(19.W))
   val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val group_count_reg = RegInit(1.U(4.W)) // Store group count for current operation
   val is_shared_reg   = RegInit(false.B)
@@ -149,14 +150,13 @@ class MemStorer(val b: GlobalConfig) extends Module {
   }
 
   // -----------------------------
-  // Address calculation
-  // For multi-bank: each row has group_count groups, each group is line_bytes
-  // So: offset = addr * (group_count * line_bytes) + group * line_bytes
+  // Address calculation:
+  // base + row * groups * line_bytes * stride + group * line_bytes
   // -----------------------------
+  val row_offset       = addr_counter * group_count_reg * line_bytes.U * stride_reg
+  val group_offset     = group_counter * line_bytes.U
   val current_mem_addr =
-    mem_addr_reg +
-      addr_counter * group_count_reg * line_bytes.U +
-      group_counter * line_bytes.U
+    mem_addr_reg + row_offset + group_offset
 
   val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
 
@@ -226,8 +226,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.dmaReq.bits.mask   := dma_mask
   io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
 
-  // By default we don't care dmaResp in this simple model
-  io.dmaResp.ready := true.B
+  io.dmaResp.ready := state === s_wait_dma_resp
 
   // When we have a pending SRAM beat, prepare one DMA beat (and keep it until fire)
   when(state === s_have_sram_beat) {
@@ -245,51 +244,54 @@ class MemStorer(val b: GlobalConfig) extends Module {
   when(state === s_push_dma) {
     when(io.dmaReq.fire) {
       dma_v := false.B
+      state := s_wait_dma_resp
+    }
+  }
 
-      // Update buffer state like your original:
-      when(addr_offset =/= 0.U) {
-        val remaining_bytes = align_bytes.U - addr_offset
-        data_buffer        := incoming_data >> (addr_offset * 8.U)
-        buffer_valid_bytes := remaining_bytes
-        when(buffer_valid_bytes === 0.U) {
-          buffer_start_addr := aligned_addr + align_bytes.U
-        }.otherwise {
-          buffer_start_addr := buffer_start_addr + align_bytes.U
-        }
+  when(state === s_wait_dma_resp && io.dmaResp.fire) {
+    // Update buffer state like your original:
+    when(addr_offset =/= 0.U) {
+      val remaining_bytes = align_bytes.U - addr_offset
+      data_buffer        := incoming_data >> (addr_offset * 8.U)
+      buffer_valid_bytes := remaining_bytes
+      when(buffer_valid_bytes === 0.U) {
+        buffer_start_addr := aligned_addr + align_bytes.U
       }.otherwise {
-        // aligned: clear buffer if it was used
-        when(buffer_valid_bytes > 0.U && can_send_full_line) {
-          buffer_valid_bytes := 0.U
-          data_buffer        := 0.U
-        }
+        buffer_start_addr := buffer_start_addr + align_bytes.U
       }
-
-      // Mark current beat consumed
-      pending := false.B
-
-      // Check if this was the last beat before advancing counters
-      val is_last_row   = addr_counter >= iter_reg - 1.U
-      val is_last_group = group_counter >= group_count_reg - 1.U
-      val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
-
-      // Advance counters
-      when(iter_reg =/= 0.U) {
-        when(group_counter + 1.U < group_count_reg) {
-          // Move to next group in same row
-          group_counter := group_counter + 1.U
-        }.otherwise {
-          // Move to next row, reset group counter
-          group_counter := 0.U
-          addr_counter  := addr_counter + 1.U
-        }
+    }.otherwise {
+      // aligned: clear buffer if it was used
+      when(buffer_valid_bytes > 0.U && can_send_full_line) {
+        buffer_valid_bytes := 0.U
+        data_buffer        := 0.U
       }
+    }
 
-      // Decide next state based on completion check done BEFORE counter update
-      when(pendIsLast || iter_reg === 0.U || all_done) {
-        state := s_done
+    // Mark current beat consumed
+    pending := false.B
+
+    // Check if this was the last beat before advancing counters
+    val is_last_row   = addr_counter >= iter_reg - 1.U
+    val is_last_group = group_counter >= group_count_reg - 1.U
+    val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
+
+    // Advance counters
+    when(iter_reg =/= 0.U) {
+      when(group_counter + 1.U < group_count_reg) {
+        // Move to next group in same row
+        group_counter := group_counter + 1.U
       }.otherwise {
-        state := s_issue_sram_req
+        // Move to next row, reset group counter
+        group_counter := 0.U
+        addr_counter  := addr_counter + 1.U
       }
+    }
+
+    // Decide next state based on completion check done BEFORE counter update
+    when(pendIsLast || iter_reg === 0.U || all_done) {
+      state := s_done
+    }.otherwise {
+      state := s_issue_sram_req
     }
   }
 
