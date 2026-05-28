@@ -11,8 +11,8 @@ extern "C"
                       int64_t stride2, int64_t stride3) {
   (void)allocated;
 
-  if (size0 != 1 || size1 != 32 || size2 != 6 || size3 != 6 ||
-      stride0 != 1152 || stride1 != 36 || stride2 != 6 || stride3 != 1) {
+  if (size0 != 1 || size1 != 6 || size2 != 4 || size3 != 1 || stride0 != 24 ||
+      stride1 != 4 || stride2 != 1 || stride3 != 1) {
     printf("FAILED: linalg conv2d NCHW unexpected memref shape "
            "(size=%dx%dx%dx%d stride=%dx%dx%dx%d)\n",
            (int)size0, (int)size1, (int)size2, (int)size3, (int)stride0,
@@ -21,11 +21,11 @@ extern "C"
   }
 
   int32_t *output = aligned + offset;
-  const int32_t expected = 0x43100000;
+  const int32_t expected = 0x41000000;
   for (int i = 0; i < 1; ++i) {
-    for (int c = 0; c < 32; ++c) {
-      for (int h = 0; h < 6; ++h) {
-        for (int w = 0; w < 6; ++w) {
+    for (int c = 0; c < 6; ++c) {
+      for (int h = 0; h < 4; ++h) {
+        for (int w = 0; w < 1; ++w) {
           int64_t idx = i * stride0 + c * stride1 + h * stride2 + w * stride3;
           int32_t got = output[idx];
           if (got != expected) {

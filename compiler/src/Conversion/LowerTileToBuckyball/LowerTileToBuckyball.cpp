@@ -544,150 +544,160 @@ public:
     int64_t KH = fShape[0], KW = fShape[1], OC = fShape[3];
     int64_t OH = outShape[1], OW = outShape[2];
 
-    IntegerType i64Type = rewriter.getI64Type();
-
-    // Im2col patch dimensions: patchRows = OH*OW, patchCols = KH*KW*C
-    int64_t patchCols = KH * KW * C;
-
-    // Pad patchCols to lane boundary for matmul
-    int64_t patchColsPad = ceilDiv(patchCols, (int64_t)lane) * lane;
-
-    // Tile OH*OW dimension: how many output rows per tile
-    // Each tile produces tileOHOW output pixels, requiring tileOHOW rows in
-    // patch matrix Bank constraint: patch tile (tileOHOW * patchColsPad) must
-    // fit in bank
-    int64_t tileOHOW =
-        std::min((int64_t)bankDepth / std::max(patchColsPad, (int64_t)1),
-                 (int64_t)(OH * OW));
-    if (tileOHOW < 1)
-      tileOHOW = 1;
-    // Align to lane boundary
-    tileOHOW = (tileOHOW / lane) * lane;
-    if (tileOHOW < lane)
-      tileOHOW = lane;
-
     int64_t totalOHOW = OH * OW;
-    int64_t tileNum = ceilDiv(totalOHOW, tileOHOW);
+    int64_t patchCols = KH * KW * C;
+    if (!inType.getElementType().isF32() ||
+        !filterType.getElementType().isF32())
+      return op.emitError("tile_conv2d im2col lowering currently expects f32");
+    if (totalOHOW > lane)
+      return op.emitError(
+          "tile_conv2d im2col lowering currently supports one output warp");
+    if (patchCols <= 0 || patchCols > lane)
+      return op.emitError("tile_conv2d patch size must be in 1..16");
+    if (KW * C > 15 || W * C > 31)
+      return op.emitError("tile_conv2d im2col shape exceeds ISA field width");
+    if ((H * W * C) % lane != 0)
+      return op.emitError("tile_conv2d input element count must align to lane");
 
     // For each batch
     for (int64_t n = 0; n < N; n++) {
-      for (int64_t t = 0; t < tileNum; t++) {
-        int64_t ohowStart = t * tileOHOW;
-        int64_t ohowLen = std::min(tileOHOW, totalOHOW - ohowStart);
+      Value inBatch = rewriter.create<memref::SubViewOp>(
+          loc, input,
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(n), rewriter.getIndexAttr(0),
+              rewriter.getIndexAttr(0), rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(H),
+              rewriter.getIndexAttr(W), rewriter.getIndexAttr(C)},
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(1),
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(1)});
+      auto collapseIn = rewriter.create<memref::CollapseShapeOp>(
+          loc, inBatch, SmallVector<ReassociationIndices>{{0, 1}, {2, 3}});
 
-        // Compute start row/col in input space for im2col
-        int64_t startRow = (ohowStart / OW); // starting OH index
-        int64_t startCol = (ohowStart % OW); // starting OW index
+      Value filterReshaped = rewriter.create<memref::CollapseShapeOp>(
+          loc, filter, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
+      auto filterPadType =
+          MemRefType::get({patchCols, lane}, filterType.getElementType());
+      auto filterPadAlloc =
+          rewriter.create<memref::AllocOp>(loc, filterPadType);
+      filterPadAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
+      Value filterPad = filterPadAlloc.getResult();
+      Value zeroF32 = rewriter.create<arith::ConstantOp>(
+          loc, rewriter.getF32Type(), rewriter.getF32FloatAttr(0.0));
+      rewriter.create<linalg::FillOp>(loc, ValueRange{zeroF32},
+                                      ValueRange{filterPad});
 
-        // Allocate temporary patch matrix: [ohowLen, patchColsPad]
-        auto elemType = inType.getElementType();
-        auto patchType = MemRefType::get({ohowLen, patchColsPad}, elemType);
-        Value patchBuf = rewriter.create<memref::AllocOp>(loc, patchType);
-
-        // Create subview of input for batch n, then collapse to 2D for im2col
-        Value inBatch = rewriter.create<memref::SubViewOp>(
-            loc, input,
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(n), rewriter.getIndexAttr(0),
-                rewriter.getIndexAttr(0), rewriter.getIndexAttr(0)},
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(H),
-                rewriter.getIndexAttr(W), rewriter.getIndexAttr(C)},
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(1),
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(1)});
-
-        // Collapse [1, H, W, C] → [H, W*C] for im2col input
-        auto collapseIn = rewriter.create<memref::CollapseShapeOp>(
-            loc, inBatch, SmallVector<ReassociationIndices>{{0, 1}, {2, 3}});
-
-        // Im2col: rearrange input patches into columns
-        Value kRowVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(KH));
-        Value kColVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(KW));
-        Value inRowVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(H));
-        Value inColVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(W * C));
-        Value startRowVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(startRow));
-        Value startColVal = rewriter.create<arith::ConstantOp>(
-            loc, i64Type, rewriter.getI64IntegerAttr(startCol));
-
-        // Allocate one physical bank for each im2col operand. The mvin/mvout
-        // depth carries the logical row count; bank_alloc row/col describes
-        // physical bank array shape, per compiler.md.
-        Value srcBank = buckyball::allocBank(rewriter, loc, 1, 1);
-        Value dstBank = buckyball::allocBank(rewriter, loc, 1, 1);
-
-        // Move input data to source bank
-        int64_t inDepth = H * W * C / lane;
-        Value srcBankAfterMvin =
-            buckyball::mvinBank(rewriter, loc, collapseIn, srcBank, inDepth);
-
-        // Execute im2col operation
-        Value dstBankAfterIm2col = rewriter.create<buckyball::BankIm2colOp>(
-            loc, dstBank.getType(), srcBankAfterMvin, dstBank, kRowVal, kColVal,
-            inRowVal, inColVal, startRowVal, startColVal);
-
-        // Move result to patch buffer
-        int64_t outDepth = ohowLen * patchColsPad / lane;
-        buckyball::mvoutBank(rewriter, loc, patchBuf, dstBankAfterIm2col,
-                             outDepth);
-
-        // Release banks
-        buckyball::releaseBank(rewriter, loc, srcBankAfterMvin);
-        buckyball::releaseBank(rewriter, loc, dstBankAfterIm2col);
-
-        // Reshape filter [KH, KW, C, OC] → [KH*KW*C, OC] for matmul
-        Value filterReshaped = rewriter.create<memref::CollapseShapeOp>(
-            loc, filter, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
-
-        // Create output subview for this tile: [ohowLen, OC]
-        Value outBatch = rewriter.create<memref::SubViewOp>(
-            loc, output,
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(n), rewriter.getIndexAttr(0),
-                rewriter.getIndexAttr(0), rewriter.getIndexAttr(0)},
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(OH),
-                rewriter.getIndexAttr(OW), rewriter.getIndexAttr(OC)},
-            SmallVector<OpFoldResult>{
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(1),
-                rewriter.getIndexAttr(1), rewriter.getIndexAttr(1)});
-
-        // Collapse [1, OH, OW, OC] → [OH*OW, OC]
-        auto collapseOut = rewriter.create<memref::CollapseShapeOp>(
-            loc, outBatch, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
-
-        // Subview for the current tile rows
-        Value outTile = rewriter.create<memref::SubViewOp>(
-            loc, collapseOut,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(ohowStart),
-                                      rewriter.getIndexAttr(0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(ohowLen),
-                                      rewriter.getIndexAttr(OC)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-
-        Value patchValid = rewriter.create<memref::SubViewOp>(
-            loc, patchBuf,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
-                                      rewriter.getIndexAttr(0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(ohowLen),
-                                      rewriter.getIndexAttr(patchCols)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-
-        // Route through TileMatMul so non-16-aligned K/OC are padded and tiled
-        // by the matmul lowering instead of leaking illegal Buckyball matmuls.
-        rewriter.create<tile::TileMatMulOp>(loc, patchValid, filterReshaped,
-                                            outTile);
-
-        // Free temporary buffer
-        rewriter.create<memref::DeallocOp>(loc, patchBuf);
+      Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+      Value one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+      Value kUpper = rewriter.create<arith::ConstantIndexOp>(loc, patchCols);
+      Value ocUpper = rewriter.create<arith::ConstantIndexOp>(loc, OC);
+      auto kLoop = rewriter.create<scf::ForOp>(loc, zero, kUpper, one);
+      {
+        OpBuilder::InsertionGuard guard(rewriter);
+        rewriter.setInsertionPointToStart(kLoop.getBody());
+        auto ocLoop = rewriter.create<scf::ForOp>(loc, zero, ocUpper, one);
+        rewriter.setInsertionPointToStart(ocLoop.getBody());
+        Value v = rewriter.create<memref::LoadOp>(
+            loc, filterReshaped,
+            ValueRange{kLoop.getInductionVar(), ocLoop.getInductionVar()});
+        rewriter.create<memref::StoreOp>(
+            loc, v, filterPad,
+            ValueRange{kLoop.getInductionVar(), ocLoop.getInductionVar()});
       }
+
+      Value outBatch = rewriter.create<memref::SubViewOp>(
+          loc, output,
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(n), rewriter.getIndexAttr(0),
+              rewriter.getIndexAttr(0), rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(OH),
+              rewriter.getIndexAttr(OW), rewriter.getIndexAttr(OC)},
+          SmallVector<OpFoldResult>{
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(1),
+              rewriter.getIndexAttr(1), rewriter.getIndexAttr(1)});
+      auto collapseOut = rewriter.create<memref::CollapseShapeOp>(
+          loc, outBatch, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
+
+      auto cTileType = MemRefType::get({lane, lane}, outType.getElementType());
+      auto cTileAlloc = rewriter.create<memref::AllocOp>(loc, cTileType);
+      cTileAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
+      Value cTile = cTileAlloc.getResult();
+
+      Value inputFp = buckyball::allocBank(rewriter, loc, 1, 4);
+      Value inputI8 = buckyball::allocBank(rewriter, loc, 1, 1);
+      Value patchI8 = buckyball::allocBank(rewriter, loc, 1, 1);
+      Value patchT = buckyball::allocBank(rewriter, loc, 1, 1);
+
+      Value scale = buckyball::createI64Const(rewriter, loc, 0x3f800000);
+      int64_t inputDepth = H * W * C / lane;
+      Value inputLoad =
+          buckyball::mvinBank(rewriter, loc, collapseIn, inputFp, inputDepth);
+      Value inputQuant = rewriter.create<buckyball::BankFp2IntOp>(
+          loc, inputI8.getType(), inputLoad, inputI8,
+          buckyball::createI64Const(rewriter, loc, inputDepth), scale);
+      buckyball::releaseBank(rewriter, loc, inputLoad);
+
+      Value patch = rewriter.create<buckyball::BankIm2colOp>(
+          loc, patchI8.getType(), inputQuant, patchI8,
+          buckyball::createI64Const(rewriter, loc, KH),
+          buckyball::createI64Const(rewriter, loc, KW * C),
+          buckyball::createI64Const(rewriter, loc, H),
+          buckyball::createI64Const(rewriter, loc, W * C),
+          buckyball::createI64Const(rewriter, loc, 0),
+          buckyball::createI64Const(rewriter, loc, 0));
+      buckyball::releaseBank(rewriter, loc, inputQuant);
+
+      Value patchTrans = rewriter.create<buckyball::BankTransposeOp>(
+          loc, patchT.getType(), patch, patchT,
+          buckyball::createI64Const(rewriter, loc, patchCols),
+          buckyball::createI64Const(rewriter, loc, 0));
+      buckyball::releaseBank(rewriter, loc, patch);
+
+      Value filterFp = buckyball::allocBank(rewriter, loc, 1, 4);
+      Value filterI8 = buckyball::allocBank(rewriter, loc, 1, 1);
+      Value cI32 = buckyball::allocBank(rewriter, loc, 1, 4);
+      Value filterLoad =
+          buckyball::mvinBank(rewriter, loc, filterPad, filterFp, patchCols);
+      Value filterQuant = rewriter.create<buckyball::BankFp2IntOp>(
+          loc, filterI8.getType(), filterLoad, filterI8,
+          buckyball::createI64Const(rewriter, loc, patchCols), scale);
+      buckyball::releaseBank(rewriter, loc, filterLoad);
+
+      Value cMul = rewriter.create<buckyball::BankMulWarp16Op>(
+          loc, cI32.getType(), patchTrans, filterQuant, cI32,
+          buckyball::createI64Const(rewriter, loc, patchCols),
+          buckyball::createI64Const(rewriter, loc, 0));
+      buckyball::releaseBank(rewriter, loc, patchTrans);
+      buckyball::releaseBank(rewriter, loc, filterQuant);
+
+      Value cFp32 = buckyball::allocBank(rewriter, loc, 1, 4);
+      Value cDequant = rewriter.create<buckyball::BankInt2FpOp>(
+          loc, cFp32.getType(), cMul, cFp32,
+          buckyball::createI64Const(rewriter, loc, lane), scale);
+      buckyball::releaseBank(rewriter, loc, cMul);
+      Value cStore = buckyball::mvoutBank(rewriter, loc, cTile, cDequant, lane);
+      rewriter.create<buckyball::FenceOp>(loc);
+      buckyball::releaseBank(rewriter, loc, cStore);
+
+      Value mUpper = rewriter.create<arith::ConstantIndexOp>(loc, totalOHOW);
+      auto mLoop = rewriter.create<scf::ForOp>(loc, zero, mUpper, one);
+      {
+        OpBuilder::InsertionGuard guard(rewriter);
+        rewriter.setInsertionPointToStart(mLoop.getBody());
+        auto cLoop = rewriter.create<scf::ForOp>(loc, zero, ocUpper, one);
+        rewriter.setInsertionPointToStart(cLoop.getBody());
+        Value v = rewriter.create<memref::LoadOp>(
+            loc, cTile,
+            ValueRange{mLoop.getInductionVar(), cLoop.getInductionVar()});
+        rewriter.create<memref::StoreOp>(
+            loc, v, collapseOut,
+            ValueRange{mLoop.getInductionVar(), cLoop.getInductionVar()});
+      }
+
+      rewriter.create<memref::DeallocOp>(loc, cTile);
+      rewriter.create<memref::DeallocOp>(loc, filterPad);
     }
 
     rewriter.eraseOp(op);

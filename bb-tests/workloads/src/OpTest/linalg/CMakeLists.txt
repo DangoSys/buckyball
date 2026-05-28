@@ -46,7 +46,7 @@ function(add_linalg_conv2d_test name main_src)
       -convert-linalg-to-tile
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=32"
+      "--assign-physical-banks=bank_num=16"
       -lower-bank-ssa-to-intrinsics
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -127,7 +127,7 @@ add_custom_command(
         -convert-linalg-to-tile
         -convert-tile-to-buckyball
         -lower-buckyball-to-bank-ssa
-        "--assign-physical-banks=bank_num=32"
+        "--assign-physical-banks=bank_num=16"
         -lower-bank-ssa-to-intrinsics
         -convert-linalg-to-loops
         -expand-strided-metadata
@@ -175,3 +175,11 @@ add_linalg_contract_test(conv2d_nchw_fchw_contract)
 add_linalg_conv2d_test(conv2d_nhwc_hwcf conv2d_nhwc_main.c)
 add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.c)
 add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.c)
+
+add_custom_target(linalg-OpTest-build ALL DEPENDS
+  optest_linalg_matmul_singlecore_baremetal
+  optest_linalg_conv2d_nhwc_hwcf
+  optest_linalg_conv2d_nhwc_fhwc
+  optest_linalg_conv2d_nchw_fchw
+  COMMENT "Building all Linalg OpTest workloads"
+  VERBATIM)

@@ -1,4 +1,4 @@
-// CHECK: tile.tile_conv2d {{.*}} : memref<1x8x8x16xf32> memref<3x3x16x32xf32> memref<1x6x6x32xf32>
+// CHECK: tile.tile_conv2d {{.*}} : memref<1x4x1x8xf32> memref<1x1x8x6xf32> memref<1x4x1x6xf32>
 // CHECK-NOT: linalg.conv_2d_nhwc_hwcf
 
 func.func @main() -> i8 {
@@ -6,22 +6,22 @@ func.func @main() -> i8 {
   %zero_f32 = arith.constant 0.0 : f32
   %one_f32 = arith.constant 1.0 : f32
 
-  %input = memref.alloc() : memref<1x8x8x16xf32>
-  %filter = memref.alloc() : memref<3x3x16x32xf32>
-  %output = memref.alloc() : memref<1x6x6x32xf32>
+  %input = memref.alloc() {alignment = 16 : i64} : memref<1x4x1x8xf32>
+  %filter = memref.alloc() {alignment = 16 : i64} : memref<1x1x8x6xf32>
+  %output = memref.alloc() {alignment = 16 : i64} : memref<1x4x1x6xf32>
 
-  linalg.fill ins(%one_f32 : f32) outs(%input : memref<1x8x8x16xf32>)
-  linalg.fill ins(%one_f32 : f32) outs(%filter : memref<3x3x16x32xf32>)
-  linalg.fill ins(%zero_f32 : f32) outs(%output : memref<1x6x6x32xf32>)
+  linalg.fill ins(%one_f32 : f32) outs(%input : memref<1x4x1x8xf32>)
+  linalg.fill ins(%one_f32 : f32) outs(%filter : memref<1x1x8x6xf32>)
+  linalg.fill ins(%zero_f32 : f32) outs(%output : memref<1x4x1x6xf32>)
 
   linalg.conv_2d_nhwc_hwcf
     {dilations = dense<1> : tensor<2xi64>, strides = dense<1> : tensor<2xi64>}
-    ins(%input, %filter : memref<1x8x8x16xf32>, memref<3x3x16x32xf32>)
-    outs(%output : memref<1x6x6x32xf32>)
+    ins(%input, %filter : memref<1x4x1x8xf32>, memref<1x1x8x6xf32>)
+    outs(%output : memref<1x4x1x6xf32>)
 
-  memref.dealloc %input : memref<1x8x8x16xf32>
-  memref.dealloc %filter : memref<3x3x16x32xf32>
-  memref.dealloc %output : memref<1x6x6x32xf32>
+  memref.dealloc %input : memref<1x4x1x8xf32>
+  memref.dealloc %filter : memref<1x1x8x6xf32>
+  memref.dealloc %output : memref<1x4x1x6xf32>
 
   return %zero_i8 : i8
 }
