@@ -45,4 +45,7 @@ tests = [
     "ctest_transpose_matmul_singlecore-baremetal",
     "optest_buckyball_matmul_16x64_64x16_singlecore-baremetal",
     "optest_buckyball_matmul_64x16_16x64_singlecore-baremetal",
+    "optest_linalg_conv2d_nhwc_hwcf_singlecore-baremetal",
+    "optest_linalg_conv2d_nhwc_fhwc_singlecore-baremetal",
+    "optest_linalg_conv2d_nchw_fchw_singlecore-baremetal",
 ]

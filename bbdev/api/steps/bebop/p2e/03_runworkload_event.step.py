@@ -4,7 +4,7 @@ bebop p2e runworkload event handler
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
   1. Resolve image name to .hex file under bb-tests/output/
   2. Validate bitstream .bit file path
-  3. Run bebop p2e --runworkload --image <image-path> --bitstream <bitstream> --log-dir <log>
+  3. Run bebop p2e --runworkload --image <image-path> --bitstream <bitstream> [--wave] [--wave-start <cycle>] --log-dir <log>
 """
 import glob
 import os
@@ -46,6 +46,37 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     image_name = input_data.get("image", "")
     bitstream = input_data.get("bitstream", "")
+    wave = bool(input_data.get("wave", False))
+    if "wave_start" in input_data:
+        ctx.logger.error("invalid parameter: --wave_start (use --wave-start)")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_parameter", "parameter": "wave_start"},
+            trace_id=origin_tid,
+        )
+        return
+    wave_start_raw = input_data.get("wave-start")
+    wave_start = None
+    if wave_start_raw is not None:
+        try:
+            wave_start = int(wave_start_raw)
+        except (TypeError, ValueError):
+            ctx.logger.error(f"invalid wave_start: {wave_start_raw}")
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={"error": "invalid_wave_start", "wave_start": wave_start_raw},
+                trace_id=origin_tid,
+            )
+            return
+        if wave_start < 0:
+            ctx.logger.error(f"wave_start must be >= 0: {wave_start}")
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={"error": "invalid_wave_start", "wave_start": wave_start},
+                trace_id=origin_tid,
+            )
+            return
+        wave = True
 
     image_path = resolve_image(bbdir, image_name)
     if not image_path:
@@ -71,6 +102,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # so build_dir is 2 levels up
     build_dir = input_data.get("build_dir")
     if not build_dir:
+        build_dir = input_data.get("build-dir")
+    if not build_dir:
         bitstream_abs = os.path.abspath(bitstream)
         # Go up: fpgaCompDir -> build_dir
         build_dir = os.path.dirname(os.path.dirname(bitstream_abs))
@@ -85,7 +118,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = input_data.get("log_dir") or f"{bebop_dir}/log/p2e-runworkload-{timestamp}"
+    log_dir = input_data.get("log_dir")
+    if not log_dir:
+        log_dir = input_data.get("log-dir")
+    if not log_dir:
+        log_dir = f"{bebop_dir}/log/p2e-runworkload-{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
 
     # ── Run bebop p2e --runworkload ───────────────────────────────────────
@@ -100,6 +137,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--build-dir=\"{build_dir}\" "
         f"--log-dir=\"{log_dir}\""
     )
+    if wave:
+        run_cmd += " --wave"
+    if wave_start is not None:
+        run_cmd += f" --wave-start=\"{wave_start}\""
     ctx.logger.info(f"Running bebop p2e runworkload: {run_cmd}")
     run_result = stream_run_logger(
         cmd=run_cmd,
