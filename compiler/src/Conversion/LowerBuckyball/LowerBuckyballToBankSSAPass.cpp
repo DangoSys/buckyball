@@ -37,6 +37,60 @@ static Value cstI64(OpBuilder &b, Location loc, uint64_t v) {
                                      b.getI64IntegerAttr(v));
 }
 
+static Value cstF32(OpBuilder &b, Location loc, float v) {
+  return b.create<arith::ConstantOp>(loc, b.getF32Type(), b.getF32FloatAttr(v));
+}
+
+static Value packF32BitsAsI64(OpBuilder &b, Location loc, Value f32Val) {
+  Value i32Bits = b.create<arith::BitcastOp>(loc, b.getI32Type(), f32Val);
+  return b.create<arith::ExtUIOp>(loc, b.getI64Type(), i32Bits);
+}
+
+static Value buildTileAbsMax(PatternRewriter &rewriter, Location loc, Value mem,
+                             uint64_t rows, uint64_t cols) {
+  auto maxTy = MemRefType::get({1}, rewriter.getF32Type());
+  Value maxBuf = rewriter.create<memref::AllocOp>(loc, maxTy);
+
+  Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+  Value oneIdx = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+  Value rowsIdx = rewriter.create<arith::ConstantIndexOp>(loc, rows);
+  Value colsIdx = rewriter.create<arith::ConstantIndexOp>(loc, cols);
+  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
+
+  rewriter.create<memref::StoreOp>(loc, zeroF32, maxBuf, ValueRange{zeroIdx});
+
+  auto rowLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, rowsIdx, oneIdx);
+  rewriter.setInsertionPointToStart(rowLoop.getBody());
+  auto colLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, colsIdx, oneIdx);
+  rewriter.setInsertionPointToStart(colLoop.getBody());
+
+  Value elem = rewriter.create<memref::LoadOp>(
+      loc, mem,
+      ValueRange{rowLoop.getInductionVar(), colLoop.getInductionVar()});
+  Value neg = rewriter.create<arith::NegFOp>(loc, elem);
+  Value abs = rewriter.create<arith::MaximumFOp>(loc, elem, neg);
+  Value cur = rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
+  Value upd = rewriter.create<arith::MaximumFOp>(loc, cur, abs);
+  rewriter.create<memref::StoreOp>(loc, upd, maxBuf, ValueRange{zeroIdx});
+
+  rewriter.setInsertionPointAfter(rowLoop);
+  Value result =
+      rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
+  rewriter.create<memref::DeallocOp>(loc, maxBuf);
+  return result;
+}
+
+static Value buildQuantScale(PatternRewriter &rewriter, Location loc,
+                             Value maxAbs) {
+  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
+  Value oneF32 = cstF32(rewriter, loc, 1.0f);
+  Value qmaxF32 = cstF32(rewriter, loc, 127.0f);
+  Value hasData = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGT,
+                                                 maxAbs, zeroF32);
+  Value scaled = rewriter.create<arith::DivFOp>(loc, qmaxF32, maxAbs);
+  return rewriter.create<arith::SelectOp>(loc, hasData, scaled, oneF32);
+}
+
 static LogicalResult getStaticRowStrideDiv16(MemRefType ty, uint64_t &out) {
   SmallVector<int64_t, 4> strides;
   int64_t off = 0;
@@ -92,11 +146,6 @@ public:
       return rewriter.notifyMatchFailure(
           op, "C requires static strided<[row,1]> and row % 16 == 0");
 
-    // Scale for quantization: hardcoded 1.0f for now
-    // TODO: get scale from MatMulOp attributes or global config
-    uint32_t scale_bits = 0x3f800000; // 1.0f in IEEE 754
-    auto scale = cstI64(rewriter, loc, scale_bits);
-
     constexpr uint64_t tile = 16;
     uint64_t depthA = tile * (k / tile);
     uint64_t depthB = k;
@@ -135,6 +184,18 @@ public:
         SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                   rewriter.getIndexAttr(1)});
 
+    Value maxA = buildTileAbsMax(rewriter, loc, aTile, tile, k);
+    Value maxB = buildTileAbsMax(rewriter, loc, bTile, k, tile);
+    Value scaleAF32 = buildQuantScale(rewriter, loc, maxA);
+    Value scaleBF32 = buildQuantScale(rewriter, loc, maxB);
+    Value scaleABits = packF32BitsAsI64(rewriter, loc, scaleAF32);
+    Value scaleBBits = packF32BitsAsI64(rewriter, loc, scaleBF32);
+    Value oneF32 = cstF32(rewriter, loc, 1.0f);
+    Value scaleProd = rewriter.create<arith::MulFOp>(loc, scaleAF32, scaleBF32);
+    Value dequantScaleF32 =
+        rewriter.create<arith::DivFOp>(loc, oneF32, scaleProd);
+    Value dequantScaleBits = packF32BitsAsI64(rewriter, loc, dequantScaleF32);
+
     auto aFp32 =
         rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
     aFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
@@ -157,10 +218,10 @@ public:
 
     auto aQuant = rewriter.create<buckyball::BankFp2IntOp>(
         loc, rewriter.getI64Type(), aLoad.getBankOut(), aI8.getBank(),
-        cstI64(rewriter, loc, depthA), scale);
+        cstI64(rewriter, loc, depthA), scaleABits);
     auto bQuant = rewriter.create<buckyball::BankFp2IntOp>(
         loc, rewriter.getI64Type(), bLoad.getBankOut(), bI8.getBank(),
-        cstI64(rewriter, loc, depthB), scale);
+        cstI64(rewriter, loc, depthB), scaleBBits);
 
     rewriter.create<buckyball::BankReleaseOp>(loc, aLoad.getBankOut());
     rewriter.create<buckyball::BankReleaseOp>(loc, bLoad.getBankOut());
@@ -186,7 +247,7 @@ public:
 
     auto cDequant = rewriter.create<buckyball::BankInt2FpOp>(
         loc, rewriter.getI64Type(), cMul.getWrBankOut(), cFp32.getBank(),
-        cstI64(rewriter, loc, depthC), scale);
+        cstI64(rewriter, loc, depthC), dequantScaleBits);
     rewriter.create<buckyball::BankReleaseOp>(loc, cMul.getWrBankOut());
 
     auto cStore = rewriter.create<buckyball::BankMvoutOp>(
