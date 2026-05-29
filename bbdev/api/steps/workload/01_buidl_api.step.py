@@ -17,6 +17,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "workload": body.get("workload", ""),
         "model": body.get("model", ""),
+        "trace": body.get("trace", False),
     }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

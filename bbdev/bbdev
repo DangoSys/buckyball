@@ -40,7 +40,7 @@ WORKFLOW_COMMANDS = {
         "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     },
     "workload": {
-        "build": "Build workload.",
+        "build": 'Build workload. Args: "[--model <name>] [--trace]"',
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {

@@ -17,6 +17,9 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 # Build specific workload
 bbdev workload --build "--workload test_program"
 
+# Build traced LeNet workload
+bbdev workload --build "--model lenet --trace"
+
 # Build all workloads
 bbdev workload --build
 ```
