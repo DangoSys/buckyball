@@ -106,7 +106,7 @@ class StreamWriter(val b: GlobalConfig) extends Module {
   }
 
   when(io.elemIn.fire) {
-    packReg(packCntReg) := io.elemIn.bits
+    packReg(packCntReg(log2Ceil(lanesPerBeat) - 1, 0)) := io.elemIn.bits
     val nextCnt = packCntReg + 1.U
     packCntReg := nextCnt
     when(nextCnt === lanesPerBeat.U) {

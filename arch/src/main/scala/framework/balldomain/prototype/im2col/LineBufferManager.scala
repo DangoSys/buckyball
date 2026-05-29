@@ -3,53 +3,36 @@ package framework.balldomain.prototype.im2col
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-
 import framework.balldomain.blink.BankRead
-import framework.top.GlobalConfig
 import framework.balldomain.prototype.im2col.configs.Im2colBallParam
+import framework.top.GlobalConfig
 
-/**
- * LineBufferManager — manages lineBuffer loading and element extraction.
- *
- * Handles preload (loading kRow rows) and load_next_row (loading 1 new row
- * with FIFO rotation). Provides a combinational element read port that
- * extracts a single element from the lineBuffer given (kRowIdx, kColIdx).
- */
 @instantiable
 class LineBufferManager(val b: GlobalConfig) extends Module {
   private val maxK          = Im2colBallParam().InputNum
   private val elemWidth     = Im2colBallParam().inputWidth
   private val bankWidth     = b.memDomain.bankWidth
   private val lanesPerBeat  = 16
-  private val maxInCol      = 32
-  private val maxInColWords = (maxInCol + lanesPerBeat - 1) / lanesPerBeat
+  private val maxInColWords = 3
 
-  private val mapping = b.ballDomain.ballIdMappings
+  private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
     .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
 
-  private val inBW = mapping.inBW
+  private val inBW = map.inBW
 
   @public val io = IO(new Bundle {
-    // SRAM read port (directly connected to Ball's bankRead)
-    val bankRead = Vec(inBW, Flipped(new BankRead(b)))
+    val bankRead      = Vec(inBW, Flipped(new BankRead(b)))
+    val startPreload  = Input(Bool())
+    val startLoadNext = Input(Bool())
+    val kRow          = Input(UInt(log2Ceil(maxK + 1).W))
+    val inCol         = Input(UInt(16.W))
+    val rowPtr        = Input(UInt(16.W))
+    val rBaseBeat     = Input(UInt(32.W))
+    val rBankId       = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val robId         = Input(UInt(log2Up(b.frontend.rob_entries).W))
+    val loadDone      = Output(Bool())
 
-    // Control inputs
-    val startPreload  = Input(Bool()) // pulse: begin preloading kRow rows
-    val startLoadNext = Input(Bool()) // pulse: begin loading 1 new row
-
-    // Configuration (latched by Im2col on cmdReq.fire)
-    val kRow      = Input(UInt(log2Ceil(maxK + 1).W))
-    val inCol     = Input(UInt(16.W))
-    val rowPtr    = Input(UInt(16.W))
-    val rBaseBeat = Input(UInt(32.W))
-    val rBankId   = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val robId     = Input(UInt(log2Up(b.frontend.rob_entries).W))
-
-    // Status outputs
-    val loadDone = Output(Bool()) // high when load operation is complete
-
-    // Element read port (combinational)
     val elemReq = new Bundle {
       val kRowIdx = Input(UInt(log2Ceil(maxK + 1).W))
       val kColIdx = Input(UInt(log2Ceil(maxK + 1).W))
@@ -60,28 +43,26 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   })
 
   private def ceilDiv(a: UInt, d: Int): UInt = (a + (d - 1).U) / d.U
-  private val inColWords = ceilDiv(io.inCol, lanesPerBeat)
+  private val inColWords = ceilDiv(io.inCol + (lanesPerBeat - 1).U, lanesPerBeat)
+  private val buf        = RegInit(VecInit(Seq.fill(maxK)(VecInit(Seq.fill(maxInColWords)(0.U(bankWidth.W))))))
 
-  // Line buffer storage
-  private val lineBuffer = RegInit(VecInit(Seq.fill(maxK)(VecInit(Seq.fill(maxInColWords)(0.U(bankWidth.W))))))
-
-  // Row slot FIFO for circular buffer management
   private val rowFifo = Module(new RowSlotFIFO(maxK))
+  private val loader  = Module(new LineLoadCtrl(maxK, maxInColWords))
   rowFifo.io.kRows   := io.kRow
-  rowFifo.io.init    := false.B
-  rowFifo.io.advance := false.B
+  rowFifo.io.init    := io.startPreload
+  rowFifo.io.advance := loader.io.advanceFifo
 
-  // Load state machine
-  val sIdle :: sPreload :: sLoadNext :: Nil = Enum(3)
-  val loadState                             = RegInit(sIdle)
+  loader.io.startPreload  := io.startPreload
+  loader.io.startLoadNext := io.startLoadNext
+  loader.io.kRow          := io.kRow
+  loader.io.inColWords    := inColWords
+  loader.io.inCol         := io.inCol
+  loader.io.rowPtr        := io.rowPtr
+  loader.io.rBaseBeat     := io.rBaseBeat
+  loader.io.targetSlot    := rowFifo.io.slotToOverwrite
+  loader.io.reqReady      := io.bankRead(0).io.req.ready
+  loader.io.respValid     := io.bankRead(0).io.resp.valid
 
-  private val ldRowIdxReg      = RegInit(0.U(log2Ceil(maxK + 1).W))
-  private val ldBeatIdxReg     = RegInit(0.U(log2Ceil(maxInColWords + 1).W))
-  private val ldOutstandingReg = RegInit(false.B)
-
-  io.loadDone := (loadState === sIdle)
-
-  // Default bankRead signals
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := 0.U
@@ -92,88 +73,22 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     io.bankRead(i).group_id         := 0.U
   }
 
-  // Element extraction (combinational) — no division needed
-  private val startLane    = io.elemReq.colPtr % lanesPerBeat.U
-  private val physicalSlot = RowSlotFIFO.logicalToPhysical(rowFifo.io.head, io.elemReq.kRowIdx, io.kRow)
-  private val laneSum      = startLane + io.elemReq.kColIdx
-  private val beatIdx      = laneSum / lanesPerBeat.U
-  private val laneIdx      = laneSum           % lanesPerBeat.U
-  private val beatWord     = lineBuffer(physicalSlot)(beatIdx)
-  private val lanes        = beatWord.asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
-  io.elemData := lanes(laneIdx)
+  io.bankRead(0).io.req.valid     := loader.io.reqValid
+  io.bankRead(0).io.req.bits.addr := loader.io.reqAddr
+  io.bankRead(0).io.resp.ready    := loader.io.respReady
+  io.loadDone                     := loader.io.done
 
-  switch(loadState) {
-    is(sIdle) {
-      when(io.startPreload) {
-        ldRowIdxReg      := 0.U
-        ldBeatIdxReg     := 0.U
-        ldOutstandingReg := false.B
-        rowFifo.io.init  := true.B
-        loadState        := sPreload
-      }.elsewhen(io.startLoadNext) {
-        ldBeatIdxReg     := 0.U
-        ldOutstandingReg := false.B
-        loadState        := sLoadNext
-      }
-    }
-
-    is(sPreload) {
-      val doneRows = ldRowIdxReg === io.kRow
-      val canIssue = !doneRows && !ldOutstandingReg && (ldBeatIdxReg < inColWords)
-      val rowElem  = io.rowPtr + ldRowIdxReg
-      val reqAddr  = io.rBaseBeat + rowElem * inColWords + ldBeatIdxReg
-
-      io.bankRead(0).io.req.valid     := canIssue
-      io.bankRead(0).io.req.bits.addr := reqAddr
-      io.bankRead(0).io.resp.ready    := ldOutstandingReg
-
-      when(io.bankRead(0).io.req.fire) {
-        ldOutstandingReg := true.B
-      }
-
-      when(io.bankRead(0).io.resp.fire) {
-        lineBuffer(ldRowIdxReg)(ldBeatIdxReg) := io.bankRead(0).io.resp.bits.data.asUInt
-        ldOutstandingReg                      := false.B
-
-        when(ldBeatIdxReg + 1.U === inColWords) {
-          ldBeatIdxReg := 0.U
-          ldRowIdxReg  := ldRowIdxReg + 1.U
-        }.otherwise {
-          ldBeatIdxReg := ldBeatIdxReg + 1.U
-        }
-      }
-
-      when(doneRows && !ldOutstandingReg) {
-        loadState := sIdle
-      }
-    }
-
-    is(sLoadNext) {
-      val canIssue   = !ldOutstandingReg && (ldBeatIdxReg < inColWords)
-      val rowElem    = io.rowPtr + io.kRow - 1.U
-      val reqAddr    = io.rBaseBeat + rowElem * inColWords + ldBeatIdxReg
-      val targetSlot = rowFifo.io.slotToOverwrite
-
-      io.bankRead(0).io.req.valid     := canIssue
-      io.bankRead(0).io.req.bits.addr := reqAddr
-      io.bankRead(0).io.resp.ready    := ldOutstandingReg
-
-      when(io.bankRead(0).io.req.fire) {
-        ldOutstandingReg := true.B
-      }
-
-      when(io.bankRead(0).io.resp.fire) {
-        lineBuffer(targetSlot)(ldBeatIdxReg) := io.bankRead(0).io.resp.bits.data.asUInt
-        ldOutstandingReg                     := false.B
-
-        when(ldBeatIdxReg + 1.U === inColWords) {
-          ldBeatIdxReg       := 0.U
-          rowFifo.io.advance := true.B
-          loadState          := sIdle
-        }.otherwise {
-          ldBeatIdxReg := ldBeatIdxReg + 1.U
-        }
-      }
-    }
+  when(io.bankRead(0).io.resp.fire) {
+    buf(loader.io.writeRow)(loader.io.writeBeat) := io.bankRead(0).io.resp.bits.data.asUInt
   }
+
+  private val rowByte   = (io.rowPtr + io.elemReq.kRowIdx) * io.inCol
+  private val startLane = ((rowByte + io.elemReq.colPtr) % lanesPerBeat.U)(log2Ceil(lanesPerBeat) - 1, 0)
+  private val slot      = RowSlotFIFO
+    .logicalToPhysical(rowFifo.io.head, io.elemReq.kRowIdx, io.kRow)(log2Ceil(maxK) - 1, 0)
+  private val laneSum   = startLane + io.elemReq.kColIdx
+  private val beatIdx   = (laneSum / lanesPerBeat.U)(log2Ceil(maxInColWords) - 1, 0)
+  private val laneIdx   = (laneSum % lanesPerBeat.U)(log2Ceil(lanesPerBeat) - 1, 0)
+  private val lanes     = buf(slot)(beatIdx).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
+  io.elemData := lanes(laneIdx)
 }

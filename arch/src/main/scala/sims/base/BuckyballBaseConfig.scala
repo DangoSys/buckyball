@@ -57,7 +57,7 @@ class BuckyballBaseConfig
         // ================================================
         //   Interrupts
         // ================================================
-        new freechips.rocketchip.subsystem.WithNExtTopInterrupts(0) ++
+        new freechips.rocketchip.subsystem.WithNExtTopInterrupts(1) ++
 
         // ================================================
         //   Memory system

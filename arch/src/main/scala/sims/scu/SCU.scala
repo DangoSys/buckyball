@@ -24,7 +24,8 @@ import freechips.rocketchip.tilelink._
  * Within each hart's sub-region:
  *   +0x00000: simExit register (write triggers $finish with exit code)
  *   +0x20000: uartTx register  (write outputs a byte via DPI-C)
- *   +0x20005: status register  (read-only, returns 0x60)
+ *   +0x20004: uartRx register  (read pops a byte from host input)
+ *   +0x20005: status register  (read-only, bit0 rx-valid, bit5/6 tx-ready)
  *
  * @param baseAddress   physical base address (must be aligned to totalSizeBytes)
  * @param strideBytes   bytes per hart (must be power of two)
@@ -140,6 +141,40 @@ class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
+class SCUReadDPI extends BlackBox with HasBlackBoxInline {
+  override def desiredName = "SCUReadDPI"
+
+  val io = IO(new Bundle {
+    val hart_id  = Input(UInt(32.W))
+    val pop      = Input(Bool())
+    val rx_valid = Output(Bool())
+    val rx_data  = Output(UInt(8.W))
+  })
+
+  setInline(
+    "SCUReadDPI.v",
+    s"""
+       |import "DPI-C" context function int scu_uart_rx_valid(input int unsigned hart_id);
+       |import "DPI-C" context function int scu_uart_peek(input int unsigned hart_id);
+       |import "DPI-C" context function int scu_uart_pop(input int unsigned hart_id);
+       |
+       |module SCUReadDPI(
+       |  input  [31:0] hart_id,
+       |  input         pop,
+       |  output reg       rx_valid,
+       |  output reg [7:0] rx_data
+       |);
+       |  integer data;
+       |  always @(*) begin
+       |    rx_valid = (scu_uart_rx_valid(hart_id) != 0);
+       |    data = pop ? scu_uart_pop(hart_id) : scu_uart_peek(hart_id);
+       |    rx_data = data[7:0];
+       |  end
+       |endmodule
+    """.stripMargin
+  )
+}
+
 /**
  * Global multi-hart SCU. Each hart owns a sub-region of size `strideBytes`
  * starting at `baseAddress + hartId * strideBytes`. Address decoder only
@@ -172,6 +207,13 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
     val dpi = Module(new SCUWriteDPI)
     dpi.io.clock := clock
     dpi.io.reset := reset.asBool
+
+    val rxDpis = Seq.tabulate(params.maxHarts) { h =>
+      val rx = Module(new SCUReadDPI)
+      rx.io.hart_id := h.U
+      rx.io.pop     := false.B
+      rx
+    }
 
     // Collect per-hart valid/data signals
     val uartValids = Wire(Vec(params.maxHarts, Bool()))
@@ -214,11 +256,21 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
           true.B
         }
 
+        val uartRead = RegReadFn { ready =>
+          rxDpis(h).io.pop := ready && rxDpis(h).io.rx_valid
+          (true.B, rxDpis(h).io.rx_data)
+        }
+
+        val uartStatus = RegReadFn { _ =>
+          (true.B, "h60".U(8.W) | rxDpis(h).io.rx_valid.asUInt)
+        }
+
         // Each hart's registers at hartBase + offset
         Seq(
           (hartBase + 0x00000) -> Seq(RegField(32, simExitReg, simExitWrite)),
           (hartBase + 0x20000) -> Seq(RegField(8, uartTxReg, uartWrite)),
-          (hartBase + 0x20005) -> Seq(RegField.r(8, "h60".U))
+          (hartBase + 0x20004) -> Seq(RegField.r(8, uartRead)),
+          (hartBase + 0x20005) -> Seq(RegField.r(8, uartStatus))
         )
       }
 

@@ -10,6 +10,9 @@
 //
 // DPI-C functions (implemented in mmio.cc):
 //   - scu_uart_write(hart_id, ch) : called when software writes to UART TX
+//   - scu_uart_rx_valid(hart_id)  : always false in Verilator batch mode
+//   - scu_uart_peek(hart_id)      : always zero in Verilator batch mode
+//   - scu_uart_pop(hart_id)       : always zero in Verilator batch mode
 //   - scu_sim_exit(hart_id, code) : called when software writes to sim exit
 
 #endif // _MMIO_H_

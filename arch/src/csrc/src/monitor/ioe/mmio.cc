@@ -32,6 +32,21 @@ extern "C" void scu_uart_write(uint32_t hart_id, uint32_t ch) {
   uart_putchar((char)(ch & 0xff));
 }
 
+extern "C" int scu_uart_rx_valid(uint32_t hart_id) {
+  (void)hart_id;
+  return 0;
+}
+
+extern "C" int scu_uart_peek(uint32_t hart_id) {
+  (void)hart_id;
+  return 0;
+}
+
+extern "C" int scu_uart_pop(uint32_t hart_id) {
+  (void)hart_id;
+  return 0;
+}
+
 // DPI-C function: called from RTL when software writes to SCU sim_exit register
 // (address 0x6000_0000, offset +0x00000 from SCU base)
 extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code) {
