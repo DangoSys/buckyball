@@ -37,6 +37,18 @@ extern "C" int scu_uart_rx_valid(uint32_t hart_id) {
   return 0;
 }
 
+extern "C" void scu_uart_rx_sample(uint32_t hart_id, uint32_t pop,
+                                   uint32_t *valid, uint32_t *data) {
+  (void)hart_id;
+  (void)pop;
+  if (!valid || !data) {
+    fprintf(stderr, "scu_uart_rx_sample received null output pointer\n");
+    _exit(1);
+  }
+  *valid = 0;
+  *data = 0;
+}
+
 extern "C" int scu_uart_peek(uint32_t hart_id) {
   (void)hart_id;
   return 0;

@@ -61,16 +61,23 @@ _start:
     la      a1, _dtb
     li      a2, 0x80
     csrc    mstatus, a2
-    li      t5, 0x60020000
-    la      t6, bootend_str
-4:  lbu     t0, 0(t6)
-    beqz    t0, 5f
-    sb      t0, 0(t5)
-    addi    t6, t6, 1
-    j       4b
-5:
-    mret
 
-.section .rodata, "a", @progbits
-bootend_str:
-    .asciz "BOOTEND\n"
+# Print "BOOTEND" to the console
+    li      t5, 0x60020000
+    li      t0, 'B'
+    sb      t0, 0(t5)
+    li      t0, 'O'
+    sb      t0, 0(t5)
+    sb      t0, 0(t5)
+    li      t0, 'T'
+    sb      t0, 0(t5)
+    li      t0, 'E'
+    sb      t0, 0(t5)
+    li      t0, 'N'
+    sb      t0, 0(t5)
+    li      t0, 'D'
+    sb      t0, 0(t5)
+    li      t0, '\n'
+    sb      t0, 0(t5)
+
+    mret

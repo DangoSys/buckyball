@@ -37,6 +37,7 @@ in
     httpx-sse
     requests
     pysocks
+    socksio
     allure-pytest
     matplotlib
 

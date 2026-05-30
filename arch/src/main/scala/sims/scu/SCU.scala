@@ -145,7 +145,10 @@ class SCUReadDPI extends BlackBox with HasBlackBoxInline {
   override def desiredName = "SCUReadDPI"
 
   val io = IO(new Bundle {
+    val clock    = Input(Clock())
+    val reset    = Input(Bool())
     val hart_id  = Input(UInt(32.W))
+    val enable   = Input(Bool())
     val pop      = Input(Bool())
     val rx_valid = Output(Bool())
     val rx_data  = Output(UInt(8.W))
@@ -154,21 +157,37 @@ class SCUReadDPI extends BlackBox with HasBlackBoxInline {
   setInline(
     "SCUReadDPI.v",
     s"""
-       |import "DPI-C" context function int scu_uart_rx_valid(input int unsigned hart_id);
-       |import "DPI-C" context function int scu_uart_peek(input int unsigned hart_id);
-       |import "DPI-C" context function int scu_uart_pop(input int unsigned hart_id);
+       |import "DPI-C" context function void scu_uart_rx_sample(
+       |  input  int unsigned hart_id,
+       |  input  int unsigned pop,
+       |  output int unsigned valid,
+       |  output int unsigned data
+       |);
        |
        |module SCUReadDPI(
+       |  input         clock,
+       |  input         reset,
        |  input  [31:0] hart_id,
+       |  input         enable,
        |  input         pop,
        |  output reg       rx_valid,
        |  output reg [7:0] rx_data
        |);
+       |  integer valid;
        |  integer data;
-       |  always @(*) begin
-       |    rx_valid = (scu_uart_rx_valid(hart_id) != 0);
-       |    data = pop ? scu_uart_pop(hart_id) : scu_uart_peek(hart_id);
-       |    rx_data = data[7:0];
+       |  always @(posedge clock) begin
+       |    if (reset) begin
+       |      rx_valid <= 1'b0;
+       |      rx_data <= 8'h0;
+       |    end else if (enable) begin
+       |      scu_uart_rx_sample(hart_id, {31'h0, pop}, valid, data);
+       |      if (pop) begin
+       |        rx_valid <= 1'b0;
+       |      end else begin
+       |        rx_valid <= (valid != 0);
+       |        rx_data <= data[7:0];
+       |      end
+       |    end
        |  end
        |endmodule
     """.stripMargin
@@ -210,7 +229,10 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
 
     val rxDpis = Seq.tabulate(params.maxHarts) { h =>
       val rx = Module(new SCUReadDPI)
+      rx.io.clock   := clock
+      rx.io.reset   := reset.asBool
       rx.io.hart_id := h.U
+      rx.io.enable  := false.B
       rx.io.pop     := false.B
       rx
     }
@@ -256,12 +278,18 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
           true.B
         }
 
+        val uartReadFire   = WireDefault(false.B)
+        val uartStatusFire = WireDefault(false.B)
+        rxDpis(h).io.enable := uartReadFire || uartStatusFire
+        rxDpis(h).io.pop    := uartReadFire
+
         val uartRead = RegReadFn { ready =>
-          rxDpis(h).io.pop := ready && rxDpis(h).io.rx_valid
+          uartReadFire := ready
           (true.B, rxDpis(h).io.rx_data)
         }
 
-        val uartStatus = RegReadFn { _ =>
+        val uartStatus = RegReadFn { ready =>
+          uartStatusFire := ready
           (true.B, "h60".U(8.W) | rxDpis(h).io.rx_valid.asUInt)
         }
 

@@ -19,6 +19,7 @@ if(NOT DEFINED MODEL)
   set(MODEL_QWEN3 ON)
   set(MODEL_YOLO26 ON)
   set(MODEL_BUDDYNEXT ON)
+  set(MODEL_GEMMA4 ON)
 endif()
 
 # EXCLUDE_FROM_ALL keeps e2e targets out of the default `ninja` build but
@@ -26,3 +27,6 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/e2e/models/CMakeLists.txt")
   add_subdirectory(e2e/models EXCLUDE_FROM_ALL)
 endif()
+
+unset(ARCH CACHE)
+unset(MODEL CACHE)
