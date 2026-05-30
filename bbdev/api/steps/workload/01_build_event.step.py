@@ -27,7 +27,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     workload_dir = f"{bbdir}/bb-tests"
     build_dir = f"{workload_dir}/build"
     model = input_data.get("model", "")
-    trace = bool(input_data.get("trace", False))
 
     model_targets = {
         "lenet": "buddy-buckyball-lenet-run",
@@ -35,24 +34,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "resnet": "buddy-buckyball-resnet-run",
         "yolo": "buddy-buckyball-yolo26-run",
     }
-    trace_model_targets = {
-        "lenet": "buddy-buckyball-lenet-trace-run",
-    }
     target = ""
     if model:
         model_key = model.lower()
-        if trace:
-            target = trace_model_targets.get(model_key)
-            if target is None:
-                ctx.logger.error(f"Trace build is not supported for model: {model}")
-                await check_result(
-                    ctx, 1, continue_run=False,
-                    extra_fields={"error": "trace_unsupported_model", "model": model},
-                    trace_id=origin_tid,
-                )
-                return
-        else:
-            target = model_targets.get(model_key)
+        target = model_targets.get(model_key)
         if target is None:
             ctx.logger.error(f"Unknown model: {model}")
             await check_result(

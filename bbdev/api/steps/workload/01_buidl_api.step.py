@@ -1,7 +1,5 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import get_buckyball_path
-
 config = {
     "name": "workload-build-api",
     "description": "build workload",
@@ -12,12 +10,10 @@ config = {
 
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = request.body or {}
     data = {
         "workload": body.get("workload", ""),
         "model": body.get("model", ""),
-        "trace": body.get("trace", False),
     }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

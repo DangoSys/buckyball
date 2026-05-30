@@ -52,9 +52,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     log_dir = input_data.get("log_dir") or f"{arch_dir}/log/{timestamp}-{binary_name}-bemu"
     os.makedirs(log_dir, exist_ok=True)
-    trace_path = os.path.join(log_dir, "layer-trace.ndjson")
-    run_env = os.environ.copy()
-    run_env.setdefault("BB_LAYER_TRACE_PATH", trace_path)
 
     # ── Run bebop bemu ────────────────────────────────────────────────────
     pk_flag = " --pk" if input_data.get("pk") else ""
@@ -71,11 +68,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=binary_dir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
-        env=run_env,
     )
-    fallback_trace_path = os.path.join(binary_dir, "layer-trace.ndjson")
-    if not os.path.exists(trace_path) and os.path.exists(fallback_trace_path):
-        os.replace(fallback_trace_path, trace_path)
 
     await check_result(
         ctx,
