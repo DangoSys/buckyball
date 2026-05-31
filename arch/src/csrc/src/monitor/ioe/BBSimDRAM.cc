@@ -83,6 +83,7 @@ static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
 
   munmap(file_buf, file_size);
   printf("[BBSimDRAM] Loaded ELF '%s': %zu bytes\n", path, loaded);
+  fflush(stdout);
 }
 
 extern "C" void *

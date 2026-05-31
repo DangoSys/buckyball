@@ -1,6 +1,6 @@
-# Buckyball Bootrom Makefile
+# Buckyball baremetal BootROM Makefile
 # Input: bootrom.S
-# Output: bootrom.img
+# Output: bootrom.rv64.img
 
 # Toolchain (will be provided by nix develop)
 CC = riscv64-none-elf-gcc
@@ -13,7 +13,7 @@ LDFLAGS = -Wl,--build-id=none -Wl,-Ttext=0x10000
 # Files
 SRC = bootrom.S
 ELF = bootrom.elf
-IMG = bootrom.img
+IMG = bootrom.rv64.img
 
 .PHONY: all clean
 

@@ -14,6 +14,13 @@ class WithCustomBootROM
         ))
     })
 
+class WithLinuxBootROM
+    extends Config((site, here, up) => {
+      case BootROMLocated(InSubsystem) => Some(BootROMParams(
+          contentFileName = "src/main/resources/linux/bootrom.rv64.img"
+        ))
+    })
+
 class BuckyballToyVerilatorConfig
     extends Config(
       new BBSimConfig ++
@@ -85,6 +92,34 @@ class BuckyballGoban24Tile16CoreVerilatorConfig
       new BBSimConfig ++
         new WithCustomBootROM ++
         new examples.goban.BuckyballGoban24Tile16CoreConfig
+    )
+
+class BuckyballGoban2Tile4CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig(maxHarts = 8) ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban2Tile4CoreConfig
+    )
+
+class BuckyballGoban2Tile4CoreLinuxVerilatorConfig
+    extends Config(
+      new BBSimConfig(maxHarts = 8) ++
+        new WithLinuxBootROM ++
+        new examples.goban.BuckyballGoban2Tile4CoreConfig
+    )
+
+class BuckyballGoban64Tile4CoreVerilatorConfig
+    extends Config(
+      new BBSimConfig(maxHarts = 256) ++
+        new WithCustomBootROM ++
+        new examples.goban.BuckyballGoban64Tile4CoreConfig
+    )
+
+class BuckyballGoban64Tile4CoreLinuxVerilatorConfig
+    extends Config(
+      new BBSimConfig(maxHarts = 256) ++
+        new WithLinuxBootROM ++
+        new examples.goban.BuckyballGoban64Tile4CoreConfig
     )
 
 //===----------------------------------------------------------------------===//

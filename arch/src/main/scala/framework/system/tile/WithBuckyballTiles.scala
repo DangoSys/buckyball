@@ -26,13 +26,14 @@ import framework.system.configloader.TomlConfigLoader
  *                      themselves are unchanged.
  */
 class WithBuckyballTiles(
-  tomlPath:      String,
-  withBuckyball: Boolean = true)
-    extends Config(WithBuckyballTiles.assemble(tomlPath, withBuckyball))
+  tomlPath:       String,
+  withBuckyball:  Boolean = true,
+  hiddenHartBase: Option[Int] = None)
+    extends Config(WithBuckyballTiles.assemble(tomlPath, withBuckyball, hiddenHartBase))
 
 object WithBuckyballTiles {
 
-  def assemble(tomlPath: String, withBuckyball: Boolean): Parameters = {
+  def assemble(tomlPath: String, withBuckyball: Boolean, hiddenHartBase: Option[Int]): Parameters = {
     val topology = TomlConfigLoader.load(tomlPath)
 
     val tileFragments: Seq[Config] = topology.tiles.map { tile =>
@@ -41,7 +42,8 @@ object WithBuckyballTiles {
         withBuckyball = resolved.exists(_.isDefined),
         nCoresPerTile = tile.cores.size,
         buckyballPerCore = Some(resolved),
-        privateDCache = tile.privateDCache
+        privateDCache = tile.privateDCache,
+        hiddenHartBase = hiddenHartBase
       )
     }
 

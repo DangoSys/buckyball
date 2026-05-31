@@ -1,7 +1,7 @@
 package sims.scu
 
 import chisel3._
-import chisel3.util.{log2Ceil, HasBlackBoxInline, Mux1H, PriorityEncoder}
+import chisel3.util.{log2Ceil, HasBlackBoxInline}
 import org.chipsalliance.cde.config.{Config, Field, Parameters}
 
 import freechips.rocketchip.diplomacy._
@@ -26,6 +26,7 @@ import freechips.rocketchip.tilelink._
  *   +0x20000: uartTx register  (write outputs a byte via DPI-C)
  *   +0x20004: uartRx register  (read pops a byte from host input)
  *   +0x20005: status register  (read-only, bit0 rx-valid, bit5/6 tx-ready)
+ *   +0x20006: ready register   (read/write software-visible byte)
  *
  * @param baseAddress   physical base address (must be aligned to totalSizeBytes)
  * @param strideBytes   bytes per hart (must be power of two)
@@ -220,12 +221,19 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
   )
 
   lazy val module = new LazyModuleImp(this) {
-    // Single DPI instance shared by all harts. We multiplex per-hart signals
-    // using priority encoders (lower hart ID wins if multiple harts write
-    // simultaneously, though this should be rare in practice).
-    val dpi = Module(new SCUWriteDPI)
-    dpi.io.clock := clock
-    dpi.io.reset := reset.asBool
+
+    val writeDpis = Seq.tabulate(params.maxHarts) { h =>
+      val dpi = Module(new SCUWriteDPI)
+      dpi.io.clock        := clock
+      dpi.io.reset        := reset.asBool
+      dpi.io.uart_valid   := false.B
+      dpi.io.uart_hart_id := h.U
+      dpi.io.uart_data    := 0.U
+      dpi.io.exit_valid   := false.B
+      dpi.io.exit_hart_id := h.U
+      dpi.io.exit_code    := 0.U
+      dpi
+    }
 
     val rxDpis = Seq.tabulate(params.maxHarts) { h =>
       val rx = Module(new SCUReadDPI)
@@ -248,14 +256,6 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
     uartDatas.foreach(_  := 0.U)
     exitValids.foreach(_ := false.B)
     exitCodes.foreach(_  := 0.U)
-
-    // Mux per-hart signals into the single DPI
-    dpi.io.uart_valid   := RegNext(uartValids.asUInt.orR, false.B)
-    dpi.io.uart_hart_id := RegNext(PriorityEncoder(uartValids.asUInt), 0.U)
-    dpi.io.uart_data    := RegNext(Mux1H(uartValids, uartDatas), 0.U)
-    dpi.io.exit_valid   := RegNext(exitValids.asUInt.orR, false.B)
-    dpi.io.exit_hart_id := RegNext(PriorityEncoder(exitValids.asUInt), 0.U)
-    dpi.io.exit_code    := RegNext(Mux1H(exitValids, exitCodes), 0.U)
 
     // Per-hart registers and write functions
     val allFields: Seq[RegField.Map] =
@@ -293,14 +293,24 @@ class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends L
           (true.B, "h60".U(8.W) | rxDpis(h).io.rx_valid.asUInt)
         }
 
+        val readyReg = RegInit(0.U(8.W))
+
         // Each hart's registers at hartBase + offset
         Seq(
           (hartBase + 0x00000) -> Seq(RegField(32, simExitReg, simExitWrite)),
           (hartBase + 0x20000) -> Seq(RegField(8, uartTxReg, uartWrite)),
           (hartBase + 0x20004) -> Seq(RegField.r(8, uartRead)),
-          (hartBase + 0x20005) -> Seq(RegField.r(8, uartStatus))
+          (hartBase + 0x20005) -> Seq(RegField.r(8, uartStatus)),
+          (hartBase + 0x20006) -> Seq(RegField(8, readyReg))
         )
       }
+
+    writeDpis.zipWithIndex.foreach { case (dpi, h) =>
+      dpi.io.uart_valid := RegNext(uartValids(h), false.B)
+      dpi.io.uart_data  := RegNext(uartDatas(h), 0.U)
+      dpi.io.exit_valid := RegNext(exitValids(h), false.B)
+      dpi.io.exit_code  := RegNext(exitCodes(h), 0.U)
+    }
 
     // Register all fields at once
     node.regmap(allFields: _*)

@@ -10,7 +10,7 @@ import org.chipsalliance.diplomacy.lazymodule._
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.tile._
 import freechips.rocketchip.devices.tilelink.{BasicBusBlocker, BasicBusBlockerParams}
-import freechips.rocketchip.diplomacy.{AddressSet, BufferParams, DisableMonitors}
+import freechips.rocketchip.diplomacy.{AddressSet, BufferParams, DisableMonitors, TransferSizes}
 import freechips.rocketchip.resources.{
   Description,
   Resource,
@@ -30,6 +30,7 @@ import freechips.rocketchip.tilelink.{
   TLFragmenter,
   TLIdentityNode,
   TLMasterPortParameters,
+  TLSlaveParameters,
   TLWidthWidget,
   TLXbar
 }
@@ -80,6 +81,18 @@ class BBTile private (
   val bbEnabledCoreIds = bbPerCore.zipWithIndex.collect { case (Some(_), i) => i }
   val hasBuckyball     = bbEnabledCoreIds.nonEmpty
   val bbSharedConfig   = bbPerCore.collectFirst { case Some(cfg) => cfg }
+  val hiddenHartBase   = bbParams.hiddenHartBase
+
+  def staticHartIdForCore(coreIdx: Int): Int = bbParams.hartIdForCore(coreIdx)
+
+  require(
+    log2Ceil((0 until nCores).map(staticHartIdForCore).max + 1) <= p(MaxHartIdBits),
+    s"MaxHartIdBits (${p(MaxHartIdBits)}) is too small for BBTile ${bbParams.tileId} hart IDs " +
+      s"${(0 until nCores).map(staticHartIdForCore).mkString(",")}"
+  )
+
+  def isHiddenCore(coreIdx: Int): Boolean = hiddenHartBase.isDefined && coreIdx != 0
+
   if (hasBuckyball) {
     require(
       bbEnabledCoreIds.contains(0),
@@ -142,10 +155,7 @@ class BBTile private (
   // ---------------------------------------------------------------------------
   val extraFrontends: Seq[Frontend] = (1 until nCores).map { coreIdx =>
     // ICache needs a static ID for metadata (TileLink node naming).
-    // Use the same formula as runtime hartId assignment (BBTile.scala:385):
-    //   c.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U
-    // This ensures each Frontend has a globally unique identifier.
-    val staticHartId = bbParams.tileId * nCores + coreIdx
+    val staticHartId = staticHartIdForCore(coreIdx)
     val f            = LazyModule(new Frontend(bbParams.icache.get, staticHartId))
     tlMasterXbar.node                               := TLWidthWidget(bbParams.icache.get.rowBits / 8) := f.masterNode
     connectTLSlave(f.slaveNode, bbParams.core.fetchBytes)
@@ -260,11 +270,12 @@ class BBTile private (
       //   A system-level InclusiveCache downstream would convert DRAM's regionType
       //   to CACHED, violating lastLevel. So privateDCache=true is paired with
       //   disabling the system-level InclusiveCache (see WithBuckyballTiles).
-      val cacheable = AddressSet(p(ExtMem).get.master.base, p(ExtMem).get.master.size - 1)
+      val cacheable =
+        AddressSet.misaligned(p(ExtMem).get.master.base, p(ExtMem).get.master.size)
 
       val dcacheXbar        = LazyModule(new TLXbar)
-      val cacheableFilter   = LazyModule(new TLFilter(mfilter = TLFilter.mSelectIntersect(cacheable)))
-      val uncacheableFilter = LazyModule(new TLFilter(mfilter = TLFilter.mSubtract(Seq(cacheable))))
+      val cacheableFilter   = LazyModule(new TLFilter(mfilter = BBTile.mSelectIntersect(cacheable)))
+      val uncacheableFilter = LazyModule(new TLFilter(mfilter = TLFilter.mSubtract(cacheable)))
       dcacheXbar.suggestName(s"tile_private_dcache_${bbParams.tileId}_xbar")
       cacheableFilter.suggestName(s"tile_private_dcache_${bbParams.tileId}_cacheable_filter")
       uncacheableFilter.suggestName(s"tile_private_dcache_${bbParams.tileId}_uncacheable_filter")
@@ -367,6 +378,25 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
   val core = cores.head
 
+  def hartIdForCore(coreIdx: Int): UInt = outer.bbParams.hiddenHartBase match {
+    case Some(_) => outer.staticHartIdForCore(coreIdx).U
+    case None    => outer.hartIdSinkNode.bundle * nCores.U + coreIdx.U
+  }
+
+  def tieOffInterrupts(intr: CoreInterrupts): Unit = {
+    intr.debug          := false.B
+    intr.msip           := false.B
+    intr.mtip           := false.B
+    intr.meip           := false.B
+    intr.seip.foreach(_ := false.B)
+    intr.lip.foreach(_  := false.B)
+    intr.nmi.foreach { nmi =>
+      nmi.rnmi                  := false.B
+      nmi.rnmi_interrupt_vector := 0.U
+      nmi.rnmi_exception_vector := 0.U
+    }
+  }
+
   // Vector unit connections
   outer.vector_unit.foreach { v =>
     core.io.vector.get <> v.module.io.core
@@ -387,19 +417,31 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   outer.reportWFI(Some(cores.map(_.io.wfi).reduce(_ && _)))
 
   // Interrupts
-  cores.foreach(c => outer.decodeCoreInterrupts(c.io.interrupts))
-  outer.bus_error_unit.foreach { beu =>
-    cores.foreach(_.io.interrupts.buserror.get := beu.module.io.interrupt)
-    beu.module.io.errors.dcache                := outer.dcache.module.io.errors
-    beu.module.io.errors.icache                := outer.frontend.module.io.errors
+  cores.zipWithIndex.foreach { case (c, i) =>
+    if (outer.isHiddenCore(i)) {
+      tieOffInterrupts(c.io.interrupts)
+    } else {
+      outer.decodeCoreInterrupts(c.io.interrupts)
+    }
   }
-  cores.foreach(_.io.interrupts.nmi.foreach(nmi => nmi := outer.nmiSinkNode.get.bundle))
+  outer.bus_error_unit.foreach { beu =>
+    cores.zipWithIndex.foreach { case (c, i) =>
+      c.io.interrupts.buserror.get := Mux(outer.isHiddenCore(i).B, false.B, beu.module.io.interrupt)
+    }
+    beu.module.io.errors.dcache := outer.dcache.module.io.errors
+    beu.module.io.errors.icache := outer.frontend.module.io.errors
+  }
+  cores.zipWithIndex.foreach { case (c, i) =>
+    if (!outer.isHiddenCore(i)) {
+      c.io.interrupts.nmi.foreach(nmi => nmi := outer.nmiSinkNode.get.bundle)
+    }
+  }
 
   // Trace and misc
   outer.traceSourceNode.bundle <> core.io.trace
   cores.foreach(_.io.traceStall := outer.traceAuxSinkNode.bundle.stall)
   outer.bpwatchSourceNode.bundle <> core.io.bpwatch
-  cores.zipWithIndex.foreach { case (c, i) => c.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U }
+  cores.zipWithIndex.foreach { case (c, i) => c.io.hartid := hartIdForCore(i) }
 
   // Core pipeline connections
   outer.frontend.module.io.cpu <> core.io.imem
@@ -529,7 +571,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
         val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
         val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
         val acc               = Module(new BuckyballAccelerator(cfg)(edge))
-        acc.io.hartid := outer.hartIdSinkNode.bundle * nCores.U + i.U
+        acc.io.hartid := hartIdForCore(i)
 
         tl_reader <> acc.io.tl_reader
         tl_writer <> acc.io.tl_writer
@@ -628,6 +670,39 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 }
 
 object BBTile {
+
+  def mSelectIntersect(selects: Seq[AddressSet]): TLFilter.ManagerFilter = { m =>
+    val filtered  = m.address.flatMap(a => selects.flatMap(a.intersect))
+    val alignment =
+      if (selects.isEmpty) BigInt(0)
+      else selects.map(_.alignment).min
+    transferSizeHelper(m, filtered, alignment)
+  }
+
+  private def transferSizeHelper(
+    m:         TLSlaveParameters,
+    filtered:  Seq[AddressSet],
+    alignment: BigInt
+  ): Option[TLSlaveParameters] = {
+    val maxTransfer = 1 << 30
+    val capTransfer = if (alignment == 0 || alignment > maxTransfer) maxTransfer else alignment.toInt
+    val cap         = TransferSizes(1, capTransfer)
+    if (filtered.isEmpty) {
+      None
+    } else {
+      Some(m.v1copy(
+        address = filtered,
+        supportsAcquireT = m.supportsAcquireT.intersect(cap),
+        supportsAcquireB = m.supportsAcquireB.intersect(cap),
+        supportsArithmetic = m.supportsArithmetic.intersect(cap),
+        supportsLogical = m.supportsLogical.intersect(cap),
+        supportsGet = m.supportsGet.intersect(cap),
+        supportsPutFull = m.supportsPutFull.intersect(cap),
+        supportsPutPartial = m.supportsPutPartial.intersect(cap),
+        supportsHint = m.supportsHint.intersect(cap)
+      ))
+    }
+  }
 
   /**
    * Inject a dummy BuildRoCC entry so that usingRoCC=true throughout all

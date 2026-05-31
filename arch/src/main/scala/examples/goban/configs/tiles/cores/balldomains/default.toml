@@ -1,11 +1,19 @@
-# Goban Ball Domain - SystolicArrayBall only
+# Goban Ball Domain Configuration
 
-ballNum = 1
+ballNum = 5
 
 ballIdMappings = [
-  { ballId = 0, ballName = "SystolicArrayBall", ballClass = "framework.balldomain.prototype.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 }
+  { ballId = 0, ballName = "VecBall", ballClass = "framework.balldomain.prototype.vector.VecBall", inBW = 2, outBW = 4 },
+  { ballId = 1, ballName = "Fp2IntBall", ballClass = "framework.balldomain.prototype.fp2int.Fp2IntBall", inBW = 1, outBW = 1 },
+  { ballId = 2, ballName = "Int2FpBall", ballClass = "framework.balldomain.prototype.int2fp.Int2FpBall", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "TransposeBall", ballClass = "framework.balldomain.prototype.transpose.TransposeBall", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "Im2colBall", ballClass = "framework.balldomain.prototype.im2col.Im2colBall", inBW = 1, outBW = 1 }
 ]
 
 ballISA = [
-  { mnemonic = "SYSTOLIC", funct7 = 65, bid = 0 }
+  { mnemonic = "MATMUL_WARP16", funct7 = 64, bid = 0 },
+  { mnemonic = "FP2INT", funct7 = 51, bid = 1 },
+  { mnemonic = "INT2FP", funct7 = 52, bid = 2 },
+  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 3 },
+  { mnemonic = "IM2COL", funct7 = 48, bid = 4 }
 ]

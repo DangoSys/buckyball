@@ -58,7 +58,8 @@ class WithBBTile(
   crossing:         Option[RocketCrossingParams] = None,
   nCoresPerTile:    Int = 1,
   buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
-  privateDCache:    Option[PrivateDCacheParams] = None)
+  privateDCache:    Option[PrivateDCacheParams] = None,
+  hiddenHartBase:   Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -80,6 +81,7 @@ class WithBBTile(
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
           privateDCache = privateDCache,
+          hiddenHartBase = hiddenHartBase,
           core = RocketCoreParam.toRocketCoreParams(rocketCore),
           dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
           icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),
@@ -100,7 +102,8 @@ class WithNBBTiles(
   crossing:         Option[RocketCrossingParams] = None,
   nCoresPerTile:    Int = 1,
   buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
-  privateDCache:    Option[PrivateDCacheParams] = None)
+  privateDCache:    Option[PrivateDCacheParams] = None,
+  hiddenHartBase:   Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -122,6 +125,7 @@ class WithNBBTiles(
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
           privateDCache = privateDCache,
+          hiddenHartBase = hiddenHartBase,
           core = RocketCoreParam.toRocketCoreParams(rocketCore),
           dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
           icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),

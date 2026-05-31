@@ -34,9 +34,9 @@ class WithBBSimMem
 // the AXI4 MMIO port. The SCU is intercepted inside each BBTile and never
 // reaches the system bus.
 // =============================================================================
-class BBSimConfig
+class BBSimConfig(maxHarts: Int = 64)
     extends Config(
-      new WithSCU ++
+      new WithSCU(maxHarts = maxHarts) ++
         new WithBBSimMem ++
         new chipyard.config.WithUniformBusFrequencies(1000.0) ++
         new chipyard.harness.WithTieOffInterrupts ++

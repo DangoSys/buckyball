@@ -43,6 +43,9 @@ case class PrivateDCacheParams(
  * @param privateDCache Optional per-tile private data cache (between L1 DCache and system LLC).
  *                      When None, tile connects directly to system bus.
  *                      When Some, tile traffic routes through private DCache before reaching system bus.
+ * @param hiddenHartBase Optional base hart id for non-leader cores. When set,
+ *                       core 0 keeps the tile id as its hart id and cores 1..N
+ *                       are mapped after hiddenHartBase.
  */
 case class BBTileParams(
   nCores:           Int = 1,
@@ -54,6 +57,7 @@ case class BBTileParams(
   buckyballConfig:  GlobalConfig = GlobalConfig(),
   buckyballPerCore: Seq[Option[GlobalConfig]] = Nil,
   privateDCache:    Option[PrivateDCacheParams] = None,
+  hiddenHartBase:   Option[Int] = None,
   tileId:           Int = 0,
   beuAddr:          Option[BigInt] = None,
   blockerCtrlAddr:  Option[BigInt] = None,
@@ -63,6 +67,9 @@ case class BBTileParams(
   require(icache.isDefined)
   require(dcache.isDefined)
   require(nCores >= 1)
+  hiddenHartBase.foreach { base =>
+    require(base > 0, s"hiddenHartBase ($base) must be positive")
+  }
   require(
     buckyballPerCore.isEmpty || buckyballPerCore.size == nCores,
     s"buckyballPerCore size (${buckyballPerCore.size}) must be 0 or nCores ($nCores)"
@@ -79,6 +86,17 @@ case class BBTileParams(
 
   val enabledBuckyballCores: Seq[Int] = resolvedBuckyballPerCore.zipWithIndex.collect {
     case (Some(_), i) => i
+  }
+
+  def hartIdForCore(coreIdx: Int): Int = {
+    require(coreIdx >= 0 && coreIdx < nCores, s"coreIdx ($coreIdx) must be in [0, $nCores)")
+    hiddenHartBase match {
+      case Some(base) =>
+        if (coreIdx == 0) tileId
+        else base + tileId * (nCores - 1) + (coreIdx - 1)
+      case None       =>
+        tileId * nCores + coreIdx
+    }
   }
 
   def instantiate(

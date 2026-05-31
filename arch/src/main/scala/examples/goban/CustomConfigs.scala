@@ -1,7 +1,14 @@
 package examples.goban
 
+import chisel3.util.log2Ceil
 import org.chipsalliance.cde.config.Config
+import freechips.rocketchip.tile.MaxHartIdBits
 import framework.system.tile.WithBuckyballTiles
+
+class WithGobanHiddenHartIdBits(nTiles: Int, nCoresPerTile: Int, hiddenHartBase: Int)
+    extends Config((site, here, up) => {
+      case MaxHartIdBits => log2Ceil(hiddenHartBase + nTiles * (nCoresPerTile - 1))
+    })
 
 /** 1 BBTile × 2 Buckyball cores. */
 class BuckyballGoban2CoreConfig
@@ -82,6 +89,24 @@ class BuckyballGoban8Tile8CoreConfig
 class BuckyballGoban24Tile16CoreConfig
     extends Config(
       new WithBuckyballTiles("src/main/scala/examples/goban/configs/24t16c.toml") ++
+        new chipyard.config.WithSystemBusWidth(256) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/** 2 BBTiles × 4 Rocket cores each = 8 harts; core 0 in each tile has Buckyball. */
+class BuckyballGoban2Tile4CoreConfig
+    extends Config(
+      new WithGobanHiddenHartIdBits(nTiles = 2, nCoresPerTile = 4, hiddenHartBase = 2) ++
+        new WithBuckyballTiles("src/main/scala/examples/goban/configs/2t4c-private.toml", hiddenHartBase = Some(2)) ++
+        new chipyard.config.WithSystemBusWidth(256) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
+/** 64 BBTiles × 4 Rocket cores each = 256 harts; core 0 in each tile has Buckyball. */
+class BuckyballGoban64Tile4CoreConfig
+    extends Config(
+      new WithGobanHiddenHartIdBits(nTiles = 64, nCoresPerTile = 4, hiddenHartBase = 64) ++
+        new WithBuckyballTiles("src/main/scala/examples/goban/configs/64t4c-private.toml", hiddenHartBase = Some(64)) ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
     )

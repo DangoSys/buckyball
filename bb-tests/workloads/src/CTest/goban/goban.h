@@ -5,10 +5,8 @@
 #include <stdint.h>
 
 /*
- * Goban's hardware barrier is tile-local. The default Goban tile currently has
- * four RocketBB cores, while BuckyballGoban2TileConfig exposes global mhartid
- * values 0..7. Tests should use the tile-local core id for per-tile arrays and
- * bank ownership.
+ * Goban's hardware barrier is tile-local. Tests should use the tile-local core
+ * id for per-tile arrays and bank ownership.
  */
 #ifndef GOBAN_CORES_PER_TILE
 #define GOBAN_CORES_PER_TILE 4
@@ -28,11 +26,27 @@ static inline int bb_get_hart_id(void) {
 }
 
 static inline int bb_get_tile_core_id(void) {
+#ifdef GOBAN_HIDDEN_HART_BASE
+  int hart = bb_get_hart_id();
+  if (hart < GOBAN_HIDDEN_HART_BASE) {
+    return 0;
+  }
+  return 1 + (hart - GOBAN_HIDDEN_HART_BASE) % (GOBAN_CORES_PER_TILE - 1);
+#else
   return bb_get_hart_id() % GOBAN_CORES_PER_TILE;
+#endif
 }
 
 static inline int bb_get_tile_id(void) {
+#ifdef GOBAN_HIDDEN_HART_BASE
+  int hart = bb_get_hart_id();
+  if (hart < GOBAN_HIDDEN_HART_BASE) {
+    return hart;
+  }
+  return (hart - GOBAN_HIDDEN_HART_BASE) / (GOBAN_CORES_PER_TILE - 1);
+#else
   return bb_get_hart_id() / GOBAN_CORES_PER_TILE;
+#endif
 }
 
 static inline int bb_get_core_id(void) { return bb_get_tile_core_id(); }

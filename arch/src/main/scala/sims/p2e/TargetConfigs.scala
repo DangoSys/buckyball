@@ -48,10 +48,10 @@ class WithP2EDDR4MemPort
 //   - WithP2EDDR4MemPort: DDR4 memory port @ 0x80000000, 16 GiB
 //   - WithP2EBootROM    : P2E bootrom image
 // =============================================================================
-class P2EBaseConfig
+class P2EBaseConfig(maxHarts: Int = 64)
     extends Config(
       new WithP2EHarness ++
-        new WithSCU ++
+        new WithSCU(maxHarts = maxHarts) ++
         new WithP2EDDR4MemPort ++
         new WithP2EBootROM
     )
@@ -137,6 +137,40 @@ class BuckyballGoban24Tile16CoreP2EConfig
     extends Config(
       new P2EBaseConfig ++
         new examples.goban.BuckyballGoban24Tile16CoreConfig
+    )
+
+class BuckyballGoban2Tile4CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig(maxHarts = 8) ++
+        new examples.goban.BuckyballGoban2Tile4CoreConfig
+    )
+
+/**
+ * Linux variant of the 2-tile Goban config.
+ * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ */
+class BuckyballGoban2Tile4CoreLinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 8) ++
+        new examples.goban.BuckyballGoban2Tile4CoreConfig
+    )
+
+class BuckyballGoban64Tile4CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig(maxHarts = 256) ++
+        new examples.goban.BuckyballGoban64Tile4CoreConfig
+    )
+
+/**
+ * Linux variant of the 64-tile Goban config.
+ * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ */
+class BuckyballGoban64Tile4CoreLinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 256) ++
+        new examples.goban.BuckyballGoban64Tile4CoreConfig
     )
 
 //===----------------------------------------------------------------------===//

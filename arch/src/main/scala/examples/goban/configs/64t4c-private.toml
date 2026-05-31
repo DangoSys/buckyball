@@ -1,0 +1,8 @@
+# Goban - 64 tiles x 4 cores each (256 harts total)
+
+[top]
+nTiles = 64
+
+[tileTemplate]
+include = "tiles/4core-private-1bb.toml"
+count = 64
