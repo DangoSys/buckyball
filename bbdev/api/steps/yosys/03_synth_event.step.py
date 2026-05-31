@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -61,8 +62,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
 
-    yosys_output_dir = os.path.join(os.path.dirname(__file__), "log")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    fallback_log_dir = os.path.join(os.path.dirname(__file__), "log", f"{stamp}-{origin_tid[:8]}")
+    yosys_output_dir = input_data.get("log_dir", fallback_log_dir)
     os.makedirs(yosys_output_dir, exist_ok=True)
+    ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
 
     read_commands = "\n".join([f"read_verilog -sv {src}" for src in vsrcs])
     yosys_script = f"{yosys_output_dir}/synth_area.ys"

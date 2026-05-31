@@ -79,9 +79,9 @@ WORKFLOW_COMMANDS = {
         "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
     },
     "yosys": {
-        "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
-        "verilog": 'Generate verilog for yosys flow. Args: "[--config <cfg>] [--output-dir <dir>]"',
-        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>]"',
+        "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
+        "verilog": 'Generate verilog for yosys flow. Args: "[--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
+        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>]"',
     },
 }
 

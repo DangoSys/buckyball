@@ -163,7 +163,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/")
+    yosys_log_dir = input_data.get("log_dir", f"{bbdir}/bbdev/api/steps/yosys/log")
     arch_dir = f"{bbdir}/arch"
+    ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
 
     yosys_cfg = load_yosys_config()
     elaborate_config = input_data.get("config") or yosys_cfg.get(
@@ -204,7 +206,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if os.path.exists(topname_file):
             os.remove(topname_file)
 
-    yosys_log_dir = f"{bbdir}/bbdev/api/steps/yosys/log"
     os.makedirs(yosys_log_dir, exist_ok=True)
     try:
         source_list_path = prepare_yosys_verilog(build_dir, yosys_log_dir, ctx.logger)
