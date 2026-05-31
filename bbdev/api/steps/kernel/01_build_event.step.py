@@ -27,6 +27,25 @@ config = {
 }
 
 
+def hart_count_params(input_data: dict) -> dict:
+    visible = int(input_data.get("visible-hart-count", 64))
+    total = int(input_data.get("total-hart-count", visible))
+    hidden_base = int(input_data.get("hidden-hart-base", visible))
+
+    if visible < 1:
+        raise ValueError("visible-hart-count must be at least 1")
+    if total < visible:
+        raise ValueError("total-hart-count must cover visible harts")
+    if hidden_base < visible:
+        raise ValueError("hidden-hart-base must be after visible harts")
+
+    return {
+        "visible": visible,
+        "total": total,
+        "hidden_base": hidden_base,
+    }
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -40,8 +59,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
+    try:
+        hart_params = hart_count_params(input_data)
+    except ValueError as e:
+        ctx.logger.error(str(e))
+        await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
+        return
+
     # cmake configure
-    configure_cmd = f"cmake -B {kernel_build} -S {kernel_src}"
+    configure_cmd = (
+        f"cmake -B {kernel_build} -S {kernel_src} "
+        f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
+        f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
+        f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']}"
+    )
     result = stream_run_logger(
         cmd=configure_cmd,
         logger=ctx.logger,
@@ -82,4 +113,3 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     await check_result(ctx, 0, continue_run=False, trace_id=origin_tid)
-
