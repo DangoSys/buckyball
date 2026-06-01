@@ -173,6 +173,34 @@ class BuckyballGoban64Tile4CoreLinuxP2EConfig
         new examples.goban.BuckyballGoban64Tile4CoreConfig
     )
 
+class BuckyballGobanConfig1LinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 128) ++
+        new examples.goban.BuckyballGobanConfig1Config
+    )
+
+class BuckyballGobanConfig2LinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 192) ++
+        new examples.goban.BuckyballGobanConfig2Config
+    )
+
+class BuckyballGobanConfig3LinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 128) ++
+        new examples.goban.BuckyballGobanConfig3Config
+    )
+
+class BuckyballGobanConfig4LinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 256) ++
+        new examples.goban.BuckyballGobanConfig4Config
+    )
+
 //===----------------------------------------------------------------------===//
 
 object Elaborate extends App {

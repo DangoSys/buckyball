@@ -42,6 +42,7 @@ object WithBuckyballTiles {
         withBuckyball = resolved.exists(_.isDefined),
         nCoresPerTile = tile.cores.size,
         buckyballPerCore = Some(resolved),
+        rocketCorePerCore = Some(tile.rocketCores),
         privateDCache = tile.privateDCache,
         hiddenHartBase = hiddenHartBase
       )

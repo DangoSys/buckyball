@@ -48,21 +48,22 @@ case class PrivateDCacheParams(
  *                       are mapped after hiddenHartBase.
  */
 case class BBTileParams(
-  nCores:           Int = 1,
-  withBuckyball:    Boolean = true,
-  core:             RocketCoreParams = RocketCoreParams(),
-  icache:           Option[ICacheParams] = Some(ICacheParams()),
-  dcache:           Option[DCacheParams] = Some(DCacheParams()),
-  btb:              Option[BTBParams] = Some(BTBParams()),
-  buckyballConfig:  GlobalConfig = GlobalConfig(),
-  buckyballPerCore: Seq[Option[GlobalConfig]] = Nil,
-  privateDCache:    Option[PrivateDCacheParams] = None,
-  hiddenHartBase:   Option[Int] = None,
-  tileId:           Int = 0,
-  beuAddr:          Option[BigInt] = None,
-  blockerCtrlAddr:  Option[BigInt] = None,
-  clockSinkParams:  ClockSinkParameters = ClockSinkParameters(),
-  boundaryBuffers:  Option[RocketTileBoundaryBufferParams] = None)
+  nCores:            Int = 1,
+  withBuckyball:     Boolean = true,
+  core:              RocketCoreParams = RocketCoreParams(),
+  icache:            Option[ICacheParams] = Some(ICacheParams()),
+  dcache:            Option[DCacheParams] = Some(DCacheParams()),
+  btb:               Option[BTBParams] = Some(BTBParams()),
+  buckyballConfig:   GlobalConfig = GlobalConfig(),
+  buckyballPerCore:  Seq[Option[GlobalConfig]] = Nil,
+  rocketCorePerCore: Seq[RocketCoreParams] = Nil,
+  privateDCache:     Option[PrivateDCacheParams] = None,
+  hiddenHartBase:    Option[Int] = None,
+  tileId:            Int = 0,
+  beuAddr:           Option[BigInt] = None,
+  blockerCtrlAddr:   Option[BigInt] = None,
+  clockSinkParams:   ClockSinkParameters = ClockSinkParameters(),
+  boundaryBuffers:   Option[RocketTileBoundaryBufferParams] = None)
     extends InstantiableTileParams[BBTile] {
   require(icache.isDefined)
   require(dcache.isDefined)
@@ -73,6 +74,10 @@ case class BBTileParams(
   require(
     buckyballPerCore.isEmpty || buckyballPerCore.size == nCores,
     s"buckyballPerCore size (${buckyballPerCore.size}) must be 0 or nCores ($nCores)"
+  )
+  require(
+    rocketCorePerCore.isEmpty || rocketCorePerCore.size == nCores,
+    s"rocketCorePerCore size (${rocketCorePerCore.size}) must be 0 or nCores ($nCores)"
   )
 
   val baseName   = "bbtile"
@@ -86,6 +91,11 @@ case class BBTileParams(
 
   val enabledBuckyballCores: Seq[Int] = resolvedBuckyballPerCore.zipWithIndex.collect {
     case (Some(_), i) => i
+  }
+
+  def rocketCoreForCore(coreIdx: Int): RocketCoreParams = {
+    require(coreIdx >= 0 && coreIdx < nCores, s"coreIdx ($coreIdx) must be in [0, $nCores)")
+    if (rocketCorePerCore.nonEmpty) rocketCorePerCore(coreIdx) else core
   }
 
   def hartIdForCore(coreIdx: Int): Int = {

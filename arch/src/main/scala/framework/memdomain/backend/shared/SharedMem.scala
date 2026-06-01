@@ -12,6 +12,9 @@ object SharedMemLayout {
   def totalBank(b:   GlobalConfig): Int = bankPerHart(b) * maxHart(b)
 
   def channelPerHart(b: GlobalConfig): Int = {
+    if (!b.memDomain.sharedEnable) {
+      return 0
+    }
     require(b.top.nCores > 0, s"nCores(${b.top.nCores}) must be > 0")
     require(
       b.memDomain.sharedInputChannels > 0,
@@ -32,7 +35,7 @@ object SharedMemLayout {
     ch
   }
 
-  def totalChannel(b: GlobalConfig): Int = b.memDomain.sharedInputChannels
+  def totalChannel(b: GlobalConfig): Int = if (b.memDomain.sharedEnable) b.memDomain.sharedInputChannels else 0
 }
 
 class SharedMemReadReq(val b: GlobalConfig) extends Bundle {

@@ -39,9 +39,18 @@ class MemBackend(val b: GlobalConfig) extends Module {
   val cfgToShared = io.config.bits.is_shared
   privateBackend.io.config.valid := io.config.valid && !cfgToShared
   privateBackend.io.config.bits  := io.config.bits
-  io.shared_config.valid         := io.config.valid && cfgToShared
-  io.shared_config.bits          := io.config.bits
-  io.config.ready                := Mux(cfgToShared, io.shared_config.ready, privateBackend.io.config.ready)
+  if (b.memDomain.sharedEnable) {
+    io.shared_config.valid := io.config.valid && cfgToShared
+    io.shared_config.bits  := io.config.bits
+    io.config.ready        := Mux(cfgToShared, io.shared_config.ready, privateBackend.io.config.ready)
+  } else {
+    io.shared_config.valid := false.B
+    io.shared_config.bits  := DontCare
+    io.config.ready        := Mux(cfgToShared, false.B, privateBackend.io.config.ready)
+    when(io.config.valid && cfgToShared) {
+      assert(false.B, "MemBackend shared config received while sharedMem is disabled\n")
+    }
+  }
 
   // Query routing
   privateBackend.io.query_vbank_id := io.query_vbank_id

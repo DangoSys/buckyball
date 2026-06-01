@@ -368,12 +368,20 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   Annotated.params(this, outer.bbParams)
   val nCores = outer.nCores
 
+  def coreParamsForCore(coreIdx: Int): BBTileParams =
+    outer.bbParams.copy(core = outer.bbParams.rocketCoreForCore(coreIdx))
+
+  def paramsForCore(coreIdx: Int): Parameters =
+    outer.p.alterPartial { case TileKey => coreParamsForCore(coreIdx) }
+
   // --- FPU (optional) ---
-  val fpuOpts = Seq.fill(nCores)(outer.bbParams.core.fpu.map(params => Module(new FPU(params)(outer.p))))
+  val fpuOpts = (0 until nCores).map { i =>
+    outer.bbParams.rocketCoreForCore(i).fpu.map(params => Module(new FPU(params)(paramsForCore(i))))
+  }
 
   // --- Rocket core (using our fork that accepts BBTile) ---
   val cores = (0 until nCores).map { i =>
-    Module(new RocketBB(outer, outer.bbPerCore(i).isDefined)(outer.p))
+    Module(new RocketBB(outer, outer.bbPerCore(i).isDefined)(paramsForCore(i)))
   }
 
   val core = cores.head
@@ -611,31 +619,41 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     dcachePorts += roccMemIF.io.cache
     cores.foreach(_.io.rocc.mem               := DontCare)
 
-    // SharedMemBackend (tile-level singleton)
-    val sharedBackend = Module(new SharedMemBackend(cfg0))
+    if (cfg0.memDomain.sharedEnable) {
+      // SharedMemBackend (tile-level singleton)
+      val sharedBackend = Module(new SharedMemBackend(cfg0))
 
-    // Connect each accelerator's shared ports to the SharedMemBackend
-    for (i <- 0 until nCores) {
-      for (ch <- 0 until sharedPerCore) {
-        val slot = i * sharedPerCore + ch
-        accelerators(i) match {
-          case Some(acc) => sharedBackend.io.mem_req(slot) <> acc.io.shared_mem_req(ch)
-          case None      => tieOffMemReq(sharedBackend.io.mem_req(slot))
+      // Connect each accelerator's shared ports to the SharedMemBackend
+      for (i <- 0 until nCores) {
+        for (ch <- 0 until sharedPerCore) {
+          val slot = i * sharedPerCore + ch
+          accelerators(i) match {
+            case Some(acc) => sharedBackend.io.mem_req(slot) <> acc.io.shared_mem_req(ch)
+            case None      => tieOffMemReq(sharedBackend.io.mem_req(slot))
+          }
         }
       }
-    }
 
-    // Shared config arbiter: enabled accelerators -> 1 SharedMemBackend config port
-    val cfgArb = Module(new Arbiter(new MemConfigerIO(cfg0), enabledAccelerators.size))
-    for ((acc, i) <- enabledAccelerators.zipWithIndex) {
-      cfgArb.io.in(i) <> acc.io.shared_config
-    }
-    sharedBackend.io.config <> cfgArb.io.out
+      // Shared config arbiter: enabled accelerators -> 1 SharedMemBackend config port
+      val cfgArb = Module(new Arbiter(new MemConfigerIO(cfg0), enabledAccelerators.size))
+      for ((acc, i) <- enabledAccelerators.zipWithIndex) {
+        cfgArb.io.in(i) <> acc.io.shared_config
+      }
+      sharedBackend.io.config <> cfgArb.io.out
 
-    sharedBackend.io.query_vbank_id := enabledAccelerators.head.io.shared_query_vbank_id
-    for (i <- 0 until nCores) {
-      accelerators(i).foreach { acc =>
-        acc.io.shared_query_group_count := sharedBackend.io.query_group_count
+      sharedBackend.io.query_vbank_id := enabledAccelerators.head.io.shared_query_vbank_id
+      for (i <- 0 until nCores) {
+        accelerators(i).foreach { acc =>
+          acc.io.shared_query_group_count := sharedBackend.io.query_group_count
+        }
+      }
+    } else {
+      for (acc <- enabledAccelerators) {
+        acc.io.shared_config.ready      := false.B
+        acc.io.shared_query_group_count := 0.U
+        when(acc.io.shared_config.valid) {
+          assert(false.B, "Buckyball shared config emitted while sharedMem is disabled\n")
+        }
       }
     }
 

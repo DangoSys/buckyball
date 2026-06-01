@@ -1,4 +1,4 @@
-# Goban Tile (4 cores: core 0 has Buckyball, cores 1-3 are Rocket-only)
+# Goban Tile (4 Rocket-only cores)
 
 [privateDCache]
 enable = true
@@ -15,11 +15,6 @@ inputChannels = 28
 defaultGroupCount = 1
 memCycles = 10
 
-[[cores]]
-include = "cores/default.toml"
-
-[[cores]]
-
-[[cores]]
-
-[[cores]]
+[coreTemplate]
+include = "cores/rocket.toml"
+count = 4

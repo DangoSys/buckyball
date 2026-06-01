@@ -144,11 +144,11 @@ object TomlConfigLoader {
 
     val sharedMem = parseSharedMem(tileTable)
 
-    val cores: Seq[Option[GlobalConfig]] = tileTable.get("coreTemplate") match {
+    val coreEntries: Seq[(Option[GlobalConfig], Option[RocketCoreParam])] = tileTable.get("coreTemplate") match {
       case Some(templateValue) =>
         val (templateTable, newBase) = resolveInclude(asTable(templateValue, "coreTemplate"), baseDir)
         val count                    = getInt(templateTable, "count")
-        val coreConfig               = parseCore(templateTable - "count", newBase, sharedMem)
+        val coreConfig               = parseCoreEntry(templateTable - "count", newBase, sharedMem)
         Seq.fill(count)(coreConfig)
 
       case None =>
@@ -157,7 +157,7 @@ object TomlConfigLoader {
             coresArray.map { coreValue =>
               val coreTable           = asTable(coreValue, "core entry")
               val (resolved, newBase) = resolveInclude(coreTable, baseDir)
-              parseCore(resolved, newBase, sharedMem)
+              parseCoreEntry(resolved, newBase, sharedMem)
             }
           case None                        =>
             throw new RuntimeException("Tile must define either [[cores]] array or [coreTemplate]")
@@ -168,17 +168,28 @@ object TomlConfigLoader {
 
     // BBTile requires every core's top.nCores to equal the tile's core count.
     // Sync it here so users don't need to repeat the count in every per-core TOML.
+    val cores           = coreEntries.map(_._1)
     val nCores          = cores.size
     val coresWithNCores = cores.map(_.map(cfg => cfg.copy(top = cfg.top.copy(nCores = nCores))))
+    val rocketCoreOpts  = coreEntries.map {
+      case (Some(cfg), _) => Some(cfg.rocketCore)
+      case (None, cfg)    => cfg
+    }
+    val rocketCores     = rocketCoreOpts.zipWithIndex.map {
+      case (Some(cfg), _) => cfg
+      case (None, i)      => throw new RuntimeException(s"Core $i must define [rocketCore]")
+    }
 
-    TileTopology(coresWithNCores, privateDCache)
+    TileTopology(coresWithNCores, privateDCache, rocketCores)
   }
 
-  private def parseCore(
+  private def parseCoreEntry(
     coreTable: Map[String, Value],
     baseDir:   Path,
     sharedMem: SharedMemFields
-  ): Option[GlobalConfig] = {
+  ): (Option[GlobalConfig], Option[RocketCoreParam]) = {
+    val rocketCore = getTable(coreTable, "rocketCore").map(parseRocketCore)
+
     // A core entry with `balldomain` becomes a Buckyball-bearing core.
     // Omitting `balldomain` (or empty string) drops the accelerator slot.
     val balldomainOpt = coreTable.get("balldomain").flatMap {
@@ -191,7 +202,7 @@ object TomlConfigLoader {
       case _                          => throw new RuntimeException("'balldomain' must be a string path or table")
     }
 
-    balldomainOpt.map { balldomain =>
+    val buckyball = balldomainOpt.map { balldomain =>
       val memdomain = coreTable.get("memdomain") match {
         case Some(Value.Str(s)) if s.nonEmpty => parseMemDomain(parseFile(baseDir.resolve(s).toString), sharedMem)
         case Some(Value.Tbl(t))               =>
@@ -201,15 +212,17 @@ object TomlConfigLoader {
           throw new RuntimeException("Core with balldomain must define 'memdomain' (string path or table)")
       }
 
-      val rocketCoreTable = getTable(coreTable, "rocketCore").getOrElse(
+      val parsedRocketCore = rocketCore.getOrElse(
         throw new RuntimeException("Core with balldomain must have [rocketCore] section")
       )
       GlobalConfig().copy(
         ballDomain = balldomain,
         memDomain = memdomain,
-        rocketCore = parseRocketCore(rocketCoreTable)
+        rocketCore = parsedRocketCore
       )
     }
+
+    (buckyball, rocketCore)
   }
 
   private def parseRocketCore(table: Map[String, Value]): RocketCoreParam = {
@@ -421,4 +434,5 @@ case class ExampleTopology(tiles: Seq[TileTopology])
  */
 case class TileTopology(
   cores:         Seq[Option[GlobalConfig]],
-  privateDCache: Option[PrivateDCacheParams])
+  privateDCache: Option[PrivateDCacheParams],
+  rocketCores:   Seq[RocketCoreParam])

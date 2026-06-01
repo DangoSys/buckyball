@@ -1,0 +1,8 @@
+# Goban config3 - 64 tiles x 2 Buckyball Rocket cores each
+
+[top]
+nTiles = 64
+
+[tileTemplate]
+include = "tiles/2core-private-2bb.toml"
+count = 64

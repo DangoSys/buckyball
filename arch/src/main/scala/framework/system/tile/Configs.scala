@@ -49,17 +49,36 @@ object WithNBBTiles {
     }
   }
 
+  def resolveRocketCores(
+    nCoresPerTile:     Int,
+    buckyballPerCore:  Seq[Option[GlobalConfig]],
+    buckyballConfig:   GlobalConfig,
+    rocketCorePerCore: Option[Seq[RocketCoreParam]]
+  ): Seq[RocketCoreParam] = {
+    rocketCorePerCore match {
+      case Some(cores) =>
+        require(
+          cores.size == nCoresPerTile,
+          s"rocketCorePerCore size (${cores.size}) must equal nCoresPerTile ($nCoresPerTile)"
+        )
+        cores
+      case None        =>
+        Seq.fill(nCoresPerTile)(resolveRocketCore(buckyballPerCore, buckyballConfig))
+    }
+  }
+
 }
 
 class WithBBTile(
-  location:         HierarchicalLocation = InSubsystem,
-  withBuckyball:    Boolean = true,
-  buckyballConfig:  GlobalConfig = GlobalConfig(),
-  crossing:         Option[RocketCrossingParams] = None,
-  nCoresPerTile:    Int = 1,
-  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
-  privateDCache:    Option[PrivateDCacheParams] = None,
-  hiddenHartBase:   Option[Int] = None)
+  location:          HierarchicalLocation = InSubsystem,
+  withBuckyball:     Boolean = true,
+  buckyballConfig:   GlobalConfig = GlobalConfig(),
+  crossing:          Option[RocketCrossingParams] = None,
+  nCoresPerTile:     Int = 1,
+  buckyballPerCore:  Option[Seq[Option[GlobalConfig]]] = None,
+  rocketCorePerCore: Option[Seq[RocketCoreParam]] = None,
+  privateDCache:     Option[PrivateDCacheParams] = None,
+  hiddenHartBase:    Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -72,7 +91,13 @@ class WithBBTile(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
-        val rocketCore               = WithNBBTiles.resolveRocketCore(resolvedBuckyballPerCore, buckyballConfig)
+        val rocketCores              = WithNBBTiles.resolveRocketCores(
+          nCoresPerTile,
+          resolvedBuckyballPerCore,
+          buckyballConfig,
+          rocketCorePerCore
+        )
+        val rocketCore               = rocketCores.head
         val rowBits                  = site(SystemBusKey).beatBits
         val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
@@ -80,6 +105,7 @@ class WithBBTile(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
+          rocketCorePerCore = rocketCores.map(RocketCoreParam.toRocketCoreParams),
           privateDCache = privateDCache,
           hiddenHartBase = hiddenHartBase,
           core = RocketCoreParam.toRocketCoreParams(rocketCore),
@@ -95,15 +121,16 @@ class WithBBTile(
     })
 
 class WithNBBTiles(
-  n:                Int,
-  location:         HierarchicalLocation = InSubsystem,
-  withBuckyball:    Boolean = true,
-  buckyballConfig:  GlobalConfig = GlobalConfig(),
-  crossing:         Option[RocketCrossingParams] = None,
-  nCoresPerTile:    Int = 1,
-  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
-  privateDCache:    Option[PrivateDCacheParams] = None,
-  hiddenHartBase:   Option[Int] = None)
+  n:                 Int,
+  location:          HierarchicalLocation = InSubsystem,
+  withBuckyball:     Boolean = true,
+  buckyballConfig:   GlobalConfig = GlobalConfig(),
+  crossing:          Option[RocketCrossingParams] = None,
+  nCoresPerTile:     Int = 1,
+  buckyballPerCore:  Option[Seq[Option[GlobalConfig]]] = None,
+  rocketCorePerCore: Option[Seq[RocketCoreParam]] = None,
+  privateDCache:     Option[PrivateDCacheParams] = None,
+  hiddenHartBase:    Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -116,7 +143,13 @@ class WithNBBTiles(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
-        val rocketCore               = WithNBBTiles.resolveRocketCore(resolvedBuckyballPerCore, buckyballConfig)
+        val rocketCores              = WithNBBTiles.resolveRocketCores(
+          nCoresPerTile,
+          resolvedBuckyballPerCore,
+          buckyballConfig,
+          rocketCorePerCore
+        )
+        val rocketCore               = rocketCores.head
         val rowBits                  = site(SystemBusKey).beatBits
         val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
@@ -124,6 +157,7 @@ class WithNBBTiles(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
+          rocketCorePerCore = rocketCores.map(RocketCoreParam.toRocketCoreParams),
           privateDCache = privateDCache,
           hiddenHartBase = hiddenHartBase,
           core = RocketCoreParam.toRocketCoreParams(rocketCore),
