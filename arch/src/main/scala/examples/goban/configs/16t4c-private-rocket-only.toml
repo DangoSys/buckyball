@@ -1,0 +1,8 @@
+# Goban config4 - 16 tiles x 4 Rocket-only cores each
+
+[top]
+nTiles = 16
+
+[tileTemplate]
+include = "tiles/4core-private-rocket-only.toml"
+count = 16

@@ -176,28 +176,28 @@ class BuckyballGoban64Tile4CoreLinuxP2EConfig
 class BuckyballGobanConfig1LinuxP2EConfig
     extends Config(
       new WithLinuxBootROM ++
-        new P2EBaseConfig(maxHarts = 128) ++
+        new P2EBaseConfig(maxHarts = 60) ++
         new examples.goban.BuckyballGobanConfig1Config
     )
 
 class BuckyballGobanConfig2LinuxP2EConfig
     extends Config(
       new WithLinuxBootROM ++
-        new P2EBaseConfig(maxHarts = 192) ++
+        new P2EBaseConfig(maxHarts = 64) ++
         new examples.goban.BuckyballGobanConfig2Config
     )
 
 class BuckyballGobanConfig3LinuxP2EConfig
     extends Config(
       new WithLinuxBootROM ++
-        new P2EBaseConfig(maxHarts = 128) ++
+        new P2EBaseConfig(maxHarts = 64) ++
         new examples.goban.BuckyballGobanConfig3Config
     )
 
 class BuckyballGobanConfig4LinuxP2EConfig
     extends Config(
       new WithLinuxBootROM ++
-        new P2EBaseConfig(maxHarts = 256) ++
+        new P2EBaseConfig(maxHarts = 64) ++
         new examples.goban.BuckyballGobanConfig4Config
     )
 

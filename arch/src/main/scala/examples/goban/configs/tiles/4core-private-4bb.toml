@@ -1,4 +1,4 @@
-# Goban Tile (2 cores: both cores have Buckyball)
+# Goban Tile (4 cores: all cores have Buckyball)
 
 [privateDCache]
 enable = true
@@ -11,10 +11,10 @@ memCycles = 10
 [sharedMem]
 enable = false
 entries = 16384
-inputChannels = 14
+inputChannels = 4
 defaultGroupCount = 1
 memCycles = 10
 
 [coreTemplate]
 include = "cores/default.toml"
-count = 2
+count = 4

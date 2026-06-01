@@ -1,4 +1,4 @@
-# Goban Tile (3 cores: core 0 has Buckyball, core 1 is Rocket-only, core 2 is safe core)
+# Goban Tile (5 cores: core 0 has Buckyball, cores 1-2 are Rocket-only, cores 3-4 are safe core)
 
 [privateDCache]
 enable = true
@@ -11,7 +11,7 @@ memCycles = 10
 [sharedMem]
 enable = false
 entries = 16384
-inputChannels = 12
+inputChannels = 5
 defaultGroupCount = 1
 memCycles = 10
 
@@ -20,6 +20,12 @@ include = "cores/default.toml"
 
 [[cores]]
 include = "cores/rocket.toml"
+
+[[cores]]
+include = "cores/rocket.toml"
+
+[[cores]]
+include = "cores/safe-core.toml"
 
 [[cores]]
 include = "cores/safe-core.toml"

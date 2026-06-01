@@ -111,49 +111,49 @@ class BuckyballGoban64Tile4CoreConfig
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config1: 64 BBTiles × 2 cores each; core 0 has Buckyball, core 1 is hidden Rocket-only. */
+/** Config1: 12 BBTiles × 5 cores each; core 0 has Buckyball, cores 1-2 Rocket-only, cores 3-4 safe core. */
 class BuckyballGobanConfig1Config
     extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 64, nCoresPerTile = 2, hiddenHartBase = 64) ++
+      new WithGobanHiddenHartIdBits(nTiles = 12, nCoresPerTile = 5, hiddenHartBase = 12) ++
         new WithBuckyballTiles(
-          "src/main/scala/examples/goban/configs/64t2c-private-1bb.toml",
-          hiddenHartBase = Some(64)
+          "src/main/scala/examples/goban/configs/12t5c-private-1bb-2rocket-2safe.toml",
+          hiddenHartBase = Some(12)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config2: 64 BBTiles × 3 cores each; core 0 has Buckyball, core 1 Rocket-only, core 2 safe core. */
+/** Config2: 8 BBTiles × 8 cores each; cores 0-3 have Buckyball, cores 4-7 Rocket-only. */
 class BuckyballGobanConfig2Config
     extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 64, nCoresPerTile = 3, hiddenHartBase = 64) ++
+      new WithGobanHiddenHartIdBits(nTiles = 8, nCoresPerTile = 8, hiddenHartBase = 8) ++
         new WithBuckyballTiles(
-          "src/main/scala/examples/goban/configs/64t3c-private-1bb-safe.toml",
-          hiddenHartBase = Some(64)
+          "src/main/scala/examples/goban/configs/8t8c-private-4bb-4rocket.toml",
+          hiddenHartBase = Some(8)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config3: 64 BBTiles × 2 cores each; both cores have Buckyball, core 1 is hidden from Linux. */
+/** Config3: 16 BBTiles × 4 cores each; all cores have Buckyball. */
 class BuckyballGobanConfig3Config
     extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 64, nCoresPerTile = 2, hiddenHartBase = 64) ++
+      new WithGobanHiddenHartIdBits(nTiles = 16, nCoresPerTile = 4, hiddenHartBase = 16) ++
         new WithBuckyballTiles(
-          "src/main/scala/examples/goban/configs/64t2c-private-2bb.toml",
-          hiddenHartBase = Some(64)
+          "src/main/scala/examples/goban/configs/16t4c-private-4bb.toml",
+          hiddenHartBase = Some(16)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config4: 64 BBTiles × 4 hidden Rocket-only cores each. Linux still sees core 0 in every tile. */
+/** Config4: 16 BBTiles × 4 Rocket-only cores each. Linux still sees core 0 in every tile. */
 class BuckyballGobanConfig4Config
     extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 64, nCoresPerTile = 4, hiddenHartBase = 64) ++
+      new WithGobanHiddenHartIdBits(nTiles = 16, nCoresPerTile = 4, hiddenHartBase = 16) ++
         new WithBuckyballTiles(
-          "src/main/scala/examples/goban/configs/64t4c-private-rocket-only.toml",
-          hiddenHartBase = Some(64)
+          "src/main/scala/examples/goban/configs/16t4c-private-rocket-only.toml",
+          hiddenHartBase = Some(16)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
