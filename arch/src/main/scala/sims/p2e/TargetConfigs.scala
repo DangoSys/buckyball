@@ -11,7 +11,7 @@ import sims.scu.WithSCU
 class WithP2EBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/bootrom/bootrom.rv64.img"
+          contentFileName = "src/main/resources/bootrom/bare/bootrom.rv64.img"
         ))
     })
 
@@ -22,7 +22,7 @@ class WithP2EBootROM
 class WithLinuxBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/linux/bootrom.rv64.img"
+          contentFileName = "src/main/resources/bootrom/linux/bootrom.rv64.img"
         ))
     })
 
@@ -64,7 +64,7 @@ class P2EToyConfig
 
 /**
  * Linux variant of P2EToyConfig.
- * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Uses bootrom/linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
  * Pair with OpenSBI fw_payload built by `bbdev kernel --build`.
  */
 class P2EToyLinuxConfig
@@ -93,7 +93,7 @@ class P2EGemminiConfig
 
 /**
  * Linux variant of P2EGemminiConfig.
- * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Uses bootrom/linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
  * Pair with OpenSBI fw_payload built by `bbdev kernel --build`.
  */
 class P2EGemminiLinuxConfig
@@ -147,7 +147,7 @@ class BuckyballGoban2Tile4CoreP2EConfig
 
 /**
  * Linux variant of the 2-tile Goban config.
- * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Uses bootrom/linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
  */
 class BuckyballGoban2Tile4CoreLinuxP2EConfig
     extends Config(
@@ -164,7 +164,7 @@ class BuckyballGoban64Tile4CoreP2EConfig
 
 /**
  * Linux variant of the 64-tile Goban config.
- * Uses linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
+ * Uses bootrom/linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
  */
 class BuckyballGoban64Tile4CoreLinuxP2EConfig
     extends Config(

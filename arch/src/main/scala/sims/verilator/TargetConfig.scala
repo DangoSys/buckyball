@@ -10,14 +10,14 @@ import freechips.rocketchip.subsystem.InSubsystem
 class WithCustomBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/bootrom/bootrom.rv64.img"
+          contentFileName = "src/main/resources/bootrom/bare/bootrom.rv64.img"
         ))
     })
 
 class WithLinuxBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/linux/bootrom.rv64.img"
+          contentFileName = "src/main/resources/bootrom/linux/bootrom.rv64.img"
         ))
     })
 

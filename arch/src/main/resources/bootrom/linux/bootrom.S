@@ -27,3 +27,5 @@ _start:
 
 trap_entry:
   j       trap_entry
+
+  .balign 8
