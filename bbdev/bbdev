@@ -44,7 +44,7 @@ WORKFLOW_COMMANDS = {
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs for Pegasus. Args: "[--visible-hart-count <n>] [--total-hart-count <n>] [--hidden-hart-base <n>]"',
+        "build": 'Build RISC-V kernel + rootfs for Pegasus. Args: "[--visible-hart-count <n>] [--total-hart-count <n>]"',
     },
     "firesim": {
         "enumeratefpgas": "Enumerate FPGAs.",
@@ -72,7 +72,7 @@ WORKFLOW_COMMANDS = {
         "clean": 'Clean Bebop P2E build directory. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
         "buildbitstream": "Build Bebop P2E bitstream.",
-        "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--wave] [--wave-start <cycle>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
+        "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--multi-fpga] [--wave] [--wave-start <cycle>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
         "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--bitstream <path> --build-dir <dir> --test <elf-tests|pk-tests>"',
     },
     "dc": {

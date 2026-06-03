@@ -4,7 +4,7 @@ bebop p2e runworkload event handler
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
   1. Resolve image name to .hex file under bb-tests/output/
   2. Validate bitstream .bit file path
-  3. Run bebop p2e --runworkload --image <image-path> --bitstream <bitstream> [--wave] [--wave-start <cycle>] --log-dir <log>
+  3. Run bebop p2e --runworkload --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>] --log-dir <log>
 """
 import glob
 import os
@@ -46,6 +46,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     image_name = input_data.get("image", "")
     bitstream = input_data.get("bitstream", "")
+    multi_fpga = bool(input_data.get("multi-fpga", False))
     wave = bool(input_data.get("wave", False))
     if "wave_start" in input_data:
         ctx.logger.error("invalid parameter: --wave_start (use --wave-start)")
@@ -137,6 +138,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--build-dir=\"{build_dir}\" "
         f"--log-dir=\"{log_dir}\""
     )
+    if multi_fpga:
+        run_cmd += " --multi-fpga"
     if wave:
         run_cmd += " --wave"
     if wave_start is not None:

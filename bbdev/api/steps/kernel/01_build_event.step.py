@@ -1,6 +1,5 @@
 import os
 import sys
-import shutil
 
 from motia import FlowContext, queue
 
@@ -28,16 +27,22 @@ config = {
 
 
 def hart_count_params(input_data: dict) -> dict:
+    allowed = {"visible-hart-count", "total-hart-count", "_trace_id"}
+    unknown = sorted(k for k in input_data if k not in allowed)
+    if unknown:
+        raise ValueError(f"unknown kernel build parameter(s): {', '.join(unknown)}")
+
+    if "hidden-hart-base" in input_data:
+        raise ValueError("hidden-hart-base is not supported; hidden harts must start at visible-hart-count")
+
     visible = int(input_data.get("visible-hart-count", 64))
     total = int(input_data.get("total-hart-count", visible))
-    hidden_base = int(input_data.get("hidden-hart-base", visible))
+    hidden_base = visible
 
     if visible < 1:
         raise ValueError("visible-hart-count must be at least 1")
     if total < visible:
         raise ValueError("total-hart-count must cover visible harts")
-    if hidden_base < visible:
-        raise ValueError("hidden-hart-base must be after visible harts")
 
     return {
         "visible": visible,
@@ -46,17 +51,29 @@ def hart_count_params(input_data: dict) -> dict:
     }
 
 
+def kernel_build_dir(bbdir: str, hart_params: dict) -> str:
+    visible = hart_params["visible"]
+    total = hart_params["total"]
+    if visible == 64 and total == 64:
+        return os.path.join(bbdir, "bb-tests", "build", "kernel")
+    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}")
+
+
+def fw_payload_name(hart_params: dict) -> str:
+    visible = hart_params["visible"]
+    total = hart_params["total"]
+    if visible == 64 and total == 64:
+        return "fw_payload"
+    return f"fw_payload-v{visible}-t{total}"
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
 
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
-    kernel_build = os.path.join(bbdir, "bb-tests", "build", "kernel")
     output_dir = os.path.join(bbdir, "bb-tests", "output", "kernel")
 
-    # Clear previous output before rebuild
-    if os.path.isdir(output_dir):
-        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
     try:
@@ -65,6 +82,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
+    kernel_build = kernel_build_dir(bbdir, hart_params)
 
     # cmake configure
     configure_cmd = (
@@ -97,11 +115,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    fw_payload_bin = os.path.join(output_dir, "fw_payload.bin")
-    fw_payload_hex = os.path.join(output_dir, "fw_payload.hex")
+    payload_name = fw_payload_name(hart_params)
+    fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
+    fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
 
     if not os.path.exists(fw_payload_bin):
-        ctx.logger.error("fw_payload.bin not found")
+        ctx.logger.error(f"{payload_name}.bin not found")
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
 
