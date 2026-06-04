@@ -19,16 +19,17 @@ def Im2colOp : Buckyball_Op<"im2col"> {
     Transforms image data into column format for efficient convolution.
     Corresponds to bb_im2col instruction (funct7=48).
     Belongs to Im2colBall (bid=3).
-    ISA: bb_im2col(op1_bank_id, wr_bank_id, krow, kcol, inrow, incol, startrow, startcol)
+    ISA: bb_im2col_ex(op1_bank_id, wr_bank_id, krow, kcol, inrow, incol, startrow, startcol, col_step)
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$krow, I64:$kcol,
                        I64:$inrow, I64:$incol,
-                       I64:$startrow, I64:$startcol);
+                       I64:$startrow, I64:$startcol,
+                       I64:$colStep);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
                        "$krow `,` $kcol `,` "
                        "$inrow `,` $incol `,` "
-                       "$startrow `,` $startcol attr-dict `:` "
+                       "$startrow `,` $startcol `,` $colStep attr-dict `:` "
                        "type($inputBankId)";
 }
 

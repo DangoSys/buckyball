@@ -261,14 +261,6 @@ public:
   }
 };
 
-// TransposeToBankSSAPattern removed - TransposeOp no longer has memref operands
-
-// Im2colToBankSSAPattern removed - Im2colOp no longer has memref operands
-
-// QuantToBankSSAPattern removed - QuantOp no longer has memref operands
-
-// DequantToBankSSAPattern removed - DequantOp no longer has memref operands
-
 class LowerBuckyballToBankSSAPass
     : public PassWrapper<LowerBuckyballToBankSSAPass,
                          OperationPass<func::FuncOp>> {

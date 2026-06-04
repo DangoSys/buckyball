@@ -83,10 +83,11 @@ def BankTransposeOp : Buckyball_Op<"bank_transpose"> {
 def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
   let summary = "Im2col using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$krow, I64:$kcol,
-                       I64:$inrow, I64:$incol, I64:$startrow, I64:$startcol);
+                       I64:$inrow, I64:$incol, I64:$startrow, I64:$startcol,
+                       I64:$colStep);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $krow $kcol $inrow $incol $startrow $startcol attr-dict `:` type($inBank) type($outBank) type($krow) type($kcol) type($inrow) type($incol) type($startrow) type($startcol)";
+      "$inBank $outBank $krow $kcol $inrow $incol $startrow $startcol $colStep attr-dict `:` type($inBank) type($outBank) type($krow) type($kcol) type($inrow) type($incol) type($startrow) type($startcol) type($colStep)";
 }
 
 def BankFp2IntOp : Buckyball_Op<"bank_fp2int"> {

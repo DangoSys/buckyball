@@ -22,6 +22,7 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
     val inCol    = Output(UInt(16.W))
     val startRow = Output(UInt(16.W))
     val startCol = Output(UInt(16.W))
+    val colStep  = Output(UInt(16.W))
   })
 
   private val robId    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
@@ -35,11 +36,13 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
   private val inCol    = RegInit(0.U(16.W))
   private val startRow = RegInit(0.U(16.W))
   private val startCol = RegInit(0.U(16.W))
+  private val colStep  = RegInit(1.U(16.W))
 
-  val cmdKCol  = io.cmd.cmd.special(3, 0)
-  val cmdKRow  = io.cmd.cmd.special(7, 4)
-  val cmdInCol = io.cmd.cmd.special(12, 8)
-  val cmdInRow = io.cmd.cmd.special(22, 13)
+  val cmdKCol    = io.cmd.cmd.special(7, 0)
+  val cmdKRow    = io.cmd.cmd.special(15, 8)
+  val cmdInCol   = io.cmd.cmd.special(23, 16)
+  val cmdInRow   = io.cmd.cmd.special(31, 24)
+  val cmdColStep = io.cmd.cmd.special(55, 48)
 
   when(io.load) {
     robId    := io.cmd.rob_id
@@ -51,13 +54,14 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
     kRow     := cmdKRow
     inCol    := cmdInCol
     inRow    := cmdInRow
-    startCol := io.cmd.cmd.special(27, 23)
-    startRow := io.cmd.cmd.special(37, 28)
+    startCol := io.cmd.cmd.special(39, 32)
+    startRow := io.cmd.cmd.special(47, 40)
+    colStep  := cmdColStep
   }
 
   io.invalid  := (cmdKCol === 0.U) || (cmdKRow === 0.U) ||
     (cmdInCol === 0.U) || (cmdInRow === 0.U) ||
-    (cmdInCol < cmdKCol) || (cmdInRow < cmdKRow)
+    (cmdColStep === 0.U) || (cmdInCol < cmdKCol) || (cmdInRow < cmdKRow)
   io.robId    := Mux(io.load, io.cmd.rob_id, robId)
   io.isSub    := Mux(io.load, io.cmd.is_sub, isSub)
   io.subRobId := Mux(io.load, io.cmd.sub_rob_id, subRobId)
@@ -67,6 +71,7 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
   io.kCol     := Mux(io.load, cmdKCol, kCol)
   io.inRow    := Mux(io.load, cmdInRow, inRow)
   io.inCol    := Mux(io.load, cmdInCol, inCol)
-  io.startRow := Mux(io.load, io.cmd.cmd.special(37, 28), startRow)
-  io.startCol := Mux(io.load, io.cmd.cmd.special(27, 23), startCol)
+  io.startRow := Mux(io.load, io.cmd.cmd.special(47, 40), startRow)
+  io.startCol := Mux(io.load, io.cmd.cmd.special(39, 32), startCol)
+  io.colStep  := Mux(io.load, cmdColStep, colStep)
 }

@@ -373,17 +373,14 @@ public:
   LowerBuckyballToLLVMPass() = default;
   LowerBuckyballToLLVMPass(const LowerBuckyballToLLVMPass &) {}
 
-  Option<int64_t> lane{*this, "lane", llvm::cl::desc("Hardware lane width."),
-                       llvm::cl::init(16)};
-  Option<int64_t> warp{*this, "warp", llvm::cl::desc("Hardware warp depth."),
-                       llvm::cl::init(16)};
+  Option<int64_t> bankWidthBytes{
+      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
+      llvm::cl::init(16)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Depth of each bank."),
                             llvm::cl::init(4096)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
                           llvm::cl::init(8)};
-  Option<int32_t> hartId{*this, "hartId", llvm::cl::desc("The hart id."),
-                         llvm::cl::init(0)};
 
   // Override explicitly to allow conditional dialect dependence.
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -410,17 +407,14 @@ public:
   LowerBankSSAToIntrinsicsPass() = default;
   LowerBankSSAToIntrinsicsPass(const LowerBankSSAToIntrinsicsPass &) {}
 
-  Option<int64_t> lane{*this, "lane", llvm::cl::desc("Hardware lane width."),
-                       llvm::cl::init(16)};
-  Option<int64_t> warp{*this, "warp", llvm::cl::desc("Hardware warp depth."),
-                       llvm::cl::init(16)};
+  Option<int64_t> bankWidthBytes{
+      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
+      llvm::cl::init(16)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Depth of each bank."),
                             llvm::cl::init(4096)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
                           llvm::cl::init(8)};
-  Option<int32_t> hartId{*this, "hartId", llvm::cl::desc("The hart id."),
-                         llvm::cl::init(0)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<LLVM::LLVMDialect>();
@@ -442,8 +436,8 @@ void LowerBuckyballToLLVMPass::runOnOperation() {
   RewritePatternSet patterns(context);
   LLVMConversionTarget target(*context);
   configureBuckyballLegalizeForExportTarget(target);
-  populateBuckyballLegalizeForLLVMExportPatterns(converter, patterns, lane,
-                                                 warp, bankDepth, bankNum);
+  populateBuckyballLegalizeForLLVMExportPatterns(
+      converter, patterns, bankWidthBytes, bankDepth, bankNum);
   populateAffineToStdConversionPatterns(patterns);
   populateSCFToControlFlowConversionPatterns(patterns);
   mlir::arith::populateArithToLLVMConversionPatterns(converter, patterns);
@@ -465,8 +459,8 @@ void LowerBankSSAToIntrinsicsPass::runOnOperation() {
   RewritePatternSet patterns(context);
   LLVMConversionTarget target(*context);
   configureBuckyballLegalizeForExportTarget(target);
-  populateBuckyballLegalizeForLLVMExportPatterns(converter, patterns, lane,
-                                                 warp, bankDepth, bankNum);
+  populateBuckyballLegalizeForLLVMExportPatterns(
+      converter, patterns, bankWidthBytes, bankDepth, bankNum);
   populateAffineToStdConversionPatterns(patterns);
   populateSCFToControlFlowConversionPatterns(patterns);
   mlir::arith::populateArithToLLVMConversionPatterns(converter, patterns);

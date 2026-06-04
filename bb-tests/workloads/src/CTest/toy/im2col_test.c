@@ -72,7 +72,7 @@ void hw_im2col(const char *test_name, elem_t *a, elem_t *b, int size) {
   uint64_t startrow = STARTROW;
   uint64_t startcol = STARTCOL;
   bb_im2col(op1_bank_id, op2_bank_id, krow, kcol, inrow, incol, startrow,
-            startcol);
+            startcol, 1);
   bb_mvout((uintptr_t)b, op2_bank_id, conv_num() / kernel_elems(), 1);
   bb_fence();
 }
@@ -112,6 +112,7 @@ int main() {
     printf("Im2col test FAILED\n");
   }
 #ifdef MULTICORE
-  exit(0);
+  exit(passed ? 0 : 1);
 #endif
+  return passed ? 0 : 1;
 }

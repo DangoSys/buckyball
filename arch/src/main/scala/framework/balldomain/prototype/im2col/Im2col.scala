@@ -73,6 +73,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   win.io.inCol    := cfg.io.inCol
   win.io.startRow := cfg.io.startRow
   win.io.startCol := cfg.io.startCol
+  win.io.colStep  := cfg.io.colStep
   val cmdStart    = io.cmdReq.fire && !invalid
   val loadNextRow = WireDefault(false.B)
   val canEmitElem = running && linesReady && !finishPending && !elemDone

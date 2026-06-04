@@ -422,28 +422,32 @@ struct BuckyballIm2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
         loc, i64, adaptor.getOutputBankId(), cstI64(rewriter, loc, 20));
     Value rs1 = rewriter.create<arith::OrIOp>(loc, i64, bank0Shift, bank2Shift);
 
-    // Pack rs2: fields at specific bit positions
+    // Pack rs2: seven 8-bit im2col fields.
     Value rs2 = adaptor.getKcol();
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getKrow(),
-                                       cstI64(rewriter, loc, 4)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getIncol(),
                                        cstI64(rewriter, loc, 8)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getIncol(),
+                                       cstI64(rewriter, loc, 16)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getInrow(),
-                                       cstI64(rewriter, loc, 13)));
+                                       cstI64(rewriter, loc, 24)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getStartcol(),
-                                       cstI64(rewriter, loc, 23)));
+                                       cstI64(rewriter, loc, 32)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getStartrow(),
-                                       cstI64(rewriter, loc, 28)));
+                                       cstI64(rewriter, loc, 40)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getColStep(),
+                                       cstI64(rewriter, loc, 48)));
 
     rewriter.replaceOpWithNewOp<Im2colIntrOp>(op, rs1, rs2);
     return success();
@@ -539,10 +543,9 @@ struct BuckyballSystolicLowering : public ConvertOpToLLVMPattern<SystolicOp> {
 //===----------------------------------------------------------------------===//
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, int64_t lane,
-    int64_t warp, int64_t bankDepth, int64_t bankNum) {
-  (void)lane;
-  (void)warp;
+    LLVMTypeConverter &converter, RewritePatternSet &patterns,
+    int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum) {
+  (void)bankWidthBytes;
   (void)bankDepth;
   (void)bankNum;
 

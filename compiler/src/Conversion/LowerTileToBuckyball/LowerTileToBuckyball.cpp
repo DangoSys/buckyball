@@ -44,6 +44,70 @@ using namespace buddy;
 
 static size_t ceilDiv(size_t a, size_t b) { return (a + b - 1) / b; }
 
+static constexpr size_t kDefaultBankWidthBytes = 16;
+static constexpr size_t kMatmulTile = 16;
+
+static size_t elemsPerBankRow(Type elemType, size_t bankWidthBytes) {
+  unsigned bitWidth = elemType.getIntOrFloatBitWidth();
+  if (bitWidth == 0 || bitWidth % 8 != 0)
+    return 0;
+  return bankWidthBytes / (bitWidth / 8);
+}
+
+static Value cstF32(OpBuilder &b, Location loc, float v) {
+  return b.create<arith::ConstantOp>(loc, b.getF32Type(), b.getF32FloatAttr(v));
+}
+
+static Value packF32BitsAsI64(OpBuilder &b, Location loc, Value f32Val) {
+  Value i32Bits = b.create<arith::BitcastOp>(loc, b.getI32Type(), f32Val);
+  return b.create<arith::ExtUIOp>(loc, b.getI64Type(), i32Bits);
+}
+
+static Value buildTileAbsMax(PatternRewriter &rewriter, Location loc, Value mem,
+                             uint64_t rows, uint64_t cols) {
+  auto maxTy = MemRefType::get({1}, rewriter.getF32Type());
+  Value maxBuf = rewriter.create<memref::AllocOp>(loc, maxTy);
+
+  Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+  Value oneIdx = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+  Value rowsIdx = rewriter.create<arith::ConstantIndexOp>(loc, rows);
+  Value colsIdx = rewriter.create<arith::ConstantIndexOp>(loc, cols);
+  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
+
+  rewriter.create<memref::StoreOp>(loc, zeroF32, maxBuf, ValueRange{zeroIdx});
+
+  auto rowLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, rowsIdx, oneIdx);
+  rewriter.setInsertionPointToStart(rowLoop.getBody());
+  auto colLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, colsIdx, oneIdx);
+  rewriter.setInsertionPointToStart(colLoop.getBody());
+
+  Value elem = rewriter.create<memref::LoadOp>(
+      loc, mem,
+      ValueRange{rowLoop.getInductionVar(), colLoop.getInductionVar()});
+  Value neg = rewriter.create<arith::NegFOp>(loc, elem);
+  Value abs = rewriter.create<arith::MaximumFOp>(loc, elem, neg);
+  Value cur = rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
+  Value upd = rewriter.create<arith::MaximumFOp>(loc, cur, abs);
+  rewriter.create<memref::StoreOp>(loc, upd, maxBuf, ValueRange{zeroIdx});
+
+  rewriter.setInsertionPointAfter(rowLoop);
+  Value result =
+      rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
+  rewriter.create<memref::DeallocOp>(loc, maxBuf);
+  return result;
+}
+
+static Value buildQuantScale(PatternRewriter &rewriter, Location loc,
+                             Value maxAbs) {
+  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
+  Value oneF32 = cstF32(rewriter, loc, 1.0f);
+  Value qmaxF32 = cstF32(rewriter, loc, 127.0f);
+  Value hasData = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGT,
+                                                 maxAbs, zeroF32);
+  Value scaled = rewriter.create<arith::DivFOp>(loc, qmaxF32, maxAbs);
+  return rewriter.create<arith::SelectOp>(loc, hasData, scaled, oneF32);
+}
+
 // Matches `BuckyballMatMulLowering` mvout depthC = M * (N/16) on C (i32 acc,
 // cols=4). Spike/bebop: BANK_SIZE / (cols*16) = 16384/64 = 256 lines per mvout.
 static constexpr size_t kMaxAccMvoutDepthLines = 256;
@@ -79,10 +143,9 @@ class TileMatMulLowering : public OpRewritePattern<tile::TileMatMulOp> {
   }
 
 public:
-  explicit TileMatMulLowering(MLIRContext *context, int64_t lane, int64_t warp,
+  explicit TileMatMulLowering(MLIRContext *context, int64_t /*bankWidthBytes*/,
                               int64_t bankDepth, int64_t /*bankNum*/)
-      : OpRewritePattern(context), lane(lane), warp(warp),
-        bankDepth(bankDepth) {}
+      : OpRewritePattern(context), bankDepth(bankDepth) {}
 
   LogicalResult matchAndRewrite(tile::TileMatMulOp tileMatMulOp,
                                 PatternRewriter &rewriter) const override {
@@ -169,11 +232,10 @@ public:
     size_t K_tiling = needPadding ? K_pad : K;
     size_t N_tiling = needPadding ? N_pad : N;
 
-    // Block counts per axis: each unit is lane×lane×warp elements (see
-    // mTileSize below).
-    const size_t mMeta = lane;
-    const size_t nMeta = lane;
-    const size_t kMeta = warp;
+    // Buckyball matmul ISA tile is 16xK @ Kx16 -> 16x16.
+    const size_t mMeta = kMatmulTile;
+    const size_t nMeta = kMatmulTile;
+    const size_t kMeta = kMatmulTile;
 
     // Pad dimensions to multiples of meta lengths
     const size_t mPad = ceilDiv(M_tiling, mMeta) * mMeta;
@@ -389,7 +451,7 @@ public:
   }
 
 private:
-  int64_t lane, warp, bankDepth;
+  int64_t bankDepth;
 };
 
 } // namespace
@@ -402,10 +464,9 @@ namespace {
 
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
 public:
-  explicit TileTransposeLowering(MLIRContext *context, int64_t lane,
-                                 int64_t /*warp*/, int64_t /*bankDepth*/,
-                                 int64_t /*bankNum*/)
-      : OpRewritePattern(context), lane(lane) {}
+  explicit TileTransposeLowering(MLIRContext *context, int64_t bankWidthBytes,
+                                 int64_t /*bankDepth*/, int64_t /*bankNum*/)
+      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes) {}
 
   LogicalResult matchAndRewrite(tile::TileTransposeOp tileTransposeOp,
                                 PatternRewriter &rewriter) const override {
@@ -427,17 +488,22 @@ public:
       return tileTransposeOp.emitError(
           "Output shape must be transposed of input shape");
 
+    size_t elemsPerRow =
+        elemsPerBankRow(inputType.getElementType(), bankWidthBytes);
+    if (elemsPerRow == 0)
+      return tileTransposeOp.emitError("unsupported transpose element type");
+
     // Hardware constraint: transpose processes 16 rows at a time
     // iter parameter: number of columns (max 64 for i8)
-    constexpr size_t kTransposeRows = 16;
+    constexpr size_t kTransposeRows = kMatmulTile;
     constexpr size_t kMaxTransposeCols = 64;
 
     // Tile columns to fit hardware limit
     size_t colTileSize = std::min(Cols, kMaxTransposeCols);
-    // Align to lane for efficient mvin/mvout
-    colTileSize = (colTileSize / lane) * lane;
+    // Align to physical bank rows for efficient mvin/mvout
+    colTileSize = (colTileSize / elemsPerRow) * elemsPerRow;
     if (colTileSize == 0)
-      colTileSize = lane;
+      colTileSize = elemsPerRow;
 
     size_t rowTileNum = ceilDiv(Rows, kTransposeRows);
     size_t colTileNum = ceilDiv(Cols, colTileSize);
@@ -476,8 +542,8 @@ public:
             rewriter.create<buckyball::BankAllocOp>(loc, rewriter.getI64Type());
 
         // Move data from memref to source bank
-        // depth = number of lane-width rows = rLenPadded * cLen / lane
-        int64_t depth = rLenPadded * cLen / lane;
+        // depth = number of physical bank rows
+        int64_t depth = rLenPadded * cLen / elemsPerRow;
         Value srcBankAfterMvin =
             buckyball::mvinBank(rewriter, loc, inTile, srcBank, depth);
 
@@ -491,7 +557,7 @@ public:
 
         // Move result from destination bank to memref
         // Output is cLen × rLenPadded, but we only mvout cLen × rLen
-        int64_t outDepth = cLen * rLen / lane;
+        int64_t outDepth = cLen * rLen / elemsPerRow;
         buckyball::mvoutBank(rewriter, loc, outTile, dstBankAfterTranspose,
                              outDepth);
 
@@ -506,7 +572,7 @@ public:
   }
 
 private:
-  int64_t lane;
+  int64_t bankWidthBytes;
 };
 
 } // namespace
@@ -519,10 +585,10 @@ namespace {
 
 class TileConv2dLowering : public OpRewritePattern<tile::TileConv2dOp> {
 public:
-  explicit TileConv2dLowering(MLIRContext *context, int64_t lane,
-                              int64_t /*warp*/, int64_t bankDepth,
-                              int64_t /*bankNum*/)
-      : OpRewritePattern(context), lane(lane), bankDepth(bankDepth) {}
+  explicit TileConv2dLowering(MLIRContext *context, int64_t bankWidthBytes,
+                              int64_t bankDepth, int64_t /*bankNum*/)
+      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes),
+        bankDepth(bankDepth) {}
 
   LogicalResult matchAndRewrite(tile::TileConv2dOp op,
                                 PatternRewriter &rewriter) const override {
@@ -546,18 +612,22 @@ public:
 
     int64_t totalOHOW = OH * OW;
     int64_t patchCols = KH * KW * C;
+    int64_t i8ElemsPerRow = bankWidthBytes;
     if (!inType.getElementType().isF32() ||
         !filterType.getElementType().isF32())
       return op.emitError("tile_conv2d im2col lowering currently expects f32");
-    if (totalOHOW > lane)
+    if (N <= 0 || H <= 0 || W <= 0 || C <= 0 || KH <= 0 || KW <= 0 || OC <= 0 ||
+        OH <= 0 || OW <= 0)
+      return op.emitError("tile_conv2d requires positive static shapes");
+    if (patchCols <= 0 || patchCols > (int64_t)bankDepth)
+      return op.emitError("tile_conv2d patch size exceeds bank depth");
+    if (KH > 255 || KW * C > 255 || H > 255 || W * C > 255 || OH > 255 ||
+        OW > 255 || C > 255)
+      return op.emitError("tile_conv2d im2col shape exceeds 8-bit ISA fields");
+    if ((H * W * C) % i8ElemsPerRow != 0)
       return op.emitError(
-          "tile_conv2d im2col lowering currently supports one output warp");
-    if (patchCols <= 0 || patchCols > lane)
-      return op.emitError("tile_conv2d patch size must be in 1..16");
-    if (KW * C > 15 || W * C > 31)
-      return op.emitError("tile_conv2d im2col shape exceeds ISA field width");
-    if ((H * W * C) % lane != 0)
-      return op.emitError("tile_conv2d input element count must align to lane");
+          "tile_conv2d input element count must align to bank width");
+    (void)totalOHOW;
 
     // For each batch
     for (int64_t n = 0; n < N; n++) {
@@ -577,8 +647,9 @@ public:
 
       Value filterReshaped = rewriter.create<memref::CollapseShapeOp>(
           loc, filter, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
+      int64_t ocPadded = ceilDiv(OC, kMatmulTile) * kMatmulTile;
       auto filterPadType =
-          MemRefType::get({patchCols, lane}, filterType.getElementType());
+          MemRefType::get({patchCols, ocPadded}, filterType.getElementType());
       auto filterPadAlloc =
           rewriter.create<memref::AllocOp>(loc, filterPadType);
       filterPadAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
@@ -620,83 +691,128 @@ public:
       auto collapseOut = rewriter.create<memref::CollapseShapeOp>(
           loc, outBatch, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
 
-      auto cTileType = MemRefType::get({lane, lane}, outType.getElementType());
-      auto cTileAlloc = rewriter.create<memref::AllocOp>(loc, cTileType);
-      cTileAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
-      Value cTile = cTileAlloc.getResult();
-
       Value inputFp = buckyball::allocBank(rewriter, loc, 1, 4);
       Value inputI8 = buckyball::allocBank(rewriter, loc, 1, 1);
-      Value patchI8 = buckyball::allocBank(rewriter, loc, 1, 1);
-      Value patchT = buckyball::allocBank(rewriter, loc, 1, 1);
 
-      Value scale = buckyball::createI64Const(rewriter, loc, 0x3f800000);
-      int64_t inputDepth = H * W * C / lane;
+      int64_t inputDepth = H * W * C / i8ElemsPerRow;
       Value inputLoad =
           buckyball::mvinBank(rewriter, loc, collapseIn, inputFp, inputDepth);
+      Value inputMax = buildTileAbsMax(rewriter, loc, collapseIn, H, W * C);
+      Value inputScale = buildQuantScale(rewriter, loc, inputMax);
+      Value inputScaleBits = packF32BitsAsI64(rewriter, loc, inputScale);
       Value inputQuant = rewriter.create<buckyball::BankFp2IntOp>(
           loc, inputI8.getType(), inputLoad, inputI8,
-          buckyball::createI64Const(rewriter, loc, inputDepth), scale);
+          buckyball::createI64Const(rewriter, loc, inputDepth), inputScaleBits);
       buckyball::releaseBank(rewriter, loc, inputLoad);
 
-      Value patch = rewriter.create<buckyball::BankIm2colOp>(
-          loc, patchI8.getType(), inputQuant, patchI8,
-          buckyball::createI64Const(rewriter, loc, KH),
-          buckyball::createI64Const(rewriter, loc, KW * C),
-          buckyball::createI64Const(rewriter, loc, H),
-          buckyball::createI64Const(rewriter, loc, W * C),
-          buckyball::createI64Const(rewriter, loc, 0),
-          buckyball::createI64Const(rewriter, loc, 0));
-      buckyball::releaseBank(rewriter, loc, inputQuant);
+      for (int64_t oc0 = 0; oc0 < OC; oc0 += kMatmulTile) {
+        Value oc0Idx = rewriter.create<arith::ConstantIndexOp>(loc, oc0);
+        Value filterTile = rewriter.create<memref::SubViewOp>(
+            loc, filterPad,
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(0), oc0Idx},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(patchCols),
+                                      rewriter.getIndexAttr(kMatmulTile)},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                      rewriter.getIndexAttr(1)});
+        Value filterFp = buckyball::allocBank(rewriter, loc, 1, 4);
+        Value filterI8 = buckyball::allocBank(rewriter, loc, 1, 1);
+        Value filterMax =
+            buildTileAbsMax(rewriter, loc, filterTile, patchCols, kMatmulTile);
+        Value filterScale = buildQuantScale(rewriter, loc, filterMax);
+        Value filterScaleBits = packF32BitsAsI64(rewriter, loc, filterScale);
+        Value filterLoad =
+            buckyball::mvinBank(rewriter, loc, filterTile, filterFp, patchCols);
+        Value filterQuant = rewriter.create<buckyball::BankFp2IntOp>(
+            loc, filterI8.getType(), filterLoad, filterI8,
+            buckyball::createI64Const(rewriter, loc, patchCols),
+            filterScaleBits);
+        buckyball::releaseBank(rewriter, loc, filterLoad);
 
-      Value patchTrans = rewriter.create<buckyball::BankTransposeOp>(
-          loc, patchT.getType(), patch, patchT,
-          buckyball::createI64Const(rewriter, loc, patchCols),
-          buckyball::createI64Const(rewriter, loc, 0));
-      buckyball::releaseBank(rewriter, loc, patch);
+        for (int64_t oh0 = 0; oh0 < OH; ++oh0) {
+          for (int64_t ow0 = 0; ow0 < OW; ow0 += kMatmulTile) {
+            int64_t mLen = std::min<int64_t>(kMatmulTile, OW - ow0);
+            int64_t outOffset = oh0 * OW + ow0;
 
-      Value filterFp = buckyball::allocBank(rewriter, loc, 1, 4);
-      Value filterI8 = buckyball::allocBank(rewriter, loc, 1, 1);
-      Value cI32 = buckyball::allocBank(rewriter, loc, 1, 4);
-      Value filterLoad =
-          buckyball::mvinBank(rewriter, loc, filterPad, filterFp, patchCols);
-      Value filterQuant = rewriter.create<buckyball::BankFp2IntOp>(
-          loc, filterI8.getType(), filterLoad, filterI8,
-          buckyball::createI64Const(rewriter, loc, patchCols), scale);
-      buckyball::releaseBank(rewriter, loc, filterLoad);
+            auto cTileType =
+                MemRefType::get({(int64_t)kMatmulTile, (int64_t)kMatmulTile},
+                                outType.getElementType());
+            auto cTileAlloc = rewriter.create<memref::AllocOp>(loc, cTileType);
+            cTileAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
+            Value cTile = cTileAlloc.getResult();
 
-      Value cMul = rewriter.create<buckyball::BankMulWarp16Op>(
-          loc, cI32.getType(), patchTrans, filterQuant, cI32,
-          buckyball::createI64Const(rewriter, loc, patchCols),
-          buckyball::createI64Const(rewriter, loc, 0));
-      buckyball::releaseBank(rewriter, loc, patchTrans);
-      buckyball::releaseBank(rewriter, loc, filterQuant);
+            Value patchI8 = buckyball::allocBank(rewriter, loc, 1, 1);
+            Value patchT = buckyball::allocBank(rewriter, loc, 1, 1);
+            Value cI32 = buckyball::allocBank(rewriter, loc, 1, 4);
 
-      Value cFp32 = buckyball::allocBank(rewriter, loc, 1, 4);
-      Value cDequant = rewriter.create<buckyball::BankInt2FpOp>(
-          loc, cFp32.getType(), cMul, cFp32,
-          buckyball::createI64Const(rewriter, loc, lane), scale);
-      buckyball::releaseBank(rewriter, loc, cMul);
-      Value cStore = buckyball::mvoutBank(rewriter, loc, cTile, cDequant, lane);
-      rewriter.create<buckyball::FenceOp>(loc);
-      buckyball::releaseBank(rewriter, loc, cStore);
+            Value patch = rewriter.create<buckyball::BankIm2colOp>(
+                loc, patchI8.getType(), inputQuant, patchI8,
+                buckyball::createI64Const(rewriter, loc, KH),
+                buckyball::createI64Const(rewriter, loc, KW * C),
+                buckyball::createI64Const(rewriter, loc, H),
+                buckyball::createI64Const(rewriter, loc, W * C),
+                buckyball::createI64Const(rewriter, loc, oh0),
+                buckyball::createI64Const(rewriter, loc, ow0 * C),
+                buckyball::createI64Const(rewriter, loc, C));
 
-      Value mUpper = rewriter.create<arith::ConstantIndexOp>(loc, totalOHOW);
-      auto mLoop = rewriter.create<scf::ForOp>(loc, zero, mUpper, one);
-      {
-        OpBuilder::InsertionGuard guard(rewriter);
-        rewriter.setInsertionPointToStart(mLoop.getBody());
-        auto cLoop = rewriter.create<scf::ForOp>(loc, zero, ocUpper, one);
-        rewriter.setInsertionPointToStart(cLoop.getBody());
-        Value v = rewriter.create<memref::LoadOp>(
-            loc, cTile,
-            ValueRange{mLoop.getInductionVar(), cLoop.getInductionVar()});
-        rewriter.create<memref::StoreOp>(
-            loc, v, collapseOut,
-            ValueRange{mLoop.getInductionVar(), cLoop.getInductionVar()});
+            Value patchTrans = rewriter.create<buckyball::BankTransposeOp>(
+                loc, patchT.getType(), patch, patchT,
+                buckyball::createI64Const(rewriter, loc, patchCols),
+                buckyball::createI64Const(rewriter, loc, 0));
+            buckyball::releaseBank(rewriter, loc, patch);
+
+            Value cMul = rewriter.create<buckyball::BankMulWarp16Op>(
+                loc, cI32.getType(), patchTrans, filterQuant, cI32,
+                buckyball::createI64Const(rewriter, loc, patchCols),
+                buckyball::createI64Const(rewriter, loc, 0));
+            buckyball::releaseBank(rewriter, loc, patchTrans);
+
+            Value cFp32 = buckyball::allocBank(rewriter, loc, 1, 4);
+            Value oneF32 = cstF32(rewriter, loc, 1.0f);
+            Value scaleProd =
+                rewriter.create<arith::MulFOp>(loc, inputScale, filterScale);
+            Value dequantScale =
+                rewriter.create<arith::DivFOp>(loc, oneF32, scaleProd);
+            Value dequantScaleBits =
+                packF32BitsAsI64(rewriter, loc, dequantScale);
+            Value cDequant = rewriter.create<buckyball::BankInt2FpOp>(
+                loc, cFp32.getType(), cMul, cFp32,
+                buckyball::createI64Const(rewriter, loc, kMatmulTile),
+                dequantScaleBits);
+            buckyball::releaseBank(rewriter, loc, cMul);
+            Value cStore = buckyball::mvoutBank(rewriter, loc, cTile, cDequant,
+                                                kMatmulTile);
+            rewriter.create<buckyball::FenceOp>(loc);
+            buckyball::releaseBank(rewriter, loc, cStore);
+
+            Value mUpper = rewriter.create<arith::ConstantIndexOp>(loc, mLen);
+            Value cUpper = rewriter.create<arith::ConstantIndexOp>(
+                loc, std::min<int64_t>(kMatmulTile, OC - oc0));
+            auto mLoop = rewriter.create<scf::ForOp>(loc, zero, mUpper, one);
+            {
+              OpBuilder::InsertionGuard guard(rewriter);
+              rewriter.setInsertionPointToStart(mLoop.getBody());
+              auto cLoop = rewriter.create<scf::ForOp>(loc, zero, cUpper, one);
+              rewriter.setInsertionPointToStart(cLoop.getBody());
+              Value v = rewriter.create<memref::LoadOp>(
+                  loc, cTile,
+                  ValueRange{mLoop.getInductionVar(), cLoop.getInductionVar()});
+              Value outM = rewriter.create<arith::AddIOp>(
+                  loc, mLoop.getInductionVar(),
+                  rewriter.create<arith::ConstantIndexOp>(loc, outOffset));
+              Value outC = rewriter.create<arith::AddIOp>(
+                  loc, cLoop.getInductionVar(), oc0Idx);
+              rewriter.create<memref::StoreOp>(loc, v, collapseOut,
+                                               ValueRange{outM, outC});
+            }
+
+            rewriter.create<memref::DeallocOp>(loc, cTile);
+          }
+        }
+
+        buckyball::releaseBank(rewriter, loc, filterQuant);
       }
 
-      rewriter.create<memref::DeallocOp>(loc, cTile);
+      buckyball::releaseBank(rewriter, loc, inputQuant);
       rewriter.create<memref::DeallocOp>(loc, filterPad);
     }
 
@@ -705,7 +821,7 @@ public:
   }
 
 private:
-  int64_t lane, bankDepth;
+  int64_t bankWidthBytes, bankDepth;
 };
 
 } // namespace
@@ -715,15 +831,15 @@ private:
 //===----------------------------------------------------------------------===//
 
 void populateLowerTileToBuckyballConversionPatterns(RewritePatternSet &patterns,
-                                                    int64_t lane, int64_t warp,
+                                                    int64_t bankWidthBytes,
                                                     int64_t bankDepth,
                                                     int64_t bankNum) {
-  patterns.add<TileMatMulLowering>(patterns.getContext(), lane, warp, bankDepth,
-                                   bankNum);
-  patterns.add<TileTransposeLowering>(patterns.getContext(), lane, warp,
+  patterns.add<TileMatMulLowering>(patterns.getContext(), bankWidthBytes,
+                                   bankDepth, bankNum);
+  patterns.add<TileTransposeLowering>(patterns.getContext(), bankWidthBytes,
                                       bankDepth, bankNum);
-  patterns.add<TileConv2dLowering>(patterns.getContext(), lane, warp, bankDepth,
-                                   bankNum);
+  patterns.add<TileConv2dLowering>(patterns.getContext(), bankWidthBytes,
+                                   bankDepth, bankNum);
 }
 
 //===----------------------------------------------------------------------===//
@@ -742,10 +858,9 @@ public:
   LowerTileToBuckyballPass() = default;
   LowerTileToBuckyballPass(const LowerTileToBuckyballPass &) {}
 
-  Option<int64_t> lane{*this, "lane", llvm::cl::desc("Hardware lane width."),
-                       llvm::cl::init(16)};
-  Option<int64_t> warp{*this, "warp", llvm::cl::desc("Warp depth."),
-                       llvm::cl::init(16)};
+  Option<int64_t> bankWidthBytes{
+      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
+      llvm::cl::init(kDefaultBankWidthBytes)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Bank depth (rows per bank)."),
                             llvm::cl::init(4096)};
@@ -774,7 +889,7 @@ void LowerTileToBuckyballPass::runOnOperation() {
   target.addIllegalDialect<tile::TileDialect>();
 
   RewritePatternSet patterns(context);
-  populateLowerTileToBuckyballConversionPatterns(patterns, lane, warp,
+  populateLowerTileToBuckyballConversionPatterns(patterns, bankWidthBytes,
                                                  bankDepth, bankNum);
 
   if (failed(applyPartialConversion(module, target, std::move(patterns))))

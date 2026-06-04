@@ -16,6 +16,7 @@ class Im2colWindow(maxK: Int) extends Module {
     val inCol      = Input(UInt(16.W))
     val startRow   = Input(UInt(16.W))
     val startCol   = Input(UInt(16.W))
+    val colStep    = Input(UInt(16.W))
     val rowPtr     = Output(UInt(16.W))
     val colPtr     = Output(UInt(16.W))
     val kRowIdx    = Output(UInt(log2Ceil(maxK + 1).W))
@@ -33,7 +34,7 @@ class Im2colWindow(maxK: Int) extends Module {
   val rowMax   = io.inRow - io.kRow
   val colMax   = io.inCol - io.kCol
   val rowEnd   = rowPtr === (io.startRow + rowMax)
-  val colEnd   = colPtr === (io.startCol + colMax)
+  val colEnd   = colPtr + io.colStep > io.startCol + colMax
   val elemLast = (kRowIdx === (io.kRow - 1.U)) && (kColIdx === (io.kCol - 1.U))
 
   when(io.init) {
@@ -47,7 +48,7 @@ class Im2colWindow(maxK: Int) extends Module {
     kRowIdx := 0.U
     kColIdx := 0.U
   }.elsewhen(io.nextCol) {
-    colPtr  := colPtr + 1.U
+    colPtr  := colPtr + io.colStep
     kRowIdx := 0.U
     kColIdx := 0.U
   }.elsewhen(io.elemFire && !elemLast) {

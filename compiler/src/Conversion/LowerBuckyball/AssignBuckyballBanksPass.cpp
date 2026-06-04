@@ -1,5 +1,6 @@
-//====- AssignPhysicalBanksPass.cpp - Map virtual handles to physical banks
-//-===//
+//====- AssignBuckyballBanksPass.cpp - Map virtual handles to physical
+// banks-===//
+//
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -232,19 +233,22 @@ public:
         Value rs2 = im.getKcol();
         rs2 = b.create<arith::OrIOp>(
             loc, rs2,
-            b.create<arith::ShLIOp>(loc, im.getKrow(), cstI64(b, loc, 4)));
+            b.create<arith::ShLIOp>(loc, im.getKrow(), cstI64(b, loc, 8)));
         rs2 = b.create<arith::OrIOp>(
             loc, rs2,
-            b.create<arith::ShLIOp>(loc, im.getIncol(), cstI64(b, loc, 8)));
+            b.create<arith::ShLIOp>(loc, im.getIncol(), cstI64(b, loc, 16)));
         rs2 = b.create<arith::OrIOp>(
             loc, rs2,
-            b.create<arith::ShLIOp>(loc, im.getInrow(), cstI64(b, loc, 13)));
+            b.create<arith::ShLIOp>(loc, im.getInrow(), cstI64(b, loc, 24)));
         rs2 = b.create<arith::OrIOp>(
             loc, rs2,
-            b.create<arith::ShLIOp>(loc, im.getStartcol(), cstI64(b, loc, 23)));
+            b.create<arith::ShLIOp>(loc, im.getStartcol(), cstI64(b, loc, 32)));
         rs2 = b.create<arith::OrIOp>(
             loc, rs2,
-            b.create<arith::ShLIOp>(loc, im.getStartrow(), cstI64(b, loc, 28)));
+            b.create<arith::ShLIOp>(loc, im.getStartrow(), cstI64(b, loc, 40)));
+        rs2 = b.create<arith::OrIOp>(
+            loc, rs2,
+            b.create<arith::ShLIOp>(loc, im.getColStep(), cstI64(b, loc, 48)));
         b.create<buckyball::Im2colIntrOp>(loc, cstI64(b, loc, rs1), rs2);
         im.getOutBankOut().replaceAllUsesWith(im.getOutBank());
         op.erase();

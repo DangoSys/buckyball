@@ -4,6 +4,10 @@
 .section .text.init,"ax",@progbits
 .global _start
 _start:
+    /* Single-core tests only run on hart 0. */
+    csrr t0, mhartid
+    bnez t0, park_hart
+
     /* Enable FPU: set mstatus.FS = 01 (Initial) */
     li   t0, 0x2000          # mstatus.FS = 01 (bit 13)
     csrs mstatus, t0
@@ -52,3 +56,7 @@ trap_entry:
 
     /* Infinite loop */
 1:  j    1b
+
+park_hart:
+    wfi
+    j park_hart
