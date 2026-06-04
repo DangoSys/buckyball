@@ -44,7 +44,7 @@ WORKFLOW_COMMANDS = {
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs for Pegasus. Args: "[--visible-hart-count <n>] [--total-hart-count <n>]"',
+        "build": 'Build RISC-V kernel + rootfs for Pegasus. Args: "[--visible-hart-count <n>] [--total-hart-count <n>] [--model <name>]"',
     },
     "firesim": {
         "enumeratefpgas": "Enumerate FPGAs.",

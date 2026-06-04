@@ -17,6 +17,19 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 from bin_to_hex import bin_to_hex
 
+KERNEL_MODELS = {
+    "bert",
+    "deepseekr1",
+    "gemma4",
+    "lenet",
+    "llama2",
+    "mobilenet",
+    "qwen3",
+    "resnet",
+    "stablediffusion",
+    "yolo",
+}
+
 config = {
     "name": "kernel-build",
     "description": "build RISC-V kernel + rootfs for image via bb-tests/workloads/lib/kernel",
@@ -27,7 +40,7 @@ config = {
 
 
 def hart_count_params(input_data: dict) -> dict:
-    allowed = {"visible-hart-count", "total-hart-count", "_trace_id"}
+    allowed = {"visible-hart-count", "total-hart-count", "model", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         raise ValueError(f"unknown kernel build parameter(s): {', '.join(unknown)}")
@@ -51,12 +64,27 @@ def hart_count_params(input_data: dict) -> dict:
     }
 
 
-def kernel_build_dir(bbdir: str, hart_params: dict) -> str:
+def kernel_model(input_data: dict) -> str:
+    model = input_data.get("model", "")
+    if model in ("", None):
+        return ""
+    if not isinstance(model, str):
+        raise ValueError("model must be a string")
+
+    model = model.lower()
+    if model not in KERNEL_MODELS:
+        valid = ", ".join(sorted(KERNEL_MODELS))
+        raise ValueError(f"unknown kernel model: {model}; valid models: {valid}")
+    return model
+
+
+def kernel_build_dir(bbdir: str, hart_params: dict, model: str = "") -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
+    model_suffix = f"-model-{model}" if model else ""
     if visible == 64 and total == 64:
-        return os.path.join(bbdir, "bb-tests", "build", "kernel")
-    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}")
+        return os.path.join(bbdir, "bb-tests", "build", f"kernel{model_suffix}")
+    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{model_suffix}")
 
 
 def fw_payload_name(hart_params: dict) -> str:
@@ -78,18 +106,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     try:
         hart_params = hart_count_params(input_data)
+        model = kernel_model(input_data)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
-    kernel_build = kernel_build_dir(bbdir, hart_params)
+    kernel_build = kernel_build_dir(bbdir, hart_params, model)
 
     # cmake configure
     configure_cmd = (
         f"cmake -B {kernel_build} -S {kernel_src} "
         f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
         f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
-        f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']}"
+        f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']} "
+        f"-DBUCKYBALL_KERNEL_MODEL={model}"
     )
     result = stream_run_logger(
         cmd=configure_cmd,
