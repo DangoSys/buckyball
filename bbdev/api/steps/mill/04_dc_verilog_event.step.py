@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 import glob
+import re
 
 from motia import FlowContext, queue
 
@@ -22,18 +23,52 @@ config = {
 }
 
 
+def is_dpi_source(path: str) -> bool:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        return 'import "DPI-C"' in f.read()
+
+
+def build_stub_from_header(src_path: str) -> str:
+    with open(src_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+    m = re.search(
+        r"module\s+([A-Za-z_][A-Za-z0-9_]*)\s*(#\s*\(.*?\)\s*)?\((.*?)\)\s*;",
+        content,
+        re.S,
+    )
+    if m is None:
+        raise RuntimeError(f"invalid module header format: {src_path}")
+    mod_name = m.group(1)
+    params_block = m.group(2) or ""
+    ports_block = m.group(3).rstrip()
+    return f"(* blackbox *) module {mod_name} {params_block}(\n{ports_block}\n);\nendmodule\n"
+
+
 def prepare_dc_verilog(build_dir: str):
     vsrcs = sorted(
         glob.glob(f"{build_dir}/**/*.sv", recursive=True)
         + glob.glob(f"{build_dir}/**/*.v", recursive=True)
     )
-    if not vsrcs:
+    stub_dir = os.path.join(build_dir, "dc_stubs")
+    os.makedirs(stub_dir, exist_ok=True)
+    kept = []
+    stubbed_dpi = []
+    for path in vsrcs:
+        if is_dpi_source(path):
+            stub_path = os.path.join(stub_dir, f"stub_{os.path.basename(path)}")
+            with open(stub_path, "w") as f:
+                f.write(build_stub_from_header(path))
+            kept.append(stub_path)
+            stubbed_dpi.append(path)
+        else:
+            kept.append(path)
+    if not kept:
         raise RuntimeError("no dc verilog source generated")
     source_list_path = os.path.join(build_dir, "dc_sources.list")
     with open(source_list_path, "w") as f:
-        for path in vsrcs:
+        for path in kept:
             f.write(path + "\n")
-    return source_list_path
+    return source_list_path, stubbed_dpi
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -94,7 +129,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
 
     try:
-        source_list_path = prepare_dc_verilog(build_dir)
+        source_list_path, stubbed_dpi = prepare_dc_verilog(build_dir)
     except Exception as e:
         _, failure_result = await check_result(
             ctx,
@@ -104,6 +139,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return failure_result
+    if stubbed_dpi:
+        ctx.logger.info(
+            f"Stubbed {len(stubbed_dpi)} DPI-C sources for DC: "
+            f"{', '.join(os.path.basename(path) for path in stubbed_dpi[:10])}"
+            f"{'...' if len(stubbed_dpi) > 10 else ''}"
+        )
 
     await check_result(
         ctx,
