@@ -76,7 +76,7 @@ WORKFLOW_COMMANDS = {
         "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--bitstream <path> --build-dir <dir> --test <elf-tests|pk-tests>"',
     },
     "dc": {
-        "run": 'Run Design Compiler synthesis. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>]"',
+        "verilog": 'Generate DC RTL. Args: "--config <cfg> [--dir <root>]"',
     },
     "yosys": {
         "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',

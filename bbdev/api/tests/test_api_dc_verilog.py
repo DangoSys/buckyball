@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev dc --verilog")
+run_bbdev_case("bbdev dc --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'")
