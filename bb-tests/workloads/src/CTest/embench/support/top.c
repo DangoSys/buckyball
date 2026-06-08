@@ -1,6 +1,6 @@
-#include <bbsw/test.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "boardsupport.h"
 
@@ -114,11 +114,5 @@ int main(void) {
   printf("Embench top total cycles=%lu failures=%d\n", (unsigned long)total,
          failures);
 
-  if (failures == 0) {
-    bb_test_pass();
-    while (1) {
-    }
-  }
-
-  bb_test_fail();
+  exit(failures == 0 ? 0 : 1);
 }

@@ -50,11 +50,13 @@ function(add_embench_singlecore_target BMARK_NAME SOURCE_FILES)
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
       ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${EMBENCH_SUPPORT_SOURCES}
       ${SOURCE_FILES}
       -lm
     DEPENDS ${SOURCE_FILES} ${EMBENCH_SUPPORT_SOURCES}
       ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Building embench singlecore: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -71,12 +73,14 @@ function(add_embench_multicore_target BMARK_NAME SOURCE_FILES)
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
       ${BBSW_BAREMETAL_DIR}/start.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
       -DMULTICORE=3
       ${EMBENCH_SUPPORT_SOURCES}
       ${SOURCE_FILES}
       -lm
     DEPENDS ${SOURCE_FILES} ${EMBENCH_SUPPORT_SOURCES}
       ${BBSW_BAREMETAL_DIR}/start.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Building embench multicore: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -167,6 +171,7 @@ function(add_embench_top_target)
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
       COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} ${MODE_DEFS} -o ${EXECUTABLE}
         ${STARTUP}
+        ${BBSW_BAREMETAL_DIR}/syscalls.c
         ${EMBENCH_TOP_SUPPORT_SOURCES}
         ${EMBENCH_TOP_OBJECTS}
         ${BBSW_BAREMETAL_DIR}/test.c
@@ -174,6 +179,7 @@ function(add_embench_top_target)
       DEPENDS ${EMBENCH_TOP_SUPPORT_SOURCES}
         ${EMBENCH_TOP_OBJECTS}
         ${STARTUP}
+        ${BBSW_BAREMETAL_DIR}/syscalls.c
         ${BBSW_BAREMETAL_DIR}/test.c
       COMMENT "Building embench top ${MODE}: ${EXECUTABLE}"
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
