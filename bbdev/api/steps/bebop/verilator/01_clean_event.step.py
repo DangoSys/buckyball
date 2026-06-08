@@ -16,10 +16,10 @@ config = {
     "description": "Clean verilator build directory",
     "flows": ["bebop"],
     "triggers": [
-        queue("bebop.verilator.run"),
         queue("bebop.verilator.clean"),
+        queue("bebop.verilator.run.clean"),
     ],
-    "enqueues": ["bebop.verilator.verilog"],
+    "enqueues": ["bebop.verilator.verilog", "bebop.verilator.run.verilog"],
 }
 
 
@@ -48,6 +48,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # Continue routing to verilog if from run workflow
     if input_data.get("from_run_workflow"):
+        data = {k: v for k, v in input_data.items() if k not in ("output_dir", "vsrc_dir")}
+        if input_data.get("_explicit_output_dir"):
+            data["output_dir"] = build_dir
         await ctx.enqueue(
-            {"topic": "bebop.verilator.verilog", "data": {**input_data, "output_dir": build_dir, "task": "run"}}
+            {"topic": "bebop.verilator.run.verilog", "data": {**data, "task": "run"}}
         )

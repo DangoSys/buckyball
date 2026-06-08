@@ -31,10 +31,7 @@ async def check_result(ctx, returncode, continue_run=False, extra_fields=None, t
     extra_fields = extra_fields or {}
     scope = trace_id or ctx.trace_id
 
-    if continue_run:
-        await ctx.state.set(scope, "processing", True)
-        return None, None
-    elif returncode != 0:
+    if returncode != 0:
         failure_result = {
             "status": 500,
             "body": {
@@ -47,6 +44,9 @@ async def check_result(ctx, returncode, continue_run=False, extra_fields=None, t
         }
         await ctx.state.set(scope, "failure", failure_result)
         return None, failure_result
+    elif continue_run:
+        await ctx.state.set(scope, "processing", {"processing": True, **extra_fields})
+        return None, None
     else:
         success_result = {
             "status": 200,

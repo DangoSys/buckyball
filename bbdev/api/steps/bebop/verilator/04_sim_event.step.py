@@ -4,11 +4,12 @@ bebop verilator event handler
 Runs bebop verilator simulation:
   1. Resolve binary path
   2. Resolve verilog source directory (VSRC_PATH)
-  3. Build bebop with verilator feature (cargo build)
-  4. Run bebop verilator with elf, log and fst directories
+  3. Run the built bebop binary with elf, log and fst directories
 """
 import os
+import shlex
 import sys
+import json
 from datetime import datetime
 
 from motia import FlowContext, queue
@@ -21,12 +22,13 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
+from utils.bebop_verilator import build_marker_path, read_build_marker
 
 config = {
     "name": "bebop-verilator-sim",
     "description": "Run bebop verilator simulation",
     "flows": ["bebop"],
-    "triggers": [queue("bebop.verilator.sim")],
+    "triggers": [queue("bebop.verilator.sim"), queue("bebop.verilator.run.sim")],
     "enqueues": [],
 }
 
@@ -40,6 +42,66 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     arch_config = input_data.get("config", "sims.verilator.BuckyballToyVerilatorConfig")
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
+    if not os.path.isdir(vsrc_dir):
+        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "vsrc_not_found", "vsrc_dir": vsrc_dir},
+            trace_id=origin_tid,
+        )
+        return
+
+    bebop_bin = f"{bebop_dir}/target/debug/bebop"
+    if not os.path.isfile(bebop_bin):
+        ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "bebop_binary_not_found", "binary": bebop_bin},
+            trace_id=origin_tid,
+        )
+        return
+    try:
+        marker = read_build_marker(bebop_dir)
+    except (OSError, json.JSONDecodeError) as e:
+        marker_path = build_marker_path(bebop_dir)
+        ctx.logger.error(f"failed to read bebop verilator build marker: {e}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "build_marker_read_failed", "marker": marker_path, "detail": str(e)},
+            trace_id=origin_tid,
+        )
+        return
+    expect_vsrc = os.path.abspath(vsrc_dir)
+    expect_bin = os.path.abspath(bebop_bin)
+    if marker is None:
+        marker_path = build_marker_path(bebop_dir)
+        ctx.logger.error(f"bebop verilator build marker does not exist: {marker_path}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "build_marker_not_found", "marker": marker_path},
+            trace_id=origin_tid,
+        )
+        return
+    if (
+        marker.get("config") != arch_config
+        or marker.get("vsrc_dir") != expect_vsrc
+        or marker.get("binary") != expect_bin
+    ):
+        ctx.logger.error(f"bebop verilator build marker mismatch: {marker}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={
+                "error": "build_marker_mismatch",
+                "marker": marker,
+                "expected": {
+                    "config": arch_config,
+                    "vsrc_dir": expect_vsrc,
+                    "binary": expect_bin,
+                },
+            },
+            trace_id=origin_tid,
+        )
+        return
 
     binary_name = input_data.get("binary", "")
     binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
@@ -67,13 +129,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     trace_args = (" " + " ".join(trace_flags)) if trace_flags else ""
 
     run_cmd = (
-        f"cargo run --features verilator "
-        f"--config=\"env.ARCH_CONFIG='{arch_config}'\" "
-        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\" "
-        f"-- verilator "
-        f"--elf=\"{binary_path}\" "
-        f"--log-dir=\"{log_dir}\" "
-        f"--fst-dir=\"{fst_dir}\""
+        f"{shlex.quote(bebop_bin)} verilator "
+        f"--elf={shlex.quote(binary_path)} "
+        f"--log-dir={shlex.quote(log_dir)} "
+        f"--fst-dir={shlex.quote(fst_dir)}"
         f"{trace_args}"
     )
     ctx.logger.info(f"Running bebop verilator: {run_cmd}")
@@ -83,6 +142,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bebop_dir,
         stdout_prefix="bebop verilator",
         stderr_prefix="bebop verilator",
+        env={
+            **os.environ,
+            "ARCH_CONFIG": arch_config,
+            "VSRC_PATH": vsrc_dir,
+        },
     )
 
     await check_result(

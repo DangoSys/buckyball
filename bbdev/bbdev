@@ -4,7 +4,6 @@ import sys
 import argparse
 import subprocess
 import os
-import signal
 import shlex
 import json
 import time
@@ -13,13 +12,16 @@ import threading
 import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
-from utils.port import reserve_port
+from utils.port import HOST, reserve_port
+from utils.process import clean_python_caches, stop_workspace_servers, terminate_group
 
 workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
 
 NO_PROXY = {"http": None, "https": None, "all": None}
 WORKER_PORT_START = 49200
 WORKER_PORT_END = 49500
+HTTP_PORT_START = 5100
+HTTP_PORT_END = 5500
 
 # Subcommand definitions: {name: {operation: help_text, ...}}
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
@@ -88,7 +90,7 @@ WORKFLOW_COMMANDS = {
 ALL_COMMANDS = ["start", "stop"] + list(WORKFLOW_COMMANDS)
 
 
-def make_iii_config(port: int, worker_port: int, quiet: bool = False) -> str:
+def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_module: bool = True) -> str:
     """Create a temporary config.yaml with unique HTTP and Worker ports, return the path."""
     base_config = os.path.join(workflow_dir, "config.yaml")
     with open(base_config, "r") as f:
@@ -97,11 +99,17 @@ def make_iii_config(port: int, worker_port: int, quiet: bool = False) -> str:
     # then RestApiModule HTTP port (default 3111).
     content = content.replace("port: 49134", f"port: {worker_port}")
     content = content.replace("port: 3111", f"port: {port}", 1)
+    content = content.replace("host: 0.0.0.0", f"host: {HOST}")
     if quiet:
         content = content.replace(
             "exporter: memory",
             "exporter: memory\n      level: warn\n      logs_console_output: false",
         )
+    if not exec_module:
+        marker = "\n  # ── Exec Module (Python) ───────────────────────────────────────────────"
+        if marker not in content:
+            raise RuntimeError("failed to remove ExecModule from iii config")
+        content = content.split(marker, 1)[0].rstrip() + "\n"
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", prefix="iii-config-", dir=workflow_dir, delete=False
     )
@@ -110,47 +118,17 @@ def make_iii_config(port: int, worker_port: int, quiet: bool = False) -> str:
     return tmp.name
 
 
+def user_preferred_port(start: int, end: int) -> int:
+    size = end - start + 1
+    offset = (os.getuid() * 37) % size
+    return start + offset
+
+
 def cleanup_config(config_path: str):
     """Remove temp config file, ignoring if already deleted."""
     try:
         os.unlink(config_path)
     except FileNotFoundError:
-        pass
-
-
-def _kill_proc_tree(pid: int):
-    """Kill a process and all its descendants via /proc.
-    Kills children first (bottom-up) so they are still in the process tree
-    and discoverable before their parent dies."""
-    def _get_children(parent_pid):
-        children = []
-        try:
-            for entry in os.listdir("/proc"):
-                if not entry.isdigit():
-                    continue
-                try:
-                    with open(f"/proc/{entry}/stat") as f:
-                        stat = f.read().split()
-                    if int(stat[3]) == parent_pid:
-                        child_pid = int(entry)
-                        children.append(child_pid)
-                        children.extend(_get_children(child_pid))
-                except (FileNotFoundError, IndexError, ValueError, PermissionError):
-                    continue
-        except FileNotFoundError:
-            pass
-        return children
-
-    # children first, then parent — so children are still discoverable in /proc
-    children = _get_children(pid)
-    for p in reversed(children):
-        try:
-            os.kill(p, signal.SIGTERM)
-        except (ProcessLookupError, OSError):
-            pass
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except (ProcessLookupError, OSError):
         pass
 
 
@@ -328,33 +306,47 @@ def run_server_mode(args, cmd_info):
             worker_port, worker_sock = reserve_port(start_port=WORKER_PORT_START, end_port=WORKER_PORT_END)
             worker_sock.close()
             config_path = make_iii_config(args.port, worker_port)
+            worker_url = f"ws://{HOST}:{worker_port}"
             print(f"Using worker port {worker_port}")
         else:
             config_path = os.path.join(workflow_dir, "config.yaml")
+            worker_url = f"ws://{HOST}:49134"
+        proc = None
         try:
-            subprocess.run(["iii", "-c", config_path], cwd=workflow_dir, check=True)
+            env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+            if worker_url:
+                env["III_URL"] = worker_url
+            proc = subprocess.Popen(
+                ["iii", "-c", config_path],
+                cwd=workflow_dir,
+                env=env,
+                start_new_session=True,
+            )
+            rc = proc.wait()
+            if rc != 0:
+                sys.exit(rc)
         finally:
+            if proc:
+                terminate_group(proc)
+            stop_workspace_servers(workflow_dir, worker_url=worker_url)
             if args.port:
                 cleanup_config(config_path)
 
     elif command == "stop":
         if cmd_info["operation"] == "all":
-            print("Stopping all servers")
-            subprocess.run(
-                "kill -9 $(ps aux | grep '[i]ii' | awk '{print $2}')",
-                shell=True, check=False, text=True,
-            )
+            count = stop_workspace_servers(workflow_dir)
+            print(f"Stopped {count} process(es) for this workspace")
         else:
-            print(f"Stopping server on port {args.port}")
-            subprocess.run(
-                f"kill -TERM $(lsof -t -i :{args.port})",
-                shell=True, check=False, text=True,
-            )
+            count = stop_workspace_servers(workflow_dir, port=args.port)
+            if args.port:
+                print(f"Stopped {count} process(es) on port {args.port}")
+            else:
+                print(f"Stopped {count} process(es) for this workspace")
 
     elif command in WORKFLOW_COMMANDS:
         api_path = f"/{command.replace('-', '/')}/{cmd_info['operation']}"
         resp = requests.post(
-            f"http://localhost:{args.port}{api_path}",
+            f"http://{HOST}:{args.port}{api_path}",
             json=cmd_info["args"],
             timeout=30,
             proxies=NO_PROXY,
@@ -369,7 +361,7 @@ def run_server_mode(args, cmd_info):
 
 def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
     """Submit a task to iii and poll for its result. Returns exit code (0=ok, 1=fail)."""
-    base_url = f"http://localhost:{port}"
+    base_url = f"http://{HOST}:{port}"
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
     try:
         submit_resp = requests.post(
@@ -396,6 +388,7 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
     state_file = os.path.join(workflow_dir, "data", "state_store.db", f"{trace_id}.bin")
     poll_timeout = 24 * 60 * 60  # 24 hours max
     task_result = None
+    legacy_processing_count = 0
     for _ in range(poll_timeout // 2):
         state_data = read_state_file(state_file)
         if state_data:
@@ -405,12 +398,19 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
             elif "failure" in state_data:
                 task_result = state_data["failure"].get("body", state_data["failure"])
                 break
+            elif state_data.get("processing") is True:
+                legacy_processing_count += 1
+                if legacy_processing_count >= 30:
+                    print("Error: Task is stuck in legacy processing state; worker did not advance the queue")
+                    return 1
+            else:
+                legacy_processing_count = 0
         time.sleep(2)
     else:
         print("Error: Task polling timed out after 24 hours")
         return 1
 
-    print(f"\nTask completed on http://localhost:{port}")
+    print(f"\nTask completed on http://{HOST}:{port}")
     if task_result and not task_result.get("success", False):
         print("Error: Task failed")
         return 1
@@ -421,8 +421,15 @@ def run_script_mode(args, cmd_info):
     """Handle script mode: start iii, run one task, then shut down."""
     command = cmd_info["command"]
 
-    if command in ("start", "stop"):
+    if command == "start":
         print(f"'{command}' does nothing in script mode")
+        return
+    if command == "stop":
+        count = stop_workspace_servers(workflow_dir, port=args.port)
+        if args.port:
+            print(f"Stopped {count} process(es) on port {args.port}")
+        else:
+            print(f"Stopped {count} process(es) for this workspace")
         return
 
     if command not in WORKFLOW_COMMANDS:
@@ -438,8 +445,16 @@ def run_script_mode(args, cmd_info):
         available_port = args.port
         http_sock = None
     else:
-        available_port, http_sock = reserve_port(start_port=5100, end_port=5500)
-    worker_port, worker_sock = reserve_port(start_port=WORKER_PORT_START, end_port=WORKER_PORT_END)
+        available_port, http_sock = reserve_port(
+            start_port=HTTP_PORT_START,
+            end_port=HTTP_PORT_END,
+            preferred_port=user_preferred_port(HTTP_PORT_START, HTTP_PORT_END),
+        )
+    worker_port, worker_sock = reserve_port(
+        start_port=WORKER_PORT_START,
+        end_port=WORKER_PORT_END,
+        preferred_port=user_preferred_port(WORKER_PORT_START, WORKER_PORT_END),
+    )
     print(f"Starting server on port {available_port}...")
 
     # Clean stale state files from previous runs
@@ -451,8 +466,14 @@ def run_script_mode(args, cmd_info):
                     os.unlink(os.path.join(state_dir, f))
                 except OSError:
                     pass
+    clean_python_caches(workflow_dir)
 
-    config_path = make_iii_config(available_port, worker_port, quiet=True)
+    config_path = make_iii_config(
+        available_port,
+        worker_port,
+        quiet=True,
+        exec_module=False,
+    )
     iii_output_active = threading.Event()
     iii_output_active.set()
 
@@ -462,7 +483,12 @@ def run_script_mode(args, cmd_info):
     worker_sock.close()
 
     # Set III_URL so motia SDK connects to the correct worker port
-    iii_env = {**os.environ, "III_URL": f"ws://localhost:{worker_port}"}
+    iii_env = {
+        **os.environ,
+        "III_URL": f"ws://{HOST}:{worker_port}",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "BUCKYBALL_ROOT": os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    }
     proc = subprocess.Popen(
         ["iii", "-c", config_path],
         cwd=workflow_dir,
@@ -470,7 +496,9 @@ def run_script_mode(args, cmd_info):
         stderr=subprocess.STDOUT,
         text=True,
         env=iii_env,
+        start_new_session=True,
     )
+    worker_proc = None
 
     output_thread = threading.Thread(
         target=forward_iii_output, args=(proc.stdout, iii_output_active, True), daemon=True
@@ -478,7 +506,7 @@ def run_script_mode(args, cmd_info):
     output_thread.start()
 
     try:
-        base_url = f"http://localhost:{available_port}"
+        base_url = f"http://{HOST}:{available_port}"
 
         # Phase 1: wait for iii engine HTTP
         if not wait_for_http(
@@ -489,6 +517,22 @@ def run_script_mode(args, cmd_info):
         ):
             sys.exit(1)
 
+        worker_proc = subprocess.Popen(
+            [".venv/bin/motia", "dev", "--dir", "steps"],
+            cwd=workflow_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=iii_env,
+            start_new_session=True,
+        )
+        worker_output_thread = threading.Thread(
+            target=forward_iii_output,
+            args=(worker_proc.stdout, iii_output_active, True),
+            daemon=True,
+        )
+        worker_output_thread.start()
+
         # Phase 2: wait for route registration
         if not wait_for_http(
             f"{base_url}{api_path}",
@@ -497,6 +541,7 @@ def run_script_mode(args, cmd_info):
             error_msg="Routes failed to register within timeout",
         ):
             sys.exit(1)
+        time.sleep(2)
 
         print(f"Server is ready on port {available_port}")
         rc = _submit_and_poll(available_port, api_path, cmd_info)
@@ -504,11 +549,13 @@ def run_script_mode(args, cmd_info):
             sys.exit(rc)
 
     finally:
-        # Cleanup: kill iii and all its descendant processes, then remove temp config
+        # Cleanup: stop iii, its process group, and any workspace worker it spawned.
         iii_output_active.clear()
         time.sleep(0.5)
-        _kill_proc_tree(proc.pid)
-        proc.wait()
+        if worker_proc:
+            terminate_group(worker_proc)
+        terminate_group(proc)
+        stop_workspace_servers(workflow_dir, worker_url=iii_env["III_URL"])
         cleanup_config(config_path)
 
 

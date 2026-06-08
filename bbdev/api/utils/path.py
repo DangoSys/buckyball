@@ -3,6 +3,14 @@ import re
 
 
 def get_buckyball_path():
+    root = os.environ.get("BUCKYBALL_ROOT")
+    if root:
+        if not os.path.isabs(root):
+            raise ValueError("BUCKYBALL_ROOT must be an absolute path")
+        if not os.path.isdir(root):
+            raise ValueError(f"BUCKYBALL_ROOT does not exist: {root}")
+        return root
+
     current_dir = os.path.dirname(__file__)
     # bbdev/api/utils -> bbdev/api -> bbdev -> buckyball
     return os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))

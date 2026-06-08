@@ -20,8 +20,8 @@ config = {
     "name": "bebop-verilator-verilog",
     "description": "Generate verilog code via mill",
     "flows": ["bebop"],
-    "triggers": [queue("bebop.verilator.verilog")],
-    "enqueues": ["bebop.verilator.build"],
+    "triggers": [queue("bebop.verilator.verilog"), queue("bebop.verilator.run.verilog")],
+    "enqueues": ["bebop.verilator.build", "bebop.verilator.run.build"],
 }
 
 
@@ -43,6 +43,19 @@ def prepare_verilator_verilog(build_dir: str, arch_dir: str, logger):
                 with open(patch_file, "w") as f:
                     f.write(patched)
                 logger.info(f"Patched fesvr includes from {patch_file}")
+
+
+def check_verilog_output(build_dir: str) -> dict:
+    exists = os.path.exists(build_dir)
+    is_dir = os.path.isdir(build_dir)
+    sv_count = 0
+    if is_dir:
+        sv_count = sum(1 for name in os.listdir(build_dir) if name.endswith((".sv", ".v")))
+    return {
+        "exists": exists,
+        "is_dir": is_dir,
+        "sv_count": sv_count,
+    }
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -96,6 +109,43 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     prepare_verilator_verilog(build_dir, arch_dir, ctx.logger)
 
+    output_status = check_verilog_output(build_dir)
+    if result.returncode != 0:
+        await check_result(
+            ctx,
+            result.returncode,
+            continue_run=False,
+            extra_fields={
+                "task": "verilog",
+                "config": config_name,
+                "output_dir": build_dir,
+                "output_status": output_status,
+            },
+            trace_id=origin_tid,
+        )
+        return
+
+    if not output_status["is_dir"] or output_status["sv_count"] == 0:
+        ctx.logger.error(
+            f"Verilog output is invalid: {build_dir} "
+            f"(exists={output_status['exists']}, is_dir={output_status['is_dir']}, "
+            f"sv_count={output_status['sv_count']})"
+        )
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "verilog",
+                "error": "invalid_verilog_output",
+                "config": config_name,
+                "output_dir": build_dir,
+                "output_status": output_status,
+            },
+            trace_id=origin_tid,
+        )
+        return
+
     await check_result(
         ctx,
         result.returncode,
@@ -107,5 +157,5 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Continue routing to build if from run workflow
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(
-            {"topic": "bebop.verilator.build", "data": {**input_data, "output_dir": build_dir, "vsrc_dir": build_dir, "task": "run"}}
+            {"topic": "bebop.verilator.run.build", "data": {**input_data, "output_dir": build_dir, "vsrc_dir": build_dir, "task": "run"}}
         )

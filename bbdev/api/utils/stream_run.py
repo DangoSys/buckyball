@@ -155,7 +155,7 @@ def stream_run_logger(
             logger.info(f"[{stdout_prefix}] {line}")
         else:
             # Non-verbose mode: print directly, use green for STDOUT
-            print(f"\033[32m[{stdout_prefix}]\033[0m {line}")
+            print(f"\033[32m[{stdout_prefix}]\033[0m {line}", flush=True)
 
     def log_stderr(line):
         if verbose:
@@ -163,7 +163,7 @@ def stream_run_logger(
             logger.info(f"[{stderr_prefix}] {line}")
         else:
             # Non-verbose mode: print directly, use red for STDERR
-            print(f"\033[31m[{stderr_prefix}]\033[0m {line}")
+            print(f"\033[31m[{stderr_prefix}]\033[0m {line}", flush=True)
 
     return stream_run(
         cmd=cmd,
