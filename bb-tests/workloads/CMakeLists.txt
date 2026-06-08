@@ -59,6 +59,7 @@ add_dependencies(sync-bin
   OpTest-all
   buckyball-goban-CTest-build
   embench-all
+  coremark-all
 )
 
 add_custom_target(build-all ALL
