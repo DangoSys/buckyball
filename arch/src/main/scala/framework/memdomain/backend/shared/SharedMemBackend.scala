@@ -57,16 +57,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
 
-  val clearIdle :: clearReq :: clearResp :: Nil = Enum(3)
-  val clearState                                = RegInit(clearIdle)
-  val clearAddr                                 = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
-  val clearPbank                                = RegInit(0.U(log2Up(totalBanks).W))
-  val clearHart                                 = RegInit(0.U(b.core.xLen.W))
-  val clearVbank                                = RegInit(0.U(5.W))
-  val clearIsMulti                              = RegInit(false.B)
-  val clearGroup                                = RegInit(0.U(3.W))
-  val idleCycles                                = RegInit(0.U(3.W))
-
   def isAcc(hart_id: UInt, vbank_id: UInt): Bool =
     mappingTable.map(entry =>
       entry.valid && (entry.vbank_id === vbank_id) && (entry.hart_id === hart_id) && entry.is_multi
@@ -90,10 +80,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   def deleteEntry(hart_id: UInt, vbank_id: UInt): Unit = {
     for (i <- 0 until totalBanks) {
       when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
-        mappingTable(i).valid    := false.B
-        mappingTable(i).vbank_id := 0.U
-        mappingTable(i).is_multi := false.B
-        mappingTable(i).group_id := 0.U
+        mappingTable(i).valid := false.B
       }
     }
   }
@@ -138,79 +125,20 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  val hasMemReq = VecInit((0 until totalChannel).map { i =>
-    io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid || accPipes(i).io.busy
-  }).asUInt.orR
-
-  val canStartClear = clearState === clearIdle && !hasMemReq && idleCycles >= 2.U
-
-  when(clearState === clearIdle) {
-    when(hasMemReq) {
-      idleCycles := 0.U
-    }.elsewhen(idleCycles =/= 7.U) {
-      idleCycles := idleCycles + 1.U
-    }
-  }.otherwise {
-    idleCycles := 0.U
-  }
-
-  val clearWriteFires = Wire(Vec(totalBanks, Bool()))
-  val clearRespFires  = Wire(Vec(totalBanks, Bool()))
-  val clearLast       = clearAddr === (b.memDomain.bankEntries - 1).U
-
-  for (j <- 0 until totalBanks) {
-    val clearing = clearPbank === j.U
-    clearWriteFires(j) := clearing && banks(j).io.sramWrite.req.fire
-    clearRespFires(j)  := clearing && banks(j).io.sramWrite.resp.fire
-    when(clearState === clearReq && clearing) {
-      banks(j).io.sramWrite.req.valid      := true.B
-      banks(j).io.sramWrite.req.bits.addr  := clearAddr
-      banks(j).io.sramWrite.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      banks(j).io.sramWrite.req.bits.data  := 0.U
-      banks(j).io.sramWrite.req.bits.wmode := false.B
-    }
-  }
-
-  val clearWriteFire = clearWriteFires.reduce(_ || _)
-  val clearRespFire  = clearRespFires.reduce(_ || _)
-  val clearDone      = clearState === clearResp && clearRespFire && clearLast
-  io.config.ready := (clearState === clearIdle && !io.config.bits.alloc) || clearDone
+  io.config.ready := true.B
 
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
 
-  when(canStartClear && io.config.valid && io.config.bits.alloc) {
-    clearPbank   := getFreePbankId()
-    clearHart    := io.config.bits.hart_id
-    clearVbank   := io.config.bits.vbank_id
-    clearIsMulti := io.config.bits.is_multi
-    clearGroup   := io.config.bits.group_id
-    clearAddr    := 0.U
-    clearState   := clearReq
-  }
-
-  when(clearState === clearReq && clearWriteFire) {
-    clearState := clearResp
-  }
-
-  when(clearState === clearResp && clearRespFire) {
-    when(clearLast) {
-      clearState := clearIdle
-    }.otherwise {
-      clearAddr  := clearAddr + 1.U
-      clearState := clearReq
-    }
-  }
-
   when(io.config.fire) {
     when(io.config.bits.alloc) {
       addEntry(
-        clearHart,
-        clearVbank,
-        clearPbank,
-        clearIsMulti,
-        clearGroup
+        io.config.bits.hart_id,
+        io.config.bits.vbank_id,
+        getFreePbankId(),
+        io.config.bits.is_multi,
+        io.config.bits.group_id
       )
     }.otherwise {
       deleteEntry(io.config.bits.hart_id, io.config.bits.vbank_id)
@@ -254,7 +182,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until totalChannel) {
-    val req_valid = (io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid) && clearState === clearIdle
+    val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
 
     val tracePbankId = Wire(UInt(32.W))
     tracePbankId := 0.U

@@ -118,6 +118,7 @@ add_cross_platform_test_target(ctest_systolic_matmul_8x8_ones systolic_matmul_8x
 add_cross_platform_test_target(ctest_systolic_matmul_16x16_ones systolic_matmul_16x16_ones.c)
 add_cross_platform_test_target(ctest_systolic_matmul_32x32_ones systolic_matmul_32x32_ones.c)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
+add_cross_platform_test_target(ctest_boot_init_test boot_init_test.c)
 add_cross_platform_test_target(ctest_mmio_minimal_test mmio_minimal_test.c)
 add_cross_platform_test_target(ctest_scu_uart_rx_echo_test scu_uart_rx_echo_test.c)
 add_cross_platform_test_target(ctest_mxfp2int_test mxfp2int_test.c)
@@ -168,6 +169,7 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_systolic_matmul_16x16_ones
   ctest_systolic_matmul_32x32_ones
   ctest_relu_test
+  ctest_boot_init_test
   ctest_mxfp2int_test
   ctest_vsetvli
   ctest_bfp_test

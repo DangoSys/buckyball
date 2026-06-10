@@ -68,12 +68,15 @@ class Frontend(val b: GlobalConfig) extends Module {
   private val bootBankCount = b.frontend.vbank_id_upper_bound + 1
 
   private val bootRecords =
-    (0 until bootBankCount).map(bankId => bootCmd(msetFunct, bankId, 0)) :+
+    (0 until bootBankCount).map(bankId => bootCmd(msetFunct, bankId, 0)) ++
+      (0 until b.memDomain.bankNum).map(bankId => bootCmd(mmioSetFunct, bankId, 0)) :+
       bootCmd(initEndFunct, 0, 0)
 
   private val bootRom     = VecInit(bootRecords)
   private val bootPcWidth = math.max(1, log2Ceil(bootRecords.length))
-  val bootActive          = RegInit(true.B)
+  // Phase-1 boot validation uses explicit software bb_boot_init(). Keep the
+  // ROM path compiled but disabled until the explicit sequence is proven.
+  val bootActive          = RegInit(false.B)
   val bootDrain           = RegInit(false.B)
   val bootWaitIdle        = RegInit(false.B)
   val bootPc              = RegInit(0.U(bootPcWidth.W))
