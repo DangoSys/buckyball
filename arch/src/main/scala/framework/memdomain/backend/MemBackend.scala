@@ -23,12 +23,12 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface: shared query goes out, private query handled internally.
     val shared_query_vbank_id    = Output(UInt(8.W))
-    val shared_query_group_count = Input(UInt(4.W))
+    val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
     // Original query interface from frontend
     val query_vbank_id    = Input(UInt(8.W))
     val query_is_shared   = Input(Bool())
-    val query_group_count = Output(UInt(4.W))
+    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
   })
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.

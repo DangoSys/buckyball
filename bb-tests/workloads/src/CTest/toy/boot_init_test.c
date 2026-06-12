@@ -49,7 +49,6 @@ int main() {
   multicore(MULTICORE);
 #endif
 
-  bb_boot_init();
   int passed = run_boot_init_test();
 
   if (passed) {

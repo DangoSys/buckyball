@@ -80,7 +80,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val headPtr     = RegInit(0.U(idWidth.W))
   val tailPtr     = RegInit(0.U(idWidth.W))
   val issuedCount = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols    = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(5.W))))
+  val bankCols    = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
 
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
   val isFull  = headPtr === tailPtr && robValid(headPtr)
@@ -302,7 +302,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
         val bank = robEntries(i).cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)
         val col  = robEntries(i).cmd.cmd.rs2Data(9, 5)
         when(robEntries(i).cmd.cmd.rs2Data(10)) {
-          bankCols(bank) := col
+          bankCols(bank) := Mux(col === 0.U, b.memDomain.bankNum.U, col)
         }.otherwise {
           bankCols(bank) := 0.U
         }

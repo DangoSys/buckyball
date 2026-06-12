@@ -22,7 +22,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(8.W))
-    val query_group_count = Output(UInt(4.W))
+    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
@@ -52,7 +52,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val hart_id  = UInt(b.core.xLen.W)
     val vbank_id = UInt(5.W)
     val is_multi = Bool()
-    val group_id = UInt(3.W)
+    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
@@ -150,7 +150,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   val groupCounts = mappingTable.map { entry =>
     val matches = entry.valid && (entry.vbank_id === io.query_vbank_id)
-    val count   = Mux(entry.is_multi, entry.group_id + 1.U, 1.U)
+    val count   = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
     Mux(matches, count, 0.U)
   }
 

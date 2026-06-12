@@ -2,25 +2,26 @@ package framework.memdomain.frontend.mem.dma
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket.{MStatus, M_XRD}
 
+import framework.frontend.BootAddress
 import framework.memdomain.frontend.mem.tlb.BBTLBIO
 import framework.top.GlobalConfig
 
 class BBReadRequest extends Bundle {
   val vaddr  = UInt(64.W)
-  val len    = UInt(16.W)
+  val len    = UInt(32.W)
   val status = new MStatus
   val stride = UInt(19.W)
-  val groups = UInt(4.W)
+  val groups = UInt(6.W)
 }
 
 class BBReadResponse(dataWidth: Int) extends Bundle {
   val data        = UInt(dataWidth.W)
   val last        = Bool()
-  val addrcounter = UInt(10.W)
+  val addrcounter = UInt(16.W)
 }
 
 @instantiable
@@ -47,9 +48,11 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val state                  = RegInit(s_idle)
 
   val reqReg = Reg(new BBReadRequest())
+  val zeroBuffer: Instance[BootZeroBuffer] = Instantiate(new BootZeroBuffer(b, beatBits, beatBytes))
+  val zeroActive = RegInit(false.B)
 
-  val bytesRequested = RegInit(0.U(16.W))
-  val bytesReceived  = RegInit(0.U(16.W))
+  val bytesRequested = RegInit(0.U(32.W))
+  val bytesReceived  = RegInit(0.U(32.W))
 
   val inflight = RegInit(false.B)
 
@@ -67,6 +70,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   io.tlb.req.valid :=
     (state === s_run) &&
+      !zeroActive &&
       (bytesRequested < reqReg.len) &&
       !inflight
 
@@ -81,12 +85,12 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   io.tl.a.valid :=
     io.tlb.resp.valid && !io.tlb.resp.bits.miss &&
-      !inflight && state =/= s_idle
+      !inflight && !zeroActive && state =/= s_idle
 
   io.tl.a.bits         := get
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
 
-  io.tlb.resp.ready := io.tl.a.ready && !inflight
+  io.tlb.resp.ready := io.tl.a.ready && !inflight && !zeroActive
 
   when(io.tl.a.fire) {
     inflight       := true.B
@@ -97,16 +101,17 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   // TL D → Response
   //------------------------------------------------------------
 
-  io.tl.d.ready := io.resp.ready
+  io.tl.d.ready := io.resp.ready && !zeroActive
 
-  io.resp.valid     := io.tl.d.valid
-  io.resp.bits.data := io.tl.d.bits.data
+  io.resp.valid     := Mux(zeroActive, zeroBuffer.io.resp.valid, io.tl.d.valid)
+  io.resp.bits.data := Mux(zeroActive, zeroBuffer.io.resp.bits.data, io.tl.d.bits.data)
 
   val beatCountResp = bytesReceived >> log2Ceil(beatBytes)
-  io.resp.bits.addrcounter := beatCountResp(9, 0)
+  io.resp.bits.addrcounter := Mux(zeroActive, zeroBuffer.io.resp.bits.addrcounter, beatCountResp)
 
-  io.resp.bits.last :=
-    (bytesReceived + beatBytes.U >= reqReg.len)
+  io.resp.bits.last := Mux(zeroActive, zeroBuffer.io.resp.bits.last, bytesReceived + beatBytes.U >= reqReg.len)
+
+  zeroBuffer.io.resp.ready := io.resp.ready && zeroActive
 
   when(io.tl.d.fire) {
     inflight      := false.B
@@ -117,11 +122,18 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl.c.valid := false.B
   io.tl.e.valid := false.B
 
-  io.req.ready := (state === s_idle)
+  val reqIsZero = BootAddress.isZeroBase(io.req.bits.vaddr)
+  zeroBuffer.io.req.valid := io.req.valid && state === s_idle && reqIsZero
+  zeroBuffer.io.req.bits  := io.req.bits
 
-  io.busy := (state =/= s_idle) || inflight
+  io.req.ready := (state === s_idle) && Mux(reqIsZero, zeroBuffer.io.req.ready, true.B)
 
-  when(io.req.fire) {
+  io.busy := (state =/= s_idle) || inflight || zeroBuffer.io.busy
+
+  when(io.req.fire && reqIsZero) {
+    zeroActive := true.B
+    state      := s_run
+  }.elsewhen(io.req.fire) {
     reqReg         := io.req.bits
     bytesRequested := 0.U
     bytesReceived  := 0.U
@@ -129,7 +141,12 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     state          := s_run
   }
 
-  when(state === s_run && bytesReceived >= reqReg.len) {
+  when(zeroActive && zeroBuffer.io.resp.fire && zeroBuffer.io.resp.bits.last) {
+    zeroActive := false.B
+    state      := s_idle
+  }
+
+  when(state === s_run && !zeroActive && bytesReceived >= reqReg.len) {
     state := s_idle
   }
 }

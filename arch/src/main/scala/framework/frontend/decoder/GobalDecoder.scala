@@ -23,9 +23,9 @@ class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val domain_id  = UInt(4.W)
   val cmd        = new RoCCCommandBB(b.core.xLen)
   val bankAccess = new BankAccessInfo(log2Up(b.memDomain.bankNum))
-  val op1_col    = UInt(5.W)
-  val op2_col    = UInt(5.W)
-  val wr_col     = UInt(5.W)
+  val op1_col    = UInt(log2Up(b.memDomain.bankNum + 1).W)
+  val op2_col    = UInt(log2Up(b.memDomain.bankNum + 1).W)
+  val wr_col     = UInt(log2Up(b.memDomain.bankNum + 1).W)
   val isFence    = Bool()
   val isBarrier  = Bool()
 }
