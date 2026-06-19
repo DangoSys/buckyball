@@ -3,7 +3,6 @@ package framework.balldomain.bbus.pmc
 import chisel3._
 import chisel3.util._
 
-// DPI-C BlackBox for PMC trace
 class PMCTraceDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {

@@ -1,11 +1,14 @@
 # CmdRouter
 
 ## TL;DR
-- 【Module Function】It arbitrates `numBalls` request inputs from `cmdReq_i` into one `cmdReq_o`, and forwards each `cmdResp_i` lane to the matching `cmdResp_o` lane.
-- 【Module Placement】The module is defined in package `framework.balldomain.bbus.cmdrouter` as a Chisel `Module` in `CmdRouter.scala`.
-- 【Module Inputs】Inputs include request channels `cmdReq_i`, response channels `cmdResp_i`, and the idle-state vector `ballIdle`.
-- 【Module Outputs】Outputs include one arbitrated request channel `cmdReq_o` and `numBalls` response channels `cmdResp_o`.
-- The most important behavior is that request admission is gated by registered `ballIdleR`, so `ballIdle` affects arbitration with a one-cycle delay.
+- 【Module Function】Arbitrates `numBalls` request lanes from `cmdReq_i` into one `cmdReq_o`, and forwards each `cmdResp_i` lane to the matching `cmdResp_o` lane.
+- 【Module Placement】This module is `CmdRouter` on the `bbus` in `balldomain`, responsible for command routing.
+- 【Module Inputs/Outputs】
+    - Command dispatch: `cmdReq_i` from frontend to bbus; after round-robin arbitration, single `cmdReq_o` to one ball.
+    - Command completion response: `cmdResp_i` from each ball; forwarded lane-by-lane through `cmdResp_o` to frontend.
+    - BBus drives `ballIdle` to report whether each ball is idle.
+- 【Key Points】
+    - Request arbitration uses registered `ballIdleR` only, so `ballIdle` affects admission with a one-cycle delay.
 
 ## Interface
 | Direction | Signal | Type | Meaning |

@@ -169,10 +169,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itraceAlloc.io.domain_id   := io.alloc.bits.domain_id
     itraceAlloc.io.funct       := io.alloc.bits.cmd.funct
     itraceAlloc.io.pc          := io.alloc.bits.cmd.pc
-    itraceAlloc.io.rs1_idx  := io.alloc.bits.cmd.rs1
-    itraceAlloc.io.rs2_idx  := io.alloc.bits.cmd.rs2
-    itraceAlloc.io.rs1_data := io.alloc.bits.cmd.rs1Data
-    itraceAlloc.io.rs2_data := io.alloc.bits.cmd.rs2Data
+    itraceAlloc.io.rs1_idx     := io.alloc.bits.cmd.rs1
+    itraceAlloc.io.rs2_idx     := io.alloc.bits.cmd.rs2
+    itraceAlloc.io.rs1_data    := io.alloc.bits.cmd.rs1Data
+    itraceAlloc.io.rs2_data    := io.alloc.bits.cmd.rs2Data
     itraceAlloc.io.bank_enable := io.alloc.bits.cmd.funct(6, 4)
     itraceAlloc.io.enable      := true.B
 
@@ -207,10 +207,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itraceComp.io.domain_id   := robEntries(cid).cmd.domain_id
     itraceComp.io.funct       := robEntries(cid).cmd.cmd.funct
     itraceComp.io.pc          := robEntries(cid).cmd.cmd.pc
-    itraceComp.io.rs1_idx  := robEntries(cid).cmd.cmd.rs1
-    itraceComp.io.rs2_idx  := robEntries(cid).cmd.cmd.rs2
-    itraceComp.io.rs1_data := robEntries(cid).cmd.cmd.rs1Data
-    itraceComp.io.rs2_data := robEntries(cid).cmd.cmd.rs2Data
+    itraceComp.io.rs1_idx     := robEntries(cid).cmd.cmd.rs1
+    itraceComp.io.rs2_idx     := robEntries(cid).cmd.cmd.rs2
+    itraceComp.io.rs1_data    := robEntries(cid).cmd.cmd.rs1Data
+    itraceComp.io.rs2_data    := robEntries(cid).cmd.cmd.rs2Data
     itraceComp.io.bank_enable := robEntries(cid).cmd.cmd.funct(6, 4)
     itraceComp.io.enable      := true.B
   }
@@ -285,10 +285,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itraceIssue.io.domain_id   := issueEntry.cmd.domain_id
     itraceIssue.io.funct       := issueEntry.cmd.cmd.funct
     itraceIssue.io.pc          := issueEntry.cmd.cmd.pc
-    itraceIssue.io.rs1_idx  := issueEntry.cmd.cmd.rs1
-    itraceIssue.io.rs2_idx  := issueEntry.cmd.cmd.rs2
-    itraceIssue.io.rs1_data := issueEntry.cmd.cmd.rs1Data
-    itraceIssue.io.rs2_data := issueEntry.cmd.cmd.rs2Data
+    itraceIssue.io.rs1_idx     := issueEntry.cmd.cmd.rs1
+    itraceIssue.io.rs2_idx     := issueEntry.cmd.cmd.rs2
+    itraceIssue.io.rs1_data    := issueEntry.cmd.cmd.rs1Data
+    itraceIssue.io.rs2_data    := issueEntry.cmd.cmd.rs2Data
     itraceIssue.io.bank_enable := issueEntry.cmd.cmd.funct(6, 4)
     itraceIssue.io.enable      := true.B
   }
