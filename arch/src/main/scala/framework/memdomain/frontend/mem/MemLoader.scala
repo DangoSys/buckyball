@@ -89,11 +89,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.dmaResp.ready := (state === s_dma_wait) && !pending
 
   // bank write request driven from pending
-  io.bankWrite.io.req.valid      := pending
-  io.bankWrite.io.req.bits.addr  := latBeat / group_count_reg
-  io.bankWrite.io.req.bits.data  := latData
-  io.bankWrite.io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-  io.bankWrite.io.req.bits.wmode := false.B
+  io.bankWrite.io.req.valid     := pending
+  io.bankWrite.io.req.bits.addr := latBeat / group_count_reg
+  io.bankWrite.io.req.bits.data := latData
+  io.bankWrite.io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
 
   // IMPORTANT: always ready for write response (avoid deadlock)
   io.bankWrite.io.resp.ready := true.B

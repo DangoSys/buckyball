@@ -150,7 +150,7 @@ class BBTLBPTWIO(val b: GlobalConfig) extends Bundle {
   val paddrBits = b.core.paddrBits
   val pgIdxBits = b.core.pgIdxBits
   val xLen      = b.core.xLen
-  val pgLevels  = if (xLen == 32) 2 else 4 // Simplified: assume SV39 for 64-bit
+  val pgLevels  = b.rocketCore.pgLevels
   val nPMPs     = b.core.nPMPs
 
   val req        = Decoupled(Valid(new BBTLBPTWReq(vaddrBits, pgIdxBits)))

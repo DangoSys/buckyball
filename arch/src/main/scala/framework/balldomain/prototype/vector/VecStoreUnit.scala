@@ -23,10 +23,9 @@ class ex_st_req(b: GlobalConfig) extends Bundle {
 }
 
 class BankWriteEntry(b: GlobalConfig) extends Bundle {
-  val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
-  val data  = UInt(b.memDomain.bankWidth.W)
-  val mask  = Vec(b.memDomain.bankMaskLen, Bool())
-  val wmode = Bool()
+  val addr = UInt(log2Ceil(b.memDomain.bankEntries).W)
+  val data = UInt(b.memDomain.bankWidth.W)
+  val mask = Vec(b.memDomain.bankMaskLen, Bool())
 }
 
 @instantiable
@@ -88,10 +87,9 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
       val endIdx             = startIdx + elementsPerChannel - 1
 
       val entry = Wire(new BankWriteEntry(b))
-      entry.addr  := wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
-      entry.data  := Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
-      entry.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      entry.wmode := true.B
+      entry.addr := wr_bank_addr + iter_counter(log2Ceil(InputNum) - 1, 0)
+      entry.data := Cat(io.ex_st_i.bits.rst.slice(startIdx, endIdx + 1).reverse)
+      entry.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
 
       writeQueues(i).enq.valid := true.B
       writeQueues(i).enq.bits  := entry
@@ -103,24 +101,22 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
 // Drain write queues to bankWrite interface
 // -----------------------------------------------------------------------------
   io.bankWrite.foreach { acc =>
-    acc.req.valid      := false.B
-    acc.req.bits.addr  := 0.U
-    acc.req.bits.data  := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
-    acc.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.req.bits.wmode := false.B
-    acc.resp.ready     := false.B
+    acc.req.valid     := false.B
+    acc.req.bits.addr := 0.U
+    acc.req.bits.data := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
+    acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    acc.resp.ready    := false.B
   }
 
   for (i <- 0 until outBW) {
     writeQueues(i).deq.ready := false.B
 
     when(writeQueues(i).deq.valid) {
-      io.bankWrite(i).req.valid      := true.B
-      io.bankWrite(i).req.bits.addr  := writeQueues(i).deq.bits.addr
-      io.bankWrite(i).req.bits.data  := writeQueues(i).deq.bits.data
-      io.bankWrite(i).req.bits.mask  := writeQueues(i).deq.bits.mask
-      io.bankWrite(i).req.bits.wmode := writeQueues(i).deq.bits.wmode
-      writeQueues(i).deq.ready       := io.bankWrite(i).req.ready
+      io.bankWrite(i).req.valid     := true.B
+      io.bankWrite(i).req.bits.addr := writeQueues(i).deq.bits.addr
+      io.bankWrite(i).req.bits.data := writeQueues(i).deq.bits.data
+      io.bankWrite(i).req.bits.mask := writeQueues(i).deq.bits.mask
+      writeQueues(i).deq.ready      := io.bankWrite(i).req.ready
     }
   }
 

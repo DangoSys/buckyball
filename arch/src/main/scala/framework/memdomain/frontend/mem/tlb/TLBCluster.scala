@@ -41,8 +41,8 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
   tlb_io.req.bits  := tlbArbOut.bits
   tlbArbOut.ready  := tlb_io.req.ready
 
-  // Connect status to PTW
-  tlb_io.ptw.status := tlbArbOut.bits.status
+  // PTW status comes from the tile CSR path. DMA requests do not carry CSR state.
+  tlb_io.ptw.status := io.ptw(0).status
   tlb_io.kill       := false.B
 
   // Handle sfence from exception IO

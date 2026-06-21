@@ -52,7 +52,6 @@ class SharedMemWriteReq(val b: GlobalConfig) extends Bundle {
   val addr     = UInt(log2Ceil(b.memDomain.bankEntries).W)
   val mask     = Vec(b.memDomain.bankMaskLen, Bool())
   val data     = UInt(b.memDomain.bankWidth.W)
-  val wmode    = Bool()
 }
 
 class SharedMemReadIO(val b: GlobalConfig) extends Bundle {

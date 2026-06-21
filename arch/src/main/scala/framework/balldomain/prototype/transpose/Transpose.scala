@@ -80,14 +80,13 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankRead(i).group_id         := 0.U
   }
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
-    io.bankWrite(i).bank_id           := wbank_reg
-    io.bankWrite(i).group_id          := 0.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.resp.ready    := false.B
+    io.bankWrite(i).bank_id          := wbank_reg
+    io.bankWrite(i).group_id         := 0.U
   }
 
   io.cmdReq.ready            := (state === idle)

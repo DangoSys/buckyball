@@ -14,7 +14,7 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   val pgIdxBits = b.core.pgIdxBits
   val vpnBits   = vaddrBits - pgIdxBits
   val ppnBits   = paddrBits - pgIdxBits
-  val pgLevels  = if (b.core.xLen == 32) 2 else 4 // Match Rocket PTW convention
+  val pgLevels  = b.rocketCore.pgLevels
 
   @public
   val io = IO(new Bundle {
@@ -98,7 +98,9 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
     entryData.sx        := pte.sx()
     entryData.cacheable := true.B // Simplified
     entryData.pf        := io.ptw.resp.bits.pf
-    entryData.ae_final  := io.ptw.resp.bits.ae_final
+    entryData.gf        := io.ptw.resp.bits.gf
+    entryData.ae_ptw    := io.ptw.resp.bits.ae_ptw
+    entryData.ae        := io.ptw.resp.bits.ae_ptw || io.ptw.resp.bits.ae_final
 
     tlbEntries(refill_idx).insert(refill_vpn, io.ptw.resp.bits.level, entryData)
     // Update LRU
@@ -152,12 +154,12 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   io.resp.bits.pf.ld        := hitEntryData.pf
   io.resp.bits.pf.st        := hitEntryData.pf
   io.resp.bits.pf.inst      := hitEntryData.pf
-  io.resp.bits.gf.ld        := false.B
-  io.resp.bits.gf.st        := false.B
-  io.resp.bits.gf.inst      := false.B
-  io.resp.bits.ae.ld        := hitEntryData.ae_final
-  io.resp.bits.ae.st        := hitEntryData.ae_final
-  io.resp.bits.ae.inst      := hitEntryData.ae_final
+  io.resp.bits.gf.ld        := hitEntryData.gf
+  io.resp.bits.gf.st        := hitEntryData.gf
+  io.resp.bits.gf.inst      := hitEntryData.gf
+  io.resp.bits.ae.ld        := hitEntryData.ae
+  io.resp.bits.ae.st        := hitEntryData.ae
+  io.resp.bits.ae.inst      := hitEntryData.ae
   io.resp.bits.ma.ld        := false.B
   io.resp.bits.ma.st        := false.B
   io.resp.bits.ma.inst      := false.B

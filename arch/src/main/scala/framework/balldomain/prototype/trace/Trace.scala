@@ -75,15 +75,14 @@ class Trace(val b: GlobalConfig) extends Module {
   val privBank = Module(new SramBank(b))
 
   // Default: private bank idle
-  privBank.io.sramRead.req.valid       := false.B
-  privBank.io.sramRead.req.bits.addr   := 0.U
-  privBank.io.sramRead.resp.ready      := false.B
-  privBank.io.sramWrite.req.valid      := false.B
-  privBank.io.sramWrite.req.bits.addr  := 0.U
-  privBank.io.sramWrite.req.bits.data  := 0.U
-  privBank.io.sramWrite.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-  privBank.io.sramWrite.req.bits.wmode := false.B
-  privBank.io.sramWrite.resp.ready     := true.B
+  privBank.io.sramRead.req.valid      := false.B
+  privBank.io.sramRead.req.bits.addr  := 0.U
+  privBank.io.sramRead.resp.ready     := false.B
+  privBank.io.sramWrite.req.valid     := false.B
+  privBank.io.sramWrite.req.bits.addr := 0.U
+  privBank.io.sramWrite.req.bits.data := 0.U
+  privBank.io.sramWrite.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  privBank.io.sramWrite.resp.ready    := true.B
 
   // ============================================================
   // DPI-C modules
@@ -110,16 +109,15 @@ class Trace(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := rob_id_reg
-    io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).bank_id           := 0.U
-    io.bankWrite(i).group_id          := 0.U
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).rob_id           := rob_id_reg
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).bank_id          := 0.U
+    io.bankWrite(i).group_id         := 0.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.resp.ready    := false.B
   }
 
   // ============================================================

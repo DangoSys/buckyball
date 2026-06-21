@@ -29,6 +29,13 @@ endfunction()
 function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_multicore-baremetal")
 
+  set(TEST_DEPS
+    ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
+    ${BBSW_BAREMETAL_DIR}/start.S)
+  if(SOURCE_FILE MATCHES "^tlb_.*\\.c$")
+    list(APPEND TEST_DEPS ${CTEST_TOY_WORKLOAD_DIR}/tlb_common.h)
+  endif()
+
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${C_FLAGS} -o ${EXECUTABLE} ${BBSW_BAREMETAL_DIR}/start.S
@@ -36,8 +43,7 @@ function(add_multicore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-    DEPENDS ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
-      ${BBSW_BAREMETAL_DIR}/start.S
+    DEPENDS ${TEST_DEPS}
     COMMENT "Building multicore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -50,6 +56,14 @@ endfunction()
 function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}_singlecore-baremetal")
 
+  set(TEST_DEPS
+    ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
+    ${BBSW_BAREMETAL_DIR}/crt0.S
+    ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c)
+  if(SOURCE_FILE MATCHES "^tlb_.*\\.c$")
+    list(APPEND TEST_DEPS ${CTEST_TOY_WORKLOAD_DIR}/tlb_common.h)
+  endif()
+
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${C_FLAGS} -o ${EXECUTABLE}
@@ -57,9 +71,7 @@ function(add_singlecore_baremetal_test_target TEST_NAME SOURCE_FILE)
       ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
       ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-    DEPENDS ${CTEST_TOY_WORKLOAD_DIR}/${SOURCE_FILE}
-      ${BBSW_BAREMETAL_DIR}/crt0.S
-      ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
+    DEPENDS ${TEST_DEPS}
     COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -126,7 +138,13 @@ add_cross_platform_test_target(ctest_vsetvli test_vsetvli.c)
 add_cross_platform_test_target(ctest_bfp_test bfp_test.c)
 add_cross_platform_test_target(ctest_fp2int_test fp2int_test.c)
 add_cross_platform_test_target(ctest_int2fp_test int2fp_test.c)
-add_cross_platform_test_target(ctest_tlb_test tlb_test.c)
+add_cross_platform_test_target(ctest_tlb_bare_mode_test tlb_bare_mode_test.c)
+add_cross_platform_test_target(ctest_tlb_sv39_identity_test tlb_sv39_identity_test.c)
+add_cross_platform_test_target(ctest_tlb_sfence_flush_test tlb_sfence_flush_test.c)
+add_cross_platform_test_target(ctest_tlb_repeated_sfence_test tlb_repeated_sfence_test.c)
+add_cross_platform_test_target(ctest_tlb_sv39_nonidentity_test tlb_sv39_nonidentity_test.c)
+add_cross_platform_test_target(ctest_tlb_sv39_4k_alias_test tlb_sv39_4k_alias_test.c)
+add_cross_platform_test_target(ctest_tlb_sfence_remap_test tlb_sfence_remap_test.c)
 add_cross_platform_test_target(ctest_bdb_counter_test bdb_counter_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_basic_test gemmini_os_risc_basic_test.c)
 add_cross_platform_test_target(ctest_gemmini_os_risc_shift_test gemmini_os_risc_shift_test.c)
@@ -175,7 +193,13 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_bfp_test
   ctest_fp2int_test
   ctest_int2fp_test
-  ctest_tlb_test
+  ctest_tlb_bare_mode_test
+  ctest_tlb_sv39_identity_test
+  ctest_tlb_sfence_flush_test
+  ctest_tlb_repeated_sfence_test
+  ctest_tlb_sv39_nonidentity_test
+  ctest_tlb_sv39_4k_alias_test
+  ctest_tlb_sfence_remap_test
   ctest_bdb_counter_test
   ctest_mmio_minimal_test
   ctest_scu_uart_rx_echo_test

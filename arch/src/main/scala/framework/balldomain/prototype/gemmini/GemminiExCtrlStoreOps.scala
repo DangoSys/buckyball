@@ -81,11 +81,10 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
       for (i <- 0 until outBW) {
         when(!port_written(i)) {
           val slice = row_bits((i + 1) * bitsPerPort - 1, i * bitsPerPort)
-          io.bankWrite(i).req.valid      := true.B
-          io.bankWrite(i).req.bits.addr  := store_row_cnt
-          io.bankWrite(i).req.bits.data  := slice
-          io.bankWrite(i).req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-          io.bankWrite(i).req.bits.wmode := true.B
+          io.bankWrite(i).req.valid     := true.B
+          io.bankWrite(i).req.bits.addr := store_row_cnt
+          io.bankWrite(i).req.bits.data := slice
+          io.bankWrite(i).req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
           when(io.bankWrite(i).req.ready) {
             port_written(i) := true.B
           }

@@ -122,12 +122,11 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   }
 
   // Route write to MMIO or main bank based on is_mvin_mmio_active
-  mmioPool.io.write.req.valid      := loaderBankWrite.io.req.valid && destIsMmio
-  mmioPool.io.write.req.bits.addr  := mmioRowAddr
-  mmioPool.io.write.req.bits.data  := loaderBankWrite.io.req.bits.data
-  mmioPool.io.write.req.bits.mask  := mmioByteMask
-  mmioPool.io.write.req.bits.wmode := false.B
-  mmioPool.io.writeBankIdx         := mmioBankIdx
+  mmioPool.io.write.req.valid     := loaderBankWrite.io.req.valid && destIsMmio
+  mmioPool.io.write.req.bits.addr := mmioRowAddr
+  mmioPool.io.write.req.bits.data := loaderBankWrite.io.req.bits.data
+  mmioPool.io.write.req.bits.mask := mmioByteMask
+  mmioPool.io.writeBankIdx        := mmioBankIdx
 
   // Main bank write (when NOT mvin_mmio)
   midend.io.bankWrite(totalBallWrite).bankWrite.io.req.valid := loaderBankWrite.io.req.valid && !destIsMmio

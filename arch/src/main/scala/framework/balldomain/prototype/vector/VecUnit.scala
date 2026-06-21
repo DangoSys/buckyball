@@ -80,16 +80,15 @@ class VecUnit(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := robIdReg
-    io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).bank_id           := wrBank
-    io.bankWrite(i).group_id          := i.U
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    io.bankWrite(i).io.req.bits.wmode := true.B
-    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).rob_id           := robIdReg
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).bank_id          := wrBank
+    io.bankWrite(i).group_id         := i.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    io.bankWrite(i).io.resp.ready    := false.B
   }
 
   def rowVec(word: UInt): Vec[UInt] =
@@ -209,13 +208,12 @@ class VecUnit(val b: GlobalConfig) extends Module {
 
     is(sWriteReq) {
       for (group <- 0 until 4) {
-        io.bankWrite(group).bank_id           := wrBank
-        io.bankWrite(group).group_id          := group.U
-        io.bankWrite(group).io.req.valid      := !writeIssued(group)
-        io.bankWrite(group).io.req.bits.addr  := writeRow
-        io.bankWrite(group).io.req.bits.data  := writeData(group)
-        io.bankWrite(group).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-        io.bankWrite(group).io.req.bits.wmode := true.B
+        io.bankWrite(group).bank_id          := wrBank
+        io.bankWrite(group).group_id         := group.U
+        io.bankWrite(group).io.req.valid     := !writeIssued(group)
+        io.bankWrite(group).io.req.bits.addr := writeRow
+        io.bankWrite(group).io.req.bits.data := writeData(group)
+        io.bankWrite(group).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
 
         when(io.bankWrite(group).io.req.fire) {
           writeIssued(group) := true.B

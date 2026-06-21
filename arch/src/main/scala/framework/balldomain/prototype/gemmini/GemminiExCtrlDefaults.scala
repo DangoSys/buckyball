@@ -32,12 +32,11 @@ trait GemminiExCtrlDefaults { this: GemminiExCtrl =>
     // mesh.io.resp is Valid-only (no ready); MeshWithDelays assumes immediate observation when valid
 
     io.bankWrite.foreach { bw =>
-      bw.req.valid      := false.B
-      bw.req.bits.addr  := 0.U
-      bw.req.bits.data  := 0.U
-      bw.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-      bw.req.bits.wmode := true.B
-      bw.resp.ready     := true.B
+      bw.req.valid     := false.B
+      bw.req.bits.addr := 0.U
+      bw.req.bits.data := 0.U
+      bw.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+      bw.resp.ready    := true.B
     }
   }
 

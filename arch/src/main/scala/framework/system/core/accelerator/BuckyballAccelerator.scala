@@ -140,9 +140,9 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   memDomain.io.ptw(0).customCSRs := DontCare
 
   // --- TLB exception ---
-  memDomain.io.tlbExp(0).flush_skip  := false.B
-  memDomain.io.tlbExp(0).flush_retry := io.sfence
-  io.tlbExp(0) <> memDomain.io.tlbExp(0)
+  memDomain.io.tlbExp(0).flush_skip  := io.tlbExp(0).flush_skip
+  memDomain.io.tlbExp(0).flush_retry := io.tlbExp(0).flush_retry || io.sfence
+  io.tlbExp(0).interrupt             := memDomain.io.tlbExp(0).interrupt
 
   // --- TileLink DMA ---
   io.tl_reader <> memDomain.io.tl_reader

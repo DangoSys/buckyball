@@ -81,12 +81,11 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.resp.ready    := false.B
   }
 
   for (i <- 0 until inBW) {
@@ -153,7 +152,7 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
         respCounter := respCounter + 1.U
       }
 
-      when(respCounter === (InputNum - 1).U) {
+      when(io.bankRead(0).io.resp.fire && respCounter === (InputNum - 1).U) {
         state        := sWrite
         writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(0)(j)))
         for (i <- 0 until b.memDomain.bankMaskLen) {
