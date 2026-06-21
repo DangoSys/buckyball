@@ -87,12 +87,15 @@ def kernel_build_dir(bbdir: str, hart_params: dict, model: str = "") -> str:
     return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{model_suffix}")
 
 
-def fw_payload_name(hart_params: dict) -> str:
+def fw_payload_name(hart_params: dict, model: str = "") -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
-    if visible == 64 and total == 64:
-        return "fw_payload"
-    return f"fw_payload-v{visible}-t{total}"
+    name = "fw_payload"
+    if visible != 64 or total != 64:
+        name = f"{name}-v{visible}-t{total}"
+    if model:
+        name = f"{name}-{model}"
+    return name
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -145,7 +148,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    payload_name = fw_payload_name(hart_params)
+    payload_name = fw_payload_name(hart_params, model)
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
 
