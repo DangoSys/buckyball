@@ -21,4 +21,11 @@ tests = [
     "ctest_gemmini_os_risc_shift_test_singlecore-baremetal",
     "ctest_gemmini_ws_cisc_conv_test_singlecore-baremetal",
     "ctest_gemmini_ws_risc_basic_test_singlecore-baremetal",
+    "ctest_tlb_bare_mode_test_singlecore-baremetal",
+    "ctest_tlb_sv39_identity_test_singlecore-baremetal",
+    "ctest_tlb_sfence_flush_test_singlecore-baremetal",
+    "ctest_tlb_repeated_sfence_test_singlecore-baremetal",
+    "ctest_tlb_sv39_nonidentity_test_singlecore-baremetal",
+    "ctest_tlb_sv39_4k_alias_test_singlecore-baremetal",
+    "ctest_tlb_sfence_remap_test_singlecore-baremetal",
 ]

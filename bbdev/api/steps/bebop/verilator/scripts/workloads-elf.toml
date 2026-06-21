@@ -39,7 +39,13 @@ tests = [
     "ctest_mmio_minimal_test_singlecore-baremetal",
     "ctest_mxfp2int_test_singlecore-baremetal",
 
-    "ctest_tlb_test_singlecore-baremetal",
+    "ctest_tlb_bare_mode_test_singlecore-baremetal",
+    "ctest_tlb_sv39_identity_test_singlecore-baremetal",
+    "ctest_tlb_sfence_flush_test_singlecore-baremetal",
+    "ctest_tlb_repeated_sfence_test_singlecore-baremetal",
+    "ctest_tlb_sv39_nonidentity_test_singlecore-baremetal",
+    "ctest_tlb_sv39_4k_alias_test_singlecore-baremetal",
+    "ctest_tlb_sfence_remap_test_singlecore-baremetal",
 
     "ctest_mvin_mvout_stride_test_singlecore-baremetal",
     "ctest_transpose_matmul_singlecore-baremetal",
