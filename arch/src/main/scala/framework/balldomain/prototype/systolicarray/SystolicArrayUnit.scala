@@ -91,9 +91,8 @@ class SystolicArrayUnit(val b: GlobalConfig) extends Module {
 
   for (i <- 0 until outBW) {
     io.bankWrite(i).io <> store.io.bankWrite(i)
-    io.bankWrite(i).bank_id           := store.io.wr_bank_o
-    io.bankWrite(i).io.req.bits.wmode := true.B
-    io.bankWrite(i).group_id          := i.U
+    io.bankWrite(i).bank_id  := store.io.wr_bank_o
+    io.bankWrite(i).group_id := i.U
   }
 
   val hasInput  = RegInit(false.B)

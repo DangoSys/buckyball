@@ -58,16 +58,15 @@ class Fp2Int(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.resp.ready    := false.B
   }
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := robIdReg
-    io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).bank_id           := wbankReg
-    io.bankWrite(i).group_id          := 0.U
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).rob_id           := robIdReg
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).bank_id          := wbankReg
+    io.bankWrite(i).group_id         := 0.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    io.bankWrite(i).io.resp.ready    := false.B
   }
 
   io.cmdReq.ready            := state === idle
@@ -228,13 +227,12 @@ class Fp2Int(val b: GlobalConfig) extends Module {
     }
 
     is(sWriteReq) {
-      io.bankWrite(0).bank_id           := wbankReg
-      io.bankWrite(0).group_id          := 0.U
-      io.bankWrite(0).io.req.valid      := true.B
-      io.bankWrite(0).io.req.bits.addr  := rowReg
-      io.bankWrite(0).io.req.bits.data  := writeWord
-      io.bankWrite(0).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      io.bankWrite(0).io.req.bits.wmode := false.B
+      io.bankWrite(0).bank_id          := wbankReg
+      io.bankWrite(0).group_id         := 0.U
+      io.bankWrite(0).io.req.valid     := true.B
+      io.bankWrite(0).io.req.bits.addr := rowReg
+      io.bankWrite(0).io.req.bits.data := writeWord
+      io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
       when(io.bankWrite(0).io.req.fire) {
         state := sWriteResp
       }

@@ -21,10 +21,9 @@ class SramReadIO(val b: GlobalConfig) extends Bundle {
 }
 
 class SramWriteReq(val b: GlobalConfig) extends Bundle {
-  val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
-  val mask  = Vec(b.memDomain.bankMaskLen, Bool())
-  val data  = UInt(b.memDomain.bankWidth.W)
-  val wmode = Bool() // true=accumulator mode, false=direct write mode
+  val addr = UInt(log2Ceil(b.memDomain.bankEntries).W)
+  val mask = Vec(b.memDomain.bankMaskLen, Bool())
+  val data = UInt(b.memDomain.bankWidth.W)
 }
 
 class SramWriteIO(val b: GlobalConfig) extends Bundle {

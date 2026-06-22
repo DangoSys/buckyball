@@ -35,7 +35,6 @@ class AxisBundle(
   val tid   = UInt(idWidth.W)
   val tdest = UInt(destWidth.W)
 
-  val wmode  = Bool() // true=accumulator mode, false=direct write mode
   val offset = UInt(offsetWidth.W)
   val rob_id = UInt(log2Ceil(b.frontend.rob_entries).W)
 }

@@ -47,10 +47,14 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   val gDecoder:  Instance[GlobalDecoder]   = Instantiate(new GlobalDecoder(b))
   val scheduler: Instance[GlobalScheduler] = Instantiate(new GlobalScheduler(b))
+  val boot:      Instance[BootRom]         = Instantiate(new BootRom(b))
 
-  gDecoder.io.id_i.valid    := io.cmd.valid
-  gDecoder.io.id_i.bits.cmd := io.cmd.bits.cmd
-  io.cmd.ready              := gDecoder.io.id_i.ready
+  boot.io.schedulerIdle := scheduler.io.idle
+  boot.io.cmd.ready     := boot.io.active && gDecoder.io.id_i.ready
+
+  gDecoder.io.id_i.valid    := Mux(boot.io.active, boot.io.cmd.valid, io.cmd.valid)
+  gDecoder.io.id_i.bits.cmd := Mux(boot.io.active, boot.io.cmd.bits.cmd, io.cmd.bits.cmd)
+  io.cmd.ready              := !boot.io.active && gDecoder.io.id_i.ready
 
   scheduler.io.decode_cmd_i <> gDecoder.io.id_o
 
@@ -68,7 +72,7 @@ class Frontend(val b: GlobalConfig) extends Module {
   }
 
   io.resp <> scheduler.io.scheduler_rocc_o.resp
-  io.busy := scheduler.io.scheduler_rocc_o.busy
+  io.busy := boot.io.active || scheduler.io.scheduler_rocc_o.busy
 
   // Barrier passthrough
   io.barrier_arrive            := scheduler.io.barrier_arrive

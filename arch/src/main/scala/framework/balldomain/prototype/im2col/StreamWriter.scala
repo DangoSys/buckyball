@@ -61,26 +61,24 @@ class StreamWriter(val b: GlobalConfig) extends Module {
 
   // Default bankWrite signals
   for (i <- 0 until outBW) {
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
-    io.bankWrite(i).bank_id           := io.wBankId
-    io.bankWrite(i).rob_id            := io.robId
-    io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).group_id          := 0.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    io.bankWrite(i).io.resp.ready    := false.B
+    io.bankWrite(i).bank_id          := io.wBankId
+    io.bankWrite(i).rob_id           := io.robId
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).group_id         := 0.U
   }
 
   io.bankWrite(0).io.resp.ready := true.B
 
   // Write request when pack full or flushing
-  io.bankWrite(0).io.req.valid      := wrPendingReg
-  io.bankWrite(0).io.req.bits.addr  := wAddrReg
-  io.bankWrite(0).io.req.bits.data  := Cat(packReg.reverse)
-  io.bankWrite(0).io.req.bits.wmode := true.B
-  io.bankWrite(0).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.bankWrite(0).io.req.valid     := wrPendingReg
+  io.bankWrite(0).io.req.bits.addr := wAddrReg
+  io.bankWrite(0).io.req.bits.data := Cat(packReg.reverse)
+  io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
 
   // Accept elements when not pending a write
   io.elemIn.ready := !wrPendingReg && !flushingReg

@@ -48,7 +48,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_vbank_id    = Output(UInt(8.W))
-    val shared_query_group_count = Input(UInt(4.W))
+    val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
   })
 
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
@@ -122,12 +122,11 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   }
 
   // Route write to MMIO or main bank based on is_mvin_mmio_active
-  mmioPool.io.write.req.valid      := loaderBankWrite.io.req.valid && destIsMmio
-  mmioPool.io.write.req.bits.addr  := mmioRowAddr
-  mmioPool.io.write.req.bits.data  := loaderBankWrite.io.req.bits.data
-  mmioPool.io.write.req.bits.mask  := mmioByteMask
-  mmioPool.io.write.req.bits.wmode := false.B
-  mmioPool.io.writeBankIdx         := mmioBankIdx
+  mmioPool.io.write.req.valid     := loaderBankWrite.io.req.valid && destIsMmio
+  mmioPool.io.write.req.bits.addr := mmioRowAddr
+  mmioPool.io.write.req.bits.data := loaderBankWrite.io.req.bits.data
+  mmioPool.io.write.req.bits.mask := mmioByteMask
+  mmioPool.io.writeBankIdx        := mmioBankIdx
 
   // Main bank write (when NOT mvin_mmio)
   midend.io.bankWrite(totalBallWrite).bankWrite.io.req.valid := loaderBankWrite.io.req.valid && !destIsMmio

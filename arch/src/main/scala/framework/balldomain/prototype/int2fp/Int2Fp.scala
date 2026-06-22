@@ -59,16 +59,15 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     io.bankRead(i).io.resp.ready    := false.B
   }
   for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id            := robIdReg
-    io.bankWrite(i).ball_id           := 0.U
-    io.bankWrite(i).bank_id           := wbankReg
-    io.bankWrite(i).group_id          := 0.U
-    io.bankWrite(i).io.req.valid      := false.B
-    io.bankWrite(i).io.req.bits.addr  := 0.U
-    io.bankWrite(i).io.req.bits.data  := 0.U
-    io.bankWrite(i).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    io.bankWrite(i).io.req.bits.wmode := false.B
-    io.bankWrite(i).io.resp.ready     := false.B
+    io.bankWrite(i).rob_id           := robIdReg
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).bank_id          := wbankReg
+    io.bankWrite(i).group_id         := 0.U
+    io.bankWrite(i).io.req.valid     := false.B
+    io.bankWrite(i).io.req.bits.addr := 0.U
+    io.bankWrite(i).io.req.bits.data := 0.U
+    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
+    io.bankWrite(i).io.resp.ready    := false.B
   }
 
   io.cmdReq.ready            := state === idle
@@ -105,27 +104,39 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   }
 
   def fp32Multiply(a: UInt, bv: UInt): UInt = {
-    val aSign     = a(31)
-    val bSign     = bv(31)
-    val aExp      = a(30, 23)
-    val bExp      = bv(30, 23)
-    val aMant     = Cat(1.U(1.W), a(22, 0))
-    val bMant     = Cat(1.U(1.W), bv(22, 0))
-    val resSign   = aSign ^ bSign
-    val aZero     = aExp === 0.U && a(22, 0) === 0.U
-    val bZero     = bExp === 0.U && bv(22, 0) === 0.U
-    val prod      = (aMant * bMant)(47, 0)
-    val mant      = Wire(UInt(24.W))
-    val expAdjust = Wire(UInt(1.W))
+    val aSign      = a(31)
+    val bSign      = bv(31)
+    val aExp       = a(30, 23)
+    val bExp       = bv(30, 23)
+    val aMant      = Cat(1.U(1.W), a(22, 0))
+    val bMant      = Cat(1.U(1.W), bv(22, 0))
+    val resSign    = aSign ^ bSign
+    val aZero      = aExp === 0.U && a(22, 0) === 0.U
+    val bZero      = bExp === 0.U && bv(22, 0) === 0.U
+    val prod       = (aMant * bMant)(47, 0)
+    val sig        = Wire(UInt(24.W))
+    val guard      = Wire(Bool())
+    val round      = Wire(Bool())
+    val sticky     = Wire(Bool())
+    val normAdjust = Wire(UInt(2.W))
     when(prod(47)) {
-      mant      := prod(47, 24)
-      expAdjust := 1.U
+      sig        := prod(47, 24)
+      guard      := prod(23)
+      round      := prod(22)
+      sticky     := prod(21, 0).orR
+      normAdjust := 1.U
     }.otherwise {
-      mant      := prod(46, 23)
-      expAdjust := 0.U
+      sig        := prod(46, 23)
+      guard      := prod(22)
+      round      := prod(21)
+      sticky     := prod(20, 0).orR
+      normAdjust := 0.U
     }
-    val expWide   = aExp +& bExp +& expAdjust - 127.U
-    val result    = Wire(UInt(32.W))
+    val inc        = guard && (round || sticky || sig(0))
+    val rounded    = sig +& inc.asUInt
+    val finalSig   = Mux(rounded(24), rounded(24, 1), rounded(23, 0))
+    val expWide    = aExp +& bExp +& normAdjust +& rounded(24) - 127.U
+    val result     = Wire(UInt(32.W))
     when(aZero || bZero) {
       result := 0.U
     }.elsewhen(expWide(9, 8) =/= 0.U && expWide(9)) {
@@ -133,7 +144,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     }.elsewhen(expWide(8) && !expWide(9)) {
       result := Cat(resSign, 255.U(8.W), 0.U(23.W))
     }.otherwise {
-      result := Cat(resSign, expWide(7, 0), mant(22, 0))
+      result := Cat(resSign, expWide(7, 0), finalSig(22, 0))
     }
     result
   }
@@ -214,13 +225,12 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     }
 
     is(sWriteReq) {
-      io.bankWrite(0).bank_id           := wbankReg
-      io.bankWrite(0).group_id          := Mux(modeI8ToFp || modeI32Group, groupReg, 0.U)
-      io.bankWrite(0).io.req.valid      := true.B
-      io.bankWrite(0).io.req.bits.addr  := rowReg
-      io.bankWrite(0).io.req.bits.data  := writeWord
-      io.bankWrite(0).io.req.bits.mask  := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      io.bankWrite(0).io.req.bits.wmode := false.B
+      io.bankWrite(0).bank_id          := wbankReg
+      io.bankWrite(0).group_id         := Mux(modeI8ToFp || modeI32Group, groupReg, 0.U)
+      io.bankWrite(0).io.req.valid     := true.B
+      io.bankWrite(0).io.req.bits.addr := rowReg
+      io.bankWrite(0).io.req.bits.data := writeWord
+      io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
       when(io.bankWrite(0).io.req.fire) {
         state := sWriteResp
       }

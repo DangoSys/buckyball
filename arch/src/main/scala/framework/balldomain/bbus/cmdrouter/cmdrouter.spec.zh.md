@@ -2,10 +2,13 @@
 
 ## TL;DR
 - 【模块功能】将 `numBalls` 路 `cmdReq_i` 按轮询仲裁汇聚到单一路 `cmdReq_o`，并把每路 `cmdResp_i` 一一透传到对应的 `cmdResp_o`。
-- 【模块定位】该模块定义在 `framework.balldomain.bbus.cmdrouter` 包内，是 `CmdRouter.scala` 中的 Chisel `Module`。
-- 【模块输入】输入包含 `cmdReq_i`、`cmdResp_i` 两组 `Decoupled` 通道，以及 `ballIdle` 空闲状态向量。
-- 【模块输出】输出包含单一路 `cmdReq_o` 请求通道和 `numBalls` 路 `cmdResp_o` 响应通道。
-- 关键注意点是请求仲裁只看寄存后的 `ballIdleR`，因此 `ballIdle` 对请求放行有 1 个周期延迟。
+- 【模块定位】该模块是 `balldomain`的`bbus`上的 `CmdRouter` 负责指令路由`。
+- 【模块输入/输出】
+    - 指令分发：从前端到bbus输入 `cmdReq_i`，选择后输出单路 `cmdReq_o` 给某个ball。
+    - 指令（完成后）响应：从每个ball输入`cmdResp_o` 的响应信号，选择后输出单路给前端。
+    - bbus通过 `ballIdle` 获取每个ball是否空闲
+- 【关键点】
+    - 请求仲裁只看寄存后的 `ballIdleR`
 
 ## Interface
 | 方向 | 信号名 | 类型 | 含义 |

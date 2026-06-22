@@ -12,7 +12,7 @@ class MemConfigerIO(val b: GlobalConfig) extends Bundle {
   val is_shared = Output(Bool())
   val is_multi  = Output(Bool())
   val alloc     = Output(Bool())
-  val group_id  = Output(UInt(3.W))
+  val group_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
   val hart_id   = Output(UInt(b.core.xLen.W))
 }
 
@@ -42,13 +42,13 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   val rob_id_reg                    = RegInit(0.U(rob_id_width.W))
   val is_sub_reg                    = RegInit(false.B)
   val sub_rob_id_reg                = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val counter                       = RegInit(0.U(4.W))
+  val counter                       = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
 
   io.config.bits.is_multi    := false.B
   io.config.bits.is_shared   := false.B
   io.config.bits.alloc       := false.B
   io.config.bits.vbank_id    := 0.U(8.W)
-  io.config.bits.group_id    := 0.U(3.W)
+  io.config.bits.group_id    := 0.U
   io.config.bits.hart_id     := io.hartid
   io.config.valid            := false.B
   io.cmdResp.valid           := false.B
@@ -87,9 +87,13 @@ class MemConfiger(val b: GlobalConfig) extends Module {
 
       }.otherwise {
         when(io.cmdReq.fire) {
+          val rawCol  = io.cmdReq.bits.cmd.special(9, 5)
+          val alloc   = io.cmdReq.bits.cmd.special(10)
+          val fullCol = b.memDomain.bankNum.U(col_reg.getWidth.W)
+
           state          := config
-          col_reg        := Mux(io.cmdReq.bits.cmd.special(9, 5) > 1.U, io.cmdReq.bits.cmd.special(9, 5), 1.U)
-          alloc_reg      := io.cmdReq.bits.cmd.special(10)
+          col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
+          alloc_reg      := alloc
           is_shared_reg  := io.cmdReq.bits.cmd.is_shared
           vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
           rob_id_reg     := io.cmdReq.bits.rob_id
@@ -104,7 +108,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     io.config.bits.is_shared := is_shared_reg
     io.config.bits.alloc     := alloc_reg
     io.config.bits.vbank_id  := vbank_id_reg
-    io.config.bits.group_id  := counter
+    io.config.bits.group_id  := counter(log2Up(b.memDomain.bankNum) - 1, 0)
     io.config.valid          := true.B
 
     when(io.config.fire) {

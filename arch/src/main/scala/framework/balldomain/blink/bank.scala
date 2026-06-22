@@ -23,7 +23,7 @@ trait HasBallId {
 
 trait HasAccGroupId {
   val b: GlobalConfig
-  val group_id = Input(UInt(3.W))
+  val group_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
 }
 
 class BankRead(val b: GlobalConfig) extends Bundle with HasBankId with HasRobId with HasBallId with HasAccGroupId {

@@ -5,8 +5,9 @@ import chisel3.util._
 
 object GISA {
   // enable=000, opcode group for no-bank-access instructions
-  val FENCE_BITPAT   = BitPat("b0000000") // 0 (0x00) — enable=000, opcode=0
-  val BARRIER_BITPAT = BitPat("b0000001") // 1 (0x01) — enable=000, opcode=1
+  val FENCE_BITPAT    = BitPat("b0000000") // 0 (0x00) — enable=000, opcode=0
+  val BARRIER_BITPAT  = BitPat("b0000001") // 1 (0x01) — enable=000, opcode=1
+  val INIT_END_BITPAT = BitPat("b0000010") // 2 (0x02) — internal boot ROM terminator
 }
 
 // Domain ID constants

@@ -32,7 +32,6 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
   val op2_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wr_bank        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wr_bank_addr   = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val is_acc         = RegInit(false.B)   // Deprecated: use wmode instead
   val has_send       = RegInit(false.B)
   val mode           = RegInit(0.U(1.W))
 
@@ -49,12 +48,11 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
     is_sub_reg     := io.cmdReq.bits.is_sub
     sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
     op1_bank       := io.cmdReq.bits.cmd.op1_bank
-    op1_bank_addr  := 0.U     // New ISA: all operations start from row 0
+    op1_bank_addr  := 0.U // New ISA: all operations start from row 0
     op2_bank       := io.cmdReq.bits.cmd.op2_bank
-    op2_bank_addr  := 0.U     // New ISA: all operations start from row 0
+    op2_bank_addr  := 0.U // New ISA: all operations start from row 0
     wr_bank        := io.cmdReq.bits.cmd.wr_bank
-    wr_bank_addr   := 0.U     // New ISA: all operations start from row 0
-    is_acc         := false.B // Deprecated: use wmode instead
+    wr_bank_addr   := 0.U // New ISA: all operations start from row 0
     mode           := io.cmdReq.bits.cmd.special(0)
 
     state := busy

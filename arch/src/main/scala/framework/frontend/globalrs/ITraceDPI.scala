@@ -12,8 +12,10 @@ class ITraceDPI extends BlackBox with HasBlackBoxInline {
     val domain_id   = Input(UInt(32.W))
     val funct       = Input(UInt(32.W))
     val pc          = Input(UInt(64.W))
-    val rs1         = Input(UInt(64.W))
-    val rs2         = Input(UInt(64.W))
+    val rs1_idx     = Input(UInt(64.W))
+    val rs2_idx     = Input(UInt(64.W))
+    val rs1_data    = Input(UInt(64.W))
+    val rs2_data    = Input(UInt(64.W))
     val bank_enable = Input(UInt(8.W))
     val enable      = Input(Bool())
   })
@@ -27,8 +29,10 @@ class ITraceDPI extends BlackBox with HasBlackBoxInline {
       |  input int unsigned domain_id,
       |  input int unsigned funct,
       |  input longint unsigned pc,
-      |  input longint unsigned rs1,
-      |  input longint unsigned rs2,
+      |  input longint unsigned rs1_idx,
+      |  input longint unsigned rs2_idx,
+      |  input longint unsigned rs1_data,
+      |  input longint unsigned rs2_data,
       |  input byte unsigned bank_enable
       |);
       |
@@ -38,14 +42,16 @@ class ITraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [31:0] domain_id,
       |  input [31:0] funct,
       |  input [63:0] pc,
-      |  input [63:0] rs1,
-      |  input [63:0] rs2,
+      |  input [63:0] rs1_idx,
+      |  input [63:0] rs2_idx,
+      |  input [63:0] rs1_data,
+      |  input [63:0] rs2_data,
       |  input [7:0] bank_enable,
       |  input enable
       |);
       |  always @(*) begin
       |    if (enable) begin
-      |      dpi_itrace(is_issue, rob_id, domain_id, funct, pc, rs1, rs2, bank_enable);
+      |      dpi_itrace(is_issue, rob_id, domain_id, funct, pc, rs1_idx, rs2_idx, rs1_data, rs2_data, bank_enable);
       |    end
       |  end
       |endmodule
