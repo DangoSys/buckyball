@@ -22,7 +22,7 @@ void hw_matmul(elem_t *a, elem_t *b, result_t *c, int size) {
 
   bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
-  bb_BFP(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
+  bb_BFP(op1_bank_id, op2_bank_id, acc_bank_id, size);
   bb_mvout((uintptr_t)c, acc_bank_id, size << 2, 1);
   bb_fence();
 }
