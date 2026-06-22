@@ -14,6 +14,8 @@ set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
 set(CMAKE_C_COMPILER "riscv64-unknown-linux-gnu-gcc")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 
+find_program(RISCV64_OBJDUMP riscv64-unknown-elf-objdump)
+
 # Generate Linux version executables
 function(add_linux_test_target TEST_NAME SOURCE_FILE)
   set(EXECUTABLE "${TEST_NAME}-linux")
@@ -81,6 +83,31 @@ function(add_cross_platform_test_target TEST_NAME SOURCE_FILE)
   )
 endfunction()
 
+function(add_singlecore_objdump_target TEST_NAME)
+  if(NOT RISCV64_OBJDUMP)
+    return()
+  endif()
+
+  set(BINARY_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}_singlecore-baremetal")
+  set(DUMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}_singlecore-baremetal.dump")
+
+  add_custom_command(
+    OUTPUT ${DUMP_FILE}
+    COMMAND ${CMAKE_COMMAND}
+      -DOBJDUMP=${RISCV64_OBJDUMP}
+      -DINPUT=${BINARY_FILE}
+      -DOUTPUT=${DUMP_FILE}
+      -P ${CTEST_TOY_WORKLOAD_DIR}/dump_baremetal_objdump.cmake
+    DEPENDS ${TEST_NAME}_singlecore_baremetal
+      ${CTEST_TOY_WORKLOAD_DIR}/dump_baremetal_objdump.cmake
+    COMMENT "Generating singlecore baremetal objdump: ${TEST_NAME}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+  )
+
+  add_custom_target(${TEST_NAME}_objdump DEPENDS ${DUMP_FILE})
+endfunction()
+
 #-------------------------------------------------------------------------------
 # build linux version workload (current not supported)
 #-------------------------------------------------------------------------------
@@ -117,6 +144,13 @@ add_cross_platform_test_target(ctest_systolic_matmul_4x4_ones systolic_matmul_4x
 add_cross_platform_test_target(ctest_systolic_matmul_8x8_ones systolic_matmul_8x8_ones.c)
 add_cross_platform_test_target(ctest_systolic_matmul_16x16_ones systolic_matmul_16x16_ones.c)
 add_cross_platform_test_target(ctest_systolic_matmul_32x32_ones systolic_matmul_32x32_ones.c)
+add_cross_platform_test_target(ctest_systolic_instruction_probe systolic_instruction_probe.c)
+add_cross_platform_test_target(ctest_systolic_os_only_test systolic_os_only_test.c)
+add_cross_platform_test_target(ctest_systolic_ws_only_test systolic_ws_only_test.c)
+add_cross_platform_test_target(ctest_systolic_mode_switch_test systolic_mode_switch_test.c)
+add_cross_platform_test_target(ctest_systolic_os_ws_test systolic_os_ws_test.c)
+add_cross_platform_test_target(ctest_systolic_matmul_4x8_8x4 systolic_matmul_4x8_8x4.c)
+add_singlecore_objdump_target(ctest_systolic_instruction_probe)
 add_cross_platform_test_target(ctest_relu_test relu_test.c)
 add_cross_platform_test_target(ctest_mmio_minimal_test mmio_minimal_test.c)
 add_cross_platform_test_target(ctest_scu_uart_rx_echo_test scu_uart_rx_echo_test.c)
@@ -167,6 +201,12 @@ add_custom_target(buckyball-CTest-build ALL DEPENDS
   ctest_systolic_matmul_8x8_ones
   ctest_systolic_matmul_16x16_ones
   ctest_systolic_matmul_32x32_ones
+  ctest_systolic_instruction_probe
+  ctest_systolic_os_only_test
+  ctest_systolic_ws_only_test
+  ctest_systolic_mode_switch_test
+  ctest_systolic_os_ws_test
+  ctest_systolic_matmul_4x8_8x4
   ctest_relu_test
   ctest_mxfp2int_test
   ctest_vsetvli
