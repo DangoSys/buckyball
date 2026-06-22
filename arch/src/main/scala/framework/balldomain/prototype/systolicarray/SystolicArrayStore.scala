@@ -151,7 +151,8 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
     acc.req.bits.addr := 0.U
     acc.req.bits.data := 0.U(b.memDomain.bankWidth.W)
     acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.resp.ready    := false.B
+    acc.req.bits.wmode := false.B
+    acc.resp.ready    := true.B
   }
 
   for (i <- 0 until outBW) {
@@ -162,6 +163,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
       io.bankWrite(i).req.bits.addr := writeQueues(i).deq.bits.addr
       io.bankWrite(i).req.bits.data := writeQueues(i).deq.bits.data
       io.bankWrite(i).req.bits.mask := writeQueues(i).deq.bits.mask
+      io.bankWrite(i).req.bits.wmode := false.B
       writeQueues(i).deq.ready      := io.bankWrite(i).req.ready
     }
   }
@@ -195,7 +197,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
     io.cmdResp_o.bits.commit := false.B
   }
 
-  when(state === idle) {
+  when(state === idle && !io.ctrl_st_i.fire) {
     iter_counter := 0.U
     configReg    := 0.U
   }
