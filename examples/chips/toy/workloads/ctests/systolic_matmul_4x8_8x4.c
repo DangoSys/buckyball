@@ -10,7 +10,7 @@
 #define TILE_DIM 4
 #define PACKED_INPUT_COLS (BANK_WIDTH / 8 / (int)sizeof(elem_t))
 #define PACKED_OUTPUT_GROUPS 4
-#define PACKED_OUTPUT_COLS \
+#define PACKED_OUTPUT_COLS                                                     \
   (PACKED_OUTPUT_GROUPS * (BANK_WIDTH / 8 / (int)sizeof(result_t)))
 
 static elem_t input_matrix_a[M_DIM * K_DIM] __attribute__((aligned(64)));
