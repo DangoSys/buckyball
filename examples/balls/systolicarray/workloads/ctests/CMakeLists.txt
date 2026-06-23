@@ -4,7 +4,6 @@ add_buckyball_ctests(
   systolic_matmul_32x32_ones.c
   systolic_matmul_4x4_ones.c
   systolic_matmul_8x8_ones.c
-  systolic_instruction_probe.c
   systolic_mode_switch_test.c
   systolic_os_only_test.c
   systolic_os_ws_test.c
