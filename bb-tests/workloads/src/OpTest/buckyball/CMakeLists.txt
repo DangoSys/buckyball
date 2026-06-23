@@ -167,9 +167,33 @@ function(add_buckyball_contract_test name)
     )
 endfunction()
 
+function(add_buckyball_lowering_contract_test name)
+    set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
+    set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_bank_ssa.mlir)
+
+    add_custom_command(
+        OUTPUT ${OUT}
+        COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+            -lower-buckyball-to-bank-ssa
+            > ${OUT}
+        DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+        COMMENT "Building Buckyball lowering contract IR for ${name}"
+        VERBATIM
+    )
+
+    add_custom_target(optest_buckyball_${name}_contract
+        COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
+        DEPENDS ${OUT}
+        COMMENT "Checking Buckyball lowering contract for ${name}"
+        VERBATIM
+    )
+endfunction()
+
 add_buckyball_matmul_contract_test(matmul_16x64_64x16)
 add_buckyball_matmul_test(matmul_64x16_16x64)
 add_buckyball_matmul_test(matmul_1024x16_16x1024)
+add_buckyball_lowering_contract_test(systolic_matmul_4x4)
+add_buckyball_lowering_contract_test(systolic_matmul_4x8_8x4)
 add_buckyball_contract_test(bank_im2col_contract)
 
 add_custom_target(buckyball-OpTest-build ALL DEPENDS

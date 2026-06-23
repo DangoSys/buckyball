@@ -8,7 +8,8 @@ import framework.top.GlobalConfig
 import framework.balldomain.prototype.systolicarray.configs.SystolicBallParam
 
 class ctrl_ex_req(b: GlobalConfig) extends Bundle {
-  val iter = UInt(b.frontend.iter_len.W)
+  val iter   = UInt(b.frontend.iter_len.W)
+  val config = UInt(64.W)
 }
 
 class ld_ex_req(b: GlobalConfig) extends Bundle {
@@ -60,6 +61,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val inputWidth  = config.inputWidth
   val outputWidth = config.outputWidth
   val arraySize   = config.lane
+  val wsModeBit   = 0
 
   @public
   val io = IO(new Bundle {
@@ -72,28 +74,57 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
-  val iter_counter        = RegInit(0.U(b.frontend.iter_len.W))
-  val store_counter       = RegInit(0.U(log2Ceil(config.lane + 1).W))
-  val in_counter          = RegInit(0.U(b.frontend.iter_len.W))
-  val drainThreshold      = (2 * arraySize + 8).U
-  val inputReadyThreshold = if (arraySize <= 16) arraySize else 16
+  val cfgIter          = RegInit(0.U(b.frontend.iter_len.W))
+  val cfgMode          = RegInit(0.U(64.W))
+  val iter_counter     = RegInit(0.U(b.frontend.iter_len.W))
+  val store_counter    = RegInit(0.U(log2Ceil(config.lane + 1).W))
+  val in_counter       = RegInit(0.U(b.frontend.iter_len.W))
+  val osDrainActive    = RegInit(false.B)
+  val isWsMode         = cfgMode(wsModeBit)
+  val maxIter          = arraySize.U(b.frontend.iter_len.W)
+  val effectiveIter    = Mux(cfgIter > maxIter, maxIter, cfgIter)
+  val osDrainThreshold = effectiveIter + (2 * arraySize - 2).U(b.frontend.iter_len.W)
+  val wsRowCounter     = RegInit(0.U(b.frontend.iter_len.W))
+  val wsKCounter       = RegInit(0.U(b.frontend.iter_len.W))
+  val wsAcc            = RegInit(VecInit(Seq.fill(arraySize)(0.U(outputWidth.W))))
 
   // Use Reg with Vec type for proper register behavior
   val in_a_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))
   val in_b_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))
   val pes         = VecInit(Seq.fill(arraySize)(VecInit(Seq.fill(arraySize)(Module(new PE(inputWidth, outputWidth)).io))))
+  val clearPes    = WireDefault(false.B)
 
   // default values
-  io.ctrl_ex_i.ready := io.ex_st_o.ready
-  io.ld_ex_i.ready   := io.ex_st_o.ready
+  io.ctrl_ex_i.ready := state === idle
+  io.ld_ex_i.ready   := state === busy && (in_counter < effectiveIter)
 
   io.ex_st_o.valid       := false.B
   io.ex_st_o.bits.result := VecInit(Seq.fill(arraySize)(0.U(outputWidth.W)))
 
   for (row <- 0 until arraySize) {
     for (col <- 0 until arraySize) {
-      pes(row)(col).clear := false.B
+      pes(row)(col).clear := clearPes
     }
+  }
+
+  when(io.ctrl_ex_i.fire) {
+    clearPes      := true.B
+    cfgIter       := io.ctrl_ex_i.bits.iter
+    cfgMode       := io.ctrl_ex_i.bits.config
+    iter_counter  := 0.U
+    store_counter := 0.U
+    in_counter    := 0.U
+    osDrainActive := false.B
+    wsRowCounter  := 0.U
+    wsKCounter    := 0.U
+    wsAcc         := VecInit(Seq.fill(arraySize)(0.U(outputWidth.W)))
+    for (row <- 0 until arraySize) {
+      for (col <- 0 until arraySize) {
+        in_a_buffer(row)(col) := 0.U
+        in_b_buffer(row)(col) := 0.U
+      }
+    }
+    state := busy
   }
 
   // input data to buffer
@@ -108,12 +139,18 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   }
 
   // PEs connection
-  when(in_counter === inputReadyThreshold.U) {
+  val inputsReady  = state === busy && (effectiveIter =/= 0.U) && (in_counter >= effectiveIter)
+  val osDrainStart = inputsReady && !isWsMode && !osDrainActive && (iter_counter >= osDrainThreshold)
+
+  when(osDrainStart) {
+    osDrainActive := true.B
+  }
+
+  when(inputsReady && !isWsMode && !osDrainActive) {
     iter_counter := iter_counter + 1.U
 
     for (row <- 0 until arraySize) {
       for (col <- 0 until arraySize) {
-
         if (row == 0 && col == 0) {
           when(iter_counter < arraySize.U) {
             pes(row)(col).in_a.valid := true.B
@@ -174,25 +211,56 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
     }
   }
 
+  when(inputsReady && isWsMode && wsRowCounter < effectiveIter) {
+    when(wsKCounter < effectiveIter) {
+      for (col <- 0 until arraySize) {
+        val product = in_a_buffer(wsRowCounter)(wsKCounter) * in_b_buffer(wsKCounter)(col)
+        wsAcc(col) := wsAcc(col) + product
+      }
+      wsKCounter := wsKCounter + 1.U
+    }.otherwise {
+      io.ex_st_o.valid       := true.B
+      io.ex_st_o.bits.result := wsAcc
+      when(io.ex_st_o.ready) {
+        val nextRow = wsRowCounter + 1.U
+        wsRowCounter := nextRow
+        wsKCounter   := 0.U
+        wsAcc        := VecInit(Seq.fill(arraySize)(0.U(outputWidth.W)))
+        when(nextRow >= effectiveIter) {
+          clearPes      := true.B
+          cfgIter       := 0.U
+          cfgMode       := 0.U
+          iter_counter  := 0.U
+          store_counter := 0.U
+          in_counter    := 0.U
+          osDrainActive := false.B
+          state         := idle
+        }
+      }
+    }
+  }
+
   // output data from PEs
-  when(iter_counter >= drainThreshold) {
-    when(store_counter < arraySize.U) {
+  when(osDrainActive) {
+    when(store_counter < effectiveIter) {
       io.ex_st_o.valid       := true.B
       io.ex_st_o.bits.result := VecInit(pes(store_counter).map(_.out_c))
-      store_counter          := store_counter + 1.U
+      when(io.ex_st_o.ready) {
+        store_counter := store_counter + 1.U
+      }
     }.otherwise {
       // back to idle
+      clearPes      := true.B
+      cfgIter       := 0.U
+      cfgMode       := 0.U
       iter_counter  := 0.U
       store_counter := 0.U
       in_counter    := 0.U
-
-      // clear PEs
-      for (row <- 0 until arraySize) {
-        for (col <- 0 until arraySize) {
-          pes(row)(col).clear := true.B
-        }
-      }
-
+      osDrainActive := false.B
+      wsRowCounter  := 0.U
+      wsKCounter    := 0.U
+      wsAcc         := VecInit(Seq.fill(arraySize)(0.U(outputWidth.W)))
+      state         := idle
     }
   }
 

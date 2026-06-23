@@ -73,6 +73,14 @@ def BankMulWarp16Op : Buckyball_Op<"bank_mul_warp16"> {
       "$op1Bank $op2Bank $wrBank $iter $mode attr-dict `:` type($op1Bank) type($op2Bank) type($wrBank) type($iter) type($mode)";
 }
 
+def BankSystolicOp : Buckyball_Op<"bank_systolic"> {
+  let summary = "Systolic array matmul using virtual bank handles";
+  let arguments = (ins I64:$op1Bank, I64:$op2Bank, I64:$wrBank, I64:$iter, I64:$config);
+  let results = (outs I64:$wrBankOut);
+  let assemblyFormat =
+      "$op1Bank $op2Bank $wrBank $iter $config attr-dict `:` type($op1Bank) type($op2Bank) type($wrBank) type($iter) type($config)";
+}
+
 def BankTransposeOp : Buckyball_Op<"bank_transpose"> {
   let summary = "Transpose using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$mode);

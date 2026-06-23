@@ -536,6 +536,23 @@ struct BuckyballSystolicLowering : public ConvertOpToLLVMPattern<SystolicOp> {
   }
 };
 
+struct BuckyballSystolicIterLowering
+    : public ConvertOpToLLVMPattern<SystolicIterOp> {
+  using ConvertOpToLLVMPattern<SystolicIterOp>::ConvertOpToLLVMPattern;
+
+  LogicalResult
+  matchAndRewrite(SystolicIterOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getOp1BankId(),
+                                 adaptor.getOp2BankId(),
+                                 adaptor.getResultBankId(), adaptor.getIter());
+    Value rs2 = adaptor.getConfig();
+    rewriter.replaceOpWithNewOp<SystolicIntrOp>(op, rs1, rs2);
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -564,6 +581,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
   patterns.add<BuckyballInt2FpLowering>(converter);
   patterns.add<BuckyballReluLowering>(converter);
   patterns.add<BuckyballSystolicLowering>(converter);
+  patterns.add<BuckyballSystolicIterLowering>(converter);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
@@ -573,9 +591,10 @@ void mlir::configureBuckyballLegalizeForExportTarget(
                     ReluIntrOp, MsetIntrOp, SystolicIntrOp>();
   target.addIllegalOp<FenceOp, MsetOp, MvinOp, MvoutOp, MatMulOp, MulWarp16Op,
                       TransposeOp, Im2colOp, Fp2IntOp, Int2FpOp, ReluOp,
-                      SystolicOp, BankAllocOp, BankReleaseOp, BankMvinOp,
-                      BankMvoutOp, BankMulWarp16Op, BankTransposeOp,
-                      BankIm2colOp, BankFp2IntOp, BankInt2FpOp>();
+                      SystolicOp, SystolicIterOp, BankAllocOp, BankReleaseOp,
+                      BankMvinOp, BankMvoutOp, BankMulWarp16Op, BankSystolicOp,
+                      BankTransposeOp, BankIm2colOp, BankFp2IntOp,
+                      BankInt2FpOp>();
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalDialect<arith::ArithDialect>();
   target.addLegalDialect<LLVM::LLVMDialect>();

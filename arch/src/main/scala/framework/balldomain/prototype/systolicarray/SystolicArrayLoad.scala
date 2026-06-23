@@ -60,6 +60,11 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
   bankRespQueue0.io.enq <> io.bankReadResp(0)
   bankRespQueue1.io.enq <> io.bankReadResp(1)
 
+  io.ld_ex_o.valid     := false.B
+  io.ld_ex_o.bits.iter := 0.U
+  io.ld_ex_o.bits.op1  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
+  io.ld_ex_o.bits.op2  := VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
+
   when(io.ctrl_ld_i.fire) {
     op1_bank         := io.ctrl_ld_i.bits.op1_bank
     op2_bank         := io.ctrl_ld_i.bits.op2_bank

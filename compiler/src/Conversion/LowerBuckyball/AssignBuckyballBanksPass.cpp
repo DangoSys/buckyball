@@ -132,9 +132,9 @@ public:
     func.walk<WalkOrder::PreOrder>([&](Operation *op) {
       if (isa<buckyball::BankAllocOp, buckyball::BankReleaseOp,
               buckyball::BankMvinOp, buckyball::BankMvoutOp,
-              buckyball::BankMulWarp16Op, buckyball::BankTransposeOp,
-              buckyball::BankIm2colOp, buckyball::BankFp2IntOp,
-              buckyball::BankInt2FpOp>(op))
+              buckyball::BankMulWarp16Op, buckyball::BankSystolicOp,
+              buckyball::BankTransposeOp, buckyball::BankIm2colOp,
+              buckyball::BankFp2IntOp, buckyball::BankInt2FpOp>(op))
         opsToProcess.push_back(op);
     });
 
@@ -200,6 +200,15 @@ public:
                                          mm.getWrBank(), mm.getIter(),
                                          mm.getMode());
         mm.getWrBankOut().replaceAllUsesWith(mm.getWrBank());
+        op.erase();
+        continue;
+      }
+
+      if (auto sm = dyn_cast<buckyball::BankSystolicOp>(op)) {
+        b.create<buckyball::SystolicIterOp>(loc, sm.getOp1Bank(),
+                                            sm.getOp2Bank(), sm.getWrBank(),
+                                            sm.getIter(), sm.getConfig());
+        sm.getWrBankOut().replaceAllUsesWith(sm.getWrBank());
         op.erase();
         continue;
       }

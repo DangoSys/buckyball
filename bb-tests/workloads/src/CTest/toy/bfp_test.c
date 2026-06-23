@@ -30,7 +30,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
 
-  bb_BFP(op1_bank_id, op2_bank_id, acc_bank_id, size, 0);
+  bb_BFP(op1_bank_id, op2_bank_id, acc_bank_id, size);
   bb_mvout((uintptr_t)c, acc_bank_id, size << 2, 1);
   bb_fence();
 }
@@ -38,7 +38,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
 int run_test(const char *test_name, elem_t *a, elem_t *b, int size) {
   cpu_matmul(a, b, expected_matrix, size, size, size);
   hw_matmul(test_name, a, b, output_matrix, size);
-  
+
   if (compare_u32_matrices(output_matrix, expected_matrix, size, size)) {
     printf("Test %s PASSED\n", test_name);
     return 1;
