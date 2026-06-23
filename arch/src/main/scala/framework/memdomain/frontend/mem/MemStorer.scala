@@ -65,13 +65,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val pendData   = Reg(UInt(b.memDomain.bankWidth.W))
   val pendIsLast = RegInit(false.B)
 
-  // -----------------------------
-  // Optional: simple 16B align/merge support (keep your original intent)
-  // We'll keep a small byte buffer for unaligned head/tail.
-  // -----------------------------
-  val data_buffer        = RegInit(0.U((align_bytes * 8).W)) // 16B
-  val buffer_valid_bytes = RegInit(0.U(log2Ceil(align_bytes + 1).W))
-  val buffer_start_addr  = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val split_valid = RegInit(false.B)
+  val split_addr  = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val split_data  = RegInit(0.U((align_bytes * 8).W))
+  val split_mask  = RegInit(0.U(align_bytes.W))
 
   // Convenience
   val target_bank = rd_bank_reg
@@ -98,10 +95,11 @@ class MemStorer(val b: GlobalConfig) extends Module {
     addr_counter  := 0.U
     group_counter := 0.U
 
-    pending            := false.B
-    data_buffer        := 0.U
-    buffer_valid_bytes := 0.U
-    buffer_start_addr  := 0.U
+    pending     := false.B
+    split_valid := false.B
+    split_addr  := 0.U
+    split_data  := 0.U
+    split_mask  := 0.U
 
     state := s_issue_sram_req
   }
@@ -165,51 +163,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
     0.U(log2Ceil(align_bytes).W)
   )
 
-  // -----------------------------
-  // Merge logic (kept compatible with your original behavior)
-  // incoming_data is always 16 bytes (bankWidth==128 in your waveforms)
-  // -----------------------------
-  val incoming_data  = pendData
-  val incoming_bytes = align_bytes.U
-
-  val merged_data       = Wire(UInt((align_bytes * 8).W))
-  val total_valid_bytes = Wire(UInt(log2Ceil(align_bytes * 2).W))
-
-  when(buffer_valid_bytes === 0.U) {
-    when(addr_offset === 0.U) {
-      merged_data       := incoming_data
-      total_valid_bytes := incoming_bytes
-    }.otherwise {
-      // first unaligned: send high part, pad low with 0
-      val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
-      merged_data       := new_data_low << (addr_offset * 8.U)
-      total_valid_bytes := align_bytes.U
-    }
-  }.otherwise {
-    val new_data_low = incoming_data & ((1.U << (addr_offset * 8.U)) - 1.U)
-    merged_data       := (new_data_low << (addr_offset * 8.U)) | data_buffer
-    total_valid_bytes := align_bytes.U
-  }
-
-  val can_send_full_line = total_valid_bytes >= align_bytes.U
-
-  // send address (aligned)
-  val send_addr = Mux(
-    buffer_valid_bytes === 0.U,
-    aligned_addr,
-    Cat(buffer_start_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)), 0.U(log2Ceil(align_bytes).W))
-  )
-
-  // send mask
-  val send_mask = Wire(UInt(align_bytes.W))
-  when(buffer_valid_bytes === 0.U && addr_offset =/= 0.U) {
-    val valid_bytes = align_bytes.U - addr_offset
-    send_mask := ((1.U << valid_bytes) - 1.U) << addr_offset
-  }.elsewhen(buffer_valid_bytes > 0.U && can_send_full_line) {
-    send_mask := ~0.U(align_bytes.W)
-  }.otherwise {
-    send_mask := ~0.U(align_bytes.W)
-  }
+  val incoming_data = pendData
+  val first_bytes   = align_bytes.U - addr_offset
+  val first_mask    = (~0.U(align_bytes.W)) << addr_offset
+  val second_mask   = (1.U(align_bytes.W) << addr_offset) - 1.U
 
   // -----------------------------
   // DMA request (Decoupled correct): hold valid until fire
@@ -232,11 +189,15 @@ class MemStorer(val b: GlobalConfig) extends Module {
   when(state === s_have_sram_beat) {
     // Only arm dma_v if not already armed
     when(!dma_v) {
-      dma_v    := true.B
-      dma_addr := send_addr
-      dma_data := merged_data
-      dma_mask := send_mask
-      state    := s_push_dma
+      dma_v       := true.B
+      dma_addr    := aligned_addr
+      dma_data    := Mux(addr_offset === 0.U, incoming_data, incoming_data << (addr_offset * 8.U))
+      dma_mask    := Mux(addr_offset === 0.U, ~0.U(align_bytes.W), first_mask)
+      split_valid := addr_offset =/= 0.U
+      split_addr  := aligned_addr + align_bytes.U
+      split_data  := incoming_data >> (first_bytes * 8.U)
+      split_mask  := second_mask
+      state       := s_push_dma
     }
   }
 
@@ -249,49 +210,34 @@ class MemStorer(val b: GlobalConfig) extends Module {
   }
 
   when(state === s_wait_dma_resp && io.dmaResp.fire) {
-    // Update buffer state like your original:
-    when(addr_offset =/= 0.U) {
-      val remaining_bytes = align_bytes.U - addr_offset
-      data_buffer        := incoming_data >> (addr_offset * 8.U)
-      buffer_valid_bytes := remaining_bytes
-      when(buffer_valid_bytes === 0.U) {
-        buffer_start_addr := aligned_addr + align_bytes.U
-      }.otherwise {
-        buffer_start_addr := buffer_start_addr + align_bytes.U
-      }
+    when(split_valid) {
+      dma_v       := true.B
+      dma_addr    := split_addr
+      dma_data    := split_data
+      dma_mask    := split_mask
+      split_valid := false.B
+      state       := s_push_dma
     }.otherwise {
-      // aligned: clear buffer if it was used
-      when(buffer_valid_bytes > 0.U && can_send_full_line) {
-        buffer_valid_bytes := 0.U
-        data_buffer        := 0.U
+      pending := false.B
+
+      val is_last_row   = addr_counter >= iter_reg - 1.U
+      val is_last_group = group_counter >= group_count_reg - 1.U
+      val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
+
+      when(iter_reg =/= 0.U) {
+        when(group_counter + 1.U < group_count_reg) {
+          group_counter := group_counter + 1.U
+        }.otherwise {
+          group_counter := 0.U
+          addr_counter  := addr_counter + 1.U
+        }
       }
-    }
 
-    // Mark current beat consumed
-    pending := false.B
-
-    // Check if this was the last beat before advancing counters
-    val is_last_row   = addr_counter >= iter_reg - 1.U
-    val is_last_group = group_counter >= group_count_reg - 1.U
-    val all_done      = is_last_row && is_last_group && (iter_reg =/= 0.U)
-
-    // Advance counters
-    when(iter_reg =/= 0.U) {
-      when(group_counter + 1.U < group_count_reg) {
-        // Move to next group in same row
-        group_counter := group_counter + 1.U
+      when(pendIsLast || iter_reg === 0.U || all_done) {
+        state := s_done
       }.otherwise {
-        // Move to next row, reset group counter
-        group_counter := 0.U
-        addr_counter  := addr_counter + 1.U
+        state := s_issue_sram_req
       }
-    }
-
-    // Decide next state based on completion check done BEFORE counter update
-    when(pendIsLast || iter_reg === 0.U || all_done) {
-      state := s_done
-    }.otherwise {
-      state := s_issue_sram_req
     }
   }
 

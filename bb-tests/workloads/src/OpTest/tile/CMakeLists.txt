@@ -185,10 +185,12 @@ function(add_tile_contract_test name)
 endfunction()
 
 add_tile_matmul_test(matmul_127x17_17x127)
+add_tile_matmul_test(matmul_1x84_84x10)
 add_tile_matmul_contract_test(matmul_16x2048_2048x16_contract)
 add_tile_contract_test(conv2d_nhwc_hwcf_contract)
 
 add_custom_target(tile-OpTest-build ALL DEPENDS
   optest_tile_matmul_127x17_17x127
+  optest_tile_matmul_1x84_84x10
   COMMENT "Building all Tile OpTest workloads"
   VERBATIM)

@@ -3,7 +3,7 @@ add_mlir_translation_library(BuddyBuckyballToLLVMIRTranslation
 
   DEPENDS
   BuddyBuckyballConversionsIncGen
-  buddy_intrinsics_gen
+  intrinsics_gen
 
   LINK_COMPONENTS
   Core
