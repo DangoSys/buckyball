@@ -36,6 +36,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stdout_prefix="compiler build",
         stderr_prefix="compiler build",
     )
+    command = (
+        f"cd {bbdir}/compiler/thirdparty/buddy-mlir/build "
+        "&& cmake --build . --target python-package-buddy"
+    )
+    result = stream_run_logger(
+        cmd=command,
+        logger=ctx.logger,
+        stdout_prefix="compiler build",
+        stderr_prefix="compiler build",
+    )
     command = f"cd {bbdir}/compiler/thirdparty/buddy-mlir/build && ninja -j{os.cpu_count()}"
     result = stream_run_logger(
         cmd=command,
