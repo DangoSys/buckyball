@@ -67,9 +67,9 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
     io.ctrl_ld_o.bits.op2_bank_addr := op2_bank_addr
     io.ctrl_ld_o.bits.iter          := iter
 
-    io.ctrl_ex_o.valid        := true.B
-    io.ctrl_ex_o.bits.iter    := iter
-    io.ctrl_ex_o.bits.config  := configReg
+    io.ctrl_ex_o.valid       := true.B
+    io.ctrl_ex_o.bits.iter   := iter
+    io.ctrl_ex_o.bits.config := configReg
 
     io.ctrl_st_o.valid             := true.B
     io.ctrl_st_o.bits.wr_bank      := wr_bank
@@ -88,8 +88,8 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
     io.ctrl_ld_o.bits.op2_bank_addr := 0.U
     io.ctrl_ld_o.bits.iter          := 0.U
 
-    io.ctrl_ex_o.valid     := false.B
-    io.ctrl_ex_o.bits.iter := 0.U
+    io.ctrl_ex_o.valid       := false.B
+    io.ctrl_ex_o.bits.iter   := 0.U
     io.ctrl_ex_o.bits.config := 0.U
 
     io.ctrl_st_o.valid             := false.B

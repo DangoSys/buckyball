@@ -59,9 +59,11 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
   val configReg       = RegInit(0.U(64.W))
   val accRowsSeen     = RegInit(0.U(b.frontend.iter_len.W))
   val flushRowCounter = RegInit(0.U(b.frontend.iter_len.W))
+
   val accBuf = RegInit(
     VecInit(Seq.fill(InputNum)(VecInit(Seq.fill(InputNum)(0.U(accWidth.W)))))
   )
+
   val idle :: busy :: flushing :: Nil = Enum(3)
   val state                           = RegInit(idle)
 
@@ -112,7 +114,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
       io.ctrl_st_i.bits.config(accModeLsb + accModeWidth - 1, accModeLsb) === firstMode) {
       clearAccBuf()
     }
-    state := busy
+    state           := busy
   }
 
 // -----------------------------------------------------------------------------
@@ -151,7 +153,6 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
     acc.req.bits.addr := 0.U
     acc.req.bits.data := 0.U(b.memDomain.bankWidth.W)
     acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.req.bits.wmode := false.B
     acc.resp.ready    := true.B
   }
 
@@ -163,7 +164,6 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
       io.bankWrite(i).req.bits.addr := writeQueues(i).deq.bits.addr
       io.bankWrite(i).req.bits.data := writeQueues(i).deq.bits.data
       io.bankWrite(i).req.bits.mask := writeQueues(i).deq.bits.mask
-      io.bankWrite(i).req.bits.wmode := false.B
       writeQueues(i).deq.ready      := io.bankWrite(i).req.ready
     }
   }
@@ -178,11 +178,11 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
 // Reset iter counter, commit cmdResp, return to idle state
 // -----------------------------------------------------------------------------
-  val directDone = state === busy && accMode === directMode && iter_counter >= expectedRows
+  val directDone      = state === busy && accMode === directMode && iter_counter >= expectedRows
   val accBufferedDone =
     state === busy && accMode =/= directMode && accMode =/= lastMode && accRowsSeen >= expectedRows
-  val flushDone        = state === flushing && flushRowCounter >= expectedRows
-  val allDataEnqueued  = directDone || accBufferedDone || flushDone
+  val flushDone       = state === flushing && flushRowCounter >= expectedRows
+  val allDataEnqueued = directDone || accBufferedDone || flushDone
 
   when(allDataEnqueued && allQueuesEmpty) {
     state                    := idle

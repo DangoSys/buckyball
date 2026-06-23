@@ -124,8 +124,8 @@ public:
     auto aTy = dyn_cast<MemRefType>(aMem.getType());
     auto bTy = dyn_cast<MemRefType>(bMem.getType());
     auto cTy = dyn_cast<MemRefType>(cMem.getType());
-    if (!aTy || !bTy || !cTy || !aTy.hasStaticShape() || !bTy.hasStaticShape() ||
-        !cTy.hasStaticShape())
+    if (!aTy || !bTy || !cTy || !aTy.hasStaticShape() ||
+        !bTy.hasStaticShape() || !cTy.hasStaticShape())
       return rewriter.notifyMatchFailure(
           op, "systolic_matmul requires static rank-2 memrefs");
 
@@ -133,7 +133,8 @@ public:
       return rewriter.notifyMatchFailure(
           op, "systolic_matmul expects rank-2 memrefs");
 
-    if (!aTy.getElementType().isInteger(8) || !bTy.getElementType().isInteger(8) ||
+    if (!aTy.getElementType().isInteger(8) ||
+        !bTy.getElementType().isInteger(8) ||
         !cTy.getElementType().isInteger(32))
       return rewriter.notifyMatchFailure(
           op, "systolic_matmul expects i8 inputs and i32 outputs");
@@ -149,7 +150,8 @@ public:
     constexpr int64_t tile = 4;
     if (m % tile != 0 || k % tile != 0 || n % tile != 0)
       return rewriter.notifyMatchFailure(
-          op, "current SystolicArrayBall lowering requires M, K and N to be multiples of 4");
+          op, "current SystolicArrayBall lowering requires M, K and N to be "
+              "multiples of 4");
 
     auto packedATy = MemRefType::get({tile, 16}, aTy.getElementType());
     auto packedBTy = MemRefType::get({tile, 16}, bTy.getElementType());
@@ -207,10 +209,14 @@ public:
     Value aCol = rewriter.create<arith::AddIOp>(loc, kIv, colIv);
     Value bRow = aCol;
     Value bCol = rewriter.create<arith::AddIOp>(loc, nIv, colIv);
-    Value aVal = rewriter.create<memref::LoadOp>(loc, aMem, ValueRange{aRow, aCol});
-    Value bVal = rewriter.create<memref::LoadOp>(loc, bMem, ValueRange{bRow, bCol});
-    rewriter.create<memref::StoreOp>(loc, aVal, packedA, ValueRange{rowIv, colIv});
-    rewriter.create<memref::StoreOp>(loc, bVal, packedB, ValueRange{rowIv, colIv});
+    Value aVal =
+        rewriter.create<memref::LoadOp>(loc, aMem, ValueRange{aRow, aCol});
+    Value bVal =
+        rewriter.create<memref::LoadOp>(loc, bMem, ValueRange{bRow, bCol});
+    rewriter.create<memref::StoreOp>(loc, aVal, packedA,
+                                     ValueRange{rowIv, colIv});
+    rewriter.create<memref::StoreOp>(loc, bVal, packedB,
+                                     ValueRange{rowIv, colIv});
 
     rewriter.setInsertionPointAfter(rowLoop);
 
@@ -228,12 +234,12 @@ public:
 
     Value isFirst = rewriter.create<arith::CmpIOp>(
         loc, arith::CmpIPredicate::eq, kIv, zeroIdx);
-    Value isLast = rewriter.create<arith::CmpIOp>(
-        loc, arith::CmpIPredicate::eq, kIv, kLastIdx);
-    Value directWhenSingleK = rewriter.create<arith::SelectOp>(
-        loc, isLast, directTag, firstTag);
-    Value nonFirstTag = rewriter.create<arith::SelectOp>(
-        loc, isLast, lastTag, midTag);
+    Value isLast = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
+                                                  kIv, kLastIdx);
+    Value directWhenSingleK =
+        rewriter.create<arith::SelectOp>(loc, isLast, directTag, firstTag);
+    Value nonFirstTag =
+        rewriter.create<arith::SelectOp>(loc, isLast, lastTag, midTag);
     Value accTag = rewriter.create<arith::SelectOp>(
         loc, isFirst, directWhenSingleK, nonFirstTag);
     Value config = rewriter.create<arith::OrIOp>(loc, wsBit, accTag);
@@ -253,10 +259,12 @@ public:
                                             cstI64(rewriter, loc, 1));
     rewriter.create<buckyball::FenceOp>(loc);
 
-    auto outRowLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
+    auto outRowLoop =
+        rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
     rewriter.setInsertionPointToStart(outRowLoop.getBody());
     Value outRowIv = outRowLoop.getInductionVar();
-    auto outColLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
+    auto outColLoop =
+        rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
     rewriter.setInsertionPointToStart(outColLoop.getBody());
     Value outColIv = outColLoop.getInductionVar();
     Value packColIv = rewriter.create<arith::MulIOp>(loc, outColIv, tileIdx);
@@ -264,7 +272,8 @@ public:
         loc, packedC, ValueRange{outRowIv, packColIv});
     Value outRow = rewriter.create<arith::AddIOp>(loc, mIv, outRowIv);
     Value outCol = rewriter.create<arith::AddIOp>(loc, nIv, outColIv);
-    rewriter.create<memref::StoreOp>(loc, cVal, cMem, ValueRange{outRow, outCol});
+    rewriter.create<memref::StoreOp>(loc, cVal, cMem,
+                                     ValueRange{outRow, outCol});
 
     rewriter.setInsertionPointAfter(outRowLoop);
     rewriter.create<scf::YieldOp>(loc);

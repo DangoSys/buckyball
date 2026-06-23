@@ -5,11 +5,14 @@ static elem_t input_matrix_a[SYSTOLIC_TEST_DIM * SYSTOLIC_TEST_DIM]
     __attribute__((aligned(64)));
 static elem_t input_matrix_b[SYSTOLIC_TEST_DIM * SYSTOLIC_TEST_DIM]
     __attribute__((aligned(64)));
-static elem_t packed_input_matrix_a[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_INPUT_COLS]
+static elem_t
+    packed_input_matrix_a[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_INPUT_COLS]
     __attribute__((aligned(64)));
-static elem_t packed_input_matrix_b[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_INPUT_COLS]
+static elem_t
+    packed_input_matrix_b[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_INPUT_COLS]
     __attribute__((aligned(64)));
-static result_t packed_output_matrix[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_OUTPUT_COLS]
+static result_t
+    packed_output_matrix[SYSTOLIC_TEST_DIM * SYSTOLIC_PACKED_OUTPUT_COLS]
     __attribute__((aligned(64)));
 static result_t output_matrix[SYSTOLIC_TEST_DIM * SYSTOLIC_TEST_DIM]
     __attribute__((aligned(64)));

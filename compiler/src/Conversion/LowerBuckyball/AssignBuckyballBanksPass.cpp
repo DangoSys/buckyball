@@ -132,9 +132,9 @@ public:
     func.walk<WalkOrder::PreOrder>([&](Operation *op) {
       if (isa<buckyball::BankAllocOp, buckyball::BankReleaseOp,
               buckyball::BankMvinOp, buckyball::BankMvoutOp,
-              buckyball::BankMulWarp16Op, buckyball::BankSystolicOp, buckyball::BankTransposeOp,
-              buckyball::BankIm2colOp, buckyball::BankFp2IntOp,
-              buckyball::BankInt2FpOp>(op))
+              buckyball::BankMulWarp16Op, buckyball::BankSystolicOp,
+              buckyball::BankTransposeOp, buckyball::BankIm2colOp,
+              buckyball::BankFp2IntOp, buckyball::BankInt2FpOp>(op))
         opsToProcess.push_back(op);
     });
 

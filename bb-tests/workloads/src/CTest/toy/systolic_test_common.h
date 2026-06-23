@@ -9,7 +9,7 @@
 #define SYSTOLIC_TEST_DIM 4
 #define SYSTOLIC_PACKED_INPUT_COLS (BANK_WIDTH / 8 / (int)sizeof(elem_t))
 #define SYSTOLIC_PACKED_OUTPUT_GROUPS 4
-#define SYSTOLIC_PACKED_OUTPUT_COLS                                             \
+#define SYSTOLIC_PACKED_OUTPUT_COLS                                            \
   (SYSTOLIC_PACKED_OUTPUT_GROUPS * (BANK_WIDTH / 8 / (int)sizeof(result_t)))
 
 static inline void systolic_pack_input_matrix(const elem_t *src, elem_t *dst) {
@@ -65,7 +65,8 @@ static inline int systolic_run_case(const char *test_name, const elem_t *a,
                                     result_t *expected) {
   clear_u32_matrix(output, SYSTOLIC_TEST_DIM, SYSTOLIC_TEST_DIM);
   clear_u32_matrix(expected, SYSTOLIC_TEST_DIM, SYSTOLIC_TEST_DIM);
-  clear_u32_matrix(packed_output, SYSTOLIC_TEST_DIM, SYSTOLIC_PACKED_OUTPUT_COLS);
+  clear_u32_matrix(packed_output, SYSTOLIC_TEST_DIM,
+                   SYSTOLIC_PACKED_OUTPUT_COLS);
 
   cpu_matmul((elem_t *)a, (elem_t *)b, expected, SYSTOLIC_TEST_DIM,
              SYSTOLIC_TEST_DIM, SYSTOLIC_TEST_DIM);
@@ -82,13 +83,10 @@ static inline int systolic_run_case(const char *test_name, const elem_t *a,
   return 1;
 }
 
-static inline int systolic_run_random_case(const char *test_name, int ws_mode,
-                                           int seed_a, int seed_b,
-                                           elem_t *input_a, elem_t *input_b,
-                                           elem_t *packed_a, elem_t *packed_b,
-                                           result_t *packed_output,
-                                           result_t *output,
-                                           result_t *expected) {
+static inline int systolic_run_random_case(
+    const char *test_name, int ws_mode, int seed_a, int seed_b, elem_t *input_a,
+    elem_t *input_b, elem_t *packed_a, elem_t *packed_b,
+    result_t *packed_output, result_t *output, result_t *expected) {
   init_u8_random_matrix(input_a, SYSTOLIC_TEST_DIM, SYSTOLIC_TEST_DIM, seed_a);
   init_u8_random_matrix(input_b, SYSTOLIC_TEST_DIM, SYSTOLIC_TEST_DIM, seed_b);
   return systolic_run_case(test_name, input_a, input_b, ws_mode, packed_a,

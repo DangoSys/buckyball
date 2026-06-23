@@ -544,9 +544,9 @@ struct BuckyballSystolicIterLowering
   matchAndRewrite(SystolicIterOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
-    Value rs1 = packRs1BanksIter(
-        rewriter, loc, adaptor.getOp1BankId(), adaptor.getOp2BankId(),
-        adaptor.getResultBankId(), adaptor.getIter());
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getOp1BankId(),
+                                 adaptor.getOp2BankId(),
+                                 adaptor.getResultBankId(), adaptor.getIter());
     Value rs2 = adaptor.getConfig();
     rewriter.replaceOpWithNewOp<SystolicIntrOp>(op, rs1, rs2);
     return success();
@@ -591,9 +591,10 @@ void mlir::configureBuckyballLegalizeForExportTarget(
                     ReluIntrOp, MsetIntrOp, SystolicIntrOp>();
   target.addIllegalOp<FenceOp, MsetOp, MvinOp, MvoutOp, MatMulOp, MulWarp16Op,
                       TransposeOp, Im2colOp, Fp2IntOp, Int2FpOp, ReluOp,
-                      SystolicOp, SystolicIterOp, BankAllocOp, BankReleaseOp, BankMvinOp,
-                      BankMvoutOp, BankMulWarp16Op, BankSystolicOp, BankTransposeOp,
-                      BankIm2colOp, BankFp2IntOp, BankInt2FpOp>();
+                      SystolicOp, SystolicIterOp, BankAllocOp, BankReleaseOp,
+                      BankMvinOp, BankMvoutOp, BankMulWarp16Op, BankSystolicOp,
+                      BankTransposeOp, BankIm2colOp, BankFp2IntOp,
+                      BankInt2FpOp>();
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalDialect<arith::ArithDialect>();
   target.addLegalDialect<LLVM::LLVMDialect>();

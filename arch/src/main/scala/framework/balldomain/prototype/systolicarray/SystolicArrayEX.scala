@@ -74,19 +74,19 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
-  val cfgIter             = RegInit(0.U(b.frontend.iter_len.W))
-  val cfgMode             = RegInit(0.U(64.W))
-  val iter_counter        = RegInit(0.U(b.frontend.iter_len.W))
-  val store_counter       = RegInit(0.U(log2Ceil(config.lane + 1).W))
-  val in_counter          = RegInit(0.U(b.frontend.iter_len.W))
-  val osDrainActive       = RegInit(false.B)
-  val isWsMode            = cfgMode(wsModeBit)
-  val maxIter             = arraySize.U(b.frontend.iter_len.W)
-  val effectiveIter       = Mux(cfgIter > maxIter, maxIter, cfgIter)
-  val osDrainThreshold    = effectiveIter + (2 * arraySize - 2).U(b.frontend.iter_len.W)
-  val wsRowCounter        = RegInit(0.U(b.frontend.iter_len.W))
-  val wsKCounter          = RegInit(0.U(b.frontend.iter_len.W))
-  val wsAcc               = RegInit(VecInit(Seq.fill(arraySize)(0.U(outputWidth.W))))
+  val cfgIter          = RegInit(0.U(b.frontend.iter_len.W))
+  val cfgMode          = RegInit(0.U(64.W))
+  val iter_counter     = RegInit(0.U(b.frontend.iter_len.W))
+  val store_counter    = RegInit(0.U(log2Ceil(config.lane + 1).W))
+  val in_counter       = RegInit(0.U(b.frontend.iter_len.W))
+  val osDrainActive    = RegInit(false.B)
+  val isWsMode         = cfgMode(wsModeBit)
+  val maxIter          = arraySize.U(b.frontend.iter_len.W)
+  val effectiveIter    = Mux(cfgIter > maxIter, maxIter, cfgIter)
+  val osDrainThreshold = effectiveIter + (2 * arraySize - 2).U(b.frontend.iter_len.W)
+  val wsRowCounter     = RegInit(0.U(b.frontend.iter_len.W))
+  val wsKCounter       = RegInit(0.U(b.frontend.iter_len.W))
+  val wsAcc            = RegInit(VecInit(Seq.fill(arraySize)(0.U(outputWidth.W))))
 
   // Use Reg with Vec type for proper register behavior
   val in_a_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))
@@ -124,7 +124,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
         in_b_buffer(row)(col) := 0.U
       }
     }
-    state         := busy
+    state := busy
   }
 
   // input data to buffer
@@ -139,7 +139,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   }
 
   // PEs connection
-  val inputsReady = state === busy && (effectiveIter =/= 0.U) && (in_counter >= effectiveIter)
+  val inputsReady  = state === busy && (effectiveIter =/= 0.U) && (in_counter >= effectiveIter)
   val osDrainStart = inputsReady && !isWsMode && !osDrainActive && (iter_counter >= osDrainThreshold)
 
   when(osDrainStart) {

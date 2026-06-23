@@ -7,7 +7,7 @@
 #define DIM 4
 #define PACKED_INPUT_COLS (BANK_WIDTH / 8 / (int)sizeof(elem_t))
 #define PACKED_OUTPUT_GROUPS 4
-#define PACKED_OUTPUT_COLS \
+#define PACKED_OUTPUT_COLS                                                     \
   (PACKED_OUTPUT_GROUPS * (BANK_WIDTH / 8 / (int)sizeof(result_t)))
 static elem_t input_matrix_a[DIM * DIM] __attribute__((aligned(64)));
 static elem_t input_matrix_b[DIM * DIM] __attribute__((aligned(64)));
@@ -23,7 +23,8 @@ static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 static void pack_input_matrix(const elem_t *src, elem_t *dst) {
   for (int row = 0; row < DIM; ++row) {
     for (int col = 0; col < PACKED_INPUT_COLS; ++col) {
-      dst[row * PACKED_INPUT_COLS + col] = (col < DIM) ? src[row * DIM + col] : 0;
+      dst[row * PACKED_INPUT_COLS + col] =
+          (col < DIM) ? src[row * DIM + col] : 0;
     }
   }
 }
