@@ -349,7 +349,7 @@ object TomlConfigLoader {
       sharedDefaultGroupCount = shared.sharedDefaultGroupCount,
       tlb_size = getInt(tlb, "size"),
       dma_n_xacts = getInt(dma, "nXacts"),
-      dma_maxbytes = getInt(dma, "maxBytes"),
+      dma_burst_maxbytes = getInt(dma, "burstMaxBytes"),
       bankChannel = getInt(bank, "channel"),
       max_in_flight_mem_reqs = getInt(dma, "maxInFlightMemReqs"),
       dma_buswidth = getInt(dma, "busWidth"),

@@ -26,9 +26,17 @@ class BBReadResponse(dataWidth: Int) extends Bundle {
 
 @instantiable
 class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
+  // one packet can delivery how many bits
+  val beatBits      = b.memDomain.dma_buswidth
+  // one packet can delivery how many bytes
+  val beatBytes     = beatBits / 8
+  // beatBytes x beat times
+  val burstMaxBytes = b.memDomain.dma_burst_maxbytes
+  val lgBeat        = log2Ceil(beatBytes)
 
-  val beatBits  = b.memDomain.dma_buswidth
-  val beatBytes = beatBits / 8
+  require(isPow2(beatBytes), s"dma_buswidth bytes must be a power of two, got $beatBytes")
+  require(isPow2(burstMaxBytes), s"dma_burst_maxbytes must be a power of two, got $burstMaxBytes")
+  require(burstMaxBytes >= beatBytes, s"dma_burst_maxbytes ($burstMaxBytes) must be >= beatBytes ($beatBytes)")
 
   @public
   val io = IO(new Bundle {
@@ -62,10 +70,26 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val readOffset = (rowIdx * reqReg.groups * reqReg.stride + groupIdx) * beatBytes.U
   val read_vaddr = reqReg.vaddr + readOffset
 
+  val bytesLeft       = reqReg.len - bytesRequested
+  val groupsLeftInRow = reqReg.groups - groupIdx
+  val rowBytesLeft    = groupsLeftInRow * beatBytes.U
+  val pageBytesLeft   = (1.U << b.core.pgIdxBits) - read_vaddr(b.core.pgIdxBits - 1, 0)
+  val maxBurstBytes   = Seq(bytesLeft, rowBytesLeft, pageBytesLeft, burstMaxBytes.U).reduce((a, c) => Mux(a < c, a, c))
+
+  val burstCandidates = Iterator.iterate(beatBytes)(_ * 2).takeWhile(_ <= burstMaxBytes).toSeq
+
+  val (readBytes, readLgSize) = burstCandidates.foldLeft((beatBytes.U(32.W), lgBeat.U)) {
+    case ((bestBytes, bestLg), size) =>
+      val lgSize  = log2Ceil(size)
+      val aligned = if (size == 1) true.B else read_vaddr(lgSize - 1, 0) === 0.U
+      val fits    = maxBurstBytes >= size.U
+      (Mux(fits && aligned, size.U, bestBytes), Mux(fits && aligned, lgSize.U, bestLg))
+  }
+
   val get = edge.Get(
     fromSource = 0.U,
     toAddress = 0.U,
-    lgSize = log2Ceil(beatBytes).U
+    lgSize = readLgSize
   )._2
 
   io.tlb.req.valid :=
@@ -94,7 +118,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   when(io.tl.a.fire) {
     inflight       := true.B
-    bytesRequested := bytesRequested + beatBytes.U
+    bytesRequested := bytesRequested + readBytes
   }
 
   //------------------------------------------------------------
@@ -114,7 +138,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   zeroBuffer.io.resp.ready := io.resp.ready && zeroActive
 
   when(io.tl.d.fire) {
-    inflight      := false.B
+    inflight      := !edge.last(io.tl.d)
     bytesReceived := bytesReceived + beatBytes.U
   }
 
