@@ -4,7 +4,7 @@ bebop bemu event handler
 Runs bebop bemu (Spike-based) emulator:
   1. Resolve binary (ELF) path
   2. Build bebop with bemu feature (cargo build)
-  3. Run bebop bemu with the resolved ELF
+  3. Run bebop run bemu with the resolved ELF
 """
 import os
 import sys
@@ -56,7 +56,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Run bebop bemu ────────────────────────────────────────────────────
     pk_flag = " --pk" if input_data.get("pk") else ""
     run_cmd = (
-        f"cargo run --manifest-path \"{bebop_dir}/Cargo.toml\" --features bemu -- bemu "
+        f"cargo run --manifest-path \"{bebop_dir}/Cargo.toml\" --features bemu -- run bemu "
         f"--elf=\"{binary_path}\" "
         f"--log-dir=\"{log_dir}\""
         f"{pk_flag}"

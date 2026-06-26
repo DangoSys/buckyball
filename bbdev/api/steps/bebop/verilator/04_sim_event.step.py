@@ -4,7 +4,7 @@ bebop verilator event handler
 Runs bebop verilator simulation:
   1. Resolve binary path
   2. Resolve verilog source directory (VSRC_PATH)
-  3. Run the built bebop binary with elf, log and fst directories
+  3. Run the built bebop binary with the new run/verilator CLI
 """
 import os
 import shlex
@@ -121,19 +121,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(fst_dir, exist_ok=True)
 
-    # ── Run bebop verilator ───────────────────────────────────────────────
-    trace_flags = []
-    for flag in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace"):
-        if input_data.get(flag, False):
-            trace_flags.append(f"--{flag}")
-    trace_args = (" " + " ".join(trace_flags)) if trace_flags else ""
+    # ── Run bebop run verilator ──────────────────────────────────────────
+    wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
 
     run_cmd = (
-        f"{shlex.quote(bebop_bin)} verilator "
+        f"{shlex.quote(bebop_bin)} run verilator "
         f"--elf={shlex.quote(binary_path)} "
         f"--log-dir={shlex.quote(log_dir)} "
         f"--fst-dir={shlex.quote(fst_dir)}"
-        f"{trace_args}"
+        f"{wave_arg}"
     )
     ctx.logger.info(f"Running bebop verilator: {run_cmd}")
     run_result = stream_run_logger(

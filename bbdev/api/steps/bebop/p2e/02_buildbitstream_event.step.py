@@ -1,10 +1,10 @@
 """
 bebop p2e buildbitstream event handler
 
-Builds the FPGA bitstream via bebop CLI:
-  1. Resolve verilog source directory (VSRC_PATH) from config
-  2. Build bebop with p2e feature (vvacDir generated under build_dir via OUT_PATH)
-  3. Run bebop p2e --buildbitstream with build_dir (all outputs land in build_dir)
+Builds the P2E VVAC runtime case via bebop CLI:
+  1. Resolve Verilog source directory (VSRC_PATH) from config
+  2. Run bebop build p2e with rtl_dir and out_dir
+  3. Validate runtime artifacts used by bebop run p2e
 """
 import os
 import sys
@@ -22,7 +22,7 @@ from utils.event_common import check_result, get_origin_trace_id
 
 config = {
     "name": "bebop-p2e-buildbitstream",
-    "description": "Build P2E bitstream via bebop CLI",
+    "description": "Build Bebop P2E runtime case",
     "flows": ["bebop"],
     "triggers": [queue("bebop.p2e.buildbitstream")],
     "enqueues": [],
@@ -46,17 +46,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    build_dir = input_data.get("build_dir") or f"{bebop_dir}/build/{config_name}-{timestamp}"
+    build_dir = (
+        input_data.get("build_dir")
+        or input_data.get("build-dir")
+        or input_data.get("output_dir")
+        or input_data.get("output-dir")
+        or f"{bebop_dir}/build/{config_name}-{timestamp}"
+    )
     os.makedirs(build_dir, exist_ok=True)
 
-    # ── Build bebop with p2e feature ──────────────────────────────────────
     build_cmd = (
         f"nix develop --ignore-environment --keep ALL_PROXY -c "
-        f"cargo build --features p2e "
-        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\" "
-        f"--config=\"env.OUT_PATH='{build_dir}'\""
+        f"cargo run --features p2e -- build p2e "
+        f"--rtl-dir=\"{vsrc_dir}\" "
+        f"--out-dir=\"{build_dir}\""
     )
-    ctx.logger.info("Building bebop p2e ...")
+    ctx.logger.info("Building bebop p2e runtime case ...")
     build_result = stream_run_logger(
         cmd=build_cmd,
         logger=ctx.logger,
@@ -64,42 +69,41 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stdout_prefix="bebop p2e build",
         stderr_prefix="bebop p2e build",
     )
-    if build_result.returncode != 0:
-        await check_result(
-            ctx, build_result.returncode, continue_run=False,
-            extra_fields={"task": "buildbitstream", "stage": "build"},
-            trace_id=origin_tid,
-        )
-        return
 
-    # ── Run bebop p2e --buildbitstream ────────────────────────────────────
-    run_cmd = (
-        f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
-        f"cargo run --features p2e "
-        f"-- p2e "
-        f"--buildbitstream "
-        f"--build-dir=\"{build_dir}\""
-    )
-    ctx.logger.info(f"Running bebop p2e buildbitstream: {run_cmd}")
-    run_result = stream_run_logger(
-        cmd=run_cmd,
-        logger=ctx.logger,
-        cwd=bebop_dir,
-        stdout_prefix="bebop p2e build-bitstream",
-        stderr_prefix="bebop p2e build-bitstream",
-    )
+    rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
+    libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
+    if build_result.returncode == 0:
+        missing = [path for path in (rtcfg_path, libvctb_path) if not os.path.exists(path)]
+        if missing:
+            ctx.logger.error(f"P2E runtime artifacts missing: {missing}")
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={
+                    "task": "build",
+                    "config": config_name,
+                    "vsrc_dir": vsrc_dir,
+                    "build_dir": build_dir,
+                    "missing": missing,
+                    "error": "runtime_artifact_not_found",
+                    "timestamp": timestamp,
+                },
+                trace_id=origin_tid,
+            )
+            return
 
-    bitstream_path = os.path.join(build_dir, "fpgaCompDir", "bitstream.bit")
     await check_result(
         ctx,
-        run_result.returncode,
+        build_result.returncode,
         continue_run=False,
         extra_fields={
-            "task": "buildbitstream",
+            "task": "build",
             "config": config_name,
             "vsrc_dir": vsrc_dir,
             "build_dir": build_dir,
-            "bitstream": bitstream_path,
+            "rtcfg": rtcfg_path,
+            "libvCtb": libvctb_path,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

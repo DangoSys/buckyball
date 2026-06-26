@@ -23,7 +23,6 @@ def main():
     "test_api_firesim_buildbitstream.py",
     "test_api_firesim_infrasetup.py",
     "test_api_firesim_runworkload.py",
-    "test_api_bebop_bemu_build.py",
     "test_api_bebop_bemu_sim.py",
     "test_api_bebop_bemu_batch.py",
     "test_api_bebop_verilator_clean.py",

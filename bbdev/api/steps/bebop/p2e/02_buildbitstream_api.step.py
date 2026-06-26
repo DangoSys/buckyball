@@ -4,7 +4,7 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 
 config = {
     "name": "bebop-p2e-buildbitstream-api",
-    "description": "Build P2E bitstream via bebop CLI",
+    "description": "Build Bebop P2E runtime case",
     "flows": ["bebop"],
     "triggers": [api("POST", "/bebop/p2e/buildbitstream")],
     "enqueues": ["bebop.p2e.buildbitstream"],
@@ -22,7 +22,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "config": config_name,
         "vsrc_dir": vsrc_dir,
         "output_dir": body.get("output_dir"),
-        "log_dir": body.get("log_dir"),
     }
     await ctx.enqueue({
         "topic": "bebop.p2e.buildbitstream",

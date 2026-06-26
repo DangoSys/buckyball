@@ -4,7 +4,7 @@ bebop p2e runworkload event handler
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
   1. Resolve image name to .hex file under bb-tests/output/
   2. Validate bitstream .bit file path
-  3. Run bebop p2e --runworkload --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>] --log-dir <log>
+  3. Run bebop run p2e --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>]
 """
 import glob
 import os
@@ -126,17 +126,21 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         log_dir = f"{bebop_dir}/log/p2e-runworkload-{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
 
-    # ── Run bebop p2e --runworkload ───────────────────────────────────────
+    if input_data.get("log_dir") or input_data.get("log-dir"):
+        ctx.logger.warning(
+            "bebop run p2e no longer accepts a separate output/build directory; "
+            "using build_dir as --log-dir so VVAC runtime artifacts can be found"
+        )
+
+    # ── Run bebop run p2e ─────────────────────────────────────────────────
     run_cmd = (
         f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
         f"cargo run --features p2e "
         f"--config=\"env.OUT_PATH='{build_dir}'\" "
-        f"-- p2e "
-        f"--runworkload "
+        f"-- run p2e "
         f"--image=\"{image_path}\" "
         f"--bitstream=\"{bitstream}\" "
-        f"--build-dir=\"{build_dir}\" "
-        f"--log-dir=\"{log_dir}\""
+        f"--log-dir=\"{build_dir}\""
     )
     if multi_fpga:
         run_cmd += " --multi-fpga"
@@ -153,7 +157,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop p2e runworkload",
     )
 
-    uart_log = os.path.join(log_dir, "uart.log")
     await check_result(
         ctx,
         run_result.returncode,
@@ -163,8 +166,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "image": image_path,
             "bitstream": bitstream,
             "build_dir": build_dir,
-            "log_dir": log_dir,
-            "uart_log": uart_log,
+            "log_dir": build_dir,
+            "requested_log_dir": log_dir,
+            "uart_log": os.path.join(build_dir, "uart.log"),
             "timestamp": timestamp,
         },
         trace_id=origin_tid,
