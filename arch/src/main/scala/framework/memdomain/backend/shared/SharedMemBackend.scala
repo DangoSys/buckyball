@@ -21,8 +21,10 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
-    val query_vbank_id    = Input(UInt(8.W))
-    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val query_valid       = Input(Vec(nCores, Bool()))
+    val query_hart_id     = Input(Vec(nCores, UInt(b.core.xLen.W)))
+    val query_vbank_id    = Input(Vec(nCores, UInt(8.W)))
+    val query_group_count = Output(Vec(nCores, UInt(log2Up(b.memDomain.bankNum + 1).W)))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
@@ -69,6 +71,15 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     is_multi: Bool,
     group_id: UInt
   ): Unit = {
+    val duplicate = mappingTable.map(entry =>
+      entry.valid &&
+        (entry.hart_id === hart_id) &&
+        (entry.vbank_id === vbank_id)
+    ).reduce(_ || _)
+    when(duplicate) {
+      assert(false.B, "SharedMemBackend duplicate allocation: hart=%d vbank=%d group=%d\n", hart_id, vbank_id, group_id)
+    }
+
     val entry = mappingTable(pbank_id)
     entry.valid    := true.B
     entry.hart_id  := hart_id
@@ -78,6 +89,13 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   def deleteEntry(hart_id: UInt, vbank_id: UInt): Unit = {
+    val found = mappingTable.map(entry =>
+      entry.valid && entry.vbank_id === vbank_id && entry.hart_id === hart_id
+    ).reduce(_ || _)
+    when(!found) {
+      assert(false.B, "SharedMemBackend release missing allocation: hart=%d vbank=%d\n", hart_id, vbank_id)
+    }
+
     for (i <- 0 until totalBanks) {
       when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
         mappingTable(i).valid := false.B
@@ -86,6 +104,11 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   def getFreePbankId(): UInt = {
+    val hasFree = mappingTable.map(_.valid === false.B).reduce(_ || _)
+    when(!hasFree) {
+      assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
+    }
+
     val freePbankId = mappingTable.indexWhere(_.valid === false.B)
     freePbankId
   }
@@ -133,14 +156,22 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
   when(io.config.fire) {
     when(io.config.bits.alloc) {
+      val pbankId = getFreePbankId()
+      printf(
+        p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +
+          p"group=${io.config.bits.group_id} pbank=${pbankId} is_multi=${io.config.bits.is_multi}\n"
+      )
       addEntry(
         io.config.bits.hart_id,
         io.config.bits.vbank_id,
-        getFreePbankId(),
+        pbankId,
         io.config.bits.is_multi,
         io.config.bits.group_id
       )
     }.otherwise {
+      printf(
+        p"[SharedMemBackend][RELEASE] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)}\n"
+      )
       deleteEntry(io.config.bits.hart_id, io.config.bits.vbank_id)
     }
   }
@@ -148,13 +179,31 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   // Query interface: return group count for a given vbank_id
   // -----------------------------------------------------------------------------
-  val groupCounts = mappingTable.map { entry =>
-    val matches = entry.valid && (entry.vbank_id === io.query_vbank_id)
-    val count   = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
-    Mux(matches, count, 0.U)
-  }
+  for (q <- 0 until nCores) {
+    val groupCounts = mappingTable.map { entry =>
+      val matches = io.query_valid(q) &&
+        entry.valid &&
+        (entry.hart_id === io.query_hart_id(q)) &&
+        (entry.vbank_id === io.query_vbank_id(q))
+      val count = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
+      Mux(matches, count, 0.U)
+    }
 
-  io.query_group_count := groupCounts.reduce((a, b) => Mux(a > b, a, b))
+    io.query_group_count(q) := groupCounts.reduce((a, b) => Mux(a > b, a, b))
+    val queryHit = groupCounts.map(_ =/= 0.U).reduce(_ || _)
+    when(io.query_valid(q)) {
+      printf(
+        p"[SharedMemBackend][QUERY] q=$q hart=${io.query_hart_id(q)} " +
+          p"vbank=0x${Hexadecimal(io.query_vbank_id(q))} group_count=${io.query_group_count(q)} hit=${queryHit}\n"
+      )
+    }
+    when(io.query_valid(q) && !queryHit) {
+      printf(
+        p"[SharedMemBackend][QUERY_MISS] q=$q hart=${io.query_hart_id(q)} " +
+          p"vbank=0x${Hexadecimal(io.query_vbank_id(q))} returned group_count=0\n"
+      )
+    }
+  }
 
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
@@ -200,6 +249,11 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
       emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
+      printf(
+        p"[SharedMemBackend][ACCESS] type=read ch=$i hart=${io.mem_req(i).hart_id} " +
+          p"vbank=0x${Hexadecimal(io.mem_req(i).bank_id)} group=${io.mem_req(i).group_id} " +
+          p"pbank=${tracePbankId} addr=0x${Hexadecimal(io.mem_req(i).read.req.bits.addr)}\n"
+      )
     }
 
     // Memory trace: write request
@@ -212,6 +266,12 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         io.mem_req(i).write.req.bits.data(63, 0),
         io.mem_req(i).write.req.bits.data(127, 64),
         true.B
+      )
+      printf(
+        p"[SharedMemBackend][ACCESS] type=write ch=$i hart=${io.mem_req(i).hart_id} " +
+          p"vbank=0x${Hexadecimal(io.mem_req(i).bank_id)} group=${io.mem_req(i).group_id} " +
+          p"pbank=${tracePbankId} addr=0x${Hexadecimal(io.mem_req(i).write.req.bits.addr)} " +
+          p"data_lo=0x${Hexadecimal(io.mem_req(i).write.req.bits.data(63, 0))}\n"
       )
     }
 

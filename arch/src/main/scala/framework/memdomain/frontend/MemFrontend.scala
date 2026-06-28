@@ -95,10 +95,25 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   // Connect query interfaces
   // Use memLoader's query by default, memStorer will override when active
-  io.query_vbank_id              := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
-  io.query_is_shared             := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_is_shared, memLoader.io.query_is_shared)
+  val loaderSharedQuery = memLoader.io.query_is_shared
+  val storerSharedQuery = memStorer.io.query_is_shared
+  io.query_vbank_id              := Mux(storerSharedQuery, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
+  io.query_is_shared             := loaderSharedQuery || storerSharedQuery
   memLoader.io.query_group_count := io.query_group_count
   memStorer.io.query_group_count := io.query_group_count
+
+  when(loaderSharedQuery || storerSharedQuery) {
+    printf(
+      p"[MemFrontend][QUERY] hart=${io.hartid} " +
+        p"loader_shared=${memLoader.io.query_is_shared} loader_vbank=0x${Hexadecimal(memLoader.io.query_vbank_id)} " +
+        p"storer_shared=${memStorer.io.query_is_shared} " +
+        p"storer_vbank=0x${Hexadecimal(memStorer.io.query_vbank_id)} selected_vbank=0x${Hexadecimal(io.query_vbank_id)} " +
+        p"group_count=${io.query_group_count}\n"
+    )
+  }
+  when(loaderSharedQuery && storerSharedQuery && memLoader.io.query_vbank_id =/= memStorer.io.query_vbank_id) {
+    assert(false.B, "MemFrontend shared query conflict: loader and storer query different vbanks in the same cycle\n")
+  }
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation

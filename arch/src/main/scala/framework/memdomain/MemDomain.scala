@@ -47,6 +47,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 // Shared memory path
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
+    val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
   })
@@ -64,6 +65,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
   // Shared query: backend delegates shared query to external SharedMemBackend
   backend.io.shared_query_group_count := io.shared_query_group_count
+  io.shared_query_valid               := backend.io.shared_query_valid
   io.shared_query_vbank_id            := backend.io.shared_query_vbank_id
 
 //===----------------------------------------------------------------------===//

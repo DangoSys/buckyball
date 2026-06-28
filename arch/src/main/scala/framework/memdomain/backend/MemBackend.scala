@@ -22,6 +22,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val shared_config  = Decoupled(new MemConfigerIO(b))
 
     // Query interface: shared query goes out, private query handled internally.
+    val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
@@ -54,8 +55,13 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Query routing
   privateBackend.io.query_vbank_id := io.query_vbank_id
+  io.shared_query_valid            := io.query_is_shared
   io.shared_query_vbank_id         := io.query_vbank_id
   io.query_group_count             := Mux(io.query_is_shared, io.shared_query_group_count, privateBackend.io.query_group_count)
+  when(io.query_is_shared) {
+    printf(p"[MemBackend][QUERY_ROUTE] shared=1 vbank=0x${Hexadecimal(io.query_vbank_id)} " +
+      p"group_count=${io.shared_query_group_count}\n")
+  }
 
   // Track whether a vbank is currently allocated in shared backend.
   // Ball requests do not carry explicit shared/private info, so they are routed by this table.
@@ -66,6 +72,9 @@ class MemBackend(val b: GlobalConfig) extends Module {
   when(io.config.fire) {
     when(io.config.bits.alloc) {
       when(io.config.bits.is_shared) {
+        when(privateAllocByVbank(cfgVbankIdx)) {
+          printf(p"[MemBackend][ALIAS_WARN] alloc shared vbank=0x${Hexadecimal(cfgVbankIdx)} while private allocation exists\n")
+        }
         sharedAllocByVbank(cfgVbankIdx) := true.B
       }.otherwise {
         privateAllocByVbank(cfgVbankIdx) := true.B
@@ -127,6 +136,15 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val useSharedReq       = useSharedReqRaw && canUseSharedPort.B
     val useSharedReadResp  = Mux(readPending(i), readRouteShared(i), useSharedReq)
     val useSharedWriteResp = Mux(writePending(i), writeRouteShared(i), useSharedReq)
+
+    when(io.mem_req(i).read.req.fire || io.mem_req(i).write.req.fire) {
+      printf(
+        p"[MemBackend][ROUTE] ch=$i hart=${io.mem_req(i).hart_id} vbank=0x${Hexadecimal(io.mem_req(i).bank_id)} " +
+          p"group=${io.mem_req(i).group_id} req_shared=${io.mem_req(i).is_shared} is_ball=${isBallChannel.B} " +
+          p"private_alloc=${hasPrivateAlloc} shared_alloc=${hasSharedAlloc} use_shared=${useSharedReq} " +
+          p"read_fire=${io.mem_req(i).read.req.fire} write_fire=${io.mem_req(i).write.req.fire}\n"
+      )
+    }
 
     when(io.mem_req(i).read.req.fire) {
       readPending(i)     := true.B
