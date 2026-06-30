@@ -67,6 +67,8 @@ static Value buildTileAbsMax(PatternRewriter &rewriter, Location loc, Value mem,
   Value elem = rewriter.create<memref::LoadOp>(
       loc, mem,
       ValueRange{rowLoop.getInductionVar(), colLoop.getInductionVar()});
+  if (elem.getType() != rewriter.getF32Type())
+    elem = rewriter.create<arith::ExtFOp>(loc, rewriter.getF32Type(), elem);
   Value neg = rewriter.create<arith::NegFOp>(loc, elem);
   Value abs = rewriter.create<arith::MaximumFOp>(loc, elem, neg);
   Value cur = rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});

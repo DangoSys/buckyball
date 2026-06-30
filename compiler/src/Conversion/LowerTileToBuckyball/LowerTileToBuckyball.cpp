@@ -84,6 +84,8 @@ static Value buildTileAbsMax(PatternRewriter &rewriter, Location loc, Value mem,
   Value elem = rewriter.create<memref::LoadOp>(
       loc, mem,
       ValueRange{rowLoop.getInductionVar(), colLoop.getInductionVar()});
+  if (elem.getType() != rewriter.getF32Type())
+    elem = rewriter.create<arith::ExtFOp>(loc, rewriter.getF32Type(), elem);
   Value neg = rewriter.create<arith::NegFOp>(loc, elem);
   Value abs = rewriter.create<arith::MaximumFOp>(loc, elem, neg);
   Value cur = rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
@@ -611,22 +613,25 @@ public:
     int64_t OH = outShape[1], OW = outShape[2];
 
     int64_t totalOHOW = OH * OW;
-    int64_t patchCols = KH * KW * C;
     int64_t i8ElemsPerRow = bankWidthBytes;
+    bool needInputPad = (H * W * C) % i8ElemsPerRow != 0;
+    int64_t cPadded = C;
+    while ((H * W * cPadded) % i8ElemsPerRow != 0)
+      ++cPadded;
+    int64_t patchCols = KH * KW * cPadded;
     if (!inType.getElementType().isF32() ||
         !filterType.getElementType().isF32())
       return op.emitError("tile_conv2d im2col lowering currently expects f32");
     if (N <= 0 || H <= 0 || W <= 0 || C <= 0 || KH <= 0 || KW <= 0 || OC <= 0 ||
         OH <= 0 || OW <= 0)
       return op.emitError("tile_conv2d requires positive static shapes");
-    if (patchCols <= 0 || patchCols > (int64_t)bankDepth)
+    if (patchCols <= 0)
+      return op.emitError("tile_conv2d requires positive patch size");
+    if (patchCols > (int64_t)bankDepth)
       return op.emitError("tile_conv2d patch size exceeds bank depth");
-    if (KH > 255 || KW * C > 255 || H > 255 || W * C > 255 || OH > 255 ||
-        OW > 255 || C > 255)
+    if (KH > 255 || KW * cPadded > 255 || H > 255 || W * cPadded > 255 ||
+        OH > 255 || OW > 255 || cPadded > 255)
       return op.emitError("tile_conv2d im2col shape exceeds 8-bit ISA fields");
-    if ((H * W * C) % i8ElemsPerRow != 0)
-      return op.emitError(
-          "tile_conv2d input element count must align to bank width");
     (void)totalOHOW;
 
     // For each batch
@@ -642,11 +647,51 @@ public:
           SmallVector<OpFoldResult>{
               rewriter.getIndexAttr(1), rewriter.getIndexAttr(1),
               rewriter.getIndexAttr(1), rewriter.getIndexAttr(1)});
-      auto collapseIn = rewriter.create<memref::CollapseShapeOp>(
-          loc, inBatch, SmallVector<ReassociationIndices>{{0, 1}, {2, 3}});
+      Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+      Value one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+      Value zeroF32 = rewriter.create<arith::ConstantOp>(
+          loc, rewriter.getF32Type(), rewriter.getF32FloatAttr(0.0));
 
-      Value filterReshaped = rewriter.create<memref::CollapseShapeOp>(
-          loc, filter, SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
+      Value input2d;
+      Value inputPad;
+      if (needInputPad) {
+        auto inputPadType =
+            MemRefType::get({H, W, cPadded}, inType.getElementType());
+        auto inputPadAlloc =
+            rewriter.create<memref::AllocOp>(loc, inputPadType);
+        inputPadAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
+        inputPad = inputPadAlloc.getResult();
+        rewriter.create<linalg::FillOp>(loc, ValueRange{zeroF32},
+                                        ValueRange{inputPad});
+
+        Value hUpper = rewriter.create<arith::ConstantIndexOp>(loc, H);
+        Value wUpper = rewriter.create<arith::ConstantIndexOp>(loc, W);
+        Value cUpper = rewriter.create<arith::ConstantIndexOp>(loc, C);
+        auto hLoop = rewriter.create<scf::ForOp>(loc, zero, hUpper, one);
+        {
+          OpBuilder::InsertionGuard guard(rewriter);
+          rewriter.setInsertionPointToStart(hLoop.getBody());
+          auto wLoop = rewriter.create<scf::ForOp>(loc, zero, wUpper, one);
+          rewriter.setInsertionPointToStart(wLoop.getBody());
+          auto cLoop = rewriter.create<scf::ForOp>(loc, zero, cUpper, one);
+          rewriter.setInsertionPointToStart(cLoop.getBody());
+          Value v = rewriter.create<memref::LoadOp>(
+              loc, inBatch,
+              ValueRange{zero, hLoop.getInductionVar(), wLoop.getInductionVar(),
+                         cLoop.getInductionVar()});
+          rewriter.create<memref::StoreOp>(loc, v, inputPad,
+                                           ValueRange{hLoop.getInductionVar(),
+                                                      wLoop.getInductionVar(),
+                                                      cLoop.getInductionVar()});
+        }
+
+        input2d = rewriter.create<memref::CollapseShapeOp>(
+            loc, inputPad, SmallVector<ReassociationIndices>{{0}, {1, 2}});
+      } else {
+        input2d = rewriter.create<memref::CollapseShapeOp>(
+            loc, inBatch, SmallVector<ReassociationIndices>{{0, 1}, {2, 3}});
+      }
+
       int64_t ocPadded = ceilDiv(OC, kMatmulTile) * kMatmulTile;
       auto filterPadType =
           MemRefType::get({patchCols, ocPadded}, filterType.getElementType());
@@ -654,27 +699,40 @@ public:
           rewriter.create<memref::AllocOp>(loc, filterPadType);
       filterPadAlloc->setAttr("alignment", rewriter.getI64IntegerAttr(16));
       Value filterPad = filterPadAlloc.getResult();
-      Value zeroF32 = rewriter.create<arith::ConstantOp>(
-          loc, rewriter.getF32Type(), rewriter.getF32FloatAttr(0.0));
       rewriter.create<linalg::FillOp>(loc, ValueRange{zeroF32},
                                       ValueRange{filterPad});
 
-      Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-      Value one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-      Value kUpper = rewriter.create<arith::ConstantIndexOp>(loc, patchCols);
+      Value khUpper = rewriter.create<arith::ConstantIndexOp>(loc, KH);
+      Value kwUpper = rewriter.create<arith::ConstantIndexOp>(loc, KW);
+      Value cUpper = rewriter.create<arith::ConstantIndexOp>(loc, C);
       Value ocUpper = rewriter.create<arith::ConstantIndexOp>(loc, OC);
-      auto kLoop = rewriter.create<scf::ForOp>(loc, zero, kUpper, one);
+      Value kwConst = rewriter.create<arith::ConstantIndexOp>(loc, KW);
+      Value cPaddedConst =
+          rewriter.create<arith::ConstantIndexOp>(loc, cPadded);
+      auto khLoop = rewriter.create<scf::ForOp>(loc, zero, khUpper, one);
       {
         OpBuilder::InsertionGuard guard(rewriter);
-        rewriter.setInsertionPointToStart(kLoop.getBody());
+        rewriter.setInsertionPointToStart(khLoop.getBody());
+        auto kwLoop = rewriter.create<scf::ForOp>(loc, zero, kwUpper, one);
+        rewriter.setInsertionPointToStart(kwLoop.getBody());
+        auto cLoop = rewriter.create<scf::ForOp>(loc, zero, cUpper, one);
+        rewriter.setInsertionPointToStart(cLoop.getBody());
         auto ocLoop = rewriter.create<scf::ForOp>(loc, zero, ocUpper, one);
         rewriter.setInsertionPointToStart(ocLoop.getBody());
+        Value khKw = rewriter.create<arith::MulIOp>(
+            loc, khLoop.getInductionVar(), kwConst);
+        Value khKwPlus =
+            rewriter.create<arith::AddIOp>(loc, khKw, kwLoop.getInductionVar());
+        Value rowBase =
+            rewriter.create<arith::MulIOp>(loc, khKwPlus, cPaddedConst);
+        Value row = rewriter.create<arith::AddIOp>(loc, rowBase,
+                                                   cLoop.getInductionVar());
         Value v = rewriter.create<memref::LoadOp>(
-            loc, filterReshaped,
-            ValueRange{kLoop.getInductionVar(), ocLoop.getInductionVar()});
+            loc, filter,
+            ValueRange{khLoop.getInductionVar(), kwLoop.getInductionVar(),
+                       cLoop.getInductionVar(), ocLoop.getInductionVar()});
         rewriter.create<memref::StoreOp>(
-            loc, v, filterPad,
-            ValueRange{kLoop.getInductionVar(), ocLoop.getInductionVar()});
+            loc, v, filterPad, ValueRange{row, ocLoop.getInductionVar()});
       }
 
       Value outBatch = rewriter.create<memref::SubViewOp>(
@@ -694,10 +752,10 @@ public:
       Value inputFp = buckyball::allocBank(rewriter, loc, 1, 4);
       Value inputI8 = buckyball::allocBank(rewriter, loc, 1, 1);
 
-      int64_t inputDepth = H * W * C / i8ElemsPerRow;
+      int64_t inputDepth = H * W * cPadded / i8ElemsPerRow;
       Value inputLoad =
-          buckyball::mvinBank(rewriter, loc, collapseIn, inputFp, inputDepth);
-      Value inputMax = buildTileAbsMax(rewriter, loc, collapseIn, H, W * C);
+          buckyball::mvinBank(rewriter, loc, input2d, inputFp, inputDepth);
+      Value inputMax = buildTileAbsMax(rewriter, loc, input2d, H, W * cPadded);
       Value inputScale = buildQuantScale(rewriter, loc, inputMax);
       Value inputScaleBits = packF32BitsAsI64(rewriter, loc, inputScale);
       Value inputQuant = rewriter.create<buckyball::BankFp2IntOp>(
@@ -747,12 +805,12 @@ public:
             Value patch = rewriter.create<buckyball::BankIm2colOp>(
                 loc, patchI8.getType(), inputQuant, patchI8,
                 buckyball::createI64Const(rewriter, loc, KH),
-                buckyball::createI64Const(rewriter, loc, KW * C),
+                buckyball::createI64Const(rewriter, loc, KW * cPadded),
                 buckyball::createI64Const(rewriter, loc, H),
-                buckyball::createI64Const(rewriter, loc, W * C),
+                buckyball::createI64Const(rewriter, loc, W * cPadded),
                 buckyball::createI64Const(rewriter, loc, oh0),
-                buckyball::createI64Const(rewriter, loc, ow0 * C),
-                buckyball::createI64Const(rewriter, loc, C));
+                buckyball::createI64Const(rewriter, loc, ow0 * cPadded),
+                buckyball::createI64Const(rewriter, loc, cPadded));
 
             Value patchTrans = rewriter.create<buckyball::BankTransposeOp>(
                 loc, patchT.getType(), patch, patchT,
@@ -813,6 +871,8 @@ public:
       }
 
       buckyball::releaseBank(rewriter, loc, inputQuant);
+      if (needInputPad)
+        rewriter.create<memref::DeallocOp>(loc, inputPad);
       rewriter.create<memref::DeallocOp>(loc, filterPad);
     }
 
