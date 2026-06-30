@@ -26,7 +26,7 @@ KERNEL_MODELS = {
     "mobilenet",
     "qwen3",
     "resnet",
-    "stablediffusion",
+    "stable-diffusion",
     "yolo",
 }
 

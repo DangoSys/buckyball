@@ -33,6 +33,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "mobilenet": "buddy-buckyball-mobilenetv3-run",
         "resnet": "buddy-buckyball-resnet-run",
         "yolo": "buddy-buckyball-yolo26-run",
+        "bert": "buddy-buckyball-bert-run",
+        "qwen3": "buddy-buckyball-qwen3-run",
+        "gemma4": "buddy-buckyball-gemma4-run",
+        "deepseekr1": "buddy-buckyball-deepseekr1-run",
+        "llama2": "buddy-buckyball-llama2-run",
+        "stable-diffusion": "buddy-buckyball-stable-diffusion-run",
+        "whisper": "buddy-buckyball-whisper-run",
     }
     target = ""
     if model:
