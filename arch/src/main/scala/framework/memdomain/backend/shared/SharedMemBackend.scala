@@ -74,7 +74,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val duplicate = mappingTable.map(entry =>
       entry.valid &&
         (entry.hart_id === hart_id) &&
-        (entry.vbank_id === vbank_id)
+        (entry.vbank_id === vbank_id) &&
+        (entry.group_id === group_id)
     ).reduce(_ || _)
     when(duplicate) {
       assert(false.B, "SharedMemBackend duplicate allocation: hart=%d vbank=%d group=%d\n", hart_id, vbank_id, group_id)
@@ -191,12 +192,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     io.query_group_count(q) := groupCounts.reduce((a, b) => Mux(a > b, a, b))
     val queryHit = groupCounts.map(_ =/= 0.U).reduce(_ || _)
-    when(io.query_valid(q)) {
-      printf(
-        p"[SharedMemBackend][QUERY] q=$q hart=${io.query_hart_id(q)} " +
-          p"vbank=0x${Hexadecimal(io.query_vbank_id(q))} group_count=${io.query_group_count(q)} hit=${queryHit}\n"
-      )
-    }
     when(io.query_valid(q) && !queryHit) {
       printf(
         p"[SharedMemBackend][QUERY_MISS] q=$q hart=${io.query_hart_id(q)} " +
@@ -249,11 +244,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
       emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
-      printf(
-        p"[SharedMemBackend][ACCESS] type=read ch=$i hart=${io.mem_req(i).hart_id} " +
-          p"vbank=0x${Hexadecimal(io.mem_req(i).bank_id)} group=${io.mem_req(i).group_id} " +
-          p"pbank=${tracePbankId} addr=0x${Hexadecimal(io.mem_req(i).read.req.bits.addr)}\n"
-      )
     }
 
     // Memory trace: write request
@@ -266,12 +256,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         io.mem_req(i).write.req.bits.data(63, 0),
         io.mem_req(i).write.req.bits.data(127, 64),
         true.B
-      )
-      printf(
-        p"[SharedMemBackend][ACCESS] type=write ch=$i hart=${io.mem_req(i).hart_id} " +
-          p"vbank=0x${Hexadecimal(io.mem_req(i).bank_id)} group=${io.mem_req(i).group_id} " +
-          p"pbank=${tracePbankId} addr=0x${Hexadecimal(io.mem_req(i).write.req.bits.addr)} " +
-          p"data_lo=0x${Hexadecimal(io.mem_req(i).write.req.bits.data(63, 0))}\n"
       )
     }
 
