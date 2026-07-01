@@ -44,7 +44,9 @@ function(add_tile_matmul_test name)
       -lower-bank-ssa-to-intrinsics
       -convert-linalg-to-loops
       -expand-strided-metadata
+      -lower-affine
       -convert-scf-to-cf
+      -convert-cf-to-llvm
       -lower-buckyball
       -convert-arith-to-llvm
       -convert-math-to-llvm
@@ -59,7 +61,9 @@ function(add_tile_matmul_test name)
       -lower-bank-ssa-to-intrinsics
       -convert-linalg-to-loops
       -expand-strided-metadata
+      -lower-affine
       -convert-scf-to-cf
+      -convert-cf-to-llvm
       -lower-buckyball
       -convert-arith-to-llvm
       -convert-math-to-llvm
@@ -75,7 +79,9 @@ function(add_tile_matmul_test name)
       -lower-bank-ssa-to-intrinsics
       -convert-linalg-to-loops
       -expand-strided-metadata
+      -lower-affine
       -convert-scf-to-cf
+      -convert-cf-to-llvm
       -lower-buckyball
       -convert-arith-to-llvm
       -convert-math-to-llvm
@@ -83,7 +89,7 @@ function(add_tile_matmul_test name)
       -convert-func-to-llvm
       -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -mattr=+buddyext,+D
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbbpebble,+D
       -float-abi=hard -o ${OBJ}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building ${name}.o from Tile MLIR"

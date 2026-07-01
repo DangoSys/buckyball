@@ -172,7 +172,7 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// Fence — lowers to int_riscv_bb_fence / BB_FENCE when +buddyext-bb.
+// Fence lowers to int_riscv_bb_fence / BB_FENCE when +xbbpebble is enabled.
 //===----------------------------------------------------------------------===//
 
 struct BuckyballFenceLowering : public ConvertOpToLLVMPattern<FenceOp> {
