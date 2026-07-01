@@ -21,6 +21,8 @@ extern VBBSimHarness *top;
 extern const char *log_path;
 // FST file path
 extern const char *fst_path;
+// Enable fst wave
+extern bool enable_wave;
 // UART stdout file path
 extern const char *stdout_path;
 // Raw stdout fd saved before dup2 — UART writes here for real-time display

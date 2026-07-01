@@ -27,26 +27,34 @@ static void coverage_signal_handler(int sig) {
 }
 #endif
 
+static void dump_wave() {
+  if (enable_wave) {
+    tfp->dump(contextp->time());
+  }
+}
+
 void step_and_dump_wave() {
   top->eval();
   contextp->timeInc(1);
-  tfp->dump(contextp->time());
+  dump_wave();
   sim_time++;
 }
 
 void sim_init(int argc, char **argv) {
   contextp = new VerilatedContext;
   contextp->commandArgs(argc, argv);
-  tfp = new VerilatedFstC;
 
   top = new VBBSimHarness{contextp};
 
-  contextp->traceEverOn(true);
-  top->trace(tfp, 0);
+  if (enable_wave) {
+    tfp = new VerilatedFstC;
+    contextp->traceEverOn(true);
+    top->trace(tfp, 0);
 
-  tfp->open(fst_path);
-  if (bdb_sim_meta_path() == nullptr) {
-    Log("The waveform will be saved to the FST file: %s", fst_path);
+    tfp->open(fst_path);
+    if (bdb_sim_meta_path() == nullptr) {
+      Log("The waveform will be saved to the FST file: %s", fst_path);
+    }
   }
 
   top->reset = 1;
@@ -68,10 +76,12 @@ void sim_init(int argc, char **argv) {
 
 void sim_exit() {
   contextp->timeInc(1);
-  tfp->dump(contextp->time());
-  tfp->close();
-  if (bdb_sim_meta_path() == nullptr) {
-    printf("The wave data has been saved to the FST file: %s\n", fst_path);
+  dump_wave();
+  if (enable_wave) {
+    tfp->close();
+    if (bdb_sim_meta_path() == nullptr) {
+      printf("The wave data has been saved to the FST file: %s\n", fst_path);
+    }
   }
   exit(0);
 }
@@ -83,7 +93,7 @@ void ball_exec_once() {
   // SCU DPI-C functions (scu_uart_write, scu_sim_exit) are called automatically
   // from RTL
   contextp->timeInc(1);
-  tfp->dump(contextp->time());
+  dump_wave();
   sim_time++;
 
   // negedge: clock=0, eval
