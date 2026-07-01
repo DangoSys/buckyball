@@ -28,7 +28,8 @@ using OwningRewritePatternList = RewritePatternSet;
 
 void populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
-    int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum);
+    int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
+    bool includeFuncOperandForwarding = true);
 void configureBuckyballLegalizeForExportTarget(LLVMConversionTarget &target);
 
 } // namespace mlir

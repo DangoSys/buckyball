@@ -544,14 +544,18 @@ struct BuckyballSystolicLowering : public ConvertOpToLLVMPattern<SystolicOp> {
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
-    int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum) {
+    int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
+    bool includeFuncOperandForwarding) {
   (void)bankWidthBytes;
   (void)bankDepth;
   (void)bankNum;
 
-  patterns
-      .add<ForwardOperands<func::CallOp>, ForwardOperands<func::CallIndirectOp>,
-           ForwardOperands<func::ReturnOp>>(converter, &converter.getContext());
+  if (includeFuncOperandForwarding) {
+    patterns.add<ForwardOperands<func::CallOp>,
+                 ForwardOperands<func::CallIndirectOp>,
+                 ForwardOperands<func::ReturnOp>>(converter,
+                                                  &converter.getContext());
+  }
   patterns.add<BuckyballFenceLowering>(converter);
   patterns.add<BuckyballMsetLowering>(converter);
   patterns.add<BuckyballMvinLowering>(converter);

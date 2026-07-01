@@ -30,6 +30,7 @@
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -437,18 +438,18 @@ void LowerBuckyballToLLVMPass::runOnOperation() {
   LLVMConversionTarget target(*context);
   configureBuckyballLegalizeForExportTarget(target);
   populateBuckyballLegalizeForLLVMExportPatterns(
-      converter, patterns, bankWidthBytes, bankDepth, bankNum);
-  populateAffineToStdConversionPatterns(patterns);
-  populateSCFToControlFlowConversionPatterns(patterns);
-  mlir::arith::populateArithToLLVMConversionPatterns(converter, patterns);
-  populateFinalizeMemRefToLLVMConversionPatterns(converter, patterns);
-  cf::populateControlFlowToLLVMConversionPatterns(converter, patterns);
-  populateFuncToLLVMConversionPatterns(converter, patterns);
+      converter, patterns, bankWidthBytes, bankDepth, bankNum,
+      /*includeFuncOperandForwarding=*/false);
+  target.addLegalDialect<cf::ControlFlowDialect, func::FuncDialect,
+                         scf::SCFDialect>();
   patterns.add<BBPrintMemRefOpLowering>(&getContext());
   patterns.add<BBPrintScalarOpLowering>(&getContext());
   patterns.add<BBCounterStartOpLowering>(&getContext());
   patterns.add<BBCounterStopOpLowering>(&getContext());
-  if (failed(applyPartialConversion(module, target, std::move(patterns))))
+  ConversionConfig config;
+  config.allowPatternRollback = false;
+  if (failed(
+          applyPartialConversion(module, target, std::move(patterns), config)))
     signalPassFailure();
 }
 
@@ -459,19 +460,14 @@ void LowerBankSSAToIntrinsicsPass::runOnOperation() {
   RewritePatternSet patterns(context);
   LLVMConversionTarget target(*context);
   configureBuckyballLegalizeForExportTarget(target);
+  target.addLegalDialect<func::FuncDialect, scf::SCFDialect>();
   populateBuckyballLegalizeForLLVMExportPatterns(
-      converter, patterns, bankWidthBytes, bankDepth, bankNum);
-  populateAffineToStdConversionPatterns(patterns);
-  populateSCFToControlFlowConversionPatterns(patterns);
-  mlir::arith::populateArithToLLVMConversionPatterns(converter, patterns);
-  populateFinalizeMemRefToLLVMConversionPatterns(converter, patterns);
-  cf::populateControlFlowToLLVMConversionPatterns(converter, patterns);
-  populateFuncToLLVMConversionPatterns(converter, patterns);
-  patterns.add<BBPrintMemRefOpLowering>(&getContext());
-  patterns.add<BBPrintScalarOpLowering>(&getContext());
-  patterns.add<BBCounterStartOpLowering>(&getContext());
-  patterns.add<BBCounterStopOpLowering>(&getContext());
-  if (failed(applyPartialConversion(module, target, std::move(patterns))))
+      converter, patterns, bankWidthBytes, bankDepth, bankNum,
+      /*includeFuncOperandForwarding=*/false);
+  ConversionConfig config;
+  config.allowPatternRollback = false;
+  if (failed(
+          applyPartialConversion(module, target, std::move(patterns), config)))
     signalPassFailure();
 }
 
