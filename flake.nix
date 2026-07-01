@@ -100,6 +100,9 @@
 
           # nix develop
           devShells.default = pkgs.mkShell {
+            # this is needed to build LLVM/libc++, disable the nix injected hardening
+            hardeningDisable = [ "libcxxhardeningfast" ];
+
             buildInputs = with pkgs; [
               clibs.zlib-dev
               clibs.zlib
