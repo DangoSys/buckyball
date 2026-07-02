@@ -14,7 +14,6 @@
 [submodule "bebop"]
 	path = bebop
 	url = https://github.com/DangoSys/bebop
-	branch = main
 [submodule "bb-tests/workloads/lib/kernel"]
 	path = bb-tests/workloads/lib/kernel
 	url = https://github.com/DangoSys/bbkernel.git
