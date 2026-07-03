@@ -145,7 +145,7 @@ if run_step "2"; then
   ninja -C llvm/build #check-clang check-mlir check-openmp
 
   cmake -G Ninja -S . -B build \
-    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/compiler/src \
+    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/examples/chips/toy/compiler \
     -DMLIR_DIR=$PWD/llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/llvm/build/lib/cmake/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \

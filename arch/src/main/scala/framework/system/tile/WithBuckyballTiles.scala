@@ -13,14 +13,14 @@ import framework.system.configloader.TomlConfigLoader
  *
  * {{{
  *   class BuckyballToyConfig extends Config(
- *     new WithBuckyballTiles("src/main/scala/examples/toy/toy.toml") ++
+ *     new WithBuckyballTiles("../examples/chips/toy/arch/src/main/scala/configs/toy.toml") ++
  *       new chipyard.config.WithSystemBusWidth(128) ++
  *       new sims.base.BuckyballBaseConfig
  *   )
  * }}}
  *
  * @param tomlPath      Path to the example's top-level TOML file (typically
- *                      `src/main/scala/examples/<name>/<name>.toml`).
+ *                      `../examples/chips/<name>/arch/src/main/scala/configs/<name>.toml`).
  * @param withBuckyball When false, every Buckyball slot in the topology is
  *                      torn down (Rocket-only tiles). The tile/core counts
  *                      themselves are unchanged.

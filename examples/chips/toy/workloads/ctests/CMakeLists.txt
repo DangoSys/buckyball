@@ -1,0 +1,27 @@
+add_buckyball_ctests(
+  aligned_matmul.c
+  mmio_minimal_test.c
+  scu_uart_rx_echo_test.c
+  test_vsetvli.c
+  tlb_bare_mode_test.c
+  tlb_repeated_sfence_test.c
+  tlb_sfence_flush_test.c
+  tlb_sfence_remap_test.c
+  tlb_sv39_4k_alias_test.c
+  tlb_sv39_identity_test.c
+  tlb_sv39_nonidentity_test.c
+  transpose_matmul.c
+  vecunit_matmul_16xn_ones.c
+  vecunit_matmul_16xn_random1.c
+  vecunit_matmul_16xn_random2.c
+  vecunit_matmul_16xn_random3.c
+  vecunit_matmul_16xn_zero_random.c
+  vecunit_matmul_col_row_vector.c
+  vecunit_matmul_identity_random.c
+  vecunit_matmul_ones.c
+  vecunit_matmul_random1.c
+  vecunit_matmul_random2.c
+  vecunit_matmul_row_col_vector.c
+  vecunit_matmul_zero_random.c
+  vecunit_tiled_matmul.c
+)

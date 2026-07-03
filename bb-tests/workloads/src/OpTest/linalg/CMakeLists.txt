@@ -47,20 +47,20 @@ function(add_linalg_conv2d_test name main_src)
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       "--assign-physical-banks=bank_num=16"
-      -lower-bank-ssa-to-intrinsics
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
       -lower-affine
       -convert-scf-to-cf
       -convert-cf-to-llvm
-      -lower-buckyball
+      ${BUCKYBALL_LOWER_BUCKYBALL}
       -convert-arith-to-llvm
       -convert-math-to-llvm
       -finalize-memref-to-llvm
       -convert-func-to-llvm
       -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbbpebble,+D
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR}
       -float-abi=hard -o ${OBJ}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building ${name}.o from Linalg Conv2D MLIR"
@@ -130,20 +130,20 @@ add_custom_command(
         -convert-tile-to-buckyball
         -lower-buckyball-to-bank-ssa
         "--assign-physical-banks=bank_num=16"
-        -lower-bank-ssa-to-intrinsics
+        ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
         -convert-linalg-to-loops
         -expand-strided-metadata
         -lower-affine
         -convert-scf-to-cf
         -convert-cf-to-llvm
-        -lower-buckyball
+        ${BUCKYBALL_LOWER_BUCKYBALL}
         -convert-arith-to-llvm
         -convert-math-to-llvm
         -finalize-memref-to-llvm
         -convert-func-to-llvm
         -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbbpebble,+D -float-abi=hard
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard
         -o ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir
     COMMENT "Building matmul.o from Linalg MLIR"

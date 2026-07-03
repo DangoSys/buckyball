@@ -36,10 +36,10 @@ REGISTRATION_FILES = {
     "default_json": REPO_ROOT
     / "arch/src/main/scala/framework/balldomain/configs/default.json",
     "bus_register": REPO_ROOT
-    / "arch/src/main/scala/examples/toy/balldomain/bbus/busRegister.scala",
-    "disa": REPO_ROOT / "arch/src/main/scala/examples/toy/balldomain/DISA.scala",
+    / "examples/chips/toy/arch/src/main/scala/balldomain/bbus/busRegister.scala",
+    "disa": REPO_ROOT / "examples/chips/toy/arch/src/main/scala/balldomain/DISA.scala",
     "domain_decoder": REPO_ROOT
-    / "arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala",
+    / "examples/chips/toy/arch/src/main/scala/balldomain/DomainDecoder.scala",
 }
 
 # ---------------------------------------------------------------------------

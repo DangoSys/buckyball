@@ -34,20 +34,20 @@ function(add_tile_matmul_test name)
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       "--assign-physical-banks=bank_num=16"
-      -lower-bank-ssa-to-intrinsics
-      -lower-buckyball
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
+      ${BUCKYBALL_LOWER_BUCKYBALL}
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_4_buckyball_intrinsics.mlir
     COMMAND ${BUDDY_OPT} ${MLIR_SRC}
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       "--assign-physical-banks=bank_num=16"
-      -lower-bank-ssa-to-intrinsics
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
       -lower-affine
       -convert-scf-to-cf
       -convert-cf-to-llvm
-      -lower-buckyball
+      ${BUCKYBALL_LOWER_BUCKYBALL}
       -convert-arith-to-llvm
       -convert-math-to-llvm
       -finalize-memref-to-llvm
@@ -58,13 +58,13 @@ function(add_tile_matmul_test name)
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       "--assign-physical-banks=bank_num=16"
-      -lower-bank-ssa-to-intrinsics
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
       -lower-affine
       -convert-scf-to-cf
       -convert-cf-to-llvm
-      -lower-buckyball
+      ${BUCKYBALL_LOWER_BUCKYBALL}
       -convert-arith-to-llvm
       -convert-math-to-llvm
       -finalize-memref-to-llvm
@@ -76,20 +76,20 @@ function(add_tile_matmul_test name)
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       "--assign-physical-banks=bank_num=16"
-      -lower-bank-ssa-to-intrinsics
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
       -lower-affine
       -convert-scf-to-cf
       -convert-cf-to-llvm
-      -lower-buckyball
+      ${BUCKYBALL_LOWER_BUCKYBALL}
       -convert-arith-to-llvm
       -convert-math-to-llvm
       -finalize-memref-to-llvm
       -convert-func-to-llvm
       -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbbpebble,+D
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR}
       -float-abi=hard -o ${OBJ}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building ${name}.o from Tile MLIR"

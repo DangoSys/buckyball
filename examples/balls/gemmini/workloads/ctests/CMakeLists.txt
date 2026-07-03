@@ -1,0 +1,15 @@
+add_buckyball_ctests(
+  gemmini_os_cisc_atranspose_test.c
+  gemmini_os_cisc_basic_test.c
+  gemmini_os_cisc_btranspose_test.c
+  gemmini_os_cisc_shift_test.c
+  gemmini_os_risc_abtranspose_test.c
+  gemmini_os_risc_atranspose_test.c
+  gemmini_os_risc_basic_test.c
+  gemmini_os_risc_btranspose_test.c
+  gemmini_os_risc_shift_test.c
+  gemmini_ws_cisc_conv_test.c
+  gemmini_ws_risc_basic_test.c
+  gemmini_ws_risc_btranspose_test.c
+  gemmini_ws_risc_shift_test.c
+)

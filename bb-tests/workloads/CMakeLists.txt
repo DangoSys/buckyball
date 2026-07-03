@@ -15,6 +15,20 @@ set(BUDDY_TRANSLATE ${BUDDY_BINARY_DIR}/buddy-translate)
 set(BUDDY_LLC ${BUDDY_BINARY_DIR}/buddy-llc)
 set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
+option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)
+if(BUCKYBALL_STABLE)
+  set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbbmeteor,+D")
+  set(BUCKYBALL_LOWER_BUCKYBALL "--lower-buckyball=stable=true")
+  set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
+      "--lower-bank-ssa-to-intrinsics=stable=true")
+else()
+  set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+D")
+  set(BUCKYBALL_LOWER_BUCKYBALL -lower-buckyball)
+  set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
+      -lower-bank-ssa-to-intrinsics)
+endif()
+message(STATUS "Buckyball RISC-V mattr: ${BUCKYBALL_RISCV_MATTR}")
+
 set(ELF_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc)
 set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 
@@ -54,10 +68,11 @@ add_custom_target(sync-bin
 )
 
 add_dependencies(sync-bin
+  base-ctests-build
   tutorial-build
-  buckyball-CTest-build
+  toy-workloads-build
   OpTest-all
-  buckyball-goban-CTest-build
+  goban-workloads-build
   embench-all
   coremark-all
 )

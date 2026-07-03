@@ -1,0 +1,21 @@
+[package]
+name = "toy-bemu"
+version = "0.1.0"
+edition = "2021"
+build = "../../../../bebop/src/nodes/bemu/build.rs"
+
+[lib]
+path = "../../../../bebop/src/nodes/bemu/src/lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+snafu = "0.8"
+once_cell = "1"
+bebop-elf = { path = "../../../../bebop/src/nodes/lib/elf" }
+bebop-syscall = { path = "../../../../bebop/src/nodes/lib/syscall" }
+bebop-dtb = { path = "../../../../bebop/src/nodes/lib/dtb" }
+bebop-uart = { path = "../../../../bebop/src/nodes/lib/uart" }
+bebop-bank-hash = { path = "../../../../bebop/src/nodes/lib/bank-hash" }
+
+[build-dependencies]
+cc = { version = "1", features = ["parallel"] }

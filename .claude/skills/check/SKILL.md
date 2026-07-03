@@ -20,8 +20,8 @@ Report pass/fail for each item.
 After validation, generate a summary table for all Ball registrations. Data sources:
 
 - `arch/src/main/scala/framework/balldomain/configs/default.json` — `ballId`, `ballName`, `inBW`, `outBW`
-- `arch/src/main/scala/examples/toy/balldomain/DISA.scala` — `funct7` values
-- `arch/src/main/scala/examples/toy/balldomain/DomainDecoder.scala` — BID in decode rows
+- `examples/chips/toy/arch/src/main/scala/balldomain/DISA.scala` — `funct7` values
+- `examples/chips/toy/arch/src/main/scala/balldomain/DomainDecoder.scala` — BID in decode rows
 
 Table format:
 

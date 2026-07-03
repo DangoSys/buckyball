@@ -20,6 +20,6 @@
 
 #include "mlir/IR/Dialect.h"
 
-#include "Dialect/Buckyball/BuckyballDialect.h.inc"
+#include "BuckyballDialect.h.inc"
 
 #endif // BUCKYBALL_BUCKYBALLDIALECT_H
