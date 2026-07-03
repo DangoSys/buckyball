@@ -22,6 +22,12 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "message": "binary parameter is required",
             },
         )
+    config_name = body.get("config")
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
+        return ApiResponse(
+            status=400,
+            body={"error": "Missing required parameter: --config must be specified"},
+        )
 
     await ctx.enqueue({"topic": "verilator.sim", "data": {**body, "task": "sim", "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

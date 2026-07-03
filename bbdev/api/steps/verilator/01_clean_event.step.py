@@ -26,10 +26,19 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
+    config_name = input_data.get("config")
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
+        ctx.logger.error("Missing required parameter: config")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_config"},
+            trace_id=origin_tid,
+        )
+        return
     bbdir = get_buckyball_path()
     build_dir = get_verilator_build_dir(
         bbdir,
-        input_data.get("config"),
+        config_name,
         input_data.get("output_dir"),
     )
     # ==================================================================================

@@ -56,7 +56,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bebop_dir = f"{bbdir}/bebop"
 
     arch_config = input_data.get("config")
-    if not arch_config:
+    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
         ctx.logger.error("Missing required parameter: config must be specified")
         await check_result(
             ctx, 1, continue_run=False,

@@ -13,7 +13,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
 
     config_name = body.get("config")
-    if not config_name:
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
         return ApiResponse(
             status=400,
             body={"error": "Missing required parameter: --config must be specified"}

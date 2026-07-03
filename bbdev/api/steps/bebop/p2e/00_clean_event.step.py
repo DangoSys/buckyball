@@ -23,7 +23,15 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    config_name = input_data.get("config", "sims.p2e.P2EToyConfig")
+    config_name = input_data.get("config")
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
+        ctx.logger.error("Missing required parameter: config")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_config"},
+            trace_id=origin_tid,
+        )
+        return
     build_dir = get_verilator_build_dir(bbdir, config_name, input_data.get("output_dir"))
 
     command = f"rm -rf {build_dir}"

@@ -6,6 +6,7 @@ Runs bebop verilator nextest batch regression:
   2. Run cargo nextest with verilator-specific config (serial execution)
 """
 import os
+import shlex
 import sys
 
 from motia import FlowContext, queue
@@ -35,7 +36,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     elf_root = f"{bbdir}/bb-tests/output"
 
     arch_config = input_data.get("config")
-    if not arch_config:
+    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
         ctx.logger.error("Missing required parameter: config must be specified")
         await check_result(
             ctx, 1, continue_run=False,
@@ -72,15 +73,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # ── Build bebop verilator (tests) ─────────────────────────────────────
+    vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     build_cmd = (
-        f"nix develop -c cargo build --features verilator --tests "
-        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\""
+        f"nix develop -c cargo build --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
+        "--features verilator --tests "
+        f"--config={vsrc_config}"
     )
     ctx.logger.info("Building bebop verilator (tests)...")
     build_result = stream_run_logger(
         cmd=build_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=bbdir,
         stdout_prefix="bebop verilator build",
         stderr_prefix="bebop verilator build",
     )
@@ -102,9 +105,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "VSRC_PATH": vsrc_dir,
     })
     nextest_cmd = (
-        f"nix develop -c cargo nextest run --features verilator --test test_verilator "
-        f"--config-file \"{nextest_config}\" "
-        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\""
+        f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
+        "--features verilator --test test_verilator "
+        f"--config-file {shlex.quote(nextest_config)} "
+        f"--config={vsrc_config}"
     )
 
     ctx.logger.info(f"Running bebop verilator nextest: {nextest_cmd}")
@@ -112,7 +116,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_result = stream_run_logger(
         cmd=nextest_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=bbdir,
         stdout_prefix="bebop verilator batch",
         stderr_prefix="bebop verilator batch",
         env=env,

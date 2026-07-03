@@ -1,5 +1,6 @@
 import os
 import sys
+import shlex
 
 from motia import FlowContext, queue
 
@@ -26,7 +27,27 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     workload_dir = f"{bbdir}/bb-tests"
     build_dir = f"{workload_dir}/build"
+    allowed = {"model", "stable", "_trace_id"}
+    unknown = sorted(k for k in input_data if k not in allowed)
+    if unknown:
+        ctx.logger.error(f"Unknown workload build parameter(s): {', '.join(unknown)}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "unknown_parameter", "parameters": unknown},
+            trace_id=origin_tid,
+        )
+        return
     model = input_data.get("model", "")
+    stable = input_data.get("stable", False)
+
+    if not isinstance(stable, bool):
+        ctx.logger.error("Invalid parameter: stable must be a boolean flag")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_stable", "stable": stable},
+            trace_id=origin_tid,
+        )
+        return
 
     model_targets = {
         "lenet": "buddy-buckyball-lenet-run",
@@ -56,8 +77,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     os.makedirs(build_dir, exist_ok=True)
 
-    ninja_target = f" {target}" if target else ""
-    command = f"cd {bbdir} && nix develop -c bash -c 'cd {build_dir} && cmake -G Ninja .. && ninja -j{os.cpu_count()}{ninja_target}'"
+    stable_arg = "-DBUCKYBALL_STABLE=ON" if stable else "-DBUCKYBALL_STABLE=OFF"
+    ninja_target = f" {shlex.quote(target)}" if target else ""
+    inner = (
+        f"cd {shlex.quote(build_dir)} && "
+        f"cmake -G Ninja {stable_arg} .. && "
+        f"ninja -j{os.cpu_count()}{ninja_target}"
+    )
+    command = f"cd {shlex.quote(bbdir)} && nix develop -c bash -c {shlex.quote(inner)}"
     ctx.logger.info(
         "Executing workload command", {"command": command, "cwd": build_dir}
     )

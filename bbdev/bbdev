@@ -27,11 +27,11 @@ HTTP_PORT_END = 5500
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
 WORKFLOW_COMMANDS = {
     "verilator": {
-        "clean": 'Clean build directory. Args: "[--config <cfg>] [--output-dir <dir>]"',
-        "verilog": 'Generate verilog files. Args: "[--config <cfg>] [--output-dir <dir>] [--balltype <type>]"',
-        "build": 'Build simulation executable. Args: "[--job <num>] [--config <cfg>] [--output-dir <dir>]"',
-        "sim": 'Run simulation. Args: "--binary <path> [--batch] [--config <cfg>] [--output-dir <dir>]"',
-        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>] [--config <cfg>] [--output-dir <dir>]"',
+        "clean": 'Clean build directory. Args: "--config <cfg> [--output-dir <dir>]"',
+        "verilog": 'Generate verilog files. Args: "--config <cfg> [--output-dir <dir>] [--balltype <type>]"',
+        "build": 'Build simulation executable. Args: "--config <cfg> [--jobs <num>] [--output-dir <dir>]"',
+        "sim": 'Run simulation. Args: "--config <cfg> --binary <path> [--batch] [--output-dir <dir>]"',
+        "run": 'Integrated build+sim+run. Args: "--config <cfg> --binary <path> [--batch] [--jobs <num>] [--output-dir <dir>]"',
         "cosim": 'Run cosimulation. Args: "--binary <path> [--batch]"',
     },
     "vcs": {
@@ -42,7 +42,7 @@ WORKFLOW_COMMANDS = {
         "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     },
     "workload": {
-        "build": 'Build workload. Args: "[--model <name>]"',
+        "build": 'Build workload. Args: "[--model <name>] [--stable]"',
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
@@ -55,24 +55,24 @@ WORKFLOW_COMMANDS = {
         "runworkload": "Run workload.",
     },
     "compiler": {
-        "build": "Build compiler.",
+        "build": 'Build compiler. Args: "--chip <chip> [--stable]"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Args: "--binary <path> [--pk] [--log-dir <dir>]"',
-        "batch": 'Run Bebop bemu nextest batch regression (parallel). Args: "--test <elf-tests|pk-tests>"',
+        "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--pk] [--log-dir <dir>]"',
+        "batch": 'Run Bebop bemu nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests>"',
     },
     "bebop-verilator": {
-        "clean": 'Clean Bebop Verilator build directory. Args: "[--config <cfg>] [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop Verilog files. Args: "[--config <cfg>] [--output-dir <dir>]"',
-        "build": 'Build Bebop Verilator simulation executable. Args: "[--jobs <num>] [--config <cfg>] [--output-dir <dir>]"',
-        "sim": 'Run Bebop Verilator simulation. Args: "--binary <path> [--batch] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "clean": 'Clean Bebop Verilator build directory. Args: "--config <cfg> [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop Verilog files. Args: "--config <cfg> [--output-dir <dir>]"',
+        "build": 'Build Bebop Verilator simulation executable. Args: "--config <cfg> [--jobs <num>] [--output-dir <dir>]"',
+        "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--batch] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--config <cfg> --test <elf-tests|pk-tests>"',
     },
     "bebop-p2e": {
-        "clean": 'Clean Bebop P2E build directory. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
-        "buildbitstream": 'Build Bebop P2E runtime case. Args: "[--config sims.p2e.P2EToyConfig] [--output-dir <dir>]"',
+        "clean": 'Clean Bebop P2E build directory. Args: "--config <cfg> [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--config <cfg> [--output-dir <dir>]"',
+        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--config <cfg> [--vsrc-dir <dir>] [--output-dir <dir>]"',
         "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--multi-fpga] [--wave] [--wave-start <cycle>] [--build-dir <dir>]"',
         "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--bitstream <path> --build-dir <dir> --test <elf-tests|pk-tests>"',
     },
@@ -83,6 +83,10 @@ WORKFLOW_COMMANDS = {
         "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
         "verilog": 'Generate verilog for yosys flow. Args: "[--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
         "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>]"',
+    },
+    "uvm": {
+        "build": 'Build a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>]"',
+        "run": 'Build and run a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>] [--test <uvm_test>]"',
     },
 }
 
@@ -132,6 +136,12 @@ def cleanup_config(config_path: str):
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    try:
+        argv = _normalize_workflow_args(argv)
+    except ValueError as e:
+        print(f"bbdev: error: {e}", file=sys.stderr)
+        sys.exit(2)
+
     parser = argparse.ArgumentParser(
         prog="bbdev",
         description="Development tool for buckyball project",
@@ -174,6 +184,55 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _normalize_workflow_args(argv: list[str]) -> list[str]:
+    """Attach operation sub-arguments to the operation flag before argparse sees them."""
+    if not argv:
+        return argv
+
+    command = argv[0]
+    if command not in WORKFLOW_COMMANDS:
+        return argv
+
+    operations = WORKFLOW_COMMANDS[command]
+    out = [command]
+    i = 1
+    while i < len(argv):
+        token = argv[i]
+        if token.startswith("--") and "=" in token:
+            op_name, _value = token[2:].split("=", 1)
+            if op_name in operations and operations[op_name] is not True:
+                raise ValueError(
+                    f"--{op_name} sub-arguments must be passed as a separate quoted string"
+                )
+        if token.startswith("--") and "=" not in token:
+            op_name = token[2:]
+            if op_name in operations and operations[op_name] is not True:
+                values = []
+                j = i + 1
+                while j < len(argv):
+                    next_token = argv[j]
+                    next_key = next_token[2:].split("=", 1)[0] if next_token.startswith("--") else ""
+                    if next_key in operations:
+                        break
+                    values.append(next_token)
+                    j += 1
+                if values:
+                    if len(values) > 1 and values[0].startswith("--"):
+                        raise ValueError(
+                            f"{token} sub-arguments must be quoted as one string"
+                        )
+                    value = values[0] if len(values) == 1 else shlex.join(values)
+                    out.append(f"{token}={value}")
+                else:
+                    out.append(token)
+                i = j
+                continue
+        out.append(token)
+        i += 1
+
+    return out
+
+
 def extract_command_info(args: argparse.Namespace) -> dict:
     """Extract command, operation, and parsed sub-arguments from argparse Namespace."""
     result = {"command": args.command, "operation": None, "args": {}}
@@ -188,7 +247,11 @@ def extract_command_info(args: argparse.Namespace) -> dict:
         if attr_value is True or attr_value == "":
             result["args"] = {}
         else:
-            result["args"] = _parse_sub_args(attr_value)
+            try:
+                result["args"] = _parse_sub_args(attr_value)
+            except ValueError as e:
+                print(f"bbdev: error: {e}", file=sys.stderr)
+                sys.exit(2)
         break
 
     return result
@@ -200,20 +263,28 @@ def _parse_sub_args(arg_string: str) -> dict:
     try:
         tokens = shlex.split(arg_string)
     except ValueError as e:
-        print(f"Error parsing arguments: {e}")
-        return args_dict
+        raise ValueError(f"failed to parse sub-arguments: {e}") from e
 
     i = 0
     while i < len(tokens):
         token = tokens[i]
         if token.startswith("--"):
-            key = token[2:]
-            if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
-                args_dict[key] = tokens[i + 1]
-                i += 2
-            else:
-                args_dict[key] = True
+            if "=" in token:
+                key, value = token[2:].split("=", 1)
+                if not key or value == "":
+                    raise ValueError(f"Invalid argument: {token}")
+                args_dict[key] = value
                 i += 1
+            else:
+                key = token[2:]
+                if not key:
+                    raise ValueError(f"Invalid argument: {token}")
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                    args_dict[key] = tokens[i + 1]
+                    i += 2
+                else:
+                    args_dict[key] = True
+                    i += 1
         elif token.startswith("-") and len(token) == 2:
             key = token[1:]
             if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
@@ -223,7 +294,7 @@ def _parse_sub_args(arg_string: str) -> dict:
                 args_dict[key] = True
                 i += 1
         else:
-            i += 1
+            raise ValueError(f"Unexpected argument: {token}")
     return args_dict
 
 

@@ -19,7 +19,7 @@ Hardware simulation workflow based on Verilator in the Buckyball framework, prov
 **Example**:
 ```bash
 # bbdev wrapper
-bbdev verilator --run "jobs 256 --binary ${buckyball}/bb-tests/workloads/build/src/CTest/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
+bbdev verilator --run "jobs 256 --binary ${buckyball}/bb-tests/output/workloads/src/ctest_mvin_mvout_alternate_test_singlecore-baremetal --batch"
 
 # Raw command
 curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"jobs": 8, "binary": "/home/user/test.elf"}'

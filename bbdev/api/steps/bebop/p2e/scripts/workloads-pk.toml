@@ -5,11 +5,10 @@
 # Each entry under tests is the file STEM (without extension).
 
 [workloads]
-search_path = "workloads/src/CTest/toy"
+search_path = "workloads/src"
 tests = [
     "ctest_bdb_counter_test-linux",
     "ctest_bfp_test-linux",
-    "ctest_dequant_test-linux",
     "ctest_gemmini_os_cisc_basic_test-linux",
     "ctest_gemmini_os_cisc_atranspose_test-linux",
     "ctest_gemmini_os_cisc_btranspose_test-linux",

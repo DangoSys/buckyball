@@ -10,12 +10,16 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 **Function**: Build workload
 
 **Parameters**:
-- **`workload`** - Specify workload name to build
+- **`model`** - Optional model name to build. If omitted, build all workloads.
+- **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
 
 **Examples**:
 ```bash
-# Build specific workload
-bbdev workload --build "--workload test_program"
+# Build one model with the default xbuckyball path
+bbdev workload --build "--model lenet"
+
+# Build one model with stable LLVM Buckyball extensions
+bbdev workload --build "--model lenet --stable"
 
 # Build all workloads
 bbdev workload --build
@@ -35,5 +39,6 @@ bbdev workload --build
 
 ## Notes
 
-- Workload source code located in `bb-tests/workload` directory
-- Build results typically output to `bb-tests/workloads/build` directory
+- Workload build entry is `bb-tests`
+- Workload source code is distributed under `bb-tests/workloads/src` and `examples/*/*/workloads`
+- Workload binaries are emitted under `bb-tests/output/workloads/src`

@@ -39,7 +39,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bebop_dir = f"{bbdir}/bebop"
     arch_dir = f"{bbdir}/arch"
 
-    arch_config = input_data.get("config", "sims.verilator.BuckyballToyVerilatorConfig")
+    arch_config = input_data.get("config")
+    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
+        ctx.logger.error("Missing required parameter: config")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_config"},
+            trace_id=origin_tid,
+        )
+        return
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     if not os.path.isdir(vsrc_dir):

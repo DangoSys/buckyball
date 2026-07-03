@@ -22,6 +22,7 @@ from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
+from utils.bemu import bemu_feature
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -67,6 +68,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bebop_dir = f"{bbdir}/bebop"
     arch_dir = f"{bbdir}/arch"
 
+    chip = input_data.get("chip")
+    if not chip:
+        ctx.logger.error("Missing required parameter: chip must be specified")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
+    try:
+        feature = bemu_feature(chip)
+    except ValueError as e:
+        ctx.logger.error(str(e))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_chip", "chip": chip},
+            trace_id=origin_tid,
+        )
+        return
+
     binary_name = input_data.get("binary", "")
     binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
     if binary_path is None:
@@ -88,18 +109,30 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(log_dir, exist_ok=True)
 
     # ── Run bebop bemu ────────────────────────────────────────────────────
-    pk_flag = " --pk" if input_data.get("pk") else ""
-    run_cmd = (
-        f"cargo run --manifest-path \"{bebop_dir}/Cargo.toml\" --features bemu -- bemu "
-        f"--elf=\"{binary_path}\" "
-        f"--log-dir=\"{log_dir}\""
-        f"{pk_flag}"
-    )
+    cargo_args = [
+        "cargo",
+        "run",
+        "--manifest-path",
+        f"{bebop_dir}/Cargo.toml",
+        "--features",
+        feature,
+        "--",
+        "run",
+        "bemu",
+        "--elf",
+        binary_path,
+        "--log-dir",
+        log_dir,
+    ]
+    if input_data.get("pk"):
+        cargo_args.append("--pk")
+    inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
+    run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
     run_result = stream_run_logger(
         cmd=run_cmd,
         logger=ctx.logger,
-        cwd=binary_dir,
+        cwd=bbdir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
     )
@@ -111,6 +144,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "task": "bemu",
                 "binary": binary_path,
+                "chip": chip,
                 "log_dir": log_dir,
                 "timestamp": timestamp,
             },
@@ -157,6 +191,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         extra_fields={
             "task": "bemu",
             "binary": binary_path,
+            "chip": chip,
             "log_dir": log_dir,
             "timestamp": timestamp,
             "perfetto_target": perfetto_target,

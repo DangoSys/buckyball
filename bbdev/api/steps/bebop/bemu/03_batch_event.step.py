@@ -6,6 +6,7 @@ Runs bebop bemu nextest batch regression:
   2. Run cargo nextest with bemu-specific config
 """
 import os
+import shlex
 import sys
 
 from motia import FlowContext, queue
@@ -17,6 +18,7 @@ if utils_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
+from utils.bemu import bemu_feature
 
 config = {
     "name": "bebop-bemu-batch",
@@ -33,6 +35,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bebop_dir = f"{bbdir}/bebop"
     nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
     elf_root = f"{bbdir}/bb-tests/output"
+
+    chip = input_data.get("chip")
+    if not chip:
+        ctx.logger.error("Missing required parameter: chip must be specified")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
+    try:
+        feature = bemu_feature(chip)
+    except ValueError as e:
+        ctx.logger.error(str(e))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_chip", "chip": chip},
+            trace_id=origin_tid,
+        )
+        return
 
     # ── Determine workload file based on test type ────────────────────────
     test_type = input_data.get("test", "elf-tests")
@@ -52,12 +74,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
 
     # ── Build bebop bemu ──────────────────────────────────────────────────
-    build_cmd = "nix develop -c cargo build --features bemu --tests"
+    build_cmd = (
+        f"nix develop -c cargo build --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
+        f"--features {feature} --tests"
+    )
     ctx.logger.info("Building bebop bemu (tests)...")
     build_result = stream_run_logger(
         cmd=build_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=bbdir,
         stdout_prefix="bebop bemu build",
         stderr_prefix="bebop bemu build",
     )
@@ -78,8 +103,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "BEBOP_BB_TESTS_ROOT": elf_root,
     })
     nextest_cmd = (
-        f"nix develop -c cargo nextest run --features bemu --test test_bemu "
-        f"--config-file \"{nextest_config}\""
+        f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
+        f"--features {feature} --test test_bemu "
+        f"--config-file {shlex.quote(nextest_config)}"
     )
 
     ctx.logger.info(f"Running bebop bemu nextest: {nextest_cmd}")
@@ -87,7 +113,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_result = stream_run_logger(
         cmd=nextest_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=bbdir,
         stdout_prefix="bebop bemu batch",
         stderr_prefix="bebop bemu batch",
         env=env,
@@ -100,6 +126,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         extra_fields={
             "task": "batch",
             "backend": "bemu",
+            "chip": chip,
             "test_type": test_type,
             "nextest_config": nextest_config,
             "workload_toml": workload_toml,

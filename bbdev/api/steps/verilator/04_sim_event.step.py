@@ -30,7 +30,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     origin_tid = get_origin_trace_id(input_data, ctx)
     config_name = input_data.get("config")
-    if not config_name or config_name == "None":
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
         raise ValueError("Missing required input: config")
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"

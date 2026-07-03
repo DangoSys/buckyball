@@ -15,7 +15,12 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = request.body or {}
 
-    config_name = body.get("config", "sims.p2e.P2EToyConfig")
+    config_name = body.get("config")
+    if not isinstance(config_name, str) or not config_name or config_name == "None":
+        return ApiResponse(
+            status=400,
+            body={"error": "Missing required parameter: --config must be specified"},
+        )
     vsrc_dir = get_verilator_build_dir(bbdir, config_name, body.get("vsrc_dir"))
 
     data = {
