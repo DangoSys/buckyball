@@ -10,13 +10,15 @@ config = {
 
 
 def check_args(body: dict) -> str | None:
-    allowed = {"ball", "filelist"}
+    allowed = {"ball", "config", "filelist"}
     for key in body:
         if key not in allowed:
             return f"Unexpected parameter: --{key}"
-    ball = body.get("ball")
-    if not ball or ball is True:
-        return "Missing required parameter: --ball=<name>"
+    config = body.get("config")
+    if not config or config is True:
+        return "Missing required parameter: --config=<name>"
+    if body.get("ball") is True:
+        return "Parameter --ball requires a value"
     if body.get("filelist") is True:
         return "Parameter --filelist requires a path value"
     return None

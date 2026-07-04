@@ -12,7 +12,7 @@ if step_dir not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
-from uvm_common import run_uvm_build
+from scripts.uvm_common import run_uvm_build
 
 config = {
     "name": "uvm-build",
