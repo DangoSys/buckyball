@@ -192,6 +192,7 @@ if run_step "6"; then
   cd ${BBDIR}/bebop
   nix build
   nix develop -c echo "bebop built successfully"
+  # nix develop -c cargo build --release --features bemu --package bebop
 fi
 
 if run_step "7"; then
