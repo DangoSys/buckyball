@@ -16,7 +16,9 @@ usage() {
   echo "   3. RTL pre-compile sources"
   echo "   4. bb-tests pre-compile sources"
   echo "   5. waveform-mcp build"
-  echo "   6. pre-commit hooks installation"
+  echo "   6. bebop build"
+  echo "   7. verify build"
+  echo "   8. pre-commit hooks installation"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -83,6 +85,7 @@ git submodule update --init --progress \
   bebop \
   compiler/thirdparty/buddy-mlir \
   docs \
+  verify \
   thirdparty/waveform-mcp
 
 # I dont know why below is need for chipyard submodules, but it is
@@ -196,7 +199,13 @@ if run_step "6"; then
 fi
 
 if run_step "7"; then
-  begin_step "7" "pre-commit hooks installation"
+  begin_step "7" "verify build"
+  cd ${BBDIR}/verify
+  nix develop -c echo "verify built successfully"
+fi
+
+if run_step "8"; then
+  begin_step "8" "pre-commit hooks installation"
   cd ${BBDIR}
   pre-commit install
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)

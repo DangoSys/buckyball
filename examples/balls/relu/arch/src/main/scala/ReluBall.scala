@@ -25,6 +25,7 @@ class ReluBall(val b: GlobalConfig) extends Module with HasBlink {
   val io = IO(new BlinkIO(b, inBW, outBW))
 
   def blink: BlinkIO = io
+  dontTouch(io)
 
   val reluUnit: Instance[PipelinedRelu] = Instantiate(new PipelinedRelu(b))
 

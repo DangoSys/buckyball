@@ -24,6 +24,7 @@ class VecBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
 
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
+  dontTouch(io)
 
   val vecUnit: Instance[VecUnit] = Instantiate(new VecUnit(b))
 

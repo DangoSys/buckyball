@@ -81,7 +81,7 @@ module tb_top;
   end
 
   initial begin
-    uvm_config_db#(virtual fp2int_if)::set(null, "uvm_test_top", "vif", intf);
+    uvm_config_db#(virtual fp2int_if)::set(null, "*", "vif", intf);
     run_test("fp2int_ball_test");
   end
 endmodule

@@ -19,6 +19,7 @@ class Int2FpBall(val b: GlobalConfig) extends Module with HasBlink {
   val io = IO(new BlinkIO(b, inBW, outBW))
 
   def blink: BlinkIO = io
+  dontTouch(io)
 
   val int2fpUnit: Instance[Int2Fp] = Instantiate(new Int2Fp(b))
 

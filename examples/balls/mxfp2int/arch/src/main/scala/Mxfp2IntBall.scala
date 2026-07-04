@@ -27,6 +27,7 @@ class Mxfp2IntBall(val b: GlobalConfig) extends Module with HasBlink {
   val io = IO(new BlinkIO(b, inBW, outBW))
 
   def blink: BlinkIO = io
+  dontTouch(io)
 
   val mxfp2intUnit: Instance[PipelinedMxfp2Int] = Instantiate(new PipelinedMxfp2Int(b))
 

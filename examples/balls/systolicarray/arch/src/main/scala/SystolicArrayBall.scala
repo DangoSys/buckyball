@@ -20,6 +20,7 @@ class SystolicArrayBall(val b: GlobalConfig) extends Module with HasBlink with H
 
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
+  dontTouch(io)
 
   val systolicArrayUnit: Instance[SystolicArrayUnit] = Instantiate(new SystolicArrayUnit(b))
 

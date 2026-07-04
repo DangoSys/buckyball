@@ -21,6 +21,7 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
 
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
+  dontTouch(io)
 
   // =========================================================================
   // Sub-modules

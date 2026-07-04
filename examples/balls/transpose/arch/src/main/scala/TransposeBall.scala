@@ -20,6 +20,7 @@ class TransposeBall(val b: GlobalConfig) extends Module with HasBlink {
   val io = IO(new BlinkIO(b, inBW, outBW))
 
   def blink: BlinkIO = io
+  dontTouch(io)
 
   val transposeUnit: Instance[Transpose] = Instantiate(new Transpose(b))
 
