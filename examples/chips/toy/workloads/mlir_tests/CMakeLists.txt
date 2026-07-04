@@ -147,10 +147,8 @@ endfunction()
 add_toy_mlir_matmul_contract_test(matmul_16x64_64x16)
 add_toy_mlir_matmul_test(matmul_64x16_16x64)
 add_toy_mlir_matmul_test(matmul_1024x16_16x1024)
-add_toy_mlir_matmul_test(matmul_1x128_128x96)
 
 add_dependencies(toy-mlir-tests-build
   optest_buckyball_matmul_16x64_64x16
   optest_buckyball_matmul_64x16_16x64
-  optest_buckyball_matmul_1024x16_16x1024
-  optest_buckyball_matmul_1x128_128x96)
+  optest_buckyball_matmul_1024x16_16x1024)

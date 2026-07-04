@@ -1,7 +1,7 @@
-// CHECK: buckyball.mset
-// CHECK: buckyball.mvin
-// CHECK: buckyball.mvout
-// CHECK: buckyball.mset
+// CHECK: buckyball.intr.mset
+// CHECK: buckyball.intr.mvin
+// CHECK: buckyball.intr.mvout
+// CHECK: buckyball.intr.mset
 // CHECK-NOT: buckyball.bank_alloc
 // CHECK-NOT: buckyball.bank_mvin
 // CHECK-NOT: buckyball.bank_mvout

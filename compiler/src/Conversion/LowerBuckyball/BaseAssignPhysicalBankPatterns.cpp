@@ -48,10 +48,9 @@ public:
   LogicalResult matchAndRewrite(BankReleaseOp op,
                                 PatternRewriter &rewriter) const override {
     auto bank = state.getConstI64(op.getBank());
-    if (!bank) {
-      op.emitError("release expects constant bank id after assignment");
-      return failure();
-    }
+    if (!bank)
+      return rewriter.notifyMatchFailure(op,
+                                         "release bank id is not constant yet");
     if (failed(state.release(op, *bank)))
       return failure();
     state.createMset(rewriter, op.getLoc(), static_cast<uint64_t>(*bank), false,
