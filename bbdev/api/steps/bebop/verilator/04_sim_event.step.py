@@ -17,12 +17,15 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
-from utils.bebop_verilator import build_marker_path, read_build_marker
+from build_marker import build_marker_path, read_build_marker
 
 config = {
     "name": "bebop-verilator-sim",

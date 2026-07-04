@@ -1,7 +1,15 @@
+import os
+import sys
+
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
 from utils.path import get_buckyball_path
-from utils.yosys_log import make_yosys_log_dir, req_arg
+
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
+
+from yosys_log import make_yosys_log_dir, req_arg
 
 config = {
     "name": "yosys-synth-api",

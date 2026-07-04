@@ -6,9 +6,12 @@ from motia import ApiRequest, ApiResponse, FlowContext, api
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
-from utils.bemu import validate_bemu_chip
 from utils.path import get_buckyball_path
+from bemu_common import validate_bemu_chip
 
 config = {
     "name": "bebop-bemu-sim-api",

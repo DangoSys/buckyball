@@ -14,11 +14,14 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
-from utils.bemu import bemu_feature
+from bemu_common import bemu_env
 
 config = {
     "name": "bebop-bemu-batch",
@@ -46,7 +49,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
-        feature = bemu_feature(chip)
+        env = os.environ.copy()
+        env.update(bemu_env(chip, bbdir))
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -76,7 +80,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Build bebop bemu ──────────────────────────────────────────────────
     build_cmd = (
         f"nix develop -c cargo build --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        f"--features {feature} --tests"
+        "--features bemu --tests"
     )
     ctx.logger.info("Building bebop bemu (tests)...")
     build_result = stream_run_logger(
@@ -85,6 +89,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="bebop bemu build",
         stderr_prefix="bebop bemu build",
+        env=env,
     )
 
     if build_result.returncode != 0:
@@ -97,14 +102,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── Run nextest ───────────────────────────────────────────────────────
     # Pass parameters via environment variables (nextest doesn't support custom CLI args after `--`)
-    env = os.environ.copy()
     env.update({
         "BEBOP_WORKLOAD_TOML": workload_toml,
         "BEBOP_BB_TESTS_ROOT": elf_root,
     })
     nextest_cmd = (
         f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        f"--features {feature} --test test_bemu "
+        "--features bemu --test test_bemu "
         f"--config-file {shlex.quote(nextest_config)}"
     )
 

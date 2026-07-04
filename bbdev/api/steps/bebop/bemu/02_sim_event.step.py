@@ -17,12 +17,15 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
-from utils.bemu import bemu_feature
+from bemu_common import bemu_env
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -78,7 +81,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
-        feature = bemu_feature(chip)
+        env = os.environ.copy()
+        env.update(bemu_env(chip, bbdir))
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -115,7 +119,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--manifest-path",
         f"{bebop_dir}/Cargo.toml",
         "--features",
-        feature,
+        "bemu",
         "--",
         "run",
         "bemu",
@@ -135,6 +139,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
+        env=env,
     )
     if run_result.returncode != 0:
         await check_result(
