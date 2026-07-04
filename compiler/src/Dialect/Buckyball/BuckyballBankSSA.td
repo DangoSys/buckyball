@@ -65,45 +65,4 @@ def BankMvoutOp : Buckyball_Op<"bank_mvout"> {
       "$output $bank $depth $stride attr-dict `:` type($output) type($bank) type($depth) type($stride)";
 }
 
-def BankMulWarp16Op : Buckyball_Op<"bank_mul_warp16"> {
-  let summary = "Warp-16 matmul using virtual bank handles";
-  let arguments = (ins I64:$op1Bank, I64:$op2Bank, I64:$wrBank, I64:$iter, I64:$mode);
-  let results = (outs I64:$wrBankOut);
-  let assemblyFormat =
-      "$op1Bank $op2Bank $wrBank $iter $mode attr-dict `:` type($op1Bank) type($op2Bank) type($wrBank) type($iter) type($mode)";
-}
-
-def BankTransposeOp : Buckyball_Op<"bank_transpose"> {
-  let summary = "Transpose using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$mode);
-  let results = (outs I64:$outBankOut);
-  let assemblyFormat = "$inBank $outBank $iter $mode attr-dict `:` type($inBank) type($outBank) type($iter) type($mode)";
-}
-
-def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
-  let summary = "Im2col using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$krow, I64:$kcol,
-                       I64:$inrow, I64:$incol, I64:$startrow, I64:$startcol,
-                       I64:$colStep);
-  let results = (outs I64:$outBankOut);
-  let assemblyFormat =
-      "$inBank $outBank $krow $kcol $inrow $incol $startrow $startcol $colStep attr-dict `:` type($inBank) type($outBank) type($krow) type($kcol) type($inrow) type($incol) type($startrow) type($startcol) type($colStep)";
-}
-
-def BankFp2IntOp : Buckyball_Op<"bank_fp2int"> {
-  let summary = "Quantization using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
-  let results = (outs I64:$outBankOut);
-  let assemblyFormat =
-      "$inBank $outBank $iter $scale attr-dict `:` type($inBank) type($outBank) type($iter) type($scale)";
-}
-
-def BankInt2FpOp : Buckyball_Op<"bank_int2fp"> {
-  let summary = "Dequantization using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
-  let results = (outs I64:$outBankOut);
-  let assemblyFormat =
-      "$inBank $outBank $iter $scale attr-dict `:` type($inBank) type($outBank) type($iter) type($scale)";
-}
-
 #endif // BUCKYBALL_BANK_SSA

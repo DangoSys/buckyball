@@ -37,3 +37,6 @@
 [submodule "docs"]
 	path = docs
 	url = https://github.com/DangoSys/document.git
+[submodule "verify"]
+	path = verify
+	url = https://github.com/DangoSys/verify

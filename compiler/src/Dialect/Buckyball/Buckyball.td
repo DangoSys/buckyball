@@ -1,4 +1,4 @@
-//===-- Buckyball.td - Buckyball dialect operations -------*- tablegen -*-===//
+//===-- Buckyball.td - Buckyball base dialect operations -*- tablegen -*-===//
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,36 +13,14 @@
 // limitations under the License.
 //
 //===----------------------------------------------------------------------===//
-//
-// This is the main file for the Buckyball dialect.
-// It includes all Ball-specific operation definitions.
-//
-//===----------------------------------------------------------------------===//
 
-#ifndef BUCKYBALL_OPS
-#define BUCKYBALL_OPS
+#ifndef BUCKYBALL_BASE_OPS
+#define BUCKYBALL_BASE_OPS
 
-// Base definitions and common operations
 include "BuckyballBase.td"
-
-// Ball-specific operations
-include "VecBall.td"
-include "ReluBall.td"
-include "TransposeBall.td"
-include "Im2colBall.td"
-include "SystolicArrayBall.td"
-include "Fp2IntBall.td"
-include "Int2FpBall.td"
-
-// Additional operations (MatMul, Print, Counter)
-include "BuckyballOps.td"
-
-// Bank SSA operations
 include "BuckyballBankSSA.td"
-
-// LLVM intrinsic wrapper operations
 include "BuckyballIntrinsics.td"
+include "BuckyballCarrier.td"
+include "BuckyballDebug.td"
 
-// Note: GemminiBall operations are not included yet
-
-#endif // BUCKYBALL_OPS
+#endif // BUCKYBALL_BASE_OPS

@@ -13,7 +13,7 @@ A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6
   - `memdomain/backend/banks/` — `SramReadIO` / `SramWriteIO`
   - `core/bbtile/` — BBTile integration (Rocket core + Buckyball)
   - `top/` — `GlobalConfig` (top-level parameter aggregation)
-- `arch/src/main/scala/examples/toy/balldomain/` — toy config
+- `examples/chips/toy/arch/src/main/scala/balldomain/` — toy config
   - `DISA.scala` — instruction opcodes (`funct7` BitPat)
   - `DomainDecoder.scala` — instruction decode table (`ListLookup`)
   - `bbus/busRegister.scala` — Ball generator registration (`match case`)
