@@ -28,6 +28,34 @@ if(NOT IS_DIRECTORY
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
 
+set(BUCKYBALL_EXPECTED_COMPILER_DIR
+  "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/compiler")
+set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
+if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
+  message(FATAL_ERROR
+    "Buddy MLIR CMakeCache.txt does not exist: ${BUCKYBALL_COMPILER_CACHE}")
+endif()
+file(STRINGS "${BUCKYBALL_COMPILER_CACHE}" BUCKYBALL_COMPILER_CACHE_LINES
+  REGEX "^BUDDY_EXTERNAL_DIALECTS_DIR:PATH=")
+list(LENGTH BUCKYBALL_COMPILER_CACHE_LINES BUCKYBALL_COMPILER_CACHE_COUNT)
+if(NOT BUCKYBALL_COMPILER_CACHE_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "BUDDY_EXTERNAL_DIALECTS_DIR is missing or ambiguous in ${BUCKYBALL_COMPILER_CACHE}")
+endif()
+list(GET BUCKYBALL_COMPILER_CACHE_LINES 0 BUCKYBALL_COMPILER_CACHE_LINE)
+string(REGEX REPLACE "^BUDDY_EXTERNAL_DIALECTS_DIR:PATH=" ""
+  BUCKYBALL_COMPILER_DIR "${BUCKYBALL_COMPILER_CACHE_LINE}")
+get_filename_component(BUCKYBALL_EXPECTED_COMPILER_DIR
+  "${BUCKYBALL_EXPECTED_COMPILER_DIR}" ABSOLUTE)
+get_filename_component(BUCKYBALL_COMPILER_DIR
+  "${BUCKYBALL_COMPILER_DIR}" ABSOLUTE)
+if(NOT BUCKYBALL_COMPILER_DIR STREQUAL BUCKYBALL_EXPECTED_COMPILER_DIR)
+  message(FATAL_ERROR
+    "Compiler chip mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "but BUDDY_EXTERNAL_DIALECTS_DIR is ${BUCKYBALL_COMPILER_DIR}. "
+    "Run `bbdev compiler --build '--chip ${BUCKYBALL_WORKLOAD_CHIP}'` first.")
+endif()
+
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)
 if(BUCKYBALL_STABLE)
   set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbbmeteor,+D")
@@ -83,9 +111,8 @@ add_custom_target(sync-bin
 add_dependencies(sync-bin
   base-ctests-build
   tutorial-build
-  toy-workloads-build
+  chip-workloads-build
   OpTest-all
-  goban-workloads-build
   embench-all
   coremark-all
 )

@@ -36,12 +36,14 @@ endfunction()
 function(add_linalg_conv2d_test name main_src)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${main_src})
+  set(LLVM_MLIR ${CMAKE_CURRENT_BINARY_DIR}/${name}_llvm.mlir)
+  set(LLVM_IR ${CMAKE_CURRENT_BINARY_DIR}/${name}.ll)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
   set(BAREMETAL_BIN optest_linalg_${name}_singlecore-baremetal)
   set(LINUX_BIN optest_linalg_${name}-linux)
 
   add_custom_command(
-    OUTPUT ${OBJ}
+    OUTPUT ${OBJ} ${LLVM_MLIR} ${LLVM_IR}
     COMMAND ${BUDDY_OPT} ${MLIR_SRC}
       -convert-linalg-to-tile
       -convert-tile-to-buckyball
@@ -58,11 +60,14 @@ function(add_linalg_conv2d_test name main_src)
       -convert-math-to-llvm
       -finalize-memref-to-llvm
       -convert-func-to-llvm
-      -reconcile-unrealized-casts |
-    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR}
-      -float-abi=hard -o ${OBJ}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+      -reconcile-unrealized-casts
+      > ${LLVM_MLIR}
+    COMMAND ${BUDDY_TRANSLATE} --buddy-to-llvmir ${LLVM_MLIR}
+      > ${LLVM_IR}
+    COMMAND ${BUDDY_LLC} ${LLVM_IR}
+      -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
+      -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
     COMMENT "Building ${name}.o from Linalg Conv2D MLIR"
     VERBATIM
   )
@@ -141,11 +146,17 @@ add_custom_command(
         -convert-math-to-llvm
         -finalize-memref-to-llvm
         -convert-func-to-llvm
-        -reconcile-unrealized-casts |
-    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard
+        -reconcile-unrealized-casts
+        > ${CMAKE_CURRENT_BINARY_DIR}/matmul_llvm.mlir
+    COMMAND ${BUDDY_TRANSLATE} --buddy-to-llvmir
+        ${CMAKE_CURRENT_BINARY_DIR}/matmul_llvm.mlir
+        > ${CMAKE_CURRENT_BINARY_DIR}/matmul.ll
+    COMMAND ${BUDDY_LLC} ${CMAKE_CURRENT_BINARY_DIR}/matmul.ll
+        -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
+        -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard
         -o ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir
+        ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
     COMMENT "Building matmul.o from Linalg MLIR"
     VERBATIM
 )
@@ -180,10 +191,10 @@ add_linalg_conv2d_test(conv2d_nhwc_hwcf conv2d_nhwc_main.c)
 add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.c)
 add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.c)
 
-add_custom_target(linalg-OpTest-build ALL DEPENDS
+add_custom_target(linalg-mlir-tests-build ALL DEPENDS
   optest_linalg_matmul_singlecore_baremetal
   optest_linalg_conv2d_nhwc_hwcf
   optest_linalg_conv2d_nhwc_fhwc
   optest_linalg_conv2d_nchw_fchw
-  COMMENT "Building all Linalg OpTest workloads"
+  COMMENT "Building all Linalg MLIR tests"
   VERBATIM)
