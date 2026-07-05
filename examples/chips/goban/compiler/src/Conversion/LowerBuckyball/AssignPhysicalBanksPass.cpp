@@ -5,15 +5,13 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "mlir/Transforms/WalkPatternRewriteDriver.h"
 
 #include "Buckyball/BuckyballDialect.h"
 
 using namespace mlir;
 
 namespace mlir::buddy {
-void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                       PhysicalBankState &state);
 void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                                  PhysicalBankState &state);
 } // namespace mlir::buddy
@@ -54,7 +52,8 @@ public:
     mlir::buddy::addBaseAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateTransposeAssignPhysicalBankPatterns(patterns, state);
 
-    if (failed(applyPatternsGreedily(func, std::move(patterns)))) {
+    walkAndApplyPatterns(func, std::move(patterns));
+    if (failed(mlir::buddy::verifyNoBankSSAOps(func))) {
       signalPassFailure();
       return;
     }

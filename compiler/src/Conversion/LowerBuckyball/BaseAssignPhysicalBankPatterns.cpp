@@ -23,12 +23,12 @@ public:
     int64_t row = op.getRow();
     int64_t col = op.getCol();
     if (row <= 0 || col <= 0)
-      return failure();
+      return op.emitError("assign-physical-banks: invalid bank shape");
+
     auto base = state.tryAlloc(row, col);
-    if (!base) {
-      op.emitError("assign-physical-banks: out of physical banks");
-      return failure();
-    }
+    if (!base)
+      return op.emitError("assign-physical-banks: out of physical banks");
+
     state.createMset(rewriter, op.getLoc(), static_cast<uint64_t>(*base), true,
                      row, col);
     state.remember(*base, row, col);
@@ -49,10 +49,11 @@ public:
                                 PatternRewriter &rewriter) const override {
     auto bank = state.getConstI64(op.getBank());
     if (!bank)
-      return rewriter.notifyMatchFailure(op,
-                                         "release bank id is not constant yet");
+      return op.emitError(
+          "assign-physical-banks: release bank id is not constant");
     if (failed(state.release(op, *bank)))
       return failure();
+
     state.createMset(rewriter, op.getLoc(), static_cast<uint64_t>(*bank), false,
                      0, 0);
     rewriter.eraseOp(op);
@@ -92,6 +93,20 @@ public:
 } // namespace
 
 namespace mlir::buddy {
+
+LogicalResult verifyNoBankSSAOps(Operation *root) {
+  Operation *badOp = nullptr;
+  root->walk([&](Operation *op) {
+    if (op->getName().getStringRef().starts_with("buckyball.bank_")) {
+      badOp = op;
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  if (!badOp)
+    return success();
+  return badOp->emitError("assign-physical-banks: unsupported bank op");
+}
 
 void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                        PhysicalBankState &state) {

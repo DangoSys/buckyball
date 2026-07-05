@@ -46,6 +46,9 @@ private:
   llvm::SmallVector<int8_t, 32> used;
 };
 
+LogicalResult verifyNoBankSSAOps(Operation *root);
+void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                       PhysicalBankState &state);
 void registerAssignPhysicalBanksPass();
 void registerLowerBankSSAToIntrinsicsPass();
 void registerLowerBuckyballPass();

@@ -16,8 +16,8 @@ _start:
     la   t0, trap_entry
     csrw mtvec, t0
 
-    /* stack pointer: use a fixed address above code and heap */
-    li   sp, 0x80800000
+    /* stack pointer: keep it high in the 1GB DRAM window */
+    li   sp, 0xbf000000
 
     /* clear BSS */
     la   a0, __bss_start
