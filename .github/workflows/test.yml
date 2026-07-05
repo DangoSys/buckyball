@@ -56,9 +56,8 @@ jobs:
         run: |
           cd ~/Code/buckyball
           nix develop -c bash -c "cd bebop && cargo clean && cd .."
-          nix develop -c bbdev bebop-bemu --build
-          nix develop -c bbdev bebop-bemu --batch '--test elf-tests'
-          nix develop -c bbdev bebop-bemu --batch '--test pk-tests'
+          nix develop -c bbdev bebop-bemu --batch '--chip toy --test elf-tests'
+          nix develop -c bbdev bebop-bemu --batch '--chip toy --test pk-tests'
 
       - name: verilator Tests
         shell: zsh {0}
