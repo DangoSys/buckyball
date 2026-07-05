@@ -10,19 +10,20 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 **Function**: Build workload
 
 **Parameters**:
+- **`chip`** - Required chip name. Selects chip-specific workloads.
 - **`model`** - Optional model name to build. If omitted, build all workloads.
 - **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
 
 **Examples**:
 ```bash
 # Build one model with the default xbuckyball path
-bbdev workload --build "--model lenet"
+bbdev workload --build "--chip toy --model lenet"
 
 # Build one model with stable LLVM Buckyball extensions
-bbdev workload --build "--model lenet --stable"
+bbdev workload --build "--chip toy --model lenet --stable"
 
 # Build all workloads
-bbdev workload --build
+bbdev workload --build "--chip toy"
 ```
 
 **Response**:

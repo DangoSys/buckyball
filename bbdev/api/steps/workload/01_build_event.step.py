@@ -1,6 +1,8 @@
 import os
 import sys
 import shlex
+import re
+from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -27,13 +29,39 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     workload_dir = f"{bbdir}/bb-tests"
     build_dir = f"{workload_dir}/build"
-    allowed = {"model", "stable", "_trace_id"}
+    allowed = {"chip", "model", "stable", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload build parameter(s): {', '.join(unknown)}")
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={"error": "unknown_parameter", "parameters": unknown},
+            trace_id=origin_tid,
+        )
+        return
+    chip = input_data.get("chip")
+    if not chip:
+        ctx.logger.error("Missing required parameter: chip must be specified")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
+    if not isinstance(chip, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", chip):
+        ctx.logger.error(f"Invalid chip: {chip}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_chip", "chip": chip},
+            trace_id=origin_tid,
+        )
+        return
+    chip_dir = Path(bbdir) / "examples" / "chips" / chip
+    if not chip_dir.is_dir():
+        ctx.logger.error(f"Workload chip does not exist: {chip}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "unknown_chip", "chip": chip},
             trace_id=origin_tid,
         )
         return
@@ -77,11 +105,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     os.makedirs(build_dir, exist_ok=True)
 
+    chip_arg = f"-DBUCKYBALL_WORKLOAD_CHIP={shlex.quote(chip)}"
     stable_arg = "-DBUCKYBALL_STABLE=ON" if stable else "-DBUCKYBALL_STABLE=OFF"
     ninja_target = f" {shlex.quote(target)}" if target else ""
     inner = (
         f"cd {shlex.quote(build_dir)} && "
-        f"cmake -G Ninja {stable_arg} .. && "
+        f"cmake -G Ninja {chip_arg} {stable_arg} .. && "
         f"ninja -j{os.cpu_count()}{ninja_target}"
     )
     command = f"cd {shlex.quote(bbdir)} && nix develop -c bash -c {shlex.quote(inner)}"
