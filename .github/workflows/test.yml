@@ -48,8 +48,8 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          nix develop -c bbdev compiler --build
-          nix develop -c bbdev workload --build
+          nix develop -c bbdev compiler --build '--chip toy'
+          nix develop -c bbdev workload --build '--chip toy'
 
       - name: bemu Tests
         shell: zsh {0}

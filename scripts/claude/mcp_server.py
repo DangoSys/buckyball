@@ -268,9 +268,9 @@ def validate() -> str:
 
 
 @mcp.tool()
-def bbdev_workload_build() -> str:
+def bbdev_workload_build(chip: str) -> str:
     """Compile CTest workloads (bb-tests). Calls bbdev POST /workload/build."""
-    result = _bbdev_call("/workload/build", {}, timeout=120)
+    result = _bbdev_call("/workload/build", {"chip": chip}, timeout=120)
     return _fmt(result)
 
 

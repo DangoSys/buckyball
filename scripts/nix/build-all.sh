@@ -181,7 +181,7 @@ fi
 
 if run_step "4"; then
   begin_step "4" "bb-tests pre-compile sources"
-  bbdev workload --build
+  bbdev workload --build '--chip toy'
 fi
 
 if run_step "5"; then

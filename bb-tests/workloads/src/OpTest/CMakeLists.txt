@@ -11,7 +11,7 @@ set(OPTEST_LINALG_DIR ${OPTEST_WORKLOAD_DIR}/linalg)
 add_subdirectory(base)
 
 add_custom_target(toy-mlir-tests-build)
-if(BUCKYBALL_COMPILER_CHIP STREQUAL "toy")
+if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
   add_subdirectory(${REPO_ROOT}/examples/chips/toy/workloads/mlir_tests
     ${CMAKE_CURRENT_BINARY_DIR}/chips/toy/mlir_tests)
 endif()
@@ -32,7 +32,7 @@ foreach(BUCKYBALL_BALL_MLIR_CMAKE ${BUCKYBALL_BALL_MLIR_CMAKES})
     ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_BALL_NAME}/mlir_tests)
 endforeach()
 
-if(BUCKYBALL_COMPILER_CHIP STREQUAL "toy")
+if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
   add_subdirectory(tile)
   add_subdirectory(linalg)
 else()
