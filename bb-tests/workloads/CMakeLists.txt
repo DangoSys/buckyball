@@ -97,7 +97,7 @@ add_custom_target(create-dirs
 )
 
 add_custom_target(sync-bin
-  COMMAND rsync -av
+  COMMAND rsync -av --delete
           --exclude="CMakeFiles"
           --include="*/"
           --include="*-baremetal"

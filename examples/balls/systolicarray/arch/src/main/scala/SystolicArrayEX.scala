@@ -77,6 +77,10 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val in_counter          = RegInit(0.U(b.frontend.iter_len.W))
   val drainThreshold      = (2 * arraySize + 8).U
   val inputReadyThreshold = if (arraySize <= 16) arraySize else 16
+  val indexWidth          = log2Ceil(arraySize)
+  val inIndex             = in_counter(indexWidth - 1, 0)
+  val iterIndex           = iter_counter(indexWidth - 1, 0)
+  val storeIndex          = store_counter(indexWidth - 1, 0)
 
   // Use Reg with Vec type for proper register behavior
   val in_a_buffer = Reg(Vec(arraySize, Vec(arraySize, UInt(inputWidth.W))))
@@ -84,7 +88,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   val pes         = VecInit(Seq.fill(arraySize)(VecInit(Seq.fill(arraySize)(Module(new PE(inputWidth, outputWidth)).io))))
 
   // default values
-  io.ctrl_ex_i.ready := io.ex_st_o.ready
+  io.ctrl_ex_i.ready := true.B
   io.ld_ex_i.ready   := io.ex_st_o.ready
 
   io.ex_st_o.valid       := false.B
@@ -101,8 +105,8 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
     in_counter := in_counter + 1.U
     when(in_counter < arraySize.U) {
       for (i <- 0 until arraySize) {
-        in_a_buffer(in_counter)(i) := io.ld_ex_i.bits.op1(i)
-        in_b_buffer(in_counter)(i) := io.ld_ex_i.bits.op2(i)
+        in_a_buffer(inIndex)(i) := io.ld_ex_i.bits.op1(i)
+        in_b_buffer(inIndex)(i) := io.ld_ex_i.bits.op2(i)
       }
     }
   }
@@ -117,9 +121,9 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
         if (row == 0 && col == 0) {
           when(iter_counter < arraySize.U) {
             pes(row)(col).in_a.valid := true.B
-            pes(row)(col).in_a.bits  := in_a_buffer(0)(iter_counter)
+            pes(row)(col).in_a.bits  := in_a_buffer(0)(iterIndex)
             pes(row)(col).in_b.valid := true.B
-            pes(row)(col).in_b.bits  := in_b_buffer(iter_counter)(0)
+            pes(row)(col).in_b.bits  := in_b_buffer(iterIndex)(0)
           }.otherwise {
             pes(row)(col).in_a.valid := false.B
             pes(row)(col).in_a.bits  := 0.U
@@ -130,7 +134,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
         } else if (row == 0 && col > 0) {
           when((iter_counter >= col.U) && (iter_counter < arraySize.U + col.U)) {
             pes(row)(col).in_b.valid := true.B
-            pes(row)(col).in_b.bits  := in_b_buffer(iter_counter - col.U)(col)
+            pes(row)(col).in_b.bits  := in_b_buffer((iter_counter - col.U)(indexWidth - 1, 0))(col)
             pes(row)(col).in_a <> pes(row)(col - 1).out_a
           }.otherwise {
             pes(row)(col).in_b.valid := false.B
@@ -141,7 +145,7 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
         } else if (col == 0 && row > 0) {
           when((iter_counter >= row.U) && (iter_counter < arraySize.U + row.U)) {
             pes(row)(col).in_a.valid := true.B
-            pes(row)(col).in_a.bits  := in_a_buffer(row)(iter_counter - row.U)
+            pes(row)(col).in_a.bits  := in_a_buffer(row)((iter_counter - row.U)(indexWidth - 1, 0))
             pes(row)(col).in_b <> pes(row - 1)(col).out_b
           }.otherwise {
             pes(row)(col).in_a.valid := false.B
@@ -178,8 +182,10 @@ class SystolicArrayEX(val b: GlobalConfig) extends Module {
   when(iter_counter >= drainThreshold) {
     when(store_counter < arraySize.U) {
       io.ex_st_o.valid       := true.B
-      io.ex_st_o.bits.result := VecInit(pes(store_counter).map(_.out_c))
-      store_counter          := store_counter + 1.U
+      io.ex_st_o.bits.result := VecInit(pes(storeIndex).map(_.out_c))
+      when(io.ex_st_o.fire) {
+        store_counter := store_counter + 1.U
+      }
     }.otherwise {
       // back to idle
       iter_counter  := 0.U

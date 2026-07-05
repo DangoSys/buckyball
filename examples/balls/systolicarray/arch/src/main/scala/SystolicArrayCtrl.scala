@@ -32,7 +32,9 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   val op2_bank_addr  = RegInit(0.U(12.W))
   val wr_bank        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wr_bank_addr   = RegInit(0.U(12.W))
-  val has_send       = RegInit(false.B)
+  val ldSent         = RegInit(false.B)
+  val exSent         = RegInit(false.B)
+  val stSent         = RegInit(false.B)
 
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
@@ -50,41 +52,35 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
     op2_bank_addr  := 0.U
     wr_bank        := io.cmdReq.bits.cmd.wr_bank
     wr_bank_addr   := 0.U
+    ldSent         := false.B
+    exSent         := false.B
+    stSent         := false.B
     state          := busy
   }
 
-  when(state === busy && !has_send) {
-    io.ctrl_ld_o.valid              := true.B
-    io.ctrl_ld_o.bits.op1_bank      := op1_bank
-    io.ctrl_ld_o.bits.op1_bank_addr := op1_bank_addr
-    io.ctrl_ld_o.bits.op2_bank      := op2_bank
-    io.ctrl_ld_o.bits.op2_bank_addr := op2_bank_addr
-    io.ctrl_ld_o.bits.iter          := iter
+  io.ctrl_ld_o.valid              := state === busy && !ldSent
+  io.ctrl_ld_o.bits.op1_bank      := op1_bank
+  io.ctrl_ld_o.bits.op1_bank_addr := op1_bank_addr
+  io.ctrl_ld_o.bits.op2_bank      := op2_bank
+  io.ctrl_ld_o.bits.op2_bank_addr := op2_bank_addr
+  io.ctrl_ld_o.bits.iter          := iter
 
-    io.ctrl_ex_o.valid     := true.B
-    io.ctrl_ex_o.bits.iter := iter
+  io.ctrl_ex_o.valid     := state === busy && !exSent
+  io.ctrl_ex_o.bits.iter := iter
 
-    io.ctrl_st_o.valid             := true.B
-    io.ctrl_st_o.bits.wr_bank      := wr_bank
-    io.ctrl_st_o.bits.wr_bank_addr := wr_bank_addr
-    io.ctrl_st_o.bits.iter         := iter
+  io.ctrl_st_o.valid             := state === busy && !stSent
+  io.ctrl_st_o.bits.wr_bank      := wr_bank
+  io.ctrl_st_o.bits.wr_bank_addr := wr_bank_addr
+  io.ctrl_st_o.bits.iter         := iter
 
-    has_send := true.B
-  }.otherwise {
-    io.ctrl_ld_o.valid              := false.B
-    io.ctrl_ld_o.bits.op1_bank      := 0.U
-    io.ctrl_ld_o.bits.op1_bank_addr := 0.U
-    io.ctrl_ld_o.bits.op2_bank      := 0.U
-    io.ctrl_ld_o.bits.op2_bank_addr := 0.U
-    io.ctrl_ld_o.bits.iter          := 0.U
-
-    io.ctrl_ex_o.valid     := false.B
-    io.ctrl_ex_o.bits.iter := 0.U
-
-    io.ctrl_st_o.valid             := false.B
-    io.ctrl_st_o.bits.wr_bank      := 0.U
-    io.ctrl_st_o.bits.wr_bank_addr := 0.U
-    io.ctrl_st_o.bits.iter         := 0.U
+  when(io.ctrl_ld_o.fire) {
+    ldSent := true.B
+  }
+  when(io.ctrl_ex_o.fire) {
+    exSent := true.B
+  }
+  when(io.ctrl_st_o.fire) {
+    stSent := true.B
   }
 
   when(io.cmdResp_i.valid) {
@@ -93,7 +89,9 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
     io.cmdResp_o.bits.is_sub     := is_sub_reg
     io.cmdResp_o.bits.sub_rob_id := sub_rob_id_reg
     state                        := idle
-    has_send                     := false.B
+    ldSent                       := false.B
+    exSent                       := false.B
+    stSent                       := false.B
   }.otherwise {
     io.cmdResp_o.valid           := false.B
     io.cmdResp_o.bits.rob_id     := 0.U

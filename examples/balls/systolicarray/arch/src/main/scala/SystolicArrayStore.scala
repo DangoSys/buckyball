@@ -103,7 +103,7 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
     acc.req.bits.addr := 0.U
     acc.req.bits.data := Cat(Seq.fill(accWidth / 8)(0.U(8.W)))
     acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.resp.ready    := false.B
+    acc.resp.ready    := state === busy
   }
 
   for (i <- 0 until outBW) {
