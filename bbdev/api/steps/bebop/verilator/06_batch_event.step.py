@@ -3,7 +3,7 @@ bebop verilator batch event handler
 
 Runs bebop verilator nextest batch regression:
   1. Build bebop with verilator feature and VSRC_PATH
-  2. Run cargo nextest with verilator-specific config (serial execution)
+  2. Run cargo nextest with verilator-specific config
 """
 import os
 import shlex
