@@ -28,6 +28,13 @@ class BuckyballToyVerilatorConfig
         new examples.toy.BuckyballToyConfig
     )
 
+class BuckyballPebbleVerilatorConfig
+    extends Config(
+      new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.pebble.BuckyballPebbleConfig
+    )
+
 //===----------------------------------------------------------------------===//
 // Goban Verilator configs
 //===----------------------------------------------------------------------===//

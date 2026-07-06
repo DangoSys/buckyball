@@ -74,6 +74,19 @@ class P2EToyLinuxConfig
         new examples.toy.BuckyballToyConfig
     )
 
+class P2EPebbleConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.pebble.BuckyballPebbleConfig
+    )
+
+class P2EPebbleLinuxConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig ++
+        new examples.pebble.BuckyballPebbleConfig
+    )
+
 //===----------------------------------------------------------------------===//
 // Gemmini P2E configs
 //===----------------------------------------------------------------------===//

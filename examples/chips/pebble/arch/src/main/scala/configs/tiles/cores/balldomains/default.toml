@@ -1,0 +1,13 @@
+# Pebble ball domain configuration
+
+ballNum = 2
+
+ballIdMappings = [
+  { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", inBW = 1, outBW = 1 },
+  { ballId = 1, ballName = "SystolicArrayBall", ballClass = "examples.balls.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 }
+]
+
+ballISA = [
+  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 0 },
+  { mnemonic = "SYSTOLIC", funct7 = 65, bid = 1 }
+]
