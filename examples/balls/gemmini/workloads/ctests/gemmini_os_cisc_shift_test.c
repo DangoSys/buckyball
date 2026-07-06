@@ -22,7 +22,7 @@ int main() {
   init_u8_random_matrix(mat_b, DIM, DIM, 84);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
   for (int i = 0; i < DIM * DIM; i++)
-    expected[i] >>= SHIFT;
+    expected[i] = gemmini_in_shift(expected[i], SHIFT);
 
   bb_gemmini_config(0, 0, 0, 0, SHIFT);
   bb_gemmini_loop_ws_config_bounds(1, 1, 1);

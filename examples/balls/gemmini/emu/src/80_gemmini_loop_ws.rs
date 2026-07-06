@@ -1,6 +1,6 @@
 //===- 80_gemmini_loop_ws.rs - GEMMINI_LOOP_WS instruction -----------------===//
 
-use super::gemmini_state::{gemini, mem_i32_le, mem_i8, mem_write_i32};
+use super::gemmini_state::{gemini, in_shift as apply_in_shift, mem_i32_le, mem_i8, mem_write_i32};
 use super::instruction::{ExecContext, Instruction};
 
 // Shared implementation
@@ -34,7 +34,7 @@ fn exec_loop_impl(memory: &mut [u8]) -> u64 {
     let lw = g.loop_ws.clone();
     let a_transpose = g.cfg.a_transpose;
     let b_transpose = g.cfg.b_transpose;
-    let in_shift = g.cfg.in_shift;
+    let shift = g.cfg.in_shift;
     drop(g);
 
     let n = lw.stride_a as usize;
@@ -66,12 +66,9 @@ fn exec_loop_impl(memory: &mut [u8]) -> u64 {
                 };
                 acc += av as i32 * bv as i32;
             }
-            // Apply in_shift (arithmetic right shift) before writing back
-            if in_shift > 0 {
-                acc >>= in_shift;
-            }
+            let out = apply_in_shift(acc, shift);
             let c_off = lw.addr_c + ii * lw.stride_c + jj * 4;
-            mem_write_i32(memory, c_off, acc);
+            mem_write_i32(memory, c_off, out);
         }
     }
     0

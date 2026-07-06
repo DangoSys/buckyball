@@ -26,7 +26,7 @@ int main() {
   clear_u8_matrix(mat_d, DIM, DIM);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
   for (int i = 0; i < DIM * DIM; i++)
-    expected[i] >>= SHIFT;
+    expected[i] = gemmini_in_shift(expected[i], SHIFT);
 
   uint32_t bank_w = 0, bank_a = 1, bank_d = 2, bank_c = 3;
   bb_mem_alloc(bank_w, 1, 1);

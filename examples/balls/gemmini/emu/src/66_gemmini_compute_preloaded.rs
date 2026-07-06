@@ -1,7 +1,7 @@
 use super::super::bank::BANK_NUM;
 use super::bank_matrix::{read_i32_nn, read_i8_nn, write_i32_nn_groups};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
-use super::gemmini_state::gemini;
+use super::gemmini_state::{gemini, in_shift as apply_in_shift};
 use super::instruction::{ExecContext, Instruction};
 
 pub struct GemminiComputePreloaded;
@@ -35,7 +35,7 @@ impl Instruction for GemminiComputePreloaded {
         let df = gm.cfg.dataflow;
         let a_transpose = gm.cfg.a_transpose;
         let b_transpose = gm.cfg.b_transpose;
-        let in_shift = gm.cfg.in_shift;
+        let shift = gm.cfg.in_shift;
         let ws_b = gm.ws_b.clone();
         drop(gm);
 
@@ -68,10 +68,7 @@ impl Instruction for GemminiComputePreloaded {
                         let bv = if b_transpose { b[j][k] } else { b[k][j] };
                         acc += av as i32 * bv as i32;
                     }
-                    if in_shift > 0 {
-                        acc >>= in_shift;
-                    }
-                    c[i][j] = acc;
+                    c[i][j] = apply_in_shift(acc, shift);
                 }
             }
             write_i32_nn_groups(ctx.banks, &pw, &c, n);

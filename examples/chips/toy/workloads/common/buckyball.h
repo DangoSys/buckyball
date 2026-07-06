@@ -75,6 +75,7 @@ void transpose_u8_matrix(elem_t *src, elem_t *dst, int rows, int cols);
 void transpose_u32_matrix(result_t *src, result_t *dst, int rows, int cols);
 void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
                 int inner);
+result_t gemmini_in_shift(result_t v, int shift);
 void cpu_relu(elem_t *a, elem_t *matrix, int rows, int cols);
 void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols);
 

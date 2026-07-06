@@ -59,6 +59,43 @@ pub fn gemini() -> &'static Mutex<GemminiState> {
     GEMINI.get_or_init(|| Mutex::new(GemminiState::default()))
 }
 
+pub fn in_shift(v: i32, shift: u32) -> i32 {
+    if shift == 0 {
+        return v;
+    }
+    if v >= 0 {
+        let x = v as u32;
+        let point_five = (x >> (shift - 1)) & 1;
+        let zeros = if shift <= 1 {
+            0
+        } else if (x & ((1u32 << (shift - 1)) - 1)) != 0 {
+            1
+        } else {
+            0
+        };
+        let ones_digit = (x >> shift) & 1;
+        let r = point_five & (zeros | ones_digit);
+        return ((x >> shift) + r) as i32;
+    }
+    let x = v as u32;
+    let point_five = (x >> (shift - 1)) & 1;
+    let zeros = if shift <= 1 {
+        0
+    } else if (x & ((1u32 << (shift - 1)) - 1)) != 0 {
+        1
+    } else {
+        0
+    };
+    let ones_digit = (x >> shift) & 1;
+    let r = (point_five & (zeros | ones_digit)) != 0;
+    let base = v >> shift;
+    if r {
+        base + 1
+    } else {
+        base
+    }
+}
+
 pub fn mem_u8(mem: &[u8], addr: u64) -> u8 {
     mem_read(mem, addr)
 }
