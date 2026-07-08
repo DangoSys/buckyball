@@ -31,6 +31,7 @@
               tools.yosys
               tools.opensta
               tools.lcov
+              tools.verible
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -44,6 +45,7 @@
               # Rust toolchain
               rustTools.rustc
               rustTools.cargo
+              rustTools.cargoNextest
               rustTools.rustfmt
               rustTools.clippy
 
@@ -100,6 +102,9 @@
 
           # nix develop
           devShells.default = pkgs.mkShell {
+            # this is needed to build LLVM/libc++, disable the nix injected hardening
+            hardeningDisable = [ "libcxxhardeningfast" ];
+
             buildInputs = with pkgs; [
               clibs.zlib-dev
               clibs.zlib
@@ -118,6 +123,8 @@
 
               compiler.flatbuffers
               compiler.numactl
+
+              rustTools.cargoNextest
             ];
             shellHook = ''
               if [ -d "$PWD/result/bin" ]; then

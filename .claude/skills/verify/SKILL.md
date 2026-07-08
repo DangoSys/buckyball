@@ -8,7 +8,7 @@ description: Verify functional correctness of the Ball named $ARGUMENTS. Use thi
 ## Phase 1 - Completeness Check
 
 Use `/check` logic to validate registration consistency, then ensure all required artifacts exist and fill missing pieces:
-1. Ball implementation: `arch/src/main/scala/framework/balldomain/prototype/<name>/`
+1. Ball implementation: `examples/balls/<name>/arch/src/main/scala/`
 2. Registration entry in `arch/src/main/scala/framework/balldomain/configs/default.json`
 3. ISA macro file in `bb-tests/workloads/lib/bbhw/isa/`
 4. CTest file in `bb-tests/workloads/src/CTest/toy/`

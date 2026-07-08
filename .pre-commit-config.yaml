@@ -55,6 +55,16 @@ repos:
   # Scala formatting with scalafmt
   - repo: local
     hooks:
+      - id: verible-verilog-format
+        name: Format Verilog/SystemVerilog code with verible
+        entry: verible-verilog-format
+        language: system
+        files: \.(v|vh|sv|svh)$
+        args:
+          - --inplace
+          - --failsafe_success=false
+          - --indentation_spaces=2
+
       - id: scalafmt
         name: Format Scala code with scalafmt
         entry: bash -c 'cd arch && scalafmt --config .scalafmt.conf src/main/scala'

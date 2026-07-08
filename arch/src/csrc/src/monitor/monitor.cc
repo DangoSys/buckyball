@@ -13,6 +13,7 @@
 const char *log_path = nullptr;
 const char *fst_path = nullptr;
 const char *stdout_path = nullptr;
+bool enable_wave = true;
 uint32_t bdb_trace_mask = BDB_TR_ALL;
 
 // Raw stdout fd saved before dup2 redirect — used by UART putchar for real-time
@@ -61,6 +62,8 @@ static int parse_args(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (strncmp(argv[i], "+fst=", 5) == 0) {
       fst_path = argv[i] + 5;
+    } else if (strcmp(argv[i], "+no-wave") == 0) {
+      enable_wave = false;
     } else if (strncmp(argv[i], "+log=", 5) == 0) {
       log_path = argv[i] + 5;
     } else if (strncmp(argv[i], "+stdout=", 8) == 0) {
@@ -82,6 +85,7 @@ static int parse_args(int argc, char *argv[]) {
       printf("\t+log=<path>       specify log file path\n");
       printf("\t+stdout=<path>    specify UART output file path\n");
       printf("\t+fst=<path>       specify FST waveform file path\n");
+      printf("\t+no-wave          disable waveform generation\n");
       printf("\t+trace=<items>    trace list: "
              "none|all|itrace,mtrace,pmctrace,ctrace,banktrace\n");
       printf("\t+trace_mask=<n>   bitfield itrace=1 mtrace=2 pmctrace=4 "
@@ -94,7 +98,9 @@ static int parse_args(int argc, char *argv[]) {
   }
 
   Assert(log_path, "Log file path is required. Use +log=<path> to specify.");
-  Assert(fst_path, "FST file path is required. Use +fst=<path> to specify.");
+  if (enable_wave) {
+    Assert(fst_path, "FST file path is required. Use +fst=<path> to specify.");
+  }
   return 0;
 }
 

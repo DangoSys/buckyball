@@ -16,7 +16,9 @@ usage() {
   echo "   3. RTL pre-compile sources"
   echo "   4. bb-tests pre-compile sources"
   echo "   5. waveform-mcp build"
-  echo "   6. pre-commit hooks installation"
+  echo "   6. bebop build"
+  echo "   7. verify build"
+  echo "   8. pre-commit hooks installation"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -83,6 +85,7 @@ git submodule update --init --progress \
   bebop \
   compiler/thirdparty/buddy-mlir \
   docs \
+  verify \
   thirdparty/waveform-mcp
 
 # I dont know why below is need for chipyard submodules, but it is
@@ -131,29 +134,29 @@ if run_step "2"; then
   cd ${BBDIR}/compiler/thirdparty/buddy-mlir
   git submodule update --init --progress llvm
 
-  mkdir -p llvm/build && cd llvm/build
-  cmake -G Ninja ../llvm \
+  cmake -G Ninja -S llvm/llvm -B llvm/build \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+    -DLLVM_ENABLE_RUNTIMES="openmp" \
     -DLLVM_TARGETS_TO_BUILD="host;RISCV" \
     -DLLVM_ENABLE_ASSERTIONS=ON \
+    -DOPENMP_ENABLE_LIBOMPTARGET=OFF \
+    -DLIBOMP_LIBFLAGS=-lrt \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DPython3_EXECUTABLE=$(which python3)
-  ninja #check-mlir check-clang
+    -DPython3_EXECUTABLE="$(which python)" \
+    -DPython_EXECUTABLE="$(which python)"
+  ninja -C llvm/build #check-clang check-mlir check-openmp
 
-  cd ${BBDIR}/compiler/thirdparty/buddy-mlir
-  mkdir -p build && cd build
-  cmake -G Ninja .. \
-    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/compiler/src \
-    -DMLIR_DIR=$PWD/../llvm/build/lib/cmake/mlir \
-    -DLLVM_DIR=$PWD/../llvm/build/lib/cmake/llvm \
+  cmake -G Ninja -S . -B build \
+    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/examples/chips/toy/compiler \
+    -DMLIR_DIR=$PWD/llvm/build/lib/cmake/mlir \
+    -DLLVM_DIR=$PWD/llvm/build/lib/cmake/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
-    -DPython3_EXECUTABLE=$(which python3) \
-    -DPython_EXECUTABLE=$(which python3) \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-  ninja # check-buddy
+    -DPython3_EXECUTABLE="$(which python3)" \
+    -DPython_EXECUTABLE="$(which python)"
+  ninja -C build # check-buddy
 fi
 
 if run_step "3"; then
@@ -178,7 +181,7 @@ fi
 
 if run_step "4"; then
   begin_step "4" "bb-tests pre-compile sources"
-  bbdev workload --build
+  bbdev workload --build '--chip toy'
 fi
 
 if run_step "5"; then
@@ -192,10 +195,17 @@ if run_step "6"; then
   cd ${BBDIR}/bebop
   nix build
   nix develop -c echo "bebop built successfully"
+  # nix develop -c cargo build --release --features bemu --package bebop
 fi
 
 if run_step "7"; then
-  begin_step "7" "pre-commit hooks installation"
+  begin_step "7" "verify build"
+  cd ${BBDIR}/verify
+  nix develop -c echo "verify built successfully"
+fi
+
+if run_step "8"; then
+  begin_step "8" "pre-commit hooks installation"
   cd ${BBDIR}
   pre-commit install
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)

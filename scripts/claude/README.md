@@ -24,7 +24,7 @@ User ──→ Claude Code (slash commands + CLAUDE.md)
                           ├── POST /verilator/verilog  Generate Verilog
                           ├── POST /verilator/build    Build Verilator (supports --coverage)
                           ├── POST /verilator/sim      Run simulation (supports --coverage)
-                          ├── POST /workload/build     Build CTest
+                          ├── POST /workload/build     Build CTest (requires chip)
                           └── POST /yosys/synth        Yosys synthesis + OpenSTA timing analysis
 ```
 
@@ -50,7 +50,7 @@ User ──→ Claude Code (slash commands + CLAUDE.md)
 ### bbdev API Wrappers
 | Tool | API | Description |
 |------|-----|------|
-| `bbdev_workload_build` | `/workload/build` | Build CTest |
+| `bbdev_workload_build` | `/workload/build` | Build CTest for a chip |
 | `bbdev_verilator_run` | `/verilator/run` | Full flow: clean->verilog->build->sim |
 | `bbdev_verilator_verilog` | `/verilator/verilog` | Generate Verilog |
 | `bbdev_verilator_build` | `/verilator/build` | Build Verilator |
@@ -76,7 +76,7 @@ MCP server manages bbdev server automatically:
 3. **Register**: update `default.json` + `busRegister` + `DISA` + `DomainDecoder`
 4. **ISA macro**: create C macro file and update `isa.h`
 5. **CTest**: create test `.c`, register in `CMakeLists.txt`
-6. **Verification**: `validate` -> `bbdev_workload_build` -> `bbdev_verilator_run` -> PASS/FAIL
+6. **Verification**: `validate` -> `bbdev_workload_build(chip)` -> `bbdev_verilator_run` -> PASS/FAIL
 
 ### `/verify <Name>` - Verify Ball
 

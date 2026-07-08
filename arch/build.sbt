@@ -54,6 +54,12 @@ lazy val buckyball = (project in file("."))
       Resolver.sonatypeRepo("snapshots"),
       Resolver.sonatypeRepo("releases")
     ),
+    Compile / unmanagedSourceDirectories ++= {
+      val examples = baseDirectory.value.getParentFile / "examples"
+      val balls    = ((examples / "balls") * "*" / "arch" / "src" / "main" / "scala").get
+      val chips    = ((examples / "chips") * "*" / "arch" / "src" / "main" / "scala").get
+      (balls ++ chips).filter(_.isDirectory)
+    },
     chisel6Settings ++
       scalaTestSettings ++
       Seq(

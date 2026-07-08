@@ -25,6 +25,18 @@ object buckyball extends SbtModule { m =>
     firechip
   )
 
+  override def sources = T.sources {
+    val examples = os.pwd / os.up / "examples"
+    def archSrcs(kind: String) =
+      os.list(examples / kind)
+        .filter(os.isDir)
+        .map(_ / "arch" / "src" / "main" / "scala")
+        .filter(os.exists)
+        .map(PathRef(_))
+
+    super.sources() ++ archSrcs("balls") ++ archSrcs("chips")
+  }
+
   override def ivyDeps = Agg(
     // ivy"org.chipsalliance::chisel:6.5.0",
     ivy"org.chipsalliance::chisel:6.5.0",

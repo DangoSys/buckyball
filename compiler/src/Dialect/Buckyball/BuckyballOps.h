@@ -25,5 +25,5 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #define GET_OP_CLASSES
-#include "Dialect/Buckyball/Buckyball.h.inc"
+#include "Buckyball.h.inc"
 #endif // BUCKYBALL_BUCKYBALLOPS_H

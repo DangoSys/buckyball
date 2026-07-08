@@ -35,6 +35,25 @@ class Buckyball_IntrOpBase<string mnemonic, list<Trait> traits = []> :
                   /*list<Trait> traits=*/traits,
                   /*int numResults=*/0>;
 
+class Buckyball_CustomIntrOpBase<string mnemonic, string enumName,
+                                 list<int> immArgPositions,
+                                 list<string> immArgAttrNames,
+                                 list<Trait> traits = []> :
+  LLVM_IntrOpBase</*Dialect dialect=*/Buckyball_Dialect,
+                  /*string opName=*/"intr." # mnemonic,
+                  /*string enumName=*/enumName,
+                  /*list<int> overloadedResults=*/[],
+                  /*list<int> overloadedOperands=*/[],
+                  /*list<Trait> traits=*/traits,
+                  /*int numResults=*/0,
+                  /*bit requiresAccessGroup=*/0,
+                  /*bit requiresAliasAnalysis=*/0,
+                  /*bit requiresFastmath=*/0,
+                  /*bit requiresArgAndResultAttrs=*/0,
+                  /*bit requiresOpBundles=*/0,
+                  /*list<int> immArgPositions=*/immArgPositions,
+                  /*list<string> immArgAttrNames=*/immArgAttrNames>;
+
 //===----------------------------------------------------------------------===//
 // Common intrinsic operations
 //===----------------------------------------------------------------------===//
@@ -51,25 +70,11 @@ def MvinIntrOp : Buckyball_IntrOpBase<"mvin">,
 def MvoutIntrOp : Buckyball_IntrOpBase<"mvout">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
-def MulWarp16IntrOp : Buckyball_IntrOpBase<"mul.warp16">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def TransposeIntrOp : Buckyball_IntrOpBase<"transpose">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def Fp2IntIntrOp : Buckyball_IntrOpBase<"fp2int">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def Int2FpIntrOp : Buckyball_IntrOpBase<"int2fp">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def ReluIntrOp : Buckyball_IntrOpBase<"relu">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
-
-def SystolicIntrOp : Buckyball_IntrOpBase<"bbfp.mul">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
+def CustomIntrOp
+    : Buckyball_CustomIntrOpBase<"custom", "riscv_buckyball_custom",
+                                 [2], ["funct7"]>,
+      Arguments<(ins LLVM_Type:$rs1, LLVM_Type:$rs2, I32Attr:$funct7)> {
+  let assemblyFormat = "$rs1 `,` $rs2 attr-dict `:` type($rs1) `,` type($rs2)";
+}
 
 #endif // BUCKYBALL_INTRINSICS

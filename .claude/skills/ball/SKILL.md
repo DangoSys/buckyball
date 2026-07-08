@@ -9,9 +9,9 @@ description: Create a new Buckyball Ball operator named $ARGUMENTS, covering the
 
 1. Inspect registration state and decide `ballId` + `funct7`:
    - `arch/src/main/scala/framework/balldomain/configs/default.json`
-   - `arch/src/main/scala/examples/toy/balldomain/DISA.scala`
+   - `examples/chips/toy/arch/src/main/scala/balldomain/DISA.scala`
 2. Check for partial existing implementation (incremental mode):
-   - existing directory in `arch/src/main/scala/framework/balldomain/prototype/`
+   - existing directory in `examples/balls/`
    - existing ISA macro in `bb-tests/workloads/lib/bbhw/isa/`
    - existing CTest in `bb-tests/workloads/src/CTest/toy/`
 3. Confirm with user:
@@ -27,7 +27,7 @@ description: Create a new Buckyball Ball operator named $ARGUMENTS, covering the
    - complex example: `.../prototype/systolicarray/`
    - Blink protocol: `.../blink/blink.scala`, `bank.scala`, `status.scala`
    - SRAM IO: `.../memdomain/backend/banks/SramIO.scala`
-2. Create files under `arch/src/main/scala/framework/balldomain/prototype/<name>/` using templates from `references/`.
+2. Create files under `examples/balls/<name>/arch/src/main/scala/` using templates from `references/`.
 
 ### Key constraints
 - SRAM read latency is 1 cycle (`resp.valid` in the cycle after `req.fire`)

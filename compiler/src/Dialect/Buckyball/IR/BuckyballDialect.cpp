@@ -32,14 +32,14 @@
 using namespace mlir;
 using namespace buddy::buckyball;
 
-#include "Buckyball/BuckyballDialect.cpp.inc"
+#include "BuckyballDialect.cpp.inc"
 
 #define GET_OP_CLASSES
-#include "Buckyball/Buckyball.cpp.inc"
+#include "Buckyball.cpp.inc"
 
 void BuckyballDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "Buckyball/Buckyball.cpp.inc"
+#include "Buckyball.cpp.inc"
       >();
 }

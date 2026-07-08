@@ -97,4 +97,7 @@ in
 
   # Coverage report (genhtml)
   lcov = pkgs.lcov;
+
+  # Verilog/SystemVerilog formatter for pre-commit
+  verible = pkgs.verible;
 }

@@ -26,12 +26,12 @@ add_custom_target(tutorial-baremetal-build ALL
     COMMAND ${ELF_CC} ${C_FLAGS}
         -o tutorial-baremetal
         ${BBSW_BAREMETAL_DIR}/crt0.S
-        ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
+        ${TOY_WORKLOAD_COMMON_DIR}/buckyball.c
         ${TUTORIAL_WORKLOAD_DIR}/tutorial.c
     DEPENDS
         ${TUTORIAL_WORKLOAD_DIR}/tutorial.c
         ${BBSW_BAREMETAL_DIR}/crt0.S
-        ${CTEST_TOY_WORKLOAD_DIR}/buckyball.c
+        ${TOY_WORKLOAD_COMMON_DIR}/buckyball.c
     COMMENT "Building baremetal workloads for tutorial"
     VERBATIM)
 

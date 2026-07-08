@@ -1,19 +1,6 @@
-//====- ReportBankUsagePass.cpp - Report physical bank usage
-//---------------===//
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-//===----------------------------------------------------------------------===//
+//===- ReportBankUsagePass.cpp - Report physical bank usage ---------------===//
+
+#include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -30,7 +17,6 @@
 #include <optional>
 
 using namespace mlir;
-using namespace buddy;
 
 namespace {
 
@@ -82,7 +68,7 @@ public:
 
     for (Block &blk : func.getBlocks()) {
       for (Operation &op : blk.getOperations()) {
-        auto mset = dyn_cast<buckyball::MsetOp>(op);
+        auto mset = dyn_cast<::buddy::buckyball::MsetOp>(op);
         if (!mset)
           continue;
         ++evt;
@@ -130,25 +116,25 @@ public:
                          << " col=" << col << " cur=" << cur << "/" << bankNum
                          << "\n";
           }
-        } else {
-          auto it = allocSize.find(*bid);
-          if (it == allocSize.end()) {
-            func.emitError("report-bank-usage: release without prior alloc");
-            signalPassFailure();
-            return;
-          }
-          int64_t need = it->second;
-          for (int64_t i = 0; i < need; ++i) {
-            used[*bid + i] = 0;
-          }
-          allocSize.erase(it);
-          cur -= need;
-          ++relCnt;
-          if (verbose) {
-            llvm::errs() << "[bank-usage] " << func.getName() << " evt=" << evt
-                         << " release b" << *bid << " size=" << need
-                         << " cur=" << cur << "/" << bankNum << "\n";
-          }
+          continue;
+        }
+
+        auto it = allocSize.find(*bid);
+        if (it == allocSize.end()) {
+          func.emitError("report-bank-usage: release without prior alloc");
+          signalPassFailure();
+          return;
+        }
+        int64_t need = it->second;
+        for (int64_t i = 0; i < need; ++i)
+          used[*bid + i] = 0;
+        allocSize.erase(it);
+        cur -= need;
+        ++relCnt;
+        if (verbose) {
+          llvm::errs() << "[bank-usage] " << func.getName() << " evt=" << evt
+                       << " release b" << *bid << " size=" << need
+                       << " cur=" << cur << "/" << bankNum << "\n";
         }
       }
     }
@@ -166,8 +152,6 @@ public:
 
 } // namespace
 
-namespace mlir {
-namespace buddy {
-void registerReportBankUsagePass() { PassRegistration<ReportBankUsagePass>(); }
-} // namespace buddy
-} // namespace mlir
+void mlir::buddy::registerReportBankUsagePass() {
+  PassRegistration<ReportBankUsagePass>();
+}

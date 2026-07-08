@@ -37,4 +37,8 @@ package-lock.json
 package.json
 vdbg.*
 
+# Ball UVM verification outputs
+examples/balls/*/verify/build/
+examples/balls/*/verify/casegen/target/
+
 AGENTS.md

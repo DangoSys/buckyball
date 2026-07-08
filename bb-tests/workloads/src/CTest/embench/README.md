@@ -3,7 +3,7 @@
 ## Directory Structure
 
 ```
-bb-tests/workloads/src/CTest/toy/embench/
+bb-tests/workloads/src/CTest/embench/
 ├── support/                 # Common support files
 │   ├── main.c               # Unified main (calls initialise_board → benchmark → verify)
 │   ├── beebsc.c/h           # Simplified libc (rand/malloc etc.)
