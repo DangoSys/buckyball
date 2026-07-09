@@ -122,3 +122,18 @@ function(add_buckyball_ctests)
     add_buckyball_ctest(${SOURCE_FILE})
   endforeach()
 endfunction()
+
+function(buckyball_add_ball_ctest_subdirs)
+  if(NOT DEFINED BUCKYBALL_BALL_CTEST_DIRS)
+    message(FATAL_ERROR "BUCKYBALL_BALL_CTEST_DIRS must be set before buckyball_add_ball_ctest_subdirs()")
+  endif()
+
+  foreach(BUCKYBALL_BALL_CTEST_DIR ${BUCKYBALL_BALL_CTEST_DIRS})
+    get_filename_component(BUCKYBALL_BALL_WORKLOADS_DIR ${BUCKYBALL_BALL_CTEST_DIR} DIRECTORY)
+    get_filename_component(BUCKYBALL_BALL_DIR ${BUCKYBALL_BALL_WORKLOADS_DIR} DIRECTORY)
+    get_filename_component(BUCKYBALL_BALL_NAME ${BUCKYBALL_BALL_DIR} NAME)
+    add_subdirectory(
+      ${BUCKYBALL_BALL_CTEST_DIR}
+      ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_BALL_NAME}/ctests)
+  endforeach()
+endfunction()
