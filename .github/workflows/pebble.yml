@@ -1,12 +1,12 @@
-name: Buckyball CI
-run-name: ${{ github.actor }} is running CI Test 🚀
+name: Buckyball Pebble CI
+run-name: ${{ github.actor }} is running Pebble CI Test 🚀
 on:
   push:
     branches:
-      - main
+      - pebble
   pull_request:
     branches:
-      - main
+      - pebble
 
 permissions:
   contents: read
@@ -60,26 +60,26 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          nix develop -c bbdev compiler --build '--chip toy'
+          nix develop -c bbdev compiler --build '--chip pebble'
           nix develop -c bbdev workload --clean
-          nix develop -c bbdev workload --build '--chip toy'
+          nix develop -c bbdev workload --build '--chip pebble'
 
       - name: bemu Tests
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
           nix develop -c bash -c "cd bebop && cargo clean && cd .."
-          nix develop -c bbdev bebop-bemu --batch '--chip toy --test elf-tests --clean-before'
-          nix develop -c bbdev bebop-bemu --batch '--chip toy --test pk-tests --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip pebble --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip pebble --test pk-tests --clean-before'
 
       - name: verilator Tests
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
-          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballToyVerilatorConfig'
-          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
-          nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballPebbleVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballPebbleVerilatorConfig --test elf-tests --clean-before'
 
       - name: Detect bebop JUnit files
         if: always()
@@ -125,4 +125,4 @@ jobs:
       #     buckyball_exec
       #     setproxy
       #     git reset --hard HEAD~1
-      #     git push --force origin main
+      #     git push --force origin pebble
