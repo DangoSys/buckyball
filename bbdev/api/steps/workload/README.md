@@ -4,6 +4,18 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 
 ## API Usage
 
+### `clean`
+**Endpoint**: `POST /workload/clean`
+
+**Function**: Clean workload output directory.
+
+**Parameters**: None.
+
+**Examples**:
+```bash
+bbdev workload --clean
+```
+
 ### `build`
 **Endpoint**: `POST /workload/build`
 
@@ -13,6 +25,8 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 - **`chip`** - Required chip name. Selects chip-specific workloads.
 - **`model`** - Optional model name to build. If omitted, build all workloads.
 - **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
+
+For chip workloads under paths like `*/chips/<chip>`, only the directory selected by `chip` is synced to `bb-tests/output/workloads`.
 
 **Examples**:
 ```bash

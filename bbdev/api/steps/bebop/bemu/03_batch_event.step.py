@@ -6,6 +6,7 @@ Runs bebop bemu nextest batch regression:
   2. Run cargo nextest with bemu-specific config
 """
 import os
+import shutil
 import shlex
 import sys
 
@@ -102,6 +103,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── Run nextest ───────────────────────────────────────────────────────
     # Pass parameters via environment variables (nextest doesn't support custom CLI args after `--`)
+    if input_data.get("clean-before", input_data.get("clean_before", False)):
+        shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
+        ctx.logger.info("Cleaned previous bebop test artifacts")
+
     env.update({
         "BEBOP_WORKLOAD_TOML": workload_toml,
         "BEBOP_BB_TESTS_ROOT": elf_root,

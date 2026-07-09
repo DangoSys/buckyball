@@ -42,7 +42,8 @@ WORKFLOW_COMMANDS = {
         "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
     },
     "workload": {
-        "build": 'Build workload. Args: "[--model <name>] [--stable]"',
+        "clean": "Clean workload output directory.",
+        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--stable]"',
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
@@ -59,7 +60,7 @@ WORKFLOW_COMMANDS = {
     },
     "bebop-bemu": {
         "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--pk] [--log-dir <dir>]"',
-        "batch": 'Run Bebop bemu nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests>"',
+        "batch": 'Run Bebop bemu nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests> [--clean-before]"',
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--config <cfg> [--output-dir <dir>]"',
@@ -67,7 +68,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build Bebop Verilator simulation executable. Args: "--config <cfg> [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--batch] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--config <cfg> --test <elf-tests|pk-tests>"',
+        "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--config <cfg> --test <elf-tests|pk-tests> [--clean-before]"',
     },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--config <cfg> [--output-dir <dir>]"',

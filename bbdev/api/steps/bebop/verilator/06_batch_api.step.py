@@ -41,6 +41,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "config": arch_config,
         "vsrc_dir": vsrc_dir,
         "test": test_type,
+        "clean-before": body.get("clean-before", body.get("clean_before", False)),
     }
     await ctx.enqueue({"topic": "bebop.verilator.batch", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

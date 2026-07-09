@@ -8,6 +8,7 @@ def main():
   test_dir = Path(__file__).resolve().parent
   tests = [
     "test_api_compiler_build.py",
+    "test_api_workload_clean.py",
     "test_api_workload_build.py",
     "test_api_verilator_clean.py",
     "test_api_verilator_verilog.py",

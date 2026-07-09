@@ -18,6 +18,7 @@ class WorkflowAPITool(Tool):
     - /verilator/verilog: Generate Verilog
     - /verilator/build: Build verilator (params: jobs)
     - /verilator/sim: Run simulation (params: binary, batch)
+    - /workload/clean: Clean workload output directory
     - /workload/build: Build workload (params: chip, model, stable)"""
 
     def get_parameters(self) -> Dict[str, Any]:
