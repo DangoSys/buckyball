@@ -15,10 +15,14 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if bebop_path not in sys.path:
+    sys.path.insert(0, bebop_path)
 
 from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
+from regression import regression_workload_toml
 
 config = {
     "name": "bebop-verilator-batch",
@@ -46,17 +50,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    # ── Determine workload file based on test type ────────────────────────
-    test_type = input_data.get("test", "elf-tests")
-    if test_type == "elf-tests":
-        workload_toml = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/workloads-elf.toml"
-    elif test_type == "pk-tests":
-        workload_toml = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/workloads-pk.toml"
-    else:
-        ctx.logger.error(f"Invalid test type: {test_type}")
+    chip = input_data.get("chip")
+    if not chip:
+        ctx.logger.error("Missing required parameter: chip must be specified")
         await check_result(
             ctx, 1, continue_run=False,
-            extra_fields={"error": "invalid_test_type", "test": test_type},
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
+
+    test_type = input_data.get("test", "elf-tests")
+    try:
+        workload_toml = regression_workload_toml(chip, "verilator", test_type, bbdir)
+    except ValueError as e:
+        ctx.logger.error(str(e))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_regression", "test": test_type, "chip": chip},
             trace_id=origin_tid,
         )
         return
@@ -134,6 +145,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         extra_fields={
             "task": "batch",
             "backend": "verilator",
+            "chip": chip,
             "config": arch_config,
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,

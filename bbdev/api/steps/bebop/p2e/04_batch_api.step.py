@@ -25,6 +25,13 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
+    chip = body.get("chip")
+    if not chip:
+        return ApiResponse(
+            status=400,
+            body={"error": "Missing required parameter: --chip must be specified"}
+        )
+
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
@@ -39,6 +46,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
 
     data = {
+        "chip": chip,
         "bitstream": bitstream,
         "build_dir": build_dir,
         "test": test_type,

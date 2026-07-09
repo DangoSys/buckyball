@@ -22,6 +22,13 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "Missing required parameter: --config must be specified"}
         )
 
+    chip = body.get("chip")
+    if not chip:
+        return ApiResponse(
+            status=400,
+            body={"error": "Missing required parameter: --chip must be specified"}
+        )
+
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
@@ -38,6 +45,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, body.get("vsrc_dir"))
 
     data = {
+        "chip": chip,
         "config": arch_config,
         "vsrc_dir": vsrc_dir,
         "test": test_type,
