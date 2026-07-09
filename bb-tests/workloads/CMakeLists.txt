@@ -97,8 +97,10 @@ add_custom_target(create-dirs
 )
 
 add_custom_target(sync-bin
-  COMMAND rsync -av --delete
+  COMMAND rsync -av --delete --delete-excluded
           --exclude="CMakeFiles"
+          --include="**/chips/${BUCKYBALL_WORKLOAD_CHIP}/"
+          --exclude="**/chips/*/"
           --include="*/"
           --include="*-baremetal"
           --include="*-linux"

@@ -49,6 +49,7 @@ jobs:
         run: |
           cd ~/Code/buckyball
           nix develop -c bbdev compiler --build '--chip toy'
+          nix develop -c bbdev workload --clean
           nix develop -c bbdev workload --build '--chip toy'
 
       - name: bemu Tests
