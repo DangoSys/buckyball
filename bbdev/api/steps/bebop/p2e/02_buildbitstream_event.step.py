@@ -4,7 +4,7 @@ bebop p2e buildbitstream event handler
 Builds the P2E VVAC runtime case via bebop CLI:
   1. Resolve Verilog source directory (VSRC_PATH) from config
   2. Run bebop build p2e with rtl_dir and out_dir
-  3. Validate runtime artifacts used by bebop run p2e
+  3. Validate generated bitstream and runtime artifacts
 """
 import os
 import sys
@@ -64,7 +64,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(build_dir, exist_ok=True)
 
     build_cmd = (
-        f"nix develop --ignore-environment --keep ALL_PROXY -c "
+        f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
         f"cargo run --features p2e -- build p2e "
         f"--rtl-dir=\"{vsrc_dir}\" "
         f"--out-dir=\"{build_dir}\""
@@ -80,10 +80,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
+    bitstream_path = os.path.join(build_dir, "fpgaCompDir", "bitstream.bit")
     if build_result.returncode == 0:
-        missing = [path for path in (rtcfg_path, libvctb_path) if not os.path.exists(path)]
+        missing = [
+            path
+            for path in (rtcfg_path, libvctb_path, bitstream_path)
+            if not os.path.exists(path)
+        ]
         if missing:
-            ctx.logger.error(f"P2E runtime artifacts missing: {missing}")
+            ctx.logger.error(f"P2E build artifacts missing: {missing}")
             await check_result(
                 ctx,
                 1,
@@ -94,7 +99,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                     "vsrc_dir": vsrc_dir,
                     "build_dir": build_dir,
                     "missing": missing,
-                    "error": "runtime_artifact_not_found",
+                    "error": "p2e_artifact_not_found",
                     "timestamp": timestamp,
                 },
                 trace_id=origin_tid,
@@ -112,6 +117,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "build_dir": build_dir,
             "rtcfg": rtcfg_path,
             "libvCtb": libvctb_path,
+            "bitstream": bitstream_path,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

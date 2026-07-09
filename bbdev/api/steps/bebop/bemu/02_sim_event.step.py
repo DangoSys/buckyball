@@ -23,7 +23,7 @@ if scripts_path not in sys.path:
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
-from utils.search_workload import search_workload
+from utils.search_workload import search_workload, search_workload_all
 from utils.event_common import check_result, get_origin_trace_id
 from bemu_common import bemu_env
 
@@ -65,6 +65,22 @@ def clean_model_trace(binary_dir: str) -> None:
         perfetto.unlink()
 
 
+def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
+    search_root = f"{bbdir}/bb-tests/output/workloads/src"
+    chip_root = f"{search_root}/CTest/chips/{chip}"
+
+    chip_binary = search_workload(chip_root, binary_name)
+    if chip_binary is not None:
+        return chip_binary
+
+    matches = search_workload_all(search_root, binary_name)
+    chip_marker = f"{os.path.sep}CTest{os.path.sep}chips{os.path.sep}"
+    non_chip_matches = [path for path in matches if chip_marker not in path]
+    if len(non_chip_matches) == 1:
+        return non_chip_matches[0]
+    return None
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -93,7 +109,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     binary_name = input_data.get("binary", "")
-    binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
+    binary_path = resolve_bemu_binary(bbdir, chip, binary_name)
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(
