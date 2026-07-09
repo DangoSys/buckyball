@@ -6,6 +6,7 @@ case class BallIdMapping(
   ballId:    Int,
   ballName:  String,
   ballClass: String,
+  config:    String,
   inBW:      Int,
   outBW:     Int)
 
@@ -17,7 +18,15 @@ case class BallISAEntry(
 case class BallDomainParam(
   ballNum:        Int,
   ballIdMappings: Seq[BallIdMapping],
-  ballISA:        Seq[BallISAEntry])
+  ballISA:        Seq[BallISAEntry]) {
+
+  def mapping(ballName: String): BallIdMapping =
+    ballIdMappings.find(_.ballName == ballName) match {
+      case Some(m) => m
+      case None    => throw new RuntimeException(s"No ballIdMapping for ballName=$ballName")
+    }
+
+}
 
 object BallDomainParam {
   implicit val ballIdMappingRW: ReadWriter[BallIdMapping]   = macroRW

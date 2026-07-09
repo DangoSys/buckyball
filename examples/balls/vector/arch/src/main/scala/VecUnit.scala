@@ -11,7 +11,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class VecUnit(val b: GlobalConfig) extends Module {
-  val cfg        = VectorBallParam()
+  val cfg        = VectorBallParam(b)
   val lane       = cfg.lane
   val inputWidth = cfg.inputWidth
   val accWidth   = cfg.outputWidth

@@ -1,0 +1,5 @@
+# Im2col Ball Configuration
+
+[ball]
+InputNum = 16
+inputWidth = 8

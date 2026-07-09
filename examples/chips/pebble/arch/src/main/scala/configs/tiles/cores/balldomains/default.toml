@@ -3,8 +3,8 @@
 ballNum = 2
 
 ballIdMappings = [
-  { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", inBW = 1, outBW = 1 },
-  { ballId = 1, ballName = "SystolicArrayBall", ballClass = "examples.balls.systolicarray.SystolicArrayBall", inBW = 2, outBW = 4 }
+  { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 1, ballName = "SystolicArrayBall", ballClass = "examples.balls.systolicarray.SystolicArrayBall", config = "arch/src/main/scala/configs/lane16.toml", inBW = 2, outBW = 4 }
 ]
 
 ballISA = [

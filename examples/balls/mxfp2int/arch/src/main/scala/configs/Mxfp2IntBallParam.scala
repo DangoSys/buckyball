@@ -1,20 +1,17 @@
 package examples.balls.mxfp2int.configs
 
-import upickle.default._
+import framework.balldomain.configs.BallParamLoader
+import framework.top.GlobalConfig
 
 case class Mxfp2IntBallParam(
-  mxfpFormat: String // "MXFP4", "MXFP6", or "MXFP8"
+  mxfpFormat: String
 )
 
 object Mxfp2IntBallParam {
-  implicit val rw: ReadWriter[Mxfp2IntBallParam] = macroRW
+  private val ballName = "Mxfp2IntBall"
 
-  def apply(): Mxfp2IntBallParam = {
-    val jsonStr =
-      scala.io.Source
-        .fromFile("../examples/balls/mxfp2int/arch/src/main/scala/configs/default.json")
-        .mkString
-    read[Mxfp2IntBallParam](jsonStr)
+  def apply(b: GlobalConfig): Mxfp2IntBallParam = {
+    val tbl = BallParamLoader.ballTable(b, ballName)
+    Mxfp2IntBallParam(mxfpFormat = BallParamLoader.str(tbl, "mxfpFormat"))
   }
-
 }

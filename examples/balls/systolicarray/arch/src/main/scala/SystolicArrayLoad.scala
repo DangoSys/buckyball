@@ -10,7 +10,7 @@ import examples.balls.systolicarray.configs.SystolicBallParam
 
 @instantiable
 class SystolicArrayLoad(val b: GlobalConfig) extends Module {
-  val config       = SystolicBallParam()
+  val config       = SystolicBallParam(b)
   val InputNum     = config.lane
   val bankWidth    = b.memDomain.bankWidth
   val inputWidth   = config.inputWidth

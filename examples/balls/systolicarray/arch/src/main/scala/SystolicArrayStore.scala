@@ -22,7 +22,7 @@ class BankWriteEntry(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class SystolicArrayStore(val b: GlobalConfig) extends Module {
-  val config   = SystolicBallParam()
+  val config   = SystolicBallParam(b)
   val InputNum = config.lane
   val accWidth = config.outputWidth
 

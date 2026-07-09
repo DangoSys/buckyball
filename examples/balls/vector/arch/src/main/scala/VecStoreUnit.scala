@@ -15,7 +15,7 @@ class ctrl_st_req(b: GlobalConfig) extends Bundle {
 }
 
 class ex_st_req(b: GlobalConfig) extends Bundle {
-  val config   = VectorBallParam()
+  val config   = VectorBallParam(b)
   val InputNum = config.lane
   val accWidth = config.outputWidth
   val rst      = Vec(InputNum, UInt(accWidth.W))
@@ -30,7 +30,7 @@ class BankWriteEntry(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class VecStoreUnit(val b: GlobalConfig) extends Module {
-  val config   = VectorBallParam()
+  val config   = VectorBallParam(b)
   val InputNum = config.lane
   val accWidth = config.outputWidth
 

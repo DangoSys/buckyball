@@ -1,0 +1,12 @@
+[workloads]
+search_path = "workloads/src"
+tests = [
+  "mvin_mvout_test-singlecore-baremetal",
+  "mvin_mvout_stride_test-singlecore-baremetal",
+  "transpose_test-singlecore-baremetal",
+  "transpose_16xn_test-singlecore-baremetal",
+  "bfp_test-singlecore-baremetal",
+  "systolic_matmul_4x4_ones-singlecore-baremetal",
+  "systolic_matmul_8x8_ones-singlecore-baremetal",
+  "systolic_matmul_16x16_ones-singlecore-baremetal",
+]

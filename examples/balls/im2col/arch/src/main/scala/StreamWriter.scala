@@ -17,8 +17,9 @@ import examples.balls.im2col.configs.Im2colBallParam
  */
 @instantiable
 class StreamWriter(val b: GlobalConfig) extends Module {
-  private val maxK         = Im2colBallParam().InputNum
-  private val elemWidth    = Im2colBallParam().inputWidth
+  private val ballCfg      = Im2colBallParam(b)
+  private val maxK         = ballCfg.InputNum
+  private val elemWidth    = ballCfg.inputWidth
   private val bankWidth    = b.memDomain.bankWidth
   private val lanesPerBeat = 16
 

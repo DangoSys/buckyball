@@ -1,6 +1,7 @@
 package examples.balls.gemmini.configs
 
-import upickle.default._
+import framework.balldomain.configs.BallParamLoader
+import framework.top.GlobalConfig
 
 case class GemminiBallParam(
   meshRows:           Int,
@@ -15,17 +16,24 @@ case class GemminiBallParam(
 
   val totalRows:    Int = meshRows * tileRows
   val totalColumns: Int = meshColumns * tileColumns
-  val blockSize:    Int = totalRows // == totalColumns (must be square)
+  val blockSize:    Int = totalRows
 }
 
 object GemminiBallParam {
-  implicit val rw: ReadWriter[GemminiBallParam] = macroRW
+  private val ballName = "GemminiBall"
 
-  def apply(): GemminiBallParam = {
-    val jsonStr = scala.io.Source.fromFile(
-      "../examples/balls/gemmini/arch/src/main/scala/configs/default.json"
-    ).mkString
-    read[GemminiBallParam](jsonStr)
+  def apply(b: GlobalConfig): GemminiBallParam = {
+    val tbl = BallParamLoader.ballTable(b, ballName)
+    GemminiBallParam(
+      meshRows = BallParamLoader.int(tbl, "meshRows"),
+      meshColumns = BallParamLoader.int(tbl, "meshColumns"),
+      tileRows = BallParamLoader.int(tbl, "tileRows"),
+      tileColumns = BallParamLoader.int(tbl, "tileColumns"),
+      inputWidth = BallParamLoader.int(tbl, "inputWidth"),
+      accWidth = BallParamLoader.int(tbl, "accWidth"),
+      spatialOutputWidth = BallParamLoader.int(tbl, "spatialOutputWidth"),
+      tileLatency = BallParamLoader.int(tbl, "tileLatency"),
+      outputDelay = BallParamLoader.int(tbl, "outputDelay")
+    )
   }
-
 }

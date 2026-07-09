@@ -1,8 +1,0 @@
-{
-  "InputNum": 8,
-  "inputWidth": 8,
-  "lane": 8,
-  "outputWidth": 32,
-  "numMulThreads": 8,
-  "numCasThreads": 8
-}

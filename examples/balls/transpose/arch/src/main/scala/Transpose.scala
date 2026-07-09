@@ -13,7 +13,7 @@ import examples.balls.transpose.configs.TransposeBallParam
 
 @instantiable
 class Transpose(val b: GlobalConfig) extends Module {
-  val ballConfig = TransposeBallParam()
+  val ballConfig = TransposeBallParam(b)
   val InputNum   = ballConfig.InputNum
   val inputWidth = ballConfig.inputWidth
   val bankWidth  = b.memDomain.bankWidth

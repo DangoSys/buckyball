@@ -1,0 +1,12 @@
+# Gemmini Ball Configuration
+
+[ball]
+meshRows = 16
+meshColumns = 16
+tileRows = 1
+tileColumns = 1
+inputWidth = 8
+accWidth = 32
+spatialOutputWidth = 20
+tileLatency = 0
+outputDelay = 1

@@ -10,7 +10,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Im2col(val b: GlobalConfig) extends Module {
-  private val maxK = Im2colBallParam().InputNum
+  private val maxK = Im2colBallParam(b).InputNum
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")

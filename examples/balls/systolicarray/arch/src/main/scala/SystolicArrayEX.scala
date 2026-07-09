@@ -12,14 +12,14 @@ class ctrl_ex_req(b: GlobalConfig) extends Bundle {
 }
 
 class ld_ex_req(b: GlobalConfig) extends Bundle {
-  val config = SystolicBallParam()
+  val config = SystolicBallParam(b)
   val op1    = Vec(config.lane, UInt(config.inputWidth.W))
   val op2    = Vec(config.lane, UInt(config.inputWidth.W))
   val iter   = UInt(b.frontend.iter_len.W)
 }
 
 class ex_st_req(b: GlobalConfig) extends Bundle {
-  val config = SystolicBallParam()
+  val config = SystolicBallParam(b)
   val result = Vec(config.lane, UInt(config.outputWidth.W))
 }
 
@@ -56,7 +56,7 @@ class PE(val inputWidth: Int, val outputWidth: Int) extends Module {
 
 @instantiable
 class SystolicArrayEX(val b: GlobalConfig) extends Module {
-  val config      = SystolicBallParam()
+  val config      = SystolicBallParam(b)
   val inputWidth  = config.inputWidth
   val outputWidth = config.outputWidth
   val arraySize   = config.lane

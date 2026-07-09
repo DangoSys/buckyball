@@ -1,0 +1,5 @@
+# Transpose Ball Configuration
+
+[ball]
+InputNum = 16
+inputWidth = 8

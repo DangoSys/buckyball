@@ -3,11 +3,11 @@
 ballNum = 5
 
 ballIdMappings = [
-  { ballId = 0, ballName = "VecBall", ballClass = "examples.balls.vector.VecBall", inBW = 2, outBW = 4 },
-  { ballId = 1, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", inBW = 1, outBW = 1 },
-  { ballId = 2, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", inBW = 1, outBW = 1 },
-  { ballId = 3, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", inBW = 1, outBW = 1 },
-  { ballId = 4, ballName = "Im2colBall", ballClass = "examples.balls.im2col.Im2colBall", inBW = 1, outBW = 1 }
+  { ballId = 0, ballName = "VecBall", ballClass = "examples.balls.vector.VecBall", config = "arch/src/main/scala/configs/default.toml", inBW = 2, outBW = 4 },
+  { ballId = 1, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 2, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "Im2colBall", ballClass = "examples.balls.im2col.Im2colBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 }
 ]
 
 ballISA = [

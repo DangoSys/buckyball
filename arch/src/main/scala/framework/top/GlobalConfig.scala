@@ -6,8 +6,6 @@ import framework.memdomain.configs.MemDomainParam
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.balldomain.configs.BallDomainParam
-import examples.balls.vector.configs.VectorBallParam
-import examples.balls.relu.configs.ReluBallParam
 import framework.system.core.configs.CoreParam
 import framework.top.configs.TopConfig
 import framework.system.core.configs.RocketCoreParam
@@ -17,8 +15,6 @@ case class GlobalConfig(
   frontend:   FrontendParam,
   gpDomain:   GpDomainParam,
   ballDomain: BallDomainParam,
-  vectorBall: VectorBallParam,
-  reluBall:   ReluBallParam,
   core:       CoreParam,
   top:        TopConfig,
   rocketCore: RocketCoreParam)
@@ -33,8 +29,6 @@ object GlobalConfig {
       frontend = FrontendParam(),
       gpDomain = GpDomainParam(),
       ballDomain = BallDomainParam(),
-      vectorBall = VectorBallParam(),
-      reluBall = ReluBallParam(),
       core = CoreParam(),
       top = TopConfig(),
       rocketCore = RocketCoreParam()

@@ -21,7 +21,7 @@ class ctrl_ld_req(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class SystolicArrayUnit(val b: GlobalConfig) extends Module {
-  val config     = SystolicBallParam()
+  val config     = SystolicBallParam(b)
   val InputNum   = config.lane
   val inputWidth = config.inputWidth
   val accWidth   = config.outputWidth

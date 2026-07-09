@@ -13,7 +13,7 @@ class ctrl_ex_req(b: GlobalConfig) extends Bundle {
 }
 
 class ld_ex_req(b: GlobalConfig) extends Bundle {
-  val config = VectorBallParam()
+  val config = VectorBallParam(b)
   val op1    = Vec(config.lane, UInt(config.inputWidth.W))
   val op2    = Vec(config.lane, UInt(config.inputWidth.W))
   val iter   = UInt(b.frontend.iter_len.W)
@@ -21,7 +21,7 @@ class ld_ex_req(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class VecEXUnit(val b: GlobalConfig) extends Module {
-  val config     = VectorBallParam()
+  val config     = VectorBallParam(b)
   val InputNum   = config.lane
   val inputWidth = config.inputWidth
   val accWidth   = config.outputWidth

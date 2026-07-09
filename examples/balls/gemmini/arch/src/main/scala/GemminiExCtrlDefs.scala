@@ -12,7 +12,7 @@ import gemmini._
 import gemmini.Util._
 
 trait GemminiExCtrlDefs { this: GemminiExCtrl =>
-  val config = GemminiBallParam()
+  val config = GemminiBallParam(b)
   val DIM    = config.blockSize
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "GemminiBall")

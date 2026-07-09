@@ -9,8 +9,9 @@ import framework.top.GlobalConfig
 
 @instantiable
 class LineBufferManager(val b: GlobalConfig) extends Module {
-  private val maxK          = Im2colBallParam().InputNum
-  private val elemWidth     = Im2colBallParam().inputWidth
+  private val ballCfg       = Im2colBallParam(b)
+  private val maxK          = ballCfg.InputNum
+  private val elemWidth     = ballCfg.inputWidth
   private val bankWidth     = b.memDomain.bankWidth
   private val lanesPerBeat  = 16
   private val maxInColWords = 3

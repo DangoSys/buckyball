@@ -1,18 +1,17 @@
 package examples.balls.fp2int.configs
 
-import upickle.default._
+import framework.balldomain.configs.BallParamLoader
+import framework.top.GlobalConfig
 
 case class Fp2IntBallParam(
-  targetType: String // "INT32" or "INT8"
+  targetType: String
 )
 
 object Fp2IntBallParam {
-  implicit val rw: ReadWriter[Fp2IntBallParam] = macroRW
+  private val ballName = "Fp2IntBall"
 
-  def apply(): Fp2IntBallParam = {
-    val jsonStr =
-      scala.io.Source.fromFile("../examples/balls/fp2int/arch/src/main/scala/configs/default.json").mkString
-    read[Fp2IntBallParam](jsonStr)
+  def apply(b: GlobalConfig): Fp2IntBallParam = {
+    val tbl = BallParamLoader.ballTable(b, ballName)
+    Fp2IntBallParam(targetType = BallParamLoader.str(tbl, "targetType"))
   }
-
 }

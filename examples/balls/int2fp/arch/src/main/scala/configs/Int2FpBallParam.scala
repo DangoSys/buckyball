@@ -1,17 +1,17 @@
 package examples.balls.int2fp.configs
 
-import upickle.default._
+import framework.balldomain.configs.BallParamLoader
+import framework.top.GlobalConfig
 
 case class Int2FpBallParam(
-  placeholder: Boolean)
+  placeholder: Boolean
+)
 
 object Int2FpBallParam {
-  implicit val rw: ReadWriter[Int2FpBallParam] = macroRW
+  private val ballName = "Int2FpBall"
 
-  def apply(): Int2FpBallParam = {
-    val jsonStr =
-      scala.io.Source.fromFile("../examples/balls/int2fp/arch/src/main/scala/configs/default.json").mkString
-    read[Int2FpBallParam](jsonStr)
+  def apply(b: GlobalConfig): Int2FpBallParam = {
+    val tbl = BallParamLoader.ballTable(b, ballName)
+    Int2FpBallParam(placeholder = BallParamLoader.bool(tbl, "placeholder"))
   }
-
 }

@@ -13,7 +13,7 @@ import examples.balls.relu.configs.ReluBallParam
 
 @instantiable
 class PipelinedRelu(val b: GlobalConfig) extends Module {
-  val ballConfig = ReluBallParam()
+  val ballConfig = ReluBallParam(b)
   val InputNum   = ballConfig.InputNum
   val inputWidth = ballConfig.inputWidth
   val bankWidth  = b.memDomain.bankWidth

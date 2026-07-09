@@ -79,7 +79,7 @@ jobs:
           nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballPebbleVerilatorConfig'
           nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballPebbleVerilatorConfig'
           nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballPebbleVerilatorConfig'
-          nix develop -c bbdev bebop-verilator --batch '--config sims.verilator.BuckyballPebbleVerilatorConfig --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip pebble --config sims.verilator.BuckyballPebbleVerilatorConfig --test elf-tests --clean-before'
 
       - name: Detect bebop JUnit files
         if: always()

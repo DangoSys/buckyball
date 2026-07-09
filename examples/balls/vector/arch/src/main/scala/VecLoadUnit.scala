@@ -19,7 +19,7 @@ class ctrl_ld_req(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class VecLoadUnit(val b: GlobalConfig) extends Module {
-  val config       = VectorBallParam()
+  val config       = VectorBallParam(b)
   val InputNum     = config.lane
   val inputWidth   = config.inputWidth
   val bankWidth    = b.memDomain.bankWidth

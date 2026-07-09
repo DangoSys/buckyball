@@ -12,7 +12,6 @@ import framework.top.GlobalConfig
 class Fp2Int(val b: GlobalConfig) extends Module {
   val elemsPerWord = 4
   val bankWidth    = b.memDomain.bankWidth
-
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "Fp2IntBall")
     .getOrElse(throw new IllegalArgumentException("Fp2IntBall not found in config"))
   val inBW        = ballMapping.inBW

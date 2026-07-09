@@ -36,7 +36,7 @@ import examples.balls.mxfp2int.configs.Mxfp2IntBallParam
  */
 @instantiable
 class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
-  val ballConfig = Mxfp2IntBallParam()
+  val ballConfig = Mxfp2IntBallParam(b)
   val decoder    = MxfpDecoder.fromFormat(ballConfig.mxfpFormat)
   val elemBits   = decoder.elemBits
 

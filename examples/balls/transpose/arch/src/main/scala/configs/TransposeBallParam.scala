@@ -1,21 +1,21 @@
 package examples.balls.transpose.configs
 
-import upickle.default._
+import framework.balldomain.configs.BallParamLoader
+import framework.top.GlobalConfig
 
-/**
- * TransposeBall Parameter
- */
 case class TransposeBallParam(
   InputNum:   Int,
-  inputWidth: Int)
+  inputWidth: Int
+)
 
 object TransposeBallParam {
-  implicit val rw: ReadWriter[TransposeBallParam] = macroRW
+  private val ballName = "TransposeBall"
 
-  def apply(): TransposeBallParam = {
-    val jsonStr =
-      scala.io.Source.fromFile("../examples/balls/transpose/arch/src/main/scala/configs/default.json").mkString
-    read[TransposeBallParam](jsonStr)
+  def apply(b: GlobalConfig): TransposeBallParam = {
+    val tbl = BallParamLoader.ballTable(b, ballName)
+    TransposeBallParam(
+      InputNum = BallParamLoader.int(tbl, "InputNum"),
+      inputWidth = BallParamLoader.int(tbl, "inputWidth")
+    )
   }
-
 }

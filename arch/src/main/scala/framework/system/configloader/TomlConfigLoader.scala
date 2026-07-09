@@ -290,6 +290,7 @@ object TomlConfigLoader {
         ballId = getInt(t, "ballId"),
         ballName = getString(t, "ballName"),
         ballClass = getString(t, "ballClass"),
+        config = getString(t, "config"),
         inBW = getInt(t, "inBW"),
         outBW = getInt(t, "outBW")
       )
