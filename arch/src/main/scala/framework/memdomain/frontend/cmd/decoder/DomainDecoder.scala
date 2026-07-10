@@ -135,7 +135,9 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  val raw_bank_id = rs1(bankIdLen - 1, 0)
+  // BB_BANK0 is encoded in rs1[9:0]. Use the full raw field to detect
+  // shared banks before truncating to the local vbank id width.
+  val raw_bank_id = rs1(9, 0)
   io.mem_decode_cmd_o.bits.is_shared    := io.mem_decode_cmd_o.valid && (raw_bank_id > 31.U)
   io.mem_decode_cmd_o.bits.is_load      := Mux(
     io.mem_decode_cmd_o.valid,

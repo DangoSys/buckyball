@@ -641,10 +641,17 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
       sharedBackend.io.config <> cfgArb.io.out
 
-      sharedBackend.io.query_vbank_id := enabledAccelerators.head.io.shared_query_vbank_id
       for (i <- 0 until nCores) {
-        accelerators(i).foreach { acc =>
-          acc.io.shared_query_group_count := sharedBackend.io.query_group_count
+        accelerators(i) match {
+          case Some(acc) =>
+            sharedBackend.io.query_valid(i)    := acc.io.shared_query_valid
+            sharedBackend.io.query_hart_id(i)  := hartIdForCore(i)
+            sharedBackend.io.query_vbank_id(i) := acc.io.shared_query_vbank_id
+            acc.io.shared_query_group_count    := sharedBackend.io.query_group_count(i)
+          case None      =>
+            sharedBackend.io.query_valid(i)    := false.B
+            sharedBackend.io.query_hart_id(i)  := 0.U
+            sharedBackend.io.query_vbank_id(i) := 0.U
         }
       }
     } else {
