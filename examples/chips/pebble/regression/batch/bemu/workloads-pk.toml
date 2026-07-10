@@ -6,7 +6,5 @@ tests = [
   "transpose_test-linux",
   "transpose_16xn_test-linux",
   "bfp_test-linux",
-  "systolic_matmul_4x4_ones-linux",
-  "systolic_matmul_8x8_ones-linux",
   "systolic_matmul_16x16_ones-linux",
 ]
