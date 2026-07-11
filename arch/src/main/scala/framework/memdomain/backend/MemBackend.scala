@@ -22,6 +22,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val shared_config  = Decoupled(new MemConfigerIO(b))
 
     // Query interface: shared query goes out, private query handled internally.
+    val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
@@ -54,6 +55,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Query routing
   privateBackend.io.query_vbank_id := io.query_vbank_id
+  io.shared_query_valid            := io.query_is_shared
   io.shared_query_vbank_id         := io.query_vbank_id
   io.query_group_count             := Mux(io.query_is_shared, io.shared_query_group_count, privateBackend.io.query_group_count)
 
