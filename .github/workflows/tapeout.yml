@@ -32,12 +32,8 @@ jobs:
             git clone --depth 1 https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
             cd "$TAPEOUT_DIR"
             git submodule update --init --force
-          else
-            echo "Tapeout repo exists, cleaning..."
-            cd "$TAPEOUT_DIR"
-            git clean -ffdx 0_RTL/RTL/ 1_SYN/outputs/ 1_SYN/rpt/ 1_SYN/logs/ config/rtl.f 2>/dev/null || true
-            git checkout -- 0_RTL/RTL/ 1_SYN/ config/ 2>/dev/null || true
           fi
+          echo "Tapeout repo ready"
 
       - name: Create test RTL
         shell: bash
