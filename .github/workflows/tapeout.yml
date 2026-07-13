@@ -58,7 +58,7 @@ concurrency:
 jobs:
   tapeout:
     name: Tapeout Flow
-    runs-on: cpu-server
+    runs-on: cpu-server-tapeout
     env:
       ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
