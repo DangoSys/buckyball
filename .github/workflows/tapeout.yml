@@ -107,33 +107,32 @@ jobs:
         shell: bash
         if: always()
         run: |
-          mkdir -p ~/tapeout_test_results/reports
-          mkdir -p ~/tapeout_test_results/netlist
-
-          cp -r ~/Code/tapeout/1_SYN/rpt/* ~/tapeout_test_results/reports/ 2>/dev/null || true
-          SYN_OUTPUTS=~/Code/tapeout/1_SYN/outputs
-          if [ -d "$SYN_OUTPUTS" ]; then
-            LATEST=$(ls -td "$SYN_OUTPUTS"/*/ 2>/dev/null | head -1)
-            if [ -n "$LATEST" ]; then
-              cp -r "$LATEST"/* ~/tapeout_test_results/netlist/ 2>/dev/null || true
-            fi
+          set +e
+          RESULTS=~/tapeout_test_results
+          mkdir -p "$RESULTS/reports" "$RESULTS/netlist"
+          
+          cp -r ~/Code/tapeout/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null || true
+          
+          LATEST=$(ls -td ~/Code/tapeout/1_SYN/outputs/*/ 2>/dev/null | head -1)
+          if [ -n "$LATEST" ] && [ -d "$LATEST" ]; then
+            cp "$LATEST"/* "$RESULTS/netlist/" 2>/dev/null || true
           fi
-
-          echo "=== Results ==="
-          find ~/tapeout_test_results -type f 2>/dev/null | sort || true
-
-          echo ""
-          echo "=== Area Report ==="
-          for rpt in ~/tapeout_test_results/reports/*/*_mapped_area.rpt; do
+          
+          echo "=== PPA Summary ==="
+          for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
             [ -f "$rpt" ] || continue
-            grep -E "Total|cell area|Area" "$rpt" | head -10
+            echo "--- Area ---"
+            grep -E "Total cell area" "$rpt" | head -1
           done
-
-          echo ""
-          echo "=== Timing Report ==="
-          for rpt in ~/tapeout_test_results/reports/*/*_timing_max_path.rpt; do
+          for rpt in "$RESULTS"/reports/*/*_timing_max_path.rpt; do
             [ -f "$rpt" ] || continue
-            grep -E "slack|data required|data arrival" "$rpt" | head -10
+            echo "--- Timing ---"
+            grep -E "slack" "$rpt" | head -1
+          done
+          for rpt in "$RESULTS"/reports/*/*_power.rpt; do
+            [ -f "$rpt" ] || continue
+            echo "--- Power ---"
+            grep -E "Total" "$rpt" | head -1
           done
 
       - name: Upload artifacts
