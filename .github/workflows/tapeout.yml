@@ -1,50 +1,9 @@
-name: Buckyball Tapeout CI
-run-name: ${{ github.actor }} is running Tapeout Flow 🚀
+name: Buckyball Tapeout CI (Test)
+run-name: ${{ github.actor }} Tapeout Test 🚀
 on:
-  workflow_dispatch:
-    inputs:
-      chip:
-        description: 'Chip name (matches verilog config suffix)'
-        required: true
-        default: 'toy'
-        type: choice
-        options:
-          - toy
-          - pebble
-      config:
-        description: 'Verilator config class (full Scala path)'
-        required: true
-        default: 'sims.verilator.BuckyballToyVerilatorConfig'
-        type: string
-      top_module:
-        description: 'Synthesis top module name'
-        required: true
-        default: 'BBSimHarness'
-        type: string
-      full_flow:
-        description: 'Run full flow (syn + glsim + ptpx + dram power)'
-        required: true
-        default: false
-        type: boolean
-      clock_period_ns:
-        description: 'Target clock period in ns (only used in full flow)'
-        required: false
-        default: '1.0'
-        type: string
-      cycles:
-        description: 'Simulation cycles (only used in full flow)'
-        required: false
-        default: '5000000'
-        type: string
   push:
     branches:
-      - main
       - feature/tapeout-ci
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'arch/src/main/scala/**'
 
 permissions:
   contents: read
@@ -58,280 +17,109 @@ jobs:
   tapeout:
     name: Tapeout Flow
     runs-on: cpu-server-tapeout
-    env:
-      ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
       - name: Print information
         run: |
-          echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "🔎 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
-            echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "🔎 Branch: ${{ github.ref_name }}"
-          else
-            echo "🔎 Trigger: workflow_dispatch"
-            echo "🔎 Chip: ${{ inputs.chip }}"
-            echo "🔎 Config: ${{ inputs.config }}"
-          fi
-          echo "🔎 Repository: ${{ github.repository }}"
+          echo "🎉 Tapeout CI Test"
+          echo "🔎 Branch: ${{ github.ref_name }}"
 
-      - name: Reset buckyball to clean state
-        shell: zsh {0}
+      - name: Setup tapeout repo
+        shell: bash
         run: |
-          cd ~/Code/buckyball
-          git fetch --force --prune origin "${{ github.ref }}"
-          git checkout --detach FETCH_HEAD
-          git reset --hard FETCH_HEAD
-          git clean -ffd
-          git submodule sync bbdev bebop compiler/thirdparty/buddy-mlir
-          git submodule update --init --force bbdev bebop compiler/thirdparty/buddy-mlir
-          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
-            git -C "$submodule" reset --hard
-            git -C "$submodule" clean -ffd
-          done
-
-      - name: Nix build
-        shell: zsh {0}
-        run: |
-          set -x
-          cd ~/Code/buckyball
-          nix build 2>&1
-
-      - name: Generate Verilog
-        shell: zsh {0}
-        env:
-          CONFIG: ${{ inputs.config || 'sims.verilator.BuckyballToyVerilatorConfig' }}
-        run: |
-          cd ~/Code/buckyball
-          nix develop -c bbdev bebop-verilator --clean "--config ${CONFIG}"
-          nix develop -c bbdev bebop-verilator --verilog "--config ${CONFIG}"
-
-      - name: Setup tapeout repository
-        shell: zsh {0}
-        run: |
-          TAPEOUT_DIR=~/Code/tapeout
-          if [ ! -d "$TAPEOUT_DIR" ]; then
-            echo "Cloning tapeout repository..."
-            git clone --depth 1 https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
-            cd "$TAPEOUT_DIR"
+          if [ ! -d ~/Code/tapeout/.git ]; then
+            git clone --depth 1 https://github.com/DangoSys/tapeout.git ~/Code/tapeout
+            cd ~/Code/tapeout
             git submodule update --init --force
           else
-            echo "Resetting tapeout repository..."
-            cd "$TAPEOUT_DIR"
-            git fetch --force --prune origin main
-            git checkout --detach FETCH_HEAD
-            git reset --hard FETCH_HEAD
-            git clean -ffd
+            cd ~/Code/tapeout
+            git checkout main
+            git pull origin main
             git submodule update --init --force
           fi
 
-      - name: Copy RTL to tapeout
-        shell: zsh {0}
+      - name: Create test RTL
+        shell: bash
         run: |
           TAPEOUT_RTL=~/Code/tapeout/0_RTL/RTL
           rm -rf "$TAPEOUT_RTL"
           mkdir -p "$TAPEOUT_RTL"
-          cp ~/Code/buckyball/arch/BBSimHarness.sv "$TAPEOUT_RTL/"
-          echo "BBSimHarness.sv" > "$TAPEOUT_RTL/filelist.f"
-          echo "RTL contents:"
-          ls -la "$TAPEOUT_RTL"
-          echo "filelist.f:"
+
+          cat > "$TAPEOUT_RTL/dut.sv" << 'VERILOG_EOF'
+          module dut (
+            input  logic        clock,
+            input  logic        reset,
+            input  logic [7:0]  a,
+            input  logic [7:0]  b,
+            output logic [8:0]  sum,
+            output logic        carry
+          );
+            always_ff @(posedge clock or posedge reset) begin
+              if (reset) begin
+                sum   <= 9'd0;
+                carry <= 1'b0;
+              end else begin
+                {carry, sum} <= {1'b0, a} + {1'b0, b};
+              end
+            end
+          endmodule
+          VERILOG_EOF
+
+          echo "dut.sv" > "$TAPEOUT_RTL/filelist.f"
+          echo "RTL created:"
           cat "$TAPEOUT_RTL/filelist.f"
 
-      - name: Set up environment variables
-        shell: zsh {0}
-        id: tapeout-env
+      - name: Run tapeout SRAM gen
+        shell: bash
         run: |
-          CHIP="${{ inputs.chip || 'toy' }}"
-          RUN_TAG="ci_${CHIP}_$(date +%Y%m%d_%H%M%S)"
-          TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
-          echo "RUN_TAG=${RUN_TAG}" | tee -a "$GITHUB_ENV"
-          echo "TOP_MODULE=${TOP_MODULE}" | tee -a "$GITHUB_ENV"
-          echo "run_tag=${RUN_TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Run tapeout SRAM collateral generation
-        shell: zsh {0}
-        run: |
-          cd ~/Code/tapeout
-          cd 0_RTL
+          cd ~/Code/tapeout/0_RTL
           python3 scripts/gen_real_sram_libs.py
 
       - name: Run tapeout synthesis
-        shell: zsh {0}
+        shell: bash
         run: |
           cd ~/Code/tapeout
+          export TOP_MODULE=dut
+          export RUN_TAG="test_$(date +%Y%m%d_%H%M%S)"
           export CLOCK_PORT=clock
           export CLOCK_NAME=clock
-          export TOP_MODULE
-          export RUN_TAG
           cd 1_SYN
           ./run_dc --top "$TOP_MODULE"
 
-      - name: Collect synthesis outputs
-        shell: zsh {0}
+      - name: Collect synthesis results
+        shell: bash
         if: always()
         run: |
-          RESULTS_DIR=~/Code/buckyball/tapeout_results
-          mkdir -p "$RESULTS_DIR/reports" "$RESULTS_DIR/netlist" "$RESULTS_DIR/logs"
+          mkdir -p ~/tapeout_test_results/reports
+          mkdir -p ~/tapeout_test_results/netlist
 
-          SYN_OUTPUTS=~/Code/tapeout/1_SYN/outputs
-          if [ -d "$SYN_OUTPUTS" ]; then
-            LATEST=$(ls -td "$SYN_OUTPUTS"/*/ 2>/dev/null | head -1)
-            if [ -n "$LATEST" ]; then
-              cp -r "$LATEST"/* "$RESULTS_DIR/netlist/" 2>/dev/null || true
-            fi
-          fi
-
-          SYN_RPT=~/Code/tapeout/1_SYN/rpt
-          if [ -d "$SYN_RPT" ]; then
-            cp -r "$SYN_RPT"/* "$RESULTS_DIR/reports/" 2>/dev/null || true
-          fi
-
-          SYN_LOGS=~/Code/tapeout/1_SYN/logs
-          if [ -d "$SYN_LOGS" ]; then
-            cp -r "$SYN_LOGS"/* "$RESULTS_DIR/logs/" 2>/dev/null || true
-          fi
-
-          echo "Tapeout results:"
-          find "$RESULTS_DIR" -type f | sort
-
-      - name: Print PPA summary
-        shell: zsh {0}
-        if: always()
-        run: |
-          echo "============================================"
-          echo "  PPA Summary (Synopsys DC Synthesis)"
-          echo "============================================"
-          echo ""
-
-          for rpt in ~/Code/buckyball/tapeout_results/reports/*/*_mapped_area.rpt; do
-            if [ -f "$rpt" ]; then
-              echo "--- Area Report ---"
-              grep -E "Total|Combinational|Noncombinational|cell area|Area" "$rpt" | head -20
-              echo ""
-            fi
-          done
-
-          for rpt in ~/Code/buckyball/tapeout_results/reports/*/*_timing_max_path.rpt; do
-            if [ -f "$rpt" ]; then
-              echo "--- Critical Path Timing ---"
-              grep -E "slack|Startpoint|Endpoint|data required|data arrival" "$rpt" | head -20
-              echo ""
-            fi
-          done
-
-          for rpt in ~/Code/buckyball/tapeout_results/reports/*/*_power.rpt; do
-            if [ -f "$rpt" ]; then
-              echo "--- Power Report ---"
-              grep -E "Total|Cell Internal|Net Switching|Leakage" "$rpt" | head -10
-              echo ""
-            fi
-          done
-
-          for rpt in ~/Code/buckyball/tapeout_results/reports/*/constraint.rpt; do
-            if [ -f "$rpt" ]; then
-              echo "--- Constraint Summary ---"
-              cat "$rpt"
-              echo ""
-            fi
-          done
-
-          echo "============================================"
-
-      - name: Full tapeout flow (conditional)
-        if: inputs.full_flow == true
-        shell: zsh {0}
-        run: |
-          echo "Running full tapeout flow: mixed simulation + PTPX + DRAM power"
-          cd ~/Code/tapeout
-
-          RUN_NAME="${RUN_TAG}_mixed"
-          export RUN_NAME
-          export CYCLES="${{ inputs.cycles || '5000000' }}"
-
-          echo "Stage 3: Copy synthesis outputs to power netlist"
+          cp -r ~/Code/tapeout/1_SYN/rpt/* ~/tapeout_test_results/reports/ 2>/dev/null || true
           SYN_OUTPUTS=~/Code/tapeout/1_SYN/outputs
           LATEST=$(ls -td "$SYN_OUTPUTS"/*/ 2>/dev/null | head -1)
-          POWER_NETLIST=~/Code/tapeout/3_POWER/netlist
-          rm -rf "$POWER_NETLIST"/*
-          mkdir -p "$POWER_NETLIST"
-          cp "$LATEST"/* "$POWER_NETLIST/" 2>/dev/null || true
-
-          echo "Stage 4: Compile mixed simulation"
-          cd ~/Code/tapeout/2_POSTSIM/glsim
-          ./compile_mixed.sh
-
-          echo "Stage 5: Run mixed simulation"
-          export ELF="${GLSIM_ELF:-$HOME/Code/tapeout/2_POSTSIM/glsim/elf/default.elf}"
-          export DUMP_VCD=0
-          export DUMP_FST=0
-          export BB_SAIF=1
-          export DUMP_SAIF=1
-          export DUMP_DRAM_TRACE=1
-          ./run_mixed.sh
-
-          echo "Stage 5: Copy SAIF to power waveform"
-          SAIF_SRC="results/$RUN_NAME/glsim_mixed.saif"
-          POWER_WAVEFORM=~/Code/tapeout/3_POWER/waveform
-          rm -rf "$POWER_WAVEFORM"/*
-          mkdir -p "$POWER_WAVEFORM"
-          cp "$SAIF_SRC" "$POWER_WAVEFORM/glsim_mixed.saif"
-
-          echo "Stage 6: Run PTPX power analysis"
-          cd ~/Code/tapeout/3_POWER
-          export RUN_TAG
-          ./run_ptpx
-
-          echo "Stage 6: Run DRAM power analysis"
-          DRAM_TRACE="results/$RUN_NAME/dram_trace.csv"
-          if [ -f "$DRAM_TRACE" ]; then
-            export DRAM_TRACE_FILE="$DRAM_TRACE"
-            ./run_dram_power
+          if [ -n "$LATEST" ]; then
+            cp -r "$LATEST"/* ~/tapeout_test_results/netlist/ 2>/dev/null || true
           fi
 
-          echo "Full flow complete"
+          echo "=== Results ==="
+          find ~/tapeout_test_results -type f | sort
 
-      - name: Collect full flow outputs
-        if: always() && inputs.full_flow == true
-        shell: zsh {0}
-        run: |
-          RESULTS_DIR=~/Code/buckyball/tapeout_results
-          mkdir -p "$RESULTS_DIR/ptpx_reports" "$RESULTS_DIR/ptpx_outputs"
-          mkdir -p "$RESULTS_DIR/glsim_results" "$RESULTS_DIR/dram_power"
-
-          cp -r ~/Code/tapeout/3_POWER/rpt/* "$RESULTS_DIR/ptpx_reports/" 2>/dev/null || true
-          cp -r ~/Code/tapeout/3_POWER/outputs/* "$RESULTS_DIR/ptpx_outputs/" 2>/dev/null || true
-          cp -r ~/Code/tapeout/2_POSTSIM/glsim/results/* "$RESULTS_DIR/glsim_results/" 2>/dev/null || true
-
-          echo "Full flow results:"
-          find "$RESULTS_DIR" -type f | sort
-
-      - name: Print PTPX power summary
-        if: always() && inputs.full_flow == true
-        shell: zsh {0}
-        run: |
-          echo "============================================"
-          echo "  PTPX Power Analysis Summary"
-          echo "============================================"
-          for rpt in ~/Code/buckyball/tapeout_results/ptpx_reports/*/*; do
-            if [ -f "$rpt" ]; then
-              echo "--- $(basename $rpt) ---"
-              head -50 "$rpt"
-              echo ""
-            fi
+          echo ""
+          echo "=== Area Report ==="
+          for rpt in ~/tapeout_test_results/reports/*/*_mapped_area.rpt; do
+            [ -f "$rpt" ] || continue
+            grep -E "Total|cell area|Area" "$rpt" | head -10
           done
-          echo "============================================"
 
-      - name: Upload tapeout artifacts
+          echo ""
+          echo "=== Timing Report ==="
+          for rpt in ~/tapeout_test_results/reports/*/*_timing_max_path.rpt; do
+            [ -f "$rpt" ] || continue
+            grep -E "slack|data required|data arrival" "$rpt" | head -10
+          done
+
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
-        env:
-          ALL_PROXY: ""
-          HTTP_PROXY: ""
-          HTTPS_PROXY: ""
-          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
-          name: tapeout-results-${{ steps.tapeout-env.outputs.run_tag }}
-          path: ~/Code/buckyball/tapeout_results/
-          retention-days: 30
+          name: tapeout-test-results
+          path: ~/tapeout_test_results/
+          retention-days: 7
