@@ -39,8 +39,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'arch/src/main/scala/**'
+      - feature/tapeout-ci
   pull_request:
     branches:
       - main
