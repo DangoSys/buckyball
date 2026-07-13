@@ -94,8 +94,9 @@ jobs:
       - name: Nix build
         shell: zsh {0}
         run: |
+          set -x
           cd ~/Code/buckyball
-          nix build
+          nix build 2>&1
 
       - name: Generate Verilog
         shell: zsh {0}
