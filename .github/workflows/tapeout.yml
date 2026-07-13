@@ -71,6 +71,15 @@ jobs:
         run: |
           cd ~/Code/tapeout/0_RTL
           python3 scripts/gen_real_sram_libs.py || echo "[skip] No SRAMs found (OK for test)"
+          # Ensure manifest files exist (empty if no SRAMs)
+          MANDIR=real_sram_libs
+          mkdir -p "$MANDIR"
+          if [ ! -f "$MANDIR/macro_manifest.csv" ]; then
+            echo "rtl_module,port_type,implementation,copies,logical_depth,logical_width,logical_bit_lo,slice_logical_width,physical_depth,physical_width,compiler,config,status,message,kit_dir,liberty_files,db_files,verilog_files,lef_files,gds_files,spice_files" > "$MANDIR/macro_manifest.csv"
+          fi
+          if [ ! -f "$MANDIR/rtl_sram_manifest.csv" ]; then
+            echo "module,source,logical_depth,logical_width,port_type,status,reason" > "$MANDIR/rtl_sram_manifest.csv"
+          fi
 
       - name: Run tapeout synthesis
         shell: bash
