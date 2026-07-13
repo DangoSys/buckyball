@@ -84,25 +84,34 @@ jobs:
 
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
             echo "Cloning tapeout repository..."
-            git clone --depth 1 --branch fix/run_all-stability https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
-            cd "$TAPEOUT_DIR"
-            git submodule update --init --force
+            git clone --depth 1 --branch fix/run_all-stability https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR" || {
+              echo "Clone failed, using existing tapeout"
+            }
+            cd "$TAPEOUT_DIR" && git submodule update --init --force || true
           else
             cd "$TAPEOUT_DIR"
-            git fetch origin fix/run_all-stability
-            git checkout fix/run_all-stability
-            git reset --hard origin/fix/run_all-stability
-            git clean -ffdx
-            git submodule update --init --force
+            git fetch origin fix/run_all-stability 2>/dev/null || echo "Fetch failed, using local tapeout"
+            git checkout fix/run_all-stability 2>/dev/null || true
+            git reset --hard origin/fix/run_all-stability 2>/dev/null || true
+            git clean -ffdx 2>/dev/null || true
+            git submodule update --init --force || true
+          fi
+
+          # Find generated Verilog directory
+          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "BBSimHarness.sv" -type f 2>/dev/null | head -1 | xargs dirname)
+          if [ -z "$VERILOG_DIR" ]; then
+            echo "ERROR: BBSimHarness.sv not found" >&2
+            exit 1
           fi
 
           TAPEOUT_RTL="$TAPEOUT_DIR/0_RTL/RTL"
           rm -rf "$TAPEOUT_RTL"
           mkdir -p "$TAPEOUT_RTL"
-          cp ~/Code/buckyball/arch/BBSimHarness.sv "$TAPEOUT_RTL/"
-          echo "BBSimHarness.sv" > "$TAPEOUT_RTL/filelist.f"
-          echo "RTL ready:"
-          cat "$TAPEOUT_RTL/filelist.f"
+          cp "$VERILOG_DIR"/*.sv "$TAPEOUT_RTL/" 2>/dev/null || true
+          cp "$VERILOG_DIR"/*.v "$TAPEOUT_RTL/" 2>/dev/null || true
+          (cd "$TAPEOUT_RTL" && ls *.sv *.v 2>/dev/null > filelist.f)
+          echo "RTL ready (${VERILOG_DIR}):"
+          wc -l "$TAPEOUT_RTL/filelist.f"
 
       - name: Run tapeout synthesis
         shell: bash
