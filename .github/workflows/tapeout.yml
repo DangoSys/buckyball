@@ -1,9 +1,28 @@
-name: Buckyball Tapeout CI (Test)
-run-name: ${{ github.actor }} Tapeout Test 🚀
+name: Buckyball Tapeout CI
+run-name: ${{ github.actor }} Tapeout PPA 🚀
 on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Verilator config class'
+        required: true
+        default: 'sims.verilator.BuckyballToyVerilatorConfig'
+        type: string
+      top_module:
+        description: 'Synthesis top module name'
+        required: true
+        default: 'BBSimHarness'
+        type: string
   push:
     branches:
-      - feature/tapeout-ci
+      - main
+    paths:
+      - 'arch/src/main/scala/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'arch/src/main/scala/**'
 
 permissions:
   contents: read
@@ -17,108 +36,97 @@ jobs:
   tapeout:
     name: Tapeout Flow
     runs-on: cpu-server-tapeout
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
       - name: Print information
         run: |
-          echo "🎉 Tapeout CI Test"
-          echo "🔎 Branch: ${{ github.ref_name }}"
+          echo "Tapeout CI triggered by ${{ github.event_name }}"
+          echo "Repository: ${{ github.repository }}"
 
-      - name: Setup tapeout repo
+      - name: Reset buckyball to clean state
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          git fetch --force --prune origin "${{ github.ref }}"
+          git checkout --detach FETCH_HEAD
+          git reset --hard FETCH_HEAD
+          git clean -ffd
+          git submodule sync bbdev bebop compiler/thirdparty/buddy-mlir
+          git submodule update --init --force bbdev bebop compiler/thirdparty/buddy-mlir
+          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
+            git -C "$submodule" reset --hard
+            git -C "$submodule" clean -ffd
+          done
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix build
+
+      - name: Generate Verilog
+        shell: zsh {0}
+        env:
+          CONFIG: ${{ inputs.config || 'sims.verilator.BuckyballToyVerilatorConfig' }}
+        run: |
+          cd ~/Code/buckyball
+          nix develop -c bbdev bebop-verilator --clean "--config ${CONFIG}"
+          nix develop -c bbdev bebop-verilator --verilog "--config ${CONFIG}"
+
+      - name: Prepare tapeout RTL
         shell: bash
         run: |
+          TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
           TAPEOUT_DIR=~/Code/tapeout
+
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
-            echo "Cloning tapeout..."
+            echo "Cloning tapeout repository..."
             git clone --depth 1 https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
             cd "$TAPEOUT_DIR"
             git submodule update --init --force
+          else
+            cd "$TAPEOUT_DIR"
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            git clean -ffdx
+            git submodule update --init --force
           fi
-          echo "Tapeout repo ready"
 
-      - name: Create test RTL
-        shell: bash
-        run: |
-          TAPEOUT_RTL=~/Code/tapeout/0_RTL/RTL
+          TAPEOUT_RTL="$TAPEOUT_DIR/0_RTL/RTL"
           rm -rf "$TAPEOUT_RTL"
           mkdir -p "$TAPEOUT_RTL"
-
-          cat > "$TAPEOUT_RTL/dut.sv" << 'VERILOG_EOF'
-          module dut (
-            input  logic        clock,
-            input  logic        reset,
-            input  logic [7:0]  a,
-            input  logic [7:0]  b,
-            output logic [8:0]  sum,
-            output logic        carry
-          );
-            always_ff @(posedge clock or posedge reset) begin
-              if (reset) begin
-                sum   <= 9'd0;
-                carry <= 1'b0;
-              end else begin
-                {carry, sum} <= {1'b0, a} + {1'b0, b};
-              end
-            end
-          endmodule
-          VERILOG_EOF
-
-          echo "dut.sv" > "$TAPEOUT_RTL/filelist.f"
-          echo "RTL created:"
+          cp ~/Code/buckyball/arch/BBSimHarness.sv "$TAPEOUT_RTL/"
+          echo "BBSimHarness.sv" > "$TAPEOUT_RTL/filelist.f"
+          echo "RTL ready:"
           cat "$TAPEOUT_RTL/filelist.f"
-
-      - name: Run tapeout SRAM gen
-        shell: bash
-        run: |
-          cd ~/Code/tapeout/0_RTL
-          python3 scripts/gen_real_sram_libs.py || echo "[skip] No SRAMs found (OK for test)"
-          # Ensure manifest files exist (empty if no SRAMs)
-          MANDIR=real_sram_libs
-          mkdir -p "$MANDIR"
-          if [ ! -f "$MANDIR/macro_manifest.csv" ]; then
-            echo "rtl_module,port_type,implementation,copies,logical_depth,logical_width,logical_bit_lo,slice_logical_width,physical_depth,physical_width,compiler,config,status,message,kit_dir,liberty_files,db_files,verilog_files,lef_files,gds_files,spice_files" > "$MANDIR/macro_manifest.csv"
-          fi
-          if [ ! -f "$MANDIR/rtl_sram_manifest.csv" ]; then
-            echo "module,source,logical_depth,logical_width,port_type,status,reason" > "$MANDIR/rtl_sram_manifest.csv"
-          fi
 
       - name: Run tapeout synthesis
         shell: bash
         run: |
+          TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
           cd ~/Code/tapeout
-          TOP_MODULE=dut
-          RUN_TAG="test_$(date +%Y%m%d_%H%M%S)"
-          export TOP_MODULE RUN_TAG
           export CLOCK_PORT=clock CLOCK_NAME=clock
-          . config/env.sh
-          cd 1_SYN
-          mkdir -p alib-52 elab logs outputs rpt
-          rm -rf elab/*
-          mkdir -p "outputs/$RUN_TAG" "rpt/$RUN_TAG"
-          python3 ./scripts/sramReplace.py
-          dc_shell -f ./scripts/dc.tcl -x "set RUN_TAG {$RUN_TAG}" | tee "logs/dc_${RUN_TAG}.log"
-          # Check synthesis succeeded
-          if ! grep -q "DC run complete:" "logs/dc_${RUN_TAG}.log"; then
-            echo "DC synthesis did not complete!" >&2
-            exit 1
-          fi
-          echo "DC synthesis complete"
+          ./run_all --top "$TOP_MODULE"
 
-      - name: Collect synthesis results
+      - name: Collect and summarize PPA
         shell: bash
         if: always()
         run: |
-          set +e
-          RESULTS=~/tapeout_test_results
-          mkdir -p "$RESULTS/reports" "$RESULTS/netlist"
-          
+          RESULTS=~/tapeout_results
+          mkdir -p "$RESULTS/reports" "$RESULTS/netlist" "$RESULTS/logs"
+
           cp -r ~/Code/tapeout/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null || true
-          
           LATEST=$(ls -td ~/Code/tapeout/1_SYN/outputs/*/ 2>/dev/null | head -1)
           if [ -n "$LATEST" ] && [ -d "$LATEST" ]; then
             cp "$LATEST"/* "$RESULTS/netlist/" 2>/dev/null || true
           fi
-          
-          echo "=== PPA Summary ==="
+          cp ~/Code/tapeout/1_SYN/logs/* "$RESULTS/logs/" 2>/dev/null || true
+
+          echo "============================================"
+          echo "  PPA Summary (Synopsys DC @ TSMC28)"
+          echo "============================================"
           for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
             [ -f "$rpt" ] || continue
             echo "--- Area ---"
@@ -126,7 +134,7 @@ jobs:
           done
           for rpt in "$RESULTS"/reports/*/*_timing_max_path.rpt; do
             [ -f "$rpt" ] || continue
-            echo "--- Timing ---"
+            echo "--- Timing (critical path) ---"
             grep -E "slack" "$rpt" | head -1
           done
           for rpt in "$RESULTS"/reports/*/*_power.rpt; do
@@ -134,11 +142,22 @@ jobs:
             echo "--- Power ---"
             grep -E "Total" "$rpt" | head -1
           done
+          for rpt in "$RESULTS"/reports/*/constraint.rpt; do
+            [ -f "$rpt" ] || continue
+            echo "--- Constraints ---"
+            cat "$rpt"
+          done
+          echo "============================================"
 
-      - name: Upload artifacts
+      - name: Upload tapeout artifacts
         if: always()
         uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
-          name: tapeout-test-results
-          path: ~/tapeout_test_results/
-          retention-days: 7
+          name: tapeout-ppa-results
+          path: ~/tapeout_results/
+          retention-days: 30
