@@ -85,12 +85,23 @@ jobs:
         shell: bash
         run: |
           cd ~/Code/tapeout
-          export TOP_MODULE=dut
-          export RUN_TAG="test_$(date +%Y%m%d_%H%M%S)"
-          export CLOCK_PORT=clock
-          export CLOCK_NAME=clock
+          TOP_MODULE=dut
+          RUN_TAG="test_$(date +%Y%m%d_%H%M%S)"
+          export TOP_MODULE RUN_TAG
+          export CLOCK_PORT=clock CLOCK_NAME=clock
+          . config/env.sh
           cd 1_SYN
-          ./run_dc --top "$TOP_MODULE"
+          mkdir -p alib-52 elab logs outputs rpt
+          rm -rf elab/*
+          mkdir -p "outputs/$RUN_TAG" "rpt/$RUN_TAG"
+          python3 ./scripts/sramReplace.py
+          dc_shell -f ./scripts/dc.tcl -x "set RUN_TAG {$RUN_TAG}" | tee "logs/dc_${RUN_TAG}.log"
+          # Check for REAL errors (not Tcl source code echoes)
+          if grep -E "^Error:|FATAL:.*failed" "logs/dc_${RUN_TAG}.log" >/dev/null; then
+            echo "DC synthesis failed!" >&2
+            exit 1
+          fi
+          echo "DC synthesis complete"
 
       - name: Collect synthesis results
         shell: bash
