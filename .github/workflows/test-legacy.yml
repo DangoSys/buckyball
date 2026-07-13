@@ -1,5 +1,5 @@
-name: Buckyball CI (Legacy Test)
-run-name: ${{ github.actor }} Legacy CI Test 🚀
+name: Buckyball CI (Legacy Test - Local)
+run-name: ${{ github.actor }} Legacy CI Local 🚀
 on:
   workflow_dispatch:
   push:
