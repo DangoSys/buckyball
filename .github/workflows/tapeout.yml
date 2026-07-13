@@ -96,9 +96,9 @@ jobs:
           mkdir -p "outputs/$RUN_TAG" "rpt/$RUN_TAG"
           python3 ./scripts/sramReplace.py
           dc_shell -f ./scripts/dc.tcl -x "set RUN_TAG {$RUN_TAG}" | tee "logs/dc_${RUN_TAG}.log"
-          # Check for REAL errors (not Tcl source code echoes)
-          if grep -E "^Error:|FATAL:.*failed" "logs/dc_${RUN_TAG}.log" >/dev/null; then
-            echo "DC synthesis failed!" >&2
+          # Check synthesis succeeded
+          if ! grep -q "DC run complete:" "logs/dc_${RUN_TAG}.log"; then
+            echo "DC synthesis did not complete!" >&2
             exit 1
           fi
           echo "DC synthesis complete"
