@@ -82,14 +82,14 @@ jobs:
 
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
             echo "Cloning tapeout repository..."
-            git clone --depth 1 https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
+            git clone --depth 1 --branch fix/run_all-stability https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR"
             cd "$TAPEOUT_DIR"
             git submodule update --init --force
           else
             cd "$TAPEOUT_DIR"
-            git fetch origin main
-            git checkout main
-            git reset --hard origin/main
+            git fetch origin fix/run_all-stability
+            git checkout fix/run_all-stability
+            git reset --hard origin/fix/run_all-stability
             git clean -ffdx
             git submodule update --init --force
           fi
