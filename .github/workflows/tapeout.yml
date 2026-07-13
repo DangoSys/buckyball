@@ -119,7 +119,7 @@ jobs:
           TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
           cd ~/Code/tapeout
           export CLOCK_PORT=clock CLOCK_NAME=clock
-          ./run_all --top "$TOP_MODULE"
+          ./run_all --top "$TOP_MODULE" 2>&1
 
       - name: Collect and summarize PPA
         shell: bash
