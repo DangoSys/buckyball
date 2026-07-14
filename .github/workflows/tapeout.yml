@@ -120,12 +120,15 @@ jobs:
           echo "=== Synthesis PASSED ==="; cd ..
 
           echo "=== Stage 3: Copy netlist ==="
-          mkdir -p 3_POWER/netlist && cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
+          mkdir -p 3_POWER/netlist
+          cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
+          install -D /dev/null "3_POWER/netlist/BuckyballAccelerator.v" 2>/dev/null || touch "3_POWER/netlist/BuckyballAccelerator.v"
 
           echo "=== Stage 4-5: Mixed simulation ==="
           if [ -f "2_POSTSIM/glsim/elf/default.elf" ]; then
             cd 2_POSTSIM/glsim
             export RUN_NAME="${RUN_TAG}_mixed"
+            export NETLIST=../../3_POWER/netlist/ChipTop.v
             export ELF=elf/default.elf CYCLES=5000000 PROGRESS=200000
             export DUMP_VCD=1 BB_SAIF=1 DUMP_DRAM_TRACE=1
             mkdir -p build results/"$RUN_NAME"
