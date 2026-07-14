@@ -11,7 +11,7 @@ on:
       top_module:
         description: 'Synthesis top module name'
         required: true
-        default: 'BuckyballAccelerator'
+        default: 'ChipTop'
         type: string
   push:
     branches:
@@ -79,7 +79,7 @@ jobs:
       - name: Prepare tapeout RTL
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'BuckyballAccelerator' }}"
+          TOP_MODULE="${{ inputs.top_module || 'ChipTop' }}"
           TAPEOUT_DIR=~/Code/tapeout
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
             echo "Cloning tapeout..."
@@ -103,7 +103,7 @@ jobs:
       - name: Run tapeout synthesis
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'BuckyballAccelerator' }}"
+          TOP_MODULE="${{ inputs.top_module || 'ChipTop' }}"
           cd ~/Code/tapeout
           export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG="${GITHUB_RUN_ID:-manual}"
 
