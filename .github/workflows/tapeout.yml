@@ -112,6 +112,7 @@ jobs:
           python3 scripts/gen_real_sram_libs.py 2>&1 | tail -3
           # sramReplace generates rtl.f and stubs
           cd ../1_SYN
+          . ../config/env.sh
           python3 ./scripts/sramReplace.py 2>&1 | tail -3
           mkdir -p alib-52 elab logs outputs rpt "outputs/$RUN_TAG" "rpt/$RUN_TAG"
 
