@@ -11,7 +11,7 @@ on:
       top_module:
         description: 'Synthesis top module name'
         required: true
-        default: 'BBSimHarness'
+        default: 'BuckyballAccelerator'
         type: string
   push:
     branches:
@@ -36,7 +36,7 @@ jobs:
     name: Tapeout Flow
     runs-on: cpu-server-tapeout
     env:
-      ALL_PROXY: socks5h://127.0.0.1:7890
+      ALL_PROXY: socks5h://127.0.0.1:17890
     steps:
       - name: Print information
         run: |
@@ -79,7 +79,7 @@ jobs:
       - name: Prepare tapeout RTL
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
+          TOP_MODULE="${{ inputs.top_module || 'BuckyballAccelerator' }}"
           TAPEOUT_DIR=~/Code/tapeout
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
             echo "Cloning tapeout..."
@@ -87,9 +87,9 @@ jobs:
             cd "$TAPEOUT_DIR" && git submodule update --init --force || true
           fi
 
-          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "BBSimHarness.sv" -type f 2>/dev/null | head -1 | xargs dirname)
+          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "${TOP_MODULE}.sv" -type f 2>/dev/null | head -1 | xargs dirname)
           if [ -z "$VERILOG_DIR" ]; then
-            echo "ERROR: BBSimHarness.sv not found" >&2; exit 1
+            echo "ERROR: ${TOP_MODULE}.sv not found in arch/build/" >&2; exit 1
           fi
 
           TAPEOUT_RTL="$TAPEOUT_DIR/0_RTL/RTL"
@@ -103,10 +103,11 @@ jobs:
       - name: Run tapeout synthesis
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'BBSimHarness' }}"
+          TOP_MODULE="${{ inputs.top_module || 'BuckyballAccelerator' }}"
           cd ~/Code/tapeout
           export CLOCK_PORT=clock CLOCK_NAME=clock
-          ./run_all --top "$TOP_MODULE" 2>&1
+          # Run SRAM gen + synthesis only (skip mixed sim + PTPX)
+          cd 0_RTL && python3 scripts/gen_real_sram_libs.py && cd ../1_SYN && ./run_dc --top "$TOP_MODULE"
 
       - name: Collect and summarize PPA
         shell: bash
