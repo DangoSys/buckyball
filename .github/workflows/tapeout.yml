@@ -1,49 +1,34 @@
-name: Buckyball Tapeout CI
-run-name: ${{ github.actor }} Tapeout PPA 🚀
+name: Buckyball Pebble + Tapeout CI
+run-name: ${{ github.actor }} Pebble → Tapeout 🚀
 on:
   workflow_dispatch:
-    inputs:
-      config:
-        description: 'Verilator config class'
-        required: true
-        default: 'sims.verilator.BuckyballPebbleVerilatorConfig'
-        type: string
-      top_module:
-        description: 'Synthesis top module name'
-        required: true
-        default: 'ChipTop'
-        type: string
   push:
     branches:
-      - main
+      - pebble
       - feature/tapeout-ci
   pull_request:
     branches:
-      - main
-    paths:
-      - 'arch/src/main/scala/**'
+      - pebble
 
 permissions:
   contents: read
   checks: write
 
 concurrency:
-  group: buckyball-tapeout-ci
+  group: buckyball-pebble-tapeout
   cancel-in-progress: false
 
 jobs:
   tapeout:
-    name: Tapeout Flow
+    name: Pebble → Tapeout
     runs-on: cpu-server-tapeout
     env:
       ALL_PROXY: socks5h://127.0.0.1:17890
     steps:
+      # ──────────── Pebble CI ────────────
       - name: Print information
         run: |
-          echo "🎉 Tapeout CI triggered by ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "🔎 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
-          fi
+          echo "🎉 Pebble → Tapeout CI: ${{ github.event_name }}"
           echo "🔎 Repository: ${{ github.repository }}"
 
       - name: Reset buckyball to clean state
@@ -67,49 +52,63 @@ jobs:
           cd ~/Code/buckyball
           nix build
 
-      - name: Generate Verilog
+      - name: Build compiler and workloads
         shell: zsh {0}
-        env:
-          CONFIG: ${{ inputs.config || 'sims.verilator.BuckyballPebbleVerilatorConfig' }}
         run: |
           cd ~/Code/buckyball
-          nix develop -c bbdev bebop-verilator --clean "--config ${CONFIG}"
-          nix develop -c bbdev bebop-verilator --verilog "--config ${CONFIG}"
+          nix develop -c bbdev compiler --build '--chip pebble'
+          nix develop -c bbdev workload --clean
+          nix develop -c bbdev workload --build '--chip pebble'
 
+      - name: Generate Verilog
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+
+      # ──────────── Tapeout Flow ────────────
       - name: Prepare tapeout RTL
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'ChipTop' }}"
           TAPEOUT_DIR=~/Code/tapeout
           if [ ! -d "$TAPEOUT_DIR/.git" ]; then
-            echo "Cloning tapeout..."
             git clone --depth 1 --branch fix/run_all-stability https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR" || exit 1
             cd "$TAPEOUT_DIR" && git submodule update --init --force || true
           fi
-
-          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "${TOP_MODULE}.sv" -type f 2>/dev/null | head -1 | xargs dirname)
-          if [ -z "$VERILOG_DIR" ]; then
-            echo "ERROR: ${TOP_MODULE}.sv not found in arch/build/" >&2; exit 1
-          fi
-
+          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "ChipTop.sv" -type f 2>/dev/null | head -1 | xargs dirname)
+          [ -n "$VERILOG_DIR" ] || { echo "ERROR: ChipTop.sv not found" >&2; exit 1; }
           TAPEOUT_RTL="$TAPEOUT_DIR/0_RTL/RTL"
-          rm -rf "$TAPEOUT_RTL"
-          mkdir -p "$TAPEOUT_RTL"
+          rm -rf "$TAPEOUT_RTL" && mkdir -p "$TAPEOUT_RTL"
           cp "$VERILOG_DIR"/*.sv "$TAPEOUT_RTL/" 2>/dev/null || true
           cp "$VERILOG_DIR"/*.v "$TAPEOUT_RTL/" 2>/dev/null || true
           (cd "$TAPEOUT_RTL" && ls *.sv *.v 2>/dev/null > filelist.f)
           echo "RTL ready: $(wc -l < "$TAPEOUT_RTL/filelist.f") files from $VERILOG_DIR"
 
-      - name: Run tapeout synthesis
+      - name: Prepare ELF for mixed simulation
         shell: bash
         run: |
-          TOP_MODULE="${{ inputs.top_module || 'ChipTop' }}"
-          cd ~/Code/tapeout
-          export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG="${GITHUB_RUN_ID:-manual}"
+          ELF_DIR=~/Code/tapeout/2_POSTSIM/glsim/elf
+          mkdir -p "$ELF_DIR"
+          # Pick first available bare-metal ELF from workload build
+          SRC_ELF=$(find ~/Code/buckyball/bb-tests/output -name "*baremetal*" -o -name "*baremetal*.elf" 2>/dev/null | head -1)
+          if [ -n "$SRC_ELF" ] && [ -f "$SRC_ELF" ]; then
+            cp "$SRC_ELF" "$ELF_DIR/default.elf"
+            echo "ELF ready: $ELF_DIR/default.elf ($(wc -c < "$ELF_DIR/default.elf") bytes)"
+          else
+            echo "WARNING: No ELF found, mixed sim will be skipped"
+          fi
 
-          echo "=== Stage 0: SRAM collateral generation ==="
-          cd 0_RTL && python3 scripts/gen_real_sram_libs.py 2>&1 | tail -3
-          cd ..
+      - name: Run tapeout flow
+        shell: bash
+        run: |
+          TOP_MODULE=ChipTop
+          RUN_TAG="${GITHUB_RUN_ID:-manual}"
+          export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG
+          cd ~/Code/tapeout
+
+          echo "=== Stage 0: SRAM collateral ==="
+          cd 0_RTL && python3 scripts/gen_real_sram_libs.py 2>&1 | tail -3; cd ..
 
           echo "=== Stage 1-2: DC synthesis ==="
           cd 1_SYN
@@ -117,26 +116,29 @@ jobs:
           python3 ./scripts/sramReplace.py 2>&1 | tail -3
           mkdir -p alib-52 logs outputs rpt "outputs/$RUN_TAG" "rpt/$RUN_TAG"
           dc_shell -f ./scripts/dc.tcl -x "set RUN_TAG {$RUN_TAG}" > "logs/dc_${RUN_TAG}.log" 2>&1
-          if ! grep -q "DC run complete:" "logs/dc_${RUN_TAG}.log"; then
-            echo "=== Synthesis FAILED ==="; tail -20 "logs/dc_${RUN_TAG}.log"; exit 1
-          fi
-          echo "=== Synthesis PASSED ==="
-          cd ..
+          grep -q "DC run complete:" "logs/dc_${RUN_TAG}.log" || { echo "Synthesis FAILED"; tail -20 "logs/dc_${RUN_TAG}.log"; exit 1; }
+          echo "=== Synthesis PASSED ==="; cd ..
 
-          echo "=== Stage 3: Copy netlist to power stage ==="
-          mkdir -p 3_POWER/netlist
-          cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
+          echo "=== Stage 3: Copy netlist ==="
+          mkdir -p 3_POWER/netlist && cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
 
-          echo "=== Stage 4-5: Mixed simulation (VCS) ==="
+          echo "=== Stage 4-5: Mixed simulation ==="
           if [ -f "2_POSTSIM/glsim/elf/default.elf" ]; then
             cd 2_POSTSIM/glsim
             export RUN_NAME="${RUN_TAG}_mixed"
             export ELF=elf/default.elf CYCLES=5000000 PROGRESS=200000
             export DUMP_VCD=1 BB_SAIF=1 DUMP_DRAM_TRACE=1
+            mkdir -p build results/"$RUN_NAME"
             ./compile_mixed.sh > "build/compile_${RUN_TAG}.log" 2>&1
             ./run_mixed.sh > "results/${RUN_NAME}/sim.log" 2>&1
             cd ../..
-            echo "=== Mixed simulation done ==="
+            SAIF="2_POSTSIM/glsim/results/${RUN_NAME}/glsim_mixed.saif"
+            if [ -f "$SAIF" ]; then
+              mkdir -p 3_POWER/waveform && cp "$SAIF" 3_POWER/waveform/glsim_mixed.saif
+              echo "=== Mixed simulation PASSED ==="
+            else
+              echo "=== Mixed simulation completed (no SAIF) ==="
+            fi
           else
             echo "=== Skipped mixed simulation (no ELF) ==="
           fi
@@ -146,7 +148,7 @@ jobs:
             cd 3_POWER && ./run_ptpx > "logs/ptpx_${RUN_TAG}.log" 2>&1 && cd ..
             echo "=== PTPX done ==="
           else
-            echo "=== Skipped PTPX (no SAIF) ==="
+            echo "=== Skipped PTPX (no SAIF from mixed sim) ==="
           fi
 
           echo "=== Tapeout flow complete ==="
@@ -155,41 +157,30 @@ jobs:
         shell: bash
         if: always()
         run: |
-          set +e
-          RESULTS=~/tapeout_results
+          set +e; RESULTS=~/tapeout_results
           mkdir -p "$RESULTS/reports" "$RESULTS/netlist" "$RESULTS/logs"
-
           cp -r ~/Code/tapeout/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null || true
           cp -r ~/Code/tapeout/3_POWER/rpt/* "$RESULTS/reports/" 2>/dev/null || true
           LATEST=$(ls -td ~/Code/tapeout/1_SYN/outputs/*/ 2>/dev/null | head -1)
-          if [ -n "$LATEST" ] && [ -d "$LATEST" ]; then
-            cp "$LATEST"/* "$RESULTS/netlist/" 2>/dev/null || true
-          fi
+          [ -n "$LATEST" ] && cp "$LATEST"/* "$RESULTS/netlist/" 2>/dev/null || true
           cp ~/Code/tapeout/1_SYN/logs/* "$RESULTS/logs/" 2>/dev/null || true
           cp ~/Code/tapeout/3_POWER/logs/* "$RESULTS/logs/" 2>/dev/null || true
+          cp -r ~/Code/tapeout/2_POSTSIM/glsim/results/* "$RESULTS/logs/" 2>/dev/null || true
 
           echo "============================================"
-          echo "  PPA Summary (Synopsys DC @ TSMC28)"
+          echo "  PPA Summary (Pebble ChipTop @ TSMC28)"
           echo "============================================"
           for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
             [ -f "$rpt" ] || continue
-            echo "--- Area ---"
-            grep -E "Total cell area" "$rpt" | head -1
+            echo "--- Area ---"; grep -E "Total cell area" "$rpt" | head -1
           done
           for rpt in "$RESULTS"/reports/*/*_timing_max_path.rpt; do
             [ -f "$rpt" ] || continue
-            echo "--- Timing (critical path) ---"
-            grep -E "slack" "$rpt" | head -1
+            echo "--- Timing ---"; grep -E "slack" "$rpt" | head -1
           done
           for rpt in "$RESULTS"/reports/*/*_power.rpt; do
             [ -f "$rpt" ] || continue
-            echo "--- Power (DC estimate) ---"
-            grep -E "Total" "$rpt" | head -1
-          done
-          for rpt in "$RESULTS"/reports/*/constraint.rpt; do
-            [ -f "$rpt" ] || continue
-            echo "--- Constraints ---"
-            cat "$rpt"
+            echo "--- Power (DC) ---"; grep -E "Total" "$rpt" | head -1
           done
           echo "============================================"
 
@@ -202,6 +193,6 @@ jobs:
           HTTPS_PROXY: ""
           NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
-          name: tapeout-ppa-results
+          name: pebble-tapeout-results
           path: ~/tapeout_results/
           retention-days: 30
