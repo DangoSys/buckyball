@@ -107,7 +107,7 @@ jobs:
           cd ~/Code/tapeout
           export CLOCK_PORT=clock CLOCK_NAME=clock
           # Run SRAM gen + synthesis only (skip mixed sim + PTPX)
-          cd 0_RTL && python3 scripts/gen_real_sram_libs.py && cd ../1_SYN && ./run_dc --top "$TOP_MODULE"
+          cd 0_RTL && python3 scripts/gen_real_sram_libs.py && cd ../1_SYN && ./run_dc --top "$TOP_MODULE" 2>&1
 
       - name: Collect and summarize PPA
         shell: bash
