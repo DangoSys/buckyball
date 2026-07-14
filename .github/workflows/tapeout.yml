@@ -88,13 +88,13 @@ jobs:
       - name: Prepare ELF for mixed simulation
         shell: bash
         run: |
+          set +o pipefail
           ELF_DIR=~/Code/tapeout/2_POSTSIM/glsim/elf
           mkdir -p "$ELF_DIR"
-          # Pick first available bare-metal ELF from workload build
-          SRC_ELF=$(find ~/Code/buckyball/bb-tests/output -name "*baremetal*" -o -name "*baremetal*.elf" 2>/dev/null | head -1)
+          SRC_ELF=$(find ~/Code/buckyball/bb-tests/output -type f -name "*baremetal*" 2>/dev/null | head -1)
           if [ -n "$SRC_ELF" ] && [ -f "$SRC_ELF" ]; then
             cp "$SRC_ELF" "$ELF_DIR/default.elf"
-            echo "ELF ready: $ELF_DIR/default.elf ($(wc -c < "$ELF_DIR/default.elf") bytes)"
+            echo "ELF ready: $(wc -c < "$ELF_DIR/default.elf") bytes"
           else
             echo "WARNING: No ELF found, mixed sim will be skipped"
           fi
