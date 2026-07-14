@@ -104,8 +104,9 @@ jobs:
         run: |
           TOP_MODULE=ChipTop
           RUN_TAG="${GITHUB_RUN_ID:-manual}"
+          TAPEOUT_ROOT=~/Code/tapeout
           export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG
-          cd ~/Code/tapeout
+          cd "$TAPEOUT_ROOT"
 
           echo "=== Stage 0: SRAM collateral ==="
           cd 0_RTL && python3 scripts/gen_real_sram_libs.py 2>&1 | tail -3; cd ..
@@ -128,7 +129,8 @@ jobs:
           if [ -f "2_POSTSIM/glsim/elf/default.elf" ]; then
             cd 2_POSTSIM/glsim
             export RUN_NAME="${RUN_TAG}_mixed"
-            export NETLIST=../../3_POWER/netlist/ChipTop.v
+            export NETLIST=$TAPEOUT_ROOT/3_POWER/netlist/ChipTop.v
+            export PATCHED_NETLIST=build/ChipTop.queue_ram_zero.v
             export ELF=elf/default.elf CYCLES=5000000 PROGRESS=200000
             export DUMP_VCD=1 BB_SAIF=1 DUMP_DRAM_TRACE=1
             mkdir -p build results/"$RUN_NAME"
