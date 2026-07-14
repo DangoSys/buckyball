@@ -6,7 +6,7 @@ on:
       config:
         description: 'Verilator config class'
         required: true
-        default: 'sims.verilator.BuckyballToyVerilatorConfig'
+        default: 'sims.verilator.BuckyballPebbleVerilatorConfig'
         type: string
       top_module:
         description: 'Synthesis top module name'
@@ -70,7 +70,7 @@ jobs:
       - name: Generate Verilog
         shell: zsh {0}
         env:
-          CONFIG: ${{ inputs.config || 'sims.verilator.BuckyballToyVerilatorConfig' }}
+          CONFIG: ${{ inputs.config || 'sims.verilator.BuckyballPebbleVerilatorConfig' }}
         run: |
           cd ~/Code/buckyball
           nix develop -c bbdev bebop-verilator --clean "--config ${CONFIG}"
