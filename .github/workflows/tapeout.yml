@@ -104,7 +104,7 @@ jobs:
         run: |
           TOP_MODULE=ChipTop
           RUN_TAG="${GITHUB_RUN_ID:-manual}"
-          TAPEOUT_ROOT=~/Code/tapeout
+          TAPEOUT_ROOT=$(readlink -f ~/Code/tapeout)
           export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG
           cd "$TAPEOUT_ROOT"
 
@@ -121,9 +121,7 @@ jobs:
           echo "=== Synthesis PASSED ==="; cd ..
 
           echo "=== Stage 3: Copy netlist ==="
-          mkdir -p 3_POWER/netlist
-          cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
-          install -D /dev/null "3_POWER/netlist/BuckyballAccelerator.v" 2>/dev/null || touch "3_POWER/netlist/BuckyballAccelerator.v"
+          mkdir -p 3_POWER/netlist && cp 1_SYN/outputs/$RUN_TAG/* 3_POWER/netlist/ 2>/dev/null || true
 
           echo "=== Stage 4-5: Mixed simulation ==="
           if [ -f "2_POSTSIM/glsim/elf/default.elf" ]; then
