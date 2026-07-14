@@ -105,7 +105,7 @@ jobs:
         run: |
           TOP_MODULE="${{ inputs.top_module || 'BuckyballAccelerator' }}"
           cd ~/Code/tapeout
-          export CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG="${GITHUB_RUN_ID:-manual}"
+          export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG="${GITHUB_RUN_ID:-manual}"
 
           echo "=== Stage 1: SRAM collateral generation ==="
           cd 0_RTL
