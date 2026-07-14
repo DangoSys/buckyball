@@ -126,6 +126,8 @@ jobs:
           echo "=== Stage 4-5: Mixed simulation ==="
           if [ -f "2_POSTSIM/glsim/elf/default.elf" ]; then
             cd 2_POSTSIM/glsim
+            . ../../config/env.sh
+            export LD_LIBRARY_PATH="$VCS_HOME/linux64/lib:$LD_LIBRARY_PATH"
             export RUN_NAME="${RUN_TAG}_mixed"
             export NETLIST=$TAPEOUT_ROOT/3_POWER/netlist/ChipTop.v
             export PATCHED_NETLIST=build/ChipTop.queue_ram_zero.v
