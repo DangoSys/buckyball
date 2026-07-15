@@ -76,8 +76,8 @@ jobs:
             git clone --depth 1 --branch fix/run_all-stability https://github.com/DangoSys/tapeout.git "$TAPEOUT_DIR" || exit 1
             cd "$TAPEOUT_DIR" && git submodule update --init --force || true
           fi
-          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "ChipTop.sv" -type f 2>/dev/null | head -1 | xargs dirname)
-          [ -n "$VERILOG_DIR" ] || { echo "ERROR: ChipTop.sv not found" >&2; exit 1; }
+          VERILOG_DIR=$(find ~/Code/buckyball/arch/build -maxdepth 2 -name "BBSimHarness.sv" -type f 2>/dev/null | head -1 | xargs dirname)
+          [ -n "$VERILOG_DIR" ] || { echo "ERROR: BBSimHarness.sv not found" >&2; exit 1; }
           TAPEOUT_RTL="$TAPEOUT_DIR/0_RTL/RTL"
           rm -rf "$TAPEOUT_RTL" && mkdir -p "$TAPEOUT_RTL"
           cp "$VERILOG_DIR"/*.sv "$TAPEOUT_RTL/" 2>/dev/null || true
@@ -102,7 +102,7 @@ jobs:
       - name: Run tapeout flow
         shell: bash
         run: |
-          TOP_MODULE=ChipTop
+          TOP_MODULE=BBSimHarness
           RUN_TAG="${GITHUB_RUN_ID:-manual}"
           TAPEOUT_ROOT=$(readlink -f ~/Code/tapeout)
           export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG
@@ -129,8 +129,8 @@ jobs:
             . ../../config/env.sh
             export LD_LIBRARY_PATH="$VCS_HOME/linux64/lib:$LD_LIBRARY_PATH"
             export RUN_NAME="${RUN_TAG}_mixed"
-            export NETLIST=$TAPEOUT_ROOT/3_POWER/netlist/ChipTop.v
-            export PATCHED_NETLIST=build/ChipTop.queue_ram_zero.v
+            export NETLIST=$TAPEOUT_ROOT/3_POWER/netlist/BBSimHarness.v
+            export PATCHED_NETLIST=build/BBSimHarness.queue_ram_zero.v
             export ELF=elf/default.elf CYCLES=5000000 PROGRESS=200000
             export DUMP_VCD=1 BB_SAIF=1 DUMP_DRAM_TRACE=1
             mkdir -p build results/"$RUN_NAME"
@@ -173,7 +173,7 @@ jobs:
           cp -r ~/Code/tapeout/2_POSTSIM/glsim/results/* "$RESULTS/logs/" 2>/dev/null || true
 
           echo "============================================"
-          echo "  PPA Summary (Pebble ChipTop @ TSMC28)"
+          echo "  PPA Summary (Pebble BBSimHarness @ TSMC28)"
           echo "============================================"
           for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
             [ -f "$rpt" ] || continue
