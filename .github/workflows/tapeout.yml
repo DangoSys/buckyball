@@ -105,7 +105,7 @@ jobs:
           TOP_MODULE=BBSimHarness
           RUN_TAG="${GITHUB_RUN_ID:-manual}"
           TAPEOUT_ROOT=$(readlink -f ~/Code/tapeout)
-          export TOP_MODULE CLOCK_PORT=clock_uncore CLOCK_NAME=clock_uncore RUN_TAG
+          export TOP_MODULE CLOCK_PORT=clock CLOCK_NAME=clock RUN_TAG
           cd "$TAPEOUT_ROOT"
 
           echo "=== Stage 0: SRAM collateral ==="
