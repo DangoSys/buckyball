@@ -131,7 +131,7 @@ jobs:
             export RUN_NAME="${RUN_TAG}_mixed"
             export NETLIST=$TAPEOUT_ROOT/3_POWER/netlist/BBSimHarness.v
             export PATCHED_NETLIST=build/BBSimHarness.queue_ram_zero.v
-            export ELF=elf/default.elf CYCLES=10000 PROGRESS=5000
+            export ELF=$TAPEOUT_ROOT/2_POSTSIM/glsim/elf/default.elf CYCLES=10000 PROGRESS=5000
             export DUMP_VCD=1 BB_SAIF=1 DUMP_DRAM_TRACE=1
             export EXTRA_ARGS="+tb_no_rocc"
             mkdir -p build results/"$RUN_NAME"
