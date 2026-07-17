@@ -2,203 +2,113 @@ package examples.balls.systolicarray
 
 import chisel3._
 import chisel3.util._
-import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.memdomain.backend.banks.SramWriteIO
 import framework.top.GlobalConfig
-import examples.balls.systolicarray.configs.SystolicBallParam
-
-class ctrl_st_req(b: GlobalConfig) extends Bundle {
-  val wr_bank      = UInt(log2Up(b.memDomain.bankNum).W)
-  val wr_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
-  val iter         = UInt(b.frontend.iter_len.W)
-  val config       = UInt(64.W)
-}
-
-class BankWriteEntry(b: GlobalConfig) extends Bundle {
-  val addr = UInt(log2Ceil(b.memDomain.bankEntries).W)
-  val data = UInt(b.memDomain.bankWidth.W)
-  val mask = Vec(b.memDomain.bankMaskLen, Bool())
-}
 
 @instantiable
 class SystolicArrayStore(val b: GlobalConfig) extends Module {
-  val config       = SystolicBallParam(b)
-  val InputNum     = config.lane
-  val accWidth     = config.outputWidth
-  val accModeLsb   = 1
-  val accModeWidth = 2
-  val directMode   = 0.U(accModeWidth.W)
-  val firstMode    = 1.U(accModeWidth.W)
-  val midMode      = 2.U(accModeWidth.W)
-  val lastMode     = 3.U(accModeWidth.W)
-
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "SystolicArrayBall")
-    .getOrElse(throw new IllegalArgumentException("SystolicArrayBall not found in config"))
-  val outBW       = ballMapping.outBW
-
-  require(InputNum % outBW == 0)
-  require(
-    InputNum / outBW * accWidth <= b.memDomain.bankWidth,
-    s"SystolicArrayBall outBW=$outBW is too small for lane=$InputNum (need at least ${InputNum * accWidth / b.memDomain.bankWidth} write ports)"
-  )
+  private val tile          = SystolicArrayConst.Tile
+  private val accElemBits   = SystolicArrayConst.AccElemBits
+  private val resultRowBits = SystolicArrayConst.ResultRowBits
+  private val bufferRows    = 4
 
   @public
   val io = IO(new Bundle {
-    val ctrl_st_i = Flipped(Decoupled(new ctrl_st_req(b)))
-    val ex_st_i   = Flipped(Decoupled(new ex_st_req(b)))
-    val bankWrite = Vec(outBW, Flipped(new SramWriteIO(b)))
-    val wr_bank_o = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val cmdResp_o = Valid(new Bundle { val commit = Bool() })
+    val ex_st_i = Flipped(Decoupled(new SystolicResultRow))
+
+    val store_req_o       = Output(Bool())
+    val store_ctrl_resp_i = Flipped(Decoupled(new SystolicStoreCtrlResp(b)))
+    val store_done_o      = Output(Bool())
+
+    val wr_o = Decoupled(new SystolicStoreWriteReq(b))
+    val wr_done_i = Input(Bool())
   })
 
-  val wr_bank         = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank_addr    = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val iter_counter    = RegInit(0.U(b.frontend.iter_len.W))
-  val expectedRows    = RegInit(0.U(b.frontend.iter_len.W))
-  val configReg       = RegInit(0.U(64.W))
-  val accRowsSeen     = RegInit(0.U(b.frontend.iter_len.W))
-  val flushRowCounter = RegInit(0.U(b.frontend.iter_len.W))
+  private def rowElem(row: UInt, col: Int): UInt =
+    row((col + 1) * accElemBits - 1, col * accElemBits)
 
-  val accBuf = RegInit(
-    VecInit(Seq.fill(InputNum)(VecInit(Seq.fill(InputNum)(0.U(accWidth.W)))))
-  )
+  private def packRow(elems: Vec[UInt], validElems: UInt): UInt =
+    Cat((0 until tile).reverse.map { col =>
+      Mux(col.U < validElems, elems(col), 0.U(accElemBits.W))
+    })
 
-  val idle :: busy :: flushing :: Nil = Enum(3)
-  val state                           = RegInit(idle)
+  val sIdle :: sWaitResp :: sProcess :: sWrite :: sWaitWrite :: sDone :: Nil = Enum(6)
+  val state = RegInit(sIdle)
 
-  val writeQueues    = VecInit(Seq.fill(outBW)(Module(new Queue(new BankWriteEntry(b), 16)).io))
-  val allQueuesReady = writeQueues.map(_.enq.ready).reduce(_ && _)
-  val allQueuesEmpty = writeQueues.map(q => !q.deq.valid).reduce(_ && _)
-  val accMode        = configReg(accModeLsb + accModeWidth - 1, accModeLsb)
+  val resultBuffer = Reg(Vec(bufferRows, UInt(resultRowBits.W)))
+  val readPtr      = RegInit(0.U(log2Ceil(bufferRows).W))
+  val writePtr     = RegInit(0.U(log2Ceil(bufferRows).W))
+  val bufferCount  = RegInit(0.U(log2Ceil(bufferRows + 1).W))
 
-  private def clearAccBuf(): Unit = {
-    for (row <- 0 until InputNum) {
-      for (col <- 0 until InputNum) {
-        accBuf(row)(col) := 0.U
-      }
-    }
+  io.ex_st_i.ready := bufferCount < bufferRows.U
+  val bufferEnq = io.ex_st_i.fire
+  val bufferDeq = state === sDone
+
+  when(bufferEnq) {
+    resultBuffer(writePtr) := io.ex_st_i.bits.data
+    writePtr := Mux(writePtr === (bufferRows - 1).U, 0.U, writePtr + 1.U)
+  }
+  when(bufferDeq) {
+    readPtr := Mux(readPtr === (bufferRows - 1).U, 0.U, readPtr + 1.U)
+  }
+  switch(Cat(bufferEnq, bufferDeq)) {
+    is("b10".U) { bufferCount := bufferCount + 1.U }
+    is("b01".U) { bufferCount := bufferCount - 1.U }
   }
 
-  private def enqueueRow(rowData: Seq[UInt], rowIdx: UInt): Unit = {
-    for (i <- 0 until outBW) {
-      val elementsPerChannel = InputNum / outBW
-      val startIdx           = i * elementsPerChannel
-      val endIdx             = startIdx + elementsPerChannel - 1
+  val respReg = RegInit(0.U.asTypeOf(new SystolicStoreCtrlResp(b)))
 
-      val entry = Wire(new BankWriteEntry(b))
-      entry.addr := wr_bank_addr + rowIdx
-      entry.data := Cat(rowData.slice(startIdx, endIdx + 1).reverse)
-      entry.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.store_req_o := state === sIdle && bufferCount =/= 0.U
+  io.store_ctrl_resp_i.ready := state === sWaitResp
+  io.store_done_o := state === sDone
 
-      writeQueues(i).enq.valid := true.B
-      writeQueues(i).enq.bits  := entry
-    }
+  io.wr_o.valid := state === sWrite
+
+  val currentRow = resultBuffer(readPtr)
+  val rowElems = Wire(Vec(tile, UInt(accElemBits.W)))
+  for (col <- 0 until tile) {
+    rowElems(col) := rowElem(currentRow, col)
   }
 
-// -----------------------------------------------------------------------------
-// Set registers when Ctrl instruction arrives
-// -----------------------------------------------------------------------------
-  io.ctrl_st_i.ready := state === idle
+  io.wr_o.bits.wr_bank       := respReg.wr_bank
+  io.wr_o.bits.wr_group_base := respReg.wr_group_base
+  io.wr_o.bits.wr_row_addr   := respReg.wr_row_addr
+  io.wr_o.bits.valid_elems   := respReg.row_valid_elems
+  io.wr_o.bits.beat_count    := (respReg.row_valid_elems + 3.U) >> 2
+  io.wr_o.bits.data          := packRow(rowElems, respReg.row_valid_elems)
 
-  when(io.ctrl_st_i.fire) {
-    wr_bank      := io.ctrl_st_i.bits.wr_bank
-    wr_bank_addr := io.ctrl_st_i.bits.wr_bank_addr
-    val iterClamped = Mux(io.ctrl_st_i.bits.iter > InputNum.U, InputNum.U, io.ctrl_st_i.bits.iter)
-    expectedRows    := iterClamped
-    iter_counter    := 0.U
-    accRowsSeen     := 0.U
-    flushRowCounter := 0.U
-    configReg       := io.ctrl_st_i.bits.config
-    when(io.ctrl_st_i.bits.config(accModeLsb + accModeWidth - 1, accModeLsb) === directMode ||
-      io.ctrl_st_i.bits.config(accModeLsb + accModeWidth - 1, accModeLsb) === firstMode) {
-      clearAccBuf()
-    }
-    state           := busy
+  when(state === sIdle && bufferCount =/= 0.U) {
+    state := sWaitResp
   }
 
-// -----------------------------------------------------------------------------
-// Accept computation results from EX unit and push to write queues
-// -----------------------------------------------------------------------------
-  io.ex_st_i.ready := state === busy && allQueuesReady
-
-  for (i <- 0 until outBW) {
-    writeQueues(i).enq.valid := false.B
-    writeQueues(i).enq.bits  := DontCare
+  when(io.store_ctrl_resp_i.fire) {
+    respReg := io.store_ctrl_resp_i.bits
+    state := sProcess
   }
 
-  when(io.ex_st_i.fire) {
-    val rowIdx = accRowsSeen
-    when(accMode === directMode) {
-      enqueueRow(io.ex_st_i.bits.result, iter_counter)
-      iter_counter := iter_counter + 1.U
+  when(state === sProcess) {
+    assert(bufferCount =/= 0.U, "SystolicArrayStore: processing without a result row")
+
+    when(respReg.row_write_valid) {
+      state := sWrite
     }.otherwise {
-      for (col <- 0 until InputNum) {
-        accBuf(rowIdx)(col) := accBuf(rowIdx)(col) + io.ex_st_i.bits.result(col)
-      }
-      accRowsSeen := accRowsSeen + 1.U
-      when(accMode === lastMode && accRowsSeen + 1.U >= expectedRows) {
-        flushRowCounter := 0.U
-        iter_counter    := 0.U
-        state           := flushing
-      }
+      state := sDone
     }
   }
 
-// -----------------------------------------------------------------------------
-// Drain write queues to bankWrite interface
-// -----------------------------------------------------------------------------
-  io.bankWrite.foreach { acc =>
-    acc.req.valid     := false.B
-    acc.req.bits.addr := 0.U
-    acc.req.bits.data := 0.U(b.memDomain.bankWidth.W)
-    acc.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    acc.resp.ready    := true.B
+  when(io.wr_o.fire) {
+    state := sWaitWrite
   }
 
-  for (i <- 0 until outBW) {
-    writeQueues(i).deq.ready := false.B
-
-    when(writeQueues(i).deq.valid) {
-      io.bankWrite(i).req.valid     := true.B
-      io.bankWrite(i).req.bits.addr := writeQueues(i).deq.bits.addr
-      io.bankWrite(i).req.bits.data := writeQueues(i).deq.bits.data
-      io.bankWrite(i).req.bits.mask := writeQueues(i).deq.bits.mask
-      writeQueues(i).deq.ready      := io.bankWrite(i).req.ready
-    }
+  when(state === sWaitWrite && io.wr_done_i) {
+    state := sDone
   }
 
-  when(state === flushing && allQueuesReady && flushRowCounter < expectedRows) {
-    enqueueRow(accBuf(flushRowCounter), flushRowCounter)
-    flushRowCounter := flushRowCounter + 1.U
+  when(state === sDone) {
+    state := sIdle
   }
 
-  io.wr_bank_o := wr_bank
-
-// -----------------------------------------------------------------------------
-// Reset iter counter, commit cmdResp, return to idle state
-// -----------------------------------------------------------------------------
-  val directDone      = state === busy && accMode === directMode && iter_counter >= expectedRows
-  val accBufferedDone =
-    state === busy && accMode =/= directMode && accMode =/= lastMode && accRowsSeen >= expectedRows
-  val flushDone       = state === flushing && flushRowCounter >= expectedRows
-  val allDataEnqueued = directDone || accBufferedDone || flushDone
-
-  when(allDataEnqueued && allQueuesEmpty) {
-    state                    := idle
-    expectedRows             := 0.U
-    accRowsSeen              := 0.U
-    flushRowCounter          := 0.U
-    iter_counter             := 0.U
-    io.cmdResp_o.valid       := true.B
-    io.cmdResp_o.bits.commit := true.B
-  }.otherwise {
-    io.cmdResp_o.valid       := false.B
-    io.cmdResp_o.bits.commit := false.B
-  }
-
-  when(state === idle && !io.ctrl_st_i.fire) {
-    iter_counter := 0.U
-    configReg    := 0.U
-  }
+  assert(!(io.store_req_o && state =/= sIdle), "SystolicArrayStore: store_req must only pulse from idle")
+  assert(io.wr_o.bits.valid_elems <= tile.U, "SystolicArrayStore: row valid element count exceeds TILE")
+  assert(bufferCount <= bufferRows.U, "SystolicArrayStore: result buffer overflow")
 }
