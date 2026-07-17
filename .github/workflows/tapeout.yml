@@ -149,12 +149,15 @@ jobs:
             echo "=== Skipped mixed simulation (no ELF) ==="
           fi
 
-          echo "=== Stage 6: PTPX power analysis ==="
-          if [ -f "3_POWER/waveform/glsim_mixed.saif" ]; then
+          echo "=== Stage 6: PTPX power analysis (VCD-based) ==="
+          VCD=$(find 2_POSTSIM/glsim/results -name "*.vcd" -not -name "*.raw.vcd" 2>/dev/null | head -1)
+          if [ -n "$VCD" ] && [ -f "$VCD" ]; then
+            VCD_ABS=$(readlink -f "$VCD")
+            export PTPX_ACTIVITY_FILE="$VCD_ABS" PTPX_ACTIVITY_FORMAT=vcd PTPX_TOP_MODULE=BBSimHarness
             cd 3_POWER && ./run_ptpx > "logs/ptpx_${RUN_TAG}.log" 2>&1 && cd ..
             echo "=== PTPX done ==="
           else
-            echo "=== Skipped PTPX (no SAIF from mixed sim) ==="
+            echo "=== Skipped PTPX (no VCD) ==="
           fi
 
           echo "=== Tapeout flow complete ==="
