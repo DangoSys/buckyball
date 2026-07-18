@@ -8,6 +8,7 @@
 #define SYSTOLICARRAYBALL_OPS
 
 include "BuckyballBase.td"
+include "BuckyballIntrinsics.td"
 
 //===----------------------------------------------------------------------===//
 // SystolicArrayBall operations
@@ -57,5 +58,8 @@ def SystolicIterOp : Buckyball_Op<"systolic_iter"> {
                        "$iter `,` $config attr-dict `:` "
                        "type($op1BankId)";
 }
+
+def SystolicIntrOp : Buckyball_IntrOpBase<"bbfp.mul">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 #endif // SYSTOLICARRAYBALL_OPS
