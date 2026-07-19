@@ -6,6 +6,7 @@ Runs bebop verilator simulation:
   2. Resolve verilog source directory (VSRC_PATH)
   3. Run the built bebop binary with the new run/verilator CLI
 """
+import json
 import os
 import shlex
 import sys
@@ -24,7 +25,7 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
-from build_marker import verify_build_marker
+from build_marker import build_marker_path, read_build_marker
 
 config = {
     "name": "bebop-verilator-sim",
@@ -62,12 +63,54 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bebop_bin = f"{bebop_dir}/target/debug/bebop"
-    marker_err = verify_build_marker(bebop_dir, arch_config, vsrc_dir)
-    if marker_err is not None:
-        ctx.logger.error(f"bebop verilator build check failed: {marker_err}")
+    if not os.path.isfile(bebop_bin):
+        ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
         await check_result(
             ctx, 1, continue_run=False,
-            extra_fields=marker_err,
+            extra_fields={"error": "bebop_binary_not_found", "binary": bebop_bin},
+            trace_id=origin_tid,
+        )
+        return
+
+    marker_path = build_marker_path(bebop_dir)
+    try:
+        marker = read_build_marker(bebop_dir)
+    except FileNotFoundError:
+        ctx.logger.error(f"bebop verilator build marker does not exist: {marker_path}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "build_marker_not_found", "marker": marker_path},
+            trace_id=origin_tid,
+        )
+        return
+    except (OSError, json.JSONDecodeError) as e:
+        ctx.logger.error(f"failed to read bebop verilator build marker: {e}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "build_marker_read_failed", "marker": marker_path, "detail": str(e)},
+            trace_id=origin_tid,
+        )
+        return
+
+    expect_vsrc = os.path.abspath(vsrc_dir)
+    expect_bin = os.path.abspath(bebop_bin)
+    if (
+        marker.get("config") != arch_config
+        or marker.get("vsrc_dir") != expect_vsrc
+        or marker.get("binary") != expect_bin
+    ):
+        ctx.logger.error(f"bebop verilator build marker mismatch: {marker}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={
+                "error": "build_marker_mismatch",
+                "marker": marker,
+                "expected": {
+                    "config": arch_config,
+                    "vsrc_dir": expect_vsrc,
+                    "binary": expect_bin,
+                },
+            },
             trace_id=origin_tid,
         )
         return
@@ -90,7 +133,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(fst_dir, exist_ok=True)
 
-    # ── Run bebop run verilator ──────────────────────────────────────────
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
 
     run_cmd = (

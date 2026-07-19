@@ -13,9 +13,6 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
-if scripts_path not in sys.path:
-    sys.path.insert(0, scripts_path)
 bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
@@ -24,7 +21,6 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
-from build_marker import verify_build_marker
 
 config = {
     "name": "bebop-verilator-batch",
@@ -86,16 +82,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    marker_err = verify_build_marker(bebop_dir, arch_config, vsrc_dir)
-    if marker_err is not None:
-        ctx.logger.error(f"bebop verilator build check failed: {marker_err}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields=marker_err,
-            trace_id=origin_tid,
-        )
-        return
-
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
@@ -109,7 +95,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     })
     nextest_cmd = (
         f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features verilator --test test_verilator --no-build "
+        "--features verilator --test test_verilator "
         f"--config-file {shlex.quote(nextest_config)} "
         f"--config={vsrc_config}"
     )
