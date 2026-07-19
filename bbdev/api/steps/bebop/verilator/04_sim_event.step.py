@@ -9,7 +9,6 @@ Runs bebop verilator simulation:
 import os
 import shlex
 import sys
-import json
 from datetime import datetime
 
 from motia import FlowContext, queue
@@ -25,7 +24,7 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
-from build_marker import build_marker_path, read_build_marker
+from build_marker import verify_build_marker
 
 config = {
     "name": "bebop-verilator-sim",
@@ -63,53 +62,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bebop_bin = f"{bebop_dir}/target/debug/bebop"
-    if not os.path.isfile(bebop_bin):
-        ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
+    marker_err = verify_build_marker(bebop_dir, arch_config, vsrc_dir)
+    if marker_err is not None:
+        ctx.logger.error(f"bebop verilator build check failed: {marker_err}")
         await check_result(
             ctx, 1, continue_run=False,
-            extra_fields={"error": "bebop_binary_not_found", "binary": bebop_bin},
-            trace_id=origin_tid,
-        )
-        return
-    try:
-        marker = read_build_marker(bebop_dir)
-    except (OSError, json.JSONDecodeError) as e:
-        marker_path = build_marker_path(bebop_dir)
-        ctx.logger.error(f"failed to read bebop verilator build marker: {e}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "build_marker_read_failed", "marker": marker_path, "detail": str(e)},
-            trace_id=origin_tid,
-        )
-        return
-    expect_vsrc = os.path.abspath(vsrc_dir)
-    expect_bin = os.path.abspath(bebop_bin)
-    if marker is None:
-        marker_path = build_marker_path(bebop_dir)
-        ctx.logger.error(f"bebop verilator build marker does not exist: {marker_path}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "build_marker_not_found", "marker": marker_path},
-            trace_id=origin_tid,
-        )
-        return
-    if (
-        marker.get("config") != arch_config
-        or marker.get("vsrc_dir") != expect_vsrc
-        or marker.get("binary") != expect_bin
-    ):
-        ctx.logger.error(f"bebop verilator build marker mismatch: {marker}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={
-                "error": "build_marker_mismatch",
-                "marker": marker,
-                "expected": {
-                    "config": arch_config,
-                    "vsrc_dir": expect_vsrc,
-                    "binary": expect_bin,
-                },
-            },
+            extra_fields=marker_err,
             trace_id=origin_tid,
         )
         return

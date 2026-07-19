@@ -87,7 +87,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     build_cmd = (
-        f"cargo build --features verilator "
+        f"cargo build --features verilator --tests "
         f"--config=\"env.VSRC_PATH='{vsrc_dir}'\""
     )
     ctx.logger.info("Building bebop verilator ...")

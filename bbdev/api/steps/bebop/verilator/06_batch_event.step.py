@@ -1,9 +1,7 @@
 """
 bebop verilator batch event handler
 
-Runs bebop verilator nextest batch regression:
-  1. Build bebop with verilator feature and VSRC_PATH
-  2. Run cargo nextest with verilator-specific config
+Runs bebop verilator nextest batch regression (requires prior --build).
 """
 import os
 import shutil
@@ -15,6 +13,9 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
@@ -23,6 +24,7 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
+from build_marker import verify_build_marker
 
 config = {
     "name": "bebop-verilator-batch",
@@ -84,32 +86,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    # ── Build bebop verilator (tests) ─────────────────────────────────────
-    vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
-    build_cmd = (
-        f"nix develop -c cargo build --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features verilator --tests "
-        f"--config={vsrc_config}"
-    )
-    ctx.logger.info("Building bebop verilator (tests)...")
-    build_result = stream_run_logger(
-        cmd=build_cmd,
-        logger=ctx.logger,
-        cwd=bbdir,
-        stdout_prefix="bebop verilator build",
-        stderr_prefix="bebop verilator build",
-    )
-
-    if build_result.returncode != 0:
+    marker_err = verify_build_marker(bebop_dir, arch_config, vsrc_dir)
+    if marker_err is not None:
+        ctx.logger.error(f"bebop verilator build check failed: {marker_err}")
         await check_result(
-            ctx, build_result.returncode, continue_run=False,
-            extra_fields={"task": "build", "backend": "verilator", "vsrc_dir": vsrc_dir},
+            ctx, 1, continue_run=False,
+            extra_fields=marker_err,
             trace_id=origin_tid,
         )
         return
 
-    # ── Run nextest ───────────────────────────────────────────────────────
-    # Pass parameters via environment variables (nextest doesn't support custom CLI args after `--`)
+    vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
         ctx.logger.info("Cleaned previous bebop test artifacts")
@@ -122,7 +109,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     })
     nextest_cmd = (
         f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features verilator --test test_verilator "
+        "--features verilator --test test_verilator --no-build "
         f"--config-file {shlex.quote(nextest_config)} "
         f"--config={vsrc_config}"
     )
