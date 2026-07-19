@@ -24,8 +24,6 @@ jobs:
     runs-on: cpu-server-tapeout
     env:
       ALL_PROXY: socks5h://127.0.0.1:17890
-      BUCKYBALL_DIR: ~/Code/buckyball
-      TAPEOUT_DIR: ~/Code/tapeout
     steps:
       - name: Print information
         run: |
@@ -36,6 +34,7 @@ jobs:
       - name: Reset buckyball to clean state
         shell: zsh {0}
         run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
           cd $BUCKYBALL_DIR
           git fetch --force --prune origin "${{ github.ref }}"
           git checkout --detach FETCH_HEAD
@@ -51,12 +50,14 @@ jobs:
       - name: Nix build
         shell: zsh {0}
         run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
           cd $BUCKYBALL_DIR
           nix build
 
       - name: Build compiler and workloads
         shell: zsh {0}
         run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
           cd $BUCKYBALL_DIR
           nix develop -c bbdev compiler --build '--chip pebble'
           nix develop -c bbdev workload --clean
@@ -65,6 +66,7 @@ jobs:
       - name: Generate Verilog
         shell: zsh {0}
         run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
           cd $BUCKYBALL_DIR
           nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballPebbleVerilatorConfig'
           nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballPebbleVerilatorConfig'
@@ -73,6 +75,8 @@ jobs:
       - name: Run tapeout flow
         shell: zsh {0}
         run: |
+          TAPEOUT_DIR=$HOME/Code/tapeout
+          export BUCKYBALL_DIR=$HOME/Code/buckyball
           git -C $TAPEOUT_DIR clean -fdx
           $TAPEOUT_DIR/run_flow.sh pebble
 
@@ -82,7 +86,8 @@ jobs:
         if: always()
         run: |
           set +e
-          RESULTS=~/tapeout_results
+          TAPEOUT_DIR=$HOME/Code/tapeout
+          RESULTS=$HOME/tapeout_results
           mkdir -p "$RESULTS/reports" "$RESULTS/netlist" "$RESULTS/logs"
           cp -r $TAPEOUT_DIR/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null
           cp -r $TAPEOUT_DIR/3_POWER/rpt/* "$RESULTS/reports/" 2>/dev/null
