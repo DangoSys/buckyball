@@ -25,11 +25,11 @@ void populateTransposeLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable);
 void configureTransposeLegalizeForExportTarget(LLVMConversionTarget &target,
                                                bool stable);
-void populateSystolicLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                   RewritePatternSet &patterns,
-                                                   bool stable);
-void configureSystolicLegalizeForExportTarget(LLVMConversionTarget &target,
-                                              bool stable);
+void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                 RewritePatternSet &patterns,
+                                                 bool stable);
+void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
+                                            bool stable);
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
@@ -44,7 +44,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
                                             includeFuncOperandForwarding);
   mlir::buddy::buckyball::populateTransposeLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
-  mlir::buddy::buckyball::populateSystolicLegalizeForLLVMExportPatterns(
+  mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
 }
 
@@ -53,6 +53,6 @@ void mlir::configureBuckyballLegalizeForExportTarget(
   configureBaseLegalizeForExportTarget(target);
   mlir::buddy::buckyball::configureTransposeLegalizeForExportTarget(target,
                                                                     stable);
-  mlir::buddy::buckyball::configureSystolicLegalizeForExportTarget(target,
-                                                                   stable);
+  mlir::buddy::buckyball::configureMatrixLegalizeForExportTarget(target,
+                                                                 stable);
 }

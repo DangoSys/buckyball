@@ -45,11 +45,11 @@ void populateReluLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                bool stable);
 void configureReluLegalizeForExportTarget(LLVMConversionTarget &target,
                                           bool stable);
-void populateSystolicLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                   RewritePatternSet &patterns,
-                                                   bool stable);
-void configureSystolicLegalizeForExportTarget(LLVMConversionTarget &target,
-                                              bool stable);
+void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                 RewritePatternSet &patterns,
+                                                 bool stable);
+void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
+                                            bool stable);
 } // namespace mlir::buddy::buckyball
 
 namespace {
@@ -179,7 +179,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
   mlir::buddy::buckyball::populateReluLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
-  mlir::buddy::buckyball::populateSystolicLegalizeForLLVMExportPatterns(
+  mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
 }
 
@@ -198,6 +198,6 @@ void mlir::configureBuckyballLegalizeForExportTarget(
   mlir::buddy::buckyball::configureInt2FpLegalizeForExportTarget(target,
                                                                  stable);
   mlir::buddy::buckyball::configureReluLegalizeForExportTarget(target, stable);
-  mlir::buddy::buckyball::configureSystolicLegalizeForExportTarget(target,
-                                                                   stable);
+  mlir::buddy::buckyball::configureMatrixLegalizeForExportTarget(target,
+                                                                 stable);
 }

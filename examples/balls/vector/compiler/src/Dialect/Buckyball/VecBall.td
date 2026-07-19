@@ -1,6 +1,6 @@
 //===-- VecBall.td - VecBall operations --------------------*- tablegen -*-===//
 //
-// VecBall operations for matrix multiplication using warp-16 systolic array.
+// VecBall operations for matrix multiplication using warp-16 matrix array.
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,7 +17,7 @@ include "BuckyballIntrinsics.td"
 def MulWarp16Op : Buckyball_Op<"mul_warp16"> {
   let summary = "Warp-16 matrix multiplication";
   let description = [{
-    Performs matrix multiplication using 16x16 systolic array.
+    Performs matrix multiplication using 16x16 matrix array.
     Corresponds to bb_mul_warp16 instruction (funct7=64).
     Belongs to VecBall (bid=0).
   }];

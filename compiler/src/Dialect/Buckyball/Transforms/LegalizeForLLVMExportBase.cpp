@@ -197,12 +197,38 @@ struct BuckyballInstLowering : public ConvertOpToLLVMPattern<InstOp> {
   matchAndRewrite(InstOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     int32_t funct7 = op.getFunct7();
-    if (funct7 < 0 || funct7 > 127)
-      return op.emitError("buckyball.inst funct7 must be in [0, 127]");
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, adaptor.getRs1(), adaptor.getRs2(),
-        rewriter.getI32IntegerAttr(funct7));
-    return success();
+    switch (funct7) {
+    case 48:
+      rewriter.replaceOpWithNewOp<Im2colIntrOp>(op, adaptor.getRs1(),
+                                                adaptor.getRs2());
+      return success();
+    case 49:
+      rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, adaptor.getRs1(),
+                                                   adaptor.getRs2());
+      return success();
+    case 50:
+      rewriter.replaceOpWithNewOp<ReluIntrOp>(op, adaptor.getRs1(),
+                                              adaptor.getRs2());
+      return success();
+    case 51:
+      rewriter.replaceOpWithNewOp<Fp2IntIntrOp>(op, adaptor.getRs1(),
+                                                adaptor.getRs2());
+      return success();
+    case 52:
+      rewriter.replaceOpWithNewOp<Int2FpIntrOp>(op, adaptor.getRs1(),
+                                                adaptor.getRs2());
+      return success();
+    case 64:
+      rewriter.replaceOpWithNewOp<MulWarp16IntrOp>(op, adaptor.getRs1(),
+                                                   adaptor.getRs2());
+      return success();
+    case 65:
+      rewriter.replaceOpWithNewOp<MatrixIntrOp>(op, adaptor.getRs1(),
+                                                adaptor.getRs2());
+      return success();
+    default:
+      return op.emitError("unsupported buckyball.inst funct7: ") << funct7;
+    }
   }
 };
 
@@ -225,8 +251,10 @@ void populateBaseLegalizeForLLVMExportPatterns(
 }
 
 void configureBaseLegalizeForExportTarget(LLVMConversionTarget &target) {
-  target.addLegalOp<CustomIntrOp, FenceIntrOp, MsetIntrOp, MvinIntrOp,
-                    MvoutIntrOp>();
+  target
+      .addLegalOp<CustomIntrOp, FenceIntrOp, MsetIntrOp, MvinIntrOp,
+                  MvoutIntrOp, Im2colIntrOp, TransposeIntrOp, ReluIntrOp,
+                  Fp2IntIntrOp, Int2FpIntrOp, MulWarp16IntrOp, MatrixIntrOp>();
   target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, MvoutOp, BankAllocOp,
                       BankReleaseOp, BankMvinOp, BankMvoutOp>();
   target.addLegalDialect<memref::MemRefDialect>();

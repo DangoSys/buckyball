@@ -204,7 +204,7 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
       preSlot.valid         := true.B
       preSlot.bits          := 0.U.asTypeOf(new LoopSubCmd(b))
       preSlot.bits.cmdType  := LoopSubCmdType.PRELOAD
-      preSlot.bits.op1_bank := cfg.bank_a // preload A (activations) into systolic array
+      preSlot.bits.op1_bank := cfg.bank_a // preload A (activations) into matrix array
       preSlot.bits.wr_bank  := cfg.bank_c
       preSlot.bits.iter     := DIM.U
 

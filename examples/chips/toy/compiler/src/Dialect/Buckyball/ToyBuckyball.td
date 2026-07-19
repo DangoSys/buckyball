@@ -31,7 +31,7 @@ include "VecBall.td"
 include "ReluBall.td"
 include "TransposeBall.td"
 include "Im2colBall.td"
-include "SystolicArrayBall.td"
+include "MatrixBall.td"
 include "Fp2IntBall.td"
 include "Int2FpBall.td"
 

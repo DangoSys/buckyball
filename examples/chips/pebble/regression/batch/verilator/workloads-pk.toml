@@ -5,6 +5,6 @@ tests = [
   "mvin_mvout_stride_test-linux",
   "transpose_test-linux",
   "transpose_16xn_test-linux",
-  "bfp_test-linux",
-  "systolic_matmul_16x16_ones-linux",
+  "matrix_test-linux",
+  "matrix_matmul_16x16_ones-linux",
 ]
