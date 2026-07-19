@@ -20,8 +20,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
   // acc0: write to accumulator, offset 0
-  int acc_bank_id = 2; // virtual bank id
-                       // bb_mem_alloc(acc_bank_id, 1, 4);
+  int acc_bank_id = 2;
 
   bb_mem_alloc(op1_bank_id, 1, 1);
   bb_mem_alloc(op2_bank_id, 1, 1);
@@ -31,7 +30,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   bb_mvin((uintptr_t)b, op2_bank_id, DIM, 1);
 
   bb_matrix(op1_bank_id, op2_bank_id, acc_bank_id, size);
-  bb_mvout((uintptr_t)c, acc_bank_id, size << 2, 1);
+  bb_mvout((uintptr_t)c, acc_bank_id, size, 1);
   bb_fence();
 }
 
