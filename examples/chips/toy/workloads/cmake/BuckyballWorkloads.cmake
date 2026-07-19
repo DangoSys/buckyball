@@ -19,10 +19,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -Wl,--no-dynamic-linker")
 
 function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
+  file(GLOB BUCKYBALL_ISA_DEPS CONFIGURE_DEPENDS
+    ${WORKLOAD_LIB_DIR}/bbhw/isa/*)
   set(DEPS
     ${SOURCE_DIR}/${SOURCE_FILE}
     ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
-    ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.h)
+    ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.h
+    ${BUCKYBALL_ISA_DEPS})
 
   if(SOURCE_FILE MATCHES "^tlb_.*\\.c$")
     list(APPEND DEPS ${BUCKYBALL_TOY_COMMON_DIR}/tlb_common.h)
