@@ -141,9 +141,8 @@ class MatrixUnit(val b: GlobalConfig) extends Module {
                          0.U(5.W))
     val portData = (rowWriteReg.data >> (startElem * accElemBits.U))(
       b.memDomain.bankWidth - 1, 0)
-    val linearAddr = rowWriteReg.wr_row_addr.pad(addrWidth + 2) + writeBeatIdx
-    val targetGroup = rowWriteReg.wr_group_base + (linearAddr / b.memDomain.bankEntries.U)
-    val targetAddr = linearAddr % b.memDomain.bankEntries.U
+    val targetGroup = rowWriteReg.wr_group_base + writeBeatIdx
+    val targetAddr  = rowWriteReg.wr_row_addr / rowWriteReg.beat_count
 
     io.bankWrite(port).bank_id := rowWriteReg.wr_bank
     io.bankWrite(port).group_id := targetGroup(groupWidth - 1, 0)
