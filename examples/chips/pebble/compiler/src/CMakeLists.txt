@@ -24,7 +24,7 @@ include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/Dialect/Buckyball)
 
 set(PEBBLE_BALL_COMPILER_DIALECT_DIRS
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/systolicarray/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/matrix/compiler/src/Dialect/Buckyball
 )
 
 foreach(PEBBLE_BALL_COMPILER_DIALECT_DIR ${PEBBLE_BALL_COMPILER_DIALECT_DIRS})

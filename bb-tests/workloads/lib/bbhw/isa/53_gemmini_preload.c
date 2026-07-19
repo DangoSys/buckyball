@@ -6,7 +6,7 @@
 #define BB_GEMMINI_PRELOAD_FUNC7 53
 #define BB_GEMMINI_PRELOAD_RS2 1ULL
 
-// Preload D/B matrix into systolic array
+// Preload D/B matrix into matrix array
 // op1_bank_id: source bank for D (OS) or B (WS)
 // wr_bank_id: destination bank for C output
 // iter: number of rows to preload

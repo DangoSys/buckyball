@@ -56,11 +56,16 @@ jobs:
           cd ~/Code/buckyball
           nix build
 
-      - name: Build Workloads
+      - name: Build Compiler
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
           nix develop -c bbdev compiler --build '--chip toy'
+
+      - name: Build Workloads
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
           nix develop -c bbdev workload --clean
           nix develop -c bbdev workload --build '--chip toy'
 

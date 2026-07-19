@@ -5,6 +5,6 @@ tests = [
   "mvin_mvout_stride_test-singlecore-baremetal",
   "transpose_test-singlecore-baremetal",
   "transpose_16xn_test-singlecore-baremetal",
-  "bfp_test-singlecore-baremetal",
-  "systolic_matmul_16x16_ones-singlecore-baremetal",
+  "matrix_test-singlecore-baremetal",
+  "matrix_matmul_16x16_ones-singlecore-baremetal",
 ]

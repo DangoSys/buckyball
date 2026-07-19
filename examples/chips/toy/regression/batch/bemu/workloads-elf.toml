@@ -21,7 +21,7 @@ tests = [
   "fp2int_test-singlecore-baremetal",
   "int2fp_test-singlecore-baremetal",
   "bdb_counter_test-singlecore-baremetal",
-  "bfp_test-singlecore-baremetal",
+  "matrix_test-singlecore-baremetal",
   "gemmini_os_cisc_basic_test-singlecore-baremetal",
   "gemmini_os_cisc_atranspose_test-singlecore-baremetal",
   "gemmini_os_cisc_btranspose_test-singlecore-baremetal",

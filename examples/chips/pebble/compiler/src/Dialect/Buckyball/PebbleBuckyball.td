@@ -19,6 +19,6 @@
 
 include "Buckyball.td"
 include "TransposeBall.td"
-include "SystolicArrayBall.td"
+include "MatrixBall.td"
 
 #endif // PEBBLE_BUCKYBALL_OPS

@@ -21,7 +21,7 @@ tests = [
   "fp2int_test-linux",
   "int2fp_test-linux",
   "bdb_counter_test-linux",
-  "bfp_test-linux",
+  "matrix_test-linux",
   "gemmini_os_cisc_basic_test-linux",
   "gemmini_os_cisc_atranspose_test-linux",
   "gemmini_os_cisc_btranspose_test-linux",

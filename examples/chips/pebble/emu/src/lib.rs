@@ -6,8 +6,8 @@ pub use super::instruction;
 
 #[path = "../../../../balls/transpose/emu/src/49_transpose.rs"]
 pub mod f49_transpose;
-#[path = "../../../../balls/systolicarray/emu/src/65_bfp.rs"]
-pub mod f65_bfp;
+#[path = "../../../../balls/matrix/emu/src/65_matrix.rs"]
+pub mod f65_matrix;
 
 use instruction::{ExecContext, Instruction};
 
@@ -51,5 +51,5 @@ register_instructions! {
   super::f34_mmio_set::MmioSet,
   super::f35_mvin_mmio::MvinMmio,
   f49_transpose::Transpose,
-  f65_bfp::Bfp,
+  f65_matrix::Matrix,
 }

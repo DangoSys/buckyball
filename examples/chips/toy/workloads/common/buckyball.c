@@ -194,7 +194,7 @@ void init_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
   }
 }
 
-void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
+void init_matrix_random_matrix(elem_t *matrix, int rows, int cols, int seed) {
   srand(seed);
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
