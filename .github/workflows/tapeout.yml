@@ -98,7 +98,7 @@ jobs:
           cp -r $TAPEOUT_DIR/2_POSTSIM/glsim/results/* "$RESULTS/logs/" 2>/dev/null
 
           echo "============================================"
-          echo "  PPA Summary (Pebble BBSimHarness @ TSMC28)"
+          echo "  PPA Summary (Pebble @ TSMC28)"
           echo "============================================"
           for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
             [ -f "$rpt" ] || continue
