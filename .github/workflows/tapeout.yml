@@ -124,5 +124,5 @@ jobs:
           NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
           name: pebble-tapeout-results
-          path: ~/tapeout_results/
+          path: ~/Code/tapeout/tapeout_results
           retention-days: 30
