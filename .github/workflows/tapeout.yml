@@ -87,7 +87,7 @@ jobs:
         run: |
           set +e
           TAPEOUT_DIR=$HOME/Code/tapeout
-          RESULTS=$HOME/tapeout_results
+          RESULTS=$TAPEOUT_DIR/tapeout_results
           mkdir -p "$RESULTS/reports" "$RESULTS/netlist" "$RESULTS/logs"
           cp -r $TAPEOUT_DIR/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null
           cp -r $TAPEOUT_DIR/3_POWER/rpt/* "$RESULTS/reports/" 2>/dev/null
