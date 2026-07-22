@@ -1,0 +1,11 @@
+add_buckyball_ctests(
+  matrix_test.c
+  matrix_matmul_16x16_ones.c
+  matrix_matmul_32x32_ones.c
+  matrix_matmul_4x4_ones.c
+  matrix_matmul_8x8_ones.c
+  matrix_mode_switch_test.c
+  matrix_os_only_test.c
+  matrix_os_ws_test.c
+  matrix_ws_only_test.c
+)

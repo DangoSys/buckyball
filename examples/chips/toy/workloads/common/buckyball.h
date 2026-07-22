@@ -66,7 +66,7 @@ void init_identity_matrix(elem_t *matrix, int size);
 void init_row_vector(elem_t *matrix, int cols, elem_t value);
 void init_col_vector(elem_t *matrix, int rows, elem_t value);
 void init_random_matrix(elem_t *matrix, int rows, int cols, int seed);
-void init_bbfp_random_matrix(elem_t *matrix, int rows, int cols, int seed);
+void init_matrix_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_sequence_matrix(elem_t *matrix, int rows, int cols);
 void init_col_aligned_random_matrix(elem_t *aligned_matrix, elem_t *matrix,
                                     int align, int rows, int cols, int seed);

@@ -1,0 +1,9 @@
+# Matrix Ball Configuration (lane=32)
+
+[ball]
+InputNum = 32
+inputWidth = 8
+lane = 32
+outputWidth = 32
+numMulThreads = 32
+numCasThreads = 32

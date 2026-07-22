@@ -54,6 +54,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     // Shared memory path — exposed to tile level for multi-core SharedMemBackend
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
+    val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(8.W))
     val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
@@ -151,6 +152,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Shared memory passthrough ---
   io.shared_mem_req <> memDomain.io.shared_mem_req
   io.shared_config <> memDomain.io.shared_config
+  io.shared_query_valid                 := memDomain.io.shared_query_valid
   io.shared_query_vbank_id              := memDomain.io.shared_query_vbank_id
   memDomain.io.shared_query_group_count := io.shared_query_group_count
 

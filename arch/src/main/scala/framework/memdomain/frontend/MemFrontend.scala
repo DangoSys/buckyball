@@ -94,11 +94,21 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.config <> configer.io.config
 
   // Connect query interfaces
-  // Use memLoader's query by default, memStorer will override when active
-  io.query_vbank_id              := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
-  io.query_is_shared             := Mux(memStorer.io.cmdReq.valid, memStorer.io.query_is_shared, memLoader.io.query_is_shared)
+  // Preserve private store priority while keeping shared queries valid-gated.
+  val loaderSharedQuery = memLoader.io.query_is_shared
+  val storerSharedQuery = memStorer.io.query_is_shared
+  val storerIssueQuery  = memStorer.io.cmdReq.valid
+  val loaderIssueQuery  = memLoader.io.cmdReq.valid
+  val selectStorerQuery = storerIssueQuery || (!loaderIssueQuery && storerSharedQuery)
+
+  io.query_vbank_id              := Mux(selectStorerQuery, memStorer.io.query_vbank_id, memLoader.io.query_vbank_id)
+  io.query_is_shared             := Mux(selectStorerQuery, storerSharedQuery, loaderSharedQuery)
   memLoader.io.query_group_count := io.query_group_count
   memStorer.io.query_group_count := io.query_group_count
+
+  when(loaderSharedQuery && storerSharedQuery && memLoader.io.query_vbank_id =/= memStorer.io.query_vbank_id) {
+    assert(false.B, "MemFrontend shared query conflict: loader and storer query different vbanks in the same cycle\n")
+  }
 
 // -----------------------------------------------------------------------------
 // MemDecoder -> MemReservationStation

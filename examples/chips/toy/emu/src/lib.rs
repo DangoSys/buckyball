@@ -26,8 +26,8 @@ pub mod f53_gemmini_preload;
 pub mod f55_mxfp2int;
 #[path = "../../../../balls/vector/emu/src/64_mul_warp16.rs"]
 pub mod f64_mul_warp16;
-#[path = "../../../../balls/systolicarray/emu/src/65_bfp.rs"]
-pub mod f65_bfp;
+#[path = "../../../../balls/matrix/emu/src/65_matrix.rs"]
+pub mod f65_matrix;
 #[path = "../../../../balls/gemmini/emu/src/66_gemmini_compute_preloaded.rs"]
 pub mod f66_gemmini_compute_preloaded;
 #[path = "../../../../balls/gemmini/emu/src/67_gemmini_compute_accumulated.rs"]
@@ -91,7 +91,7 @@ register_instructions! {
     f53_gemmini_preload::GemminiPreload,
     f55_mxfp2int::Mxfp2Int,
     f64_mul_warp16::MulWarp16,
-    f65_bfp::Bfp,
+    f65_matrix::Matrix,
     f66_gemmini_compute_preloaded::GemminiComputePreloaded,
     f67_gemmini_compute_accumulated::GemminiComputeAccumulated,
     f80_gemmini_loop_ws::GemminiLoopWsConfigBounds,

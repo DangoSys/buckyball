@@ -20,6 +20,7 @@ function(add_goban_test_target TEST_NAME SOURCE_FILE)
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${GOBAN_C_FLAGS}
+      ${ARGN}
       -o ${EXECUTABLE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
@@ -95,6 +96,17 @@ endfunction()
 
 add_goban_test_target(goban_barrier_test barrier_test.c)
 add_goban_test_target(goban_barrier_mvin_test barrier_mvin_test.c)
+add_goban_test_target(goban_shared_barrier_mvin_test shared_barrier_mvin_test.c)
+add_goban_test_target(goban_shared_same_vbank_test shared_same_vbank_test.c)
+add_goban_test_target(goban_shared_multigroup_mvin_test shared_multigroup_mvin_test.c)
+add_goban_test_target(goban_shared_duplicate_alloc_assert_test shared_duplicate_alloc_assert_test.c)
+add_goban_test_target(goban_shared_invalid_release_assert_test shared_invalid_release_assert_test.c)
+add_goban_test_target(goban_shared_barrier_mvin_2core_test shared_barrier_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(goban_shared_same_vbank_2core_test shared_same_vbank_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(goban_shared_multigroup_mvin_2core_test shared_multigroup_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(goban_shared_barrier_mvin_8core_test shared_barrier_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(goban_shared_same_vbank_8core_test shared_same_vbank_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(goban_shared_multigroup_mvin_8core_test shared_multigroup_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
 add_goban_2t4c_test_target(goban_hetero_2t4c_smoke_test hetero_64t4c_smoke_test.c)
 add_goban_64t4c_test_target(goban_hetero_64t4c_smoke_test hetero_64t4c_smoke_test.c)
 add_goban_2t4c_test_target(goban_uart_rx_echo_2t4c_test uart_rx_echo_test.c)
@@ -104,6 +116,15 @@ add_custom_target(goban-ctests-build ALL
   DEPENDS
     goban_barrier_test-ctest-build
     goban_barrier_mvin_test-ctest-build
+    goban_shared_barrier_mvin_test-ctest-build
+    goban_shared_same_vbank_test-ctest-build
+    goban_shared_multigroup_mvin_test-ctest-build
+    goban_shared_barrier_mvin_2core_test-ctest-build
+    goban_shared_same_vbank_2core_test-ctest-build
+    goban_shared_multigroup_mvin_2core_test-ctest-build
+    goban_shared_barrier_mvin_8core_test-ctest-build
+    goban_shared_same_vbank_8core_test-ctest-build
+    goban_shared_multigroup_mvin_8core_test-ctest-build
     goban_hetero_2t4c_smoke_test-ctest-build
     goban_hetero_64t4c_smoke_test-ctest-build
     goban_uart_rx_echo_2t4c_test-ctest-build

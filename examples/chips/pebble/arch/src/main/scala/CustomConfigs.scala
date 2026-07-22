@@ -4,7 +4,7 @@ import org.chipsalliance.cde.config.Config
 import framework.system.tile.WithBuckyballTiles
 
 /**
- * Pebble example: one tile with TransposeBall and SystolicArrayBall.
+ * Pebble example: one tile with TransposeBall and MatrixBall.
  */
 class BuckyballPebbleConfig
     extends Config(
