@@ -1,33 +1,26 @@
-name: Buckyball Pebble + Tapeout CI
-run-name: ${{ github.actor }} Pebble → Tapeout
+name: Buckyball Pebble PPA Regression
+run-name: ${{ github.actor }} Pebble PPA Regression
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - pebble
-      - feature/tapeout-ci
-  pull_request:
-    branches:
-      - pebble
 
 permissions:
   contents: read
   checks: write
 
 concurrency:
-  group: buckyball-pebble-tapeout
+  group: buckyball-ppa-regression
   cancel-in-progress: false
 
 jobs:
   tapeout:
-    name: Pebble → Tapeout
+    name: Pebble PPA Regression
     runs-on: cpu-server-tapeout
     env:
       ALL_PROXY: socks5h://127.0.0.1:17890
     steps:
       - name: Print information
         run: |
-          echo "Pebble → Tapeout CI: ${{ github.event_name }}"
+          echo "Pebble PPA Regression: ${{ github.event_name }}"
           echo "Repository: ${{ github.repository }}"
 
       # ──────────── Pebble CI ────────────
