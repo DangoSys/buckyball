@@ -23,10 +23,7 @@
 
 include "Buckyball.td"
 
-include "ToyOps.td"
-
 // Ball-specific operations
-// Note: GemminiBall operations are not included yet
 include "VecBall.td"
 include "ReluBall.td"
 include "TransposeBall.td"
@@ -34,6 +31,5 @@ include "Im2colBall.td"
 include "MatrixBall.td"
 include "Fp2IntBall.td"
 include "Int2FpBall.td"
-
 
 #endif // TOY_BUCKYBALL_OPS

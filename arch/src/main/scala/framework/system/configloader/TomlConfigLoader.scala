@@ -193,12 +193,14 @@ object TomlConfigLoader {
     // A core entry with `balldomain` becomes a Buckyball-bearing core.
     // Omitting `balldomain` (or empty string) drops the accelerator slot.
     val balldomainOpt = coreTable.get("balldomain").flatMap {
-      case Value.Str(s) if s.nonEmpty => Some(parseBallDomain(parseFile(baseDir.resolve(s).toString)))
+      case Value.Str(s) if s.nonEmpty =>
+        val balldomainPath = baseDir.resolve(s).normalize()
+        Some(parseBallDomain(parseFile(balldomainPath.toString), balldomainPath.getParent))
       case Value.Str(_)               => None // empty string = no balldomain
       case Value.Tbl(t)               =>
         // Inline or include
-        val (resolved, _) = resolveInclude(t, baseDir)
-        Some(parseBallDomainTable(resolved))
+        val (resolved, newBase) = resolveInclude(t, baseDir)
+        Some(parseBallDomainTable(resolved, newBase))
       case _                          => throw new RuntimeException("'balldomain' must be a string path or table")
     }
 
@@ -277,12 +279,12 @@ object TomlConfigLoader {
     )
 
   /** Parse a BallDomain file (returns BallDomainParam from the root table). */
-  private def parseBallDomain(value: Value): BallDomainParam = {
+  private def parseBallDomain(value: Value, baseDir: Path): BallDomainParam = {
     val table = asTable(value, "balldomain root")
-    parseBallDomainTable(table)
+    parseBallDomainTable(table, baseDir)
   }
 
-  private def parseBallDomainTable(table: Map[String, Value]): BallDomainParam = {
+  private def parseBallDomainTable(table: Map[String, Value], baseDir: Path): BallDomainParam = {
     val ballNum        = getInt(table, "ballNum")
     val ballIdMappings = getArray(table, "ballIdMappings").map { v =>
       val t = asTable(v, "ballIdMapping entry")
@@ -291,6 +293,7 @@ object TomlConfigLoader {
         ballName = getString(t, "ballName"),
         ballClass = getString(t, "ballClass"),
         config = getString(t, "config"),
+        configBaseDir = baseDir.toString,
         inBW = getInt(t, "inBW"),
         outBW = getInt(t, "outBW")
       )

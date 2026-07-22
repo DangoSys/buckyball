@@ -20,5 +20,8 @@
 include "Buckyball.td"
 include "TransposeBall.td"
 include "MatrixBall.td"
+include "Im2colBall.td"
+include "Fp2IntBall.td"
+include "Int2FpBall.td"
 
 #endif // PEBBLE_BUCKYBALL_OPS

@@ -10,7 +10,7 @@
 // CHECK:     %[[PARTIAL:.*]] = memref.alloc() : memref<16x16xf32>
 // CHECK:     linalg.fill
 // CHECK:     scf.for {{.*}} = %[[C0]] to %[[C2048]] step %[[C1024]] {
-// CHECK:       buckyball.matmul {{.*}} %[[PARTIAL]]
+// CHECK:       buckyball.matrix_matmul {{.*}} %[[PARTIAL]]
 // CHECK:       scf.for {{.*}} = %[[C0]] to {{.*}} step {{.*}} {
 // CHECK:         scf.for {{.*}} = %[[C0]] to {{.*}} step {{.*}} {
 // CHECK:           memref.load %[[C_TILE]]

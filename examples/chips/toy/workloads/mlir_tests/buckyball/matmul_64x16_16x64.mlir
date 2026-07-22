@@ -1,6 +1,6 @@
 // Buckyball Dialect matmul test: 64x16 @ 16x64
 // Matrix: 64x16 (fp32) @ 16x64 (fp32) -> 64x64 (fp32)
-// Tests buckyball.matmul lowering: fp32 -> quant -> mul_warp16 -> dequant
+// Tests buckyball.matrix_matmul lowering: fp32 -> quant -> mul_warp16 -> dequant
 // Verification done in C wrapper to avoid fp constant pool (.LCPI) which
 // triggers R_RISCV_HI20 relocation truncation under newlib.
 
@@ -19,7 +19,7 @@ func.func @main() -> i8 {
   linalg.fill ins(%one_f32 : f32) outs(%b : memref<16x64xf32>)
   linalg.fill ins(%zero_f32 : f32) outs(%c : memref<64x64xf32>)
 
-  buckyball.matmul %a %b %c
+  buckyball.matrix_matmul %a %b %c
     : memref<64x16xf32> memref<16x64xf32> memref<64x64xf32>
 
   func.call @check_result(%c) : (memref<64x64xf32>) -> ()

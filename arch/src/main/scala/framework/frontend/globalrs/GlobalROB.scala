@@ -58,6 +58,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val itraceComp  = Module(new ITraceDPI)
 
   for (t <- Seq(itraceAlloc, itraceIssue, itraceComp)) {
+    t.io.clock       := clock
+    t.io.reset       := reset.asBool
     t.io.is_issue    := 0.U
     t.io.rob_id      := 0.U
     t.io.domain_id   := 0.U

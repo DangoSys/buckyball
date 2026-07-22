@@ -91,11 +91,11 @@ static LogicalResult getStaticRowStrideDiv16(MemRefType type, uint64_t &out) {
   return success();
 }
 
-class MatMulToBankSSAPattern : public OpRewritePattern<MatMulOp> {
+class MatrixMatmulToBankSSAPattern : public OpRewritePattern<MatrixMatmulOp> {
 public:
-  using OpRewritePattern<MatMulOp>::OpRewritePattern;
+  using OpRewritePattern<MatrixMatmulOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(MatMulOp op,
+  LogicalResult matchAndRewrite(MatrixMatmulOp op,
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value aMem = op.getAMemArray();
@@ -121,7 +121,8 @@ public:
       return rewriter.notifyMatchFailure(op, "output dimensions must match");
     if (m % 16 != 0 || k % 16 != 0 || n % 16 != 0)
       return rewriter.notifyMatchFailure(
-          op, "buckyball.matmul requires M, K and N to be multiples of 16");
+          op,
+          "buckyball.matrix_matmul requires M, K and N to be multiples of 16");
 
     uint64_t strideB = 0;
     uint64_t strideC = 0;
@@ -244,5 +245,5 @@ public:
 
 void mlir::buddy::populateToyLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
-  patterns.add<MatMulToBankSSAPattern>(patterns.getContext());
+  patterns.add<MatrixMatmulToBankSSAPattern>(patterns.getContext());
 }

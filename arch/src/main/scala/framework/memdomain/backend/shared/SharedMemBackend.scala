@@ -33,6 +33,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
   for (mt <- mtraces) {
+    mt.io.clock     := clock
+    mt.io.reset     := reset.asBool
     mt.io.is_write  := 0.U
     mt.io.is_shared := 0.U
     mt.io.channel   := 0.U
@@ -90,9 +92,8 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   def deleteEntry(hart_id: UInt, vbank_id: UInt): Unit = {
-    val found = mappingTable.map(entry =>
-      entry.valid && entry.vbank_id === vbank_id && entry.hart_id === hart_id
-    ).reduce(_ || _)
+    val found =
+      mappingTable.map(entry => entry.valid && entry.vbank_id === vbank_id && entry.hart_id === hart_id).reduce(_ || _)
     when(!found) {
       assert(false.B, "SharedMemBackend release missing allocation: hart=%d vbank=%d\n", hart_id, vbank_id)
     }
@@ -160,7 +161,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       val pbankId = getFreePbankId()
       printf(
         p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +
-          p"group=${io.config.bits.group_id} pbank=${pbankId} is_multi=${io.config.bits.is_multi}\n"
+          p"group=${io.config.bits.group_id} pbank=$pbankId is_multi=${io.config.bits.is_multi}\n"
       )
       addEntry(
         io.config.bits.hart_id,
@@ -186,7 +187,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         entry.valid &&
         (entry.hart_id === io.query_hart_id(q)) &&
         (entry.vbank_id === io.query_vbank_id(q))
-      val count = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
+      val count   = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
       Mux(matches, count, 0.U)
     }
 

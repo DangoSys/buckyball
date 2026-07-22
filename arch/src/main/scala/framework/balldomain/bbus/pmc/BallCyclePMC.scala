@@ -53,6 +53,8 @@ class BallCyclePMC(val b: GlobalConfig) extends Module {
 
 //===---------- Initialize the PMC traces ----------===//
   for (pt <- pmcTraces) {
+    pt.io.clock   := clock
+    pt.io.reset   := reset.asBool
     pt.io.ball_id := 0.U
     pt.io.rob_id  := 0.U
     pt.io.elapsed := 0.U

@@ -30,11 +30,15 @@ class MemCyclePMC(val b: GlobalConfig) extends Module {
   val ldPmcTrace = Module(new MemPMCTraceDPI)
   val stPmcTrace = Module(new MemPMCTraceDPI)
 
+  ldPmcTrace.io.clock    := clock
+  ldPmcTrace.io.reset    := reset.asBool
   ldPmcTrace.io.is_store := 0.U
   ldPmcTrace.io.rob_id   := 0.U
   ldPmcTrace.io.elapsed  := 0.U
   ldPmcTrace.io.enable   := false.B
 
+  stPmcTrace.io.clock    := clock
+  stPmcTrace.io.reset    := reset.asBool
   stPmcTrace.io.is_store := 1.U
   stPmcTrace.io.rob_id   := 0.U
   stPmcTrace.io.elapsed  := 0.U

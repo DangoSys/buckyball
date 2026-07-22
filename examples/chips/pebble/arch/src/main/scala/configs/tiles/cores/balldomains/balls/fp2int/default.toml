@@ -1,0 +1,4 @@
+# Pebble Fp2Int Ball Configuration
+
+[ball]
+targetType = "INT32"

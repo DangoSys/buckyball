@@ -2,6 +2,7 @@ package framework.balldomain.configs
 
 import framework.top.GlobalConfig
 import toml.{Toml, Value}
+import java.nio.file.{Files, Path, Paths}
 
 object BallParamLoader {
 
@@ -24,10 +25,49 @@ object BallParamLoader {
     }
 
   def ballDir(ballClass: String): String = {
+    val pkg = ballPackage(ballClass)
+    s"../examples/balls/$pkg"
+  }
+
+  private def ballPackage(ballClass: String): String = {
     val parts = ballClass.split("\\.")
     if (parts.length < 4 || parts(0) != "examples" || parts(1) != "balls")
       throw new RuntimeException(s"Invalid ballClass for ballDir: $ballClass")
-    s"../${parts(0)}/${parts(1)}/${parts(2)}"
+    parts(2)
+  }
+
+  private def mergeTables(base: Map[String, Value], overrideTable: Map[String, Value]): Map[String, Value] =
+    overrideTable.foldLeft(base) {
+      case (acc, (key, overrideValue)) =>
+        val mergedValue = (acc.get(key), overrideValue) match {
+          case (Some(Value.Tbl(baseNested)), Value.Tbl(overrideNested)) =>
+            Value.Tbl(mergeTables(baseNested, overrideNested))
+          case _                                                        => overrideValue
+        }
+        acc + (key -> mergedValue)
+    }
+
+  private def overrideCandidates(mapping: BallIdMapping): Seq[Path] = {
+    if (mapping.configBaseDir.isEmpty) Seq.empty
+    else {
+      val overrideRoot = Paths.get(mapping.configBaseDir).resolve("balls")
+      val configName   = Paths.get(mapping.config).getFileName.toString
+      val pkg          = ballPackage(mapping.ballClass)
+      Seq(
+        overrideRoot.resolve(pkg).resolve(configName),
+        overrideRoot.resolve(s"${mapping.ballName}.toml"),
+        overrideRoot.resolve(s"$pkg.toml")
+      )
+    }
+  }
+
+  private def loadWithOverride(mapping: BallIdMapping): Map[String, Value] = {
+    val defaultPath = s"${ballDir(mapping.ballClass)}/${mapping.config}"
+    val defaultRoot = load(defaultPath)
+    overrideCandidates(mapping).find(path => Files.isRegularFile(path)) match {
+      case Some(overridePath) => mergeTables(defaultRoot, load(overridePath.toString))
+      case None               => defaultRoot
+    }
   }
 
   def ballTable(b: GlobalConfig, ballName: String): Map[String, Value] = {
@@ -35,8 +75,7 @@ object BallParamLoader {
       case Some(m) => m
       case None    => throw new RuntimeException(s"No ballIdMapping for ballName=$ballName")
     }
-    val path    = s"${ballDir(mapping.ballClass)}/${mapping.config}"
-    ball(load(path))
+    ball(loadWithOverride(mapping))
   }
 
   def int(table: Map[String, Value], key: String): Int =

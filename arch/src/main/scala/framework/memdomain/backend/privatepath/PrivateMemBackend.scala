@@ -28,6 +28,8 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
   for (mt <- mtraces) {
+    mt.io.clock     := clock
+    mt.io.reset     := reset.asBool
     mt.io.is_write  := 0.U
     mt.io.is_shared := 0.U
     mt.io.channel   := 0.U

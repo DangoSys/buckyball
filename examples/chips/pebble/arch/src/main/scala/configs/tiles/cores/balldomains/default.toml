@@ -1,13 +1,19 @@
 # Pebble ball domain configuration
 
-ballNum = 2
+ballNum = 5
 
 ballIdMappings = [
   { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 1, ballName = "MatrixBall", ballClass = "examples.balls.matrix.MatrixBall", config = "arch/src/main/scala/configs/lane16.toml", inBW = 2, outBW = 4 }
+  { ballId = 1, ballName = "MatrixBall", ballClass = "examples.balls.matrix.MatrixBall", config = "arch/src/main/scala/configs/lane16.toml", inBW = 2, outBW = 4 },
+  { ballId = 2, ballName = "Im2colBall", ballClass = "examples.balls.im2col.Im2colBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "arch/src/main/scala/configs/default.toml", inBW = 1, outBW = 1 }
 ]
 
 ballISA = [
   { mnemonic = "TRANSPOSE", funct7 = 49, bid = 0 },
-  { mnemonic = "MATRIX", funct7 = 65, bid = 1 }
+  { mnemonic = "MATRIX", funct7 = 65, bid = 1 },
+  { mnemonic = "IM2COL", funct7 = 48, bid = 2 },
+  { mnemonic = "FP2INT", funct7 = 51, bid = 3 },
+  { mnemonic = "INT2FP", funct7 = 52, bid = 4 }
 ]

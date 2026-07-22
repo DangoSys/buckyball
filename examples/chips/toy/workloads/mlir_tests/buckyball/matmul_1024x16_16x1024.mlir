@@ -15,7 +15,7 @@ func.func @main() -> i8 {
   linalg.fill ins(%one_f32 : f32) outs(%b : memref<16x1024xf32>)
   linalg.fill ins(%zero_f32 : f32) outs(%c : memref<1024x1024xf32>)
 
-  buckyball.matmul %a %b %c
+  buckyball.matrix_matmul %a %b %c
     : memref<1024x16xf32> memref<16x1024xf32> memref<1024x1024xf32>
 
   func.call @check_result(%c) : (memref<1024x1024xf32>) -> ()

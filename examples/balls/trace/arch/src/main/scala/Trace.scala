@@ -88,6 +88,8 @@ class Trace(val b: GlobalConfig) extends Module {
   // DPI-C modules
   // ============================================================
   val ctraceDpi = Module(new CTraceDPI)
+  ctraceDpi.io.clock   := clock
+  ctraceDpi.io.reset   := reset.asBool
   ctraceDpi.io.subcmd  := 0.U
   ctraceDpi.io.ctr_id  := 0.U
   ctraceDpi.io.tag     := 0.U

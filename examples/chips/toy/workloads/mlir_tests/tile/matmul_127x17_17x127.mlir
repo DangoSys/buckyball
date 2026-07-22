@@ -1,6 +1,6 @@
 // Tile Dialect matmul test
 // Matrix: 127x17 (fp32) @ 17x127 (fp32) -> 127x127 (fp32)
-// Tests tile-level padding before lowering to buckyball.matmul.
+// Tests tile-level padding before lowering to buckyball.matrix_matmul.
 
 func.func private @check_result(memref<127x127xf32>) -> ()
 

@@ -7,6 +7,7 @@ if(NOT DEFINED LINUX_CC)
 endif()
 
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
+set(BUDDY_CYCLE_TRACE_RUNTIME_SRC ${BBSW_BAREMETAL_DIR}/buddy_cycle_trace.c)
 set(BUCKYBALL_CTEST_C_FLAGS
   -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
