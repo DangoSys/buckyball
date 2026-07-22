@@ -14,7 +14,7 @@ permissions:
 
 # limit the number of concurrent jobs to 1, to avoid resource contention
 concurrency:
-  group: buckyball-ci-cpu-server
+  group: buckyball-cpu-server
   cancel-in-progress: false
 
 jobs:

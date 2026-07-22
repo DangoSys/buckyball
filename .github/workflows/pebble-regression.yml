@@ -1,0 +1,121 @@
+name: Buckyball Pebble PPA Regression
+run-name: ${{ github.actor }} Pebble PPA Regression
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: buckyball-ppa-regression
+  cancel-in-progress: false
+
+jobs:
+  tapeout:
+    name: Pebble PPA Regression
+    runs-on: cpu-server-tapeout
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:17890
+    steps:
+      - name: Print information
+        run: |
+          echo "Pebble PPA Regression: ${{ github.event_name }}"
+          echo "Repository: ${{ github.repository }}"
+
+      # ──────────── Pebble CI ────────────
+      - name: Reset buckyball to clean state
+        shell: zsh {0}
+        run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
+          cd $BUCKYBALL_DIR
+          git fetch --force --prune origin "${{ github.ref }}"
+          git checkout --detach FETCH_HEAD
+          git reset --hard FETCH_HEAD
+          git clean -ffd
+          git submodule sync bbdev bebop compiler/thirdparty/buddy-mlir
+          git submodule update --init --force bbdev bebop compiler/thirdparty/buddy-mlir
+          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
+            git -C "$submodule" reset --hard
+            git -C "$submodule" clean -ffd
+          done
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
+          cd $BUCKYBALL_DIR
+          nix build
+
+      - name: Build compiler and workloads
+        shell: zsh {0}
+        run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
+          cd $BUCKYBALL_DIR
+          nix develop -c bbdev compiler --build '--chip pebble'
+          nix develop -c bbdev workload --clean
+          nix develop -c bbdev workload --build '--chip pebble'
+
+      - name: Generate Verilog
+        shell: zsh {0}
+        run: |
+          BUCKYBALL_DIR=$HOME/Code/buckyball
+          cd $BUCKYBALL_DIR
+          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballPebbleVerilatorConfig'
+
+      # ──────────── Tapeout Flow ────────────
+      - name: Run tapeout flow
+        shell: zsh {0}
+        run: |
+          TAPEOUT_DIR=$HOME/Code/tapeout
+          export BUCKYBALL_DIR=$HOME/Code/buckyball
+          git -C $TAPEOUT_DIR clean -fdx
+          $TAPEOUT_DIR/run_flow.sh pebble
+
+      # ──────────── Collect & Upload ────────────
+      - name: Collect and summarize PPA
+        shell: zsh {0}
+        if: always()
+        run: |
+          set +e
+          TAPEOUT_DIR=$HOME/Code/tapeout
+          RESULTS=$TAPEOUT_DIR/tapeout_results
+          mkdir -p "$RESULTS/reports" "$RESULTS/netlist" "$RESULTS/logs"
+          cp -r $TAPEOUT_DIR/1_SYN/rpt/* "$RESULTS/reports/" 2>/dev/null
+          cp -r $TAPEOUT_DIR/3_POWER/rpt/* "$RESULTS/reports/" 2>/dev/null
+          LATEST=$(ls -td $TAPEOUT_DIR/1_SYN/outputs/*/ 2>/dev/null | head -1)
+          [ -n "$LATEST" ] && cp "$LATEST"/* "$RESULTS/netlist/" 2>/dev/null
+          cp $TAPEOUT_DIR/1_SYN/logs/* "$RESULTS/logs/" 2>/dev/null
+          cp $TAPEOUT_DIR/3_POWER/logs/* "$RESULTS/logs/" 2>/dev/null
+          cp -r $TAPEOUT_DIR/2_POSTSIM/glsim/results/* "$RESULTS/logs/" 2>/dev/null
+
+          echo "============================================"
+          echo "  PPA Summary (Pebble @ TSMC28)"
+          echo "============================================"
+          for rpt in "$RESULTS"/reports/*/*_mapped_area.rpt; do
+            [ -f "$rpt" ] || continue
+            echo "--- Area ---"; grep -E "Total cell area" "$rpt" | head -1
+          done
+          for rpt in "$RESULTS"/reports/*/*_timing_max_path.rpt; do
+            [ -f "$rpt" ] || continue
+            echo "--- Timing ---"; grep -E "slack" "$rpt" | head -1
+          done
+          for rpt in "$RESULTS"/reports/*/*_power.rpt; do
+            [ -f "$rpt" ] || continue
+            echo "--- Power (DC) ---"; grep -E "Total" "$rpt" | head -1
+          done
+          echo "============================================"
+
+      - name: Upload tapeout artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
+        with:
+          name: pebble-tapeout-results
+          path: ~/Code/tapeout/tapeout_results
+          retention-days: 30
