@@ -88,8 +88,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # BDB_SIM_META moves NDJSON banner to sim_meta.txt so it does not pollute disasm.
     # ==================================================================================
     ld_lib_path = (
-        f"{bbdir}/result/lib:"
-        f"{arch_dir}/thirdparty/chipyard/tools/DRAMSim2"
+        f"{bbdir}/result/lib"
     )
     sim_cmd = (
         f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "

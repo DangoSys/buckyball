@@ -2,7 +2,7 @@
 """ELF -> hex converter for Buckyball P2E DDR loading.
 
 Output format:
-    @0
+    @0x0
     XX
     XX
     ...
@@ -28,7 +28,8 @@ def elf_to_bin(elf_path: Path, bin_path: Path, objcopy: str) -> None:
 
 def bin_to_hex(bin_path: Path, hex_path: Path) -> int:
     data = bin_path.read_bytes()
-    lines = ["@0"]
+    # VDBG accepts hexadecimal address markers only, including address zero.
+    lines = ["@0x0"]
     lines.extend(f"{b:02X}" for b in data)
     hex_path.write_text("\n".join(lines) + "\n")
     return len(data)

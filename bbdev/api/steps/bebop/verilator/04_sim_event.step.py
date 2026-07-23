@@ -134,6 +134,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(fst_dir, exist_ok=True)
 
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
+    trace_args = ""
+    for trace_name in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace"):
+        if input_data.get(trace_name, False):
+            trace_args += f" --{trace_name}"
 
     run_cmd = (
         f"{shlex.quote(bebop_bin)} run verilator "
@@ -141,6 +145,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--log-dir={shlex.quote(log_dir)} "
         f"--fst-dir={shlex.quote(fst_dir)}"
         f"{wave_arg}"
+        f"{trace_args}"
     )
     ctx.logger.info(f"Running bebop verilator: {run_cmd}")
     run_result = stream_run_logger(

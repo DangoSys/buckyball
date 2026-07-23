@@ -90,7 +90,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
 
     ldflags = (
-        f"-lreadline -ldramsim -lstdc++ -lz "
+        f"-lreadline -ldramsim3 -lstdc++ -lz "
         f"-L{result_dir}/lib "
         f"-L{readline_lib} -Wl,-rpath,{readline_lib} "
         f"-L{zlib_lib} -Wl,-rpath,{zlib_lib} "
