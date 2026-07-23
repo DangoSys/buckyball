@@ -17,11 +17,21 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "ioe/mm_dramsim2.h"
+#include "ioe/mm_dramsim3.h"
 
 static bool use_dramsim = false;
 static std::vector<std::map<long long int, backing_data_t>> mem_data = {};
 static std::string elf_file = "";
+
+static std::string default_dramsim3_config_dir() {
+  const char *config_dir = getenv("DRAMSIM3_CONFIG_DIR");
+  if (config_dir != nullptr && config_dir[0] != '\0')
+    return std::string(config_dir);
+  const char *riscv = getenv("RISCV");
+  if (riscv != nullptr && riscv[0] != '\0')
+    return std::string(riscv) + "/share/dramsim3/configs";
+  return "result/share/dramsim3/configs";
+}
 
 static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
                             uint64_t mem_size) {
@@ -93,9 +103,8 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
   mm_t *mm;
   s_vpi_vlog_info info;
 
-  std::string memory_ini = "DDR3_micron_64M_8B_x4_sg15.ini";
-  std::string system_ini = "system.ini";
-  std::string local_ini_dir = "dramsim2_ini";
+  std::string memory_ini = "DDR3_1Gb_x8_1333.ini";
+  std::string local_ini_dir = default_dramsim3_config_dir();
 
   if (!vpi_get_vlog_info(&info))
     abort();
@@ -132,9 +141,9 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
   }
 
   if (use_dramsim) {
-    mm = (mm_t *)(new mm_dramsim2_t(
-        mem_base, mem_size, word_size, line_size, mem_data[chip_id][mem_base],
-        memory_ini, system_ini, local_ini_dir, 1 << id_bits, clock_hz));
+    mm = (mm_t *)(new mm_dramsim3_t(mem_base, mem_size, word_size, line_size,
+                                    mem_data[chip_id][mem_base], memory_ini,
+                                    local_ini_dir, 1 << id_bits, clock_hz));
   } else {
     mm = (mm_t *)(new mm_magic_t(mem_base, mem_size, word_size, line_size,
                                  mem_data[chip_id][mem_base]));

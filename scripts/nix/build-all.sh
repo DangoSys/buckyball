@@ -91,7 +91,6 @@ git submodule update --init --progress \
 # I dont know why below is need for chipyard submodules, but it is
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/*
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/*
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/stage
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde

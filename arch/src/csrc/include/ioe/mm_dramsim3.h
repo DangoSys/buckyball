@@ -1,10 +1,10 @@
 // See LICENSE for license details.
 
-#ifndef _MM_EMULATOR_DRAMSIM2_H
-#define _MM_EMULATOR_DRAMSIM2_H
+#ifndef _MM_EMULATOR_DRAMSIM3_H
+#define _MM_EMULATOR_DRAMSIM3_H
 
 #include "mm.h"
-#include <DRAMSim.h>
+#include <dramsim3.h>
 #include <list>
 #include <map>
 #include <queue>
@@ -31,12 +31,11 @@ struct mm_req_t {
   }
 };
 
-class mm_dramsim2_t : public mm_t {
+class mm_dramsim3_t : public mm_t {
 public:
-  mm_dramsim2_t(size_t mem_base, size_t mem_sz, size_t word_sz, size_t line_sz,
+  mm_dramsim3_t(size_t mem_base, size_t mem_sz, size_t word_sz, size_t line_sz,
                 backing_data_t &dat, std::string memory_ini,
-                std::string system_ini, std::string ini_dir, int axi4_ids,
-                size_t clock_hz);
+                std::string ini_dir, int axi4_ids, size_t clock_hz);
 
   virtual bool ar_ready();
   virtual bool aw_ready();
@@ -65,8 +64,10 @@ public:
                     bool r_ready, bool b_ready);
 
 protected:
-  DRAMSim::MultiChannelMemorySystem *mem;
+  dramsim3::MemorySystem *mem;
   uint64_t cycle;
+  bool ar_ready_cache = false;
+  bool aw_ready_cache = false;
 
   bool store_inflight = false;
   uint64_t store_addr;
@@ -85,8 +86,8 @@ protected:
 
   uint64_t clock_hz = 0;
 
-  void read_complete(unsigned id, uint64_t address, uint64_t clock_cycle);
-  void write_complete(unsigned id, uint64_t address, uint64_t clock_cycle);
+  void read_complete(uint64_t address);
+  void write_complete(uint64_t address);
 };
 
 #endif

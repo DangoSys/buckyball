@@ -21,7 +21,7 @@
             name = "buckyball-environment";
             paths = with pkgs; [
               tools.verilator
-              tools.dramsim2
+              tools.dramsim3
               tools.ccache
               tools.lld
               tools.cmake

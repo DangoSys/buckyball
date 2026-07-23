@@ -1,6 +1,6 @@
 // See LICENSE for license details.
 
-#include "ioe/mm_dramsim2.h"
+#include "ioe/mm_dramsim3.h"
 #include "ioe/mm.h"
 #include <cassert>
 #include <cstdlib>
@@ -9,13 +9,26 @@
 #include <iostream>
 #include <list>
 #include <queue>
+#include <string>
 
-// #define DEBUG_DRAMSIM2
+// #define DEBUG_DRAMSIM3
 
-using namespace DRAMSim;
+static std::string dramsim3_config_path(const std::string &memory_ini,
+                                        const std::string &ini_dir) {
+  if (memory_ini.empty())
+    return ini_dir;
+  if (!memory_ini.empty() && memory_ini[0] == '/')
+    return memory_ini;
+  if (ini_dir.empty())
+    return memory_ini;
+  if (ini_dir.size() >= 4 && ini_dir.substr(ini_dir.size() - 4) == ".ini")
+    return ini_dir;
+  if (ini_dir.back() == '/')
+    return ini_dir + memory_ini;
+  return ini_dir + "/" + memory_ini;
+}
 
-void mm_dramsim2_t::read_complete(unsigned id, uint64_t address,
-                                  uint64_t clock_cycle) {
+void mm_dramsim3_t::read_complete(uint64_t address) {
   assert(!rreq[address].empty());
   auto req = rreq[address].front();
   uint64_t start_addr = (req.addr / word_size) * word_size;
@@ -27,8 +40,7 @@ void mm_dramsim2_t::read_complete(unsigned id, uint64_t address,
   rreq[address].pop();
 }
 
-void mm_dramsim2_t::write_complete(unsigned id, uint64_t address,
-                                   uint64_t clock_cycle) {
+void mm_dramsim3_t::write_complete(uint64_t address) {
   assert(!wreq[address].empty());
   auto b_id = wreq[address].front();
   bresp.push(b_id);
@@ -36,38 +48,28 @@ void mm_dramsim2_t::write_complete(unsigned id, uint64_t address,
   wreq[address].pop();
 }
 
-void power_callback(double a, double b, double c, double d) {
-  // fprintf(stderr, "power callback: %0.3f, %0.3f, %0.3f, %0.3f\n",a,b,c,d);
-}
-
-mm_dramsim2_t::mm_dramsim2_t(size_t mem_base, size_t mem_sz, size_t word_sz,
+mm_dramsim3_t::mm_dramsim3_t(size_t mem_base, size_t mem_sz, size_t word_sz,
                              size_t line_sz, backing_data_t &dat,
-                             std::string memory_ini, std::string system_ini,
-                             std::string ini_dir, int axi4_ids, size_t clock_hz)
+                             std::string memory_ini, std::string ini_dir,
+                             int axi4_ids, size_t clock_hz)
     : mm_t(mem_base, mem_sz, word_sz, line_sz, dat),
       read_id_busy(axi4_ids, false), write_id_busy(axi4_ids, false) {
 
-  assert(line_sz == 64); // assumed by dramsim2
+  assert(line_sz == 64); // assumed by dramsim3
   assert(mem_sz % (1024 * 1024) == 0);
-  mem = getMemorySystemInstance(memory_ini, system_ini, ini_dir, "results",
-                                mem_size / (1024 * 1024));
-  mem->setCPUClockSpeed(clock_hz);
-  TransactionCompleteCB *read_cb =
-      new Callback<mm_dramsim2_t, void, unsigned, uint64_t, uint64_t>(
-          this, &mm_dramsim2_t::read_complete);
-  TransactionCompleteCB *write_cb =
-      new Callback<mm_dramsim2_t, void, unsigned, uint64_t, uint64_t>(
-          this, &mm_dramsim2_t::write_complete);
-  mem->RegisterCallbacks(read_cb, write_cb, power_callback);
+  (void)clock_hz;
+  auto config_file = dramsim3_config_path(memory_ini, ini_dir);
+  mem = dramsim3::GetMemorySystem(
+      config_file, "results",
+      [this](uint64_t address) { this->read_complete(address); },
+      [this](uint64_t address) { this->write_complete(address); });
 };
 
-bool mm_dramsim2_t::ar_ready() { return mem->willAcceptTransaction(); }
+bool mm_dramsim3_t::ar_ready() { return ar_ready_cache; }
 
-bool mm_dramsim2_t::aw_ready() {
-  return mem->willAcceptTransaction() && !store_inflight;
-}
+bool mm_dramsim3_t::aw_ready() { return aw_ready_cache && !store_inflight; }
 
-void mm_dramsim2_t::tick(bool reset,
+void mm_dramsim3_t::tick(bool reset,
 
                          bool ar_valid, uint64_t ar_addr, uint64_t ar_id,
                          uint64_t ar_size, uint64_t ar_len,
@@ -79,22 +81,24 @@ void mm_dramsim2_t::tick(bool reset,
                          bool w_last,
 
                          bool r_ready, bool b_ready) {
-  bool ar_fire = !reset && ar_valid && ar_ready();
-  bool aw_fire = !reset && aw_valid && aw_ready();
+  ar_ready_cache = !reset && mem->WillAcceptTransaction(ar_addr, false);
+  aw_ready_cache =
+      !reset && !store_inflight && mem->WillAcceptTransaction(aw_addr, true);
+
+  bool ar_fire = ar_valid && ar_ready_cache;
+  bool aw_fire = aw_valid && aw_ready_cache;
   bool w_fire = !reset && w_valid && w_ready();
   bool r_fire = !reset && r_valid() && r_ready;
   bool b_fire = !reset && b_valid() && b_ready;
 
-  if (mem->willAcceptTransaction()) {
-    for (auto it = rreq_queue.begin(); it != rreq_queue.end(); it++) {
-      if (!read_id_busy[it->id]) {
-        read_id_busy[it->id] = true;
-        auto transaction = *it;
-        rreq[transaction.addr].push(transaction);
-        mem->addTransaction(false, transaction.addr);
-        rreq_queue.erase(it);
-        break;
-      }
+  for (auto it = rreq_queue.begin(); it != rreq_queue.end(); it++) {
+    if (!read_id_busy[it->id] && mem->WillAcceptTransaction(it->addr, false)) {
+      read_id_busy[it->id] = true;
+      auto transaction = *it;
+      rreq[transaction.addr].push(transaction);
+      mem->AddTransaction(transaction.addr, false);
+      rreq_queue.erase(it);
+      break;
     }
   }
 
@@ -117,7 +121,7 @@ void mm_dramsim2_t::tick(bool reset,
 
     if (store_count == 0) {
       store_inflight = false;
-      mem->addTransaction(true, store_addr);
+      mem->AddTransaction(store_addr, true);
       wreq[store_addr].push(store_id);
       assert(w_last);
     }
@@ -129,7 +133,7 @@ void mm_dramsim2_t::tick(bool reset,
   if (r_fire)
     rresp.pop();
 
-  mem->update();
+  mem->ClockTick();
   cycle++;
 
   if (reset) {
@@ -138,5 +142,7 @@ void mm_dramsim2_t::tick(bool reset,
     while (!rresp.empty())
       rresp.pop();
     cycle = 0;
+    ar_ready_cache = false;
+    aw_ready_cache = false;
   }
 }

@@ -51,13 +51,13 @@ nix develop
 Run Verilator simulation test to verify installation:
 
 ```bash
-bbdev verilator --run '--jobs 16 --binary ctest_vecunit_matmul_ones_singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
+bbdev verilator --run '--jobs 16 --binary vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ```
 
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--binary ctest_vecunit_matmul_ones_singlecore-baremetal --batch --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
+bbdev bebop-verilator --run '--binary vecunit_matmul_ones-singlecore-baremetal --batch --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
 ```
 
 ## Tutorial
