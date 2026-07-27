@@ -1,4 +1,4 @@
-package examples.balls.matrix
+package framework.balldomain.prototype.systolicarray
 
 import chisel3._
 import chisel3.util._
@@ -7,24 +7,28 @@ import framework.memdomain.backend.banks.{SramReadReq, SramReadResp}
 import framework.top.GlobalConfig
 
 @instantiable
-class MatrixLoad(val b: GlobalConfig) extends Module {
-  private val tile      = MatrixConst.Tile
-  private val opRowBits = MatrixConst.OpRowBits
-  private val abRows    = b.memDomain.bankEntries
-  private val bankWidth = log2Up(b.memDomain.bankNum)
-  private val groupWidth = log2Up(b.memDomain.bankNum)
-  private val addrWidth = log2Up(b.memDomain.bankEntries)
+class SystolicArrayLoad(val b: GlobalConfig) extends Module {
+  private val tile         = SystolicArrayConst.Tile
+  private val opRowBits    = SystolicArrayConst.OpRowBits
+  private val abRows       = b.memDomain.bankEntries
+  private val bankWidth    = log2Up(b.memDomain.bankNum)
+  private val groupWidth   = log2Up(b.memDomain.bankNum)
+  private val addrWidth    = log2Up(b.memDomain.bankEntries)
   private val rowIndexWidth = log2Ceil(tile)
+  private val slotCount    = 3
+  private val slotWidth    = log2Ceil(slotCount)
+  private val tagQueueDepth = 16
+  private val rowFifoDepth = 2
 
   private val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "MatrixBall")
     .getOrElse(throw new IllegalArgumentException("MatrixBall not found in config"))
   private val inBW = ballMapping.inBW
 
-  require(inBW >= 2, "MatrixLoad requires at least two read ports")
-  require(b.memDomain.bankWidth == opRowBits, "MatrixLoad expects one 16xi8 row per 128-bit bank read")
+  require(inBW >= 2, "SystolicArrayLoad requires at least two read ports")
+  require(b.memDomain.bankWidth == opRowBits, "SystolicArrayLoad expects one 16xi8 row per 128-bit bank read")
   require(
     b.memDomain.bankEntries % tile == 0,
-    "MatrixLoad expects bankEntries to be an integer number of 16-row A/B tiles"
+    "SystolicArrayLoad expects bankEntries to be an integer number of 16-row A/B tiles"
   )
 
   @public
@@ -32,24 +36,24 @@ class MatrixLoad(val b: GlobalConfig) extends Module {
     val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq(b)))
     val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
 
-    val ctrl_ld_i = Flipped(Decoupled(new MatrixCtrlLoadReq(b)))
+    val ctrl_ld_i = Flipped(Decoupled(new SystolicCtrlLoadReq(b)))
 
-    val load_ex_req_kind   = Output(UInt(2.W))
+    val load_ex_req_kind    = Output(UInt(2.W))
     val load_ex_k_tile_kind = Output(UInt(2.W))
-    val load_ex_acc_slot    = Output(UInt(log2Ceil(MatrixConst.WsReuseTiles).W))
-    val load_ex_valid_m    = Output(UInt(5.W))
-    val load_ex_valid_n    = Output(UInt(5.W))
-    val load_ex_valid_k    = Output(UInt(5.W))
-    val load_ex_row_count  = Output(UInt(5.W))
-    val load_ex_first_row  = Output(Bool())
-    val load_ex_last_row   = Output(Bool())
-    val load_ex_op1_o      = Decoupled(UInt(opRowBits.W))
-    val load_ex_op2_o      = Decoupled(UInt(opRowBits.W))
+    val load_ex_acc_slot    = Output(UInt(log2Ceil(SystolicArrayConst.WsReuseTiles).W))
+    val load_ex_valid_m     = Output(UInt(5.W))
+    val load_ex_valid_n     = Output(UInt(5.W))
+    val load_ex_valid_k     = Output(UInt(5.W))
+    val load_ex_b_valid_n   = Output(UInt(5.W))
+    val load_ex_b_valid_k   = Output(UInt(5.W))
+    val load_ex_weight_generation = Output(Bool())
+    val load_ex_op1_o       = Decoupled(UInt(opRowBits.W))
+    val load_ex_op2_o       = Decoupled(UInt(opRowBits.W))
 
-    val op1_rd_bank_o  = Output(UInt(bankWidth.W))
-    val op1_rd_group_o = Output(UInt(groupWidth.W))
-    val op2_rd_bank_o  = Output(UInt(bankWidth.W))
-    val op2_rd_group_o = Output(UInt(groupWidth.W))
+    val op1_rd_bank_o   = Output(UInt(bankWidth.W))
+    val op1_rd_group_o  = Output(UInt(groupWidth.W))
+    val op2_rd_bank_o   = Output(UInt(bankWidth.W))
+    val op2_rd_group_o  = Output(UInt(groupWidth.W))
   })
 
   private def fitTo(x: UInt, width: Int): UInt =
@@ -65,211 +69,228 @@ class MatrixLoad(val b: GlobalConfig) extends Module {
     fitTo(rowLinear % abRows.U, addrWidth)
   }
 
-  private def needOp1(kind: UInt): Bool =
-    kind === MatrixCtrlLoadReqKind.READ_AB || kind === MatrixCtrlLoadReqKind.READ_A_ONLY ||
-      kind === MatrixCtrlLoadReqKind.READ_A_B_PE
-
   private def needOp2(kind: UInt): Bool =
-    kind === MatrixCtrlLoadReqKind.READ_AB || kind === MatrixCtrlLoadReqKind.READ_A_B_PE
+    kind === SystolicCtrlLoadReqKind.READ_AB || kind === SystolicCtrlLoadReqKind.READ_A_B_PE ||
+      kind === SystolicCtrlLoadReqKind.READ_A_B_BUF
 
-  private val slotCount = 2
+  private def nextSlot(slot: UInt): UInt =
+    Mux(slot === (slotCount - 1).U, 0.U, slot + 1.U)
 
-  val slotReq       = RegInit(VecInit(Seq.fill(slotCount)(0.U.asTypeOf(new MatrixCtrlLoadReq(b)))))
-  val slotOccupied  = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
-  val slotBankDone  = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
-  val slotFirstSent = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
-  val slotFillStarted = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
-  val bufferInUse   = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
-  val allocSlot     = RegInit(0.U(1.W))
-  val fillSlot      = RegInit(0.U(1.W))
-  val metaSlot      = RegInit(0.U(1.W))
+  class LoadSlot extends Bundle {
+    val req_kind     = UInt(2.W)
+    val k_tile_kind  = UInt(2.W)
+    val acc_slot     = UInt(log2Ceil(SystolicArrayConst.WsReuseTiles).W)
+    val valid_m      = UInt(5.W)
+    val valid_n      = UInt(5.W)
+    val valid_k      = UInt(5.W)
+    val b_valid_n    = UInt(5.W)
+    val b_valid_k    = UInt(5.W)
+    val weight_generation = Bool()
+    val op1_bank     = UInt(bankWidth.W)
+    val op1_group    = UInt(groupWidth.W)
+    val op1_row_base = UInt(addrWidth.W)
+    val op2_bank     = UInt(bankWidth.W)
+    val op2_group    = UInt(groupWidth.W)
+    val op2_row_base = UInt(addrWidth.W)
+  }
+
+  class ReadTag extends Bundle {
+    val slot = UInt(slotWidth.W)
+    val row  = UInt(rowIndexWidth.W)
+  }
+
+  class RowData extends Bundle {
+    val slot = UInt(slotWidth.W)
+    val row  = UInt(rowIndexWidth.W)
+    val data = UInt(opRowBits.W)
+  }
+
+  val slotReq      = RegInit(VecInit(Seq.fill(slotCount)(0.U.asTypeOf(new LoadSlot))))
+  val slotOccupied = RegInit(VecInit(Seq.fill(slotCount)(false.B)))
+  val slotAReqCount = RegInit(VecInit(Seq.fill(slotCount)(0.U(5.W))))
+  val slotBReqCount = RegInit(VecInit(Seq.fill(slotCount)(0.U(5.W))))
+
+  val allocSlot = RegInit(0.U(slotWidth.W))
+  val aReqSlot  = RegInit(0.U(slotWidth.W))
+  val bReqSlot  = RegInit(0.U(slotWidth.W))
+  val sendSlot  = RegInit(0.U(slotWidth.W))
 
   io.ctrl_ld_i.ready := !slotOccupied(allocSlot)
   when(io.ctrl_ld_i.fire) {
-    slotReq(allocSlot)       := io.ctrl_ld_i.bits
-    slotOccupied(allocSlot)  := true.B
-    slotBankDone(allocSlot)  := false.B
-    slotFirstSent(allocSlot) := false.B
-    slotFillStarted(allocSlot) := false.B
-    allocSlot := allocSlot ^ 1.U
-    assert(io.ctrl_ld_i.bits.valid_m >= 1.U && io.ctrl_ld_i.bits.valid_m <= tile.U)
-    assert(io.ctrl_ld_i.bits.valid_n >= 1.U && io.ctrl_ld_i.bits.valid_n <= tile.U)
-    assert(io.ctrl_ld_i.bits.valid_k >= 1.U && io.ctrl_ld_i.bits.valid_k <= tile.U)
-    assert(io.ctrl_ld_i.bits.row_count >= 1.U && io.ctrl_ld_i.bits.row_count <= tile.U)
+    val input = io.ctrl_ld_i.bits
+    slotReq(allocSlot).req_kind     := input.req_kind
+    slotReq(allocSlot).k_tile_kind  := input.k_tile_kind
+    slotReq(allocSlot).acc_slot     := input.acc_slot
+    slotReq(allocSlot).valid_m      := input.valid_m
+    slotReq(allocSlot).valid_n      := input.valid_n
+    slotReq(allocSlot).valid_k      := input.valid_k
+    slotReq(allocSlot).b_valid_n    := input.b_valid_n
+    slotReq(allocSlot).b_valid_k    := input.b_valid_k
+    slotReq(allocSlot).weight_generation := input.weight_generation
+    slotReq(allocSlot).op1_bank     := input.op1_bank
+    slotReq(allocSlot).op1_group    := input.op1_group
+    slotReq(allocSlot).op1_row_base := input.op1_row_base
+    slotReq(allocSlot).op2_bank     := input.op2_bank
+    slotReq(allocSlot).op2_group    := input.op2_group
+    slotReq(allocSlot).op2_row_base := input.op2_row_base
+    slotOccupied(allocSlot) := true.B
+    slotAReqCount(allocSlot) := 0.U
+    slotBReqCount(allocSlot) := 0.U
+    allocSlot := nextSlot(allocSlot)
+
+    assert(input.valid_m >= 1.U && input.valid_m <= tile.U)
+    assert(input.valid_n >= 1.U && input.valid_n <= tile.U)
+    assert(input.valid_k >= 1.U && input.valid_k <= tile.U)
+    assert(!needOp2(input.req_kind) || input.b_valid_k >= 1.U)
   }
 
-  val op1Rows = Reg(Vec(slotCount, Vec(tile, UInt(opRowBits.W))))
-  val op2Rows = Reg(Vec(slotCount, Vec(tile, UInt(opRowBits.W))))
-  val op1RowsReady = RegInit(VecInit(Seq.fill(slotCount)(0.U(5.W))))
-  val op2RowsReady = RegInit(VecInit(Seq.fill(slotCount)(0.U(5.W))))
+  val sendReq       = slotReq(sendSlot)
+  val sendNeedOp2   = needOp2(sendReq.req_kind)
+  val sendATotalRows = sendReq.valid_m
+  val sendBTotalRows = Mux(sendNeedOp2, sendReq.b_valid_k, 0.U(5.W))
+  val sendARow      = RegInit(0.U(5.W))
+  val sendBRow      = RegInit(0.U(5.W))
+  val sendADone     = RegInit(false.B)
+  val sendBDone     = RegInit(false.B)
+  val sendActive    = slotOccupied(sendSlot)
 
-  val sendRow         = RegInit(0.U(5.W))
-  val sendBuffer      = RegInit(0.U(1.W))
-  val sendReqKind     = RegInit(MatrixCtrlLoadReqKind.READ_AB)
-  val sendKTileKind   = RegInit(MatrixKTileKind.DIRECT)
-  val sendAccSlot     = RegInit(0.U(log2Ceil(MatrixConst.WsReuseTiles).W))
-  val sendValidM      = RegInit(tile.U(5.W))
-  val sendValidN      = RegInit(tile.U(5.W))
-  val sendValidK      = RegInit(tile.U(5.W))
-  val sendRowCount    = RegInit(tile.U(5.W))
-  val firstSendRow    = sendRow === 0.U
-  val sendMetaPresent = slotOccupied(metaSlot) && !slotFirstSent(metaSlot) &&
-    slotFillStarted(metaSlot) && bufferInUse(metaSlot)
-  val currentBuffer   = Mux(firstSendRow, metaSlot, sendBuffer)
-  val currentReqKind  = Mux(firstSendRow, slotReq(metaSlot).req_kind, sendReqKind)
-  val currentKTileKind = Mux(firstSendRow, slotReq(metaSlot).k_tile_kind, sendKTileKind)
-  val currentAccSlot  = Mux(firstSendRow, slotReq(metaSlot).acc_slot, sendAccSlot)
-  val currentValidM   = Mux(firstSendRow, slotReq(metaSlot).valid_m, sendValidM)
-  val currentValidN   = Mux(firstSendRow, slotReq(metaSlot).valid_n, sendValidN)
-  val currentValidK   = Mux(firstSendRow, slotReq(metaSlot).valid_k, sendValidK)
-  val currentRowCount = Mux(firstSendRow, slotReq(metaSlot).row_count, sendRowCount)
-  val currentNeedOp1  = needOp1(currentReqKind)
-  val currentNeedOp2  = needOp2(currentReqKind)
-  val sendActive      = !firstSendRow || sendMetaPresent
+  io.load_ex_req_kind     := sendReq.req_kind
+  io.load_ex_k_tile_kind  := sendReq.k_tile_kind
+  io.load_ex_acc_slot     := sendReq.acc_slot
+  io.load_ex_valid_m      := sendReq.valid_m
+  io.load_ex_valid_n      := sendReq.valid_n
+  io.load_ex_valid_k      := sendReq.valid_k
+  io.load_ex_b_valid_n    := sendReq.b_valid_n
+  io.load_ex_b_valid_k    := sendReq.b_valid_k
+  io.load_ex_weight_generation := sendReq.weight_generation
 
-  io.load_ex_req_kind    := currentReqKind
-  io.load_ex_k_tile_kind := currentKTileKind
-  io.load_ex_acc_slot    := currentAccSlot
-  io.load_ex_valid_m     := currentValidM
-  io.load_ex_valid_n     := currentValidN
-  io.load_ex_valid_k     := currentValidK
-  io.load_ex_row_count   := currentRowCount
-  io.load_ex_first_row   := sendActive && firstSendRow
-  io.load_ex_last_row    := sendActive && sendRow + 1.U >= currentRowCount
-  io.load_ex_op1_o.valid := sendActive && currentNeedOp1 && op1RowsReady(currentBuffer) > sendRow
-  io.load_ex_op1_o.bits  := op1Rows(currentBuffer)(sendRow(rowIndexWidth - 1, 0))
-  io.load_ex_op2_o.valid := sendActive && currentNeedOp2 && op2RowsReady(currentBuffer) > sendRow
-  io.load_ex_op2_o.bits  := op2Rows(currentBuffer)(sendRow(rowIndexWidth - 1, 0))
+  val aTagQ = Module(new Queue(new ReadTag, entries = tagQueueDepth))
+  val bTagQ = Module(new Queue(new ReadTag, entries = tagQueueDepth))
+  val aRowQ = Module(new Queue(new RowData, entries = rowFifoDepth))
+  val bRowQ = Module(new Queue(new RowData, entries = rowFifoDepth))
+
+  val aReq       = slotReq(aReqSlot)
+  val bReq       = slotReq(bReqSlot)
+  val bNeed      = needOp2(bReq.req_kind)
+  val aTotalRows = aReq.valid_m
+  val bTotalRows = Mux(bNeed, bReq.b_valid_k, 0.U(5.W))
+  val aRequestsDone = slotAReqCount(aReqSlot) >= aTotalRows
+  val bRequestsDone = !bNeed || slotBReqCount(bReqSlot) >= bTotalRows
+  val aCanRequest = slotOccupied(aReqSlot) && !aRequestsDone
+  val bCanRequest = slotOccupied(bReqSlot) && !bRequestsDone
+
+  for (i <- 0 until inBW) {
+    io.bankReadReq(i).valid  := false.B
+    io.bankReadReq(i).bits.addr := 0.U
+    io.bankReadResp(i).ready := false.B
+  }
+
+  io.op1_rd_bank_o   := aReq.op1_bank
+  io.op1_rd_group_o  := rowGroup(aReq.op1_group, aReq.op1_row_base, slotAReqCount(aReqSlot))
+  io.op2_rd_bank_o   := bReq.op2_bank
+  io.op2_rd_group_o  := rowGroup(bReq.op2_group, bReq.op2_row_base, slotBReqCount(bReqSlot))
+
+  io.bankReadReq(0).valid := aCanRequest && aTagQ.io.enq.ready
+  io.bankReadReq(0).bits.addr := rowAddr(aReq.op1_row_base, slotAReqCount(aReqSlot))
+  aTagQ.io.enq.valid := io.bankReadReq(0).fire
+  aTagQ.io.enq.bits.slot := aReqSlot
+  aTagQ.io.enq.bits.row := slotAReqCount(aReqSlot)(rowIndexWidth - 1, 0)
+
+  io.bankReadReq(1).valid := bCanRequest && bTagQ.io.enq.ready
+  io.bankReadReq(1).bits.addr := rowAddr(bReq.op2_row_base, slotBReqCount(bReqSlot))
+  bTagQ.io.enq.valid := io.bankReadReq(1).fire
+  bTagQ.io.enq.bits.slot := bReqSlot
+  bTagQ.io.enq.bits.row := slotBReqCount(bReqSlot)(rowIndexWidth - 1, 0)
+
+  when(io.bankReadReq(0).fire) {
+    slotAReqCount(aReqSlot) := slotAReqCount(aReqSlot) + 1.U
+    when(slotAReqCount(aReqSlot) + 1.U >= aTotalRows) {
+      aReqSlot := nextSlot(aReqSlot)
+    }
+  }.elsewhen(slotOccupied(aReqSlot) && aRequestsDone) {
+    aReqSlot := nextSlot(aReqSlot)
+  }
+
+  when(io.bankReadReq(1).fire) {
+    slotBReqCount(bReqSlot) := slotBReqCount(bReqSlot) + 1.U
+    when(slotBReqCount(bReqSlot) + 1.U >= bTotalRows) {
+      bReqSlot := nextSlot(bReqSlot)
+    }
+  }.elsewhen(slotOccupied(bReqSlot) && bRequestsDone) {
+    bReqSlot := nextSlot(bReqSlot)
+  }
+
+  val aResponseReady = aTagQ.io.deq.valid && aRowQ.io.enq.ready
+  val bResponseReady = bTagQ.io.deq.valid && bRowQ.io.enq.ready
+  io.bankReadResp(0).ready := aResponseReady
+  io.bankReadResp(1).ready := bResponseReady
+  aTagQ.io.deq.ready := io.bankReadResp(0).fire
+  bTagQ.io.deq.ready := io.bankReadResp(1).fire
+  aRowQ.io.enq.valid := io.bankReadResp(0).fire
+  bRowQ.io.enq.valid := io.bankReadResp(1).fire
+  aRowQ.io.enq.bits.slot := aTagQ.io.deq.bits.slot
+  aRowQ.io.enq.bits.row  := aTagQ.io.deq.bits.row
+  aRowQ.io.enq.bits.data := io.bankReadResp(0).bits.data
+  bRowQ.io.enq.bits.slot := bTagQ.io.deq.bits.slot
+  bRowQ.io.enq.bits.row  := bTagQ.io.deq.bits.row
+  bRowQ.io.enq.bits.data := io.bankReadResp(1).bits.data
+
+  val aHeadMatches = aRowQ.io.deq.valid &&
+    aRowQ.io.deq.bits.slot === sendSlot &&
+    aRowQ.io.deq.bits.row === sendARow(rowIndexWidth - 1, 0)
+  val bHeadMatches = bRowQ.io.deq.valid &&
+    bRowQ.io.deq.bits.slot === sendSlot &&
+    bRowQ.io.deq.bits.row === sendBRow(rowIndexWidth - 1, 0)
+
+  io.load_ex_op1_o.valid := sendActive && !sendADone && aHeadMatches
+  io.load_ex_op1_o.bits := aRowQ.io.deq.bits.data
+  io.load_ex_op2_o.valid := sendActive && sendNeedOp2 && !sendBDone && bHeadMatches
+  io.load_ex_op2_o.bits := bRowQ.io.deq.bits.data
+  aRowQ.io.deq.ready := io.load_ex_op1_o.fire
+  bRowQ.io.deq.ready := io.load_ex_op2_o.fire
 
   val op1Fire = io.load_ex_op1_o.fire
   val op2Fire = io.load_ex_op2_o.fire
-  val rowDone = MuxLookup(currentReqKind, false.B)(Seq(
-    MatrixCtrlLoadReqKind.READ_AB     -> (op1Fire && op2Fire),
-    MatrixCtrlLoadReqKind.READ_A_ONLY -> op1Fire,
-    MatrixCtrlLoadReqKind.READ_A_B_PE -> (op1Fire && op2Fire)
-  ))
-  when(rowDone) {
-    when(firstSendRow) {
-      sendReqKind   := slotReq(metaSlot).req_kind
-      sendKTileKind := slotReq(metaSlot).k_tile_kind
-      sendAccSlot   := slotReq(metaSlot).acc_slot
-      sendValidM    := slotReq(metaSlot).valid_m
-      sendValidN    := slotReq(metaSlot).valid_n
-      sendValidK    := slotReq(metaSlot).valid_k
-      sendRowCount  := slotReq(metaSlot).row_count
-      sendBuffer    := metaSlot
-      slotFirstSent(metaSlot) := true.B
-      when(slotBankDone(metaSlot)) {
-        slotOccupied(metaSlot) := false.B
-      }
-      metaSlot := metaSlot ^ 1.U
-    }
+  val aFinishesThisCycle = op1Fire && sendARow + 1.U >= sendATotalRows
+  val bFinishesThisCycle = op2Fire && sendBRow + 1.U >= sendBTotalRows
+  val aDoneNext = sendADone || aFinishesThisCycle
+  val bDoneNext = !sendNeedOp2 || sendBDone || bFinishesThisCycle
 
-    when(sendRow + 1.U >= currentRowCount) {
-      sendRow := 0.U
-      bufferInUse(currentBuffer) := false.B
+  when(op1Fire) {
+    when(aFinishesThisCycle) {
+      sendADone := true.B
     }.otherwise {
-      sendRow := sendRow + 1.U
+      sendARow := sendARow + 1.U
+    }
+  }
+  when(op2Fire) {
+    when(bFinishesThisCycle) {
+      sendBDone := true.B
+    }.otherwise {
+      sendBRow := sendBRow + 1.U
     }
   }
 
-  val op1ReqRow    = RegInit(0.U(5.W))
-  val op2ReqRow    = RegInit(0.U(5.W))
-  val op1RespCount = RegInit(0.U(5.W))
-  val op2RespCount = RegInit(0.U(5.W))
-  val fillReq      = slotReq(fillSlot)
-  val fillCanStart = slotOccupied(fillSlot) && !slotBankDone(fillSlot) &&
-    !slotFillStarted(fillSlot) && !bufferInUse(fillSlot)
-  val fillActive   = slotOccupied(fillSlot) && slotFillStarted(fillSlot) && !slotBankDone(fillSlot)
-  val fillNeedOp1  = needOp1(fillReq.req_kind)
-  val fillNeedOp2  = needOp2(fillReq.req_kind)
-  val fillRowCount = fillReq.row_count
-
-  when(fillCanStart) {
-    slotFillStarted(fillSlot) := true.B
-    bufferInUse(fillSlot) := true.B
-    op1RowsReady(fillSlot) := 0.U
-    op2RowsReady(fillSlot) := 0.U
-    op1ReqRow := 0.U
-    op2ReqRow := 0.U
-    op1RespCount := 0.U
-    op2RespCount := 0.U
-  }
-
-  for (i <- 0 until inBW) {
-    io.bankReadReq(i).valid     := false.B
-    io.bankReadReq(i).bits.addr := 0.U
-    io.bankReadResp(i).ready    := false.B
-  }
-
-  io.op1_rd_bank_o  := fillReq.op1_bank
-  io.op1_rd_group_o := rowGroup(fillReq.op1_group, fillReq.op1_row_base, op1ReqRow)
-  io.op2_rd_bank_o  := fillReq.op2_bank
-  io.op2_rd_group_o := rowGroup(fillReq.op2_group, fillReq.op2_row_base, op2ReqRow)
-
-  when(fillActive && fillNeedOp1 && op1ReqRow < fillRowCount) {
-    io.bankReadReq(0).valid     := true.B
-    io.bankReadReq(0).bits.addr := rowAddr(fillReq.op1_row_base, op1ReqRow)
-    when(io.bankReadReq(0).fire) {
-      op1ReqRow := op1ReqRow + 1.U
-    }
-  }
-
-  when(fillActive && fillNeedOp2 && op2ReqRow < fillRowCount) {
-    io.bankReadReq(1).valid     := true.B
-    io.bankReadReq(1).bits.addr := rowAddr(fillReq.op2_row_base, op2ReqRow)
-    when(io.bankReadReq(1).fire) {
-      op2ReqRow := op2ReqRow + 1.U
-    }
-  }
-
-  io.bankReadResp(0).ready := fillActive && fillNeedOp1 && op1RespCount < fillRowCount
-  io.bankReadResp(1).ready := fillActive && fillNeedOp2 && op2RespCount < fillRowCount
-
-  val op1Enq = io.bankReadResp(0).fire
-  val op2Enq = io.bankReadResp(1).fire
-
-  when(op1Enq) {
-    op1Rows(fillSlot)(op1RespCount(rowIndexWidth - 1, 0)) := io.bankReadResp(0).bits.data
-    op1RowsReady(fillSlot) := op1RespCount + 1.U
-    op1RespCount := op1RespCount + 1.U
-  }
-  when(op2Enq) {
-    op2Rows(fillSlot)(op2RespCount(rowIndexWidth - 1, 0)) := io.bankReadResp(1).bits.data
-    op2RowsReady(fillSlot) := op2RespCount + 1.U
-    op2RespCount := op2RespCount + 1.U
-  }
-
-  val op1FillDone = !fillNeedOp1 || op1RespCount === fillRowCount
-  val op2FillDone = !fillNeedOp2 || op2RespCount === fillRowCount
-  when(fillActive && op1FillDone && op2FillDone) {
-    slotBankDone(fillSlot) := true.B
-    when(slotFirstSent(fillSlot)) {
-      slotOccupied(fillSlot) := false.B
-    }
-    fillSlot      := fillSlot ^ 1.U
-    op1ReqRow     := 0.U
-    op2ReqRow     := 0.U
-    op1RespCount  := 0.U
-    op2RespCount  := 0.U
+  when(sendActive && aDoneNext && bDoneNext) {
+    slotOccupied(sendSlot) := false.B
+    sendSlot := nextSlot(sendSlot)
+    sendARow := 0.U
+    sendBRow := 0.U
+    sendADone := false.B
+    sendBDone := false.B
   }
 
   for (slot <- 0 until slotCount) {
-    when(slotOccupied(slot) && slotBankDone(slot) && slotFirstSent(slot)) {
-      slotOccupied(slot) := false.B
+    val slotNeedB = needOp2(slotReq(slot).req_kind)
+    when(slotOccupied(slot)) {
+      assert(slotAReqCount(slot) <= slotReq(slot).valid_m)
+      assert(slotBReqCount(slot) <= Mux(slotNeedB, slotReq(slot).b_valid_k, 0.U))
     }
   }
-
-  when(sendActive && (currentReqKind === MatrixCtrlLoadReqKind.READ_AB ||
-    currentReqKind === MatrixCtrlLoadReqKind.READ_A_B_PE)) {
-    assert(op1Fire === op2Fire, "MatrixLoad: paired operands must fire atomically")
+  when(io.bankReadResp(0).valid) {
+    assert(aTagQ.io.deq.valid, "SystolicArrayLoad: A response arrived without an outstanding request")
   }
-  for (slot <- 0 until slotCount) {
-    assert(op1RowsReady(slot) <= tile.U, "MatrixLoad: A Buffer overflow")
-    assert(op2RowsReady(slot) <= tile.U, "MatrixLoad: B Buffer overflow")
-    when(slotOccupied(slot) && slotBankDone(slot)) {
-      assert(!needOp1(slotReq(slot).req_kind) || op1RowsReady(slot) === slotReq(slot).row_count)
-      assert(!needOp2(slotReq(slot).req_kind) || op2RowsReady(slot) === slotReq(slot).row_count)
-    }
+  when(io.bankReadResp(1).valid) {
+    assert(bTagQ.io.deq.valid, "SystolicArrayLoad: B response arrived without an outstanding request")
   }
 }
