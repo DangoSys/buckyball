@@ -7,4 +7,5 @@ tests = [
   "transpose_16xn_test-linux",
   "matrix_test-linux",
   "matrix_matmul_16x16_ones-linux",
+  "im2col_test-linux",
 ]

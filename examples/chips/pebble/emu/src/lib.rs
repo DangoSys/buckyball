@@ -4,6 +4,8 @@ pub use super::bank_matrix;
 pub use super::decode;
 pub use super::instruction;
 
+#[path = "../../../../balls/im2col/emu/src/48_im2col.rs"]
+pub mod f48_im2col;
 #[path = "../../../../balls/transpose/emu/src/49_transpose.rs"]
 pub mod f49_transpose;
 #[path = "../../../../balls/matrix/emu/src/65_matrix.rs"]
@@ -50,6 +52,7 @@ register_instructions! {
   super::f33_mvin::Mvin,
   super::f34_mmio_set::MmioSet,
   super::f35_mvin_mmio::MvinMmio,
+  f48_im2col::Im2col,
   f49_transpose::Transpose,
   f65_matrix::Matrix,
 }

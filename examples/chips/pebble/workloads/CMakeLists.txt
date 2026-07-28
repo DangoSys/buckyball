@@ -10,6 +10,7 @@ set(BUCKYBALL_CTEST_GROUP_TARGET pebble-ctests-build)
 set(BUCKYBALL_BALL_CTEST_DIRS
   ${BUCKYBALL_REPO_ROOT}/examples/balls/transpose/workloads/ctests
   ${BUCKYBALL_REPO_ROOT}/examples/balls/matrix/workloads/ctests
+  ${BUCKYBALL_REPO_ROOT}/examples/balls/im2col/workloads/ctests
 )
 buckyball_add_ball_ctest_subdirs()
 
