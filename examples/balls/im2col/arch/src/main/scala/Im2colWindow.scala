@@ -6,65 +6,58 @@ import chisel3.util._
 class Im2colWindow(maxK: Int) extends Module {
 
   val io = IO(new Bundle {
-    val init       = Input(Bool())
-    val nextCol    = Input(Bool())
-    val nextRow    = Input(Bool())
-    val elemFire   = Input(Bool())
-    val kRow       = Input(UInt(log2Ceil(maxK + 1).W))
-    val kCol       = Input(UInt(log2Ceil(maxK + 1).W))
-    val inRow      = Input(UInt(16.W))
-    val inCol      = Input(UInt(16.W))
-    val startRow   = Input(UInt(16.W))
-    val startCol   = Input(UInt(16.W))
-    val colStep    = Input(UInt(16.W))
-    val rowPtr     = Output(UInt(16.W))
-    val colPtr     = Output(UInt(16.W))
-    val kRowIdx    = Output(UInt(log2Ceil(maxK + 1).W))
-    val kColIdx    = Output(UInt(log2Ceil(maxK + 1).W))
-    val elemLast   = Output(Bool())
-    val colEnd     = Output(Bool())
-    val lastWindow = Output(Bool())
+    val init     = Input(Bool())
+    val next     = Input(Bool())
+    val elemFire = Input(Bool())
+    val iter     = Input(UInt(16.W))
+    val kSize    = Input(UInt(log2Ceil(maxK + 1).W))
+    val stride   = Input(UInt(8.W))
+    val padding  = Input(UInt(8.W))
+    val outRow   = Output(UInt(16.W))
+    val outCol   = Output(UInt(16.W))
+    val kRowIdx  = Output(UInt(log2Ceil(maxK + 1).W))
+    val kColIdx  = Output(UInt(log2Ceil(maxK + 1).W))
+    val elemLast = Output(Bool())
+    val last     = Output(Bool())
   })
 
-  private val rowPtr  = RegInit(0.U(16.W))
-  private val colPtr  = RegInit(0.U(16.W))
-  private val kRowIdx = RegInit(0.U(log2Ceil(maxK + 1).W))
-  private val kColIdx = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val outRowReg  = RegInit(0.U(16.W))
+  private val outColReg  = RegInit(0.U(16.W))
+  private val kRowIdxReg = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val kColIdxReg = RegInit(0.U(log2Ceil(maxK + 1).W))
 
-  val rowMax   = io.inRow - io.kRow
-  val colMax   = io.inCol - io.kCol
-  val rowEnd   = rowPtr === (io.startRow + rowMax)
-  val colEnd   = colPtr + io.colStep > io.startCol + colMax
-  val elemLast = (kRowIdx === (io.kRow - 1.U)) && (kColIdx === (io.kCol - 1.U))
+  private val paddedSize = io.iter +& (io.padding << 1)
+  private val outputDim  = ((paddedSize - io.kSize) / io.stride) + 1.U
+  private val elemLast   =
+    (kRowIdxReg === io.kSize - 1.U) && (kColIdxReg === io.kSize - 1.U)
 
   when(io.init) {
-    rowPtr  := io.startRow
-    colPtr  := io.startCol
-    kRowIdx := 0.U
-    kColIdx := 0.U
-  }.elsewhen(io.nextRow) {
-    rowPtr  := rowPtr + 1.U
-    colPtr  := io.startCol
-    kRowIdx := 0.U
-    kColIdx := 0.U
-  }.elsewhen(io.nextCol) {
-    colPtr  := colPtr + io.colStep
-    kRowIdx := 0.U
-    kColIdx := 0.U
-  }.elsewhen(io.elemFire && !elemLast) {
-    when(kColIdx === (io.kCol - 1.U)) {
-      kColIdx := 0.U
-      kRowIdx := kRowIdx + 1.U
+    outRowReg  := 0.U
+    outColReg  := 0.U
+    kRowIdxReg := 0.U
+    kColIdxReg := 0.U
+  }.elsewhen(io.next) {
+    kRowIdxReg := 0.U
+    kColIdxReg := 0.U
+    when(outColReg + 1.U === outputDim) {
+      outRowReg := outRowReg + 1.U
+      outColReg := 0.U
     }.otherwise {
-      kColIdx := kColIdx + 1.U
+      outColReg := outColReg + 1.U
+    }
+  }.elsewhen(io.elemFire && !elemLast) {
+    when(kColIdxReg === io.kSize - 1.U) {
+      kColIdxReg := 0.U
+      kRowIdxReg := kRowIdxReg + 1.U
+    }.otherwise {
+      kColIdxReg := kColIdxReg + 1.U
     }
   }
 
-  io.rowPtr     := rowPtr
-  io.colPtr     := colPtr
-  io.kRowIdx    := kRowIdx
-  io.kColIdx    := kColIdx
-  io.elemLast   := elemLast
-  io.colEnd     := colEnd
-  io.lastWindow := rowEnd && colEnd
+  io.outRow   := outRowReg
+  io.outCol   := outColReg
+  io.kRowIdx  := kRowIdxReg
+  io.kColIdx  := kColIdxReg
+  io.elemLast := elemLast
+  io.last     := (outRowReg === outputDim - 1.U) && (outColReg === outputDim - 1.U)
 }

@@ -92,6 +92,7 @@ git submodule update --init --progress \
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/*
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/stage tools/cde tools/firrtl2 tools/rocket-dsp-utils tools/fixedpoint tools/dsptools
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/stage
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/firrtl2

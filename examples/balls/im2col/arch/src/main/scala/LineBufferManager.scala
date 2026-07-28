@@ -9,12 +9,12 @@ import framework.top.GlobalConfig
 
 @instantiable
 class LineBufferManager(val b: GlobalConfig) extends Module {
-  private val ballCfg       = Im2colBallParam(b)
-  private val maxK          = ballCfg.InputNum
-  private val elemWidth     = ballCfg.inputWidth
-  private val bankWidth     = b.memDomain.bankWidth
-  private val lanesPerBeat  = 16
-  private val maxInColWords = 3
+  private val ballCfg      = Im2colBallParam(b)
+  private val maxDim       = ballCfg.InputNum
+  private val elemWidth    = ballCfg.inputWidth
+  private val bankWidth    = b.memDomain.bankWidth
+  private val lanesPerBeat = bankWidth / elemWidth
+  private val maxBeats     = (maxDim * maxDim + lanesPerBeat - 1) / lanesPerBeat
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
@@ -23,46 +23,27 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   private val inBW = map.inBW
 
   @public val io = IO(new Bundle {
-    val bankRead      = Vec(inBW, Flipped(new BankRead(b)))
-    val startPreload  = Input(Bool())
-    val startLoadNext = Input(Bool())
-    val kRow          = Input(UInt(log2Ceil(maxK + 1).W))
-    val inCol         = Input(UInt(16.W))
-    val rowPtr        = Input(UInt(16.W))
-    val rBaseBeat     = Input(UInt(32.W))
-    val rBankId       = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val robId         = Input(UInt(log2Up(b.frontend.rob_entries).W))
-    val loadDone      = Output(Bool())
-
-    val elemReq = new Bundle {
-      val kRowIdx = Input(UInt(log2Ceil(maxK + 1).W))
-      val kColIdx = Input(UInt(log2Ceil(maxK + 1).W))
-      val colPtr  = Input(UInt(16.W))
-    }
-
+    val bankRead = Vec(inBW, Flipped(new BankRead(b)))
+    val start    = Input(Bool())
+    val iter     = Input(UInt(16.W))
+    val stride   = Input(UInt(8.W))
+    val padding  = Input(UInt(8.W))
+    val outRow   = Input(UInt(16.W))
+    val outCol   = Input(UInt(16.W))
+    val kRowIdx  = Input(UInt(log2Ceil(maxDim + 1).W))
+    val kColIdx  = Input(UInt(log2Ceil(maxDim + 1).W))
+    val rBankId  = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val robId    = Input(UInt(log2Up(b.frontend.rob_entries).W))
+    val loadDone = Output(Bool())
     val elemData = Output(UInt(elemWidth.W))
   })
 
-  private def ceilDiv(a: UInt, d: Int): UInt = (a + (d - 1).U) / d.U
-  private val inColWords = ceilDiv(io.inCol + (lanesPerBeat - 1).U, lanesPerBeat)
-  private val buf        = RegInit(VecInit(Seq.fill(maxK)(VecInit(Seq.fill(maxInColWords)(0.U(bankWidth.W))))))
-
-  private val rowFifo = Module(new RowSlotFIFO(maxK))
-  private val loader  = Module(new LineLoadCtrl(maxK, maxInColWords))
-  rowFifo.io.kRows   := io.kRow
-  rowFifo.io.init    := io.startPreload
-  rowFifo.io.advance := loader.io.advanceFifo
-
-  loader.io.startPreload  := io.startPreload
-  loader.io.startLoadNext := io.startLoadNext
-  loader.io.kRow          := io.kRow
-  loader.io.inColWords    := inColWords
-  loader.io.inCol         := io.inCol
-  loader.io.rowPtr        := io.rowPtr
-  loader.io.rBaseBeat     := io.rBaseBeat
-  loader.io.targetSlot    := rowFifo.io.slotToOverwrite
-  loader.io.reqReady      := io.bankRead(0).io.req.ready
-  loader.io.respValid     := io.bankRead(0).io.resp.valid
+  private val buf     = RegInit(VecInit(Seq.fill(maxBeats)(0.U(bankWidth.W))))
+  private val active  = RegInit(false.B)
+  private val pending = RegInit(false.B)
+  private val beat    = RegInit(0.U(log2Ceil(maxBeats + 1).W))
+  private val totalBeats =
+    ((io.iter * io.iter) + (lanesPerBeat - 1).U) / lanesPerBeat.U
 
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req.valid     := false.B
@@ -74,22 +55,39 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     io.bankRead(i).group_id         := 0.U
   }
 
-  io.bankRead(0).io.req.valid     := loader.io.reqValid
-  io.bankRead(0).io.req.bits.addr := loader.io.reqAddr
-  io.bankRead(0).io.resp.ready    := loader.io.respReady
-  io.loadDone                     := loader.io.done
+  io.bankRead(0).io.req.valid     := active && !pending
+  io.bankRead(0).io.req.bits.addr := beat
+  io.bankRead(0).io.resp.ready    := pending
+  io.loadDone                     := !active
 
-  when(io.bankRead(0).io.resp.fire) {
-    buf(loader.io.writeRow)(loader.io.writeBeat) := io.bankRead(0).io.resp.bits.data.asUInt
+  when(io.start) {
+    active  := true.B
+    pending := false.B
+    beat    := 0.U
+  }.elsewhen(io.bankRead(0).io.req.fire) {
+    pending := true.B
   }
 
-  private val rowByte   = (io.rowPtr + io.elemReq.kRowIdx) * io.inCol
-  private val startLane = ((rowByte + io.elemReq.colPtr) % lanesPerBeat.U)(log2Ceil(lanesPerBeat) - 1, 0)
-  private val slot      = RowSlotFIFO
-    .logicalToPhysical(rowFifo.io.head, io.elemReq.kRowIdx, io.kRow)(log2Ceil(maxK) - 1, 0)
-  private val laneSum   = startLane + io.elemReq.kColIdx
-  private val beatIdx   = (laneSum / lanesPerBeat.U)(log2Ceil(maxInColWords) - 1, 0)
-  private val laneIdx   = (laneSum % lanesPerBeat.U)(log2Ceil(lanesPerBeat) - 1, 0)
-  private val lanes     = buf(slot)(beatIdx).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
-  io.elemData := lanes(laneIdx)
+  when(io.bankRead(0).io.resp.fire) {
+    buf(beat) := io.bankRead(0).io.resp.bits.data.asUInt
+    pending   := false.B
+    when(beat + 1.U === totalBeats) {
+      active := false.B
+    }.otherwise {
+      beat := beat + 1.U
+    }
+  }
+
+  private val paddedRow = io.outRow * io.stride + io.kRowIdx
+  private val paddedCol = io.outCol * io.stride + io.kColIdx
+  private val rowValid  = paddedRow >= io.padding && paddedRow < io.padding + io.iter
+  private val colValid  = paddedCol >= io.padding && paddedCol < io.padding + io.iter
+  private val srcRow    = paddedRow - io.padding
+  private val srcCol    = paddedCol - io.padding
+  private val elemIndex = srcRow * io.iter + srcCol
+  private val beatIndex = elemIndex / lanesPerBeat.U
+  private val laneIndex = elemIndex % lanesPerBeat.U
+  private val lanes     = buf(beatIndex).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
+
+  io.elemData := Mux(rowValid && colValid, lanes(laneIndex), 0.U)
 }

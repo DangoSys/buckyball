@@ -1,5 +1,5 @@
 use super::super::bank::BANK_NUM;
-use super::decode::{pbank, rs1_b0, rs1_b2};
+use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
 pub struct Im2col;
@@ -21,79 +21,98 @@ impl Instruction for Im2col {
             panic!("im2col: op1 and wr must differ");
         }
 
-        let kcol = (xs2 & 0xFF) as usize;
-        let krow = ((xs2 >> 8) & 0xFF) as usize;
-        let incol = ((xs2 >> 16) & 0xFF) as usize;
-        let inrow = ((xs2 >> 24) & 0xFF) as usize;
-        let startcol = ((xs2 >> 32) & 0xFF) as usize;
-        let startrow = ((xs2 >> 40) & 0xFF) as usize;
-        let col_step = ((xs2 >> 48) & 0xFF) as usize;
+        let iter = rs1_iter(xs1) as usize;
+        let ksize = (xs2 & 0xFF) as usize;
+        let stride = ((xs2 >> 8) & 0xFF) as usize;
+        let padding = ((xs2 >> 16) & 0xFF) as usize;
 
-        if kcol == 0 || krow == 0 || incol == 0 || inrow == 0 || col_step == 0 {
+        if iter == 0 || ksize == 0 || stride == 0 {
             panic!("im2col: invalid shape (zero dim)");
         }
-        if incol < kcol || inrow < krow {
-            panic!("im2col: kernel larger than input");
+        let padded_size = iter + 2 * padding;
+        if padded_size < ksize {
+            panic!("im2col: kernel larger than padded input");
         }
 
-        let row_end = inrow - krow;
-        let col_end = incol - kcol;
-        if startrow > row_end || startcol > col_end {
-            panic!("im2col: invalid start window");
-        }
+        let output_dim = (padded_size - ksize) / stride + 1;
 
+        const TILE: usize = 16;
         let po = pbank(ctx.bank_map, op1);
-        let pw = pbank(ctx.bank_map, wr);
-        let (srcb, dstb): (&[u8], &mut [u8]) = if po < pw {
-            let (l, r) = ctx.banks.split_at_mut(pw);
-            (&l[po], &mut r[0])
-        } else {
-            let (l, r) = ctx.banks.split_at_mut(po);
-            (&r[0], &mut l[pw])
-        };
+        let windows = output_dim * output_dim;
+        let kernel_elems = ksize * ksize;
+        let m_tiles = windows.div_ceil(TILE);
+        let k_tiles = kernel_elems.div_ceil(TILE);
+        let mut output = vec![0u8; m_tiles * k_tiles * TILE * TILE];
 
-        let mut out = 0usize;
-        for r in startrow..=row_end {
-            for c in (startcol..=col_end).step_by(col_step) {
-                for kr in 0..krow {
-                    for kc in 0..kcol {
-                        let src = r * incol + c + kr * incol + kc;
-                        if src >= srcb.len() || out >= dstb.len() {
-                            panic!("im2col: range src={src} out={out}");
+        let srcb = &ctx.banks[po];
+        let mut window = 0usize;
+        for output_row in 0..output_dim {
+            for output_col in 0..output_dim {
+                for kr in 0..ksize {
+                    for kc in 0..ksize {
+                        let input_row = (output_row * stride + kr) as isize - padding as isize;
+                        let input_col = (output_col * stride + kc) as isize - padding as isize;
+                        let kernel = kr * ksize + kc;
+                        let m_tile = window / TILE;
+                        let m_row = window % TILE;
+                        let k_tile = kernel / TILE;
+                        let lane = kernel % TILE;
+                        let bank_row = (m_tile * k_tiles + k_tile) * TILE + m_row;
+                        let out = bank_row * TILE + lane;
+                        if out >= output.len() {
+                            panic!("im2col: output range out={out}");
                         }
-                        dstb[out] = srcb[src];
-                        out += 1;
+                        if input_row >= 0
+                            && input_row < iter as isize
+                            && input_col >= 0
+                            && input_col < iter as isize
+                        {
+                            let src = input_row as usize * iter + input_col as usize;
+                            if src >= srcb.len() {
+                                panic!("im2col: input range src={src}");
+                            }
+                            output[out] = srcb[src];
+                        }
                     }
                 }
+                window += 1;
             }
+        }
+
+        let groups = ctx.cfgs[wr as usize].cols as usize;
+        let rows_per_bank = ctx.banks[pbank_group(ctx.bank_map, wr, 0)].len() / TILE;
+        for (row, data) in output.chunks_exact(TILE).enumerate() {
+            let group = row / rows_per_bank;
+            let local_row = row % rows_per_bank;
+            if group >= groups {
+                panic!("im2col: output requires group {group}, allocated groups={groups}");
+            }
+            let pw = pbank_group(ctx.bank_map, wr, group as u64);
+            let off = local_row * TILE;
+            ctx.banks[pw][off..off + TILE].copy_from_slice(data);
         }
         0
     }
 
     fn latency(_xs1: u64, xs2: u64) -> u64 {
-        let kcol = xs2 & 0xFF;
-        let krow = (xs2 >> 8) & 0xFF;
-        let incol = (xs2 >> 16) & 0xFF;
-        let inrow = (xs2 >> 24) & 0xFF;
-        let startcol = (xs2 >> 32) & 0xFF;
-        let startrow = (xs2 >> 40) & 0xFF;
-        let col_step = (xs2 >> 48) & 0xFF;
+        let iter = rs1_iter(_xs1);
+        let ksize = xs2 & 0xFF;
+        let stride = (xs2 >> 8) & 0xFF;
+        let padding = (xs2 >> 16) & 0xFF;
 
-        if kcol == 0 || krow == 0 || incol == 0 || inrow == 0 || col_step == 0 {
+        if iter == 0 || ksize == 0 || stride == 0 {
             return 16;
         }
-        if incol < kcol || inrow < krow {
-            return 16;
-        }
-
-        let row_end = inrow - krow;
-        let col_end = incol - kcol;
-        if startrow > row_end || startcol > col_end {
+        let padded_size = iter + 2 * padding;
+        if padded_size < ksize {
             return 16;
         }
 
-        let col_windows = ((col_end - startcol) / col_step) + 1;
-        let nwin = (row_end - startrow + 1).saturating_mul(col_windows);
-        nwin.saturating_mul(krow).saturating_mul(kcol).max(16)
+        let output_dim = (padded_size - ksize) / stride + 1;
+        output_dim
+            .saturating_mul(output_dim)
+            .saturating_mul(ksize)
+            .saturating_mul(ksize)
+            .max(16)
     }
 }

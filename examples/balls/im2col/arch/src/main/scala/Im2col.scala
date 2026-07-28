@@ -36,10 +36,8 @@ class Im2col(val b: GlobalConfig) extends Module {
   val writer:  Instance[StreamWriter]      = Instantiate(new StreamWriter(b))
 
   val running       = RegInit(false.B)
-  val linesReady    = RegInit(false.B)
-  val finishPending = RegInit(false.B)
+  val inputReady    = RegInit(false.B)
   val respPending   = RegInit(false.B)
-  val elemDone      = RegInit(false.B)
 
   cfg.io.cmd  := io.cmdReq.bits
   cfg.io.load := io.cmdReq.fire
@@ -55,86 +53,62 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   when(io.cmdReq.fire) {
     running       := !invalid
-    linesReady    := false.B
-    finishPending := false.B
+    inputReady    := false.B
     respPending   := invalid
-    elemDone      := false.B
   }
   when(io.cmdResp.fire) {
     respPending := false.B
   }
 
   win.io.init     := io.cmdReq.fire
-  win.io.nextCol  := false.B
-  win.io.nextRow  := false.B
-  win.io.kRow     := cfg.io.kRow
-  win.io.kCol     := cfg.io.kCol
-  win.io.inRow    := cfg.io.inRow
-  win.io.inCol    := cfg.io.inCol
-  win.io.startRow := cfg.io.startRow
-  win.io.startCol := cfg.io.startCol
-  win.io.colStep  := cfg.io.colStep
+  win.io.next     := false.B
+  win.io.iter     := cfg.io.iter
+  win.io.kSize    := cfg.io.kSize
+  win.io.stride   := cfg.io.stride
+  win.io.padding  := cfg.io.padding
   val cmdStart    = io.cmdReq.fire && !invalid
-  val loadNextRow = WireDefault(false.B)
-  val canEmitElem = running && linesReady && !finishPending && !elemDone
+  val canEmitElem = running && inputReady
   win.io.elemFire := canEmitElem && writer.io.elemIn.ready
 
   for (i <- 0 until inBW) {
     lineBuf.io.bankRead(i) <> io.bankRead(i)
   }
-  lineBuf.io.startPreload    := cmdStart
-  lineBuf.io.startLoadNext   := loadNextRow
-  lineBuf.io.kRow            := cfg.io.kRow
-  lineBuf.io.inCol           := cfg.io.inCol
-  lineBuf.io.rowPtr          := win.io.rowPtr
-  lineBuf.io.rBaseBeat       := 0.U
-  lineBuf.io.rBankId         := cfg.io.rBank
-  lineBuf.io.robId           := cfg.io.robId
-  lineBuf.io.elemReq.kRowIdx := win.io.kRowIdx
-  lineBuf.io.elemReq.kColIdx := win.io.kColIdx
-  lineBuf.io.elemReq.colPtr  := win.io.colPtr
+  lineBuf.io.start   := cmdStart
+  lineBuf.io.iter    := cfg.io.iter
+  lineBuf.io.stride  := cfg.io.stride
+  lineBuf.io.padding := cfg.io.padding
+  lineBuf.io.outRow  := win.io.outRow
+  lineBuf.io.outCol  := win.io.outCol
+  lineBuf.io.kRowIdx := win.io.kRowIdx
+  lineBuf.io.kColIdx := win.io.kColIdx
+  lineBuf.io.rBankId := cfg.io.rBank
+  lineBuf.io.robId   := cfg.io.robId
 
   for (i <- 0 until outBW) {
     writer.io.bankWrite(i) <> io.bankWrite(i)
   }
-  writer.io.start        := false.B
   writer.io.init         := cmdStart
-  writer.io.flush        := false.B
-  writer.io.wBaseBeat    := 0.U
   writer.io.wBankId      := cfg.io.wBank
   writer.io.robId        := cfg.io.robId
   writer.io.elemIn.valid := canEmitElem
   writer.io.elemIn.bits  := lineBuf.io.elemData
+  writer.io.elemLast     := win.io.elemLast
+  writer.io.kSize        := cfg.io.kSize
+  val outputDim = ((cfg.io.iter +& (cfg.io.padding << 1) - cfg.io.kSize) /
+    cfg.io.stride) + 1.U
+  writer.io.windowIdx := win.io.outRow * outputDim + win.io.outCol
 
-  when((cmdStart || loadNextRow) && !lineBuf.io.loadDone) {
-    linesReady := false.B
-  }.elsewhen(running && !linesReady && !finishPending && lineBuf.io.loadDone) {
-    linesReady := true.B
+  when(cmdStart) {
+    inputReady := false.B
+  }.elsewhen(running && !inputReady && lineBuf.io.loadDone) {
+    inputReady := true.B
   }
 
-  when(win.io.elemLast && win.io.elemFire) {
-    elemDone := true.B
-  }
-
-  val windowDone = running && linesReady && elemDone && !writer.io.busy
-  when(windowDone && win.io.lastWindow) {
-    writer.io.flush := true.B
-    linesReady      := false.B
-    finishPending   := true.B
-    elemDone        := false.B
-  }.elsewhen(windowDone && win.io.colEnd) {
-    win.io.nextRow := true.B
-    loadNextRow    := true.B
-    linesReady     := false.B
-    elemDone       := false.B
-  }.elsewhen(windowDone) {
-    win.io.nextCol := true.B
-    elemDone       := false.B
-  }
-
-  when(finishPending && !writer.io.busy) {
-    finishPending := false.B
-    running       := false.B
-    respPending   := true.B
+  when(writer.io.windowComplete && win.io.last) {
+    inputReady := false.B
+    running    := false.B
+    respPending := true.B
+  }.elsewhen(writer.io.windowComplete) {
+    win.io.next := true.B
   }
 }
