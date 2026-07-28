@@ -96,6 +96,7 @@
               systemTools.rsync
               systemTools.nodejs
               systemTools.git
+              systemTools.docker
               # systemTools.npm
             ];
           };
@@ -123,6 +124,8 @@
 
               compiler.flatbuffers
               compiler.numactl
+
+              systemTools.docker
 
               rustTools.cargoNextest
             ];

@@ -1,0 +1,30 @@
+name: Publish Docker Image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        shell: bash
+        run: |
+          commit=$(git rev-parse --short=12 HEAD)
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${commit}"
+
+          ./scripts/docker/build.sh
+          docker tag "buckyball:${commit}" "${image}"
+          docker push "${image}"

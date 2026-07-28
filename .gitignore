@@ -44,3 +44,5 @@ examples/balls/*/verify/casegen/target/
 AGENTS.md
 
 log/
+
+scripts/docker/.last-image-tag
