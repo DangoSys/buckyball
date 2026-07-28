@@ -4,6 +4,8 @@ FROM ${NIX_BASE_IMAGE}
 ARG GIT_REMOTE
 ARG GIT_COMMIT
 
+LABEL org.opencontainers.image.source="https://github.com/DangoSys/buckyball"
+
 RUN mkdir -p /etc/nix && \
     printf '%s\n' \
       'experimental-features = nix-command flakes' \
