@@ -20,28 +20,22 @@ def Im2colOp : Buckyball_Op<"im2col"> {
     Transforms image data into column format for efficient convolution.
     Corresponds to bb_im2col instruction (funct7=48).
     Belongs to Im2colBall (bid=3).
-    ISA: bb_im2col_ex(op1_bank_id, wr_bank_id, krow, kcol, inrow, incol, startrow, startcol, col_step)
+    ISA: bb_im2col(op1_bank_id, wr_bank_id, iter, ksize, stride, padding)
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
-                       I64:$krow, I64:$kcol,
-                       I64:$inrow, I64:$incol,
-                       I64:$startrow, I64:$startcol,
-                       I64:$colStep);
+                       I64:$iter, I64:$ksize, I64:$stride, I64:$padding);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$krow `,` $kcol `,` "
-                       "$inrow `,` $incol `,` "
-                       "$startrow `,` $startcol `,` $colStep attr-dict `:` "
+                       "$iter `,` $ksize `,` $stride `,` $padding attr-dict `:` "
                        "type($inputBankId)";
 }
 
 def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
   let summary = "Im2col using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$krow, I64:$kcol,
-                       I64:$inrow, I64:$incol, I64:$startrow, I64:$startcol,
-                       I64:$colStep);
+  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$ksize,
+                       I64:$stride, I64:$padding);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $krow $kcol $inrow $incol $startrow $startcol $colStep attr-dict `:` type($inBank) type($outBank) type($krow) type($kcol) type($inrow) type($incol) type($startrow) type($startcol) type($colStep)";
+      "$inBank $outBank $iter $ksize $stride $padding attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) type($stride) type($padding)";
 }
 
 def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,

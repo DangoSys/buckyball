@@ -23,9 +23,8 @@ public:
   LogicalResult matchAndRewrite(BankIm2colOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.create<Im2colOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                              op.getKrow(), op.getKcol(), op.getInrow(),
-                              op.getIncol(), op.getStartrow(), op.getStartcol(),
-                              op.getColStep());
+                              op.getIter(), op.getKsize(), op.getStride(),
+                              op.getPadding());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

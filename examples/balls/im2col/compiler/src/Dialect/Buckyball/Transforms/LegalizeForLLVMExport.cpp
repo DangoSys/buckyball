@@ -24,32 +24,20 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
         loc, i64, adaptor.getInputBankId(),
         rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputBankId(),
                                        cstI64(rewriter, loc, 20)));
+    rs1 = rewriter.create<arith::OrIOp>(
+        loc, rs1,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getIter(),
+                                       cstI64(rewriter, loc, 30)));
 
-    Value rs2 = adaptor.getKcol();
+    Value rs2 = adaptor.getKsize();
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getKrow(),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getStride(),
                                        cstI64(rewriter, loc, 8)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getIncol(),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getPadding(),
                                        cstI64(rewriter, loc, 16)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getInrow(),
-                                       cstI64(rewriter, loc, 24)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getStartcol(),
-                                       cstI64(rewriter, loc, 32)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getStartrow(),
-                                       cstI64(rewriter, loc, 40)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getColStep(),
-                                       cstI64(rewriter, loc, 48)));
 
     if (stable) {
       rewriter.replaceOpWithNewOp<Im2colIntrOp>(op, rs1, rs2);

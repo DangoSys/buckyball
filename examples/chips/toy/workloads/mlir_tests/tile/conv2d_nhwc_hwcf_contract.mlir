@@ -1,7 +1,6 @@
-// CHECK: buckyball.bank_mvin
-// CHECK: buckyball.bank_im2col
-// CHECK: buckyball.bank_mvout
-// CHECK: buckyball.bank_mul_warp16
+// CHECK: scf.for
+// CHECK-NOT: tile.tile_conv2d
+// CHECK-NOT: buckyball.bank_im2col
 
 func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8

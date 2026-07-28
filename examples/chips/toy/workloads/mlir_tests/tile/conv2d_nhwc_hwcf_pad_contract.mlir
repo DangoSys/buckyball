@@ -1,8 +1,6 @@
-// CHECK-DAG: memref.alloc() {{.*}} : memref<1x1x16xf32>
-// CHECK-DAG: buckyball.bank_mvin {{.*}} : memref<1x16xf32>
-// CHECK-DAG: buckyball.bank_im2col
-// CHECK-DAG: buckyball.bank_mul_warp16
-// CHECK-DAG: memref.dealloc {{.*}} : memref<1x1x16xf32>
+// CHECK: scf.for
+// CHECK-NOT: tile.tile_conv2d
+// CHECK-NOT: buckyball.bank_im2col
 
 func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
