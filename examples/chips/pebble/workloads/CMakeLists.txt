@@ -7,6 +7,8 @@ include(${BUCKYBALL_REPO_ROOT}/examples/chips/toy/workloads/cmake/BuckyballWorkl
 add_custom_target(pebble-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET pebble-ctests-build)
 
+add_subdirectory(ctests)
+
 set(BUCKYBALL_BALL_CTEST_DIRS
   ${BUCKYBALL_REPO_ROOT}/examples/balls/transpose/workloads/ctests
   ${BUCKYBALL_REPO_ROOT}/examples/balls/matrix/workloads/ctests
