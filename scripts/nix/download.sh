@@ -31,6 +31,9 @@ git submodule update --init --progress \
   docs \
   verify \
   thirdparty/waveform-mcp
+git submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
+  bb-tests/thirdparty/linux \
+  bb-tests/thirdparty/opensbi
 
 # I dont know why below is need for chipyard submodules, but it is
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells
@@ -52,5 +55,5 @@ rm -rf ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/cde \
 git -C ${BBDIR}/arch/thirdparty/chipyard/sims/firesim submodule update --init --progress \
   sim/cde sim/rocket-chip sim/diplomacy sim/berkeley-hardfloat
 
-begin_step "0-2" "buddy-mlir llvm init"
-git -C ${BBDIR}/compiler/thirdparty/buddy-mlir submodule update --init --progress llvm
+begin_step "0-3" "buddy-mlir llvm init"
+git -C ${BBDIR}/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

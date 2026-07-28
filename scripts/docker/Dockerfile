@@ -19,9 +19,11 @@ ENV NIX_CONFIG="experimental-features = nix-command flakes"
 
 WORKDIR /workspace
 RUN nix --extra-experimental-features "nix-command flakes" shell nixpkgs#git -c bash -lc '\
-      git clone "$GIT_REMOTE" buckyball && \
+      git init buckyball && \
       cd buckyball && \
-      git checkout "$GIT_COMMIT" && \
+      git remote add origin "$GIT_REMOTE" && \
+      git fetch --depth 1 origin "$GIT_COMMIT" && \
+      git checkout FETCH_HEAD && \
       scripts/nix/download.sh \
     '
 
