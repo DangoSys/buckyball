@@ -22,12 +22,25 @@ The output dimension is:
 outputDim = floor((iter + 2 * padding - ksize) / stride) + 1
 ```
 
-Windows are emitted in output-row-major order. Each window is flattened in
-kernel-row-major order, so the total output byte count is:
+Windows form the rows of MatrixBall operand A. The kernel elements form its K
+dimension. Output is stored in MatrixBall's `(M tile, K tile, tile row, lane)`
+layout, with both tile dimensions fixed at 16:
 
 ```text
-outputDim * outputDim * ksize * ksize
+M = outputDim * outputDim
+K = ksize * ksize
+mTiles = ceil(M / 16)
+kTiles = ceil(K / 16)
+
+bankRow(window, kernel) =
+  ((window / 16) * kTiles + (kernel / 16)) * 16 + (window % 16)
+lane(window, kernel) = kernel % 16
 ```
+
+Every bank row contains 16 int8 lanes. Unused lanes in the final K tile are
+zero. Consequently each M tile occupies `kTiles * 16` bank rows; a kernel wider
+than 16 elements continues in the next K tile rather than immediately after
+the preceding window.
 
 For output coordinate `(orow, ocol)` and kernel coordinate `(krow, kcol)`, the
 unpadded input coordinate is:
@@ -49,6 +62,7 @@ inputRow * iter + inputCol
 - `Im2colConfigRegs.scala`: ISA field decoding and validation.
 - `Im2colWindow.scala`: output-window and kernel traversal.
 - `LineBufferManager.scala`: input preload and padded element selection.
-- `StreamWriter.scala`: contiguous output packing and bank writes.
+- `StreamWriter.scala`: MatrixBall-compatible tiled output packing and bank
+  writes.
 - `Im2colBall.scala`: Blink-compatible ball wrapper.
 - `configs/Im2colBallParam.scala`: maximum dimension and element width.

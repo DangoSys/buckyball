@@ -37,9 +37,7 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   val running       = RegInit(false.B)
   val inputReady    = RegInit(false.B)
-  val finishPending = RegInit(false.B)
   val respPending   = RegInit(false.B)
-  val elemDone      = RegInit(false.B)
 
   cfg.io.cmd  := io.cmdReq.bits
   cfg.io.load := io.cmdReq.fire
@@ -56,9 +54,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   when(io.cmdReq.fire) {
     running       := !invalid
     inputReady    := false.B
-    finishPending := false.B
     respPending   := invalid
-    elemDone      := false.B
   }
   when(io.cmdResp.fire) {
     respPending := false.B
@@ -71,7 +67,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   win.io.stride   := cfg.io.stride
   win.io.padding  := cfg.io.padding
   val cmdStart    = io.cmdReq.fire && !invalid
-  val canEmitElem = running && inputReady && !finishPending && !elemDone
+  val canEmitElem = running && inputReady
   win.io.elemFire := canEmitElem && writer.io.elemIn.ready
 
   for (i <- 0 until inBW) {
@@ -91,39 +87,28 @@ class Im2col(val b: GlobalConfig) extends Module {
   for (i <- 0 until outBW) {
     writer.io.bankWrite(i) <> io.bankWrite(i)
   }
-  writer.io.start        := false.B
   writer.io.init         := cmdStart
-  writer.io.flush        := false.B
-  writer.io.wBaseBeat    := 0.U
   writer.io.wBankId      := cfg.io.wBank
   writer.io.robId        := cfg.io.robId
   writer.io.elemIn.valid := canEmitElem
   writer.io.elemIn.bits  := lineBuf.io.elemData
+  writer.io.elemLast     := win.io.elemLast
+  writer.io.kSize        := cfg.io.kSize
+  val outputDim = ((cfg.io.iter +& (cfg.io.padding << 1) - cfg.io.kSize) /
+    cfg.io.stride) + 1.U
+  writer.io.windowIdx := win.io.outRow * outputDim + win.io.outCol
 
   when(cmdStart) {
     inputReady := false.B
-  }.elsewhen(running && !inputReady && !finishPending && lineBuf.io.loadDone) {
+  }.elsewhen(running && !inputReady && lineBuf.io.loadDone) {
     inputReady := true.B
   }
 
-  when(win.io.elemLast && win.io.elemFire) {
-    elemDone := true.B
-  }
-
-  val windowDone = running && inputReady && elemDone && !writer.io.busy
-  when(windowDone && win.io.last) {
-    writer.io.flush := true.B
-    inputReady      := false.B
-    finishPending   := true.B
-    elemDone        := false.B
-  }.elsewhen(windowDone) {
+  when(writer.io.windowComplete && win.io.last) {
+    inputReady := false.B
+    running    := false.B
+    respPending := true.B
+  }.elsewhen(writer.io.windowComplete) {
     win.io.next := true.B
-    elemDone       := false.B
-  }
-
-  when(finishPending && !writer.io.busy) {
-    finishPending := false.B
-    running       := false.B
-    respPending   := true.B
   }
 }
