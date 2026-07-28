@@ -16,13 +16,10 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
     val subRobId = Output(UInt(log2Up(b.frontend.sub_rob_depth * 4).W))
     val rBank    = Output(UInt(log2Up(b.memDomain.bankNum).W))
     val wBank    = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val kRow     = Output(UInt(log2Ceil(maxK + 1).W))
-    val kCol     = Output(UInt(log2Ceil(maxK + 1).W))
-    val inRow    = Output(UInt(16.W))
-    val inCol    = Output(UInt(16.W))
-    val startRow = Output(UInt(16.W))
-    val startCol = Output(UInt(16.W))
-    val colStep  = Output(UInt(16.W))
+    val iter    = Output(UInt(b.frontend.iter_len.W))
+    val kSize   = Output(UInt(log2Ceil(maxK + 1).W))
+    val stride  = Output(UInt(8.W))
+    val padding = Output(UInt(8.W))
   })
 
   private val robId    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
@@ -30,19 +27,15 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
   private val subRobId = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   private val rBank    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val wBank    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val kRow     = RegInit(0.U(log2Ceil(maxK + 1).W))
-  private val kCol     = RegInit(0.U(log2Ceil(maxK + 1).W))
-  private val inRow    = RegInit(0.U(16.W))
-  private val inCol    = RegInit(0.U(16.W))
-  private val startRow = RegInit(0.U(16.W))
-  private val startCol = RegInit(0.U(16.W))
-  private val colStep  = RegInit(1.U(16.W))
+  private val iter    = RegInit(0.U(b.frontend.iter_len.W))
+  private val kSize   = RegInit(0.U(log2Ceil(maxK + 1).W))
+  private val stride  = RegInit(1.U(8.W))
+  private val padding = RegInit(0.U(8.W))
 
-  val cmdKCol    = io.cmd.cmd.special(7, 0)
-  val cmdKRow    = io.cmd.cmd.special(15, 8)
-  val cmdInCol   = io.cmd.cmd.special(23, 16)
-  val cmdInRow   = io.cmd.cmd.special(31, 24)
-  val cmdColStep = io.cmd.cmd.special(55, 48)
+  val cmdIter    = io.cmd.cmd.iter
+  val cmdKSize   = io.cmd.cmd.special(7, 0)
+  val cmdStride  = io.cmd.cmd.special(15, 8)
+  val cmdPadding = io.cmd.cmd.special(23, 16)
 
   when(io.load) {
     robId    := io.cmd.rob_id
@@ -50,28 +43,23 @@ class Im2colConfigRegs(val b: GlobalConfig, maxK: Int) extends Module {
     subRobId := io.cmd.sub_rob_id
     rBank    := io.cmd.cmd.op1_bank
     wBank    := io.cmd.cmd.wr_bank
-    kCol     := cmdKCol
-    kRow     := cmdKRow
-    inCol    := cmdInCol
-    inRow    := cmdInRow
-    startCol := io.cmd.cmd.special(39, 32)
-    startRow := io.cmd.cmd.special(47, 40)
-    colStep  := cmdColStep
+    iter    := cmdIter
+    kSize   := cmdKSize
+    stride  := cmdStride
+    padding := cmdPadding
   }
 
-  io.invalid  := (cmdKCol === 0.U) || (cmdKRow === 0.U) ||
-    (cmdInCol === 0.U) || (cmdInRow === 0.U) ||
-    (cmdColStep === 0.U) || (cmdInCol < cmdKCol) || (cmdInRow < cmdKRow)
+  val paddedSize = cmdIter +& (cmdPadding << 1)
+  io.invalid  := (cmdIter === 0.U) || (cmdIter > maxK.U) ||
+    (cmdKSize === 0.U) || (cmdKSize > maxK.U) ||
+    (cmdStride === 0.U) || (paddedSize < cmdKSize)
   io.robId    := Mux(io.load, io.cmd.rob_id, robId)
   io.isSub    := Mux(io.load, io.cmd.is_sub, isSub)
   io.subRobId := Mux(io.load, io.cmd.sub_rob_id, subRobId)
   io.rBank    := Mux(io.load, io.cmd.cmd.op1_bank, rBank)
   io.wBank    := Mux(io.load, io.cmd.cmd.wr_bank, wBank)
-  io.kRow     := Mux(io.load, cmdKRow, kRow)
-  io.kCol     := Mux(io.load, cmdKCol, kCol)
-  io.inRow    := Mux(io.load, cmdInRow, inRow)
-  io.inCol    := Mux(io.load, cmdInCol, inCol)
-  io.startRow := Mux(io.load, io.cmd.cmd.special(47, 40), startRow)
-  io.startCol := Mux(io.load, io.cmd.cmd.special(39, 32), startCol)
-  io.colStep  := Mux(io.load, cmdColStep, colStep)
+  io.iter    := Mux(io.load, cmdIter, iter)
+  io.kSize   := Mux(io.load, cmdKSize, kSize)
+  io.stride  := Mux(io.load, cmdStride, stride)
+  io.padding := Mux(io.load, cmdPadding, padding)
 }

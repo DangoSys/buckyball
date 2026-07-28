@@ -36,7 +36,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   val writer:  Instance[StreamWriter]      = Instantiate(new StreamWriter(b))
 
   val running       = RegInit(false.B)
-  val linesReady    = RegInit(false.B)
+  val inputReady    = RegInit(false.B)
   val finishPending = RegInit(false.B)
   val respPending   = RegInit(false.B)
   val elemDone      = RegInit(false.B)
@@ -55,7 +55,7 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   when(io.cmdReq.fire) {
     running       := !invalid
-    linesReady    := false.B
+    inputReady    := false.B
     finishPending := false.B
     respPending   := invalid
     elemDone      := false.B
@@ -65,34 +65,28 @@ class Im2col(val b: GlobalConfig) extends Module {
   }
 
   win.io.init     := io.cmdReq.fire
-  win.io.nextCol  := false.B
-  win.io.nextRow  := false.B
-  win.io.kRow     := cfg.io.kRow
-  win.io.kCol     := cfg.io.kCol
-  win.io.inRow    := cfg.io.inRow
-  win.io.inCol    := cfg.io.inCol
-  win.io.startRow := cfg.io.startRow
-  win.io.startCol := cfg.io.startCol
-  win.io.colStep  := cfg.io.colStep
+  win.io.next     := false.B
+  win.io.iter     := cfg.io.iter
+  win.io.kSize    := cfg.io.kSize
+  win.io.stride   := cfg.io.stride
+  win.io.padding  := cfg.io.padding
   val cmdStart    = io.cmdReq.fire && !invalid
-  val loadNextRow = WireDefault(false.B)
-  val canEmitElem = running && linesReady && !finishPending && !elemDone
+  val canEmitElem = running && inputReady && !finishPending && !elemDone
   win.io.elemFire := canEmitElem && writer.io.elemIn.ready
 
   for (i <- 0 until inBW) {
     lineBuf.io.bankRead(i) <> io.bankRead(i)
   }
-  lineBuf.io.startPreload    := cmdStart
-  lineBuf.io.startLoadNext   := loadNextRow
-  lineBuf.io.kRow            := cfg.io.kRow
-  lineBuf.io.inCol           := cfg.io.inCol
-  lineBuf.io.rowPtr          := win.io.rowPtr
-  lineBuf.io.rBaseBeat       := 0.U
-  lineBuf.io.rBankId         := cfg.io.rBank
-  lineBuf.io.robId           := cfg.io.robId
-  lineBuf.io.elemReq.kRowIdx := win.io.kRowIdx
-  lineBuf.io.elemReq.kColIdx := win.io.kColIdx
-  lineBuf.io.elemReq.colPtr  := win.io.colPtr
+  lineBuf.io.start   := cmdStart
+  lineBuf.io.iter    := cfg.io.iter
+  lineBuf.io.stride  := cfg.io.stride
+  lineBuf.io.padding := cfg.io.padding
+  lineBuf.io.outRow  := win.io.outRow
+  lineBuf.io.outCol  := win.io.outCol
+  lineBuf.io.kRowIdx := win.io.kRowIdx
+  lineBuf.io.kColIdx := win.io.kColIdx
+  lineBuf.io.rBankId := cfg.io.rBank
+  lineBuf.io.robId   := cfg.io.robId
 
   for (i <- 0 until outBW) {
     writer.io.bankWrite(i) <> io.bankWrite(i)
@@ -106,29 +100,24 @@ class Im2col(val b: GlobalConfig) extends Module {
   writer.io.elemIn.valid := canEmitElem
   writer.io.elemIn.bits  := lineBuf.io.elemData
 
-  when((cmdStart || loadNextRow) && !lineBuf.io.loadDone) {
-    linesReady := false.B
-  }.elsewhen(running && !linesReady && !finishPending && lineBuf.io.loadDone) {
-    linesReady := true.B
+  when(cmdStart) {
+    inputReady := false.B
+  }.elsewhen(running && !inputReady && !finishPending && lineBuf.io.loadDone) {
+    inputReady := true.B
   }
 
   when(win.io.elemLast && win.io.elemFire) {
     elemDone := true.B
   }
 
-  val windowDone = running && linesReady && elemDone && !writer.io.busy
-  when(windowDone && win.io.lastWindow) {
+  val windowDone = running && inputReady && elemDone && !writer.io.busy
+  when(windowDone && win.io.last) {
     writer.io.flush := true.B
-    linesReady      := false.B
+    inputReady      := false.B
     finishPending   := true.B
     elemDone        := false.B
-  }.elsewhen(windowDone && win.io.colEnd) {
-    win.io.nextRow := true.B
-    loadNextRow    := true.B
-    linesReady     := false.B
-    elemDone       := false.B
   }.elsewhen(windowDone) {
-    win.io.nextCol := true.B
+    win.io.next := true.B
     elemDone       := false.B
   }
 

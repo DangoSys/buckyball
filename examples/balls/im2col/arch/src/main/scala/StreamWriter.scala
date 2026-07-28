@@ -12,8 +12,8 @@ import examples.balls.im2col.configs.Im2colBallParam
  * StreamWriter — packs elements into beats and writes to SRAM.
  *
  * Accepts one element per cycle via elemIn, packs lanesPerBeat elements
- * into a full beat, then issues a write request. Handles partial flush
- * at window end.
+ * into a full beat, then issues a write request. Handles a partial flush
+ * at operation end.
  */
 @instantiable
 class StreamWriter(val b: GlobalConfig) extends Module {
