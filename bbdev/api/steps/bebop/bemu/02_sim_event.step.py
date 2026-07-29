@@ -3,8 +3,8 @@ bebop bemu event handler
 
 Runs bebop bemu (Spike-based) emulator:
   1. Resolve binary (ELF) path
-  2. Build bebop with bemu feature (cargo build)
-  3. Run bebop bemu with the resolved ELF
+  2. Build the selected chip's BEMU wrapper
+  3. Run BEMU with the resolved ELF
 """
 import os
 import shlex
@@ -25,7 +25,7 @@ from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload, search_workload_all
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_env
+from bemu_common import bemu_manifest
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -97,8 +97,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
-        env = os.environ.copy()
-        env.update(bemu_env(chip, bbdir))
+        bemu_cargo_manifest = bemu_manifest(chip, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -133,9 +132,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "cargo",
         "run",
         "--manifest-path",
-        f"{bebop_dir}/Cargo.toml",
-        "--features",
-        "bemu",
+        str(bemu_cargo_manifest),
         "--",
         "run",
         "bemu",
@@ -155,7 +152,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
-        env=env,
     )
     if run_result.returncode != 0:
         await check_result(

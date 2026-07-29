@@ -2,7 +2,7 @@
 bebop bemu batch event handler
 
 Runs bebop bemu nextest batch regression:
-  1. Build bebop with bemu feature
+  1. Build the selected chip's BEMU wrapper
   2. Run cargo nextest with bemu-specific config
 """
 import os
@@ -25,7 +25,7 @@ if scripts_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_env
+from bemu_common import bemu_manifest
 from regression import regression_workload_toml
 
 config = {
@@ -55,7 +55,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     try:
         env = os.environ.copy()
-        env.update(bemu_env(chip, bbdir))
+        bemu_cargo_manifest = bemu_manifest(chip, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -81,8 +81,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── Build bebop bemu ──────────────────────────────────────────────────
     build_cmd = (
-        f"nix develop -c cargo build --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features bemu --tests"
+        f"nix develop -c cargo build --manifest-path {shlex.quote(str(bemu_cargo_manifest))} "
+        "--tests"
     )
     ctx.logger.info("Building bebop bemu (tests)...")
     build_result = stream_run_logger(
@@ -103,7 +103,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # ── Run nextest ───────────────────────────────────────────────────────
-    # Pass parameters via environment variables (nextest doesn't support custom CLI args after `--`)
+    # Pass test harness parameters through nextest's process environment.
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
         ctx.logger.info("Cleaned previous bebop test artifacts")
@@ -113,8 +113,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "BEBOP_BB_TESTS_ROOT": elf_root,
     })
     nextest_cmd = (
-        f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features bemu --test test_bemu "
+        f"nix develop -c cargo nextest run --manifest-path {shlex.quote(str(bemu_cargo_manifest))} "
+        "--test test_bemu "
         f"--config-file {shlex.quote(nextest_config)}"
     )
 

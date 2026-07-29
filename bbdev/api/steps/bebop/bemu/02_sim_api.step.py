@@ -11,7 +11,7 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from utils.path import get_buckyball_path
-from bemu_common import bemu_chip_inst
+from bemu_common import bemu_manifest
 
 config = {
     "name": "bebop-bemu-sim-api",
@@ -26,7 +26,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     chip = body.get("chip", "")
     try:
-        bemu_chip_inst(chip, get_buckyball_path())
+        bemu_manifest(chip, get_buckyball_path())
     except ValueError as e:
         return ApiResponse(
             status=400,
