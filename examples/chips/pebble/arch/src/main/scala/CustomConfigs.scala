@@ -8,14 +8,14 @@ import framework.system.tile.WithBuckyballTiles
  */
 class BuckyballPebbleConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/pebble/arch/src/main/scala/configs/pebble.toml") ++
+      new WithBuckyballTiles("../examples/chips/pebble/configs/pebble.toml") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
 
 class RocketOnlyPebbleConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/pebble/arch/src/main/scala/configs/pebble.toml", withBuckyball = false) ++
+      new WithBuckyballTiles("../examples/chips/pebble/configs/pebble.toml", withBuckyball = false) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )

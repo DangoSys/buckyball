@@ -1,0 +1,7 @@
+# Toy Example - 1 tile x 16 Buckyball cores
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/16core.toml"

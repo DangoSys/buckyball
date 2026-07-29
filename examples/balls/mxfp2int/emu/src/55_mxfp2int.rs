@@ -12,7 +12,7 @@
 //
 //===-----------------------------------------------------------------===//
 
-use super::super::bank::{mmio_read_byte, BANK_WIDTH};
+use super::super::bank::{bank_width, mmio_read_byte};
 use super::decode::{rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -25,13 +25,6 @@ impl Instruction for Mxfp2Int {
         let in_bank = rs1_b0(xs1) as u32;
         let out_bank = rs1_b2(xs1) as u32;
         let iter = rs1_iter(xs1) as usize; // number of MXFP blocks
-
-        if std::env::var("BEMU_RTRACE").is_ok() {
-            eprintln!(
-                "[RTRACE] mxfp2int: in_bank={} out_bank={} iter={}",
-                in_bank, out_bank, iter
-            );
-        }
 
         // Resolve physical banks
         let in_pbank = ctx
@@ -48,12 +41,18 @@ impl Instruction for Mxfp2Int {
 
         for block_idx in 0..iter {
             // Read E8M0 scale from MMIO (meta_bank = out_bank, rel_addr = block_idx)
-            let scale_e8m0 = mmio_read_byte(ctx.mmio_banks, ctx.mmio_region_table, out_bank as usize, block_idx);
+            let scale_e8m0 = mmio_read_byte(
+                ctx.mmio_banks,
+                ctx.mmio_region_table,
+                out_bank as usize,
+                block_idx,
+            );
 
             // Read input MXFP4 block (16 bytes = 1 bank row)
             let in_row_addr = block_idx;
+            let row_bytes = bank_width() / 8;
             let in_row_bytes =
-                &ctx.banks[in_pbank][in_row_addr * (BANK_WIDTH / 8)..(in_row_addr + 1) * (BANK_WIDTH / 8)];
+                &ctx.banks[in_pbank][in_row_addr * row_bytes..(in_row_addr + 1) * row_bytes];
 
             // Dequantize 32 FP4 elements to INT8
             let mut out_bytes = [0i8; BYTES_PER_OUTPUT_BLOCK];
@@ -90,9 +89,9 @@ impl Instruction for Mxfp2Int {
             let out_row_base = block_idx * 2;
             for row_offset in 0..2 {
                 let out_row_addr = out_row_base + row_offset;
-                let out_row_start = out_row_addr * (BANK_WIDTH / 8);
-                let src_start = row_offset * (BANK_WIDTH / 8);
-                let src_end = src_start + (BANK_WIDTH / 8);
+                let out_row_start = out_row_addr * row_bytes;
+                let src_start = row_offset * row_bytes;
+                let src_end = src_start + row_bytes;
 
                 // Copy 16 bytes (1 row) from out_bytes to output bank
                 for (i, &byte) in out_bytes[src_start..src_end].iter().enumerate() {

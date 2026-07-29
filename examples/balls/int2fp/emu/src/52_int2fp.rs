@@ -1,6 +1,6 @@
 //===- 52_dequant.rs - INT2FP instruction (INT to FP32 dequantization) ----------------===//
 
-use super::super::bank::{BANK_NUM, BANK_SIZE};
+use super::super::bank::{bank_num, bank_size};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -14,7 +14,7 @@ impl Instruction for Int2Fp {
         let dst = rs1_b2(xs1);
         let depth = rs1_iter(xs1) as usize;
 
-        if src >= BANK_NUM as u64 || dst >= BANK_NUM as u64 {
+        if src >= bank_num() as u64 || dst >= bank_num() as u64 {
             panic!("int2fp: invalid bank_id");
         }
 
@@ -42,7 +42,7 @@ impl Instruction for Int2Fp {
                 for i in 0..depth {
                     let src_base = i * 64;
                     let dst_base = i * 64;
-                    if src_base + 64 > BANK_SIZE || dst_base + 64 > BANK_SIZE {
+                    if src_base + 64 > bank_size() || dst_base + 64 > bank_size() {
                         panic!("int2fp: out of range");
                     }
                     for j in 0..16 {
@@ -59,7 +59,7 @@ impl Instruction for Int2Fp {
                 for i in 0..depth {
                     let src_base = i * 16;
                     let dst_base = i * 64;
-                    if src_base + 16 > BANK_SIZE || dst_base + 64 > BANK_SIZE {
+                    if src_base + 16 > bank_size() || dst_base + 64 > bank_size() {
                         panic!("int2fp: out of range");
                     }
                     for j in 0..16 {
@@ -77,12 +77,13 @@ impl Instruction for Int2Fp {
                     let pd = pbank_group(ctx.bank_map, dst, group);
                     for i in 0..depth {
                         let base = i * 16;
-                        if base + 16 > BANK_SIZE {
+                        if base + 16 > bank_size() {
                             panic!("int2fp: out of range");
                         }
                         for j in 0..4 {
                             let off = base + j * 4;
-                            let v = i32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
+                            let v =
+                                i32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
                             let o = ((v as f32) * scale).to_bits();
                             ctx.banks[pd][off..off + 4].copy_from_slice(&o.to_le_bytes());
                         }

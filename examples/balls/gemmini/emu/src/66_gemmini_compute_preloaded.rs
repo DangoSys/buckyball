@@ -1,4 +1,4 @@
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::bank_matrix::{read_i32_nn, read_i8_nn, write_i32_nn_groups};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::gemmini_state::{gemini, in_shift as apply_in_shift};
@@ -15,10 +15,12 @@ impl Instruction for GemminiComputePreloaded {
         let wr = rs1_b2(xs1);
         let n = rs1_iter(xs1) as usize;
 
-        if op_a >= BANK_NUM as u64 || op_b >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op_a >= bank_num() as u64 || op_b >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("gemmini_compute_preloaded: invalid bank_id");
         }
-        if !ctx.cfgs[op_a as usize].allocated || !ctx.cfgs[op_b as usize].allocated || !ctx.cfgs[wr as usize].allocated
+        if !ctx.cfgs[op_a as usize].allocated
+            || !ctx.cfgs[op_b as usize].allocated
+            || !ctx.cfgs[wr as usize].allocated
         {
             panic!("gemmini_compute_preloaded: bank not allocated");
         }

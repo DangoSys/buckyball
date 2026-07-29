@@ -360,6 +360,7 @@ object TomlConfigLoader {
       memAddrLen = getInt(mem, "addrLen"),
       tmaReadChannel = getInt(tma, "readChannel"),
       tmaWriteChannel = getInt(tma, "writeChannel"),
+      mmioEnable = getBool(mmio, "enable"),
       mmioBankNum = getInt(mmio, "bankNum"),
       mmioBankEntries = getInt(mmio, "bankEntries"),
       mmioBankWidth = getInt(mmio, "bankWidth"),

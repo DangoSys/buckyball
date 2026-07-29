@@ -34,7 +34,14 @@ object buckyball extends SbtModule { m =>
         .filter(os.exists)
         .map(PathRef(_))
 
-    super.sources() ++ archSrcs("balls") ++ archSrcs("chips")
+    def configSrcs(kind: String) =
+      os.list(examples / kind)
+        .filter(os.isDir)
+        .map(_ / "configs")
+        .filter(os.exists)
+        .map(PathRef(_))
+
+    super.sources() ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs("balls") ++ configSrcs("chips")
   }
 
   override def ivyDeps = Agg(

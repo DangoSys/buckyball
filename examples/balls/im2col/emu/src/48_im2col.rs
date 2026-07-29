@@ -1,4 +1,4 @@
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -11,7 +11,7 @@ impl Instruction for Im2col {
         let op1 = rs1_b0(xs1);
         let wr = rs1_b2(xs1);
 
-        if op1 >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op1 >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("im2col: invalid bank_id");
         }
         if !ctx.cfgs[op1 as usize].allocated || !ctx.cfgs[wr as usize].allocated {

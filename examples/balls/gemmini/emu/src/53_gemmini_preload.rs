@@ -1,4 +1,4 @@
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::bank_matrix::{read_i8_nn, write_i32_nn};
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
 use super::gemmini_state::gemini;
@@ -14,7 +14,7 @@ impl Instruction for GemminiPreload {
         let wr = rs1_b2(xs1);
         let n = rs1_iter(xs1) as usize;
 
-        if op1 >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op1 >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("gemmini_preload: invalid bank_id");
         }
         if !ctx.cfgs[op1 as usize].allocated || !ctx.cfgs[wr as usize].allocated {

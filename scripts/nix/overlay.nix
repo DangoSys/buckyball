@@ -12,4 +12,5 @@ final: prev:
   systemTools = final.callPackage ./build-env-system.nix { };
   tools = final.callPackage ./build-env-tools.nix { };
   kernel = final.callPackage ./build-env-kernel.nix { };
+  mosoo = final.callPackage ./build-env-mosoo.nix { };
 }

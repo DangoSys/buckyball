@@ -97,6 +97,11 @@
               systemTools.nodejs
               systemTools.git
               # systemTools.npm
+
+              # Mosoo local development tools
+              mosoo.bun
+              mosoo.just
+              mosoo.workerd
             ];
           };
 
@@ -124,6 +129,9 @@
               compiler.flatbuffers
               compiler.numactl
 
+              mosoo.bun
+              mosoo.just
+              mosoo.workerd
 
               rustTools.cargoNextest
             ];
@@ -135,6 +143,8 @@
               fi
 
               source "$PWD/sourceme.sh"
+
+              export MINIFLARE_WORKERD_PATH="''${MINIFLARE_WORKERD_PATH:-${pkgs.mosoo.workerd}/bin/workerd}"
 
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache

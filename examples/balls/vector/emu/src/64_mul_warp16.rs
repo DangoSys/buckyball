@@ -1,6 +1,6 @@
 //===- 64_mul_warp16.rs - MUL_WARP16 instruction ---------------------------===//
 
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::bank_matrix::{read_i32_nn_groups, read_i8_k_rows, write_i32_nn_groups};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
@@ -20,11 +20,7 @@ impl Instruction for MulWarp16 {
         let iter = rs1_iter(xs1);
         let _ = xs2;
 
-        if std::env::var("BEMU_RTRACE").is_ok() {
-            eprintln!("[RTRACE] mul_warp16: banks[{},{},{}] iter={}", op1, op2, wr, iter);
-        }
-
-        if op1 >= BANK_NUM as u64 || op2 >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op1 >= bank_num() as u64 || op2 >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("mul_warp16: invalid bank_id");
         }
 
@@ -37,7 +33,9 @@ impl Instruction for MulWarp16 {
 
         let p1 = pbank(ctx.bank_map, op1);
         let p2 = pbank(ctx.bank_map, op2);
-        let pw: Vec<_> = (0..cw).map(|group| pbank_group(ctx.bank_map, wr, group)).collect();
+        let pw: Vec<_> = (0..cw)
+            .map(|group| pbank_group(ctx.bank_map, wr, group))
+            .collect();
         let kin = iter as usize;
 
         if kin == 0 {

@@ -1,3 +1,4 @@
 **/target/
 *.key
 build/
+test-artifacts/

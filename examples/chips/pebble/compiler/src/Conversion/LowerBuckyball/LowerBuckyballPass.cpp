@@ -37,7 +37,7 @@ public:
       llvm::cl::init(16)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Depth of each bank."),
-                            llvm::cl::init(4096)};
+                            llvm::cl::init(1024)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
                           llvm::cl::init(8)};
   Option<bool> stable{*this, "stable",
@@ -90,7 +90,7 @@ public:
       llvm::cl::init(16)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Depth of each bank."),
-                            llvm::cl::init(4096)};
+                            llvm::cl::init(1024)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
                           llvm::cl::init(8)};
   Option<bool> stable{*this, "stable",

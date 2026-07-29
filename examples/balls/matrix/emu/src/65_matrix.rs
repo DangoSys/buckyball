@@ -1,4 +1,4 @@
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::bank_matrix::read_i8_k_rows;
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2};
 use super::instruction::{ExecContext, Instruction};
@@ -16,10 +16,13 @@ impl Instruction for Matrix {
         let n = ((xs2 >> 12) & 0xfff) as usize;
         let k = ((xs2 >> 24) & 0xfff) as usize;
 
-        if op1 >= BANK_NUM as u64 || op2 >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op1 >= bank_num() as u64 || op2 >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("matrix: invalid bank_id");
         }
-        if !ctx.cfgs[op1 as usize].allocated || !ctx.cfgs[op2 as usize].allocated || !ctx.cfgs[wr as usize].allocated {
+        if !ctx.cfgs[op1 as usize].allocated
+            || !ctx.cfgs[op2 as usize].allocated
+            || !ctx.cfgs[wr as usize].allocated
+        {
             panic!("matrix: bank not allocated");
         }
         if ctx.cfgs[wr as usize].cols != 4 {

@@ -35,14 +35,6 @@ class FireSimGemminiBuckyballConfig
         new chipyard.GemminiRocketConfig
     )
 
-class FireSimBuckyballToyConfig
-    extends Config(
-      new WithBootROM ++
-        new firechip.chip.WithDefaultFireSimBridges ++
-        new firechip.chip.WithFireSimConfigTweaks ++
-        new examples.toy.BuckyballToyConfig
-    )
-
 //===----------------------------------------------------------------------===//
 // Chipyard firesim configs
 //===----------------------------------------------------------------------===//

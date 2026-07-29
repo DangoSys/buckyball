@@ -55,7 +55,6 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
   val midend:   Instance[MemMidend]   = Instantiate(new MemMidend(b))
   val backend:  Instance[MemBackend]  = Instantiate(new MemBackend(b))
-  val mmioPool: Instance[MmioPool]    = Instantiate(new MmioPool(b))
 
   // Connect query interface from frontend to backend
   backend.io.query_vbank_id     := frontend.io.query_vbank_id
@@ -93,9 +92,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   }
   midend.io.bankRead(totalBallRead).bankRead <> frontend.io.interdma.bankRead
   midend.io.bankRead(totalBallRead).is_shared := frontend.io.interdma.read_is_shared
-  midend.io.bankWrite(totalBallWrite).bankWrite <> frontend.io.interdma.bankWrite
-  midend.io.bankWrite(totalBallWrite).is_shared := frontend.io.interdma.write_is_shared
-  midend.io.hartid                              := io.hartid
+  midend.io.hartid := io.hartid
 
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
@@ -103,70 +100,87 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 //===----------------------------------------------------------------------===//
 // MMIO subsystem wiring
 //===----------------------------------------------------------------------===//
-  // Alloc/dealloc from MemConfiger (mmio_set instruction)
-  mmioPool.io.alloc := frontend.io.mmioAlloc
-
-  // Dealloc from MemConfiger (implicit lifecycle: mem_dealloc with alloc=false)
-  // For now, tie off explicit dealloc (lifecycle managed by mmio_set with size_rows=0)
-  mmioPool.io.dealloc.valid := false.B
-  mmioPool.io.dealloc.bits  := 0.U
-
-  // Write path: route MemLoader's bankWrite to MmioPool when is_mvin_mmio_active
   val loaderBankWrite = frontend.io.interdma.bankWrite
-  val destIsMmio      = frontend.io.is_mvin_mmio_active
+  val dmaBankWrite    = midend.io.bankWrite(totalBallWrite).bankWrite
+  midend.io.bankWrite(totalBallWrite).is_shared := frontend.io.interdma.write_is_shared
 
-  // Compute MMIO write parameters from MemLoader's mmio_addr/col
-  val mmioRowAddr  = frontend.io.mmio_addr(9, 4) + loaderBankWrite.io.req.bits.addr
-  val mmioBankIdx  = frontend.io.mmio_addr(16, 10)
-  val mmioByteMask = Wire(Vec(b.memDomain.bankMaskLen, Bool()))
-  for (k <- 0 until b.memDomain.bankMaskLen) {
-    mmioByteMask(k) := k.U < frontend.io.mmio_col
-  }
+  if (b.memDomain.mmioEnable) {
+    val mmioPool: Instance[MmioPool] = Instantiate(new MmioPool(b))
 
-  // Route write to MMIO or main bank based on is_mvin_mmio_active
-  mmioPool.io.write.req.valid     := loaderBankWrite.io.req.valid && destIsMmio
-  mmioPool.io.write.req.bits.addr := mmioRowAddr
-  mmioPool.io.write.req.bits.data := loaderBankWrite.io.req.bits.data
-  mmioPool.io.write.req.bits.mask := mmioByteMask
-  mmioPool.io.writeBankIdx        := mmioBankIdx
+    // Alloc/dealloc from MemConfiger (mmio_set instruction)
+    mmioPool.io.alloc := frontend.io.mmioAlloc
 
-  // Main bank write (when NOT mvin_mmio)
-  midend.io.bankWrite(totalBallWrite).bankWrite.io.req.valid := loaderBankWrite.io.req.valid && !destIsMmio
-  midend.io.bankWrite(totalBallWrite).bankWrite.io.req.bits  := loaderBankWrite.io.req.bits
-  midend.io.bankWrite(totalBallWrite).bankWrite.rob_id       := loaderBankWrite.rob_id
-  midend.io.bankWrite(totalBallWrite).bankWrite.bank_id      := loaderBankWrite.bank_id
-  midend.io.bankWrite(totalBallWrite).bankWrite.ball_id      := loaderBankWrite.ball_id
-  midend.io.bankWrite(totalBallWrite).bankWrite.group_id     := loaderBankWrite.group_id
-  midend.io.bankWrite(totalBallWrite).is_shared              := frontend.io.interdma.write_is_shared
+    // Dealloc from MemConfiger (implicit lifecycle: mem_dealloc with alloc=false)
+    // For now, tie off explicit dealloc (lifecycle managed by mmio_set with size_rows=0)
+    mmioPool.io.dealloc.valid := false.B
+    mmioPool.io.dealloc.bits  := 0.U
 
-  // Request ready mux: select MMIO or main bank ready
-  loaderBankWrite.io.req.ready := Mux(
-    destIsMmio,
-    mmioPool.io.write.req.ready,
-    midend.io.bankWrite(totalBallWrite).bankWrite.io.req.ready
-  )
+    // Write path: route MemLoader's bankWrite to MmioPool when is_mvin_mmio_active
+    val destIsMmio = frontend.io.is_mvin_mmio_active
 
-  // Response mux: select MMIO or main bank response
-  loaderBankWrite.io.resp.valid := Mux(
-    destIsMmio,
-    mmioPool.io.write.resp.valid,
-    midend.io.bankWrite(totalBallWrite).bankWrite.io.resp.valid
-  )
-  loaderBankWrite.io.resp.bits  := Mux(
-    destIsMmio,
-    mmioPool.io.write.resp.bits,
-    midend.io.bankWrite(totalBallWrite).bankWrite.io.resp.bits
-  )
+    // Compute MMIO write parameters from MemLoader's mmio_addr/col
+    val mmioRowAddr  = frontend.io.mmio_addr(9, 4) + loaderBankWrite.io.req.bits.addr
+    val mmioBankIdx  = frontend.io.mmio_addr(16, 10)
+    val mmioByteMask = Wire(Vec(b.memDomain.bankMaskLen, Bool()))
+    for (k <- 0 until b.memDomain.bankMaskLen) {
+      mmioByteMask(k) := k.U < frontend.io.mmio_col
+    }
 
-  // Ready signals
-  mmioPool.io.write.resp.ready                                := loaderBankWrite.io.resp.ready && destIsMmio
-  midend.io.bankWrite(totalBallWrite).bankWrite.io.resp.ready := loaderBankWrite.io.resp.ready && !destIsMmio
+    dmaBankWrite.bank_id  := loaderBankWrite.bank_id
+    dmaBankWrite.rob_id   := loaderBankWrite.rob_id
+    dmaBankWrite.ball_id  := loaderBankWrite.ball_id
+    dmaBankWrite.group_id := loaderBankWrite.group_id
 
-  // Ball read path: connect Ball mmioRead to MmioPool
-  for (i <- 0 until b.ballDomain.ballNum) {
-    mmioPool.io.ballReq(i) <> io.ballDomain.mmioRead(i).req
-    io.ballDomain.mmioRead(i).resp <> mmioPool.io.ballResp(i)
-    mmioPool.io.ballMetaBank(i) := io.ballDomain.mmioRead(i).meta_bank
+    // Route write to MMIO or main bank based on is_mvin_mmio_active
+    mmioPool.io.write.req.valid     := loaderBankWrite.io.req.valid && destIsMmio
+    mmioPool.io.write.req.bits.addr := mmioRowAddr
+    mmioPool.io.write.req.bits.data := loaderBankWrite.io.req.bits.data
+    mmioPool.io.write.req.bits.mask := mmioByteMask
+    mmioPool.io.writeBankIdx        := mmioBankIdx
+
+    // Main bank write (when NOT mvin_mmio).
+    dmaBankWrite.io.req.valid := loaderBankWrite.io.req.valid && !destIsMmio
+    dmaBankWrite.io.req.bits  := loaderBankWrite.io.req.bits
+
+    // Request ready mux: select MMIO or main bank ready
+    loaderBankWrite.io.req.ready := Mux(
+      destIsMmio,
+      mmioPool.io.write.req.ready,
+      dmaBankWrite.io.req.ready
+    )
+
+    // Response mux: select MMIO or main bank response
+    loaderBankWrite.io.resp.valid := Mux(
+      destIsMmio,
+      mmioPool.io.write.resp.valid,
+      dmaBankWrite.io.resp.valid
+    )
+    loaderBankWrite.io.resp.bits  := Mux(
+      destIsMmio,
+      mmioPool.io.write.resp.bits,
+      dmaBankWrite.io.resp.bits
+    )
+
+    // Ready signals
+    mmioPool.io.write.resp.ready := loaderBankWrite.io.resp.ready && destIsMmio
+    dmaBankWrite.io.resp.ready   := loaderBankWrite.io.resp.ready && !destIsMmio
+
+    // Ball read path: connect Ball mmioRead to MmioPool
+    for (i <- 0 until b.ballDomain.ballNum) {
+      mmioPool.io.ballReq(i) <> io.ballDomain.mmioRead(i).req
+      io.ballDomain.mmioRead(i).resp <> mmioPool.io.ballResp(i)
+      mmioPool.io.ballMetaBank(i) := io.ballDomain.mmioRead(i).meta_bank
+    }
+  } else {
+    dmaBankWrite <> loaderBankWrite
+    assert(!frontend.io.mmioAlloc.valid, "MemDomain MMIO is disabled, but mmio_set was issued")
+    assert(!frontend.io.is_mvin_mmio_active, "MemDomain MMIO is disabled, but mvin_mmio was issued")
+
+    for (i <- 0 until b.ballDomain.ballNum) {
+      io.ballDomain.mmioRead(i).req.ready  := false.B
+      io.ballDomain.mmioRead(i).resp.valid := false.B
+      io.ballDomain.mmioRead(i).resp.bits  := 0.U.asTypeOf(io.ballDomain.mmioRead(i).resp.bits)
+    }
   }
 
   // Shared path passthrough

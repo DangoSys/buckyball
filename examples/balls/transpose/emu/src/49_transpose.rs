@@ -1,4 +1,4 @@
-use super::super::bank::BANK_NUM;
+use super::super::bank::bank_num;
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -15,11 +15,7 @@ impl Instruction for Transpose {
         let iter = rs1_iter(xs1);
         let _ = xs2;
 
-        if std::env::var("BEMU_RTRACE").is_ok() {
-            eprintln!("[RTRACE] transpose: bank{} -> bank{} iter={}", op1, wr, iter);
-        }
-
-        if op1 >= BANK_NUM as u64 || wr >= BANK_NUM as u64 {
+        if op1 >= bank_num() as u64 || wr >= bank_num() as u64 {
             panic!("transpose: invalid bank_id");
         }
 
@@ -69,7 +65,8 @@ impl Instruction for Transpose {
                 for j in 0..n {
                     let src_off = i * 64 + j * 4;
                     let dst_off = j * 64 + i * 4;
-                    let v = i32::from_le_bytes(ctx.banks[po][src_off..src_off + 4].try_into().unwrap());
+                    let v =
+                        i32::from_le_bytes(ctx.banks[po][src_off..src_off + 4].try_into().unwrap());
                     ctx.banks[pw][dst_off..dst_off + 4].copy_from_slice(&v.to_le_bytes());
                 }
             }

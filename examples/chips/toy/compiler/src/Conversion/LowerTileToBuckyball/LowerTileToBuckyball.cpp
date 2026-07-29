@@ -369,7 +369,7 @@ public:
       llvm::cl::init(kDefaultBankWidthBytes)};
   Option<int64_t> bankDepth{*this, "bank_depth",
                             llvm::cl::desc("Bank depth (rows per bank)."),
-                            llvm::cl::init(4096)};
+                            llvm::cl::init(1024)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
                           llvm::cl::init(8)};
 

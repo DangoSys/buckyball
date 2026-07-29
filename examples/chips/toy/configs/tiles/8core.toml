@@ -1,0 +1,19 @@
+# Toy Tile Configuration (8 cores, shared tile-private L2)
+
+[privateDCache]
+enable = true
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 8
+defaultGroupCount = 1
+
+[coreTemplate]
+include = "cores/default.toml"
+count = 8

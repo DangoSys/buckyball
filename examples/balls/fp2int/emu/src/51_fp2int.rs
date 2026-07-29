@@ -1,6 +1,6 @@
 //===- 51_quant.rs - FP2INT instruction (FP32 to INT quantization) ----------------------===//
 
-use super::super::bank::{BANK_NUM, BANK_SIZE};
+use super::super::bank::{bank_num, bank_size};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -16,7 +16,7 @@ impl Instruction for Fp2Int {
         let dst = rs1_b2(xs1);
         let depth = rs1_iter(xs1) as usize;
 
-        if src >= BANK_NUM as u64 || dst >= BANK_NUM as u64 {
+        if src >= bank_num() as u64 || dst >= bank_num() as u64 {
             panic!("fp2int: invalid bank_id");
         }
 
@@ -43,12 +43,13 @@ impl Instruction for Fp2Int {
                 for i in 0..depth {
                     let src_base = i * 64;
                     let dst_base = i * 64;
-                    if src_base + 64 > BANK_SIZE || dst_base + 64 > BANK_SIZE {
+                    if src_base + 64 > bank_size() || dst_base + 64 > bank_size() {
                         panic!("fp2int: out of range");
                     }
                     for j in 0..16 {
                         let off = src_base + j * 4;
-                        let fp_bits = u32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
+                        let fp_bits =
+                            u32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
                         let q = model::fp2int_i32_bits(fp_bits, scale_bits);
                         let dst_off = dst_base + j * 4;
                         ctx.banks[pd][dst_off..dst_off + 4].copy_from_slice(&q.to_le_bytes());
@@ -60,14 +61,15 @@ impl Instruction for Fp2Int {
                 for i in 0..depth {
                     let src_base = i * 16;
                     let dst_base = i * 16;
-                    if src_base + 16 > BANK_SIZE || dst_base + 16 > BANK_SIZE {
+                    if src_base + 16 > bank_size() || dst_base + 16 > bank_size() {
                         panic!("fp2int: out of range");
                     }
                     for group in 0..4 {
                         let ps = pbank_group(ctx.bank_map, src, group);
                         for lane in 0..4 {
                             let off = src_base + lane * 4;
-                            let fp_bits = u32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
+                            let fp_bits =
+                                u32::from_le_bytes(ctx.banks[ps][off..off + 4].try_into().unwrap());
                             let q = model::fp2int_i8_bits(fp_bits, scale_bits);
                             ctx.banks[pd][dst_base + group as usize * 4 + lane] = q as u8;
                         }

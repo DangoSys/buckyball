@@ -1,6 +1,6 @@
 //===- 50_relu.rs - RELU instruction ----------------------------------------===//
 
-use super::super::bank::{BANK_NUM, BANK_SIZE};
+use super::super::bank::{bank_num, bank_size};
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
@@ -14,7 +14,7 @@ impl Instruction for Relu {
         let dst = rs1_b2(xs1);
         let depth = rs1_iter(xs1) as usize;
 
-        if src >= BANK_NUM as u64 || dst >= BANK_NUM as u64 {
+        if src >= bank_num() as u64 || dst >= bank_num() as u64 {
             panic!("relu: invalid bank_id");
         }
 
@@ -30,7 +30,7 @@ impl Instruction for Relu {
         if sc.cols == 1 && dc.cols == 1 {
             for i in 0..depth {
                 let base = i * 16;
-                if base + 16 > BANK_SIZE {
+                if base + 16 > bank_size() {
                     panic!("relu: out of range");
                 }
                 for j in 0..16 {
@@ -44,7 +44,7 @@ impl Instruction for Relu {
         if sc.cols == 4 && dc.cols == 4 {
             for i in 0..depth {
                 let base = i * 64;
-                if base + 64 > BANK_SIZE {
+                if base + 64 > bank_size() {
                     panic!("relu: out of range");
                 }
                 for j in 0..16 {
@@ -57,7 +57,10 @@ impl Instruction for Relu {
             return 0;
         }
 
-        panic!("relu: unsupported layout src_cols={} dst_cols={}", sc.cols, dc.cols);
+        panic!(
+            "relu: unsupported layout src_cols={} dst_cols={}",
+            sc.cols, dc.cols
+        );
     }
 
     fn latency(xs1: u64, _xs2: u64) -> u64 {
