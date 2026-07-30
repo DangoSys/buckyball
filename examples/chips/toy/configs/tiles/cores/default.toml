@@ -3,6 +3,9 @@
 balldomain = "balldomains/full.toml"
 memdomain = "memdomains/default.toml"
 
+[frontend]
+subRobEnable = true
+
 [rocketCore]
 xLen = 64
 pgLevels = 3

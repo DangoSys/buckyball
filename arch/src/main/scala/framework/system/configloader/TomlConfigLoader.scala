@@ -4,6 +4,7 @@ import toml.{Toml, Value}
 import framework.system.tile.PrivateDCacheParams
 import framework.system.core.configs.RocketCoreParam
 import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMapping}
+import framework.frontend.configs.FrontendParam
 import framework.memdomain.configs.MemDomainParam
 import framework.top.GlobalConfig
 import java.nio.file.{Path, Paths}
@@ -189,6 +190,7 @@ object TomlConfigLoader {
     sharedMem: SharedMemFields
   ): (Option[GlobalConfig], Option[RocketCoreParam]) = {
     val rocketCore = getTable(coreTable, "rocketCore").map(parseRocketCore)
+    val frontend   = getTable(coreTable, "frontend").map(parseFrontend).getOrElse(GlobalConfig().frontend)
 
     // A core entry with `balldomain` becomes a Buckyball-bearing core.
     // Omitting `balldomain` (or empty string) drops the accelerator slot.
@@ -219,6 +221,7 @@ object TomlConfigLoader {
       )
       GlobalConfig().copy(
         ballDomain = balldomain,
+        frontend = frontend,
         memDomain = memdomain,
         rocketCore = parsedRocketCore
       )
@@ -277,6 +280,13 @@ object TomlConfigLoader {
       nEntries = getInt(table, "nEntries"),
       nRAS = getInt(table, "nRAS")
     )
+
+  private def parseFrontend(table: Map[String, Value]): FrontendParam = {
+    val default = GlobalConfig().frontend
+    default.copy(
+      sub_rob_enable = getOptionalBool(table, "subRobEnable").getOrElse(default.sub_rob_enable)
+    )
+  }
 
   /** Parse a BallDomain file (returns BallDomainParam from the root table). */
   private def parseBallDomain(value: Value, baseDir: Path): BallDomainParam = {
@@ -421,6 +431,13 @@ object TomlConfigLoader {
     table.get(key) match {
       case Some(Value.Bool(b)) => b
       case None                => throw new RuntimeException(s"Missing boolean at key '$key'")
+      case _                   => throw new RuntimeException(s"Expected boolean at key '$key'")
+    }
+
+  private def getOptionalBool(table: Map[String, Value], key: String): Option[Boolean] =
+    table.get(key) match {
+      case Some(Value.Bool(b)) => Some(b)
+      case None                => None
       case _                   => throw new RuntimeException(s"Expected boolean at key '$key'")
     }
 

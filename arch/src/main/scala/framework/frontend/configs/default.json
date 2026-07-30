@@ -4,5 +4,6 @@
   "bank_id_len": 10,
   "vbank_id_upper_bound": 15,
   "iter_len": 34,
+  "sub_rob_enable": true,
   "sub_rob_depth": 64
 }

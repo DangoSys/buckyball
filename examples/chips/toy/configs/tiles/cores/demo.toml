@@ -1,4 +1,4 @@
-# Goban Core Configuration (default)
+# Toy Core Configuration (default)
 
 balldomain = "balldomains/default.toml"
 memdomain = "memdomains/default.toml"

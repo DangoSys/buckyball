@@ -10,6 +10,10 @@ import framework.top.GlobalConfig
 
 @instantiable
 class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStatus {
+  require(
+    b.frontend.sub_rob_enable,
+    "GemminiBall requires frontend.sub_rob_enable=true because loop instructions emit SubROB rows"
+  )
 
   val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "GemminiBall")
     .getOrElse(throw new IllegalArgumentException("GemminiBall not found in config"))

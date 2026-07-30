@@ -53,8 +53,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     val barrier_release = Input(Bool())
   })
 
-  val rob:    Instance[GlobalROB] = Instantiate(new GlobalROB(b))
-  val subRob: Instance[SubROB]    = Instantiate(new SubROB(b))
+  val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
 
   val isFenceCmd  = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isFence
   val fenceActive = RegInit(false.B)
@@ -90,29 +89,9 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     rob.io.alloc.ready && !anyStall
   )
 
-  val subRobWriteArb = Module(new Arbiter(new SubRobRow(b), b.ballDomain.ballNum))
-  for (i <- 0 until b.ballDomain.ballNum) {
-    subRobWriteArb.io.in(i) <> io.ball_subrob_req_i(i)
-  }
-  subRob.io.write <> subRobWriteArb.io.out
-
   val is_ball_domain = rob.io.issue.bits.cmd.domain_id === DomainId.BALL
   val is_mem_domain  = rob.io.issue.bits.cmd.domain_id === DomainId.MEM
   val is_gp_domain   = rob.io.issue.bits.cmd.domain_id === DomainId.GP
-
-  val subRobIssueValid = subRob.io.issue.valid
-  val subRobCmd        = subRob.io.issue.bits
-
-  val subRobIssueEntry = Wire(new GlobalSchedIssue(b))
-  subRobIssueEntry.cmd               := subRobCmd
-  subRobIssueEntry.renamedBankAccess := 0.U.asTypeOf(subRobIssueEntry.renamedBankAccess)
-  subRobIssueEntry.rob_id            := subRob.io.issueMasterRobId
-  subRobIssueEntry.is_sub            := true.B
-  subRobIssueEntry.sub_rob_id        := subRob.io.issueSubId
-
-  val subRobIssBall = subRobCmd.domain_id === DomainId.BALL
-  val subRobIssMem  = subRobCmd.domain_id === DomainId.MEM
-  val subRobIssGp   = subRobCmd.domain_id === DomainId.GP
 
   val mainIssueEntry = Wire(new GlobalSchedIssue(b))
   mainIssueEntry.cmd               := rob.io.issue.bits.cmd
@@ -120,39 +99,6 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   mainIssueEntry.rob_id            := rob.io.issue.bits.rob_id
   mainIssueEntry.is_sub            := false.B
   mainIssueEntry.sub_rob_id        := 0.U
-
-  io.ball_issue_o.valid := Mux(
-    subRobIssueValid && subRobIssBall,
-    true.B,
-    rob.io.issue.valid && is_ball_domain && !subRobIssueValid
-  )
-  io.ball_issue_o.bits  := Mux(subRobIssueValid && subRobIssBall, subRobIssueEntry, mainIssueEntry)
-
-  io.mem_issue_o.valid := Mux(
-    subRobIssueValid && subRobIssMem,
-    true.B,
-    rob.io.issue.valid && is_mem_domain && !subRobIssueValid
-  )
-  io.mem_issue_o.bits  := Mux(subRobIssueValid && subRobIssMem, subRobIssueEntry, mainIssueEntry)
-
-  io.gp_issue_o.valid := Mux(
-    subRobIssueValid && subRobIssGp,
-    true.B,
-    rob.io.issue.valid && is_gp_domain && !subRobIssueValid
-  )
-  io.gp_issue_o.bits  := Mux(subRobIssueValid && subRobIssGp, subRobIssueEntry, mainIssueEntry)
-
-  subRob.io.issue.ready :=
-    (subRobIssBall && io.ball_issue_o.ready) ||
-      (subRobIssMem && io.mem_issue_o.ready) ||
-      (subRobIssGp && io.gp_issue_o.ready)
-
-  rob.io.issue.ready  := !subRobIssueValid && (
-    (is_ball_domain && io.ball_issue_o.ready) ||
-      (is_mem_domain && io.mem_issue_o.ready) ||
-      (is_gp_domain && io.gp_issue_o.ready)
-  )
-  rob.io.subRobActive := subRobIssueValid
 
   val completeArb = Module(new Arbiter(new GlobalSchedComplete(b), 3))
   completeArb.io.in(0).valid := io.ball_complete_i.valid
@@ -166,32 +112,118 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   io.gp_complete_i.ready     := completeArb.io.in(2).ready
 
   val completeBits = completeArb.io.out.bits
-  subRob.io.subComplete.valid    := completeArb.io.out.valid && completeBits.is_sub
-  subRob.io.subComplete.bits     := completeBits.sub_rob_id
-  subRob.io.masterComplete.ready := true.B
 
-  val normalComplete = completeArb.io.out.valid && !completeBits.is_sub
-  if (b.frontend.rs_out_of_order_response) {
-    rob.io.complete.valid := normalComplete || subRob.io.masterComplete.valid
-    rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
-  } else {
-    val isHeadComplete = Mux(
-      subRob.io.masterComplete.valid,
-      subRob.io.masterComplete.bits === rob.io.head_ptr,
-      completeBits.rob_id === rob.io.head_ptr
+  if (b.frontend.sub_rob_enable) {
+    val subRob: Instance[SubROB] = Instantiate(new SubROB(b))
+
+    val subRobWriteArb = Module(new Arbiter(new SubRobRow(b), b.ballDomain.ballNum))
+    for (i <- 0 until b.ballDomain.ballNum) {
+      subRobWriteArb.io.in(i) <> io.ball_subrob_req_i(i)
+    }
+    subRob.io.write <> subRobWriteArb.io.out
+
+    val subRobIssueValid = subRob.io.issue.valid
+    val subRobCmd        = subRob.io.issue.bits
+
+    val subRobIssueEntry = Wire(new GlobalSchedIssue(b))
+    subRobIssueEntry.cmd               := subRobCmd
+    subRobIssueEntry.renamedBankAccess := 0.U.asTypeOf(subRobIssueEntry.renamedBankAccess)
+    subRobIssueEntry.rob_id            := subRob.io.issueMasterRobId
+    subRobIssueEntry.is_sub            := true.B
+    subRobIssueEntry.sub_rob_id        := subRob.io.issueSubId
+
+    val subRobIssBall = subRobCmd.domain_id === DomainId.BALL
+    val subRobIssMem  = subRobCmd.domain_id === DomainId.MEM
+    val subRobIssGp   = subRobCmd.domain_id === DomainId.GP
+
+    io.ball_issue_o.valid := Mux(
+      subRobIssueValid && subRobIssBall,
+      true.B,
+      rob.io.issue.valid && is_ball_domain && !subRobIssueValid
     )
-    rob.io.complete.valid := (normalComplete || subRob.io.masterComplete.valid) && isHeadComplete
-    rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
+    io.ball_issue_o.bits  := Mux(subRobIssueValid && subRobIssBall, subRobIssueEntry, mainIssueEntry)
+
+    io.mem_issue_o.valid := Mux(
+      subRobIssueValid && subRobIssMem,
+      true.B,
+      rob.io.issue.valid && is_mem_domain && !subRobIssueValid
+    )
+    io.mem_issue_o.bits  := Mux(subRobIssueValid && subRobIssMem, subRobIssueEntry, mainIssueEntry)
+
+    io.gp_issue_o.valid := Mux(
+      subRobIssueValid && subRobIssGp,
+      true.B,
+      rob.io.issue.valid && is_gp_domain && !subRobIssueValid
+    )
+    io.gp_issue_o.bits  := Mux(subRobIssueValid && subRobIssGp, subRobIssueEntry, mainIssueEntry)
+
+    subRob.io.issue.ready :=
+      (subRobIssBall && io.ball_issue_o.ready) ||
+        (subRobIssMem && io.mem_issue_o.ready) ||
+        (subRobIssGp && io.gp_issue_o.ready)
+
+    rob.io.issue.ready  := !subRobIssueValid && (
+      (is_ball_domain && io.ball_issue_o.ready) ||
+        (is_mem_domain && io.mem_issue_o.ready) ||
+        (is_gp_domain && io.gp_issue_o.ready)
+    )
+    rob.io.subRobActive := subRobIssueValid
+
+    subRob.io.subComplete.valid    := completeArb.io.out.valid && completeBits.is_sub
+    subRob.io.subComplete.bits     := completeBits.sub_rob_id
+    subRob.io.masterComplete.ready := true.B
+
+    val normalComplete = completeArb.io.out.valid && !completeBits.is_sub
+    if (b.frontend.rs_out_of_order_response) {
+      rob.io.complete.valid := normalComplete || subRob.io.masterComplete.valid
+      rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
+    } else {
+      val isHeadComplete = Mux(
+        subRob.io.masterComplete.valid,
+        subRob.io.masterComplete.bits === rob.io.head_ptr,
+        completeBits.rob_id === rob.io.head_ptr
+      )
+      rob.io.complete.valid := (normalComplete || subRob.io.masterComplete.valid) && isHeadComplete
+      rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
+    }
+    completeArb.io.out.ready := Mux(
+      completeBits.is_sub,
+      subRob.io.subComplete.ready,
+      rob.io.complete.ready
+    )
+    io.idle := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
+  } else {
+    for (i <- 0 until b.ballDomain.ballNum) {
+      io.ball_subrob_req_i(i).ready := false.B
+    }
+
+    io.ball_issue_o.valid := rob.io.issue.valid && is_ball_domain
+    io.ball_issue_o.bits  := mainIssueEntry
+    io.mem_issue_o.valid  := rob.io.issue.valid && is_mem_domain
+    io.mem_issue_o.bits   := mainIssueEntry
+    io.gp_issue_o.valid   := rob.io.issue.valid && is_gp_domain
+    io.gp_issue_o.bits    := mainIssueEntry
+
+    rob.io.issue.ready  := (is_ball_domain && io.ball_issue_o.ready) ||
+      (is_mem_domain && io.mem_issue_o.ready) ||
+      (is_gp_domain && io.gp_issue_o.ready)
+    rob.io.subRobActive := false.B
+
+    when(completeArb.io.out.valid) {
+      assert(!completeBits.is_sub, "SubROB completion observed when frontend.sub_rob_enable=false")
+    }
+    if (b.frontend.rs_out_of_order_response) {
+      rob.io.complete.valid := completeArb.io.out.valid
+    } else {
+      rob.io.complete.valid := completeArb.io.out.valid && completeBits.rob_id === rob.io.head_ptr
+    }
+    rob.io.complete.bits     := completeBits.rob_id
+    completeArb.io.out.ready := rob.io.complete.ready
+    io.idle                  := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease
   }
-  completeArb.io.out.ready := Mux(
-    completeBits.is_sub,
-    subRob.io.subComplete.ready,
-    rob.io.complete.ready
-  )
 
   io.scheduler_rocc_o.resp.valid     := false.B
   io.scheduler_rocc_o.resp.bits.rd   := 0.U
   io.scheduler_rocc_o.resp.bits.data := 0.U
   io.scheduler_rocc_o.busy           := rob.io.full || fenceActive || barrierWaitROB || barrierWaitRelease
-  io.idle                            := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
 }

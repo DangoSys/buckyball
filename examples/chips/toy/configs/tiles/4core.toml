@@ -15,5 +15,5 @@ inputChannels = 4
 defaultGroupCount = 1
 
 [coreTemplate]
-include = "cores/default.toml"
+include = "cores/demo.toml"
 count = 4
