@@ -9,4 +9,5 @@ tests = [
   "matrix_matmul_16x16_ones-singlecore-baremetal",
   "im2col_test-singlecore-baremetal",
   "conv_im2col_transpose_matmul_6x6_test-singlecore-baremetal",
+  "conv1layer_quant_im2col_transpose_gemm_test-singlecore-baremetal",
 ]
