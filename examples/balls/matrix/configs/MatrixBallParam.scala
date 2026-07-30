@@ -7,6 +7,7 @@ case class MatrixBallParam(
   InputNum:      Int,
   inputWidth:    Int,
   lane:          Int,
+  wsReuseTiles:  Int,
   outputWidth:   Int,
   numMulThreads: Int,
   numCasThreads: Int
@@ -21,6 +22,7 @@ object MatrixBallParam {
       InputNum = BallParamLoader.int(tbl, "InputNum"),
       inputWidth = BallParamLoader.int(tbl, "inputWidth"),
       lane = BallParamLoader.int(tbl, "lane"),
+      wsReuseTiles = BallParamLoader.int(tbl, "wsReuseTiles"),
       outputWidth = BallParamLoader.int(tbl, "outputWidth"),
       numMulThreads = BallParamLoader.int(tbl, "numMulThreads"),
       numCasThreads = BallParamLoader.int(tbl, "numCasThreads")

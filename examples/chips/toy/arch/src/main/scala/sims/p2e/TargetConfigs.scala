@@ -26,6 +26,13 @@ class P2EToyLinuxConfig
         new examples.toy.BuckyballToyConfig
     )
 
+class P2EToy4CoreLinuxConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig(maxHarts = 4) ++
+        new examples.toy.BuckyballToy4CoreConfig
+    )
+
 class P2EToy8CoreLinuxConfig
     extends Config(
       new WithLinuxBootROM ++

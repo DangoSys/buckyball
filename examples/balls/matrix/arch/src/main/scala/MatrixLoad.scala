@@ -15,6 +15,7 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
   private val groupWidth   = log2Up(b.memDomain.bankNum)
   private val addrWidth    = log2Up(b.memDomain.bankEntries)
   private val rowIndexWidth = log2Ceil(tile)
+  private val wsReuseTiles  = SystolicArrayConst.wsReuseTiles(b)
   private val slotCount    = 3
   private val slotWidth    = log2Ceil(slotCount)
   private val tagQueueDepth = 16
@@ -40,7 +41,7 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
 
     val load_ex_req_kind    = Output(UInt(2.W))
     val load_ex_k_tile_kind = Output(UInt(2.W))
-    val load_ex_acc_slot    = Output(UInt(log2Ceil(SystolicArrayConst.WsReuseTiles).W))
+    val load_ex_acc_slot    = Output(UInt(log2Ceil(wsReuseTiles).W))
     val load_ex_valid_m     = Output(UInt(5.W))
     val load_ex_valid_n     = Output(UInt(5.W))
     val load_ex_valid_k     = Output(UInt(5.W))
@@ -79,7 +80,7 @@ class SystolicArrayLoad(val b: GlobalConfig) extends Module {
   class LoadSlot extends Bundle {
     val req_kind     = UInt(2.W)
     val k_tile_kind  = UInt(2.W)
-    val acc_slot     = UInt(log2Ceil(SystolicArrayConst.WsReuseTiles).W)
+    val acc_slot     = UInt(log2Ceil(wsReuseTiles).W)
     val valid_m      = UInt(5.W)
     val valid_n      = UInt(5.W)
     val valid_k      = UInt(5.W)

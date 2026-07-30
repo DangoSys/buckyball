@@ -3,6 +3,7 @@ package framework.balldomain.prototype.systolicarray
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
+import examples.balls.matrix.configs.MatrixBallParam
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
 
@@ -17,8 +18,12 @@ object SystolicArrayConst {
   // Store 将一行 16 个 int32 结果拆成最多 4 个 128-bit bank 写 beat。
   val StoreWritePorts   = 4
   val StorePortElemCount = Tile / StoreWritePorts
-  // WS 模式一次保留一组 B 权重，供最多 8 个 M tile 复用。
-  val WsReuseTiles       = 8
+  // WS 模式一次保留一组 B 权重，供一批 M tile 复用；具体批大小由 ball TOML 配置。
+  def wsReuseTiles(b: GlobalConfig): Int = {
+    val value = MatrixBallParam(b).wsReuseTiles
+    require(value >= 2, s"MatrixBall wsReuseTiles must be at least 2, got $value")
+    value
+  }
 }
 
 object SystolicCtrlLoadReqKind {
@@ -48,7 +53,7 @@ class SystolicCtrlLoadReq(b: GlobalConfig) extends Bundle {
   // 描述当前 tile 在同一输出 tile 的 K 维累加链中的位置。
   val k_tile_kind  = UInt(2.W)
   // WS 模式的累加上下文槽；OS 不使用该字段，固定发送 0。
-  val acc_slot     = UInt(log2Ceil(SystolicArrayConst.WsReuseTiles).W)
+  val acc_slot     = UInt(log2Ceil(SystolicArrayConst.wsReuseTiles(b)).W)
   // 边缘 tile 的真实 M/N/K 尺寸，Load/EX 用它们完成补零和结果裁剪。
   val valid_m      = UInt(5.W)
   val valid_n      = UInt(5.W)
@@ -133,4 +138,3 @@ class SystolicStoreMeta(b: GlobalConfig) extends Bundle {
   val wr_base = UInt(log2Up(b.memDomain.bankEntries).W)
   val rob_id  = UInt(log2Up(b.frontend.rob_entries).W)
 }
-

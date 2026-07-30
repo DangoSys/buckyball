@@ -21,6 +21,7 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   private val groupWidth = log2Up(b.memDomain.bankNum)
   private val addrWidth  = log2Up(b.memDomain.bankEntries)
   private val countWidth = 32
+  private val wsReuseTiles = SystolicArrayConst.wsReuseTiles(b)
 
   require(
     b.memDomain.bankEntries % tile == 0,
@@ -109,7 +110,7 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   val mt = RegInit(0.U(countWidth.W))
   val nt = RegInit(0.U(countWidth.W))
   val kt = RegInit(0.U(countWidth.W))
-  // WS 一批最多复用 8 个 M tile；wsBatchBase 是该批第一个 M tile 的下标。
+  // WS 一批最多复用 wsReuseTiles 个 M tile；wsBatchBase 是该批第一个 M tile 的下标。
   val wsBatchBase = RegInit(0.U(countWidth.W))
 
   // WS 下 wsLoadPeB=true 表示本次请求要以 B 更新 PE 权重；false 时仅读 A。
@@ -175,14 +176,14 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
     (mt.pad(countWidth) * kTiles.pad(countWidth) + kt.pad(countWidth)) << log2Ceil(tile)
   val bRowOffset =
     (nt.pad(countWidth) * kTiles.pad(countWidth) + kt.pad(countWidth)) << log2Ceil(tile)
-  // 当前 WS batch 的开区间上界，尾批可能不足 8 个 M tile。
+  // 当前 WS batch 的开区间上界，尾批可能不足 wsReuseTiles 个 M tile。
   val wsBatchLimit = Mux(
-    wsBatchBase + SystolicArrayConst.WsReuseTiles.U < mTiles,
-    wsBatchBase + SystolicArrayConst.WsReuseTiles.U,
+    wsBatchBase + wsReuseTiles.U < mTiles,
+    wsBatchBase + wsReuseTiles.U,
     mTiles)
   val wsReuseCount = wsBatchLimit - wsBatchBase
   val wsHasNextWeight = kt + 1.U < kTiles ||
-    wsBatchBase + SystolicArrayConst.WsReuseTiles.U < mTiles || nt + 1.U < nTiles
+    wsBatchBase + wsReuseTiles.U < mTiles || nt + 1.U < nTiles
   val wsPrefetchB = task.mode && !wsLoadPeB && wsReuseCount >= 3.U &&
     mt + 2.U === wsBatchLimit && wsHasNextWeight
   val prefetchNt = Wire(UInt(countWidth.W))
@@ -191,7 +192,7 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   prefetchKt := 0.U
   when(kt + 1.U < kTiles) {
     prefetchKt := kt + 1.U
-  }.elsewhen(wsBatchBase + SystolicArrayConst.WsReuseTiles.U < mTiles) {
+  }.elsewhen(wsBatchBase + wsReuseTiles.U < mTiles) {
     prefetchKt := 0.U
   }.otherwise {
     prefetchNt := nt + 1.U
@@ -287,7 +288,7 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   io.ctrl_ld_o.bits.k_tile_kind  := currentKTileKind
   io.ctrl_ld_o.bits.acc_slot     := Mux(
     task.mode,
-    fitTo(mt - wsBatchBase, log2Ceil(SystolicArrayConst.WsReuseTiles)),
+    fitTo(mt - wsBatchBase, log2Ceil(wsReuseTiles)),
     0.U)
   io.ctrl_ld_o.bits.valid_m      := currentValidM
   io.ctrl_ld_o.bits.valid_n      := currentValidN
@@ -467,7 +468,7 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
   /**
     * WS 发射顺序。
     *
-    * 对固定 (N,K) 与一个最多 8 个 M tile 的 batch，先为 batch 首个 M tile
+    * 对固定 (N,K) 与一个最多 wsReuseTiles 个 M tile 的 batch，先为 batch 首个 M tile
     * 发送 READ_A_B_PE 装载权重，随后为其余 M tile 发送 READ_A_ONLY。所有 K
     * tile 完成后才切换下一 batch 或下一 N tile。
     */
@@ -487,9 +488,9 @@ class SystolicArrayCtrl(val b: GlobalConfig) extends Module {
         wsPrefetchedWeights := false.B
       }.otherwise {
         kt := 0.U
-        when(wsBatchBase + SystolicArrayConst.WsReuseTiles.U < mTiles) {
-          wsBatchBase := wsBatchBase + SystolicArrayConst.WsReuseTiles.U
-          mt := wsBatchBase + SystolicArrayConst.WsReuseTiles.U
+        when(wsBatchBase + wsReuseTiles.U < mTiles) {
+          wsBatchBase := wsBatchBase + wsReuseTiles.U
+          mt := wsBatchBase + wsReuseTiles.U
           wsLoadPeB := !wsPrefetchedWeights
           wsWeightGeneration := !wsWeightGeneration
           wsPrefetchedWeights := false.B

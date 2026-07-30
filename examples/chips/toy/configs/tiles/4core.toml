@@ -1,4 +1,4 @@
-# Toy Tile Configuration (16 cores, shared tile-private L2)
+# Toy Tile Configuration (8 cores, shared tile-private L2)
 
 [privateDCache]
 enable = false
@@ -11,9 +11,9 @@ memCycles = 10
 [sharedMem]
 enable = false
 entries = 16384
-inputChannels = 16
+inputChannels = 4
 defaultGroupCount = 1
 
 [coreTemplate]
 include = "cores/default.toml"
-count = 16
+count = 4

@@ -4,6 +4,7 @@
 InputNum = 4
 inputWidth = 8
 lane = 4
+wsReuseTiles = 8
 outputWidth = 32
 numMulThreads = 4
 numCasThreads = 4

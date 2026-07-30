@@ -24,6 +24,15 @@ class BuckyballToyConfig
         new sims.base.BuckyballBaseConfig
     )
 
+/** 1 BBTile × 4 Buckyball cores sharing one tile-private L2. */
+class BuckyballToy4CoreConfig
+    extends Config(
+      new WithToyHartIdBits(nTiles = 1, nCoresPerTile = 4) ++
+        new WithBuckyballTiles("../examples/chips/toy/configs/1t4c.toml") ++
+        new chipyard.config.WithSystemBusWidth(128) ++
+        new sims.base.BuckyballBaseConfig
+    )
+
 /** 1 BBTile × 8 Buckyball cores sharing one tile-private L2. */
 class BuckyballToy8CoreConfig
     extends Config(

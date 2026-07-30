@@ -12,7 +12,7 @@ abstract class SystolicArrayEXBase(val b: GlobalConfig) extends Module {
   protected val accElemBits      = SystolicArrayConst.AccElemBits
   protected val wsPsumBits       = 2 * opElemBits + log2Ceil(tile)
   protected val opRowBits        = SystolicArrayConst.OpRowBits
-  protected val contextCount     = SystolicArrayConst.WsReuseTiles
+  protected val contextCount     = SystolicArrayConst.wsReuseTiles(b)
   protected val operandSlotCount = 3
   protected val contextWidth     = log2Ceil(contextCount)
   protected val operandSlotWidth = log2Ceil(operandSlotCount)
