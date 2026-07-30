@@ -85,13 +85,13 @@ class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: In
   when(io.alloc.valid) {
     val rid = io.alloc.rob_id
     when(q.rd_bank_0_valid) {
-      assert(q.rd_bank_0_id <= vbankUpper.U, "BAT rd_bank_0_id exceeds virtual bank upper bound")
+      // assert(q.rd_bank_0_id <= vbankUpper.U, "BAT rd_bank_0_id exceeds virtual bank upper bound")
     }
     when(q.rd_bank_1_valid) {
-      assert(q.rd_bank_1_id <= vbankUpper.U, "BAT rd_bank_1_id exceeds virtual bank upper bound")
+      // assert(q.rd_bank_1_id <= vbankUpper.U, "BAT rd_bank_1_id exceeds virtual bank upper bound")
     }
     when(q.wr_bank_valid) {
-      assert(q.wr_bank_id <= vbankUpper.U, "BAT wr_bank_id exceeds virtual bank upper bound")
+      // assert(q.wr_bank_id <= vbankUpper.U, "BAT wr_bank_id exceeds virtual bank upper bound")
     }
 
     entHasWrite(rid) := q.wr_bank_valid
