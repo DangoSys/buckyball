@@ -38,7 +38,6 @@ in
     requests
     pysocks
     socksio
-    allure-pytest
     matplotlib
 
     # pre-commit hooks (language: system use)
@@ -72,7 +71,6 @@ in
     pytest-html
     pytest-xdist
     pytest-cov
-    allure-pytest
     colorlog
 
     # firemarshal
