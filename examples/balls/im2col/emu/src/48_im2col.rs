@@ -1,4 +1,4 @@
-use super::super::bank::bank_num;
+use super::super::bank::BANK_NUM;
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
