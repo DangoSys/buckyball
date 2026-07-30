@@ -12,6 +12,12 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
 
+    if "output_dir" in body:
+        return ApiResponse(
+            status=400,
+            body={"error": "Unsupported parameter: output_dir. Use --output-dir."},
+        )
+
     config_name = body.get("config")
     if not isinstance(config_name, str) or not config_name or config_name == "None":
         return ApiResponse(
@@ -42,10 +48,12 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "banktrace": body.get("banktrace", False),
         "log_dir": body.get("log_dir"),
         "fst_dir": body.get("fst_dir"),
+        "jobs": body.get("jobs", 16),
         "from_run_workflow": True,
     }
-    if "output_dir" in body:
-        data["output_dir"] = body.get("output_dir")
+    output_dir = body.get("output-dir")
+    if output_dir is not None:
+        data["output_dir"] = output_dir
         data["_explicit_output_dir"] = True
     await ctx.enqueue({"topic": "bebop.verilator.run.clean", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

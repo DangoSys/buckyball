@@ -460,6 +460,7 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
     poll_timeout = 24 * 60 * 60  # 24 hours max
     task_result = None
     legacy_processing_count = 0
+    last_heartbeat = time.monotonic()
     for _ in range(poll_timeout // 2):
         state_data = read_state_file(state_file)
         if state_data:
@@ -476,6 +477,10 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
                     return 1
             else:
                 legacy_processing_count = 0
+        now = time.monotonic()
+        if now - last_heartbeat >= 600:
+            print(f"[bbdev] still running trace {trace_id}...", flush=True)
+            last_heartbeat = now
         time.sleep(2)
     else:
         print("Error: Task polling timed out after 24 hours")
@@ -557,6 +562,8 @@ def run_script_mode(args, cmd_info):
     iii_env = {
         **os.environ,
         "III_URL": f"ws://{HOST}:{worker_port}",
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONIOENCODING": "utf-8",
         "PYTHONDONTWRITEBYTECODE": "1",
         "BUCKYBALL_ROOT": os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     }
@@ -566,6 +573,7 @@ def run_script_mode(args, cmd_info):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        bufsize=1,
         env=iii_env,
         start_new_session=True,
     )
@@ -594,6 +602,7 @@ def run_script_mode(args, cmd_info):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
             env=iii_env,
             start_new_session=True,
         )

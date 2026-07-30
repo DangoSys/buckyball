@@ -55,17 +55,31 @@ def stream_run(
       )
     """
 
-    def read_stream(
-        stream, output_list: List[str], callback: Optional[Callable], prefix: str
-    ):
-        """Thread function to read stream output"""
+    def read_stream(stream, output_list: List[str], callback: Optional[Callable]):
+        """Thread function to read stream output as soon as a line/progress record is available."""
+        pending = []
+
+        def emit():
+            if not pending:
+                return
+            line = "".join(pending).rstrip()
+            pending.clear()
+            if not line:
+                return
+            output_list.append(line)
+            if callback:
+                callback(line)
+
         try:
-            for line in iter(stream.readline, ""):
-                if line:
-                    line = line.rstrip()
-                    output_list.append(line)
-                    if callback:
-                        callback(line)
+            while True:
+                char = stream.read(1)
+                if char == "":
+                    emit()
+                    break
+                if char in ("\n", "\r"):
+                    emit()
+                else:
+                    pending.append(char)
         finally:
             stream.close()
 
@@ -91,11 +105,11 @@ def stream_run(
     # Create threads to read stdout and stderr
     stdout_thread = threading.Thread(
         target=read_stream,
-        args=(process.stdout, stdout_lines, on_stdout, stdout_prefix),
+        args=(process.stdout, stdout_lines, on_stdout),
     )
     stderr_thread = threading.Thread(
         target=read_stream,
-        args=(process.stderr, stderr_lines, on_stderr, stderr_prefix),
+        args=(process.stderr, stderr_lines, on_stderr),
     )
 
     stdout_thread.start()

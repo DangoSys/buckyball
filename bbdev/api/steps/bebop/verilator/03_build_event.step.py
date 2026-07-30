@@ -4,6 +4,7 @@ bebop verilator build event handler
 Builds bebop with verilator feature and VSRC_PATH
 """
 import os
+import shlex
 import sys
 
 from motia import FlowContext, queue
@@ -29,28 +30,8 @@ config = {
 }
 
 
-def describe_path(path: str) -> dict:
-    info = {
-        "cwd": os.getcwd(),
-        "uid": os.getuid(),
-        "exists": os.path.exists(path),
-        "is_dir": os.path.isdir(path),
-        "parent": os.path.dirname(path),
-    }
-    try:
-        stat = os.stat(path)
-        info.update({
-            "mode": oct(stat.st_mode),
-            "owner_uid": stat.st_uid,
-            "owner_gid": stat.st_gid,
-        })
-    except OSError as e:
-        info.update({"stat_error": str(e), "errno": e.errno})
-    try:
-        info["parent_entries"] = sorted(os.listdir(info["parent"]))[:20]
-    except OSError as e:
-        info["parent_error"] = str(e)
-    return info
+def configure_fast_dev_profile(env: dict) -> None:
+    env.setdefault("CARGO_INCREMENTAL", "1")
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -72,24 +53,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
 
     if not os.path.isdir(vsrc_dir):
-        path_info = describe_path(vsrc_dir)
-        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}; path_info={path_info}")
+        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={
                 "error": "vsrc_not_found",
                 "source": "bebop.verilator.build",
                 "vsrc_dir": vsrc_dir,
-                "path_info": path_info,
             },
             trace_id=origin_tid,
         )
         return
 
+    jobs = input_data.get("jobs", 16)
     build_cmd = (
-        f"cargo build --features verilator --tests "
-        f"--config=\"env.VSRC_PATH='{vsrc_dir}'\""
+        f"cargo build --bin bebop --features verilator --jobs {shlex.quote(str(jobs))}"
     )
+    env = {**os.environ, "VSRC_PATH": vsrc_dir}
+    configure_fast_dev_profile(env)
     ctx.logger.info("Building bebop verilator ...")
     build_result = stream_run_logger(
         cmd=build_cmd,
@@ -97,6 +78,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bebop_dir,
         stdout_prefix="bebop verilator build",
         stderr_prefix="bebop verilator build",
+        env=env,
     )
 
     bebop_bin = f"{bebop_dir}/target/debug/bebop"
