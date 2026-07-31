@@ -4,6 +4,7 @@ balldomain = "balldomains/default.toml"
 memdomain = "memdomains/default.toml"
 
 [frontend]
+vbankIdUpperBound = 7
 subRobEnable = false
 
 [rocketCore]

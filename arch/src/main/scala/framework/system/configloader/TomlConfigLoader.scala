@@ -284,6 +284,7 @@ object TomlConfigLoader {
   private def parseFrontend(table: Map[String, Value]): FrontendParam = {
     val default = GlobalConfig().frontend
     default.copy(
+      vbank_id_upper_bound = getOptionalInt(table, "vbankIdUpperBound").getOrElse(default.vbank_id_upper_bound),
       sub_rob_enable = getOptionalBool(table, "subRobEnable").getOrElse(default.sub_rob_enable)
     )
   }
@@ -412,6 +413,13 @@ object TomlConfigLoader {
     table.get(key) match {
       case Some(Value.Num(n)) => n.toInt
       case None               => throw new RuntimeException(s"Missing integer at key '$key'")
+      case _                  => throw new RuntimeException(s"Expected integer at key '$key'")
+    }
+
+  private def getOptionalInt(table: Map[String, Value], key: String): Option[Int] =
+    table.get(key) match {
+      case Some(Value.Num(n)) => Some(n.toInt)
+      case None               => None
       case _                  => throw new RuntimeException(s"Expected integer at key '$key'")
     }
 
