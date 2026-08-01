@@ -75,26 +75,38 @@ class Fp2Int(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.sub_rob_id := subRobIdReg
 
   def fp32Multiply(a: UInt, bv: UInt): UInt = {
-    val aSign     = a(31)
-    val bSign     = bv(31)
-    val aExp      = a(30, 23)
-    val bExp      = bv(30, 23)
-    val aMant     = Cat(1.U(1.W), a(22, 0))
-    val bMant     = Cat(1.U(1.W), bv(22, 0))
-    val resSign   = aSign ^ bSign
-    val aZero     = aExp === 0.U && a(22, 0) === 0.U
-    val bZero     = bExp === 0.U && bv(22, 0) === 0.U
-    val prod      = (aMant * bMant)(47, 0)
-    val mant      = Wire(UInt(24.W))
-    val expAdjust = Wire(UInt(1.W))
+    val aSign      = a(31)
+    val bSign      = bv(31)
+    val aExp       = a(30, 23)
+    val bExp       = bv(30, 23)
+    val aMant      = Cat(1.U(1.W), a(22, 0))
+    val bMant      = Cat(1.U(1.W), bv(22, 0))
+    val resSign    = aSign ^ bSign
+    val aZero      = aExp === 0.U && a(22, 0) === 0.U
+    val bZero      = bExp === 0.U && bv(22, 0) === 0.U
+    val prod       = (aMant * bMant)(47, 0)
+    val sig        = Wire(UInt(24.W))
+    val guard      = Wire(Bool())
+    val round      = Wire(Bool())
+    val sticky     = Wire(Bool())
+    val normAdjust = Wire(UInt(2.W))
     when(prod(47)) {
-      mant      := prod(47, 24)
-      expAdjust := 1.U
+      sig        := prod(47, 24)
+      guard      := prod(23)
+      round      := prod(22)
+      sticky     := prod(21, 0).orR
+      normAdjust := 1.U
     }.otherwise {
-      mant      := prod(46, 23)
-      expAdjust := 0.U
+      sig        := prod(46, 23)
+      guard      := prod(22)
+      round      := prod(21)
+      sticky     := prod(20, 0).orR
+      normAdjust := 0.U
     }
-    val expWide   = aExp +& bExp +& expAdjust - 127.U
+    val increment  = guard && (round || sticky || sig(0))
+    val rounded    = sig +& increment.asUInt
+    val finalSig   = Mux(rounded(24), rounded(24, 1), rounded(23, 0))
+    val expWide    = aExp +& bExp +& normAdjust +& rounded(24) - 127.U
     val result    = Wire(UInt(32.W))
     when(aZero || bZero) {
       result := 0.U
@@ -103,37 +115,45 @@ class Fp2Int(val b: GlobalConfig) extends Module {
     }.elsewhen(expWide(8) && !expWide(9)) {
       result := Cat(resSign, 255.U(8.W), 0.U(23.W))
     }.otherwise {
-      result := Cat(resSign, expWide(7, 0), mant(22, 0))
+      result := Cat(resSign, expWide(7, 0), finalSig(22, 0))
     }
     result
   }
 
   def fp32ToInt32(fp: UInt): UInt = {
-    val sign     = fp(31)
-    val exponent = fp(30, 23)
-    val mantissa = Cat(1.U(1.W), fp(22, 0))
-    val isZero   = exponent === 0.U && fp(22, 0) === 0.U
-    val expVal   = exponent.asSInt - 127.S
-    val result   = Wire(SInt(32.W))
-    when(isZero) {
+    val sign         = fp(31)
+    val exponent     = fp(30, 23)
+    val fraction     = fp(22, 0)
+    val mantissa     = Mux(exponent === 0.U, Cat(0.U(1.W), fraction), Cat(1.U(1.W), fraction))
+    val mantissaWide = Cat(0.U(40.W), mantissa)
+    val expVal       = exponent.zext - 127.S
+    val magnitude    = Wire(UInt(64.W))
+
+    magnitude := 0.U
+    when(expVal >= 31.S) {
+      magnitude := "h80000000".U
+    }.elsewhen(expVal >= 23.S) {
+      magnitude := mantissaWide << (expVal - 23.S).asUInt
+    }.elsewhen(expVal >= -1.S) {
+      val rightShift   = (23.S - expVal).asUInt
+      val truncated    = mantissaWide >> rightShift
+      val half         = 1.U(64.W) << (rightShift - 1.U)
+      val remainder    = mantissaWide & ((1.U(64.W) << rightShift) - 1.U)
+      val roundUp      = remainder > half || (remainder === half && truncated(0))
+      magnitude := truncated + roundUp.asUInt
+    }
+
+    val result = Wire(SInt(32.W))
+    when(exponent === 255.U && fraction =/= 0.U) {
       result := 0.S
-    }.elsewhen(expVal >= 31.S) {
-      result := Mux(sign.asBool, -2147483648L.S(32.W), 2147483647.S(32.W))
-    }.elsewhen(expVal < 0.S) {
-      when(expVal === -1.S) {
-        result := Mux(sign.asBool, -1.S(32.W), 1.S(32.W))
-      }.otherwise {
-        result := 0.S
-      }
+    }.elsewhen(sign.asBool) {
+      result := Mux(
+        magnitude >= "h80000000".U,
+        -2147483648L.S(32.W),
+        -magnitude(31, 0).asSInt
+      )
     }.otherwise {
-      val shift = expVal.asUInt(4, 0)
-      val mag   = Wire(UInt(32.W))
-      when(shift >= 23.U) {
-        mag := mantissa << (shift - 23.U)
-      }.otherwise {
-        mag := mantissa >> (23.U - shift)
-      }
-      result := Mux(sign.asBool, -(mag.asSInt), mag.asSInt)
+      result := Mux(magnitude > "h7fffffff".U, 2147483647.S(32.W), magnitude(31, 0).asSInt)
     }
     result.asUInt
   }

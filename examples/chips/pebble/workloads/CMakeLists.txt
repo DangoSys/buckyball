@@ -19,6 +19,8 @@ set(BUCKYBALL_BALL_CTEST_DIRS
   ${BUCKYBALL_REPO_ROOT}/examples/balls/transpose/workloads/ctests
   ${BUCKYBALL_REPO_ROOT}/examples/balls/matrix/workloads/ctests
   ${BUCKYBALL_REPO_ROOT}/examples/balls/im2col/workloads/ctests
+  ${BUCKYBALL_REPO_ROOT}/examples/balls/fp2int/workloads/ctests
+  ${BUCKYBALL_REPO_ROOT}/examples/balls/int2fp/workloads/ctests
 )
 buckyball_add_ball_ctest_subdirs()
 

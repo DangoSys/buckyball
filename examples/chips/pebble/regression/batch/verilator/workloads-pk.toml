@@ -9,4 +9,9 @@ tests = [
   "matrix_matmul_16x16_ones-linux",
   "conv_im2col_transpose_matmul_test-linux",
   "conv1layer_quant_im2col_transpose_gemm_test-linux",
+  "fp2int_test-linux",
+  "fp2int_fp32_to_int8_test-linux",
+  "int2fp_test-linux",
+  "int2fp_int8_to_fp32_test-linux",
+  "int2fp_int32_to_int8_test-linux",
 ]
