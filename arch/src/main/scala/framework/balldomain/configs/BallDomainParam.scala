@@ -6,7 +6,7 @@ case class BallIdMapping(
   ballId:        Int,
   ballName:      String,
   ballClass:     String,
-  config:        String,
+  config:        Option[String] = None,
   inBW:          Int,
   outBW:         Int,
   configBaseDir: String = "")
