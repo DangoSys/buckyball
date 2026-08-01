@@ -303,7 +303,7 @@ object TomlConfigLoader {
         ballId = getInt(t, "ballId"),
         ballName = getString(t, "ballName"),
         ballClass = getString(t, "ballClass"),
-        config = getString(t, "config"),
+        config = getOptionalString(t, "config"),
         configBaseDir = baseDir.toString,
         inBW = getInt(t, "inBW"),
         outBW = getInt(t, "outBW")
@@ -406,6 +406,13 @@ object TomlConfigLoader {
     table.get(key) match {
       case Some(Value.Str(s)) => s
       case None               => throw new RuntimeException(s"Missing string at key '$key'")
+      case _                  => throw new RuntimeException(s"Expected string at key '$key'")
+    }
+
+  private def getOptionalString(table: Map[String, Value], key: String): Option[String] =
+    table.get(key) match {
+      case Some(Value.Str(s)) => Some(s)
+      case None               => None
       case _                  => throw new RuntimeException(s"Expected string at key '$key'")
     }
 

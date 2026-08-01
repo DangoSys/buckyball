@@ -1,4 +1,5 @@
 # Fp2Int Ball Configuration
 
 [ball]
-targetType = "INT32"
+inputType = "FP32"
+outputType = "INT32"

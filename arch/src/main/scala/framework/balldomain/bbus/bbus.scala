@@ -10,6 +10,7 @@ import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.blink.mmio.MmioRead
+import java.lang.reflect.InvocationTargetException
 
 /**
  * BBus - Ball bus, manages connections and arbitration of multiple Ball devices.
@@ -43,9 +44,23 @@ class BBus(val b: GlobalConfig) extends Module {
 
   val balls = b.ballDomain.ballIdMappings.map { mapping =>
     Module {
-      val cls  = Class.forName(mapping.ballClass)
-      val ctor = cls.getConstructor(classOf[GlobalConfig])
-      ctor.newInstance(b).asInstanceOf[HasBlink with Module]
+      try {
+        val cls  = Class.forName(mapping.ballClass)
+        val ctor = cls.getConstructor(classOf[GlobalConfig])
+        ctor.newInstance(b).asInstanceOf[HasBlink with Module]
+      } catch {
+        case e: InvocationTargetException =>
+          val cause = Option(e.getCause).getOrElse(e)
+          throw new RuntimeException(
+            s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${cause.getMessage}",
+            cause
+          )
+        case e: Throwable                 =>
+          throw new RuntimeException(
+            s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${e.getMessage}",
+            e
+          )
+      }
     }
   }
 
