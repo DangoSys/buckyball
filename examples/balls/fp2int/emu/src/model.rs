@@ -38,12 +38,29 @@ fn fp32_multiply(a: u32, b: u32) -> u32 {
     let a_zero = a_exp == 0 && a_frac == 0;
     let b_zero = b_exp == 0 && b_frac == 0;
     let prod = a_mant * b_mant;
-    let (mant, exp_adjust) = if ((prod >> 47) & 1) != 0 {
-        ((prod >> 24) as u32, 1u32)
+    let (sig, guard, round, sticky, exp_adjust) = if ((prod >> 47) & 1) != 0 {
+        (
+            (prod >> 24) as u32,
+            ((prod >> 23) & 1) != 0,
+            ((prod >> 22) & 1) != 0,
+            (prod & ((1u64 << 22) - 1)) != 0,
+            1u32,
+        )
     } else {
-        ((prod >> 23) as u32, 0u32)
+        (
+            (prod >> 23) as u32,
+            ((prod >> 22) & 1) != 0,
+            ((prod >> 21) & 1) != 0,
+            (prod & ((1u64 << 21) - 1)) != 0,
+            0u32,
+        )
     };
-    let exp_wide = (a_exp + b_exp + exp_adjust).wrapping_sub(127) & 0x3ff;
+    // Match the RTL's round-to-nearest, ties-to-even multiplier.
+    let increment = guard && (round || sticky || (sig & 1) != 0);
+    let rounded = u64::from(sig) + u64::from(increment);
+    let carry = ((rounded >> 24) & 1) as u32;
+    let final_sig = if carry != 0 { rounded >> 1 } else { rounded } as u32;
+    let exp_wide = (a_exp + b_exp + exp_adjust + carry).wrapping_sub(127) & 0x3ff;
 
     if a_zero || b_zero {
         0
@@ -52,7 +69,7 @@ fn fp32_multiply(a: u32, b: u32) -> u32 {
     } else if (exp_wide & 0x100) != 0 {
         ((a_sign ^ b_sign) << 31) | (0xff << 23)
     } else {
-        ((a_sign ^ b_sign) << 31) | ((exp_wide & 0xff) << 23) | (mant & 0x7f_ffff)
+        ((a_sign ^ b_sign) << 31) | ((exp_wide & 0xff) << 23) | (final_sig & 0x7f_ffff)
     }
 }
 
@@ -64,37 +81,38 @@ fn fp32_to_int32(fp: u32) -> i32 {
     let is_zero = exponent == 0 && frac == 0;
     let exp_val = exponent - 127;
 
+    if exponent == 0xff && frac != 0 {
+        return 0;
+    }
     if is_zero {
+        return 0;
+    }
+
+    let magnitude = if exp_val >= 31 {
+        0x8000_0000u64
+    } else if exp_val >= 23 {
+        u64::from(mantissa) << (exp_val - 23)
+    } else if exp_val >= -1 {
+        let right_shift = (23 - exp_val) as u32;
+        let truncated = u64::from(mantissa) >> right_shift;
+        let half = 1u64 << (right_shift - 1);
+        let remainder = u64::from(mantissa) & ((1u64 << right_shift) - 1);
+        let round_up = remainder > half || (remainder == half && (truncated & 1) != 0);
+        truncated + u64::from(round_up)
+    } else {
         0
-    } else if exp_val >= 31 {
-        if sign {
+    };
+
+    if sign {
+        if magnitude >= 0x8000_0000 {
             i32::MIN
         } else {
-            i32::MAX
+            -(magnitude as i32)
         }
-    } else if exp_val < 0 {
-        if exp_val == -1 {
-            if sign {
-                -1
-            } else {
-                1
-            }
-        } else {
-            0
-        }
+    } else if magnitude > i32::MAX as u64 {
+        i32::MAX
     } else {
-        let shift = exp_val as u32;
-        let mag = if shift >= 23 {
-            mantissa << (shift - 23)
-        } else {
-            mantissa >> (23 - shift)
-        };
-
-        if sign {
-            -(mag as i32)
-        } else {
-            mag as i32
-        }
+        magnitude as i32
     }
 }
 
@@ -109,9 +127,12 @@ mod tests {
         assert_eq!(fp2int_i32_bits(0x3F80_0000, scale), 1);
         assert_eq!(fp2int_i32_bits(0x4000_0000, scale), 2);
         assert_eq!(fp2int_i32_bits(0xBF80_0000, scale), -1);
-        assert_eq!(fp2int_i32_bits(0x3F00_0000, scale), 1);
-        assert_eq!(fp2int_i32_bits(0x3FC0_0000, scale), 1);
-        assert_eq!(fp2int_i32_bits(0xC020_0000, scale), -2);
+        assert_eq!(fp2int_i32_bits(0x3F00_0000, scale), 0); //  0.5 -> even 0
+        assert_eq!(fp2int_i32_bits(0xBF00_0000, scale), 0); // -0.5 -> even 0
+        assert_eq!(fp2int_i32_bits(0x3FC0_0000, scale), 2); //  1.5 -> even 2
+        assert_eq!(fp2int_i32_bits(0xBFC0_0000, scale), -2); // -1.5 -> even -2
+        assert_eq!(fp2int_i32_bits(0x4020_0000, scale), 2); //  2.5 -> even 2
+        assert_eq!(fp2int_i32_bits(0xC020_0000, scale), -2); // -2.5 -> even -2
     }
 
     #[test]
@@ -120,5 +141,27 @@ mod tests {
 
         assert_eq!(fp2int_i8_bits(0x4300_0000, scale), 127);
         assert_eq!(fp2int_i8_bits(0xC300_0000, scale), -128);
+    }
+
+    #[test]
+    fn fp32_to_int8_workload_vectors() {
+        let scale = 2.0f32.to_bits();
+        let input = [
+            0.125f32, -0.125, 0.25, -0.25, 0.75, -0.75, 1.25, -1.25, 1.75, -1.75, 63.25, 63.75,
+            -63.75, -64.75, 0.0, -0.0, 2.25, -2.25, 2.75, -2.75, 3.25, -3.25, 3.75, -3.75, 10.125,
+            -10.125, 20.25, -20.25, 0.375, -0.375, 64.25, -65.25,
+        ];
+        let expected = [
+            0i8, 0, 0, 0, 2, -2, 2, -2, 4, -4, 126, 127, -128, -128, 0, 0, 4, -4, 6, -6, 6, -6, 8,
+            -8, 20, -20, 40, -40, 1, -1, 127, -128,
+        ];
+
+        for (value, expected) in input.into_iter().zip(expected) {
+            assert_eq!(
+                fp2int_i8_bits(value.to_bits(), scale),
+                expected,
+                "input={value}"
+            );
+        }
     }
 }
