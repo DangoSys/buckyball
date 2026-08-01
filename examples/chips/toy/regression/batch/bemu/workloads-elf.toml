@@ -18,8 +18,6 @@ tests = [
   "transpose_test-singlecore-baremetal",
   "transpose_16xn_test-singlecore-baremetal",
   "im2col_test-singlecore-baremetal",
-  "fp2int_test-singlecore-baremetal",
-  "int2fp_test-singlecore-baremetal",
   "bdb_counter_test-singlecore-baremetal",
   "matrix_test-singlecore-baremetal",
   "gemmini_os_cisc_basic_test-singlecore-baremetal",

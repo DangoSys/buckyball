@@ -8,5 +8,7 @@ tests = [
   "matrix_test-linux",
   "matrix_matmul_16x16_ones-linux",
   "im2col_test-linux",
-  "conv_im2col_transpose_matmul_6x6_test-linux",
+  "conv_im2col_transpose_matmul_test-linux",
+  "conv1layer_quant_im2col_transpose_gemm_test-linux",
+  "fp2int_fp32_to_int8_test-linux",
 ]

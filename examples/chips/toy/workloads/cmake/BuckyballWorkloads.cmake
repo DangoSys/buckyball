@@ -6,6 +6,10 @@ if(NOT DEFINED LINUX_CC)
   set(LINUX_CC "riscv64-unknown-linux-gnu-gcc")
 endif()
 
+if(NOT DEFINED BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS)
+  set(BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS ${BUCKYBALL_TOY_COMMON_DIR})
+endif()
+
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
 set(BUDDY_CYCLE_TRACE_RUNTIME_SRC ${BBSW_BAREMETAL_DIR}/buddy_cycle_trace.c)
 set(BUCKYBALL_CTEST_C_FLAGS
@@ -26,6 +30,8 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     ${SOURCE_DIR}/${SOURCE_FILE}
     ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
     ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.h
+    ${BUCKYBALL_CHIP_COMMON_SOURCES}
+    ${BUCKYBALL_CHIP_COMMON_HEADERS}
     ${BUCKYBALL_ISA_DEPS})
 
   if(SOURCE_FILE MATCHES "^tlb_.*\\.c$")
@@ -40,10 +46,12 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
 
   add_executable(${EXECUTABLE}
     ${SOURCE_DIR}/${SOURCE_FILE}
-    ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c)
+    ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
+    ${BUCKYBALL_CHIP_COMMON_SOURCES})
   target_include_directories(${EXECUTABLE} PRIVATE
     ${WORKLOAD_LIB_DIR}
     ${BUCKYBALL_TOY_COMMON_DIR}
+    ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
     ${SOURCE_DIR})
   set_target_properties(${EXECUTABLE} PROPERTIES LINKER_LANGUAGE C)
 
@@ -62,8 +70,10 @@ function(add_buckyball_multicore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       ${BBSW_BAREMETAL_DIR}/start.S
       -DMULTICORE=3
       ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
+      ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
+      -I${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
       -I${SOURCE_DIR}
     DEPENDS
       ${TEST_DEPS}
@@ -86,8 +96,10 @@ function(add_buckyball_singlecore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       -o ${EXECUTABLE}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
+      ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
+      -I${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
       -I${SOURCE_DIR}
     DEPENDS
       ${TEST_DEPS}

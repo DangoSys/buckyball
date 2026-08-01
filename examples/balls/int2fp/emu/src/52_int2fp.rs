@@ -65,7 +65,10 @@ impl Instruction for Int2Fp {
                     for j in 0..16 {
                         let v = ctx.banks[ps][src_base + j] as i8;
                         let o = ((v as f32) * scale).to_bits();
-                        let off = dst_base + j * 4;
+                        let group = j / 4;
+                        let lane = j % 4;
+                        let pd = pbank_group(ctx.bank_map, dst, group as u64);
+                        let off = dst_base + lane * 4;
                         ctx.banks[pd][off..off + 4].copy_from_slice(&o.to_le_bytes());
                     }
                 }
