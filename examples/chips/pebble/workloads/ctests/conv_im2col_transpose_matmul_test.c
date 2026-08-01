@@ -10,7 +10,7 @@
  * pebble/workloads/common/pebble.c.
  */
 #ifndef TEST_CASE_NAME
-#define TEST_CASE_NAME "conv_17x17_k7"
+#define TEST_CASE_NAME "conv_6x6_k3"
 #endif
 
 enum {
