@@ -25,7 +25,8 @@ lazy val chiselSettings = chisel6Settings ++ Seq(
 
 lazy val scalaTestSettings = Seq(
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.2.+" % "test"
+    "org.scalatest" %% "scalatest" % "3.2.+" % "test",
+    "edu.berkeley.cs" %% "chiseltest" % chiselTestVersion % "test"
   )
 )
 
@@ -60,6 +61,8 @@ lazy val buckyball = (project in file("."))
       val chips    = ((examples / "chips") * "*" / "arch" / "src" / "main" / "scala").get
       (balls ++ chips).filter(_.isDirectory)
     },
+    Test / unmanagedSourceDirectories +=
+      baseDirectory.value.getParentFile / "examples" / "balls" / "matrix" / "test" / "src",
     chisel6Settings ++
       scalaTestSettings ++
       Seq(

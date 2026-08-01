@@ -60,8 +60,14 @@ object buckyball extends SbtModule { m =>
     override def scalaVersion = T("2.13.12")
     override def moduleDeps   = Seq(m)
 
+    override def sources = T.sources {
+      super.sources() ++ Seq(PathRef(
+        m.millSourcePath / os.up / "examples" / "balls" / "matrix" / "test" / "src"))
+    }
+
     override def ivyDeps = Agg(
-      ivy"org.scalatest::scalatest::3.2.19"
+      ivy"org.scalatest::scalatest::3.2.19",
+      ivy"edu.berkeley.cs::chiseltest:6.0.0"
       // ivy"org.scalatest::scalatest:3.2.16"
     )
 
