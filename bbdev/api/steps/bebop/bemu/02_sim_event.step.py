@@ -84,7 +84,6 @@ def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    bebop_dir = f"{bbdir}/bebop"
     arch_dir = f"{bbdir}/arch"
 
     chip = input_data.get("chip")

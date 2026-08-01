@@ -40,7 +40,6 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    bebop_dir = f"{bbdir}/bebop"
     nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
     elf_root = f"{bbdir}/bb-tests/output"
 
@@ -105,7 +104,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Run nextest ───────────────────────────────────────────────────────
     # Pass test harness parameters through nextest's process environment.
     if input_data.get("clean-before", input_data.get("clean_before", False)):
-        shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
+        shutil.rmtree(bemu_cargo_manifest.parent / "test-artifacts", ignore_errors=True)
         ctx.logger.info("Cleaned previous bebop test artifacts")
 
     env.update({
