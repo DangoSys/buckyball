@@ -1,0 +1,27 @@
+"""MCP tool: bbdev_bebop_p2e_buildbitstream."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from common import call, err, fmt, need, opt
+
+
+def register(mcp):
+    @mcp.tool()
+    def bbdev_bebop_p2e_buildbitstream(
+        config: str,
+        vsrc_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> str:
+        """Build bebop-p2e bitstream. POST /bebop/p2e/buildbitstream."""
+        if e := need("config", config):
+            return err(e)
+        return fmt(
+            call(
+                "/bebop/p2e/buildbitstream",
+                opt({"config": config}, vsrc_dir=vsrc_dir, output_dir=output_dir),
+                timeout=14400,
+            )
+        )
+
