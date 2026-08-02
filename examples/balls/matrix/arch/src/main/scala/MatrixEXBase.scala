@@ -14,9 +14,13 @@ abstract class SystolicArrayEXBase(val b: GlobalConfig) extends Module {
   protected val opRowBits        = SystolicArrayConst.OpRowBits
   protected val contextCount     = SystolicArrayConst.wsReuseTiles(b)
   protected val operandSlotCount = 3
+  protected val osAccBankCount   = 2
   protected val contextWidth     = log2Ceil(contextCount)
   protected val operandSlotWidth = log2Ceil(operandSlotCount)
+  protected val osAccBankWidth   = log2Ceil(osAccBankCount)
   protected val rowIndexWidth    = log2Ceil(tile)
+  protected val accRowBits       = tile * accElemBits
+  protected val wsPsumRowBits    = tile * wsPsumBits
   protected val progressWidth    = 13
 
   @public
@@ -76,14 +80,25 @@ abstract class SystolicArrayEXBase(val b: GlobalConfig) extends Module {
   val contextPendingWeightGeneration = RegInit(VecInit(Seq.fill(contextCount)(false.B)))
   val wsContextMap = RegInit(VecInit(Seq.tabulate(contextCount)(_.U(contextWidth.W))))
   val wsContextMapValid = RegInit(VecInit(Seq.fill(contextCount)(false.B)))
+  val contextOsAccBank = RegInit(VecInit(Seq.fill(contextCount)(0.U(osAccBankWidth.W))))
+  val contextWsSegmentPending = RegInit(VecInit(Seq.fill(contextCount)(false.B)))
+  val contextWsRowsCommitted = RegInit(VecInit(Seq.fill(contextCount)(0.U(5.W))))
+  val contextWsKTileKind = RegInit(VecInit(Seq.fill(contextCount)(SystolicKTileKind.DIRECT)))
 
-  val cAcc = RegInit(VecInit(Seq.tabulate(contextCount)(_ =>
+  // One 512-bit row per address; separate read/write calls infer a 1R1W memory.
+  val wsAccMem = SyncReadMem(contextCount * tile, UInt(accRowBits.W))
+
+  // OS only overlaps two output tiles, so each PE needs two local accumulators.
+  val osAcc = RegInit(VecInit(Seq.tabulate(osAccBankCount)(_ =>
     VecInit(Seq.tabulate(tile)(_ =>
       VecInit(Seq.fill(tile)(0.U(accElemBits.W))))))))
+  val osAccBankAllocated = RegInit(VecInit(Seq.fill(osAccBankCount)(false.B)))
+  val osAccBankOwner = RegInit(VecInit(Seq.fill(osAccBankCount)(0.U(contextWidth.W))))
 
   val slotOccupied = RegInit(VecInit(Seq.fill(operandSlotCount)(false.B)))
   val slotInputComplete = RegInit(VecInit(Seq.fill(operandSlotCount)(false.B)))
   val slotUseDone = RegInit(VecInit(Seq.fill(operandSlotCount)(false.B)))
+  val slotLaunchPending = RegInit(VecInit(Seq.fill(operandSlotCount)(false.B)))
   val slotContext = RegInit(VecInit(Seq.fill(operandSlotCount)(0.U(contextWidth.W))))
   val slotReqKind = RegInit(VecInit(Seq.fill(operandSlotCount)(SystolicCtrlLoadReqKind.READ_AB)))
   val slotValidM = RegInit(VecInit(Seq.fill(operandSlotCount)(tile.U(5.W))))
@@ -131,7 +146,12 @@ abstract class SystolicArrayEXBase(val b: GlobalConfig) extends Module {
   val freeSlot = PriorityEncoder(~slotOccupied.asUInt)
   val hasFreeContext = !contextAllocated.asUInt.andR
   val freeContext = PriorityEncoder(~contextAllocated.asUInt)
+  val hasFreeOsAccBank = !osAccBankAllocated.asUInt.andR
+  val freeOsAccBank = PriorityEncoder(~osAccBankAllocated.asUInt)
   val anyContextActive = contextActive.asUInt.orR
   val activeContext = PriorityEncoder(contextActive.asUInt)
   val pipelineAdvance = WireDefault(false.B)
+
+  protected def wsAccAddress(context: UInt, row: UInt): UInt =
+    Cat(context, row(rowIndexWidth - 1, 0))
 }

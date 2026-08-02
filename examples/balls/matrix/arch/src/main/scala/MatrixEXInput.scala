@@ -33,12 +33,14 @@ abstract class SystolicArrayEXInput(b: GlobalConfig) extends SystolicArrayEXBase
     Mux(firstIsContinuation, firstWsMappedContext, freeContext),
     Mux(firstIsContinuation, chainContext, freeContext))
   val firstNeedsLaunchQueue = firstIsNewOutput || (firstIsContinuation && firstUsesExplicitContext)
+  val firstNewContextResourcesAvailable = hasFreeContext &&
+    (firstUsesExplicitContext || hasFreeOsAccBank)
   val firstContextAvailable = Mux(
     firstIsContinuation,
     Mux(firstUsesExplicitContext,
       firstWsMappingValid && !contextPendingStart(firstTargetContext),
       contextAllocated(firstTargetContext) && chainValid),
-    hasFreeContext)
+    firstNewContextResourcesAvailable)
   def weightBankInUse(generation: Bool): Bool = (0 until contextCount).map { context =>
     contextWsMode(context) && (
       (contextActive(context) && contextWeightGeneration(context) === generation) ||
@@ -130,6 +132,7 @@ abstract class SystolicArrayEXInput(b: GlobalConfig) extends SystolicArrayEXBase
     slotOccupied(freeSlot) := true.B
     slotInputComplete(freeSlot) := inputCompleteNext
     slotUseDone(freeSlot) := false.B
+    slotLaunchPending(freeSlot) := firstNeedsLaunchQueue
     slotContext(freeSlot) := firstTargetContext
     slotReqKind(freeSlot) := io.load_ex_req_kind
     slotValidM(freeSlot) := io.load_ex_valid_m
@@ -177,12 +180,19 @@ abstract class SystolicArrayEXInput(b: GlobalConfig) extends SystolicArrayEXBase
       contextRowsComplete(firstTargetContext) := 0.U
       contextSendRow(firstTargetContext) := 0.U
       contextWsMode(firstTargetContext) := firstUsesExplicitContext
+      contextWsSegmentPending(firstTargetContext) := false.B
+      contextWsRowsCommitted(firstTargetContext) := 0.U
 
-      for (context <- 0 until contextCount) {
-        when(firstTargetContext === context.U) {
-          for (row <- 0 until tile) {
-            for (col <- 0 until tile) {
-              cAcc(context)(row)(col) := 0.U
+      when(!firstUsesExplicitContext) {
+        contextOsAccBank(firstTargetContext) := freeOsAccBank
+        osAccBankAllocated(freeOsAccBank) := true.B
+        osAccBankOwner(freeOsAccBank) := firstTargetContext
+        for (bank <- 0 until osAccBankCount) {
+          when(freeOsAccBank === bank.U) {
+            for (row <- 0 until tile) {
+              for (col <- 0 until tile) {
+                osAcc(bank)(row)(col) := 0.U
+              }
             }
           }
         }

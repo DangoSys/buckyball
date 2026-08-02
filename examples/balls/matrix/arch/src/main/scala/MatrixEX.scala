@@ -25,7 +25,8 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
       slotUseDone(slot) := true.B
     }
     when(slotOccupied(slot) && slotInputComplete(slot) &&
-      (slotUseDone(slot) || reachedLastUse) && !slotLaunching(slot)) {
+      (slotUseDone(slot) || reachedLastUse) && !slotLaunchPending(slot) &&
+      !slotLaunching(slot)) {
       slotOccupied(slot) := false.B
       slotInputComplete(slot) := false.B
       slotUseDone(slot) := false.B
@@ -73,6 +74,7 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
   val launchSegment = segmentOrder.io.deq.valid && launchAllowed &&
     slotOccupied(segmentSlot) && segmentInputReady &&
     !contextActive(segmentContext) &&
+    (!segmentIsWs || !contextWsSegmentPending(segmentContext)) &&
     contextPendingStart(segmentContext)
   segmentOrder.io.deq.ready := launchSegment
   slotLaunching := VecInit((0 until operandSlotCount).map(slot =>
@@ -82,6 +84,7 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
     assert(slotContext(segmentSlot) === segmentContext,
       "SystolicArrayEX: segment queue metadata does not match its operand slot")
     slotUseDone(segmentSlot) := false.B
+    slotLaunchPending(segmentSlot) := false.B
     contextPendingStart(segmentContext) := false.B
     contextActive(segmentContext) := true.B
     contextActiveSlot(segmentContext) := segmentSlot
@@ -99,6 +102,9 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
       contextFinalSeen(segmentContext) :=
         slotKTileKind(segmentSlot) === SystolicKTileKind.DIRECT ||
           slotKTileKind(segmentSlot) === SystolicKTileKind.LAST
+      contextWsSegmentPending(segmentContext) := true.B
+      contextWsRowsCommitted(segmentContext) := 0.U
+      contextWsKTileKind(segmentContext) := slotKTileKind(segmentSlot)
     }.otherwise {
       wsWeightBankValid(0) := false.B
     }
@@ -120,12 +126,68 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
   val outputRowsComplete = contextRowsComplete(outputContext)
   val outputSendRow = contextSendRow(outputContext)
   val outputValidM = contextValidM(outputContext)
-  val outputResult = resultRowBitsFrom(
-    cAcc(outputContext)(outputSendRow(rowIndexWidth - 1, 0)))
+  val outputRowIndex = outputSendRow(rowIndexWidth - 1, 0)
+  val outputOsAccBank = contextOsAccBank(outputContext)
+  val osPackedRows = Wire(Vec(osAccBankCount, Vec(tile, UInt(accRowBits.W))))
+  for (bank <- 0 until osAccBankCount) {
+    for (row <- 0 until tile) {
+      osPackedRows(bank)(row) := resultRowBitsFrom(osAcc(bank)(row))
+    }
+  }
+  val osSelectedBankRows = Wire(Vec(tile, UInt(accRowBits.W)))
+  for (row <- 0 until tile) {
+    osSelectedBankRows(row) := Mux1H((0 until osAccBankCount).map { bank =>
+      (outputOsAccBank === bank.U) -> osPackedRows(bank)(row)
+    })
+  }
+  val osOutputResult = Mux1H((0 until tile).map { row =>
+    (outputRowIndex === row.U) -> osSelectedBankRows(row)
+  })
+  val outputIsWs = outputOrder.io.deq.valid && contextWsMode(outputContext)
+
+  val wsBufferedResult = wsResultBuffer.io.deq.bits
+  val wsBufferedFinal = wsBufferedResult.kTileKind === SystolicKTileKind.DIRECT ||
+    wsBufferedResult.kTileKind === SystolicKTileKind.LAST
+  val wsBufferedMatchesOutput = outputOrder.io.deq.valid && outputIsWs &&
+    wsBufferedResult.context === outputContext && wsBufferedResult.row === outputRowIndex
+  val wsOutputValid = wsResultBuffer.io.deq.valid && wsBufferedFinal &&
+    wsBufferedMatchesOutput
+  val osOutputValid = outputOrder.io.deq.valid && !outputIsWs &&
+    outputRowsComplete > outputSendRow
 
 
-  io.ex_st_o.valid := outputOrder.io.deq.valid && outputRowsComplete > outputSendRow
-  io.ex_st_o.bits.data := outputResult
+  io.ex_st_o.valid := Mux(outputIsWs, wsOutputValid, osOutputValid)
+  io.ex_st_o.bits.data := Mux(outputIsWs, wsBufferedResult.data, osOutputResult)
+
+
+  wsResultBuffer.io.deq.ready := Mux(wsBufferedFinal,
+    wsBufferedMatchesOutput && io.ex_st_o.ready, true.B)
+  val wsResultCommit = wsResultBuffer.io.deq.fire
+  when(wsResultCommit) {
+    val commitContext = wsBufferedResult.context
+    val commitRow = wsBufferedResult.row
+    val committedRows = contextWsRowsCommitted(commitContext)
+    val committingLastRow = committedRows + 1.U >= contextValidM(commitContext)
+
+
+    assert(contextAllocated(commitContext) && contextWsMode(commitContext),
+      "SystolicArrayEX: WS accumulator result refers to an invalid context")
+    assert(contextWsSegmentPending(commitContext),
+      "SystolicArrayEX: WS accumulator result has no pending segment")
+    assert(commitRow === committedRows(rowIndexWidth - 1, 0),
+      "SystolicArrayEX: WS accumulator rows committed out of order")
+
+    when(!wsBufferedFinal) {
+      wsAccMem.write(wsAccAddress(commitContext, commitRow), wsBufferedResult.data)
+    }.otherwise {
+      contextRowsComplete(commitContext) := contextRowsComplete(commitContext) + 1.U
+    }
+
+    contextWsRowsCommitted(commitContext) := committedRows + 1.U
+    when(committingLastRow) {
+      contextWsSegmentPending(commitContext) := false.B
+    }
+  }
 
   val finishingOutput = io.ex_st_o.fire && outputSendRow + 1.U >= outputValidM
   outputOrder.io.deq.ready := finishingOutput
@@ -139,6 +201,15 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
       contextTotalK(outputContext) := 0.U
       contextRowsComplete(outputContext) := 0.U
       contextSendRow(outputContext) := 0.U
+      contextWsSegmentPending(outputContext) := false.B
+      contextWsRowsCommitted(outputContext) := 0.U
+      when(!contextWsMode(outputContext)) {
+        assert(osAccBankAllocated(outputOsAccBank),
+          "SystolicArrayEX: released an unallocated OS accumulator bank")
+        assert(osAccBankOwner(outputOsAccBank) === outputContext,
+          "SystolicArrayEX: released an OS accumulator bank owned by another context")
+        osAccBankAllocated(outputOsAccBank) := false.B
+      }
     }.otherwise {
       contextSendRow(outputContext) := outputSendRow + 1.U
     }
@@ -175,6 +246,19 @@ class SystolicArrayEX(b: GlobalConfig) extends SystolicArrayEXDatapath(b) {
     when(contextActive(context) || contextPendingStart(context)) {
       assert(contextAllocated(context),
         "SystolicArrayEX: active context is not allocated")
+    }
+    when(contextAllocated(context) && !contextWsMode(context)) {
+      val bank = contextOsAccBank(context)
+      assert(osAccBankAllocated(bank),
+        "SystolicArrayEX: allocated OS context has no accumulator bank")
+      assert(osAccBankOwner(bank) === context.U,
+        "SystolicArrayEX: allocated OS context does not own its accumulator bank")
+    }
+    when(contextWsSegmentPending(context)) {
+      assert(contextAllocated(context) && contextWsMode(context),
+        "SystolicArrayEX: pending WS segment refers to an invalid context")
+      assert(contextWsRowsCommitted(context) < contextValidM(context),
+        "SystolicArrayEX: pending WS segment already committed every row")
     }
   }
   for (slot <- 0 until operandSlotCount) {
