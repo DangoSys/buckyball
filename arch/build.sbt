@@ -1,7 +1,7 @@
 // See README.md for license details.
 
-val chisel6Version         = "6.5.0"
-val chiselTestVersion      = "6.0.0"
+val chisel6Version = "6.5.0"
+val chiselTestVersion = "6.0.0"
 val scalaVersionFromChisel = "2.13.12"
 
 // Fix for scalafix undefined setting
@@ -13,20 +13,21 @@ ThisBuild / scalafixScalaBinaryVersion := scalaBinaryVersion.value
 
 lazy val chisel6Settings = Seq(
   libraryDependencies ++= Seq("org.chipsalliance" %% "chisel" % chisel6Version),
-  addCompilerPlugin("org.chipsalliance" % "chisel-plugin" % chisel6Version cross CrossVersion.full)
+  addCompilerPlugin(
+    "org.chipsalliance" % "chisel-plugin" % chisel6Version cross CrossVersion.full
+  )
 )
 
 lazy val chiselSettings = chisel6Settings ++ Seq(
   libraryDependencies ++= Seq(
     "org.apache.commons" % "commons-lang3" % "3.12.0",
-    "org.apache.commons" % "commons-text"  % "1.9"
+    "org.apache.commons" % "commons-text" % "1.9"
   )
 )
 
 lazy val scalaTestSettings = Seq(
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.2.+" % "test",
-    "edu.berkeley.cs" %% "chiseltest" % chiselTestVersion % "test"
+    "org.scalatest" %% "scalatest" % "3.2.+" % "test"
   )
 )
 
@@ -42,9 +43,9 @@ lazy val firechip = ProjectRef(file("thirdparty/chipyard"), "firechip")
 lazy val buckyball = (project in file("."))
   .dependsOn(chipyard, firechip)
   .settings(
-    name         := "buckyball",
+    name := "buckyball",
     organization := "com.buckyball",
-    version      := "1.0.0",
+    version := "1.0.0",
     scalaVersion := scalaVersionFromChisel,
     scalacOptions ++= Seq(
       "-deprecation",
@@ -57,12 +58,12 @@ lazy val buckyball = (project in file("."))
     ),
     Compile / unmanagedSourceDirectories ++= {
       val examples = baseDirectory.value.getParentFile / "examples"
-      val balls    = ((examples / "balls") * "*" / "arch" / "src" / "main" / "scala").get
-      val chips    = ((examples / "chips") * "*" / "arch" / "src" / "main" / "scala").get
+      val balls =
+        ((examples / "balls") * "*" / "arch" / "src" / "main" / "scala").get
+      val chips =
+        ((examples / "chips") * "*" / "arch" / "src" / "main" / "scala").get
       (balls ++ chips).filter(_.isDirectory)
     },
-    Test / unmanagedSourceDirectories +=
-      baseDirectory.value.getParentFile / "examples" / "balls" / "matrix" / "test" / "src",
     chisel6Settings ++
       scalaTestSettings ++
       Seq(
