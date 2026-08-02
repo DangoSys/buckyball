@@ -6,10 +6,10 @@
 
 #define DIM 16
 #define KDIM 64
-#define KTILE 32
+#define KTILE 16
 
 _Static_assert(KDIM % KTILE == 0, "KDIM % KTILE");
-_Static_assert(KTILE % 16 == 0, "KTILE % 16");
+_Static_assert(KTILE == DIM, "KTILE must equal DIM for cols=1 transpose");
 
 static elem_t input_a[DIM * KDIM] __attribute__((aligned(64)));
 static elem_t input_b[KDIM * DIM] __attribute__((aligned(64)));
@@ -32,9 +32,8 @@ int main(void) {
     input_b[k * DIM + i] = 1;
   }
   int diag = KDIM / DIM;
-  for (int r = 0; r < DIM; r++) {
+  for (int r = 0; r < DIM; r++)
     expected[r * DIM + r] = diag;
-  }
 
   const uint32_t op1 = 0;
   const uint32_t op2 = 1;
@@ -47,12 +46,11 @@ int main(void) {
   bb_mvin((uintptr_t)zero, acc, DIM, 1);
 
   for (int k0 = 0; k0 < KDIM; k0 += KTILE) {
-    for (int r = 0; r < DIM; r++) {
+    for (int r = 0; r < DIM; r++)
       memcpy(&tile_a[r * KTILE], &input_a[r * KDIM + k0], (size_t)KTILE);
-    }
-    bb_mvin((uintptr_t)tile_a, op1, DIM * (KTILE / 16), 1);
+    bb_mvin((uintptr_t)tile_a, op1, DIM, 1);
     bb_mvin((uintptr_t)(input_b + k0 * DIM), op2, KTILE, 1);
-    bb_transpose(op1, a_t, KTILE, 8);
+    bb_transpose(op1, a_t, DIM, 8);
     bb_mul_warp16(a_t, op2, acc, KTILE, 0);
   }
 

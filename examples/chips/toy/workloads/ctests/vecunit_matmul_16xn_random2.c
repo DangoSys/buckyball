@@ -3,6 +3,7 @@
 #include <bbhw/mem/mem.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define DIM 16
 
@@ -13,31 +14,35 @@ static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
-  // spad0: original A
-  uint32_t op1_bank_id = 0;
-  // spad1: operand B
-  uint32_t op2_bank_id = 1;
-  // acc0: write to accumulator
-  int acc_bank_id = 2; // virtual bank id
-  // spad3: transposed A
-  uint32_t a_transposed_bank_id = 3;
-
+  (void)test_name;
   if (size % DIM != 0) {
     printf("K=%d not multiple of %d\n", size, DIM);
-    return;
+    exit(1);
   }
-  int a_cols = size / DIM;
-  bb_mem_alloc(op1_bank_id, 1, a_cols);
-  bb_mem_alloc(op2_bank_id, 1, 1);
-  bb_mem_alloc(acc_bank_id, 1, 4);
-  bb_mem_alloc(a_transposed_bank_id, 1, a_cols);
 
-  bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
-  bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_transpose(op1_bank_id, a_transposed_bank_id, DIM, 8);
+  uint32_t op1 = 0;
+  uint32_t op2 = 1;
+  uint32_t acc = 2;
+  uint32_t a_t = 3;
+  static result_t zero[DIM * DIM] __attribute__((aligned(64))) = {0};
+  static elem_t tile_a[DIM * DIM] __attribute__((aligned(64)));
 
-  bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
-  bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);
+  bb_mem_alloc(op1, 1, 1);
+  bb_mem_alloc(op2, 1, 1);
+  bb_mem_alloc(acc, 1, 4);
+  bb_mem_alloc(a_t, 1, 1);
+  bb_mvin((uintptr_t)zero, acc, DIM, 1);
+
+  for (int k0 = 0; k0 < size; k0 += DIM) {
+    for (int r = 0; r < DIM; r++)
+      memcpy(&tile_a[r * DIM], &a[r * size + k0], (size_t)DIM);
+    bb_mvin((uintptr_t)tile_a, op1, DIM, 1);
+    bb_mvin((uintptr_t)(b + k0 * DIM), op2, DIM, 1);
+    bb_transpose(op1, a_t, DIM, 8);
+    bb_mul_warp16(a_t, op2, acc, DIM, 0);
+  }
+
+  bb_mvout((uintptr_t)c, acc, DIM, 1);
   bb_fence();
 }
 

@@ -1,0 +1,54 @@
+// Already-lowered ball Op: buckyball.im2col (physical-bank form).
+// Same 6x6 k3 shape / golden as bank_ssa.
+
+func.func private @check_result(memref<16x16xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c6 = arith.constant 6 : index
+  %c16 = arith.constant 16 : index
+
+  %input = memref.alloc() {alignment = 64 : i64} : memref<3x16xi8>
+  %output = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
+  linalg.fill ins(%zero_i8 : i8) outs(%input : memref<3x16xi8>)
+  linalg.fill ins(%zero_i8 : i8) outs(%output : memref<16x16xi8>)
+
+  scf.for %r = %c0 to %c6 step %c1 {
+    scf.for %col = %c0 to %c6 step %c1 {
+      %tmp = arith.muli %r, %c6 : index
+      %idx = arith.addi %tmp, %col : index
+      %bank_row = arith.divui %idx, %c16 : index
+      %lane = arith.remui %idx, %c16 : index
+      %ri = arith.index_cast %r : index to i32
+      %ci = arith.index_cast %col : index to i32
+      %v32 = arith.addi %ri, %ci : i32
+      %v8 = arith.trunci %v32 : i32 to i8
+      memref.store %v8, %input[%bank_row, %lane] : memref<3x16xi8>
+    }
+  }
+
+  %iter = arith.constant 6 : i64
+  %ksize = arith.constant 3 : i64
+  %stride = arith.constant 1 : i64
+  %padding = arith.constant 0 : i64
+  %din = arith.constant 3 : i64
+  %dout = arith.constant 16 : i64
+  %s = arith.constant 1 : i64
+
+  %in = buckyball.bank_alloc
+  %out = buckyball.bank_alloc
+  %loaded = buckyball.bank_mvin %input %in %din %s
+      : memref<3x16xi8> i64 i64 i64
+  buckyball.im2col %loaded, %out, %iter, %ksize, %stride, %padding : i64
+  %stored = buckyball.bank_mvout %output %out %dout %s
+      : memref<16x16xi8> i64 i64 i64
+  buckyball.bank_release %loaded : i64
+  buckyball.bank_release %stored : i64
+
+  func.call @check_result(%output) : (memref<16x16xi8>) -> ()
+  memref.dealloc %input : memref<3x16xi8>
+  memref.dealloc %output : memref<16x16xi8>
+  return %zero_i8 : i8
+}

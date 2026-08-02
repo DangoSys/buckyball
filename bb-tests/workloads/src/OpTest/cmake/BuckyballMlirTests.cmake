@@ -40,3 +40,97 @@ function(add_buckyball_mlir_contract TEST_NAME)
     add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${TARGET})
   endif()
 endfunction()
+
+# Bank-level / ball-op MLIR -> baremetal + linux ELF (same pipeline as toy OpTest).
+function(add_buckyball_mlir_optest NAME)
+  if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
+    message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
+  endif()
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir optests")
+  endif()
+
+  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
+  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.c)
+  set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
+  set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
+  set(BAREMETAL_BIN
+    ${BUCKYBALL_WORKLOAD_CHIP}_optest_${PREFIX}_${NAME}_singlecore-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_${PREFIX}_${NAME}-linux)
+  set(BAREMETAL_TARGET optest_${PREFIX}_${NAME}_singlecore_baremetal)
+  set(LINUX_TARGET optest_${PREFIX}_${NAME}_linux)
+  set(GROUP_TARGET optest_${PREFIX}_${NAME})
+
+  set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
+  set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
+    -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+    -DBAREMETAL -Wl,-T,${BBSIM_LD})
+  set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
+  set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
+  set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+  set(LLVM_MLIR_EXECUTION_ENGINE_DIR
+    ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
+
+  add_custom_command(
+    OUTPUT ${OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      "--assign-physical-banks=bank_num=16"
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -lower-affine
+      -convert-scf-to-cf
+      -convert-cf-to-llvm
+      ${BUCKYBALL_LOWER_BUCKYBALL}
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts |
+    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
+      -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+    COMMENT "Building ${NAME}.o from ${PREFIX} MLIR"
+    VERBATIM)
+
+  add_custom_command(
+    OUTPUT ${BAREMETAL_BIN}
+    COMMAND ${ELF_CC} ${C_FLAGS}
+      -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+      ${CRUNNER_UTILS_SRC}
+      ${MAIN_SRC}
+      ${OBJ}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC}
+      ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
+    COMMENT "Linking ${BAREMETAL_BIN}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM)
+
+  add_custom_command(
+    OUTPUT ${LINUX_BIN}
+    COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
+      -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
+      ${CRUNNER_UTILS_SRC}
+      ${MAIN_SRC}
+      ${OBJ}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC}
+    COMMENT "Linking ${LINUX_BIN}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM)
+
+  add_custom_target(${BAREMETAL_TARGET}
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN})
+  add_custom_target(${LINUX_TARGET}
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
+  add_custom_target(${GROUP_TARGET}
+    DEPENDS ${BAREMETAL_TARGET} ${LINUX_TARGET})
+
+  if(DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+    add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${GROUP_TARGET})
+  endif()
+endfunction()

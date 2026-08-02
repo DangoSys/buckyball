@@ -134,14 +134,13 @@ public:
           op, "C requires static strided<[row,1]> and row % 16 == 0");
 
     constexpr uint64_t tile = 16;
-    uint64_t depthA = tile * (k / tile);
-    uint64_t depthB = k;
     uint64_t depthC = tile;
 
     OpBuilder::InsertionGuard guard(rewriter);
     Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value mUpper = rewriter.create<arith::ConstantIndexOp>(loc, m);
     Value nUpper = rewriter.create<arith::ConstantIndexOp>(loc, n);
+    Value kUpper = rewriter.create<arith::ConstantIndexOp>(loc, k);
     Value step = rewriter.create<arith::ConstantIndexOp>(loc, tile);
 
     auto mLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, mUpper, step);
@@ -183,52 +182,94 @@ public:
         rewriter.create<arith::DivFOp>(loc, oneF32, scaleProd);
     Value dequantScaleBits = packF32BitsAsI64(rewriter, loc, dequantScaleF32);
 
-    auto aFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-    aFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
-    auto bFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-    bFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
-    auto aI8 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-    auto bI8 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-    auto aI8T = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-
-    auto aLoad = rewriter.create<BankMvinOp>(
-        loc, rewriter.getI64Type(), aTile, aFp32.getBank(),
-        cstI64(rewriter, loc, depthA), cstI64(rewriter, loc, 1));
-    auto bLoad = rewriter.create<BankMvinOp>(
-        loc, rewriter.getI64Type(), bTile, bFp32.getBank(),
-        cstI64(rewriter, loc, depthB), cstI64(rewriter, loc, strideB));
-
-    auto aQuant = rewriter.create<BankFp2IntOp>(
-        loc, rewriter.getI64Type(), aLoad.getBankOut(), aI8.getBank(),
-        cstI64(rewriter, loc, depthA), scaleABits);
-    auto bQuant = rewriter.create<BankFp2IntOp>(
-        loc, rewriter.getI64Type(), bLoad.getBankOut(), bI8.getBank(),
-        cstI64(rewriter, loc, depthB), scaleBBits);
-
-    rewriter.create<BankReleaseOp>(loc, aLoad.getBankOut());
-    rewriter.create<BankReleaseOp>(loc, bLoad.getBankOut());
-
-    auto aTrans = rewriter.create<BankTransposeOp>(
-        loc, rewriter.getI64Type(), aQuant.getOutBankOut(), aI8T.getBank(),
-        cstI64(rewriter, loc, k), cstI64(rewriter, loc, 8));
-    rewriter.create<BankReleaseOp>(loc, aQuant.getOutBankOut());
-
     auto cI32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
     cI32->setAttr("col", rewriter.getI64IntegerAttr(4));
     auto cFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
     cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
 
-    auto cMul = rewriter.create<BankMulWarp16Op>(
-        loc, rewriter.getI64Type(), aTrans.getOutBankOut(),
-        bQuant.getOutBankOut(), cI32.getBank(), cstI64(rewriter, loc, k),
-        cstI64(rewriter, loc, 0));
-    rewriter.create<BankReleaseOp>(loc, aTrans.getOutBankOut());
-    rewriter.create<BankReleaseOp>(loc, bQuant.getOutBankOut());
+    auto zeroI32Ty =
+        MemRefType::get({(int64_t)tile, (int64_t)tile}, rewriter.getI32Type());
+    Value zeroI32Buf = rewriter.create<memref::AllocOp>(loc, zeroI32Ty);
+    Value zeroI32 = rewriter.create<arith::ConstantOp>(
+        loc, rewriter.getI32Type(), rewriter.getI32IntegerAttr(0));
+    Value tileIdx = rewriter.create<arith::ConstantIndexOp>(loc, tile);
+    Value oneIdx = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    auto zRow = rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
+    rewriter.setInsertionPointToStart(zRow.getBody());
+    auto zCol = rewriter.create<scf::ForOp>(loc, zeroIdx, tileIdx, oneIdx);
+    rewriter.setInsertionPointToStart(zCol.getBody());
+    rewriter.create<memref::StoreOp>(
+        loc, zeroI32, zeroI32Buf,
+        ValueRange{zRow.getInductionVar(), zCol.getInductionVar()});
+    rewriter.setInsertionPointAfter(zRow);
 
+    auto cZero = rewriter.create<BankMvinOp>(
+        loc, rewriter.getI64Type(), zeroI32Buf, cI32.getBank(),
+        cstI64(rewriter, loc, depthC), cstI64(rewriter, loc, 1));
+    rewriter.create<memref::DeallocOp>(loc, zeroI32Buf);
+
+    SmallVector<Value> kIterArgs = {cZero.getBankOut()};
+    auto kLoop = rewriter.create<scf::ForOp>(
+        loc, zeroIdx, kUpper, step, kIterArgs,
+        [&](OpBuilder &b, Location bodyLoc, Value kIv, ValueRange args) {
+          Value cIn = args[0];
+
+          Value aKTile = b.create<memref::SubViewOp>(
+              bodyLoc, aMem, SmallVector<OpFoldResult>{mIv, kIv},
+              SmallVector<OpFoldResult>{b.getIndexAttr(tile),
+                                        b.getIndexAttr(tile)},
+              SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+          Value bKTile = b.create<memref::SubViewOp>(
+              bodyLoc, bMem, SmallVector<OpFoldResult>{kIv, nIv},
+              SmallVector<OpFoldResult>{b.getIndexAttr(tile),
+                                        b.getIndexAttr(tile)},
+              SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+
+          uint64_t strideAK = k / tile;
+
+          auto aFp32 = b.create<BankAllocOp>(bodyLoc, b.getI64Type());
+          aFp32->setAttr("col", b.getI64IntegerAttr(4));
+          auto bFp32 = b.create<BankAllocOp>(bodyLoc, b.getI64Type());
+          bFp32->setAttr("col", b.getI64IntegerAttr(4));
+          auto aI8 = b.create<BankAllocOp>(bodyLoc, b.getI64Type());
+          auto bI8 = b.create<BankAllocOp>(bodyLoc, b.getI64Type());
+          auto aI8T = b.create<BankAllocOp>(bodyLoc, b.getI64Type());
+
+          auto aLoad = b.create<BankMvinOp>(
+              bodyLoc, b.getI64Type(), aKTile, aFp32.getBank(),
+              cstI64(b, bodyLoc, tile), cstI64(b, bodyLoc, strideAK));
+          auto bLoad = b.create<BankMvinOp>(
+              bodyLoc, b.getI64Type(), bKTile, bFp32.getBank(),
+              cstI64(b, bodyLoc, tile), cstI64(b, bodyLoc, strideB));
+
+          auto aQuant = b.create<BankFp2IntOp>(
+              bodyLoc, b.getI64Type(), aLoad.getBankOut(), aI8.getBank(),
+              cstI64(b, bodyLoc, tile), scaleABits);
+          auto bQuant = b.create<BankFp2IntOp>(
+              bodyLoc, b.getI64Type(), bLoad.getBankOut(), bI8.getBank(),
+              cstI64(b, bodyLoc, tile), scaleBBits);
+          b.create<BankReleaseOp>(bodyLoc, aLoad.getBankOut());
+          b.create<BankReleaseOp>(bodyLoc, bLoad.getBankOut());
+
+          auto aTrans = b.create<BankTransposeOp>(
+              bodyLoc, b.getI64Type(), aQuant.getOutBankOut(), aI8T.getBank(),
+              cstI64(b, bodyLoc, tile), cstI64(b, bodyLoc, 8));
+          b.create<BankReleaseOp>(bodyLoc, aQuant.getOutBankOut());
+
+          auto cMul = b.create<BankMulWarp16Op>(
+              bodyLoc, b.getI64Type(), aTrans.getOutBankOut(),
+              bQuant.getOutBankOut(), cIn, cstI64(b, bodyLoc, tile),
+              cstI64(b, bodyLoc, 0));
+          b.create<BankReleaseOp>(bodyLoc, aTrans.getOutBankOut());
+          b.create<BankReleaseOp>(bodyLoc, bQuant.getOutBankOut());
+          b.create<scf::YieldOp>(bodyLoc, ValueRange{cMul.getWrBankOut()});
+        });
+
+    Value cAcc = kLoop.getResult(0);
     auto cDequant = rewriter.create<BankInt2FpOp>(
-        loc, rewriter.getI64Type(), cMul.getWrBankOut(), cFp32.getBank(),
+        loc, rewriter.getI64Type(), cAcc, cFp32.getBank(),
         cstI64(rewriter, loc, depthC), dequantScaleBits);
-    rewriter.create<BankReleaseOp>(loc, cMul.getWrBankOut());
+    rewriter.create<BankReleaseOp>(loc, cAcc);
 
     auto cStore = rewriter.create<BankMvoutOp>(
         loc, rewriter.getI64Type(), cTile, cDequant.getOutBankOut(),
