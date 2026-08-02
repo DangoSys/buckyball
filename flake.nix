@@ -25,7 +25,7 @@
               tools.ccache
               tools.lld
               tools.cmake
-              pkgs.ninja
+              tools.ninja
               tools.java
               tools.dtc
               tools.spike
@@ -63,6 +63,8 @@
               # C libraries (headers + link libs)
               clibs.zlib-dev
               clibs.zlib
+              clibs.lz4-dev
+              clibs.lz4
               clibs.readline-dev
               clibs.readline
               clibs.jpeg-dev
@@ -114,6 +116,8 @@
             buildInputs = with pkgs; [
               clibs.zlib-dev
               clibs.zlib
+              clibs.lz4-dev
+              clibs.lz4
               clibs.readline-dev
               clibs.readline
               clibs.jpeg-dev

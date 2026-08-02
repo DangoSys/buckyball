@@ -86,6 +86,7 @@ in
   ccache = pkgs.ccache;
   lld = pkgs.lld;
   cmake = pkgs.cmake;
+  ninja = pkgs.ninja;
   # Chipyard/FireSim requires Java 17 (Scala 2.12 compatibility)
   java = pkgs.jdk17;
   dtc = pkgs.dtc;

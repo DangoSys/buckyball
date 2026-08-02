@@ -40,6 +40,9 @@ in
   # C libraries needed by Verilator build
   zlib-dev = pkgs.zlib.dev;
   zlib = pkgs.zlib;
+  # Verilator FST tracing uses lz4.h and links liblz4.
+  lz4-dev = pkgs.lz4.dev;
+  lz4 = pkgs.lz4;
   # C libraries needed by bdb debugger
   readline-dev = pkgs.readline.dev;
   readline = pkgs.readline;
