@@ -1,94 +1,84 @@
-# Buckyball Claude Code Workflow
+# Buckyball Agent Workflow (MCP + bbdev)
 
-Claude Code is the interactive frontend, and bbdev is the execution backend. Claude calls bbdev HTTP APIs through the MCP server (server mode with automatic lifecycle management).
+Agents talk to bbdev through the project MCP server. Humans use `bbdev` CLI.
+Config is the repo-root `.mcp.json` — shared by Claude Code, Codex, Cursor, and any stdio MCP host.
 
-## Three Workflows
-
-| # | Trigger | Function |
-|---|------|------|
-| 1 | `/ball <Name>` | Create a new Ball: implementation -> registration -> ISA macro -> CTest -> build -> simulation verification |
-| 2 | `/verify <Name>` | Verify a Ball: completeness check -> fill missing parts -> build -> simulation -> coverage analysis |
-| 3 | `/optimize <Name>` | Optimize a Ball: area (Yosys) + timing (OpenSTA) + latency (simulation cycles) -> optimize -> regression verification |
-
-## Architecture
+## Layout
 
 ```
-User ──→ Claude Code (slash commands + CLAUDE.md)
-              │
-              ├── Code read/write: Read/Edit/Write
-              ├── Static validation: MCP validate
-              └── Build/sim/synth/test: MCP bbdev_* -> bbdev HTTP API
-                    │
-                    └── bbdev server (Motia workflow backend, lifecycle managed by MCP)
-                          ├── POST /verilator/run      Full flow: clean->verilog->build->sim
-                          ├── POST /verilator/verilog  Generate Verilog
-                          ├── POST /verilator/build    Build Verilator (supports --coverage)
-                          ├── POST /verilator/sim      Run simulation (supports --coverage)
-                          ├── POST /workload/build     Build CTest (requires chip)
-                          └── POST /yosys/synth        Yosys synthesis + OpenSTA timing analysis
+User / Agent host
+  └── .mcp.json → bash scripts/claude/run_mcp_server.sh
+                    └── nix develop -c python3 scripts/claude/mcp_server.py
+                          ├── validate
+                          └── bbdev_*  → bbdev HTTP (auto start + poll /result/{trace_id})
 ```
 
-## File List
-
-| File | Description |
+| File | Role |
 |------|------|
-| `scripts/claude/mcp_server.py` | MCP server: validate + bbdev API wrappers + server lifecycle management |
-| `.claude/settings.json` | MCP configuration |
-| `CLAUDE.md` | Global instructions: project structure, Blink protocol, registration invariants, tool usage |
-| `.claude/commands/ball.md` | Full flow for creating a Ball via `/ball <Name>` |
-| `.claude/commands/verify.md` | Ball verification via `/verify <Name>` |
-| `.claude/commands/optimize.md` | Ball optimization via `/optimize <Name>` |
-| `.claude/commands/check.md` | Static validation via `/check` |
+| `.mcp.json` | Host-agnostic MCP registration |
+| `scripts/claude/run_mcp_server.sh` | cd to repo root, `NIX_QUIET=1`, clean stdout |
+| `scripts/claude/mcp_server.py` | MCP tools + bbdev lifecycle |
+| `.claude/CLAUDE.md` | Agent rules |
+| `docs/zh/设计文档/主线架构/0.0.1/工具链/` | Human CLI docs |
 
-## MCP Server Tool List
+## Daily path
+
+```text
+bbdev_compiler_build(chip)
+  → bbdev_workload_build(chip)
+  → bbdev_bemu_sim(chip, binary)
+  → bbdev_bebop_verilator_run(binary, config)
+```
+
+UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
+
+## MCP tools
 
 ### Validation
-| Tool | Function |
-|------|------|
-| `validate` | Check 6 registration invariants (`ballId` increasing, unique `funct7`, BID alignment, etc.) |
+| Tool | Purpose |
+|------|---------|
+| `validate(chip, balldomain?)` | Chip balldomain TOML invariants (`ballIdMappings` / `ballISA`) |
 
-### bbdev API Wrappers
-| Tool | API | Description |
-|------|-----|------|
-| `bbdev_workload_build` | `/workload/build` | Build CTest for a chip |
-| `bbdev_verilator_run` | `/verilator/run` | Full flow: clean->verilog->build->sim |
-| `bbdev_verilator_verilog` | `/verilator/verilog` | Generate Verilog |
-| `bbdev_verilator_build` | `/verilator/build` | Build Verilator |
-| `bbdev_verilator_sim` | `/verilator/sim` | Run simulation |
-| `bbdev_yosys_synth` | `/yosys/synth` | Yosys synthesis + OpenSTA |
+### Preferred bbdev wrappers
+| Tool | API |
+|------|-----|
+| `bbdev_compiler_build` | `/compiler/build` |
+| `bbdev_workload_clean` | `/workload/clean` |
+| `bbdev_workload_build` | `/workload/build` |
+| `bbdev_bemu_sim` | `/bebop/bemu/sim` |
+| `bbdev_bemu_batch` | `/bebop/bemu/batch` |
+| `bbdev_bebop_verilator_*` | `/bebop/verilator/{clean,verilog,build,sim,run,batch}` |
+| `bbdev_uvm_build` / `bbdev_uvm_run` | `/uvm/build`, `/uvm/run` |
+| `bbdev_yosys_synth` | `/yosys/synth` |
 
-## bbdev Server Lifecycle
+`bbdev_verilator_*` still exist for the legacy non-bebop path; daily work should use bebop tools.
 
-MCP server manages bbdev server automatically:
-- Auto-start on first `bbdev_*` call (`pnpm dev --port <port>`)
-- Clean BullMQ AOF before startup to avoid replaying stale events
-- Auto-select port from 5100-5500
-- Return only after health check passes
-- Check liveness before each call, auto-restart if down
-- Clean up automatically when MCP server exits
+## Server lifecycle
 
-## Detailed Workflow
+On first `bbdev_*` call the MCP server (same path as human `bbdev start --server`):
 
-### `/ball <Name>` - Create Ball
+1. Requires `iii` in PATH and `bbdev/api/.venv/bin/motia` (no auto-install; fail if missing)
+2. Starts `bbdev start --server --port <auto>` (ports 5100–5500)
+3. Waits until worker routes are registered
+4. Submits HTTP + polls `bbdev/api/data/state_store.db/<trace_id>.bin` (same as CLI)
+5. Stops via `bbdev stop --server` on MCP exit
 
-1. **Requirement collection**: read `default.json`/`DISA.scala` to determine `ballId`/`funct7`, then confirm function/inBW/outBW/op2 with user
-2. **Implement Ball**: reference existing Ball code and create wrapper/core/config under `prototype/`
-3. **Register**: update `default.json` + `busRegister` + `DISA` + `DomainDecoder`
-4. **ISA macro**: create C macro file and update `isa.h`
-5. **CTest**: create test `.c`, register in `CMakeLists.txt`
-6. **Verification**: `validate` -> `bbdev_workload_build(chip)` -> `bbdev_verilator_run` -> PASS/FAIL
+Port is dynamic. Do not use Node `pnpm/motia`.
 
-### `/verify <Name>` - Verify Ball
+## Slash commands
 
-1. **Completeness check**: verify registration/ISA macro/CTest entries, fill missing parts
-2. **Build + simulation**: `bbdev_workload_build` -> `bbdev_verilator_run`
-3. **Failure analysis**: read simulation logs -> analyze Chisel code -> propose fixes
+| Trigger | Skill |
+|---------|-------|
+| `/ball <Name>` | `.claude/skills/ball` |
+| `/verify <Name>` | `.claude/skills/verify` |
+| `/optimize <Name>` | `.claude/skills/optimize` |
+| `/check` | `.claude/skills/check` |
 
-### `/optimize <Name>` - Optimize Ball
+## Smoke test
 
-1. **Baseline measurement**: `bbdev_yosys_synth` (area + timing) + `bbdev_verilator_run` (cycle count)
-2. **Area analysis**: extract submodule area from `hierarchy_report`, identify large contributors
-3. **Timing/latency analysis**: critical paths in `timing_report` + simulation cycle count + FSM source analysis
-4. **Optimization plan**: quantified options (method/area delta/latency delta/frequency impact/trade-off)
-5. **Implementation**: modify Chisel code
-6. **Post-opt measurement**: rerun Yosys + Verilator and output before/after report
+```bash
+# from any cwd; stdout must be JSON-only
+bash /path/to/buckyball/scripts/claude/run_mcp_server.sh <<'EOF'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}
+EOF
+```

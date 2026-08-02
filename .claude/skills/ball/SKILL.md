@@ -3,18 +3,19 @@ name: ball
 description: Create a new Buckyball Ball operator named $ARGUMENTS, covering the full flow from implementation to verification.
 ---
 
-**Important: all build/simulation operations must go through MCP tools (`validate`, `bbdev_workload_build`, `bbdev_verilator_run`, etc.). Do not use bbdev CLI or nix develop directly.**
+**Important: all build/simulation operations must go through MCP tools from project `.mcp.json` (`validate`, `bbdev_workload_build`, `bbdev_bemu_sim`, `bbdev_bebop_verilator_run`, etc.). Do not use bbdev CLI or nix develop directly. If `buckyball-dev` is not loaded, stop and report it.**
 
 ## Phase 1 - Requirement Collection
 
 1. Inspect registration state and decide `ballId` + `funct7`:
-   - `arch/src/main/scala/framework/balldomain/configs/default.json`
-   - `examples/chips/toy/arch/src/main/scala/balldomain/DISA.scala`
+   - active file from `examples/chips/<chip>/configs/tiles/cores/default.toml` → `balldomain = ...`
+   - usually `examples/chips/<chip>/configs/tiles/cores/balldomains/*.toml`
 2. Check for partial existing implementation (incremental mode):
    - existing directory in `examples/balls/`
    - existing ISA macro in `bb-tests/workloads/lib/bbhw/isa/`
-   - existing CTest in `bb-tests/workloads/src/CTest/toy/`
+   - existing chip/ball ctests under `examples/` or `bb-tests/workloads/`
 3. Confirm with user:
+   - target chip
    - operator semantics
    - `inBW` / `outBW`
    - whether `op2` is needed
@@ -37,11 +38,12 @@ description: Create a new Buckyball Ball operator named $ARGUMENTS, covering the
 
 ## Phase 3 - Register the Ball
 
-Update files in order:
-1. `.../configs/default.json` - append `ballIdMappings` entry and update `ballNum`
-2. `.../bbus/busRegister.scala` - add import + `match case`
-3. `.../DISA.scala` - add `val XXX = BitPat("bxxxxxxx")`
-4. `.../DomainDecoder.scala` - add decode row (`BID = ballId.U`)
+Edit the chip balldomain TOML (the one selected by `cores/default.toml`, or the variant you are changing):
+
+1. Append a `ballIdMappings` row (`ballId`, `ballName`, `ballClass`, `config`, `inBW`, `outBW`)
+2. Update `ballNum`
+3. Append a `ballISA` row (`mnemonic`, `funct7`, `bid`)
+4. Run MCP `validate(chip=..., balldomain=...)` before continuing
 
 ## Phase 4 - Add ISA C Macro
 
@@ -55,8 +57,10 @@ Create `<funct7_decimal>_<name>.c` under `bb-tests/workloads/lib/bbhw/isa/`, the
 ## Phase 6 - Validate, Build, and Simulate
 
 1. Run `validate` and ensure all 6 invariants pass
-2. Run `bbdev_workload_build`
-3. Run `bbdev_verilator_run` for this Ball's CTest binary
-4. Interpret results:
+2. Run `bbdev_workload_build(chip="toy")` (or the target chip)
+3. Run `bbdev_bemu_sim` for this Ball's CTest binary (functional first)
+4. Run `bbdev_bebop_verilator_run` with an explicit config (e.g. `sims.verilator.BuckyballToyVerilatorConfig`)
+5. Interpret results:
    - `PASSED` -> done
-   - `FAILED` -> switch to `/debug`
+   - bemu pass / verilator fail -> RTL/timing issue, switch to `/debug`
+   - bemu fail -> fix workload / ball semantics first

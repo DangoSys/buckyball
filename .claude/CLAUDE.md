@@ -5,23 +5,21 @@ A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6
 ## Project Structure
 
 - `arch/src/main/scala/framework/` — framework core
-  - `balldomain/prototype/` — Ball operator implementations (one subdirectory per Ball)
   - `balldomain/blink/` — Blink protocol definitions (`BlinkIO`, `BankRead/Write`, `BallStatus`)
-  - `balldomain/configs/` — `BallDomainParam` + `default.json` (`ballIdMappings`)
+  - `balldomain/configs/` — `BallDomainParam` + TOML loaders
   - `balldomain/bbus/` — BBus interconnect
   - `balldomain/rs/` — `BallRsIssue` / `BallRsComplete` (issue/complete interfaces)
   - `memdomain/backend/banks/` — `SramReadIO` / `SramWriteIO`
   - `core/bbtile/` — BBTile integration (Rocket core + Buckyball)
   - `top/` — `GlobalConfig` (top-level parameter aggregation)
-- `examples/chips/toy/arch/src/main/scala/balldomain/` — toy config
-  - `DISA.scala` — instruction opcodes (`funct7` BitPat)
-  - `DomainDecoder.scala` — instruction decode table (`ListLookup`)
-  - `bbus/busRegister.scala` — Ball generator registration (`match case`)
+- `examples/balls/<name>/` — Ball implementations (arch / compiler / emu / workloads)
+- `examples/chips/<chip>/configs/` — chip TOML (tile/core/balldomain/memdomain)
+  - ball registration: `tiles/cores/balldomains/*.toml` (`ballNum`, `ballIdMappings`, `ballISA`)
 - `arch/src/main/scala/sims/` — simulation configs
   - `verilator/` — Verilator config
 - `bb-tests/` — tests
   - `workloads/lib/bbhw/isa/` — ISA C macros (one `.c` file per instruction)
-  - `workloads/src/CTest/toy/` — C test cases
+  - `workloads/src/CTest/` — C test cases
 - `bbdev/` — developer toolchain (Motia workflow backend)
 
 ## Blink Protocol
@@ -47,37 +45,48 @@ Key timing rule: SRAM read latency is 1 cycle (`resp.valid` is asserted in the n
 
 ## Registration Invariants
 
-When adding or modifying Ball registrations, all six conditions below must hold:
+Ball registration is TOML under `examples/chips/<chip>/configs/tiles/cores/balldomains/`.
+`cores/default.toml` selects which balldomain file is active (e.g. toy uses `balldomains/full.toml`).
 
-1. `ballNum` in `default.json` equals the length of `ballIdMappings`
-2. `ballId` is strictly increasing (`0, 1, 2, ...`) with no gaps
-3. No duplicated `ballId`
-4. No duplicated `funct7` values in `DISA.scala`
-5. Case names in `busRegister.scala` equal `ballName` set in `default.json`
-6. BID values in `DomainDecoder.scala` equal `ballId` set in `default.json`
+When adding or modifying a balldomain TOML, these must hold:
 
-Use the `/check` skill to validate all invariants and optionally auto-fix issues.
+1. `ballNum` equals `ballIdMappings` length
+2. `ballId` is strictly `0, 1, 2, ...` with no gaps/duplicates
+3. `ballName` / `funct7` / `mnemonic` have no duplicates
+4. every `ballISA.bid` exists in `ballIdMappings`, and every ball has at least one ISA entry
+5. relative `config=` paths resolve to existing files (when present)
+6. `inBW` / `outBW` are positive integers
+
+Use MCP `validate(chip=..., balldomain=...)` or `/check`.
 
 ## MCP Tools
 
-The project configures the `buckyball-dev` MCP server with the following tools.
+Project MCP config lives in root `.mcp.json` (Claude Code / Codex / Cursor / any stdio MCP host).
+Entry point: `scripts/claude/run_mcp_server.sh` → `scripts/claude/mcp_server.py`.
+It cds to the repo root, sets `NIX_QUIET=1`, and keeps stdout MCP-clean.
 
-**Important: build, simulation, synthesis, and tests must be invoked via MCP tools. Do not call `bbdev` CLI or `nix develop` directly.**
-`bbdev` CLI is for human developers, while MCP tools are for agents. MCP tools manage bbdev server lifecycle and call it through HTTP APIs.
+**Important: agents must invoke build/sim/synth/test via MCP tools. Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly.**
+Humans use `bbdev` CLI (see `docs/zh/设计文档/主线架构/0.0.1/工具链/`). MCP auto-starts bbdev HTTP and polls `/result/{trace_id}`.
+If `buckyball-dev` is missing from the host tool list, stop and tell the human to reload project MCP from `.mcp.json`; do not invent a parallel workflow.
+
+Daily agent path:
+`bbdev_compiler_build` → `bbdev_workload_build` → `bbdev_bemu_sim` → `bbdev_bebop_verilator_run` (or uvm when needed)
 
 ### Validation
-- `validate` — check all 6 registration invariants
+- `validate(chip="toy", balldomain?=)` — check balldomain TOML invariants (default: file selected by `cores/default.toml`)
 
-### bbdev API wrappers (with automatic server lifecycle management)
-- `bbdev_workload_build` — build CTests
-- `bbdev_verilator_run(binary, config?, batch?, coverage?)` — full flow: clean -> verilog -> build -> sim
-- `bbdev_verilator_verilog(config)` — generate Verilog; `config` is required
-- `bbdev_verilator_build(jobs?, coverage?)` — build Verilator simulator
-- `bbdev_verilator_sim(binary, batch?, coverage?)` — run simulation (requires prior build)
-- `bbdev_yosys_synth(top?, config?)` — Yosys synthesis + OpenSTA timing analysis
+### bbdev API wrappers (automatic server lifecycle + result polling)
+- `bbdev_compiler_build(chip, stable?)`
+- `bbdev_workload_clean()` / `bbdev_workload_build(chip, model?)`
+- `bbdev_bemu_sim(chip, binary, pk?)` / `bbdev_bemu_batch(chip, test, clean_before?)`
+- `bbdev_bebop_verilator_clean|verilog|build|sim|run|batch` — preferred RTL path
+- `bbdev_uvm_build(config, ball?, filelist?)` / `bbdev_uvm_run(ball, filelist?, test?)`
+- `bbdev_verilator_*` — legacy non-bebop verilator; prefer bebop tools above
+- `bbdev_yosys_synth(top?, config?)`
 
-Default config value: `sims.verilator.BuckyballToyVerilatorConfig`
-Simulation binary naming format: `ctest_<name>_test_singlecore-baremetal`
+Default Verilator config: `sims.verilator.BuckyballToyVerilatorConfig`
+Pebble: `sims.verilator.BuckyballPebbleVerilatorConfig`
+Workload binary names are the built ELF names, e.g. `vecunit_matmul_ones-singlecore-baremetal`
 
 ### Analysis report paths
 - Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
@@ -103,5 +112,6 @@ Project skills are under `.claude/skills/`:
 - Do not edit registration files while changing Ball implementation; do not edit implementation files while changing registration
 - Chisel version is 6.5.0; do not use 6.6+ APIs
 - Register CTests in CMakeLists via `add_cross_platform_test_target`
-- **Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly**; use MCP tools
-- Ball wrapper class names must match `ballName` in `default.json`
+- **Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly**; use MCP tools. If MCP is not loaded, report that and stop.
+- Ball wrapper class names must match `ballName` in the chip balldomain TOML
+- MCP starts bbdev via `bbdev start --server` (`iii` + `bbdev/api/.venv` motia). Missing venv/iii → hard error. Do not use Node `pnpm/motia`.

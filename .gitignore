@@ -1,7 +1,7 @@
 .vscode/
 .metals/
 .motia/
-.cursor/
+# .cursor/
 .bsp/
 out/
 .Xil/

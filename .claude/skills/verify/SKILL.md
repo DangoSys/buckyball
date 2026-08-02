@@ -3,23 +3,24 @@ name: verify
 description: Verify functional correctness of the Ball named $ARGUMENTS. Use this skill when users ask to verify/test a Ball, check whether a Ball works correctly, or validate a newly created Ball.
 ---
 
-**Important: build, simulation, and test operations must be invoked via MCP tools. Do not call bbdev CLI or nix develop directly.**
+**Important: build, simulation, and test operations must be invoked via MCP tools from project `.mcp.json`. Do not call bbdev CLI or nix develop directly. If `buckyball-dev` is not loaded, stop and report it.**
 
 ## Phase 1 - Completeness Check
 
 Use `/check` logic to validate registration consistency, then ensure all required artifacts exist and fill missing pieces:
 1. Ball implementation: `examples/balls/<name>/arch/src/main/scala/`
-2. Registration entry in `arch/src/main/scala/framework/balldomain/configs/default.json`
+2. Registration entry in chip balldomain TOML under `examples/chips/<chip>/configs/tiles/cores/balldomains/`
 3. ISA macro file in `bb-tests/workloads/lib/bbhw/isa/`
-4. CTest file in `bb-tests/workloads/src/CTest/toy/`
+4. CTest for that ball/chip
 
 ## Phase 2 - Build and Simulate
 
-1. Run MCP tool `bbdev_workload_build` to build all CTests
-2. Run MCP tool `bbdev_verilator_run` for this Ball's CTest
-   - binary naming format: `ctest_<name>_test_singlecore-baremetal`
-   - set `batch=true`
-3. If build/simulation fails, switch to `/debug` flow
+1. Run `bbdev_workload_build(chip=...)` to build CTests
+2. Run `bbdev_bemu_sim(chip=..., binary=...)` first
+3. Run `bbdev_bebop_verilator_run(binary=..., config=...)` for RTL
+   - binary is the built ELF name, e.g. `transpose_test-singlecore-baremetal`
+   - config is required, e.g. `sims.verilator.BuckyballToyVerilatorConfig`
+4. If build/simulation fails, switch to `/debug` flow
 
 ## Phase 3 - PMC Performance Analysis
 
