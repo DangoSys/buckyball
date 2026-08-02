@@ -384,7 +384,12 @@ def run_server_mode(args, cmd_info):
             worker_url = f"ws://{HOST}:49134"
         proc = None
         try:
-            env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            env = {
+                **os.environ,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "BUCKYBALL_ROOT": repo_root,
+            }
             if worker_url:
                 env["III_URL"] = worker_url
             proc = subprocess.Popen(
