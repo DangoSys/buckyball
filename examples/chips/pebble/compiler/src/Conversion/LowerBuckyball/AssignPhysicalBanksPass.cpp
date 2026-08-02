@@ -14,6 +14,8 @@ using namespace mlir;
 namespace mlir::buddy {
 void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                                  PhysicalBankState &state);
+void populateMatrixAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                              PhysicalBankState &state);
 void populateIm2colAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
@@ -57,6 +59,7 @@ public:
     RewritePatternSet patterns(&getContext());
     mlir::buddy::addBaseAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateTransposeAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateMatrixAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateIm2colAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateFp2IntAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(patterns, state);

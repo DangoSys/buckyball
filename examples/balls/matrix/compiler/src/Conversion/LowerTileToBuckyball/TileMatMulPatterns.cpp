@@ -251,13 +251,16 @@ public:
           SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                     rewriter.getIndexAttr(1)});
 
-      auto elemType = aType.getElementType();
+      auto cElemType = cType.getElementType();
+      if (!isa<IntegerType>(cElemType))
+        return tileMatMulOp.emitError(
+            "multi-K tile.matmul accumulate requires integer C element type");
       auto partialType =
-          MemRefType::get({(int64_t)mTileSize, (int64_t)nTileSize}, elemType);
+          MemRefType::get({(int64_t)mTileSize, (int64_t)nTileSize}, cElemType);
       Value partial = rewriter.create<memref::AllocOp>(loc, partialType);
 
       Value zero = rewriter.create<arith::ConstantOp>(
-          loc, elemType, rewriter.getZeroAttr(elemType));
+          loc, cElemType, rewriter.getZeroAttr(cElemType));
       rewriter.create<linalg::FillOp>(loc, zero, cTile);
 
       auto kLoop =
@@ -296,7 +299,7 @@ public:
           rewriter.create<memref::LoadOp>(loc, cTile, ValueRange{iIv, jIv});
       Value part =
           rewriter.create<memref::LoadOp>(loc, partial, ValueRange{iIv, jIv});
-      Value sum = rewriter.create<arith::AddFOp>(loc, acc, part);
+      Value sum = rewriter.create<arith::AddIOp>(loc, acc, part);
       rewriter.create<memref::StoreOp>(loc, sum, cTile, ValueRange{iIv, jIv});
 
       rewriter.setInsertionPointAfter(kLoop);

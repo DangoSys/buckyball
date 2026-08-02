@@ -53,7 +53,7 @@ function(add_buckyball_mlir_optest NAME)
   endif()
 
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
-  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.c)
+  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
   set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
   set(BAREMETAL_BIN

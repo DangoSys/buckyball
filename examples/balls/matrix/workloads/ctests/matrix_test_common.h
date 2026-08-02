@@ -6,92 +6,105 @@
 #include <bbhw/mem/mem.h>
 #include <stdio.h>
 
-#define MATRIX_TEST_DIM 4
-#define MATRIX_PACKED_INPUT_COLS (BANK_WIDTH / 8 / (int)sizeof(elem_t))
-#define MATRIX_PACKED_OUTPUT_GROUPS 4
-#define MATRIX_PACKED_OUTPUT_COLS                                              \
-  (MATRIX_PACKED_OUTPUT_GROUPS * (BANK_WIDTH / 8 / (int)sizeof(result_t)))
+#define MATRIX_TILE 16
+#define MATRIX_ACC_LANES 16
 
-static inline void matrix_pack_input_matrix(const elem_t *src, elem_t *dst) {
-  for (int row = 0; row < MATRIX_TEST_DIM; ++row) {
-    for (int col = 0; col < MATRIX_PACKED_INPUT_COLS; ++col) {
-      dst[row * MATRIX_PACKED_INPUT_COLS + col] =
-          (col < MATRIX_TEST_DIM) ? src[row * MATRIX_TEST_DIM + col] : 0;
+static inline int matrix_ceil_div(int x, int d) { return (x + d - 1) / d; }
+
+static inline int matrix_a_rows(int m, int k) {
+  return matrix_ceil_div(m, MATRIX_TILE) * matrix_ceil_div(k, MATRIX_TILE) *
+         MATRIX_TILE;
+}
+
+static inline int matrix_b_rows(int n, int k) {
+  return matrix_ceil_div(n, MATRIX_TILE) * matrix_ceil_div(k, MATRIX_TILE) *
+         MATRIX_TILE;
+}
+
+static inline int matrix_c_blocks(int m, int n) {
+  return m * matrix_ceil_div(n, MATRIX_TILE);
+}
+
+static inline void matrix_pack_a(const elem_t *src, elem_t *dst, int m, int k) {
+  int kt = matrix_ceil_div(k, MATRIX_TILE);
+  int rows = matrix_a_rows(m, k);
+  for (int i = 0; i < rows * MATRIX_TILE; ++i)
+    dst[i] = 0;
+  for (int r = 0; r < m; ++r) {
+    for (int c = 0; c < k; ++c) {
+      int mt = r / MATRIX_TILE;
+      int mr = r % MATRIX_TILE;
+      int kti = c / MATRIX_TILE;
+      int lane = c % MATRIX_TILE;
+      int bank_row = (mt * kt + kti) * MATRIX_TILE + mr;
+      dst[bank_row * MATRIX_TILE + lane] = src[r * k + c];
     }
   }
 }
 
-static inline void matrix_unpack_output_matrix(const result_t *src,
-                                               result_t *dst) {
-  for (int row = 0; row < MATRIX_TEST_DIM; ++row) {
-    for (int col = 0; col < MATRIX_TEST_DIM; ++col) {
-      dst[row * MATRIX_TEST_DIM + col] =
-          src[row * MATRIX_PACKED_OUTPUT_COLS + col * 4];
+static inline void matrix_pack_b(const elem_t *src, elem_t *dst, int k, int n) {
+  int kt = matrix_ceil_div(k, MATRIX_TILE);
+  int rows = matrix_b_rows(n, k);
+  for (int i = 0; i < rows * MATRIX_TILE; ++i)
+    dst[i] = 0;
+  for (int r = 0; r < k; ++r) {
+    for (int c = 0; c < n; ++c) {
+      int nt = c / MATRIX_TILE;
+      int lane = c % MATRIX_TILE;
+      int kti = r / MATRIX_TILE;
+      int kr = r % MATRIX_TILE;
+      int bank_row = (nt * kt + kti) * MATRIX_TILE + kr;
+      dst[bank_row * MATRIX_TILE + lane] = src[r * n + c];
     }
   }
 }
 
-static inline void matrix_hw_matmul(const elem_t *a, const elem_t *b,
-                                    result_t *c, int size, int ws_mode,
-                                    elem_t *packed_a, elem_t *packed_b,
-                                    result_t *packed_output) {
-  uint32_t op1_bank_id = 0;
-  uint32_t op2_bank_id = 1;
-  uint32_t acc_bank_id = 2;
-
-  bb_mem_alloc(op1_bank_id, 1, 1);
-  bb_mem_alloc(op2_bank_id, 1, 1);
-  bb_mem_alloc(acc_bank_id, 1, 4);
-
-  matrix_pack_input_matrix(a, packed_a);
-  matrix_pack_input_matrix(b, packed_b);
-
-  bb_mvin((uintptr_t)packed_a, op1_bank_id, MATRIX_TEST_DIM, 1);
-  bb_mvin((uintptr_t)packed_b, op2_bank_id, MATRIX_TEST_DIM, 1);
-  if (ws_mode) {
-    bb_matrix_ws(op1_bank_id, op2_bank_id, acc_bank_id, size);
-  } else {
-    bb_matrix_os(op1_bank_id, op2_bank_id, acc_bank_id, size);
+static inline int matrix_c_block(int row, int n_tile, int m, int n) {
+  int n_tiles = matrix_ceil_div(n, MATRIX_TILE);
+  int mt = row / MATRIX_TILE;
+  int mr = row % MATRIX_TILE;
+  int block = 0;
+  for (int t = 0; t < mt; ++t) {
+    int rows = m - t * MATRIX_TILE;
+    if (rows > MATRIX_TILE)
+      rows = MATRIX_TILE;
+    block += rows * n_tiles;
   }
-  bb_mvout((uintptr_t)packed_output, acc_bank_id, size, 1);
+  int rows = m - mt * MATRIX_TILE;
+  if (rows > MATRIX_TILE)
+    rows = MATRIX_TILE;
+  return block + n_tile * rows + mr;
+}
+
+static inline void matrix_unpack_c(const result_t *src, result_t *dst, int m,
+                                   int n) {
+  for (int r = 0; r < m; ++r) {
+    for (int c = 0; c < n; ++c) {
+      int nti = c / MATRIX_TILE;
+      int lane = c % MATRIX_TILE;
+      int block = matrix_c_block(r, nti, m, n);
+      dst[r * n + c] = src[block * MATRIX_ACC_LANES + lane];
+    }
+  }
+}
+
+static inline void matrix_hw_mnk(const elem_t *packed_a, const elem_t *packed_b,
+                                 result_t *packed_c, int m, int n, int k,
+                                 int ws) {
+  uint32_t op1 = 0, op2 = 1, wr = 2;
+  int a_rows = matrix_a_rows(m, k);
+  int b_rows = matrix_b_rows(n, k);
+  int c_blocks = matrix_c_blocks(m, n);
+
+  bb_mem_alloc(op1, 1, 1);
+  bb_mem_alloc(op2, 1, 1);
+  bb_mem_alloc(wr, 1, 4);
+  bb_mvin((uintptr_t)packed_a, op1, a_rows, 1);
+  bb_mvin((uintptr_t)packed_b, op2, b_rows, 1);
+  bb_matrix_mnk_mode(op1, op2, wr, m, n, k,
+                     ws ? BB_MATRIX_MODE_WS : BB_MATRIX_MODE_OS);
+  bb_mvout((uintptr_t)packed_c, wr, c_blocks, 1);
   bb_fence();
-  matrix_unpack_output_matrix(packed_output, c);
-}
-
-static inline int matrix_run_case(const char *test_name, const elem_t *a,
-                                  const elem_t *b, int ws_mode,
-                                  elem_t *packed_a, elem_t *packed_b,
-                                  result_t *packed_output, result_t *output,
-                                  result_t *expected) {
-  clear_u32_matrix(output, MATRIX_TEST_DIM, MATRIX_TEST_DIM);
-  clear_u32_matrix(expected, MATRIX_TEST_DIM, MATRIX_TEST_DIM);
-  clear_u32_matrix(packed_output, MATRIX_TEST_DIM, MATRIX_PACKED_OUTPUT_COLS);
-
-  cpu_matmul((elem_t *)a, (elem_t *)b, expected, MATRIX_TEST_DIM,
-             MATRIX_TEST_DIM, MATRIX_TEST_DIM);
-  matrix_hw_matmul(a, b, output, MATRIX_TEST_DIM, ws_mode, packed_a, packed_b,
-                   packed_output);
-
-  if (!compare_u32_matrices(output, expected, MATRIX_TEST_DIM,
-                            MATRIX_TEST_DIM)) {
-    printf("%s FAILED\n", test_name);
-    return 0;
-  }
-
-  printf("%s PASSED\n", test_name);
-  return 1;
-}
-
-static inline int matrix_run_random_case(const char *test_name, int ws_mode,
-                                         int seed_a, int seed_b,
-                                         elem_t *input_a, elem_t *input_b,
-                                         elem_t *packed_a, elem_t *packed_b,
-                                         result_t *packed_output,
-                                         result_t *output, result_t *expected) {
-  init_u8_random_matrix(input_a, MATRIX_TEST_DIM, MATRIX_TEST_DIM, seed_a);
-  init_u8_random_matrix(input_b, MATRIX_TEST_DIM, MATRIX_TEST_DIM, seed_b);
-  return matrix_run_case(test_name, input_a, input_b, ws_mode, packed_a,
-                         packed_b, packed_output, output, expected);
 }
 
 #endif

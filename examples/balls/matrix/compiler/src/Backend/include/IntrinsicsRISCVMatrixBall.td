@@ -1,4 +1,7 @@
 //===- IntrinsicsRISCVMatrixBall.td - MatrixBall intrinsics --------------===//
-
-let TargetPrefix = "riscv" in
-def int_riscv_bb_bbfp_mul : Intrinsic<[], [llvm_i64_ty, llvm_i64_ty], []>;
+//
+// Stable LLVM intrinsic for MatrixBall is not wired yet. Pebble uses
+// CustomIntrOp(funct7=65). Keep this file as a placeholder for a future
+// int_riscv_bb_matrix addition to the RISC-V backend.
+//
+//===----------------------------------------------------------------------===//

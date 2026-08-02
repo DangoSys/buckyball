@@ -20,6 +20,8 @@ void populateVectorAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                                  PhysicalBankState &state);
+void populateMatrixAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                              PhysicalBankState &state);
 void populateIm2colAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,

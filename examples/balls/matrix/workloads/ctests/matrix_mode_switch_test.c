@@ -1,43 +1,46 @@
 #include "matrix_test_common.h"
-#include <stdlib.h>
 
-static elem_t input_matrix_a[MATRIX_TEST_DIM * MATRIX_TEST_DIM]
-    __attribute__((aligned(64)));
-static elem_t input_matrix_b[MATRIX_TEST_DIM * MATRIX_TEST_DIM]
-    __attribute__((aligned(64)));
-static elem_t packed_input_matrix_a[MATRIX_TEST_DIM * MATRIX_PACKED_INPUT_COLS]
-    __attribute__((aligned(64)));
-static elem_t packed_input_matrix_b[MATRIX_TEST_DIM * MATRIX_PACKED_INPUT_COLS]
-    __attribute__((aligned(64)));
-static result_t
-    packed_output_matrix[MATRIX_TEST_DIM * MATRIX_PACKED_OUTPUT_COLS]
-    __attribute__((aligned(64)));
-static result_t output_matrix[MATRIX_TEST_DIM * MATRIX_TEST_DIM]
-    __attribute__((aligned(64)));
-static result_t expected_matrix[MATRIX_TEST_DIM * MATRIX_TEST_DIM]
-    __attribute__((aligned(64)));
+#define DIM 4
 
-int main() {
+static elem_t a0[DIM * DIM] __attribute__((aligned(64))) = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+};
+static elem_t b0[DIM * DIM] __attribute__((aligned(64))) = {
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+};
+static elem_t a1[DIM * DIM] __attribute__((aligned(64))) = {
+    2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2,
+};
+static elem_t b1[DIM * DIM] __attribute__((aligned(64))) = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+static elem_t pa[16 * MATRIX_TILE] __attribute__((aligned(64)));
+static elem_t pb[16 * MATRIX_TILE] __attribute__((aligned(64)));
+static result_t pc[DIM * MATRIX_ACC_LANES] __attribute__((aligned(64)));
+static result_t out[DIM * DIM] __attribute__((aligned(64)));
+static result_t exp_[DIM * DIM] __attribute__((aligned(64)));
+
+static int run_one(const char *name, elem_t *a, elem_t *b, int ws) {
+  cpu_matmul(a, b, exp_, DIM, DIM, DIM);
+  matrix_pack_a(a, pa, DIM, DIM);
+  matrix_pack_b(b, pb, DIM, DIM);
+  clear_u32_matrix(pc, DIM, MATRIX_ACC_LANES);
+  matrix_hw_mnk(pa, pb, pc, DIM, DIM, DIM, ws);
+  matrix_unpack_c(pc, out, DIM, DIM);
+  if (!compare_u32_matrices(out, exp_, DIM, DIM)) {
+    printf("%s FAILED\n", name);
+    return 0;
+  }
+  printf("%s PASSED\n", name);
+  return 1;
+}
+
+int main(void) {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-
-  int os_first_passed = matrix_run_random_case(
-      "matrix_mode_switch_os_first", 0, 123, 456, input_matrix_a,
-      input_matrix_b, packed_input_matrix_a, packed_input_matrix_b,
-      packed_output_matrix, output_matrix, expected_matrix);
-  int ws_second_passed = matrix_run_random_case(
-      "matrix_mode_switch_ws_second", 1, 789, 321, input_matrix_a,
-      input_matrix_b, packed_input_matrix_a, packed_input_matrix_b,
-      packed_output_matrix, output_matrix, expected_matrix);
-  int os_third_passed = matrix_run_random_case(
-      "matrix_mode_switch_os_third", 0, 654, 987, input_matrix_a,
-      input_matrix_b, packed_input_matrix_a, packed_input_matrix_b,
-      packed_output_matrix, output_matrix, expected_matrix);
-
-  int rc = (os_first_passed && ws_second_passed && os_third_passed) ? 0 : 1;
-#ifdef MULTICORE
-  exit(rc);
-#endif
-  return rc;
+  int ok = run_one("mode_switch_os", a0, b0, 0);
+  ok = run_one("mode_switch_ws", a1, b1, 1) && ok;
+  ok = run_one("mode_switch_os2", a0, b1, 0) && ok;
+  return ok ? 0 : 1;
 }

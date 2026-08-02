@@ -21,16 +21,20 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
+    printf("FAILED: bank_ssa shape %dx%d stride %dx%d\n", (int)size0,
+           (int)size1, (int)stride0, (int)stride1);
     fail();
   }
 
   int32_t *out = aligned + offset;
   for (int i = 0; i < 16; ++i) {
     for (int j = 0; j < 16; ++j) {
-      if (out[i * stride0 + j * stride1] != 16) {
+      int32_t got = out[i * stride0 + j * stride1];
+      if (got != 16) {
+        printf("FAILED: bank_ssa out[%d][%d] exp=16 got=%d\n", i, j, (int)got);
         fail();
       }
     }
   }
-  printf("PASSED: linalg matmul 16x16 i8\n");
+  printf("PASSED: matrix bank_ssa 16x16 ones\n");
 }
