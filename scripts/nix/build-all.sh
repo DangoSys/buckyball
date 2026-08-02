@@ -162,7 +162,12 @@ if run_step "6"; then
   cd ${BBDIR}/bebop
   nix build
   nix develop -c echo "bebop built successfully"
-  # nix develop -c cargo build --release --features bemu --package bebop
+
+  # check if spike source is downloaded, sometimes it's affected by network and will fail
+  if [ ! -d ${BBDIR}/bebop/src/nodes/bemu/native/spike ]; then
+    echo "ERROR: Spike source is missing: ${BBDIR}/bebop/src/nodes/bemu/native/spike" >&2
+    exit 1
+  fi
 fi
 
 if run_step "7"; then
