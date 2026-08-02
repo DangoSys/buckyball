@@ -25,6 +25,7 @@
               tools.ccache
               tools.lld
               tools.cmake
+              pkgs.ninja
               tools.java
               tools.dtc
               tools.spike
