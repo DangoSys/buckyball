@@ -10,8 +10,9 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Int2Fp(val b: GlobalConfig) extends Module {
-  val elemsPerWord = 4
   val bankWidth    = b.memDomain.bankWidth
+  require(bankWidth == 128, s"Int2FpBall requires bankWidth = 128, got $bankWidth")
+  val elemsPerWord = bankWidth / 32
 
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "Int2FpBall")
     .getOrElse(throw new IllegalArgumentException("Int2FpBall not found in config"))
@@ -44,6 +45,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
 
   val rowReg       = RegInit(0.U(b.frontend.iter_len.W))
   val groupReg     = RegInit(0.U(2.W))
+  val lastGroupReg = RegInit(0.U(2.W))
   val modeI8ToFp   = RegInit(false.B)
   val modeI32Group = RegInit(false.B)
   val modeI32ToI8  = RegInit(false.B)
@@ -240,7 +242,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
         val outputInt8   = outputMode === 1.U
         val isI32Single  = outputFp32 && srcCol === 1.U && dstCol === 1.U
         val isI8ToFp     = outputFp32 && srcCol === 1.U && dstCol === 4.U
-        val isI32Group   = outputFp32 && srcCol === 4.U && dstCol === 4.U
+        val isI32Group   = outputFp32 && srcCol === dstCol && (srcCol === 2.U || srcCol === 4.U)
         val isI32ToInt8  = outputInt8 && srcCol === 4.U && dstCol === 1.U
 
         assert(io.cmdReq.bits.cmd.iter > 0.U, "Int2Fp iter must be > 0")
@@ -256,6 +258,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
         scaleReg     := io.cmdReq.bits.cmd.special(31, 0)
         rowReg       := 0.U
         groupReg     := 0.U
+        lastGroupReg := srcCol - 1.U
         modeI8ToFp   := isI8ToFp
         modeI32Group := isI32Group
         modeI32ToI8  := isI32ToInt8
@@ -327,7 +330,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
           groupReg  := groupReg + 1.U
           writeWord := scaledI8Word(srcWord, groupReg + 1.U)
           state     := sWriteReq
-        }.elsewhen(modeI32Group && groupReg =/= 3.U) {
+        }.elsewhen(modeI32Group && groupReg =/= lastGroupReg) {
           groupReg := groupReg + 1.U
           state    := sReadReq
         }.elsewhen(rowReg === iterReg - 1.U) {

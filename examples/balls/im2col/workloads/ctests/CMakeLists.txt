@@ -1,3 +1,12 @@
 add_buckyball_ctests(
-  im2col_test.c
+  im2col_k1_test.c
+  im2col_k3_test.c
+  im2col_k3_partial_test.c
+  im2col_k3_pad_test.c
+  im2col_k5_test.c
+  im2col_k7_test.c
+  im2col_bank_k1_test.c
+  im2col_bank_k3_test.c
+  im2col_bank_k5_test.c
+  im2col_bank_k7_test.c
 )

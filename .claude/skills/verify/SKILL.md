@@ -18,7 +18,7 @@ Use `/check` logic to validate registration consistency, then ensure all require
 1. Run `bbdev_workload_build(chip=...)` to build CTests
 2. Run `bbdev_bemu_sim(chip=..., binary=...)` first
 3. Run `bbdev_bebop_verilator_run(binary=..., config=...)` for RTL
-   - binary is the built ELF name, e.g. `transpose_test-singlecore-baremetal`
+   - binary is `{chip}_{stem}-{platform}`, e.g. `toy_transpose_test-singlecore-baremetal`
    - config is required, e.g. `sims.verilator.BuckyballToyVerilatorConfig`
 4. If build/simulation fails, switch to `/debug` flow
 

@@ -9,23 +9,22 @@ import framework.top.GlobalConfig
 import examples.balls.im2col.configs.Im2colBallParam
 
 /**
- * Packs one im2col K tile into a 128-bit bank row.
- *
- * MatrixBall consumes A in (M tile, K tile, tile row) order.  For window w and
- * kernel chunk kt the destination row is:
+ * Packs im2col K tiles into 128-bit bank rows (MatrixBall A layout).
  *
  *   ((w / 16) * ceil(kernelElems / 16) + kt) * 16 + (w % 16)
  *
- * A partial final K tile is zero-filled to 16 int8 lanes.
+ * Partial final K-tile lanes and partial final M-tile rows are zero-filled.
  */
 @instantiable
 class StreamWriter(val b: GlobalConfig) extends Module {
   private val ballCfg      = Im2colBallParam(b)
-  private val maxK         = ballCfg.InputNum
+  private val maxKSize     = ballCfg.maxKSize
   private val elemWidth    = ballCfg.inputWidth
   private val bankWidth    = b.memDomain.bankWidth
   private val lanesPerBeat = bankWidth / elemWidth
   private val laneIdxWidth = log2Ceil(lanesPerBeat)
+  private val kW           = log2Ceil(maxKSize + 1)
+  private val addrW        = log2Ceil(b.memDomain.bankEntries)
 
   private val mapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
@@ -39,29 +38,56 @@ class StreamWriter(val b: GlobalConfig) extends Module {
   @public val io = IO(new Bundle {
     val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
 
-    val elemIn    = Flipped(Decoupled(UInt(elemWidth.W)))
-    val elemLast  = Input(Bool())
-    val init      = Input(Bool())
-    val windowIdx = Input(UInt(32.W))
-    val kSize     = Input(UInt(log2Ceil(maxK + 1).W))
-    val wBankId   = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val robId     = Input(UInt(log2Up(b.frontend.rob_entries).W))
+    val elemIn     = Flipped(Decoupled(UInt(elemWidth.W)))
+    val elemLast   = Input(Bool())
+    val lastWindow = Input(Bool())
+    val init       = Input(Bool())
+    val windowIdx  = Input(UInt(32.W))
+    val kSize      = Input(UInt(kW.W))
+    val wBankId    = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val robId      = Input(UInt(log2Up(b.frontend.rob_entries).W))
 
     val busy           = Output(Bool())
     val windowComplete = Output(Bool())
+    val opComplete     = Output(Bool())
   })
 
-  private val packCntReg = RegInit(0.U(log2Ceil(lanesPerBeat + 1).W))
+  private val packCntReg   = RegInit(0.U(log2Ceil(lanesPerBeat + 1).W))
   private val packReg =
     RegInit(VecInit(Seq.fill(lanesPerBeat)(0.U(elemWidth.W))))
-  private val chunkIdxReg = RegInit(0.U(16.W))
+  private val chunkIdxReg  = RegInit(0.U(16.W))
   private val wrPendingReg = RegInit(false.B)
   private val endWindowReg = RegInit(false.B)
-  private val wAddrReg = RegInit(0.U(32.W))
+  private val lastWinReg   = RegInit(false.B)
+  private val wAddrReg     = RegInit(0.U(addrW.W))
+  private val padActive    = RegInit(false.B)
+  private val padMTile     = RegInit(0.U(32.W))
+  private val padKTiles    = RegInit(0.U(16.W))
+  private val padK         = RegInit(0.U(16.W))
+  private val padRow       = RegInit(0.U(laneIdxWidth.W))
 
-  io.busy := wrPendingReg
-  io.windowComplete := wrPendingReg && endWindowReg &&
-    io.bankWrite(0).io.req.fire
+  private val zeros = VecInit(Seq.fill(lanesPerBeat)(0.U(elemWidth.W)))
+
+  private val kernelElems = io.kSize * io.kSize
+  private val kTiles = (kernelElems + (lanesPerBeat - 1).U) >> laneIdxWidth
+  private val mTile = io.windowIdx >> laneIdxWidth
+  private val mRow  = io.windowIdx(laneIdxWidth - 1, 0)
+  private val targetAddr =
+    ((mTile * kTiles + chunkIdxReg) << laneIdxWidth) + mRow
+  private val padAddr =
+    ((padMTile * padKTiles + padK) << laneIdxWidth) + padRow
+
+  private val writeFire = io.bankWrite(0).io.req.fire
+
+  io.busy := wrPendingReg || padActive
+  io.windowComplete := wrPendingReg && endWindowReg && writeFire && !lastWinReg
+  io.opComplete := Mux(
+    padActive,
+    wrPendingReg && writeFire &&
+      (padK + 1.U === padKTiles) && (padRow === (lanesPerBeat - 1).U),
+    wrPendingReg && endWindowReg && writeFire && lastWinReg &&
+      (mRow === (lanesPerBeat - 1).U)
+  )
 
   for (i <- 0 until outBW) {
     io.bankWrite(i).io.req.valid     := false.B
@@ -86,33 +112,60 @@ class StreamWriter(val b: GlobalConfig) extends Module {
   io.bankWrite(0).rob_id   := io.robId
   io.bankWrite(0).group_id := 0.U
 
-  io.elemIn.ready := !wrPendingReg
-
-  val kernelElems = io.kSize * io.kSize
-  val kTiles = (kernelElems + (lanesPerBeat - 1).U) >> laneIdxWidth
-  val mTile = io.windowIdx >> laneIdxWidth
-  val mRow  = io.windowIdx(laneIdxWidth - 1, 0)
-  val targetAddr =
-    ((mTile * kTiles + chunkIdxReg) << laneIdxWidth) + mRow
+  io.elemIn.ready := !wrPendingReg && !padActive
 
   when(io.init) {
     packCntReg   := 0.U
-    packReg      := VecInit(Seq.fill(lanesPerBeat)(0.U(elemWidth.W)))
+    packReg      := zeros
     chunkIdxReg  := 0.U
     wrPendingReg := false.B
     endWindowReg := false.B
+    lastWinReg   := false.B
     wAddrReg     := 0.U
+    padActive    := false.B
+    padMTile     := 0.U
+    padKTiles    := 0.U
+    padK         := 0.U
+    padRow       := 0.U
   }.otherwise {
-    when(io.bankWrite(0).io.req.fire) {
+    when(writeFire) {
       packCntReg   := 0.U
-      packReg      := VecInit(Seq.fill(lanesPerBeat)(0.U(elemWidth.W)))
+      packReg      := zeros
       wrPendingReg := false.B
       endWindowReg := false.B
-      when(endWindowReg) {
+      when(padActive) {
+        when(padRow === (lanesPerBeat - 1).U) {
+          padRow := 0.U
+          when(padK + 1.U === padKTiles) {
+            padActive := false.B
+            padK      := 0.U
+          }.otherwise {
+            padK := padK + 1.U
+          }
+        }.otherwise {
+          padRow := padRow + 1.U
+        }
+      }.elsewhen(endWindowReg) {
         chunkIdxReg := 0.U
+        when(lastWinReg && (mRow =/= (lanesPerBeat - 1).U)) {
+          padActive := true.B
+          padMTile  := mTile
+          padKTiles := kTiles
+          padK      := 0.U
+          padRow    := mRow + 1.U
+        }
+        lastWinReg := false.B
       }.otherwise {
         chunkIdxReg := chunkIdxReg + 1.U
       }
+    }
+
+    when(padActive && !wrPendingReg) {
+      wrPendingReg := true.B
+      endWindowReg := false.B
+      lastWinReg   := false.B
+      packReg      := zeros
+      wAddrReg     := padAddr.asTypeOf(UInt(addrW.W))
     }
 
     when(io.elemIn.fire) {
@@ -122,7 +175,8 @@ class StreamWriter(val b: GlobalConfig) extends Module {
       when(nextCnt === lanesPerBeat.U || io.elemLast) {
         wrPendingReg := true.B
         endWindowReg := io.elemLast
-        wAddrReg     := targetAddr
+        lastWinReg   := io.elemLast && io.lastWindow
+        wAddrReg     := targetAddr.asTypeOf(UInt(addrW.W))
       }
     }
   }

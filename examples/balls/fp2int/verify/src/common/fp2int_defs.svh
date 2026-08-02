@@ -2,6 +2,10 @@ import "DPI-C" function int fp2int_ref_i32(
   input int unsigned fp_bits,
   input int unsigned scale_bits
 );
+import "DPI-C" function int fp2int_ref_i8(
+  input int unsigned fp_bits,
+  input int unsigned scale_bits
+);
 import "DPI-C" function int unsigned fp2int_case_bid(
   input int unsigned seed,
   input int unsigned index
@@ -70,4 +74,7 @@ import "DPI-C" function longint unsigned fp2int_case_word_hi(
 );
 
 localparam int FP2INT_NUM_WORDS = 4;
-localparam int FP2INT_TIMEOUT_CYCLES = 200;
+localparam int FP2INT_NUM_GROUPS = 4;
+localparam int FP2INT_MAX_WORDS = FP2INT_NUM_WORDS * FP2INT_NUM_GROUPS;
+localparam int FP2INT_TEST_BID = 0;
+localparam int FP2INT_TIMEOUT_CYCLES = 400;

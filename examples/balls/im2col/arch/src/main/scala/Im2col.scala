@@ -10,7 +10,10 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Im2col(val b: GlobalConfig) extends Module {
-  private val maxK = Im2colBallParam(b).InputNum
+  private val ballCfg  = Im2colBallParam(b)
+  private val maxIter  = ballCfg.maxIter
+  private val maxKSize = ballCfg.maxKSize
+  private val maxPad   = ballCfg.maxPadding
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
@@ -30,14 +33,14 @@ class Im2col(val b: GlobalConfig) extends Module {
   require(inBW >= 1, "[Im2col] inBW must be >= 1")
   require(outBW >= 1, "[Im2col] outBW must be >= 1")
 
-  val cfg = Module(new Im2colConfigRegs(b, maxK))
-  val win = Module(new Im2colWindow(maxK))
+  val cfg = Module(new Im2colConfigRegs(b, maxIter, maxKSize, maxPad))
+  val win = Module(new Im2colWindow(maxKSize))
   val lineBuf: Instance[LineBufferManager] = Instantiate(new LineBufferManager(b))
   val writer:  Instance[StreamWriter]      = Instantiate(new StreamWriter(b))
 
-  val running       = RegInit(false.B)
-  val inputReady    = RegInit(false.B)
-  val respPending   = RegInit(false.B)
+  val running     = RegInit(false.B)
+  val inputReady  = RegInit(false.B)
+  val respPending = RegInit(false.B)
 
   cfg.io.cmd  := io.cmdReq.bits
   cfg.io.load := io.cmdReq.fire
@@ -52,9 +55,9 @@ class Im2col(val b: GlobalConfig) extends Module {
   io.status.running          := running
 
   when(io.cmdReq.fire) {
-    running       := !invalid
-    inputReady    := false.B
-    respPending   := invalid
+    running     := !invalid
+    inputReady  := false.B
+    respPending := invalid
   }
   when(io.cmdResp.fire) {
     respPending := false.B
@@ -93,6 +96,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   writer.io.elemIn.valid := canEmitElem
   writer.io.elemIn.bits  := lineBuf.io.elemData
   writer.io.elemLast     := win.io.elemLast
+  writer.io.lastWindow   := win.io.last
   writer.io.kSize        := cfg.io.kSize
   val outputDim = ((cfg.io.iter +& (cfg.io.padding << 1) - cfg.io.kSize) /
     cfg.io.stride) + 1.U
@@ -104,9 +108,9 @@ class Im2col(val b: GlobalConfig) extends Module {
     inputReady := true.B
   }
 
-  when(writer.io.windowComplete && win.io.last) {
-    inputReady := false.B
-    running    := false.B
+  when(writer.io.opComplete) {
+    inputReady  := false.B
+    running     := false.B
     respPending := true.B
   }.elsewhen(writer.io.windowComplete) {
     win.io.next := true.B

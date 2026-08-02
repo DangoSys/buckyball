@@ -13,8 +13,11 @@ function(add_tile_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}_main.c)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
-  set(BAREMETAL_BIN optest_tile_${name}_singlecore-baremetal)
-  set(LINUX_BIN optest_tile_${name}-linux)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
+  endif()
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}_singlecore-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}-linux)
 
   add_custom_command(
     OUTPUT ${OBJ}

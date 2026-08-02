@@ -75,9 +75,9 @@ int main() {
   }
 
   if (passed) {
-    printf("Int2Fp test PASSED\n");
+    printf("Int2Fp INT32-to-FP32 test PASSED\n");
   } else {
-    printf("Int2Fp test FAILED\n");
+    printf("Int2Fp INT32-to-FP32 test FAILED\n");
   }
   return (!passed);
 

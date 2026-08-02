@@ -11,6 +11,7 @@ import framework.top.GlobalConfig
 /**
  * Im2colBall - An Im2col computation Ball that complies with the Blink protocol
  */
+@instantiable
 class Im2colBall(val b: GlobalConfig) extends Module with HasBlink {
   val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "Im2colBall")
     .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))

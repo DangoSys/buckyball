@@ -2,7 +2,8 @@ add_buckyball_ctests(
   aligned_matmul.c
   mmio_minimal_test.c
   scu_uart_rx_echo_test.c
-  matrix_matmul_4x8_8x4.c
+  matrix_matmul_4x8_8x4_os.c
+  matrix_matmul_4x8_8x4_ws.c
   test_vsetvli.c
   tlb_bare_mode_test.c
   tlb_repeated_sfence_test.c

@@ -10,8 +10,9 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Fp2Int(val b: GlobalConfig) extends Module {
-  val elemsPerWord = 4
   val bankWidth    = b.memDomain.bankWidth
+  require(bankWidth == 128, s"Fp2IntBall requires bankWidth = 128, got $bankWidth")
+  val elemsPerWord = bankWidth / 32
   val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "Fp2IntBall")
     .getOrElse(throw new IllegalArgumentException("Fp2IntBall not found in config"))
   val inBW        = ballMapping.inBW

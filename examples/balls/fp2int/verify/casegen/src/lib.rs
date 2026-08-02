@@ -84,10 +84,18 @@ pub extern "C" fn fp2int_case_sub_rob_id(seed: u32, index: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn fp2int_case_word_lo(seed: u32, index: u32, word_index: u32) -> u64 {
-  casegen::gen_case(seed, index).word_lo(word_index as usize)
+  let case = casegen::gen_case(seed, index);
+  if (word_index as usize) >= casegen::MAX_WORDS {
+    panic!("fp2int_case_word_lo: word_index out of range");
+  }
+  case.word_lo(word_index as usize)
 }
 
 #[no_mangle]
 pub extern "C" fn fp2int_case_word_hi(seed: u32, index: u32, word_index: u32) -> u64 {
-  casegen::gen_case(seed, index).word_hi(word_index as usize)
+  let case = casegen::gen_case(seed, index);
+  if (word_index as usize) >= casegen::MAX_WORDS {
+    panic!("fp2int_case_word_hi: word_index out of range");
+  }
+  case.word_hi(word_index as usize)
 }

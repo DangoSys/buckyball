@@ -1,8 +1,8 @@
 class fp2int_cmd_item extends bb_blink_cmd_item;
-  bit [127:0] input_words[FP2INT_NUM_WORDS];
+  bit [127:0] input_words[FP2INT_MAX_WORDS];
 
   constraint legal_c {
-    bid == 5'd5;
+    bid == FP2INT_TEST_BID[4:0];
     funct7 == 7'd51;
     iter inside {[1 : FP2INT_NUM_WORDS]};
     op1_en == 1'b1;
@@ -19,15 +19,14 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
     sub_rob_id == 8'h00;
   }
 
-  constraint i32_layout_c {
-    op1_col == 5'd1;
-    wr_col == 5'd1;
-  }
-
   `uvm_object_utils(fp2int_cmd_item)
 
   function new(string name = "fp2int_cmd_item");
     super.new(name);
+  endfunction
+
+  function bit is_i8();
+    return (op1_col == 5'd4) && (wr_col == 5'd1);
   endfunction
 
   function void load_rust_case(int unsigned seed, int unsigned index);
@@ -69,7 +68,7 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
     v = fp2int_case_sub_rob_id(seed, index);
     sub_rob_id = v[7:0];
 
-    for (int i = 0; i < FP2INT_NUM_WORDS; i++) begin
+    for (int i = 0; i < FP2INT_MAX_WORDS; i++) begin
       word_hi = fp2int_case_word_hi(seed, index, i);
       word_lo = fp2int_case_word_lo(seed, index, i);
       input_words[i] = {word_hi, word_lo};
@@ -79,7 +78,7 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
   endfunction
 
   function void check_legal();
-    if (bid != 5'd5) begin
+    if (bid != FP2INT_TEST_BID[4:0]) begin
       `uvm_fatal("CASE", $sformatf("invalid bid from Rust casegen: %0d", bid))
     end
     if (funct7 != 7'd51) begin
@@ -88,7 +87,7 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
     if (iter == 0 || iter > FP2INT_NUM_WORDS) begin
       `uvm_fatal("CASE", $sformatf("invalid iter from Rust casegen: %0d", iter))
     end
-    if (op1_col != 5'd1 || wr_col != 5'd1) begin
+    if (!((op1_col == 5'd1 && wr_col == 5'd1) || (op1_col == 5'd4 && wr_col == 5'd1))) begin
       `uvm_fatal("CASE", "Rust casegen produced unsupported layout")
     end
     if (op1_bank == wr_bank) begin
@@ -104,7 +103,7 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("COPY", "rhs is not fp2int_cmd_item")
     end
 
-    for (int i = 0; i < FP2INT_NUM_WORDS; i++) begin
+    for (int i = 0; i < FP2INT_MAX_WORDS; i++) begin
       input_words[i] = rhs_.input_words[i];
     end
   endfunction

@@ -112,9 +112,20 @@ function(add_buckyball_singlecore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
+get_filename_component(_BUCKYBALL_CHIPS_CMAKE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/../../../cmake" ABSOLUTE)
+include(${_BUCKYBALL_CHIPS_CMAKE_DIR}/BuckyballCtestLimits.cmake)
+
 function(add_buckyball_ctest SOURCE_FILE)
-  get_filename_component(TEST_NAME ${SOURCE_FILE} NAME_WE)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR
+      "BUCKYBALL_WORKLOAD_CHIP must be set before add_buckyball_ctest()")
+  endif()
+  get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${_stem}")
   set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+  buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
 
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_multicore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})

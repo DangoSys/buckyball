@@ -5,12 +5,13 @@
 //
 // CHECK-DAG: %[[C64:.*]] = arith.constant 64 : i64
 // CHECK-DAG: %[[C16:.*]] = arith.constant 16 : i64
+// CHECK-DAG: %[[C8:.*]] = arith.constant 8 : i64
 // CHECK-DAG: %[[C1:.*]] = arith.constant 1 : i64
 // CHECK: buckyball.bank_mvin {{.*}} %[[C64]] %[[C1]]
 // CHECK: buckyball.bank_mvin {{.*}} %[[C64]] %[[C1]]
 // CHECK: buckyball.bank_fp2int {{.*}} %[[C64]]
 // CHECK: buckyball.bank_fp2int {{.*}} %[[C64]]
-// CHECK: buckyball.bank_transpose {{.*}} %[[C64]]
+// CHECK: buckyball.bank_transpose {{.*}} %[[C64]] %[[C8]]
 // CHECK: buckyball.bank_mul_warp16 {{.*}} %[[C64]]
 // CHECK: buckyball.bank_int2fp {{.*}} %[[C16]]
 // CHECK: buckyball.bank_mvout {{.*}} %[[C16]] %[[C1]]

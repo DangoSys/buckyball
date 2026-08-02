@@ -1,5 +1,24 @@
 # Im2col Ball Configuration
+#
+# Legal command range (enforced fail-hard in bemu/RTL):
+#   iter    in 1 ..= maxIter
+#   ksize   in 1 ..= maxKSize   # covers 1x1 / 3x3 / 5x5 / 7x7
+#   stride  >= 1
+#   padding in 0 ..= maxPadding
+#   paddedSize = iter + 2*padding >= ksize
+#   op1_bank != wr_bank
+#   outputDim = floor((iter + 2*padding - ksize) / stride) + 1
+#   M = outputDim * outputDim
+#   K = ksize * ksize
+#   outputRows = ceil(M/16) * ceil(K/16) * 16
+#   outputRows <= bankEntries   # bankEntries from chip memdomain
+#
+# Partial final K-tile lanes and partial final M-tile rows are zero.
+# maxIter=34 covers bank-level ctests that fill BANK_LINES (1024) output rows.
+# Bank-level binaries are bemu-only (not in verilator regression).
 
 [ball]
-InputNum = 16
 inputWidth = 8
+maxIter = 34
+maxKSize = 7
+maxPadding = 3

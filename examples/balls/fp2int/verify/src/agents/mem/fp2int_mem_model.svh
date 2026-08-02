@@ -3,7 +3,8 @@ class fp2int_mem_model extends uvm_component;
 
   virtual fp2int_if vif;
   uvm_analysis_imp_stim #(fp2int_cmd_item, fp2int_mem_model) stim_imp;
-  bit [127:0] input_words[FP2INT_NUM_WORDS];
+  bit [127:0] input_words[FP2INT_MAX_WORDS];
+  bit is_i8;
   bit have_stim;
 
   function new(string name, uvm_component parent);
@@ -19,9 +20,10 @@ class fp2int_mem_model extends uvm_component;
   endfunction
 
   function void write_stim(fp2int_cmd_item item);
-    for (int i = 0; i < FP2INT_NUM_WORDS; i++) begin
+    for (int i = 0; i < FP2INT_MAX_WORDS; i++) begin
       input_words[i] = item.input_words[i];
     end
+    is_i8 = item.is_i8();
     have_stim = 1'b1;
   endfunction
 
@@ -54,6 +56,8 @@ class fp2int_mem_model extends uvm_component;
   endtask
 
   task handle_read();
+    int unsigned word_index;
+
     if (vif.bank_read_0_resp_valid && vif.bank_read_0_resp_ready) begin
       vif.bank_read_0_resp_valid <= 1'b0;
     end
@@ -66,7 +70,17 @@ class fp2int_mem_model extends uvm_component;
         `uvm_fatal("MEM", $sformatf("read addr out of range: %0d", vif.bank_read_0_req_bits_addr))
       end
 
-      vif.bank_read_0_resp_bits_data <= input_words[vif.bank_read_0_req_bits_addr];
+      if (is_i8) begin
+        word_index = vif.bank_read_0_req_bits_addr * FP2INT_NUM_GROUPS + vif.bank_read_0_group_id;
+      end else begin
+        if (vif.bank_read_0_group_id !== 5'd0) begin
+          `uvm_fatal("MEM", $sformatf("unexpected group_id for INT32 mode: %0d",
+                                      vif.bank_read_0_group_id))
+        end
+        word_index = vif.bank_read_0_req_bits_addr;
+      end
+
+      vif.bank_read_0_resp_bits_data <= input_words[word_index];
       vif.bank_read_0_resp_valid <= 1'b1;
     end
   endtask

@@ -19,8 +19,10 @@ def Im2colOp : Buckyball_Op<"im2col"> {
   let description = [{
     Transforms image data into column format for efficient convolution.
     Corresponds to bb_im2col instruction (funct7=48).
-    Belongs to Im2colBall (bid=3).
+    Ball id (BID) is chip-specific via balldomain TOML; do not hardcode.
     ISA: bb_im2col(op1_bank_id, wr_bank_id, iter, ksize, stride, padding)
+    Legal range is defined in examples/balls/im2col/configs/default.toml
+    (maxIter / maxKSize / maxPadding); out of range is illegal fail-hard.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$iter, I64:$ksize, I64:$stride, I64:$padding);

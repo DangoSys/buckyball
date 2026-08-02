@@ -175,22 +175,40 @@ public:
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
 
+        if (cLen % elemsPerRow != 0)
+          return tileTransposeOp.emitError(
+              "transpose tile width must be a multiple of bank row elems");
+
+        int64_t nGroups = (int64_t)(cLen / elemsPerRow);
+        int64_t elemBits =
+            (int64_t)inputType.getElementType().getIntOrFloatBitWidth();
+        if (elemBits != 8 && elemBits != 32)
+          return tileTransposeOp.emitError(
+              "transpose only supports elem_bits 8 or 32");
+        if (nGroups * 2 > 16)
+          return tileTransposeOp.emitError(
+              "transpose tile needs more physical banks than available");
+
         Value srcBank =
             rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
+        srcBank.getDefiningOp()->setAttr("col",
+                                         rewriter.getI64IntegerAttr(nGroups));
         Value dstBank =
             rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
+        dstBank.getDefiningOp()->setAttr("col",
+                                         rewriter.getI64IntegerAttr(nGroups));
 
-        int64_t depth = rLenPadded * cLen / elemsPerRow;
+        int64_t depth = (int64_t)rLenPadded;
         Value srcBankAfterMvin =
             mvinBank(rewriter, loc, inTile, srcBank, depth);
 
-        Value iterVal = createI64Const(rewriter, loc, cLen);
-        Value modeVal = createI64Const(rewriter, loc, 0);
+        Value iterVal = createI64Const(rewriter, loc, rLenPadded);
+        Value elemBitsVal = createI64Const(rewriter, loc, elemBits);
         Value dstBankAfterTranspose = rewriter.create<BankTransposeOp>(
             loc, dstBank.getType(), srcBankAfterMvin, dstBank, iterVal,
-            modeVal);
+            elemBitsVal);
 
-        int64_t outDepth = cLen * rLen / elemsPerRow;
+        int64_t outDepth = (int64_t)rLenPadded;
         mvoutBank(rewriter, loc, outTile, dstBankAfterTranspose, outDepth);
 
         releaseBank(rewriter, loc, srcBankAfterMvin);

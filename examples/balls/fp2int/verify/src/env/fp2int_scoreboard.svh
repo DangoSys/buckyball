@@ -9,10 +9,13 @@ class fp2int_scoreboard extends uvm_scoreboard;
 
   fp2int_cmd_item stim_q[$];
   bit [127:0] expected_words[FP2INT_NUM_WORDS];
+  int unsigned expected_reads;
+  int unsigned expected_writes;
   int unsigned cmd_count;
   int unsigned read_count;
   int unsigned write_count;
   int unsigned resp_count;
+  int unsigned expect_group;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -32,19 +35,34 @@ class fp2int_scoreboard extends uvm_scoreboard;
     if (!$cast(clone, item.clone())) begin
       `uvm_fatal("SCB", "failed to clone stimulus item")
     end
-    if (clone.iter != FP2INT_NUM_WORDS) begin
-      `uvm_fatal("SCB", $sformatf("unsupported iter in this test: %0d", clone.iter))
-    end
 
     build_expected(clone);
+    expected_writes = clone.iter;
+    expected_reads = clone.is_i8() ? (clone.iter * FP2INT_NUM_GROUPS) : clone.iter;
+    expect_group = 0;
     stim_q.push_back(clone);
   endfunction
 
   function void build_expected(fp2int_cmd_item item);
-    for (int w = 0; w < FP2INT_NUM_WORDS; w++) begin
-      for (int e = 0; e < 4; e++) begin
-        expected_words[w][e*32+:32] =
-            fp2int_ref_i32(item.input_words[w][e*32+:32], item.scale_bits);
+    if (item.is_i8()) begin
+      for (int row = 0; row < item.iter; row++) begin
+        bit [127:0] packed_word = '0;
+        for (int group = 0; group < FP2INT_NUM_GROUPS; group++) begin
+          bit [127:0] src = item.input_words[row*FP2INT_NUM_GROUPS+group];
+          for (int lane = 0; lane < 4; lane++) begin
+            bit [31:0] fp_bits = src[lane*32+:32];
+            bit [ 7:0] q = fp2int_ref_i8(fp_bits, item.scale_bits);
+            packed_word[group*32+lane*8+:8] = q;
+          end
+        end
+        expected_words[row] = packed_word;
+      end
+    end else begin
+      for (int w = 0; w < item.iter; w++) begin
+        for (int e = 0; e < 4; e++) begin
+          expected_words[w][e*32+:32] =
+              fp2int_ref_i32(item.input_words[w][e*32+:32], item.scale_bits);
+        end
       end
     end
   endfunction
@@ -84,25 +102,37 @@ class fp2int_scoreboard extends uvm_scoreboard;
 
   function void write_read(fp2int_read_item item);
     fp2int_cmd_item stim;
+    int unsigned expect_addr;
 
     stim = current_stim("READ");
     if (item.bank_id !== stim.op1_bank) begin
       `uvm_fatal("READ", $sformatf("read bank mismatch: got %0d expected %0d", item.bank_id,
                                    stim.op1_bank))
     end
-    if (item.group_id !== 5'd0) begin
-      `uvm_fatal("READ", $sformatf("read group mismatch: got %0d", item.group_id))
-    end
     if (item.rob_id !== stim.rob_id) begin
       `uvm_fatal("READ", $sformatf("read rob_id mismatch: got 0x%0h expected 0x%0h", item.rob_id,
                                    stim.rob_id))
     end
-    if (item.addr >= FP2INT_NUM_WORDS) begin
-      `uvm_fatal("READ", $sformatf("read addr out of range: %0d", item.addr))
-    end
-    if (item.addr !== read_count[6:0]) begin
-      `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
-                                   read_count))
+
+    if (stim.is_i8()) begin
+      expect_addr = read_count / FP2INT_NUM_GROUPS;
+      if (item.group_id !== expect_group[4:0]) begin
+        `uvm_fatal("READ", $sformatf("read group mismatch: got %0d expected %0d", item.group_id,
+                                     expect_group))
+      end
+      if (item.addr !== expect_addr[6:0]) begin
+        `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
+                                     expect_addr))
+      end
+      expect_group = (expect_group + 1) % FP2INT_NUM_GROUPS;
+    end else begin
+      if (item.group_id !== 5'd0) begin
+        `uvm_fatal("READ", $sformatf("read group mismatch: got %0d", item.group_id))
+      end
+      if (item.addr !== read_count[6:0]) begin
+        `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
+                                     read_count))
+      end
     end
 
     read_count++;
@@ -119,9 +149,6 @@ class fp2int_scoreboard extends uvm_scoreboard;
     if (item.rob_id !== stim.rob_id) begin
       `uvm_fatal("WRITE", $sformatf("write rob_id mismatch: got 0x%0h expected 0x%0h", item.rob_id,
                                     stim.rob_id))
-    end
-    if (item.addr >= FP2INT_NUM_WORDS) begin
-      `uvm_fatal("WRITE", $sformatf("write addr out of range: %0d", item.addr))
     end
     if (item.addr !== write_count[6:0]) begin
       `uvm_fatal("WRITE", $sformatf("write addr mismatch: got %0d expected %0d", item.addr,
@@ -166,8 +193,8 @@ class fp2int_scoreboard extends uvm_scoreboard;
 
   function bit done();
     return cmd_count == 1 &&
-           read_count == FP2INT_NUM_WORDS &&
-           write_count == FP2INT_NUM_WORDS &&
+           read_count == expected_reads &&
+           write_count == expected_writes &&
            resp_count == 1;
   endfunction
 

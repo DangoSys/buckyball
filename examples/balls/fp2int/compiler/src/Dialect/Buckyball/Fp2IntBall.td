@@ -19,7 +19,7 @@ def Fp2IntOp : Buckyball_Op<"fp2int"> {
   let description = [{
     Quantizes floating-point values to fixed-point representation.
     Corresponds to bb_fp2int instruction (funct7=51).
-    Belongs to Fp2IntBall (bid=5).
+    Belongs to Fp2IntBall (ballName=Fp2IntBall; ballId is chip-config specific).
     ISA: bb_fp2int(bank_id, wr_bank_id, iter, scale_fp32)
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,

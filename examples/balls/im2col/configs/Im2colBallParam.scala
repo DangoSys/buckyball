@@ -4,7 +4,9 @@ import framework.balldomain.configs.BallParamLoader
 import framework.top.GlobalConfig
 
 case class Im2colBallParam(
-  InputNum:   Int,
+  maxIter:    Int,
+  maxKSize:   Int,
+  maxPadding: Int,
   inputWidth: Int
 )
 
@@ -14,7 +16,9 @@ object Im2colBallParam {
   def apply(b: GlobalConfig): Im2colBallParam = {
     val tbl = BallParamLoader.ballTable(b, ballName)
     Im2colBallParam(
-      InputNum = BallParamLoader.int(tbl, "InputNum"),
+      maxIter = BallParamLoader.int(tbl, "maxIter"),
+      maxKSize = BallParamLoader.int(tbl, "maxKSize"),
+      maxPadding = BallParamLoader.int(tbl, "maxPadding"),
       inputWidth = BallParamLoader.int(tbl, "inputWidth")
     )
   }

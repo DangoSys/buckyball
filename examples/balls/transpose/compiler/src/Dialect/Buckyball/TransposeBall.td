@@ -10,31 +10,26 @@
 include "BuckyballBase.td"
 include "BuckyballIntrinsics.td"
 
-//===----------------------------------------------------------------------===//
-// TransposeBall operations
-//===----------------------------------------------------------------------===//
-
 def TransposeOp : Buckyball_Op<"transpose"> {
   let summary = "Matrix transpose operation";
   let description = [{
-    Transposes a matrix in scratchpad memory.
-    Corresponds to bb_transpose instruction (funct7=49).
-    Belongs to TransposeBall (bid=2).
-    ISA: bb_transpose(op1_bank_id, wr_bank_id, iter, mode)
+    Transposes iter x W to W x iter in scratchpad banks.
+    funct7=49. ISA: bb_transpose(op1_bank, wr_bank, iter, elem_bits)
+    W = (bankWidth * cols) / elem_bits.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
-                       I64:$iter, I64:$mode);
+                       I64:$iter, I64:$elemBits);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $mode attr-dict `:` "
+                       "$iter `,` $elemBits attr-dict `:` "
                        "type($inputBankId)";
 }
 
 def BankTransposeOp : Buckyball_Op<"bank_transpose"> {
   let summary = "Transpose using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$mode);
+  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$elemBits);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $mode attr-dict `:` type($inBank) type($outBank) type($iter) type($mode)";
+      "$inBank $outBank $iter $elemBits attr-dict `:` type($inBank) type($outBank) type($iter) type($elemBits)";
 }
 
 def TransposeIntrOp : Buckyball_IntrOpBase<"transpose">,

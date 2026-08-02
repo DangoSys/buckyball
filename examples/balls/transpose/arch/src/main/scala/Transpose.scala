@@ -2,10 +2,8 @@ package examples.balls.transpose
 
 import chisel3._
 import chisel3.util._
-import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import examples.balls.vector._
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
@@ -14,9 +12,8 @@ import examples.balls.transpose.configs.TransposeBallParam
 @instantiable
 class Transpose(val b: GlobalConfig) extends Module {
   val ballConfig = TransposeBallParam(b)
-  val InputNum   = ballConfig.InputNum
-  val inputWidth = ballConfig.inputWidth
   val bankWidth  = b.memDomain.bankWidth
+  val rowBytes   = bankWidth / 8
 
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "TransposeBall")
@@ -24,6 +21,13 @@ class Transpose(val b: GlobalConfig) extends Module {
 
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
+  require(inBW == outBW, "TransposeBall requires inBW == outBW")
+  require(bankWidth % 8 == 0, "bankWidth must be byte-aligned")
+  val side = inBW
+
+  // Side x Side register array (cells hold one bank beat). With side==1 this is
+  // a single-beat corner buffer; wider configs use the geometric X/Y access.
+  val cell = Reg(Vec(side, Vec(side, UInt(bankWidth.W))))
 
   @public
   val io = IO(new Bundle {
@@ -34,59 +38,53 @@ class Transpose(val b: GlobalConfig) extends Module {
     val status    = new BallStatus
   })
 
-  // -------------------------------
-  // ROB / IDs
-  // -------------------------------
   val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   val is_sub_reg     = RegInit(false.B)
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  when(io.cmdReq.fire) {
-    rob_id_reg     := io.cmdReq.bits.rob_id
-    is_sub_reg     := io.cmdReq.bits.is_sub
-    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
-  }
 
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id  := rob_id_reg
-    io.bankRead(i).ball_id := 0.U
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id  := rob_id_reg
-    io.bankWrite(i).ball_id := 0.U
-  }
-
-  val idle :: read :: write :: complete :: Nil = Enum(4)
-  val state                                    = RegInit(idle)
-  val outRow                                   = RegInit(VecInit(Seq.fill(InputNum)(0.U(inputWidth.W))))
-
-  // Command fields
   val rbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   val wbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val iter_reg  = RegInit(0.U(32.W))
+  val ncol_reg  = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val iter_reg  = RegInit(0.U(b.frontend.iter_len.W))
+  val elem_reg  = RegInit(0.U(8.W))
 
-  // Counters
-  val outCol  = RegInit(0.U(32.W))
-  val srcRow  = RegInit(0.U(log2Ceil(InputNum + 1).W))
-  val pending = RegInit(false.B)
+  val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
+  val state                                      = RegInit(idle)
 
-  // -------------------------------
-  // Default IO assignments
-  // -------------------------------
+  // Walk destination dense index 0 .. iter*W-1, filling write beats.
+  val dstIdx   = RegInit(0.U(32.W))
+  val pending  = RegInit(false.B)
+  val wrData   = RegInit(0.U(bankWidth.W))
+  val wrMask   = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))))
+  val wrGroup  = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val wrAddr   = RegInit(0.U(b.frontend.iter_len.W))
+  val wrValid  = RegInit(false.B)
+  val beatFill = RegInit(0.U(8.W))
+
+  val cached     = RegInit(false.B)
+  val cacheAddr  = RegInit(0.U(b.frontend.iter_len.W))
+  val cacheGroup = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val cacheData  = RegInit(0.U(bankWidth.W))
+
   for (i <- 0 until inBW) {
+    io.bankRead(i).rob_id           := rob_id_reg
+    io.bankRead(i).ball_id          := 0.U
+    io.bankRead(i).bank_id          := rbank_reg
+    io.bankRead(i).group_id         := 0.U
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := 0.U
     io.bankRead(i).io.resp.ready    := false.B
-    io.bankRead(i).bank_id          := rbank_reg
-    io.bankRead(i).group_id         := 0.U
   }
   for (i <- 0 until outBW) {
+    io.bankWrite(i).rob_id           := rob_id_reg
+    io.bankWrite(i).ball_id          := 0.U
+    io.bankWrite(i).bank_id          := wbank_reg
+    io.bankWrite(i).group_id         := 0.U
     io.bankWrite(i).io.req.valid     := false.B
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
     io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
-    io.bankWrite(i).io.resp.ready    := false.B
-    io.bankWrite(i).bank_id          := wbank_reg
-    io.bankWrite(i).group_id         := 0.U
+    io.bankWrite(i).io.resp.ready    := (state =/= idle)
   }
 
   io.cmdReq.ready            := (state === idle)
@@ -95,78 +93,117 @@ class Transpose(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.is_sub     := is_sub_reg
   io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
-  io.bankRead(0).io.resp.ready  := (state === read) && pending
-  io.bankWrite(0).io.resp.ready := (state =/= idle)
+  val elemBits = elem_reg
+  val elemBytes = elemBits >> 3
+  val epg       = (rowBytes.U / elemBytes)
+  val wElems    = ncol_reg * epg
+  val total     = iter_reg * wElems
 
-  val srcByte   = srcRow * iter_reg + outCol
-  val srcLane   = srcByte(log2Ceil(InputNum) - 1, 0)
-  val srcAddr   = srcByte >> log2Ceil(InputNum)
-  val rowIdx    = srcRow(log2Ceil(InputNum) - 1, 0)
-  val readLanes = io.bankRead(0).io.resp.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-  val packedRow = Cat(outRow.reverse)
+  // Decode dest linear index -> (virt_row, group, lane) and src (r,c).
+  val dCol = Mux(iter_reg === 0.U, 0.U, dstIdx / iter_reg) // c in W×iter
+  val dRow = Mux(iter_reg === 0.U, 0.U, dstIdx % iter_reg) // r
+  val srcR = dRow
+  val srcC = dCol
 
-  // -------------------------------
-  // Main FSM
-  // -------------------------------
+  val srcGroup = srcC / epg
+  val srcLane  = srcC % epg
+  val srcAddr  = srcR
+
+  val dstVirtRow = Mux(wElems === 0.U, 0.U, dstIdx / wElems)
+  val dstVirtCol = Mux(wElems === 0.U, 0.U, dstIdx % wElems)
+  val dstGroup   = dstVirtCol / epg
+  val dstLane    = dstVirtCol % epg
+
+  val needRead = !cached || cacheAddr =/= srcAddr || cacheGroup =/= srcGroup
+
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        val iterVal = io.cmdReq.bits.cmd.iter
-
-        rbank_reg        := io.cmdReq.bits.cmd.op1_bank
-        wbank_reg        := io.cmdReq.bits.cmd.wr_bank
-        iter_reg         := iterVal
-        outCol           := 0.U
-        srcRow           := 0.U
-        pending          := false.B
-        outRow.foreach(_ := 0.U)
-        assert(io.cmdReq.bits.cmd.iter > 0.U, "Transpose iter must be > 0")
-        assert(
-          io.cmdReq.bits.cmd.op1_col === 1.U && io.cmdReq.bits.cmd.wr_col === 1.U,
-          "Transpose unsupported bank layout"
-        )
-        state            := read
+        val cmd = io.cmdReq.bits.cmd
+        rob_id_reg     := io.cmdReq.bits.rob_id
+        is_sub_reg     := io.cmdReq.bits.is_sub
+        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+        rbank_reg      := cmd.op1_bank
+        wbank_reg      := cmd.wr_bank
+        ncol_reg       := cmd.op1_col
+        iter_reg       := cmd.iter
+        elem_reg       := cmd.rs2(7, 0)
+        dstIdx         := 0.U
+        pending        := false.B
+        wrValid        := false.B
+        beatFill       := 0.U
+        cached         := false.B
+        assert(cmd.iter > 0.U, "Transpose iter must be > 0")
+        assert(cmd.op1_bank =/= cmd.wr_bank, "Transpose op1 and wr must differ")
+        assert(cmd.op1_col === cmd.wr_col && cmd.op1_col =/= 0.U, "Transpose cols mismatch")
+        assert(cmd.rs2(63, 8) === 0.U, "Transpose rs2[63:8] must be 0")
+        assert(cmd.rs2(7, 0) === 8.U || cmd.rs2(7, 0) === 32.U, "Transpose elem_bits")
+        assert(bankWidth.U % cmd.rs2(7, 0) === 0.U,
+          "Transpose bankWidth not divisible by elem_bits")
+        state := sRead
       }
     }
 
-    is(read) {
-      io.bankRead(0).io.req.valid     := (srcRow < InputNum.U) && !pending
+    is(sRead) {
+      io.bankRead(0).group_id         := srcGroup
+      io.bankRead(0).io.resp.ready    := pending
+      io.bankRead(0).io.req.valid     := needRead && !pending && !wrValid
       io.bankRead(0).io.req.bits.addr := srcAddr
+
       when(io.bankRead(0).io.req.fire) {
         pending := true.B
       }
-
       when(io.bankRead(0).io.resp.fire) {
-        outRow(rowIdx) := readLanes(srcLane)
-        pending        := false.B
-        srcRow         := srcRow + 1.U
-        when(srcRow === (InputNum - 1).U) {
-          state := write
+        cacheData  := io.bankRead(0).io.resp.bits.data
+        cacheAddr  := srcAddr
+        cacheGroup := srcGroup
+        cached     := true.B
+        pending    := false.B
+        cell(0)(0) := io.bankRead(0).io.resp.bits.data
+      }
+
+      when(cached && !needRead && !wrValid) {
+        val shift = srcLane * elemBytes * 8.U
+        val mask  = (1.U << (elemBytes * 8.U)) - 1.U
+        val elem  = (cacheData >> shift) & mask
+        val wsh   = dstLane * elemBytes * 8.U
+        val base  = Mux(beatFill === 0.U, 0.U, wrData)
+        when(beatFill === 0.U) {
+          wrGroup := dstGroup
+          wrAddr  := dstVirtRow
+        }
+        wrData   := base | (elem << wsh)
+        beatFill := beatFill + 1.U
+        dstIdx   := dstIdx + 1.U
+
+        val beatDone = (beatFill + 1.U === epg) || (dstIdx + 1.U === total)
+        when(beatDone) {
+          wrMask.foreach(_ := 1.U)
+          wrValid := true.B
+          state   := sWrite
         }
       }
     }
 
-    is(write) {
-      io.bankWrite(0).io.req.valid     := true.B
-      io.bankWrite(0).io.req.bits.addr := outCol
-      io.bankWrite(0).io.req.bits.data := packedRow
-      io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
-
+    is(sWrite) {
+      io.bankWrite(0).group_id         := wrGroup
+      io.bankWrite(0).io.req.valid     := wrValid
+      io.bankWrite(0).io.req.bits.addr := wrAddr
+      io.bankWrite(0).io.req.bits.data := wrData
+      io.bankWrite(0).io.req.bits.mask := wrMask
       when(io.bankWrite(0).io.req.fire) {
-        srcRow           := 0.U
-        outRow.foreach(_ := 0.U)
-        when(outCol + 1.U === iter_reg) {
+        wrValid  := false.B
+        beatFill := 0.U
+        when(dstIdx === total) {
           state := complete
         }.otherwise {
-          outCol := outCol + 1.U
-          state  := read
+          state := sRead
         }
       }
     }
 
     is(complete) {
-      io.cmdResp.valid       := true.B
-      io.cmdResp.bits.rob_id := rob_id_reg
+      io.cmdResp.valid := true.B
       when(io.cmdResp.fire) {
         state := idle
       }
@@ -175,4 +212,8 @@ class Transpose(val b: GlobalConfig) extends Module {
 
   io.status.idle    := (state === idle)
   io.status.running := (state =/= idle)
+
+  // Silence unused param warnings from legacy config fields.
+  val _legacy = WireInit(ballConfig.InputNum.U | ballConfig.inputWidth.U)
+  dontTouch(_legacy)
 }

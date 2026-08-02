@@ -7,7 +7,7 @@
 #define DIM 16
 
 // Column count n for 16xn matrix multiplication
-#define MATMUL_COL 50
+#define MATMUL_COL 32
 static elem_t input_matrix_a[DIM * MATMUL_COL] __attribute__((aligned(64)));
 static elem_t input_matrix_b[MATMUL_COL * DIM] __attribute__((aligned(16)));
 static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
@@ -16,23 +16,25 @@ static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
 void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
                int size) {
   (void)test_name;
-  // spad0: operand A, offset 0
   uint32_t op1_bank_id = 0;
-  // spad1: operand B, offset 0
   uint32_t op2_bank_id = 1;
-  // acc0: write to accumulator, offset 0
-  int acc_bank_id = 2; // virtual bank id
-  // spad3: transposed A
+  int acc_bank_id = 2;
   uint32_t a_transposed_bank_id = 3;
 
-  bb_mem_alloc(op1_bank_id, 1, 1);
+  if (size % DIM != 0) {
+    printf("K=%d not multiple of %d\n", size, DIM);
+    return;
+  }
+  int a_cols = size / DIM;
+
+  bb_mem_alloc(op1_bank_id, 1, a_cols);
   bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 1, 4);
-  bb_mem_alloc(a_transposed_bank_id, 1, 1);
+  bb_mem_alloc(a_transposed_bank_id, 1, a_cols);
 
-  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_transpose(op1_bank_id, a_transposed_bank_id, size, 0);
+  bb_transpose(op1_bank_id, a_transposed_bank_id, DIM, 8);
   bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);
   bb_fence();

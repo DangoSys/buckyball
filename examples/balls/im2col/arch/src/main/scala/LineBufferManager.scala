@@ -10,11 +10,14 @@ import framework.top.GlobalConfig
 @instantiable
 class LineBufferManager(val b: GlobalConfig) extends Module {
   private val ballCfg      = Im2colBallParam(b)
-  private val maxDim       = ballCfg.InputNum
+  private val maxIter      = ballCfg.maxIter
+  private val maxKSize     = ballCfg.maxKSize
   private val elemWidth    = ballCfg.inputWidth
   private val bankWidth    = b.memDomain.bankWidth
   private val lanesPerBeat = bankWidth / elemWidth
-  private val maxBeats     = (maxDim * maxDim + lanesPerBeat - 1) / lanesPerBeat
+  private val maxBeats     = (maxIter * maxIter + lanesPerBeat - 1) / lanesPerBeat
+  private val kW           = log2Ceil(maxKSize + 1)
+  private val addrW        = log2Ceil(b.memDomain.bankEntries)
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
@@ -25,13 +28,13 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   @public val io = IO(new Bundle {
     val bankRead = Vec(inBW, Flipped(new BankRead(b)))
     val start    = Input(Bool())
-    val iter     = Input(UInt(16.W))
+    val iter     = Input(UInt(b.frontend.iter_len.W))
     val stride   = Input(UInt(8.W))
     val padding  = Input(UInt(8.W))
     val outRow   = Input(UInt(16.W))
     val outCol   = Input(UInt(16.W))
-    val kRowIdx  = Input(UInt(log2Ceil(maxDim + 1).W))
-    val kColIdx  = Input(UInt(log2Ceil(maxDim + 1).W))
+    val kRowIdx  = Input(UInt(kW.W))
+    val kColIdx  = Input(UInt(kW.W))
     val rBankId  = Input(UInt(log2Up(b.memDomain.bankNum).W))
     val robId    = Input(UInt(log2Up(b.frontend.rob_entries).W))
     val loadDone = Output(Bool())
@@ -56,7 +59,7 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   }
 
   io.bankRead(0).io.req.valid     := active && !pending
-  io.bankRead(0).io.req.bits.addr := beat
+  io.bankRead(0).io.req.bits.addr := beat.asTypeOf(UInt(addrW.W))
   io.bankRead(0).io.resp.ready    := pending
   io.loadDone                     := !active
 
@@ -82,12 +85,13 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   private val paddedCol = io.outCol * io.stride + io.kColIdx
   private val rowValid  = paddedRow >= io.padding && paddedRow < io.padding + io.iter
   private val colValid  = paddedCol >= io.padding && paddedCol < io.padding + io.iter
-  private val srcRow    = paddedRow - io.padding
-  private val srcCol    = paddedCol - io.padding
+  private val inBound   = rowValid && colValid
+  private val srcRow    = Mux(inBound, paddedRow - io.padding, 0.U)
+  private val srcCol    = Mux(inBound, paddedCol - io.padding, 0.U)
   private val elemIndex = srcRow * io.iter + srcCol
   private val beatIndex = elemIndex / lanesPerBeat.U
   private val laneIndex = elemIndex % lanesPerBeat.U
   private val lanes     = buf(beatIndex).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
 
-  io.elemData := Mux(rowValid && colValid, lanes(laneIndex), 0.U)
+  io.elemData := Mux(inBound, lanes(laneIndex), 0.U)
 }

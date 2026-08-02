@@ -22,14 +22,19 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
   // spad3: transposed A
   uint32_t a_transposed_bank_id = 3;
 
-  bb_mem_alloc(op1_bank_id, 1, 1);
+  if (size % DIM != 0) {
+    printf("K=%d not multiple of %d\n", size, DIM);
+    return;
+  }
+  int a_cols = size / DIM;
+  bb_mem_alloc(op1_bank_id, 1, a_cols);
   bb_mem_alloc(op2_bank_id, 1, 1);
   bb_mem_alloc(acc_bank_id, 1, 4);
-  bb_mem_alloc(a_transposed_bank_id, 1, 1);
+  bb_mem_alloc(a_transposed_bank_id, 1, a_cols);
 
-  bb_mvin((uintptr_t)a, op1_bank_id, size, 1);
+  bb_mvin((uintptr_t)a, op1_bank_id, DIM, 1);
   bb_mvin((uintptr_t)b, op2_bank_id, size, 1);
-  bb_transpose(op1_bank_id, a_transposed_bank_id, size, 0);
+  bb_transpose(op1_bank_id, a_transposed_bank_id, DIM, 8);
 
   bb_mul_warp16(a_transposed_bank_id, op2_bank_id, acc_bank_id, size, 0);
   bb_mvout((uintptr_t)c, acc_bank_id, DIM, 1);

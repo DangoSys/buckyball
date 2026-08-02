@@ -39,8 +39,11 @@ function(add_linalg_conv2d_test name main_src)
   set(LLVM_MLIR ${CMAKE_CURRENT_BINARY_DIR}/${name}_llvm.mlir)
   set(LLVM_IR ${CMAKE_CURRENT_BINARY_DIR}/${name}.ll)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
-  set(BAREMETAL_BIN optest_linalg_${name}_singlecore-baremetal)
-  set(LINUX_BIN optest_linalg_${name}-linux)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
+  endif()
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}_singlecore-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}-linux)
 
   add_custom_command(
     OUTPUT ${OBJ} ${LLVM_MLIR} ${LLVM_IR}
@@ -161,11 +164,16 @@ add_custom_command(
     VERBATIM
 )
 
-# Link baremetal binary
+if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+  message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
+endif()
+set(LINALG_MATMUL_BAREMETAL_BIN
+  ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_matmul_singlecore-baremetal)
+
 add_custom_command(
-    OUTPUT optest_linalg_matmul_singlecore-baremetal
+    OUTPUT ${LINALG_MATMUL_BAREMETAL_BIN}
     COMMAND ${ELF_CC} ${C_FLAGS}
-        -o ${CMAKE_CURRENT_BINARY_DIR}/optest_linalg_matmul_singlecore-baremetal
+        -o ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
@@ -174,13 +182,13 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c
-    COMMENT "Linking optest_linalg_matmul_singlecore-baremetal"
+    COMMENT "Linking ${LINALG_MATMUL_BAREMETAL_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
 
 add_custom_target(optest_linalg_matmul_singlecore_baremetal ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/optest_linalg_matmul_singlecore-baremetal
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
 )
 
 add_linalg_contract_test(conv2d_nhwc_hwcf_contract)

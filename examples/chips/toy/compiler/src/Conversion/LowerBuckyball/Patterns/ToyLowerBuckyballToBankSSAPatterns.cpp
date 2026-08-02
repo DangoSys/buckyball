@@ -210,7 +210,7 @@ public:
 
     auto aTrans = rewriter.create<BankTransposeOp>(
         loc, rewriter.getI64Type(), aQuant.getOutBankOut(), aI8T.getBank(),
-        cstI64(rewriter, loc, k), cstI64(rewriter, loc, 0));
+        cstI64(rewriter, loc, k), cstI64(rewriter, loc, 8));
     rewriter.create<BankReleaseOp>(loc, aQuant.getOutBankOut());
 
     auto cI32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());

@@ -13,9 +13,12 @@ function(add_toy_mlir_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}_main.c)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
-  set(BAREMETAL_BIN optest_buckyball_${name}_singlecore-baremetal)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
+  endif()
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}_singlecore-baremetal)
   set(BAREMETAL_TARGET optest_buckyball_${name}_singlecore_baremetal)
-  set(LINUX_BIN optest_buckyball_${name}-linux)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}-linux)
   set(LINUX_TARGET optest_buckyball_${name}_linux)
 
   add_custom_command(
@@ -148,9 +151,71 @@ add_toy_mlir_matmul_contract_test(matmul_16x64_64x16)
 add_toy_mlir_matmul_test(matmul_64x16_16x64)
 add_toy_mlir_matmul_test(matmul_1024x16_16x1024)
 
+set(INT_CONVERT_MLIR ${CMAKE_CURRENT_SOURCE_DIR}/int_convert_ops.mlir)
+set(INT_CONVERT_PHYSICAL ${CMAKE_CURRENT_BINARY_DIR}/int_convert_ops_physical.mlir)
+set(INT_CONVERT_INTRIN ${CMAKE_CURRENT_BINARY_DIR}/int_convert_ops_intrinsics.mlir)
+
+add_custom_command(
+  OUTPUT ${INT_CONVERT_PHYSICAL} ${INT_CONVERT_INTRIN}
+  COMMAND ${BUDDY_OPT} ${INT_CONVERT_MLIR}
+    "--assign-physical-banks=bank_num=16"
+    > ${INT_CONVERT_PHYSICAL}
+  COMMAND ${BUDDY_OPT} ${INT_CONVERT_MLIR}
+    "--assign-physical-banks=bank_num=16"
+    ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
+    ${BUCKYBALL_LOWER_BUCKYBALL}
+    > ${INT_CONVERT_INTRIN}
+  DEPENDS ${INT_CONVERT_MLIR} ${BUDDY_OPT}
+  COMMENT "Lowering int_convert_ops.mlir"
+  VERBATIM
+)
+
+add_custom_target(optest_buckyball_int_convert_ops_contract
+  COMMAND ${FILECHECK} ${INT_CONVERT_MLIR}
+    --check-prefix=CHECK-PHYSICAL
+    --input-file=${INT_CONVERT_PHYSICAL}
+  COMMAND ${FILECHECK} ${INT_CONVERT_MLIR}
+    --check-prefix=CHECK-INTRIN
+    --input-file=${INT_CONVERT_INTRIN}
+  DEPENDS ${INT_CONVERT_PHYSICAL} ${INT_CONVERT_INTRIN}
+  COMMENT "Checking Int2Fp convert ISA contract"
+  VERBATIM)
+
+set(TRANSPOSE_OPS_MLIR ${CMAKE_CURRENT_SOURCE_DIR}/transpose_ops.mlir)
+set(TRANSPOSE_OPS_PHYSICAL ${CMAKE_CURRENT_BINARY_DIR}/transpose_ops_physical.mlir)
+set(TRANSPOSE_OPS_INTRIN ${CMAKE_CURRENT_BINARY_DIR}/transpose_ops_intrinsics.mlir)
+
+add_custom_command(
+  OUTPUT ${TRANSPOSE_OPS_PHYSICAL} ${TRANSPOSE_OPS_INTRIN}
+  COMMAND ${BUDDY_OPT} ${TRANSPOSE_OPS_MLIR}
+    "--assign-physical-banks=bank_num=16"
+    > ${TRANSPOSE_OPS_PHYSICAL}
+  COMMAND ${BUDDY_OPT} ${TRANSPOSE_OPS_MLIR}
+    "--assign-physical-banks=bank_num=16"
+    ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
+    ${BUCKYBALL_LOWER_BUCKYBALL}
+    > ${TRANSPOSE_OPS_INTRIN}
+  DEPENDS ${TRANSPOSE_OPS_MLIR} ${BUDDY_OPT}
+  COMMENT "Lowering transpose_ops.mlir"
+  VERBATIM
+)
+
+add_custom_target(optest_buckyball_transpose_ops_contract
+  COMMAND ${FILECHECK} ${TRANSPOSE_OPS_MLIR}
+    --check-prefix=CHECK-PHYSICAL
+    --input-file=${TRANSPOSE_OPS_PHYSICAL}
+  COMMAND ${FILECHECK} ${TRANSPOSE_OPS_MLIR}
+    --check-prefix=CHECK-INTRIN
+    --input-file=${TRANSPOSE_OPS_INTRIN}
+  DEPENDS ${TRANSPOSE_OPS_PHYSICAL} ${TRANSPOSE_OPS_INTRIN}
+  COMMENT "Checking TransposeBall ISA contract"
+  VERBATIM)
+
 add_custom_target(buckyball-mlir-tests-build ALL DEPENDS
   optest_buckyball_matmul_16x64_64x16
   optest_buckyball_matmul_64x16_16x64
   optest_buckyball_matmul_1024x16_16x1024
+  optest_buckyball_int_convert_ops_contract
+  optest_buckyball_transpose_ops_contract
   COMMENT "Building Toy Buckyball MLIR tests"
   VERBATIM)

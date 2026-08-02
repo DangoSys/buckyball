@@ -1,6 +1,12 @@
-use super::super::bank::bank_num;
+use super::super::bank::{bank_lines, bank_num};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
+
+/// Must match examples/balls/im2col/configs/default.toml
+const MAX_ITER: usize = 34;
+const MAX_KSIZE: usize = 7;
+const MAX_PADDING: usize = 3;
+const TILE: usize = 16;
 
 pub struct Im2col;
 
@@ -26,8 +32,17 @@ impl Instruction for Im2col {
         let stride = ((xs2 >> 8) & 0xFF) as usize;
         let padding = ((xs2 >> 16) & 0xFF) as usize;
 
-        if iter == 0 || ksize == 0 || stride == 0 {
-            panic!("im2col: invalid shape (zero dim)");
+        if iter == 0 || iter > MAX_ITER {
+            panic!("im2col: iter out of range 1..={MAX_ITER} (got {iter})");
+        }
+        if ksize == 0 || ksize > MAX_KSIZE {
+            panic!("im2col: ksize out of range 1..={MAX_KSIZE} (got {ksize})");
+        }
+        if stride == 0 {
+            panic!("im2col: stride must be >= 1");
+        }
+        if padding > MAX_PADDING {
+            panic!("im2col: padding out of range 0..={MAX_PADDING} (got {padding})");
         }
         let padded_size = iter + 2 * padding;
         if padded_size < ksize {
@@ -35,14 +50,24 @@ impl Instruction for Im2col {
         }
 
         let output_dim = (padded_size - ksize) / stride + 1;
-
-        const TILE: usize = 16;
-        let po = pbank(ctx.bank_map, op1);
         let windows = output_dim * output_dim;
         let kernel_elems = ksize * ksize;
         let m_tiles = windows.div_ceil(TILE);
         let k_tiles = kernel_elems.div_ceil(TILE);
-        let mut output = vec![0u8; m_tiles * k_tiles * TILE * TILE];
+        let output_rows = m_tiles * k_tiles * TILE;
+
+        let groups = ctx.cfgs[wr as usize].cols as usize;
+        let rows_per_bank = bank_lines();
+        let capacity_rows = groups * rows_per_bank;
+        if output_rows > capacity_rows {
+            panic!(
+                "im2col: outputRows={output_rows} exceeds bank capacity={capacity_rows} \
+                 (groups={groups}, bank_lines={rows_per_bank})"
+            );
+        }
+
+        let po = pbank(ctx.bank_map, op1);
+        let mut output = vec![0u8; output_rows * TILE];
 
         let srcb = &ctx.banks[po];
         let mut window = 0usize;
@@ -79,8 +104,6 @@ impl Instruction for Im2col {
             }
         }
 
-        let groups = ctx.cfgs[wr as usize].cols as usize;
-        let rows_per_bank = ctx.banks[pbank_group(ctx.bank_map, wr, 0)].len() / TILE;
         for (row, data) in output.chunks_exact(TILE).enumerate() {
             let group = row / rows_per_bank;
             let local_row = row % rows_per_bank;
@@ -94,13 +117,15 @@ impl Instruction for Im2col {
         0
     }
 
-    fn latency(_xs1: u64, xs2: u64) -> u64 {
-        let iter = rs1_iter(_xs1);
+    fn latency(xs1: u64, xs2: u64) -> u64 {
+        let iter = rs1_iter(xs1);
         let ksize = xs2 & 0xFF;
         let stride = (xs2 >> 8) & 0xFF;
         let padding = (xs2 >> 16) & 0xFF;
 
-        if iter == 0 || ksize == 0 || stride == 0 {
+        if iter == 0 || iter > MAX_ITER as u64 || ksize == 0 || ksize > MAX_KSIZE as u64 || stride == 0
+            || padding > MAX_PADDING as u64
+        {
             return 16;
         }
         let padded_size = iter + 2 * padding;

@@ -22,10 +22,11 @@ struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
     if (stable) {
-      rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, rs1, adaptor.getMode());
+      rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, rs1,
+                                                   adaptor.getElemBits());
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getMode(),
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getElemBits(),
                                               rewriter.getI32IntegerAttr(49));
     return success();
   }

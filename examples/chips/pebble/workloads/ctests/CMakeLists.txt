@@ -1,4 +1,10 @@
 add_buckyball_ctests(
-  conv_im2col_transpose_matmul_test.c
-  conv1layer_quant_im2col_transpose_gemm_test.c
+  conv_im2col_test.c
+  conv_transpose_test.c
+  conv_matmul_test.c
+  quant_fp32_to_int8_test.c
+  quant_im2col_test.c
+  quant_transpose_test.c
+  quant_gemm_test.c
+  quant_int8_to_fp32_test.c
 )

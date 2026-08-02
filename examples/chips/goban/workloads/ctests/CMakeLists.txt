@@ -2,6 +2,10 @@ if(NOT DEFINED ELF_CC)
   set(ELF_CC "riscv64-unknown-elf-gcc")
 endif()
 
+get_filename_component(_BUCKYBALL_REPO_ROOT
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
+include(${_BUCKYBALL_REPO_ROOT}/examples/chips/cmake/BuckyballCtestLimits.cmake)
+
 set(GOBAN_CTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GOBAN_LD ${GOBAN_CTEST_DIR}/goban.ld)
 
@@ -14,7 +18,12 @@ set(GOBAN_C_FLAGS
   -I${GOBAN_CTEST_DIR}
 )
 
-function(add_goban_test_target TEST_NAME SOURCE_FILE)
+function(add_goban_test_target STEM SOURCE_FILE)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before goban ctests")
+  endif()
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${STEM}")
+  buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
   set(EXECUTABLE "${TEST_NAME}-multicore-baremetal")
 
   add_custom_command(
@@ -39,7 +48,12 @@ function(add_goban_test_target TEST_NAME SOURCE_FILE)
   )
 endfunction()
 
-function(add_goban_64t4c_test_target TEST_NAME SOURCE_FILE)
+function(add_goban_64t4c_test_target STEM SOURCE_FILE)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before goban ctests")
+  endif()
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${STEM}")
+  buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
   set(EXECUTABLE "${TEST_NAME}-multicore-baremetal")
 
   add_custom_command(
@@ -66,7 +80,12 @@ function(add_goban_64t4c_test_target TEST_NAME SOURCE_FILE)
   )
 endfunction()
 
-function(add_goban_2t4c_test_target TEST_NAME SOURCE_FILE)
+function(add_goban_2t4c_test_target STEM SOURCE_FILE)
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before goban ctests")
+  endif()
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${STEM}")
+  buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
   set(EXECUTABLE "${TEST_NAME}-multicore-baremetal")
 
   add_custom_command(
@@ -94,41 +113,41 @@ function(add_goban_2t4c_test_target TEST_NAME SOURCE_FILE)
   )
 endfunction()
 
-add_goban_test_target(goban_barrier_test barrier_test.c)
-add_goban_test_target(goban_barrier_mvin_test barrier_mvin_test.c)
-add_goban_test_target(goban_shared_barrier_mvin_test shared_barrier_mvin_test.c)
-add_goban_test_target(goban_shared_same_vbank_test shared_same_vbank_test.c)
-add_goban_test_target(goban_shared_multigroup_mvin_test shared_multigroup_mvin_test.c)
-add_goban_test_target(goban_shared_duplicate_alloc_assert_test shared_duplicate_alloc_assert_test.c)
-add_goban_test_target(goban_shared_invalid_release_assert_test shared_invalid_release_assert_test.c)
-add_goban_test_target(goban_shared_barrier_mvin_2core_test shared_barrier_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
-add_goban_test_target(goban_shared_same_vbank_2core_test shared_same_vbank_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
-add_goban_test_target(goban_shared_multigroup_mvin_2core_test shared_multigroup_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
-add_goban_test_target(goban_shared_barrier_mvin_8core_test shared_barrier_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
-add_goban_test_target(goban_shared_same_vbank_8core_test shared_same_vbank_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
-add_goban_test_target(goban_shared_multigroup_mvin_8core_test shared_multigroup_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
-add_goban_2t4c_test_target(goban_hetero_2t4c_smoke_test hetero_64t4c_smoke_test.c)
-add_goban_64t4c_test_target(goban_hetero_64t4c_smoke_test hetero_64t4c_smoke_test.c)
-add_goban_2t4c_test_target(goban_uart_rx_echo_2t4c_test uart_rx_echo_test.c)
-add_goban_64t4c_test_target(goban_uart_rx_echo_64t4c_test uart_rx_echo_test.c)
+add_goban_test_target(barrier_test barrier_test.c)
+add_goban_test_target(barrier_mvin_test barrier_mvin_test.c)
+add_goban_test_target(shared_barrier_mvin_test shared_barrier_mvin_test.c)
+add_goban_test_target(shared_same_vbank_test shared_same_vbank_test.c)
+add_goban_test_target(shared_multigroup_mvin_test shared_multigroup_mvin_test.c)
+add_goban_test_target(shared_duplicate_alloc_assert_test shared_duplicate_alloc_assert_test.c)
+add_goban_test_target(shared_invalid_release_assert_test shared_invalid_release_assert_test.c)
+add_goban_test_target(shared_barrier_mvin_2core_test shared_barrier_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(shared_same_vbank_2core_test shared_same_vbank_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(shared_multigroup_mvin_2core_test shared_multigroup_mvin_test.c -DNCORES=2 -DGOBAN_CORES_PER_TILE=2 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(shared_barrier_mvin_8core_test shared_barrier_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(shared_same_vbank_8core_test shared_same_vbank_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
+add_goban_test_target(shared_multigroup_mvin_8core_test shared_multigroup_mvin_test.c -DNCORES=8 -DGOBAN_CORES_PER_TILE=8 -DGOBAN_MAX_TILES=1)
+add_goban_2t4c_test_target(hetero_2t4c_smoke_test hetero_64t4c_smoke_test.c)
+add_goban_64t4c_test_target(hetero_64t4c_smoke_test hetero_64t4c_smoke_test.c)
+add_goban_2t4c_test_target(uart_rx_echo_2t4c_test uart_rx_echo_test.c)
+add_goban_64t4c_test_target(uart_rx_echo_64t4c_test uart_rx_echo_test.c)
 
 add_custom_target(goban-ctests-build ALL
   DEPENDS
-    goban_barrier_test-ctest-build
-    goban_barrier_mvin_test-ctest-build
-    goban_shared_barrier_mvin_test-ctest-build
-    goban_shared_same_vbank_test-ctest-build
-    goban_shared_multigroup_mvin_test-ctest-build
-    goban_shared_barrier_mvin_2core_test-ctest-build
-    goban_shared_same_vbank_2core_test-ctest-build
-    goban_shared_multigroup_mvin_2core_test-ctest-build
-    goban_shared_barrier_mvin_8core_test-ctest-build
-    goban_shared_same_vbank_8core_test-ctest-build
-    goban_shared_multigroup_mvin_8core_test-ctest-build
-    goban_hetero_2t4c_smoke_test-ctest-build
-    goban_hetero_64t4c_smoke_test-ctest-build
-    goban_uart_rx_echo_2t4c_test-ctest-build
-    goban_uart_rx_echo_64t4c_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_barrier_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_barrier_mvin_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_barrier_mvin_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_same_vbank_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_multigroup_mvin_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_barrier_mvin_2core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_same_vbank_2core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_multigroup_mvin_2core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_barrier_mvin_8core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_same_vbank_8core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_shared_multigroup_mvin_8core_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_hetero_2t4c_smoke_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_hetero_64t4c_smoke_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_uart_rx_echo_2t4c_test-ctest-build
+    ${BUCKYBALL_WORKLOAD_CHIP}_uart_rx_echo_64t4c_test-ctest-build
   COMMENT "Building all Goban CTest workloads"
   VERBATIM
 )

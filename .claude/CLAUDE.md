@@ -86,7 +86,7 @@ Daily agent path:
 
 Default Verilator config: `sims.verilator.BuckyballToyVerilatorConfig`
 Pebble: `sims.verilator.BuckyballPebbleVerilatorConfig`
-Workload binary names are the built ELF names, e.g. `vecunit_matmul_ones-singlecore-baremetal`
+Workload binary names are `{chip}_{stem}-{platform}`, e.g. `toy_vecunit_matmul_ones-singlecore-baremetal`
 
 ### Analysis report paths
 - Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
