@@ -8,7 +8,7 @@ Config is the repo-root `.mcp.json` — shared by Claude Code, Codex, Cursor, an
 ```
 User / Agent host
   └── .mcp.json → bash scripts/claude/run_mcp_server.sh
-                    └── nix develop -c python3 scripts/claude/mcp_server.py
+                    └── nix develop -c python3 bbdev/mcp/__main__.py
                           ├── validate
                           └── bbdev_*  → bbdev HTTP (auto start + poll /result/{trace_id})
 ```
@@ -17,7 +17,7 @@ User / Agent host
 |------|------|
 | `.mcp.json` | Host-agnostic MCP registration |
 | `scripts/claude/run_mcp_server.sh` | cd to repo root, `NIX_QUIET=1`, clean stdout |
-| `scripts/claude/mcp_server.py` | MCP tools + bbdev lifecycle |
+| `bbdev/mcp/` | MCP package: `common.py`, `server.py`, `tools/*.py` |
 | `.claude/CLAUDE.md` | Agent rules |
 | `docs/zh/设计文档/主线架构/0.0.1/工具链/` | Human CLI docs |
 
@@ -39,19 +39,22 @@ UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
 |------|---------|
 | `validate(chip, balldomain?)` | Chip balldomain TOML invariants (`ballIdMappings` / `ballISA`) |
 
-### Preferred bbdev wrappers
+### bbdev wrappers (all POST APIs)
 | Tool | API |
 |------|-----|
 | `bbdev_compiler_build` | `/compiler/build` |
-| `bbdev_workload_clean` | `/workload/clean` |
-| `bbdev_workload_build` | `/workload/build` |
-| `bbdev_bemu_sim` | `/bebop/bemu/sim` |
-| `bbdev_bemu_batch` | `/bebop/bemu/batch` |
+| `bbdev_workload_{clean,build,tohex}` | `/workload/{clean,build,tohex}` |
+| `bbdev_bemu_{sim,batch}` | `/bebop/bemu/{sim,batch}` |
 | `bbdev_bebop_verilator_*` | `/bebop/verilator/{clean,verilog,build,sim,run,batch}` |
-| `bbdev_uvm_build` / `bbdev_uvm_run` | `/uvm/build`, `/uvm/run` |
-| `bbdev_yosys_synth` | `/yosys/synth` |
+| `bbdev_verilator_*` | `/verilator/{clean,verilog,build,sim,run}` (non-bebop) |
+| `bbdev_bebop_p2e_*` | `/bebop/p2e/{clean,verilog,buildbitstream,runworkload,batch}` |
+| `bbdev_uvm_{build,run}` | `/uvm/{build,run}` |
+| `bbdev_yosys_{run,verilog,synth}` | `/yosys/{run,verilog,synth}` |
+| `bbdev_dc_verilog` | `/dc/verilog` |
+| `bbdev_firesim_*` | `/firesim/{enumeratefpgas,buildbitstream,infrasetup,runworkload}` |
+| `bbdev_kernel_build` | `/kernel/build` |
 
-`bbdev_verilator_*` still exist for the legacy non-bebop path; daily work should use bebop tools.
+Daily work: bebop + bemu + workload. Reload project MCP after changing `bbdev/mcp/`.
 
 ## Server lifecycle
 

@@ -22,12 +22,12 @@ class Transpose(val b: GlobalConfig) extends Module {
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
   require(inBW == outBW, "TransposeBall requires inBW == outBW")
+  require(inBW == 1, "TransposeBall gather/scatter path requires inBW == 1")
   require(bankWidth % 8 == 0, "bankWidth must be byte-aligned")
-  val side = inBW
-
-  // Side x Side register array (cells hold one bank beat). With side==1 this is
-  // a single-beat corner buffer; wider configs use the geometric X/Y access.
-  val cell = Reg(Vec(side, Vec(side, UInt(bankWidth.W))))
+  require(
+    ballConfig.InputNum * ballConfig.inputWidth == bankWidth,
+    "TransposeBall InputNum*inputWidth must equal bankWidth"
+  )
 
   @public
   val io = IO(new Bundle {
@@ -159,7 +159,6 @@ class Transpose(val b: GlobalConfig) extends Module {
         cacheGroup := srcGroup
         cached     := true.B
         pending    := false.B
-        cell(0)(0) := io.bankRead(0).io.resp.bits.data
       }
 
       when(cached && !needRead && !wrValid) {
@@ -212,8 +211,4 @@ class Transpose(val b: GlobalConfig) extends Module {
 
   io.status.idle    := (state === idle)
   io.status.running := (state =/= idle)
-
-  // Silence unused param warnings from legacy config fields.
-  val _legacy = WireInit(ballConfig.InputNum.U | ballConfig.inputWidth.U)
-  dontTouch(_legacy)
 }

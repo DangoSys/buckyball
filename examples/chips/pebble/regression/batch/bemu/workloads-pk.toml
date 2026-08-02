@@ -13,6 +13,7 @@ tests = [
   "pebble_optest_transpose_ball_op-linux",
   "pebble_matrix_test-linux",
   "pebble_matrix_matmul_16x16_ones-linux",
+  "pebble_optest_linalg_matmul-linux",
   "pebble_optest_im2col_bank_ssa-linux",
   "pebble_optest_im2col_ball_op-linux",
   "pebble_optest_fp2int_bank_ssa-linux",

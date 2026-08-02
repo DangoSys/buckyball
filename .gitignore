@@ -1,12 +1,10 @@
 .vscode/
 .metals/
 .motia/
-# .cursor/
 .bsp/
 out/
 .Xil/
 result
-.codex/
 
 CLAUDE.local.md
 node_modules/

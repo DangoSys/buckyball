@@ -62,7 +62,7 @@ Use MCP `validate(chip=..., balldomain=...)` or `/check`.
 ## MCP Tools
 
 Project MCP config lives in root `.mcp.json` (Claude Code / Codex / Cursor / any stdio MCP host).
-Entry point: `scripts/claude/run_mcp_server.sh` → `scripts/claude/mcp_server.py`.
+Entry point: `scripts/claude/run_mcp_server.sh` → `bbdev/mcp/__main__.py` (tools in `bbdev/mcp/tools/`).
 It cds to the repo root, sets `NIX_QUIET=1`, and keeps stdout MCP-clean.
 
 **Important: agents must invoke build/sim/synth/test via MCP tools. Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly.**
@@ -76,13 +76,13 @@ Daily agent path:
 - `validate(chip="toy", balldomain?=)` — check balldomain TOML invariants (default: file selected by `cores/default.toml`)
 
 ### bbdev API wrappers (automatic server lifecycle + result polling)
-- `bbdev_compiler_build(chip, stable?)`
-- `bbdev_workload_clean()` / `bbdev_workload_build(chip, model?)`
-- `bbdev_bemu_sim(chip, binary, pk?)` / `bbdev_bemu_batch(chip, test, clean_before?)`
-- `bbdev_bebop_verilator_clean|verilog|build|sim|run|batch` — preferred RTL path
-- `bbdev_uvm_build(config, ball?, filelist?)` / `bbdev_uvm_run(ball, filelist?, test?)`
-- `bbdev_verilator_*` — legacy non-bebop verilator; prefer bebop tools above
-- `bbdev_yosys_synth(top?, config?)`
+All bbdev POST endpoints are exposed as `bbdev_*` tools. Daily path prefers:
+- `bbdev_compiler_build` / `bbdev_workload_{clean,build,tohex}`
+- `bbdev_bemu_{sim,batch}`
+- `bbdev_bebop_verilator_{clean,verilog,build,sim,run,batch}` — bebop-accelerated RTL
+- `bbdev_verilator_{clean,verilog,build,sim,run}` — non-bebop Verilator RTL path
+- `bbdev_uvm_{build,run}` / `bbdev_yosys_{run,verilog,synth}`
+Also: `bbdev_bebop_p2e_*`, `bbdev_firesim_*`, `bbdev_dc_verilog`, `bbdev_kernel_build`
 
 Default Verilator config: `sims.verilator.BuckyballToyVerilatorConfig`
 Pebble: `sims.verilator.BuckyballPebbleVerilatorConfig`

@@ -43,6 +43,8 @@ endfunction()
 
 # Bank-level / ball-op MLIR -> baremetal + linux ELF (same pipeline as toy OpTest).
 function(add_buckyball_mlir_optest NAME)
+  cmake_parse_arguments(ARG "" "" "PASSES" ${ARGN})
+
   if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
     message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
   endif()
@@ -71,9 +73,10 @@ function(add_buckyball_mlir_optest NAME)
   set(LLVM_MLIR_EXECUTION_ENGINE_DIR
     ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
 
-  add_custom_command(
-    OUTPUT ${OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+  if(ARG_PASSES)
+    set(MLIR_PASSES ${ARG_PASSES})
+  else()
+    set(MLIR_PASSES
       "--assign-physical-banks=bank_num=16"
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
@@ -86,7 +89,12 @@ function(add_buckyball_mlir_optest NAME)
       -convert-math-to-llvm
       -finalize-memref-to-llvm
       -convert-func-to-llvm
-      -reconcile-unrealized-casts |
+      -reconcile-unrealized-casts)
+  endif()
+
+  add_custom_command(
+    OUTPUT ${OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${MLIR_PASSES} |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
     ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
       -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}

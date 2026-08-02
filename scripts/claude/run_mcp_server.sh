@@ -16,4 +16,4 @@ if [[ -z "$NIX_BIN" ]]; then
 fi
 
 export NIX_QUIET=1
-exec "$NIX_BIN" develop "$ROOT" -c python3 -u "$ROOT/scripts/claude/mcp_server.py"
+exec "$NIX_BIN" develop "$ROOT" -c python3 -u "$ROOT/bbdev/mcp/__main__.py"

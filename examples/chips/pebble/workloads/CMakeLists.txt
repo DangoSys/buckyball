@@ -14,6 +14,7 @@ add_custom_target(pebble-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET pebble-ctests-build)
 
 add_subdirectory(ctests)
+add_subdirectory(mlir_tests)
 
 set(BUCKYBALL_BALL_CTEST_DIRS
   ${BUCKYBALL_REPO_ROOT}/examples/balls/transpose/workloads/ctests
@@ -25,6 +26,8 @@ set(BUCKYBALL_BALL_CTEST_DIRS
 buckyball_add_ball_ctest_subdirs()
 
 add_custom_target(chip-workloads-build ALL
-  DEPENDS pebble-ctests-build
+  DEPENDS
+    pebble-ctests-build
+    pebble-mlir-tests-build
   COMMENT "Building pebble workloads"
   VERBATIM)

@@ -3,26 +3,27 @@ package examples.balls.im2col
 import chisel3._
 import chisel3.util._
 
-class Im2colWindow(maxK: Int) extends Module {
+class Im2colWindow(maxK: Int, iterW: Int) extends Module {
+  require(iterW >= 1, "Im2colWindow iterW must be >= 1")
 
   val io = IO(new Bundle {
     val init     = Input(Bool())
     val next     = Input(Bool())
     val elemFire = Input(Bool())
-    val iter     = Input(UInt(16.W))
+    val iter     = Input(UInt(iterW.W))
     val kSize    = Input(UInt(log2Ceil(maxK + 1).W))
     val stride   = Input(UInt(8.W))
     val padding  = Input(UInt(8.W))
-    val outRow   = Output(UInt(16.W))
-    val outCol   = Output(UInt(16.W))
+    val outRow   = Output(UInt(iterW.W))
+    val outCol   = Output(UInt(iterW.W))
     val kRowIdx  = Output(UInt(log2Ceil(maxK + 1).W))
     val kColIdx  = Output(UInt(log2Ceil(maxK + 1).W))
     val elemLast = Output(Bool())
     val last     = Output(Bool())
   })
 
-  private val outRowReg  = RegInit(0.U(16.W))
-  private val outColReg  = RegInit(0.U(16.W))
+  private val outRowReg  = RegInit(0.U(iterW.W))
+  private val outColReg  = RegInit(0.U(iterW.W))
   private val kRowIdxReg = RegInit(0.U(log2Ceil(maxK + 1).W))
   private val kColIdxReg = RegInit(0.U(log2Ceil(maxK + 1).W))
 

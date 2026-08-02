@@ -34,7 +34,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   require(outBW >= 1, "[Im2col] outBW must be >= 1")
 
   val cfg = Module(new Im2colConfigRegs(b, maxIter, maxKSize, maxPad))
-  val win = Module(new Im2colWindow(maxKSize))
+  val win = Module(new Im2colWindow(maxKSize, b.frontend.iter_len))
   val lineBuf: Instance[LineBufferManager] = Instantiate(new LineBufferManager(b))
   val writer:  Instance[StreamWriter]      = Instantiate(new StreamWriter(b))
 

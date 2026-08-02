@@ -13,6 +13,7 @@ tests = [
   "pebble_optest_transpose_ball_op_singlecore-baremetal",
   "pebble_matrix_test-singlecore-baremetal",
   "pebble_matrix_matmul_16x16_ones-singlecore-baremetal",
+  "pebble_optest_linalg_matmul_singlecore-baremetal",
   "pebble_optest_im2col_bank_ssa_singlecore-baremetal",
   "pebble_optest_im2col_ball_op_singlecore-baremetal",
   "pebble_optest_fp2int_bank_ssa_singlecore-baremetal",
