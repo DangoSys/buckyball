@@ -36,4 +36,36 @@ object MulWarp16Tie {
       p.io.resp.ready    := false.B
     }
   }
+
+  def feedRead(child: BankRead, parent: BankRead): Unit = {
+    child.io.req.ready    := parent.io.req.ready
+    child.io.resp.valid   := parent.io.resp.valid
+    child.io.resp.bits    := parent.io.resp.bits
+  }
+
+  def feedWrite(child: BankWrite, parent: BankWrite): Unit = {
+    child.io.req.ready  := parent.io.req.ready
+    child.io.resp.valid := parent.io.resp.valid
+    child.io.resp.bits  := parent.io.resp.bits
+  }
+
+  def driveRead(parent: BankRead, child: BankRead): Unit = {
+    parent.rob_id           := child.rob_id
+    parent.ball_id          := child.ball_id
+    parent.bank_id          := child.bank_id
+    parent.group_id         := child.group_id
+    parent.io.req.valid     := child.io.req.valid
+    parent.io.req.bits      := child.io.req.bits
+    parent.io.resp.ready    := child.io.resp.ready
+  }
+
+  def driveWrite(parent: BankWrite, child: BankWrite): Unit = {
+    parent.rob_id           := child.rob_id
+    parent.ball_id          := child.ball_id
+    parent.bank_id          := child.bank_id
+    parent.group_id         := child.group_id
+    parent.io.req.valid     := child.io.req.valid
+    parent.io.req.bits      := child.io.req.bits
+    parent.io.resp.ready    := child.io.resp.ready
+  }
 }
