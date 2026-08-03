@@ -16,7 +16,7 @@ class MulWarp16AccLoad(val b: GlobalConfig, lane: Int, accWidth: Int) extends Mo
     val busy     = Output(Bool())
   })
 
-  val sIdle :: sReq :: sResp :: Nil = Enum(3)
+  val sIdle :: sReq :: sResp :: sFinish :: Nil = Enum(4)
   val state = RegInit(sIdle)
 
   val loadRow   = RegInit(0.U(log2Ceil(lane + 1).W))
@@ -91,8 +91,7 @@ class MulWarp16AccLoad(val b: GlobalConfig, lane: Int, accWidth: Int) extends Mo
           respDone  := clr2()
           state     := sReq
         }.elsewhen(loadRow === (lane - 1).U) {
-          io.done := true.B
-          state   := sIdle
+          state := sFinish
         }.otherwise {
           loadRow   := loadRow + 1.U
           loadPhase := 0.U
@@ -101,6 +100,11 @@ class MulWarp16AccLoad(val b: GlobalConfig, lane: Int, accWidth: Int) extends Mo
           state     := sReq
         }
       }
+    }
+
+    is(sFinish) {
+      io.done := true.B
+      state   := sIdle
     }
   }
 }
