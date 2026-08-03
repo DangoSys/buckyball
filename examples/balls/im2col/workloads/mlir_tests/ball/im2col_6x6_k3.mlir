@@ -1,5 +1,5 @@
 // Already-lowered ball Op: buckyball.im2col (physical-bank form).
-// Same 6x6 k3 shape / golden as bank_ssa.
+// Same 6x6 k3 shape / golden as bank_im2col.
 
 func.func private @check_result(memref<16x16xi8>) -> ()
 

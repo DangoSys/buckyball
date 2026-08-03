@@ -3,6 +3,7 @@
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 
 #include "Buckyball/BuckyballOps.h"
 
@@ -14,13 +15,66 @@ PhysicalBankState::PhysicalBankState(int64_t bankNum)
     : bankNum(bankNum), used(bankNum, 0) {}
 
 std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
-  auto cst = value.getDefiningOp<arith::ConstantOp>();
-  if (!cst)
+  for (unsigned depth = 0; depth != 16; ++depth) {
+    if (auto cst = value.getDefiningOp<arith::ConstantOp>()) {
+      auto attr = dyn_cast<IntegerAttr>(cst.getValue());
+      if (!attr)
+        return std::nullopt;
+      return attr.getInt();
+    }
+    if (auto op = value.getDefiningOp<BankMvinOp>()) {
+      value = op.getBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankMvoutOp>()) {
+      value = op.getBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankTransposeOp>()) {
+      value = op.getOutBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankFp2IntOp>()) {
+      value = op.getOutBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankInt2FpOp>()) {
+      value = op.getOutBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankInt32ToInt8Op>()) {
+      value = op.getOutBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankIm2colOp>()) {
+      value = op.getOutBank();
+      continue;
+    }
+    if (auto op = value.getDefiningOp<BankMatrixOp>()) {
+      value = op.getWrBank();
+      continue;
+    }
+    if (Operation *op = value.getDefiningOp();
+        op && op->getName().getStringRef() == "buckyball.bank_mul_warp16") {
+      value = op->getOperand(2);
+      continue;
+    }
+    if (auto forOp = value.getDefiningOp<scf::ForOp>()) {
+      unsigned resultNumber = cast<OpResult>(value).getResultNumber();
+      value = cast<scf::YieldOp>(forOp.getBody()->getTerminator())
+                  .getResults()[resultNumber];
+      continue;
+    }
+    if (auto argument = dyn_cast<BlockArgument>(value)) {
+      auto forOp = dyn_cast<scf::ForOp>(argument.getOwner()->getParentOp());
+      if (!forOp || argument.getArgNumber() == 0)
+        return std::nullopt;
+      value = forOp.getInitArgs()[argument.getArgNumber() - 1];
+      continue;
+    }
     return std::nullopt;
-  auto attr = dyn_cast<IntegerAttr>(cst.getValue());
-  if (!attr)
-    return std::nullopt;
-  return attr.getInt();
+  }
+  return std::nullopt;
 }
 
 std::optional<int64_t> PhysicalBankState::tryAlloc(int64_t row, int64_t col) {

@@ -10,7 +10,7 @@ User / Agent host
   └── .mcp.json → bash scripts/claude/run_mcp_server.sh
                     └── nix develop -c python3 bbdev/mcp/__main__.py
                           ├── validate
-                          └── bbdev_*  → bbdev HTTP (auto start + poll /result/{trace_id})
+                          └── bbdev_*  → bbdev HTTP (submit + trace_id)
 ```
 
 | File | Role |
@@ -25,9 +25,13 @@ User / Agent host
 
 ```text
 bbdev_compiler_build(chip)
+  → bbdev_task_status(trace_id) until success
   → bbdev_workload_build(chip)
+  → bbdev_task_status(trace_id) until success
   → bbdev_bemu_sim(chip, binary)
+  → bbdev_task_status(trace_id) until success
   → bbdev_bebop_verilator_run(binary, config)
+  → bbdev_task_status(trace_id) until success
 ```
 
 UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
@@ -43,6 +47,7 @@ UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
 | Tool | API |
 |------|-----|
 | `bbdev_compiler_build` | `/compiler/build` |
+| `bbdev_task_status` | State for a submitted `trace_id` |
 | `bbdev_workload_{clean,build,tohex}` | `/workload/{clean,build,tohex}` |
 | `bbdev_bemu_{sim,batch}` | `/bebop/bemu/{sim,batch}` |
 | `bbdev_bebop_verilator_*` | `/bebop/verilator/{clean,verilog,build,sim,run,batch}` |
@@ -63,16 +68,23 @@ On first `bbdev_*` call the MCP server (same path as human `bbdev start --server
 1. Requires `iii` in PATH and `bbdev/api/.venv/bin/motia` (no auto-install; fail if missing)
 2. Starts `bbdev start --server --port <auto>` (ports 5100–5500)
 3. Waits until worker routes are registered
-4. Submits HTTP + polls `bbdev/api/data/state_store.db/<trace_id>.bin` (same as CLI)
+4. Submits HTTP and returns `accepted=true`, `processing=true`, and `trace_id`
 5. Stops via `bbdev stop --server` on MCP exit
 
 Port is dynamic. Do not use Node `pnpm/motia`.
+
+Every `bbdev_*` tool is non-blocking. Submit a task once, then call
+`bbdev_task_status(trace_id)` until it returns a terminal result. Only
+`success=true` with `returncode=0` is a passing task. `failure=true` is terminal
+and must stop the flow. A state-less trace is queued only when it was submitted by
+the current MCP server; any other unknown trace fails.
 
 ## Slash commands
 
 | Trigger | Skill |
 |---------|-------|
 | `/ball <Name>` | `.claude/skills/ball` |
+| `/ball-align` | `.claude/skills/ball-align` (also `.codex/skills/`, `.cursor/skills/`) |
 | `/verify <Name>` | `.claude/skills/verify` |
 | `/optimize <Name>` | `.claude/skills/optimize` |
 | `/check` | `.claude/skills/check` |

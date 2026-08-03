@@ -161,7 +161,7 @@ public:
 
     auto inputPackTy = MemRefType::get({3, 16}, rewriter.getF32Type());
     auto filterPackTy = MemRefType::get({16, 16}, rewriter.getF32Type());
-    auto outputPackTy = MemRefType::get({16, 4}, rewriter.getF32Type());
+    auto outputPackTy = MemRefType::get({16, 16}, rewriter.getF32Type());
     Value inputPack = rewriter.create<memref::AllocOp>(loc, inputPackTy);
     Value filterPack = rewriter.create<memref::AllocOp>(loc, filterPackTy);
     Value outputPack = rewriter.create<memref::AllocOp>(loc, outputPackTy);
@@ -211,12 +211,14 @@ public:
 
     Value inputF = allocBank(rewriter, loc, 1, 4);
     Value inputI = allocBank(rewriter, loc, 1, 1);
-    Value patches = allocBank(rewriter, loc, 1, 1);
     Value scale = createI64Const(rewriter, loc, 1065353216);
     Value inputLoaded = mvinBank(rewriter, loc, inputPack, inputF, 3);
     Value inputQuant = rewriter.create<BankFp2IntOp>(
         loc, inputI.getType(), inputLoaded, inputI,
         createI64Const(rewriter, loc, 3), scale);
+    releaseBank(rewriter, loc, inputLoaded);
+
+    Value patches = allocBank(rewriter, loc, 1, 1);
     Value patchBank = rewriter.create<BankIm2colOp>(
         loc, patches.getType(), inputQuant, patches,
         createI64Const(rewriter, loc, 6), createI64Const(rewriter, loc, 3),
@@ -225,15 +227,20 @@ public:
 
     Value filterF = allocBank(rewriter, loc, 1, 4);
     Value filterI = allocBank(rewriter, loc, 1, 1);
-    Value acc = allocBank(rewriter, loc, 1, 4);
-    Value outputF = inputLoaded;
     Value filterLoaded = mvinBank(rewriter, loc, filterPack, filterF, 16);
     Value filterQuant = rewriter.create<BankFp2IntOp>(
         loc, filterI.getType(), filterLoaded, filterI,
         createI64Const(rewriter, loc, 16), scale);
+    releaseBank(rewriter, loc, filterLoaded);
+
+    Value acc = allocBank(rewriter, loc, 1, 4);
     Value computed = rewriter.create<BankMatrixOp>(
         loc, acc.getType(), patchBank, filterQuant, acc,
         createI64Const(rewriter, loc, 0x09001010));
+    releaseBank(rewriter, loc, patchBank);
+    releaseBank(rewriter, loc, filterQuant);
+
+    Value outputF = computed;
     Value dequant =
         rewriter.create<BankInt2FpOp>(loc, outputF.getType(), computed, outputF,
                                       createI64Const(rewriter, loc, 16), scale);
@@ -254,9 +261,7 @@ public:
                                                 outCol.getInductionVar(),
                                                 zero});
     rewriter.setInsertionPointAfter(outRow);
-    for (Value bank :
-         {patchBank, filterLoaded, filterQuant, computed, outputStored})
-      releaseBank(rewriter, loc, bank);
+    releaseBank(rewriter, loc, outputStored);
     rewriter.create<memref::DeallocOp>(loc, inputPack);
     rewriter.create<memref::DeallocOp>(loc, filterPack);
     rewriter.create<memref::DeallocOp>(loc, outputPack);

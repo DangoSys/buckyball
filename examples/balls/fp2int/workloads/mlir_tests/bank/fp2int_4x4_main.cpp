@@ -25,7 +25,7 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != 4 || size1 != 4 || stride0 != 4 || stride1 != 1) {
-    printf("FAILED: bank_ssa shape %dx%d stride %dx%d\n", (int)size0,
+    printf("FAILED: bank_fp2int shape %dx%d stride %dx%d\n", (int)size0,
            (int)size1, (int)stride0, (int)stride1);
     fail();
   }
@@ -36,11 +36,11 @@ extern "C"
       int32_t exp = expected[i * 4 + j];
       int32_t got = out[i * stride0 + j * stride1];
       if (got != exp) {
-        printf("FAILED: bank_ssa out[%d][%d] exp=%d got=%d\n", i, j, (int)exp,
-               (int)got);
+        printf("FAILED: bank_fp2int out[%d][%d] exp=%d got=%d\n", i, j,
+               (int)exp, (int)got);
         fail();
       }
     }
   }
-  printf("PASSED: fp2int bank_ssa 4x4 fp32->int32\n");
+  printf("PASSED: fp2int bank_fp2int 4x4 fp32->int32\n");
 }

@@ -51,17 +51,24 @@ function(add_buckyball_mlir_optest NAME)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir optests")
   endif()
+  if(NOT DEFINED BUCKYBALL_MLIR_BANK_NUM)
+    message(FATAL_ERROR "BUCKYBALL_MLIR_BANK_NUM is not set")
+  endif()
 
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
   set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
+  set(TEST_ID ${NAME})
+  if(NOT NAME MATCHES "^${PREFIX}_")
+    set(TEST_ID ${PREFIX}_${NAME})
+  endif()
   set(BAREMETAL_BIN
-    ${BUCKYBALL_WORKLOAD_CHIP}_optest_${PREFIX}_${NAME}_singlecore-baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_${PREFIX}_${NAME}-linux)
-  set(BAREMETAL_TARGET optest_${PREFIX}_${NAME}_singlecore_baremetal)
-  set(LINUX_TARGET optest_${PREFIX}_${NAME}_linux)
-  set(GROUP_TARGET optest_${PREFIX}_${NAME})
+    ${BUCKYBALL_WORKLOAD_CHIP}_optest_${TEST_ID}_singlecore-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_${TEST_ID}-linux)
+  set(BAREMETAL_TARGET optest_${TEST_ID}_singlecore_baremetal)
+  set(LINUX_TARGET optest_${TEST_ID}_linux)
+  set(GROUP_TARGET optest_${TEST_ID})
 
   set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
   set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
@@ -77,7 +84,7 @@ function(add_buckyball_mlir_optest NAME)
     set(MLIR_PASSES ${ARG_PASSES})
   else()
     set(MLIR_PASSES
-      "--assign-physical-banks=bank_num=16"
+      "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}"
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata

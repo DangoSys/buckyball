@@ -5,7 +5,7 @@ set(BUCKYBALL_MLIR_TEST_PREFIX ball)
 
 add_buckyball_mlir_contract(transpose_16x16_i8_contract
   PASSES
-    "--assign-physical-banks=bank_num=16"
+    "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}"
     ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
     ${BUCKYBALL_LOWER_BUCKYBALL})
 

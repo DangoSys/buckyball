@@ -184,8 +184,6 @@ public:
 
     auto cI32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
     cI32->setAttr("col", rewriter.getI64IntegerAttr(4));
-    auto cFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-    cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
 
     auto zeroI32Ty =
         MemRefType::get({(int64_t)tile, (int64_t)tile}, rewriter.getI32Type());
@@ -266,6 +264,8 @@ public:
         });
 
     Value cAcc = kLoop.getResult(0);
+    auto cFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
+    cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
     auto cDequant = rewriter.create<BankInt2FpOp>(
         loc, rewriter.getI64Type(), cAcc, cFp32.getBank(),
         cstI64(rewriter, loc, depthC), dequantScaleBits);

@@ -176,10 +176,10 @@ add_custom_command(
         -o ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
-        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${LINALG_MATMUL_BAREMETAL_BIN}"
@@ -195,9 +195,9 @@ add_linalg_contract_test(conv2d_nhwc_hwcf_contract)
 add_linalg_contract_test(conv2d_nhwc_fhwc_contract)
 add_linalg_contract_test(conv2d_nchw_fchw_contract)
 
-add_linalg_conv2d_test(conv2d_nhwc_hwcf conv2d_nhwc_main.c)
-add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.c)
-add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.c)
+add_linalg_conv2d_test(conv2d_nhwc_hwcf conv2d_nhwc_main.cpp)
+add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.cpp)
+add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.cpp)
 
 add_custom_target(linalg-mlir-tests-build ALL DEPENDS
   optest_linalg_matmul_singlecore_baremetal

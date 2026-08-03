@@ -21,7 +21,7 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
-    printf("FAILED: bank_ssa shape %dx%d stride %dx%d\n", (int)size0,
+    printf("FAILED: bank_matrix shape %dx%d stride %dx%d\n", (int)size0,
            (int)size1, (int)stride0, (int)stride1);
     fail();
   }
@@ -31,10 +31,11 @@ extern "C"
     for (int j = 0; j < 16; ++j) {
       int32_t got = out[i * stride0 + j * stride1];
       if (got != 16) {
-        printf("FAILED: bank_ssa out[%d][%d] exp=16 got=%d\n", i, j, (int)got);
+        printf("FAILED: bank_matrix out[%d][%d] exp=16 got=%d\n", i, j,
+               (int)got);
         fail();
       }
     }
   }
-  printf("PASSED: matrix bank_ssa 16x16 ones\n");
+  printf("PASSED: matrix bank_matrix 16x16 ones\n");
 }

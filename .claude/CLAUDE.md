@@ -66,7 +66,7 @@ Entry point: `scripts/claude/run_mcp_server.sh` → `bbdev/mcp/__main__.py` (too
 It cds to the repo root, sets `NIX_QUIET=1`, and keeps stdout MCP-clean.
 
 **Important: agents must invoke build/sim/synth/test via MCP tools. Do not call `bbdev` CLI or `nix develop -c bbdev ...` directly.**
-Humans use `bbdev` CLI (see `docs/zh/设计文档/主线架构/0.0.1/工具链/`). MCP auto-starts bbdev HTTP and polls `/result/{trace_id}`.
+Humans use `bbdev` CLI (see `docs/zh/设计文档/主线架构/0.0.1/工具链/`). MCP auto-starts bbdev HTTP and each `bbdev_*` tool returns a `trace_id`; agents must query `bbdev_task_status(trace_id)` until the task reaches a terminal state.
 If `buckyball-dev` is missing from the host tool list, stop and tell the human to reload project MCP from `.mcp.json`; do not invent a parallel workflow.
 
 Daily agent path:
@@ -75,7 +75,7 @@ Daily agent path:
 ### Validation
 - `validate(chip="toy", balldomain?=)` — check balldomain TOML invariants (default: file selected by `cores/default.toml`)
 
-### bbdev API wrappers (automatic server lifecycle + result polling)
+### bbdev API wrappers (automatic server lifecycle + task status)
 All bbdev POST endpoints are exposed as `bbdev_*` tools. Daily path prefers:
 - `bbdev_compiler_build` / `bbdev_workload_{clean,build,tohex}`
 - `bbdev_bemu_{sim,batch}`
@@ -83,6 +83,10 @@ All bbdev POST endpoints are exposed as `bbdev_*` tools. Daily path prefers:
 - `bbdev_verilator_{clean,verilog,build,sim,run}` — non-bebop Verilator RTL path
 - `bbdev_uvm_{build,run}` / `bbdev_yosys_{run,verilog,synth}`
 Also: `bbdev_bebop_p2e_*`, `bbdev_firesim_*`, `bbdev_dc_verilog`, `bbdev_kernel_build`
+
+Every `bbdev_*` task submission returns immediately with `accepted=true`,
+`processing=true`, and `trace_id`. Poll `bbdev_task_status(trace_id)`; only
+`success=true` and `returncode=0` permits the next workflow stage.
 
 Default Verilator config: `sims.verilator.BuckyballToyVerilatorConfig`
 Pebble: `sims.verilator.BuckyballPebbleVerilatorConfig`
@@ -99,8 +103,12 @@ Workload binary names are `{chip}_{stem}-{platform}`, e.g. `toy_vecunit_matmul_o
 
 ## Skills
 
-Project skills are under `.claude/skills/`:
+Project skills live under `.claude/skills/` (canonical). Discovery links:
+- Claude Code / Cursor: `.claude/skills/` (Cursor also has `.cursor/skills/ball-align` → same tree)
+- Codex: `.codex/skills/<name>/SKILL.md` → same tree
+
 - `/ball` — create a new Ball operator (full flow: implementation -> registration -> ISA -> CTest -> simulation)
+- `/ball-align` — align Ball across ctest/bemu/compiler/MLIR/RTL/UVM to one contract (`docs/superpowers/ball-dev-guide.md`)
 - `/check` — registration consistency check + auto-fix
 - `/verify` — Ball functional verification (build -> simulation -> PMC analysis)
 - `/optimize` — RTL area/latency optimization (applies to any module, not only Balls)

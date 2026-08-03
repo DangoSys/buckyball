@@ -28,6 +28,15 @@ if(NOT IS_DIRECTORY
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
 
+if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "pebble")
+  set(BUCKYBALL_MLIR_BANK_NUM 8)
+elseif(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
+  set(BUCKYBALL_MLIR_BANK_NUM 16)
+else()
+  message(FATAL_ERROR
+    "MLIR physical-bank count is not configured for chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+endif()
+
 set(BUCKYBALL_EXPECTED_COMPILER_DIR
   "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/compiler")
 set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")

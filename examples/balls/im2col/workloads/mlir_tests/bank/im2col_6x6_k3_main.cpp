@@ -37,7 +37,7 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != OUT_ROWS || size1 != LANES || stride0 != LANES || stride1 != 1) {
-    printf("FAILED: im2col bank_ssa unexpected shape "
+    printf("FAILED: im2col bank_im2col unexpected shape "
            "(size=%ldx%ld stride=%ldx%ld)\n",
            (long)size0, (long)size1, (long)stride0, (long)stride1);
     fail();
@@ -56,7 +56,7 @@ extern "C"
               src(orow * STRIDE + krow - PAD, ocol * STRIDE + kcol - PAD);
           int8_t got = out[bank_row * stride0 + (ki % LANES) * stride1];
           if (got != exp) {
-            printf("FAILED: im2col bank_ssa w=%d ki=%d "
+            printf("FAILED: im2col bank_im2col w=%d ki=%d "
                    "(expected %d, got %d)\n",
                    w, ki, (int)exp, (int)got);
             fail();
@@ -67,5 +67,5 @@ extern "C"
     }
   }
 
-  printf("PASSED: im2col bank_ssa 6x6 k3\n");
+  printf("PASSED: im2col bank_im2col 6x6 k3\n");
 }

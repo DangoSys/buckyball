@@ -11,7 +11,7 @@ set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 
 function(add_tile_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
-  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}_main.c)
+  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}_main.cpp)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${name}.o)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")

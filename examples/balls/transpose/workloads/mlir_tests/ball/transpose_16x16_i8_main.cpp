@@ -21,8 +21,8 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
-    printf("FAILED: ball_op shape %dx%d stride %dx%d\n", (int)size0, (int)size1,
-           (int)stride0, (int)stride1);
+    printf("FAILED: ball_transpose shape %dx%d stride %dx%d\n", (int)size0,
+           (int)size1, (int)stride0, (int)stride1);
     fail();
   }
 
@@ -32,11 +32,11 @@ extern "C"
       int8_t exp = (int8_t)(j * 16 + i);
       int8_t got = out[i * stride0 + j * stride1];
       if (got != exp) {
-        printf("FAILED: ball_op out[%d][%d] exp=%d got=%d\n", i, j, (int)exp,
-               (int)got);
+        printf("FAILED: ball_transpose out[%d][%d] exp=%d got=%d\n", i, j,
+               (int)exp, (int)got);
         fail();
       }
     }
   }
-  printf("PASSED: transpose ball_op 16x16 i8\n");
+  printf("PASSED: transpose ball_transpose 16x16 i8\n");
 }
