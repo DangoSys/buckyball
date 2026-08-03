@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -24,7 +24,7 @@ def register(mcp):
             if e := need(n, v):
                 return err(e)
         return fmt(
-            call(
+            submit(
                 "/bebop/verilator/run",
                 {
                     "binary": binary,
@@ -37,7 +37,6 @@ def register(mcp):
                     "banktrace": banktrace,
                     "no-wave": no_wave,
                 },
-                timeout=14400,
             )
         )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -39,5 +39,5 @@ def register(mcp):
             params["log_dir"] = log_dir
         if fst_dir:
             params["fst_dir"] = fst_dir
-        return fmt(call("/bebop/verilator/sim", params, timeout=7200))
+        return fmt(submit("/bebop/verilator/sim", params))
 

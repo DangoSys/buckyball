@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from common import call, err, fmt, need
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -36,4 +36,4 @@ def register(mcp):
         }
         if coverage:
             params["coverage"] = True
-        return fmt(call("/verilator/sim", params, timeout=7200))
+        return fmt(submit("/verilator/sim", params))

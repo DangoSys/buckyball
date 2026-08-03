@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -16,5 +16,5 @@ def register(mcp):
         params: Dict[str, Any] = {"chip": chip}
         if model:
             params["model"] = model
-        return fmt(call("/workload/build", params, timeout=1800))
+        return fmt(submit("/workload/build", params))
 

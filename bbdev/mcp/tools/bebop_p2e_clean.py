@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -12,5 +12,5 @@ def register(mcp):
         """Clean bebop-p2e build. POST /bebop/p2e/clean."""
         if e := need("config", config):
             return err(e)
-        return fmt(call("/bebop/p2e/clean", {"config": config}, timeout=300))
+        return fmt(submit("/bebop/p2e/clean", {"config": config}))
 

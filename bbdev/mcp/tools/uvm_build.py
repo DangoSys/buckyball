@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -20,5 +20,5 @@ def register(mcp):
             params["ball"] = ball
         if filelist:
             params["filelist"] = filelist
-        return fmt(call("/uvm/build", params, timeout=3600))
+        return fmt(submit("/uvm/build", params))
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from common import call, fmt, opt
+from common import submit, fmt, opt
 
 
 def register(mcp):
@@ -17,7 +17,7 @@ def register(mcp):
     ) -> str:
         """Yosys synthesis + OpenSTA. POST /yosys/synth."""
         return fmt(
-            call(
+            submit(
                 "/yosys/synth",
                 opt(
                     {},
@@ -26,7 +26,6 @@ def register(mcp):
                     output_dir=output_dir,
                     log_dir=log_dir,
                 ),
-                timeout=3600,
             )
         )
 

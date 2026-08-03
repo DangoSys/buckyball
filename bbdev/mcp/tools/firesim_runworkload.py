@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 
-from common import call, fmt, opt
+from common import submit, fmt, opt
 
 
 def register(mcp):
     @mcp.tool()
     def bbdev_firesim_runworkload(jobs: int = 16) -> str:
         """Run FireSim workload. POST /firesim/runworkload."""
-        return fmt(call("/firesim/runworkload", {"jobs": jobs}, timeout=14400))
+        return fmt(submit("/firesim/runworkload", {"jobs": jobs}))
 

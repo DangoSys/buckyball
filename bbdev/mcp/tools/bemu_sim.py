@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -22,5 +22,5 @@ def register(mcp):
         params: Dict[str, Any] = {"chip": chip, "binary": binary, "pk": pk}
         if log_dir:
             params["log_dir"] = log_dir
-        return fmt(call("/bebop/bemu/sim", params, timeout=1800))
+        return fmt(submit("/bebop/bemu/sim", params))
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -18,10 +18,9 @@ def register(mcp):
         if e := need("config", config):
             return err(e)
         return fmt(
-            call(
+            submit(
                 "/bebop/p2e/buildbitstream",
                 opt({"config": config}, vsrc_dir=vsrc_dir, output_dir=output_dir),
-                timeout=14400,
             )
         )
 

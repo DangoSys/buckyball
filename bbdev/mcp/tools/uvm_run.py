@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -22,5 +22,5 @@ def register(mcp):
             params["filelist"] = filelist
         if test:
             params["test"] = test
-        return fmt(call("/uvm/run", params, timeout=7200))
+        return fmt(submit("/uvm/run", params))
 

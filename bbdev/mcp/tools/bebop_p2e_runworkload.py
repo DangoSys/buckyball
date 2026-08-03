@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -14,10 +14,9 @@ def register(mcp):
             if e := need(n, v):
                 return err(e)
         return fmt(
-            call(
+            submit(
                 "/bebop/p2e/runworkload",
                 {"image": image, "bitstream": bitstream},
-                timeout=7200,
             )
         )
 

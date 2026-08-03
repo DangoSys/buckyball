@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from common import call, err, fmt, opt
+from common import submit, err, fmt, opt
 
 
 def register(mcp):
@@ -16,10 +16,9 @@ def register(mcp):
         if not config and not rtl_dir:
             return err("config or rtl_dir is required")
         return fmt(
-            call(
+            submit(
                 "/dc/verilog",
                 opt({}, config=config, dir=rtl_dir),
-                timeout=1800,
             )
         )
 

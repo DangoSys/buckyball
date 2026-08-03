@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -15,10 +15,9 @@ def register(mcp):
         if test not in ("elf-tests", "pk-tests"):
             return err("test must be elf-tests or pk-tests")
         return fmt(
-            call(
+            submit(
                 "/bebop/bemu/batch",
                 {"chip": chip, "test": test, "clean-before": clean_before},
-                timeout=7200,
             )
         )
 

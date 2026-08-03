@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from common import call, err, fmt, need
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -18,4 +18,4 @@ def register(mcp):
         params = {"config": config, "jobs": jobs}
         if coverage:
             params["coverage"] = True
-        return fmt(call("/verilator/build", params, timeout=3600))
+        return fmt(submit("/verilator/build", params))

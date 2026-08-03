@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 
-from common import call, fmt, opt
+from common import submit, fmt, opt
 
 
 def register(mcp):
     @mcp.tool()
     def bbdev_firesim_buildbitstream() -> str:
         """Build FireSim bitstream. POST /firesim/buildbitstream."""
-        return fmt(call("/firesim/buildbitstream", {}, timeout=14400))
+        return fmt(submit("/firesim/buildbitstream", {}))
 

@@ -25,6 +25,7 @@ STATE_DIR = API / "data" / "state_store.db"
 _proc: Optional[subprocess.Popen] = None
 _port: Optional[int] = None
 _log_fh = None
+_submitted_trace_ids: set[str] = set()
 
 
 def _log(msg: str) -> None:
@@ -195,7 +196,8 @@ def _read_state(trace_id: str) -> Optional[Dict[str, Any]]:
     return data
 
 
-def _call(endpoint: str, params: Dict[str, Any], timeout: int = 600) -> Dict[str, Any]:
+def submit(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Submit an asynchronous bbdev task without waiting for completion."""
     port = _ensure()
     base = f"http://127.0.0.1:{port}"
     _log(f"POST {endpoint} params={params}")
@@ -222,60 +224,58 @@ def _call(endpoint: str, params: Dict[str, Any], timeout: int = 600) -> Dict[str
             "port": port,
         }
 
-    deadline = time.monotonic() + timeout
-    beat = time.monotonic()
-    stuck = 0
-    while time.monotonic() < deadline:
-        state = _read_state(trace_id)
-        if state is None:
-            time.sleep(2)
-            continue
-        if "success" in state:
-            out = state["success"].get("body", state["success"])
-            if not isinstance(out, dict):
-                raise RuntimeError(f"success body must be object: {out!r}")
-            out.setdefault("success", True)
-            out.setdefault("trace_id", trace_id)
-            out.setdefault("port", port)
-            return out
-        if "failure" in state:
-            body = state["failure"].get("body", state["failure"])
-            return {
-                "success": False,
-                "failure": True,
-                "trace_id": trace_id,
-                "port": port,
-                "body": body,
-                "server_log": str(LOG),
-            }
-        if state.get("processing") is True:
-            stuck += 1
-            if stuck >= 30:
-                return {
-                    "success": False,
-                    "failure": True,
-                    "error": "stuck in legacy processing state",
-                    "trace_id": trace_id,
-                    "port": port,
-                    "server_log": str(LOG),
-                }
-        else:
-            stuck = 0
-
-        now = time.monotonic()
-        if now - beat >= 30:
-            _log(f"still running {endpoint} trace={trace_id}")
-            beat = now
-        time.sleep(2)
-
+    _submitted_trace_ids.add(trace_id)
     return {
-        "success": False,
-        "failure": True,
-        "error": f"timed out after {timeout}s waiting for {endpoint}",
+        "accepted": True,
+        "processing": True,
         "trace_id": trace_id,
-        "server_log": str(LOG),
         "port": port,
     }
+
+
+def task_status(trace_id: str) -> Dict[str, Any]:
+    """Read the terminal or in-progress state for a submitted bbdev task."""
+    if not trace_id:
+        raise ValueError("trace_id is required")
+
+    state = _read_state(trace_id)
+    if state is None:
+        if trace_id not in _submitted_trace_ids:
+            raise RuntimeError(f"unknown task trace_id: {trace_id}")
+        return {
+            "accepted": True,
+            "processing": True,
+            "queued": True,
+            "trace_id": trace_id,
+        }
+    if "success" in state:
+        _submitted_trace_ids.discard(trace_id)
+        out = state["success"].get("body", state["success"])
+        if not isinstance(out, dict):
+            raise RuntimeError(f"success body must be object: {out!r}")
+        out.setdefault("success", True)
+        out.setdefault("failure", False)
+        out.setdefault("processing", False)
+        out.setdefault("trace_id", trace_id)
+        return out
+    if "failure" in state:
+        _submitted_trace_ids.discard(trace_id)
+        body = state["failure"].get("body", state["failure"])
+        return {
+            "success": False,
+            "failure": True,
+            "processing": False,
+            "trace_id": trace_id,
+            "body": body,
+            "server_log": str(LOG),
+        }
+    if state.get("processing") is True:
+        out = dict(state)
+        out.setdefault("accepted", True)
+        out.setdefault("processing", True)
+        out.setdefault("trace_id", trace_id)
+        return out
+    raise RuntimeError(f"invalid task state for trace_id {trace_id}: {state!r}")
 
 
 def _load_toml(path: Path) -> Dict[str, Any]:
@@ -441,6 +441,5 @@ fmt = _fmt
 err = _err
 need = _need
 opt = _opt
-call = _call
 balldomain_path = _balldomain_path
 validate_toml = _validate

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, fmt, opt
+from common import submit, fmt, opt
 
 
 def register(mcp):
@@ -21,5 +21,5 @@ def register(mcp):
             params["visible-hart-count"] = visible_hart_count
         if total_hart_count is not None:
             params["total-hart-count"] = total_hart_count
-        return fmt(call("/kernel/build", params, timeout=7200))
+        return fmt(submit("/kernel/build", params))
 

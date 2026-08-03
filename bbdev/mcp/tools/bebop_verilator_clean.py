@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import call, err, fmt, need, opt
+from common import submit, err, fmt, need, opt
 
 
 def register(mcp):
@@ -12,5 +12,5 @@ def register(mcp):
         """Clean bebop-verilator build. POST /bebop/verilator/clean."""
         if e := need("config", config):
             return err(e)
-        return fmt(call("/bebop/verilator/clean", {"config": config}, timeout=300))
+        return fmt(submit("/bebop/verilator/clean", {"config": config}))
 

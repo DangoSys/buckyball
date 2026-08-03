@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from common import call, err, fmt, need
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -39,4 +39,4 @@ def register(mcp):
         }
         if jobs is not None:
             params["jobs"] = jobs
-        return fmt(call("/verilator/run", params, timeout=14400))
+        return fmt(submit("/verilator/run", params))
