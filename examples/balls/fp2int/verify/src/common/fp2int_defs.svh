@@ -1,7 +1,3 @@
-import "DPI-C" function int fp2int_ref_i32(
-  input int unsigned fp_bits,
-  input int unsigned scale_bits
-);
 import "DPI-C" function int fp2int_ref_i8(
   input int unsigned fp_bits,
   input int unsigned scale_bits

@@ -2,11 +2,9 @@
 
 DPI reference lives in `casegen/` and reuses `../emu/src/model.rs`.
 
-Full SystemVerilog UVM env is the next slice after Fp2Int UVM INT8 landing:
-mirror `examples/balls/fp2int/verify/` with directed cases for:
-
-1. INT32→FP32 `(op1_col=1, wr_col=1, output_mode=0)`
-2. INT32→INT8 `(op1_col=4, wr_col=1, output_mode=1)`
+The full SystemVerilog UVM environment is the next verification slice. It can
+mirror `examples/balls/fp2int/verify/` with a directed `INT32 -> FP32` case
+using `op1_col = 1` and `wr_col = 1`.
 
 Build DPI:
 

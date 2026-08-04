@@ -2,17 +2,13 @@ add_buckyball_ctests(
   conv_im2col_test.c
   conv_transpose_test.c
   conv_matmul_test.c
-  quant_fp32_to_int8_test.c
   quant_im2col_test.c
   quant_transpose_test.c
   quant_gemm_test.c
-  quant_int8_to_fp32_test.c
   conv_im2col_bank_test.c
   conv_transpose_bank_test.c
   conv_matmul_bank_test.c
-  quant_fp32_to_int8_bank_test.c
   quant_im2col_bank_test.c
   quant_transpose_bank_test.c
   quant_gemm_bank_test.c
-  quant_int8_to_fp32_bank_test.c
 )

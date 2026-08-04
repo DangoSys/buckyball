@@ -38,32 +38,23 @@ class fp2int_scoreboard extends uvm_scoreboard;
 
     build_expected(clone);
     expected_writes = clone.iter;
-    expected_reads = clone.is_i8() ? (clone.iter * FP2INT_NUM_GROUPS) : clone.iter;
+    expected_reads = clone.iter * FP2INT_NUM_GROUPS;
     expect_group = 0;
     stim_q.push_back(clone);
   endfunction
 
   function void build_expected(fp2int_cmd_item item);
-    if (item.is_i8()) begin
-      for (int row = 0; row < item.iter; row++) begin
-        bit [127:0] packed_word = '0;
-        for (int group = 0; group < FP2INT_NUM_GROUPS; group++) begin
-          bit [127:0] src = item.input_words[row*FP2INT_NUM_GROUPS+group];
-          for (int lane = 0; lane < 4; lane++) begin
-            bit [31:0] fp_bits = src[lane*32+:32];
-            bit [ 7:0] q = fp2int_ref_i8(fp_bits, item.scale_bits);
-            packed_word[group*32+lane*8+:8] = q;
-          end
-        end
-        expected_words[row] = packed_word;
-      end
-    end else begin
-      for (int w = 0; w < item.iter; w++) begin
-        for (int e = 0; e < 4; e++) begin
-          expected_words[w][e*32+:32] =
-              fp2int_ref_i32(item.input_words[w][e*32+:32], item.scale_bits);
+    for (int row = 0; row < item.iter; row++) begin
+      bit [127:0] packed_word = '0;
+      for (int group = 0; group < FP2INT_NUM_GROUPS; group++) begin
+        bit [127:0] src = item.input_words[row*FP2INT_NUM_GROUPS+group];
+        for (int lane = 0; lane < 4; lane++) begin
+          bit [31:0] fp_bits = src[lane*32+:32];
+          bit [ 7:0] q = fp2int_ref_i8(fp_bits, item.scale_bits);
+          packed_word[group*32+lane*8+:8] = q;
         end
       end
+      expected_words[row] = packed_word;
     end
   endfunction
 
@@ -114,26 +105,16 @@ class fp2int_scoreboard extends uvm_scoreboard;
                                    stim.rob_id))
     end
 
-    if (stim.is_i8()) begin
-      expect_addr = read_count / FP2INT_NUM_GROUPS;
-      if (item.group_id !== expect_group[4:0]) begin
-        `uvm_fatal("READ", $sformatf("read group mismatch: got %0d expected %0d", item.group_id,
-                                     expect_group))
-      end
-      if (item.addr !== expect_addr[6:0]) begin
-        `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
-                                     expect_addr))
-      end
-      expect_group = (expect_group + 1) % FP2INT_NUM_GROUPS;
-    end else begin
-      if (item.group_id !== 5'd0) begin
-        `uvm_fatal("READ", $sformatf("read group mismatch: got %0d", item.group_id))
-      end
-      if (item.addr !== read_count[6:0]) begin
-        `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
-                                     read_count))
-      end
+    expect_addr = read_count / FP2INT_NUM_GROUPS;
+    if (item.group_id !== expect_group[4:0]) begin
+      `uvm_fatal("READ", $sformatf("read group mismatch: got %0d expected %0d", item.group_id,
+                                   expect_group))
     end
+    if (item.addr !== expect_addr[6:0]) begin
+      `uvm_fatal("READ", $sformatf("read addr mismatch: got %0d expected %0d", item.addr,
+                                   expect_addr))
+    end
+    expect_group = (expect_group + 1) % FP2INT_NUM_GROUPS;
 
     read_count++;
   endfunction

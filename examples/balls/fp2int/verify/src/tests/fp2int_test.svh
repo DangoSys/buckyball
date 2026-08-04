@@ -18,8 +18,7 @@ class fp2int_ball_test extends uvm_test;
 
   task run_phase(uvm_phase phase);
     phase.raise_objection(this);
-    run_case(0, "INT32");
-    run_case(1, "INT8");
+    run_case(0, "FP32_TO_INT8");
     phase.drop_objection(this);
   endtask
 
