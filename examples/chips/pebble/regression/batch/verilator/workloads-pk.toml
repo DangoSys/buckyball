@@ -28,6 +28,8 @@ tests = [
   "pebble_optest_tile_matmul_16x16_i8-linux",
   "pebble_optest_tile_transpose_16x16_i8-linux",
   "pebble_optest_tile_conv2d_6x6_k3-linux",
+  "pebble_optest_tile_conv2d_1x1_c16_oc8-linux",
+  "pebble_optest_tile_conv2d_1x1_c16_oc24-linux",
   "pebble_optest_tile_conv2d_8x8_k3_c2_oc2-linux",
   "pebble_optest_tile_conv2d_12x12_k5-linux",
   "pebble_optest_bank_im2col_6x6_k3-linux",
