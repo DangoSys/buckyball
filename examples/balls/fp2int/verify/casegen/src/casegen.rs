@@ -1,24 +1,26 @@
+pub const FUNCT7: u32 = 51;
 pub const WORDS: usize = 4;
 pub const GROUPS: usize = 4;
 pub const MAX_WORDS: usize = WORDS * GROUPS;
-pub const TEST_BID: u32 = 0;
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Fp2IntCase {
+pub struct Fp2IntCmd {
   pub bid: u32,
   pub funct7: u32,
   pub iter: u32,
   pub scale_bits: u32,
   pub op1_bank: u32,
-  pub op2_bank: u32,
   pub wr_bank: u32,
   pub op1_col: u32,
-  pub op2_col: u32,
   pub wr_col: u32,
-  pub meta_bank: u32,
   pub rob_id: u32,
-  pub is_sub: bool,
-  pub sub_rob_id: u32,
+  pub num_src_words: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fp2IntCase {
+  pub cmd: Fp2IntCmd,
   pub input_words: [u128; MAX_WORDS],
 }
 
@@ -31,20 +33,21 @@ impl Fp2IntCase {
     (self.input_words[index] >> 64) as u64
   }
 
+  #[allow(dead_code)]
   pub fn is_i8(&self) -> bool {
-    self.op1_col == 4 && self.wr_col == 1
+    self.cmd.op1_col == 4 && self.cmd.wr_col == 1
   }
 }
 
-pub fn gen_case(seed: u32, index: u32) -> Fp2IntCase {
+pub fn gen_case(seed: u32, index: u32, bid: u32) -> Fp2IntCase {
   match index {
-    0 => directed_i32_case(),
-    1 => directed_i8_case(),
-    _ => random_i32_case(seed, index),
+    0 => directed_i32_case(bid),
+    1 => directed_i8_case(bid),
+    _ => random_i32_case(seed, index, bid),
   }
 }
 
-fn directed_i32_case() -> Fp2IntCase {
+fn directed_i32_case(bid: u32) -> Fp2IntCase {
   let mut input_words = [0u128; MAX_WORDS];
   input_words[0] = 0xBF80_0000_4040_0000_4000_0000_3F80_0000;
   input_words[1] = 0x40A0_0000_4080_0000_0000_0000_C000_0000;
@@ -52,25 +55,23 @@ fn directed_i32_case() -> Fp2IntCase {
   input_words[3] = 0xC100_0000_4100_0000_40E0_0000_C2C8_0000;
 
   Fp2IntCase {
-    bid: TEST_BID,
-    funct7: 51,
-    iter: WORDS as u32,
-    scale_bits: 0x3F80_0000,
-    op1_bank: 0,
-    op2_bank: 0,
-    wr_bank: 1,
-    op1_col: 1,
-    op2_col: 0,
-    wr_col: 1,
-    meta_bank: 0,
-    rob_id: 3,
-    is_sub: false,
-    sub_rob_id: 0,
+    cmd: Fp2IntCmd {
+      bid,
+      funct7: FUNCT7,
+      iter: WORDS as u32,
+      scale_bits: 0x3F80_0000,
+      op1_bank: 0,
+      wr_bank: 1,
+      op1_col: 1,
+      wr_col: 1,
+      rob_id: 3,
+      num_src_words: WORDS as u32,
+    },
     input_words,
   }
 }
 
-fn directed_i8_case() -> Fp2IntCase {
+fn directed_i8_case(bid: u32) -> Fp2IntCase {
   let mut input_words = [0u128; MAX_WORDS];
   let vals: [u32; 16] = [
     0x3E00_0000, // 0.125
@@ -91,7 +92,6 @@ fn directed_i8_case() -> Fp2IntCase {
     0x8000_0000,
   ];
 
-  // One row, four groups, four lanes each.
   for group in 0..GROUPS {
     let mut word = 0u128;
     for lane in 0..4 {
@@ -101,30 +101,28 @@ fn directed_i8_case() -> Fp2IntCase {
   }
 
   Fp2IntCase {
-    bid: TEST_BID,
-    funct7: 51,
-    iter: 1,
-    scale_bits: 0x4000_0000, // 2.0
-    op1_bank: 0,
-    op2_bank: 0,
-    wr_bank: 1,
-    op1_col: 4,
-    op2_col: 0,
-    wr_col: 1,
-    meta_bank: 0,
-    rob_id: 2,
-    is_sub: false,
-    sub_rob_id: 0,
+    cmd: Fp2IntCmd {
+      bid,
+      funct7: FUNCT7,
+      iter: 1,
+      scale_bits: 0x4000_0000, // 2.0
+      op1_bank: 0,
+      wr_bank: 1,
+      op1_col: 4,
+      wr_col: 1,
+      rob_id: 2,
+      num_src_words: GROUPS as u32,
+    },
     input_words,
   }
 }
 
-fn random_i32_case(seed: u32, index: u32) -> Fp2IntCase {
+fn random_i32_case(seed: u32, index: u32, bid: u32) -> Fp2IntCase {
   let mut rng = Rng::new(seed, index);
-  let op1_bank = rng.range(0, 31);
-  let mut wr_bank = rng.range(0, 31);
+  let op1_bank = rng.range(0, 7);
+  let mut wr_bank = rng.range(0, 7);
   if wr_bank == op1_bank {
-    wr_bank = (wr_bank + 1) & 31;
+    wr_bank = (wr_bank + 1) & 7;
   }
 
   let mut input_words = [0u128; MAX_WORDS];
@@ -133,20 +131,18 @@ fn random_i32_case(seed: u32, index: u32) -> Fp2IntCase {
   }
 
   Fp2IntCase {
-    bid: TEST_BID,
-    funct7: 51,
-    iter: WORDS as u32,
-    scale_bits: scale_pool(rng.range(0, 3)),
-    op1_bank,
-    op2_bank: 0,
-    wr_bank,
-    op1_col: 1,
-    op2_col: 0,
-    wr_col: 1,
-    meta_bank: 0,
-    rob_id: rng.range(0, 15),
-    is_sub: false,
-    sub_rob_id: 0,
+    cmd: Fp2IntCmd {
+      bid,
+      funct7: FUNCT7,
+      iter: WORDS as u32,
+      scale_bits: scale_pool(rng.range(0, 3)),
+      op1_bank,
+      wr_bank,
+      op1_col: 1,
+      wr_col: 1,
+      rob_id: rng.range(0, 15),
+      num_src_words: WORDS as u32,
+    },
     input_words,
   }
 }
@@ -219,42 +215,53 @@ mod tests {
 
   #[test]
   fn case_zero_is_smoke_case() {
-    let case = gen_case(0x1234, 0);
+    let case = gen_case(0x1234, 0, 3);
 
-    assert_eq!(case.bid, TEST_BID);
-    assert_eq!(case.funct7, 51);
-    assert_eq!(case.iter, WORDS as u32);
-    assert_eq!(case.scale_bits, 0x3F80_0000);
-    assert_eq!(case.op1_bank, 0);
-    assert_eq!(case.wr_bank, 1);
-    assert_eq!(case.op1_col, 1);
-    assert_eq!(case.wr_col, 1);
-    assert_eq!(case.rob_id, 3);
+    assert_eq!(case.cmd.bid, 3);
+    assert_eq!(case.cmd.funct7, FUNCT7);
+    assert_eq!(case.cmd.iter, WORDS as u32);
+    assert_eq!(case.cmd.scale_bits, 0x3F80_0000);
+    assert_eq!(case.cmd.op1_bank, 0);
+    assert_eq!(case.cmd.wr_bank, 1);
+    assert_eq!(case.cmd.op1_col, 1);
+    assert_eq!(case.cmd.wr_col, 1);
+    assert_eq!(case.cmd.rob_id, 3);
+    assert_eq!(case.cmd.num_src_words, WORDS as u32);
     assert_eq!(case.input_words[0], 0xBF80_0000_4040_0000_4000_0000_3F80_0000);
   }
 
   #[test]
   fn case_one_is_i8_case() {
-    let case = gen_case(0, 1);
+    let case = gen_case(0, 1, 5);
     assert!(case.is_i8());
-    assert_eq!(case.iter, 1);
-    assert_eq!(case.scale_bits, 0x4000_0000);
+    assert_eq!(case.cmd.bid, 5);
+    assert_eq!(case.cmd.iter, 1);
+    assert_eq!(case.cmd.scale_bits, 0x4000_0000);
+    assert_eq!(case.cmd.num_src_words, GROUPS as u32);
   }
 
   #[test]
   fn random_cases_are_deterministic_and_legal() {
-    let a = gen_case(0xCAFE_BABE, 7);
-    let b = gen_case(0xCAFE_BABE, 7);
+    let a = gen_case(0xCAFE_BABE, 7, 3);
+    let b = gen_case(0xCAFE_BABE, 7, 3);
 
     assert_eq!(a, b);
-    assert_eq!(a.bid, TEST_BID);
-    assert_eq!(a.funct7, 51);
-    assert_eq!(a.iter, WORDS as u32);
-    assert_ne!(a.op1_bank, a.wr_bank);
-    assert!(a.op1_bank < 32);
-    assert!(a.wr_bank < 32);
-    assert!(a.rob_id < 16);
-    assert_eq!(a.op1_col, 1);
-    assert_eq!(a.wr_col, 1);
+    assert_eq!(a.cmd.bid, 3);
+    assert_eq!(a.cmd.funct7, FUNCT7);
+    assert_eq!(a.cmd.iter, WORDS as u32);
+    assert_ne!(a.cmd.op1_bank, a.cmd.wr_bank);
+    assert!(a.cmd.op1_bank < 8);
+    assert!(a.cmd.wr_bank < 8);
+    assert!(a.cmd.rob_id < 16);
+    assert_eq!(a.cmd.op1_col, 1);
+    assert_eq!(a.cmd.wr_col, 1);
+  }
+
+  #[test]
+  fn bid_is_required_arg() {
+    let case = gen_case(0, 0, 3);
+    assert_eq!(case.cmd.bid, 3);
+    let case = gen_case(0, 0, 5);
+    assert_eq!(case.cmd.bid, 5);
   }
 }

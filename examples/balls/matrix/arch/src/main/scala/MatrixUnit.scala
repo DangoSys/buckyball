@@ -96,8 +96,29 @@ class MatrixUnit(val b: GlobalConfig) extends Module {
   ctrl.io.store_done_i := store.io.store_done_o
 
   for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id  := 0.U
+    io.bankRead(i).rob_id := 0.U
     io.bankRead(i).ball_id := 0.U
+  }
+
+  io.bankRead(0).bank_id := load.io.op1_rd_bank_o
+  io.bankRead(0).group_id := load.io.op1_rd_group_o
+  io.bankRead(0).io.req.valid := load.io.bankReadReq(0).valid && !resetActive
+  io.bankRead(0).io.req.bits := load.io.bankReadReq(0).bits
+  load.io.bankReadReq(0).ready := io.bankRead(0).io.req.ready && !resetActive
+  load.io.bankReadResp(0).valid := io.bankRead(0).io.resp.valid
+  load.io.bankReadResp(0).bits := io.bankRead(0).io.resp.bits
+  io.bankRead(0).io.resp.ready := load.io.bankReadResp(0).ready && !resetActive
+
+  io.bankRead(1).bank_id := load.io.op2_rd_bank_o
+  io.bankRead(1).group_id := load.io.op2_rd_group_o
+  io.bankRead(1).io.req.valid := load.io.bankReadReq(1).valid && !resetActive
+  io.bankRead(1).io.req.bits := load.io.bankReadReq(1).bits
+  load.io.bankReadReq(1).ready := io.bankRead(1).io.req.ready && !resetActive
+  load.io.bankReadResp(1).valid := io.bankRead(1).io.resp.valid
+  load.io.bankReadResp(1).bits := io.bankRead(1).io.resp.bits
+  io.bankRead(1).io.resp.ready := load.io.bankReadResp(1).ready && !resetActive
+
+  for (i <- 2 until inBW) {
     io.bankRead(i).bank_id := 0.U
     io.bankRead(i).group_id := 0.U
     io.bankRead(i).io.req.valid := false.B
@@ -107,24 +128,6 @@ class MatrixUnit(val b: GlobalConfig) extends Module {
     load.io.bankReadResp(i).valid := false.B
     load.io.bankReadResp(i).bits := 0.U.asTypeOf(load.io.bankReadResp(i).bits)
   }
-
-  io.bankRead(0).bank_id := load.io.op1_rd_bank_o
-  io.bankRead(0).group_id := load.io.op1_rd_group_o
-  io.bankRead(0).io.req.valid := load.io.bankReadReq(0).valid && !resetActive
-  io.bankRead(0).io.req.bits  := load.io.bankReadReq(0).bits
-  load.io.bankReadReq(0).ready := io.bankRead(0).io.req.ready && !resetActive
-  load.io.bankReadResp(0).valid := io.bankRead(0).io.resp.valid && !resetActive
-  load.io.bankReadResp(0).bits  := io.bankRead(0).io.resp.bits
-  io.bankRead(0).io.resp.ready := load.io.bankReadResp(0).ready && !resetActive
-
-  io.bankRead(1).bank_id := load.io.op2_rd_bank_o
-  io.bankRead(1).group_id := load.io.op2_rd_group_o
-  io.bankRead(1).io.req.valid := load.io.bankReadReq(1).valid && !resetActive
-  io.bankRead(1).io.req.bits  := load.io.bankReadReq(1).bits
-  load.io.bankReadReq(1).ready := io.bankRead(1).io.req.ready && !resetActive
-  load.io.bankReadResp(1).valid := io.bankRead(1).io.resp.valid && !resetActive
-  load.io.bankReadResp(1).bits  := io.bankRead(1).io.resp.bits
-  io.bankRead(1).io.resp.ready := load.io.bankReadResp(1).ready && !resetActive
 
   // 两项数据队列只保留尚未完全发出的 C 行；请求全部发出后立即释放 512-bit 数据。
   // 四项轻量 tracker 继续等待 bank response，从而保持原有的最大在途行数。

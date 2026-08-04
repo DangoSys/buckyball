@@ -44,3 +44,4 @@ AGENTS.md
 log/
 
 scripts/docker/.last-image-tag
+ucli.key

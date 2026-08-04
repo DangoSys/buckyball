@@ -2,7 +2,7 @@ module tb_top;
   import uvm_pkg::*;
   import fp2int_pkg::*;
 
-  fp2int_if intf ();
+  bb_blink_if #(1, 1) intf ();
 
   Fp2IntBall dut (
       .clock(intf.clock),
@@ -35,40 +35,41 @@ module tb_top;
       .io_cmdResp_bits_rob_id(intf.cmd_resp_bits_rob_id),
       .io_cmdResp_bits_is_sub(intf.cmd_resp_bits_is_sub),
       .io_cmdResp_bits_sub_rob_id(intf.cmd_resp_bits_sub_rob_id),
-      .io_bankRead_0_bank_id(intf.bank_read_0_bank_id),
-      .io_bankRead_0_rob_id(intf.bank_read_0_rob_id),
-      .io_bankRead_0_group_id(intf.bank_read_0_group_id),
-      .io_bankRead_0_io_req_ready(intf.bank_read_0_req_ready),
-      .io_bankRead_0_io_req_valid(intf.bank_read_0_req_valid),
-      .io_bankRead_0_io_req_bits_addr(intf.bank_read_0_req_bits_addr),
-      .io_bankRead_0_io_resp_ready(intf.bank_read_0_resp_ready),
-      .io_bankRead_0_io_resp_valid(intf.bank_read_0_resp_valid),
-      .io_bankRead_0_io_resp_bits_data(intf.bank_read_0_resp_bits_data),
-      .io_bankWrite_0_bank_id(intf.bank_write_0_bank_id),
-      .io_bankWrite_0_rob_id(intf.bank_write_0_rob_id),
-      .io_bankWrite_0_io_req_ready(intf.bank_write_0_req_ready),
-      .io_bankWrite_0_io_req_valid(intf.bank_write_0_req_valid),
-      .io_bankWrite_0_io_req_bits_addr(intf.bank_write_0_req_bits_addr),
-      .io_bankWrite_0_io_req_bits_mask_0(intf.bank_write_0_req_bits_mask[0]),
-      .io_bankWrite_0_io_req_bits_mask_1(intf.bank_write_0_req_bits_mask[1]),
-      .io_bankWrite_0_io_req_bits_mask_2(intf.bank_write_0_req_bits_mask[2]),
-      .io_bankWrite_0_io_req_bits_mask_3(intf.bank_write_0_req_bits_mask[3]),
-      .io_bankWrite_0_io_req_bits_mask_4(intf.bank_write_0_req_bits_mask[4]),
-      .io_bankWrite_0_io_req_bits_mask_5(intf.bank_write_0_req_bits_mask[5]),
-      .io_bankWrite_0_io_req_bits_mask_6(intf.bank_write_0_req_bits_mask[6]),
-      .io_bankWrite_0_io_req_bits_mask_7(intf.bank_write_0_req_bits_mask[7]),
-      .io_bankWrite_0_io_req_bits_mask_8(intf.bank_write_0_req_bits_mask[8]),
-      .io_bankWrite_0_io_req_bits_mask_9(intf.bank_write_0_req_bits_mask[9]),
-      .io_bankWrite_0_io_req_bits_mask_10(intf.bank_write_0_req_bits_mask[10]),
-      .io_bankWrite_0_io_req_bits_mask_11(intf.bank_write_0_req_bits_mask[11]),
-      .io_bankWrite_0_io_req_bits_mask_12(intf.bank_write_0_req_bits_mask[12]),
-      .io_bankWrite_0_io_req_bits_mask_13(intf.bank_write_0_req_bits_mask[13]),
-      .io_bankWrite_0_io_req_bits_mask_14(intf.bank_write_0_req_bits_mask[14]),
-      .io_bankWrite_0_io_req_bits_mask_15(intf.bank_write_0_req_bits_mask[15]),
-      .io_bankWrite_0_io_req_bits_data(intf.bank_write_0_req_bits_data),
-      .io_bankWrite_0_io_resp_ready(intf.bank_write_0_resp_ready),
-      .io_bankWrite_0_io_resp_valid(intf.bank_write_0_resp_valid),
-      .io_bankWrite_0_io_resp_bits_ok(intf.bank_write_0_resp_bits_ok),
+      .io_bankRead_0_bank_id(intf.bank_read_bank_id[0]),
+      .io_bankRead_0_rob_id(intf.bank_read_rob_id[0]),
+      .io_bankRead_0_group_id(intf.bank_read_group_id[0]),
+      .io_bankRead_0_io_req_ready(intf.bank_read_req_ready[0]),
+      .io_bankRead_0_io_req_valid(intf.bank_read_req_valid[0]),
+      .io_bankRead_0_io_req_bits_addr(intf.bank_read_req_addr[0]),
+      .io_bankRead_0_io_resp_ready(intf.bank_read_resp_ready[0]),
+      .io_bankRead_0_io_resp_valid(intf.bank_read_resp_valid[0]),
+      .io_bankRead_0_io_resp_bits_data(intf.bank_read_resp_data[0]),
+      .io_bankWrite_0_bank_id(intf.bank_write_bank_id[0]),
+      .io_bankWrite_0_rob_id(intf.bank_write_rob_id[0]),
+      .io_bankWrite_0_group_id(intf.bank_write_group_id[0]),
+      .io_bankWrite_0_io_req_ready(intf.bank_write_req_ready[0]),
+      .io_bankWrite_0_io_req_valid(intf.bank_write_req_valid[0]),
+      .io_bankWrite_0_io_req_bits_addr(intf.bank_write_req_addr[0]),
+      .io_bankWrite_0_io_req_bits_mask_0(intf.bank_write_req_mask[0][0]),
+      .io_bankWrite_0_io_req_bits_mask_1(intf.bank_write_req_mask[0][1]),
+      .io_bankWrite_0_io_req_bits_mask_2(intf.bank_write_req_mask[0][2]),
+      .io_bankWrite_0_io_req_bits_mask_3(intf.bank_write_req_mask[0][3]),
+      .io_bankWrite_0_io_req_bits_mask_4(intf.bank_write_req_mask[0][4]),
+      .io_bankWrite_0_io_req_bits_mask_5(intf.bank_write_req_mask[0][5]),
+      .io_bankWrite_0_io_req_bits_mask_6(intf.bank_write_req_mask[0][6]),
+      .io_bankWrite_0_io_req_bits_mask_7(intf.bank_write_req_mask[0][7]),
+      .io_bankWrite_0_io_req_bits_mask_8(intf.bank_write_req_mask[0][8]),
+      .io_bankWrite_0_io_req_bits_mask_9(intf.bank_write_req_mask[0][9]),
+      .io_bankWrite_0_io_req_bits_mask_10(intf.bank_write_req_mask[0][10]),
+      .io_bankWrite_0_io_req_bits_mask_11(intf.bank_write_req_mask[0][11]),
+      .io_bankWrite_0_io_req_bits_mask_12(intf.bank_write_req_mask[0][12]),
+      .io_bankWrite_0_io_req_bits_mask_13(intf.bank_write_req_mask[0][13]),
+      .io_bankWrite_0_io_req_bits_mask_14(intf.bank_write_req_mask[0][14]),
+      .io_bankWrite_0_io_req_bits_mask_15(intf.bank_write_req_mask[0][15]),
+      .io_bankWrite_0_io_req_bits_data(intf.bank_write_req_data[0]),
+      .io_bankWrite_0_io_resp_ready(intf.bank_write_resp_ready[0]),
+      .io_bankWrite_0_io_resp_valid(intf.bank_write_resp_valid[0]),
+      .io_bankWrite_0_io_resp_bits_ok(intf.bank_write_resp_ok[0]),
       .io_subRobReq_ready(intf.sub_rob_req_ready),
       .io_mmioRead_req_ready(intf.mmio_read_req_ready),
       .io_mmioRead_resp_valid(intf.mmio_read_resp_valid),
@@ -81,7 +82,7 @@ module tb_top;
   end
 
   initial begin
-    uvm_config_db#(virtual fp2int_if)::set(null, "*", "vif", intf);
+    uvm_config_db#(virtual bb_blink_if #(1, 1))::set(null, "*", "vif", intf);
     run_test("fp2int_ball_test");
   end
 endmodule
