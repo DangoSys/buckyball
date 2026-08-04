@@ -51,10 +51,14 @@ class MulWarp16(val b: GlobalConfig, lane: Int, inBW: Int, outBW: Int, inW: Int,
   store.io.robId    := robIdReg
   store.io.acc      := acc
   for (p <- 0 until 2) {
-    MulWarp16Tie.feedRead(accLoad.io.bankRead(p), io.bankRead(p))
+    accLoad.io.bankRead(p).io.req.ready  := io.bankRead(p).io.req.ready
+    accLoad.io.bankRead(p).io.resp.valid := io.bankRead(p).io.resp.valid
+    accLoad.io.bankRead(p).io.resp.bits  := io.bankRead(p).io.resp.bits
   }
   for (g <- 0 until 4) {
-    MulWarp16Tie.feedWrite(store.io.bankWrite(g), io.bankWrite(g))
+    store.io.bankWrite(g).io.req.ready  := io.bankWrite(g).io.req.ready
+    store.io.bankWrite(g).io.resp.valid := io.bankWrite(g).io.resp.valid
+    store.io.bankWrite(g).io.resp.bits  := io.bankWrite(g).io.resp.bits
   }
 
   io.cmdReq.ready            := state === sIdle
@@ -94,9 +98,7 @@ class MulWarp16(val b: GlobalConfig, lane: Int, inBW: Int, outBW: Int, inW: Int,
     }
 
     is(sLoadAcc) {
-      for (p <- 0 until 2) {
-        MulWarp16Tie.driveRead(io.bankRead(p), accLoad.io.bankRead(p))
-      }
+      for (p <- 0 until 2) { MulWarp16Tie.takeRead(io.bankRead(p), accLoad.io.bankRead(p)) }
       when(accLoad.io.done) {
         acc      := accLoad.io.acc
         aReqDone := false.B
@@ -155,9 +157,7 @@ class MulWarp16(val b: GlobalConfig, lane: Int, inBW: Int, outBW: Int, inW: Int,
     }
 
     is(sWrite) {
-      for (g <- 0 until 4) {
-        MulWarp16Tie.driveWrite(io.bankWrite(g), store.io.bankWrite(g))
-      }
+      for (g <- 0 until 4) { MulWarp16Tie.takeWrite(io.bankWrite(g), store.io.bankWrite(g)) }
       when(store.io.done) { state := sDone }
     }
 

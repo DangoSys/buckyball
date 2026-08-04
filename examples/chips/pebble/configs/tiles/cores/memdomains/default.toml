@@ -1,7 +1,7 @@
 # Pebble core memory domain configuration
 
 [bank]
-num = 8
+num = 16
 width = 128
 entries = 1024
 maskLen = 16

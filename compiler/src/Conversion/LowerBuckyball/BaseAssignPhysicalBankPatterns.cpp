@@ -85,6 +85,7 @@ public:
                                 PatternRewriter &rewriter) const override {
     rewriter.create<MvoutOp>(op.getLoc(), op.getOutput(), op.getBank(),
                              op.getDepth(), op.getStride());
+    rewriter.create<FenceOp>(op.getLoc());
     rewriter.replaceOp(op, op.getBank());
     return success();
   }

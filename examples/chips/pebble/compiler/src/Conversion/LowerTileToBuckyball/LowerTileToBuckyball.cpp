@@ -240,10 +240,11 @@ public:
     releaseBank(rewriter, loc, patchBank);
     releaseBank(rewriter, loc, filterQuant);
 
-    Value outputF = computed;
+    Value outputF = allocBank(rewriter, loc, 1, 4);
     Value dequant =
         rewriter.create<BankInt2FpOp>(loc, outputF.getType(), computed, outputF,
                                       createI64Const(rewriter, loc, 16), scale);
+    releaseBank(rewriter, loc, computed);
     Value outputStored = mvoutBank(rewriter, loc, outputPack, dequant, 16);
 
     auto outRow = rewriter.create<scf::ForOp>(loc, zero, four, one);
