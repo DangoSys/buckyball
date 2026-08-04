@@ -48,6 +48,6 @@ void configureTransposeLegalizeForExportTarget(LLVMConversionTarget &target,
     target.addLegalOp<TransposeIntrOp>();
   else
     target.addIllegalOp<TransposeIntrOp>();
-  target.addIllegalOp<TransposeOp, BankTransposeOp>();
+  target.addIllegalOp<MemTransposeOp, TransposeOp, BankTransposeOp>();
 }
 } // namespace mlir::buddy::buckyball

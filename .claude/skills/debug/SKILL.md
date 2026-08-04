@@ -9,7 +9,7 @@ description: Systematically debug Buckyball simulation failures. Use this skill 
 
 1. Find the log directory:
    - MCP tool JSON output includes `log_dir`
-   - If absent, use `ls -t arch/log/ | head -5` to find recent log dirs
+   - If absent, use `ls -t log/ | head -5` to find recent log dirs
 2. Confirm key log files exist:
    - `stdout.log` - program stdout (`PASSED`/`FAILED`, `printf`)
    - `disasm.log` - disassembled instruction stream

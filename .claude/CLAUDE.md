@@ -95,8 +95,8 @@ Workload binary names are `{chip}_{stem}-{platform}`, e.g. `toy_vecunit_matmul_o
 ### Analysis report paths
 - Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
 - Timing report: `bbdev/api/steps/yosys/log/timing_report.txt`
-- Simulation logs: `arch/log/<timestamp>/stdout.log`, `disasm.log`
-- bdb debug log: `arch/log/<timestamp>/bdb.log`, with three DPI-C traces:
+- Simulation logs: `log/<timestamp>-{bemu,verilator,p2e}-<name>/stdout.log`, `disasm.log`
+- bdb debug log: `log/<timestamp>-*/bdb.ndjson` (or `bdb.log`), with three DPI-C traces:
   - `[ITRACE]` — instruction issue/complete
   - `[MTRACE]` — SRAM reads/writes
   - `[PMCTRACE]` — Ball/Mem performance counters (elapsed cycles)

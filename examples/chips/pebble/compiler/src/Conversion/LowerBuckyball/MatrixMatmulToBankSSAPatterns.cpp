@@ -179,7 +179,14 @@ public:
 
 } // namespace
 
-void mlir::buddy::populatePebbleLowerBuckyballToBankSSAPatterns(
+void mlir::buddy::populatePebbleMatrixMatmulToBankSSAPatterns(
     RewritePatternSet &patterns) {
   patterns.add<MatrixMatmulToBankSSAPattern>(patterns.getContext());
+}
+
+void mlir::buddy::populatePebbleLowerBuckyballToBankSSAPatterns(
+    RewritePatternSet &patterns) {
+  populatePebbleMatrixMatmulToBankSSAPatterns(patterns);
+  populatePebbleIm2colMatmulToBankSSAPatterns(patterns);
+  populatePebbleMemTransposeToBankSSAPatterns(patterns);
 }

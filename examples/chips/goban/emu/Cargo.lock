@@ -101,6 +101,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bebop-bemu-profile"
+version = "0.1.0"
+
+[[package]]
 name = "bebop-dasm"
 version = "0.1.0"
 
@@ -164,6 +168,7 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "bebop-bank-hash",
+ "bebop-bemu-profile",
  "bebop-dasm",
  "bebop-dtb",
  "bebop-elf",

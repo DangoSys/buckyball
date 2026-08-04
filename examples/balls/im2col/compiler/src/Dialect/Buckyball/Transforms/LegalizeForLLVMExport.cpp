@@ -66,6 +66,6 @@ void configureIm2colLegalizeForExportTarget(LLVMConversionTarget &target,
     target.addLegalOp<Im2colIntrOp>();
   else
     target.addIllegalOp<Im2colIntrOp>();
-  target.addIllegalOp<Im2colOp, BankIm2colOp>();
+  target.addIllegalOp<Im2colMatmulOp, Im2colOp, BankIm2colOp>();
 }
 } // namespace mlir::buddy::buckyball

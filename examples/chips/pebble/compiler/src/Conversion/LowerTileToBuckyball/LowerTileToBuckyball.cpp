@@ -30,177 +30,43 @@
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
-#include "Utils/BankUtils.h"
-#include "Utils/QuantUtils.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
-using mlir::buddy::ceilDiv;
 using mlir::buddy::kDefaultBankWidthBytes;
-using mlir::buddy::kMatmulTile;
 using mlir::buddy::populateMatrixTileMatMulPatterns;
 
 namespace {
 
-static size_t elemsPerBankRow(Type elemType, size_t bankWidthBytes) {
-  unsigned bitWidth = elemType.getIntOrFloatBitWidth();
-  if (bitWidth == 0 || bitWidth % 8 != 0)
-    return 0;
-  return bankWidthBytes / (bitWidth / 8);
-}
-
-// Bank mvin/mvout stride is (memref row stride in elems) / 16.
-static LogicalResult rowStrideDiv16(MemRefType ty, int64_t &out) {
-  SmallVector<int64_t, 4> strides;
-  int64_t offset = 0;
-  if (failed(ty.getStridesAndOffset(strides, offset)) || strides.size() < 2)
-    return failure();
-  if (ShapedType::isDynamic(strides[0]) || strides[0] <= 0 ||
-      strides[0] % 16 != 0)
-    return failure();
-  if (ShapedType::isDynamic(strides[1]) || strides[1] != 1)
-    return failure();
-  out = strides[0] / 16;
-  return success();
-}
-
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
 public:
-  TileTransposeLowering(MLIRContext *context, int64_t bankWidthBytes)
-      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes) {}
+  using OpRewritePattern::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tile::TileTransposeOp op,
                                 PatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-    Value input = op.getAMemArray();
-    Value output = op.getBMemArray();
-    auto inputType = dyn_cast<MemRefType>(input.getType());
-    auto outputType = dyn_cast<MemRefType>(output.getType());
+    auto inputType = dyn_cast<MemRefType>(op.getAMemArray().getType());
+    auto outputType = dyn_cast<MemRefType>(op.getBMemArray().getType());
     if (!inputType || !outputType || !inputType.hasStaticShape() ||
         !outputType.hasStaticShape())
       return op.emitError("requires static input and output memrefs");
-
-    auto inShape = inputType.getShape();
-    auto outShape = outputType.getShape();
-    size_t rows = inShape[0];
-    size_t cols = inShape[1];
-    if (outShape[0] != static_cast<int64_t>(cols) ||
-        outShape[1] != static_cast<int64_t>(rows))
+    if (inputType.getRank() != 2 || outputType.getRank() != 2)
+      return op.emitError("requires rank-2 memrefs");
+    if (outputType.getShape()[0] != inputType.getShape()[1] ||
+        outputType.getShape()[1] != inputType.getShape()[0])
       return op.emitError("output shape must transpose the input shape");
+    if (inputType.getElementType() != outputType.getElementType())
+      return op.emitError("input/output element types must match");
 
-    Type elemTy = inputType.getElementType();
-    int64_t elemBits = elemTy.getIntOrFloatBitWidth();
-    if (elemBits != 8 && elemBits != 32)
-      return op.emitError("only 8/32-bit transpose elements are supported");
-
-    size_t elemsPerRow = elemsPerBankRow(elemTy, bankWidthBytes);
-    if (elemsPerRow == 0)
-      return op.emitError("unsupported transpose element type");
-
-    // src+dst share pebble's 8 banks => at most 4 column-groups per side
-    size_t colTile = elemsPerRow * 4;
-    if (colTile == 0)
-      return op.emitError("tile width is smaller than one bank row");
-
-    // Transpose ball packs with iter==rowTile and W==colTile; pad to full
-    // tiles. Also materialize when layout isn't static row-major (MobileNet
-    // bufferization often yields strided<[?,?]>).
-    size_t rowsPad = ceilDiv(rows, kMatmulTile) * kMatmulTile;
-    size_t colsPad = ceilDiv(cols, colTile) * colTile;
-    bool pad = rowsPad != rows || colsPad != cols;
-    int64_t dummyStride = 0;
-    bool inContig = succeeded(rowStrideDiv16(inputType, dummyStride));
-    bool outContig = succeeded(rowStrideDiv16(outputType, dummyStride));
-    // HW tiles need contiguous scratch on both sides.
-    bool materialize = pad || !inContig || !outContig;
-
-    Value inBuf = input;
-    Value outBuf = output;
-    if (materialize) {
-      auto inPadTy =
-          MemRefType::get({(int64_t)rowsPad, (int64_t)colsPad}, elemTy);
-      auto outPadTy =
-          MemRefType::get({(int64_t)colsPad, (int64_t)rowsPad}, elemTy);
-      inBuf = rewriter.create<memref::AllocOp>(loc, inPadTy);
-      outBuf = rewriter.create<memref::AllocOp>(loc, outPadTy);
-      Value z = rewriter.create<arith::ConstantOp>(
-          loc, elemTy, rewriter.getZeroAttr(elemTy));
-      rewriter.create<linalg::FillOp>(loc, z, inBuf);
-      rewriter.create<linalg::FillOp>(loc, z, outBuf);
-      Value inView = rewriter.create<memref::SubViewOp>(
-          loc, inBuf,
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
-                                    rewriter.getIndexAttr(0)},
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(rows),
-                                    rewriter.getIndexAttr(cols)},
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                    rewriter.getIndexAttr(1)});
-      rewriter.create<memref::CopyOp>(loc, input, inView);
-    }
-
-    int64_t groups = (int64_t)(colTile / elemsPerRow);
-    // rowsPad/colsPad equal the live shape when !materialize.
-    int64_t strideIn = (int64_t)colsPad / 16;
-    int64_t strideOut = (int64_t)rowsPad / 16;
-    for (size_t r0 = 0; r0 < rowsPad; r0 += kMatmulTile) {
-      for (size_t c0 = 0; c0 < colsPad; c0 += colTile) {
-        Value inTile = rewriter.create<memref::SubViewOp>(
-            loc, inBuf,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(r0),
-                                      rewriter.getIndexAttr(c0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(kMatmulTile),
-                                      rewriter.getIndexAttr(colTile)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-        Value outTile = rewriter.create<memref::SubViewOp>(
-            loc, outBuf,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(c0),
-                                      rewriter.getIndexAttr(r0)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(colTile),
-                                      rewriter.getIndexAttr(kMatmulTile)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-
-        Value src = allocBank(rewriter, loc, 1, groups);
-        Value dst = allocBank(rewriter, loc, 1, groups);
-        Value loaded =
-            mvinBank(rewriter, loc, inTile, src, kMatmulTile, strideIn);
-        Value transposed = rewriter.create<BankTransposeOp>(
-            loc, dst.getType(), loaded, dst,
-            createI64Const(rewriter, loc, (int64_t)kMatmulTile),
-            createI64Const(rewriter, loc, elemBits));
-        mvoutBank(rewriter, loc, outTile, transposed, kMatmulTile, strideOut);
-        releaseBank(rewriter, loc, loaded);
-        releaseBank(rewriter, loc, transposed);
-      }
-    }
-
-    if (materialize) {
-      Value outView = rewriter.create<memref::SubViewOp>(
-          loc, outBuf,
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
-                                    rewriter.getIndexAttr(0)},
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(cols),
-                                    rewriter.getIndexAttr(rows)},
-          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                    rewriter.getIndexAttr(1)});
-      rewriter.create<memref::CopyOp>(loc, outView, output);
-      rewriter.create<memref::DeallocOp>(loc, inBuf);
-      rewriter.create<memref::DeallocOp>(loc, outBuf);
-    }
-
+    rewriter.create<MemTransposeOp>(op.getLoc(), op.getAMemArray(),
+                                    op.getBMemArray());
     rewriter.eraseOp(op);
     return success();
   }
-
-private:
-  int64_t bankWidthBytes;
 };
 
 // Pebble im2col: square HxW, per-cin plane, K=k^2.
-// Conv: tile / cin / oc16 -> pack -> fp2int -> im2col -> matrix -> int2fp;
-// add into outs. pad=0 stride=1 only. OC tiled by 16.
+// tile->buckyball: pack + buckyball.im2col_matmul (no quant). pad=0 stride=1.
 constexpr int64_t kMaxIter = 34;
 constexpr int64_t kMaxK = 7;
 constexpr int64_t kBankLines = 1024;
@@ -216,8 +82,6 @@ static int64_t pickTile(int64_t outDim, int64_t ksize) {
     int64_t inSize = t + ksize - 1;
     if (inSize > kMaxIter)
       continue;
-    // Input plane is packed into 16-wide bank rows with zero pad; no need for
-    // inSize^2 % 16 == 0 (needed for 1x1 and many MobileNet shapes).
     int64_t rows = cdiv(t * t, kLane) * cdiv(kElems, kLane) * kLane;
     if (rows <= kBankLines)
       return t;
@@ -324,8 +188,6 @@ public:
         loc, MemRefType::get({inRows, kLane}, b.getF32Type()));
     Value fPack = b.create<memref::AllocOp>(
         loc, MemRefType::get({bRows, kLane}, b.getF32Type()));
-    Value tmpI = b.create<memref::AllocOp>(
-        loc, MemRefType::get({cBlocks, kLane}, b.getI32Type()));
     Value tmpF = b.create<memref::AllocOp>(
         loc, MemRefType::get({cBlocks, kLane}, b.getF32Type()));
     Value accF = b.create<memref::AllocOp>(
@@ -337,8 +199,6 @@ public:
         for (int64_t ow0 = 0; ow0 < OW; ow0 += tile) {
           for (int64_t oc0 = 0; oc0 < OC; oc0 += kLane) {
             int64_t ocTile = OC - oc0 < kLane ? OC - oc0 : kLane;
-            uint64_t cfg = packBits(wins, 0, 11) | packBits(ocTile, 12, 23) |
-                           packBits(kElems, 24, 35);
             b.create<linalg::FillOp>(loc, f0, accF);
 
             Value ih0V = b.create<arith::ConstantIndexOp>(loc, oh0);
@@ -369,54 +229,10 @@ public:
               }
             }
 
-            Value scaleAF =
-                quantScale(b, loc, absMaxF32(b, loc, inPack, inRows, kLane));
-            Value scaleBF =
-                quantScale(b, loc, absMaxF32(b, loc, fPack, bRows, kLane));
-            Value scaleA = packF32BitsAsI64(b, loc, scaleAF);
-            Value scaleB = packF32BitsAsI64(b, loc, scaleBF);
-            Value scaleD = packF32BitsAsI64(
-                b, loc, dequantScale(b, loc, scaleAF, scaleBF));
-
-            Value inFB = allocBank(b, loc, 1, 4);
-            Value inIB = allocBank(b, loc, 1, 1);
-            Value loaded = mvinBank(b, loc, inPack, inFB, inRows);
-            Value quant =
-                b.create<BankFp2IntOp>(loc, inIB.getType(), loaded, inIB,
-                                       createI64Const(b, loc, inRows), scaleA);
-            releaseBank(b, loc, loaded);
-
-            Value patches = allocBank(b, loc, 1, 1);
-            Value patch = b.create<BankIm2colOp>(
-                loc, patches.getType(), quant, patches,
-                createI64Const(b, loc, inSize), createI64Const(b, loc, KH),
-                createI64Const(b, loc, 1), createI64Const(b, loc, 0));
-            releaseBank(b, loc, quant);
-
-            Value fFB = allocBank(b, loc, 1, 4);
-            Value fIB = allocBank(b, loc, 1, 1);
-            Value fLoaded = mvinBank(b, loc, fPack, fFB, bRows);
-            Value fQuant =
-                b.create<BankFp2IntOp>(loc, fIB.getType(), fLoaded, fIB,
-                                       createI64Const(b, loc, bRows), scaleB);
-            releaseBank(b, loc, fLoaded);
-
-            Value accB = allocBank(b, loc, 1, 4);
-            Value computed =
-                b.create<BankMatrixOp>(loc, accB.getType(), patch, fQuant, accB,
-                                       createI64Const(b, loc, (int64_t)cfg));
-            releaseBank(b, loc, patch);
-            releaseBank(b, loc, fQuant);
-            mvoutBank(b, loc, tmpI, computed, cBlocks);
-            releaseBank(b, loc, computed);
-
-            Value tF = allocBank(b, loc, 1, 4);
-            Value tL = mvinBank(b, loc, tmpI, tF, cBlocks);
-            Value fp =
-                b.create<BankInt2FpOp>(loc, tL.getType(), tL, tL,
-                                       createI64Const(b, loc, cBlocks), scaleD);
-            mvoutBank(b, loc, tmpF, fp, cBlocks);
-            releaseBank(b, loc, fp);
+            b.create<Im2colMatmulOp>(
+                loc, inPack, fPack, tmpF, b.getI64IntegerAttr(inSize),
+                b.getI64IntegerAttr(KH), b.getI64IntegerAttr(ocTile),
+                b.getI64IntegerAttr(1), b.getI64IntegerAttr(0));
             addF32Pack(b, loc, accF, tmpF, cBlocks);
             b.setInsertionPointAfter(cinL);
 
@@ -455,7 +271,6 @@ public:
 
     b.create<memref::DeallocOp>(loc, inPack);
     b.create<memref::DeallocOp>(loc, fPack);
-    b.create<memref::DeallocOp>(loc, tmpI);
     b.create<memref::DeallocOp>(loc, tmpF);
     b.create<memref::DeallocOp>(loc, accF);
     b.eraseOp(op);
@@ -470,7 +285,7 @@ void mlir::populateLowerTileToBuckyballConversionPatterns(
     int64_t bankNum) {
   populateMatrixTileMatMulPatterns(patterns, bankWidthBytes, bankDepth,
                                    bankNum);
-  patterns.add<TileTransposeLowering>(patterns.getContext(), bankWidthBytes);
+  patterns.add<TileTransposeLowering>(patterns.getContext());
   patterns.add<TileConv2dLowering>(patterns.getContext());
 }
 

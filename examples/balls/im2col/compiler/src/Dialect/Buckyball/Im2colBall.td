@@ -14,6 +14,29 @@ include "BuckyballIntrinsics.td"
 // Im2colBall operations
 //===----------------------------------------------------------------------===//
 
+// Memref-level im2col+gemm (like matrix_matmul). Chip bank-ssa decides
+// f32 quant / Bank* composition; this op carries no quant policy.
+def Im2colMatmulOp : Buckyball_Op<"im2col_matmul"> {
+  let summary = "Packed-plane im2col then matrix gemm";
+  let description = [{
+    Computes one cin-plane gemm tile:
+      output[M,16] from im2col(input) x filter, with matrix N = $n (1..16).
+    `input` is a packed HxW plane (bank rows x 16), `filter` is Kx16 with
+    K = ksize*ksize (row-padded to a multiple of 16). Stride/padding are
+    im2col ISA fields; pebble currently only emits stride=1 padding=0.
+  }];
+  let arguments = (ins MemRefRankOf<[AnyType], [2]>:$input,
+                       MemRefRankOf<[AnyType], [2]>:$filter,
+                       MemRefRankOf<[AnyType], [2]>:$output,
+                       I64Attr:$inSize,
+                       I64Attr:$ksize,
+                       I64Attr:$n,
+                       DefaultValuedAttr<I64Attr, "1">:$stride,
+                       DefaultValuedAttr<I64Attr, "0">:$padding);
+  let assemblyFormat = [{$input $filter $output attr-dict `:`
+    type($input) type($filter) type($output)}];
+}
+
 def Im2colOp : Buckyball_Op<"im2col"> {
   let summary = "Image-to-column transformation for convolution";
   let description = [{

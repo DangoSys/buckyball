@@ -26,7 +26,7 @@ Use `/check` logic to validate registration consistency, then ensure all require
 
 After simulation passes, analyze PMC traces from `bdb.log`:
 
-1. Locate log directory (`ls -t arch/log/ | head -5`)
+1. Locate log directory (`ls -t log/ | head -5`)
 2. Search `[PMCTRACE] BALL` entries in `bdb.log` and extract elapsed cycles for the target Ball
 3. Summarize:
    - average elapsed cycles per task

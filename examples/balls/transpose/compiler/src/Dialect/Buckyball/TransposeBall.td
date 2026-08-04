@@ -10,6 +10,20 @@
 include "BuckyballBase.td"
 include "BuckyballIntrinsics.td"
 
+// Memref-level transpose (like matrix_matmul). Chip bank-ssa decides
+// pad / tile / Bank* composition; this op carries no bank policy.
+def MemTransposeOp : Buckyball_Op<"mem_transpose"> {
+  let summary = "Logical matrix transpose on memrefs";
+  let description = [{
+    Transposes input[R,C] into output[C,R]. Element type and layout
+    constraints are enforced by the chip bank-ssa lowering.
+  }];
+  let arguments = (ins MemRefRankOf<[AnyType], [2]>:$input,
+                       MemRefRankOf<[AnyType], [2]>:$output);
+  let assemblyFormat = [{$input $output attr-dict `:`
+    type($input) type($output)}];
+}
+
 def TransposeOp : Buckyball_Op<"transpose"> {
   let summary = "Matrix transpose operation";
   let description = [{

@@ -11,6 +11,8 @@ add_mlir_library(${BB_CHIP_TARGET_PREFIX}LowerBuckyballPass
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
   MatrixMatmulToBankSSAPatterns.cpp
+  Im2colMatmulToBankSSAPatterns.cpp
+  MemTransposeToBankSSAPatterns.cpp
 
   LINK_LIBS PUBLIC
   ${BB_CHIP_TARGET_PREFIX}BuddyBuckyballTransforms
