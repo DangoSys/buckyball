@@ -25,9 +25,10 @@ as proof that the command was accepted by the DUT.
 
 The current directed case covers:
 
-- `INT32` layout: `op1_col = 1`, `wr_col = 1`
-- `scale = 1.0` (`0x3F800000`)
-- 4 input bank words
+- `FP32 -> INT8` layout: `op1_col = 4`, `wr_col = 1`
+- `scale = 2.0` (`0x40000000`)
+- fractional inputs, RNE ties-to-even, and saturation
+- four input groups packed into one output bank word
 - read request checks
 - write request checks
 - command response checks
@@ -38,7 +39,7 @@ The UVM DPI reference and case generator live under `casegen/`:
 - `casegen/src/casegen.rs` generates deterministic UVM cases
 - `../emu/src/model.rs` is reused as the fp2int reference model
 
-The smoke sequence asks Rust for case index 0, which is the fixed INT32 smoke
+The smoke sequence asks Rust for case index 0, which is the fixed INT8 smoke
 case. Non-zero case indices are seed-based deterministic random cases.
 
 ## Build

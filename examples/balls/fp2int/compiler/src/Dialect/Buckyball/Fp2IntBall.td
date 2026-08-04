@@ -15,9 +15,9 @@ include "BuckyballIntrinsics.td"
 //===----------------------------------------------------------------------===//
 
 def Fp2IntOp : Buckyball_Op<"fp2int"> {
-  let summary = "Quantize floating-point to fixed-point";
+  let summary = "Quantize FP32 to packed INT8";
   let description = [{
-    Quantizes floating-point values to fixed-point representation.
+    Quantizes FP32 values to packed INT8 using an FP32 scale multiplier.
     Corresponds to bb_fp2int instruction (funct7=51).
     Belongs to Fp2IntBall (ballName=Fp2IntBall; ballId is chip-config specific).
     ISA: bb_fp2int(bank_id, wr_bank_id, iter, scale_fp32)
@@ -30,7 +30,7 @@ def Fp2IntOp : Buckyball_Op<"fp2int"> {
 }
 
 def BankFp2IntOp : Buckyball_Op<"bank_fp2int"> {
-  let summary = "Quantization using virtual bank handles";
+  let summary = "FP32-to-INT8 quantization using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =

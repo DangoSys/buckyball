@@ -3,9 +3,9 @@
 
 func.func @main() -> i8 {
   %z = arith.constant 0 : i8
-  %iter = arith.constant 4 : i64
-  %scale = arith.constant 1065353216 : i64
-  %in = buckyball.bank_alloc
+  %iter = arith.constant 2 : i64
+  %scale = arith.constant 1073741824 : i64
+  %in = buckyball.bank_alloc {col = 4 : i64}
   %out = buckyball.bank_alloc
   %r = buckyball.bank_fp2int %in %out %iter %scale
       : i64 i64 i64 i64

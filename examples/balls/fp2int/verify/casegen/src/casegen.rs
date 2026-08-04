@@ -31,42 +31,12 @@ impl Fp2IntCase {
     (self.input_words[index] >> 64) as u64
   }
 
-  pub fn is_i8(&self) -> bool {
-    self.op1_col == 4 && self.wr_col == 1
-  }
 }
 
 pub fn gen_case(seed: u32, index: u32) -> Fp2IntCase {
   match index {
-    0 => directed_i32_case(),
-    1 => directed_i8_case(),
-    _ => random_i32_case(seed, index),
-  }
-}
-
-fn directed_i32_case() -> Fp2IntCase {
-  let mut input_words = [0u128; MAX_WORDS];
-  input_words[0] = 0xBF80_0000_4040_0000_4000_0000_3F80_0000;
-  input_words[1] = 0x40A0_0000_4080_0000_0000_0000_C000_0000;
-  input_words[2] = 0x42C8_0000_3F00_0000_C120_0000_4120_0000;
-  input_words[3] = 0xC100_0000_4100_0000_40E0_0000_C2C8_0000;
-
-  Fp2IntCase {
-    bid: TEST_BID,
-    funct7: 51,
-    iter: WORDS as u32,
-    scale_bits: 0x3F80_0000,
-    op1_bank: 0,
-    op2_bank: 0,
-    wr_bank: 1,
-    op1_col: 1,
-    op2_col: 0,
-    wr_col: 1,
-    meta_bank: 0,
-    rob_id: 3,
-    is_sub: false,
-    sub_rob_id: 0,
-    input_words,
+    0 => directed_i8_case(),
+    _ => random_i8_case(seed, index),
   }
 }
 
@@ -119,7 +89,7 @@ fn directed_i8_case() -> Fp2IntCase {
   }
 }
 
-fn random_i32_case(seed: u32, index: u32) -> Fp2IntCase {
+fn random_i8_case(seed: u32, index: u32) -> Fp2IntCase {
   let mut rng = Rng::new(seed, index);
   let op1_bank = rng.range(0, 31);
   let mut wr_bank = rng.range(0, 31);
@@ -128,7 +98,7 @@ fn random_i32_case(seed: u32, index: u32) -> Fp2IntCase {
   }
 
   let mut input_words = [0u128; MAX_WORDS];
-  for i in 0..WORDS {
+  for i in 0..MAX_WORDS {
     input_words[i] = random_word(&mut rng);
   }
 
@@ -140,7 +110,7 @@ fn random_i32_case(seed: u32, index: u32) -> Fp2IntCase {
     op1_bank,
     op2_bank: 0,
     wr_bank,
-    op1_col: 1,
+    op1_col: 4,
     op2_col: 0,
     wr_col: 1,
     meta_bank: 0,
@@ -218,27 +188,19 @@ mod tests {
   use super::*;
 
   #[test]
-  fn case_zero_is_smoke_case() {
+  fn case_zero_is_i8_smoke_case() {
     let case = gen_case(0x1234, 0);
 
     assert_eq!(case.bid, TEST_BID);
     assert_eq!(case.funct7, 51);
-    assert_eq!(case.iter, WORDS as u32);
-    assert_eq!(case.scale_bits, 0x3F80_0000);
-    assert_eq!(case.op1_bank, 0);
-    assert_eq!(case.wr_bank, 1);
-    assert_eq!(case.op1_col, 1);
-    assert_eq!(case.wr_col, 1);
-    assert_eq!(case.rob_id, 3);
-    assert_eq!(case.input_words[0], 0xBF80_0000_4040_0000_4000_0000_3F80_0000);
-  }
-
-  #[test]
-  fn case_one_is_i8_case() {
-    let case = gen_case(0, 1);
-    assert!(case.is_i8());
     assert_eq!(case.iter, 1);
     assert_eq!(case.scale_bits, 0x4000_0000);
+    assert_eq!(case.op1_bank, 0);
+    assert_eq!(case.wr_bank, 1);
+    assert_eq!(case.op1_col, 4);
+    assert_eq!(case.wr_col, 1);
+    assert_eq!(case.rob_id, 2);
+    assert_eq!(case.input_words[0], 0xBE80_0000_3E80_0000_BE00_0000_3E00_0000);
   }
 
   #[test]
@@ -254,7 +216,7 @@ mod tests {
     assert!(a.op1_bank < 32);
     assert!(a.wr_bank < 32);
     assert!(a.rob_id < 16);
-    assert_eq!(a.op1_col, 1);
+    assert_eq!(a.op1_col, 4);
     assert_eq!(a.wr_col, 1);
   }
 }

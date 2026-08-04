@@ -5,6 +5,7 @@
 
 #define BB_FP2INT_FUNC7 51
 
+// Convert FP32 data to packed INT8.
 // bb_fp2int(bank_id, wr_bank_id, iter, scale_fp32)
 // scale_fp32 is a 32-bit FP32 value passed as uint32_t bit pattern
 // Encoding: rs1 = banks | iter

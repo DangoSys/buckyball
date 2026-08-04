@@ -42,10 +42,6 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       value = op.getOutBank();
       continue;
     }
-    if (auto op = value.getDefiningOp<BankInt32ToInt8Op>()) {
-      value = op.getOutBank();
-      continue;
-    }
     if (auto op = value.getDefiningOp<BankIm2colOp>()) {
       value = op.getOutBank();
       continue;

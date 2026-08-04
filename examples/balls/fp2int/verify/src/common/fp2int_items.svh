@@ -25,10 +25,6 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
     super.new(name);
   endfunction
 
-  function bit is_i8();
-    return (op1_col == 5'd4) && (wr_col == 5'd1);
-  endfunction
-
   function void load_rust_case(int unsigned seed, int unsigned index);
     int unsigned v;
     longint unsigned word_lo;
@@ -87,7 +83,7 @@ class fp2int_cmd_item extends bb_blink_cmd_item;
     if (iter == 0 || iter > FP2INT_NUM_WORDS) begin
       `uvm_fatal("CASE", $sformatf("invalid iter from Rust casegen: %0d", iter))
     end
-    if (!((op1_col == 5'd1 && wr_col == 5'd1) || (op1_col == 5'd4 && wr_col == 5'd1))) begin
+    if (op1_col != 5'd4 || wr_col != 5'd1) begin
       `uvm_fatal("CASE", "Rust casegen produced unsupported layout")
     end
     if (op1_bank == wr_bank) begin

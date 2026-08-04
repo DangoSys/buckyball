@@ -3,11 +3,6 @@ mod casegen;
 mod model;
 
 #[no_mangle]
-pub extern "C" fn fp2int_ref_i32(fp_bits: u32, scale_bits: u32) -> i32 {
-  model::fp2int_i32_bits(fp_bits, scale_bits)
-}
-
-#[no_mangle]
 pub extern "C" fn fp2int_ref_i8(fp_bits: u32, scale_bits: u32) -> i32 {
   i32::from(model::fp2int_i8_bits(fp_bits, scale_bits))
 }
