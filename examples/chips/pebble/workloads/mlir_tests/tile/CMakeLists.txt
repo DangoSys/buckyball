@@ -21,5 +21,12 @@ set(PEBBLE_TILE_TO_ELF_PASSES
   -reconcile-unrealized-casts)
 
 add_buckyball_mlir_optest(tile_matmul_16x16_i8 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_matmul_16x16_f32 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_matmul_1x256x120_f32 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
 add_buckyball_mlir_optest(tile_transpose_16x16_i8 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_transpose_120x256_f32 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_transpose_matmul_120x256_f32 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
 add_buckyball_mlir_optest(tile_conv2d_6x6_k3 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_conv2d_8x8_k3_c2_oc2 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_conv2d_12x12_k5 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_optest(tile_conv2d_28x28_k5 PASSES ${PEBBLE_TILE_TO_ELF_PASSES})

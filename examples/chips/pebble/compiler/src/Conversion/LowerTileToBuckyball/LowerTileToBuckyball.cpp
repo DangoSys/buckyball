@@ -31,6 +31,7 @@
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
 #include "Utils/BankUtils.h"
+#include "Utils/QuantUtils.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
@@ -47,6 +48,21 @@ static size_t elemsPerBankRow(Type elemType, size_t bankWidthBytes) {
   if (bitWidth == 0 || bitWidth % 8 != 0)
     return 0;
   return bankWidthBytes / (bitWidth / 8);
+}
+
+// Bank mvin/mvout stride is (memref row stride in elems) / 16.
+static LogicalResult rowStrideDiv16(MemRefType ty, int64_t &out) {
+  SmallVector<int64_t, 4> strides;
+  int64_t offset = 0;
+  if (failed(ty.getStridesAndOffset(strides, offset)) || strides.size() < 2)
+    return failure();
+  if (ShapedType::isDynamic(strides[0]) || strides[0] <= 0 ||
+      strides[0] % 16 != 0)
+    return failure();
+  if (ShapedType::isDynamic(strides[1]) || strides[1] != 1)
+    return failure();
+  out = strides[0] / 16;
+  return success();
 }
 
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
@@ -73,61 +89,104 @@ public:
         outShape[1] != static_cast<int64_t>(rows))
       return op.emitError("output shape must transpose the input shape");
 
-    size_t elemsPerRow =
-        elemsPerBankRow(inputType.getElementType(), bankWidthBytes);
-    if (elemsPerRow == 0 || cols % elemsPerRow != 0)
-      return op.emitError("input width must be a whole number of bank rows");
-    int64_t elemBits = inputType.getElementType().getIntOrFloatBitWidth();
+    Type elemTy = inputType.getElementType();
+    int64_t elemBits = elemTy.getIntOrFloatBitWidth();
     if (elemBits != 8 && elemBits != 32)
-      return op.emitError("only i8 and i32 transpose elements are supported");
+      return op.emitError("only 8/32-bit transpose elements are supported");
 
-    constexpr size_t kMaxCols = 64;
-    size_t colTile = std::min(cols, kMaxCols);
-    colTile = (colTile / elemsPerRow) * elemsPerRow;
+    size_t elemsPerRow = elemsPerBankRow(elemTy, bankWidthBytes);
+    if (elemsPerRow == 0)
+      return op.emitError("unsupported transpose element type");
+
+    // src+dst share pebble's 8 banks => at most 4 column-groups per side
+    size_t colTile = elemsPerRow * 4;
     if (colTile == 0)
       return op.emitError("tile width is smaller than one bank row");
 
-    for (size_t r0 = 0; r0 < ceilDiv(rows, kMatmulTile); ++r0) {
-      for (size_t c0 = 0; c0 < ceilDiv(cols, colTile); ++c0) {
-        size_t rStart = r0 * kMatmulTile;
-        size_t cStart = c0 * colTile;
-        size_t rLen = std::min(kMatmulTile, rows - rStart);
-        size_t cLen = std::min(colTile, cols - cStart);
-        size_t paddedRows = std::max(rLen, kMatmulTile);
-        int64_t groups = cLen / elemsPerRow;
-        if (groups * 2 > 16)
-          return op.emitError("transpose tile exceeds Pebble bank capacity");
+    // Transpose ball packs with iter==rowTile and W==colTile; pad to full
+    // tiles.
+    size_t rowsPad = ceilDiv(rows, kMatmulTile) * kMatmulTile;
+    size_t colsPad = ceilDiv(cols, colTile) * colTile;
+    bool pad = rowsPad != rows || colsPad != cols;
 
+    Value inBuf = input;
+    Value outBuf = output;
+    if (pad) {
+      auto inPadTy =
+          MemRefType::get({(int64_t)rowsPad, (int64_t)colsPad}, elemTy);
+      auto outPadTy =
+          MemRefType::get({(int64_t)colsPad, (int64_t)rowsPad}, elemTy);
+      inBuf = rewriter.create<memref::AllocOp>(loc, inPadTy);
+      outBuf = rewriter.create<memref::AllocOp>(loc, outPadTy);
+      Value z = rewriter.create<arith::ConstantOp>(
+          loc, elemTy, rewriter.getZeroAttr(elemTy));
+      rewriter.create<linalg::FillOp>(loc, z, inBuf);
+      rewriter.create<linalg::FillOp>(loc, z, outBuf);
+      Value inView = rewriter.create<memref::SubViewOp>(
+          loc, inBuf,
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                    rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(rows),
+                                    rewriter.getIndexAttr(cols)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                    rewriter.getIndexAttr(1)});
+      rewriter.create<memref::CopyOp>(loc, input, inView);
+    }
+
+    int64_t groups = (int64_t)(colTile / elemsPerRow);
+    for (size_t r0 = 0; r0 < rowsPad; r0 += kMatmulTile) {
+      for (size_t c0 = 0; c0 < colsPad; c0 += colTile) {
         Value inTile = rewriter.create<memref::SubViewOp>(
-            loc, input,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(rStart),
-                                      rewriter.getIndexAttr(cStart)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(rLen),
-                                      rewriter.getIndexAttr(cLen)},
+            loc, inBuf,
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(r0),
+                                      rewriter.getIndexAttr(c0)},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(kMatmulTile),
+                                      rewriter.getIndexAttr(colTile)},
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
         Value outTile = rewriter.create<memref::SubViewOp>(
-            loc, output,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(cStart),
-                                      rewriter.getIndexAttr(rStart)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(cLen),
-                                      rewriter.getIndexAttr(rLen)},
+            loc, outBuf,
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(c0),
+                                      rewriter.getIndexAttr(r0)},
+            SmallVector<OpFoldResult>{rewriter.getIndexAttr(colTile),
+                                      rewriter.getIndexAttr(kMatmulTile)},
             SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                       rewriter.getIndexAttr(1)});
 
-        Value src = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-        src.getDefiningOp()->setAttr("col", rewriter.getI64IntegerAttr(groups));
-        Value dst = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-        dst.getDefiningOp()->setAttr("col", rewriter.getI64IntegerAttr(groups));
-        Value loaded = mvinBank(rewriter, loc, inTile, src, paddedRows);
+        int64_t strideIn = 0, strideOut = 0;
+        auto inTileTy = cast<MemRefType>(inTile.getType());
+        auto outTileTy = cast<MemRefType>(outTile.getType());
+        if (failed(rowStrideDiv16(inTileTy, strideIn)) ||
+            failed(rowStrideDiv16(outTileTy, strideOut)))
+          return op.emitError("transpose tile needs static strided<[row,1]> "
+                              "with row%16==0");
+
+        Value src = allocBank(rewriter, loc, 1, groups);
+        Value dst = allocBank(rewriter, loc, 1, groups);
+        Value loaded =
+            mvinBank(rewriter, loc, inTile, src, kMatmulTile, strideIn);
         Value transposed = rewriter.create<BankTransposeOp>(
             loc, dst.getType(), loaded, dst,
-            createI64Const(rewriter, loc, paddedRows),
+            createI64Const(rewriter, loc, (int64_t)kMatmulTile),
             createI64Const(rewriter, loc, elemBits));
-        mvoutBank(rewriter, loc, outTile, transposed, paddedRows);
+        mvoutBank(rewriter, loc, outTile, transposed, kMatmulTile, strideOut);
         releaseBank(rewriter, loc, loaded);
         releaseBank(rewriter, loc, transposed);
       }
+    }
+
+    if (pad) {
+      Value outView = rewriter.create<memref::SubViewOp>(
+          loc, outBuf,
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(0),
+                                    rewriter.getIndexAttr(0)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(cols),
+                                    rewriter.getIndexAttr(rows)},
+          SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
+                                    rewriter.getIndexAttr(1)});
+      rewriter.create<memref::CopyOp>(loc, outView, output);
+      rewriter.create<memref::DeallocOp>(loc, inBuf);
+      rewriter.create<memref::DeallocOp>(loc, outBuf);
     }
 
     rewriter.eraseOp(op);
@@ -138,135 +197,244 @@ private:
   int64_t bankWidthBytes;
 };
 
+// Pebble im2col: square HxW, per-cin plane, K=k^2.
+// Conv: tile / cin -> pack -> fp2int -> im2col -> matrix -> int2fp; add into
+// outs. pad=0 stride=1 only. OC <= 16.
+constexpr int64_t kMaxIter = 34;
+constexpr int64_t kMaxK = 7;
+constexpr int64_t kBankLines = 1024;
+constexpr int64_t kLane = 16;
+
+static int64_t cdiv(int64_t a, int64_t b) { return (a + b - 1) / b; }
+
+static int64_t pickTile(int64_t outDim, int64_t ksize) {
+  int64_t kElems = ksize * ksize;
+  for (int64_t t = outDim; t >= 1; --t) {
+    if (outDim % t != 0)
+      continue;
+    int64_t inSize = t + ksize - 1;
+    if (inSize > kMaxIter)
+      continue;
+    if ((inSize * inSize) % kLane != 0)
+      continue;
+    int64_t rows = cdiv(t * t, kLane) * cdiv(kElems, kLane) * kLane;
+    if (rows <= kBankLines)
+      return t;
+  }
+  return 0;
+}
+
+static void addF32Pack(OpBuilder &b, Location loc, Value dst, Value src,
+                       int64_t rows) {
+  Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+  Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+  Value nRows = b.create<arith::ConstantIndexOp>(loc, rows);
+  Value nCols = b.create<arith::ConstantIndexOp>(loc, kLane);
+  auto r = b.create<scf::ForOp>(loc, zero, nRows, one);
+  b.setInsertionPointToStart(r.getBody());
+  auto c = b.create<scf::ForOp>(loc, zero, nCols, one);
+  b.setInsertionPointToStart(c.getBody());
+  Value a = b.create<memref::LoadOp>(
+      loc, dst, ValueRange{r.getInductionVar(), c.getInductionVar()});
+  Value t = b.create<memref::LoadOp>(
+      loc, src, ValueRange{r.getInductionVar(), c.getInductionVar()});
+  b.create<memref::StoreOp>(
+      loc, b.create<arith::AddFOp>(loc, a, t), dst,
+      ValueRange{r.getInductionVar(), c.getInductionVar()});
+  b.setInsertionPointAfter(r);
+}
+
 class TileConv2dLowering : public OpRewritePattern<tile::TileConv2dOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tile::TileConv2dOp op,
-                                PatternRewriter &rewriter) const override {
+                                PatternRewriter &b) const override {
     Location loc = op.getLoc();
-    auto inputTy = dyn_cast<MemRefType>(op.getInput().getType());
-    auto filterTy = dyn_cast<MemRefType>(op.getFilter().getType());
-    auto outputTy = dyn_cast<MemRefType>(op.getOutput().getType());
-    if (!inputTy || !filterTy || !outputTy || !inputTy.hasStaticShape() ||
-        !filterTy.hasStaticShape() || !outputTy.hasStaticShape() ||
-        !inputTy.getElementType().isF32() ||
-        !filterTy.getElementType().isF32() ||
-        !outputTy.getElementType().isF32())
+    auto inTy = dyn_cast<MemRefType>(op.getInput().getType());
+    auto fTy = dyn_cast<MemRefType>(op.getFilter().getType());
+    auto oTy = dyn_cast<MemRefType>(op.getOutput().getType());
+    if (!inTy || !fTy || !oTy || !inTy.hasStaticShape() ||
+        !fTy.hasStaticShape() || !oTy.hasStaticShape() ||
+        !inTy.getElementType().isF32() || !fTy.getElementType().isF32() ||
+        !oTy.getElementType().isF32())
       return op.emitError("requires static f32 memrefs");
-    if (inputTy.getShape() != ArrayRef<int64_t>{1, 6, 6, 1} ||
-        filterTy.getShape() != ArrayRef<int64_t>{3, 3, 1, 1} ||
-        outputTy.getShape() != ArrayRef<int64_t>{1, 4, 4, 1})
-      return op.emitError("currently supports NHWC 1x6x6x1 and HWCF 3x3x1x1");
 
-    auto inputPackTy = MemRefType::get({3, 16}, rewriter.getF32Type());
-    auto filterPackTy = MemRefType::get({16, 16}, rewriter.getF32Type());
-    auto outputPackTy = MemRefType::get({16, 16}, rewriter.getF32Type());
-    Value inputPack = rewriter.create<memref::AllocOp>(loc, inputPackTy);
-    Value filterPack = rewriter.create<memref::AllocOp>(loc, filterPackTy);
-    Value outputPack = rewriter.create<memref::AllocOp>(loc, outputPackTy);
-    Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-    Value one = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-    Value six = rewriter.create<arith::ConstantIndexOp>(loc, 6);
-    Value three = rewriter.create<arith::ConstantIndexOp>(loc, 3);
-    Value four = rewriter.create<arith::ConstantIndexOp>(loc, 4);
-    Value sixteen = rewriter.create<arith::ConstantIndexOp>(loc, 16);
-    Value fzero = rewriter.create<arith::ConstantOp>(
-        loc, rewriter.getF32Type(), rewriter.getF32FloatAttr(0));
-    rewriter.create<linalg::FillOp>(loc, fzero, inputPack);
-    rewriter.create<linalg::FillOp>(loc, fzero, filterPack);
+    auto is = inTy.getShape(), fs = fTy.getShape(), os = oTy.getShape();
+    int64_t N = is[0], H = is[1], W = is[2], C = is[3];
+    int64_t KH = fs[0], KW = fs[1], FC = fs[2], OC = fs[3];
+    int64_t OH = os[1], OW = os[2];
+    if (N != os[0] || C != FC || OC != os[3] || H != W || OH != OW || KH != KW)
+      return op.emitError("shape mismatch or non-square H/W/K");
+    if (KH < 1 || KH > kMaxK || OC > kLane)
+      return op.emitError("ksize/OC out of range");
+    if (OH != H - KH + 1)
+      return op.emitError("only pad=0 stride=1 supported");
 
-    auto inRow = rewriter.create<scf::ForOp>(loc, zero, six, one);
-    rewriter.setInsertionPointToStart(inRow.getBody());
-    auto inCol = rewriter.create<scf::ForOp>(loc, zero, six, one);
-    rewriter.setInsertionPointToStart(inCol.getBody());
-    Value flat = rewriter.create<arith::AddIOp>(
-        loc, rewriter.create<arith::MulIOp>(loc, inRow.getInductionVar(), six),
-        inCol.getInductionVar());
-    Value packRow = rewriter.create<arith::DivUIOp>(loc, flat, sixteen);
-    Value packCol = rewriter.create<arith::RemUIOp>(loc, flat, sixteen);
-    Value inputValue = rewriter.create<memref::LoadOp>(
-        loc, op.getInput(),
-        ValueRange{zero, inRow.getInductionVar(), inCol.getInductionVar(),
-                   zero});
-    rewriter.create<memref::StoreOp>(loc, inputValue, inputPack,
-                                     ValueRange{packRow, packCol});
-    rewriter.setInsertionPointAfter(inRow);
+    int64_t tile = pickTile(OH, KH);
+    if (tile == 0)
+      return op.emitError("no tile fits im2col bank capacity");
 
-    auto filterRow = rewriter.create<scf::ForOp>(loc, zero, three, one);
-    rewriter.setInsertionPointToStart(filterRow.getBody());
-    auto filterCol = rewriter.create<scf::ForOp>(loc, zero, three, one);
-    rewriter.setInsertionPointToStart(filterCol.getBody());
-    Value filterIndex = rewriter.create<arith::AddIOp>(
-        loc,
-        rewriter.create<arith::MulIOp>(loc, filterRow.getInductionVar(), three),
-        filterCol.getInductionVar());
-    Value filterValue = rewriter.create<memref::LoadOp>(
-        loc, op.getFilter(),
-        ValueRange{filterRow.getInductionVar(), filterCol.getInductionVar(),
-                   zero, zero});
-    rewriter.create<memref::StoreOp>(loc, filterValue, filterPack,
-                                     ValueRange{filterIndex, zero});
-    rewriter.setInsertionPointAfter(filterRow);
+    int64_t kElems = KH * KH;
+    int64_t wins = tile * tile;
+    int64_t inSize = tile + KH - 1;
+    int64_t inRows = cdiv(inSize * inSize, kLane);
+    int64_t bRows = cdiv(kElems, kLane) * kLane;
+    int64_t cBlocks = wins;
+    uint64_t cfg =
+        packBits(wins, 0, 11) | packBits(OC, 12, 23) | packBits(kElems, 24, 35);
 
-    Value inputF = allocBank(rewriter, loc, 1, 4);
-    Value inputI = allocBank(rewriter, loc, 1, 1);
-    Value scale = createI64Const(rewriter, loc, 1065353216);
-    Value inputLoaded = mvinBank(rewriter, loc, inputPack, inputF, 3);
-    Value inputQuant = rewriter.create<BankFp2IntOp>(
-        loc, inputI.getType(), inputLoaded, inputI,
-        createI64Const(rewriter, loc, 3), scale);
-    releaseBank(rewriter, loc, inputLoaded);
+    Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+    Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+    Value sixteen = b.create<arith::ConstantIndexOp>(loc, kLane);
+    Value f0 = b.create<arith::ConstantOp>(loc, b.getF32Type(),
+                                           b.getF32FloatAttr(0.0f));
 
-    Value patches = allocBank(rewriter, loc, 1, 1);
-    Value patchBank = rewriter.create<BankIm2colOp>(
-        loc, patches.getType(), inputQuant, patches,
-        createI64Const(rewriter, loc, 6), createI64Const(rewriter, loc, 3),
-        createI64Const(rewriter, loc, 1), createI64Const(rewriter, loc, 0));
-    releaseBank(rewriter, loc, inputQuant);
+    Value inPack = b.create<memref::AllocOp>(
+        loc, MemRefType::get({inRows, kLane}, b.getF32Type()));
+    Value fPack = b.create<memref::AllocOp>(
+        loc, MemRefType::get({bRows, kLane}, b.getF32Type()));
+    Value tmpI = b.create<memref::AllocOp>(
+        loc, MemRefType::get({cBlocks, kLane}, b.getI32Type()));
+    Value tmpF = b.create<memref::AllocOp>(
+        loc, MemRefType::get({cBlocks, kLane}, b.getF32Type()));
+    Value accF = b.create<memref::AllocOp>(
+        loc, MemRefType::get({cBlocks, kLane}, b.getF32Type()));
 
-    Value filterF = allocBank(rewriter, loc, 1, 4);
-    Value filterI = allocBank(rewriter, loc, 1, 1);
-    Value filterLoaded = mvinBank(rewriter, loc, filterPack, filterF, 16);
-    Value filterQuant = rewriter.create<BankFp2IntOp>(
-        loc, filterI.getType(), filterLoaded, filterI,
-        createI64Const(rewriter, loc, 16), scale);
-    releaseBank(rewriter, loc, filterLoaded);
+    for (int64_t n = 0; n < N; ++n) {
+      Value nV = b.create<arith::ConstantIndexOp>(loc, n);
+      for (int64_t oh0 = 0; oh0 < OH; oh0 += tile) {
+        for (int64_t ow0 = 0; ow0 < OW; ow0 += tile) {
+          b.create<linalg::FillOp>(loc, f0, accF);
 
-    Value acc = allocBank(rewriter, loc, 1, 4);
-    Value computed = rewriter.create<BankMatrixOp>(
-        loc, acc.getType(), patchBank, filterQuant, acc,
-        createI64Const(rewriter, loc, 0x09001010));
-    releaseBank(rewriter, loc, patchBank);
-    releaseBank(rewriter, loc, filterQuant);
+          for (int64_t cin = 0; cin < C; ++cin) {
+            Value cV = b.create<arith::ConstantIndexOp>(loc, cin);
 
-    Value outputF = allocBank(rewriter, loc, 1, 4);
-    Value dequant =
-        rewriter.create<BankInt2FpOp>(loc, outputF.getType(), computed, outputF,
-                                      createI64Const(rewriter, loc, 16), scale);
-    releaseBank(rewriter, loc, computed);
-    Value outputStored = mvoutBank(rewriter, loc, outputPack, dequant, 16);
+            b.create<linalg::FillOp>(loc, f0, inPack);
+            Value inSizeV = b.create<arith::ConstantIndexOp>(loc, inSize);
+            Value ih0V = b.create<arith::ConstantIndexOp>(loc, oh0);
+            Value iw0V = b.create<arith::ConstantIndexOp>(loc, ow0);
+            auto rL = b.create<scf::ForOp>(
+                loc, zero, b.create<arith::ConstantIndexOp>(loc, inRows), one);
+            b.setInsertionPointToStart(rL.getBody());
+            auto cL = b.create<scf::ForOp>(loc, zero, sixteen, one);
+            b.setInsertionPointToStart(cL.getBody());
+            Value flat = b.create<arith::AddIOp>(
+                loc,
+                b.create<arith::MulIOp>(loc, rL.getInductionVar(), sixteen),
+                cL.getInductionVar());
+            Value ih = b.create<arith::DivUIOp>(loc, flat, inSizeV);
+            Value iw = b.create<arith::RemUIOp>(loc, flat, inSizeV);
+            Value v = b.create<memref::LoadOp>(
+                loc, op.getInput(),
+                ValueRange{nV, b.create<arith::AddIOp>(loc, ih0V, ih),
+                           b.create<arith::AddIOp>(loc, iw0V, iw), cV});
+            b.create<memref::StoreOp>(
+                loc, v, inPack,
+                ValueRange{rL.getInductionVar(), cL.getInductionVar()});
+            b.setInsertionPointAfter(rL);
 
-    auto outRow = rewriter.create<scf::ForOp>(loc, zero, four, one);
-    rewriter.setInsertionPointToStart(outRow.getBody());
-    auto outCol = rewriter.create<scf::ForOp>(loc, zero, four, one);
-    rewriter.setInsertionPointToStart(outCol.getBody());
-    Value outIndex = rewriter.create<arith::AddIOp>(
-        loc,
-        rewriter.create<arith::MulIOp>(loc, outRow.getInductionVar(), four),
-        outCol.getInductionVar());
-    Value outputValue = rewriter.create<memref::LoadOp>(
-        loc, outputPack, ValueRange{outIndex, zero});
-    rewriter.create<memref::StoreOp>(loc, outputValue, op.getOutput(),
-                                     ValueRange{zero, outRow.getInductionVar(),
-                                                outCol.getInductionVar(),
-                                                zero});
-    rewriter.setInsertionPointAfter(outRow);
-    releaseBank(rewriter, loc, outputStored);
-    rewriter.create<memref::DeallocOp>(loc, inputPack);
-    rewriter.create<memref::DeallocOp>(loc, filterPack);
-    rewriter.create<memref::DeallocOp>(loc, outputPack);
-    rewriter.eraseOp(op);
+            b.create<linalg::FillOp>(loc, f0, fPack);
+            for (int64_t kr = 0; kr < KH; ++kr) {
+              for (int64_t kc = 0; kc < KW; ++kc) {
+                int64_t k = kr * KH + kc;
+                Value krV = b.create<arith::ConstantIndexOp>(loc, kr);
+                Value kcV = b.create<arith::ConstantIndexOp>(loc, kc);
+                Value rowV = b.create<arith::ConstantIndexOp>(loc, k);
+                for (int64_t o = 0; o < OC; ++o) {
+                  Value oV = b.create<arith::ConstantIndexOp>(loc, o);
+                  Value wt = b.create<memref::LoadOp>(
+                      loc, op.getFilter(), ValueRange{krV, kcV, cV, oV});
+                  b.create<memref::StoreOp>(loc, wt, fPack,
+                                            ValueRange{rowV, oV});
+                }
+              }
+            }
+
+            Value scaleAF =
+                quantScale(b, loc, absMaxF32(b, loc, inPack, inRows, kLane));
+            Value scaleBF =
+                quantScale(b, loc, absMaxF32(b, loc, fPack, bRows, kLane));
+            Value scaleA = packF32BitsAsI64(b, loc, scaleAF);
+            Value scaleB = packF32BitsAsI64(b, loc, scaleBF);
+            Value scaleD = packF32BitsAsI64(
+                b, loc, dequantScale(b, loc, scaleAF, scaleBF));
+
+            Value inFB = allocBank(b, loc, 1, 4);
+            Value inIB = allocBank(b, loc, 1, 1);
+            Value loaded = mvinBank(b, loc, inPack, inFB, inRows);
+            Value quant =
+                b.create<BankFp2IntOp>(loc, inIB.getType(), loaded, inIB,
+                                       createI64Const(b, loc, inRows), scaleA);
+            releaseBank(b, loc, loaded);
+
+            Value patches = allocBank(b, loc, 1, 1);
+            Value patch = b.create<BankIm2colOp>(
+                loc, patches.getType(), quant, patches,
+                createI64Const(b, loc, inSize), createI64Const(b, loc, KH),
+                createI64Const(b, loc, 1), createI64Const(b, loc, 0));
+            releaseBank(b, loc, quant);
+
+            Value fFB = allocBank(b, loc, 1, 4);
+            Value fIB = allocBank(b, loc, 1, 1);
+            Value fLoaded = mvinBank(b, loc, fPack, fFB, bRows);
+            Value fQuant =
+                b.create<BankFp2IntOp>(loc, fIB.getType(), fLoaded, fIB,
+                                       createI64Const(b, loc, bRows), scaleB);
+            releaseBank(b, loc, fLoaded);
+
+            Value accB = allocBank(b, loc, 1, 4);
+            Value computed =
+                b.create<BankMatrixOp>(loc, accB.getType(), patch, fQuant, accB,
+                                       createI64Const(b, loc, (int64_t)cfg));
+            releaseBank(b, loc, patch);
+            releaseBank(b, loc, fQuant);
+            mvoutBank(b, loc, tmpI, computed, cBlocks);
+            releaseBank(b, loc, computed);
+
+            Value tF = allocBank(b, loc, 1, 4);
+            Value tL = mvinBank(b, loc, tmpI, tF, cBlocks);
+            Value fp =
+                b.create<BankInt2FpOp>(loc, tL.getType(), tL, tL,
+                                       createI64Const(b, loc, cBlocks), scaleD);
+            mvoutBank(b, loc, tmpF, fp, cBlocks);
+            releaseBank(b, loc, fp);
+            addF32Pack(b, loc, accF, tmpF, cBlocks);
+          }
+
+          Value tileV = b.create<arith::ConstantIndexOp>(loc, tile);
+          Value oh0V = b.create<arith::ConstantIndexOp>(loc, oh0);
+          Value ow0V = b.create<arith::ConstantIndexOp>(loc, ow0);
+          auto ohL = b.create<scf::ForOp>(loc, zero, tileV, one);
+          b.setInsertionPointToStart(ohL.getBody());
+          auto owL = b.create<scf::ForOp>(loc, zero, tileV, one);
+          b.setInsertionPointToStart(owL.getBody());
+          Value win = b.create<arith::AddIOp>(
+              loc, b.create<arith::MulIOp>(loc, ohL.getInductionVar(), tileV),
+              owL.getInductionVar());
+          auto ocL = b.create<scf::ForOp>(
+              loc, zero, b.create<arith::ConstantIndexOp>(loc, OC), one);
+          b.setInsertionPointToStart(ocL.getBody());
+          Value ov = b.create<memref::LoadOp>(
+              loc, accF, ValueRange{win, ocL.getInductionVar()});
+          ValueRange outIdx{
+              nV, b.create<arith::AddIOp>(loc, oh0V, ohL.getInductionVar()),
+              b.create<arith::AddIOp>(loc, ow0V, owL.getInductionVar()),
+              ocL.getInductionVar()};
+          Value cur = b.create<memref::LoadOp>(loc, op.getOutput(), outIdx);
+          b.create<memref::StoreOp>(loc, b.create<arith::AddFOp>(loc, cur, ov),
+                                    op.getOutput(), outIdx);
+          b.setInsertionPointAfter(ohL);
+        }
+      }
+    }
+
+    b.create<memref::DeallocOp>(loc, inPack);
+    b.create<memref::DeallocOp>(loc, fPack);
+    b.create<memref::DeallocOp>(loc, tmpI);
+    b.create<memref::DeallocOp>(loc, tmpF);
+    b.create<memref::DeallocOp>(loc, accF);
+    b.eraseOp(op);
     return success();
   }
 };

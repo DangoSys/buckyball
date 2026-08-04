@@ -54,6 +54,7 @@ void registerLowerBankSSAToIntrinsicsPass();
 void registerLowerBuckyballPass();
 void registerLowerBuckyballToBankSSAPass();
 void registerReportBankUsagePass();
+void populatePebbleLowerBuckyballToBankSSAPatterns(RewritePatternSet &patterns);
 
 } // namespace buddy
 } // namespace mlir
