@@ -1,5 +1,6 @@
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
@@ -21,11 +22,13 @@ struct Fp2IntLowering : public ConvertOpToLLVMPattern<Fp2IntOp> {
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
+    Value rs2 = rewriter.create<arith::AndIOp>(
+        loc, adaptor.getScale(), cstI64(rewriter, loc, 0xffffffffULL));
     if (stable) {
-      rewriter.replaceOpWithNewOp<Fp2IntIntrOp>(op, rs1, adaptor.getScale());
+      rewriter.replaceOpWithNewOp<Fp2IntIntrOp>(op, rs1, rs2);
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getScale(),
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, rs2,
                                               rewriter.getI32IntegerAttr(51));
     return success();
   }

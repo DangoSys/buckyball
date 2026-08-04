@@ -43,15 +43,8 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   val iterReg  = RegInit(0.U(b.frontend.iter_len.W))
   val scaleReg = RegInit(0.U(32.W))
 
-  val rowReg       = RegInit(0.U(b.frontend.iter_len.W))
-  val groupReg     = RegInit(0.U(2.W))
-  val lastGroupReg = RegInit(0.U(2.W))
-  val modeI8ToFp   = RegInit(false.B)
-  val modeI32Group = RegInit(false.B)
-  val modeI32ToI8  = RegInit(false.B)
-  val srcWord      = RegInit(0.U(bankWidth.W))
-  val outWord      = RegInit(0.U(bankWidth.W))
-  val writeWord    = RegInit(0.U(bankWidth.W))
+  val rowReg    = RegInit(0.U(b.frontend.iter_len.W))
+  val writeWord = RegInit(0.U(bankWidth.W))
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id           := robIdReg
@@ -172,82 +165,15 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     Cat(out.reverse)
   }
 
-  def scaledI8Word(data: UInt, group: UInt): UInt = {
-    val out = Wire(Vec(elemsPerWord, UInt(32.W)))
-    for (i <- 0 until elemsPerWord) {
-      val idx  = group * 4.U + i.U
-      val byte = (data >> (idx << 3.U))(7, 0)
-      val sx   = Cat(Fill(24, byte(7)), byte)
-      out(i) := fp32Multiply(int32ToFp32(sx), scaleReg)
-    }
-    Cat(out.reverse)
-  }
-
-  def fp32ToInt32(fp: UInt): UInt = {
-    val sign         = fp(31)
-    val exponent     = fp(30, 23)
-    val fraction     = fp(22, 0)
-    val mantissa     = Mux(exponent === 0.U, Cat(0.U(1.W), fraction), Cat(1.U(1.W), fraction))
-    val mantissaWide = Cat(0.U(40.W), mantissa)
-    val expVal       = exponent.zext - 127.S
-    val magnitude    = Wire(UInt(64.W))
-
-    magnitude := 0.U
-    when(expVal >= 31.S) {
-      magnitude := "h80000000".U
-    }.elsewhen(expVal >= 23.S) {
-      magnitude := mantissaWide << (expVal - 23.S).asUInt
-    }.elsewhen(expVal >= -1.S) {
-      val rightShift = (23.S - expVal).asUInt
-      val truncated  = mantissaWide >> rightShift
-      val half       = 1.U(64.W) << (rightShift - 1.U)
-      val remainder  = mantissaWide & ((1.U(64.W) << rightShift) - 1.U)
-      val roundUp    = remainder > half || (remainder === half && truncated(0))
-      magnitude := truncated + roundUp.asUInt
-    }
-
-    val result = Wire(SInt(32.W))
-    when(exponent === 255.U && fraction =/= 0.U) {
-      result := 0.S
-    }.elsewhen(sign.asBool) {
-      result := Mux(
-        magnitude >= "h80000000".U,
-        -2147483648L.S(32.W),
-        -magnitude(31, 0).asSInt
-      )
-    }.otherwise {
-      result := Mux(magnitude > "h7fffffff".U, 2147483647.S(32.W), magnitude(31, 0).asSInt)
-    }
-    result.asUInt
-  }
-
-  def requantI32Bytes(data: UInt): UInt = {
-    val out = Wire(Vec(elemsPerWord, UInt(8.W)))
-    for (i <- 0 until elemsPerWord) {
-      val elem   = data((i + 1) * 32 - 1, i * 32)
-      val scaled = fp32Multiply(int32ToFp32(elem), scaleReg)
-      val value  = fp32ToInt32(scaled).asSInt
-      out(i) := Mux(value > 127.S, 127.S(8.W), Mux(value < -128.S, -128.S(8.W), value(7, 0).asSInt)).asUInt
-    }
-    Cat(out.reverse)
-  }
-
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
         val srcCol       = io.cmdReq.bits.cmd.op1_col
         val dstCol       = io.cmdReq.bits.cmd.wr_col
-        val outputMode   = io.cmdReq.bits.cmd.special(33, 32)
-        val outputFp32   = outputMode === 0.U
-        val outputInt8   = outputMode === 1.U
-        val isI32Single  = outputFp32 && srcCol === 1.U && dstCol === 1.U
-        val isI8ToFp     = outputFp32 && srcCol === 1.U && dstCol === 4.U
-        val isI32Group   = outputFp32 && srcCol === dstCol && (srcCol === 2.U || srcCol === 4.U)
-        val isI32ToInt8  = outputInt8 && srcCol === 4.U && dstCol === 1.U
+        val isI32ToFp32  = srcCol === 1.U && dstCol === 1.U
 
         assert(io.cmdReq.bits.cmd.iter > 0.U, "Int2Fp iter must be > 0")
-        assert(outputMode <= 1.U, "Int2Fp reserved output mode")
-        assert(isI32Single || isI8ToFp || isI32Group || isI32ToInt8, "Int2Fp unsupported mode/layout")
+        assert(isI32ToFp32, "Int2Fp requires INT32-to-FP32 layout (src_col=1, dst_col=1)")
 
         robIdReg     := io.cmdReq.bits.rob_id
         isSubReg     := io.cmdReq.bits.is_sub
@@ -257,13 +183,6 @@ class Int2Fp(val b: GlobalConfig) extends Module {
         iterReg      := io.cmdReq.bits.cmd.iter
         scaleReg     := io.cmdReq.bits.cmd.special(31, 0)
         rowReg       := 0.U
-        groupReg     := 0.U
-        lastGroupReg := srcCol - 1.U
-        modeI8ToFp   := isI8ToFp
-        modeI32Group := isI32Group
-        modeI32ToI8  := isI32ToInt8
-        srcWord      := 0.U
-        outWord      := 0.U
         writeWord    := 0.U
         state        := sReadReq
       }
@@ -271,7 +190,7 @@ class Int2Fp(val b: GlobalConfig) extends Module {
 
     is(sReadReq) {
       io.bankRead(0).bank_id          := rbankReg
-      io.bankRead(0).group_id         := Mux(modeI32Group || modeI32ToI8, groupReg, 0.U)
+      io.bankRead(0).group_id         := 0.U
       io.bankRead(0).io.req.valid     := true.B
       io.bankRead(0).io.req.bits.addr := rowReg
       when(io.bankRead(0).io.req.fire) {
@@ -281,37 +200,17 @@ class Int2Fp(val b: GlobalConfig) extends Module {
 
     is(sReadResp) {
       io.bankRead(0).bank_id       := rbankReg
-      io.bankRead(0).group_id      := Mux(modeI32Group || modeI32ToI8, groupReg, 0.U)
+      io.bankRead(0).group_id      := 0.U
       io.bankRead(0).io.resp.ready := true.B
       when(io.bankRead(0).io.resp.fire) {
-        when(modeI8ToFp) {
-          srcWord   := io.bankRead(0).io.resp.bits.data
-          writeWord := scaledI8Word(io.bankRead(0).io.resp.bits.data, 0.U)
-          groupReg  := 0.U
-          state     := sWriteReq
-        }.elsewhen(modeI32ToI8) {
-          val bytes    = requantI32Bytes(io.bankRead(0).io.resp.bits.data)
-          val nextWord = outWord | (bytes << (groupReg << 5.U))
-          when(groupReg === 3.U) {
-            writeWord := nextWord
-            groupReg  := 0.U
-            outWord   := 0.U
-            state     := sWriteReq
-          }.otherwise {
-            outWord  := nextWord
-            groupReg := groupReg + 1.U
-            state    := sReadReq
-          }
-        }.otherwise {
-          writeWord := scaledI32Word(io.bankRead(0).io.resp.bits.data)
-          state     := sWriteReq
-        }
+        writeWord := scaledI32Word(io.bankRead(0).io.resp.bits.data)
+        state     := sWriteReq
       }
     }
 
     is(sWriteReq) {
       io.bankWrite(0).bank_id          := wbankReg
-      io.bankWrite(0).group_id         := Mux(modeI8ToFp || modeI32Group, groupReg, 0.U)
+      io.bankWrite(0).group_id         := 0.U
       io.bankWrite(0).io.req.valid     := true.B
       io.bankWrite(0).io.req.bits.addr := rowReg
       io.bankWrite(0).io.req.bits.data := writeWord
@@ -323,23 +222,14 @@ class Int2Fp(val b: GlobalConfig) extends Module {
 
     is(sWriteResp) {
       io.bankWrite(0).bank_id       := wbankReg
-      io.bankWrite(0).group_id      := Mux(modeI8ToFp || modeI32Group, groupReg, 0.U)
+      io.bankWrite(0).group_id      := 0.U
       io.bankWrite(0).io.resp.ready := true.B
       when(io.bankWrite(0).io.resp.fire) {
-        when(modeI8ToFp && groupReg =/= 3.U) {
-          groupReg  := groupReg + 1.U
-          writeWord := scaledI8Word(srcWord, groupReg + 1.U)
-          state     := sWriteReq
-        }.elsewhen(modeI32Group && groupReg =/= lastGroupReg) {
-          groupReg := groupReg + 1.U
-          state    := sReadReq
-        }.elsewhen(rowReg === iterReg - 1.U) {
+        when(rowReg === iterReg - 1.U) {
           state := complete
         }.otherwise {
-          rowReg   := rowReg + 1.U
-          groupReg := 0.U
-          outWord  := 0.U
-          state    := sReadReq
+          rowReg := rowReg + 1.U
+          state  := sReadReq
         }
       }
     }

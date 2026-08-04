@@ -29,24 +29,10 @@ public:
   }
 };
 
-class BankInt32ToInt8Pattern : public OpRewritePattern<BankInt32ToInt8Op> {
-public:
-  using OpRewritePattern<BankInt32ToInt8Op>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BankInt32ToInt8Op op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.create<Int32ToInt8Op>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                                   op.getIter(), op.getScale());
-    rewriter.replaceOp(op, op.getOutBank());
-    return success();
-  }
-};
-
 } // namespace
 
 void mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
-  patterns.add<BankInt2FpPattern, BankInt32ToInt8Pattern>(
-      patterns.getContext());
+  patterns.add<BankInt2FpPattern>(patterns.getContext());
 }
