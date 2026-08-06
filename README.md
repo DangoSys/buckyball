@@ -40,7 +40,7 @@ cd buckyball
 ./scripts/nix/build-all.sh
 ```
 
-After the first time installation, you can enter the environment anytime by running:
+After the first-time installation, you can enter the environment anytime by running:
 
 ```bash
 nix develop
@@ -60,17 +60,6 @@ bbdev verilator --run '--jobs 16 --binary toy_vecunit_matmul_ones-singlecore-bar
 bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-singlecore-baremetal --batch --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
 ```
 
-## Tutorial
-You can start to learn ball and blink from [here](https://docs.buckyball.tech/zh/%E6%95%99%E7%A8%8B/%E4%BB%80%E4%B9%88%E6%98%AFBall+%26+%E5%A6%82%E4%BD%95%E5%86%99%E4%B8%80%E4%B8%AABall)
+## For Reviewers
+The quickest way to understand the structure of a ‘ball’ and the design patterns based on buckyballs is to read through the individual ball designs and decoupled chip implementations in the [examples](https://github.com/DangoSys/buckyball/tree/anonymous/examples) folder.
 
-## Additional Resources
-
-You can learn more from [DeepWiki](https://deepwiki.com/DangoSys/buckyball) and [Zread](https://zread.ai/DangoSys/buckyball)
-
-
-## Contributors
-Thank you for considering contributing to buckyball!
-
-<a href="https://github.com/DangoSys/buckyball/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=DangoSys/buckyball" />
-</a>
