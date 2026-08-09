@@ -25,6 +25,7 @@ def regression_workload_toml(
   backend: str,
   test_type: str,
   bbdir: str | None = None,
+  rushB: bool = False,
 ) -> str:
   if test_type == "elf-tests":
     suffix = "elf"
@@ -33,7 +34,8 @@ def regression_workload_toml(
   else:
     raise ValueError(f"invalid test type: {test_type}")
 
-  toml = chip_regression_dir(chip, backend, bbdir) / f"workloads-{suffix}.toml"
+  name = f"workloads-{suffix}-rushB.toml" if rushB else f"workloads-{suffix}.toml"
+  toml = chip_regression_dir(chip, backend, bbdir) / name
   if not toml.is_file():
     raise ValueError(f"regression workload toml does not exist: {toml}")
   return str(toml)

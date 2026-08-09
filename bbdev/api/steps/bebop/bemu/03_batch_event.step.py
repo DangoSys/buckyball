@@ -65,8 +65,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     test_type = input_data.get("test", "elf-tests")
+    rushB = bool(input_data.get("rushB", False))
     try:
-        workload_toml = regression_workload_toml(chip, "bemu", test_type, bbdir)
+        workload_toml = regression_workload_toml(
+            chip, "bemu", test_type, bbdir, rushB=rushB
+        )
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -76,7 +79,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
+    ctx.logger.info(
+        f"Running {test_type} with workload config: {workload_toml} rushB={rushB}"
+    )
 
     # ── Build bebop bemu ──────────────────────────────────────────────────
     build_cmd = (
@@ -134,9 +139,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "batch",
-            "backend": "bemu",
+            "backend": "bemu-rushB" if rushB else "bemu",
             "chip": chip,
             "test_type": test_type,
+            "rushB": rushB,
             "nextest_config": nextest_config,
             "workload_toml": workload_toml,
         },

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import submit, err, fmt, need, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -13,6 +13,7 @@ def register(mcp):
         config: str,
         test: str,
         clean_before: bool = False,
+        rushB: bool = False,
     ) -> str:
         """Batch bebop-verilator regression. POST /bebop/verilator/batch."""
         for n, v in (("chip", chip), ("config", config)):
@@ -28,7 +29,7 @@ def register(mcp):
                     "config": config,
                     "test": test,
                     "clean-before": clean_before,
+                    "rushB": rushB,
                 },
             )
         )
-

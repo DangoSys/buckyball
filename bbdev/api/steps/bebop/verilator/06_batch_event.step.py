@@ -59,8 +59,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     test_type = input_data.get("test", "elf-tests")
+    rushB = bool(input_data.get("rushB", False))
     try:
-        workload_toml = regression_workload_toml(chip, "verilator", test_type, bbdir)
+        workload_toml = regression_workload_toml(
+            chip, "verilator", test_type, bbdir, rushB=rushB
+        )
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -70,7 +73,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
+    ctx.logger.info(
+        f"Running {test_type} with workload config: {workload_toml} rushB={rushB}"
+    )
 
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
     if not os.path.isdir(vsrc_dir):
@@ -117,11 +122,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "batch",
-            "backend": "verilator",
+            "backend": "verilator-rushB" if rushB else "verilator",
             "chip": chip,
             "config": arch_config,
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,
+            "rushB": rushB,
             "nextest_config": nextest_config,
             "workload_toml": workload_toml,
         },
