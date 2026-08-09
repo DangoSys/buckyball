@@ -1,0 +1,14 @@
+[chip]
+name = "toy"
+topology = "configs/toy.toml"
+compilerCore = "toy"
+
+[runtime]
+bemu = "emu/Cargo.toml"
+kernel = "kernel"
+workloads = "workloads"
+regression = "regression"
+
+[[cores]]
+name = "toy"
+path = "../../cores/toy"

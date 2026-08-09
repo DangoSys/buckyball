@@ -21,6 +21,7 @@ int main(void) {
   multicore(MULTICORE);
 #endif
 
+  bb_dma_touch(actual, sizeof(actual));
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 4);
   bb_mvin((uintptr_t)input, 0, 1, 1);

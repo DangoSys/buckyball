@@ -19,6 +19,7 @@ int main(void) {
 #endif
   init_i8_random_matrix(input_matrix, ROWS, COLS, SEED);
   transpose_u8_matrix(input_matrix, expected_matrix, ROWS, COLS);
+  clear_i8_matrix(output_matrix, COLS, ROWS);
   bb_mem_alloc(0, BANK_LINES, 1);
   bb_mem_alloc(1, BANK_LINES, 1);
   bb_mvin((uintptr_t)input_matrix, 0, ROWS, 1);

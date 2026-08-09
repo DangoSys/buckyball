@@ -15,5 +15,5 @@ inputChannels = 16
 defaultGroupCount = 1
 
 [coreTemplate]
-include = "cores/demo.toml"
+include = "../../../../cores/toy/configs/demo.toml"
 count = 16

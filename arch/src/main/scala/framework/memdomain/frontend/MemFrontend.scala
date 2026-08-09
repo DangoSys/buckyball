@@ -183,11 +183,57 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tl_reader <> reader.io.tl
   io.tl_writer <> writer.io.tl
 
-  // Connect MemLoader and MemStorer to MemController's DMA interface
-  memLoader.io.bankWrite <> io.interdma.bankWrite
+  // MemLoader and MSET.clear share the frontend write channel. A source owns
+  // the channel until its write response returns, preserving BankWrite's
+  // request/response pairing.
+  val frontendWriteBusy        = RegInit(false.B)
+  val frontendWriteOwnerConfig = RegInit(false.B)
+  val selectConfigWrite        = configer.io.bankWrite.io.req.valid
+  val selectConfigOwner        = Mux(frontendWriteBusy, frontendWriteOwnerConfig, selectConfigWrite)
+
+  io.interdma.bankWrite.io.req.valid := !frontendWriteBusy &&
+    (configer.io.bankWrite.io.req.valid || memLoader.io.bankWrite.io.req.valid)
+  io.interdma.bankWrite.io.req.bits  := Mux(
+    selectConfigWrite,
+    configer.io.bankWrite.io.req.bits,
+    memLoader.io.bankWrite.io.req.bits
+  )
+  io.interdma.bankWrite.bank_id      := Mux(selectConfigWrite, configer.io.bankWrite.bank_id, memLoader.io.bankWrite.bank_id)
+  io.interdma.bankWrite.rob_id       := Mux(selectConfigWrite, configer.io.bankWrite.rob_id, memLoader.io.bankWrite.rob_id)
+  io.interdma.bankWrite.ball_id      := Mux(selectConfigWrite, configer.io.bankWrite.ball_id, memLoader.io.bankWrite.ball_id)
+  io.interdma.bankWrite.group_id     := Mux(
+    selectConfigWrite,
+    configer.io.bankWrite.group_id,
+    memLoader.io.bankWrite.group_id
+  )
+
+  configer.io.bankWrite.io.req.ready  := !frontendWriteBusy && selectConfigWrite && io.interdma.bankWrite.io.req.ready
+  memLoader.io.bankWrite.io.req.ready := !frontendWriteBusy && !selectConfigWrite &&
+    memLoader.io.bankWrite.io.req.valid && io.interdma.bankWrite.io.req.ready
+
+  io.interdma.bankWrite.io.resp.ready  := frontendWriteBusy && Mux(
+    frontendWriteOwnerConfig,
+    configer.io.bankWrite.io.resp.ready,
+    memLoader.io.bankWrite.io.resp.ready
+  )
+  configer.io.bankWrite.io.resp.valid  := frontendWriteBusy && frontendWriteOwnerConfig &&
+    io.interdma.bankWrite.io.resp.valid
+  configer.io.bankWrite.io.resp.bits   := io.interdma.bankWrite.io.resp.bits
+  memLoader.io.bankWrite.io.resp.valid := frontendWriteBusy && !frontendWriteOwnerConfig &&
+    io.interdma.bankWrite.io.resp.valid
+  memLoader.io.bankWrite.io.resp.bits  := io.interdma.bankWrite.io.resp.bits
+
+  when(io.interdma.bankWrite.io.req.fire) {
+    frontendWriteBusy        := true.B
+    frontendWriteOwnerConfig := selectConfigWrite
+  }
+  when(io.interdma.bankWrite.io.resp.fire) {
+    frontendWriteBusy := false.B
+  }
+
   memStorer.io.bankRead <> io.interdma.bankRead
   io.interdma.read_is_shared  := memStorer.io.is_shared
-  io.interdma.write_is_shared := memLoader.io.is_shared
+  io.interdma.write_is_shared := Mux(selectConfigOwner, false.B, memLoader.io.is_shared)
 
   // MMIO signals from MemConfiger and MemLoader, exposed to MemDomain
   io.mmioAlloc           := configer.io.mmioAlloc

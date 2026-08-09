@@ -3,6 +3,7 @@ package framework.balldomain.decoder
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.balldomain.isa.BallISA
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.top.GlobalConfig
 
@@ -45,6 +46,8 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   val hasWr      = enableBits === 2.U || enableBits === 3.U || enableBits === 4.U
 
   // funct7 -> bid lookup, generated from b.ballDomain.ballISA
+  require(!b.ballDomain.ballISA.exists(_.funct7 == BallISA.InitFunct), "BALL_INIT funct7 is framework-reserved")
+
   val bidWire      = WireDefault(0.U(5.W))
   val isaValidWire = WireDefault(false.B)
   b.ballDomain.ballISA.foreach { e =>
@@ -54,8 +57,11 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
     }
   }
 
+  val isBallInit = func7 === BallISA.InitFunct.U
+  val decodedBid = Mux(isBallInit, rs2(4, 0), bidWire)
+
   ball_decode_cmd_o.valid              := cmd_i.valid && (cmd_i.bits.domain_id === DomainId.BALL)
-  ball_decode_cmd_o.bits.bid           := Mux(ball_decode_cmd_o.valid, bidWire, 0.U)
+  ball_decode_cmd_o.bits.bid           := Mux(ball_decode_cmd_o.valid, decodedBid, 0.U)
   ball_decode_cmd_o.bits.funct7        := Mux(ball_decode_cmd_o.valid, func7, 0.U)
   ball_decode_cmd_o.bits.iter          := Mux(ball_decode_cmd_o.valid, iter_raw, 0.U(iterLen.W))
   ball_decode_cmd_o.bits.special       := Mux(ball_decode_cmd_o.valid, rs2, 0.U(64.W))
@@ -80,9 +86,17 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   ball_decode_cmd_o.bits.rs2 := rs2
 
   assert(
-    !(cmd_i.fire && (cmd_i.bits.domain_id === DomainId.BALL) && !isaValidWire),
+    !(cmd_i.fire && (cmd_i.bits.domain_id === DomainId.BALL) && !isBallInit && !isaValidWire),
     "BallDomainDecoder: funct7 has no matching entry in ballISA"
   )
+  when(cmd_i.fire && isBallInit) {
+    assert(rs1 === 0.U, "BALL_INIT requires rs1=0")
+    assert(rs2(63, 5) === 0.U, "BALL_INIT reserves rs2[63:5]")
+    assert(
+      VecInit(b.ballDomain.ballIdMappings.map(m => rs2(4, 0) === m.ballId.U)).asUInt.orR,
+      "BALL_INIT target ID is not configured"
+    )
+  }
   assert(
     !(ball_decode_cmd_o.valid && ball_decode_cmd_o.bits.op1_en && ball_decode_cmd_o.bits.op2_en &&
       ball_decode_cmd_o.bits.op1_bank === ball_decode_cmd_o.bits.op2_bank),

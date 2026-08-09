@@ -1,0 +1,5 @@
+[workloads]
+search_path = "kernel"
+tests = [
+  "fw_payload-toy-pk",
+]

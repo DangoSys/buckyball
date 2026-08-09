@@ -17,6 +17,7 @@ set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
 get_filename_component(BUCKYBALL_REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
 set(BUCKYBALL_WORKLOAD_CHIP "" CACHE STRING "Buckyball chip for workloads")
+set(BUCKYBALL_WORKLOAD_CORE "" CACHE STRING "Compiler Core for workloads")
 if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
   message(FATAL_ERROR
     "BUCKYBALL_WORKLOAD_CHIP is required. Pass -DBUCKYBALL_WORKLOAD_CHIP=<chip>.")
@@ -27,18 +28,38 @@ if(NOT IS_DIRECTORY
     "Buckyball workload chip does not exist: ${BUCKYBALL_WORKLOAD_CHIP}")
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+if(BUCKYBALL_WORKLOAD_CORE STREQUAL "")
+  message(FATAL_ERROR
+    "BUCKYBALL_WORKLOAD_CORE is required. bbdev derives it from chip.toml.")
+endif()
+message(STATUS "Buckyball workload compiler Core: ${BUCKYBALL_WORKLOAD_CORE}")
 
-if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "pebble")
+set(BUCKYBALL_RUSHB_CHIP_CMAKE
+    ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/workloads/cmake/RushB.cmake)
+if(EXISTS ${BUCKYBALL_RUSHB_CHIP_CMAKE})
+  include(${BUCKYBALL_RUSHB_CHIP_CMAKE})
+endif()
+
+if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST)
+  add_custom_target(rushB-bemu-workloads-build)
+endif()
+if(DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+  add_custom_target(rushB-verilator-workloads-build)
+endif()
+
+if(BUCKYBALL_WORKLOAD_CORE STREQUAL "pebble")
   set(BUCKYBALL_MLIR_BANK_NUM 16)
-elseif(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
+elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "toy")
+  set(BUCKYBALL_MLIR_BANK_NUM 16)
+elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "goban")
   set(BUCKYBALL_MLIR_BANK_NUM 16)
 else()
   message(FATAL_ERROR
-    "MLIR physical-bank count is not configured for chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+    "MLIR physical-bank count is not configured for Core: ${BUCKYBALL_WORKLOAD_CORE}")
 endif()
 
 set(BUCKYBALL_EXPECTED_COMPILER_DIR
-  "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/compiler")
+  "${BUCKYBALL_REPO_ROOT}/examples/cores/${BUCKYBALL_WORKLOAD_CORE}/compiler")
 set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
 if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
   message(FATAL_ERROR
@@ -60,22 +81,30 @@ get_filename_component(BUCKYBALL_COMPILER_DIR
   "${BUCKYBALL_COMPILER_DIR}" ABSOLUTE)
 if(NOT BUCKYBALL_COMPILER_DIR STREQUAL BUCKYBALL_EXPECTED_COMPILER_DIR)
   message(FATAL_ERROR
-    "Compiler chip mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "Compiler Core mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "whose compiler Core is ${BUCKYBALL_WORKLOAD_CORE}, "
     "but BUDDY_EXTERNAL_DIALECTS_DIR is ${BUCKYBALL_COMPILER_DIR}. "
-    "Run `bbdev compiler --build '--chip ${BUCKYBALL_WORKLOAD_CHIP}'` first.")
+    "Run `bbdev compiler --build '--core ${BUCKYBALL_WORKLOAD_CORE}'` first.")
 endif()
 
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)
 if(BUCKYBALL_STABLE)
   set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbbmeteor,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL "--lower-buckyball=stable=true")
+  set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB
+      "--lower-buckyball=stable=true rushb=true")
   set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
       "--lower-bank-ssa-to-intrinsics=stable=true")
+  set(BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS
+      "--lower-bank-ssa-to-intrinsics=stable=true rushb=true")
 else()
   set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL -lower-buckyball)
+  set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB "--lower-buckyball=rushb=true")
   set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
       -lower-bank-ssa-to-intrinsics)
+  set(BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS
+      "--lower-bank-ssa-to-intrinsics=rushb=true")
 endif()
 message(STATUS "Buckyball RISC-V mattr: ${BUCKYBALL_RISCV_MATTR}")
 
@@ -85,7 +114,9 @@ set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 set(BUILD_BIN_DIR ${WORKLOAD_DIR}/../build/workloads)
 set(OUTPUT_BIN_DIR ${WORKLOAD_DIR}/../output/workloads)
 
-set(Python3_EXECUTABLE python3)
+if(NOT Python3_EXECUTABLE)
+  set(Python3_EXECUTABLE python3)
+endif()
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------

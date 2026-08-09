@@ -103,9 +103,15 @@ class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.tlb.resp.ready := (state === s_tlb_req) && io.tl.a.ready
 
   // -----------------------
-  // TileLink A channel (only when tlb resp is present and NOT a miss)
+  // TileLink A channel (only when tlb resp is present, hit, and writable)
   // -----------------------
-  io.tl.a.valid        := (state === s_tlb_req) && io.tlb.resp.valid && !io.tlb.resp.bits.miss
+  val tlbFault = io.tlb.resp.valid && !io.tlb.resp.bits.miss &&
+    (io.tlb.resp.bits.pf.st || io.tlb.resp.bits.ae.st || io.tlb.resp.bits.gf.st)
+  val tlbOk    = io.tlb.resp.valid && !io.tlb.resp.bits.miss && !tlbFault
+
+  assert(!(state === s_tlb_req && tlbFault), "DMA store TLB fault (non-writable/CoW page?)")
+
+  io.tl.a.valid        := (state === s_tlb_req) && tlbOk
   io.tl.a.bits         := putMsg
   io.tl.a.bits.address := io.tlb.resp.bits.paddr
 

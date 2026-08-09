@@ -79,8 +79,7 @@ impl Instruction for Matrix {
         if ctx.cfgs[op1 as usize].cols != 1 || ctx.cfgs[op2 as usize].cols != 1 {
             panic!(
                 "matrix: op banks must have cols=1 (op1={} op2={})",
-                ctx.cfgs[op1 as usize].cols,
-                ctx.cfgs[op2 as usize].cols
+                ctx.cfgs[op1 as usize].cols, ctx.cfgs[op2 as usize].cols
             );
         }
         if ctx.cfgs[wr as usize].cols != 4 {
@@ -112,9 +111,7 @@ impl Instruction for Matrix {
 
         let p1 = pbank(ctx.bank_map, op1);
         let p2 = pbank(ctx.bank_map, op2);
-        let pw: Vec<_> = (0..4)
-            .map(|g| pbank_group(ctx.bank_map, wr, g))
-            .collect();
+        let pw: Vec<_> = (0..4).map(|g| pbank_group(ctx.bank_map, wr, g)).collect();
 
         let mut c = vec![vec![0i32; n]; m];
         for i in 0..m {

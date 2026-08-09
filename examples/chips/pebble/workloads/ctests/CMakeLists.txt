@@ -15,4 +15,5 @@ add_buckyball_ctests(
   quant_transpose_bank_test.c
   quant_gemm_bank_test.c
   quant_int8_to_fp32_bank_test.c
+  mvout_fence_loop_test.c
 )

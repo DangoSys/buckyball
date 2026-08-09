@@ -29,6 +29,7 @@ int main(void) {
     b[k * 16] = v;
   }
   clear_u32_matrix(zero, M, 16);
+  clear_u32_matrix(actual, M, 16);
   for (int i = 0; i < M; ++i) {
     result_t s = 0;
     for (int k = 0; k < K; ++k)

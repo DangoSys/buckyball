@@ -2,6 +2,7 @@ get_filename_component(BUCKYBALL_REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../../../
 
 set(BUCKYBALL_TOY_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuckyballWorkloads.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MlirRushB.cmake)
 
 add_custom_target(toy-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET toy-ctests-build)

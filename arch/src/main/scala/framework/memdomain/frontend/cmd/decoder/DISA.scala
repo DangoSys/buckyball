@@ -2,8 +2,10 @@ package framework.memdomain.frontend.cmd.decoder
 
 import chisel3._
 import chisel3.util._
+import framework.memdomain.isa.MemISA
 
 object DISA {
+  val MSET_FUNCT       = MemISA.MsetFunct
   // enable=010 (1 write), opcode group
   val MSET_BITPAT      = BitPat("b0100000") // 32 (0x20) — enable=010, opcode=0
   val MVIN_BITPAT      = BitPat("b0100001") // 33 (0x21) — enable=010, opcode=1

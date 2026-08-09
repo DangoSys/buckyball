@@ -3,6 +3,7 @@ package framework.frontend
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import framework.frontend.boot.BootRom
 import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, GlobalScheduler}
 import framework.top.GlobalConfig
@@ -37,8 +38,10 @@ class Frontend(val b: GlobalConfig) extends Module {
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
 
     // RoCC response
-    val resp = Decoupled(new RoCCResponseBB(b.core.xLen))
-    val busy = Output(Bool())
+    val resp    = Decoupled(new RoCCResponseBB(b.core.xLen))
+    val busy    = Output(Bool())
+    // Propagates the Global ROB retirement pulse to the host bridge.
+    val retired = Output(Bool())
 
     // Barrier interface — passthrough to GlobalRS
     val barrier_arrive  = Output(Bool())
@@ -72,7 +75,8 @@ class Frontend(val b: GlobalConfig) extends Module {
   }
 
   io.resp <> scheduler.io.scheduler_rocc_o.resp
-  io.busy := boot.io.active || scheduler.io.scheduler_rocc_o.busy
+  io.busy    := boot.io.active || scheduler.io.scheduler_rocc_o.busy
+  io.retired := scheduler.io.retired
 
   // Barrier passthrough
   io.barrier_arrive            := scheduler.io.barrier_arrive

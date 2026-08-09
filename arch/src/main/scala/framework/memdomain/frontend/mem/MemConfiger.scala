@@ -3,9 +3,10 @@ package framework.memdomain.frontend.mem
 import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
+import framework.balldomain.blink.BankWrite
 import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import framework.memdomain.backend.mmio.MmioAllocReq
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 class MemConfigerIO(val b: GlobalConfig) extends Bundle {
   val vbank_id  = Output(UInt(8.W))
@@ -26,23 +27,28 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
     val cmdResp = Decoupled(new MemRsComplete(b))
 
-    val config = Decoupled(new MemConfigerIO(b))
-    val hartid = Input(UInt(b.core.xLen.W))
+    val config    = Decoupled(new MemConfigerIO(b))
+    val hartid    = Input(UInt(b.core.xLen.W))
+    val bankWrite = Flipped(new BankWrite(b))
 
     // MMIO alloc/dealloc port
     val mmioAlloc = Valid(new MmioAllocReq(b))
   })
 
-  val idle :: config :: resp :: Nil = Enum(3)
-  val state                         = RegInit(idle)
-  val alloc_reg                     = RegInit(false.B)
-  val is_shared_reg                 = RegInit(false.B)
-  val col_reg                       = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
-  val vbank_id_reg                  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val rob_id_reg                    = RegInit(0.U(rob_id_width.W))
-  val is_sub_reg                    = RegInit(false.B)
-  val sub_rob_id_reg                = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val counter                       = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val idle :: config :: zeroReq :: zeroRun :: zeroWait :: resp :: Nil = Enum(6)
+  val state                                                           = RegInit(idle)
+  val alloc_reg                                                       = RegInit(false.B)
+  val is_shared_reg                                                   = RegInit(false.B)
+  val col_reg                                                         = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val clear_reg                                                       = RegInit(false.B)
+  val vbank_id_reg                                                    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rob_id_reg                                                      = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg                                                      = RegInit(false.B)
+  val sub_rob_id_reg                                                  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val counter                                                         = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val zeroLastRow                                                     = RegInit(false.B)
+
+  val zeroLines: Instance[ZeroLineGenerator] = Instantiate(new ZeroLineGenerator(b.memDomain.bankWidth))
 
   io.config.bits.is_multi    := false.B
   io.config.bits.is_shared   := false.B
@@ -61,6 +67,20 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.mmioAlloc.bits.main_bank := 0.U
   io.mmioAlloc.bits.mmio_addr := 0.U
   io.mmioAlloc.bits.size_rows := 0.U
+
+  io.bankWrite.io.req.valid     := false.B
+  io.bankWrite.io.req.bits.addr := zeroLines.io.resp.bits.row(log2Ceil(b.memDomain.bankEntries) - 1, 0)
+  io.bankWrite.io.req.bits.data := zeroLines.io.resp.bits.data
+  io.bankWrite.io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.bankWrite.io.resp.ready    := state === zeroWait
+  io.bankWrite.bank_id          := vbank_id_reg
+  io.bankWrite.rob_id           := rob_id_reg
+  io.bankWrite.ball_id          := 0.U
+  io.bankWrite.group_id         := counter(log2Up(b.memDomain.bankNum) - 1, 0)
+
+  zeroLines.io.req.valid     := state === zeroReq
+  zeroLines.io.req.bits.rows := b.memDomain.bankEntries.U
+  zeroLines.io.resp.ready    := state === zeroRun && io.bankWrite.io.req.ready
 
   val isMmioSet = io.cmdReq.valid && io.cmdReq.bits.cmd.is_mmio_set
   io.cmdReq.ready := state === idle && (!isMmioSet || io.cmdResp.ready)
@@ -94,11 +114,16 @@ class MemConfiger(val b: GlobalConfig) extends Module {
           state          := config
           col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
           alloc_reg      := alloc
+          clear_reg      := io.cmdReq.bits.cmd.clear
           is_shared_reg  := io.cmdReq.bits.cmd.is_shared
           vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
           rob_id_reg     := io.cmdReq.bits.rob_id
           is_sub_reg     := io.cmdReq.bits.is_sub
           sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+          assert(
+            !(io.cmdReq.bits.cmd.clear && io.cmdReq.bits.cmd.is_shared),
+            "MSET clear is currently supported for private banks only"
+          )
         }
       }
     }
@@ -113,12 +138,36 @@ class MemConfiger(val b: GlobalConfig) extends Module {
 
     when(io.config.fire) {
       when(counter === col_reg - 1.U) {
-        state := resp
+        counter := 0.U
+        state   := Mux(clear_reg, zeroReq, resp)
       }.otherwise {
         counter := counter + 1.U
       }
     }
-  }.otherwise {
+  }.elsewhen(state === zeroReq) {
+    when(zeroLines.io.req.fire) {
+      state := zeroRun
+    }
+  }.elsewhen(state === zeroRun) {
+    io.bankWrite.io.req.valid := zeroLines.io.resp.valid
+    when(zeroLines.io.resp.fire) {
+      zeroLastRow := zeroLines.io.resp.bits.last
+      state       := zeroWait
+    }
+  }.elsewhen(state === zeroWait) {
+    when(io.bankWrite.io.resp.fire) {
+      when(zeroLastRow) {
+        when(counter === col_reg - 1.U) {
+          state := resp
+        }.otherwise {
+          counter := counter + 1.U
+          state   := zeroReq
+        }
+      }.otherwise {
+        state := zeroRun
+      }
+    }
+  }.elsewhen(state === resp) {
     io.cmdResp.valid           := true.B
     io.cmdResp.bits.rob_id     := rob_id_reg
     io.cmdResp.bits.is_sub     := is_sub_reg

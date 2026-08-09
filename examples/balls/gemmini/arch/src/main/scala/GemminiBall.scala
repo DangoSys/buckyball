@@ -189,16 +189,18 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   // cmdReq.ready: route to correct consumer
   // =========================================================================
+  val idleReady =
+    exCtrl.exio.cmdReq.ready && !matmulUnroller.io.busy && !convUnroller.io.busy
   io.cmdReq.ready := Mux(
     isExUnit,
     exCtrl.exio.cmdReq.ready,
     Mux(
       isLoopWsConfig || isLoopConvConfig,
-      true.B,
+      idleReady,
       Mux(
         isLoopWsTrigger,
         !matmulUnroller.io.busy,
-        Mux(isLoopConvTrigger, !convUnroller.io.busy, false.B)
+        Mux(isLoopConvTrigger, !convUnroller.io.busy, idleReady)
       )
     )
   )

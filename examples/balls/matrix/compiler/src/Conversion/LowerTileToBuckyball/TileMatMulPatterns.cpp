@@ -74,6 +74,20 @@ public:
         cShape[cShape.size() - 1] != (int64_t)N)
       return tileMatMulOp.emitError("matmul input/output shapes mismatch");
 
+    // Float (f32/bf16/...): one linalg.matmul (accumulates into C). HW
+    // tile/bank expansion blows up LLM-sized graphs and crashes
+    // convert-scf-to-cf.
+    if (isa<FloatType>(aType.getElementType())) {
+      Type elem = aType.getElementType();
+      if (bType.getElementType() != elem || cType.getElementType() != elem)
+        return tileMatMulOp.emitError(
+            "float matmul requires matching A/B/C element types");
+      rewriter.create<linalg::MatmulOp>(loc, ValueRange{aMemArray, bMemArray},
+                                        ValueRange{cMemArray});
+      rewriter.eraseOp(tileMatMulOp);
+      return success();
+    }
+
     size_t M_pad = ceilDiv(M, 16) * 16;
     size_t K_pad = ceilDiv(K, 16) * 16;
     size_t N_pad = ceilDiv(N, 16) * 16;
@@ -231,6 +245,11 @@ public:
           SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                     rewriter.getIndexAttr(1)});
 
+      // matrix_matmul accumulates into C; clear tile first.
+      auto cElemType = cType.getElementType();
+      Value zero = rewriter.create<arith::ConstantOp>(
+          loc, cElemType, rewriter.getZeroAttr(cElemType));
+      rewriter.create<linalg::FillOp>(loc, zero, cTile);
       rewriter.create<MatrixMatmulOp>(loc, aTile, bTile, cTile);
     } else {
       auto mLoop =
@@ -252,12 +271,10 @@ public:
                                     rewriter.getIndexAttr(1)});
 
       auto cElemType = cType.getElementType();
-      if (!isa<IntegerType>(cElemType))
+      if (!isa<IntegerType>(cElemType) && !isa<FloatType>(cElemType))
         return tileMatMulOp.emitError(
-            "multi-K tile.matmul accumulate requires integer C element type");
-      auto partialType =
-          MemRefType::get({(int64_t)mTileSize, (int64_t)nTileSize}, cElemType);
-      Value partial = rewriter.create<memref::AllocOp>(loc, partialType);
+            "multi-K tile.matmul accumulate requires integer or float C "
+            "element type");
 
       Value zero = rewriter.create<arith::ConstantOp>(
           loc, cElemType, rewriter.getZeroAttr(cElemType));
@@ -281,29 +298,10 @@ public:
           SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                     rewriter.getIndexAttr(1)});
 
-      rewriter.create<MatrixMatmulOp>(loc, aTile, bTile, partial);
-
-      Value oneIdx = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-      Value iUpper = rewriter.create<arith::ConstantIndexOp>(loc, mTileSize);
-      Value jUpper = rewriter.create<arith::ConstantIndexOp>(loc, nTileSize);
-
-      auto iLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, iUpper, oneIdx);
-      rewriter.setInsertionPointToStart(iLoop.getBody());
-      Value iIv = iLoop.getInductionVar();
-
-      auto jLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, jUpper, oneIdx);
-      rewriter.setInsertionPointToStart(jLoop.getBody());
-      Value jIv = jLoop.getInductionVar();
-
-      Value acc =
-          rewriter.create<memref::LoadOp>(loc, cTile, ValueRange{iIv, jIv});
-      Value part =
-          rewriter.create<memref::LoadOp>(loc, partial, ValueRange{iIv, jIv});
-      Value sum = rewriter.create<arith::AddIOp>(loc, acc, part);
-      rewriter.create<memref::StoreOp>(loc, sum, cTile, ValueRange{iIv, jIv});
+      // f32/i8 matrix_matmul accumulates into C across K tiles.
+      rewriter.create<MatrixMatmulOp>(loc, aTile, bTile, cTile);
 
       rewriter.setInsertionPointAfter(kLoop);
-      rewriter.create<memref::DeallocOp>(loc, partial);
     }
 
     rewriter.setInsertionPointAfter(outerLoop);

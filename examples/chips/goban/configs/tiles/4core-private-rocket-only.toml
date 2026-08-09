@@ -16,5 +16,5 @@ defaultGroupCount = 1
 memCycles = 10
 
 [coreTemplate]
-include = "cores/rocket.toml"
+include = "../../../../cores/rocket/core.toml"
 count = 4

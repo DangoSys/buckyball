@@ -47,9 +47,9 @@ impl Instruction for MulWarp16 {
             panic!("mul_warp16: iter too large for bank");
         }
 
-        let a_t = read_i8_k_rows(ctx.banks, p1, kin, WARP_N);
-        let b = read_i8_k_rows(ctx.banks, p2, kin, WARP_N);
-        let mut c = read_i32_nn_groups(ctx.banks, &pw, 16);
+        let a_t = read_i8_k_rows(&ctx.banks, p1, kin, WARP_N);
+        let b = read_i8_k_rows(&ctx.banks, p2, kin, WARP_N);
+        let mut c = read_i32_nn_groups(&ctx.banks, &pw, 16);
 
         for i in 0..WARP_M {
             for j in 0..WARP_N {
@@ -61,7 +61,7 @@ impl Instruction for MulWarp16 {
             }
         }
 
-        write_i32_nn_groups(ctx.banks, &pw, &c, 16);
+        write_i32_nn_groups(&mut ctx.banks, &pw, &c, 16);
         0
     }
 

@@ -1,0 +1,5 @@
+[core]
+name = "pebble"
+kind = "buckyball"
+config = "core.toml"
+compiler = "compiler"

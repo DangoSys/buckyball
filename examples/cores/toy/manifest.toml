@@ -1,0 +1,5 @@
+[core]
+name = "toy"
+kind = "buckyball"
+config = "core.toml"
+compiler = "compiler"

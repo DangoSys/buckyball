@@ -29,7 +29,8 @@ using OwningRewritePatternList = RewritePatternSet;
 void populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
-    bool includeFuncOperandForwarding = true, bool stable = false);
+    bool includeFuncOperandForwarding = true, bool stable = false,
+    bool rushB = false);
 void configureBuckyballLegalizeForExportTarget(LLVMConversionTarget &target,
                                                bool stable = false);
 

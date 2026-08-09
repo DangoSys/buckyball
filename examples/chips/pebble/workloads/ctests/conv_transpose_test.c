@@ -34,6 +34,7 @@ int main(void) {
     src[i] = 0;
   for (int i = 0; i < k_elems; ++i)
     src[i] = t->kernel[i];
+  bb_dma_touch(actual, sizeof(actual));
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);

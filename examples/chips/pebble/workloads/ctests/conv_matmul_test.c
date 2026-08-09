@@ -55,6 +55,7 @@ int main(void) {
     matrix_b[i] = 0;
   for (int row = 0; row < k_elems; ++row)
     matrix_b[row * PEBBLE_INT8_LANES] = t->kernel[row];
+  bb_dma_touch(packed_c, sizeof(packed_c));
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
