@@ -31,6 +31,7 @@ int main(void) {
     packed[i] = 0.0f;
   for (int i = 0; i < INPUT_N; ++i)
     packed[i] = input_fp32[i];
+  bb_dma_touch(actual, sizeof(actual));
 
   bb_mem_alloc(0, 1, 4);
   bb_mem_alloc(1, 1, 1);

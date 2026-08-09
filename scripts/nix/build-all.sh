@@ -110,8 +110,8 @@ if run_step "2"; then
     -DLIBOMP_LIBFLAGS=-lrt \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DPython3_EXECUTABLE="$(which python)" \
-    -DPython_EXECUTABLE="$(which python)"
+    -DPython3_EXECUTABLE="$(which python3)" \
+    -DPython_EXECUTABLE="$(which python3)"
   ninja -C llvm/build #check-clang check-mlir check-openmp
 
   cmake -G Ninja -S . -B build \
@@ -122,7 +122,7 @@ if run_step "2"; then
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
     -DPython3_EXECUTABLE="$(which python3)" \
-    -DPython_EXECUTABLE="$(which python)"
+    -DPython_EXECUTABLE="$(which python3)"
   ninja -C build # check-buddy
 fi
 

@@ -8,3 +8,11 @@ class BuckyballPebbleVerilatorConfig
         new WithCustomBootROM ++
         new examples.pebble.BuckyballPebbleConfig
     )
+
+class BuckyballPebbleHostRushVerilatorConfig
+    extends Config(
+      new WithBuckyballHostRush ++
+        new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.pebble.BuckyballPebbleConfig
+    )

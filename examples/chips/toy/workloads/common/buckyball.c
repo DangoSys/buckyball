@@ -10,7 +10,9 @@
 /* Read cycle counter (rdcycle) helper. Works on RV64 with a single rdcycle.
    On RV32 we read low/high and detect rollover to produce a 64-bit value. */
 unsigned long long read_rdcycle(void) {
-#if defined(__riscv_xlen) && __riscv_xlen == 64
+#if defined(BUCKYBALL_RUSHB)
+  return rushb_cycles();
+#elif defined(__riscv_xlen) && __riscv_xlen == 64
   unsigned long long cycles;
   asm volatile("rdcycle %0" : "=r"(cycles));
   return cycles;
@@ -284,9 +286,13 @@ void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols) {
   }
 }
 unsigned long long read_cycle(void) {
+#if defined(BUCKYBALL_RUSHB)
+  return rushb_cycles();
+#else
   unsigned long long c;
   asm volatile("csrr %0, cycle" : "=r"(c));
   return c;
+#endif
 }
 
 // MMIO stubs are for baremetal/BBSim only.

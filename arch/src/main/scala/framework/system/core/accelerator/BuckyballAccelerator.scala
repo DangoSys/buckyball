@@ -37,6 +37,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.core.xLen)))
     val resp      = Decoupled(new RoCCResponseBB(b.core.xLen))
     val busy      = Output(Bool())
+    val retired   = Output(Bool())
     val interrupt = Output(Bool())
     val hartid    = Input(UInt(b.core.xLen.W))
 
@@ -163,6 +164,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Response & status ---
   io.resp <> frontend.io.resp
   io.busy      := frontend.io.busy
+  io.retired   := frontend.io.retired
   io.interrupt := memDomain.io.tlbExp(0).interrupt
 
   // --- Busy watchdog ---

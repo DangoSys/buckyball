@@ -1,0 +1,59 @@
+#!/bin/sh
+set -e
+
+[ -c /dev/console ] || {
+  echo "ERROR: /dev/console is missing or not a character device" >&2
+  exit 1
+}
+
+[ -c /dev/null ] || {
+  echo "ERROR: /dev/null is missing or not a character device" >&2
+  exit 1
+}
+
+exec </dev/console >/dev/console 2>&1
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+echo ""
+cat <<'EOF'
+     __  __                               __          ____
+    / / / /___ __   _____      ____ _    / /_  ____ _/ / /
+   / /_/ / __ `/ | / / _ \    / __ `/   / __ \/ __ `/ / /
+  / __  / /_/ /| |/ /  __/   / /_/ /   / /_/ / /_/ / / /
+ /_/ /_/\__,_/ |___/\___/    \__,_/   /_.___/\__,_/_/_/
+EOF
+echo ""
+echo "[pebble] pk regression via /init"
+echo ""
+
+# Failures use reboot -f → OpenSBI sim_exit=1. Do not exit (kills init → panic loop).
+fail_exit() {
+  echo "$1" >&2
+  reboot -f
+}
+
+count=0
+for t in /root/*-linux; do
+  [ -e "$t" ] || continue
+  name=${t##*/}
+  echo "RUN $name"
+  set +e
+  "$t"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    fail_exit "FAIL $name rc=$rc"
+  fi
+  echo "PASS $name"
+  count=$((count + 1))
+done
+
+if [ "$count" -eq 0 ]; then
+  fail_exit "ERROR: no *-linux tests installed under /root"
+fi
+
+echo "ALL_PASS count=$count"
+poweroff -f

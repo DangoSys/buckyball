@@ -35,13 +35,13 @@ void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
-    bool includeFuncOperandForwarding, bool stable) {
+    bool includeFuncOperandForwarding, bool stable, bool rushB) {
   (void)bankWidthBytes;
   (void)bankDepth;
   (void)bankNum;
 
-  populateBaseLegalizeForLLVMExportPatterns(converter, patterns,
-                                            includeFuncOperandForwarding);
+  populateBaseLegalizeForLLVMExportPatterns(
+      converter, patterns, includeFuncOperandForwarding, rushB);
   mlir::buddy::buckyball::populateTransposeLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
   mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(

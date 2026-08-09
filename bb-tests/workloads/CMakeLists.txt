@@ -28,6 +28,19 @@ if(NOT IS_DIRECTORY
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
 
+set(BUCKYBALL_RUSHB_CHIP_CMAKE
+    ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/workloads/cmake/RushB.cmake)
+if(EXISTS ${BUCKYBALL_RUSHB_CHIP_CMAKE})
+  include(${BUCKYBALL_RUSHB_CHIP_CMAKE})
+endif()
+
+if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST)
+  add_custom_target(rushB-bemu-workloads-build)
+endif()
+if(DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+  add_custom_target(rushB-verilator-workloads-build)
+endif()
+
 if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "pebble")
   set(BUCKYBALL_MLIR_BANK_NUM 16)
 elseif(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
@@ -85,7 +98,9 @@ set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 set(BUILD_BIN_DIR ${WORKLOAD_DIR}/../build/workloads)
 set(OUTPUT_BIN_DIR ${WORKLOAD_DIR}/../output/workloads)
 
-set(Python3_EXECUTABLE python3)
+if(NOT Python3_EXECUTABLE)
+  set(Python3_EXECUTABLE python3)
+endif()
 #-------------------------------------------------------------------------------
 # add_subdirectory
 #-------------------------------------------------------------------------------

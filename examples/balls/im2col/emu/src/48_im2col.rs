@@ -123,7 +123,11 @@ impl Instruction for Im2col {
         let stride = (xs2 >> 8) & 0xFF;
         let padding = (xs2 >> 16) & 0xFF;
 
-        if iter == 0 || iter > MAX_ITER as u64 || ksize == 0 || ksize > MAX_KSIZE as u64 || stride == 0
+        if iter == 0
+            || iter > MAX_ITER as u64
+            || ksize == 0
+            || ksize > MAX_KSIZE as u64
+            || stride == 0
             || padding > MAX_PADDING as u64
         {
             return 16;

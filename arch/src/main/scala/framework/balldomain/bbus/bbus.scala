@@ -8,6 +8,7 @@ import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.HasBlink
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
+import framework.balldomain.isa.BallISA
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.blink.mmio.MmioRead
 import java.lang.reflect.InvocationTargetException
@@ -42,24 +43,33 @@ class BBus(val b: GlobalConfig) extends Module {
   @public
   val subRobReq = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
 
-  val balls = b.ballDomain.ballIdMappings.map { mapping =>
-    Module {
-      try {
-        val cls  = Class.forName(mapping.ballClass)
-        val ctor = cls.getConstructor(classOf[GlobalConfig])
-        ctor.newInstance(b).asInstanceOf[HasBlink with Module]
-      } catch {
-        case e: InvocationTargetException =>
-          val cause = Option(e.getCause).getOrElse(e)
-          throw new RuntimeException(
-            s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${cause.getMessage}",
-            cause
-          )
-        case e: Throwable                 =>
-          throw new RuntimeException(
-            s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${e.getMessage}",
-            e
-          )
+  require(b.ballDomain.ballIdMappings.length == numBalls, "ballNum must match ballIdMappings length")
+
+  // Apply BALL_INIT on the cycle after the command handshake.  Driving reset
+  // directly from cmd.fire would feed the Ball's reset-dependent ready signal
+  // back into that same handshake.
+  val ballBootReset = RegInit(VecInit(Seq.fill(numBalls)(false.B)))
+
+  val balls = b.ballDomain.ballIdMappings.zipWithIndex.map { case (mapping, index) =>
+    withReset(reset.asBool || ballBootReset(index)) {
+      Module {
+        try {
+          val cls  = Class.forName(mapping.ballClass)
+          val ctor = cls.getConstructor(classOf[GlobalConfig])
+          ctor.newInstance(b).asInstanceOf[HasBlink with Module]
+        } catch {
+          case e: InvocationTargetException =>
+            val cause = Option(e.getCause).getOrElse(e)
+            throw new RuntimeException(
+              s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${cause.getMessage}",
+              cause
+            )
+          case e: Throwable                 =>
+            throw new RuntimeException(
+              s"Failed to instantiate ball ${mapping.ballName} (${mapping.ballClass}): ${e.getMessage}",
+              e
+            )
+        }
       }
     }
   }
@@ -76,16 +86,34 @@ class BBus(val b: GlobalConfig) extends Module {
   cmdRouter.io.cmdReq_i <> cmdReq
   cmdRouter.io.ballIdle := idle_ball
 
+  val isBallInit    = cmdRouter.io.cmdReq_o.bits.cmd.funct7 === BallISA.InitFunct.U
+  val initPending   = RegInit(VecInit(Seq.fill(numBalls)(false.B)))
+  val initResp      = Reg(Vec(numBalls, new BallRsComplete(b)))
+  val targetMatches = VecInit(b.ballDomain.ballIdMappings.map(m => cmdRouter.io.cmdReq_o.bits.cmd.bid === m.ballId.U))
+
   for (i <- 0 until numBalls) {
-    balls(i).blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
+    val targetMatch = targetMatches(i)
+    balls(i).blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && !isBallInit && targetMatch
     balls(i).blink.cmdReq.bits  := cmdRouter.io.cmdReq_o.bits
 
-    cmdRouter.io.cmdResp_i(i) <> balls(i).blink.cmdResp
+    cmdRouter.io.cmdResp_i(i).valid := Mux(initPending(i), true.B, balls(i).blink.cmdResp.valid)
+    cmdRouter.io.cmdResp_i(i).bits  := Mux(initPending(i), initResp(i), balls(i).blink.cmdResp.bits)
+    balls(i).blink.cmdResp.ready    := !initPending(i) && cmdRouter.io.cmdResp_i(i).ready
+
+    ballBootReset(i) := cmdRouter.io.cmdReq_o.fire && isBallInit && targetMatch
+    when(cmdRouter.io.cmdReq_o.fire && isBallInit && targetMatch) {
+      initPending(i)         := true.B
+      initResp(i).rob_id     := cmdRouter.io.cmdReq_o.bits.rob_id
+      initResp(i).is_sub     := cmdRouter.io.cmdReq_o.bits.is_sub
+      initResp(i).sub_rob_id := cmdRouter.io.cmdReq_o.bits.sub_rob_id
+    }
+    when(initPending(i) && cmdRouter.io.cmdResp_i(i).fire) {
+      initPending(i) := false.B
+    }
   }
 
-  cmdRouter.io.cmdReq_o.ready := VecInit((0 until numBalls).map(i =>
-    balls(i).blink.cmdReq.ready && (cmdRouter.io.cmdReq_o.bits.cmd.bid === i.U)
-  )).asUInt.orR
+  val targetReady = VecInit((0 until numBalls).map(i => balls(i).blink.cmdReq.ready && targetMatches(i))).asUInt.orR
+  cmdRouter.io.cmdReq_o.ready := targetReady
 
   cmdResp <> cmdRouter.io.cmdResp_o
 

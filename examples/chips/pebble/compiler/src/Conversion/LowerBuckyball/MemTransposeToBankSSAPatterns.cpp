@@ -1,10 +1,12 @@
-//===- MemTransposeToBankSSAPatterns.cpp - mem_transpose -> Bank* ---------===//
+//===- MemTransposeToBankSSAPatterns.cpp - mem_transpose -> Bank*/linalg --===//
 
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Utils/StructuredOpsUtils.h"
+#include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
 
@@ -18,6 +20,9 @@ namespace {
 
 constexpr int64_t kBankWidthBytes = 16;
 constexpr int64_t kRowTile = 16;
+// Above this, bank-SSA tile expansion blows up (Bert 768x768 →
+// convert-scf-to-cf crash). Use compact linalg.generic instead.
+constexpr int64_t kMaxBankTransposeElems = 64 * 64;
 
 static size_t elemsPerBankRow(Type elemType) {
   unsigned bitWidth = elemType.getIntOrFloatBitWidth();
@@ -41,6 +46,21 @@ static LogicalResult rowStrideDiv16(MemRefType ty, int64_t &out) {
 }
 
 static int64_t cdiv(int64_t a, int64_t b) { return (a + b - 1) / b; }
+
+static void emitLinalgTranspose(PatternRewriter &rewriter, Location loc,
+                                Value input, Value output) {
+  MLIRContext *ctx = rewriter.getContext();
+  AffineMap id = AffineMap::getMultiDimIdentityMap(2, ctx);
+  AffineMap tr = AffineMap::get(
+      2, 0, {rewriter.getAffineDimExpr(1), rewriter.getAffineDimExpr(0)}, ctx);
+  SmallVector<utils::IteratorType> iters(2, utils::IteratorType::parallel);
+  rewriter.create<linalg::GenericOp>(
+      loc, TypeRange{}, ValueRange{input}, ValueRange{output},
+      ArrayRef<AffineMap>{id, tr}, iters,
+      [](OpBuilder &b, Location loc, ValueRange args) {
+        b.create<linalg::YieldOp>(loc, args[0]);
+      });
+}
 
 class MemTransposeToBankSSAPattern : public OpRewritePattern<MemTransposeOp> {
 public:
@@ -66,16 +86,21 @@ public:
 
     Type elemTy = inputType.getElementType();
     int64_t elemBits = elemTy.getIntOrFloatBitWidth();
-    if (elemBits != 8 && elemBits != 32)
-      return op.emitError("only 8/32-bit transpose elements are supported");
+    if (elemBits == 0 || elemBits % 8 != 0)
+      return op.emitError("unsupported transpose element type");
+    // HW bank transpose only handles i8/f32; bf16 and oversized mats use
+    // compact linalg (same Bert IR-size escape hatch).
+    bool hwElem = elemBits == 8 || elemBits == 32;
+    if (!hwElem || rows * cols > kMaxBankTransposeElems) {
+      emitLinalgTranspose(rewriter, loc, input, output);
+      rewriter.eraseOp(op);
+      return success();
+    }
 
     size_t elemsPerRow = elemsPerBankRow(elemTy);
     if (elemsPerRow == 0)
       return op.emitError("unsupported transpose element type");
 
-    // src+dst share banks => at most 4 column-groups per side. Prefer the
-    // smallest full-row tile that covers `cols` so small matrices (e.g. 16x16
-    // i8) are not padded out to 64 and mvout-truncated.
     size_t maxColTile = elemsPerRow * 4;
     size_t colsAlign =
         ((size_t)cols + elemsPerRow - 1) / elemsPerRow * elemsPerRow;
@@ -142,7 +167,6 @@ public:
             loc, dst.getType(), loaded, dst,
             createI64Const(rewriter, loc, kRowTile),
             createI64Const(rewriter, loc, elemBits));
-        // Output of transpose is [colTile, rowTile]; mvout depth = colTile.
         mvoutBank(rewriter, loc, outTile, transposed, (int64_t)colTile,
                   strideOut);
         releaseBank(rewriter, loc, loaded);

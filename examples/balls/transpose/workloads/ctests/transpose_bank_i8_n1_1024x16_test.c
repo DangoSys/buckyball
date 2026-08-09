@@ -20,6 +20,7 @@ int main(void) {
 
   init_i8_random_matrix(input_matrix, ROWS, COLS, SEED);
   transpose_u8_matrix(input_matrix, expected_matrix, ROWS, COLS);
+  clear_i8_matrix(output_matrix, COLS, ROWS);
 
   const uint32_t src = 0;
   const uint32_t dst = 1;

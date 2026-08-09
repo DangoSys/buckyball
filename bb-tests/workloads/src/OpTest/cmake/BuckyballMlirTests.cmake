@@ -77,6 +77,7 @@ function(add_buckyball_mlir_optest NAME)
   set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
   set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
   set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+  set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
   set(LLVM_MLIR_EXECUTION_ENGINE_DIR
     ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
 
@@ -99,6 +100,18 @@ function(add_buckyball_mlir_optest NAME)
       -reconcile-unrealized-casts)
   endif()
 
+  set(RUSHB_MLIR_PASSES)
+  foreach(MLIR_PASS ${MLIR_PASSES})
+    if(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}")
+      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS})
+    elseif(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BUCKYBALL}")
+      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB})
+    else()
+      list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
+    endif()
+  endforeach()
+  set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-rushB.o)
+
   add_custom_command(
     OUTPUT ${OBJ}
     COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${MLIR_PASSES} |
@@ -110,16 +123,29 @@ function(add_buckyball_mlir_optest NAME)
     VERBATIM)
 
   add_custom_command(
+    OUTPUT ${RUSHB_OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${RUSHB_MLIR_PASSES}
+            -lower-buckyball-intrinsics-to-rushb |
+    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
+    ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
+    COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
+    VERBATIM)
+
+  add_custom_command(
     OUTPUT ${BAREMETAL_BIN}
     COMMAND ${ELF_CC} ${C_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
-    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
       ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -129,11 +155,14 @@ function(add_buckyball_mlir_optest NAME)
     OUTPUT ${LINUX_BIN}
     COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
-    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM)
@@ -144,6 +173,16 @@ function(add_buckyball_mlir_optest NAME)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
   add_custom_target(${GROUP_TARGET}
     DEPENDS ${BAREMETAL_TARGET} ${LINUX_TARGET})
+
+  add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}_optest_${TEST_ID}
+    CXX
+    OUTPUT_SUBDIR src/OpTest/rushB
+    SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC} ${RUSHB_OBJ}
+    INCLUDE_DIRS
+      ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      ${WORKLOAD_LIB_DIR}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem
+    DEPENDS ${RUSHB_OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C})
 
   if(DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
     add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${GROUP_TARGET})
