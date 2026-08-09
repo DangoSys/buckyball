@@ -127,8 +127,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if not await run_stage("configure", nix_cmd(cmake_args)):
         return
 
-    command = nix_cmd(["ninja", "-C", build_dir,
-                       "buddy-opt", "buddy-translate", "buddy-llc"])
+    command = nix_cmd([
+        "ninja", "-C", build_dir,
+        "buddy-opt", "buddy-translate", "buddy-llc",
+        "python-package-buddy", "BuddyMLIRPythonModules",
+    ])
     mode = "stable" if stable else "custom"
     if not await run_stage(f"compiler-{core_package.name}-{mode}", command):
         return
