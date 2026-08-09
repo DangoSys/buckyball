@@ -69,7 +69,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
       set(RUSHB_BUILD_RUNTIME)
       set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_VERILATOR_LIBRARY})
     endif()
-    if(RUSHB_LIBRARY STREQUAL "")
+    if(NOT RUSHB_LIBRARY)
       message(FATAL_ERROR
         "${TARGET_NAME}: BUCKYBALL_RUSHB_${RUSHB_BACKEND} library is unset. "
         "Include examples/chips/<chip>/workloads/cmake/RushB.cmake first.")
@@ -235,19 +235,22 @@ function(add_buckyball_ctest SOURCE_FILE)
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_multicore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_singlecore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-  add_buckyball_rushb_native(${TEST_NAME}
-    OUTPUT_SUBDIR src/CTest/rushB
-    SOURCES
-      ${SOURCE_DIR}/${SOURCE_FILE}
-      ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
-      ${BUCKYBALL_BBHW_MEM_C}
-      ${BUCKYBALL_CHIP_COMMON_SOURCES}
-    INCLUDE_DIRS
-      ${WORKLOAD_LIB_DIR}
-      ${BUCKYBALL_TOY_COMMON_DIR}
-      ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
-      ${SOURCE_DIR}
-    DEPENDS ${TEST_DEPS})
+  if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
+     DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+    add_buckyball_rushb_native(${TEST_NAME}
+      OUTPUT_SUBDIR src/CTest/rushB
+      SOURCES
+        ${SOURCE_DIR}/${SOURCE_FILE}
+        ${BUCKYBALL_TOY_COMMON_DIR}/buckyball.c
+        ${BUCKYBALL_BBHW_MEM_C}
+        ${BUCKYBALL_CHIP_COMMON_SOURCES}
+      INCLUDE_DIRS
+        ${WORKLOAD_LIB_DIR}
+        ${BUCKYBALL_TOY_COMMON_DIR}
+        ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
+        ${SOURCE_DIR}
+      DEPENDS ${TEST_DEPS})
+  endif()
 
   add_custom_target(${TEST_NAME}-ctest-build
     DEPENDS

@@ -5,6 +5,7 @@ set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
 set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
 set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
 set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
 set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
@@ -103,15 +104,19 @@ function(add_tile_matmul_test name)
     OUTPUT ${BAREMETAL_BIN}
     COMMAND ${ELF_CC} ${C_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ}
       ${MAIN_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
@@ -123,13 +128,17 @@ function(add_tile_matmul_test name)
     OUTPUT ${LINUX_BIN}
     COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ}
       ${MAIN_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
