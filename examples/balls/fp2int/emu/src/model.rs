@@ -97,9 +97,7 @@ fn fp32_to_int32(fp: u32) -> i32 {
         let truncated = u64::from(mantissa) >> right_shift;
         let half = 1u64 << (right_shift - 1);
         let remainder = u64::from(mantissa) & ((1u64 << right_shift) - 1);
-        // The FP2INT ISA uses round-to-nearest with halfway cases rounded
-        // away from zero (the sign is applied below).
-        let round_up = remainder >= half;
+        let round_up = remainder > half || (remainder == half && (truncated & 1) != 0);
         truncated + u64::from(round_up)
     } else {
         0
@@ -129,12 +127,12 @@ mod tests {
         assert_eq!(fp2int_i32_bits(0x3F80_0000, scale), 1);
         assert_eq!(fp2int_i32_bits(0x4000_0000, scale), 2);
         assert_eq!(fp2int_i32_bits(0xBF80_0000, scale), -1);
-        assert_eq!(fp2int_i32_bits(0x3F00_0000, scale), 1);
-        assert_eq!(fp2int_i32_bits(0xBF00_0000, scale), -1);
-        assert_eq!(fp2int_i32_bits(0x3FC0_0000, scale), 2);
-        assert_eq!(fp2int_i32_bits(0xBFC0_0000, scale), -2);
-        assert_eq!(fp2int_i32_bits(0x4020_0000, scale), 3);
-        assert_eq!(fp2int_i32_bits(0xC020_0000, scale), -3);
+        assert_eq!(fp2int_i32_bits(0x3F00_0000, scale), 0); //  0.5 -> even 0
+        assert_eq!(fp2int_i32_bits(0xBF00_0000, scale), 0); // -0.5 -> even 0
+        assert_eq!(fp2int_i32_bits(0x3FC0_0000, scale), 2); //  1.5 -> even 2
+        assert_eq!(fp2int_i32_bits(0xBFC0_0000, scale), -2); // -1.5 -> even -2
+        assert_eq!(fp2int_i32_bits(0x4020_0000, scale), 2); //  2.5 -> even 2
+        assert_eq!(fp2int_i32_bits(0xC020_0000, scale), -2); // -2.5 -> even -2
     }
 
     #[test]
@@ -154,8 +152,8 @@ mod tests {
             -10.125, 20.25, -20.25, 0.375, -0.375, 64.25, -65.25,
         ];
         let expected = [
-            0i8, 0, 1, -1, 2, -2, 3, -3, 4, -4, 127, 127, -128, -128, 0, 0, 5, -5, 6, -6, 7, -7, 8,
-            -8, 20, -20, 41, -41, 1, -1, 127, -128,
+            0i8, 0, 0, 0, 2, -2, 2, -2, 4, -4, 126, 127, -128, -128, 0, 0, 4, -4, 6, -6, 6, -6, 8,
+            -8, 20, -20, 40, -40, 1, -1, 127, -128,
         ];
 
         for (value, expected) in input.into_iter().zip(expected) {

@@ -140,9 +140,7 @@ class Fp2Int(val b: GlobalConfig) extends Module {
       val truncated    = mantissaWide >> rightShift
       val half         = 1.U(64.W) << (rightShift - 1.U)
       val remainder    = mantissaWide & ((1.U(64.W) << rightShift) - 1.U)
-      // FP2INT rounds halfway cases away from zero. The sign is applied after
-      // rounding the magnitude.
-      val roundUp      = remainder >= half
+      val roundUp      = remainder > half || (remainder === half && truncated(0))
       magnitude := truncated + roundUp.asUInt
     }
 
