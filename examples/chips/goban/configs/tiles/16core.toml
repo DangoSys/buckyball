@@ -9,7 +9,7 @@ portFactor = 2
 memCycles = 10
 
 [sharedMem]
-enable = true
+enable = false
 entries = 16384
 inputChannels = 16
 defaultGroupCount = 1
