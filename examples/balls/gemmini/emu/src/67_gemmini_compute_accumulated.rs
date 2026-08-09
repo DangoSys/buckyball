@@ -40,9 +40,9 @@ impl Instruction for GemminiComputeAccumulated {
         let shift = gm.cfg.in_shift;
         drop(gm);
 
-        let a = read_i8_nn(ctx.banks, pa, n);
-        let b = read_i8_nn(ctx.banks, pb, n);
-        let mut c = read_i32_nn_groups(ctx.banks, &pw, n);
+        let a = read_i8_nn(&ctx.banks, pa, n);
+        let b = read_i8_nn(&ctx.banks, pb, n);
+        let mut c = read_i32_nn_groups(&ctx.banks, &pw, n);
 
         for i in 0..n {
             for j in 0..n {
@@ -55,7 +55,7 @@ impl Instruction for GemminiComputeAccumulated {
             }
         }
 
-        write_i32_nn_groups(ctx.banks, &pw, &c, n);
+        write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);
         0
     }
 

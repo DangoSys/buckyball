@@ -29,9 +29,9 @@ impl Instruction for GemminiPreload {
         let mut gm = gemini().lock().unwrap();
 
         if gm.cfg.dataflow == 1 {
-            gm.ws_b = Some(read_i8_nn(ctx.banks, p1, n));
+            gm.ws_b = Some(read_i8_nn(&ctx.banks, p1, n));
         } else {
-            let d = read_i8_nn(ctx.banks, p1, n);
+            let d = read_i8_nn(&ctx.banks, p1, n);
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
                 for j in 0..n {
@@ -39,7 +39,7 @@ impl Instruction for GemminiPreload {
                 }
             }
             drop(gm);
-            write_i32_nn(ctx.banks, pw, &c, n);
+            write_i32_nn(&mut ctx.banks, pw, &c, n);
         }
         0
     }
