@@ -93,6 +93,7 @@ jobs:
           nix develop -c bbdev workload --build '--chip toy --rushB bemu'
           nix develop -c bbdev bebop-bemu --batch '--chip toy --test elf-tests --rushB --clean-before'
           nix develop -c bbdev bebop-bemu --batch '--chip toy --test pk-tests --rushB --clean-before'
+
           nix develop -c bbdev workload --build '--chip toy --model lenet'
           nix develop -c bbdev workload --build '--chip toy --model lenet --rushB bemu'
           nix develop -c bbdev bebop-bemu --sim '--chip toy --binary buddy-buckyball-lenet-rushB-bemu-run --rushB'

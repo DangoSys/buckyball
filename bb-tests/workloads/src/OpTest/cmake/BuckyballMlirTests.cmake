@@ -100,16 +100,35 @@ function(add_buckyball_mlir_optest NAME)
       -reconcile-unrealized-casts)
   endif()
 
+  if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
+     NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
+    message(FATAL_ERROR
+      "rushB MLIR lowers require BUCKYBALL_LOWER_*_RUSHB "
+      "(define them in bb-tests/workloads/CMakeLists.txt)")
+  endif()
+
+  # Keep lower-buckyball before convert-arith-to-llvm (it emits arith).
+  # Insert intrinsics-to-rushb immediately before the final reconcile.
   set(RUSHB_MLIR_PASSES)
+  set(RUSHB_HAS_RECONCILE FALSE)
   foreach(MLIR_PASS ${MLIR_PASSES})
     if(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}")
       list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS})
     elseif(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BUCKYBALL}")
       list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB})
+    elseif(MLIR_PASS STREQUAL "-reconcile-unrealized-casts")
+      set(RUSHB_HAS_RECONCILE TRUE)
+      list(APPEND RUSHB_MLIR_PASSES
+        -lower-buckyball-intrinsics-to-rushb
+        -reconcile-unrealized-casts)
     else()
       list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
     endif()
   endforeach()
+  if(NOT RUSHB_HAS_RECONCILE)
+    message(FATAL_ERROR
+      "rushB pass rewrite for ${NAME} requires -reconcile-unrealized-casts")
+  endif()
   set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-rushB.o)
 
   add_custom_command(
@@ -124,8 +143,7 @@ function(add_buckyball_mlir_optest NAME)
 
   add_custom_command(
     OUTPUT ${RUSHB_OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${RUSHB_MLIR_PASSES}
-            -lower-buckyball-intrinsics-to-rushb |
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${RUSHB_MLIR_PASSES} |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
     ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
