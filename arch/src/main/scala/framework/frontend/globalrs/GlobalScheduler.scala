@@ -48,7 +48,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     }
 
     val idle    = Output(Bool())
-    // One-cycle pulse used by host-rush to advance its command queue.
+    // One-cycle pulse used by rushB to advance its command queue.
     val retired = Output(Bool())
 
     val barrier_arrive  = Output(Bool())

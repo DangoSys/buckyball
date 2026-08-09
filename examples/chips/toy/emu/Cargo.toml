@@ -7,7 +7,7 @@ build = "../../../../bebop/src/nodes/bemu/build.rs"
 [lib]
 name = "bebop_bemu"
 path = "src/lib.rs"
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "bebop"

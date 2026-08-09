@@ -16,6 +16,8 @@
 
 #include "Conversion/LowerTileToBuckyball/LowerTileToBuckyball.h"
 
+#include <algorithm>
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -111,8 +113,9 @@ static Value buildQuantScale(PatternRewriter &rewriter, Location loc,
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
 public:
   explicit TileTransposeLowering(MLIRContext *context, int64_t bankWidthBytes,
-                                 int64_t /*bankDepth*/, int64_t /*bankNum*/)
-      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes) {}
+                                 int64_t /*bankDepth*/, int64_t bankNum)
+      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes),
+        bankNum(bankNum) {}
 
   LogicalResult matchAndRewrite(tile::TileTransposeOp tileTransposeOp,
                                 PatternRewriter &rewriter) const override {
@@ -138,14 +141,20 @@ public:
         elemsPerBankRow(inputType.getElementType(), bankWidthBytes);
     if (elemsPerRow == 0)
       return tileTransposeOp.emitError("unsupported transpose element type");
+    if (bankNum < 2)
+      return tileTransposeOp.emitError("transpose requires bank_num >= 2");
 
+    // src and dst each take nGroups banks; keep 2 * nGroups <= bankNum.
+    size_t maxGroups = (size_t)bankNum / 2;
+    size_t maxColsByBanks = maxGroups * elemsPerRow;
     constexpr size_t kTransposeRows = kMatmulTile;
     constexpr size_t kMaxTransposeCols = 64;
 
-    size_t colTileSize = std::min(Cols, kMaxTransposeCols);
+    size_t colTileSize = std::min({Cols, kMaxTransposeCols, maxColsByBanks});
     colTileSize = (colTileSize / elemsPerRow) * elemsPerRow;
     if (colTileSize == 0)
-      colTileSize = elemsPerRow;
+      return tileTransposeOp.emitError(
+          "transpose tile needs more physical banks than available");
 
     size_t rowTileNum = ceilDiv(Rows, kTransposeRows);
     size_t colTileNum = ceilDiv(Cols, colTileSize);
@@ -185,7 +194,7 @@ public:
         if (elemBits != 8 && elemBits != 32)
           return tileTransposeOp.emitError(
               "transpose only supports elem_bits 8 or 32");
-        if (nGroups * 2 > 16)
+        if (nGroups * 2 > bankNum)
           return tileTransposeOp.emitError(
               "transpose tile needs more physical banks than available");
 
@@ -222,6 +231,7 @@ public:
 
 private:
   int64_t bankWidthBytes;
+  int64_t bankNum;
 };
 
 class TileConv2dLowering : public OpRewritePattern<tile::TileConv2dOp> {
@@ -389,7 +399,7 @@ public:
                             llvm::cl::desc("Bank depth (rows per bank)."),
                             llvm::cl::init(1024)};
   Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
-                          llvm::cl::init(8)};
+                          llvm::cl::init(16)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<::buddy::tile::TileDialect,

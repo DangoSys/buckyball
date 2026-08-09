@@ -9,9 +9,9 @@ class BuckyballPebbleVerilatorConfig
         new examples.pebble.BuckyballPebbleConfig
     )
 
-class BuckyballPebbleHostRushVerilatorConfig
+class BuckyballPebbleRushBVerilatorConfig
     extends Config(
-      new WithBuckyballHostRush ++
+      new WithBuckyballRushB ++
         new BBSimConfig ++
         new WithCustomBootROM ++
         new examples.pebble.BuckyballPebbleConfig

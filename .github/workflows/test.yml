@@ -86,6 +86,25 @@ jobs:
           nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyVerilatorConfig'
           nix develop -c bbdev bebop-verilator --batch '--chip toy --config sims.verilator.BuckyballToyVerilatorConfig --test elf-tests --clean-before'
 
+      - name: rushB Tests
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix develop -c bbdev workload --build '--chip toy --rushB bemu'
+          nix develop -c bbdev bebop-bemu --batch '--chip toy --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip toy --test pk-tests --rushB --clean-before'
+          nix develop -c bbdev workload --build '--chip toy --model lenet'
+          nix develop -c bbdev workload --build '--chip toy --model lenet --rushB bemu'
+          nix develop -c bbdev bebop-bemu --sim '--chip toy --binary buddy-buckyball-lenet-rushB-bemu-run --rushB'
+
+          nix develop -c bbdev bebop-verilator --clean '--config sims.verilator.BuckyballToyRushBVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --verilog '--config sims.verilator.BuckyballToyRushBVerilatorConfig'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config sims.verilator.BuckyballToyRushBVerilatorConfig'
+
+          nix develop -c bbdev workload --build '--chip toy --rushB verilator'
+          nix develop -c bbdev bebop-verilator --batch '--chip toy --config sims.verilator.BuckyballToyRushBVerilatorConfig --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip toy --config sims.verilator.BuckyballToyRushBVerilatorConfig --test pk-tests --rushB --clean-before'
+
       - name: Detect bebop JUnit files
         if: always()
         id: junit

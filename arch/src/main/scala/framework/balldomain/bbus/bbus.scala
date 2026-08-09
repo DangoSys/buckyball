@@ -113,7 +113,7 @@ class BBus(val b: GlobalConfig) extends Module {
   }
 
   val targetReady = VecInit((0 until numBalls).map(i => balls(i).blink.cmdReq.ready && targetMatches(i))).asUInt.orR
-  cmdRouter.io.cmdReq_o.ready := targetReady
+  cmdRouter.io.cmdReq_o.ready := Mux(isBallInit, targetMatches.asUInt.orR, targetReady)
 
   cmdResp <> cmdRouter.io.cmdResp_o
 

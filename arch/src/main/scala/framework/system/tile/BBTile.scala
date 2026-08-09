@@ -44,9 +44,9 @@ import framework.system.core.rocket.RocketBB
 import framework.system.core.rocket.id.RVVRoCCDecode
 import framework.system.core.accelerator.{
   BuckyballAccelerator,
-  BuckyballHostRushKey,
-  HostRushAcceleratorId,
-  HostRushCommandBridge
+  BuckyballRushBKey,
+  RushBAcceleratorId,
+  RushBCommandBridge
 }
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
@@ -371,8 +371,8 @@ class BBTile private (
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
   Annotated.params(this, outer.bbParams)
-  val nCores          = outer.nCores
-  val hostRushEnabled = outer.p(BuckyballHostRushKey)
+  val nCores       = outer.nCores
+  val rushBEnabled = outer.p(BuckyballRushBKey)
 
   def coreParamsForCore(coreIdx: Int): BBTileParams =
     outer.bbParams.copy(core = outer.bbParams.rocketCoreForCore(coreIdx))
@@ -387,8 +387,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
   // --- Rocket core (using our fork that accepts BBTile) ---
   private def makeCore(coreIdx: Int): RocketBB = {
-    if (hostRushEnabled && outer.hasBuckyball) {
-      // Host-rush drives RoCC below. Keeping Rocket reset prevents unrelated
+    if (rushBEnabled && outer.hasBuckyball) {
+      // rushB drives RoCC below. Keeping Rocket reset prevents unrelated
       // instruction and memory traffic while preserving the existing tile RTL.
       withReset(true.B) {
         Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
@@ -594,11 +594,11 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   private def connectRoCC(
-    core:       RocketBB,
-    acc:        BuckyballAccelerator,
-    hostSource: Option[HostRushCommandBridge]
+    core:        RocketBB,
+    acc:         BuckyballAccelerator,
+    rushBSource: Option[RushBCommandBridge]
   ): Unit = {
-    hostSource match {
+    rushBSource match {
       case Some(source) =>
         acc.io.cmd.valid       := source.io.cmd.valid
         acc.io.cmd.bits        := source.io.cmd.bits
@@ -634,11 +634,11 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
     }
 
-    val hostSources = accelerators.zipWithIndex.map { case (acc, i) =>
+    val rushBSources = accelerators.zipWithIndex.map { case (acc, i) =>
       acc.map { accelerator =>
-        if (hostRushEnabled) {
-          val source = Module(new HostRushCommandBridge(
-            HostRushAcceleratorId(outer.bbParams.tileId, i),
+        if (rushBEnabled) {
+          val source = Module(new RushBCommandBridge(
+            RushBAcceleratorId(outer.bbParams.tileId, i),
             accelerator.b.core.xLen
           ))
           source.io.retired := accelerator.io.retired
@@ -653,7 +653,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     for (i <- 0 until nCores) {
       accelerators(i) match {
         case Some(acc) =>
-          connectRoCC(cores(i), acc, hostSources(i))
+          connectRoCC(cores(i), acc, rushBSources(i))
         case None      =>
           tieOffRoCC(cores(i))
       }

@@ -9,6 +9,14 @@ class BuckyballToyVerilatorConfig
         new examples.toy.BuckyballToyConfig
     )
 
+class BuckyballToyRushBVerilatorConfig
+    extends Config(
+      new WithBuckyballRushB ++
+        new BBSimConfig ++
+        new WithCustomBootROM ++
+        new examples.toy.BuckyballToyConfig
+    )
+
 class BuckyballToy8CoreVerilatorConfig
     extends Config(
       new BBSimConfig(maxHarts = 8) ++
