@@ -48,7 +48,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
     set(RUSHB_STANDARD -std=c++17)
   else()
     set(RUSHB_COMPILER cc)
-    set(RUSHB_STANDARD -std=c17)
+    set(RUSHB_STANDARD -std=gnu17)
   endif()
 
   foreach(RUSHB_BACKEND bemu verilator)
