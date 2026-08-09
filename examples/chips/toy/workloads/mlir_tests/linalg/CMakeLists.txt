@@ -135,6 +135,29 @@ function(add_linalg_conv2d_test name main_src)
       optest_linalg_${name}_singlecore_baremetal
     COMMENT "Building optest_linalg_${name} for all platforms"
   )
+
+  add_toy_mlir_rushb(
+    NAME ${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}
+    CXX
+    FRONT_PASSES
+      -convert-linalg-to-tile
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+    SOURCES
+      ${BBSW_LINUX_TEST_SRC}
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
+      ${MAIN_SRC}
+    INCLUDE_DIRS
+      ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      ${WORKLOAD_LIB_DIR}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem
+    DEPENDS
+      ${MAIN_SRC}
+      ${BBSW_LINUX_TEST_SRC}
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C})
 endfunction()
 
 # Compile matmul.mlir -> matmul.o

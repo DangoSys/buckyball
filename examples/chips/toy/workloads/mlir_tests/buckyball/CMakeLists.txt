@@ -143,6 +143,18 @@ function(add_toy_mlir_matmul_test name)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
   add_custom_target(optest_buckyball_${name}
     DEPENDS ${BAREMETAL_TARGET} ${LINUX_TARGET})
+
+  add_toy_mlir_rushb(
+    NAME ${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}
+    CXX
+    FRONT_PASSES -lower-buckyball-to-bank-ssa
+    SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC}
+    INCLUDE_DIRS
+      ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      ${WORKLOAD_LIB_DIR}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem
+    DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C})
 endfunction()
 
 function(add_toy_mlir_matmul_contract_test name)

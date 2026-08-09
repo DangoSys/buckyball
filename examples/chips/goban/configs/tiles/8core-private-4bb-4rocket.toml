@@ -16,25 +16,25 @@ defaultGroupCount = 1
 memCycles = 10
 
 [[cores]]
-include = "cores/default.toml"
+include = "../../../../cores/goban/core.toml"
 
 [[cores]]
-include = "cores/default.toml"
+include = "../../../../cores/goban/core.toml"
 
 [[cores]]
-include = "cores/default.toml"
+include = "../../../../cores/goban/core.toml"
 
 [[cores]]
-include = "cores/default.toml"
+include = "../../../../cores/goban/core.toml"
 
 [[cores]]
-include = "cores/rocket.toml"
+include = "../../../../cores/rocket/core.toml"
 
 [[cores]]
-include = "cores/rocket.toml"
+include = "../../../../cores/rocket/core.toml"
 
 [[cores]]
-include = "cores/rocket.toml"
+include = "../../../../cores/rocket/core.toml"
 
 [[cores]]
-include = "cores/rocket.toml"
+include = "../../../../cores/rocket/core.toml"

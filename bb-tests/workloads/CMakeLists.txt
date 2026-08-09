@@ -17,6 +17,7 @@ set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
 get_filename_component(BUCKYBALL_REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
 set(BUCKYBALL_WORKLOAD_CHIP "" CACHE STRING "Buckyball chip for workloads")
+set(BUCKYBALL_WORKLOAD_CORE "" CACHE STRING "Compiler Core for workloads")
 if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
   message(FATAL_ERROR
     "BUCKYBALL_WORKLOAD_CHIP is required. Pass -DBUCKYBALL_WORKLOAD_CHIP=<chip>.")
@@ -27,6 +28,11 @@ if(NOT IS_DIRECTORY
     "Buckyball workload chip does not exist: ${BUCKYBALL_WORKLOAD_CHIP}")
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+if(BUCKYBALL_WORKLOAD_CORE STREQUAL "")
+  message(FATAL_ERROR
+    "BUCKYBALL_WORKLOAD_CORE is required. bbdev derives it from chip.toml.")
+endif()
+message(STATUS "Buckyball workload compiler Core: ${BUCKYBALL_WORKLOAD_CORE}")
 
 set(BUCKYBALL_RUSHB_CHIP_CMAKE
     ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/workloads/cmake/RushB.cmake)
@@ -41,17 +47,19 @@ if(DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
   add_custom_target(rushB-verilator-workloads-build)
 endif()
 
-if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "pebble")
+if(BUCKYBALL_WORKLOAD_CORE STREQUAL "pebble")
   set(BUCKYBALL_MLIR_BANK_NUM 16)
-elseif(BUCKYBALL_WORKLOAD_CHIP STREQUAL "toy")
+elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "toy")
+  set(BUCKYBALL_MLIR_BANK_NUM 16)
+elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "goban")
   set(BUCKYBALL_MLIR_BANK_NUM 16)
 else()
   message(FATAL_ERROR
-    "MLIR physical-bank count is not configured for chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+    "MLIR physical-bank count is not configured for Core: ${BUCKYBALL_WORKLOAD_CORE}")
 endif()
 
 set(BUCKYBALL_EXPECTED_COMPILER_DIR
-  "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/compiler")
+  "${BUCKYBALL_REPO_ROOT}/examples/cores/${BUCKYBALL_WORKLOAD_CORE}/compiler")
 set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
 if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
   message(FATAL_ERROR
@@ -73,9 +81,10 @@ get_filename_component(BUCKYBALL_COMPILER_DIR
   "${BUCKYBALL_COMPILER_DIR}" ABSOLUTE)
 if(NOT BUCKYBALL_COMPILER_DIR STREQUAL BUCKYBALL_EXPECTED_COMPILER_DIR)
   message(FATAL_ERROR
-    "Compiler chip mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "Compiler Core mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "whose compiler Core is ${BUCKYBALL_WORKLOAD_CORE}, "
     "but BUDDY_EXTERNAL_DIALECTS_DIR is ${BUCKYBALL_COMPILER_DIR}. "
-    "Run `bbdev compiler --build '--chip ${BUCKYBALL_WORKLOAD_CHIP}'` first.")
+    "Run `bbdev compiler --build '--core ${BUCKYBALL_WORKLOAD_CORE}'` first.")
 endif()
 
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)

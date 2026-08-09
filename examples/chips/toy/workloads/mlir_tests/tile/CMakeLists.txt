@@ -155,6 +155,18 @@ function(add_tile_matmul_test name)
       optest_tile_${name}_singlecore_baremetal
     COMMENT "Building optest_tile_${name} for all platforms"
   )
+
+  add_toy_mlir_rushb(
+    NAME ${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}
+    CXX
+    FRONT_PASSES -convert-tile-to-buckyball -lower-buckyball-to-bank-ssa
+    SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC}
+    INCLUDE_DIRS
+      ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      ${WORKLOAD_LIB_DIR}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem
+    DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C})
 endfunction()
 
 function(add_tile_matmul_contract_test name)
