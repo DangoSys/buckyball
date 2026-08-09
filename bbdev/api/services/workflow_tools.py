@@ -19,7 +19,7 @@ class WorkflowAPITool(Tool):
     - /verilator/build: Build verilator (params: jobs)
     - /verilator/sim: Run simulation (params: binary, batch)
     - /workload/clean: Clean workload output directory
-    - /workload/build: Build workload (params: chip, model, stable)"""
+    - /workload/build: Build workload (params: chip, model, stable, rushB)"""
 
     def get_parameters(self) -> Dict[str, Any]:
         return {

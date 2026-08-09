@@ -1,10 +1,7 @@
 """
 bebop verilator event handler
 
-Runs bebop verilator simulation:
-  1. Resolve binary path
-  2. Resolve verilog source directory (VSRC_PATH)
-  3. Run the built bebop binary with the new run/verilator CLI
+Run Verilator either through its guest-ELF simulator or the rushB native ABI.
 """
 import json
 import os
@@ -36,11 +33,19 @@ config = {
 }
 
 
+def is_native_host_elf(path: str) -> bool:
+    try:
+        with open(path, "rb") as binary:
+            header = binary.read(20)
+    except OSError:
+        return False
+    return header[:4] == b"\x7fELF" and header[18:20] == b"\x3e\x00"
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    arch_dir = f"{bbdir}/arch"
 
     arch_config = input_data.get("config")
     if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
@@ -62,7 +67,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    bebop_bin = f"{bebop_dir}/target/debug/bebop"
+    bebop_bin = f"{bebop_dir}/target/release/bebop"
     if not os.path.isfile(bebop_bin):
         ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
         await check_result(
@@ -128,10 +133,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"binary_path: {binary_path}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = input_data.get("log_dir") or f"{arch_dir}/log/{timestamp}-{binary_name}"
-    fst_dir = input_data.get("fst_dir") or f"{arch_dir}/waveform/{timestamp}-{binary_name}"
+    log_dir = f"{bbdir}/log/{timestamp}-verilator-{binary_name}"
     os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(fst_dir, exist_ok=True)
 
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
     trace_args = ""
@@ -139,26 +142,46 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if input_data.get(trace_name, False):
             trace_args += f" --{trace_name}"
 
-    run_cmd = (
-        f"{shlex.quote(bebop_bin)} run verilator "
-        f"--elf={shlex.quote(binary_path)} "
-        f"--log-dir={shlex.quote(log_dir)} "
-        f"--fst-dir={shlex.quote(fst_dir)}"
-        f"{wave_arg}"
-        f"{trace_args}"
-    )
-    ctx.logger.info(f"Running bebop verilator: {run_cmd}")
+    if input_data.get("rushB"):
+        # rushB owns the Verilator instance inside libbebop_verilator. It must
+        # execute as a native program, never as the normal guest ELF input.
+        if not is_native_host_elf(binary_path):
+            ctx.logger.error(
+                f"--rushB requires a native x86_64 rushB runner; got guest ELF: {binary_path}"
+            )
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={"error": "rushB_requires_native_runner", "binary": binary_path},
+                trace_id=origin_tid,
+            )
+            return
+        backend_library = f"{bebop_dir}/target/release/deps/libbebop_verilator.so"
+        binary_dir = os.path.dirname(binary_path)
+        copy_cmd = shlex.join(["cmake", "-E", "copy_if_different", backend_library, binary_dir])
+        inner_cmd = f"cd {shlex.quote(binary_dir)} && {copy_cmd} && exec {shlex.quote(binary_path)}"
+        run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
+        ctx.logger.info(f"Running rushB Verilator: {run_cmd}")
+        stdout_prefix = "rushB verilator"
+        stderr_prefix = "rushB verilator"
+    else:
+        run_cmd = (
+            f"{shlex.quote(bebop_bin)} run verilator "
+            f"--elf={shlex.quote(binary_path)} "
+            f"--log-dir={shlex.quote(log_dir)}"
+            f"{wave_arg}"
+            f"{trace_args}"
+        )
+        ctx.logger.info(f"Running bebop verilator: {run_cmd}")
+        stdout_prefix = "bebop verilator"
+        stderr_prefix = "bebop verilator"
     run_result = stream_run_logger(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
-        stdout_prefix="bebop verilator",
-        stderr_prefix="bebop verilator",
-        env={
-            **os.environ,
-            "ARCH_CONFIG": arch_config,
-            "VSRC_PATH": vsrc_dir,
-        },
+        stdout_prefix=stdout_prefix,
+        stderr_prefix=stderr_prefix,
     )
 
     await check_result(
@@ -167,10 +190,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "verilator",
+            "backend": "rushB" if input_data.get("rushB") else "guest-elf",
             "binary": binary_path,
             "config": arch_config,
             "log_dir": log_dir,
-            "fst_dir": fst_dir,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

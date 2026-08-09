@@ -46,8 +46,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "pmctrace": body.get("pmctrace", False),
         "ctrace": body.get("ctrace", False),
         "banktrace": body.get("banktrace", False),
-        "log_dir": body.get("log_dir"),
-        "fst_dir": body.get("fst_dir"),
+        "rushB": body.get("rushB", False),
         "jobs": body.get("jobs", 16),
         "from_run_workflow": True,
     }

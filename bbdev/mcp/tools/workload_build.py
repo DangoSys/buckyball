@@ -9,12 +9,19 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_workload_build(chip: str, model: Optional[str] = None) -> str:
+    def bbdev_workload_build(
+        chip: str,
+        model: Optional[str] = None,
+        rushB: Optional[str] = None,
+    ) -> str:
         """Build workloads for a chip. POST /workload/build."""
         if e := need("chip", chip):
             return err(e)
         params: Dict[str, Any] = {"chip": chip}
         if model:
             params["model"] = model
+        if rushB:
+            if rushB not in {"bemu", "verilator"}:
+                return err("rushB must be bemu or verilator")
+            params["rushB"] = rushB
         return fmt(submit("/workload/build", params))
-

@@ -35,13 +35,14 @@ def reserve_port(
 ) -> tuple[int, socket.socket]:
     """Reserve a port by binding and holding the socket open.
 
+    Do not set SO_REUSEADDR: with it, two processes can both bind the same
+    port, then both fail when iii tries to listen. Without it, bind is exclusive.
+
     The caller must close the returned socket once the engine has taken over the port.
-    This prevents TOCTOU races when multiple bbdev instances start concurrently.
     """
     for port in _port_order(start_port, end_port, preferred_port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind((HOST, port))
             return port, sock
         except OSError:

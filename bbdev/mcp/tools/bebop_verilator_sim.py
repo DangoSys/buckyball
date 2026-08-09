@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from common import submit, err, fmt, need, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -18,8 +18,7 @@ def register(mcp):
         ctrace: bool = False,
         banktrace: bool = False,
         no_wave: bool = False,
-        log_dir: Optional[str] = None,
-        fst_dir: Optional[str] = None,
+        rushB: bool = False,
     ) -> str:
         """Run one workload on bebop-verilator. POST /bebop/verilator/sim."""
         for n, v in (("binary", binary), ("config", config)):
@@ -34,10 +33,6 @@ def register(mcp):
             "ctrace": ctrace,
             "banktrace": banktrace,
             "no-wave": no_wave,
+            "rushB": rushB,
         }
-        if log_dir:
-            params["log_dir"] = log_dir
-        if fst_dir:
-            params["fst_dir"] = fst_dir
         return fmt(submit("/bebop/verilator/sim", params))
-

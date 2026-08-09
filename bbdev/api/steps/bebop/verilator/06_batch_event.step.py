@@ -94,7 +94,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "VSRC_PATH": vsrc_dir,
     })
     nextest_cmd = (
-        f"nix develop -c cargo nextest run --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
+        f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
         "--features verilator --test test_verilator "
         f"--config-file {shlex.quote(nextest_config)} "
         f"--config={vsrc_config}"

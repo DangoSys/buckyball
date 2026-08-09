@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from common import submit, err, fmt, need, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
@@ -11,15 +11,10 @@ def register(mcp):
     def bbdev_bebop_p2e_batch(
         chip: str,
         bitstream: str,
-        build_dir: str,
         test: str,
     ) -> str:
         """Batch bebop-p2e regression. test: elf-tests|pk-tests. POST /bebop/p2e/batch."""
-        for n, v in (
-            ("chip", chip),
-            ("bitstream", bitstream),
-            ("build_dir", build_dir),
-        ):
+        for n, v in (("chip", chip), ("bitstream", bitstream)):
             if e := need(n, v):
                 return err(e)
         if test not in ("elf-tests", "pk-tests"):
@@ -30,9 +25,7 @@ def register(mcp):
                 {
                     "chip": chip,
                     "bitstream": bitstream,
-                    "build-dir": build_dir,
                     "test": test,
                 },
             )
         )
-

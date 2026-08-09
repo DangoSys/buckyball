@@ -43,11 +43,11 @@ WORKFLOW_COMMANDS = {
     },
     "workload": {
         "clean": "Clean workload output directory.",
-        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--stable]"',
+        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--stable] [--rushB <bemu|verilator>]"; without --model, --rushB builds CTest and MLIR rushB runners.',
         "tohex": "Convert all -baremetal ELF files under bb-tests/output/workloads/src to hex.",
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs for Pegasus. Args: "[--visible-hart-count <n>] [--total-hart-count <n>] [--model <name>]"',
+        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>]"',
     },
     "firesim": {
         "enumeratefpgas": "Enumerate FPGAs.",
@@ -59,23 +59,23 @@ WORKFLOW_COMMANDS = {
         "build": 'Build compiler. Args: "--chip <chip> [--stable]"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--pk] [--log-dir <dir>]"',
+        "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--pk] [--disasm] [--tool-profile] [--log-dir <dir>]"',
         "batch": 'Run Bebop bemu nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests> [--clean-before]"',
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--config <cfg> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop Verilog files. Args: "--config <cfg> [--output-dir <dir>]"',
         "build": 'Build Bebop Verilator simulation executable. Args: "--config <cfg> [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--batch] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--rushB] [--batch] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--rushB] [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--chip <chip> --config <cfg> --test <elf-tests|pk-tests> [--clean-before]"',
     },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--config <cfg> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--config <cfg> [--output-dir <dir>]"',
         "buildbitstream": 'Build Bebop P2E runtime case. Args: "--config <cfg> [--vsrc-dir <dir>] [--output-dir <dir>]"',
-        "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--multi-fpga] [--wave] [--wave-start <cycle>] [--build-dir <dir>]"',
-        "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --build-dir <dir> --test <elf-tests|pk-tests>"',
+        "runworkload": 'Run Bebop P2E workload. Args: "--image <path> --bitstream <path> [--multi-fpga] [--wave] [--wave-start <cycle>] [--itrace] [--mtrace] [--pmctrace]"',
+        "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests>"',
     },
     "dc": {
         "verilog": 'Generate DC RTL. Args: "--config <cfg> [--dir <root>]"',

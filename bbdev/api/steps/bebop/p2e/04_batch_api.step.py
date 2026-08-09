@@ -13,15 +13,14 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
 
     bitstream = body.get("bitstream", "")
-    build_dir = body.get("build-dir") or body.get("build_dir", "")
-    if not bitstream or not build_dir:
+    if not bitstream:
         return ApiResponse(
             status=400,
             body={
                 "success": False,
                 "failure": True,
                 "returncode": 400,
-                "message": "--bitstream and --build-dir parameters are required",
+                "message": "--bitstream parameter is required",
             },
         )
 
@@ -48,7 +47,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "chip": chip,
         "bitstream": bitstream,
-        "build_dir": build_dir,
         "test": test_type,
     }
     await ctx.enqueue({"topic": "bebop.p2e.batch", "data": {**data, "_trace_id": ctx.trace_id}})

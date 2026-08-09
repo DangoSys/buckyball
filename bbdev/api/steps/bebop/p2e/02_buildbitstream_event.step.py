@@ -65,7 +65,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     build_cmd = (
         f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
-        f"cargo run --features p2e -- build p2e "
+        f"cargo run --release --features p2e -- build p2e "
         f"--rtl-dir=\"{vsrc_dir}\" "
         f"--out-dir=\"{build_dir}\""
     )

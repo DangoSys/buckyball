@@ -152,7 +152,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # deliberately left in place, so runtime/DPIC changes never trigger FPGA synthesis.
     runtime_cmd = (
         f"env BEBOP_P2E_RUNTIME_ONLY=1 BEBOP_P2E_REBUILD_RUNTIME=1 "
-        f"cargo run --features p2e -- build p2e "
+        f"cargo run --release --features p2e -- build p2e "
         f"--rtl-dir=\"{vsrc_dir}\" "
         f"--out-dir=\"{build_dir}\""
     )
@@ -187,7 +187,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── Run bebop run p2e ─────────────────────────────────────────────────
     run_cmd = (
-        f"cargo run --features p2e "
+        f"cargo run --release --features p2e "
         f"--config=\"env.OUT_PATH='{build_dir}'\" "
         f"-- run p2e "
         f"--image=\"{image_path}\" "

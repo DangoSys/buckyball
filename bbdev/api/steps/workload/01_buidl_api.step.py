@@ -22,7 +22,7 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "model", "stable"}
+    allowed = {"chip", "model", "stable", "rushB"}
     unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return ApiResponse(
@@ -52,10 +52,17 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=400,
             body={"error": "Invalid parameter: stable must be a boolean flag"},
         )
+    rushb_backend = body.get("rushB")
+    if rushb_backend is not None and rushb_backend not in {"bemu", "verilator"}:
+        return ApiResponse(
+            status=400,
+            body={"error": "Invalid --rushB: expected bemu or verilator"},
+        )
     data = {
         "chip": chip,
         "model": body.get("model", ""),
         "stable": stable,
+        "rushB": rushb_backend,
     }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -40,7 +40,14 @@ config = {
 
 
 def hart_count_params(input_data: dict) -> dict:
-    allowed = {"visible-hart-count", "total-hart-count", "model", "_trace_id"}
+    allowed = {
+        "visible-hart-count",
+        "total-hart-count",
+        "model",
+        "chip",
+        "interactive",
+        "_trace_id",
+    }
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         raise ValueError(f"unknown kernel build parameter(s): {', '.join(unknown)}")
@@ -64,6 +71,13 @@ def hart_count_params(input_data: dict) -> dict:
     }
 
 
+def kernel_interactive(input_data: dict) -> bool:
+    interactive = input_data.get("interactive", False)
+    if not isinstance(interactive, bool):
+        raise ValueError("interactive must be a boolean flag")
+    return interactive
+
+
 def kernel_model(input_data: dict) -> str:
     model = input_data.get("model", "")
     if model in ("", None):
@@ -78,22 +92,52 @@ def kernel_model(input_data: dict) -> str:
     return model
 
 
-def kernel_build_dir(bbdir: str, hart_params: dict, model: str = "") -> str:
+def kernel_chip(input_data: dict, bbdir: str) -> str:
+    chip = input_data.get("chip", "")
+    if chip in ("", None):
+        return ""
+    if not isinstance(chip, str):
+        raise ValueError("chip must be a string")
+    if os.path.sep in chip or chip in {".", ".."}:
+        raise ValueError(f"invalid chip: {chip}")
+
+    chip_kernel = os.path.join(bbdir, "examples", "chips", chip, "kernel")
+    chip_init = os.path.join(chip_kernel, "overlay", "init")
+    if not os.path.isfile(chip_init):
+        raise ValueError(f"chip OS overlay init not found: {chip_init}")
+    return chip
+
+
+def kernel_build_dir(
+    bbdir: str,
+    hart_params: dict,
+    model: str = "",
+    chip: str = "",
+    interactive: bool = False,
+) -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
-    model_suffix = f"-model-{model}" if model else ""
+    suffix = ""
+    if chip:
+        suffix += f"-chip-{chip}"
+    if model:
+        suffix += f"-model-{model}"
+    if interactive:
+        suffix += "-interactive"
     if visible == 64 and total == 64:
-        return os.path.join(bbdir, "bb-tests", "build", f"kernel{model_suffix}")
-    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{model_suffix}")
+        return os.path.join(bbdir, "bb-tests", "build", f"kernel{suffix}")
+    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{suffix}")
 
 
-def fw_payload_name(hart_params: dict, model: str = "") -> str:
+def fw_payload_name(hart_params: dict, model: str = "", chip: str = "") -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
     name = "fw_payload"
     if visible != 64 or total != 64:
         name = f"{name}-v{visible}-t{total}"
-    if model:
+    if chip:
+        name = f"{name}-{chip}-pk"
+    elif model:
         name = f"{name}-{model}"
     return name
 
@@ -110,11 +154,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         hart_params = hart_count_params(input_data)
         model = kernel_model(input_data)
+        chip = kernel_chip(input_data, bbdir)
+        interactive = kernel_interactive(input_data)
+        if chip and model:
+            raise ValueError("chip and model cannot be set together")
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
-    kernel_build = kernel_build_dir(bbdir, hart_params, model)
+    kernel_build = kernel_build_dir(
+        bbdir, hart_params, model, chip, interactive=interactive
+    )
+    interactive_arg = "ON" if interactive else "OFF"
 
     # cmake configure
     configure_cmd = (
@@ -122,8 +173,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
         f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
         f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']} "
-        f"-DBUCKYBALL_KERNEL_MODEL={model}"
+        f"-DBUCKYBALL_KERNEL_MODEL={model} "
+        f"-DBUCKYBALL_KERNEL_CHIP={chip} "
+        f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg}"
     )
+    if chip:
+        chip_kernel = os.path.join(bbdir, "examples", "chips", chip, "kernel")
+        pk_toml = os.path.join(
+            bbdir, "examples", "chips", chip, "regression", "batch", "bemu", "workloads-pk.toml"
+        )
+        if not os.path.isfile(pk_toml):
+            ctx.logger.error(f"chip pk workload toml not found: {pk_toml}")
+            await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
+            return
+        configure_cmd += (
+            f" -DBUCKYBALL_CHIP_KERNEL_DIR={chip_kernel}"
+            f" -DBUCKYBALL_PK_WORKLOAD_TOML={pk_toml}"
+        )
+
     result = stream_run_logger(
         cmd=configure_cmd,
         logger=ctx.logger,
@@ -148,7 +215,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    payload_name = fw_payload_name(hart_params, model)
+    payload_name = fw_payload_name(hart_params, model, chip)
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
 

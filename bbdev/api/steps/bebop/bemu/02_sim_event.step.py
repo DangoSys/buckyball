@@ -1,10 +1,7 @@
 """
 bebop bemu event handler
 
-Runs bebop bemu (Spike-based) emulator:
-  1. Resolve binary (ELF) path
-  2. Build the selected chip's BEMU wrapper
-  3. Run BEMU with the resolved ELF
+Run BEMU either through its guest-ELF emulator or the rushB native ABI.
 """
 import os
 import shlex
@@ -81,10 +78,18 @@ def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     return None
 
 
+def is_native_host_elf(path: str) -> bool:
+    try:
+        with open(path, "rb") as binary:
+            header = binary.read(20)
+    except OSError:
+        return False
+    return header[:4] == b"\x7fELF" and header[18:20] == b"\x3e\x00"
+
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    arch_dir = f"{bbdir}/arch"
 
     chip = input_data.get("chip")
     if not chip:
@@ -123,13 +128,61 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         clean_model_trace(binary_dir)
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = input_data.get("log_dir") or f"{arch_dir}/log/{timestamp}-{binary_name}-bemu"
+    log_dir = f"{bbdir}/log/{timestamp}-bemu-{binary_name}"
     os.makedirs(log_dir, exist_ok=True)
+
+    if input_data.get("rushB"):
+        # rushB binaries are host executables. Rebuilding and co-locating the
+        # backend library keeps the ABI selection explicit and avoids sending
+        # a host ELF through Spike's guest-ELF path.
+        if not is_native_host_elf(binary_path):
+            ctx.logger.error(
+                f"--rushB requires a native x86_64 rushB runner; got guest ELF: {binary_path}"
+            )
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={"error": "rushB_requires_native_runner", "binary": binary_path},
+                trace_id=origin_tid,
+            )
+            return
+        bemu_library = bemu_cargo_manifest.parent / "target/release/libbebop_bemu.so"
+        build_cmd = shlex.join([
+            "cargo", "build", "--release", "--manifest-path", str(bemu_cargo_manifest), "--lib",
+        ])
+        copy_cmd = shlex.join([
+            "cmake", "-E", "copy_if_different", str(bemu_library), binary_dir,
+        ])
+        inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && exec {shlex.quote(binary_path)}"
+        run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
+        ctx.logger.info(f"Running rushB BEMU: {run_cmd}")
+        run_result = stream_run_logger(
+            cmd=run_cmd,
+            logger=ctx.logger,
+            cwd=bbdir,
+            stdout_prefix="rushB bemu",
+            stderr_prefix="rushB bemu",
+        )
+        await check_result(
+            ctx,
+            run_result.returncode,
+            continue_run=False,
+            extra_fields={
+                "task": "bemu",
+                "backend": "rushB",
+                "binary": binary_path,
+                "chip": chip,
+                "log_dir": log_dir,
+                "timestamp": timestamp,
+            },
+            trace_id=origin_tid,
+        )
+        return
 
     # ── Run bebop bemu ────────────────────────────────────────────────────
     cargo_args = [
         "cargo",
         "run",
+        "--release",
         "--manifest-path",
         str(bemu_cargo_manifest),
         "--",
@@ -142,6 +195,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ]
     if input_data.get("pk"):
         cargo_args.append("--pk")
+    if input_data.get("disasm"):
+        cargo_args.append("--disasm")
+    if input_data.get("tool-profile"):
+        cargo_args.append("--tool-profile")
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")

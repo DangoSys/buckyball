@@ -29,11 +29,6 @@ config = {
     "enqueues": ["bebop.verilator.sim", "bebop.verilator.run.sim"],
 }
 
-
-def configure_fast_dev_profile(env: dict) -> None:
-    env.setdefault("CARGO_INCREMENTAL", "1")
-
-
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
@@ -67,10 +62,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     jobs = input_data.get("jobs", 16)
     build_cmd = (
-        f"cargo build --bin bebop --features verilator --jobs {shlex.quote(str(jobs))}"
+        f"cargo build --release --bin bebop --features verilator --jobs {shlex.quote(str(jobs))}"
     )
     env = {**os.environ, "VSRC_PATH": vsrc_dir}
-    configure_fast_dev_profile(env)
     ctx.logger.info("Building bebop verilator ...")
     build_result = stream_run_logger(
         cmd=build_cmd,
@@ -81,7 +75,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         env=env,
     )
 
-    bebop_bin = f"{bebop_dir}/target/debug/bebop"
+    bebop_bin = f"{bebop_dir}/target/release/bebop"
     if build_result.returncode == 0:
         try:
             write_build_marker(bebop_dir, arch_config, vsrc_dir, bebop_bin)
