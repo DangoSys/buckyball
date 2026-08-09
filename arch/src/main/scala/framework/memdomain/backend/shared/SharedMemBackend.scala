@@ -33,19 +33,21 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
   for (mt <- mtraces) {
-    mt.io.clock     := clock
-    mt.io.reset     := reset.asBool
-    mt.io.is_write  := 0.U
-    mt.io.is_shared := 0.U
-    mt.io.channel   := 0.U
-    mt.io.hart_id   := 0.U
-    mt.io.vbank_id  := 0.U
-    mt.io.pbank_id  := 0.U
-    mt.io.group_id  := 0.U
-    mt.io.addr      := 0.U
-    mt.io.data_lo   := 0.U
-    mt.io.data_hi   := 0.U
-    mt.io.enable    := false.B
+    mt.io.clock      := clock
+    mt.io.reset      := reset.asBool
+    mt.io.is_write   := 0.U
+    mt.io.is_shared  := 0.U
+    mt.io.channel    := 0.U
+    mt.io.hart_id    := 0.U
+    mt.io.rob_id     := 0.U
+    mt.io.vbank_id   := 0.U
+    mt.io.pbank_id   := 0.U
+    mt.io.group_id   := 0.U
+    mt.io.addr       := 0.U
+    mt.io.write_mask := 0.U
+    mt.io.data_lo    := 0.U
+    mt.io.data_hi    := 0.U
+    mt.io.enable     := false.B
   }
 
   // -----------------------------------------------------------------------------
@@ -126,6 +128,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
     accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
+    accPipes(i).io.mem_req.rob_id    := io.mem_req(i).rob_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -205,25 +208,28 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Connect AccPipe and Banks
   // -----------------------------------------------------------------------------
   private def emitTrace(
-    ch:      Int,
-    isWrite: UInt,
-    pbankId: UInt,
-    addr:    UInt,
-    dataLo:  UInt,
-    dataHi:  UInt,
-    en:      Bool
+    ch:        Int,
+    isWrite:   UInt,
+    pbankId:   UInt,
+    addr:      UInt,
+    writeMask: UInt,
+    dataLo:    UInt,
+    dataHi:    UInt,
+    en:        Bool
   ): Unit = {
-    mtraces(ch).io.is_write  := isWrite
-    mtraces(ch).io.is_shared := io.mem_req(ch).is_shared.asUInt
-    mtraces(ch).io.channel   := ch.U
-    mtraces(ch).io.hart_id   := io.mem_req(ch).hart_id
-    mtraces(ch).io.vbank_id  := io.mem_req(ch).bank_id
-    mtraces(ch).io.pbank_id  := pbankId
-    mtraces(ch).io.group_id  := io.mem_req(ch).group_id
-    mtraces(ch).io.addr      := addr
-    mtraces(ch).io.data_lo   := dataLo
-    mtraces(ch).io.data_hi   := dataHi
-    mtraces(ch).io.enable    := en
+    mtraces(ch).io.is_write   := isWrite
+    mtraces(ch).io.is_shared  := io.mem_req(ch).is_shared.asUInt
+    mtraces(ch).io.channel    := ch.U
+    mtraces(ch).io.hart_id    := io.mem_req(ch).hart_id
+    mtraces(ch).io.rob_id     := io.mem_req(ch).rob_id
+    mtraces(ch).io.vbank_id   := io.mem_req(ch).bank_id
+    mtraces(ch).io.pbank_id   := pbankId
+    mtraces(ch).io.group_id   := io.mem_req(ch).group_id
+    mtraces(ch).io.addr       := addr
+    mtraces(ch).io.write_mask := writeMask
+    mtraces(ch).io.data_lo    := dataLo
+    mtraces(ch).io.data_hi    := dataHi
+    mtraces(ch).io.enable     := en
   }
 
   for (i <- 0 until totalChannel) {
@@ -244,18 +250,19 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     // Memory trace: read request
     when(io.mem_req(i).read.req.fire) {
-      emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, true.B)
+      emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, 0.U, true.B)
     }
 
-    // Memory trace: write request
-    when(io.mem_req(i).write.req.fire) {
+    // Arrival trace: observe acceptance at the selected shared SPM SRAM port.
+    when(accPipes(i).io.sramWrite.req.fire) {
       emitTrace(
         i,
         1.U,
         tracePbankId,
-        io.mem_req(i).write.req.bits.addr,
-        io.mem_req(i).write.req.bits.data(63, 0),
-        io.mem_req(i).write.req.bits.data(127, 64),
+        accPipes(i).io.sramWrite.req.bits.addr,
+        accPipes(i).io.sramWrite.req.bits.mask.asUInt,
+        accPipes(i).io.sramWrite.req.bits.data(63, 0),
+        accPipes(i).io.sramWrite.req.bits.data(127, 64),
         true.B
       )
     }

@@ -94,6 +94,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     io.shared_mem_req(i).group_id  := 0.U
     io.shared_mem_req(i).is_shared := false.B
     io.shared_mem_req(i).hart_id   := 0.U
+    io.shared_mem_req(i).rob_id    := 0.U
 
     io.shared_mem_req(i).read.req.valid  := false.B
     io.shared_mem_req(i).read.req.bits   := DontCare
@@ -151,6 +152,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     privateBackend.io.mem_req(i).group_id  := io.mem_req(i).group_id
     privateBackend.io.mem_req(i).is_shared := useSharedReq
     privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
+    privateBackend.io.mem_req(i).rob_id    := io.mem_req(i).rob_id
 
     // Read request route
     privateBackend.io.mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && !useSharedReq
@@ -169,6 +171,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       io.shared_mem_req(i).group_id  := io.mem_req(i).group_id
       io.shared_mem_req(i).is_shared := useSharedReq
       io.shared_mem_req(i).hart_id   := io.mem_req(i).hart_id
+      io.shared_mem_req(i).rob_id    := io.mem_req(i).rob_id
 
       io.shared_mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && useSharedReq
       io.shared_mem_req(i).read.req.bits  := io.mem_req(i).read.req.bits

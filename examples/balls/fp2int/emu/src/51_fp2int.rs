@@ -34,6 +34,8 @@ impl Instruction for Fp2Int {
 
         match (sc.cols, dc.cols) {
             (1, 1) => {
+                // One SRAM beat contains four FP32 values and also four INT32
+                // results. `iter` counts beats, not 16-element matrix rows.
                 let ps = pbank(ctx.bank_map, src);
                 let pd = pbank(ctx.bank_map, dst);
                 for i in 0..depth {

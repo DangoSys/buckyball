@@ -43,24 +43,25 @@ impl Instruction for GemminiComputePreloaded {
 
         if df == 1 {
             let b = ws_b.expect("gemmini_compute_preloaded: WS missing preload");
-            let a = read_i8_nn(ctx.banks, pa, n);
-            let d = read_i32_nn(ctx.banks, pb, n);
+            let a = read_i8_nn(&ctx.banks, pa, n);
+            let d = read_i32_nn(&ctx.banks, pb, n);
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
                 for j in 0..n {
                     let mut acc = d[i][j];
                     for k in 0..n {
-                        acc += a[i][k] as i32 * b[k][j] as i32;
+                        let av = if a_transpose { a[k][i] } else { a[i][k] };
+                        acc += av as i32 * b[k][j] as i32;
                     }
-                    c[i][j] = acc;
+                    c[i][j] = apply_in_shift(acc, shift);
                 }
             }
-            write_i32_nn_groups(ctx.banks, &pw, &c, n);
+            write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);
         } else {
             // OS mode: per RTL GemminiExCtrlPreloadStates, preload feeds D=0 to
             // mesh in OS mode, so the accumulator starts at zero.
-            let a = read_i8_nn(ctx.banks, pa, n);
-            let b = read_i8_nn(ctx.banks, pb, n);
+            let a = read_i8_nn(&ctx.banks, pa, n);
+            let b = read_i8_nn(&ctx.banks, pb, n);
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
                 for j in 0..n {
@@ -73,7 +74,7 @@ impl Instruction for GemminiComputePreloaded {
                     c[i][j] = apply_in_shift(acc, shift);
                 }
             }
-            write_i32_nn_groups(ctx.banks, &pw, &c, n);
+            write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);
         }
         0
     }

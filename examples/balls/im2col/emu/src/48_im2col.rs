@@ -10,6 +10,49 @@ const TILE: usize = 16;
 
 pub struct Im2col;
 
+#[derive(Clone, Copy)]
+enum Shape {
+    Square {
+        iter: usize,
+        ksize: usize,
+        stride: usize,
+        padding: usize,
+    },
+    Legacy {
+        krow: usize,
+        kcol: usize,
+        inrow: usize,
+        incol: usize,
+        startrow: usize,
+        startcol: usize,
+        col_step: usize,
+    },
+}
+
+fn decode_shape(xs1: u64, xs2: u64) -> Shape {
+    let iter = rs1_iter(xs1) as usize;
+    if iter != 0 {
+        Shape::Square {
+            iter,
+            ksize: (xs2 & 0xff) as usize,
+            stride: ((xs2 >> 8) & 0xff) as usize,
+            padding: ((xs2 >> 16) & 0xff) as usize,
+        }
+    } else {
+        // Workloads emitted before the square-window API put the complete
+        // rectangular shape in rs2 and left BB_ITER clear.
+        Shape::Legacy {
+            kcol: (xs2 & 0xff) as usize,
+            krow: ((xs2 >> 8) & 0xff) as usize,
+            incol: ((xs2 >> 16) & 0xff) as usize,
+            inrow: ((xs2 >> 24) & 0xff) as usize,
+            startcol: ((xs2 >> 32) & 0xff) as usize,
+            startrow: ((xs2 >> 40) & 0xff) as usize,
+            col_step: ((xs2 >> 48) & 0xff) as usize,
+        }
+    }
+}
+
 impl Instruction for Im2col {
     const FUNCT: u32 = 48;
 
@@ -27,10 +70,61 @@ impl Instruction for Im2col {
             panic!("im2col: op1 and wr must differ");
         }
 
-        let iter = rs1_iter(xs1) as usize;
-        let ksize = (xs2 & 0xFF) as usize;
-        let stride = ((xs2 >> 8) & 0xFF) as usize;
-        let padding = ((xs2 >> 16) & 0xFF) as usize;
+        if let Shape::Legacy {
+            krow,
+            kcol,
+            inrow,
+            incol,
+            startrow,
+            startcol,
+            col_step,
+        } = decode_shape(xs1, xs2)
+        {
+            if krow == 0 || kcol == 0 || inrow == 0 || incol == 0 || col_step == 0 {
+                panic!("im2col: invalid legacy shape (zero dim)");
+            }
+            if inrow < krow || incol < kcol {
+                panic!("im2col: kernel larger than input");
+            }
+            let row_end = inrow - krow;
+            let col_end = incol - kcol;
+            if startrow > row_end || startcol > col_end {
+                panic!("im2col: invalid start window");
+            }
+
+            let po = pbank(ctx.bank_map, op1);
+            let pw = pbank(ctx.bank_map, wr);
+            let mut output = Vec::new();
+            for r in startrow..=row_end {
+                for c in (startcol..=col_end).step_by(col_step) {
+                    for kr in 0..krow {
+                        for kc in 0..kcol {
+                            let src = (r + kr) * incol + c + kc;
+                            output.push(
+                                *ctx.banks[po].get(src).unwrap_or_else(|| {
+                                    panic!("im2col: legacy input range src={src}")
+                                }),
+                            );
+                        }
+                    }
+                }
+            }
+            if output.len() > ctx.banks[pw].len() {
+                panic!("im2col: legacy output range size={}", output.len());
+            }
+            ctx.banks[pw][..output.len()].copy_from_slice(&output);
+            return 0;
+        }
+
+        let Shape::Square {
+            iter,
+            ksize,
+            stride,
+            padding,
+        } = decode_shape(xs1, xs2)
+        else {
+            unreachable!()
+        };
 
         if iter == 0 || iter > MAX_ITER {
             panic!("im2col: iter out of range 1..={MAX_ITER} (got {iter})");
@@ -118,12 +212,48 @@ impl Instruction for Im2col {
     }
 
     fn latency(xs1: u64, xs2: u64) -> u64 {
-        let iter = rs1_iter(xs1);
-        let ksize = xs2 & 0xFF;
-        let stride = (xs2 >> 8) & 0xFF;
-        let padding = (xs2 >> 16) & 0xFF;
+        if let Shape::Legacy {
+            krow,
+            kcol,
+            inrow,
+            incol,
+            startrow,
+            startcol,
+            col_step,
+        } = decode_shape(xs1, xs2)
+        {
+            if krow == 0 || kcol == 0 || inrow < krow || incol < kcol || col_step == 0 {
+                return 16;
+            }
+            let row_end = inrow - krow;
+            let col_end = incol - kcol;
+            if startrow > row_end || startcol > col_end {
+                return 16;
+            }
+            let windows =
+                (row_end - startrow + 1).saturating_mul((col_end - startcol) / col_step + 1);
+            return windows.saturating_mul(krow).saturating_mul(kcol).max(16) as u64;
+        }
 
-        if iter == 0 || iter > MAX_ITER as u64 || ksize == 0 || ksize > MAX_KSIZE as u64 || stride == 0
+        let Shape::Square {
+            iter,
+            ksize,
+            stride,
+            padding,
+        } = decode_shape(xs1, xs2)
+        else {
+            unreachable!()
+        };
+        let iter = iter as u64;
+        let ksize = ksize as u64;
+        let stride = stride as u64;
+        let padding = padding as u64;
+
+        if iter == 0
+            || iter > MAX_ITER as u64
+            || ksize == 0
+            || ksize > MAX_KSIZE as u64
+            || stride == 0
             || padding > MAX_PADDING as u64
         {
             return 16;
