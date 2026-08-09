@@ -10,7 +10,7 @@ from common import balldomain_path, err, fmt, need, validate_toml
 def register(mcp):
     @mcp.tool()
     def validate(chip: str = "toy", balldomain: Optional[str] = None) -> str:
-        """Validate chip balldomain TOML registration."""
+        """Validate the compiler Core's BallDomain registration for a Chip."""
         if e := need("chip", chip):
             return err(e)
         try:
@@ -19,4 +19,3 @@ def register(mcp):
             return fmt(
                 {"passed": False, "success": False, "failure": True, "error": str(ex)}
             )
-

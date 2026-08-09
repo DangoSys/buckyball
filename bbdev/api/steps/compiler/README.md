@@ -10,12 +10,14 @@ Compiler build workflow in the Buckyball framework for building the Buckyball co
 **Function**: Build Buckyball compiler
 
 **Parameters**:
-- `chip`: compiler chip package used as `BUDDY_EXTERNAL_DIALECTS_DIR`; valid values include `toy`, `goban`, and `pebble`
+- `core`: direct compiler Core target, such as `toy`, `goban`, or `pebble`
+- `chip`: Chip runtime target; its `chip.toml` selects the default compiler Core. Specify exactly one of `core` or `chip`.
 - `stable`: optional boolean flag; for `pebble`, build the compiler package that can use the stable LLVM backend lowering path
 
 **Example**:
 ```bash
 bbdev compiler --build '--chip toy'
+bbdev compiler --build '--core goban'
 bbdev compiler --build '--chip pebble --stable'
 ```
 

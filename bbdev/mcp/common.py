@@ -291,17 +291,30 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     if not chip_root.is_dir():
         raise FileNotFoundError(f"chip does not exist: {chip_root}")
 
-    domains = chip_root / "configs" / "tiles" / "cores" / "balldomains"
-    cores = chip_root / "configs" / "tiles" / "cores"
+    chip_manifest = chip_root / "chip.toml"
+    if not chip_manifest.is_file():
+        raise FileNotFoundError(f"chip manifest does not exist: {chip_manifest}")
+    chip_config = _load_toml(chip_manifest).get("chip")
+    if not isinstance(chip_config, dict):
+        raise ValueError(f"missing [chip] table: {chip_manifest}")
+    core_name = chip_config.get("compilerCore")
+    if not isinstance(core_name, str) or not core_name:
+        raise ValueError(f"chip manifest missing compilerCore: {chip_manifest}")
+
+    core_root = REPO / "examples" / "cores" / core_name
+    core_manifest = core_root / "manifest.toml"
+    if not core_manifest.is_file():
+        raise FileNotFoundError(f"core manifest does not exist: {core_manifest}")
+    domains = core_root / "configs" / "balldomains"
+    core_config = core_root / "core.toml"
 
     if balldomain is None:
-        default = cores / "default.toml"
-        if not default.is_file():
-            raise FileNotFoundError(f"missing {default}; pass balldomain= explicitly")
-        rel = _load_toml(default).get("balldomain")
+        if not core_config.is_file():
+            raise FileNotFoundError(f"missing {core_config}; pass balldomain= explicitly")
+        rel = _load_toml(core_config).get("balldomain")
         if not isinstance(rel, str) or not rel:
-            raise ValueError(f"cores/default.toml missing balldomain=: {default}")
-        path = (cores / rel).resolve()
+            raise ValueError(f"core.toml missing balldomain=: {core_config}")
+        path = (core_root / rel).resolve()
     else:
         raw = Path(balldomain)
         if raw.is_absolute():
@@ -309,7 +322,7 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
         elif balldomain.endswith(".toml"):
             candidates = [
                 domains / raw.name,
-                cores / balldomain,
+                core_root / balldomain,
                 chip_root / balldomain,
             ]
             path = next(

@@ -11,6 +11,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
+from utils.chip import resolve_chip_compiler_core
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
@@ -131,6 +132,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    try:
+        core_package = resolve_chip_compiler_core(bbdir, chip)
+    except ValueError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_chip_manifest", "chip": chip},
+            trace_id=origin_tid,
+        )
+        return
     model = input_data.get("model", "")
     stable = input_data.get("stable", False)
     rushb_backend = input_data.get("rushB")
@@ -185,11 +196,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(build_dir, exist_ok=True)
 
     chip_arg = f"-DBUCKYBALL_WORKLOAD_CHIP={shlex.quote(chip)}"
+    core_arg = f"-DBUCKYBALL_WORKLOAD_CORE={shlex.quote(core_package.name)}"
     stable_arg = "-DBUCKYBALL_STABLE=ON" if stable else "-DBUCKYBALL_STABLE=OFF"
     ninja_target = f" {shlex.quote(target)}" if target else ""
     inner = (
         f"cd {shlex.quote(build_dir)} && "
-        f"cmake -G Ninja {chip_arg} {stable_arg} "
+        f"cmake -G Ninja {chip_arg} {core_arg} {stable_arg} "
         f"-DPython3_EXECUTABLE=\"$(which python3)\" .. && "
         f"ninja -j{os.cpu_count()}{ninja_target}"
     )
