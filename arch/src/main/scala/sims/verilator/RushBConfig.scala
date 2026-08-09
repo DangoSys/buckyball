@@ -3,8 +3,11 @@ package sims.verilator
 import org.chipsalliance.cde.config.Config
 import framework.system.core.accelerator.BuckyballRushBKey
 
-/** Selects the DPI rushB command source for a dedicated Verilator build. */
+/** DPI rushB Verilator build. Broadcast coherence keeps host DRAM staging coherent with DMA. */
 class WithBuckyballRushB
-    extends Config((site, here, up) => {
-      case BuckyballRushBKey => true
-    })
+    extends Config(
+      new chipyard.config.WithBroadcastManager ++
+        new Config((site, here, up) => {
+          case BuckyballRushBKey => true
+        })
+    )
