@@ -97,8 +97,9 @@ function(add_buckyball_rushb_native TARGET_NAME)
     foreach(RUSHB_INCLUDE_DIR ${ARG_INCLUDE_DIRS})
       list(APPEND RUSHB_INCLUDE_ARGS -I${RUSHB_INCLUDE_DIR})
     endforeach()
+    set(RUSHB_INSTALLED ${RUSHB_OUTPUT_DIR}/${RUSHB_TARGET})
     add_custom_command(
-      OUTPUT ${RUSHB_BINARY}
+      OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_BUILD_DIR}
       COMMAND ${RUSHB_COMPILER} -no-pie ${RUSHB_STANDARD} -O2 -DBUCKYBALL_RUSHB
               ${RUSHB_INCLUDE_ARGS}
@@ -107,13 +108,13 @@ function(add_buckyball_rushb_native TARGET_NAME)
               -Wl,-rpath,${RUSHB_OUTPUT_ROOT} -o ${RUSHB_BINARY}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_DIR}
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RUSHB_BINARY}
-              ${RUSHB_OUTPUT_DIR}/${RUSHB_TARGET}
+              ${RUSHB_INSTALLED}
       DEPENDS ${ARG_SOURCES} ${ARG_DEPENDS}
               ${BUCKYBALL_REPO_ROOT}/compiler/include/buckyball/rushb.h
               ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c
       COMMENT "Building rushB ${RUSHB_BACKEND}: ${TARGET_NAME}"
       VERBATIM)
-    add_custom_target(${RUSHB_TARGET} DEPENDS ${RUSHB_BINARY})
+    add_custom_target(${RUSHB_TARGET} DEPENDS ${RUSHB_BINARY} ${RUSHB_INSTALLED})
     add_dependencies(${RUSHB_TARGET} ${RUSHB_OUTPUT_ROOT_TARGET})
     add_dependencies(${RUSHB_TARGET} ${RUSHB_RUNTIME_TARGET})
     add_dependencies(rushB-${RUSHB_BACKEND}-workloads-build ${RUSHB_TARGET})
