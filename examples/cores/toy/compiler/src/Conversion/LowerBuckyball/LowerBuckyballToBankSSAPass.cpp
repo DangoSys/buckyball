@@ -4,6 +4,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Pass/Pass.h"
@@ -27,8 +28,9 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<arith::ArithDialect, memref::MemRefDialect, scf::SCFDialect,
-                    ::buddy::buckyball::BuckyballDialect>();
+    registry
+        .insert<arith::ArithDialect, memref::MemRefDialect, scf::SCFDialect,
+                linalg::LinalgDialect, ::buddy::buckyball::BuckyballDialect>();
   }
 
   void runOnOperation() override {

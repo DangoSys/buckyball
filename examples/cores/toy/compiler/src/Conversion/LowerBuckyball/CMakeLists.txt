@@ -11,6 +11,7 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   AssignPhysicalBanksPass.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
+  MemTransposeToBankSSAPatterns.cpp
   Patterns/ToyAssignPhysicalBankPatterns.cpp
   Patterns/ToyLowerBuckyballToBankSSAPatterns.cpp
   Patterns/ToyLowerBuckyballToLLVMPatterns.cpp

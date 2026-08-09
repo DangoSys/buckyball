@@ -235,7 +235,12 @@ function(add_buckyball_ctest SOURCE_FILE)
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_multicore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_singlecore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-  if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
+  set(_rushb_ok TRUE)
+  if(_stem MATCHES "^tlb_" OR _stem STREQUAL "test_vsetvli")
+    set(_rushb_ok FALSE)
+  endif()
+  if(_rushb_ok AND
+     DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
      DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
     add_buckyball_rushb_native(${TEST_NAME}
       OUTPUT_SUBDIR src/CTest/rushB

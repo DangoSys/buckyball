@@ -15,6 +15,7 @@ void populateToyAssignPhysicalBankPatterns(RewritePatternSet &patterns,
 void populateToyLowerBuckyballToLLVMPatterns(RewritePatternSet &patterns);
 void configureToyLowerBuckyballToLLVMTarget(LLVMConversionTarget &target);
 void populateToyLowerBuckyballToBankSSAPatterns(RewritePatternSet &patterns);
+void populateToyMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
 
 void populateVectorAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);

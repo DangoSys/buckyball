@@ -16,8 +16,6 @@
 
 #include "Conversion/LowerTileToBuckyball/LowerTileToBuckyball.h"
 
-#include <algorithm>
-
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -34,25 +32,14 @@
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
 
-#include "Utils/BankUtils.h"
-
 using namespace mlir;
 using namespace ::buddy::buckyball;
 using namespace ::buddy::tile;
 namespace tile = ::buddy::tile;
-using mlir::buddy::ceilDiv;
 using mlir::buddy::kDefaultBankWidthBytes;
-using mlir::buddy::kMatmulTile;
 using mlir::buddy::populateMatrixTileMatMulPatterns;
 
 namespace {
-
-static size_t elemsPerBankRow(Type elemType, size_t bankWidthBytes) {
-  unsigned bitWidth = elemType.getIntOrFloatBitWidth();
-  if (bitWidth == 0 || bitWidth % 8 != 0)
-    return 0;
-  return bankWidthBytes / (bitWidth / 8);
-}
 
 static Value cstF32(OpBuilder &b, Location loc, float v) {
   return b.create<arith::ConstantOp>(loc, b.getF32Type(), b.getF32FloatAttr(v));
@@ -112,126 +99,28 @@ static Value buildQuantScale(PatternRewriter &rewriter, Location loc,
 
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
 public:
-  explicit TileTransposeLowering(MLIRContext *context, int64_t bankWidthBytes,
-                                 int64_t /*bankDepth*/, int64_t bankNum)
-      : OpRewritePattern(context), bankWidthBytes(bankWidthBytes),
-        bankNum(bankNum) {}
+  using OpRewritePattern::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(tile::TileTransposeOp tileTransposeOp,
+  LogicalResult matchAndRewrite(tile::TileTransposeOp op,
                                 PatternRewriter &rewriter) const override {
-    Location loc = tileTransposeOp.getLoc();
+    auto inputType = dyn_cast<MemRefType>(op.getAMemArray().getType());
+    auto outputType = dyn_cast<MemRefType>(op.getBMemArray().getType());
+    if (!inputType || !outputType || !inputType.hasStaticShape() ||
+        !outputType.hasStaticShape())
+      return op.emitError("requires static input and output memrefs");
+    if (inputType.getRank() != 2 || outputType.getRank() != 2)
+      return op.emitError("requires rank-2 memrefs");
+    if (outputType.getShape()[0] != inputType.getShape()[1] ||
+        outputType.getShape()[1] != inputType.getShape()[0])
+      return op.emitError("output shape must transpose the input shape");
+    if (inputType.getElementType() != outputType.getElementType())
+      return op.emitError("input/output element types must match");
 
-    Value inputMemArray = tileTransposeOp.getAMemArray();
-    Value outputMemArray = tileTransposeOp.getBMemArray();
-
-    auto inputType = cast<MemRefType>(inputMemArray.getType());
-    auto outputType = cast<MemRefType>(outputMemArray.getType());
-    auto inShape = inputType.getShape();
-    auto outShape = outputType.getShape();
-
-    size_t Rows = inShape[inShape.size() - 2];
-    size_t Cols = inShape[inShape.size() - 1];
-
-    if (outShape[outShape.size() - 2] != (int64_t)Cols ||
-        outShape[outShape.size() - 1] != (int64_t)Rows)
-      return tileTransposeOp.emitError(
-          "Output shape must be transposed of input shape");
-
-    size_t elemsPerRow =
-        elemsPerBankRow(inputType.getElementType(), bankWidthBytes);
-    if (elemsPerRow == 0)
-      return tileTransposeOp.emitError("unsupported transpose element type");
-    if (bankNum < 2)
-      return tileTransposeOp.emitError("transpose requires bank_num >= 2");
-
-    // src and dst each take nGroups banks; keep 2 * nGroups <= bankNum.
-    size_t maxGroups = (size_t)bankNum / 2;
-    size_t maxColsByBanks = maxGroups * elemsPerRow;
-    constexpr size_t kTransposeRows = kMatmulTile;
-    constexpr size_t kMaxTransposeCols = 64;
-
-    size_t colTileSize = std::min({Cols, kMaxTransposeCols, maxColsByBanks});
-    colTileSize = (colTileSize / elemsPerRow) * elemsPerRow;
-    if (colTileSize == 0)
-      return tileTransposeOp.emitError(
-          "transpose tile needs more physical banks than available");
-
-    size_t rowTileNum = ceilDiv(Rows, kTransposeRows);
-    size_t colTileNum = ceilDiv(Cols, colTileSize);
-
-    for (size_t r0 = 0; r0 < rowTileNum; r0++) {
-      for (size_t c0 = 0; c0 < colTileNum; c0++) {
-        size_t rStart = r0 * kTransposeRows;
-        size_t cStart = c0 * colTileSize;
-        size_t rLen = std::min(kTransposeRows, Rows - rStart);
-        size_t cLen = std::min(colTileSize, Cols - cStart);
-        size_t rLenPadded = (rLen < kTransposeRows) ? kTransposeRows : rLen;
-
-        Value inTile = rewriter.create<memref::SubViewOp>(
-            loc, inputMemArray,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(rStart),
-                                      rewriter.getIndexAttr(cStart)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(rLen),
-                                      rewriter.getIndexAttr(cLen)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-        Value outTile = rewriter.create<memref::SubViewOp>(
-            loc, outputMemArray,
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(cStart),
-                                      rewriter.getIndexAttr(rStart)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(cLen),
-                                      rewriter.getIndexAttr(rLen)},
-            SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
-                                      rewriter.getIndexAttr(1)});
-
-        if (cLen % elemsPerRow != 0)
-          return tileTransposeOp.emitError(
-              "transpose tile width must be a multiple of bank row elems");
-
-        int64_t nGroups = (int64_t)(cLen / elemsPerRow);
-        int64_t elemBits =
-            (int64_t)inputType.getElementType().getIntOrFloatBitWidth();
-        if (elemBits != 8 && elemBits != 32)
-          return tileTransposeOp.emitError(
-              "transpose only supports elem_bits 8 or 32");
-        if (nGroups * 2 > bankNum)
-          return tileTransposeOp.emitError(
-              "transpose tile needs more physical banks than available");
-
-        Value srcBank =
-            rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-        srcBank.getDefiningOp()->setAttr("col",
-                                         rewriter.getI64IntegerAttr(nGroups));
-        Value dstBank =
-            rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
-        dstBank.getDefiningOp()->setAttr("col",
-                                         rewriter.getI64IntegerAttr(nGroups));
-
-        int64_t depth = (int64_t)rLenPadded;
-        Value srcBankAfterMvin =
-            mvinBank(rewriter, loc, inTile, srcBank, depth);
-
-        Value iterVal = createI64Const(rewriter, loc, rLenPadded);
-        Value elemBitsVal = createI64Const(rewriter, loc, elemBits);
-        Value dstBankAfterTranspose = rewriter.create<BankTransposeOp>(
-            loc, dstBank.getType(), srcBankAfterMvin, dstBank, iterVal,
-            elemBitsVal);
-
-        int64_t outDepth = (int64_t)rLenPadded;
-        mvoutBank(rewriter, loc, outTile, dstBankAfterTranspose, outDepth);
-
-        releaseBank(rewriter, loc, srcBankAfterMvin);
-        releaseBank(rewriter, loc, dstBankAfterTranspose);
-      }
-    }
-
-    rewriter.eraseOp(tileTransposeOp);
+    rewriter.create<MemTransposeOp>(op.getLoc(), op.getAMemArray(),
+                                    op.getBMemArray());
+    rewriter.eraseOp(op);
     return success();
   }
-
-private:
-  int64_t bankWidthBytes;
-  int64_t bankNum;
 };
 
 class TileConv2dLowering : public OpRewritePattern<tile::TileConv2dOp> {
@@ -363,8 +252,7 @@ private:
 void populateToyLocalTilePatterns(RewritePatternSet &patterns,
                                   int64_t bankWidthBytes, int64_t bankDepth,
                                   int64_t bankNum) {
-  patterns.add<TileTransposeLowering>(patterns.getContext(), bankWidthBytes,
-                                      bankDepth, bankNum);
+  patterns.add<TileTransposeLowering>(patterns.getContext());
   patterns.add<TileConv2dLowering>(patterns.getContext(), bankWidthBytes,
                                    bankDepth, bankNum);
 }

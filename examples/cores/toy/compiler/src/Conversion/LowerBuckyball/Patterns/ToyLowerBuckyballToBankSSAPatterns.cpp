@@ -287,4 +287,5 @@ public:
 void mlir::buddy::populateToyLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
   patterns.add<MatrixMatmulToBankSSAPattern>(patterns.getContext());
+  populateToyMemTransposeToBankSSAPatterns(patterns);
 }
