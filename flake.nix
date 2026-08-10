@@ -11,7 +11,11 @@
       (system:
         let
           overlay = import ./scripts/nix/overlay.nix;
-          pkgs = import nixpkgs { overlays = [ overlay ]; inherit system; };
+          pkgs = import nixpkgs {
+            overlays = [ overlay ];
+            inherit system;
+            config.allowUnfree = true;
+          };
         in
         {
           legacyPackages = pkgs;
@@ -105,6 +109,10 @@
               mosoo.bun
               mosoo.just
               mosoo.workerd
+
+              # CUDA toolkit (12.8, matches host driver) + host g++-13
+              cuda.cudatoolkit
+              cuda.gcc13
             ];
           };
 
@@ -161,6 +169,9 @@
 
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
+
+              export CUDA_HOME="${pkgs.cuda.cudatoolkit}"
+              export CPATH="''${CUDA_HOME}/include''${CPATH:+:$CPATH}"
 
               # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
               if [ -z "$NIX_QUIET" ]; then

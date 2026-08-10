@@ -13,4 +13,5 @@ final: prev:
   tools = final.callPackage ./build-env-tools.nix { };
   kernel = final.callPackage ./build-env-kernel.nix { };
   mosoo = final.callPackage ./build-env-mosoo.nix { };
+  cuda = final.callPackage ./build-env-cuda.nix { };
 }

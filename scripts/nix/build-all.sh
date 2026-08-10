@@ -25,12 +25,15 @@ usage() {
   echo "Options"
   echo "  --help -h     : Display this message"
   echo "  --skip -s N   : Skip step N in the list above. Use multiple times to skip multiple steps ('-s N -s M ...')."
+  echo "  --nv          : Enable NVPTX + CUDA runner (requires CUDA_HOME. We install CUDA in nix store, and you need to make \
+                          sure CUDA driver is installed on your system.)"
   exit "$1"
 }
 
 SKIP_LIST=()
 VERBOSE_FLAG=""
 INSTALL_IN_NIX=0
+WITH_NV=0
 
 while [ "$1" != "" ];
 do
@@ -45,6 +48,8 @@ do
       SKIP_LIST+=(${1}) ;;
     --install-in-nix)
       INSTALL_IN_NIX=1 ;;
+    --nv)
+      WITH_NV=1 ;;
     * )
       echo "Error: invalid option $1" >&2
       usage 1 ;;
@@ -85,6 +90,7 @@ if [ "${INSTALL_IN_NIX}" != "1" ]; then
   for skip in "${SKIP_LIST[@]}"; do
     SKIP_ARGS="${SKIP_ARGS} -s ${skip}"
   done
+  [ "${WITH_NV}" = "1" ] && SKIP_ARGS="${SKIP_ARGS} --nv"
   exec nix develop --command bash ${BBDIR}/scripts/nix/build-all.sh --install-in-nix ${SKIP_ARGS} ${VERBOSE_FLAG}
 fi
 
@@ -104,25 +110,26 @@ if run_step "2"; then
   cmake -G Ninja -S llvm/llvm -B llvm/build \
     -DLLVM_ENABLE_PROJECTS="mlir;clang" \
     -DLLVM_ENABLE_RUNTIMES="openmp" \
-    -DLLVM_TARGETS_TO_BUILD="host;RISCV" \
+    -DLLVM_TARGETS_TO_BUILD="host;RISCV$([ "${WITH_NV}" = "1" ] && echo ';NVPTX')" \
+    $([ "${WITH_NV}" = "1" ] && echo "-DMLIR_ENABLE_CUDA_RUNNER=ON -DCMAKE_CUDA_COMPILER=$CUDA_HOME/bin/nvcc -DCUDAToolkit_ROOT=$CUDA_HOME -DCMAKE_CUDA_HOST_COMPILER=$(command -v g++-13)") \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DOPENMP_ENABLE_LIBOMPTARGET=OFF \
     -DLIBOMP_LIBFLAGS=-lrt \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
     -DPython3_EXECUTABLE="$(which python3)" \
-    -DPython_EXECUTABLE="$(which python3)"
+    -DPython_EXECUTABLE="$(which python)"
   ninja -C llvm/build #check-clang check-mlir check-openmp
 
   cmake -G Ninja -S . -B build \
-    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/examples/cores/toy/compiler \
+    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/examples/chips/toy/compiler \
     -DMLIR_DIR=$PWD/llvm/build/lib/cmake/mlir \
     -DLLVM_DIR=$PWD/llvm/build/lib/cmake/llvm \
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
     -DPython3_EXECUTABLE="$(which python3)" \
-    -DPython_EXECUTABLE="$(which python3)"
+    -DPython_EXECUTABLE="$(which python)"
   ninja -C build # check-buddy
 fi
 

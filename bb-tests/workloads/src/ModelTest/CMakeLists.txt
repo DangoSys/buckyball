@@ -20,6 +20,8 @@ if(NOT DEFINED MODEL)
   set(MODEL_YOLO26 ON)
   set(MODEL_BUDDYNEXT ON)
   set(MODEL_GEMMA4 ON)
+  set(MODEL_MINIMAX_H3_FL2VA ON)
+  set(MODEL_MINIMAX_H3_REF2VA ON)
 endif()
 
 # EXCLUDE_FROM_ALL keeps e2e targets out of the default `ninja` build but
