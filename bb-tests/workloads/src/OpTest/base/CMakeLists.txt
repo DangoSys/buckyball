@@ -10,7 +10,7 @@ add_buckyball_mlir_contract(base_intrinsics_contract
 
 add_buckyball_mlir_contract(base_bank_contract
   PASSES
-    "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}"
+    ${BUCKYBALL_ASSIGN_PHYSICAL_BANKS}
     ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS})
 
 add_buckyball_mlir_optest(base_mvin_mvout_16x16_i8

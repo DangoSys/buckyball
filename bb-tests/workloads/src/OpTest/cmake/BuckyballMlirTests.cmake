@@ -85,7 +85,7 @@ function(add_buckyball_mlir_optest NAME)
     set(MLIR_PASSES ${ARG_PASSES})
   else()
     set(MLIR_PASSES
-      "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}"
+      ${BUCKYBALL_ASSIGN_PHYSICAL_BANKS}
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata

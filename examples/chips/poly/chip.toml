@@ -1,0 +1,10 @@
+[chip]
+name = "poly"
+topology = "configs/poly.toml"
+compilerCore = "prefill"
+
+[runtime]
+bemu = "emu/Cargo.toml"
+bemuCore = "../../cores/prefill/emu/Cargo.toml"
+bemuTile = "configs/tiles/default.toml"
+workloads = "workloads"

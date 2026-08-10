@@ -30,6 +30,21 @@ void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  bool stable);
 void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable);
+void populateMatrixMatmulLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    bool rushB);
+void configureMatrixMatmulLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                  bool stable);
+void populateFp2IntLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                 RewritePatternSet &patterns,
+                                                 bool stable);
+void configureFp2IntLegalizeForExportTarget(LLVMConversionTarget &target,
+                                            bool stable);
+void populateInt2FpLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                 RewritePatternSet &patterns,
+                                                 bool stable);
+void configureInt2FpLegalizeForExportTarget(LLVMConversionTarget &target,
+                                            bool stable);
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
@@ -42,17 +57,29 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
 
   populateBaseLegalizeForLLVMExportPatterns(
       converter, patterns, includeFuncOperandForwarding, rushB);
+  mlir::buddy::buckyball::populateFp2IntLegalizeForLLVMExportPatterns(
+      converter, patterns, stable);
+  mlir::buddy::buckyball::populateInt2FpLegalizeForLLVMExportPatterns(
+      converter, patterns, stable);
   mlir::buddy::buckyball::populateTransposeLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
   mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
+  mlir::buddy::buckyball::populateMatrixMatmulLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, rushB);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target, bool stable) {
   configureBaseLegalizeForExportTarget(target);
+  mlir::buddy::buckyball::configureFp2IntLegalizeForExportTarget(target,
+                                                                 stable);
+  mlir::buddy::buckyball::configureInt2FpLegalizeForExportTarget(target,
+                                                                 stable);
   mlir::buddy::buckyball::configureTransposeLegalizeForExportTarget(target,
                                                                     stable);
   mlir::buddy::buckyball::configureMatrixLegalizeForExportTarget(target,
                                                                  stable);
+  mlir::buddy::buckyball::configureMatrixMatmulLegalizeForExportTarget(target,
+                                                                       stable);
 }

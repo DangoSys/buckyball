@@ -4,11 +4,7 @@ topology = "configs/pebble.toml"
 compilerCore = "pebble"
 
 [runtime]
-bemu = "emu/Cargo.toml"
+bemu = "../../cores/pebble/emu/Cargo.toml"
 kernel = "kernel"
 workloads = "workloads"
 regression = "regression"
-
-[[cores]]
-name = "pebble"
-path = "../../cores/pebble"

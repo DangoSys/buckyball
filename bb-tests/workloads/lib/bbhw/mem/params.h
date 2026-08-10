@@ -2,7 +2,9 @@
 #define _PARAMS_H_
 
 // number of virtual banks
+#ifndef BANK_NUM
 #define BANK_NUM 16
+#endif
 // bank width in bits
 #define BANK_WIDTH 128
 // number of lines in a bank (16KB)

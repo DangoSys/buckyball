@@ -46,3 +46,4 @@ log/
 scripts/docker/.last-image-tag
 ucli.key
 .worktrees/
+nohup.out

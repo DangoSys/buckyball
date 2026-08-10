@@ -122,54 +122,6 @@ class BuckyballGoban64Tile4CoreConfig
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config1: 12 BBTiles × 5 cores each; core 0 has Buckyball and cores 1-4 are Rocket-only. */
-class BuckyballGobanConfig1Config
-    extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 12, nCoresPerTile = 5, hiddenHartBase = 12) ++
-        new WithBuckyballTiles(
-          "../examples/chips/goban/configs/12t5c-private-1bb-4rocket.toml",
-          hiddenHartBase = Some(12)
-        ) ++
-        new chipyard.config.WithSystemBusWidth(256) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
-/** Config2: 8 BBTiles × 8 cores each; cores 0-3 have Buckyball, cores 4-7 Rocket-only. */
-class BuckyballGobanConfig2Config
-    extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 8, nCoresPerTile = 8, hiddenHartBase = 8) ++
-        new WithBuckyballTiles(
-          "../examples/chips/goban/configs/8t8c-private-4bb-4rocket.toml",
-          hiddenHartBase = Some(8)
-        ) ++
-        new chipyard.config.WithSystemBusWidth(256) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
-/** Config3: 16 BBTiles × 4 cores each; all cores have Buckyball. */
-class BuckyballGobanConfig3Config
-    extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 16, nCoresPerTile = 4, hiddenHartBase = 16) ++
-        new WithBuckyballTiles(
-          "../examples/chips/goban/configs/16t4c-private-4bb.toml",
-          hiddenHartBase = Some(16)
-        ) ++
-        new chipyard.config.WithSystemBusWidth(256) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
-/** Config4: 16 BBTiles × 4 Rocket-only cores each. Linux still sees core 0 in every tile. */
-class BuckyballGobanConfig4Config
-    extends Config(
-      new WithGobanHiddenHartIdBits(nTiles = 16, nCoresPerTile = 4, hiddenHartBase = 16) ++
-        new WithBuckyballTiles(
-          "../examples/chips/goban/configs/16t4c-private-rocket-only.toml",
-          hiddenHartBase = Some(16)
-        ) ++
-        new chipyard.config.WithSystemBusWidth(256) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
 /** Rocket-only variant of the default goban topology (no Buckyball). */
 class RocketOnlyGobanConfig
     extends Config(

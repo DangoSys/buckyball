@@ -1,0 +1,7 @@
+# Poly Chip: higher levels replicate a homogeneous 3-prefill/2-decode Tile.
+
+[top]
+nTiles = 1
+
+[[tiles]]
+include = "tiles/default.toml"
