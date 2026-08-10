@@ -63,7 +63,7 @@ bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-singlecore-baremet
 Run a Verilator+BEMU Bank DiffTest against an existing RTL build:
 
 ```bash
-bbdev bebop-difftest --run '--chip toy --config sims.verilator.BuckyballToyVerilatorConfig --binary toy_vecunit_matmul_ones-singlecore-baremetal --no-wave'
+bbdev difftest --run '--chip toy --config sims.verilator.BuckyballToyVerilatorConfig --binary toy_vecunit_matmul_ones-singlecore-baremetal --no-wave'
 ```
 
 ## Tutorial
