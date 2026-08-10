@@ -1,5 +1,6 @@
 use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
-use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2};
+use super::bank_matrix::read_i8_k_rows;
+use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{ExecContext, Instruction};
 
 const TILE: usize = 16;
@@ -51,16 +52,35 @@ impl Instruction for Matrix {
         let op1 = rs1_b0(xs1);
         let op2 = rs1_b1(xs1);
         let wr = rs1_b2(xs1);
-        let op1_base = ((xs1 >> 30) & 0x7f) as usize;
-        let op2_base = ((xs1 >> 37) & 0x7f) as usize;
-        let wr_base = ((xs1 >> 44) & 0x7f) as usize;
-        if xs1 >> 51 != 0 {
+        let encoded_m = (xs2 & 0xfff) as usize;
+        let encoded_n = ((xs2 >> 12) & 0xfff) as usize;
+        let encoded_k = ((xs2 >> 24) & 0xfff) as usize;
+        let legacy = encoded_m == 0 && encoded_n == 0 && encoded_k == 0;
+        let iter = rs1_iter(xs1) as usize;
+        let (m, n, k) = if legacy {
+            (iter, iter, iter)
+        } else {
+            (encoded_m, encoded_n, encoded_k)
+        };
+        let op1_base = if legacy {
+            0
+        } else {
+            ((xs1 >> 30) & 0x7f) as usize
+        };
+        let op2_base = if legacy {
+            0
+        } else {
+            ((xs1 >> 37) & 0x7f) as usize
+        };
+        let wr_base = if legacy {
+            0
+        } else {
+            ((xs1 >> 44) & 0x7f) as usize
+        };
+        if !legacy && xs1 >> 51 != 0 {
             panic!("matrix: rs1[63:51] must be 0");
         }
 
-        let m = (xs2 & 0xfff) as usize;
-        let n = ((xs2 >> 12) & 0xfff) as usize;
-        let k = ((xs2 >> 24) & 0xfff) as usize;
         let mode = (xs2 >> 36) & 1;
         if xs2 >> 37 != 0 {
             panic!("matrix: rs2[63:37] must be 0");
@@ -112,6 +132,25 @@ impl Instruction for Matrix {
         let p1 = pbank(ctx.bank_map, op1);
         let p2 = pbank(ctx.bank_map, op2);
         let pw: Vec<_> = (0..4).map(|g| pbank_group(ctx.bank_map, wr, g)).collect();
+        if legacy {
+            // The former BFP API encoded a square dimension in BB_ITER and
+            // used the original row-major bank layout.
+            let a = read_i8_k_rows(&ctx.banks, p1, m, k);
+            let b = read_i8_k_rows(&ctx.banks, p2, k, n);
+            for i in 0..m {
+                for j in 0..n {
+                    let mut acc = 0i32;
+                    for kk in 0..k {
+                        acc += a[i][kk] as i32 * b[kk][j] as i32;
+                    }
+                    let group = j / 4;
+                    let lane = j % 4;
+                    let off = i * 16 + lane * 4;
+                    ctx.banks[pw[group]][off..off + 4].copy_from_slice(&acc.to_le_bytes());
+                }
+            }
+            return 0;
+        }
 
         let mut c = vec![vec![0i32; n]; m];
         for i in 0..m {
@@ -151,11 +190,21 @@ impl Instruction for Matrix {
         0
     }
 
-    fn latency(_xs1: u64, xs2: u64) -> u64 {
-        let m = (xs2 & 0xfff).max(1);
-        let n = ((xs2 >> 12) & 0xfff).max(1);
-        let k = ((xs2 >> 24) & 0xfff).max(1);
+    fn latency(xs1: u64, xs2: u64) -> u64 {
+        let encoded_m = xs2 & 0xfff;
+        let encoded_n = (xs2 >> 12) & 0xfff;
+        let encoded_k = (xs2 >> 24) & 0xfff;
+        let legacy = encoded_m == 0 && encoded_n == 0 && encoded_k == 0;
+        let (m, n, k) = if legacy {
+            let iter = rs1_iter(xs1).clamp(1, 64);
+            (iter, iter.min(16), iter)
+        } else {
+            (encoded_m.max(1), encoded_n.max(1), encoded_k.max(1))
+        };
         let mode = (xs2 >> 36) & 1;
+        if legacy {
+            return m.saturating_mul(n).saturating_mul(k) / 4 + m.saturating_mul(n);
+        }
         let body = m.saturating_mul(n).saturating_mul(k) / (TILE as u64);
         if mode == 1 {
             body + m.saturating_mul(n)

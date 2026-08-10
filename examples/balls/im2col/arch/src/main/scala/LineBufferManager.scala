@@ -28,11 +28,15 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   @public val io = IO(new Bundle {
     val bankRead = Vec(inBW, Flipped(new BankRead(b)))
     val start    = Input(Bool())
-    val iter     = Input(UInt(b.frontend.iter_len.W))
-    val stride   = Input(UInt(8.W))
-    val padding  = Input(UInt(8.W))
-    val outRow   = Input(UInt(b.frontend.iter_len.W))
-    val outCol   = Input(UInt(b.frontend.iter_len.W))
+    val inRows    = Input(UInt(16.W))
+    val inCols    = Input(UInt(16.W))
+    val rowStride = Input(UInt(8.W))
+    val colStride = Input(UInt(8.W))
+    val padding   = Input(UInt(8.W))
+    val startRow  = Input(UInt(8.W))
+    val startCol  = Input(UInt(8.W))
+    val outRow   = Input(UInt(16.W))
+    val outCol   = Input(UInt(16.W))
     val kRowIdx  = Input(UInt(kW.W))
     val kColIdx  = Input(UInt(kW.W))
     val rBankId  = Input(UInt(log2Up(b.memDomain.bankNum).W))
@@ -46,7 +50,7 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   private val pending = RegInit(false.B)
   private val beat    = RegInit(0.U(log2Ceil(maxBeats + 1).W))
   private val totalBeats =
-    ((io.iter * io.iter) + (lanesPerBeat - 1).U) / lanesPerBeat.U
+    ((io.inRows * io.inCols) + (lanesPerBeat - 1).U) / lanesPerBeat.U
 
   for (i <- 0 until inBW) {
     io.bankRead(i).io.req.valid     := false.B
@@ -81,14 +85,14 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     }
   }
 
-  private val paddedRow = io.outRow * io.stride + io.kRowIdx
-  private val paddedCol = io.outCol * io.stride + io.kColIdx
-  private val rowValid  = paddedRow >= io.padding && paddedRow < io.padding + io.iter
-  private val colValid  = paddedCol >= io.padding && paddedCol < io.padding + io.iter
+  private val paddedRow = io.startRow + io.outRow * io.rowStride + io.kRowIdx
+  private val paddedCol = io.startCol + io.outCol * io.colStride + io.kColIdx
+  private val rowValid  = paddedRow >= io.padding && paddedRow < io.padding + io.inRows
+  private val colValid  = paddedCol >= io.padding && paddedCol < io.padding + io.inCols
   private val inBound   = rowValid && colValid
   private val srcRow    = Mux(inBound, paddedRow - io.padding, 0.U)
   private val srcCol    = Mux(inBound, paddedCol - io.padding, 0.U)
-  private val elemIndex = srcRow * io.iter + srcCol
+  private val elemIndex = srcRow * io.inCols + srcCol
   private val beatIndex = elemIndex / lanesPerBeat.U
   private val laneIndex = elemIndex % lanesPerBeat.U
   private val lanes     = buf(beatIndex).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))

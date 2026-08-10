@@ -65,10 +65,15 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   win.io.init     := io.cmdReq.fire
   win.io.next     := false.B
-  win.io.iter     := cfg.io.iter
-  win.io.kSize    := cfg.io.kSize
-  win.io.stride   := cfg.io.stride
-  win.io.padding  := cfg.io.padding
+  win.io.inRows    := cfg.io.inRows
+  win.io.inCols    := cfg.io.inCols
+  win.io.kRows     := cfg.io.kRows
+  win.io.kCols     := cfg.io.kCols
+  win.io.rowStride := cfg.io.rowStride
+  win.io.colStride := cfg.io.colStride
+  win.io.padding   := cfg.io.padding
+  win.io.startRow  := cfg.io.startRow
+  win.io.startCol  := cfg.io.startCol
   val cmdStart    = io.cmdReq.fire && !invalid
   val canEmitElem = running && inputReady
   win.io.elemFire := canEmitElem && writer.io.elemIn.ready
@@ -77,9 +82,13 @@ class Im2col(val b: GlobalConfig) extends Module {
     lineBuf.io.bankRead(i) <> io.bankRead(i)
   }
   lineBuf.io.start   := cmdStart
-  lineBuf.io.iter    := cfg.io.iter
-  lineBuf.io.stride  := cfg.io.stride
-  lineBuf.io.padding := cfg.io.padding
+  lineBuf.io.inRows    := cfg.io.inRows
+  lineBuf.io.inCols    := cfg.io.inCols
+  lineBuf.io.rowStride := cfg.io.rowStride
+  lineBuf.io.colStride := cfg.io.colStride
+  lineBuf.io.padding   := cfg.io.padding
+  lineBuf.io.startRow  := cfg.io.startRow
+  lineBuf.io.startCol  := cfg.io.startCol
   lineBuf.io.outRow  := win.io.outRow
   lineBuf.io.outCol  := win.io.outCol
   lineBuf.io.kRowIdx := win.io.kRowIdx
@@ -96,11 +105,14 @@ class Im2col(val b: GlobalConfig) extends Module {
   writer.io.elemIn.valid := canEmitElem
   writer.io.elemIn.bits  := lineBuf.io.elemData
   writer.io.elemLast     := win.io.elemLast
-  writer.io.lastWindow   := win.io.last
-  writer.io.kSize        := cfg.io.kSize
-  val outputDim = ((cfg.io.iter +& (cfg.io.padding << 1) - cfg.io.kSize) /
-    cfg.io.stride) + 1.U
-  writer.io.windowIdx := win.io.outRow * outputDim + win.io.outCol
+  writer.io.finalWindow  := win.io.last
+  writer.io.legacy       := cfg.io.legacy
+  writer.io.kRows        := cfg.io.kRows
+  writer.io.kCols        := cfg.io.kCols
+  val paddedCols = cfg.io.inCols +& (cfg.io.padding << 1)
+  val outputCols = ((paddedCols - cfg.io.kCols - cfg.io.startCol) /
+    cfg.io.colStride) + 1.U
+  writer.io.windowIdx := win.io.outRow * outputCols + win.io.outCol
 
   when(cmdStart) {
     inputReady := false.B

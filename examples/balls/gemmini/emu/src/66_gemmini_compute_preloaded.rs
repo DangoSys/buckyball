@@ -50,9 +50,10 @@ impl Instruction for GemminiComputePreloaded {
                 for j in 0..n {
                     let mut acc = d[i][j];
                     for k in 0..n {
-                        acc += a[i][k] as i32 * b[k][j] as i32;
+                        let av = if a_transpose { a[k][i] } else { a[i][k] };
+                        acc += av as i32 * b[k][j] as i32;
                     }
-                    c[i][j] = acc;
+                    c[i][j] = apply_in_shift(acc, shift);
                 }
             }
             write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);

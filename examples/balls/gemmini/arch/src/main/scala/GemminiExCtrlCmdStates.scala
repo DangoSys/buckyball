@@ -30,6 +30,8 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
         read_row_cnt := 0.U
         feed_row_cnt := 0.U
         req_sent     := false.B
+        xpose_ready  := false.B
+        xpose_row_cnt := 0.U
         state        := sPreloadRead
       }.elsewhen(sub_cmd === GemminiSubCmd.COMPUTE_PRELOADED || sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED) {
         read_row_cnt        := 0.U

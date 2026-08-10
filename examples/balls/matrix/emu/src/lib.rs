@@ -1,4 +1,4 @@
-pub(crate) use crate::inst::{decode, instruction};
+pub(crate) use crate::inst::{bank_matrix, decode, instruction};
 
 use crate::inst::instruction::{ExecContext, Instruction};
 
