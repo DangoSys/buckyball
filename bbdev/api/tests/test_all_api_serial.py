@@ -32,6 +32,7 @@ def main():
     "test_api_bebop_verilator_sim.py",
     "test_api_bebop_verilator_run.py",
     "test_api_bebop_verilator_batch.py",
+    "test_api_bebop_difftest.py",
     "test_api_bebop_p2e_clean.py",
     "test_api_bebop_p2e_verilog.py",
     "test_api_bebop_p2e_buildbitstream.py",
