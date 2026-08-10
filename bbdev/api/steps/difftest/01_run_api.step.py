@@ -7,7 +7,7 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 
 config = {
     "name": "difftest-run-api",
-    "description": "Run Bank DiffTest on Verilator RTL with BEMU as the reference model",
+    "description": "Run Bank DiffTest on a selected backend with BEMU as the reference model",
     "flows": ["difftest"],
     "triggers": [api("POST", "/difftest/run")],
     "enqueues": ["difftest.run"],
@@ -23,7 +23,40 @@ def _required_string(body: dict, name: str) -> str | None:
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    required = {name: _required_string(body, name) for name in ("chip", "config", "binary")}
+    backend = _required_string(body, "backend")
+    if backend is None:
+        return ApiResponse(
+            status=400,
+            body={
+                "success": False,
+                "error": "Missing required parameter(s): --backend",
+            },
+        )
+
+    known_backends = ("verilator", "p2e")
+    if backend not in known_backends:
+        return ApiResponse(
+            status=400,
+            body={
+                "success": False,
+                "error": (
+                    f"Unsupported DiffTest backend: {backend}; "
+                    f"available backends: {', '.join(known_backends)}"
+                ),
+            },
+        )
+    if backend == "p2e":
+        return ApiResponse(
+            status=501,
+            body={
+                "success": False,
+                "error": "DiffTest backend p2e is reserved but not implemented yet",
+            },
+        )
+
+    required = {
+        name: _required_string(body, name) for name in ("chip", "config", "binary")
+    }
     missing = [name for name, value in required.items() if value is None]
     if missing:
         missing_args = ", ".join("--" + name for name in missing)
@@ -59,6 +92,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
 
     data = {
+        "backend": backend,
         **required,
         "jobs": body.get("jobs", 16),
         "vsrc_dir": get_verilator_build_dir(

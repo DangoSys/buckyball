@@ -58,6 +58,19 @@ async def fail(ctx, trace_id: str, error: str, **fields) -> None:
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
+    backend = input_data.get("backend")
+    if backend != "verilator":
+        error = "backend_not_implemented" if backend == "p2e" else "unsupported_backend"
+        await fail(
+            ctx,
+            origin_tid,
+            error,
+            backend=backend,
+            available_backends=["verilator", "p2e"],
+            implemented_backends=["verilator"],
+        )
+        return
+
     bbdir = get_buckyball_path()
     chip = input_data["chip"]
     arch_config = input_data["config"]
@@ -115,7 +128,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 continue_run=False,
                 extra_fields={
                     "task": "environment",
-                    "backend": "verilator",
+                    "backend": backend,
                     "chip": chip,
                     "config": arch_config,
                     "dependency": str(dramsim_header),
@@ -156,7 +169,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "build",
-                "backend": "verilator",
+                "backend": backend,
                 "chip": chip,
                 "config": arch_config,
                 "binary": str(bebop_bin),
@@ -177,7 +190,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_args = [
         str(bebop_bin),
         "run",
-        "verilator",
+        backend,
         f"--elf={binary_path}",
         f"--log-dir={log_dir}",
         "--diff",
@@ -215,7 +228,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "difftest",
-            "backend": "verilator",
+            "backend": backend,
             "chip": chip,
             "config": arch_config,
             "binary": binary_path,
