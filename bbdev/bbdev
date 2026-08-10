@@ -70,6 +70,9 @@ WORKFLOW_COMMANDS = {
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--chip <chip> --config <cfg> --test <elf-tests|pk-tests> [--rushB] [--clean-before]"',
     },
+    "bebop-difftest": {
+        "run": 'Run Verilator+BEMU Bank DiffTest. Args: "--chip <chip> --config <cfg> --binary <path> [--jobs <num>] [--log-dir <dir>] [--no-wave]"',
+    },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--config <cfg> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--config <cfg> [--output-dir <dir>]"',
