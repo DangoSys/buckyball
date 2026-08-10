@@ -6,11 +6,11 @@ from utils.path import get_buckyball_path, get_verilator_build_dir
 
 
 config = {
-    "name": "bebop-difftest-run-api",
-    "description": "Run Verilator+BEMU Bank DiffTest",
-    "flows": ["bebop"],
-    "triggers": [api("POST", "/bebop/difftest/run")],
-    "enqueues": ["bebop.difftest.run"],
+    "name": "difftest-run-api",
+    "description": "Run Bank DiffTest on Verilator RTL with BEMU as the reference model",
+    "flows": ["difftest"],
+    "triggers": [api("POST", "/difftest/run")],
+    "enqueues": ["difftest.run"],
 }
 
 
@@ -55,7 +55,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if not manifest.is_file():
         return ApiResponse(
             status=400,
-            body={"success": False, "error": f"Chip BEMU manifest does not exist: {manifest}"},
+            body={"success": False, "error": f"Chip emulator manifest does not exist: {manifest}"},
         )
 
     data = {
@@ -75,5 +75,5 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "log_dir": body.get("log-dir") or body.get("log_dir"),
         "_trace_id": ctx.trace_id,
     }
-    await ctx.enqueue({"topic": "bebop.difftest.run", "data": data})
+    await ctx.enqueue({"topic": "difftest.run", "data": data})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

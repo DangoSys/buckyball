@@ -1,4 +1,4 @@
-"""Build and run a Chip-specific Verilator+BEMU Bank DiffTest workload."""
+"""Run Bank DiffTest on Verilator RTL using BEMU as the reference model."""
 
 import os
 import shlex
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from motia import FlowContext, queue
 
-utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
@@ -19,10 +19,10 @@ from utils.stream_run import stream_run_logger
 
 
 config = {
-    "name": "bebop-difftest-run",
-    "description": "Build and run Verilator+BEMU Bank DiffTest",
-    "flows": ["bebop"],
-    "triggers": [queue("bebop.difftest.run")],
+    "name": "difftest-run",
+    "description": "Run Bank DiffTest on Verilator RTL with BEMU as the reference model",
+    "flows": ["difftest"],
+    "triggers": [queue("difftest.run")],
     "enqueues": [],
 }
 
@@ -105,8 +105,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             cmd="nix build",
             logger=ctx.logger,
             cwd=bbdir,
-            stdout_prefix="bebop difftest environment",
-            stderr_prefix="bebop difftest environment",
+            stdout_prefix="difftest environment",
+            stderr_prefix="difftest environment",
         )
         if env_result.returncode != 0:
             await check_result(
@@ -115,7 +115,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 continue_run=False,
                 extra_fields={
                     "task": "environment",
-                    "backend": "verilator+bemu-difftest",
+                    "backend": "verilator",
                     "chip": chip,
                     "config": arch_config,
                     "dependency": str(dramsim_header),
@@ -145,8 +145,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cmd=build_cmd,
         logger=ctx.logger,
         cwd=bbdir,
-        stdout_prefix="bebop difftest build",
-        stderr_prefix="bebop difftest build",
+        stdout_prefix="difftest build",
+        stderr_prefix="difftest build",
         env={**os.environ, "VSRC_PATH": vsrc_dir},
     )
     if build_result.returncode != 0:
@@ -156,7 +156,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "build",
-                "backend": "verilator+bemu-difftest",
+                "backend": "verilator",
                 "chip": chip,
                 "config": arch_config,
                 "binary": str(bebop_bin),
@@ -206,8 +206,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bbdir,
-        stdout_prefix="bebop difftest",
-        stderr_prefix="bebop difftest",
+        stdout_prefix="difftest",
+        stderr_prefix="difftest",
     )
     await check_result(
         ctx,
@@ -215,7 +215,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "difftest",
-            "backend": "verilator+bemu-difftest",
+            "backend": "verilator",
             "chip": chip,
             "config": arch_config,
             "binary": binary_path,

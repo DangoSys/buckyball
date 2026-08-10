@@ -1,4 +1,4 @@
-"""MCP tool: bbdev_bebop_difftest_run."""
+"""MCP tool: bbdev_difftest_run."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_bebop_difftest_run(
+    def bbdev_difftest_run(
         chip: str,
         config: str,
         binary: str,
@@ -22,7 +22,7 @@ def register(mcp):
         banktrace: bool = False,
         log_dir: Optional[str] = None,
     ) -> str:
-        """Build and run Verilator+BEMU Bank DiffTest. POST /bebop/difftest/run."""
+        """Run Bank DiffTest on Verilator RTL using BEMU as reference. POST /difftest/run."""
         for name, value in (("chip", chip), ("config", config), ("binary", binary)):
             if error := need(name, value):
                 return err(error)
@@ -38,4 +38,4 @@ def register(mcp):
             "ctrace": ctrace,
             "banktrace": banktrace,
         }
-        return fmt(submit("/bebop/difftest/run", opt(params, **{"log-dir": log_dir})))
+        return fmt(submit("/difftest/run", opt(params, **{"log-dir": log_dir})))
