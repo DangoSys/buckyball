@@ -50,6 +50,7 @@ default = ["bemu"]
 bemu = []
 verilator = ["dep:bebop-verilator"]
 p2e = ["dep:bebop-p2e"]
+difftest = []
 
 [build-dependencies]
 cc = { version = "1", features = ["parallel"] }
