@@ -21,6 +21,7 @@ int main(void) {
   for (int i = 0; i < NUM_WINDOWS * 16; ++i) {
     matrix_a[i] = 0;
     zero[i] = 0;
+    actual[i] = 0;
   }
   for (int i = 0; i < KERNEL_ELEMS * 16; ++i)
     matrix_b[i] = 0;

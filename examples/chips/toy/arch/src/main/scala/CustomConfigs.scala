@@ -15,7 +15,7 @@ class WithToyHartIdBits(nTiles: Int, nCoresPerTile: Int)
  *
  * Demonstrates the simplest possible Buckyball configuration — a single tile
  * with a single accelerator-bearing core. All topology is defined in toy.toml
- * and its included sub-files (tiles/, cores/, balldomains/).
+ * and its included topology and Core files.
  */
 class BuckyballToyConfig
     extends Config(

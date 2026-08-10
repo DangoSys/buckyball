@@ -2,6 +2,7 @@
 
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
@@ -25,8 +26,9 @@ uint64_t matrixRs1(uint64_t op1, uint64_t op2, uint64_t wr) {
 }
 
 struct MatrixMatmulLowering : public ConvertOpToLLVMPattern<MatrixMatmulOp> {
-  MatrixMatmulLowering(LLVMTypeConverter &converter, bool /*stable*/)
-      : ConvertOpToLLVMPattern<MatrixMatmulOp>(converter) {}
+  MatrixMatmulLowering(LLVMTypeConverter &converter, bool /*stable*/,
+                       bool rushB)
+      : ConvertOpToLLVMPattern<MatrixMatmulOp>(converter), rushB(rushB) {}
 
   LogicalResult
   matchAndRewrite(MatrixMatmulOp op, OpAdaptor,
@@ -76,13 +78,27 @@ struct MatrixMatmulLowering : public ConvertOpToLLVMPattern<MatrixMatmulOp> {
                                  cstI64(rewriter, loc, depthA));
     Value rs2A =
         packRs2MemStride(rewriter, loc, aPtr, cstI64(rewriter, loc, 1));
-    rewriter.create<MvinIntrOp>(loc, rs1A, rs2A);
+    if (rushB) {
+      Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
+      rewriter.create<RushBMvinOp>(
+          loc, rs1A, rs2A,
+          LLVM::IntToPtrOp::create(rewriter, loc, ptrType, aPtr));
+    } else {
+      rewriter.create<MvinIntrOp>(loc, rs1A, rs2A);
+    }
 
     Value rs1B = packRs1BankIter(rewriter, loc, cstI64(rewriter, loc, bBank),
                                  cstI64(rewriter, loc, depthB));
     Value rs2B =
         packRs2MemStride(rewriter, loc, bPtr, cstI64(rewriter, loc, 1));
-    rewriter.create<MvinIntrOp>(loc, rs1B, rs2B);
+    if (rushB) {
+      Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
+      rewriter.create<RushBMvinOp>(
+          loc, rs1B, rs2B,
+          LLVM::IntToPtrOp::create(rewriter, loc, ptrType, bPtr));
+    } else {
+      rewriter.create<MvinIntrOp>(loc, rs1B, rs2B);
+    }
 
     uint64_t mode = op.getWs() ? 1ull : 0ull;
     rewriter.create<CustomIntrOp>(
@@ -94,7 +110,14 @@ struct MatrixMatmulLowering : public ConvertOpToLLVMPattern<MatrixMatmulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
         packRs2MemStride(rewriter, loc, cPtr, cstI64(rewriter, loc, 1));
-    rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
+    if (rushB) {
+      Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
+      rewriter.create<RushBMvoutOp>(
+          loc, rs1C, rs2C,
+          LLVM::IntToPtrOp::create(rewriter, loc, ptrType, cPtr));
+    } else {
+      rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
+    }
 
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
@@ -105,6 +128,9 @@ struct MatrixMatmulLowering : public ConvertOpToLLVMPattern<MatrixMatmulOp> {
     rewriter.eraseOp(op);
     return success();
   }
+
+private:
+  bool rushB;
 };
 
 struct MatrixLowering : public ConvertOpToLLVMPattern<MatrixOp> {
@@ -135,8 +161,9 @@ private:
 
 namespace mlir::buddy::buckyball {
 void populateMatrixMatmulLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable) {
-  patterns.add<MatrixMatmulLowering>(converter, stable);
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    bool rushB) {
+  patterns.add<MatrixMatmulLowering>(converter, stable, rushB);
 }
 
 void configureMatrixMatmulLegalizeForExportTarget(LLVMConversionTarget &target,

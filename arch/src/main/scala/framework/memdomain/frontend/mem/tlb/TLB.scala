@@ -3,6 +3,7 @@ package framework.memdomain.frontend.mem.tlb
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
+import freechips.rocketchip.rocket.{M_XRD, M_XWR}
 import framework.top.GlobalConfig
 
 /** TLB implementation with fully-associative structure and LRU replacement */
@@ -146,6 +147,14 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
     Cat(hitPPN, pgIdx)
   )
 
+  // Permission: present PTE with R/W cleared must not silently translate for DMA.
+  // Linux CoW zero pages are readable but not writable — stores must AE.
+  val wantLd = io.req.bits.cmd === M_XRD
+  val wantSt = io.req.bits.cmd === M_XWR
+  val permOk = tlbHit && !hitEntryData.pf
+  val aeLd   = hitEntryData.ae || (vm_enabled && permOk && wantLd && !hitEntryData.sr)
+  val aeSt   = hitEntryData.ae || (vm_enabled && permOk && wantSt && !hitEntryData.sw)
+
   io.resp.valid             := io.req.valid && state === s_ready
   io.resp.bits.miss         := tlbMiss || (state === s_wait)
   io.resp.bits.paddr        := paddr(paddrBits - 1, 0)
@@ -157,8 +166,8 @@ class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   io.resp.bits.gf.ld        := hitEntryData.gf
   io.resp.bits.gf.st        := hitEntryData.gf
   io.resp.bits.gf.inst      := hitEntryData.gf
-  io.resp.bits.ae.ld        := hitEntryData.ae
-  io.resp.bits.ae.st        := hitEntryData.ae
+  io.resp.bits.ae.ld        := aeLd
+  io.resp.bits.ae.st        := aeSt
   io.resp.bits.ae.inst      := hitEntryData.ae
   io.resp.bits.ma.ld        := false.B
   io.resp.bits.ma.st        := false.B

@@ -26,6 +26,7 @@ tests = [
   "pebble_optest_linalg_transpose_16x16_i8-linux",
   "pebble_optest_linalg_conv_2d_nhwc_hwcf_6x6_k3-linux",
   "pebble_optest_tile_matmul_16x16_i8-linux",
+  "pebble_optest_tile_matmul_16x16_f32-linux",
   "pebble_optest_tile_transpose_16x16_i8-linux",
   "pebble_optest_tile_conv2d_6x6_k3-linux",
   "pebble_optest_tile_conv2d_1x1_c16_oc8-linux",

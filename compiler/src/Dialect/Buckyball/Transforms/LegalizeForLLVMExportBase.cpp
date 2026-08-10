@@ -21,6 +21,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -53,7 +54,13 @@ static int64_t elemByteSize(Type el) {
   return -1;
 }
 
-Value extractPtr(OpBuilder &b, Location loc, Value memref) {
+struct MemrefAddress {
+  Value address;
+  Value hostPtr;
+};
+
+static MemrefAddress extractMemrefAddress(OpBuilder &b, Location loc,
+                                          Value memref) {
   auto ty = cast<MemRefType>(memref.getType());
   int64_t eb = elemByteSize(ty.getElementType());
   if (eb <= 0)
@@ -69,7 +76,14 @@ Value extractPtr(OpBuilder &b, Location loc, Value memref) {
   Value offBytes = offI64;
   if (eb != 1)
     offBytes = b.create<arith::MulIOp>(loc, offI64, cstI64(b, loc, eb));
-  return b.create<arith::AddIOp>(loc, baseI64, offBytes);
+  Value address = b.create<arith::AddIOp>(loc, baseI64, offBytes);
+  Type ptrType = LLVM::LLVMPointerType::get(b.getContext());
+  Value hostPtr = LLVM::IntToPtrOp::create(b, loc, ptrType, address);
+  return {address, hostPtr};
+}
+
+Value extractPtr(OpBuilder &b, Location loc, Value memref) {
+  return extractMemrefAddress(b, loc, memref).address;
 }
 
 Value packRs1BanksIter(OpBuilder &b, Location loc, Value rBank0, Value rBank1,
@@ -111,6 +125,59 @@ void emitMset(OpBuilder &b, Location loc, uint64_t bankId, uint64_t row,
   uint64_t rs2 =
       fieldBits(row, 0, 4) | fieldBits(col, 5, 9) | fieldBits(alloc, 10, 10);
   b.create<MsetIntrOp>(loc, cstI64(b, loc, rs1), cstI64(b, loc, rs2));
+}
+
+static constexpr char kBbDmaTouchMvoutFn[] = "bb_dma_touch_mvout";
+static constexpr char kBbDmaBankSetColsFn[] = "bb_dma_bank_set_cols";
+
+static FlatSymbolRefAttr getOrInsertExtFunc(OpBuilder &b, ModuleOp module,
+                                            StringRef name,
+                                            LLVM::LLVMFunctionType type) {
+  if (module.lookupSymbol<LLVM::LLVMFuncOp>(name))
+    return FlatSymbolRefAttr::get(b.getContext(), name);
+
+  OpBuilder::InsertionGuard guard(b);
+  b.setInsertionPointToEnd(module.getBody());
+  LLVM::LLVMFuncOp::create(b, module.getLoc(), name, type,
+                           LLVM::Linkage::External, false, LLVM::CConv::C);
+  return FlatSymbolRefAttr::get(b.getContext(), name);
+}
+
+static ModuleOp parentModule(OpBuilder &b) {
+  Operation *op = b.getInsertionBlock()->getParentOp();
+  ModuleOp module = op->getParentOfType<ModuleOp>();
+  if (!module)
+    llvm_unreachable("bb_dma: missing ModuleOp parent");
+  return module;
+}
+
+static void emitBbDmaBankSetCols(OpBuilder &b, Location loc, Value bankId,
+                                 Value cols) {
+  ModuleOp module = parentModule(b);
+  auto i32Ty = IntegerType::get(b.getContext(), 32);
+  auto voidTy = LLVM::LLVMVoidType::get(b.getContext());
+  auto fnTy = LLVM::LLVMFunctionType::get(voidTy, {i32Ty, i32Ty});
+  FlatSymbolRefAttr callee =
+      getOrInsertExtFunc(b, module, kBbDmaBankSetColsFn, fnTy);
+  Value bankI32 = b.create<arith::TruncIOp>(loc, i32Ty, bankId);
+  Value colsI32 = b.create<arith::TruncIOp>(loc, i32Ty, cols);
+  LLVM::CallOp::create(b, loc, TypeRange{}, callee,
+                       ValueRange{bankI32, colsI32});
+}
+
+static void emitBbDmaTouchMvout(OpBuilder &b, Location loc, Value hostPtr,
+                                Value depth, Value stride, Value bankId) {
+  ModuleOp module = parentModule(b);
+  auto ptrTy = LLVM::LLVMPointerType::get(b.getContext());
+  auto i64Ty = IntegerType::get(b.getContext(), 64);
+  auto i32Ty = IntegerType::get(b.getContext(), 32);
+  auto voidTy = LLVM::LLVMVoidType::get(b.getContext());
+  auto fnTy = LLVM::LLVMFunctionType::get(voidTy, {ptrTy, i64Ty, i64Ty, i32Ty});
+  FlatSymbolRefAttr callee =
+      getOrInsertExtFunc(b, module, kBbDmaTouchMvoutFn, fnTy);
+  Value bankI32 = b.create<arith::TruncIOp>(loc, i32Ty, bankId);
+  LLVM::CallOp::create(b, loc, TypeRange{}, callee,
+                       ValueRange{hostPtr, depth, stride, bankI32});
 }
 
 namespace {
@@ -155,6 +222,8 @@ struct BuckyballMsetLowering : public ConvertOpToLLVMPattern<MsetOp> {
     uint64_t colVal = op.getAlloc() ? static_cast<uint64_t>(op.getCol()) : 0u;
     uint64_t rs2Val = fieldBits(rowVal, 0, 4) | fieldBits(colVal, 5, 9) |
                       fieldBits(allocBit, 10, 10);
+    Value colsForTouch = cstI64(rewriter, loc, op.getAlloc() ? colVal : 1u);
+    emitBbDmaBankSetCols(rewriter, loc, bankId, colsForTouch);
     rewriter.replaceOpWithNewOp<MsetIntrOp>(op, rs1,
                                             cstI64(rewriter, loc, rs2Val));
     return success();
@@ -162,33 +231,55 @@ struct BuckyballMsetLowering : public ConvertOpToLLVMPattern<MsetOp> {
 };
 
 struct BuckyballMvinLowering : public ConvertOpToLLVMPattern<MvinOp> {
-  using ConvertOpToLLVMPattern<MvinOp>::ConvertOpToLLVMPattern;
+  BuckyballMvinLowering(LLVMTypeConverter &converter, bool rushB)
+      : ConvertOpToLLVMPattern<MvinOp>(converter), rushB(rushB) {}
+
   LogicalResult
   matchAndRewrite(MvinOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
-    Value memAddr = extractPtr(rewriter, loc, op.getInput());
+    MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
-    Value rs2 = packRs2MemStride(rewriter, loc, memAddr, adaptor.getStride());
+    Value rs2 =
+        packRs2MemStride(rewriter, loc, memref.address, adaptor.getStride());
+    if (rushB) {
+      rewriter.replaceOpWithNewOp<RushBMvinOp>(op, rs1, rs2, memref.hostPtr);
+      return success();
+    }
     rewriter.replaceOpWithNewOp<MvinIntrOp>(op, rs1, rs2);
     return success();
   }
+
+private:
+  bool rushB;
 };
 
 struct BuckyballMvoutLowering : public ConvertOpToLLVMPattern<MvoutOp> {
-  using ConvertOpToLLVMPattern<MvoutOp>::ConvertOpToLLVMPattern;
+  BuckyballMvoutLowering(LLVMTypeConverter &converter, bool rushB)
+      : ConvertOpToLLVMPattern<MvoutOp>(converter), rushB(rushB) {}
+
   LogicalResult
   matchAndRewrite(MvoutOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
-    Value memAddr = extractPtr(rewriter, loc, op.getOutput());
+    MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getOutput());
+    emitBbDmaTouchMvout(rewriter, loc, memref.hostPtr, adaptor.getDepth(),
+                        adaptor.getStride(), adaptor.getAddr());
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
-    Value rs2 = packRs2MemStride(rewriter, loc, memAddr, adaptor.getStride());
+    Value rs2 =
+        packRs2MemStride(rewriter, loc, memref.address, adaptor.getStride());
+    if (rushB) {
+      rewriter.replaceOpWithNewOp<RushBMvoutOp>(op, rs1, rs2, memref.hostPtr);
+      return success();
+    }
     rewriter.replaceOpWithNewOp<MvoutIntrOp>(op, rs1, rs2);
     return success();
   }
+
+private:
+  bool rushB;
 };
 
 struct BuckyballInstLowering : public ConvertOpToLLVMPattern<InstOp> {
@@ -207,7 +298,7 @@ struct BuckyballInstLowering : public ConvertOpToLLVMPattern<InstOp> {
 
 void populateBaseLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
-    bool includeFuncOperandForwarding) {
+    bool includeFuncOperandForwarding, bool rushB) {
   if (includeFuncOperandForwarding) {
     patterns.add<ForwardOperands<func::CallOp>,
                  ForwardOperands<func::CallIndirectOp>,
@@ -216,14 +307,14 @@ void populateBaseLegalizeForLLVMExportPatterns(
   }
   patterns.add<BuckyballFenceLowering>(converter);
   patterns.add<BuckyballMsetLowering>(converter);
-  patterns.add<BuckyballMvinLowering>(converter);
-  patterns.add<BuckyballMvoutLowering>(converter);
+  patterns.add<BuckyballMvinLowering>(converter, rushB);
+  patterns.add<BuckyballMvoutLowering>(converter, rushB);
   patterns.add<BuckyballInstLowering>(converter);
 }
 
 void configureBaseLegalizeForExportTarget(LLVMConversionTarget &target) {
   target.addLegalOp<CustomIntrOp, FenceIntrOp, MsetIntrOp, MvinIntrOp,
-                    MvoutIntrOp>();
+                    MvoutIntrOp, RushBMvinOp, RushBMvoutOp>();
   target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, MvoutOp, BankAllocOp,
                       BankReleaseOp, BankMvinOp, BankMvoutOp>();
   target.addLegalDialect<memref::MemRefDialect>();

@@ -15,4 +15,4 @@ inputChannels = 7
 defaultGroupCount = 1
 
 [[cores]]
-include = "cores/default.toml"
+include = "../../../../cores/toy/core.toml"

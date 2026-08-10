@@ -49,6 +49,7 @@ int main(void) {
     packed_in[i] = 0;
   for (int i = 0; i < in_elems; ++i)
     packed_in[i] = t->input[i];
+  bb_dma_touch(actual, sizeof(actual));
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);

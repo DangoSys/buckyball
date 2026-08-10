@@ -1,0 +1,16 @@
+[chip]
+name = "goban"
+topology = "configs/goban.toml"
+compilerCore = "goban"
+
+[runtime]
+bemu = "emu/Cargo.toml"
+workloads = "workloads"
+
+[[cores]]
+name = "goban"
+path = "../../cores/goban"
+
+[[cores]]
+name = "rocket"
+path = "../../cores/rocket"

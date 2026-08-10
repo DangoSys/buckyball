@@ -42,7 +42,12 @@ import freechips.rocketchip.util.BooleanToAugmentedBoolean
 import framework.top.GlobalConfig
 import framework.system.core.rocket.RocketBB
 import framework.system.core.rocket.id.RVVRoCCDecode
-import framework.system.core.accelerator.BuckyballAccelerator
+import framework.system.core.accelerator.{
+  BuckyballAccelerator,
+  BuckyballRushBKey,
+  RushBAcceleratorId,
+  RushBCommandBridge
+}
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
@@ -366,7 +371,8 @@ class BBTile private (
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
   Annotated.params(this, outer.bbParams)
-  val nCores = outer.nCores
+  val nCores       = outer.nCores
+  val rushBEnabled = outer.p(BuckyballRushBKey)
 
   def coreParamsForCore(coreIdx: Int): BBTileParams =
     outer.bbParams.copy(core = outer.bbParams.rocketCoreForCore(coreIdx))
@@ -380,9 +386,19 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   // --- Rocket core (using our fork that accepts BBTile) ---
-  val cores = (0 until nCores).map { i =>
-    Module(new RocketBB(outer, outer.bbPerCore(i).isDefined)(paramsForCore(i)))
+  private def makeCore(coreIdx: Int): RocketBB = {
+    if (rushBEnabled && outer.hasBuckyball) {
+      // rushB drives RoCC below. Keeping Rocket reset prevents unrelated
+      // instruction and memory traffic while preserving the existing tile RTL.
+      withReset(true.B) {
+        Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
+      }
+    } else {
+      Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
+    }
   }
+
+  val cores = (0 until nCores).map(makeCore)
 
   val core = cores.head
 
@@ -569,6 +585,33 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     req.hart_id          := 0.U
   }
 
+  private def tieOffRoCC(core: RocketBB): Unit = {
+    core.io.rocc.cmd.ready  := false.B
+    core.io.rocc.resp.valid := false.B
+    core.io.rocc.resp.bits  := DontCare
+    core.io.rocc.busy       := false.B
+    core.io.rocc.interrupt  := false.B
+  }
+
+  private def connectRoCC(
+    core:        RocketBB,
+    acc:         BuckyballAccelerator,
+    rushBSource: Option[RushBCommandBridge]
+  ): Unit = {
+    rushBSource match {
+      case Some(source) =>
+        acc.io.cmd.valid       := source.io.cmd.valid
+        acc.io.cmd.bits        := source.io.cmd.bits
+        source.io.cmd.ready    := acc.io.cmd.ready
+        core.io.rocc.cmd.ready := false.B
+      case None         =>
+        acc.io.cmd <> core.io.rocc.cmd
+    }
+    core.io.rocc.resp <> acc.io.resp
+    core.io.rocc.busy      := acc.io.busy
+    core.io.rocc.interrupt := acc.io.interrupt
+  }
+
   if (outer.hasBuckyball) {
     val cfg0          = outer.bbSharedConfig.get
     val sharedPerCore = SharedMemLayout.channelPerHart(cfg0)
@@ -591,20 +634,28 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
     }
 
+    val rushBSources = accelerators.zipWithIndex.map { case (acc, i) =>
+      acc.map { accelerator =>
+        if (rushBEnabled) {
+          val source = Module(new RushBCommandBridge(
+            RushBAcceleratorId(outer.bbParams.tileId, i),
+            accelerator.b.core.xLen
+          ))
+          source.io.retired := accelerator.io.retired
+          Some(source)
+        } else {
+          None
+        }
+      }.flatten
+    }
+
     val enabledAccelerators = outer.bbEnabledCoreIds.map(i => accelerators(i).get)
     for (i <- 0 until nCores) {
       accelerators(i) match {
         case Some(acc) =>
-          acc.io.cmd <> cores(i).io.rocc.cmd
-          cores(i).io.rocc.resp <> acc.io.resp
-          cores(i).io.rocc.busy      := acc.io.busy
-          cores(i).io.rocc.interrupt := acc.io.interrupt
+          connectRoCC(cores(i), acc, rushBSources(i))
         case None      =>
-          cores(i).io.rocc.cmd.ready  := false.B
-          cores(i).io.rocc.resp.valid := false.B
-          cores(i).io.rocc.resp.bits  := DontCare
-          cores(i).io.rocc.busy       := false.B
-          cores(i).io.rocc.interrupt  := false.B
+          tieOffRoCC(cores(i))
       }
     }
 

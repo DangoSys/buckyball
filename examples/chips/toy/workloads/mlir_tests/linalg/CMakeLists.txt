@@ -5,6 +5,7 @@ set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
 set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
 set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
 set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 set(BBSW_BAREMETAL_TEST_SRC ${WORKLOAD_LIB_DIR}/bbsw/baremetal/test.c)
 set(BBSW_LINUX_TEST_SRC ${WORKLOAD_LIB_DIR}/bbsw/linux/test.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
@@ -80,17 +81,20 @@ function(add_linalg_conv2d_test name main_src)
     COMMAND ${ELF_CC} ${C_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${BBSW_BAREMETAL_TEST_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ}
       ${MAIN_SRC}
       ${BBSW_BAREMETAL_TEST_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
@@ -103,15 +107,18 @@ function(add_linalg_conv2d_test name main_src)
     COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${BBSW_LINUX_TEST_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ}
       ${MAIN_SRC}
       ${BBSW_LINUX_TEST_SRC}
       ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -128,6 +135,29 @@ function(add_linalg_conv2d_test name main_src)
       optest_linalg_${name}_singlecore_baremetal
     COMMENT "Building optest_linalg_${name} for all platforms"
   )
+
+  add_toy_mlir_rushb(
+    NAME ${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}
+    CXX
+    FRONT_PASSES
+      -convert-linalg-to-tile
+      -convert-tile-to-buckyball
+      -lower-buckyball-to-bank-ssa
+    SOURCES
+      ${BBSW_LINUX_TEST_SRC}
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
+      ${MAIN_SRC}
+    INCLUDE_DIRS
+      ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      ${WORKLOAD_LIB_DIR}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem
+    DEPENDS
+      ${MAIN_SRC}
+      ${BBSW_LINUX_TEST_SRC}
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C})
 endfunction()
 
 # Compile matmul.mlir -> matmul.o

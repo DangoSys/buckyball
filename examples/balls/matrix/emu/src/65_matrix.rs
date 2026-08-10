@@ -132,7 +132,6 @@ impl Instruction for Matrix {
         let p1 = pbank(ctx.bank_map, op1);
         let p2 = pbank(ctx.bank_map, op2);
         let pw: Vec<_> = (0..4).map(|g| pbank_group(ctx.bank_map, wr, g)).collect();
-
         if legacy {
             // The former BFP API encoded a square dimension in BB_ITER and
             // used the original row-major bank layout.

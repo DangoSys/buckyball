@@ -5,6 +5,12 @@ add_buckyball_ctests(
   matrix_ws_16x16_test.c
   matrix_os_32x16_test.c
   matrix_ws_32x16_test.c
+  matrix_os_48x16_test.c
+  matrix_os_48x16x25_test.c
+  matrix_os_64x16x25_test.c
+  matrix_os_64x16x25_slim_test.c
+  matrix_os_64x16x25_b051_test.c
+  matrix_os_seq_n6_n16_test.c
   matrix_os_16x16_ones.c
   matrix_os_32x32_ones.c
   matrix_os_tail_5x7x3_test.c

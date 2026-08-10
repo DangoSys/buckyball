@@ -122,12 +122,12 @@ class BuckyballGoban64Tile4CoreConfig
         new sims.base.BuckyballBaseConfig
     )
 
-/** Config1: 12 BBTiles × 5 cores each; core 0 has Buckyball, cores 1-2 Rocket-only, cores 3-4 safe core. */
+/** Config1: 12 BBTiles × 5 cores each; core 0 has Buckyball and cores 1-4 are Rocket-only. */
 class BuckyballGobanConfig1Config
     extends Config(
       new WithGobanHiddenHartIdBits(nTiles = 12, nCoresPerTile = 5, hiddenHartBase = 12) ++
         new WithBuckyballTiles(
-          "../examples/chips/goban/configs/12t5c-private-1bb-2rocket-2safe.toml",
+          "../examples/chips/goban/configs/12t5c-private-1bb-4rocket.toml",
           hiddenHartBase = Some(12)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++

@@ -1,0 +1,14 @@
+[chip]
+name = "pebble"
+topology = "configs/pebble.toml"
+compilerCore = "pebble"
+
+[runtime]
+bemu = "emu/Cargo.toml"
+kernel = "kernel"
+workloads = "workloads"
+regression = "regression"
+
+[[cores]]
+name = "pebble"
+path = "../../cores/pebble"

@@ -20,6 +20,12 @@ class BuckyballGoban8CoreP2EConfig
         new examples.goban.BuckyballGoban8CoreConfig
     )
 
+class BuckyballGoban16CoreP2EConfig
+    extends Config(
+      new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban16CoreConfig
+    )
+
 class BuckyballGoban64CoreP2EConfig
     extends Config(
       new P2EBaseConfig ++

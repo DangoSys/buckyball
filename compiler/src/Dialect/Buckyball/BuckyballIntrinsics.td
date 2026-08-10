@@ -70,6 +70,25 @@ def MvinIntrOp : Buckyball_IntrOpBase<"mvin">,
 def MvoutIntrOp : Buckyball_IntrOpBase<"mvout">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
+// Host-only DMA carriers. Unlike the RISC-V intrinsics above, these retain
+// the host pointer explicitly for rushB lowering. The guest ISA continues to
+// use its two-register mvin/mvout intrinsic ABI.
+def RushBMvinOp : Buckyball_Op<"rushb_mvin"> {
+  let summary = "rushB host DMA load";
+  let arguments = (ins LLVM_Type:$rs1, LLVM_Type:$packedXs2,
+                       LLVM_Type:$hostPtr);
+  let assemblyFormat = "$rs1 `,` $packedXs2 `,` $hostPtr attr-dict `:` "
+                       "type($rs1) `,` type($packedXs2) `,` type($hostPtr)";
+}
+
+def RushBMvoutOp : Buckyball_Op<"rushb_mvout"> {
+  let summary = "rushB host DMA store";
+  let arguments = (ins LLVM_Type:$rs1, LLVM_Type:$packedXs2,
+                       LLVM_Type:$hostPtr);
+  let assemblyFormat = "$rs1 `,` $packedXs2 `,` $hostPtr attr-dict `:` "
+                       "type($rs1) `,` type($packedXs2) `,` type($hostPtr)";
+}
+
 def CustomIntrOp
     : Buckyball_CustomIntrOpBase<"custom", "riscv_buckyball_custom",
                                  [2], ["funct7"]>,

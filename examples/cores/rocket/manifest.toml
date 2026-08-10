@@ -1,0 +1,4 @@
+[core]
+name = "rocket"
+kind = "rocket"
+config = "core.toml"

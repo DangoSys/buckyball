@@ -32,6 +32,7 @@ int main(void) {
 
   for (int i = 0; i < 16; ++i)
     packed[i] = quant_input[i];
+  bb_dma_touch(actual, sizeof(actual));
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);

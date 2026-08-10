@@ -46,7 +46,7 @@ void emitMset(mlir::OpBuilder &b, mlir::Location loc, uint64_t bankId,
 
 void populateBaseLegalizeForLLVMExportPatterns(
     mlir::LLVMTypeConverter &converter, mlir::RewritePatternSet &patterns,
-    bool includeFuncOperandForwarding);
+    bool includeFuncOperandForwarding, bool rushB);
 
 void configureBaseLegalizeForExportTarget(mlir::LLVMConversionTarget &target);
 

@@ -9,12 +9,12 @@ portFactor = 2
 memCycles = 10
 
 [sharedMem]
-enable = true
+enable = false
 entries = 16384
 inputChannels = 16
 defaultGroupCount = 1
 memCycles = 10
 
 [coreTemplate]
-include = "cores/default.toml"
+include = "../../../../cores/goban/core.toml"
 count = 16

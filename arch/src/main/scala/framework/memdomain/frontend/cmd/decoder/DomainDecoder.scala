@@ -14,6 +14,7 @@ class MemDecodeCmd(b: GlobalConfig) extends Bundle {
   val is_load   = Bool()
   val is_store  = Bool()
   val is_config = Bool()
+  val clear     = Bool()
 
   // MMIO instruction flags
   val is_mmio_set  = Bool() // true if funct7 == MMIO_SET_BITPAT
@@ -155,6 +156,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     (func7 === MSET_BITPAT) || (func7 === MMIO_SET_BITPAT),
     false.B
   )
+  io.mem_decode_cmd_o.bits.clear        := io.mem_decode_cmd_o.valid &&
+    (func7 === MSET_BITPAT) && rs2(11)
   io.mem_decode_cmd_o.bits.is_mmio_set  := Mux(
     io.mem_decode_cmd_o.valid,
     func7 === MMIO_SET_BITPAT,
@@ -165,13 +168,19 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     func7 === MVIN_MMIO_BITPAT,
     false.B
   )
-  io.mem_decode_cmd_o.bits.mem_addr     := Mux(
+
+  when(io.cmd_i.fire && func7 === MSET_BITPAT) {
+    assert(rs1(63, 10) === 0.U, "MSET reserves rs1[63:10]")
+    assert(rs2(63, 12) === 0.U, "MSET reserves rs2[63:12]")
+    assert(!(rs2(11) && !rs2(10)), "MSET clear requires alloc=1")
+  }
+  io.mem_decode_cmd_o.bits.mem_addr := Mux(
     io.mem_decode_cmd_o.valid,
     ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt,
     0.U(b.memDomain.memAddrLen.W)
   )
   // iter is always from rs1[63:30]
-  io.mem_decode_cmd_o.bits.iter         := Mux(
+  io.mem_decode_cmd_o.bits.iter     := Mux(
     io.mem_decode_cmd_o.valid,
     rs1(63, 30),
     0.U(iterLen.W)

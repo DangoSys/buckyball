@@ -7,7 +7,7 @@ build = "../../../../bebop/src/nodes/bemu/build.rs"
 [lib]
 name = "bebop_bemu"
 path = "src/lib.rs"
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "bebop"
@@ -25,6 +25,7 @@ toml = "0.8"
 bebop-dasm = { path = "../../../../bebop/src/nodes/lib/dasm" }
 bebop-bank-hash = { path = "../../../../bebop/src/nodes/lib/bank-hash" }
 bebop-bemu-profile = { path = "../../../../bebop/src/nodes/lib/bemu-profile" }
+bebop-rushb = { path = "../../../../bebop/src/nodes/lib/rushB" }
 bebop-fd-redirect = { path = "../../../../bebop/src/nodes/lib/fd-redirect" }
 bebop-rtl-trace = { path = "../../../../bebop/src/nodes/lib/rtl-trace" }
 bebop-uart = { path = "../../../../bebop/src/nodes/lib/uart" }
