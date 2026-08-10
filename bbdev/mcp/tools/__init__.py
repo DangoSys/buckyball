@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from . import validate
 from . import task_status
+from . import task_cancel
 from . import compiler_build
 from . import workload_clean
 from . import workload_build
@@ -41,6 +42,7 @@ from . import yosys_synth
 MODULES = [
     validate,
     task_status,
+    task_cancel,
     compiler_build,
     workload_clean,
     workload_build,

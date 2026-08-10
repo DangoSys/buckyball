@@ -2,6 +2,8 @@ import subprocess
 import threading
 from typing import Optional, List, Callable
 
+from utils.process_registry import current_task_scope, register_process, unregister_process
+
 
 class StreamResult:
     """Result object mimicking subprocess.CompletedProcess"""
@@ -23,6 +25,7 @@ def stream_run(
     stdout_prefix: str = "STDOUT",
     stderr_prefix: str = "STDERR",
     env: Optional[dict] = None,
+    task_scope: Optional[str] = None,
 ) -> StreamResult:
     """
     Execute command and stream output in real-time
@@ -85,10 +88,15 @@ def stream_run(
 
     # Start process
     # Use errors='replace' to handle non-UTF-8 bytes from simulation UART output
+    task_scope = task_scope or current_task_scope()
     process = subprocess.Popen(
         cmd,
         cwd=cwd,
         shell=shell,
+        # MCP workers do not provide interactive input.  Closing the child's
+        # stdin makes batch workloads observe EOF instead of waiting forever
+        # at an application prompt.
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -97,7 +105,12 @@ def stream_run(
         bufsize=1,
         executable=executable,
         env=env,
+        # A task owns a process group, so a generic cancel request also
+        # terminates shells and descendants such as nix/cargo/ninja.
+        start_new_session=True,
     )
+    if task_scope:
+        register_process(task_scope, process.pid)
 
     stdout_lines = []
     stderr_lines = []
@@ -127,6 +140,8 @@ def stream_run(
     stdout_thread.join()
     stderr_thread.join()
 
+    if task_scope:
+        unregister_process(task_scope)
     return StreamResult(
         returncode=process.returncode,
         stdout="\n".join(stdout_lines),
@@ -145,6 +160,7 @@ def stream_run_logger(
     stderr_prefix: str = "STDERR",
     verbose: bool = False,
     env: Optional[dict] = None,
+    task_scope: Optional[str] = None,
 ) -> StreamResult:
     """
     Convenience function for streaming output using logger
@@ -190,4 +206,5 @@ def stream_run_logger(
         stdout_prefix=stdout_prefix,
         stderr_prefix=stderr_prefix,
         env=env,
+        task_scope=task_scope,
     )

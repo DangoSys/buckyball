@@ -2,6 +2,8 @@
 Common utility functions for all event steps.
 """
 
+from utils.process_registry import set_current_task_scope
+
 
 def get_origin_trace_id(input_data, ctx):
     """Get the origin trace_id from input_data (passed by API step) or fall back to ctx.trace_id.
@@ -9,9 +11,9 @@ def get_origin_trace_id(input_data, ctx):
     iii 0.7+ assigns a new trace_id per handler invocation, so the API step's
     trace_id must be forwarded explicitly via input_data["_trace_id"].
     """
-    if isinstance(input_data, dict) and "_trace_id" in input_data:
-        return input_data["_trace_id"]
-    return ctx.trace_id
+    trace_id = input_data["_trace_id"] if isinstance(input_data, dict) and "_trace_id" in input_data else ctx.trace_id
+    set_current_task_scope(trace_id)
+    return trace_id
 
 
 async def check_result(ctx, returncode, continue_run=False, extra_fields=None, trace_id=None):

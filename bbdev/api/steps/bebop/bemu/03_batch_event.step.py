@@ -25,7 +25,7 @@ if scripts_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_manifest
+from bemu_common import bemu_core_manifest
 from regression import regression_workload_toml
 
 config = {
@@ -54,7 +54,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     try:
         env = os.environ.copy()
-        bemu_cargo_manifest = bemu_manifest(chip, bbdir)
+        bemu_cargo_manifest = bemu_core_manifest(chip, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(

@@ -248,6 +248,17 @@ def task_status(trace_id: str) -> Dict[str, Any]:
             "queued": True,
             "trace_id": trace_id,
         }
+    if "cancelled" in state:
+        _submitted_trace_ids.discard(trace_id)
+        body = state["cancelled"].get("body", state["cancelled"])
+        if not isinstance(body, dict):
+            raise RuntimeError(f"cancelled body must be object: {body!r}")
+        body.setdefault("success", False)
+        body.setdefault("failure", False)
+        body.setdefault("cancelled", True)
+        body.setdefault("processing", False)
+        body.setdefault("trace_id", trace_id)
+        return body
     if "success" in state:
         _submitted_trace_ids.discard(trace_id)
         out = state["success"].get("body", state["success"])
@@ -306,15 +317,18 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     if not core_manifest.is_file():
         raise FileNotFoundError(f"core manifest does not exist: {core_manifest}")
     domains = core_root / "configs" / "balldomains"
-    core_config = core_root / "core.toml"
+    core_manifest_config = _load_toml(core_manifest).get("core", {}).get("config")
+    if not isinstance(core_manifest_config, str) or not core_manifest_config:
+        raise ValueError(f"Core manifest missing core.config: {core_manifest}")
+    core_config = (core_root / core_manifest_config).resolve()
 
     if balldomain is None:
         if not core_config.is_file():
             raise FileNotFoundError(f"missing {core_config}; pass balldomain= explicitly")
         rel = _load_toml(core_config).get("balldomain")
         if not isinstance(rel, str) or not rel:
-            raise ValueError(f"core.toml missing balldomain=: {core_config}")
-        path = (core_root / rel).resolve()
+            raise ValueError(f"Core configuration missing balldomain=: {core_config}")
+        path = (core_config.parent / rel).resolve()
     else:
         raw = Path(balldomain)
         if raw.is_absolute():

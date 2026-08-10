@@ -24,6 +24,16 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "trace_id is required"}
         )
 
+    cancelled_state = await ctx.state.get(trace_id, "cancelled")
+    if cancelled_state:
+        return ApiResponse(
+            status=200,
+            body={
+                "status": "cancelled",
+                "body": cancelled_state.get("body", cancelled_state),
+            },
+        )
+
     # Check for success state
     success_state = await ctx.state.get(trace_id, "success")
     if success_state:

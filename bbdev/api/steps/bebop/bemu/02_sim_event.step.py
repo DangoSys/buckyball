@@ -6,6 +6,7 @@ Run BEMU either through its guest-ELF emulator or the rushB native ABI.
 import os
 import shlex
 import sys
+import tomllib
 from datetime import datetime
 from pathlib import Path
 
@@ -22,7 +23,8 @@ from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload, search_workload_all
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_manifest
+from utils.process_registry import cancellation_requested
+from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -63,14 +65,18 @@ def clean_model_trace(binary_dir: str) -> None:
 
 
 def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
-    search_root = f"{bbdir}/bb-tests/output/workloads/src"
-    chip_root = f"{search_root}/CTest/chips/{chip}"
+    if Path(binary_name).name != binary_name:
+        return None
 
-    chip_binary = search_workload(chip_root, binary_name)
-    if chip_binary is not None:
-        return chip_binary
+    build_root = f"{bbdir}/bb-tests/build/workloads/src"
+    output_root = f"{bbdir}/bb-tests/output/workloads/src"
+    for search_root in (build_root, output_root):
+        chip_root = f"{search_root}/CTest/chips/{chip}"
+        chip_binary = search_workload(chip_root, binary_name)
+        if chip_binary is not None:
+            return chip_binary
 
-    matches = search_workload_all(search_root, binary_name)
+    matches = search_workload_all(output_root, binary_name)
     chip_marker = f"{os.path.sep}CTest{os.path.sep}chips{os.path.sep}"
     non_chip_matches = [path for path in matches if chip_marker not in path]
     if len(non_chip_matches) == 1:
@@ -85,6 +91,22 @@ def is_native_host_elf(path: str) -> bool:
     except OSError:
         return False
     return header[:4] == b"\x7fELF" and header[18:20] == b"\x3e\x00"
+
+
+def rushb_bemu_library(manifest: Path) -> Path:
+    """Return the cdylib emitted by the Core selected for a rushB run."""
+    with manifest.open("rb") as source:
+        cargo = tomllib.load(source)
+    lib_name = cargo.get("lib", {}).get("name")
+    if not lib_name:
+        lib_name = cargo["package"]["name"].replace("-", "_")
+    return manifest.parent / "target/release" / f"lib{lib_name}.so"
+
+
+def rushb_bemu_library_dirs(manifest: Path) -> list[Path]:
+    """Locate native shared-library dependencies produced by the Core build."""
+    build_dir = manifest.parent / "target/release/build"
+    return sorted({library.parent for library in build_dir.glob("*/out/**/libriscv.so")})
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -128,10 +150,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         clean_model_trace(binary_dir)
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = f"{bbdir}/log/{timestamp}-bemu-{binary_name}"
+    log_dir = f"{bbdir}/log/{timestamp}-bemu-{Path(binary_path).name}"
     os.makedirs(log_dir, exist_ok=True)
 
     if input_data.get("rushB"):
+        # rushB is a native ABI for one accelerator instance, so it remains a
+        # Core-level backend even when guest-ELF BEMU runs a whole tile.
+        bemu_cargo_manifest = bemu_core_manifest(chip, bbdir)
         # rushB binaries are host executables. Rebuilding and co-locating the
         # backend library keeps the ABI selection explicit and avoids sending
         # a host ELF through Spike's guest-ELF path.
@@ -145,14 +170,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        bemu_library = bemu_cargo_manifest.parent / "target/release/libbebop_bemu.so"
+        bemu_library = rushb_bemu_library(bemu_cargo_manifest)
+        bemu_runtime_library = Path(binary_dir) / "libbebop_bemu.so"
+        dependency_dirs = rushb_bemu_library_dirs(bemu_cargo_manifest)
         build_cmd = shlex.join([
             "cargo", "build", "--release", "--manifest-path", str(bemu_cargo_manifest), "--lib",
         ])
         copy_cmd = shlex.join([
-            "cmake", "-E", "copy_if_different", str(bemu_library), binary_dir,
+            "cmake", "-E", "copy_if_different", str(bemu_library), str(bemu_runtime_library),
         ])
-        inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && exec {shlex.quote(binary_path)}"
+        dependency_path = os.pathsep.join(str(path) for path in dependency_dirs)
+        library_env = f"LD_LIBRARY_PATH={shlex.quote(dependency_path)}:${{LD_LIBRARY_PATH:-}}"
+        inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && {library_env} exec {shlex.quote(binary_path)}"
         run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
         ctx.logger.info(f"Running rushB BEMU: {run_cmd}")
         run_result = stream_run_logger(
@@ -161,7 +190,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             cwd=bbdir,
             stdout_prefix="rushB bemu",
             stderr_prefix="rushB bemu",
+            task_scope=origin_tid,
         )
+        if cancellation_requested(origin_tid):
+            return
         await check_result(
             ctx,
             run_result.returncode,
@@ -186,13 +218,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--manifest-path",
         str(bemu_cargo_manifest),
         "--",
-        "run",
-        "bemu",
-        "--elf",
-        binary_path,
-        "--log-dir",
-        log_dir,
     ]
+    tile = bemu_tile(chip, bbdir)
+    if tile:
+        cargo_args.extend(["--tile", str(tile), "--elf", binary_path, "--log-dir", log_dir])
+    else:
+        cargo_args.extend(["--", "run", "bemu", "--elf", binary_path, "--log-dir", log_dir])
     if input_data.get("pk"):
         cargo_args.append("--pk")
     if input_data.get("disasm"):
@@ -208,7 +239,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
+        task_scope=origin_tid,
     )
+    if cancellation_requested(origin_tid):
+        return
     if run_result.returncode != 0:
         await check_result(
             ctx,
