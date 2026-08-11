@@ -16,7 +16,6 @@ from . import bebop_verilator_build
 from . import bebop_verilator_sim
 from . import bebop_verilator_run
 from . import bebop_verilator_batch
-from . import difftest_run
 from . import verilator_clean
 from . import verilator_verilog
 from . import verilator_build
@@ -55,7 +54,6 @@ MODULES = [
     bebop_verilator_sim,
     bebop_verilator_run,
     bebop_verilator_batch,
-    difftest_run,
     verilator_clean,
     verilator_verilog,
     verilator_build,

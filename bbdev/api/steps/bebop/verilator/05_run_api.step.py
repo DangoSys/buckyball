@@ -37,6 +37,14 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
+    diff = body.get("diff", False)
+    rushb = body.get("rushB", False)
+    if diff and rushb:
+        return ApiResponse(
+            status=400,
+            body={"error": "--diff and --rushB cannot be used together"},
+        )
+
     data = {
         "config": config_name,
         "binary": binary,
@@ -46,7 +54,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "pmctrace": body.get("pmctrace", False),
         "ctrace": body.get("ctrace", False),
         "banktrace": body.get("banktrace", False),
-        "rushB": body.get("rushB", False),
+        "rushB": rushb,
+        "diff": diff,
+        "batch": body.get("batch", False),
+        "no-wave": body.get("no-wave", body.get("no_wave", False)),
         "jobs": body.get("jobs", 16),
         "from_run_workflow": True,
     }

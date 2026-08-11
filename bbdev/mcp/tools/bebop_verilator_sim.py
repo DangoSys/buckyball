@@ -19,6 +19,7 @@ def register(mcp):
         banktrace: bool = False,
         no_wave: bool = False,
         rushB: bool = False,
+        batch: bool = False,
     ) -> str:
         """Run one workload on bebop-verilator. POST /bebop/verilator/sim."""
         for n, v in (("binary", binary), ("config", config)):
@@ -34,5 +35,6 @@ def register(mcp):
             "banktrace": banktrace,
             "no-wave": no_wave,
             "rushB": rushB,
+            "batch": batch,
         }
         return fmt(submit("/bebop/verilator/sim", params))

@@ -18,7 +18,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
+from utils.path import get_buckyball_path, get_chip_from_config, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
@@ -56,6 +56,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+
+    diff = bool(input_data.get("diff", False))
+    batch = bool(input_data.get("batch", False))
+    if diff and input_data.get("rushB"):
+        ctx.logger.error("--diff and --rushB cannot be used together")
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "diff_conflicts_with_rushB"},
+            trace_id=origin_tid,
+        )
+        return
+
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     if not os.path.isdir(vsrc_dir):
@@ -67,7 +81,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    bebop_bin = f"{bebop_dir}/target/release/bebop"
+    build_dir = bebop_dir
+    chip = input_data.get("chip")
+    if diff:
+        try:
+            chip = chip or get_chip_from_config(bbdir, arch_config)
+        except ValueError as error:
+            ctx.logger.error(str(error))
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={"error": "chip_resolution_failed", "detail": str(error)},
+                trace_id=origin_tid,
+            )
+            return
+        build_dir = os.path.join(bbdir, "examples", "chips", chip, "emu")
+
+    bebop_bin = os.path.join(build_dir, "target", "release", "bebop")
     if not os.path.isfile(bebop_bin):
         ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
         await check_result(
@@ -77,9 +108,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    marker_path = build_marker_path(bebop_dir)
+    marker_path = build_marker_path(build_dir)
     try:
-        marker = read_build_marker(bebop_dir)
+        marker = read_build_marker(build_dir)
     except FileNotFoundError:
         ctx.logger.error(f"bebop verilator build marker does not exist: {marker_path}")
         await check_result(
@@ -103,6 +134,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         marker.get("config") != arch_config
         or marker.get("vsrc_dir") != expect_vsrc
         or marker.get("binary") != expect_bin
+        or bool(marker.get("diff", False)) != diff
     ):
         ctx.logger.error(f"bebop verilator build marker mismatch: {marker}")
         await check_result(
@@ -114,6 +146,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                     "config": arch_config,
                     "vsrc_dir": expect_vsrc,
                     "binary": expect_bin,
+                    "diff": diff,
                 },
             },
             trace_id=origin_tid,
@@ -121,7 +154,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     binary_name = input_data.get("binary", "")
-    binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
+    workload_root = f"{bbdir}/bb-tests/output/workloads/src"
+    binary_path = None
+    if diff and chip:
+        binary_path = search_workload(
+            f"{workload_root}/CTest/chips/{chip}", binary_name
+        )
+    if binary_path is None:
+        binary_path = search_workload(workload_root, binary_name)
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(
@@ -133,7 +173,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"binary_path: {binary_path}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = f"{bbdir}/log/{timestamp}-verilator-{binary_name}"
+    mode = "difftest" if diff else "verilator"
+    log_dir = f"{bbdir}/log/{timestamp}-{mode}-{binary_name}"
     os.makedirs(log_dir, exist_ok=True)
 
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
@@ -170,12 +211,28 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"{shlex.quote(bebop_bin)} run verilator "
             f"--elf={shlex.quote(binary_path)} "
             f"--log-dir={shlex.quote(log_dir)}"
+            f"{' --diff' if diff else ''}"
+            f"{' --batch' if batch else ''}"
             f"{wave_arg}"
             f"{trace_args}"
         )
-        ctx.logger.info(f"Running bebop verilator: {run_cmd}")
-        stdout_prefix = "bebop verilator"
-        stderr_prefix = "bebop verilator"
+        if diff:
+            preload = os.pathsep.join(
+                path
+                for path in (
+                    f"{bbdir}/result/lib/libdramsim3.so",
+                    os.environ.get("LD_PRELOAD", ""),
+                )
+                if path
+            )
+            run_inner = (
+                f"cd {shlex.quote(build_dir)} && "
+                f"export LD_PRELOAD={shlex.quote(preload)} && exec {run_cmd}"
+            )
+            run_cmd = f"nix develop -c sh -c {shlex.quote(run_inner)}"
+        ctx.logger.info(f"Running bebop verilator (diff={diff}): {run_cmd}")
+        stdout_prefix = "bebop verilator difftest" if diff else "bebop verilator"
+        stderr_prefix = stdout_prefix
     run_result = stream_run_logger(
         cmd=run_cmd,
         logger=ctx.logger,
@@ -191,9 +248,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         extra_fields={
             "task": "verilator",
             "backend": "rushB" if input_data.get("rushB") else "guest-elf",
+            "diff": diff,
+            "batch": batch,
+            "chip": chip,
             "binary": binary_path,
             "config": arch_config,
             "log_dir": log_dir,
+            "bank_diff": os.path.join(log_dir, "bank_diff.ndjson") if diff else None,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

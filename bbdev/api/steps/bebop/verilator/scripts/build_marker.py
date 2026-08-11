@@ -6,13 +6,20 @@ def build_marker_path(bebop_dir: str) -> str:
   return os.path.join(bebop_dir, "target", "debug", ".bbdev-verilator-build.json")
 
 
-def write_build_marker(bebop_dir: str, config: str, vsrc_dir: str, binary: str):
+def write_build_marker(
+    bebop_dir: str,
+    config: str,
+    vsrc_dir: str,
+    binary: str,
+    diff: bool = False,
+):
   marker = build_marker_path(bebop_dir)
   os.makedirs(os.path.dirname(marker), exist_ok=True)
   data = {
     "config": config,
     "vsrc_dir": os.path.abspath(vsrc_dir),
     "binary": os.path.abspath(binary),
+    "diff": diff,
   }
   tmp = f"{marker}.tmp"
   with open(tmp, "w") as f:
