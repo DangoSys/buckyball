@@ -1,6 +1,6 @@
 # See LICENSE for license details.
 
-CHIPYARD_STAGING_DIR := $(chipyard_dir)/sims/firesim-staging
+CHIPYARD_STAGING_DIR := $(abspath $(makefile_dir)/../../../../../../../thirdparty/firesim-staging)
 
 # target scala directories to copy into midas. used by TARGET_COPY_TO_MIDAS_SCALA_DIRS
 TARGET_COPY_TO_MIDAS_SCALA_DIRS := \
@@ -13,15 +13,13 @@ $(FIRRTL_FILE) $(ANNO_FILE) &: SHELL := /usr/bin/env bash # needed for running s
 $(FIRRTL_FILE) $(ANNO_FILE) &: firesim_target_symlink_hook
 	@mkdir -p $(@D)
 	@mkdir -p $(TARGET_SBT_DIR)/target/generated-src/$(long_name)
-	source $(TARGET_SBT_DIR)/../sourceme.sh
-	cd $(TARGET_SBT_DIR) && \
-		pwd && \
-		${SBT} ";project $(TARGET_SBT_PROJECT); runMain chipyard.Generator \
+	cd $(TARGET_MILL_DIR) && \
+		mill -i firesim.runMain chipyard.Generator \
 			--target-dir $(TARGET_SBT_DIR)/target/generated-src/$(long_name) \
 			--name $(long_name) \
 			--top-module $(DESIGN_PACKAGE).$(DESIGN) \
 			--legacy-configs $(TARGET_CONFIG_PACKAGE):$(TARGET_CONFIG) \
-			--emit-legacy-sfc"
+			--emit-legacy-sfc
 	# Link to the generated files
 	ln -sf $(TARGET_SBT_DIR)/target/generated-src/$(long_name)/$(long_name).sfc.fir $(FIRRTL_FILE)
 	ln -sf $(TARGET_SBT_DIR)/target/generated-src/$(long_name)/$(long_name).anno.json $(ANNO_FILE)

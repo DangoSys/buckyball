@@ -3,9 +3,9 @@
 
 # Liberty (.lib) file path for ASIC area estimation
 # If not specified, yosys will use generic gate-level statistics
-# Example:
-#   liberty: /path/to/your/standard_cell.lib
-liberty: 
+# The default Nix EDA shell exports SKY130_ROOT.  bbdev expands environment
+# variables in this file before invoking Yosys/OpenSTA.
+liberty: ${SKY130_ROOT}/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
 
 # Default top module name (override with --top on CLI)
 top: BuckyballAccelerator
@@ -15,8 +15,18 @@ elaborate_config: sims.verilator.BuckyballToyVerilatorConfig
 
 # OpenSTA timing analysis settings
 # Clock period in nanoseconds (used for STA constraint)
-# Default 10ns = 500MHz
-clock_period: 2.0
+# Default 10ns = 100MHz
+clock_period: 10.0
 
 # Clock port name in the design
 clock_name: clock
+
+# Power estimation reports dynamic power as Internal + Switching; leakage is
+# retained in OpenSTA's raw report but not included in dynamic_power_report.txt.
+# Supply a workload VCD through `bbdev yosys --synth --vcd <file>` for an
+# activity-driven result.  Empty vcd uses the default toggle-rate estimate below.
+vcd:
+input_activity: 0.1
+input_duty: 0.5
+clock_activity: 1.0
+clock_duty: 0.5

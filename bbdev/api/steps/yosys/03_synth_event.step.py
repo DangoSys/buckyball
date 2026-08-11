@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import yaml
 from datetime import datetime
@@ -22,11 +23,41 @@ config = {
 }
 
 
+POWER_TOTAL_RE = re.compile(
+    r"^Total\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)",
+    re.M,
+)
+
+
+def dynamic_power_report(power_report: str, activity_source: str) -> tuple[str, float] | None:
+    """Return OpenSTA's internal-plus-switching power, excluding leakage."""
+    match = POWER_TOTAL_RE.search(power_report)
+    if match is None:
+        return None
+    internal, switching, _leakage, _total = (float(value) for value in match.groups())
+    dynamic = internal + switching
+    return (
+        "OpenSTA dynamic power\n"
+        f"  Activity source: {activity_source}\n"
+        f"  Internal: {internal:.6e} W\n"
+        f"  Switching: {switching:.6e} W\n"
+        f"  Dynamic (internal + switching): {dynamic:.6e} W\n",
+        dynamic,
+    )
+
+
 def load_yosys_config():
     config_path = os.path.join(os.path.dirname(__file__), "scripts", "yosys-config.yaml")
     if os.path.exists(config_path):
         with open(config_path, "r") as f:
-            return yaml.safe_load(f) or {}
+            config = yaml.safe_load(f) or {}
+            # Keep paths portable between the Nix shell and explicit user
+            # configurations while retaining normal YAML scalar values.
+            if isinstance(config.get("liberty"), str):
+                config["liberty"] = os.path.expandvars(os.path.expanduser(config["liberty"]))
+            if isinstance(config.get("vcd"), str) and config["vcd"]:
+                config["vcd"] = os.path.expandvars(os.path.expanduser(config["vcd"]))
+            return config
     return {}
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -38,7 +69,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     top_module = input_data.get("top") or yosys_cfg.get("top") or "BuckyballAccelerator"
     liberty = yosys_cfg.get("liberty")
 
-    source_list_path = os.path.join(build_dir, "yosys_sources.list")
+    source_list_path = input_data.get("source_list") or os.path.join(build_dir, "yosys_sources.list")
     if not os.path.exists(source_list_path):
         success_result, failure_result = await check_result(
             ctx,
@@ -67,6 +98,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     yosys_output_dir = input_data.get("log_dir", fallback_log_dir)
     os.makedirs(yosys_output_dir, exist_ok=True)
     ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
+
+    ip_replacement = input_data.get("ip_replacement") or {}
+    macro_liberties = ip_replacement.get("macro_liberties", [])
+    macro_area = ip_replacement.get("macro_area", 0.0)
+    mapped_memories = ip_replacement.get("mapped", 0)
 
     read_commands = "\n".join([f"read_verilog -sv {src}" for src in vsrcs])
     yosys_script = f"{yosys_output_dir}/synth_area.ys"
@@ -101,21 +137,68 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="yosys synth",
     )
 
-    extra = {"task": "synth", "output_dir": yosys_output_dir}
+    extra = {
+        "task": "synth",
+        "output_dir": yosys_output_dir,
+        "ip_manifest": ip_replacement.get("manifest"),
+        "ip_mapped_memories": mapped_memories,
+        "ip_macro_area": macro_area,
+    }
     netlist_file = f"{yosys_output_dir}/synth_netlist.v"
     timing_report_file = f"{yosys_output_dir}/timing_report.txt"
+    power_report_file = f"{yosys_output_dir}/power_report.txt"
+    dynamic_power_report_file = f"{yosys_output_dir}/dynamic_power_report.txt"
+    sta_returncode = 0
 
     if liberty and os.path.exists(liberty) and os.path.exists(netlist_file) and result.returncode == 0:
         clock_period = yosys_cfg.get("clock_period", 10.0)
         clock_name = yosys_cfg.get("clock_name", "clock")
+        vcd = input_data.get("vcd") or yosys_cfg.get("vcd")
+        if isinstance(vcd, str):
+            vcd = os.path.expandvars(os.path.expanduser(vcd))
+        if vcd and not os.path.isfile(vcd):
+            extra["error"] = f"VCD file does not exist: {vcd}"
+            sta_returncode = 1
+            vcd = None
+        if sta_returncode:
+            await check_result(
+                ctx,
+                sta_returncode,
+                continue_run=False,
+                extra_fields=extra,
+                trace_id=origin_tid,
+            )
+            return
         sta_script = f"{yosys_output_dir}/sta_timing.tcl"
         with open(sta_script, "w") as f:
             f.write(f"read_liberty {liberty}\n")
+            for macro_liberty in macro_liberties:
+                f.write(f"read_liberty {macro_liberty}\n")
             f.write(f"read_verilog {netlist_file}\n")
             f.write(f"link_design {top_module}\n")
-            f.write(f"create_clock [get_ports {clock_name}] -name clk -period {clock_period}\n")
+            # Prefer the configured port, then use the generated-memory clock
+            # naming convention.  Some small modules are combinational and
+            # therefore have no clock at all.
+            f.write(f"set bb_clock_port [get_ports -quiet {clock_name}]\n")
+            f.write("if {[llength $bb_clock_port] == 0} { set bb_clock_port [get_ports -quiet *clk*] }\n")
+            f.write(f"if {{[llength $bb_clock_port] > 0}} {{ create_clock $bb_clock_port -name clk -period {clock_period} }}\n")
             f.write(f"report_checks -path_delay max -format full > {timing_report_file}\n")
             f.write(f"report_checks -path_delay max -format full\n")
+            if vcd and os.path.exists(vcd):
+                f.write(f"read_vcd {vcd} -scope {top_module}\n")
+                extra["power_activity_source"] = vcd
+            else:
+                input_activity = yosys_cfg.get("input_activity", 0.1)
+                input_duty = yosys_cfg.get("input_duty", 0.5)
+                clock_activity = yosys_cfg.get("clock_activity", 1.0)
+                clock_duty = yosys_cfg.get("clock_duty", 0.5)
+                f.write(f"set_power_activity -input -activity {input_activity} -duty {input_duty}\n")
+                # OpenSTA expects the clock collection after ``-clock``.
+                # Applying the default rate to all clocks keeps this usable
+                # for generated designs whose clock port is renamed.
+                f.write(f"if {{[llength [all_clocks]] > 0}} {{ set_power_activity -clock [all_clocks] -activity {clock_activity} -duty {clock_duty} }}\n")
+                extra["power_activity_source"] = "default"
+            f.write(f"report_power -digits 4 > {power_report_file}\n")
             f.write("exit\n")
 
         sta_result = stream_run_logger(
@@ -129,11 +212,38 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if sta_result.returncode == 0 and os.path.exists(timing_report_file):
             with open(timing_report_file, "r") as f:
                 extra["timing_report"] = f.read()
+        sta_returncode = sta_result.returncode
+        if sta_result.returncode == 0 and os.path.exists(power_report_file):
+            with open(power_report_file, "r") as f:
+                extra["power_report"] = f.read()
+            dynamic_result = dynamic_power_report(
+                extra["power_report"], extra.get("power_activity_source", "unknown")
+            )
+            if dynamic_result is not None:
+                dynamic_report, dynamic_power = dynamic_result
+                with open(dynamic_power_report_file, "w") as f:
+                    f.write(dynamic_report)
+                extra["dynamic_power_report"] = dynamic_report
+                extra["dynamic_power_w"] = dynamic_power
 
     report_file = f"{yosys_output_dir}/area_report.txt"
     if os.path.exists(report_file):
         with open(report_file, "r") as f:
             extra["area_report"] = f.read()
+        if macro_area:
+            chip_area = re.search(r"Chip area for module .*?:\s+([0-9.]+)", extra["area_report"])
+            standard_area = float(chip_area.group(1)) if chip_area else 0.0
+            total_area = standard_area + macro_area
+            ip_area_report = (
+                "\nIP macro area summary\n"
+                f"  Macro area: {macro_area:.6f} um^2\n"
+                f"  Standard-cell area: {standard_area:.6f} um^2\n"
+                f"  Total estimated area: {total_area:.6f} um^2\n"
+            )
+            with open(report_file, "a") as f:
+                f.write(ip_area_report)
+            extra["area_report"] += ip_area_report
+            extra["estimated_total_area"] = total_area
 
     hierarchy_file = f"{yosys_output_dir}/hierarchy_report.txt"
     if os.path.exists(hierarchy_file):
@@ -142,7 +252,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     await check_result(
         ctx,
-        result.returncode,
+        result.returncode or sta_returncode,
         continue_run=False,
         extra_fields=extra,
         trace_id=origin_tid,

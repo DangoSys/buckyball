@@ -16,7 +16,7 @@ config = {
     "description": "run yosys synthesis for area estimation",
     "flows": ["yosys"],
     "triggers": [api("POST", "/yosys/synth")],
-    "enqueues": ["yosys.synth"],
+    "enqueues": ["ip-replace.run"],
 }
 
 
@@ -30,6 +30,19 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "log_dir": log_dir,
         "top": req_arg(body, "top"),
         "config": req_arg(body, "config"),
+        "vcd": req_arg(body, "vcd"),
     }
-    await ctx.enqueue({"topic": "yosys.synth", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue(
+        {
+            "topic": "ip-replace.run",
+            "data": {
+                **data,
+                "source_list": f"{data['output_dir']}/yosys_sources.list",
+                "ip_replace_output_dir": log_dir,
+                "consumer": "yosys",
+                "next_topic": "yosys.synth",
+                "_trace_id": ctx.trace_id,
+            },
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -80,10 +80,13 @@ WORKFLOW_COMMANDS = {
     "dc": {
         "verilog": 'Generate DC RTL. Args: "--config <cfg> [--dir <root>]"',
     },
+    "ip-replace": {
+        "run": 'Replace behavioral IP RTL. Args: "--source-list <file> --output-dir <dir> [--top <module>] [--consumer <dc|yosys>]"',
+    },
     "yosys": {
-        "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
+        "run": 'Run yosys flow. Args: "[--top <top_module>] [--config <cfg>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
         "verilog": 'Generate verilog for yosys flow. Args: "[--config <cfg>] [--output-dir <dir>] [--log-dir <dir>]"',
-        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>]"',
+        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
     },
     "uvm": {
         "build": 'Build a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>]"',

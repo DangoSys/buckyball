@@ -11,7 +11,7 @@ build_farm:
   base_recipe: build-farm-recipes/externally_provisioned.yaml
   recipe_arg_overrides:
     # REQUIRED: (replace this) default location of build directory on build host.
-    default_build_dir: /home/mio/Code/buckyball/arch/thirdparty/chipyard/sims/firesim/deploy/FIRESIM_BUILD_DIR
+    default_build_dir: /home/mio/Code/buckyball/thirdparty/firesim/deploy/FIRESIM_BUILD_DIR
     # REQUIRED: List of IP addresses (or "localhost"). Each can have an OPTIONAL
     # argument, called "override_build_dir", specifying to override the default
     # build directory.
@@ -31,7 +31,7 @@ build_farm:
 builds_to_run:
     # this section references builds defined in config_build_recipes.yaml
     # if you add a build here, it will be built when you run buildbitstream
-    - alveo_u280_firesim_GemminiBuckyballConfig_no_nic
+    - alveo_u280_firesim_BuckyballToyConfig_no_nic
     # - alveo_u280_firesim_BuckyballToyConfig_no_nic
 
 agfis_to_share:

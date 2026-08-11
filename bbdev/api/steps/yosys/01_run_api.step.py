@@ -30,6 +30,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "log_dir": log_dir,
         "top": req_arg(body, "top"),
         "config": req_arg(body, "config"),
+        "vcd": req_arg(body, "vcd"),
         "from_run_workflow": True,
     }
     await ctx.enqueue({"topic": "yosys.run", "data": {**data, "_trace_id": ctx.trace_id}})

@@ -40,7 +40,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     # Fix AU280 board_part version (1.2 -> 1.0) for Vivado compatibility
     # ==================================================================================
-    au280_tcl = f"{bbdir}/arch/thirdparty/chipyard/sims/firesim/platforms/xilinx_alveo_u280/cl_firesim/scripts/au280.tcl"
+    au280_tcl = f"{bbdir}/thirdparty/firesim/platforms/xilinx_alveo_u280/cl_firesim/scripts/au280.tcl"
     if os.path.exists(au280_tcl):
         with open(au280_tcl, "r") as f:
             content = f.read()

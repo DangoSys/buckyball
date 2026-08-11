@@ -26,6 +26,7 @@ TARGET_SBT_PROJECT := buckyball
 
 # Point to our project directory
 TARGET_SBT_DIR := $(abspath $(makefile_dir)/../../../../../../../arch)
+TARGET_MILL_DIR := $(TARGET_SBT_DIR)
 TARGET_SOURCE_DIRS := $(abspath $(makefile_dir)/../../../../../../../arch/src/main/scala)
 
 # SBT launcher

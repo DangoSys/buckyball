@@ -14,13 +14,14 @@ if utils_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
+from utils.verilog import seq_mem_elaboration_command
 
 config = {
     "name": "yosys verilog",
     "description": "generate verilog for yosys flow",
     "flows": ["yosys"],
     "triggers": [queue("yosys.run"), queue("yosys.verilog")],
-    "enqueues": ["yosys.synth"],
+    "enqueues": ["ip-replace.run"],
 }
 
 
@@ -176,12 +177,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(build_dir)
     os.makedirs(build_dir, exist_ok=True)
 
-    verilog_command = (
-        f"mill -i __.test.runMain sims.verilator.Elaborate {elaborate_config} "
-        "--disable-annotation-unknown -strip-debug-info -O=debug "
-        "-lowering-options=disallowLocalVariables "
-        f"--split-verilog -o={build_dir}"
-    )
+    mem_conf = os.path.join(build_dir, "mems.conf")
+    verilog_command = seq_mem_elaboration_command(elaborate_config, build_dir, mem_conf)
 
     result = stream_run_logger(
         cmd=verilog_command,
@@ -222,12 +219,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     await check_result(
         ctx,
         result.returncode,
-        continue_run=input_data.get("from_run_workflow", False),
-        extra_fields={"task": "verilog", "source_list": source_list_path},
+        continue_run=True,
+        extra_fields={"task": "verilog", "source_list": source_list_path, "mem_conf": mem_conf},
         trace_id=origin_tid,
     )
 
-    if input_data.get("from_run_workflow"):
-        await ctx.enqueue({"topic": "yosys.synth", "data": {**input_data, "task": "run"}})
+    await ctx.enqueue(
+        {
+            "topic": "ip-replace.run",
+            "data": {
+                **input_data,
+                "source_list": source_list_path,
+                "ip_replace_output_dir": yosys_log_dir,
+                "consumer": "yosys",
+                "mem_conf": mem_conf,
+                "next_topic": "yosys.synth" if input_data.get("from_run_workflow") else None,
+                "task": "run" if input_data.get("from_run_workflow") else "verilog",
+                "_trace_id": origin_tid,
+            },
+        }
+    )
 
     return

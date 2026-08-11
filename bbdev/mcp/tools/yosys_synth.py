@@ -14,6 +14,7 @@ def register(mcp):
         config: Optional[str] = None,
         output_dir: Optional[str] = None,
         log_dir: Optional[str] = None,
+        vcd: Optional[str] = None,
     ) -> str:
         """Yosys synthesis + OpenSTA. POST /yosys/synth."""
         return fmt(
@@ -25,7 +26,7 @@ def register(mcp):
                     config=config,
                     output_dir=output_dir,
                     log_dir=log_dir,
+                    vcd=vcd,
                 ),
             )
         )
-
