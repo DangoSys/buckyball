@@ -18,6 +18,12 @@ name = "test_bemu"
 path = "../../../../bebop/tests/test_bemu.rs"
 harness = false
 
+[[test]]
+name = "test_verilator"
+path = "../../../../bebop/tests/test_verilator.rs"
+harness = false
+required-features = ["verilator"]
+
 [dependencies]
 snafu = "0.8"
 once_cell = "1"
