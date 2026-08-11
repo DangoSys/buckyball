@@ -42,6 +42,14 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"}
         )
 
+    diff = bool(body.get("diff", False))
+    rushB = bool(body.get("rushB", False))
+    if diff and rushB:
+        return ApiResponse(
+            status=400,
+            body={"error": "--diff and --rushB cannot be used together"},
+        )
+
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, body.get("vsrc_dir"))
 
     data = {
@@ -50,7 +58,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "vsrc_dir": vsrc_dir,
         "test": test_type,
         "clean-before": body.get("clean-before", body.get("clean_before", False)),
-        "rushB": bool(body.get("rushB", False)),
+        "rushB": rushB,
+        "diff": diff,
     }
     await ctx.enqueue({"topic": "bebop.verilator.batch", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

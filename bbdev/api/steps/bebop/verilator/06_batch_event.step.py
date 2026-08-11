@@ -60,9 +60,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     test_type = input_data.get("test", "elf-tests")
     rushB = bool(input_data.get("rushB", False))
+    diff = bool(input_data.get("diff", False))
+    if diff and rushB:
+        ctx.logger.error("--diff and --rushB cannot be used together")
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "diff_conflicts_with_rushB"},
+            trace_id=origin_tid,
+        )
+        return
     try:
         workload_toml = regression_workload_toml(
-            chip, "verilator", test_type, bbdir, rushB=rushB
+            chip, "verilator", test_type, bbdir, rushB=rushB, diff=diff
         )
     except ValueError as e:
         ctx.logger.error(str(e))
@@ -74,7 +85,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     ctx.logger.info(
-        f"Running {test_type} with workload config: {workload_toml} rushB={rushB}"
+        f"Running {test_type} with workload config: {workload_toml} "
+        f"rushB={rushB} diff={diff}"
     )
 
     vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
@@ -88,19 +100,51 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
-    if input_data.get("clean-before", input_data.get("clean_before", False)):
-        shutil.rmtree(f"{bebop_dir}/test-artifacts", ignore_errors=True)
-        ctx.logger.info("Cleaned previous bebop test artifacts")
-
     env = os.environ.copy()
     env.update({
         "BEBOP_WORKLOAD_TOML": workload_toml,
         "BEBOP_BB_TESTS_ROOT": elf_root,
+        "BEBOP_ARCH_CONFIG": arch_config,
         "VSRC_PATH": vsrc_dir,
     })
+
+    manifest = f"{bebop_dir}/Cargo.toml"
+    features = "verilator"
+    if diff:
+        manifest = f"{bbdir}/examples/chips/{chip}/emu/Cargo.toml"
+        if not os.path.isfile(manifest):
+            ctx.logger.error(f"Chip emulator manifest does not exist: {manifest}")
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={"error": "chip_manifest_not_found", "manifest": manifest},
+                trace_id=origin_tid,
+            )
+            return
+        features = "verilator,bemu,difftest"
+        preload = os.pathsep.join(
+            path
+            for path in (
+                f"{bbdir}/result/lib/libdramsim3.so",
+                os.environ.get("LD_PRELOAD", ""),
+            )
+            if path
+        )
+        env.update({
+            "BEBOP_VERILATOR_DIFF": "1",
+            "BEBOP_DIFF_LD_PRELOAD": preload,
+            "BEBOP_DIFF_RUN_DIR": os.path.dirname(manifest),
+        })
+
+    if input_data.get("clean-before", input_data.get("clean_before", False)):
+        artifact_dir = os.path.join(os.path.dirname(manifest), "test-artifacts")
+        shutil.rmtree(artifact_dir, ignore_errors=True)
+        ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
+
     nextest_cmd = (
-        f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(f'{bebop_dir}/Cargo.toml')} "
-        "--features verilator --test test_verilator "
+        f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(manifest)} "
+        f"--features {shlex.quote(features)} --test test_verilator "
         f"--config-file {shlex.quote(nextest_config)} "
         f"--config={vsrc_config}"
     )
@@ -122,12 +166,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "batch",
-            "backend": "verilator-rushB" if rushB else "verilator",
+            "backend": "verilator-rushB" if rushB else ("difftest" if diff else "verilator"),
             "chip": chip,
             "config": arch_config,
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,
             "rushB": rushB,
+            "diff": diff,
             "nextest_config": nextest_config,
             "workload_toml": workload_toml,
         },

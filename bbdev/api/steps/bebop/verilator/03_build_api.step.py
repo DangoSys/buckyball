@@ -32,6 +32,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "config": arch_config,
         "jobs": body.get("jobs", 16),
+        "diff": bool(body.get("diff", False)),
         "vsrc_dir": get_verilator_build_dir(
             bbdir,
             arch_config,

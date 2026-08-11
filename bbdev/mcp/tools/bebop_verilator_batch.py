@@ -14,6 +14,7 @@ def register(mcp):
         test: str,
         clean_before: bool = False,
         rushB: bool = False,
+        diff: bool = False,
     ) -> str:
         """Batch bebop-verilator regression. POST /bebop/verilator/batch."""
         for n, v in (("chip", chip), ("config", config)):
@@ -30,6 +31,7 @@ def register(mcp):
                     "test": test,
                     "clean-before": clean_before,
                     "rushB": rushB,
+                    "diff": diff,
                 },
             )
         )
