@@ -1,0 +1,21 @@
+[slice]
+id = "enc_2"
+subgraph = "sg_encoder"
+core = "audio-encoder"
+instance = 2
+scope = "encoder_layers[4:6] + final_norm"
+
+[io.in]
+name = "enc_act_23"
+dtype = "f32"
+shape = [1, 1500, 512]
+sharedmem_region = "enc_act_23"
+
+[io.out]
+name = "enc_states"
+dtype = "f32"
+shape = [1, 1500, 512]
+sharedmem_region = "enc_states"
+
+[policy]
+mismatch = "error"

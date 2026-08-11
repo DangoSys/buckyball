@@ -203,12 +203,15 @@ set(LINALG_MATMUL_BAREMETAL_BIN
 add_custom_command(
     OUTPUT ${LINALG_MATMUL_BAREMETAL_BIN}
     COMMAND ${ELF_CC} ${C_FLAGS}
+        -I${WORKLOAD_LIB_DIR}
         -o ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c
+        ${BBHW_MEM_C}
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
+        ${BBHW_MEM_C}
         ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
         ${BBSW_BAREMETAL_DIR}/crt0.S
         ${BBSW_BAREMETAL_DIR}/syscalls.c

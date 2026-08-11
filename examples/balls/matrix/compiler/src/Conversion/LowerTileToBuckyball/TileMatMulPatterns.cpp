@@ -74,11 +74,12 @@ public:
         cShape[cShape.size() - 1] != (int64_t)N)
       return tileMatMulOp.emitError("matmul input/output shapes mismatch");
 
-    if (!aType.getElementType().isInteger(8) ||
-        !bType.getElementType().isInteger(8) ||
-        !cType.getElementType().isInteger(32))
+    const bool isWideFloat =
+        aType.getElementType().isF32() || aType.getElementType().isBF16();
+    if (isWideFloat && (bType.getElementType() != aType.getElementType() ||
+                        cType.getElementType() != aType.getElementType()))
       return tileMatMulOp.emitError(
-          "Matrix Ball supports only i8 A/B with i32 C");
+          "floating-point matmul requires matching A/B/C element types");
 
     size_t M_pad = ceilDiv(M, 16) * 16;
     size_t K_pad = ceilDiv(K, 16) * 16;

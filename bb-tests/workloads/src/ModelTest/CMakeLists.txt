@@ -1,10 +1,13 @@
 set(E2E_MODEL_DIR ${MODELTEST_WORKLOAD_DIR}/e2e)
 
-# Enable all architectures and models by default for e2e
-# Users can override with -DARCH=... -DMODEL=... at cmake configure time
+# Enable models by default for e2e configure. Architectures: gemmini stays on
+# for reference backends; Buckyball ModelTest archs only exist for
+# pebble|goban|poly. Override with -DARCH=... -DMODEL=... at cmake configure.
 if(NOT DEFINED ARCH)
   set(ARCH_GEMMINI ON)
-  set(ARCH_BUCKYBALL ON)
+  if(BUCKYBALL_WORKLOAD_CHIP MATCHES "^(pebble|goban|poly)$")
+    set(ARCH_BUCKYBALL ON)
+  endif()
 endif()
 
 if(NOT DEFINED MODEL)

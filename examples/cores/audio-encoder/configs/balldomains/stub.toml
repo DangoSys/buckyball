@@ -1,0 +1,18 @@
+# LEAD STUB — core-designer must replace for encoder slice Balls.
+
+ballNum = 4
+
+ballIdMappings = [
+  { ballId = 0, ballName = "MatrixBall", ballClass = "examples.balls.matrix.MatrixBall", config = "../../../../balls/matrix/configs/lane16.toml", inBW = 2, outBW = 4 },
+  { ballId = 1, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "../../../../balls/fp2int/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 2, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 }
+]
+
+ballISA = [
+  { mnemonic = "MATRIX", funct7 = 65, bid = 0 },
+  { mnemonic = "MATRIX_F32", funct7 = 66, bid = 0 },
+  { mnemonic = "FP2INT", funct7 = 51, bid = 1 },
+  { mnemonic = "INT2FP", funct7 = 52, bid = 2 },
+  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 3 }
+]

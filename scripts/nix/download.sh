@@ -24,21 +24,36 @@ begin_step "0-1" "submodules init"
 cd ${BBDIR}
 git submodule update --init --progress \
   arch/thirdparty/chipyard \
+  arch/thirdparty/rocket-chip \
+  arch/thirdparty/boom \
+  arch/thirdparty/rocket-chip-inclusive-cache \
+  arch/thirdparty/berkeley-hardfloat \
   bb-tests/workloads/lib/kernel \
   bbdev \
   bebop \
   compiler/thirdparty/buddy-mlir \
   docs \
   verify \
-  thirdparty/waveform-mcp
+  thirdparty/firesim \
+thirdparty/waveform-mcp
 git submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   bb-tests/thirdparty/linux \
   bb-tests/thirdparty/opensbi
+git -C ${BBDIR}/thirdparty/firesim submodule update --init --progress \
+  sim/rocket-chip \
+  sim/berkeley-hardfloat \
+  sim/diplomacy \
+  sim/cde
 
-# I dont know why below is need for chipyard submodules, but it is
+# Rocket-Chip, BOOM, Inclusive Cache, and Hardfloat are provided by
+# Buckyball's arch/thirdparty submodules above rather than Chipyard copies.
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress fpga/fpga-shells
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress generators/*
-git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress sims/firesim
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress \
+  generators/diplomacy \
+  generators/rocc-acc-utils \
+  generators/bar-fetchers \
+  generators/testchipip \
+  generators/rocket-chip-blocks
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --progress tools/stage tools/cde tools/firrtl2 tools/rocket-dsp-utils tools/fixedpoint tools/dsptools
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/stage
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/cde
@@ -46,14 +61,8 @@ git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --fo
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force tools/rocket-dsp-utils
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocc-acc-utils
 git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/bar-fetchers
-
-# FireSim sim/ has its own submodules (cde, rocket-chip, diplomacy, berkeley-hardfloat)
-rm -rf ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/cde \
-       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/rocket-chip \
-       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/diplomacy \
-       ${BBDIR}/arch/thirdparty/chipyard/sims/firesim/sim/berkeley-hardfloat
-git -C ${BBDIR}/arch/thirdparty/chipyard/sims/firesim submodule update --init --progress \
-  sim/cde sim/rocket-chip sim/diplomacy sim/berkeley-hardfloat
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/testchipip
+git -C ${BBDIR}/arch/thirdparty/chipyard submodule update --init --checkout --force generators/rocket-chip-blocks
 
 begin_step "0-3" "buddy-mlir llvm init"
 git -C ${BBDIR}/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

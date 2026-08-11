@@ -36,7 +36,7 @@ import freechips.rocketchip.tilelink.{
 }
 import freechips.rocketchip.subsystem.{ExtMem, HierarchicalElementCrossingParamsLike}
 import freechips.rocketchip.prci.{ClockCrossingType, ClockSinkParameters, RationalCrossing}
-import freechips.rocketchip.util.{Annotated, InOrderArbiter}
+import freechips.rocketchip.util.InOrderArbiter
 import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
 import framework.top.GlobalConfig
@@ -370,7 +370,6 @@ class BBTile private (
 // =============================================================================
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
-  Annotated.params(this, outer.bbParams)
   val nCores       = outer.nCores
   val rushBEnabled = outer.p(BuckyballRushBKey)
 

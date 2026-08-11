@@ -1,0 +1,3 @@
+[workloads]
+search_path = "kernel"
+tests = []

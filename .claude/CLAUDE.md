@@ -109,6 +109,7 @@ Project skills live under `.claude/skills/` (canonical). Discovery links:
 
 - `/ball` — create a new Ball operator (full flow: implementation -> registration -> ISA -> CTest -> simulation)
 - `/ball-align` — align Ball across ctest/bemu/compiler/MLIR/RTL/UVM to one contract (`docs/superpowers/ball-dev-guide.md`)
+- `/chip-designer` — lead a new chip (topology, subgraph/slice cut, contracts, dispatch to core-designers; do not implement cores)
 - `/check` — registration consistency check + auto-fix
 - `/verify` — Ball functional verification (build -> simulation -> PMC analysis)
 - `/optimize` — RTL area/latency optimization (applies to any module, not only Balls)

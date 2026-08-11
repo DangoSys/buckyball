@@ -40,3 +40,24 @@
 [submodule "verify"]
 	path = verify
 	url = https://github.com/DangoSys/verify
+[submodule "arch/thirdparty/boom"]
+	path = arch/thirdparty/boom
+	url = https://github.com/SEU-ACAL/acal-boom.git
+[submodule "arch/thirdparty/rocket-chip"]
+	path = arch/thirdparty/rocket-chip
+	url = https://github.com/SEU-ACAL/rocket-chip.git
+[submodule "arch/thirdparty/rocket-chip-inclusive-cache"]
+	path = arch/thirdparty/rocket-chip-inclusive-cache
+	url = https://github.com/SEU-ACAL/rocket-chip-inclusive-cache.git
+[submodule "arch/thirdparty/berkeley-hardfloat"]
+	path = arch/thirdparty/berkeley-hardfloat
+	url = https://github.com/SEU-ACAL/berkeley-hardfloat.git
+[submodule "thirdparty/firesim"]
+	path = thirdparty/firesim
+	url = https://github.com/firesim/firesim.git
+[submodule "thirdparty/tapeout-framework"]
+	path = thirdparty/tapeout-framework
+	url = https://github.com/DangoSys/tapeout-framework.git
+[submodule "thirdparty/soc-framework"]
+	path = thirdparty/soc-framework
+	url = https://github.com/DangoSys/soc-framework.git

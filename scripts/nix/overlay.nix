@@ -11,6 +11,10 @@ final: prev:
   scala = final.callPackage ./build-env-scala.nix { };
   systemTools = final.callPackage ./build-env-system.nix { };
   tools = final.callPackage ./build-env-tools.nix { };
+  eda = final.callPackage ./build-env-eda.nix {
+    yosys = final.tools.yosys;
+    opensta = final.tools.opensta;
+  };
   kernel = final.callPackage ./build-env-kernel.nix { };
   mosoo = final.callPackage ./build-env-mosoo.nix { };
   cuda = final.callPackage ./build-env-cuda.nix { };

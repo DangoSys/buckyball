@@ -20,6 +20,19 @@
         {
           legacyPackages = pkgs;
 
+          packages.eda = pkgs.buildEnv {
+            name = "buckyball-eda-environment";
+            paths = with pkgs.eda; [
+              yosys
+              opensta
+              openroad
+              magic
+              netgen
+              klayout
+              sky130
+            ];
+          };
+
           # nix build
           packages.default = pkgs.buildEnv {
             name = "buckyball-environment";
@@ -122,6 +135,7 @@
             hardeningDisable = [ "libcxxhardeningfast" ];
 
             buildInputs = with pkgs; [
+              eda.sky130
               clibs.zlib-dev
               clibs.zlib
               clibs.lz4-dev
@@ -165,6 +179,8 @@
 
               source "$BB_ROOT/sourceme.sh"
 
+              export SKY130_ROOT="${pkgs.eda.sky130}"
+
               export MINIFLARE_WORKERD_PATH="''${MINIFLARE_WORKERD_PATH:-${pkgs.mosoo.workerd}/bin/workerd}"
 
               # Verilator build acceleration: ccache via OBJCACHE
@@ -190,6 +206,23 @@
                 echo "Buddy MLIR: $(which buddy-opt)" >&2
                 echo "===========================================================================" >&2
               fi
+            '';
+          };
+
+          devShells.eda = pkgs.mkShell {
+            packages = with pkgs.eda; [
+              yosys
+              opensta
+              openroad
+              magic
+              netgen
+              klayout
+              sky130
+            ];
+            shellHook = ''
+              export SKY130_ROOT="${pkgs.eda.sky130}"
+              echo "Sky130 EDA environment activated" >&2
+              echo "  libraries: $SKY130_ROOT" >&2
             '';
           };
         }

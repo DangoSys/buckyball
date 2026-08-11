@@ -1,0 +1,21 @@
+[slice]
+id = "enc_0"
+subgraph = "sg_encoder"
+core = "audio-encoder"
+instance = 0
+scope = "conv_stem + encoder_layers[0:2]"
+
+[io.in]
+name = "mel"
+dtype = "f32"
+shape = [1, 80, 3000]
+sharedmem_region = "mel"
+
+[io.out]
+name = "enc_act_01"
+dtype = "f32"
+shape = [1, 1500, 512]
+sharedmem_region = "enc_act_01"
+
+[policy]
+mismatch = "error"
