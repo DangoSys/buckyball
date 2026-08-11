@@ -63,3 +63,28 @@ extern "C" void dpi_mtrace(unsigned char is_write, // 1 = write, 0 = read
     fflush(mtrace_fp);
   }
 }
+
+// DPI-C function for memory trace issue (mtrace_issue)
+// Called when MemMidend issues memory operations
+extern "C" void dpi_mtrace_issue(unsigned int hart_id_lo,
+                                 unsigned int hart_id_hi,
+                                 unsigned char is_shared, unsigned int rob_id,
+                                 unsigned int vbank_id, unsigned int group_id) {
+  if (!bdb_trace_on(BDB_TR_MTRACE)) {
+    return;
+  }
+  init_mtrace();
+
+  unsigned long long hart_id =
+      ((unsigned long long)hart_id_hi << 32) | hart_id_lo;
+
+  if (mtrace_fp) {
+    fprintf(mtrace_fp,
+            "{\"type\":\"mtrace_issue\",\"clk\":%llu,\"event\":\"issue\","
+            "\"hart_id\":%llu,\"is_shared\":%u,\"rob_id\":%u,\"vbank_id\":%u,"
+            "\"group_id\":%u}\n",
+            (unsigned long long)bdb_rtl_clk, hart_id, is_shared, rob_id,
+            vbank_id, group_id);
+    fflush(mtrace_fp);
+  }
+}
