@@ -60,13 +60,11 @@ bbdev verilator --run '--jobs 16 --binary toy_vecunit_matmul_ones-singlecore-bar
 bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-singlecore-baremetal --batch --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
 ```
 
-Run a Verilator+BEMU Bank DiffTest against an existing RTL build:
+Run Verilator with BEMU Bank DiffTest enabled:
 
 ```bash
-bbdev difftest --run '--backend verilator --chip toy --config sims.verilator.BuckyballToyVerilatorConfig --binary toy_vecunit_matmul_ones-singlecore-baremetal --no-wave'
+bbdev bebop-verilator --run '--diff --batch --binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --no-wave'
 ```
-
-Available DiffTest backends are `verilator` and `p2e`; `p2e` is reserved but not implemented yet.
 
 ## Tutorial
 You can start to learn ball and blink from [here](https://docs.buckyball.tech/zh/%E6%95%99%E7%A8%8B/%E4%BB%80%E4%B9%88%E6%98%AFBall+%26+%E5%A6%82%E4%BD%95%E5%86%99%E4%B8%80%E4%B8%AABall)
