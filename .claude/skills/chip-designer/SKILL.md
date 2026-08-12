@@ -36,7 +36,7 @@ Explain why existing chips fail. Identify compute regimes (e.g. DSP vs long-seq 
 
 - Prefer **one tile** + hetero core *types*
 - Replica counts follow **relative stage latency** (realtime: more cores on the TTFT-critical stage)
-- Name chip and cores distinctly (chip `audio`, cores `dap` / `audio-encoder` / `audio-decoder`)
+- Name chip and cores distinctly (chip `poly`, cores `prefill` / `decode`)
 
 ### 3. Graph cut (before E2E)
 
@@ -74,22 +74,22 @@ Order: slice unit green → pairwise sharedMem → E2E. Grow regression TOML tes
 
 ```toml
 [slice]
-id = "enc_0"
-subgraph = "sg_encoder"
-core = "audio-encoder"
+id = "prefill_0"
+subgraph = "sg_prefill"
+core = "prefill"
 instance = 0
 
 [io.in]
-name = "mel"
-dtype = "f32"
-shape = [1, 80, 3000]
-sharedmem_region = "mel"
+name = "tokens"
+dtype = "i32"
+shape = [1, 128]
+sharedmem_region = "tokens"
 
 [io.out]
-name = "enc_act_01"
-dtype = "f32"
-shape = [1, 1500, 512]
-sharedmem_region = "enc_act_01"
+name = "kv_cache"
+dtype = "f16"
+shape = [1, 32, 128, 64]
+sharedmem_region = "kv_cache"
 
 [policy]
 mismatch = "error"
@@ -97,12 +97,12 @@ mismatch = "error"
 
 ## Reference package
 
-`examples/chips/audio/` — realtime Whisper-base ASR lead package (`SLICE_MAP`, `dispatch/`, stub cores).
+`examples/chips/poly/` — hetero prefill/decode tile (`sharedMem`, multi-core emu). Also see `examples/chips/goban/` for a single-core Buckyball chip skeleton.
 
 ## Anti-patterns
 
 - Leaving stage/replica cuts as “open for core-designers”
-- Chasing full Whisper/LLM E2E before subgraphs exist
+- Chasing full-model E2E before subgraphs exist
 - Reusing poly `prefill`/`decode` names for non-LLM pipelines
 - Editing registration and Ball implementation in the same change without need
 - Hiding shape mismatches with defaults

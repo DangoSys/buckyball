@@ -1,7 +1,0 @@
-# Audio chip: one tile, dap×1 + audio-encoder×3 + audio-decoder×2
-
-[top]
-nTiles = 1
-
-[[tiles]]
-include = "tiles/default.toml"

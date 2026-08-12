@@ -1,5 +1,0 @@
-[core]
-name = "dap"
-kind = "buckyball"
-config = "core.toml"
-compiler = "compiler"
