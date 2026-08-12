@@ -33,12 +33,22 @@ function(add_buckyball_rushb_native TARGET_NAME)
     message(FATAL_ERROR "${TARGET_NAME}: rushB runner has no output directory")
   endif()
 
+  if(NOT DEFINED BUILD_BIN_DIR OR NOT DEFINED OUTPUT_BIN_DIR)
+    message(FATAL_ERROR
+      "add_buckyball_rushb_native requires BUILD_BIN_DIR and OUTPUT_BIN_DIR")
+  endif()
+
+  # Install under both trees: batch discovery reads OUTPUT, while sync-bin
+  # rsync --delete mirrors BUILD→OUTPUT and would otherwise wipe rushB-only
+  # artifacts that never appear under BUILD.
   set(RUSHB_OUTPUT_ROOT ${OUTPUT_BIN_DIR}/${ARG_OUTPUT_SUBDIR})
+  set(RUSHB_SYNC_ROOT ${BUILD_BIN_DIR}/${ARG_OUTPUT_SUBDIR})
   string(MAKE_C_IDENTIFIER "${ARG_OUTPUT_SUBDIR}" RUSHB_OUTPUT_ROOT_ID)
   set(RUSHB_OUTPUT_ROOT_TARGET rushB-output-${RUSHB_OUTPUT_ROOT_ID})
   if(NOT TARGET ${RUSHB_OUTPUT_ROOT_TARGET})
     add_custom_target(${RUSHB_OUTPUT_ROOT_TARGET}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_ROOT}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_ROOT}
       COMMENT "Creating rushB output directory: ${ARG_OUTPUT_SUBDIR}"
       VERBATIM)
   endif()
@@ -55,8 +65,8 @@ function(add_buckyball_rushb_native TARGET_NAME)
     set(RUSHB_TARGET ${TARGET_NAME}-rushB-${RUSHB_BACKEND}-run)
     set(RUSHB_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/rushB/${RUSHB_TARGET})
     set(RUSHB_BINARY ${RUSHB_BUILD_DIR}/${RUSHB_TARGET}.bin)
-    set(RUSHB_OUTPUT_DIR
-      ${RUSHB_OUTPUT_ROOT}/${RUSHB_TARGET})
+    set(RUSHB_OUTPUT_DIR ${RUSHB_OUTPUT_ROOT}/${RUSHB_TARGET})
+    set(RUSHB_SYNC_DIR ${RUSHB_SYNC_ROOT}/${RUSHB_TARGET})
     if(RUSHB_BACKEND STREQUAL "bemu")
       set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_BEMU_LIBRARY})
       set(RUSHB_LIBRARY_NAME bebop_bemu)
@@ -77,18 +87,25 @@ function(add_buckyball_rushb_native TARGET_NAME)
 
     set(RUSHB_RUNTIME_OUTPUT
       ${RUSHB_OUTPUT_ROOT}/lib${RUSHB_LIBRARY_NAME}.so)
+    set(RUSHB_RUNTIME_SYNC
+      ${RUSHB_SYNC_ROOT}/lib${RUSHB_LIBRARY_NAME}.so)
     set(RUSHB_RUNTIME_TARGET
       rushB-runtime-${RUSHB_OUTPUT_ROOT_ID}-${RUSHB_BACKEND})
     if(NOT TARGET ${RUSHB_RUNTIME_TARGET})
       add_custom_command(
-        OUTPUT ${RUSHB_RUNTIME_OUTPUT}
+        OUTPUT ${RUSHB_RUNTIME_OUTPUT} ${RUSHB_RUNTIME_SYNC}
         ${RUSHB_BUILD_RUNTIME}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_ROOT}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_ROOT}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${RUSHB_LIBRARY} ${RUSHB_RUNTIME_OUTPUT}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${RUSHB_LIBRARY} ${RUSHB_RUNTIME_SYNC}
         DEPENDS ${RUSHB_RUNTIME_DEPENDENCY}
         COMMENT "Installing rushB ${RUSHB_BACKEND} runtime: ${ARG_OUTPUT_SUBDIR}"
         VERBATIM)
-      add_custom_target(${RUSHB_RUNTIME_TARGET} DEPENDS ${RUSHB_RUNTIME_OUTPUT})
+      add_custom_target(${RUSHB_RUNTIME_TARGET}
+        DEPENDS ${RUSHB_RUNTIME_OUTPUT} ${RUSHB_RUNTIME_SYNC})
       add_dependencies(${RUSHB_RUNTIME_TARGET} ${RUSHB_OUTPUT_ROOT_TARGET})
     endif()
 
@@ -98,8 +115,9 @@ function(add_buckyball_rushb_native TARGET_NAME)
       list(APPEND RUSHB_INCLUDE_ARGS -I${RUSHB_INCLUDE_DIR})
     endforeach()
     set(RUSHB_INSTALLED ${RUSHB_OUTPUT_DIR}/${RUSHB_TARGET})
+    set(RUSHB_SYNCED ${RUSHB_SYNC_DIR}/${RUSHB_TARGET})
     add_custom_command(
-      OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED}
+      OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_BUILD_DIR}
       COMMAND ${RUSHB_COMPILER} -no-pie ${RUSHB_STANDARD} -O2 -DBUCKYBALL_RUSHB
               ${RUSHB_INCLUDE_ARGS}
@@ -107,20 +125,23 @@ function(add_buckyball_rushb_native TARGET_NAME)
               -L${RUSHB_LIBRARY_DIR} -l${RUSHB_LIBRARY_NAME}
               -Wl,-rpath,${RUSHB_OUTPUT_ROOT} -o ${RUSHB_BINARY}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_DIR}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_DIR}
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RUSHB_BINARY}
               ${RUSHB_INSTALLED}
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RUSHB_BINARY}
+              ${RUSHB_SYNCED}
       DEPENDS ${ARG_SOURCES} ${ARG_DEPENDS}
               ${BUCKYBALL_REPO_ROOT}/compiler/include/buckyball/rushb.h
               ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c
       COMMENT "Building rushB ${RUSHB_BACKEND}: ${TARGET_NAME}"
       VERBATIM)
-    add_custom_target(${RUSHB_TARGET} DEPENDS ${RUSHB_BINARY} ${RUSHB_INSTALLED})
+    add_custom_target(${RUSHB_TARGET}
+      DEPENDS ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED})
     add_dependencies(${RUSHB_TARGET} ${RUSHB_OUTPUT_ROOT_TARGET})
     add_dependencies(${RUSHB_TARGET} ${RUSHB_RUNTIME_TARGET})
     add_dependencies(rushB-${RUSHB_BACKEND}-workloads-build ${RUSHB_TARGET})
   endforeach()
 endfunction()
-
 set(BUCKYBALL_BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 
 function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)

@@ -227,6 +227,10 @@ add_custom_target(create-dirs
 add_custom_target(sync-bin
   COMMAND rsync -av --delete --delete-excluded
           --exclude="CMakeFiles"
+          --filter="P_src/CTest/rushB/"
+          --filter="P_src/CTest/rushB/***"
+          --filter="P_src/OpTest/rushB/"
+          --filter="P_src/OpTest/rushB/***"
           --include="**/chips/${BUCKYBALL_WORKLOAD_CHIP}/"
           --exclude="**/chips/*/"
           --include="*/"

@@ -89,6 +89,7 @@ jobs:
       - name: rushB Tests
         shell: zsh {0}
         run: |
+          set -euo pipefail
           cd ~/Code/buckyball
           nix develop -c bbdev workload --build '--chip toy --rushB bemu'
           nix develop -c bbdev bebop-bemu --batch '--chip toy --test elf-tests --rushB --clean-before'
@@ -102,8 +103,8 @@ jobs:
           nix develop -c bbdev bebop-verilator --batch '--chip toy --config sims.verilator.BuckyballToyRushBVerilatorConfig --test elf-tests --rushB --clean-before'
           nix develop -c bbdev bebop-verilator --batch '--chip toy --config sims.verilator.BuckyballToyRushBVerilatorConfig --test pk-tests --rushB --clean-before'
 
-          # Model↔chip is many-to-many; layouts live under
-          # bb-tests/.../archs/buckyball/<chip>/<Model>/. Lenet exists on pebble today.
+          # Toy don't support any models, so we don't test it.
+          # Lenet rushB can be tested on pebble.
           # Build pebble last so BUDDY_EXTERNAL_DIALECTS_DIR does not break toy workloads above.
           # nix develop -c bbdev compiler --build '--chip pebble'
           # nix develop -c bbdev workload --build '--chip pebble --model lenet'
