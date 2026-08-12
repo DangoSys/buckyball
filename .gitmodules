@@ -55,9 +55,6 @@
 [submodule "thirdparty/firesim"]
 	path = thirdparty/firesim
 	url = https://github.com/firesim/firesim.git
-[submodule "thirdparty/tapeout-framework"]
-	path = thirdparty/tapeout-framework
-	url = https://github.com/DangoSys/tapeout-framework.git
 [submodule "thirdparty/soc-framework"]
 	path = thirdparty/soc-framework
 	url = https://github.com/DangoSys/soc-framework.git
