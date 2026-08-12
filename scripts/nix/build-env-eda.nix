@@ -3,7 +3,15 @@
 let
   # nixpkgs marks or-tools broken on Python >= 3.14; pin OpenROAD's stack below that.
   py = pkgs.python313;
-  orTools = pkgs.or-tools.override { python3 = py; };
+  orTools = (pkgs.or-tools.override { python3 = py; }).overrideAttrs (old: {
+    # Upstream packaging probe; fails under Nix PYTHONPATH even when the C++ lib is fine.
+    # OpenROAD only needs the C++ or-tools. Same pattern as nixpkgs' python_math_opt_.* exclude.
+    checkPhase = ''
+      runHook preCheck
+      ctest --output-on-failure -E 'python_math_opt_.*|python_contrib_check_dependencies'
+      runHook postCheck
+    '';
+  });
   openroad = pkgs.openroad.override {
     python3 = py;
     or-tools = orTools;
