@@ -23,6 +23,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/Dialect)
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/Dialect/Buckyball)
 
 set(GOBAN_BALL_COMPILER_DIALECT_DIRS
+  ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/matrix/compiler/src/Dialect/Buckyball
 )

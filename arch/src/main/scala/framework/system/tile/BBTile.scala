@@ -36,7 +36,7 @@ import freechips.rocketchip.tilelink.{
 }
 import freechips.rocketchip.subsystem.{ExtMem, HierarchicalElementCrossingParamsLike}
 import freechips.rocketchip.prci.{ClockCrossingType, ClockSinkParameters, RationalCrossing}
-import freechips.rocketchip.util.{Annotated, InOrderArbiter}
+import freechips.rocketchip.util.InOrderArbiter
 import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
 import framework.top.GlobalConfig
@@ -370,7 +370,6 @@ class BBTile private (
 // =============================================================================
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
-  Annotated.params(this, outer.bbParams)
   val nCores       = outer.nCores
   val rushBEnabled = outer.p(BuckyballRushBKey)
 
@@ -781,13 +780,22 @@ object BBTile {
   }
 
   /**
-   * Inject a dummy BuildRoCC entry so that usingRoCC=true throughout all
-   * HasRocketCoreParameters mixins (CSR, decode, etc.), without actually
-   * using the LazyRoCC mechanism.
+   * Size BuildRoCC so BaseTile.dcacheArbPorts matches BBTile's real HellaCache
+   * arbiter fan-in, without instantiating LazyRoCC.
+   *
+   * BaseTile.dcacheArbPorts = 1 + VM + scratch + BuildRoCC.size + vector
+   * BBTile actual ports     = nCores + VM + scratch + hasBuckyball + vector
+   * => BuildRoCC.size       = nCores - 1 + hasBuckyball
+   *
+   * With Buckyball this keeps the historical Seq.fill(nCores) injection.
+   * Rocket-only multi-core needs nCores-1 dummies so the shared L1 DCache
+   * arbiter is not stuck at the single-core expected size of 2.
    */
-  def injectBuildRoCC(p: Parameters, withBuckyball: Boolean, nCores: Int): Parameters =
-    if (withBuckyball)
-      p.alterPartial { case BuildRoCC => Seq.fill(nCores)((_: Parameters) => null.asInstanceOf[LazyRoCC]) }
+  def injectBuildRoCC(p: Parameters, withBuckyball: Boolean, nCores: Int): Parameters = {
+    val n = nCores - 1 + (if (withBuckyball) 1 else 0)
+    if (n > 0)
+      p.alterPartial { case BuildRoCC => Seq.fill(n)((_: Parameters) => null.asInstanceOf[LazyRoCC]) }
     else p
+  }
 
 }

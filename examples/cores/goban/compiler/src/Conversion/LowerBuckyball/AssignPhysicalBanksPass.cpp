@@ -14,6 +14,10 @@ using namespace mlir;
 namespace mlir::buddy {
 void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                                  PhysicalBankState &state);
+void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                              PhysicalBankState &state);
+void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                              PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
@@ -32,7 +36,7 @@ public:
 
   Option<int64_t> bankNum{*this, "bank_num",
                           llvm::cl::desc("Number of physical banks."),
-                          llvm::cl::init(16)};
+                          llvm::cl::init(20)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
@@ -50,6 +54,8 @@ public:
     mlir::buddy::PhysicalBankState state(bankNum);
     RewritePatternSet patterns(&getContext());
     mlir::buddy::addBaseAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateFp2IntAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateTransposeAssignPhysicalBankPatterns(patterns, state);
 
     walkAndApplyPatterns(func, std::move(patterns));

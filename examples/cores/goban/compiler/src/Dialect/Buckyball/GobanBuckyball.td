@@ -18,6 +18,8 @@
 #define GOBAN_BUCKYBALL_OPS
 
 include "Buckyball.td"
+include "Fp2IntBall.td"
+include "Int2FpBall.td"
 include "TransposeBall.td"
 include "MatrixBall.td"
 

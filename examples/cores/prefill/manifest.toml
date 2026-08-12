@@ -1,0 +1,5 @@
+[core]
+name = "prefill"
+kind = "buckyball"
+config = "core.toml"
+compiler = "compiler"

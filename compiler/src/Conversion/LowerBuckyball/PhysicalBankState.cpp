@@ -46,8 +46,11 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       value = op.getOutBank();
       continue;
     }
-    if (auto op = value.getDefiningOp<BankIm2colOp>()) {
-      value = op.getOutBank();
+    // Im2col is an optional Ball. Keep the generic allocator independent of
+    // its generated C++ type so a Core can omit that dialect entirely.
+    if (Operation *op = value.getDefiningOp();
+        op && op->getName().getStringRef() == "buckyball.bank_im2col") {
+      value = op->getResult(0);
       continue;
     }
     if (auto op = value.getDefiningOp<BankMatrixOp>()) {

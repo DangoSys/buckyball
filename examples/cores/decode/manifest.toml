@@ -1,0 +1,5 @@
+[core]
+name = "decode"
+kind = "buckyball"
+config = "core.toml"
+compiler = "compiler"

@@ -8,11 +8,13 @@ include(${_BUCKYBALL_REPO_ROOT}/examples/chips/cmake/BuckyballCtestLimits.cmake)
 
 set(GOBAN_CTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GOBAN_LD ${GOBAN_CTEST_DIR}/goban.ld)
+set(GOBAN_MEM_RUNTIME ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 
 set(GOBAN_C_FLAGS
   -g -fno-common -O2 -static
   -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+  -DBANK_NUM=64
   -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
   -I${GOBAN_CTEST_DIR}
@@ -33,11 +35,14 @@ function(add_goban_test_target STEM SOURCE_FILE)
       -o ${EXECUTABLE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
+      ${GOBAN_MEM_RUNTIME}
     DEPENDS
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/goban.h
       ${GOBAN_CTEST_DIR}/scu.h
+      ${GOBAN_MEM_RUNTIME}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     COMMENT "Building goban multicore baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -65,11 +70,14 @@ function(add_goban_64t4c_test_target STEM SOURCE_FILE)
       -o ${EXECUTABLE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
+      ${GOBAN_MEM_RUNTIME}
     DEPENDS
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/goban.h
       ${GOBAN_CTEST_DIR}/scu.h
+      ${GOBAN_MEM_RUNTIME}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     COMMENT "Building goban 64t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -98,11 +106,14 @@ function(add_goban_2t4c_test_target STEM SOURCE_FILE)
       -o ${EXECUTABLE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
+      ${GOBAN_MEM_RUNTIME}
     DEPENDS
       ${GOBAN_CTEST_DIR}/${SOURCE_FILE}
       ${GOBAN_CTEST_DIR}/start.S
       ${GOBAN_CTEST_DIR}/goban.h
       ${GOBAN_CTEST_DIR}/scu.h
+      ${GOBAN_MEM_RUNTIME}
+      ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     COMMENT "Building goban 2t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

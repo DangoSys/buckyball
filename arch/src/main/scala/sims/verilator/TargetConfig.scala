@@ -3,21 +3,20 @@ package sims.verilator
 import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
-
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
 import freechips.rocketchip.subsystem.InSubsystem
 
 class WithCustomBootROM
     extends Config((site, here, up) => {
-      case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/bootrom/bare/bootrom.rv64.img"
+      case BootROMLocated(InSubsystem) => Seq(BootROMParams(
+          contentFileName = freechips.rocketchip.util.SystemFileName("src/main/resources/bootrom/bare/bootrom.rv64.img")
         ))
     })
 
 class WithLinuxBootROM
     extends Config((site, here, up) => {
-      case BootROMLocated(InSubsystem) => Some(BootROMParams(
-          contentFileName = "src/main/resources/bootrom/linux/bootrom.rv64.img"
+      case BootROMLocated(InSubsystem) => Seq(BootROMParams(
+          contentFileName = freechips.rocketchip.util.SystemFileName("src/main/resources/bootrom/linux/bootrom.rv64.img")
         ))
     })
 
@@ -41,7 +40,7 @@ class ChipyardGemminiRocketVerilatorConfig
         new testchipip.serdes.WithNoSerialTL ++
         new chipyard.config.WithNoUART ++
         new chipyard.config.WithNoDebug ++
-        new chipyard.GemminiRocketConfig
+        new chipyard.RocketConfig
     )
 
 class Chipyard2CoreVerilatorConfig
@@ -82,7 +81,6 @@ class Chipyard4CoreGemminiVerilatorConfig
         new testchipip.serdes.WithNoSerialTL ++
         new chipyard.config.WithNoUART ++
         new chipyard.config.WithNoDebug ++
-        new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(4) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
@@ -95,7 +93,6 @@ class Chipyard8CoreGemminiVerilatorConfig
         new testchipip.serdes.WithNoSerialTL ++
         new chipyard.config.WithNoUART ++
         new chipyard.config.WithNoDebug ++
-        new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(8) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
@@ -108,7 +105,6 @@ class Chipyard32CoreGemminiVerilatorConfig
         new testchipip.serdes.WithNoSerialTL ++
         new chipyard.config.WithNoUART ++
         new chipyard.config.WithNoDebug ++
-        new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(32) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
@@ -121,21 +117,18 @@ class Chipyard64CoreGemminiVerilatorConfig
         new testchipip.serdes.WithNoSerialTL ++
         new chipyard.config.WithNoUART ++
         new chipyard.config.WithNoDebug ++
-        new gemmini.DefaultGemminiConfig ++
         new freechips.rocketchip.rocket.WithNHugeCores(64) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new chipyard.config.AbstractConfig
     )
 
 //===----------------------------------------------------------------------===//
-
 object Elaborate extends App {
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
     println("Example: Elaborate sims.verilator.BuckyballToyVerilatorConfig")
     sys.exit(1)
   }
-
   val configClassName = args(0)
   println(s"Elaborating BBSimHarness with config: $configClassName")
 

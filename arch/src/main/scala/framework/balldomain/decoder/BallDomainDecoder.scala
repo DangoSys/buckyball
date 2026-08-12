@@ -14,7 +14,7 @@ import framework.top.GlobalConfig
  *    count, pass-through of rs1/rs2/funct7 (pure framework concern).
  *  - funct7 → bid routing, generated from `b.ballDomain.ballISA`
  *    (a `(mnemonic, funct7, bid)` table the user provides via
- *    `default.json`); no per-example Scala decoder is needed.
+ *    TOML config); no per-example Scala decoder is needed.
  */
 @instantiable
 class BallDomainDecoder(val b: GlobalConfig) extends Module {

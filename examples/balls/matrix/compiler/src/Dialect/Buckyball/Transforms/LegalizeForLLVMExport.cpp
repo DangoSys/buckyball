@@ -56,8 +56,11 @@ struct MatrixMatmulLowering : public ConvertOpToLLVMPattern<MatrixMatmulOp> {
     if (m == 0 || n == 0 || k == 0 || m > 16 || n > 16 || k > 16)
       return rewriter.notifyMatchFailure(
           op, "matrix_matmul legalize supports one tile with M,N,K in 1..16");
-    if (!cTy.getElementType().isInteger(32))
-      return rewriter.notifyMatchFailure(op, "C memref must be i32");
+    if (!aTy.getElementType().isInteger(8) ||
+        !bTy.getElementType().isInteger(8) ||
+        !cTy.getElementType().isInteger(32))
+      return rewriter.notifyMatchFailure(
+          op, "Matrix Ball supports only i8 A/B with i32 C");
 
     const uint64_t aBank = 0;
     const uint64_t bBank = 1;

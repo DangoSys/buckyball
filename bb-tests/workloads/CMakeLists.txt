@@ -34,6 +34,101 @@ if(BUCKYBALL_WORKLOAD_CORE STREQUAL "")
 endif()
 message(STATUS "Buckyball workload compiler Core: ${BUCKYBALL_WORKLOAD_CORE}")
 
+set(BUCKYBALL_CORE_DIR
+  "${BUCKYBALL_REPO_ROOT}/examples/cores/${BUCKYBALL_WORKLOAD_CORE}")
+set(BUCKYBALL_CORE_MANIFEST "${BUCKYBALL_CORE_DIR}/manifest.toml")
+if(NOT EXISTS "${BUCKYBALL_CORE_MANIFEST}")
+  message(FATAL_ERROR "Core manifest does not exist: ${BUCKYBALL_CORE_MANIFEST}")
+endif()
+
+# Compiler hardware parameters come from the Core memory-domain TOML. Keep
+# this small parser here because the workload configure step already owns the
+# selected Core and CMake has no built-in TOML reader.
+file(STRINGS "${BUCKYBALL_CORE_MANIFEST}" BUCKYBALL_CORE_CONFIG_LINE
+  REGEX "^[ \t]*config[ \t]*=")
+list(LENGTH BUCKYBALL_CORE_CONFIG_LINE BUCKYBALL_CORE_CONFIG_COUNT)
+if(NOT BUCKYBALL_CORE_CONFIG_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "${BUCKYBALL_CORE_MANIFEST} must define exactly one core config entry")
+endif()
+list(GET BUCKYBALL_CORE_CONFIG_LINE 0 BUCKYBALL_CORE_CONFIG_LINE)
+string(REGEX REPLACE "^[^=]+=[ \t]*\"([^\"]+)\".*" "\\1"
+  BUCKYBALL_CORE_CONFIG_REL "${BUCKYBALL_CORE_CONFIG_LINE}")
+set(BUCKYBALL_CORE_CONFIG_TOML
+  "${BUCKYBALL_CORE_DIR}/${BUCKYBALL_CORE_CONFIG_REL}")
+if(NOT EXISTS "${BUCKYBALL_CORE_CONFIG_TOML}")
+  message(FATAL_ERROR "Core config TOML does not exist: ${BUCKYBALL_CORE_CONFIG_TOML}")
+endif()
+get_filename_component(BUCKYBALL_CORE_CONFIG_DIR
+  "${BUCKYBALL_CORE_CONFIG_TOML}" DIRECTORY)
+
+file(STRINGS "${BUCKYBALL_CORE_CONFIG_TOML}" BUCKYBALL_MEMDOMAIN_LINE
+  REGEX "^[ \t]*memdomain[ \t]*=")
+list(LENGTH BUCKYBALL_MEMDOMAIN_LINE BUCKYBALL_MEMDOMAIN_COUNT)
+if(NOT BUCKYBALL_MEMDOMAIN_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "${BUCKYBALL_CORE_CONFIG_TOML} must define exactly one memdomain entry")
+endif()
+list(GET BUCKYBALL_MEMDOMAIN_LINE 0 BUCKYBALL_MEMDOMAIN_LINE)
+string(REGEX REPLACE "^[^=]+=[ \t]*\"([^\"]+)\".*" "\\1"
+  BUCKYBALL_MEMDOMAIN_REL "${BUCKYBALL_MEMDOMAIN_LINE}")
+set(BUCKYBALL_MEMDOMAIN_TOML
+  "${BUCKYBALL_CORE_CONFIG_DIR}/${BUCKYBALL_MEMDOMAIN_REL}")
+if(NOT EXISTS "${BUCKYBALL_MEMDOMAIN_TOML}")
+  message(FATAL_ERROR "Memory-domain TOML does not exist: ${BUCKYBALL_MEMDOMAIN_TOML}")
+endif()
+
+file(STRINGS "${BUCKYBALL_MEMDOMAIN_TOML}" BUCKYBALL_MEMDOMAIN_LINES)
+set(BUCKYBALL_IN_BANK_SECTION FALSE)
+foreach(BUCKYBALL_MEMDOMAIN_LINE IN LISTS BUCKYBALL_MEMDOMAIN_LINES)
+  # Strip comments and surrounding whitespace before interpreting the TOML.
+  string(REGEX REPLACE "#.*$" "" BUCKYBALL_MEMDOMAIN_LINE
+    "${BUCKYBALL_MEMDOMAIN_LINE}")
+  string(STRIP "${BUCKYBALL_MEMDOMAIN_LINE}" BUCKYBALL_MEMDOMAIN_LINE)
+  if(BUCKYBALL_MEMDOMAIN_LINE STREQUAL "[bank]")
+    set(BUCKYBALL_IN_BANK_SECTION TRUE)
+    continue()
+  endif()
+  if(BUCKYBALL_MEMDOMAIN_LINE MATCHES "^\\[")
+    set(BUCKYBALL_IN_BANK_SECTION FALSE)
+  endif()
+  if(BUCKYBALL_IN_BANK_SECTION AND
+     BUCKYBALL_MEMDOMAIN_LINE MATCHES "^(num|width|entries)[ \t]*=[ \t]*[0-9]+$")
+    string(REGEX MATCH "^([^=]+)[ \t]*=[ \t]*([0-9]+)$"
+      BUCKYBALL_BANK_MATCH "${BUCKYBALL_MEMDOMAIN_LINE}")
+    string(STRIP "${CMAKE_MATCH_1}" BUCKYBALL_BANK_KEY)
+    set(BUCKYBALL_BANK_VALUE "${CMAKE_MATCH_2}")
+    if(BUCKYBALL_BANK_KEY STREQUAL "num")
+      set(BUCKYBALL_MLIR_BANK_NUM "${BUCKYBALL_BANK_VALUE}")
+    elseif(BUCKYBALL_BANK_KEY STREQUAL "width")
+      set(BUCKYBALL_MLIR_BANK_WIDTH_BITS "${BUCKYBALL_BANK_VALUE}")
+    elseif(BUCKYBALL_BANK_KEY STREQUAL "entries")
+      set(BUCKYBALL_MLIR_BANK_DEPTH "${BUCKYBALL_BANK_VALUE}")
+    endif()
+  endif()
+endforeach()
+foreach(BUCKYBALL_BANK_PARAMETER IN ITEMS
+    BUCKYBALL_MLIR_BANK_NUM BUCKYBALL_MLIR_BANK_WIDTH_BITS BUCKYBALL_MLIR_BANK_DEPTH)
+  if(NOT DEFINED ${BUCKYBALL_BANK_PARAMETER})
+    message(FATAL_ERROR
+      "${BUCKYBALL_MEMDOMAIN_TOML} [bank] is missing ${BUCKYBALL_BANK_PARAMETER}")
+  endif()
+endforeach()
+math(EXPR BUCKYBALL_MLIR_BANK_WIDTH_BYTES
+  "${BUCKYBALL_MLIR_BANK_WIDTH_BITS} / 8")
+math(EXPR BUCKYBALL_MLIR_BANK_WIDTH_REMAINDER
+  "${BUCKYBALL_MLIR_BANK_WIDTH_BITS} % 8")
+if(BUCKYBALL_MLIR_BANK_WIDTH_BITS LESS 8 OR
+   NOT BUCKYBALL_MLIR_BANK_WIDTH_REMAINDER EQUAL 0)
+  message(FATAL_ERROR
+    "Core bank width must be a positive whole number of bytes: ${BUCKYBALL_MLIR_BANK_WIDTH_BITS}")
+endif()
+set(BUCKYBALL_CONVERT_TILE_TO_BUCKYBALL
+  "--convert-tile-to-buckyball=bank_width=${BUCKYBALL_MLIR_BANK_WIDTH_BYTES} bank_depth=${BUCKYBALL_MLIR_BANK_DEPTH} bank_num=${BUCKYBALL_MLIR_BANK_NUM}")
+set(BUCKYBALL_ASSIGN_PHYSICAL_BANKS
+  "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}")
+message(STATUS "Buckyball Core banks: ${BUCKYBALL_MLIR_BANK_NUM} x ${BUCKYBALL_MLIR_BANK_WIDTH_BITS}-bit x ${BUCKYBALL_MLIR_BANK_DEPTH}")
+
 set(BUCKYBALL_RUSHB_CHIP_CMAKE
     ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/workloads/cmake/RushB.cmake)
 if(EXISTS ${BUCKYBALL_RUSHB_CHIP_CMAKE})
@@ -45,17 +140,6 @@ if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST)
 endif()
 if(DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
   add_custom_target(rushB-verilator-workloads-build)
-endif()
-
-if(BUCKYBALL_WORKLOAD_CORE STREQUAL "pebble")
-  set(BUCKYBALL_MLIR_BANK_NUM 16)
-elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "toy")
-  set(BUCKYBALL_MLIR_BANK_NUM 16)
-elseif(BUCKYBALL_WORKLOAD_CORE STREQUAL "goban")
-  set(BUCKYBALL_MLIR_BANK_NUM 16)
-else()
-  message(FATAL_ERROR
-    "MLIR physical-bank count is not configured for Core: ${BUCKYBALL_WORKLOAD_CORE}")
 endif()
 
 set(BUCKYBALL_EXPECTED_COMPILER_DIR
@@ -114,8 +198,12 @@ set(LINUX_CC ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-gcc)
 set(BUILD_BIN_DIR ${WORKLOAD_DIR}/../build/workloads)
 set(OUTPUT_BIN_DIR ${WORKLOAD_DIR}/../output/workloads)
 
-if(NOT Python3_EXECUTABLE)
-  set(Python3_EXECUTABLE python3)
+if(NOT IS_ABSOLUTE "${Python3_EXECUTABLE}")
+  find_program(BUCKYBALL_PYTHON3_EXECUTABLE NAMES python3)
+  if(NOT BUCKYBALL_PYTHON3_EXECUTABLE)
+    message(FATAL_ERROR "python3 is required to build workloads")
+  endif()
+  set(Python3_EXECUTABLE "${BUCKYBALL_PYTHON3_EXECUTABLE}")
 endif()
 #-------------------------------------------------------------------------------
 # add_subdirectory
@@ -139,6 +227,10 @@ add_custom_target(create-dirs
 add_custom_target(sync-bin
   COMMAND rsync -av --delete --delete-excluded
           --exclude="CMakeFiles"
+          --filter="P_src/CTest/rushB/"
+          --filter="P_src/CTest/rushB/***"
+          --filter="P_src/OpTest/rushB/"
+          --filter="P_src/OpTest/rushB/***"
           --include="**/chips/${BUCKYBALL_WORKLOAD_CHIP}/"
           --exclude="**/chips/*/"
           --include="*/"

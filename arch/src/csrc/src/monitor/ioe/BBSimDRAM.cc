@@ -17,10 +17,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ioe/mm.h"
 #include "ioe/mm_dramsim3.h"
 
-static bool use_dramsim = false;
 static std::vector<std::map<long long int, backing_data_t>> mem_data = {};
+static std::vector<mm_t *> channels = {};
 static std::string elf_file = "";
 
 static std::string default_dramsim3_config_dir() {
@@ -113,8 +114,6 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
     std::string arg(info.argv[i]);
     if (arg.find("+elf=") == 0)
       elf_file = arg.substr(strlen("+elf="));
-    if (arg == "+dramsim")
-      use_dramsim = true;
     if (arg.find("+dramsim_ini_dir=") == 0)
       local_ini_dir = arg.substr(strlen("+dramsim_ini_dir="));
   }
@@ -140,16 +139,20 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
     mem_data[chip_id][mem_base] = {data, (size_t)mem_size};
   }
 
-  if (use_dramsim) {
-    mm = (mm_t *)(new mm_dramsim3_t(mem_base, mem_size, word_size, line_size,
-                                    mem_data[chip_id][mem_base], memory_ini,
-                                    local_ini_dir, 1 << id_bits, clock_hz));
-  } else {
-    mm = (mm_t *)(new mm_magic_t(mem_base, mem_size, word_size, line_size,
-                                 mem_data[chip_id][mem_base]));
-  }
+  // External AXI memory is always modeled by DRAMSim3.  Internal SRAMs are
+  // modeled separately by the generated Verilog memory models.
+  mm = (mm_t *)(new mm_dramsim3_t(mem_base, mem_size, word_size, line_size,
+                                  mem_data[chip_id][mem_base], memory_ini,
+                                  local_ini_dir, 1 << id_bits, clock_hz));
 
+  channels.push_back(mm);
   return mm;
+}
+
+extern "C" void bbsim_memory_print_stats() {
+  for (auto *channel : channels)
+    if (channel != nullptr)
+      channel->print_stats();
 }
 
 extern "C" void bbsim_memory_tick(

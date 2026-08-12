@@ -1,0 +1,14 @@
+[tapeout]
+top = "DigitalTop"
+clock_port = "auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock"
+clock_period_ns = 10.0
+power_format = "vcd"
+# Default 1 ms boot skip and 4 ms measurement window at 100 MHz. Workloads can
+# override both values with --start-ns/--end-ns.
+power_start_ns = "1000000"
+power_end_ns = "5000000"
+dc_script = "dc.tcl"
+power_script = "power.tcl"
+power_sim_script = "power_sim.sh"
+# VCD comes from GatePowerHarness.dut; PTPX reads DigitalTop directly.
+power_strip_path = "GatePowerHarness.dut"

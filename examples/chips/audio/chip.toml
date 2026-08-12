@@ -1,0 +1,12 @@
+[chip]
+name = "audio"
+topology = "configs/audio.toml"
+compilerCore = "audio-encoder"
+
+[runtime]
+bemu = "emu/Cargo.toml"
+bemuCore = "../../cores/audio-encoder/emu/Cargo.toml"
+bemuTile = "configs/tiles/default.toml"
+kernel = "kernel"
+workloads = "workloads"
+regression = "regression"

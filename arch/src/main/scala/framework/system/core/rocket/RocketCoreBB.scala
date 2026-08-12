@@ -299,12 +299,18 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     val ctrl_killd   = Wire(Bool())
     val id_npc       = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
 
-    val csr = Module(new CSRFile(
+    // Tile-level BuildRoCC dummies size the shared DCache arbiter; they must
+    // not make rocket-only cores advertise RoCC in CSR/misa.
+    val csrP =
+      if (coreHasBuckyball) p
+      else p.alterPartial { case BuildRoCC => Nil }
+
+    val csr  = Module(new CSRFile(
       perfEvents,
       coreParams.customCSRs.decls,
       tile.roccCSRs.flatten,
       tile.bbParams.beuAddr.isDefined
-    ))
+    )(csrP))
 
     val id_csr_en      = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
     val id_system_insn = id_ctrl.csr === CSR.I

@@ -52,6 +52,7 @@ public:
   virtual size_t get_base() { return mem_base; }
   virtual size_t get_word_size() { return word_size; }
   virtual size_t get_line_size() { return line_size; }
+  virtual void print_stats() {}
 
   void write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t size);
   std::vector<char> read(uint64_t addr);

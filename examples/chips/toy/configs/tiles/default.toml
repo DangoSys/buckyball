@@ -1,5 +1,7 @@
 # Toy Tile Configuration (1 core)
 
+memBallChannelNum = 6
+
 [privateDCache]
 enable = false
 ways = 4

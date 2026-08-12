@@ -74,19 +74,12 @@ public:
         cShape[cShape.size() - 1] != (int64_t)N)
       return tileMatMulOp.emitError("matmul input/output shapes mismatch");
 
-    // Float (f32/bf16/...): one linalg.matmul (accumulates into C). HW
-    // tile/bank expansion blows up LLM-sized graphs and crashes
-    // convert-scf-to-cf.
-    if (isa<FloatType>(aType.getElementType())) {
-      Type elem = aType.getElementType();
-      if (bType.getElementType() != elem || cType.getElementType() != elem)
-        return tileMatMulOp.emitError(
-            "float matmul requires matching A/B/C element types");
-      rewriter.create<linalg::MatmulOp>(loc, ValueRange{aMemArray, bMemArray},
-                                        ValueRange{cMemArray});
-      rewriter.eraseOp(tileMatMulOp);
-      return success();
-    }
+    const bool isWideFloat =
+        aType.getElementType().isF32() || aType.getElementType().isBF16();
+    if (isWideFloat && (bType.getElementType() != aType.getElementType() ||
+                        cType.getElementType() != aType.getElementType()))
+      return tileMatMulOp.emitError(
+          "floating-point matmul requires matching A/B/C element types");
 
     size_t M_pad = ceilDiv(M, 16) * 16;
     size_t K_pad = ceilDiv(K, 16) * 16;
@@ -164,7 +157,8 @@ public:
 
     const size_t kTileSize = kTileLen * kMeta;
 
-    for (size_t cand = nTileLen + 1; cand * nMeta <= nPad; ++cand) {
+    for (size_t cand = nTileLen + 1; !isWideFloat && cand * nMeta <= nPad;
+         ++cand) {
       size_t candSize = cand * nMeta;
       if (computeBankRows(1, cand, kTileLen) > (size_t)bankDepth ||
           cMvoutDepthLines(mMeta, candSize) > kMaxAccMvoutDepthLines ||
@@ -174,7 +168,8 @@ public:
         nTileLen = cand;
     }
 
-    for (size_t cand = mTileLen + 1; cand * mMeta <= mPad; ++cand) {
+    for (size_t cand = mTileLen + 1; !isWideFloat && cand * mMeta <= mPad;
+         ++cand) {
       size_t candSize = cand * mMeta;
       if (computeBankRows(cand, nTileLen, kTileLen) > (size_t)bankDepth ||
           cMvoutDepthLines(candSize, nTileLen * nMeta) >
@@ -298,7 +293,7 @@ public:
           SmallVector<OpFoldResult>{rewriter.getIndexAttr(1),
                                     rewriter.getIndexAttr(1)});
 
-      // f32/i8 matrix_matmul accumulates into C across K tiles.
+      // Matrix Ball accumulates i8 products into i32 C across K tiles.
       rewriter.create<MatrixMatmulOp>(loc, aTile, bTile, cTile);
 
       rewriter.setInsertionPointAfter(kLoop);

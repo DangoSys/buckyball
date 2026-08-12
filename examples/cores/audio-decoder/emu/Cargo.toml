@@ -1,0 +1,13 @@
+[package]
+name = "bemu-audio-decoder"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "bemu_audio_decoder"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+core_bemu = { package = "bemu-goban", path = "../../goban/emu" }

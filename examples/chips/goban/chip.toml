@@ -5,12 +5,6 @@ compilerCore = "goban"
 
 [runtime]
 bemu = "emu/Cargo.toml"
+bemuCore = "../../cores/goban/emu/Cargo.toml"
+bemuTile = "configs/tiles/default.toml"
 workloads = "workloads"
-
-[[cores]]
-name = "goban"
-path = "../../cores/goban"
-
-[[cores]]
-name = "rocket"
-path = "../../cores/rocket"

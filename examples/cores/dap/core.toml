@@ -1,0 +1,42 @@
+# dap core — owned by dap core-designer
+# Lead scaffold only. Replace balldomain for DSP/RFFT/mel Balls.
+# Assigned slice: dap_0 (see examples/chips/audio/workloads/subgraphs/SLICE_MAP.md)
+
+balldomain = "configs/balldomains/stub.toml"
+memdomain  = "configs/memdomains/default.toml"
+frontend   = "configs/frontends/default.toml"
+gpdomain   = "configs/gpdomains/default.toml"
+core       = "configs/core/default.toml"
+
+[rocketCore]
+xLen = 64
+pgLevels = 3
+useVM = true
+useZba = true
+useZbb = true
+useZbs = true
+
+[rocketCore.mulDiv]
+enable = true
+mulUnroll = 8
+mulEarlyOut = true
+divEarlyOut = true
+
+[rocketCore.fpu]
+enable = true
+minFLen = 16
+fLen = 64
+
+[rocketCore.dcache]
+nSets = 32
+nWays = 4
+nMSHRs = 4
+
+[rocketCore.icache]
+nSets = 64
+nWays = 8
+
+[rocketCore.btb]
+enable = true
+nEntries = 28
+nRAS = 6

@@ -1,5 +1,7 @@
 # Pebble tile configuration
 
+memBallChannelNum = 6
+
 [privateDCache]
 enable = false
 ways = 4

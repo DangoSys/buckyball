@@ -1,0 +1,3 @@
+[workloads]
+search_path = "workloads/src"
+tests = []

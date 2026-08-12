@@ -1,0 +1,44 @@
+# Audio tile: heterogeneous ASR pipeline cores + sharedMem for activations.
+
+memBallChannelNum = 6
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[sharedMem]
+enable = true
+# mel[1,80,3000]f32 ≈ 960KB plus several [1,1500,512]f32 ≈ 3MB each — size in entries of bank width units;
+# core/chip bring-up must re-measure. Fail elaboration/tests if too small rather than silent wrap.
+entries = 65536
+inputChannels = 6
+defaultGroupCount = 1
+memCycles = 10
+
+[[cores]]
+name = "dap"
+include = "../../../../cores/dap/core.toml"
+
+[[cores]]
+name = "audio-encoder"
+include = "../../../../cores/audio-encoder/core.toml"
+
+[[cores]]
+name = "audio-encoder"
+include = "../../../../cores/audio-encoder/core.toml"
+
+[[cores]]
+name = "audio-encoder"
+include = "../../../../cores/audio-encoder/core.toml"
+
+[[cores]]
+name = "audio-decoder"
+include = "../../../../cores/audio-decoder/core.toml"
+
+[[cores]]
+name = "audio-decoder"
+include = "../../../../cores/audio-decoder/core.toml"

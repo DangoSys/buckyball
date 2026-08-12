@@ -1,10 +1,14 @@
 set(E2E_MODEL_DIR ${MODELTEST_WORKLOAD_DIR}/e2e)
 
-# Enable all architectures and models by default for e2e
-# Users can override with -DARCH=... -DMODEL=... at cmake configure time
+# Enable models by default for e2e configure. Gemmini stays on as a reference
+# backend. Buckyball ModelTest enables itself iff this chip has a layout under
+# e2e/models/archs/buckyball/<chip>/ (model↔chip is many-to-many).
 if(NOT DEFINED ARCH)
   set(ARCH_GEMMINI ON)
-  set(ARCH_BUCKYBALL ON)
+  if(DEFINED BUCKYBALL_WORKLOAD_CHIP AND
+     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/e2e/models/archs/buckyball/${BUCKYBALL_WORKLOAD_CHIP}")
+    set(ARCH_BUCKYBALL ON)
+  endif()
 endif()
 
 if(NOT DEFINED MODEL)

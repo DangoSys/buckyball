@@ -118,7 +118,7 @@ if run_step "2"; then
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
     -DPython3_EXECUTABLE="$(which python3)" \
-    -DPython_EXECUTABLE="$(which python)"
+    -DPython_EXECUTABLE="$(which python3)"
   ninja -C llvm/build #check-clang check-mlir check-openmp
 
   cmake -G Ninja -S . -B build \
@@ -128,25 +128,12 @@ if run_step "2"; then
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
     -DPython3_EXECUTABLE="$(which python3)" \
-    -DPython_EXECUTABLE="$(which python)"
+    -DPython_EXECUTABLE="$(which python3)"
   ninja -C build # check-buddy
 fi
 
 if run_step "3"; then
-  begin_step "3" "arch pre-compile sources"
-
-  # Pre-compile chipyard dependencies in order
-  # These must be compiled separately before arch/buckyball can use them
-  cd ${BBDIR}/arch/thirdparty/chipyard
-
-  # 1. cde provides org.chipsalliance.cde.config (required by rocketchip and firesim)
-  # sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "cde/compile"
-
-  # 2. firrtl2 generates ANTLR parsers (required by chipyard)
-  sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "firrtl2/compile"
-
-  # 3. chipyard includes tools/stage sources (required by firesim)
-  # sbt -J-Xms512m -J-Xmx4g -J-XX:+UseG1GC "chipyard/compile"
+  begin_step "3" "RTL source pre-compile"
 
   cd ${BBDIR}/arch
   bbdev verilator --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'

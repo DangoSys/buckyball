@@ -1,0 +1,38 @@
+# Poly Tile: three prefill Cores and two decode Cores.
+
+memBallChannelNum = 6
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[sharedMem]
+enable = true
+entries = 16384
+inputChannels = 5
+defaultGroupCount = 1
+memCycles = 10
+
+[[cores]]
+name = "prefill"
+include = "../../../../cores/prefill/core.toml"
+
+[[cores]]
+name = "prefill"
+include = "../../../../cores/prefill/core.toml"
+
+[[cores]]
+name = "prefill"
+include = "../../../../cores/prefill/core.toml"
+
+[[cores]]
+name = "decode"
+include = "../../../../cores/decode/core.toml"
+
+[[cores]]
+name = "decode"
+include = "../../../../cores/decode/core.toml"
