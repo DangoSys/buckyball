@@ -40,7 +40,8 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
   }
   // 结果行和写回描述符分别以 FIFO 顺序保存。两者的队首总是同一逻辑行，
   // 因而 resultBuffer 的物理环形回绕不会改变数据与地址的配对关系。
-  val descriptorBuffer = Reg(Vec(descriptorRows, new SystolicStoreCtrlResp(b)))
+  val descriptorBuffer =
+    RegInit(VecInit(Seq.fill(descriptorRows)(0.U.asTypeOf(new SystolicStoreCtrlResp(b)))))
   val descriptorReadPtr = RegInit(0.U(log2Ceil(descriptorRows).W))
   val descriptorWritePtr = RegInit(0.U(log2Ceil(descriptorRows).W))
   val descriptorCount = RegInit(0.U(descriptorCountWidth.W))
@@ -96,7 +97,9 @@ class SystolicArrayStore(val b: GlobalConfig) extends Module {
   // 就接收 Ctrl 的下一行地址。descriptorDeq 允许同周期“消费一项、补入一项”。
   io.store_ctrl_resp_i.ready := descriptorCount < descriptorRows.U || descriptorDeq
 
-  assert(io.wr_o.bits.valid_elems <= tile.U, "SystolicArrayStore: row valid element count exceeds TILE")
+  when(io.wr_o.valid) {
+    assert(io.wr_o.bits.valid_elems <= tile.U, "SystolicArrayStore: row valid element count exceeds TILE")
+  }
   assert(bufferCount <= bufferRows.U, "SystolicArrayStore: result buffer overflow")
   assert(descriptorCount <= descriptorRows.U, "SystolicArrayStore: descriptor buffer overflow")
   when(descriptorDeq) {
