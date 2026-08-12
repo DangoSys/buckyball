@@ -1,11 +1,12 @@
 set(E2E_MODEL_DIR ${MODELTEST_WORKLOAD_DIR}/e2e)
 
-# Enable models by default for e2e configure. Architectures: gemmini stays on
-# for reference backends; Buckyball ModelTest archs only exist for
-# pebble|goban|poly. Override with -DARCH=... -DMODEL=... at cmake configure.
+# Enable models by default for e2e configure. Gemmini stays on as a reference
+# backend. Buckyball ModelTest enables itself iff this chip has a layout under
+# e2e/models/archs/buckyball/<chip>/ (model↔chip is many-to-many).
 if(NOT DEFINED ARCH)
   set(ARCH_GEMMINI ON)
-  if(BUCKYBALL_WORKLOAD_CHIP MATCHES "^(pebble|goban|poly)$")
+  if(DEFINED BUCKYBALL_WORKLOAD_CHIP AND
+     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/e2e/models/archs/buckyball/${BUCKYBALL_WORKLOAD_CHIP}")
     set(ARCH_BUCKYBALL ON)
   endif()
 endif()
