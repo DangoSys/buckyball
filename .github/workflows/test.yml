@@ -36,7 +36,7 @@ jobs:
           echo "🔎 Repository: ${{ github.repository }}"
 
       - name: Reset to clean state
-        shell: zsh {0}
+        shell: zsh -e {0}
         run: |
           cd ~/Code/buckyball
           git fetch --force --prune origin "${{ github.ref }}"
