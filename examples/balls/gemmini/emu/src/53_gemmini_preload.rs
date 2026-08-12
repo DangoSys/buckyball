@@ -1,5 +1,5 @@
 use super::super::bank::bank_num;
-use super::bank_matrix::{read_i8_nn, write_i32_nn};
+use super::bank_matrix::read_i8_nn;
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
 use super::gemmini_state::gemini;
 use super::instruction::{ExecContext, Instruction};
@@ -25,7 +25,6 @@ impl Instruction for GemminiPreload {
         }
 
         let p1 = pbank(ctx.bank_map, op1);
-        let pw = pbank(ctx.bank_map, wr);
         let mut gm = gemini().lock().unwrap();
 
         if gm.cfg.dataflow == 1 {
@@ -36,15 +35,8 @@ impl Instruction for GemminiPreload {
                 b
             });
         } else {
-            let d = read_i8_nn(&ctx.banks, p1, n);
-            let mut c = vec![vec![0i32; n]; n];
-            for i in 0..n {
-                for j in 0..n {
-                    c[i][j] = d[i][j] as i32;
-                }
-            }
-            drop(gm);
-            write_i32_nn(&mut ctx.banks, pw, &c, n);
+            // RTL OS preload only primes the mesh and injects D=0. It does
+            // not write the destination SRAM bank; compute produces C.
         }
         0
     }
