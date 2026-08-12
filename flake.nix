@@ -16,6 +16,82 @@
             inherit system;
             config.allowUnfree = true;
           };
+
+          defaultShell = pkgs.mkShell {
+            # this is needed to build LLVM/libc++, disable the nix injected hardening
+            hardeningDisable = [ "libcxxhardeningfast" ];
+
+            buildInputs = with pkgs; [
+              clibs.zlib-dev
+              clibs.zlib
+              clibs.lz4-dev
+              clibs.lz4
+              clibs.readline-dev
+              clibs.readline
+              clibs.jpeg-dev
+              clibs.jpeg
+              clibs.png-dev
+              clibs.png
+              clibs.elfutils-dev
+              clibs.elfutils
+              clibs.gmp-dev
+              clibs.gmp
+              clibs.libdwarf-dev
+              clibs.libdwarf
+
+              compiler.flatbuffers
+              compiler.numactl
+
+              mosoo.bun
+              mosoo.just
+              mosoo.workerd
+
+              rustTools.cargoNextest
+            ];
+            shellHook = ''
+              # Must run with cwd at the git checkout. Store copies from toString ./.
+              # are unusable for development paths. MCP launcher cds to repo root first.
+              if [ ! -f "$PWD/sourceme.sh" ]; then
+                echo "ERROR: nix develop cwd must be the buckyball repo root (missing $PWD/sourceme.sh)." >&2
+                echo "Use: cd <repo> && nix develop   or   scripts/claude/run_mcp_server.sh" >&2
+                return 1 2>/dev/null || exit 1
+              fi
+              BB_ROOT="$PWD"
+              if [ -d "$BB_ROOT/result/bin" ]; then
+                export PATH="$BB_ROOT/result/bin:$PATH"
+              else
+                echo "Warning: result/bin not found. Run 'nix build' first." >&2
+              fi
+
+              source "$BB_ROOT/sourceme.sh"
+
+              export MINIFLARE_WORKERD_PATH="''${MINIFLARE_WORKERD_PATH:-${pkgs.mosoo.workerd}/bin/workerd}"
+
+              # Verilator build acceleration: ccache via OBJCACHE
+              export OBJCACHE=ccache
+
+              export CUDA_HOME="${pkgs.cuda.cudatoolkit}"
+              export CPATH="''${CUDA_HOME}/include''${CPATH:+:$CPATH}"
+
+              # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
+              if [ -z "$NIX_QUIET" ]; then
+                echo "================= Buckyball Environment Activated =========================" >&2
+                echo "Development environment loaded:" >&2
+                echo "Verilator: $(verilator --version 2>&1 | head -1)" >&2
+                echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)" >&2
+                echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)" >&2
+                echo "Mill: $(mill --version 2>&1 | head -1)" >&2
+                echo "Cargo: $(cargo --version 2>&1 | head -1)" >&2
+                echo "npm: $(npm --version 2>&1 | head -1)" >&2
+                echo "bbdev: $(which bbdev)" >&2
+                echo "RISCV: $RISCV" >&2
+                echo "Yosys: $(yosys --version 2>&1 | head -1)" >&2
+                echo "OpenSTA: $(sta -version 2>&1 | head -1)" >&2
+                echo "Buddy MLIR: $(which buddy-opt)" >&2
+                echo "===========================================================================" >&2
+              fi
+            '';
+          };
         in
         {
           legacyPackages = pkgs;
@@ -130,86 +206,11 @@
           };
 
           # nix develop
-          devShells.default = pkgs.mkShell {
-            # this is needed to build LLVM/libc++, disable the nix injected hardening
-            hardeningDisable = [ "libcxxhardeningfast" ];
+          devShells.default = defaultShell;
 
-            buildInputs = with pkgs; [
-              eda.sky130
-              clibs.zlib-dev
-              clibs.zlib
-              clibs.lz4-dev
-              clibs.lz4
-              clibs.readline-dev
-              clibs.readline
-              clibs.jpeg-dev
-              clibs.jpeg
-              clibs.png-dev
-              clibs.png
-              clibs.elfutils-dev
-              clibs.elfutils
-              clibs.gmp-dev
-              clibs.gmp
-              clibs.libdwarf-dev
-              clibs.libdwarf
-
-              compiler.flatbuffers
-              compiler.numactl
-
-              mosoo.bun
-              mosoo.just
-              mosoo.workerd
-
-              rustTools.cargoNextest
-            ];
-            shellHook = ''
-              # Must run with cwd at the git checkout. Store copies from toString ./.
-              # are unusable for development paths. MCP launcher cds to repo root first.
-              if [ ! -f "$PWD/sourceme.sh" ]; then
-                echo "ERROR: nix develop cwd must be the buckyball repo root (missing $PWD/sourceme.sh)." >&2
-                echo "Use: cd <repo> && nix develop   or   scripts/claude/run_mcp_server.sh" >&2
-                return 1 2>/dev/null || exit 1
-              fi
-              BB_ROOT="$PWD"
-              if [ -d "$BB_ROOT/result/bin" ]; then
-                export PATH="$BB_ROOT/result/bin:$PATH"
-              else
-                echo "Warning: result/bin not found. Run 'nix build' first." >&2
-              fi
-
-              source "$BB_ROOT/sourceme.sh"
-
-              export SKY130_ROOT="${pkgs.eda.sky130}"
-
-              export MINIFLARE_WORKERD_PATH="''${MINIFLARE_WORKERD_PATH:-${pkgs.mosoo.workerd}/bin/workerd}"
-
-              # Verilator build acceleration: ccache via OBJCACHE
-              export OBJCACHE=ccache
-
-              export CUDA_HOME="${pkgs.cuda.cudatoolkit}"
-              export CPATH="''${CUDA_HOME}/include''${CPATH:+:$CPATH}"
-
-              # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
-              if [ -z "$NIX_QUIET" ]; then
-                echo "================= Buckyball Environment Activated =========================" >&2
-                echo "Development environment loaded:" >&2
-                echo "Verilator: $(verilator --version 2>&1 | head -1)" >&2
-                echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)" >&2
-                echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)" >&2
-                echo "Mill: $(mill --version 2>&1 | head -1)" >&2
-                echo "Cargo: $(cargo --version 2>&1 | head -1)" >&2
-                echo "npm: $(npm --version 2>&1 | head -1)" >&2
-                echo "bbdev: $(which bbdev)" >&2
-                echo "RISCV: $RISCV" >&2
-                echo "Yosys: $(yosys --version 2>&1 | head -1)" >&2
-                echo "OpenSTA: $(sta -version 2>&1 | head -1)" >&2
-                echo "Buddy MLIR: $(which buddy-opt)" >&2
-                echo "===========================================================================" >&2
-              fi
-            '';
-          };
-
-          devShells.eda = pkgs.mkShell {
+          # default + EDA tools / sky130
+          devShells.full = pkgs.mkShell {
+            inputsFrom = [ defaultShell ];
             packages = with pkgs.eda; [
               yosys
               opensta
@@ -221,7 +222,7 @@
             ];
             shellHook = ''
               export SKY130_ROOT="${pkgs.eda.sky130}"
-              echo "Sky130 EDA environment activated" >&2
+              echo "Full environment activated (default + EDA)" >&2
               echo "  libraries: $SKY130_ROOT" >&2
             '';
           };
