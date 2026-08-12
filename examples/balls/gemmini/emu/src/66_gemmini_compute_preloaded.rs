@@ -9,7 +9,7 @@ pub struct GemminiComputePreloaded;
 impl Instruction for GemminiComputePreloaded {
     const FUNCT: u32 = 66;
 
-    fn exec(xs1: u64, _xs2: u64, ctx: &mut ExecContext) -> u64 {
+    fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let op_a = rs1_b0(xs1);
         let op_b = rs1_b1(xs1);
         let wr = rs1_b2(xs1);
@@ -40,11 +40,23 @@ impl Instruction for GemminiComputePreloaded {
         let shift = gm.cfg.in_shift;
         let ws_b = gm.ws_b.clone();
         drop(gm);
+        let zero_op2 = ((xs2 >> 4) & 1) != 0;
+        let zero_op1_tail = ((xs2 >> 5) & 1) != 0;
+        let op1_valid_rows = ctx.cfgs[op_a as usize].valid_rows.min(n as u64) as usize;
 
         if df == 1 {
             let b = ws_b.expect("gemmini_compute_preloaded: WS missing preload");
-            let a = read_i8_nn(&ctx.banks, pa, n);
-            let d = read_i32_nn(&ctx.banks, pb, n);
+            let mut a = read_i8_nn(&ctx.banks, pa, n);
+            if zero_op1_tail {
+                for row in &mut a[op1_valid_rows..] {
+                    row.fill(0);
+                }
+            }
+            let d = if zero_op2 {
+                vec![vec![0i32; n]; n]
+            } else {
+                read_i32_nn(&ctx.banks, pb, n)
+            };
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
                 for j in 0..n {
@@ -60,7 +72,12 @@ impl Instruction for GemminiComputePreloaded {
         } else {
             // OS mode: per RTL GemminiExCtrlPreloadStates, preload feeds D=0 to
             // mesh in OS mode, so the accumulator starts at zero.
-            let a = read_i8_nn(&ctx.banks, pa, n);
+            let mut a = read_i8_nn(&ctx.banks, pa, n);
+            if zero_op1_tail {
+                for row in &mut a[op1_valid_rows..] {
+                    row.fill(0);
+                }
+            }
             let b = read_i8_nn(&ctx.banks, pb, n);
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {

@@ -17,6 +17,7 @@ mod f80_gemmini_loop_ws;
 #[path = "96_gemmini_loop_conv_ws.rs"]
 mod f96_gemmini_loop_conv_ws;
 mod gemmini_state;
+mod loop_micro_ops;
 
 const BALL_CLASS: &str = "examples.balls.gemmini.GemminiBall";
 

@@ -9,7 +9,7 @@ pub struct GemminiComputeAccumulated;
 impl Instruction for GemminiComputeAccumulated {
     const FUNCT: u32 = 67;
 
-    fn exec(xs1: u64, _xs2: u64, ctx: &mut ExecContext) -> u64 {
+    fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let op_a = rs1_b0(xs1);
         let op_b = rs1_b1(xs1);
         let wr = rs1_b2(xs1);
@@ -40,7 +40,14 @@ impl Instruction for GemminiComputeAccumulated {
         let shift = gm.cfg.in_shift;
         drop(gm);
 
-        let a = read_i8_nn(&ctx.banks, pa, n);
+        let zero_op1_tail = ((xs2 >> 5) & 1) != 0;
+        let op1_valid_rows = ctx.cfgs[op_a as usize].valid_rows.min(n as u64) as usize;
+        let mut a = read_i8_nn(&ctx.banks, pa, n);
+        if zero_op1_tail {
+            for row in &mut a[op1_valid_rows..] {
+                row.fill(0);
+            }
+        }
         let b = read_i8_nn(&ctx.banks, pb, n);
         let mut c = read_i32_nn_groups(&ctx.banks, &pw, n);
 
