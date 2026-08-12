@@ -1,5 +1,7 @@
 # Audio tile: heterogeneous ASR pipeline cores + sharedMem for activations.
 
+memBallChannelNum = 6
+
 [privateDCache]
 enable = false
 ways = 4

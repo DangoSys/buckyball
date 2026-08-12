@@ -3,16 +3,12 @@ package framework.top.configs
 import upickle.default._
 
 case class TopConfig(
-  ballMemChannelNum: Int,
   memBallChannelNum: Int,
   nCores:            Int)
 
 object TopConfig {
   implicit val rw: ReadWriter[TopConfig] = macroRW
 
-  def apply(): TopConfig = {
-    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/top/configs/default.json").mkString
-    read[TopConfig](jsonStr)
-  }
-
+  /** Stub; real values come from TomlConfigLoader (tile + derived nCores). */
+  def apply(): TopConfig = TopConfig(memBallChannelNum = 0, nCores = 0)
 }

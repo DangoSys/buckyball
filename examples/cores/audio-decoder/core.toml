@@ -3,10 +3,10 @@
 # Frontend locked by chip lead: subRobEnable=true
 
 balldomain = "configs/balldomains/stub.toml"
-memdomain = "configs/memdomains/default.toml"
-
-[frontend]
-subRobEnable = true
+memdomain  = "configs/memdomains/default.toml"
+frontend   = "configs/frontends/default.toml"
+gpdomain   = "configs/gpdomains/default.toml"
+core       = "configs/core/default.toml"
 
 [rocketCore]
 xLen = 64

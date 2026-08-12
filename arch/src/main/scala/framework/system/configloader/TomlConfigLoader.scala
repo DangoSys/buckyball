@@ -2,11 +2,13 @@ package framework.system.configloader
 
 import toml.{Toml, Value}
 import framework.system.tile.PrivateDCacheParams
-import framework.system.core.configs.RocketCoreParam
+import framework.system.core.configs.{CoreParam, RocketCoreParam}
 import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMapping}
 import framework.frontend.configs.FrontendParam
+import framework.gpdomain.configs.GpDomainParam
 import framework.memdomain.configs.MemDomainParam
 import framework.top.GlobalConfig
+import framework.top.configs.TopConfig
 import java.nio.file.{Path, Paths}
 
 /**
@@ -93,6 +95,22 @@ object TomlConfigLoader {
     }
   }
 
+  private def resolvePathOrTable(
+    value:   Value,
+    baseDir: Path,
+    what:    String
+  ): (Map[String, Value], Path) = value match {
+    case Value.Str(s) if s.nonEmpty =>
+      val path = baseDir.resolve(s).normalize()
+      (asTable(parseFile(path.toString), s"$what root"), path.getParent)
+    case Value.Tbl(t)               =>
+      resolveInclude(t, baseDir)
+    case Value.Str(_)               =>
+      throw new RuntimeException(s"'$what' path must be non-empty")
+    case _                          =>
+      throw new RuntimeException(s"'$what' must be a string path or table")
+  }
+
   private def parseTiles(root: Value, baseDir: Path): Seq[TileTopology] = {
     val rootTable = asTable(root, "root")
 
@@ -167,21 +185,28 @@ object TomlConfigLoader {
         }
     }
 
-    // BBTile requires every core's top.nCores to equal the tile's core count.
-    // Sync it here so users don't need to repeat the count in every per-core TOML.
-    val cores           = coreEntries.map(_._1)
-    val nCores          = cores.size
-    val coresWithNCores = cores.map(_.map(cfg => cfg.copy(top = cfg.top.copy(nCores = nCores))))
-    val rocketCoreOpts  = coreEntries.map {
+    val cores  = coreEntries.map(_._1)
+    val nCores = cores.size
+
+    val hasBuckyball      = cores.exists(_.isDefined)
+    val memBallChannelNum =
+      if (hasBuckyball) getInt(tileTable, "memBallChannelNum")
+      else 0
+
+    val coresWithTop = cores.map(_.map { cfg =>
+      cfg.copy(top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores))
+    })
+
+    val rocketCoreOpts = coreEntries.map {
       case (Some(cfg), _) => Some(cfg.rocketCore)
       case (None, cfg)    => cfg
     }
-    val rocketCores     = rocketCoreOpts.zipWithIndex.map {
+    val rocketCores    = rocketCoreOpts.zipWithIndex.map {
       case (Some(cfg), _) => cfg
       case (None, i)      => throw new RuntimeException(s"Core $i must define [rocketCore]")
     }
 
-    TileTopology(coresWithNCores, privateDCache, rocketCores)
+    TileTopology(coresWithTop, privateDCache, rocketCores)
   }
 
   private def parseCoreEntry(
@@ -190,17 +215,13 @@ object TomlConfigLoader {
     sharedMem: SharedMemFields
   ): (Option[GlobalConfig], Option[RocketCoreParam]) = {
     val rocketCore = getTable(coreTable, "rocketCore").map(parseRocketCore)
-    val frontend   = getTable(coreTable, "frontend").map(parseFrontend).getOrElse(GlobalConfig().frontend)
 
-    // A core entry with `balldomain` becomes a Buckyball-bearing core.
-    // Omitting `balldomain` (or empty string) drops the accelerator slot.
     val balldomainOpt = coreTable.get("balldomain").flatMap {
       case Value.Str(s) if s.nonEmpty =>
         val balldomainPath = baseDir.resolve(s).normalize()
         Some(parseBallDomain(parseFile(balldomainPath.toString), balldomainPath.getParent))
-      case Value.Str(_)               => None // empty string = no balldomain
+      case Value.Str(_)               => None
       case Value.Tbl(t)               =>
-        // Inline or include
         val (resolved, newBase) = resolveInclude(t, baseDir)
         Some(parseBallDomainTable(resolved, newBase))
       case _                          => throw new RuntimeException("'balldomain' must be a string path or table")
@@ -208,20 +229,46 @@ object TomlConfigLoader {
 
     val buckyball = balldomainOpt.map { balldomain =>
       val memdomain = coreTable.get("memdomain") match {
-        case Some(Value.Str(s)) if s.nonEmpty => parseMemDomain(parseFile(baseDir.resolve(s).toString), sharedMem)
-        case Some(Value.Tbl(t))               =>
-          val (resolved, _) = resolveInclude(t, baseDir)
-          parseMemDomainTable(resolved, sharedMem)
-        case _                                =>
+        case Some(v) =>
+          val (tbl, _) = resolvePathOrTable(v, baseDir, "memdomain")
+          parseMemDomainTable(tbl, sharedMem)
+        case None    =>
           throw new RuntimeException("Core with balldomain must define 'memdomain' (string path or table)")
+      }
+
+      val frontend = coreTable.get("frontend") match {
+        case Some(v) =>
+          val (tbl, _) = resolvePathOrTable(v, baseDir, "frontend")
+          parseFrontend(tbl)
+        case None    =>
+          throw new RuntimeException("Core with balldomain must define 'frontend' (string path or table)")
+      }
+
+      val gpDomain = coreTable.get("gpdomain") match {
+        case Some(v) =>
+          val (tbl, _) = resolvePathOrTable(v, baseDir, "gpdomain")
+          parseGpDomain(tbl)
+        case None    =>
+          throw new RuntimeException("Core with balldomain must define 'gpdomain' (string path or table)")
+      }
+
+      val coreParam = coreTable.get("core") match {
+        case Some(v) =>
+          val (tbl, _) = resolvePathOrTable(v, baseDir, "core")
+          parseCoreParam(tbl)
+        case None    =>
+          throw new RuntimeException("Core with balldomain must define 'core' (string path or table)")
       }
 
       val parsedRocketCore = rocketCore.getOrElse(
         throw new RuntimeException("Core with balldomain must have [rocketCore] section")
       )
+
       GlobalConfig().copy(
         ballDomain = balldomain,
         frontend = frontend,
+        gpDomain = gpDomain,
+        core = coreParam,
         memDomain = memdomain,
         rocketCore = parsedRocketCore
       )
@@ -281,13 +328,33 @@ object TomlConfigLoader {
       nRAS = getInt(table, "nRAS")
     )
 
-  private def parseFrontend(table: Map[String, Value]): FrontendParam = {
-    val default = GlobalConfig().frontend
-    default.copy(
-      vbank_id_upper_bound = getOptionalInt(table, "vbankIdUpperBound").getOrElse(default.vbank_id_upper_bound),
-      sub_rob_enable = getOptionalBool(table, "subRobEnable").getOrElse(default.sub_rob_enable)
-    )
-  }
+  private def parseFrontend(table: Map[String, Value]): FrontendParam = FrontendParam(
+    rob_entries = getInt(table, "robEntries"),
+    rs_out_of_order_response = getBool(table, "rsOutOfOrderResponse"),
+    bank_id_len = getInt(table, "bankIdLen"),
+    vbank_id_upper_bound = getInt(table, "vbankIdUpperBound"),
+    iter_len = getInt(table, "iterLen"),
+    sub_rob_enable = getBool(table, "subRobEnable"),
+    sub_rob_depth = getInt(table, "subRobDepth")
+  )
+
+  private def parseGpDomain(table: Map[String, Value]): GpDomainParam = GpDomainParam(
+    laneNumber = getInt(table, "laneNumber"),
+    chainingSize = getInt(table, "chainingSize"),
+    vLen = getInt(table, "vLen"),
+    dLen = getInt(table, "dLen"),
+    eLen = getInt(table, "eLen"),
+    laneScale = getInt(table, "laneScale")
+  )
+
+  private def parseCoreParam(table: Map[String, Value]): CoreParam = CoreParam(
+    coreDataBytes = getInt(table, "coreDataBytes"),
+    xLen = getInt(table, "xLen"),
+    vaddrBits = getInt(table, "vaddrBits"),
+    paddrBits = getInt(table, "paddrBits"),
+    pgIdxBits = getInt(table, "pgIdxBits"),
+    nPMPs = getInt(table, "nPMPs")
+  )
 
   /** Parse a BallDomain file (returns BallDomainParam from the root table). */
   private def parseBallDomain(value: Value, baseDir: Path): BallDomainParam = {

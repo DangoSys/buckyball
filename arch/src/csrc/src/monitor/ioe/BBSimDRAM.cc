@@ -17,13 +17,20 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ioe/mm.h"
+#ifndef VCS_NO_DRAMSIM
 #include "ioe/mm_dramsim3.h"
+#endif
 
+#ifndef VCS_NO_DRAMSIM
 static bool use_dramsim = false;
+#endif
 static std::vector<std::map<long long int, backing_data_t>> mem_data = {};
+static std::vector<mm_t *> channels = {};
 static std::string elf_file = "";
 
 static std::string default_dramsim3_config_dir() {
+#ifndef VCS_NO_DRAMSIM
   const char *config_dir = getenv("DRAMSIM3_CONFIG_DIR");
   if (config_dir != nullptr && config_dir[0] != '\0')
     return std::string(config_dir);
@@ -31,6 +38,9 @@ static std::string default_dramsim3_config_dir() {
   if (riscv != nullptr && riscv[0] != '\0')
     return std::string(riscv) + "/share/dramsim3/configs";
   return "result/share/dramsim3/configs";
+#else
+  return "";
+#endif
 }
 
 static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
@@ -113,10 +123,12 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
     std::string arg(info.argv[i]);
     if (arg.find("+elf=") == 0)
       elf_file = arg.substr(strlen("+elf="));
+#ifndef VCS_NO_DRAMSIM
     if (arg == "+dramsim")
       use_dramsim = true;
     if (arg.find("+dramsim_ini_dir=") == 0)
       local_ini_dir = arg.substr(strlen("+dramsim_ini_dir="));
+#endif
   }
 
   while (chip_id >= (int)mem_data.size())
@@ -140,16 +152,27 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
     mem_data[chip_id][mem_base] = {data, (size_t)mem_size};
   }
 
+#ifndef VCS_NO_DRAMSIM
   if (use_dramsim) {
     mm = (mm_t *)(new mm_dramsim3_t(mem_base, mem_size, word_size, line_size,
                                     mem_data[chip_id][mem_base], memory_ini,
                                     local_ini_dir, 1 << id_bits, clock_hz));
   } else {
+#else
+  {
+#endif
     mm = (mm_t *)(new mm_magic_t(mem_base, mem_size, word_size, line_size,
                                  mem_data[chip_id][mem_base]));
   }
 
+  channels.push_back(mm);
   return mm;
+}
+
+extern "C" void bbsim_memory_print_stats() {
+  for (auto *channel : channels)
+    if (channel != nullptr)
+      channel->print_stats();
 }
 
 extern "C" void bbsim_memory_tick(

@@ -17,6 +17,7 @@ index.html
 *.fst
 *.log
 *.dot
+*.svf
 
 # Vivado / Webtalk session files (root-level)
 /vivado*.jou
@@ -47,3 +48,4 @@ scripts/docker/.last-image-tag
 ucli.key
 .worktrees/
 nohup.out
+alib-52/

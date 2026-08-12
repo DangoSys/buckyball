@@ -17,9 +17,14 @@ case class FrontendParam(
 object FrontendParam {
   implicit val rw: ReadWriter[FrontendParam] = macroRW
 
-  def apply(): FrontendParam = {
-    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/frontend/configs/default.json").mkString
-    read[FrontendParam](jsonStr)
-  }
+  def apply(): FrontendParam = FrontendParam(
+    rob_entries = 0,
+    rs_out_of_order_response = false,
+    bank_id_len = 0,
+    vbank_id_upper_bound = 0,
+    iter_len = 0,
+    sub_rob_enable = false,
+    sub_rob_depth = 0
+  )
 
 }

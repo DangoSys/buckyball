@@ -16,9 +16,13 @@ case class CoreParam(
 object CoreParam {
   implicit val rw: ReadWriter[CoreParam] = macroRW
 
-  def apply(): CoreParam = {
-    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/system/core/configs/default.json").mkString
-    read[CoreParam](jsonStr)
-  }
+  def apply(): CoreParam = CoreParam(
+    coreDataBytes = 0,
+    xLen = 0,
+    vaddrBits = 0,
+    paddrBits = 0,
+    pgIdxBits = 0,
+    nPMPs = 0
+  )
 
 }

@@ -65,6 +65,16 @@ mm_dramsim3_t::mm_dramsim3_t(size_t mem_base, size_t mem_sz, size_t word_sz,
       [this](uint64_t address) { this->write_complete(address); });
 };
 
+mm_dramsim3_t::~mm_dramsim3_t() {
+  delete mem;
+  mem = nullptr;
+}
+
+void mm_dramsim3_t::print_stats() {
+  if (mem != nullptr)
+    mem->PrintStats();
+}
+
 bool mm_dramsim3_t::ar_ready() { return ar_ready_cache; }
 
 bool mm_dramsim3_t::aw_ready() { return aw_ready_cache && !store_inflight; }

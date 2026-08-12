@@ -22,12 +22,13 @@ case class GpDomainParam(
 object GpDomainParam {
   implicit val rw: ReadWriter[GpDomainParam] = macroRW
 
-  /**
-   * Load from the default local JSON file.
-   */
-  def apply(): GpDomainParam = {
-    val jsonStr = scala.io.Source.fromFile("src/main/scala/framework/gpdomain/configs/default.json").mkString
-    read[GpDomainParam](jsonStr)
-  }
+  def apply(): GpDomainParam = GpDomainParam(
+    laneNumber = 0,
+    chainingSize = 0,
+    vLen = 0,
+    dLen = 0,
+    eLen = 0,
+    laneScale = 0
+  )
 
 }

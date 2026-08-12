@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <unistd.h>
 
+extern "C" void bbsim_memory_print_stats();
+
 // SCU DPI-C implementation for Verilator simulation.
 // These functions are called from the RTL when software writes to SCU
 // registers.
@@ -69,6 +71,8 @@ extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code) {
 
   if (uart_fp)
     fclose(uart_fp);
+
+  bbsim_memory_print_stats();
 
   sim_exit();
 }

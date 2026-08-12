@@ -1,5 +1,7 @@
 # Goban Tile (16 identical cores)
 
+memBallChannelNum = 6
+
 [privateDCache]
 enable = true
 ways = 4

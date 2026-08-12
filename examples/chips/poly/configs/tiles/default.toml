@@ -1,5 +1,7 @@
 # Poly Tile: three prefill Cores and two decode Cores.
 
+memBallChannelNum = 6
+
 [privateDCache]
 enable = false
 ways = 4

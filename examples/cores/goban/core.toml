@@ -1,10 +1,10 @@
 # Goban Core Configuration (default)
 
 balldomain = "configs/balldomains/default.toml"
-memdomain = "configs/memdomains/default.toml"
-
-[frontend]
-subRobEnable = false
+memdomain  = "configs/memdomains/default.toml"
+frontend   = "configs/frontends/default.toml"
+gpdomain   = "configs/gpdomains/default.toml"
+core       = "configs/core/default.toml"
 
 [rocketCore]
 xLen = 64
