@@ -69,9 +69,9 @@ SV
 CELL_MODEL="$(dirname "$(dirname "$(dirname "${TARGET_LIBRARY:?missing TARGET_LIBRARY}" )")")/verilog/scc018ug_uhd_rvt.v"
 if [[ ! -f "$CELL_MODEL" ]]; then echo "missing standard-cell Verilog model: $CELL_MODEL" >&2; exit 2; fi
 
-VCS_CMD=(vcs -full64 -sverilog -timescale=1ns/1ps -top GatePowerHarness -debug_access+all -hsopt=off -Mdir="$BUILD/csrc" -o "$BUILD/simv" -l "$BUILD/compile.log" -cpp "$ROOT/bbdev/api/steps/vcs/host_gxx.sh" -cc /usr/bin/gcc -CFLAGS "-std=c++17 -DVCS_NO_DRAMSIM -I$ROOT/result/include -I$RTL_DIR -I$ROOT/arch/src/csrc/include" -LDFLAGS "-lz -lstdc++ -L/usr/lib64")
+VCS_CMD=(vcs -full64 -sverilog -timescale=1ns/1ps -top GatePowerHarness -debug_access+all -hsopt=off -Mdir="$BUILD/csrc" -o "$BUILD/simv" -l "$BUILD/compile.log" -CFLAGS "-std=c++17 -I$ROOT/result/include -I$RTL_DIR -I$ROOT/arch/src/csrc/include" -LDFLAGS "-ldramsim3 -lz -lstdc++ -L$ROOT/result/lib -Wl,-rpath,$ROOT/result/lib")
 mapfile -t DPI_MODELS < <(find "$RTL_DIR" -maxdepth 1 -name '*DPI.v' -print | sort)
-VCS_CMD+=("$NETLIST" "$CELL_MODEL" "$BUILD/seq_mem_models.sv" "$RTL_DIR/BBSimDRAM.v" "${DPI_MODELS[@]}" "$BUILD/GatePowerHarness.sv" "$ROOT/arch/src/csrc/src/monitor/ioe/BBSimDRAM.cc" "$ROOT/arch/src/csrc/src/monitor/ioe/mm.cc" "$ROOT/bbdev/api/steps/dc/scripts/gate_dpi.cc")
+VCS_CMD+=("$NETLIST" "$CELL_MODEL" "$BUILD/seq_mem_models.sv" "$RTL_DIR/BBSimDRAM.v" "${DPI_MODELS[@]}" "$BUILD/GatePowerHarness.sv" "$ROOT/arch/src/csrc/src/monitor/ioe/BBSimDRAM.cc" "$ROOT/arch/src/csrc/src/monitor/ioe/mm.cc" "$ROOT/arch/src/csrc/src/monitor/ioe/mm_dramsim3.cc" "$ROOT/bbdev/api/steps/dc/scripts/gate_dpi.cc")
 "${VCS_CMD[@]}"
-(cd "$BUILD" && env -u LD_LIBRARY_PATH ./simv +batch +vcd "+elf=$WORKLOAD" "+timeout-ns=${END_NS:-100000000}")
+(cd "$BUILD" && env -u LD_LIBRARY_PATH ./simv +batch +vcd "+elf=$WORKLOAD" "+dramsim_ini_dir=$ROOT/result/share/dramsim3/configs" "+timeout-ns=${END_NS:-100000000}")
 cp "$BUILD/activity.vcd" "$ACTIVITY_FILE"
