@@ -7,7 +7,7 @@ def req_arg(body: dict, name: str):
 
 config = {
     "name": "ip-replace-api",
-    "description": "replace behavioral IP RTL with compiler macro wrappers",
+    "description": "prepare top-scoped synthesis RTL and SRAM metadata",
     "flows": ["ip-replace"],
     "triggers": [api("POST", "/ip/replace/run")],
     "enqueues": ["ip-replace.run"],

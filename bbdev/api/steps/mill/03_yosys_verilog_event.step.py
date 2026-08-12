@@ -10,11 +10,14 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+step_path = os.path.dirname(__file__)
+if step_path not in sys.path:
+    sys.path.insert(0, step_path)
 
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
-from utils.verilog import seq_mem_elaboration_command
+from verilog import seq_mem_elaboration_command
 
 config = {
     "name": "yosys verilog",
@@ -169,6 +172,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
 
     yosys_cfg = load_yosys_config()
+    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
     elaborate_config = input_data.get("config") or yosys_cfg.get(
         "elaborate_config", "sims.verilator.BuckyballToyVerilatorConfig"
     )
@@ -232,6 +236,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "source_list": source_list_path,
                 "ip_replace_output_dir": yosys_log_dir,
                 "consumer": "yosys",
+                "top": top_module,
                 "mem_conf": mem_conf,
                 "next_topic": "yosys.synth" if input_data.get("from_run_workflow") else None,
                 "task": "run" if input_data.get("from_run_workflow") else "verilog",

@@ -10,12 +10,14 @@ import time
 import tempfile
 import threading
 import requests
+import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
 from utils.port import HOST, reserve_port
 from utils.process import clean_python_caches, stop_workspace_servers, terminate_group
 
 workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
+workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 NO_PROXY = {"http": None, "https": None, "all": None}
 WORKER_PORT_START = 49200
@@ -35,11 +37,11 @@ WORKFLOW_COMMANDS = {
         "cosim": 'Run cosimulation. Args: "--binary <path> [--batch]"',
     },
     "vcs": {
-        "clean": True,
-        "verilog": True,
-        "build": 'Build simulation executable. Args: "[--job <num>]"',
-        "sim": 'Run simulation. Args: "--binary <path> [--batch]"',
-        "run": 'Integrated build+sim+run. Args: "--binary <path> [--batch] [--job <num>]"',
+        "clean": 'Clean VCS artifacts. Args: "--config <cfg> [--output-dir <dir>]"',
+        "verilog": 'Generate RTL for VCS. Args: "--config <cfg> [--output-dir <dir>]"',
+        "build": 'Build VCS simulation executable. Args: "--config <cfg> [--jobs <num>] [--output-dir <dir>]"',
+        "sim": 'Run a built VCS simulation. Args: "--config <cfg> --binary <path> [--batch] [--output-dir <dir>]"',
+        "run": 'Generate RTL, build, and run VCS. Args: "--config <cfg> --binary <path> [--batch] [--jobs <num>] [--output-dir <dir>]"',
     },
     "workload": {
         "clean": "Clean workload output directory.",
@@ -78,7 +80,9 @@ WORKFLOW_COMMANDS = {
         "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests>"',
     },
     "dc": {
-        "verilog": 'Generate DC RTL. Args: "--config <cfg> [--dir <root>]"',
+        "verilog": 'Generate top-scoped DC RTL collateral under arch/build/<config>. Args: "--config <cfg> [--top <module>]"',
+        "area": 'Generate RTL, run DC synthesis, and report area under log/<timestamp>-dc-<config>/area. Args: "--config <cfg> [--top <module>]".',
+        "power": 'Generate RTL, run chip-owned power simulation, then run PrimeTime PX under log/<timestamp>-dc-<config>/power. Args: "--config <cfg> [--top <module>] [--workload <built ELF name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format <saif|vcd|fsdb>]".',
     },
     "ip-replace": {
         "run": 'Replace behavioral IP RTL. Args: "--source-list <file> --output-dir <dir> [--top <module>] [--consumer <dc|yosys>]"',
@@ -137,6 +141,37 @@ def cleanup_config(config_path: str):
         os.unlink(config_path)
     except FileNotFoundError:
         pass
+
+
+def load_host_environment() -> None:
+    """Import the optional host EDA contract for worker subprocesses.
+
+    ``nix develop -c`` does not start an interactive zsh, so a sourceme file
+    installed in zshrc is otherwise invisible to Motia workers.  Import only
+    when a tool is missing and keep the operation scoped to this workspace.
+    """
+    if shutil.which("dc_shell") and shutil.which("pt_shell") and shutil.which("vcs"):
+        return
+    sourceme = os.path.join(workspace_dir, "sourceme_host.sh")
+    if not os.path.isfile(sourceme):
+        return
+    try:
+        result = subprocess.run(
+            ["bash", "-c", 'source "$1" >/dev/null 2>&1; env -0', "bbdev", sourceme],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return
+    for item in result.stdout.split(b"\0"):
+        if b"=" not in item:
+            continue
+        key, value = item.split(b"=", 1)
+        try:
+            os.environ[key.decode()] = value.decode()
+        except UnicodeDecodeError:
+            continue
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -520,6 +555,8 @@ def run_script_mode(args, cmd_info):
         print(f"Unknown command: {command}")
         print(f"Available commands: {', '.join(ALL_COMMANDS)}")
         sys.exit(1)
+
+    load_host_environment()
 
     api_path = f"/{command.replace('-', '/')}/{cmd_info['operation']}"
 

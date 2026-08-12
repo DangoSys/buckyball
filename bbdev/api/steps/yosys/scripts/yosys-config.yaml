@@ -2,13 +2,12 @@
 # Users can customize liberty library paths and synthesis options here
 
 # Liberty (.lib) file path for ASIC area estimation
-# If not specified, yosys will use generic gate-level statistics
-# The default Nix EDA shell exports SKY130_ROOT.  bbdev expands environment
-# variables in this file before invoking Yosys/OpenSTA.
-liberty: ${SKY130_ROOT}/lib/sky130_fd_sc_hd__tt_025C_1v80.lib
+# If not specified, yosys will use generic gate-level statistics. A technology
+# owner may set YOSYS_LIBERTY in the host environment.
+liberty:
 
 # Default top module name (override with --top on CLI)
-top: BuckyballAccelerator
+top: DigitalTop
 
 # Elaborate config class (override with --config on CLI)
 elaborate_config: sims.verilator.BuckyballToyVerilatorConfig

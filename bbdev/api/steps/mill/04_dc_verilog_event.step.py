@@ -3,17 +3,21 @@ import shutil
 import sys
 import glob
 import re
+import shlex
 
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+step_path = os.path.dirname(__file__)
+if step_path not in sys.path:
+    sys.path.insert(0, step_path)
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger
-from utils.verilog import seq_mem_elaboration_command
+from verilog import seq_mem_elaboration_command
 
 config = {
     "name": "dc-verilog",
@@ -77,6 +81,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     elaborate_config = input_data.get("config")
+    top_module = input_data.get("top") or "DigitalTop"
     if not elaborate_config:
         _, failure_result = await check_result(
             ctx,
@@ -96,7 +101,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return failure_result
-    ctx.logger.info(f"Using DC RTL output directory: {build_dir}")
+    ctx.logger.info(f"Using DC RTL output directory: {build_dir}, synthesis top: {top_module}")
 
     if os.path.exists(build_dir):
         shutil.rmtree(build_dir)
@@ -104,9 +109,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     mem_conf = os.path.join(build_dir, "mems.conf")
     verilog_command = seq_mem_elaboration_command(elaborate_config, build_dir, mem_conf)
+    elaboration_log = os.path.join(build_dir, "dc_elaboration.log")
 
     result = stream_run_logger(
-        cmd=verilog_command,
+        # Elaboration emits the complete device tree and environment, which is
+        # useful for postmortem debugging but too large for a bbdev terminal.
+        # Keep it with the generated collateral and leave the CLI responsive.
+        cmd=f"{verilog_command} > {shlex.quote(elaboration_log)} 2>&1",
         logger=ctx.logger,
         cwd=arch_dir,
         stdout_prefix="dc verilog",
@@ -118,7 +127,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctx,
             result.returncode,
             continue_run=False,
-            extra_fields={"task": "verilog"},
+            extra_fields={"task": "verilog", "elaboration_log": elaboration_log},
             trace_id=origin_tid,
         )
         return failure_result
@@ -145,7 +154,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx,
         result.returncode,
         continue_run=True,
-        extra_fields={"task": "verilog", "source_list": source_list_path, "mem_conf": mem_conf},
+        extra_fields={
+            "task": "verilog",
+            "source_list": source_list_path,
+            "mem_conf": mem_conf,
+            "top_module": top_module,
+            "elaboration_log": elaboration_log,
+        },
         trace_id=origin_tid,
     )
 
@@ -158,6 +173,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "ip_replace_output_dir": os.path.join(build_dir, "ip-replace"),
                 "consumer": "dc",
                 "mem_conf": mem_conf,
+                "top": top_module,
+                "next_topic": "dc.area" if input_data.get("from_area_workflow") or input_data.get("from_power_workflow") else None,
                 "_trace_id": origin_tid,
             },
         }

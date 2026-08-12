@@ -28,7 +28,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "output_dir": req_arg(body, "output_dir") or f"{bbdir}/arch/build/",
         "log_dir": log_dir,
-        "top": req_arg(body, "top"),
+        "top": req_arg(body, "top") or "DigitalTop",
         "config": req_arg(body, "config"),
         "vcd": req_arg(body, "vcd"),
     }

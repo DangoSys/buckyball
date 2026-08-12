@@ -13,15 +13,15 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from sram_replace import prepare_ip_replacement
+from sram_replace import prepare_sram_collateral
 
 
 config = {
     "name": "ip-replace",
-    "description": "replace behavioral SRAM/IP RTL with compiler macro wrappers",
+    "description": "prepare top-scoped synthesis RTL and SRAM metadata",
     "flows": ["ip-replace", "dc", "yosys"],
     "triggers": [queue("ip-replace.run")],
-    "enqueues": ["yosys.synth"],
+    "enqueues": ["dc.area", "yosys.synth"],
 }
 
 
@@ -66,18 +66,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
 
     consumer = input_data.get("consumer", "generic")
+    top_module = input_data.get("top") or "DigitalTop"
     output_dir = input_data.get("ip_replace_output_dir")
     if not isinstance(output_dir, str) or not output_dir:
         output_dir = os.path.join(os.path.dirname(source_list_path), "ip-replace")
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        replacement = prepare_ip_replacement(
-            sources,
-            output_dir,
-            os.environ.get("SKY130_ROOT"),
-            input_data.get("top"),
-        )
+        collateral = prepare_sram_collateral(sources, output_dir, top_module)
     except Exception as exc:
         _, failure_result = await check_result(
             ctx,
@@ -90,25 +86,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     replaced_source_list = os.path.join(output_dir, f"{consumer}_sources.list")
     with open(replaced_source_list, "w") as handle:
-        for path in replacement["source_paths"]:
+        for path in collateral["source_paths"]:
             handle.write(f"{path}\n")
 
-    replacement["source_list"] = replaced_source_list
+    collateral["source_list"] = replaced_source_list
     extra = {
         "task": "ip-replace",
         "consumer": consumer,
         "source_list": replaced_source_list,
-        "ip_manifest": replacement.get("manifest"),
-        "ip_mapped_memories": replacement["mapped"],
-        "ip_macro_area": replacement["macro_area"],
+        "sram_manifest": collateral["sram_manifest"],
+        "sram_memory_count": collateral["sram_memory_count"],
+        "top_module": collateral["top_module"],
     }
     if input_data.get("mem_conf"):
         extra["mem_conf"] = input_data["mem_conf"]
-    if replacement["mapped"]:
-        ctx.logger.info(
-            f"Mapped {replacement['mapped']} behavioral memories to compiler macros; "
-            f"estimated macro area {replacement['macro_area']:.3f} um^2"
-        )
+    ctx.logger.info(
+        f"Prepared {collateral['sram_memory_count']} technology-neutral SRAM modules "
+        f"for top {collateral['top_module']}"
+    )
 
     next_topic = input_data.get("next_topic")
     if isinstance(next_topic, str) and next_topic:
@@ -119,7 +114,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "data": {
                     **input_data,
                     "source_list": replaced_source_list,
-                    "ip_replacement": replacement,
+                    "sram_collateral": collateral,
                     "_trace_id": origin_tid,
                 },
             }

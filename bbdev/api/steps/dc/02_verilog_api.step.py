@@ -16,13 +16,14 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
         check_dc_rtl_args(body)
-        output_dir = get_dc_rtl_dir(bbdir, body.get("config"), body.get("dir"))
+        output_dir = get_dc_rtl_dir(bbdir, body.get("config"))
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
     data = {
         "output_dir": output_dir,
         "config": body.get("config"),
+        "top": body.get("top") or "DigitalTop",
     }
     await ctx.enqueue({"topic": "dc.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

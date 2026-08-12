@@ -66,8 +66,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/")
 
     yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg.get("top") or "BuckyballAccelerator"
-    liberty = yosys_cfg.get("liberty")
+    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
+    liberty = yosys_cfg.get("liberty") or os.environ.get("YOSYS_LIBERTY")
+    if isinstance(liberty, str):
+        liberty = os.path.expandvars(os.path.expanduser(liberty))
 
     source_list_path = input_data.get("source_list") or os.path.join(build_dir, "yosys_sources.list")
     if not os.path.exists(source_list_path):
@@ -99,10 +101,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(yosys_output_dir, exist_ok=True)
     ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
 
-    ip_replacement = input_data.get("ip_replacement") or {}
-    macro_liberties = ip_replacement.get("macro_liberties", [])
-    macro_area = ip_replacement.get("macro_area", 0.0)
-    mapped_memories = ip_replacement.get("mapped", 0)
+    sram_collateral = input_data.get("sram_collateral") or {}
 
     read_commands = "\n".join([f"read_verilog -sv {src}" for src in vsrcs])
     yosys_script = f"{yosys_output_dir}/synth_area.ys"
@@ -140,9 +139,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     extra = {
         "task": "synth",
         "output_dir": yosys_output_dir,
-        "ip_manifest": ip_replacement.get("manifest"),
-        "ip_mapped_memories": mapped_memories,
-        "ip_macro_area": macro_area,
+        "sram_manifest": sram_collateral.get("sram_manifest"),
+        "sram_memory_count": sram_collateral.get("sram_memory_count", 0),
     }
     netlist_file = f"{yosys_output_dir}/synth_netlist.v"
     timing_report_file = f"{yosys_output_dir}/timing_report.txt"
@@ -172,8 +170,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         sta_script = f"{yosys_output_dir}/sta_timing.tcl"
         with open(sta_script, "w") as f:
             f.write(f"read_liberty {liberty}\n")
-            for macro_liberty in macro_liberties:
-                f.write(f"read_liberty {macro_liberty}\n")
             f.write(f"read_verilog {netlist_file}\n")
             f.write(f"link_design {top_module}\n")
             # Prefer the configured port, then use the generated-memory clock
@@ -230,20 +226,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if os.path.exists(report_file):
         with open(report_file, "r") as f:
             extra["area_report"] = f.read()
-        if macro_area:
-            chip_area = re.search(r"Chip area for module .*?:\s+([0-9.]+)", extra["area_report"])
-            standard_area = float(chip_area.group(1)) if chip_area else 0.0
-            total_area = standard_area + macro_area
-            ip_area_report = (
-                "\nIP macro area summary\n"
-                f"  Macro area: {macro_area:.6f} um^2\n"
-                f"  Standard-cell area: {standard_area:.6f} um^2\n"
-                f"  Total estimated area: {total_area:.6f} um^2\n"
-            )
-            with open(report_file, "a") as f:
-                f.write(ip_area_report)
-            extra["area_report"] += ip_area_report
-            extra["estimated_total_area"] = total_area
 
     hierarchy_file = f"{yosys_output_dir}/hierarchy_report.txt"
     if os.path.exists(hierarchy_file):
