@@ -1,6 +1,14 @@
 { pkgs, yosys ? pkgs.yosys, opensta ? pkgs.opensta }:
 
 let
+  # nixpkgs marks or-tools broken on Python >= 3.14; pin OpenROAD's stack below that.
+  py = pkgs.python313;
+  orTools = pkgs.or-tools.override { python3 = py; };
+  openroad = pkgs.openroad.override {
+    python3 = py;
+    or-tools = orTools;
+  };
+
   # sky130_fd_sc_hd contains the source views for the HD standard-cell library.
   # Its Liberty files are stored as JSON and are converted with the official
   # SkyWater helper so OpenSTA gets a normal Liberty file.
@@ -131,7 +139,7 @@ in
 
   # OpenROAD provides placement/routing and reports post-placement area.  The
   # actual power estimate is produced by OpenSTA's Liberty-aware report_power.
-  openroad = pkgs.openroad;
+  inherit openroad;
   magic = pkgs.magic-vlsi;
   netgen = pkgs.netgen;
   klayout = pkgs.klayout;
