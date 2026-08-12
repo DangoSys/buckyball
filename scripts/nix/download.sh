@@ -55,7 +55,8 @@ git -C ${CYDIR} submodule update --init --progress \
   generators/rocc-acc-utils \
   generators/bar-fetchers \
   generators/testchipip \
-  generators/rocket-chip-blocks
+  generators/rocket-chip-blocks \
+  generators/gemmini
 git -C ${CYDIR} submodule update --init --progress tools/stage tools/cde tools/firrtl2 tools/rocket-dsp-utils tools/fixedpoint tools/dsptools
 git -C ${CYDIR} submodule update --init --checkout --force tools/stage
 git -C ${CYDIR} submodule update --init --checkout --force tools/cde
@@ -65,6 +66,7 @@ git -C ${CYDIR} submodule update --init --checkout --force generators/rocc-acc-u
 git -C ${CYDIR} submodule update --init --checkout --force generators/bar-fetchers
 git -C ${CYDIR} submodule update --init --checkout --force generators/testchipip
 git -C ${CYDIR} submodule update --init --checkout --force generators/rocket-chip-blocks
+git -C ${CYDIR} submodule update --init --checkout --force generators/gemmini
 
 begin_step "0-2" "verify chipyard nested pins"
 require_chipyard_nested() {
@@ -100,6 +102,8 @@ require_chipyard_nested generators/testchipip \
   src/main/scala/serdes/Parameters.scala
 require_chipyard_nested generators/rocket-chip-blocks \
   src/main/scala/devices/chiplink/Bundles.scala
+require_chipyard_nested generators/gemmini \
+  src/main/scala/gemmini/MeshWithDelays.scala
 require_chipyard_nested generators/diplomacy
 require_chipyard_nested generators/rocc-acc-utils
 require_chipyard_nested generators/bar-fetchers

@@ -40,6 +40,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val mesh = Module(new MeshWithDelays(
     inputType = inputType,
+    weightType = inputType,
     outputType = meshOutputType,
     accType = accType,
     tagType = new SimpleTag,

@@ -21,7 +21,8 @@ object buckyball extends SbtModule { m =>
 
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
-    chipyard
+    chipyard,
+    gemmini
   )
 
   override def sources = T.sources {
@@ -29,7 +30,6 @@ object buckyball extends SbtModule { m =>
     def archSrcs(kind: String) =
       os.list(examples / kind)
         .filter(os.isDir)
-        .filterNot(path => kind == "balls" && path.last.toString == "gemmini")
         .map(_ / "arch" / "src" / "main" / "scala")
         .filter(os.exists)
         .flatMap(root => os.walk(root).filter(path => path.ext == "scala").filterNot(path => path.toString.contains("/sims/firesim/")))
@@ -38,7 +38,6 @@ object buckyball extends SbtModule { m =>
     def configSrcs(kind: String) =
       os.list(examples / kind)
         .filter(os.isDir)
-        .filterNot(path => kind == "balls" && path.last.toString == "gemmini")
         .map(_ / "configs")
         .filter(os.exists)
         .map(PathRef(_))
