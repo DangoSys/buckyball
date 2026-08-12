@@ -43,9 +43,9 @@ jobs:
           git checkout --detach FETCH_HEAD
           git reset --hard FETCH_HEAD
           git clean -ffd
-          git submodule sync bbdev bebop compiler/thirdparty/buddy-mlir
-          git submodule update --init --force bbdev bebop compiler/thirdparty/buddy-mlir
-          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
+          git submodule sync bbdev bebop compiler/thirdparty/buddy-mlir bb-tests/workloads/src/ModelTest/e2e
+          git submodule update --init --force bbdev bebop compiler/thirdparty/buddy-mlir bb-tests/workloads/src/ModelTest/e2e
+          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir bb-tests/workloads/src/ModelTest/e2e; do
             git -C "$submodule" reset --hard
             git -C "$submodule" clean -ffd
           done
