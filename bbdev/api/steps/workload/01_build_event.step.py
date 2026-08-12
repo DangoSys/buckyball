@@ -39,6 +39,63 @@ MODEL_TARGETS = {
     "buddynext": "buddy-buckyball-buddynext-all-run",
 }
 
+# CLI model → layout dir under archs/buckyball/<chip>/
+MODEL_LAYOUT = {
+    "lenet": "LeNet",
+    "mobilenet": "MobileNetV3",
+    "resnet": "ResNet18",
+    "yolo": "YOLO26",
+    "bert": "Bert",
+    "qwen3": "Qwen3",
+    "gemma4": "Gemma4",
+    "deepseekr1": "DeepSeekR1",
+    "llama2": "llama2",
+    "stable-diffusion": "StableDiffusion",
+    "whisper": "Whisper",
+    "buddynext": "BuddyNext",
+}
+
+# CLI model → -DMODEL= value (CMake MODEL_<UPPER> flags)
+MODEL_CMAKE = {
+    "lenet": "lenet",
+    "mobilenet": "mobilenetv3",
+    "resnet": "resnet18",
+    "yolo": "yolo26",
+    "bert": "bert",
+    "qwen3": "qwen3",
+    "gemma4": "gemma4",
+    "deepseekr1": "deepseekr1",
+    "llama2": "llama2",
+    "stable-diffusion": "stablediffusion",
+    "whisper": "whisper",
+    "buddynext": "buddynext",
+}
+
+
+def chips_for_model(bbdir: str, model_key: str) -> set[str]:
+    """Chips that currently ship a layout for this model (many-to-many)."""
+    layout = MODEL_LAYOUT.get(model_key)
+    if layout is None:
+        return set()
+    root = (
+        Path(bbdir)
+        / "bb-tests"
+        / "workloads"
+        / "src"
+        / "ModelTest"
+        / "e2e"
+        / "models"
+        / "archs"
+        / "buckyball"
+    )
+    if not root.is_dir():
+        return set()
+    return {
+        p.name
+        for p in root.iterdir()
+        if p.is_dir() and (p / layout).is_dir()
+    }
+
 RUSHB_TARGETS = {
     "lenet": {
         "bemu": "buddy-buckyball-lenet-rushB-bemu-run",
@@ -176,6 +233,34 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
+        layout = MODEL_LAYOUT.get(model_key)
+        if layout is None:
+            ctx.logger.error(f"Missing layout mapping for model {model}")
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={"error": "missing_model_layout", "model": model},
+                trace_id=origin_tid,
+            )
+            return
+        supported_chips = chips_for_model(bbdir, model_key)
+        if chip not in supported_chips:
+            allowed = ", ".join(sorted(supported_chips)) if supported_chips else "(none)"
+            ctx.logger.error(
+                f"Model '{model}' has no Buckyball layout on chip '{chip}' "
+                f"(layout dir '{layout}'; chips with layout: {allowed})"
+            )
+            await check_result(
+                ctx, 1, continue_run=False,
+                extra_fields={
+                    "error": "unsupported_chip_model",
+                    "chip": chip,
+                    "model": model,
+                    "layout": layout,
+                    "supported_chips": sorted(supported_chips),
+                },
+                trace_id=origin_tid,
+            )
+            return
         if rushb_backend is not None:
             target = RUSHB_TARGETS.get(model_key, {}).get(rushb_backend)
             if target is None:
@@ -198,10 +283,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     chip_arg = f"-DBUCKYBALL_WORKLOAD_CHIP={shlex.quote(chip)}"
     core_arg = f"-DBUCKYBALL_WORKLOAD_CORE={shlex.quote(core_package.name)}"
     stable_arg = "-DBUCKYBALL_STABLE=ON" if stable else "-DBUCKYBALL_STABLE=OFF"
+    model_arg = ""
+    if model:
+        cmake_model = MODEL_CMAKE[model.lower()]
+        model_arg = f" -DMODEL={shlex.quote(cmake_model)}"
     ninja_target = f" {shlex.quote(target)}" if target else ""
     inner = (
         f"cd {shlex.quote(build_dir)} && "
-        f"cmake -G Ninja {chip_arg} {core_arg} {stable_arg} "
+        f"cmake -G Ninja {chip_arg} {core_arg} {stable_arg}{model_arg} "
         f"-DPython3_EXECUTABLE=\"$(which python3)\" .. && "
         f"ninja -j{os.cpu_count()}{ninja_target}"
     )
