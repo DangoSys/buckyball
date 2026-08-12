@@ -1,6 +1,6 @@
 # Toy Core Configuration (default)
 
-balldomain = "balldomains/default.toml"
+balldomain = "balldomains/full.toml"
 memdomain  = "memdomains/default.toml"
 frontend   = "frontends/demo.toml"
 gpdomain   = "gpdomains/default.toml"
