@@ -144,8 +144,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if artifact_dir.exists():
         shutil.rmtree(artifact_dir)
     artifact_dir.mkdir(parents=True)
-    host_gxx = Path(__file__).parent / "scripts" / "host_gxx.sh"
-    host_gxx.chmod(0o755)
     testbench = artifact_dir / "BBSimVcsHarness.sv"
     dpi_shim = artifact_dir / "vcs_dpi.cc"
     testbench.write_text(TESTBENCH, encoding="utf-8")
@@ -155,6 +153,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     csrcs = [
         arch_dir / "src/csrc/src/monitor/ioe/BBSimDRAM.cc",
         arch_dir / "src/csrc/src/monitor/ioe/mm.cc",
+        arch_dir / "src/csrc/src/monitor/ioe/mm_dramsim3.cc",
         dpi_shim,
     ]
     missing = [str(path) for path in csrcs if not path.is_file()]
@@ -163,12 +162,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     result_dir = Path(bbdir) / "result"
-    # VCS itself is a host (glibc 2.28) Synopsys binary.  Do not let the Nix
-    # shell's compiler or pkg-config libraries leak into simv: that produces a
-    # glibc-2.42 executable which cannot load the host VCS runtime.
     cflags = " ".join(
         flag for flag in (
-            "-std=c++17 -DVCS_NO_DRAMSIM",
+            "-std=c++17",
             f"-I{result_dir / 'include'}",
             f"-I{build_dir}",
             f"-I{arch_dir / 'src/csrc/include'}",
@@ -177,8 +173,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     ldflags = " ".join(
         flag for flag in (
-            "-lz -lstdc++",
-            "-L/usr/lib64",
+            "-ldramsim3 -lz -lstdc++",
+            f"-L{result_dir / 'lib'} -Wl,-rpath,{result_dir / 'lib'}",
         ) if flag
     )
     jobs = int(input_data.get("jobs", 16))
@@ -188,7 +184,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     command = " ".join(
         [
             "env -u NIX_LDFLAGS -u NIX_CFLAGS_COMPILE -u NIX_LDFLAGS_FOR_TARGET -u NIX_CFLAGS_COMPILE_FOR_TARGET -u CPATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CXXFLAGS -u LDFLAGS",
-            f"vcs -full64 -sverilog -timescale=1ns/1ps -cpp {shlex.quote(str(host_gxx))} -cc /usr/bin/gcc -ld {shlex.quote(str(host_gxx))}",
+            "vcs -full64 -sverilog -timescale=1ns/1ps -cpp g++ -cc g++ -ld g++",
             "-top BBSimVcsHarness -debug_access+all -hsopt=off",
             f"-j {jobs}",
             f"-Mdir={shlex.quote(str(artifact_dir / 'csrc'))}",
