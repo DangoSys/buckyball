@@ -73,7 +73,7 @@ require_chipyard_nested() {
   local rel=$1
   shift
   local expected
-  expected=$(git -C ${CYDIR} ls-tree HEAD "${rel}" | awk '{print $3}')
+  expected=$(git -C ${CYDIR} rev-parse "HEAD:${rel}")
   if [[ -z "${expected}" ]]; then
     echo "error: chipyard does not record gitlink for ${rel}" >&2
     exit 1

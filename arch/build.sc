@@ -247,7 +247,7 @@ object chipyard extends SbtModule {
       .map(PathRef(_))
     val frameworkSources = os.walk(leanChipyard)
       .filter(path => path.ext == "scala")
-      .filterNot(path => path.last.toString == "FireSimConfigTweaks.scala")
+      .filterNot(path => Set("FireSimConfigTweaks.scala", "BridgeBinders.scala").contains(path.last.toString))
       .map(PathRef(_))
     chipyardSources ++ stageSources ++ frameworkSources
   }
@@ -260,8 +260,7 @@ object chipyard extends SbtModule {
     rocket_chip_blocks,
     rocketchip_inclusive_cache,
     barf,
-    rocc_acc_utils,
-    icenet
+    rocc_acc_utils
   )
 
   override def ivyDeps = Agg(
@@ -301,27 +300,6 @@ object testchipip extends SbtModule {
 object rocket_chip_blocks extends SbtModule {
   override def millSourcePath =
     os.pwd / "thirdparty" / "chipyard" / "generators" / "rocket-chip-blocks"
-  override def scalaVersion = "2.13.16"
-
-  // Add rocket-chip as a dependency
-  override def moduleDeps = Seq(
-    rocketchip
-  )
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.7.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.7.0"
-  )
-
-}
-
-// Define icenet module
-object icenet extends SbtModule {
-  override def millSourcePath =
-    os.pwd / "thirdparty" / "chipyard" / "generators" / "icenet"
   override def scalaVersion = "2.13.16"
 
   // Add rocket-chip as a dependency
@@ -974,8 +952,7 @@ object firechip_bridgestubs extends SbtModule {
   override def moduleDeps = Seq(
     chipyard,
     firesim_lib,
-    firechip_bridgeinterfaces,
-    icenet
+    firechip_bridgeinterfaces
   )
 
   override def ivyDeps = Agg(
@@ -994,10 +971,14 @@ object firechip extends SbtModule {
     os.pwd / "thirdparty" / "chipyard" / "generators" / "firechip" / "chip"
   override def scalaVersion = "2.13.16"
   override def sources = T.sources {
+    val fw = os.pwd / os.up / "thirdparty" / "soc-framework" / "src" / "main" / "scala" / "firechip"
     os.walk(millSourcePath / "src" / "main" / "scala")
       .filter(path => path.ext == "scala")
-      .filterNot(path => path.last.toString == "TargetConfigs.scala")
-      .map(PathRef(_)) ++ Seq(PathRef(os.pwd / os.up / "thirdparty" / "soc-framework" / "src" / "main" / "scala" / "firechip" / "FireSimConfigTweaks.scala"))
+      .filterNot(path => Set("TargetConfigs.scala", "BridgeBinders.scala").contains(path.last.toString))
+      .map(PathRef(_)) ++ Seq(
+        PathRef(fw / "FireSimConfigTweaks.scala"),
+        PathRef(fw / "BridgeBinders.scala")
+      )
   }
 
   // Add chipyard, firesim_lib, firechip_bridgestubs, and firechip_bridgeinterfaces as dependencies

@@ -127,6 +127,7 @@ if run_step "2"; then
     -DLLVM_ENABLE_ASSERTIONS=ON \
     -DCMAKE_BUILD_TYPE=RELEASE \
     -DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON \
+    -DBUDDY_EXTERNAL_DIALECTS_DIR=${BBDIR}/examples/cores/toy/compiler \
     -DPython3_EXECUTABLE="$(which python3)" \
     -DPython_EXECUTABLE="$(which python3)"
   ninja -C build # check-buddy
