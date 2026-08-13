@@ -58,7 +58,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     diff = bool(input_data.get("diff", False))
-    batch = bool(input_data.get("batch", False))
     if diff and input_data.get("rushB"):
         ctx.logger.error("--diff and --rushB cannot be used together")
         await check_result(
@@ -212,7 +211,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"--elf={shlex.quote(binary_path)} "
             f"--log-dir={shlex.quote(log_dir)}"
             f"{' --diff' if diff else ''}"
-            f"{' --batch' if batch else ''}"
             f"{wave_arg}"
             f"{trace_args}"
         )
@@ -249,7 +247,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "verilator",
             "backend": "rushB" if input_data.get("rushB") else "guest-elf",
             "diff": diff,
-            "batch": batch,
             "chip": chip,
             "binary": binary_path,
             "config": arch_config,

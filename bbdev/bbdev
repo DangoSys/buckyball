@@ -68,8 +68,8 @@ WORKFLOW_COMMANDS = {
         "clean": 'Clean Bebop Verilator build directory. Args: "--config <cfg> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop Verilog files. Args: "--config <cfg> [--output-dir <dir>]"',
         "build": 'Build Bebop Verilator simulation executable. Args: "--config <cfg> [--diff] [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--rushB] [--batch] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--batch] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "sim": 'Run Bebop Verilator simulation. Args: "--config <cfg> --binary <path> [--rushB] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--jobs <num>] [--config <cfg>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--chip <chip> --config <cfg> --test <elf-tests|pk-tests> [--diff] [--rushB] [--clean-before]"',
     },
     "bebop-p2e": {

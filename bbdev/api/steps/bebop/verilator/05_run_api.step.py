@@ -56,7 +56,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "banktrace": body.get("banktrace", False),
         "rushB": rushb,
         "diff": diff,
-        "batch": body.get("batch", False),
         "no-wave": body.get("no-wave", body.get("no_wave", False)),
         "jobs": body.get("jobs", 16),
         "from_run_workflow": True,
