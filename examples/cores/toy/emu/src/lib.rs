@@ -1,4 +1,4 @@
-pub const BEMU_TOP_CONFIG: &str = "../../core.toml";
+pub const BEMU_TOP_CONFIG: &str = "../../../../chips/toy/configs/toy.toml";
 
 pub fn bemu_top_config() -> &'static str {
     BEMU_TOP_CONFIG
