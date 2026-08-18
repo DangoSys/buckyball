@@ -22,6 +22,7 @@
             hardeningDisable = [ "libcxxhardeningfast" ];
 
             buildInputs = with pkgs; [
+	      python.python3Packages
               clibs.zlib-dev
               clibs.zlib
               clibs.lz4-dev
