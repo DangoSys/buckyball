@@ -151,6 +151,9 @@ class LowerBuckyballIntrinsicsToRushBPass
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
       LowerBuckyballIntrinsicsToRushBPass)
+  LowerBuckyballIntrinsicsToRushBPass() = default;
+  LowerBuckyballIntrinsicsToRushBPass(
+      const LowerBuckyballIntrinsicsToRushBPass &) {}
 
   StringRef getArgument() const final {
     return "lower-buckyball-intrinsics-to-rushb";
@@ -158,6 +161,11 @@ public:
   StringRef getDescription() const final {
     return "Lower Buckyball intrinsic ops to the rushB host ABI.";
   }
+
+  Option<int64_t> coreId{
+      *this, "core_id",
+      llvm::cl::desc("Bind generated rushB calls to a tile Core."),
+      llvm::cl::init(-1)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<LLVM::LLVMDialect, ::buddy::buckyball::BuckyballDialect>();
@@ -175,6 +183,14 @@ public:
     OpBuilder builder(&getContext());
     Type i32Type = IntegerType::get(&getContext(), 32);
     Type voidType = LLVM::LLVMVoidType::get(&getContext());
+    FlatSymbolRefAttr selectCallee;
+    if (coreId >= 0) {
+      auto selectType =
+          LLVM::LLVMFunctionType::get(voidType, {i32Type, i32Type});
+      selectCallee = getOrInsertRushBFunction(
+          builder, module, "rushb_select_accelerator", selectType);
+    }
+    llvm::SmallPtrSet<func::FuncOp, 8> boundFunctions;
 
     auto call = [&](Operation *op, StringRef name, ValueRange operands) {
       SmallVector<Type> argumentTypes;
@@ -189,6 +205,21 @@ public:
     };
 
     for (Operation *op : intrinsicOps) {
+      if (coreId >= 0) {
+        if (auto function = op->getParentOfType<func::FuncOp>();
+            function && boundFunctions.insert(function).second) {
+          OpBuilder::InsertionGuard guard(builder);
+          builder.setInsertionPointToStart(&function.front());
+          auto selected = LLVM::ConstantOp::create(
+              builder, function.getLoc(), i32Type,
+              builder.getI32IntegerAttr(static_cast<int32_t>(coreId)));
+          auto chip =
+              LLVM::ConstantOp::create(builder, function.getLoc(), i32Type,
+                                       builder.getI32IntegerAttr(0));
+          LLVM::CallOp::create(builder, function.getLoc(), TypeRange{},
+                               selectCallee, ValueRange{selected, chip});
+        }
+      }
       builder.setInsertionPoint(op);
       if (isa<MsetIntrOp>(op)) {
         call(op, "rushb_mset", op->getOperands());
