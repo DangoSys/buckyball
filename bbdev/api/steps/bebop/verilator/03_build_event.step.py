@@ -16,6 +16,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
+from utils.chip import resolve_chip_runtime_manifest
 from utils.path import get_buckyball_path, get_chip_from_config, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.event_common import check_result, get_origin_trace_id
@@ -78,18 +79,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             )
             return
 
-        build_dir = os.path.join(bbdir, "examples", "chips", chip, "emu")
-        manifest = os.path.join(build_dir, "Cargo.toml")
-        if not os.path.isfile(manifest):
-            ctx.logger.error(f"Chip emulator manifest does not exist: {manifest}")
+        try:
+            manifest = resolve_chip_runtime_manifest(bbdir, chip, "bemu")
+        except ValueError as error:
+            ctx.logger.error(str(error))
             await check_result(
                 ctx,
                 1,
                 continue_run=False,
-                extra_fields={"error": "chip_manifest_not_found", "manifest": manifest},
+                extra_fields={"error": "chip_manifest_not_found", "detail": str(error)},
                 trace_id=origin_tid,
             )
             return
+        build_dir = str(manifest.parent)
         features.extend(["bemu", "difftest"])
 
         dramsim_header = os.path.join(bbdir, "result", "include", "dramsim3.h")

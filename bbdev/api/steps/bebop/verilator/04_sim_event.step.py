@@ -18,6 +18,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
+from utils.chip import resolve_chip_runtime_manifest
 from utils.path import get_buckyball_path, get_chip_from_config, get_verilator_build_dir
 from utils.stream_run import stream_run_logger
 from utils.search_workload import search_workload
@@ -85,6 +86,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if diff:
         try:
             chip = chip or get_chip_from_config(bbdir, arch_config)
+            manifest = resolve_chip_runtime_manifest(bbdir, chip, "bemu")
         except ValueError as error:
             ctx.logger.error(str(error))
             await check_result(
@@ -95,7 +97,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        build_dir = os.path.join(bbdir, "examples", "chips", chip, "emu")
+        build_dir = str(manifest.parent)
 
     bebop_bin = os.path.join(build_dir, "target", "release", "bebop")
     if not os.path.isfile(bebop_bin):

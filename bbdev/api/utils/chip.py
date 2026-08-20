@@ -21,6 +21,31 @@ def _load_toml(path: Path) -> dict:
     return data
 
 
+def resolve_chip_runtime_manifest(bbdir: str, chip: str, runtime_name: str) -> Path:
+    """Resolve a Cargo manifest declared by a chip's ``[runtime]`` table."""
+    chip_root = Path(bbdir) / "examples" / "chips" / chip
+    chip_manifest = chip_root / "chip.toml"
+    if not chip_manifest.is_file():
+        raise ValueError(f"Chip manifest does not exist: {chip_manifest}")
+
+    data = _load_toml(chip_manifest)
+    chip_table = data.get("chip")
+    if not isinstance(chip_table, dict) or chip_table.get("name") != chip:
+        raise ValueError(f"Chip manifest name mismatch: {chip_manifest}")
+
+    runtime = data.get("runtime")
+    if not isinstance(runtime, dict):
+        raise ValueError(f"Chip manifest missing [runtime]: {chip_manifest}")
+    manifest_rel = runtime.get(runtime_name)
+    if not isinstance(manifest_rel, str) or not manifest_rel:
+        raise ValueError(f"Chip manifest missing runtime.{runtime_name}: {chip_manifest}")
+
+    manifest = (chip_root / manifest_rel).resolve()
+    if not manifest.is_file():
+        raise ValueError(f"Chip runtime manifest does not exist: {manifest}")
+    return manifest
+
+
 def _core_table(path: Path) -> dict:
     core = _load_toml(path).get("core")
     if not isinstance(core, dict):
