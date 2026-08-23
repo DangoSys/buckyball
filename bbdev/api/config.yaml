@@ -5,6 +5,7 @@ modules:
   - class: modules::worker::WorkerModule
     config:
       port: 49134
+      host: 0.0.0.0
 
   # ── State Module ───────────────────────────────────────────────────────
   - class: modules::state::StateModule

@@ -13,7 +13,7 @@ if step_dir not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 from scripts.uvm_common import checked_run_paths, default_test_name
 
 config = {
@@ -74,16 +74,41 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
+    plusargs = input_data.get("plusargs")
+    if not isinstance(plusargs, str) or not plusargs:
+        ctx.logger.error("Missing required parameter: --plusargs='+BID=<n>'")
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={**info, "error": "missing_plusargs"},
+            trace_id=origin_tid,
+        )
+        return
+    try:
+        plusarg_words = shlex.split(plusargs)
+    except ValueError as e:
+        ctx.logger.error(str(e))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={**info, "error": str(e)},
+            trace_id=origin_tid,
+        )
+        return
+
     script = (
         f"cd {shlex.quote(paths['verify_dir'])} && "
         f"{shlex.quote(paths['simv'])} "
         f"-sv_lib {shlex.quote(paths['dpi_lib'])} "
-        f"+UVM_TESTNAME={shlex.quote(test)}"
+        f"+UVM_TESTNAME={shlex.quote(test)} "
+        + " ".join(shlex.quote(word) for word in plusarg_words)
     )
-    cmd = f"nix develop {shlex.quote(paths['verify_env'])} --command bash -lc {shlex.quote(script)}"
+    cmd = f"nix develop {shlex.quote(paths['verify_env'])} --command zsh -ic {shlex.quote(script)}"
 
     ctx.logger.info(f"Running UVM test {test} for ball {paths['ball']}")
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=cmd,
         logger=ctx.logger,
         cwd=bbdir,

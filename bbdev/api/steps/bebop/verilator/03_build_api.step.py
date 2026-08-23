@@ -1,5 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.chip import require_chip
 from utils.path import get_buckyball_path, get_verilator_build_dir
 
 config = {
@@ -22,20 +23,17 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": f"Unsupported parameter(s): {', '.join(unsupported)}. Use --vsrc-dir/--output-dir."},
         )
 
-    arch_config = body.get("config")
-    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"}
-        )
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
 
     data = {
-        "config": arch_config,
+        "chip": chip,
         "jobs": body.get("jobs", 16),
         "diff": bool(body.get("diff", False)),
         "vsrc_dir": get_verilator_build_dir(
-            bbdir,
-            arch_config,
+            bbdir, chip,
             body.get("vsrc-dir") or body.get("output-dir"),
         ),
     }

@@ -1,6 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import get_buckyball_path, get_vcs_build_dir
+from utils.chip import require_chip
 
 
 config = {
@@ -13,14 +13,11 @@ config = {
 
 
 def _request_data(body: dict) -> dict:
-    config_name = body.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        raise ValueError("Missing required parameter: --config must be specified")
-    bbdir = get_buckyball_path()
-    return {
-        "config": config_name,
-        "output_dir": get_vcs_build_dir(bbdir, config_name, body.get("output_dir")),
-    }
+    chip = require_chip(body)
+    data = {"chip": chip}
+    if body.get("output_dir"):
+        data["output_dir"] = body["output_dir"]
+    return data
 
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:

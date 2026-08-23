@@ -12,8 +12,10 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import get_buckyball_path
+from utils.rtl import run_chip_mill
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -26,23 +28,10 @@ config = {
 
 
 def prepare_verilator_verilog(build_dir: str, arch_dir: str, logger):
-    """Remove unwanted harness and patch fesvr includes"""
-    unwanted_harness = f"{arch_dir}/BBSimHarness.sv"
-    if os.path.exists(unwanted_harness):
-        os.remove(unwanted_harness)
-
-    for patch_file in [f"{build_dir}/mm.h", f"{build_dir}/mm.cc"]:
-        if os.path.exists(patch_file):
-            with open(patch_file, "r") as f:
-                content = f.read()
-            patched = "\n".join(
-                line for line in content.splitlines()
-                if "fesvr/memif.h" not in line and "fesvr/elfloader.h" not in line
-            )
-            if patched != content:
-                with open(patch_file, "w") as f:
-                    f.write(patched)
-                logger.info(f"Patched fesvr includes from {patch_file}")
+    unwanted = f"{arch_dir}/BBSimHarness.sv"
+    if os.path.isfile(unwanted):
+        os.remove(unwanted)
+        logger.info(f"Removed leaked mill output: {unwanted}")
 
 
 def check_verilog_output(build_dir: str) -> dict:
@@ -61,63 +50,72 @@ def check_verilog_output(build_dir: str) -> dict:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    build_dir = get_verilator_build_dir(
-        bbdir,
-        input_data.get("config"),
-        input_data.get("output_dir"),
-    )
     arch_dir = f"{bbdir}/arch"
-    config_name = input_data.get("config")
-
-    if not config_name or config_name == "None":
-        ctx.logger.error("Configuration name is required but not provided")
-        await check_result(
-            ctx,
-            1,
-            continue_run=False,
-            extra_fields={
-                "task": "validation",
-                "error": "Configuration name is required. Please specify --config parameter.",
-                "example": 'bbdev bebop verilator --verilog "--config sims.verilator.BuckyballToyVerilatorConfig"',
-            },
-            trace_id=origin_tid,
-        )
-        return
-
-    ctx.logger.info(f"Using configuration: {config_name}")
-    ctx.logger.info(f"Using build directory: {build_dir}")
+    chip = None
 
     if input_data.get("balltype"):
+        build_dir = input_data.get("output_dir")
+        if not build_dir:
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={
+                    "task": "validation",
+                    "error": "balltype mill requires output_dir",
+                    "example": 'bbdev bebop verilator --verilog "--balltype foo --output-dir <dir>"',
+                },
+                trace_id=origin_tid,
+            )
+            return
+        os.makedirs(build_dir, exist_ok=True)
         command = (
             f"mill -i __.test.runMain sims.verify.BallTopMain {input_data.get('balltype')} "
+            "--disable-annotation-unknown --strip-debug-info -O=debug "
+            f"--split-verilog -o={build_dir} "
         )
+        ctx.logger.info(f"Using build directory: {build_dir}")
+        result = await stream_run_logger_async(
+            cmd=command,
+            logger=ctx.logger,
+            cwd=arch_dir,
+            stdout_prefix="bebop verilator verilog",
+            stderr_prefix="bebop verilator verilog",
+        )
+        returncode = result.returncode
+        prepare_verilator_verilog(build_dir, arch_dir, ctx.logger)
     else:
-        command = f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
-
-    command += "--disable-annotation-unknown "
-    command += "--strip-debug-info "
-    command += "-O=debug "
-    command += f"--split-verilog -o={build_dir} "
-
-    result = stream_run_logger(
-        cmd=command,
-        logger=ctx.logger,
-        cwd=arch_dir,
-        stdout_prefix="bebop verilator verilog",
-        stderr_prefix="bebop verilator verilog",
-    )
-
-    prepare_verilator_verilog(build_dir, arch_dir, ctx.logger)
+        try:
+            chip = require_chip(input_data)
+            build_dir, returncode = await run_chip_mill(
+                ctx, bbdir, chip, "verilog", "bebop verilator verilog",
+                input_data.get("output_dir"),
+            )
+        except (ValueError, RuntimeError) as error:
+            ctx.logger.error(str(error))
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={
+                    "task": "validation",
+                    "error": str(error),
+                    "example": 'bbdev bebop verilator --verilog "--chip toy"',
+                },
+                trace_id=origin_tid,
+            )
+            return
+        ctx.logger.info(f"Using chip: {chip}")
 
     output_status = check_verilog_output(build_dir)
-    if result.returncode != 0:
+    if returncode != 0:
         await check_result(
             ctx,
-            result.returncode,
+            returncode,
             continue_run=False,
             extra_fields={
                 "task": "verilog",
-                "config": config_name,
+                "chip": chip,
                 "output_dir": build_dir,
                 "output_status": output_status,
             },
@@ -138,7 +136,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "task": "verilog",
                 "error": "invalid_verilog_output",
-                "config": config_name,
+                "chip": chip,
                 "output_dir": build_dir,
                 "output_status": output_status,
             },
@@ -148,14 +146,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     await check_result(
         ctx,
-        result.returncode,
-        continue_run=input_data.get("from_run_workflow", False),
-        extra_fields={"task": "verilog", "config": config_name, "output_dir": build_dir},
+        returncode,
+        continue_run=input_data.get("from_run_workflow", False) and returncode == 0,
+        extra_fields={"task": "verilog", "chip": chip, "output_dir": build_dir},
         trace_id=origin_tid,
     )
 
-    # Continue routing to build if from run workflow
-    if input_data.get("from_run_workflow"):
+    if input_data.get("from_run_workflow") and returncode == 0:
         await ctx.enqueue(
             {"topic": "bebop.verilator.run.build", "data": {**input_data, "output_dir": build_dir, "vsrc_dir": build_dir, "task": "run"}}
         )

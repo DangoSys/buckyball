@@ -1,0 +1,4 @@
+{"type":"itrace","clk":10,"event":"complete","funct":"0x00","pc":"0x0","rs1":"0x0","rs2":"0x0"}
+{"type":"itrace","clk":20,"event":"complete","funct":"0x41","pc":"0x0","rs1":"0x0","rs2":"0x0000000100010400"}
+{"type":"mtrace","clk":15,"event":"read","addr":"0x0","rows":1024,"line_bytes":16,"row_stride":16,"vbank_id":0,"pbank_id":0,"group_id":0}
+{"type":"mtrace","clk":16,"event":"write","addr":"0x0","rows":1,"line_bytes":16,"row_stride":16,"vbank_id":1,"pbank_id":1,"group_id":0}

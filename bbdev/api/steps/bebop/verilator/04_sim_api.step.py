@@ -1,5 +1,8 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.chip import require_chip
+from utils.path import get_buckyball_path
+
 config = {
     "name": "bebop-verilator-sim-api",
     "description": "Run bebop verilator simulation",
@@ -22,12 +25,13 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "message": "binary parameter is required",
             },
         )
-    config_name = body.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"},
-        )
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
 
-    await ctx.enqueue({"topic": "bebop.verilator.sim", "data": {**body, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue({
+        "topic": "bebop.verilator.sim",
+        "data": {**body, "chip": chip, "_trace_id": ctx.trace_id},
+    })
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

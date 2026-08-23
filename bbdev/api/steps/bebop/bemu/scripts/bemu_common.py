@@ -1,33 +1,57 @@
+import json
 from pathlib import Path
-import tomllib
 
-from utils.chip import resolve_chip_runtime_manifest
-from utils.path import get_buckyball_path
+from utils.build import install_bundle
+from utils.chip import require_chip
+
+
+def _repo(bbdir: str | None) -> Path:
+    from utils.path import get_buckyball_path
+
+    return Path(bbdir or get_buckyball_path())
+
+
+def _chip_json(chip: str, bbdir: str | None = None) -> dict:
+    root = _repo(bbdir)
+    path = root / "examples" / "chips" / chip / "generated" / "chip.json"
+    if not path.is_file():
+        install_bundle(str(root), chip)
+    if not path.is_file():
+        raise ValueError(f"missing {path} after bundle build")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def bemu_manifest(chip: str, bbdir: str | None = None) -> Path:
-  if not chip:
-    raise ValueError("missing required parameter: chip")
-  return resolve_chip_runtime_manifest(bbdir or get_buckyball_path(), chip, "bemu")
+    chip = require_chip({"chip": chip})
+    root = _repo(bbdir)
+    install_bundle(str(root), chip)
+    manifest = root / "examples" / "chips" / chip / "generated" / "bemu" / "Cargo.toml"
+    if not manifest.is_file():
+        raise ValueError(f"missing {manifest}; bundle install failed")
+    return manifest
 
 
 def bemu_core_manifest(chip: str, bbdir: str | None = None) -> Path:
-  root = Path(bbdir or get_buckyball_path())
-  chip_manifest = root / "examples" / "chips" / chip / "chip.toml"
-  with chip_manifest.open("rb") as f:
-    data = tomllib.load(f)
-  runtime = data.get("runtime", {})
-  rel = runtime.get("bemuCore") or runtime.get("bemu")
-  manifest = (chip_manifest.parent / rel).resolve()
-  if not manifest.is_file():
-    raise ValueError(f"BEMU Core manifest does not exist: {manifest}")
-  return manifest
+    return bemu_manifest(chip, bbdir)
 
 
-def bemu_tile(chip: str, bbdir: str | None = None) -> Path | None:
-  root = Path(bbdir or get_buckyball_path())
-  chip_manifest = root / "examples" / "chips" / chip / "chip.toml"
-  with chip_manifest.open("rb") as f:
-    data = tomllib.load(f)
-  rel = data.get("runtime", {}).get("bemuTile")
-  return (chip_manifest.parent / rel).resolve() if rel else None
+def chip_emu_manifest(chip: str, bbdir: str | None = None) -> Path | None:
+    chip = require_chip({"chip": chip})
+    root = _repo(bbdir)
+    main = _chip_json(chip, bbdir).get("bemu", {}).get("chipMain", "")
+    if not main:
+        return None
+    manifest = root / "examples" / "chips" / chip / "emu" / "Cargo.toml"
+    if not manifest.is_file():
+        raise ValueError(f"missing chip emu manifest: {manifest}")
+    return manifest
+
+
+def bemu_tile_index(chip: str, bbdir: str | None = None) -> int | None:
+    bemu = _chip_json(chip, bbdir).get("bemu", {})
+    if not bemu.get("chipMain", ""):
+        return None
+    index = bemu.get("tileIndex", 0)
+    if not isinstance(index, int) or index < 0:
+        raise ValueError(f"chip {chip}: bemu.tileIndex must be a non-negative int")
+    return index

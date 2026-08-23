@@ -9,6 +9,7 @@ from . import compiler_build
 from . import workload_clean
 from . import workload_build
 from . import bemu_sim
+from . import bemu_analysis
 from . import bemu_batch
 from . import bebop_verilator_clean
 from . import bebop_verilator_verilog
@@ -41,6 +42,10 @@ from . import kernel_build
 from . import yosys_run
 from . import yosys_verilog
 from . import yosys_synth
+from . import regression_buildbitstream
+from . import regression_check
+from . import regression_eval_performance
+from . import regression_eval_area_power
 
 MODULES = [
     validate,
@@ -50,6 +55,7 @@ MODULES = [
     workload_clean,
     workload_build,
     bemu_sim,
+    bemu_analysis,
     bemu_batch,
     bebop_verilator_clean,
     bebop_verilator_verilog,
@@ -82,6 +88,10 @@ MODULES = [
     yosys_run,
     yosys_verilog,
     yosys_synth,
+    regression_buildbitstream,
+    regression_check,
+    regression_eval_performance,
+    regression_eval_area_power,
 ]
 
 

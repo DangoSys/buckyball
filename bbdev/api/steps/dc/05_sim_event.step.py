@@ -13,9 +13,9 @@ if step_path not in sys.path:
     sys.path.insert(0, step_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path
+from utils.path import get_buckyball_path, workload_build_dir, workload_tests_root
 from utils.search_workload import search_workload
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 from tapeout import get_tapeout_contract, resolve_power_window, write_run_env
 
 config = {
@@ -37,7 +37,7 @@ def _first(data: dict, *names: str):
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
+    chip = input_data.get("chip")
     top_module = input_data.get("top") or "DigitalTop"
     analysis_dir = input_data.get("analysis_dir")
     if not isinstance(analysis_dir, str) or not analysis_dir:
@@ -45,7 +45,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     try:
-        contract = get_tapeout_contract(get_buckyball_path(), config_name, top_module)
+        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("chip"), top_module)
     except (OSError, ValueError) as exc:
         await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid)
         return
@@ -78,13 +78,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if os.path.isabs(str(workload_name)):
         await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "workload must be a built ELF name, not an absolute path"}, trace_id=origin_tid)
         return
+    if not chip:
+        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "missing chip"}, trace_id=origin_tid)
+        return
+    bbdir = get_buckyball_path()
     workload = None
-    for root in ("output/workloads/src", "build/workloads/src"):
-        workload = search_workload(os.path.join(get_buckyball_path(), "bb-tests", root), str(workload_name))
+    for root in (
+        workload_tests_root(bbdir, chip),
+        os.path.join(workload_build_dir(bbdir, chip), "src"),
+    ):
+        workload = search_workload(root, str(workload_name))
         if workload:
             break
     if not workload:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"workload not found in bb-tests output/build directories: {workload_name}"}, trace_id=origin_tid)
+        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"workload not found for chip {chip}: {workload_name}"}, trace_id=origin_tid)
         return
     try:
         start_ns, end_ns = resolve_power_window(
@@ -105,7 +112,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "ACTIVITY_FILE": activity_path,
             "ACTIVITY_FORMAT": activity_format,
             "TOP": top_module,
-            "CONFIG": str(config_name or ""),
+            "CONFIG": chip,
             "NETLIST": netlist,
             "SDC": sdc,
             "WORKLOAD": workload,
@@ -120,7 +127,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"format={activity_format}, workload={workload or '<chip default>'}, "
         f"window={start_ns or '<auto>'}..{end_ns or '<auto>'} ns"
     )
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=f"bash {shlex.quote(str(contract.power_sim_script))} {shlex.quote(str(run_env))}",
         logger=ctx.logger,
         cwd=str(contract.root),

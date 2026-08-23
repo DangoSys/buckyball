@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev yosys --synth")
+run_bbdev_case("bbdev yosys --synth '--chip toy'")

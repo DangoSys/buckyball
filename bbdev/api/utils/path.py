@@ -1,117 +1,203 @@
 import os
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from utils.chip import chip_field, chip_toml
+
 
 def get_buckyball_path():
+    current_dir = os.path.dirname(__file__)
+    # bbdev/api/utils -> bbdev/api -> bbdev -> buckyball
+    inferred = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
+
     root = os.environ.get("BUCKYBALL_ROOT")
     if root:
         if not os.path.isabs(root):
             raise ValueError("BUCKYBALL_ROOT must be an absolute path")
         if not os.path.isdir(root):
             raise ValueError(f"BUCKYBALL_ROOT does not exist: {root}")
-        return root
+        root = os.path.realpath(root)
+        if root != inferred:
+            raise ValueError(
+                f"BUCKYBALL_ROOT={root} does not match bbdev tree root {inferred}"
+            )
+    else:
+        root = inferred
 
-    current_dir = os.path.dirname(__file__)
-    # bbdev/api/utils -> bbdev/api -> bbdev -> buckyball
-    return os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-
-
-def get_verilator_build_dir(bbdir, config=None, output_dir=None):
-    if output_dir:
-        return output_dir
-
-    return get_config_build_dir(bbdir, config)
-
-
-def get_vcs_build_dir(bbdir, config=None, output_dir=None):
-    """Return the shared generated-RTL directory used by the VCS flow.
-
-    VCS and Verilator elaborate the same BBSimHarness RTL.  Simulator-specific
-    products live below ``vcs/`` so neither flow overwrites the other.
-    """
-    return get_config_build_dir(bbdir, config, output_dir)
+    home = os.path.realpath(str(Path.home()))
+    if not Path(root).is_relative_to(home):
+        raise ValueError(f"buckyball root must be under $HOME ({home}): {root}")
+    return root
 
 
-def get_chip_from_config(bbdir, config):
-    """Resolve the owning chip from a fully qualified Scala config name."""
-    if not isinstance(config, str) or not config or config == "None":
-        raise ValueError("invalid config name")
+def _chip_name(chip):
+    if not isinstance(chip, str) or not chip or chip == "None":
+        raise ValueError("missing required parameter: chip")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", chip):
+        raise ValueError(f"invalid chip name: {chip}")
+    return chip
 
-    config_class = config.rsplit(".", 1)[-1]
-    declaration = re.compile(rf"\b(?:class|object)\s+{re.escape(config_class)}\b")
-    chips_root = Path(bbdir) / "examples" / "chips"
-    matches = []
-    for chip_dir in sorted(path for path in chips_root.iterdir() if path.is_dir()):
-        scala_root = chip_dir / "arch" / "src" / "main" / "scala"
-        if not scala_root.is_dir():
+
+def chip_output_root(bbdir, chip):
+    chip = _chip_name(chip)
+    return os.path.join(bbdir, "bb-tests", "output", chip)
+
+
+def workload_build_dir(bbdir, chip):
+    chip = _chip_name(chip)
+    return os.path.join(bbdir, "bb-tests", "workloads", "build", chip)
+
+
+def workload_tests_root(bbdir, chip):
+    return os.path.join(chip_output_root(bbdir, chip), "workloads", "src")
+
+
+def bebop_target_dir(bbdir, chip):
+    chip = _chip_name(chip)
+    return os.path.join(bbdir, "bebop", "target", chip)
+
+
+def bebop_cargo_env(bbdir, chip):
+    return {"CARGO_TARGET_DIR": bebop_target_dir(bbdir, chip)}
+
+
+def gcc_lib_dir(soname: str) -> str:
+    candidates = []
+    printed = subprocess.run(
+        ["g++", f"-print-file-name={soname}"],
+        capture_output=True,
+        text=True,
+    )
+    printed_path = (printed.stdout or "").strip()
+    if printed.returncode == 0 and printed_path and "/" in printed_path:
+        candidates.append(printed_path)
+    for directory in os.environ.get("LIBRARY_PATH", "").split(":"):
+        if directory:
+            candidates.append(os.path.join(directory, soname))
+    for match in re.finditer(r"-L(\S+)", os.environ.get("NIX_LDFLAGS", "")):
+        candidates.append(os.path.join(match.group(1), soname))
+
+    runtime_names = [soname]
+    if soname.endswith(".so"):
+        runtime_names.append(soname + ".1")
+
+    for path in candidates:
+        if not os.path.isfile(path):
             continue
-        for source in scala_root.rglob("*.scala"):
-            try:
-                contents = source.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if declaration.search(contents):
-                matches.append(chip_dir.name)
-                break
+        lib_dir = os.path.dirname(os.path.realpath(path))
+        if any(os.path.isfile(os.path.join(lib_dir, name)) for name in runtime_names):
+            return lib_dir
 
-    if len(matches) != 1:
-        raise ValueError(
-            f"config {config} must resolve to exactly one chip; matches={matches}"
-        )
-    return matches[0]
+    detail = printed_path or (printed.stderr or "").strip() or f"exit {printed.returncode}"
+    raise RuntimeError(
+        f"cannot locate {soname} (g++ -print-file-name={soname} -> {detail!r}; "
+        f"LIBRARY_PATH={os.environ.get('LIBRARY_PATH', '')!r}; "
+        f"NIX_LDFLAGS={os.environ.get('NIX_LDFLAGS', '')!r})"
+    )
 
 
-def sanitize_config_name(config=None):
-    if config and config != "None":
-        name = re.sub(r"[^A-Za-z0-9_.-]+", "_", config).strip("._")
-        if name:
-            return name
-    return None
+_RTL_FIELD = {
+    "verilog": "verilatorConfig",
+    "synth": "verilatorConfig",
+    "p2e": "p2eConfig",
+}
 
 
-def get_config_build_dir(bbdir, config=None, output_dir=None, output_root=None):
+def chip_arch_root(bbdir, chip):
+    return os.path.join(bbdir, "arch", "build", _chip_name(chip))
+
+
+def rtl_dir(bbdir, chip, product, output_dir=None):
     if output_dir:
         return output_dir
-
-    name = sanitize_config_name(config)
-    if output_root:
-        if not name:
-            raise ValueError("output_root requires a valid config name")
-        return os.path.join(output_root, name)
-
-    if name:
-        return f"{bbdir}/arch/build/{name}"
-
-    return f"{bbdir}/arch/build"
+    if product not in _RTL_FIELD:
+        raise ValueError(f"invalid rtl product: {product}")
+    cfg = chip_field(bbdir, chip, _RTL_FIELD[product])
+    return os.path.join(chip_arch_root(bbdir, chip), cfg)
 
 
-def get_dc_rtl_dir(bbdir, config=None):
-    if not config or config is True:
-        raise ValueError("missing required parameter: config")
-
-    name = sanitize_config_name(config)
-    if not name:
-        raise ValueError("invalid config name")
-
-    return os.path.join(bbdir, "arch", "build", name)
+def rtl_dir_for_clean(bbdir, chip, product, output_dir=None):
+    return rtl_dir(bbdir, chip, product, output_dir)
 
 
-def get_dc_analysis_dir(bbdir, config=None, stage="area"):
-    if not config or config is True:
-        raise ValueError("missing required parameter: config")
-    name = sanitize_config_name(config)
-    if not name:
-        raise ValueError("invalid config name")
+def rtl_config_name(bbdir, chip, product, output_dir=None):
+    return os.path.basename(os.path.normpath(rtl_dir(bbdir, chip, product, output_dir)))
+
+
+def _log_part(value, what):
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"log dir missing {what}")
+    if os.path.basename(value) != value:
+        raise ValueError(f"log {what} must be a single path component: {value!r}")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", value):
+        raise ValueError(f"invalid log {what}: {value!r}")
+    return value
+
+
+def get_run_log_dir(bbdir, chip, product, stamp, tool, name, output_dir=None):
+    chip = _chip_name(chip)
+    config = _log_part(rtl_config_name(bbdir, chip, product, output_dir), "config")
+    stamp = _log_part(stamp, "timestamp")
+    tool = _log_part(tool, "tool")
+    name = _log_part(os.path.basename(name), "name")
+    return os.path.join(bbdir, "log", f"{stamp}-{chip}-{config}-{tool}-{name}")
+
+
+def get_bemu_log_dir(bbdir, chip, stamp, name):
+    chip = _chip_name(chip)
+    data = chip_toml(bbdir, chip)
+    table = data.get("chip")
+    if not isinstance(table, dict):
+        raise ValueError(f"{chip}: missing [chip] in chip.toml")
+    verilator = table.get("verilatorConfig")
+    p2e = table.get("p2eConfig")
+    if isinstance(verilator, str) and verilator:
+        config = verilator
+    elif isinstance(p2e, str) and p2e:
+        config = p2e
+    else:
+        raise ValueError(f"{chip}: missing [chip].verilatorConfig and [chip].p2eConfig")
+    stamp = _log_part(stamp, "timestamp")
+    name = _log_part(os.path.basename(name), "name")
+    config = _log_part(config, "config")
+    return os.path.join(bbdir, "log", f"{stamp}-{chip}-{config}-bemu-{name}")
+
+
+def get_verilator_build_dir(bbdir, chip=None, output_dir=None):
+    if output_dir:
+        return output_dir
+    if chip is None:
+        raise ValueError("missing required parameter: chip")
+    return rtl_dir(bbdir, chip, "verilog")
+
+
+def get_p2e_build_dir(bbdir, chip, output_dir=None):
+    return rtl_dir(bbdir, chip, "p2e", output_dir)
+
+
+def get_vcs_build_dir(bbdir, chip=None, output_dir=None):
+    return get_verilator_build_dir(bbdir, chip, output_dir)
+
+
+def get_arch_build_dir(bbdir, chip, output_dir=None):
+    return rtl_dir(bbdir, chip, "synth", output_dir)
+
+
+def get_dc_rtl_dir(bbdir, chip=None):
+    return get_arch_build_dir(bbdir, chip)
+
+
+def get_dc_analysis_dir(bbdir, chip=None, stage="area"):
     if stage not in {"area", "power"}:
         raise ValueError(f"invalid DC analysis stage: {stage}")
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    return os.path.join(bbdir, "log", f"{timestamp}-dc-{name}", stage)
+    return get_run_log_dir(bbdir, chip, "synth", timestamp, "dc", stage)
 
 
 def check_dc_rtl_args(body: dict):
-    allowed = {"config", "top"}
+    allowed = {"chip", "top"}
     for name in body:
         if name not in allowed:
             raise ValueError(f"unexpected parameter: {name}")
@@ -123,11 +209,11 @@ def check_dc_rtl_args(body: dict):
 
 
 def check_dc_power_args(body: dict):
-    allowed = {"config", "top", "activity", "format", "strip_path", "workload", "start_ns", "end_ns", "start-ns", "end-ns"}
+    allowed = {"chip", "top", "activity", "format", "strip_path", "workload", "start_ns", "end_ns", "start-ns", "end-ns"}
     for name in body:
         if name not in allowed:
             raise ValueError(f"unexpected parameter: {name}")
-    common = {key: body[key] for key in ("config", "top") if key in body}
+    common = {key: body[key] for key in ("chip", "top") if key in body}
     check_dc_rtl_args(common)
     activity = body.get("activity")
     activity_format = body.get("format")

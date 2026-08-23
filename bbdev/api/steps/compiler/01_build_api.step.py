@@ -8,7 +8,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import available_compiler_chips, available_cores, resolve_chip_compiler_core, resolve_core
+from utils.chip import available_compiler_chips, available_cores, resolve_core
 from utils.path import get_buckyball_path
 
 config = {
@@ -47,8 +47,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     try:
         if core:
             resolve_core(get_buckyball_path(), core, require_compiler=True)
-        else:
-            resolve_chip_compiler_core(get_buckyball_path(), chip)
+        elif chip not in available_compiler_chips(get_buckyball_path()):
+            raise ValueError(f"Chip does not exist: {chip}")
     except ValueError as error:
         choices = available_cores(get_buckyball_path()) if core else available_compiler_chips(get_buckyball_path())
         return ApiResponse(

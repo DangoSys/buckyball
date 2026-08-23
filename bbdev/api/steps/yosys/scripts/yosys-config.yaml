@@ -9,9 +9,6 @@ liberty:
 # Default top module name (override with --top on CLI)
 top: DigitalTop
 
-# Elaborate config class (override with --config on CLI)
-elaborate_config: sims.verilator.BuckyballToyVerilatorConfig
-
 # OpenSTA timing analysis settings
 # Clock period in nanoseconds (used for STA constraint)
 # Default 10ns = 100MHz

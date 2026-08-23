@@ -16,8 +16,9 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import bebop_cargo_env, get_buckyball_path, get_p2e_build_dir
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -34,16 +35,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
 
-    config_name = input_data.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        ctx.logger.error("Missing required parameter: config")
+    try:
+        chip = require_chip(input_data)
+    except ValueError as error:
+        ctx.logger.error(str(error))
         await check_result(
             ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_config"},
+            extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
         return
-    vsrc_dir = get_verilator_build_dir(bbdir, config_name, input_data.get("vsrc_dir"))
+    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
     if not os.path.isdir(vsrc_dir):
         ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
         await check_result(
@@ -59,7 +61,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         or input_data.get("build-dir")
         or input_data.get("output_dir")
         or input_data.get("output-dir")
-        or f"{bebop_dir}/build/{config_name}-{timestamp}"
+        or f"{bebop_dir}/build/{chip}-{timestamp}"
     )
     os.makedirs(build_dir, exist_ok=True)
 
@@ -70,12 +72,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--out-dir=\"{build_dir}\""
     )
     ctx.logger.info("Building bebop p2e runtime case ...")
-    build_result = stream_run_logger(
+    build_result = await stream_run_logger_async(
         cmd=build_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e build",
         stderr_prefix="bebop p2e build",
+        env={**os.environ, **bebop_cargo_env(bbdir, chip)},
     )
 
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
@@ -95,7 +98,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 continue_run=False,
                 extra_fields={
                     "task": "build",
-                    "config": config_name,
                     "vsrc_dir": vsrc_dir,
                     "build_dir": build_dir,
                     "missing": missing,
@@ -106,19 +108,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             )
             return
 
+    extra_fields = {
+        "task": "build",
+        "vsrc_dir": vsrc_dir,
+        "build_dir": build_dir,
+        "rtcfg": rtcfg_path,
+        "libvCtb": libvctb_path,
+        "bitstream": bitstream_path,
+        "timestamp": timestamp,
+    }
+    if input_data.get("from_regression_buildbitstream") and build_result.returncode == 0:
+        extra_fields["bitstream"] = os.path.abspath(bitstream_path)
+
     await check_result(
         ctx,
         build_result.returncode,
         continue_run=False,
-        extra_fields={
-            "task": "build",
-            "config": config_name,
-            "vsrc_dir": vsrc_dir,
-            "build_dir": build_dir,
-            "rtcfg": rtcfg_path,
-            "libvCtb": libvctb_path,
-            "bitstream": bitstream_path,
-            "timestamp": timestamp,
-        },
+        extra_fields=extra_fields,
         trace_id=origin_tid,
     )

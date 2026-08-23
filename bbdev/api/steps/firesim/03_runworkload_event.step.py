@@ -9,7 +9,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.path import get_buckyball_path
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 # Import firesim_env from scripts subdirectory
@@ -42,7 +42,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     command += f" -b {yaml_dir}/config_build.yaml"
     command += f" -r {yaml_dir}/config_build_recipes.yaml"
     command += f" -c {yaml_dir}/config_runtime.yaml"
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=command,
         logger=ctx.logger,
         stdout_prefix="firesim runworkload",

@@ -18,9 +18,10 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.chip import resolve_chip_runtime_manifest
-from utils.path import get_buckyball_path, get_chip_from_config, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.build import install_bundle
+from utils.path import bebop_target_dir, get_buckyball_path, get_run_log_dir, get_verilator_build_dir, workload_tests_root
+from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
 from build_marker import build_marker_path, read_build_marker
@@ -48,12 +49,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
 
-    arch_config = input_data.get("config")
-    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
-        ctx.logger.error("Missing required parameter: config")
+    try:
+        chip = require_chip(input_data)
+    except ValueError as error:
+        ctx.logger.error(str(error))
         await check_result(
             ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_config"},
+            extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
         return
@@ -70,7 +72,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
+    vsrc_dir = get_verilator_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     if not os.path.isdir(vsrc_dir):
         ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
@@ -84,9 +86,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = bebop_dir
     chip = input_data.get("chip")
     if diff:
+        if not isinstance(chip, str) or not chip:
+            ctx.logger.error("Missing required parameter: --chip (required with --diff)")
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={"error": "missing_chip"},
+                trace_id=origin_tid,
+            )
+            return
         try:
-            chip = chip or get_chip_from_config(bbdir, arch_config)
-            manifest = resolve_chip_runtime_manifest(bbdir, chip, "bemu")
+            install_bundle(bbdir, chip)
         except ValueError as error:
             ctx.logger.error(str(error))
             await check_result(
@@ -97,9 +108,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        build_dir = str(manifest.parent)
 
-    bebop_bin = os.path.join(build_dir, "target", "release", "bebop")
+    bebop_bin = os.path.join(bebop_target_dir(bbdir, chip), "release", "bebop")
     if not os.path.isfile(bebop_bin):
         ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
         await check_result(
@@ -109,9 +119,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    marker_path = build_marker_path(build_dir)
+    target_dir = bebop_target_dir(bbdir, chip)
+    marker_path = build_marker_path(target_dir)
     try:
-        marker = read_build_marker(build_dir)
+        marker = read_build_marker(target_dir)
     except FileNotFoundError:
         ctx.logger.error(f"bebop verilator build marker does not exist: {marker_path}")
         await check_result(
@@ -132,7 +143,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     expect_vsrc = os.path.abspath(vsrc_dir)
     expect_bin = os.path.abspath(bebop_bin)
     if (
-        marker.get("config") != arch_config
+        marker.get("config") != chip
         or marker.get("vsrc_dir") != expect_vsrc
         or marker.get("binary") != expect_bin
         or bool(marker.get("diff", False)) != diff
@@ -144,7 +155,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "error": "build_marker_mismatch",
                 "marker": marker,
                 "expected": {
-                    "config": arch_config,
                     "vsrc_dir": expect_vsrc,
                     "binary": expect_bin,
                     "diff": diff,
@@ -155,7 +165,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     binary_name = input_data.get("binary", "")
-    workload_root = f"{bbdir}/bb-tests/output/workloads/src"
+    workload_root = workload_tests_root(bbdir, chip)
     binary_path = None
     if diff and chip:
         binary_path = search_workload(
@@ -174,8 +184,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"binary_path: {binary_path}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    mode = "difftest" if diff else "verilator"
-    log_dir = f"{bbdir}/log/{timestamp}-{mode}-{binary_name}"
+    log_dir = get_run_log_dir(bbdir, chip, "verilog", timestamp, "verilator", binary_name, input_data.get("vsrc_dir"))
     os.makedirs(log_dir, exist_ok=True)
 
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
@@ -199,7 +208,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        backend_library = f"{bebop_dir}/target/release/deps/libbebop_verilator.so"
+        backend_library = f"{bebop_target_dir(bbdir, chip)}/release/deps/libbebop_verilator.so"
         binary_dir = os.path.dirname(binary_path)
         copy_cmd = shlex.join(["cmake", "-E", "copy_if_different", backend_library, binary_dir])
         inner_cmd = f"cd {shlex.quote(binary_dir)} && {copy_cmd} && exec {shlex.quote(binary_path)}"
@@ -233,7 +242,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx.logger.info(f"Running bebop verilator (diff={diff}): {run_cmd}")
         stdout_prefix = "bebop verilator difftest" if diff else "bebop verilator"
         stderr_prefix = stdout_prefix
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
@@ -251,7 +260,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "diff": diff,
             "chip": chip,
             "binary": binary_path,
-            "config": arch_config,
             "log_dir": log_dir,
             "bank_diff": os.path.join(log_dir, "bank_diff.ndjson") if diff else None,
             "timestamp": timestamp,

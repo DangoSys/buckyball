@@ -1,6 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import check_dc_rtl_args, get_buckyball_path, get_dc_rtl_dir
+from utils.chip import require_chip
+from utils.path import check_dc_rtl_args
 
 config = {
     "name": "dc-verilog-api",
@@ -12,17 +13,18 @@ config = {
 
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = req.body or {}
     try:
-        check_dc_rtl_args(body)
-        output_dir = get_dc_rtl_dir(bbdir, body.get("config"))
+        chip = require_chip(body)
+        subset = {"chip": chip}
+        if "top" in body:
+            subset["top"] = body.get("top")
+        check_dc_rtl_args(subset)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
     data = {
-        "output_dir": output_dir,
-        "config": body.get("config"),
+        "chip": chip,
         "top": body.get("top") or "DigitalTop",
     }
     await ctx.enqueue({"topic": "dc.verilog", "data": {**data, "_trace_id": ctx.trace_id}})

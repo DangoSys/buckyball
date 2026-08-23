@@ -19,10 +19,12 @@ bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_p2e_build_dir
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
+from regression_harness import nextest_harness_args
 
 config = {
     "name": "bebop-p2e-batch",
@@ -47,7 +49,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
     nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
-    elf_root = f"{bbdir}/bb-tests/output"
 
     bitstream = input_data.get("bitstream", "")
     if not bitstream or not os.path.isfile(bitstream):
@@ -80,6 +81,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    elf_root = chip_output_root(bbdir, chip)
+    cargo_env = bebop_cargo_env(bbdir, chip)
 
     test_type = input_data.get("test", "elf-tests")
     try:
@@ -96,15 +99,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
     ctx.logger.info(f"P2E case dir (from bitstream): {build_dir}")
 
-    config_name = resolve_runtime_config(bitstream, input_data.get("config"))
-    vsrc_dir = get_verilator_build_dir(bbdir, config_name, input_data.get("vsrc_dir"))
+    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
     if not os.path.isdir(vsrc_dir):
         ctx.logger.error(f"VSRC_PATH does not exist for P2E runtime: {vsrc_dir}")
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={
                 "error": "vsrc_not_found",
-                "config": config_name,
                 "vsrc_dir": vsrc_dir,
             },
             trace_id=origin_tid,
@@ -119,12 +120,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--out-dir=\"{build_dir}\""
     )
     ctx.logger.info("Preparing bebop p2e runtime for the selected bitstream ...")
-    runtime_result = stream_run_logger(
+    runtime_result = await stream_run_logger_async(
         cmd=runtime_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e runtime",
         stderr_prefix="bebop p2e runtime",
+        env={**os.environ.copy(), **cargo_env},
     )
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
@@ -138,7 +140,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "runtime",
-                "config": config_name,
                 "vsrc_dir": vsrc_dir,
                 "build_dir": build_dir,
                 "missing": missing,
@@ -155,12 +156,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"nix develop -c cargo {cargo_out} build --release --features p2e --tests"
     )
     ctx.logger.info("Building bebop p2e (tests)...")
-    build_result = stream_run_logger(
+    build_result = await stream_run_logger_async(
         cmd=build_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e build",
         stderr_prefix="bebop p2e build",
+        env={**os.environ.copy(), **cargo_env},
     )
 
     if build_result.returncode != 0:
@@ -173,23 +175,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # ── Run nextest ───────────────────────────────────────────────────────
     env = os.environ.copy()
-    env.update({
-        "BEBOP_WORKLOAD_TOML": workload_toml,
-        "BEBOP_BB_TESTS_ROOT": elf_root,
-        "BEBOP_P2E_BITSTREAM": bitstream,
-        "OUT_PATH": build_dir,
-    })
+    env.update(cargo_env)
+    env["OUT_PATH"] = build_dir
+    harness = nextest_harness_args(workload_toml, elf_root, p2e_bitstream=bitstream)
     nextest_cmd = (
         f"nix develop -c cargo {cargo_out} nextest run --release --features p2e "
-        f"--test test_p2e --config-file \"{nextest_config}\""
+        f"--test test_p2e --config-file \"{nextest_config}\" {harness}"
     )
 
     ctx.logger.info(f"Running bebop p2e nextest: {nextest_cmd}")
-    ctx.logger.info(
-        f"Environment: BEBOP_WORKLOAD_TOML={workload_toml}, "
-        f"BEBOP_BB_TESTS_ROOT={elf_root}, OUT_PATH={build_dir}"
-    )
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=nextest_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
@@ -198,20 +193,31 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         env=env,
     )
 
+    extra_fields = {
+        "task": "batch",
+        "backend": "p2e",
+        "chip": chip,
+        "bitstream": bitstream,
+        "build_dir": build_dir,
+        "test_type": test_type,
+        "nextest_config": nextest_config,
+        "workload_toml": workload_toml,
+    }
+
+    if input_data.get("from_regression_check"):
+        # Model accuracy is filled by eval-performance, not pk pass rate.
+        if run_result.returncode != 0:
+            await check_result(
+                ctx, run_result.returncode, continue_run=False,
+                extra_fields={**extra_fields, "error": "pk_tests_failed"},
+                trace_id=origin_tid,
+            )
+            return
+
     await check_result(
         ctx,
         run_result.returncode,
         continue_run=False,
-        extra_fields={
-            "task": "batch",
-            "backend": "p2e",
-            "chip": chip,
-            "bitstream": bitstream,
-            "config": config_name,
-            "build_dir": build_dir,
-            "test_type": test_type,
-            "nextest_config": nextest_config,
-            "workload_toml": workload_toml,
-        },
+        extra_fields=extra_fields,
         trace_id=origin_tid,
     )

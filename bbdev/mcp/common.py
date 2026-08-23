@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -56,8 +57,15 @@ def _opt(params: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
     return params
 
 
+def _preferred_http_port(lo: int = 5100, hi: int = 5500) -> int:
+    size = hi - lo + 1
+    return lo + (os.getuid() * 37) % size
+
+
 def _free_port(lo: int = 5100, hi: int = 5500) -> int:
-    for p in range(lo, hi + 1):
+    preferred = _preferred_http_port(lo, hi)
+    order = list(range(preferred, hi + 1)) + list(range(lo, preferred))
+    for p in order:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(("127.0.0.1", p))
@@ -65,6 +73,14 @@ def _free_port(lo: int = 5100, hi: int = 5500) -> int:
         except OSError:
             continue
     raise RuntimeError(f"No available port in {lo}-{hi}")
+
+
+def _assert_workspace_workers() -> None:
+    sys.path.insert(0, str(API))
+    from utils.workers import assert_sole_workspace_workers, read_server_ports
+
+    ports = read_server_ports(str(API))
+    assert_sole_workspace_workers(int(ports["worker_port"]), str(ports["bb_root"]))
 
 
 def _http(
@@ -100,7 +116,7 @@ def _stop() -> None:
     global _proc, _port, _log_fh
     if _port is not None and BBDEV.is_file():
         subprocess.run(
-            [str(BBDEV), "stop", "--server", "--port", str(_port)],
+            ["nix", "develop", "--command", str(BBDEV), "stop", "--server", "--port", str(_port)],
             cwd=str(BBDEV.parent),
             capture_output=True,
             text=True,
@@ -130,6 +146,7 @@ def _ensure() -> int:
         and _proc.poll() is None
         and _ready(_port)
     ):
+        _assert_workspace_workers()
         return _port
     if _proc is not None:
         _log(f"bbdev on port {_port} died; restarting")
@@ -137,9 +154,9 @@ def _ensure() -> int:
 
     if not BBDEV.is_file():
         raise RuntimeError(f"missing bbdev CLI: {BBDEV}")
-    if shutil.which("iii") is None:
+    if shutil.which("nix") is None:
         raise RuntimeError(
-            "iii not found; run MCP via scripts/claude/run_mcp_server.sh"
+            "nix not found; MCP must start bbdev through the project development environment"
         )
     if not MOTIA.is_file():
         raise RuntimeError(
@@ -152,7 +169,7 @@ def _ensure() -> int:
     LOG.parent.mkdir(parents=True, exist_ok=True)
     _log_fh = open(LOG, "a", encoding="utf-8")
     _proc = subprocess.Popen(
-        [str(BBDEV), "start", "--server", "--port", str(port)],
+        ["nix", "develop", "--command", str(BBDEV), "start", "--server", "--port", str(port)],
         cwd=str(BBDEV.parent),
         stdout=_log_fh,
         stderr=_log_fh,
@@ -173,6 +190,18 @@ def _ensure() -> int:
                 f"bbdev exited early; see {LOG}\n--- log tail ---\n{tail}"
             )
         if _ready(port):
+            try:
+                _assert_workspace_workers()
+            except RuntimeError as e:
+                msg = str(e)
+                if (
+                    ("need" in msg and "Motia worker" in msg)
+                    or "engine::workers::list failed" in msg
+                ):
+                    time.sleep(1)
+                    continue
+                _stop()
+                raise
             _log(f"bbdev ready on port {port}")
             return port
         time.sleep(1)
@@ -199,6 +228,7 @@ def _read_state(trace_id: str) -> Optional[Dict[str, Any]]:
 def submit(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Submit an asynchronous bbdev task without waiting for completion."""
     port = _ensure()
+    _assert_workspace_workers()
     base = f"http://127.0.0.1:{port}"
     _log(f"POST {endpoint} params={params}")
 
@@ -280,10 +310,16 @@ def task_status(trace_id: str) -> Dict[str, Any]:
             "body": body,
             "server_log": str(LOG),
         }
-    if state.get("processing") is True:
-        out = dict(state)
+    if "processing" in state:
+        body = state["processing"]
+        if body is True:
+            out = {k: v for k, v in state.items() if k != "processing"}
+        elif isinstance(body, dict):
+            out = dict(body)
+        else:
+            raise RuntimeError(f"processing body must be object or true: {body!r}")
         out.setdefault("accepted", True)
-        out.setdefault("processing", True)
+        out["processing"] = True
         out.setdefault("trace_id", trace_id)
         return out
     raise RuntimeError(f"invalid task state for trace_id {trace_id}: {state!r}")
@@ -302,33 +338,25 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     if not chip_root.is_dir():
         raise FileNotFoundError(f"chip does not exist: {chip_root}")
 
-    chip_manifest = chip_root / "chip.toml"
-    if not chip_manifest.is_file():
-        raise FileNotFoundError(f"chip manifest does not exist: {chip_manifest}")
-    chip_config = _load_toml(chip_manifest).get("chip")
-    if not isinstance(chip_config, dict):
-        raise ValueError(f"missing [chip] table: {chip_manifest}")
-    core_name = chip_config.get("compilerCore")
-    if not isinstance(core_name, str) or not core_name:
-        raise ValueError(f"chip manifest missing compilerCore: {chip_manifest}")
+    parse = REPO / "bazel" / "configparse"
+    if str(parse) not in sys.path:
+        sys.path.insert(0, str(parse))
+    from chip_json import compiler_core, core_entry, load_topology
+
+    data = load_topology(REPO, chip)
+    core_name = compiler_core(data)
+    if not core_name:
+        raise ValueError(f"chip {chip} has no unique topology core")
+    core = core_entry(data, core_name)
 
     core_root = REPO / "examples" / "cores" / core_name
-    core_manifest = core_root / "manifest.toml"
-    if not core_manifest.is_file():
-        raise FileNotFoundError(f"core manifest does not exist: {core_manifest}")
     domains = core_root / "configs" / "balldomains"
-    core_manifest_config = _load_toml(core_manifest).get("core", {}).get("config")
-    if not isinstance(core_manifest_config, str) or not core_manifest_config:
-        raise ValueError(f"Core manifest missing core.config: {core_manifest}")
-    core_config = (core_root / core_manifest_config).resolve()
 
     if balldomain is None:
-        if not core_config.is_file():
-            raise FileNotFoundError(f"missing {core_config}; pass balldomain= explicitly")
-        rel = _load_toml(core_config).get("balldomain")
-        if not isinstance(rel, str) or not rel:
-            raise ValueError(f"Core configuration missing balldomain=: {core_config}")
-        path = (core_config.parent / rel).resolve()
+        bd = core.get("balldomain")
+        if not isinstance(bd, dict) or not isinstance(bd.get("_file"), str):
+            raise ValueError(f"chip {chip} core {core_name} has no balldomain")
+        path = (REPO / bd["_file"]).resolve()
     else:
         raw = Path(balldomain)
         if raw.is_absolute():
@@ -354,15 +382,23 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
 def _validate(path: Path) -> Dict[str, Any]:
     cfg = _load_toml(path)
     mappings = cfg.get("ballIdMappings", [])
-    isa = cfg.get("ballISA", [])
-    if not isinstance(mappings, list) or not isinstance(isa, list):
-        raise ValueError(f"{path}: ballIdMappings/ballISA must be arrays")
+    if not isinstance(mappings, list):
+        raise ValueError(f"{path}: ballIdMappings must be an array")
+    isa = cfg.get("ballISA")
+    if not isinstance(isa, list) or not isa:
+        raise ValueError(f"{path}: missing or empty ballISA")
+    for i, e in enumerate(isa):
+        if not isinstance(e, dict):
+            raise ValueError(f"{path}: ballISA[{i}] must be a table")
+        if not isinstance(e.get("mnemonic"), str) or not e.get("mnemonic"):
+            raise ValueError(f"{path}: ballISA[{i}].mnemonic invalid")
+        if not isinstance(e.get("funct7"), int) or e.get("funct7") < 0:
+            raise ValueError(f"{path}: ballISA[{i}].funct7 invalid")
+        if not isinstance(e.get("bid"), int) or e.get("bid") < 0:
+            raise ValueError(f"{path}: ballISA[{i}].bid invalid")
 
     ids = [m.get("ballId") for m in mappings]
     names = [m.get("ballName") for m in mappings]
-    funct7s = [e.get("funct7") for e in isa]
-    mnemonics = [e.get("mnemonic") for e in isa]
-    bids = [e.get("bid") for e in isa]
     id_set = set(ids)
 
     missing_config = []
@@ -380,11 +416,9 @@ def _validate(path: Path) -> Dict[str, Any]:
         ):
             bad_bw.append({"ballName": name, "inBW": in_bw, "outBW": out_bw})
         cfg_rel = m.get("config")
-        if cfg_rel is None:
-            continue
         if not isinstance(cfg_rel, str) or not cfg_rel:
             missing_config.append(
-                {"ballName": name, "config": cfg_rel, "error": "empty"}
+                {"ballName": name, "config": cfg_rel, "error": "missing"}
             )
             continue
         cfg_path = (path.parent / cfg_rel).resolve()
@@ -392,6 +426,17 @@ def _validate(path: Path) -> Dict[str, Any]:
             missing_config.append(
                 {"ballName": name, "config": cfg_rel, "resolved": str(cfg_path)}
             )
+            continue
+        ball_cfg = _load_toml(cfg_path)
+        ball = ball_cfg.get("ball")
+        if not isinstance(ball, dict):
+            missing_config.append(
+                {"ballName": name, "config": cfg_rel, "error": "missing [ball]"}
+            )
+
+    funct7s = [e.get("funct7") for e in isa]
+    mnemonics = [e.get("mnemonic") for e in isa]
+    bids = [e.get("bid") for e in isa]
 
     orphan = sorted(id_set - set(bids))
     unknown = sorted(set(bids) - id_set)

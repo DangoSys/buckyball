@@ -8,9 +8,6 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from utils.path import get_chip_from_config
-
-
 def _tcl_word(value: str) -> str:
     return "{" + str(value).replace("\\", "\\\\").replace("}", "\\}") + "}"
 
@@ -65,9 +62,10 @@ def _read_config(root: Path) -> dict:
     return section
 
 
-def get_tapeout_contract(bbdir: str | os.PathLike[str], config: str, top: str | None = None) -> TapeoutContract:
-    """Resolve the tapeout scripts owned by the chip selected by a Scala config."""
-    chip = get_chip_from_config(str(bbdir), config)
+def get_tapeout_contract(bbdir: str | os.PathLike[str], chip: str, top: str | None = None) -> TapeoutContract:
+    """Resolve the tapeout scripts owned by the chip."""
+    if not isinstance(chip, str) or not chip:
+        raise ValueError("Missing required parameter: --chip")
     root = Path(bbdir) / "examples" / "chips" / chip / "tapeout"
     if not root.is_dir():
         raise ValueError(f"chip {chip} has no tapeout directory: {root}")
@@ -135,14 +133,19 @@ def technology_settings() -> dict[str, object]:
     synthetic = [item for item in os.environ.get("SYNTHETIC_LIBRARY", "").split(os.pathsep) if item]
     link = [item for item in os.environ.get("LINK_LIBRARY", "").split(os.pathsep) if item]
     if not target:
-        raise ValueError("missing TARGET_LIBRARY; source sourceme_host.sh")
+        raise ValueError("missing TARGET_LIBRARY; export it in zshrc")
+    if any(ch.isspace() for ch in target):
+        raise ValueError(
+            "TARGET_LIBRARY contains whitespace/newlines; "
+            f"fix the zshrc export (got {target!r})"
+        )
     if not Path(target).is_file():
         raise ValueError(f"TARGET_LIBRARY does not exist: {target}")
     missing = [item for item in synthetic + link if not Path(item).is_file()]
     if missing:
         raise ValueError("technology library does not exist: " + ", ".join(missing))
     if not synthetic:
-        raise ValueError("missing SYNTHETIC_LIBRARY; source sourceme_host.sh")
+        raise ValueError("missing SYNTHETIC_LIBRARY; export it in zshrc")
     return {
         "target_library": target,
         "synthetic_library": synthetic,

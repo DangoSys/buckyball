@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 
@@ -27,7 +28,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
 
-    result, info = run_uvm_build(bbdir, input_data, ctx)
+    result, info = await asyncio.to_thread(run_uvm_build, bbdir, input_data, ctx)
     await check_result(
         ctx,
         result.returncode,

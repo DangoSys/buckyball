@@ -8,7 +8,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.path import get_buckyball_path
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 # Import bin_to_hex converter
@@ -92,7 +92,7 @@ def kernel_model(input_data: dict) -> str:
     return model
 
 
-def kernel_chip(input_data: dict, bbdir: str) -> str:
+def kernel_chip(input_data: dict, bbdir: str, *, require_overlay: bool) -> str:
     chip = input_data.get("chip", "")
     if chip in ("", None):
         return ""
@@ -101,11 +101,21 @@ def kernel_chip(input_data: dict, bbdir: str) -> str:
     if os.path.sep in chip or chip in {".", ".."}:
         raise ValueError(f"invalid chip: {chip}")
 
-    chip_kernel = os.path.join(bbdir, "examples", "chips", chip, "kernel")
-    chip_init = os.path.join(chip_kernel, "overlay", "init")
-    if not os.path.isfile(chip_init):
-        raise ValueError(f"chip OS overlay init not found: {chip_init}")
+    chip_dir = os.path.join(bbdir, "examples", "chips", chip)
+    if not os.path.isdir(chip_dir):
+        raise ValueError(f"unknown chip: {chip}")
+
+    if require_overlay:
+        chip_init = os.path.join(chip_dir, "kernel", "overlay", "init")
+        if not os.path.isfile(chip_init):
+            raise ValueError(f"chip OS overlay init not found: {chip_init}")
     return chip
+
+
+def cmake_model(model: str) -> str:
+    if model == "stable-diffusion":
+        return "stablediffusion"
+    return model
 
 
 def kernel_build_dir(
@@ -135,10 +145,10 @@ def fw_payload_name(hart_params: dict, model: str = "", chip: str = "") -> str:
     name = "fw_payload"
     if visible != 64 or total != 64:
         name = f"{name}-v{visible}-t{total}"
-    if chip:
-        name = f"{name}-{chip}-pk"
-    elif model:
+    if model:
         name = f"{name}-{model}"
+    elif chip:
+        name = f"{name}-{chip}-pk"
     return name
 
 
@@ -154,10 +164,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         hart_params = hart_count_params(input_data)
         model = kernel_model(input_data)
-        chip = kernel_chip(input_data, bbdir)
+        if model and not input_data.get("chip"):
+            raise ValueError("--model requires --chip")
         interactive = kernel_interactive(input_data)
-        if chip and model:
-            raise ValueError("chip and model cannot be set together")
+        # pk mode needs OS overlay; model mode only needs chip for ModelTest path
+        chip = kernel_chip(input_data, bbdir, require_overlay=not bool(model))
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
@@ -166,6 +177,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         bbdir, hart_params, model, chip, interactive=interactive
     )
     interactive_arg = "ON" if interactive else "OFF"
+    cmake_model_name = cmake_model(model)
 
     # cmake configure
     configure_cmd = (
@@ -173,11 +185,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
         f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
         f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']} "
-        f"-DBUCKYBALL_KERNEL_MODEL={model} "
+        f"-DBUCKYBALL_KERNEL_MODEL={cmake_model_name} "
         f"-DBUCKYBALL_KERNEL_CHIP={chip} "
-        f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg}"
+        f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg} "
+        f"-DBUCKYBALL_MODEL_DATASET="
     )
-    if chip:
+    if chip and not model:
         chip_kernel = os.path.join(bbdir, "examples", "chips", chip, "kernel")
         pk_toml = os.path.join(
             bbdir, "examples", "chips", chip, "regression", "batch", "bemu", "workloads-pk.toml"
@@ -191,7 +204,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f" -DBUCKYBALL_PK_WORKLOAD_TOML={pk_toml}"
         )
 
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=configure_cmd,
         logger=ctx.logger,
         stdout_prefix="marshal build",
@@ -203,7 +216,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     # cmake build
     build_cmd = f"cmake --build {kernel_build} --target kernel-build"
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=build_cmd,
         logger=ctx.logger,
         stdout_prefix="marshal build",
@@ -215,7 +228,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    payload_name = fw_payload_name(hart_params, model, chip)
+    payload_name = fw_payload_name(hart_params, cmake_model_name if model else "", chip)
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
 

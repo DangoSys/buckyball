@@ -36,4 +36,6 @@ bbdev compiler --build '--chip pebble --stable'
 ## Notes
 
 - Ensure the system has necessary build tools and dependencies
+- Each `compilerCore` builds under `compiler/thirdparty/buddy-mlir/build/cores/<core>/`; different cores can be built in parallel on one checkout
 - `pebble` supports both custom `xbuckyball` lowering and stable LLVM backend lowering; the selected lowering mode is controlled by pass/workload options
+- Interactive shell: `export BUCKYBALL_COMPILER_CORE=<core>` then re-source `sourceme.sh` for `buddy-opt` on PATH; bbdev injects `BUDDY_MLIR_BUILD_DIR` automatically in subprocesses

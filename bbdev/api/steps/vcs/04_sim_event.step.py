@@ -11,9 +11,10 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, get_vcs_build_dir
+from utils.chip import require_chip
+from utils.path import get_buckyball_path, get_run_log_dir, get_vcs_build_dir, workload_build_dir, workload_tests_root
 from utils.search_workload import search_workload
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 
 
 config = {
@@ -25,11 +26,14 @@ config = {
 }
 
 
-def _resolve_binary(bbdir: str, binary: str) -> str | None:
+def _resolve_binary(bbdir: str, chip: str, binary: str) -> str | None:
     if os.path.isfile(binary):
         return os.path.abspath(binary)
-    for root in ("output/workloads/src", "build/workloads/src"):
-        found = search_workload(f"{bbdir}/bb-tests/{root}", binary)
+    for root in (
+        workload_tests_root(bbdir, chip),
+        os.path.join(workload_build_dir(bbdir, chip), "src"),
+    ):
+        found = search_workload(root, binary)
         if found:
             return found
     return None
@@ -37,20 +41,21 @@ def _resolve_binary(bbdir: str, binary: str) -> str | None:
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
-    binary_name = input_data.get("binary")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": "missing config"}, trace_id=origin_tid)
+    try:
+        chip = require_chip(input_data)
+    except ValueError as exc:
+        await check_result(ctx, 1, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid)
         return
+    binary_name = input_data.get("binary")
     if not isinstance(binary_name, str) or not binary_name:
         await check_result(ctx, 1, extra_fields={"task": "sim", "error": "missing binary"}, trace_id=origin_tid)
         return
     bbdir = get_buckyball_path()
-    binary = _resolve_binary(bbdir, binary_name)
+    binary = _resolve_binary(bbdir, chip, binary_name)
     if binary is None:
         await check_result(ctx, 1, extra_fields={"task": "sim", "error": f"binary not found: {binary_name}"}, trace_id=origin_tid)
         return
-    build_dir = get_vcs_build_dir(bbdir, config_name, input_data.get("output_dir"))
+    build_dir = get_vcs_build_dir(bbdir, chip, input_data.get("output_dir"))
     artifact_dir = Path(build_dir) / "vcs"
     simv = artifact_dir / "simv"
     if not simv.is_file():
@@ -58,7 +63,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    log_dir = Path(bbdir) / "log" / f"{timestamp}-vcs-{config_name.replace('/', '_')}"
+    log_dir = Path(get_run_log_dir(
+        bbdir, chip, "verilog", timestamp, "vcs", binary_name,
+        input_data.get("output_dir"),
+    ))
     log_dir.mkdir(parents=True)
     timeout_ns = input_data.get("timeout_ns", input_data.get("timeout-ns", "100000000"))
     try:
@@ -82,7 +90,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "+permissive-off",
         ]
     )
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=command,
         logger=ctx.logger,
         cwd=artifact_dir,

@@ -1,5 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.chip import require_chip
 from utils.path import get_buckyball_path, get_verilator_build_dir
 
 config = {
@@ -15,31 +16,22 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = request.body or {}
 
-    arch_config = body.get("config")
-    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"}
-        )
-
-    chip = body.get("chip")
-    if not chip:
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --chip must be specified"}
-        )
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
 
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
             status=400,
-            body={"error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"}
+            body={"error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"},
         )
 
     if test_type not in ["elf-tests", "pk-tests"]:
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"}
+            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"},
         )
 
     diff = bool(body.get("diff", False))
@@ -50,11 +42,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "--diff and --rushB cannot be used together"},
         )
 
-    vsrc_dir = get_verilator_build_dir(bbdir, arch_config, body.get("vsrc_dir"))
+    vsrc_dir = get_verilator_build_dir(bbdir, chip, body.get("vsrc_dir"))
 
     data = {
         "chip": chip,
-        "config": arch_config,
         "vsrc_dir": vsrc_dir,
         "test": test_type,
         "clean-before": body.get("clean-before", body.get("clean_before", False)),

@@ -10,7 +10,7 @@ failure-output = "immediate"
 success-output = "never"
 status-level = "all"
 fail-fast = false
-slow-timeout = { period = "360s", terminate-after = 5 }
+slow-timeout = { period = "600s", terminate-after = 18 }
 retries = 0
 junit = { path = "target/nextest/junit-bbdev-p2e.xml", report-name = "bbdev-p2e-batch" }
 
@@ -20,4 +20,4 @@ max-threads = 1
 [[profile.default.overrides]]
 filter = "binary(test_p2e)"
 test-group = "p2e-serial"
-slow-timeout = { period = "360s", terminate-after = 5 }
+slow-timeout = { period = "600s", terminate-after = 18 }

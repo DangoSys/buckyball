@@ -8,12 +8,13 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
+from utils.chip import require_chip
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path
+from utils.path import chip_output_root, get_buckyball_path
 
 config = {
     "name": "workload-clean",
-    "description": "clean workload output directory",
+    "description": "clean workload output directory for one chip",
     "flows": ["workload"],
     "triggers": [queue("workload.clean")],
     "enqueues": [],
@@ -22,7 +23,7 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    allowed = {"_trace_id"}
+    allowed = {"chip", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload clean parameter(s): {', '.join(unknown)}")
@@ -35,20 +36,32 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    bbdir = get_buckyball_path()
-    paths = [os.path.join(bbdir, "bb-tests", "output")]
+    try:
+        chip = require_chip(input_data)
+    except ValueError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
 
-    for path in paths:
-        if os.path.exists(path):
-            ctx.logger.info("Removing workload directory", {"path": path})
-            shutil.rmtree(path)
-        else:
-            ctx.logger.info("Workload directory already clean", {"path": path})
+    bbdir = get_buckyball_path()
+    path = chip_output_root(bbdir, chip)
+
+    if os.path.exists(path):
+        ctx.logger.info("Removing workload output directory", {"path": path})
+        shutil.rmtree(path)
+    else:
+        ctx.logger.info("Workload output directory already clean", {"path": path})
 
     await check_result(
         ctx,
         0,
         continue_run=False,
-        extra_fields={"task": "clean", "paths": paths},
+        extra_fields={"task": "clean", "chip": chip, "path": path},
         trace_id=origin_tid,
     )

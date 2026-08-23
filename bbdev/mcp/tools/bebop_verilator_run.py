@@ -10,7 +10,7 @@ def register(mcp):
     @mcp.tool()
     def bbdev_bebop_verilator_run(
         binary: str,
-        config: str,
+        chip: str,
         jobs: int = 16,
         itrace: bool = False,
         mtrace: bool = False,
@@ -23,7 +23,7 @@ def register(mcp):
         batch: bool = False,
     ) -> str:
         """Full bebop-verilator flow. POST /bebop/verilator/run."""
-        for n, v in (("binary", binary), ("config", config)):
+        for n, v in (("binary", binary), ("chip", chip)):
             if e := need(n, v):
                 return err(e)
         return fmt(
@@ -31,7 +31,7 @@ def register(mcp):
                 "/bebop/verilator/run",
                 {
                     "binary": binary,
-                    "config": config,
+                    "chip": chip,
                     "jobs": jobs,
                     "itrace": itrace,
                     "mtrace": mtrace,

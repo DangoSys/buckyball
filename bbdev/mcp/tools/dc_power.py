@@ -10,7 +10,7 @@ from common import err, fmt, opt, submit
 def register(mcp):
     @mcp.tool()
     def bbdev_dc_power(
-        config: Optional[str] = None,
+        chip: Optional[str] = None,
         top: Optional[str] = None,
         activity: Optional[str] = None,
         activity_format: Optional[str] = None,
@@ -24,8 +24,8 @@ def register(mcp):
         Omit activity/activity_format for the normal rerun-and-measure flow.
         Supply both only as a debugging override.
         """
-        if not config:
-            return err("config is required")
+        if not chip:
+            return err("chip is required")
         if bool(activity) != bool(activity_format):
             return err("activity and activity_format must be provided together")
         return fmt(
@@ -33,7 +33,7 @@ def register(mcp):
                 "/dc/power",
                 opt(
                     {},
-                    config=config,
+                    chip=chip,
                     top=top,
                     activity=activity,
                     format=activity_format,

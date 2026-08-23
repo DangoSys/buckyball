@@ -1,7 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.chip import require_chip
 from utils.path import get_buckyball_path
-from utils.path import get_verilator_build_dir
 
 config = {
     "name": "bebop-p2e-verilog-api",
@@ -13,20 +13,13 @@ config = {
 
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = req.body or {}
-
-    config_name = body.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"},
-        )
-    output_dir = get_verilator_build_dir(bbdir, config_name, body.get("output_dir"))
-
-    data = {
-        "config": config_name,
-        "output_dir": output_dir,
-    }
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
+    data = {"chip": chip}
+    if body.get("output_dir"):
+        data["output_dir"] = body["output_dir"]
     await ctx.enqueue({"topic": "bebop.p2e.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

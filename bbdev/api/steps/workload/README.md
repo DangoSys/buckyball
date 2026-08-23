@@ -7,13 +7,14 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 ### `clean`
 **Endpoint**: `POST /workload/clean`
 
-**Function**: Clean workload output directory.
+**Function**: Clean workload output directory for one chip.
 
-**Parameters**: None.
+**Parameters**:
+- **`chip`** - Required chip name.
 
 **Examples**:
 ```bash
-bbdev workload --clean
+bbdev workload --clean "--chip toy"
 ```
 
 ### `build`
@@ -28,7 +29,7 @@ bbdev workload --clean
 - **`rushB`** - Optional host-native backend: `bemu` or `verilator`. Requires
   `model`. It builds host-native CPU and rushB-lowered accelerator objects.
 
-For chip workloads under paths like `*/chips/<chip>`, only the directory selected by `chip` is synced to `bb-tests/output/workloads`.
+For chip workloads under paths like `*/chips/<chip>`, only the directory selected by `chip` is synced to `bb-tests/output/<chip>/workloads`.
 
 **Examples**:
 ```bash
@@ -62,6 +63,6 @@ bbdev workload --build "--chip toy"
 
 ## Notes
 
-- Workload build entry is `bb-tests`
+- Workload build directory is `bb-tests/workloads/build/<chip>`
 - Workload source code is distributed under `bb-tests/workloads/src` and `examples/*/*/workloads`
-- Workload binaries are emitted under `bb-tests/output/workloads/src`
+- Workload binaries are emitted under `bb-tests/output/<chip>/workloads/src`

@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 import threading
 from typing import Optional, List, Callable
@@ -207,4 +208,34 @@ def stream_run_logger(
         stderr_prefix=stderr_prefix,
         env=env,
         task_scope=task_scope,
+    )
+
+
+async def stream_run_logger_async(
+    cmd: str,
+    logger,
+    cwd: Optional[str] = None,
+    shell: bool = True,
+    executable: Optional[str] = None,
+    timeout: Optional[float] = None,
+    stdout_prefix: str = "STDOUT",
+    stderr_prefix: str = "STDERR",
+    verbose: bool = False,
+    env: Optional[dict] = None,
+    task_scope: Optional[str] = None,
+) -> StreamResult:
+    """Run stream_run_logger off the Motia event loop so long jobs do not stall the worker."""
+    return await asyncio.to_thread(
+        stream_run_logger,
+        cmd,
+        logger,
+        cwd,
+        shell,
+        executable,
+        timeout,
+        stdout_prefix,
+        stderr_prefix,
+        verbose,
+        env,
+        task_scope,
     )

@@ -18,9 +18,11 @@ def register(mcp):
     ) -> str:
         """Build RISC-V kernel + rootfs. POST /kernel/build.
 
-        With --chip, uses examples/chips/<chip>/kernel OS overlay and packs
+        With --chip only: uses examples/chips/<chip>/kernel OS overlay and packs
         that chip's bemu workloads-pk.toml into fw_payload-<chip>-pk.
-        With --interactive, keep shared /init shell and do not auto-run.
+        With --model: requires --chip; packs ModelTest runtime from
+        archs/buckyball/<chip>/<Model> into fw_payload-<model>.
+        With --interactive: keep shared /init shell and do not auto-run.
         """
         params: Dict[str, Any] = {}
         opt(params, chip=chip, model=model)

@@ -18,7 +18,7 @@ if step_path not in sys.path:
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
 from power import read_dynamic_power
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 from tapeout import get_tapeout_contract, resolve_power_window, technology_settings, write_run_tcl
 
 config = {
@@ -53,7 +53,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         netlist = os.path.join(analysis_dir, "outputs", f"{top_module}.v")
         sdc = os.path.join(analysis_dir, "outputs", f"{top_module}.sdc")
-        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("config"), top_module)
+        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("chip"), top_module)
         start_ns, end_ns = resolve_power_window(
             contract,
             input_data.get("start_ns", input_data.get("start-ns")),
@@ -80,7 +80,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(ctx, 1, continue_run=False, extra_fields={"task": "power", "error": str(exc)}, trace_id=origin_tid)
         return
 
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=(
             f"pt_shell -f {shlex.quote(str(script))} "
             f"-x {shlex.quote('set RUN_CONFIG ' + '{' + str(run_config) + '}')} "

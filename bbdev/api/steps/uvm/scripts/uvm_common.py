@@ -12,6 +12,10 @@ from utils.stream_run import StreamResult, stream_run_logger
 
 
 def default_test_name(ball: str) -> str:
+    if ball == "fp2int":
+        return "fp2int_scale_rows_test"
+    if ball == "int2fp":
+        return "int2fp_channel_two_rows_test"
     return f"{ball}_ball_test"
 
 
@@ -19,6 +23,59 @@ def config_dir_name(config: str) -> str:
     if not isinstance(config, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", config):
         raise ValueError("invalid config name")
     return config
+
+
+def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
+    core_config = input_data.get("core_config")
+    if not isinstance(core_config, str) or not core_config:
+        raise ValueError("Missing required parameter: --core-config=<path>")
+    path = core_config if os.path.isabs(core_config) else os.path.join(bbdir, core_config)
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"core_config not found: {path}")
+    with open(path, "rb") as src:
+        core = tomllib.load(src)
+    rel_domain = core.get("balldomain")
+    if not isinstance(rel_domain, str) or not rel_domain:
+        raise ValueError(f"core_config missing balldomain: {path}")
+    domain_path = os.path.abspath(os.path.join(os.path.dirname(path), rel_domain))
+    if not os.path.isfile(domain_path):
+        raise FileNotFoundError(f"balldomain not found: {domain_path}")
+    with open(domain_path, "rb") as src:
+        domain = tomllib.load(src)
+    entries = domain.get("ballISA")
+    if not isinstance(entries, list):
+        raise ValueError(f"ballISA missing from {domain_path}")
+    required = {
+        "fp2int": {"FP2INT": "FP2INT_FUNCT7"},
+        "int2fp": {
+            "INT2FP_TENSOR": "INT2FP_TENSOR_FUNCT7",
+            "INT2FP_CHANNEL": "INT2FP_CHANNEL_FUNCT7",
+        },
+        "smatmul": {
+            "SMATMUL_OS": "SMATMUL_OS_FUNCT7",
+            "SMATMUL_WS": "SMATMUL_WS_FUNCT7",
+        },
+        "im2col": {"IM2COL": "IM2COL_FUNCT7"},
+        "transpose": {"TRANSPOSE": "TRANSPOSE_FUNCT7"},
+    }.get(ball)
+    if required is None:
+        return []
+    values = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError(f"invalid ballISA entry in {domain_path}")
+        mnemonic = entry.get("mnemonic")
+        funct7 = entry.get("funct7")
+        if mnemonic in required:
+            if not isinstance(funct7, int) or funct7 < 0 or funct7 > 127:
+                raise ValueError(f"invalid funct7 for {mnemonic} in {domain_path}")
+            if mnemonic in values:
+                raise ValueError(f"duplicate {mnemonic} in {domain_path}")
+            values[mnemonic] = funct7
+    if set(values) != set(required):
+        raise ValueError(f"{domain_path} missing required {ball} ISA entries")
+    return [f"+define+{macro}={values[mnemonic]}" for mnemonic, macro in required.items()]
 
 
 def uvm_paths(bbdir: str, input_data: dict, ball_override: str | None = None) -> dict:
@@ -36,7 +93,14 @@ def uvm_paths(bbdir: str, input_data: dict, ball_override: str | None = None) ->
     sim_dir = os.path.join(build_dir, config_dir) if config_dir else os.path.join(build_dir, "current")
     simv = os.path.join(sim_dir, "simv")
     csrc_dir = os.path.join(sim_dir, "csrc")
-    rtl_dir = os.path.join(bbdir, "arch", "build", config_dir) if config_dir else None
+    core_config = input_data.get("core_config")
+    core_dir = None
+    if config_dir:
+        if not isinstance(core_config, str) or not core_config:
+            raise ValueError("Missing required parameter: --core-config=<path>")
+        core_path = core_config if os.path.isabs(core_config) else os.path.join(bbdir, core_config)
+        core_dir = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(core_path))))
+    rtl_dir = os.path.join(bbdir, "arch", "build", core_dir, config_dir) if config_dir else None
 
     return {
         "ball": ball,
@@ -186,6 +250,7 @@ def failed_result(message: str) -> StreamResult:
 def run_uvm_build_one(bbdir: str, input_data: dict, ctx, ball: str) -> tuple[StreamResult, dict]:
     try:
         paths = checked_paths(bbdir, input_data, ball)
+        isa_defines = core_ball_isa_defines(bbdir, input_data, ball)
     except Exception as e:
         ctx.logger.error(str(e))
         return failed_result(str(e)), {"task": "build", "error": str(e)}
@@ -199,6 +264,7 @@ def run_uvm_build_one(bbdir: str, input_data: dict, ctx, ball: str) -> tuple[Str
         "resolved_filelist": os.path.join(paths["verify_dir"], paths["filelist_arg"]),
         "simv": paths["simv"],
         "dpi_lib": paths["dpi_lib"],
+        "core_config": input_data.get("core_config"),
     }
 
     cargo_cmd = (
@@ -220,13 +286,15 @@ def run_uvm_build_one(bbdir: str, input_data: dict, ctx, ball: str) -> tuple[Str
         f"cd {shlex.quote(paths['verify_dir'])} && "
         f"rm -rf {shlex.quote(paths['csrc_dir'])} {shlex.quote(paths['simv'])} {shlex.quote(paths['simv'])}.daidir && "
         f"mkdir -p {shlex.quote(paths['sim_dir'])} {shlex.quote(paths['csrc_dir'])} && "
-        "vcs -full64 -sverilog -timescale=1ns/1ps -hsopt=off "
-        "$VCS_UVM_ARGS "
+        "vcs -full64 -sverilog -timescale=1ns/1ps -debug_access+all "
+        "${=VCS_UVM_ARGS} "
+        + " ".join(shlex.quote(value) for value in isa_defines)
+        + " "
         f"-Mdir={shlex.quote(paths['csrc_dir'])} "
         f"-o {shlex.quote(paths['simv'])} "
         f"-f {shlex.quote(paths['filelist_arg'])}"
     )
-    vcs_cmd = f"nix develop {shlex.quote(paths['verify_env'])} --command bash -lc {shlex.quote(script)}"
+    vcs_cmd = f"nix develop {shlex.quote(paths['verify_env'])} --command zsh -c {shlex.quote(script)}"
 
     ctx.logger.info(f"Building UVM simulation for ball {paths['ball']} config {paths['config']}")
     vcs_result = stream_run_logger(

@@ -19,12 +19,12 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import get_buckyball_path
-from utils.stream_run import stream_run_logger
+from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, get_bemu_log_dir, workload_tests_root
+from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload, search_workload_all
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
-from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile
+from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile_index, chip_emu_manifest
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -68,15 +68,13 @@ def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     if Path(binary_name).name != binary_name:
         return None
 
-    build_root = f"{bbdir}/bb-tests/build/workloads/src"
-    output_root = f"{bbdir}/bb-tests/output/workloads/src"
-    for search_root in (build_root, output_root):
-        chip_root = f"{search_root}/CTest/chips/{chip}"
-        chip_binary = search_workload(chip_root, binary_name)
-        if chip_binary is not None:
-            return chip_binary
+    workload_root = workload_tests_root(bbdir, chip)
+    chip_root = f"{workload_root}/CTest/chips/{chip}"
+    chip_binary = search_workload(chip_root, binary_name)
+    if chip_binary is not None:
+        return chip_binary
 
-    matches = search_workload_all(output_root, binary_name)
+    matches = search_workload_all(workload_root, binary_name)
     chip_marker = f"{os.path.sep}CTest{os.path.sep}chips{os.path.sep}"
     non_chip_matches = [path for path in matches if chip_marker not in path]
     if len(non_chip_matches) == 1:
@@ -93,19 +91,19 @@ def is_native_host_elf(path: str) -> bool:
     return header[:4] == b"\x7fELF" and header[18:20] == b"\x3e\x00"
 
 
-def rushb_bemu_library(manifest: Path) -> Path:
-    """Return the cdylib emitted by the Core selected for a rushB run."""
+def rushb_bemu_library(manifest: Path, bbdir: str, chip: str) -> Path:
+    """Return the cdylib emitted by bebop-bemu for a rushB run."""
     with manifest.open("rb") as source:
         cargo = tomllib.load(source)
     lib_name = cargo.get("lib", {}).get("name")
     if not lib_name:
         lib_name = cargo["package"]["name"].replace("-", "_")
-    return manifest.parent / "target/release" / f"lib{lib_name}.so"
+    return Path(bebop_target_dir(bbdir, chip)) / "release" / f"lib{lib_name}.so"
 
 
-def rushb_bemu_library_dirs(manifest: Path) -> list[Path]:
-    """Locate native shared-library dependencies produced by the Core build."""
-    build_dir = manifest.parent / "target/release/build"
+def rushb_bemu_library_dirs(manifest: Path, bbdir: str, chip: str) -> list[Path]:
+    """Locate native shared-library dependencies produced by the bebop-bemu build."""
+    build_dir = Path(bebop_target_dir(bbdir, chip)) / "release" / "build"
     return sorted({library.parent for library in build_dir.glob("*/out/**/libriscv.so")})
 
 
@@ -150,7 +148,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         clean_model_trace(binary_dir)
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = f"{bbdir}/log/{timestamp}-bemu-{Path(binary_path).name}"
+    log_dir = get_bemu_log_dir(bbdir, chip, timestamp, binary_name)
     os.makedirs(log_dir, exist_ok=True)
 
     if input_data.get("rushB"):
@@ -170,9 +168,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        bemu_library = rushb_bemu_library(bemu_cargo_manifest)
+        bemu_library = rushb_bemu_library(bemu_cargo_manifest, bbdir, chip)
         bemu_runtime_library = Path(binary_dir) / "libbebop_bemu.so"
-        dependency_dirs = rushb_bemu_library_dirs(bemu_cargo_manifest)
+        dependency_dirs = rushb_bemu_library_dirs(bemu_cargo_manifest, bbdir, chip)
         build_cmd = shlex.join([
             "cargo", "build", "--release", "--manifest-path", str(bemu_cargo_manifest), "--lib",
         ])
@@ -184,13 +182,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && {library_env} exec {shlex.quote(binary_path)}"
         run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
         ctx.logger.info(f"Running rushB BEMU: {run_cmd}")
-        run_result = stream_run_logger(
+        run_result = await stream_run_logger_async(
             cmd=run_cmd,
             logger=ctx.logger,
             cwd=bbdir,
             stdout_prefix="rushB bemu",
             stderr_prefix="rushB bemu",
             task_scope=origin_tid,
+            env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
         )
         if cancellation_requested(origin_tid):
             return
@@ -211,35 +210,68 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # ── Run bebop bemu ────────────────────────────────────────────────────
-    cargo_args = [
-        "cargo",
-        "run",
-        "--release",
-        "--manifest-path",
-        str(bemu_cargo_manifest),
-        "--",
-    ]
-    tile = bemu_tile(chip, bbdir)
-    if tile:
-        cargo_args.extend(["--tile", str(tile), "--elf", binary_path, "--log-dir", log_dir])
+    tile_index = bemu_tile_index(chip, bbdir)
+    chip_emu = chip_emu_manifest(chip, bbdir)
+    if (tile_index is not None) != bool(chip_emu):
+        ctx.logger.error(
+            f"chip {chip}: bundle bemu.chipMain and emu/Cargo.toml must both exist or both be absent"
+        )
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "chip_emu_entry_mismatch", "chip": chip},
+            trace_id=origin_tid,
+        )
+        return
+    if chip_emu:
+        cargo_args = [
+            "cargo",
+            "run",
+            "--release",
+            "--manifest-path",
+            str(chip_emu),
+            "--",
+            "--tile-index",
+            str(tile_index),
+            "--elf",
+            binary_path,
+            "--log-dir",
+            log_dir,
+        ]
     else:
-        cargo_args.extend(["--", "run", "bemu", "--elf", binary_path, "--log-dir", log_dir])
+        cargo_args = [
+            "cargo",
+            "run",
+            "--release",
+            "--manifest-path",
+            str(bemu_cargo_manifest),
+            "--bin",
+            "bebop-bemu",
+            "--",
+            "--elf",
+            binary_path,
+            "--log-dir",
+            log_dir,
+        ]
     if input_data.get("pk"):
         cargo_args.append("--pk")
     if input_data.get("disasm"):
         cargo_args.append("--disasm")
     if input_data.get("tool-profile"):
         cargo_args.append("--tool-profile")
+    for trace_name in ("itrace", "mtrace"):
+        if input_data.get(trace_name, False):
+            cargo_args.append(f"--{trace_name}")
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bbdir,
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
         task_scope=origin_tid,
+        env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
     )
     if cancellation_requested(origin_tid):
         return
@@ -266,7 +298,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"--target {shlex.quote(perfetto_target)}"
         )
         ctx.logger.info(f"Generating Perfetto trace: {perfetto_cmd}")
-        perfetto_result = stream_run_logger(
+        perfetto_result = await stream_run_logger_async(
             cmd=perfetto_cmd,
             logger=ctx.logger,
             cwd=bbdir,

@@ -10,15 +10,15 @@ from common import submit, err, fmt, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_dc_verilog(
-        config: Optional[str] = None,
+        chip: Optional[str] = None,
         top: Optional[str] = None,
     ) -> str:
         """Generate top-scoped DC RTL collateral. Defaults to DigitalTop."""
-        if not config:
-            return err("config is required")
+        if not chip:
+            return err("chip is required")
         return fmt(
             submit(
                 "/dc/verilog",
-                opt({}, config=config, top=top),
+                opt({}, chip=chip, top=top),
             )
         )

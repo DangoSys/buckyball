@@ -1,6 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import check_dc_power_args, get_buckyball_path, get_dc_analysis_dir, get_dc_rtl_dir
+from utils.chip import require_chip
+from utils.path import check_dc_power_args
 
 config = {
     "name": "dc-power-api",
@@ -12,12 +13,10 @@ config = {
 
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = req.body or {}
     try:
-        check_dc_power_args(body)
-        rtl_dir = get_dc_rtl_dir(bbdir, body.get("config"))
-        analysis_dir = get_dc_analysis_dir(bbdir, body.get("config"), "power")
+        chip = require_chip(body)
+        check_dc_power_args({k: v for k, v in body.items() if k != "config"})
     except ValueError as exc:
         return ApiResponse(status=400, body={"error": str(exc)})
     await ctx.enqueue(
@@ -25,9 +24,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "topic": "dc.verilog",
             "data": {
                 **body,
-                "output_dir": rtl_dir,
-                "analysis_dir": analysis_dir,
-                "config": body.get("config"),
+                "chip": chip,
                 "top": body.get("top") or "DigitalTop",
                 "from_power_workflow": True,
                 "_trace_id": ctx.trace_id,

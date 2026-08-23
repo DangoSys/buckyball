@@ -8,9 +8,8 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_bebop_verilator_clean(config: str) -> str:
+    def bbdev_bebop_verilator_clean(chip: str) -> str:
         """Clean bebop-verilator build. POST /bebop/verilator/clean."""
-        if e := need("config", config):
+        if e := need("chip", chip):
             return err(e)
-        return fmt(submit("/bebop/verilator/clean", {"config": config}))
-
+        return fmt(submit("/bebop/verilator/clean", {"chip": chip}))

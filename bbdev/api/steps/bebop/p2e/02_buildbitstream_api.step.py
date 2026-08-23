@@ -1,6 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
+from utils.chip import require_chip
+from utils.path import get_buckyball_path, get_p2e_build_dir
 
 config = {
     "name": "bebop-p2e-buildbitstream-api",
@@ -14,17 +15,14 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = request.body or {}
-
-    config_name = body.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"},
-        )
-    vsrc_dir = get_verilator_build_dir(bbdir, config_name, body.get("vsrc_dir"))
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
+    vsrc_dir = get_p2e_build_dir(bbdir, chip, body.get("vsrc_dir"))
 
     data = {
-        "config": config_name,
+        "chip": chip,
         "vsrc_dir": vsrc_dir,
         "output_dir": body.get("output_dir"),
     }

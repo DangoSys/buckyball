@@ -10,15 +10,14 @@ from common import submit, err, fmt, need, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_bebop_p2e_verilog(
-        config: str, output_dir: Optional[str] = None
+        chip: str, output_dir: Optional[str] = None
     ) -> str:
         """Generate Verilog for bebop-p2e. POST /bebop/p2e/verilog."""
-        if e := need("config", config):
+        if e := need("chip", chip):
             return err(e)
         return fmt(
             submit(
                 "/bebop/p2e/verilog",
-                opt({"config": config}, output_dir=output_dir),
+                opt({"chip": chip}, output_dir=output_dir),
             )
         )
-

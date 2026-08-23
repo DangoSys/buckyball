@@ -1,5 +1,8 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.chip import require_chip
+from utils.path import get_buckyball_path
+
 config = {
     "name": "bebop-verilator-run-api",
     "description": "Run complete bebop verilator workflow: clean → verilog → build → sim",
@@ -18,12 +21,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "Unsupported parameter: output_dir. Use --output-dir."},
         )
 
-    config_name = body.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --config must be specified"}
-        )
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
 
     binary = body.get("binary", "")
     if not binary:
@@ -46,7 +47,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
 
     data = {
-        "config": config_name,
+        "chip": chip,
         "binary": binary,
         "balltype": body.get("balltype"),
         "itrace": body.get("itrace", False),

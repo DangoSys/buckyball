@@ -18,8 +18,9 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_p2e_build_dir, get_run_log_dir
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -31,12 +32,16 @@ config = {
 }
 
 
-def resolve_image(bbdir: str, image_name: str) -> str:
-    """Search bb-tests/output/ recursively for <image_name>.hex and return its absolute path."""
-    output_root = f"{bbdir}/bb-tests/output"
-    matches = glob.glob(f"{output_root}/**/{image_name}.hex", recursive=True)
+def resolve_image(bbdir: str, image_name: str, chip: str) -> str:
+    """Search chip workload build output recursively for <image_name>.hex."""
+    workload_root = os.path.join(chip_output_root(bbdir, chip), "workloads")
+    matches = glob.glob(f"{workload_root}/**/{image_name}.hex", recursive=True)
     if not matches:
         return ""
+    if len(matches) > 1:
+        raise ValueError(
+            f"multiple .hex files for {image_name!r} under {workload_root}: {matches}"
+        )
     return matches[0]
 
 
@@ -57,6 +62,16 @@ def case_uses_multi_fpga(build_dir: str) -> bool:
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
+    try:
+        chip = require_chip(input_data)
+    except ValueError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "missing_chip"},
+            trace_id=origin_tid,
+        )
+        return
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
 
@@ -95,9 +110,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             return
         wave = True
 
-    image_path = resolve_image(bbdir, image_name)
+    image_path = resolve_image(bbdir, image_name, chip)
     if not image_path:
-        ctx.logger.error(f"image .hex not found for name: {image_name} (searched bb-tests/output/)")
+        ctx.logger.error(
+            f"image .hex not found for name: {image_name} "
+            f"(searched bb-tests/output/{chip}/workloads/)"
+        )
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={"error": "image_not_found", "image": image_name},
@@ -129,15 +147,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         multi_fpga = True
         ctx.logger.info(f"Detected multi-FPGA P2E case: {build_dir}")
 
-    config_name = resolve_runtime_config(bitstream, input_data.get("config"))
-    vsrc_dir = get_verilator_build_dir(bbdir, config_name, input_data.get("vsrc_dir"))
+    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
     if not os.path.isdir(vsrc_dir):
         ctx.logger.error(f"VSRC_PATH does not exist for P2E runtime: {vsrc_dir}")
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={
                 "error": "vsrc_not_found",
-                "config": config_name,
                 "vsrc_dir": vsrc_dir,
             },
             trace_id=origin_tid,
@@ -145,7 +161,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = f"{bbdir}/log/{timestamp}-p2e-{image_name}"
+    log_dir = get_run_log_dir(bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir"))
     os.makedirs(log_dir, exist_ok=True)
 
     # Rebuild the VVAC host runtime in the bitstream case.  The bitstream is
@@ -157,12 +173,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"--out-dir=\"{build_dir}\""
     )
     ctx.logger.info("Preparing bebop p2e runtime for the selected bitstream ...")
-    runtime_result = stream_run_logger(
+    runtime_result = await stream_run_logger_async(
         cmd=runtime_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e runtime",
         stderr_prefix="bebop p2e runtime",
+        env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
     )
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
@@ -176,7 +193,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "runtime",
-                "config": config_name,
                 "vsrc_dir": vsrc_dir,
                 "build_dir": build_dir,
                 "missing": missing,
@@ -204,12 +220,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if input_data.get(trace_name, False):
             run_cmd += f" --{trace_name}"
     ctx.logger.info(f"Running bebop p2e runworkload: {run_cmd}")
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e runworkload",
         stderr_prefix="bebop p2e runworkload",
+        env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
     )
 
     await check_result(
@@ -220,7 +237,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "runworkload",
             "image": image_path,
             "bitstream": bitstream,
-            "config": config_name,
             "build_dir": build_dir,
             "log_dir": log_dir,
             "bdb_trace": os.path.join(log_dir, "bdb.ndjson"),

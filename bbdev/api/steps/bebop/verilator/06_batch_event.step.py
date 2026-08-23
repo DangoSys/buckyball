@@ -17,11 +17,13 @@ bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
-from utils.chip import resolve_chip_runtime_manifest
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.build import install_bundle
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_verilator_build_dir
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
+from regression_harness import nextest_harness_args
 
 config = {
     "name": "bebop-verilator-batch",
@@ -37,27 +39,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
     nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
-    elf_root = f"{bbdir}/bb-tests/output"
 
-    arch_config = input_data.get("config")
-    if not isinstance(arch_config, str) or not arch_config or arch_config == "None":
-        ctx.logger.error("Missing required parameter: config must be specified")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_config"},
-            trace_id=origin_tid,
-        )
-        return
-
-    chip = input_data.get("chip")
-    if not chip:
-        ctx.logger.error("Missing required parameter: chip must be specified")
+    try:
+        chip = require_chip(input_data)
+    except ValueError as error:
+        ctx.logger.error(str(error))
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
         return
+    elf_root = chip_output_root(bbdir, chip)
 
     test_type = input_data.get("test", "elf-tests")
     rushB = bool(input_data.get("rushB", False))
@@ -90,7 +83,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"rushB={rushB} diff={diff}"
     )
 
-    vsrc_dir = get_verilator_build_dir(bbdir, arch_config, input_data.get("vsrc_dir"))
+    vsrc_dir = get_verilator_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
     if not os.path.isdir(vsrc_dir):
         ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
         await check_result(
@@ -102,10 +95,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     env = os.environ.copy()
+    env.update(bebop_cargo_env(bbdir, chip))
     env.update({
-        "BEBOP_WORKLOAD_TOML": workload_toml,
-        "BEBOP_BB_TESTS_ROOT": elf_root,
-        "BEBOP_ARCH_CONFIG": arch_config,
+        "BEBOP_ARCH_CONFIG": chip,
         "VSRC_PATH": vsrc_dir,
     })
 
@@ -113,7 +105,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     features = "verilator"
     if diff:
         try:
-            manifest = str(resolve_chip_runtime_manifest(bbdir, chip, "bemu"))
+            install_bundle(bbdir, chip)
         except ValueError as error:
             ctx.logger.error(str(error))
             await check_result(
@@ -144,16 +136,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(artifact_dir, ignore_errors=True)
         ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
 
+    harness = nextest_harness_args(workload_toml, elf_root)
     nextest_cmd = (
         f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(manifest)} "
         f"--features {shlex.quote(features)} --test test_verilator "
         f"--config-file {shlex.quote(nextest_config)} "
-        f"--config={vsrc_config}"
+        f"--config={vsrc_config} "
+        f"{harness}"
     )
 
     ctx.logger.info(f"Running bebop verilator nextest: {nextest_cmd}")
-    ctx.logger.info(f"Environment: BEBOP_WORKLOAD_TOML={workload_toml}, BEBOP_BB_TESTS_ROOT={elf_root}")
-    run_result = stream_run_logger(
+    run_result = await stream_run_logger_async(
         cmd=nextest_cmd,
         logger=ctx.logger,
         cwd=bbdir,
@@ -170,7 +163,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "batch",
             "backend": "verilator-rushB" if rushB else ("difftest" if diff else "verilator"),
             "chip": chip,
-            "config": arch_config,
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,
             "rushB": rushB,

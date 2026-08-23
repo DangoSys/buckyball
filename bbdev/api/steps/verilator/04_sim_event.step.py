@@ -10,8 +10,9 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import gcc_lib_dir, get_buckyball_path, get_run_log_dir, get_verilator_build_dir, workload_tests_root
+from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -29,14 +30,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Get simulation parameters
     # ==================================================================================
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        raise ValueError("Missing required input: config")
+    chip = require_chip(input_data)
     bbdir = get_buckyball_path()
-    arch_dir = f"{bbdir}/arch"
     build_dir = get_verilator_build_dir(
-        bbdir,
-        config_name,
+        bbdir, chip,
         input_data.get("output_dir"),
     )
     ctx.logger.info(f"Using build directory: {build_dir}")
@@ -44,23 +41,34 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
 
     binary_name = input_data.get("binary", "")
+    if not binary_name:
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "binary_required"},
+            trace_id=origin_tid,
+        )
+        return
     coverage = input_data.get("coverage", False)
-    success_result, failure_result = await check_result(
-        ctx, returncode=(binary_name is None), continue_run=True, trace_id=origin_tid,
-    )
 
-    binary_path = search_workload(f"{bbdir}/bb-tests/output/workloads/src", binary_name)
+    workload_root = workload_tests_root(bbdir, chip)
+    binary_path = search_workload(workload_root, binary_name)
     ctx.logger.info(f"binary_path: {binary_path}")
-    success_result, failure_result = await check_result(
-        ctx, returncode=(binary_path is None), continue_run=True, trace_id=origin_tid,
-    )
-    if failure_result:
-        ctx.logger.error("binary not found", failure_result)
+    if binary_path is None:
+        ctx.logger.error(f"binary not found: {binary_name}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={
+                "error": "binary_not_found",
+                "binary": binary_name,
+                "search_dir": workload_root,
+            },
+            trace_id=origin_tid,
+        )
         return
 
     topname = "BBSimHarness"
-    log_dir = f"{arch_dir}/log/{timestamp}-{binary_name}"
-    waveform_dir = f"{arch_dir}/waveform/{timestamp}-{binary_name}"
+    log_dir = get_run_log_dir(bbdir, chip, "verilog", timestamp, "verilator", binary_name, input_data.get("output_dir"))
+    waveform_dir = os.path.join(log_dir, "waveform")
 
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(waveform_dir, exist_ok=True)
@@ -71,6 +79,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         coverage_flag = f"+verilator+coverage+file+{coverage_dat_path}"
 
     bin_path = f"{build_dir}/obj_dir/V{topname}"
+    if not os.path.isfile(bin_path):
+        ctx.logger.error(f"simulator binary not found: {bin_path}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "simulator_not_found", "simulator": bin_path},
+            trace_id=origin_tid,
+        )
+        return
     batch = input_data.get("batch", False)
 
     log_path    = f"{log_dir}/bdb.ndjson"
@@ -87,9 +103,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # merging stdout with 2>&1 can break: full stdio buffering + non-DASM bytes).
     # BDB_SIM_META moves NDJSON banner to sim_meta.txt so it does not pollute disasm.
     # ==================================================================================
-    ld_lib_path = (
-        f"{bbdir}/result/lib"
-    )
+    result_lib = f"{bbdir}/result/lib"
+    if not os.path.isdir(result_lib):
+        raise RuntimeError(f"missing {result_lib}; run nix build")
+    lib_dirs = [result_lib, gcc_lib_dir("liblz4.so"), gcc_lib_dir("libstdc++.so")]
+    ld_lib_path = ":".join(dict.fromkeys(lib_dirs))
+    ctx.logger.info(f"LD_LIBRARY_PATH prefix: {ld_lib_path}")
     sim_cmd = (
         f"export LD_LIBRARY_PATH=\"{ld_lib_path}:$LD_LIBRARY_PATH\"; "
         f"export BDB_SIM_META=\"{meta_path}\"; "
@@ -102,7 +121,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     script_dir = os.path.dirname(__file__)
 
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=sim_cmd,
         logger=ctx.logger,
         cwd=script_dir,

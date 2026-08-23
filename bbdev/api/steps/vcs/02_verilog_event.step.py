@@ -8,8 +8,9 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, get_vcs_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import get_buckyball_path
+from utils.rtl import run_chip_mill
 
 
 config = {
@@ -23,30 +24,26 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        await check_result(ctx, 1, extra_fields={"task": "verilog", "error": "missing config"}, trace_id=origin_tid)
+    try:
+        chip = require_chip(input_data)
+    except ValueError as exc:
+        await check_result(ctx, 1, extra_fields={"task": "verilog", "error": str(exc)}, trace_id=origin_tid)
         return
     bbdir = get_buckyball_path()
-    build_dir = get_vcs_build_dir(bbdir, config_name, input_data.get("output_dir"))
-    command = (
-        f"mill -i __.test.runMain sims.verilator.Elaborate {config_name} "
-        "--disable-annotation-unknown --strip-debug-info -O=release "
-        f"--split-verilog -o={build_dir}"
-    )
-    result = stream_run_logger(
-        cmd=command,
-        logger=ctx.logger,
-        cwd=f"{bbdir}/arch",
-        stdout_prefix="vcs verilog",
-        stderr_prefix="vcs verilog",
-    )
+    try:
+        build_dir, returncode = await run_chip_mill(
+            ctx, bbdir, chip, "verilog", "vcs verilog",
+            input_data.get("output_dir"),
+        )
+    except (ValueError, RuntimeError) as exc:
+        await check_result(ctx, 1, extra_fields={"task": "verilog", "error": str(exc)}, trace_id=origin_tid)
+        return
     await check_result(
         ctx,
-        result.returncode,
-        continue_run=input_data.get("from_run_workflow", False),
+        returncode,
+        continue_run=input_data.get("from_run_workflow", False) and returncode == 0,
         extra_fields={"task": "verilog", "output_dir": build_dir},
         trace_id=origin_tid,
     )
-    if result.returncode == 0 and input_data.get("from_run_workflow"):
+    if input_data.get("from_run_workflow") and returncode == 0:
         await ctx.enqueue({"topic": "vcs.build", "data": {**input_data, "output_dir": build_dir, "_trace_id": origin_tid}})

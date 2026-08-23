@@ -1,7 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -13,8 +13,9 @@ class SubmitTest(unittest.TestCase):
         common._submitted_trace_ids.clear()
 
     @patch("common._http")
+    @patch("common._assert_workspace_workers")
     @patch("common._ensure", return_value=5100)
-    def test_submit_returns_trace_without_reading_state(self, ensure, http):
+    def test_submit_returns_trace_without_reading_state(self, ensure, workers, http):
         http.return_value = 202, {"trace_id": "trace-1"}
 
         result = common.submit("/workload/build", {"chip": "pebble"})
@@ -29,6 +30,7 @@ class SubmitTest(unittest.TestCase):
             },
         )
         ensure.assert_called_once_with()
+        workers.assert_called_once_with()
         http.assert_called_once_with(
             "POST",
             "http://127.0.0.1:5100/workload/build",
@@ -54,6 +56,50 @@ class SubmitTest(unittest.TestCase):
     def test_task_status_rejects_unknown_trace(self, read_state):
         with self.assertRaisesRegex(RuntimeError, "unknown task trace_id"):
             common.task_status("unknown")
+
+
+class EnsureTest(unittest.TestCase):
+    def setUp(self):
+        self.proc = common._proc
+        self.port = common._port
+        self.log_fh = common._log_fh
+        common._proc = None
+        common._port = None
+        common._log_fh = None
+
+    def tearDown(self):
+        common._proc = self.proc
+        common._port = self.port
+        common._log_fh = self.log_fh
+
+    def test_ensure_starts_server_in_nix_environment(self):
+        with (
+            patch("common.shutil.which", return_value="/usr/bin/nix"),
+            patch("common._free_port", return_value=5199),
+            patch("common._ready", return_value=True),
+            patch("common._assert_workspace_workers"),
+            patch("common.open", mock_open()),
+            patch("common.subprocess.Popen") as popen,
+        ):
+            popen.return_value.poll.return_value = None
+            self.assertEqual(common._ensure(), 5199)
+
+        popen.assert_called_once_with(
+            [
+                "nix",
+                "develop",
+                "--command",
+                str(common.BBDEV),
+                "start",
+                "--server",
+                "--port",
+                "5199",
+            ],
+            cwd=str(common.BBDEV.parent),
+            stdout=common._log_fh,
+            stderr=common._log_fh,
+            start_new_session=True,
+        )
 
     @patch("common._read_state")
     def test_task_status_reports_success(self, read_state):
@@ -86,6 +132,27 @@ class SubmitTest(unittest.TestCase):
                 "trace_id": "trace-1",
                 "body": {"returncode": 1},
                 "server_log": str(common.LOG),
+            },
+        )
+
+    @patch("common._read_state")
+    def test_task_status_reports_nested_processing(self, read_state):
+        read_state.return_value = {
+            "processing": {
+                "processing": True,
+                "task": "regression.buildbitstream",
+                "chip": "pebble",
+            }
+        }
+
+        self.assertEqual(
+            common.task_status("trace-1"),
+            {
+                "processing": True,
+                "task": "regression.buildbitstream",
+                "chip": "pebble",
+                "accepted": True,
+                "trace_id": "trace-1",
             },
         )
 

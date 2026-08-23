@@ -1,9 +1,9 @@
 import os
-import shutil
 import sys
 import glob
 import re
 import yaml
+from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -14,10 +14,10 @@ step_path = os.path.dirname(__file__)
 if step_path not in sys.path:
     sys.path.insert(0, step_path)
 
-from utils.path import get_buckyball_path
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import get_buckyball_path, get_run_log_dir
+from utils.rtl import run_chip_mill
 from utils.event_common import check_result, get_origin_trace_id
-from verilog import seq_mem_elaboration_command
 
 config = {
     "name": "yosys verilog",
@@ -166,41 +166,39 @@ def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    build_dir = input_data.get("output_dir", f"{bbdir}/arch/build/")
-    yosys_log_dir = input_data.get("log_dir", f"{bbdir}/bbdev/api/steps/yosys/log")
-    arch_dir = f"{bbdir}/arch"
-    ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
-
-    yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
-    elaborate_config = input_data.get("config") or yosys_cfg.get(
-        "elaborate_config", "sims.verilator.BuckyballToyVerilatorConfig"
-    )
-
-    if os.path.exists(build_dir):
-        shutil.rmtree(build_dir)
-    os.makedirs(build_dir, exist_ok=True)
-
-    mem_conf = os.path.join(build_dir, "mems.conf")
-    verilog_command = seq_mem_elaboration_command(elaborate_config, build_dir, mem_conf)
-
-    result = stream_run_logger(
-        cmd=verilog_command,
-        logger=ctx.logger,
-        cwd=arch_dir,
-        stdout_prefix="yosys verilog",
-        stderr_prefix="yosys verilog",
-    )
-
-    if result.returncode != 0:
+    try:
+        chip = require_chip(input_data)
+        build_dir, returncode = await run_chip_mill(
+            ctx, bbdir, chip, "synth", "yosys verilog",
+            input_data.get("output_dir"),
+        )
+    except (ValueError, RuntimeError) as error:
         success_result, failure_result = await check_result(
             ctx,
-            result.returncode,
+            1,
+            continue_run=False,
+            extra_fields={"task": "validation", "error": str(error)},
+            trace_id=origin_tid,
+        )
+        return failure_result
+    if returncode != 0:
+        success_result, failure_result = await check_result(
+            ctx,
+            returncode,
             continue_run=False,
             extra_fields={"task": "verilog"},
             trace_id=origin_tid,
         )
         return failure_result
+    yosys_cfg = load_yosys_config()
+    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
+    yosys_log_dir = input_data.get("log_dir") or get_run_log_dir(
+        bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"),
+        "yosys", top_module, input_data.get("output_dir"),
+    )
+    ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
+    mem_conf = os.path.join(build_dir, "mems.conf")
+    arch_dir = f"{bbdir}/arch"
 
     for unwanted in ["TestHarness.sv", "TargetBall.sv"]:
         topname_file = f"{arch_dir}/{unwanted}"
@@ -222,7 +220,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     await check_result(
         ctx,
-        result.returncode,
+        0,
         continue_run=True,
         extra_fields={"task": "verilog", "source_list": source_list_path, "mem_conf": mem_conf},
         trace_id=origin_tid,

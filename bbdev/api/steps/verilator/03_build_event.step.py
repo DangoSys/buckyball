@@ -10,8 +10,9 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, get_verilator_build_dir
-from utils.stream_run import stream_run_logger
+from utils.chip import require_chip
+from utils.path import gcc_lib_dir, get_buckyball_path, get_verilator_build_dir
+from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -25,14 +26,11 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        raise ValueError("Missing required input: config")
+    chip = require_chip(input_data)
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = get_verilator_build_dir(
-        bbdir,
-        config_name,
+        bbdir, chip,
         input_data.get("output_dir"),
     )
     coverage = input_data.get("coverage", False)
@@ -69,31 +67,29 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Build flags
     # ==================================================================================
     result_dir = f"{bbdir}/result"
-
-    def pkg_config(flag, pkg):
-        r = subprocess.run(["pkg-config", flag, pkg], capture_output=True, text=True)
-        return r.stdout.strip() if r.returncode == 0 else ""
-
-    readline_inc = pkg_config("--variable=includedir", "readline")
-    readline_lib = pkg_config("--variable=libdir", "readline")
-    zlib_lib = pkg_config("--variable=libdir", "zlib")
+    result_lib = f"{result_dir}/lib"
+    if not os.path.isdir(result_lib):
+        raise RuntimeError(f"missing {result_lib}; run nix build")
 
     inc_flags = " ".join([
         f"-I{result_dir}/include",
         f"-I{build_dir}",
         f"-I{arch_dir}/src/csrc/include",
-        f"-I{readline_inc}",
     ])
 
     # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
     # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event.step.py).
     cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
 
+    rpath_dirs = []
+    for lib_dir in (result_lib, gcc_lib_dir("liblz4.so"), gcc_lib_dir("libstdc++.so")):
+        if lib_dir not in rpath_dirs:
+            rpath_dirs.append(lib_dir)
+    rpath_flags = " ".join(f"-Wl,-rpath,{lib_dir}" for lib_dir in rpath_dirs)
+
     ldflags = (
         f"-lreadline -ldramsim3 -lstdc++ -lz "
-        f"-L{result_dir}/lib "
-        f"-L{readline_lib} -Wl,-rpath,{readline_lib} "
-        f"-L{zlib_lib} -Wl,-rpath,{zlib_lib} "
+        f"-L{result_lib} {rpath_flags} "
     )
 
     obj_dir = f"{build_dir}/obj_dir"
@@ -102,14 +98,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     sources = " ".join(vsrcs + csrcs)
     jobs = input_data.get("jobs", "")
-
-    # Fix nix runtime library paths
-    libstdcpp_path = subprocess.run(
-        "g++ -print-file-name=libstdc++.so", shell=True, capture_output=True, text=True
-    ).stdout.strip()
-    if libstdcpp_path and "/" in libstdcpp_path:
-        nix_lib_dir = os.path.dirname(os.path.realpath(libstdcpp_path))
-        ldflags += f" -Wl,-rpath,{nix_lib_dir}"
 
     # Enable ccache if available
     if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
@@ -140,7 +128,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-CFLAGS '{cflags}' -LDFLAGS '{ldflags}' --Mdir {obj_dir} --exe"
     )
 
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=verilator_cmd,
         logger=ctx.logger,
         cwd=bbdir,
@@ -155,7 +143,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     make_jobs = jobs if jobs else str(os.cpu_count() or 16)
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=f"make -j{make_jobs} VM_PARALLEL_BUILDS=1 -C {obj_dir} -f V{topname}.mk V{topname}",
         logger=ctx.logger,
         cwd=bbdir,

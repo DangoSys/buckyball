@@ -3,10 +3,10 @@ from pathlib import Path
 
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev dc --verilog '--config sims.verilator.BuckyballToyVerilatorConfig'")
+run_bbdev_case("bbdev dc --verilog '--chip toy'")
 
 root = Path(__file__).resolve().parents[3]
-output_dir = root / "arch" / "build" / "sims.verilator.BuckyballToyVerilatorConfig"
+output_dir = root / "arch" / "build" / "toy" / "sims.verilator.BuckyballToyVerilatorConfig"
 manifest = json.loads((output_dir / "ip-replace" / "sram_manifest.json").read_text())
 source_list = (output_dir / "ip-replace" / "dc_sources.list").read_text().splitlines()
 

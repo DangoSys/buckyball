@@ -13,8 +13,9 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
+from utils.chip import require_chip
 from utils.path import get_buckyball_path, get_vcs_build_dir
-from utils.stream_run import stream_run_logger
+from utils.stream_run import stream_run_logger_async
 
 
 config = {
@@ -114,9 +115,10 @@ def _pkg_config(flag: str, package: str) -> str:
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    config_name = input_data.get("config")
-    if not isinstance(config_name, str) or not config_name or config_name == "None":
-        await check_result(ctx, 1, extra_fields={"task": "build", "error": "missing config"}, trace_id=origin_tid)
+    try:
+        chip = require_chip(input_data)
+    except ValueError as exc:
+        await check_result(ctx, 1, extra_fields={"task": "build", "error": str(exc)}, trace_id=origin_tid)
         return
     if shutil.which("vcs") is None:
         await check_result(
@@ -128,7 +130,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    build_dir = get_vcs_build_dir(bbdir, config_name, input_data.get("output_dir"))
+    build_dir = get_vcs_build_dir(bbdir, chip, input_data.get("output_dir"))
     vsrcs = sorted(
         path for path in (
             glob.glob(f"{build_dir}/**/*.v", recursive=True)
@@ -196,7 +198,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             *(shlex.quote(source) for source in sources),
         ]
     )
-    result = stream_run_logger(
+    result = await stream_run_logger_async(
         cmd=command,
         logger=ctx.logger,
         cwd=artifact_dir,

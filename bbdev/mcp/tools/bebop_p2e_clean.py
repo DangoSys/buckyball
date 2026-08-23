@@ -8,9 +8,8 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_bebop_p2e_clean(config: str) -> str:
+    def bbdev_bebop_p2e_clean(chip: str) -> str:
         """Clean bebop-p2e build. POST /bebop/p2e/clean."""
-        if e := need("config", config):
+        if e := need("chip", chip):
             return err(e)
-        return fmt(submit("/bebop/p2e/clean", {"config": config}))
-
+        return fmt(submit("/bebop/p2e/clean", {"chip": chip}))

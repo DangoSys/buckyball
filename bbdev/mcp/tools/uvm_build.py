@@ -10,15 +10,16 @@ from common import submit, err, fmt, need, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_uvm_build(
-        config: str, ball: Optional[str] = None, filelist: Optional[str] = None
+        config: str, core_config: str, ball: Optional[str] = None, filelist: Optional[str] = None
     ) -> str:
         """Build a Ball UVM simulation. POST /uvm/build."""
         if e := need("config", config):
             return err(e)
-        params: Dict[str, Any] = {"config": config}
+        if e := need("core_config", core_config):
+            return err(e)
+        params: Dict[str, Any] = {"config": config, "core_config": core_config}
         if ball:
             params["ball"] = ball
         if filelist:
             params["filelist"] = filelist
         return fmt(submit("/uvm/build", params))
-
