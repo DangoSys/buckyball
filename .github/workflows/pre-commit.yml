@@ -30,6 +30,13 @@ jobs:
             git -C "$submodule" clean -ffd
           done
 
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          cd ~/Code/buckyball
+          nix build
+
       - name: Check pre-commit
         shell: zsh {0}
         run: |
