@@ -7,7 +7,7 @@ ACTIVE_SHA_FILE="${LOCK_DIR}/active_sha"
 REFCOUNT_FILE="${LOCK_DIR}/refcount"
 
 usage() {
-  echo "usage: $0 enter|exit <sha> <repo> <git-ref>" >&2
+  echo "usage: $0 prepare|enter|exit <sha> <repo> <git-ref>" >&2
   exit 1
 }
 
@@ -40,11 +40,26 @@ repo_reset() {
   fi
 }
 
+repo_prepare() {
+  flock 9
+  repo_reset
+  echo "${want_sha}" > "${ACTIVE_SHA_FILE}"
+  echo 0 > "${REFCOUNT_FILE}"
+  flock -u 9
+}
+
 repo_enter() {
   while true; do
     flock 9
     active_sha="$(cat "${ACTIVE_SHA_FILE}" 2>/dev/null || true)"
     refcount="$(cat "${REFCOUNT_FILE}" 2>/dev/null || echo 0)"
+    have_sha="$(git -C "${repo}" rev-parse HEAD)"
+    if [[ "${have_sha}" == "${want_sha}" ]]; then
+      echo "${want_sha}" > "${ACTIVE_SHA_FILE}"
+      echo $((refcount + 1)) > "${REFCOUNT_FILE}"
+      flock -u 9
+      return 0
+    fi
     if [[ "${active_sha}" == "${want_sha}" ]]; then
       echo $((refcount + 1)) > "${REFCOUNT_FILE}"
       flock -u 9
@@ -82,6 +97,7 @@ repo_exit() {
 }
 
 case "${cmd}" in
+  prepare) repo_prepare ;;
   enter) repo_enter ;;
   exit) repo_exit ;;
   *) usage ;;

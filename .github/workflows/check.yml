@@ -33,20 +33,13 @@ jobs:
             echo "branch=${{ github.ref_name }}"
           fi
 
-      - name: Reset to clean state
+      - name: Prepare repo
         shell: zsh {0}
         run: |
-          cd ~/Code/buckyball
-          git fetch --force --prune origin "${{ github.ref }}"
-          git checkout --detach FETCH_HEAD
-          git reset --hard FETCH_HEAD
-          git clean -ffd
-          git submodule sync
-          git submodule update --init --force
-          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
-            git -C "$submodule" reset --hard
-            git -C "$submodule" clean -ffd
-          done
+          set -euo pipefail
+          root=~/Code/buckyball
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            prepare "${{ github.sha }}" "${root}" "${{ github.ref }}"
 
       - name: Check pre-commit
         shell: zsh {0}
@@ -87,7 +80,7 @@ jobs:
           echo "event=${{ github.event_name }}"
           echo "sha=${{ github.sha }}"
 
-      - name: Enter repo lock and checkout
+      - name: Enter repo lock
         shell: zsh {0}
         run: |
           set -euo pipefail
