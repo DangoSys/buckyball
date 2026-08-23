@@ -1,0 +1,10 @@
+# SMatMul Ball Configuration (lane=16)
+
+[ball]
+InputNum = 16
+inputWidth = 8
+lane = 16
+wsReuseTiles = 8
+outputWidth = 32
+numMulThreads = 16
+numCasThreads = 16

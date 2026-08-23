@@ -6,8 +6,7 @@ import upickle.default._
 
 case class ReluBallParam(
   InputNum:   Int,
-  inputWidth: Int
-)
+  inputWidth: Int)
 
 object ReluBallParam {
   implicit val rw: ReadWriter[ReluBallParam] = macroRW
@@ -21,4 +20,5 @@ object ReluBallParam {
       inputWidth = BallParamLoader.int(tbl, "inputWidth")
     )
   }
+
 }

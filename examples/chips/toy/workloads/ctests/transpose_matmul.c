@@ -1,6 +1,8 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/transpose.h>
+#include <isa/vecmat16.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +43,7 @@ void hw_matmul(const char *test_name, elem_t *a, elem_t *b, result_t *c,
     bb_mvin((uintptr_t)tile_a, op1, DIM, 1);
     bb_mvin((uintptr_t)(b + k0 * DIM), op2, DIM, 1);
     bb_transpose(op1, a_t, DIM, 8);
-    bb_mul_warp16(a_t, op2, acc, DIM, 0);
+    bb_vecmat16(a_t, op2, acc, DIM, 0);
   }
 
   bb_mvout((uintptr_t)c, acc, DIM, 1);

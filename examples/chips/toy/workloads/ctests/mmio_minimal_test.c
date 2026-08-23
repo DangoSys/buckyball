@@ -1,4 +1,4 @@
-// Minimal MMIO test - just test mmio_set and mvin_mmio
+// Minimal MMIO test - mvin_mmio into MMIO SRAM
 
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
@@ -37,23 +37,14 @@ int main(void) {
   bb_mem_alloc(bank_id, 1, 1);
   printf("Allocated bank %d\n", bank_id);
 
-  // 3. Bind bank to MMIO
-  printf("Calling bb_mmio_set...\n");
-  bb_mmio_set(bank_id, mmio_addr, 1);
-  printf("bb_mmio_set done\n");
-
-  // 4. Load data to MMIO
   printf("Calling bb_mvin_mmio...\n");
   bb_mvin_mmio((uintptr_t)test_data, mmio_addr, 1, 16);
   printf("bb_mvin_mmio done\n");
 
-  // 5. Fence
   printf("Calling bb_fence...\n");
   bb_fence();
   printf("bb_fence done\n");
 
-  // 6. Cleanup
-  bb_mmio_set(bank_id, 0, 0);
   bb_mem_release(bank_id);
   mmio_allocator_free(&mmio_alloc, mmio_addr, 1);
 

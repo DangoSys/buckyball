@@ -5,6 +5,7 @@
 
 #include "Buckyball/BuckyballOps.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -38,13 +39,23 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getPadding(),
                                        cstI64(rewriter, loc, 16)));
+    Value startCol = cstI64(rewriter, loc, op.getStartCol());
+    Value startRow = cstI64(rewriter, loc, op.getStartRow());
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, startCol,
+                                       cstI64(rewriter, loc, 24)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, startRow,
+                                       cstI64(rewriter, loc, 32)));
 
     if (stable) {
       rewriter.replaceOpWithNewOp<Im2colIntrOp>(op, rs1, rs2);
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, rs2,
-                                              rewriter.getI32IntegerAttr(48));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, rs2, rewriter.getI32IntegerAttr(BB_FUNC7_IM2COL));
     return success();
   }
 
@@ -66,6 +77,7 @@ void configureIm2colLegalizeForExportTarget(LLVMConversionTarget &target,
     target.addLegalOp<Im2colIntrOp>();
   else
     target.addIllegalOp<Im2colIntrOp>();
-  target.addIllegalOp<Im2colMatmulOp, Im2colOp, BankIm2colOp>();
+  target.addIllegalOp<Im2colMatmulOp, Im2colFatMatmulOp, Im2colOp,
+                      BankIm2colOp>();
 }
 } // namespace mlir::buddy::buckyball

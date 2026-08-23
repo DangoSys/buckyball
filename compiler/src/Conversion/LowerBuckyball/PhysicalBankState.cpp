@@ -38,11 +38,11 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       value = op.getOutBank();
       continue;
     }
-    if (auto op = value.getDefiningOp<BankInt2FpOp>()) {
+    if (auto op = value.getDefiningOp<BankInt2FpTensorOp>()) {
       value = op.getOutBank();
       continue;
     }
-    if (auto op = value.getDefiningOp<BankInt32ToInt8Op>()) {
+    if (auto op = value.getDefiningOp<BankInt2FpChannelOp>()) {
       value = op.getOutBank();
       continue;
     }
@@ -53,12 +53,12 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       value = op->getResult(0);
       continue;
     }
-    if (auto op = value.getDefiningOp<BankMatrixOp>()) {
+    if (auto op = value.getDefiningOp<BankSMatMulOp>()) {
       value = op.getWrBank();
       continue;
     }
     if (Operation *op = value.getDefiningOp();
-        op && op->getName().getStringRef() == "buckyball.bank_mul_warp16") {
+        op && op->getName().getStringRef() == "buckyball.bank_vecmat16") {
       value = op->getOperand(2);
       continue;
     }

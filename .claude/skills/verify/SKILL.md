@@ -10,7 +10,7 @@ description: Verify functional correctness of the Ball named $ARGUMENTS. Use thi
 Use `/check` logic to validate registration consistency, then ensure all required artifacts exist and fill missing pieces:
 1. Ball implementation: `examples/balls/<name>/arch/src/main/scala/`
 2. Registration entry in chip balldomain TOML under `examples/chips/<chip>/configs/tiles/cores/balldomains/`
-3. ISA macro file in `bb-tests/workloads/lib/bbhw/isa/`
+3. ISA macro file in `examples/balls/<ball>/workloads/isa/` (base ISA under `bb-tests/workloads/lib/bbhw/isa/`)
 4. CTest for that ball/chip
 
 ## Phase 2 - Build and Simulate
@@ -18,7 +18,7 @@ Use `/check` logic to validate registration consistency, then ensure all require
 1. Run `bbdev_workload_build(chip=...)` to build CTests
 2. Run `bbdev_bemu_sim(chip=..., binary=...)` first
 3. Run `bbdev_bebop_verilator_run(binary=..., config=...)` for RTL
-   - binary is `{chip}_{stem}-{platform}`, e.g. `toy_transpose_test-singlecore-baremetal`
+   - binary is `{chip}_{stem}-{platform}`, e.g. `toy_transpose_test-baremetal`
    - config is required, e.g. `sims.verilator.BuckyballToyVerilatorConfig`
 4. If build/simulation fails, switch to `/debug` flow
 

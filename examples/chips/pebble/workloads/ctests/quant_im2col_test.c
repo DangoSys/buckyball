@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 /* 4x4 input, 3x3 kernel -> 2x2 windows; keeps golden small. */
@@ -40,6 +41,8 @@ int main(void) {
   bb_im2col(0, 1, INPUT_H, KERNEL_H, STRIDE, PADDING);
   bb_mvout((uintptr_t)actual, 1, NUM_WINDOWS, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
 
   int passed = 1;
   for (int row = 0; row < NUM_WINDOWS; ++row) {

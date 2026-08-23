@@ -1,10 +1,8 @@
 set(ELF_CC "riscv64-unknown-elf-gcc")
 set(ELF_OBJCOPY "riscv64-unknown-elf-objcopy")
 
-#-------------------------------------------------------------------------------
-# Embench: baremetal benchmarks (singlecore + multicore) sharing toy's linker
-# script and startup code in lib/bbsw/baremetal/.
-#-------------------------------------------------------------------------------
+# Embench: baremetal benchmarks sharing toy's linker script and startup
+# code in lib/bbsw/baremetal/.
 set(CTEST_EMBENCH_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/embench)
 set(EMBENCH_SUPPORT_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/support)
 set(EMBENCH_SRC_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/src)
@@ -42,66 +40,28 @@ set(EMBENCH_TOP_OBJ_FLAGS
   -I${EMBENCH_SUPPORT_DIR}
 )
 
-# Generate single-core baremetal embench target
-function(add_embench_singlecore_target BMARK_NAME SOURCE_FILES)
-  set(EXECUTABLE "embench_${BMARK_NAME}_singlecore-baremetal")
-
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
-      ${BBSW_BAREMETAL_DIR}/crt0.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      ${EMBENCH_SUPPORT_SOURCES}
-      ${SOURCE_FILES}
-      -lm
-    DEPENDS ${SOURCE_FILES} ${EMBENCH_SUPPORT_SOURCES}
-      ${BBSW_BAREMETAL_DIR}/crt0.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-    COMMENT "Building embench singlecore: ${EXECUTABLE}"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  )
-
-  add_custom_target(embench_${BMARK_NAME}_singlecore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
-endfunction()
-
-# Generate multi-core baremetal embench target
-function(add_embench_multicore_target BMARK_NAME SOURCE_FILES)
-  set(EXECUTABLE "embench_${BMARK_NAME}_multicore-baremetal")
-
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
-      ${BBSW_BAREMETAL_DIR}/start.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      -DMULTICORE=3
-      ${EMBENCH_SUPPORT_SOURCES}
-      ${SOURCE_FILES}
-      -lm
-    DEPENDS ${SOURCE_FILES} ${EMBENCH_SUPPORT_SOURCES}
-      ${BBSW_BAREMETAL_DIR}/start.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-    COMMENT "Building embench multicore: ${EXECUTABLE}"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  )
-
-  add_custom_target(embench_${BMARK_NAME}_multicore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
-endfunction()
-
-# Cross-platform embench target (singlecore + multicore baremetal)
 function(add_embench_target BMARK_NAME)
-  # Collect all .c files in this benchmark's directory
   file(GLOB BMARK_SOURCES "${EMBENCH_SRC_DIR}/${BMARK_NAME}/*.c")
+  set(EXECUTABLE "embench_${BMARK_NAME}-baremetal")
 
-  add_embench_singlecore_target(${BMARK_NAME} "${BMARK_SOURCES}")
-  add_embench_multicore_target(${BMARK_NAME} "${BMARK_SOURCES}")
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
+    COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+      ${EMBENCH_SUPPORT_SOURCES}
+      ${BMARK_SOURCES}
+      -lm
+    DEPENDS ${BMARK_SOURCES} ${EMBENCH_SUPPORT_SOURCES}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+    COMMENT "Building embench: ${EXECUTABLE}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  )
 
   add_custom_target(embench_${BMARK_NAME}
-    DEPENDS embench_${BMARK_NAME}_singlecore_baremetal
-            embench_${BMARK_NAME}_multicore_baremetal
-    COMMENT "Building embench ${BMARK_NAME} for all platforms"
-  )
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
+    COMMENT "Building embench ${BMARK_NAME}")
 endfunction()
 
 macro(add_embench_top_object BMARK_NAME PREFIX SOURCE_FILES)
@@ -157,41 +117,27 @@ function(add_embench_top_target)
   add_embench_top_benchmark(ud ud)
   add_embench_top_benchmark(wikisort wikisort)
 
-  foreach(MODE singlecore multicore)
-    set(EXECUTABLE "embench_top_${MODE}-baremetal")
-    if(MODE STREQUAL "singlecore")
-      set(STARTUP ${BBSW_BAREMETAL_DIR}/crt0.S)
-      set(MODE_DEFS)
-    else()
-      set(STARTUP ${BBSW_BAREMETAL_DIR}/start.S)
-      set(MODE_DEFS -DMULTICORE=3)
-    endif()
-
-    add_custom_command(
-      OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-      COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} ${MODE_DEFS} -o ${EXECUTABLE}
-        ${STARTUP}
-        ${BBSW_BAREMETAL_DIR}/syscalls.c
-        ${EMBENCH_TOP_SUPPORT_SOURCES}
-        ${EMBENCH_TOP_OBJECTS}
-        ${BBSW_BAREMETAL_DIR}/test.c
-        -lm
-      DEPENDS ${EMBENCH_TOP_SUPPORT_SOURCES}
-        ${EMBENCH_TOP_OBJECTS}
-        ${STARTUP}
-        ${BBSW_BAREMETAL_DIR}/syscalls.c
-        ${BBSW_BAREMETAL_DIR}/test.c
-      COMMENT "Building embench top ${MODE}: ${EXECUTABLE}"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-
-    add_custom_target(embench_top_${MODE}_baremetal
-      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
-  endforeach()
+  set(EXECUTABLE "embench_top-baremetal")
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
+    COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+      ${EMBENCH_TOP_SUPPORT_SOURCES}
+      ${EMBENCH_TOP_OBJECTS}
+      ${BBSW_BAREMETAL_DIR}/test.c
+      -lm
+    DEPENDS ${EMBENCH_TOP_SUPPORT_SOURCES}
+      ${EMBENCH_TOP_OBJECTS}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+      ${BBSW_BAREMETAL_DIR}/test.c
+    COMMENT "Building embench top: ${EXECUTABLE}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  )
 
   add_custom_target(embench_top DEPENDS
-    embench_top_singlecore_baremetal
-    embench_top_multicore_baremetal
+    ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMENT "Building embench top workload for Buckyball"
   )
 endfunction()

@@ -7,30 +7,35 @@ Verifies the generated `Int2FpBall` module using the shared Blink UVM framework.
 - `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM agents and base env
 - `src/common/int2fp_defs.svh`: DPI imports, `int2fp_require_bid`, timeouts
 - `src/common/int2fp_items.svh`: `int2fp_cmd_item` with `load_rust_case`
-  (`special[31:0]=scale`, `special[33:32]=output_mode`)
+  (`special[12:0]=Da`, `special[25:13]=Dw`; tensor/channel use separate funct7)
 - `src/seq/int2fp_sequences.svh`: one-case sequence
-- `src/cov/int2fp_cov.svh`: mode {fp32,i8} and iter {1,2,4,16} coverage
-- `src/env/int2fp_scoreboard.svh`: preload mem model (group-aware for INT8), compare writes vs DPI
+- `src/cov/int2fp_cov.svh`: iter {1,16} coverage
+- `src/env/int2fp_scoreboard.svh`: preload mem model and compare writes vs DPI
 - `src/env/int2fp_env.svh`: extends `bb_blink_env#(1,1)`
-- `src/tests/int2fp_test.svh`: directed 0..1, random 2..21 with seed `0xCAFE_BABE`
+- `src/tests/int2fp_*_test.svh`: one directed case per UVM test
 - `src/pkg/int2fp_pkg.sv`: package entry
 - `src/tb_top.sv`: `bb_blink_if#(1,1)` + `Int2FpBall`
 - `filelists/int2fp_ball.f`: VCS filelist (`@UVM@` / `@RTL@`)
 
 ## Test plan
 
-`+UVM_TESTNAME=int2fp_ball_test` runs:
+The test names are:
 
-- case 0: directed INT32→FP32 (`op1_col=1`, `wr_col=1`, `output_mode=0`, scale=1.0)
-- case 1: directed INT32→INT8 (`op1_col=4`, `wr_col=1`, `output_mode=1`, scale=0.5)
-- cases 2..21: random FP32/INT8 with fixed seed `0xCAFE_BABE`
+- `int2fp_tensor_rows_test`: 16-row tensor scale
+- `int2fp_channel_lanes_test`: four-group channel scale with distinct `Dw`
+- `int2fp_tensor_groups_test`: four-group tensor scale traversal
+- `int2fp_channel_base_test`: channel scale at MMIO byte address 64
+- `int2fp_channel_two_rows_test`: two rows reuse all sixteen channel scales
 
-Each case: reset, preload src words into `mem_model` (INT8 uses `group_id` 0..3),
+Each case: reset, preload src words and the four Da/Dw MMIO bytes into `mem_model`,
 drive one command, wait for `scb.done()` or timeout at 4000 cycles. Scoreboard
-compares observed writes with DPI `int2fp_ref_fp32` / `int2fp_ref_i8`. `int2fp_cov`
-requires mode and iter bins hit across the whole test, else `check_phase` fatal.
+compares observed writes with DPI `int2fp_ref_fp32`, including `Da * Dw` for
+per-tensor and per-channel weights. The tensor path requires eight MMIO byte
+reads (four Da bytes followed by four tensor-Dw bytes).
 
-`funct7` is 52 (`BB_INT2FP_FUNC7`).
+The core's `ballISA` assigns separate funct7 values to `INT2FP_TENSOR` and
+`INT2FP_CHANNEL` (Pebble uses 52 and 54). The Ball does not define these
+numbers.
 
 ## BID (required)
 
@@ -42,7 +47,7 @@ requires mode and iter bins hit across the whole test, else `check_phase` fatal.
 | `sims.verilator.BuckyballToyVerilatorConfig` (full.toml) | `+BID=6` |
 
 ```console
-./simv +UVM_TESTNAME=int2fp_ball_test +BID=4
+./simv +UVM_TESTNAME=int2fp_channel_two_rows_test +BID=4
 ```
 
 ## Build
@@ -71,12 +76,13 @@ vcs -full64 -sverilog -timescale=1ns/1ps \
 Run:
 
 ```console
-./simv +UVM_TESTNAME=int2fp_ball_test +BID=4
+./simv +UVM_TESTNAME=int2fp_channel_two_rows_test +BID=4
 ```
 
 Or via bbdev:
 
 ```console
-bbdev uvm --build '--ball=int2fp' --config sims.verilator.BuckyballPebbleVerilatorConfig
-bbdev uvm --run '--ball=int2fp' --config sims.verilator.BuckyballPebbleVerilatorConfig -- '+BID=4'
+bbdev uvm --build '--ball=int2fp' --config sims.verilator.BuckyballPebbleVerilatorConfig \
+  --core-config examples/cores/pebble/configs/default.toml
+bbdev uvm --run '--ball=int2fp --test int2fp_channel_two_rows_test --plusargs +BID=4'
 ```

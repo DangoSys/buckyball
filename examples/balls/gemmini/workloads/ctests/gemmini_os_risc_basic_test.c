@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/gemmini.h>
 #include <stdio.h>
 
 #define DIM 16
@@ -37,6 +38,10 @@ int main() {
   bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM);
   bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
   bb_fence();
+  bb_mem_release(bank_a);
+  bb_mem_release(bank_b);
+  bb_mem_release(bank_c);
+  bb_mem_release(bank_d_zeros);
 
   if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
     printf("Gemmini OS RISC Basic Test PASSED\n");

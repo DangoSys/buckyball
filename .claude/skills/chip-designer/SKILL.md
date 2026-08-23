@@ -54,7 +54,7 @@ Do **not** require full-model green before the cut.
 
 Create `examples/chips/<chip>/`:
 
-- `chip.toml` (`topology`, `compilerCore`, `runtime.*`)
+- `chip.toml` (only `[chip]` mill class: `verilatorConfig` / `p2eConfig`)
 - `configs/` tile with `sharedMem` + `[[cores]]` includes into `examples/cores/<name>/`
 - `arch/.../CustomConfigs.scala` + `sims/{verilator,p2e}/TargetConfigs.scala`
 - `workloads/` (contracts + later binaries), `regression/batch/{bemu,verilator,p2e}/`, optional `kernel/`

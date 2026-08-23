@@ -4,6 +4,7 @@
 
 #include "Buckyball/BuckyballOps.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -26,8 +27,9 @@ struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
                                                    adaptor.getElemBits());
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getElemBits(),
-                                              rewriter.getI32IntegerAttr(49));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, adaptor.getElemBits(),
+        rewriter.getI32IntegerAttr(BB_FUNC7_TRANSPOSE));
     return success();
   }
 

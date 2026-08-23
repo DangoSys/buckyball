@@ -2,13 +2,11 @@ use super::super::bank::bank_num;
 use super::bank_matrix::{read_i32_nn, read_i8_nn, write_i32_nn_groups};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::gemmini_state::{gemini, in_shift as apply_in_shift};
-use super::instruction::{ExecContext, Instruction};
+use super::instruction::{BallInstruction, ExecContext};
 
 pub struct GemminiComputePreloaded;
 
-impl Instruction for GemminiComputePreloaded {
-    const FUNCT: u32 = 66;
-
+impl BallInstruction for GemminiComputePreloaded {
     fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let op_a = rs1_b0(xs1);
         let op_b = rs1_b1(xs1);

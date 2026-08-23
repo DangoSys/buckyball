@@ -51,19 +51,19 @@ nix develop
 Run Verilator simulation test to verify installation:
 
 ```bash
-bbdev verilator --run '--jobs 16 --binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
+bbdev verilator --run '--jobs 16 --binary toy_vecunit_matmul_ones-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
 ``` -->
 
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
+bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
 ```
 
 Run Verilator with BEMU Bank DiffTest enabled:
 
 ```bash
-bbdev bebop-verilator --run '--diff --binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --no-wave'
+bbdev bebop-verilator --run '--diff --binary toy_vecunit_matmul_ones-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --no-wave'
 ```
 
 ## Tutorial

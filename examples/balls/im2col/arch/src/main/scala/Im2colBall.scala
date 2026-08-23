@@ -13,10 +13,15 @@ import framework.top.GlobalConfig
  */
 @instantiable
 class Im2colBall(val b: GlobalConfig) extends Module with HasBlink {
-  val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "Im2colBall")
-    .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
-  val inBW             = ballCommonConfig.inBW
-  val outBW            = ballCommonConfig.outBW
+
+  val ballCommonConfig = b.ballDomain.ballIdMappings
+    .find(_.ballName == "Im2colBall")
+    .getOrElse(
+      throw new IllegalArgumentException("Im2colBall not found in config")
+    )
+
+  val inBW  = ballCommonConfig.inBW
+  val outBW = ballCommonConfig.outBW
 
   @public
   val io = IO(new BlinkIO(b, inBW, outBW))

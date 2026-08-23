@@ -11,10 +11,14 @@ import framework.top.GlobalConfig
 @instantiable
 class TransposeBall(val b: GlobalConfig) extends Module with HasBlink {
 
-  val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "TransposeBall")
-    .getOrElse(throw new IllegalArgumentException("TransposeBall not found in config"))
-  val inBW             = ballCommonConfig.inBW
-  val outBW            = ballCommonConfig.outBW
+  val ballCommonConfig = b.ballDomain.ballIdMappings
+    .find(_.ballName == "TransposeBall")
+    .getOrElse(
+      throw new IllegalArgumentException("TransposeBall not found in config")
+    )
+
+  val inBW  = ballCommonConfig.inBW
+  val outBW = ballCommonConfig.outBW
 
   @public
   val io = IO(new BlinkIO(b, inBW, outBW))

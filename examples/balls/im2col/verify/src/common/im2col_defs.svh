@@ -1,6 +1,5 @@
 typedef struct {
   int unsigned bid;
-  int unsigned funct7;
   int unsigned iter;
   int unsigned ksize;
   int unsigned stride;
@@ -25,7 +24,10 @@ import "DPI-C" function longint unsigned im2col_case_src_word_hi(input int unsig
 import "DPI-C" function longint unsigned im2col_case_dst_word_lo(input int unsigned word_index);
 import "DPI-C" function longint unsigned im2col_case_dst_word_hi(input int unsigned word_index);
 
-localparam int IM2COL_FUNCT7 = 7'd48;
+`ifndef IM2COL_FUNCT7
+`error "IM2COL_FUNCT7 must be provided by the selected Core ballISA"
+`endif
+localparam int IM2COL_CORE_FUNCT7 = `IM2COL_FUNCT7;
 localparam int IM2COL_MAX_WORDS = 128;
 localparam int IM2COL_TIMEOUT_CYCLES = 100000;
 localparam int IM2COL_SEED = 32'hCAFE_BABE;

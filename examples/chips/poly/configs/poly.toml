@@ -1,7 +1,8 @@
-# Poly Chip: higher levels replicate a homogeneous 3-prefill/2-decode Tile.
+# Poly Chip: 4 homogeneous tiles, each 3 prefill + 2 decode Cores.
 
 [top]
-nTiles = 1
+nTiles = 4
 
-[[tiles]]
+[tileTemplate]
 include = "tiles/default.toml"
+count = 4

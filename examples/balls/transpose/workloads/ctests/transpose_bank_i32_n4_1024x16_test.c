@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/transpose.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,6 +38,8 @@ int main(void) {
   bb_transpose(src, dst, ROWS, ELEM_BITS);
   bb_mvout((uintptr_t)output_matrix, dst, ROWS, 1);
   bb_fence();
+  bb_mem_release(src);
+  bb_mem_release(dst);
 
   for (int i = 0; i < COLS * ROWS; ++i) {
     if (output_matrix[i] != expected_matrix[i]) {

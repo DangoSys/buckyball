@@ -13,9 +13,10 @@ All DPI-C hooks live inside TraceBall only and do not affect other modules.
 
 ## Instruction encoding
 
-TraceBall uses **two funct7 encodings**.
+TraceBall uses two Core-owned `ballISA` mnemonics. The selected Core assigns
+their `funct7` values at compile time.
 
-### Instruction 1: `bdb_counter` (funct7 = 48, 0x30)
+### Instruction 1: `bdb_counter`
 
 Cycle counter control. **Does not touch SRAM, needs no bank ports, completes in 1 cycle.**
 
@@ -44,7 +45,7 @@ DPI-C trace format (written to bdb.log):
 [CTRACE] CTR_READ   ctr=0 current=200 cycle=10242
 ```
 
-### Instruction 2: `bdb_backdoor` (funct7 = 49, 0x31)
+### Instruction 2: `bdb_backdoor`
 
 SRAM backdoor read/write; **all parameters (bank_id, row, data) come from DPI-C**. **Requires bank ports (inBW=1, outBW=1).**
 
@@ -79,7 +80,7 @@ DPI-C trace format:
 ```c
 // One matmul region
 bdb_counter_start(0, 0xA001);         // counter 0, tag=matmul
-bb_mul_warp16(A, B, C, 16);
+bb_vecmat16(A, B, C, 16);
 bb_fence();
 bdb_counter_stop(0);                  // prints elapsed
 
@@ -91,7 +92,7 @@ bdb_counter_start(0, 0xB001);         // outer: whole conv
   bdb_counter_stop(1);
 
   bdb_counter_start(2, 0xB003);       // inner: matmul
-  bb_mul_warp16(...);
+  bb_vecmat16(...);
   bb_fence();
   bdb_counter_stop(2);
 bdb_counter_stop(0);                    // outer end

@@ -14,6 +14,16 @@ import framework.frontend.decoder.DomainId
 class LoopCmdEncoder(val b: GlobalConfig) extends Module {
   val bankIdLen = log2Up(b.memDomain.bankNum)
 
+  def ballFunct(mnemonic: String): UInt =
+    b.ballDomain.ballISA
+      .find(_.mnemonic == mnemonic)
+      .map(_.funct7.U(7.W))
+      .getOrElse(throw new IllegalArgumentException(s"$mnemonic not found in ballISA"))
+
+  val preloadFunct    = ballFunct("GEMMINI_PRELOAD")
+  val computePreFunct = ballFunct("GEMMINI_COMPUTE_PRELOADED")
+  val computeAccFunct = ballFunct("GEMMINI_COMPUTE_ACCUMULATED")
+
   @public
   val io = IO(new Bundle {
     val cmd         = Flipped(Decoupled(new LoopCmd(b)))
@@ -94,7 +104,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
         }
         is(LoopSubCmdType.PRELOAD) {
           slot.cmd.domain_id                  := DomainId.BALL
-          slot.cmd.cmd.funct                  := 0x35.U // GEMMINI_PRELOAD (enable=011, opcode=5)
+          slot.cmd.cmd.funct                  := preloadFunct
           slot.cmd.cmd.rs1Data                := lsub.bits.op1_bank |
             (lsub.bits.wr_bank << 20) |
             (lsub.bits.iter << 30)
@@ -105,11 +115,11 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
           slot.cmd.bankAccess.wr_bank_id      := lsub.bits.wr_bank
         }
         is(LoopSubCmdType.COMPUTE) {
-          slot.cmd.domain_id := DomainId.BALL
-          slot.cmd.cmd.funct := Mux(
+          slot.cmd.domain_id                  := DomainId.BALL
+          slot.cmd.cmd.funct                  := Mux(
             lsub.bits.compute_mode === 0.U,
-            0x42.U, // COMPUTE_PRELOADED (enable=100, opcode=2)
-            0x43.U  // COMPUTE_ACCUMULATED (enable=100, opcode=3)
+            computePreFunct,
+            computeAccFunct
           )
           slot.cmd.cmd.rs1Data                := lsub.bits.op1_bank |
             (lsub.bits.op2_bank << 10) |

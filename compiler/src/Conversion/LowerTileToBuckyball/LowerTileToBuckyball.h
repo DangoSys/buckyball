@@ -25,22 +25,22 @@ namespace mlir {
 namespace buddy {
 
 inline constexpr int64_t kDefaultBankWidthBytes = 16;
-inline constexpr size_t kMatmulTile = 16;
-inline constexpr size_t kMaxAccMvoutDepthLines = 256;
-inline constexpr size_t kMaxI8MvinDepthLines = 1024;
+inline constexpr size_t kBankLane = 16;
+inline constexpr size_t kMaxMvinDepth8b = 1024;
+inline constexpr size_t kMaxMvoutDepth32b = 256;
 
 inline size_t ceilDiv(size_t a, size_t b) { return (a + b - 1) / b; }
 
 inline size_t aMvinDepthLines(size_t mEl, size_t kEl) {
-  return mEl * (kEl / 16);
+  return mEl * (kEl / kBankLane);
 }
 
 inline size_t bMvinDepthLines(size_t kEl, size_t nEl) {
-  return kEl * (nEl / 16);
+  return kEl * (nEl / kBankLane);
 }
 
 inline size_t cMvoutDepthLines(size_t mEl, size_t nEl) {
-  return mEl * (nEl / 16);
+  return mEl * (nEl / kBankLane);
 }
 
 void populateMatrixTileMatMulPatterns(RewritePatternSet &patterns,

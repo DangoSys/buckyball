@@ -5,8 +5,7 @@ import framework.top.GlobalConfig
 
 case class TransposeBallParam(
   InputNum:   Int,
-  inputWidth: Int
-)
+  inputWidth: Int)
 
 object TransposeBallParam {
   private val ballName = "TransposeBall"
@@ -18,4 +17,5 @@ object TransposeBallParam {
       inputWidth = BallParamLoader.int(tbl, "inputWidth")
     )
   }
+
 }

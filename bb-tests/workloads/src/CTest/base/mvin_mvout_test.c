@@ -31,16 +31,10 @@ int mvin_mvout_simple_test() {
 }
 
 int main() {
-#ifdef MULTICORE
-  multicore(MULTICORE);
-#endif
   int passed = mvin_mvout_simple_test();
   if (passed) {
     printf("mvin/mvout simple test PASSED\n");
   } else {
     printf("mvin/mvout simple test FAILED\n");
   }
-#ifdef MULTICORE
-  exit(0);
-#endif
 }

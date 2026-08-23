@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["default.toml"])
+
+filegroup(
+    name = "bank_params",
+    srcs = ["default.toml"],
+)

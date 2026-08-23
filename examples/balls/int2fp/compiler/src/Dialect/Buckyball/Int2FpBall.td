@@ -14,53 +14,37 @@ include "BuckyballIntrinsics.td"
 // Int2FpBall operations
 //===----------------------------------------------------------------------===//
 
-def Int2FpOp : Buckyball_Op<"int2fp"> {
-  let summary = "Dequantize fixed-point to floating-point";
+class Int2FpBaseOp<string mnemonic, string summaryText> : Buckyball_Op<mnemonic> {
+  let summary = summaryText;
   let description = [{
-    Dequantizes fixed-point values back to floating-point representation.
-    Corresponds to bb_int2fp instruction (funct7=52, output_mode=0).
-    Belongs to Int2FpBall (ballName=Int2FpBall; ballId is chip-config specific).
-    ISA: bb_int2fp(bank_id, wr_bank_id, iter, scale_fp32)
+    Dequantizes INT32 accumulators to FP32 using Da and Dw scales in MMIO.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
-                       I64:$iter, I64:$scale);
+                       I64:$iter, I64:$daAddr, I64:$dwAddr);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $scale attr-dict `:` "
+                       "$iter `,` $daAddr `,` $dwAddr attr-dict `:` "
                        "type($inputBankId)";
 }
 
-def BankInt2FpOp : Buckyball_Op<"bank_int2fp"> {
-  let summary = "Dequantization using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
+def Int2FpTensorOp : Int2FpBaseOp<"int2fp_tensor",
+    "Per-tensor INT32 accumulator dequantization">;
+
+def Int2FpChannelOp : Int2FpBaseOp<"int2fp_channel",
+    "Per-output-channel INT32 accumulator dequantization">;
+
+class BankInt2FpBaseOp<string mnemonic, string summaryText> : Buckyball_Op<mnemonic> {
+  let summary = summaryText;
+  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$daAddr,
+                       I64:$dwAddr);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $scale attr-dict `:` type($inBank) type($outBank) type($iter) type($scale)";
+      "$inBank $outBank $iter $daAddr $dwAddr attr-dict `:` type($inBank) type($outBank) type($iter) type($daAddr) type($dwAddr)";
 }
 
-def Int32ToInt8Op : Buckyball_Op<"int32_to_int8"> {
-  let summary = "Requantize INT32 bank groups to packed INT8";
-  let description = [{
-    Requantizes four INT32 bank groups into one packed INT8 bank.
-    Corresponds to bb_int32_to_int8 (funct7=52, output_mode=1).
-    Belongs to Int2FpBall (ballName=Int2FpBall; ballId is chip-config specific).
-    ISA: bb_int32_to_int8(bank_id, wr_bank_id, iter, scale_fp32)
-  }];
-  let arguments = (ins I64:$inputBankId, I64:$outputBankId,
-                       I64:$iter, I64:$scale);
-  let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $scale attr-dict `:` "
-                       "type($inputBankId)";
-}
+def BankInt2FpTensorOp : BankInt2FpBaseOp<"bank_int2fp_tensor",
+    "Per-tensor dequantization using virtual bank handles">;
 
-def BankInt32ToInt8Op : Buckyball_Op<"bank_int32_to_int8"> {
-  let summary = "INT32 to INT8 requant using virtual bank handles";
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$scale);
-  let results = (outs I64:$outBankOut);
-  let assemblyFormat =
-      "$inBank $outBank $iter $scale attr-dict `:` type($inBank) type($outBank) type($iter) type($scale)";
-}
-
-def Int2FpIntrOp : Buckyball_IntrOpBase<"int2fp">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
+def BankInt2FpChannelOp : BankInt2FpBaseOp<"bank_int2fp_channel",
+    "Per-output-channel dequantization using virtual bank handles">;
 
 #endif // DEQUANTBALL_OPS

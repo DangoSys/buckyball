@@ -15,6 +15,10 @@ pub fn transpose_bytes(src: &[u8], iter: usize, w: usize, elem_bytes: usize) -> 
 }
 
 pub fn num_words(total_bytes: usize) -> usize {
-    assert_eq!(total_bytes % BANK_ROW_BYTES, 0, "total_bytes not a multiple of bank row");
+    assert_eq!(
+        total_bytes % BANK_ROW_BYTES,
+        0,
+        "total_bytes not a multiple of bank row"
+    );
     total_bytes / BANK_ROW_BYTES
 }

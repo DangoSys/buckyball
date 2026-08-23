@@ -1,0 +1,9 @@
+# Rocket-only core: no Buckyball balls.
+
+ballNum = 0
+
+ballIdMappings = [
+]
+
+ballISA = [
+]

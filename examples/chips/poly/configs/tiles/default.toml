@@ -19,20 +19,20 @@ memCycles = 10
 
 [[cores]]
 name = "prefill"
-include = "../../../../cores/prefill/core.toml"
+include = "../../../../cores/prefill/configs/default.toml"
 
 [[cores]]
 name = "prefill"
-include = "../../../../cores/prefill/core.toml"
+include = "../../../../cores/prefill/configs/default.toml"
 
 [[cores]]
 name = "prefill"
-include = "../../../../cores/prefill/core.toml"
+include = "../../../../cores/prefill/configs/default.toml"
 
 [[cores]]
 name = "decode"
-include = "../../../../cores/decode/core.toml"
+include = "../../../../cores/decode/configs/default.toml"
 
 [[cores]]
 name = "decode"
-include = "../../../../cores/decode/core.toml"
+include = "../../../../cores/decode/configs/default.toml"

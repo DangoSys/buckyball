@@ -83,9 +83,10 @@ public:
 
   LogicalResult matchAndRewrite(BankMvoutOp op,
                                 PatternRewriter &rewriter) const override {
+    // Fence is CPU↔NPU sync, not NPU-internal. Emit FenceOp once at the end of
+    // a large Buckyball op (matmul/im2col/transpose), not after every mvout.
     rewriter.create<MvoutOp>(op.getLoc(), op.getOutput(), op.getBank(),
                              op.getDepth(), op.getStride());
-    rewriter.create<FenceOp>(op.getLoc());
     rewriter.replaceOp(op, op.getBank());
     return success();
   }

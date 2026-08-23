@@ -1,5 +1,6 @@
-// Already-lowered ball Op: buckyball.int2fp (physical-bank form).
+// Already-lowered ball Op: tensor int2fp form.
 
+func.func private @prepare_scales() -> ()
 func.func private @check_result(memref<4x4xf32>) -> ()
 
 memref.global "private" constant @i32_in : memref<4x4xi32> =
@@ -13,7 +14,10 @@ func.func @main() -> i8 {
   %depth = arith.constant 4 : i64
   %stride = arith.constant 1 : i64
   %iter = arith.constant 4 : i64
-  %scale = arith.constant 1065353216 : i64
+  %da_addr = arith.constant 0 : i64
+  %dw_addr = arith.constant 16 : i64
+
+  func.call @prepare_scales() : () -> ()
 
   %input = memref.get_global @i32_in : memref<4x4xi32>
   %output = memref.alloc() {alignment = 64 : i64} : memref<4x4xf32>
@@ -22,7 +26,7 @@ func.func @main() -> i8 {
   %bout = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %bin %depth %stride
       : memref<4x4xi32> i64 i64 i64
-  buckyball.int2fp %loaded, %bout, %iter, %scale : i64
+  buckyball.int2fp_tensor %loaded, %bout, %iter, %da_addr, %dw_addr : i64
   %stored = buckyball.bank_mvout %output %bout %depth %stride
       : memref<4x4xf32> i64 i64 i64
   buckyball.bank_release %loaded : i64

@@ -42,7 +42,7 @@ in
   zlib = pkgs.zlib;
   # Verilator FST tracing uses lz4.h and links liblz4.
   lz4-dev = pkgs.lz4.dev;
-  lz4 = pkgs.lz4;
+  lz4 = pkgs.lz4.lib;
   # C libraries needed by bdb debugger
   readline-dev = pkgs.readline.dev;
   readline = pkgs.readline;

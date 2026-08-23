@@ -8,8 +8,12 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
 
   protected def handleComputeFlushState(): Unit = {
     when(mesh.io.resp.fire && mesh.io.resp.bits.total_rows === total_rows) {
-      when(outBufCollected < total_rows && mesh.io.resp.bits.tag.rob =/= 0xff.U) {
-        outBuf(total_rows - 1.U - outBufCollected) := widenMeshToAcc(mesh.io.resp.bits.data)
+      when(
+        outBufCollected < total_rows && mesh.io.resp.bits.tag.rob =/= 0xff.U
+      ) {
+        outBuf(total_rows - 1.U - outBufCollected) := widenMeshToAcc(
+          mesh.io.resp.bits.data
+        )
         outBufCollected                            := outBufCollected + 1.U
       }.otherwise {}
     }
@@ -25,8 +29,16 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
         mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
         mesh.io.req.bits.pe_control.propagate := 1.U
         mesh.io.req.bits.pe_control.shift     := cfg_in_shift
-        mesh.io.req.bits.a_transpose          := Mux(cfg_dataflow === Dataflow.OS.id.U, true.B, cfg_a_transpose)
-        mesh.io.req.bits.bd_transpose         := Mux(cfg_dataflow === Dataflow.OS.id.U, false.B, cfg_bd_transpose)
+        mesh.io.req.bits.a_transpose          := Mux(
+          cfg_dataflow === Dataflow.OS.id.U,
+          true.B,
+          cfg_a_transpose
+        )
+        mesh.io.req.bits.bd_transpose         := Mux(
+          cfg_dataflow === Dataflow.OS.id.U,
+          false.B,
+          cfg_bd_transpose
+        )
         mesh.io.req.bits.total_rows           := total_rows
         mesh.io.req.bits.tag.rob              := robIdAsTag8(rob_id_reg)
         mesh.io.req.bits.flush                := 1.U
@@ -84,7 +96,9 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
           io.bankWrite(i).req.valid     := true.B
           io.bankWrite(i).req.bits.addr := store_row_cnt
           io.bankWrite(i).req.bits.data := slice
-          io.bankWrite(i).req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+          io.bankWrite(i).req.bits.mask := VecInit(
+            Seq.fill(b.memDomain.bankMaskLen)(true.B)
+          )
           when(io.bankWrite(i).req.ready) {
             port_written(i) := true.B
           }

@@ -15,10 +15,14 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val config = GemminiBallParam(b)
   val DIM    = config.blockSize
 
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "GemminiBall")
-    .getOrElse(throw new IllegalArgumentException("GemminiBall not found in config"))
-  val inBW        = ballMapping.inBW
-  val outBW       = ballMapping.outBW
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "GemminiBall")
+    .getOrElse(
+      throw new IllegalArgumentException("GemminiBall not found in config")
+    )
+
+  val inBW  = ballMapping.inBW
+  val outBW = ballMapping.outBW
 
   val inputType      = SInt(config.inputWidth.W)
   val accType        = SInt(config.accWidth.W)
@@ -38,23 +42,25 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val io = ctrlIo
 
-  val mesh = Module(new MeshWithDelays(
-    inputType = inputType,
-    weightType = inputType,
-    outputType = meshOutputType,
-    accType = accType,
-    tagType = new SimpleTag,
-    df = Dataflow.BOTH,
-    tree_reduction = false,
-    tile_latency = config.tileLatency,
-    output_delay = config.outputDelay,
-    tileRows = config.tileRows,
-    tileColumns = config.tileColumns,
-    meshRows = config.meshRows,
-    meshColumns = config.meshColumns,
-    leftBanks = 1,
-    upBanks = 1
-  ))
+  val mesh = Module(
+    new MeshWithDelays(
+      inputType = inputType,
+      weightType = inputType,
+      outputType = meshOutputType,
+      accType = accType,
+      tagType = new SimpleTag,
+      df = Dataflow.BOTH,
+      tree_reduction = false,
+      tile_latency = config.tileLatency,
+      output_delay = config.outputDelay,
+      tileRows = config.tileRows,
+      tileColumns = config.tileColumns,
+      meshRows = config.meshRows,
+      meshColumns = config.meshColumns,
+      leftBanks = 1,
+      upBanks = 1
+    )
+  )
 
   protected def widenMeshToAcc(src: Vec[Vec[SInt]]): Vec[Vec[SInt]] =
     VecInit(src.map(col => VecInit(col.map(_.asTypeOf(accType)))))
@@ -103,7 +109,10 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   rdQueue0.io.enq <> io.bankReadResp(0)
   rdQueue1.io.enq <> io.bankReadResp(1)
 
-  val outBuf          = Reg(Vec(DIM, Vec(config.meshColumns, Vec(config.tileColumns, accType))))
+  val outBuf = Reg(
+    Vec(DIM, Vec(config.meshColumns, Vec(config.tileColumns, accType)))
+  )
+
   val outBufRows      = RegInit(0.U(log2Up(DIM + 1).W))
   val outBufCollected = RegInit(0.U(log2Up(DIM + 1).W))
   val op1Buf          = Reg(Vec(DIM, Vec(DIM, inputType)))

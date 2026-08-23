@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/gemmini.h>
 #include <stdio.h>
 
 // Pointwise conv: batch=1, in_dim=1, in_channels=DIM, out_channels=DIM,

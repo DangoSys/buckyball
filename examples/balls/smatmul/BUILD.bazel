@@ -1,0 +1,5 @@
+load("//examples/balls:defs.bzl", "ball_package")
+
+package(default_visibility = ["//visibility:public"])
+
+ball_package()

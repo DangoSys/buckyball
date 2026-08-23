@@ -36,4 +36,5 @@ object GemminiBallParam {
       outputDelay = BallParamLoader.int(tbl, "outputDelay")
     )
   }
+
 }

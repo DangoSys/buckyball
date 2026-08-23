@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 /* padding path: out-of-bound window samples are zero */

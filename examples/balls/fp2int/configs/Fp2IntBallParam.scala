@@ -4,9 +4,8 @@ import framework.balldomain.configs.BallParamLoader
 import framework.top.GlobalConfig
 
 case class Fp2IntBallParam(
-  inputType: String,
-  outputType: String
-)
+  inputType:  String,
+  outputType: String)
 
 object Fp2IntBallParam {
   private val ballName = "Fp2IntBall"
@@ -18,4 +17,5 @@ object Fp2IntBallParam {
       outputType = BallParamLoader.str(tbl, "outputType")
     )
   }
+
 }

@@ -2,6 +2,7 @@
 .metals/
 .motia/
 .bsp/
+.dsh/
 out/
 .Xil/
 result
@@ -18,6 +19,8 @@ index.html
 *.log
 *.dot
 *.svf
+/command.log
+/dramsim3.*
 
 # Vivado / Webtalk session files (root-level)
 /vivado*.jou
@@ -47,5 +50,12 @@ log/
 scripts/docker/.last-image-tag
 ucli.key
 .worktrees/
+
+# Bazel
+/bazel-*
+/MODULE.bazel.lock
 nohup.out
 alib-52/
+
+# Bazel / chip bundle install outputs
+examples/chips/*/generated/

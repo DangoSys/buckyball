@@ -1,0 +1,150 @@
+name: Chip Check
+
+on:
+  workflow_call:
+    inputs:
+      chip:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  check:
+    name: ${{ inputs.chip }}
+    runs-on: cpu-server
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Print information
+        run: |
+          echo "chip=${{ inputs.chip }}"
+          echo "event=${{ github.event_name }}"
+          echo "sha=${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr=#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "branch=${{ github.head_ref }} -> ${{ github.base_ref }}"
+          else
+            echo "branch=${{ github.ref_name }}"
+          fi
+
+      - name: Enter repo lock and checkout
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${{ github.sha }}" "${root}" "${{ github.ref }}"
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix build
+
+      - name: Load chip CI env
+        id: cfg
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/chip_ci_env.sh" "${{ inputs.chip }}" "${root}" >> "$GITHUB_OUTPUT"
+
+      - name: Build compiler and workloads
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev compiler --build '--chip ${{ inputs.chip }}'
+          nix develop -c bbdev workload --build '--chip ${{ inputs.chip }}'
+
+      - name: bemu batch
+        if: steps.cfg.outputs.run_batch_tests == 'true'
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test pk-tests --clean-before'
+
+      - name: verilator batch
+        if: steps.cfg.outputs.run_batch_tests == 'true' && steps.cfg.outputs.verilator_config != ''
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev bebop-verilator --clean '--config ${{ steps.cfg.outputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --verilog '--config ${{ steps.cfg.outputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ steps.cfg.outputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.verilator_config }} --test elf-tests --clean-before'
+
+      - name: rushB batch
+        if: steps.cfg.outputs.enable_rushb == 'true' && steps.cfg.outputs.rushb_verilator_config != ''
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev workload --build '--chip ${{ inputs.chip }} --rushB bemu'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test pk-tests --rushB --clean-before'
+
+          nix develop -c bbdev bebop-verilator --clean '--config ${{ steps.cfg.outputs.rushb_verilator_config }}'
+          nix develop -c bbdev bebop-verilator --verilog '--config ${{ steps.cfg.outputs.rushb_verilator_config }}'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ steps.cfg.outputs.rushb_verilator_config }}'
+          nix develop -c bbdev workload --build '--chip ${{ inputs.chip }} --rushB verilator'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.rushb_verilator_config }} --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.rushb_verilator_config }} --test pk-tests --rushB --clean-before'
+
+      - name: Detect bebop JUnit files
+        if: always() && steps.cfg.outputs.run_batch_tests == 'true'
+        id: junit
+        shell: zsh {0}
+        run: |
+          root="${BB_ROOT/#\~/$HOME}"
+          files=("${root}/bebop/target/${{ inputs.chip }}/nextest/junit-bbdev-"*.xml(N))
+          if (( ${#files} == 0 )); then
+            echo "JUnit files not found"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "JUnit files: ${files[@]}"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish bebop test report
+        if: always() && steps.cfg.outputs.run_batch_tests == 'true' && steps.junit.outputs.found == 'true'
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: "~/Code/buckyball/bebop/target/${{ inputs.chip }}/nextest/junit-bbdev-*.xml"
+          check_name: "bebop nextest (${{ inputs.chip }})"
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload bebop JUnit artifacts
+        if: always() && steps.cfg.outputs.run_batch_tests == 'true' && steps.junit.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
+        with:
+          name: bebop-nextest-junit-${{ inputs.chip }}
+          path: "~/Code/buckyball/bebop/target/${{ inputs.chip }}/nextest/junit-bbdev-*.xml"
+
+      - name: Exit repo lock
+        if: always()
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${{ github.sha }}" "${root}" "${{ github.ref }}"

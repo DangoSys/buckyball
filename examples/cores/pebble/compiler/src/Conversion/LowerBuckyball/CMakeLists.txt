@@ -3,14 +3,14 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/PhysicalBankState.cpp
   ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/ReportBankUsagePass.cpp
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/matrix/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
+  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   AssignPhysicalBanksPass.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
-  MatrixMatmulToBankSSAPatterns.cpp
+  SMatMulMatmulToBankSSAPatterns.cpp
   Im2colMatmulToBankSSAPatterns.cpp
   MemTransposeToBankSSAPatterns.cpp
 

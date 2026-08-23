@@ -16,7 +16,7 @@ static void fail(void) {
 #ifdef __cplusplus
 extern "C"
 #endif
-    void check_result(int32_t *allocated, int32_t *aligned, int64_t offset,
+    void check_result(int8_t *allocated, int8_t *aligned, int64_t offset,
                       int64_t size0, int64_t size1, int64_t stride0,
                       int64_t stride1) {
   (void)allocated;
@@ -26,10 +26,10 @@ extern "C"
     fail();
   }
 
-  int32_t *out = aligned + offset;
+  int8_t *out = aligned + offset;
   int32_t got = out[0 * stride0 + 0 * stride1];
-  if (got != 1) {
-    printf("FAILED: bank_fp2int_im2col_k1_1x4 out[0][0] exp=1 got=%d\n",
+  if (got != 32) {
+    printf("FAILED: bank_fp2int_im2col_k1_1x4 out[0][0] exp=32 got=%d\n",
            (int)got);
     fail();
   }

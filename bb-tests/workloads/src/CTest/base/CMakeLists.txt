@@ -1,6 +1,3 @@
-set(BUCKYBALL_TOY_COMMON_DIR ${TOY_WORKLOAD_COMMON_DIR})
-include(${REPO_ROOT}/examples/chips/toy/workloads/cmake/BuckyballWorkloads.cmake)
-
 add_custom_target(base-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET base-ctests-build)
 

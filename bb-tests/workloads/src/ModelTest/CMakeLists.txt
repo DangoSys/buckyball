@@ -5,6 +5,7 @@ set(E2E_MODEL_DIR ${MODELTEST_WORKLOAD_DIR}/e2e)
 # e2e/models/archs/buckyball/<chip>/ (model↔chip is many-to-many).
 if(NOT DEFINED ARCH)
   set(ARCH_GEMMINI ON)
+  set(ARCH_X86 ON)
   if(DEFINED BUCKYBALL_WORKLOAD_CHIP AND
      EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/e2e/models/archs/buckyball/${BUCKYBALL_WORKLOAD_CHIP}")
     set(ARCH_BUCKYBALL ON)

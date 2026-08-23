@@ -102,17 +102,18 @@ object BTBParam {
 }
 
 case class RocketCoreParam(
-  xLen:     Int = 64,
-  pgLevels: Int = 3,
-  useVM:    Boolean = true,
-  useZba:   Boolean = true,
-  useZbb:   Boolean = true,
-  useZbs:   Boolean = true,
-  mulDiv:   MulDivParam = MulDivParam(),
-  fpu:      FPUParam = FPUParam(),
-  dcache:   DCacheParam = DCacheParam(),
-  icache:   ICacheParam = ICacheParam(),
-  btb:      BTBParam = BTBParam())
+  xLen:       Int = 64,
+  pgLevels:   Int = 3,
+  useVM:      Boolean = true,
+  useZba:     Boolean = true,
+  useZbb:     Boolean = true,
+  useZbs:     Boolean = true,
+  haveCFlush: Boolean = false,
+  mulDiv:     MulDivParam = MulDivParam(),
+  fpu:        FPUParam = FPUParam(),
+  dcache:     DCacheParam = DCacheParam(),
+  icache:     ICacheParam = ICacheParam(),
+  btb:        BTBParam = BTBParam())
 
 object RocketCoreParam {
   implicit val rw: ReadWriter[RocketCoreParam] = macroRW
@@ -128,6 +129,7 @@ object RocketCoreParam {
     useZba = p.useZba,
     useZbb = p.useZbb,
     useZbs = p.useZbs,
+    haveCFlush = p.haveCFlush,
     mulDiv = MulDivParam.toMulDivParams(p.mulDiv),
     fpu = FPUParam.toFPUParams(p.fpu)
   )

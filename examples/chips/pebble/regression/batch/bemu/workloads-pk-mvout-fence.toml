@@ -1,5 +1,5 @@
 [workloads]
 search_path = "workloads/src"
 tests = [
-  "pebble_mvout_fence_loop_test-linux",
+  "pebble_ctest_mvout_fence_loop_test-linux",
 ]

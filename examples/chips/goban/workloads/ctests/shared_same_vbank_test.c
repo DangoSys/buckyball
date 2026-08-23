@@ -65,7 +65,9 @@ int main(void) {
     }
   }
   core_ok[cid] = ok;
-  log_msg(hart, cid, ok ? "same-vbank shared test PASSED" : "same-vbank shared test FAILED");
+  log_msg(hart, cid,
+          ok ? "same-vbank shared test PASSED"
+             : "same-vbank shared test FAILED");
 
   bb_barrier();
 

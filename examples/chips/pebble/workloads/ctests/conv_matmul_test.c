@@ -1,6 +1,7 @@
 #include "pebble.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/smatmul.h>
 #include <stdio.h>
 
 #ifndef TEST_CASE_NAME
@@ -62,9 +63,12 @@ int main(void) {
   bb_mem_alloc(2, 1, 4);
   bb_mvin((uintptr_t)matrix_a, 0, a_rows, 1);
   bb_mvin((uintptr_t)matrix_b, 1, k_elems, 1);
-  bb_matrix_mnk(0, 1, 2, wins, 1, k_elems);
+  bb_smatmul_compiled(0, 1, 2, wins, 1, k_elems);
   bb_mvout((uintptr_t)packed_c, 2, wins, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
+  bb_mem_release(2);
 
   int passed = 1;
   for (int i = 0; i < wins; ++i) {

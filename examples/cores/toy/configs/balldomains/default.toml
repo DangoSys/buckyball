@@ -1,23 +1,39 @@
-# Toy Ball Domain Configuration
+# Toy: virtual single-core. Mounts leftover balls not used by pebble/poly/goban.
 
-ballNum = 7
+ballNum = 4
 
 ballIdMappings = [
-  { ballId = 0, ballName = "VecBall", ballClass = "examples.balls.vector.VecBall", config = "../../../../balls/vector/configs/default.toml", inBW = 2, outBW = 4 },
-  { ballId = 1, ballName = "ReluBall", ballClass = "examples.balls.relu.ReluBall", config = "../../../../balls/relu/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 2, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 3, ballName = "Im2colBall", ballClass = "examples.balls.im2col.Im2colBall", config = "../../../../balls/im2col/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 4, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "../../../../balls/fp2int/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 5, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 6, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 0, ballName = "ReluBall", ballClass = "examples.balls.relu.ReluBall", config = "../../../../balls/relu/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 1, ballName = "GemminiBall", ballClass = "examples.balls.gemmini.GemminiBall", config = "../../../../balls/gemmini/configs/default.toml", inBW = 2, outBW = 4 },
+  { ballId = 2, ballName = "TraceBall", ballClass = "examples.balls.trace.TraceBall", config = "../../../../balls/trace/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1 },
 ]
 
 ballISA = [
-  { mnemonic = "MATMUL_WARP16", funct7 = 64, bid = 0 },
-  { mnemonic = "RELU", funct7 = 50, bid = 1 },
-  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 2 },
-  { mnemonic = "IM2COL", funct7 = 48, bid = 3 },
-  { mnemonic = "FP2INT", funct7 = 51, bid = 4 },
-  { mnemonic = "INT2FP", funct7 = 52, bid = 5 },
-  { mnemonic = "MXFP2INT", funct7 = 55, bid = 6 },
+  { mnemonic = "RELU", funct7 = 50, bid = 0 },
+  { mnemonic = "GEMMINI_CONFIG", funct7 = 2, bid = 1 },
+  { mnemonic = "GEMMINI_FLUSH", funct7 = 3, bid = 1 },
+  { mnemonic = "GEMMINI_PRELOAD", funct7 = 53, bid = 1 },
+  { mnemonic = "GEMMINI_COMPUTE_PRELOADED", funct7 = 66, bid = 1 },
+  { mnemonic = "GEMMINI_COMPUTE_ACCUMULATED", funct7 = 67, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_BOUNDS", funct7 = 80, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_A", funct7 = 81, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_B", funct7 = 82, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_D", funct7 = 83, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_C", funct7 = 84, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_AB", funct7 = 85, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_DC", funct7 = 86, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_WS", funct7 = 87, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_1", funct7 = 96, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_2", funct7 = 97, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_3", funct7 = 98, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_4", funct7 = 99, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_5", funct7 = 100, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_6", funct7 = 101, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_7", funct7 = 102, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_8", funct7 = 103, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_9", funct7 = 104, bid = 1 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS", funct7 = 105, bid = 1 },
+  { mnemonic = "BDB_COUNTER", funct7 = 4, bid = 2 },
+  { mnemonic = "MXFP2INT", funct7 = 55, bid = 3 },
 ]

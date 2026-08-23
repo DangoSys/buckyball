@@ -23,7 +23,7 @@ public:
   LogicalResult matchAndRewrite(BankFp2IntOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.create<Fp2IntOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                              op.getIter(), op.getScale());
+                              op.getIter(), op.getDaAddr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

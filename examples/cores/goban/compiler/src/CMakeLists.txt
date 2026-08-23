@@ -26,7 +26,7 @@ set(GOBAN_BALL_COMPILER_DIALECT_DIRS
   ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/matrix/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Dialect/Buckyball
 )
 
 foreach(GOBAN_BALL_COMPILER_DIALECT_DIR ${GOBAN_BALL_COMPILER_DIALECT_DIRS})

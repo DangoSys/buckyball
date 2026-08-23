@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 /* exact M tile: 6x6 k3 -> 16 windows */

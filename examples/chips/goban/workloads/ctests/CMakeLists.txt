@@ -4,7 +4,6 @@ endif()
 
 get_filename_component(_BUCKYBALL_REPO_ROOT
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
-include(${_BUCKYBALL_REPO_ROOT}/examples/chips/cmake/BuckyballCtestLimits.cmake)
 
 set(GOBAN_CTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GOBAN_LD ${GOBAN_CTEST_DIR}/goban.ld)
@@ -17,6 +16,7 @@ set(GOBAN_C_FLAGS
   -DBANK_NUM=64
   -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
+  -I${BB_BALL_ISA_INCLUDE_DIR}
   -I${GOBAN_CTEST_DIR}
 )
 
@@ -43,6 +43,7 @@ function(add_goban_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BB_BALL_ISA_H}
     COMMENT "Building goban multicore baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -78,6 +79,7 @@ function(add_goban_64t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BB_BALL_ISA_H}
     COMMENT "Building goban 64t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -114,6 +116,7 @@ function(add_goban_2t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BB_BALL_ISA_H}
     COMMENT "Building goban 2t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

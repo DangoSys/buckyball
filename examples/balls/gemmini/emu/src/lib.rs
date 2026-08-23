@@ -1,6 +1,6 @@
 pub(crate) use crate::inst::{bank_matrix, decode, instruction};
 
-use crate::inst::instruction::{ExecContext, Instruction};
+use crate::inst::instruction::{BallInstruction, ExecContext};
 
 #[path = "02_gemmini_config.rs"]
 mod f02_gemmini_config;
@@ -31,180 +31,34 @@ pub fn execute_known(
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f02_gemmini_config::GemminiConfig as Instruction>::FUNCT => Some(
-            <f02_gemmini_config::GemminiConfig as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f03_gemmini_flush::GemminiFlush as Instruction>::FUNCT => Some(
-            <f03_gemmini_flush::GemminiFlush as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f53_gemmini_preload::GemminiPreload as Instruction>::FUNCT => Some(
-            <f53_gemmini_preload::GemminiPreload as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f66_gemmini_compute_preloaded::GemminiComputePreloaded as Instruction>::FUNCT => Some(
-            <f66_gemmini_compute_preloaded::GemminiComputePreloaded as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f67_gemmini_compute_accumulated::GemminiComputeAccumulated as Instruction>::FUNCT => Some(
-            <f67_gemmini_compute_accumulated::GemminiComputeAccumulated as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigBounds as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigBounds as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrA as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrA as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrB as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrB as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrD as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrD as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrC as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrC as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesAB as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesAB as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesDC as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesDC as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWs as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWs as Instruction>::exec(xs1, xs2, ctx),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig1 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig1 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig2 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig2 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig3 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig3 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig4 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig4 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig5 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig5 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig6 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig6 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig7 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig7 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig8 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig8 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig9 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig9 as Instruction>::exec(
-                xs1, xs2, ctx,
-            ),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWs as Instruction>::FUNCT => {
-            Some(<f96_gemmini_loop_conv_ws::GemminiLoopConvWs as Instruction>::exec(xs1, xs2, ctx))
-        }
-        _ => None,
-    }
+    let mnemonic = crate::config::ball_domain::mnemonic_for_funct(funct)?;
+    let result = match mnemonic.as_str() {
+        "GEMMINI_CONFIG" => f02_gemmini_config::GemminiConfig::exec(xs1, xs2, ctx),
+        "GEMMINI_FLUSH" => f03_gemmini_flush::GemminiFlush::exec(xs1, xs2, ctx),
+        "GEMMINI_PRELOAD" => f53_gemmini_preload::GemminiPreload::exec(xs1, xs2, ctx),
+        "GEMMINI_COMPUTE_PRELOADED" => f66_gemmini_compute_preloaded::GemminiComputePreloaded::exec(xs1, xs2, ctx),
+        "GEMMINI_COMPUTE_ACCUMULATED" => f67_gemmini_compute_accumulated::GemminiComputeAccumulated::exec(xs1, xs2, ctx),
+        name if name.starts_with("GEMMINI_LOOP_WS_") || name == "GEMMINI_LOOP_WS" => f80_gemmini_loop_ws::execute(name, xs2, ctx),
+        name if name.starts_with("GEMMINI_LOOP_CONV_WS_") || name == "GEMMINI_LOOP_CONV_WS" => f96_gemmini_loop_conv_ws::execute(name, xs2, ctx),
+        _ => return None,
+    };
+    Some(result)
 }
 
 pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f02_gemmini_config::GemminiConfig as Instruction>::FUNCT => Some(
-            <f02_gemmini_config::GemminiConfig as Instruction>::latency(xs1, xs2),
-        ),
-        <f03_gemmini_flush::GemminiFlush as Instruction>::FUNCT => Some(
-            <f03_gemmini_flush::GemminiFlush as Instruction>::latency(xs1, xs2),
-        ),
-        <f53_gemmini_preload::GemminiPreload as Instruction>::FUNCT => {
-            Some(<f53_gemmini_preload::GemminiPreload as Instruction>::latency(xs1, xs2))
-        }
-        <f66_gemmini_compute_preloaded::GemminiComputePreloaded as Instruction>::FUNCT => Some(
-            <f66_gemmini_compute_preloaded::GemminiComputePreloaded as Instruction>::latency(
-                xs1, xs2,
-            ),
-        ),
-        <f67_gemmini_compute_accumulated::GemminiComputeAccumulated as Instruction>::FUNCT => Some(
-            <f67_gemmini_compute_accumulated::GemminiComputeAccumulated as Instruction>::latency(
-                xs1, xs2,
-            ),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigBounds as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWsConfigBounds as Instruction>::latency(xs1, xs2))
-        }
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrA as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWsConfigAddrA as Instruction>::latency(xs1, xs2))
-        }
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrB as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWsConfigAddrB as Instruction>::latency(xs1, xs2))
-        }
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrD as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWsConfigAddrD as Instruction>::latency(xs1, xs2))
-        }
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigAddrC as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWsConfigAddrC as Instruction>::latency(xs1, xs2))
-        }
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesAB as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesAB as Instruction>::latency(xs1, xs2),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesDC as Instruction>::FUNCT => Some(
-            <f80_gemmini_loop_ws::GemminiLoopWsConfigStridesDC as Instruction>::latency(xs1, xs2),
-        ),
-        <f80_gemmini_loop_ws::GemminiLoopWs as Instruction>::FUNCT => {
-            Some(<f80_gemmini_loop_ws::GemminiLoopWs as Instruction>::latency(xs1, xs2))
-        }
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig1 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig1 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig2 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig2 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig3 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig3 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig4 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig4 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig5 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig5 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig6 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig6 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig7 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig7 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig8 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig8 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig9 as Instruction>::FUNCT => Some(
-            <f96_gemmini_loop_conv_ws::GemminiLoopConvWsConfig9 as Instruction>::latency(xs1, xs2),
-        ),
-        <f96_gemmini_loop_conv_ws::GemminiLoopConvWs as Instruction>::FUNCT => {
-            Some(<f96_gemmini_loop_conv_ws::GemminiLoopConvWs as Instruction>::latency(xs1, xs2))
-        }
-        _ => None,
-    }
+    let mnemonic = crate::config::ball_domain::mnemonic_for_funct(funct)?;
+    let latency = match mnemonic.as_str() {
+        "GEMMINI_CONFIG" => f02_gemmini_config::GemminiConfig::latency(xs1, xs2),
+        "GEMMINI_FLUSH" => f03_gemmini_flush::GemminiFlush::latency(xs1, xs2),
+        "GEMMINI_PRELOAD" => f53_gemmini_preload::GemminiPreload::latency(xs1, xs2),
+        "GEMMINI_COMPUTE_PRELOADED" => f66_gemmini_compute_preloaded::GemminiComputePreloaded::latency(xs1, xs2),
+        "GEMMINI_COMPUTE_ACCUMULATED" => f67_gemmini_compute_accumulated::GemminiComputeAccumulated::latency(xs1, xs2),
+        name if name.starts_with("GEMMINI_LOOP_WS_") || name == "GEMMINI_LOOP_WS" => f80_gemmini_loop_ws::latency(name),
+        name if name.starts_with("GEMMINI_LOOP_CONV_WS_") || name == "GEMMINI_LOOP_CONV_WS" => f96_gemmini_loop_conv_ws::latency(name),
+        _ => return None,
+    };
+    Some(latency)
 }

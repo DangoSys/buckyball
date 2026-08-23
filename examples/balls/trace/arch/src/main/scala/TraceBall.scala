@@ -10,15 +10,16 @@ import framework.top.GlobalConfig
 /**
  * TraceBall — Debug trace Ball providing cycle counters.
  *
- * Uses funct7 encoding:
- *   - bdb_counter (funct7=4): cycle counter management
+ * The Core ballISA assigns the funct7 encoding for bdb_counter.
  */
 @instantiable
 class TraceBall(val b: GlobalConfig) extends Module with HasBlink {
 
   val ballCommonConfig = b.ballDomain.ballIdMappings
     .find(_.ballName == "TraceBall")
-    .getOrElse(throw new IllegalArgumentException("TraceBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("TraceBall not found in config")
+    )
 
   val inBW  = ballCommonConfig.inBW
   val outBW = ballCommonConfig.outBW

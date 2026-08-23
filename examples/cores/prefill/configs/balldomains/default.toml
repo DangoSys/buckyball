@@ -11,9 +11,10 @@ ballIdMappings = [
 ]
 
 ballISA = [
-  { mnemonic = "MATMUL_WARP16", funct7 = 64, bid = 0 },
+  { mnemonic = "VECMAT16", funct7 = 64, bid = 0 },
   { mnemonic = "FP2INT", funct7 = 51, bid = 1 },
-  { mnemonic = "INT2FP", funct7 = 52, bid = 2 },
+  { mnemonic = "INT2FP_TENSOR", funct7 = 52, bid = 2 },
+  { mnemonic = "INT2FP_CHANNEL", funct7 = 54, bid = 2 },
   { mnemonic = "TRANSPOSE", funct7 = 49, bid = 3 },
   { mnemonic = "IM2COL", funct7 = 48, bid = 4 }
 ]

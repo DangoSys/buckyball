@@ -1,0 +1,7 @@
+bb-tests/thirdparty
+compiler/thirdparty
+arch/thirdparty
+node_modules
+.dsh
+result
+.worktrees

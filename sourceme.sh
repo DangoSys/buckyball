@@ -19,13 +19,27 @@ RESULT_PATH="${BBDIR}/result"
 #===----------------------------------------------------------------------------===
 # Source Environment Variables
 #===----------------------------------------------------------------------------===
-export BUDDY_MLIR_BUILD_DIR="${BBDIR}/compiler/thirdparty/buddy-mlir/build"
+export BUDDY_MLIR_BUILD_ROOT="${BBDIR}/compiler/thirdparty/buddy-mlir/build"
 export LLVM_MLIR_BUILD_DIR="${BBDIR}/compiler/thirdparty/buddy-mlir/llvm/build"
-export PYTHONPATH="${BBDIR}/compiler/thirdparty/buddy-mlir/llvm/build/tools/mlir/python_packages/mlir_core:${BBDIR}/compiler/thirdparty/buddy-mlir/build/python_packages:$PYTHONPATH"
-export BUDDY_BINARY_DIR="${BBDIR}/compiler/thirdparty/buddy-mlir/build/bin"
+export PYTHONPATH="${LLVM_MLIR_BUILD_DIR}/tools/mlir/python_packages/mlir_core:${PYTHONPATH}"
 export RISCV="${BBDIR}/result"
 export PATH="${BBDIR}/thirdparty/libgloss/install/lib:$PATH"
-export PATH="${BUDDY_BINARY_DIR}:${PATH}"
+# Per-core symlinks: buddy-opt-<core>, buddy-translate-<core>, ...
+export PATH="${BUDDY_MLIR_BUILD_ROOT}/bin:${PATH}"
+
+# Optional interactive compiler session. Set before sourcing, e.g.:
+#   export BUCKYBALL_COMPILER_CORE=toy
+# bbdev compiler/workload inject BUDDY_MLIR_BUILD_DIR per subprocess.
+if [ -n "${BUCKYBALL_COMPILER_CORE:-}" ]; then
+  export BUDDY_MLIR_BUILD_DIR="${BUDDY_MLIR_BUILD_ROOT}/cores/${BUCKYBALL_COMPILER_CORE}"
+  export BUDDY_BINARY_DIR="${BUDDY_MLIR_BUILD_DIR}/bin"
+  if [ ! -d "${BUDDY_MLIR_BUILD_DIR}" ]; then
+    echo "ERROR: missing compiler build for core ${BUCKYBALL_COMPILER_CORE}: ${BUDDY_MLIR_BUILD_DIR}" >&2
+    return 1 2>/dev/null || exit 1
+  fi
+  export PYTHONPATH="${BUDDY_MLIR_BUILD_DIR}/python_packages:${PYTHONPATH}"
+  export PATH="${BUDDY_BINARY_DIR}:${PATH}"
+fi
 
 #===----------------------------------------------------------------------------===
 # Export each submodule's PATH

@@ -2,6 +2,7 @@
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
 #include <bbhw/mem/params.h>
+#include <isa/smatmul.h>
 #include <stdio.h>
 
 /* One bank of A rows: M=1024, N=1, K=16. */
@@ -43,9 +44,12 @@ int main(void) {
   bb_mvin((uintptr_t)a, 0, M, 1);
   bb_mvin((uintptr_t)b, 1, K, 1);
   bb_mvin((uintptr_t)zero, 2, M, 1);
-  bb_matrix_mnk(0, 1, 2, M, N, K);
+  bb_smatmul_ws(0, 1, 2, M, N, K);
   bb_mvout((uintptr_t)actual, 2, M, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
+  bb_mem_release(2);
 
   int passed = 1;
   for (int i = 0; i < M; ++i) {

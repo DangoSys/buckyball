@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/transpose.h>
 #include <stdio.h>
 
 #define ROWS 16
@@ -52,6 +53,8 @@ int main(void) {
   bb_transpose(src, dst, ROWS, ELEM_BITS);
   bb_mvout((uintptr_t)output_matrix, dst, ROWS, 1);
   bb_fence();
+  bb_mem_release(src);
+  bb_mem_release(dst);
 
   if (compare_u8_matrices(output_matrix, expected_matrix, COLS, ROWS)) {
     printf("Transpose i8 16x16 PASSED\n");

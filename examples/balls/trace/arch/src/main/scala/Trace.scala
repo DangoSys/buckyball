@@ -18,7 +18,9 @@ class Trace(val b: GlobalConfig) extends Module {
 
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "TraceBall")
-    .getOrElse(throw new IllegalArgumentException("TraceBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("TraceBall not found in config")
+    )
 
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
@@ -81,7 +83,9 @@ class Trace(val b: GlobalConfig) extends Module {
   privBank.io.sramWrite.req.valid     := false.B
   privBank.io.sramWrite.req.bits.addr := 0.U
   privBank.io.sramWrite.req.bits.data := 0.U
-  privBank.io.sramWrite.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  privBank.io.sramWrite.req.bits.mask := VecInit(
+    Seq.fill(b.memDomain.bankMaskLen)(true.B)
+  )
   privBank.io.sramWrite.resp.ready    := true.B
 
   // ============================================================
@@ -118,7 +122,9 @@ class Trace(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.valid     := false.B
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask := VecInit(
+      Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))
+    )
     io.bankWrite(i).io.resp.ready    := false.B
   }
 

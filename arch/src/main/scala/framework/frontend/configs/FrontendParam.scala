@@ -10,6 +10,8 @@ case class FrontendParam(
   rs_out_of_order_response: Boolean,
   bank_id_len:              Int,
   vbank_id_upper_bound:     Int,
+  /** ISA bank-id namespace base for shared banks: raw id >= this means shared. */
+  shared_bank_id_base:      Int,
   iter_len:                 Int,
   sub_rob_enable:           Boolean,
   sub_rob_depth:            Int)
@@ -22,6 +24,7 @@ object FrontendParam {
     rs_out_of_order_response = false,
     bank_id_len = 0,
     vbank_id_upper_bound = 0,
+    shared_bank_id_base = 0,
     iter_len = 0,
     sub_rob_enable = false,
     sub_rob_depth = 0

@@ -64,7 +64,11 @@ class VecEXUnit(val b: GlobalConfig) extends Module {
     state    := busy
   }
   when(io.ld_ex_i.fire) {
-    threadId := Mux(threadId === (config.numMulThreads - 1).U, 0.U, threadId + 1.U)
+    threadId := Mux(
+      threadId === (config.numMulThreads - 1).U,
+      0.U,
+      threadId + 1.U
+    )
   }
 
 // -----------------------------------------------------------------------------

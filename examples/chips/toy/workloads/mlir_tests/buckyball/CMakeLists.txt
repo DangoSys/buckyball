@@ -17,10 +17,10 @@ function(add_toy_mlir_matmul_test name)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
   endif()
-  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}_singlecore-baremetal)
-  set(BAREMETAL_TARGET optest_buckyball_${name}_singlecore_baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}-linux)
-  set(LINUX_TARGET optest_buckyball_${name}_linux)
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_buckyball_${name}-baremetal)
+  set(BAREMETAL_TARGET mlirtest_buckyball_${name}_baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_buckyball_${name}-linux)
+  set(LINUX_TARGET mlirtest_buckyball_${name}_linux)
 
   add_custom_command(
     OUTPUT ${OBJ}
@@ -141,12 +141,12 @@ function(add_toy_mlir_matmul_test name)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN})
   add_custom_target(${LINUX_TARGET}
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
-  add_custom_target(optest_buckyball_${name}
+  add_custom_target(mlirtest_buckyball_${name}
     DEPENDS ${BAREMETAL_TARGET} ${LINUX_TARGET})
 
   add_toy_mlir_rushb(
     NAME ${name}
-    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_buckyball_${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_buckyball_${name}
     CXX
     FRONT_PASSES -lower-buckyball-to-bank-ssa
     SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC}
@@ -159,7 +159,7 @@ endfunction()
 
 function(add_toy_mlir_matmul_contract_test name)
   add_toy_mlir_matmul_test(${name})
-  add_custom_target(optest_buckyball_${name}_contract
+  add_custom_target(mlirtest_buckyball_${name}_contract
     COMMAND ${FILECHECK}
       ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir
       --input-file=${CMAKE_CURRENT_BINARY_DIR}/${name}_1_bank_ssa.mlir
@@ -191,7 +191,7 @@ add_custom_command(
   VERBATIM
 )
 
-add_custom_target(optest_buckyball_int_convert_ops_contract
+add_custom_target(mlirtest_buckyball_int_convert_ops_contract
   COMMAND ${FILECHECK} ${INT_CONVERT_MLIR}
     --check-prefix=CHECK-PHYSICAL
     --input-file=${INT_CONVERT_PHYSICAL}
@@ -203,9 +203,9 @@ add_custom_target(optest_buckyball_int_convert_ops_contract
   VERBATIM)
 
 add_custom_target(buckyball-mlir-tests-build ALL DEPENDS
-  optest_buckyball_matmul_16x64_64x16
-  optest_buckyball_matmul_64x16_16x64
-  optest_buckyball_matmul_1024x16_16x1024
-  optest_buckyball_int_convert_ops_contract
+  mlirtest_buckyball_matmul_16x64_64x16
+  mlirtest_buckyball_matmul_64x16_16x64
+  mlirtest_buckyball_matmul_1024x16_16x1024
+  mlirtest_buckyball_int_convert_ops_contract
   COMMENT "Building Toy Buckyball MLIR tests"
   VERBATIM)

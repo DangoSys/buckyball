@@ -66,7 +66,9 @@ int main(void) {
     }
   }
   core_ok[cid] = ok;
-  log_msg(hart, cid, ok ? "multi-group shared test PASSED" : "multi-group shared test FAILED");
+  log_msg(hart, cid,
+          ok ? "multi-group shared test PASSED"
+             : "multi-group shared test FAILED");
 
   bb_barrier();
 

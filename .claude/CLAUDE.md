@@ -18,7 +18,8 @@ A RISC-V based DSA (Domain Specific Architecture) framework. Built with Chisel 6
 - `arch/src/main/scala/sims/` — simulation configs
   - `verilator/` — Verilator config
 - `bb-tests/` — tests
-  - `workloads/lib/bbhw/isa/` — ISA C macros (one `.c` file per instruction)
+  - `workloads/lib/bbhw/isa/` — base mem/frontend ISA C macros
+  - `examples/balls/<ball>/workloads/isa/` — ball-specific ISA macros
   - `workloads/src/CTest/` — C test cases
 - `bbdev/` — developer toolchain (Motia workflow backend)
 
@@ -52,10 +53,11 @@ When adding or modifying a balldomain TOML, these must hold:
 
 1. `ballNum` equals `ballIdMappings` length
 2. `ballId` is strictly `0, 1, 2, ...` with no gaps/duplicates
-3. `ballName` / `funct7` / `mnemonic` have no duplicates
+3. `ballName` / `funct7` / `mnemonic` have no duplicates **within that core's ballISA** (cross-core encoding conflicts are allowed)
 4. every `ballISA.bid` exists in `ballIdMappings`, and every ball has at least one ISA entry
 5. relative `config=` paths resolve to existing files (when present)
 6. `inBW` / `outBW` are positive integers
+7. Ball trees (`examples/balls/*/`) must not hardcode `funct7`; encoding comes only from the Core `ballISA` generated into `examples/cores/<core>/isa/ballISA.h`
 
 Use MCP `validate(chip=..., balldomain=...)` or `/check`.
 
@@ -90,12 +92,12 @@ Every `bbdev_*` task submission returns immediately with `accepted=true`,
 
 Default Verilator config: `sims.verilator.BuckyballToyVerilatorConfig`
 Pebble: `sims.verilator.BuckyballPebbleVerilatorConfig`
-Workload binary names are `{chip}_{stem}-{platform}`, e.g. `toy_vecunit_matmul_ones-singlecore-baremetal`
+Workload binary names are `{chip}_{stem}-{platform}`, e.g. `toy_vecunit_matmul_ones-baremetal`
 
 ### Analysis report paths
 - Area reports: `bbdev/api/steps/yosys/log/hierarchy_report.txt` (submodule breakdown), `area_report.txt` (top-level)
 - Timing report: `bbdev/api/steps/yosys/log/timing_report.txt`
-- Simulation logs: `log/<timestamp>-{bemu,verilator,p2e}-<name>/stdout.log`, `disasm.log`
+- Simulation logs: `log/<timestamp>-<chip>-<config>-<tool>-<name>/stdout.log`, `disasm.log`
 - bdb debug log: `log/<timestamp>-*/bdb.ndjson` (or `bdb.log`), with three DPI-C traces:
   - `[ITRACE]` — instruction issue/complete
   - `[MTRACE]` — SRAM reads/writes

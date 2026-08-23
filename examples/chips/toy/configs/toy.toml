@@ -1,5 +1,4 @@
-# Toy Example - Top Level Configuration
-# Single tile with 1 Buckyball core
+# Toy: virtual single-core that mounts leftover balls.
 
 [top]
 nTiles = 1

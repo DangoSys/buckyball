@@ -71,9 +71,9 @@ module tb_top;
       .io_bankWrite_0_io_resp_valid(intf.bank_write_resp_valid[0]),
       .io_bankWrite_0_io_resp_bits_ok(intf.bank_write_resp_ok[0]),
       .io_subRobReq_ready(intf.sub_rob_req_ready),
-      .io_mmioRead_req_ready(intf.mmio_read_req_ready),
-      .io_mmioRead_resp_valid(intf.mmio_read_resp_valid),
-      .io_mmioRead_resp_bits_data(intf.mmio_read_resp_bits_data)
+      .io_mmioRead_req_ready(intf.mmio_read_req_ready[0]),
+      .io_mmioRead_resp_valid(intf.mmio_read_resp_valid[0]),
+      .io_mmioRead_resp_bits_data(intf.mmio_read_resp_bits_data[0])
   );
 
   initial begin

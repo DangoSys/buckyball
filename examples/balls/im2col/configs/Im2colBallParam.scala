@@ -7,8 +7,7 @@ case class Im2colBallParam(
   maxIter:    Int,
   maxKSize:   Int,
   maxPadding: Int,
-  inputWidth: Int
-)
+  inputWidth: Int)
 
 object Im2colBallParam {
   private val ballName = "Im2colBall"
@@ -22,4 +21,5 @@ object Im2colBallParam {
       inputWidth = BallParamLoader.int(tbl, "inputWidth")
     )
   }
+
 }

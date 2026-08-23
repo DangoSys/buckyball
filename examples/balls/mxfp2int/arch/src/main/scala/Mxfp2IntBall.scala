@@ -17,19 +17,26 @@ import framework.top.GlobalConfig
 @instantiable
 class Mxfp2IntBall(val b: GlobalConfig) extends Module with HasBlink {
 
-  val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "Mxfp2IntBall")
-    .getOrElse(throw new IllegalArgumentException("Mxfp2IntBall not found in config"))
+  val ballCommonConfig = b.ballDomain.ballIdMappings
+    .find(_.ballName == "Mxfp2IntBall")
+    .getOrElse(
+      throw new IllegalArgumentException("Mxfp2IntBall not found in config")
+    )
 
-  val inBW  = ballCommonConfig.inBW
-  val outBW = ballCommonConfig.outBW
+  val inBW       = ballCommonConfig.inBW
+  val outBW      = ballCommonConfig.outBW
+  val mmioReadBW = ballCommonConfig.mmioReadBW
+  require(mmioReadBW == 1, "Mxfp2IntBall requires exactly one MMIO read line")
 
   @public
-  val io = IO(new BlinkIO(b, inBW, outBW))
+  val io = IO(new BlinkIO(b, inBW, outBW, mmioReadBW))
 
   def blink: BlinkIO = io
   dontTouch(io)
 
-  val mxfp2intUnit: Instance[PipelinedMxfp2Int] = Instantiate(new PipelinedMxfp2Int(b))
+  val mxfp2intUnit: Instance[PipelinedMxfp2Int] = Instantiate(
+    new PipelinedMxfp2Int(b)
+  )
 
   mxfp2intUnit.io.cmdReq <> io.cmdReq
   mxfp2intUnit.io.cmdResp <> io.cmdResp
@@ -47,5 +54,5 @@ class Mxfp2IntBall(val b: GlobalConfig) extends Module with HasBlink {
   io.subRobReq.valid := false.B
   io.subRobReq.bits  := SubRobRow.tieOff(b)
 
-  io.mmioRead <> mxfp2intUnit.io.mmioRead
+  io.mmioRead(0) <> mxfp2intUnit.io.mmioRead
 }

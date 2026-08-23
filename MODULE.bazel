@@ -1,0 +1,15 @@
+module(
+    name = "buckyball",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
+bb_chips = use_extension("//bazel/config:extensions.bzl", "bb_chips")
+use_repo(bb_chips, "bb_chips")
+
+bb_cores = use_extension("//bazel/config:extensions.bzl", "bb_cores")
+use_repo(bb_cores, "bb_cores")
+
+bb_config_tomls = use_extension("//bazel/config:extensions.bzl", "bb_config_tomls")
+use_repo(bb_config_tomls, "bb_config_tomls")

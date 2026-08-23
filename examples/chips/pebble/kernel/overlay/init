@@ -36,6 +36,8 @@ fail_exit() {
 }
 
 count=0
+failed=0
+fails=""
 for t in /root/*-linux; do
   [ -e "$t" ] || continue
   name=${t##*/}
@@ -44,15 +46,23 @@ for t in /root/*-linux; do
   "$t"
   rc=$?
   set -e
-  if [ "$rc" -ne 0 ]; then
-    fail_exit "FAIL $name rc=$rc"
-  fi
-  echo "PASS $name"
   count=$((count + 1))
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL $name rc=$rc"
+    failed=$((failed + 1))
+    fails="$fails $name"
+  else
+    echo "PASS $name"
+  fi
 done
 
 if [ "$count" -eq 0 ]; then
   fail_exit "ERROR: no *-linux tests installed under /root"
+fi
+
+echo "SUMMARY total=$count passed=$((count - failed)) failed=$failed"
+if [ "$failed" -ne 0 ]; then
+  fail_exit "FAILED_TESTS:$fails"
 fi
 
 echo "ALL_PASS count=$count"

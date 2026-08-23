@@ -26,7 +26,7 @@ function(add_linalg_contract_test name)
     VERBATIM
   )
 
-  add_custom_target(optest_linalg_${name}_contract
+  add_custom_target(mlirtest_linalg_${name}_contract
     COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
     DEPENDS ${OUT}
     COMMENT "Checking Linalg contract for ${name}"
@@ -43,8 +43,8 @@ function(add_linalg_conv2d_test name main_src)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
   endif()
-  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}_singlecore-baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}-linux)
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_${name}-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_${name}-linux)
 
   add_custom_command(
     OUTPUT ${OBJ} ${LLVM_MLIR} ${LLVM_IR}
@@ -124,21 +124,21 @@ function(add_linalg_conv2d_test name main_src)
     VERBATIM
   )
 
-  add_custom_target(optest_linalg_${name}_singlecore_baremetal
+  add_custom_target(mlirtest_linalg_${name}_baremetal
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN})
 
-  add_custom_target(optest_linalg_${name}_linux
+  add_custom_target(mlirtest_linalg_${name}_linux
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
 
-  add_custom_target(optest_linalg_${name}
-    DEPENDS optest_linalg_${name}_linux
-      optest_linalg_${name}_singlecore_baremetal
-    COMMENT "Building optest_linalg_${name} for all platforms"
+  add_custom_target(mlirtest_linalg_${name}
+    DEPENDS mlirtest_linalg_${name}_linux
+      mlirtest_linalg_${name}_baremetal
+    COMMENT "Building mlirtest_linalg_${name} for all platforms"
   )
 
   add_toy_mlir_rushb(
     NAME ${name}
-    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_${name}
     CXX
     FRONT_PASSES
       -convert-linalg-to-tile
@@ -198,7 +198,7 @@ if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
   message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
 endif()
 set(LINALG_MATMUL_BAREMETAL_BIN
-  ${BUCKYBALL_WORKLOAD_CHIP}_optest_linalg_matmul_singlecore-baremetal)
+  ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_matmul-baremetal)
 
 add_custom_command(
     OUTPUT ${LINALG_MATMUL_BAREMETAL_BIN}
@@ -220,7 +220,7 @@ add_custom_command(
     VERBATIM
 )
 
-add_custom_target(optest_linalg_matmul_singlecore_baremetal ALL
+add_custom_target(mlirtest_linalg_matmul_baremetal ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
 )
 
@@ -233,9 +233,9 @@ add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.cpp)
 add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.cpp)
 
 add_custom_target(linalg-mlir-tests-build ALL DEPENDS
-  optest_linalg_matmul_singlecore_baremetal
-  optest_linalg_conv2d_nhwc_hwcf
-  optest_linalg_conv2d_nhwc_fhwc
-  optest_linalg_conv2d_nchw_fchw
+  mlirtest_linalg_matmul_baremetal
+  mlirtest_linalg_conv2d_nhwc_hwcf
+  mlirtest_linalg_conv2d_nhwc_fhwc
+  mlirtest_linalg_conv2d_nchw_fchw
   COMMENT "Building all Linalg MLIR tests"
   VERBATIM)

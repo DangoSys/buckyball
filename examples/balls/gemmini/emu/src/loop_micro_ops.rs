@@ -4,10 +4,12 @@ use super::instruction::ExecContext;
 const FUNCT_MVOUT: u32 = 16;
 const FUNCT_MSET: u32 = 32;
 const FUNCT_MVIN: u32 = 33;
-const FUNCT_PRELOAD: u32 = 53;
-const FUNCT_COMPUTE_PRELOADED: u32 = 66;
-const FUNCT_COMPUTE_ACCUMULATED: u32 = 67;
 const MAX_DMA_STRIDE: u64 = (1 << 19) - 1;
+
+fn ball_funct(mnemonic: &str) -> u32 {
+    crate::config::ball_domain::funct_for_mnemonic(mnemonic)
+        .unwrap_or_else(|| panic!("Gemmini mnemonic {mnemonic} is not declared in Core ballISA"))
+}
 
 fn execute(funct: u32, xs1: u64, xs2: u64, ctx: &mut ExecContext) {
     decode::execute_known(funct, xs1, xs2, ctx)
@@ -65,7 +67,7 @@ pub fn mvout(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64
 }
 
 pub fn preload(ctx: &mut ExecContext, source: u64, output: u64, iter: u64) {
-    execute(FUNCT_PRELOAD, banks(source, 0, output, iter), 1, ctx);
+    execute(ball_funct("GEMMINI_PRELOAD"), banks(source, 0, output, iter), 1, ctx);
 }
 
 pub fn compute(
@@ -79,9 +81,9 @@ pub fn compute(
     zero_op1_tail: bool,
 ) {
     let funct = if accumulated {
-        FUNCT_COMPUTE_ACCUMULATED
+        ball_funct("GEMMINI_COMPUTE_ACCUMULATED")
     } else {
-        FUNCT_COMPUTE_PRELOADED
+        ball_funct("GEMMINI_COMPUTE_PRELOADED")
     };
     let mode = if accumulated { 3 } else { 2 };
     let xs2 = mode | ((zero_op2 as u64) << 4) | ((zero_op1_tail as u64) << 5);

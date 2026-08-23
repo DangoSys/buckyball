@@ -4,6 +4,7 @@
 
 #include "Buckyball/BuckyballOps.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -25,8 +26,9 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
       rewriter.replaceOpWithNewOp<ReluIntrOp>(op, rs1, adaptor.getStride());
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getStride(),
-                                              rewriter.getI32IntegerAttr(50));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, adaptor.getStride(),
+        rewriter.getI32IntegerAttr(BB_FUNC7_RELU));
     return success();
   }
 

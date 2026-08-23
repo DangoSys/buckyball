@@ -35,7 +35,7 @@ zero). NxN Matrix C - used for the result.
         The actual values for A and B must be derived based on input that is not
 available at compile time.
 */
-ee_s16 matrix_test(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B, MATDAT val);
+ee_s16 smatmul_test(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B, MATDAT val);
 ee_s16 matrix_sum(ee_u32 N, MATRES *C, MATDAT clipval);
 void matrix_mul_const(ee_u32 N, MATRES *C, MATDAT *A, MATDAT val);
 void matrix_mul_vect(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B);
@@ -43,7 +43,7 @@ void matrix_mul_matrix(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B);
 void matrix_mul_matrix_bitextract(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B);
 void matrix_add_const(ee_u32 N, MATDAT *A, MATDAT val);
 
-#define matrix_test_next(x) (x + 1)
+#define smatmul_test_next(x) (x + 1)
 #define matrix_clip(x, y) ((y) ? (x) & 0x0ff : (x) & 0x0ffff)
 #define matrix_big(x) (0xf000 | (x))
 #define bit_extract(x, from, to) (((x) >> (from)) & (~(0xffffffff << (to))))
@@ -77,7 +77,7 @@ void printmatC(MATRES *C, ee_u32 N, char *name) {
 /* Function: core_bench_matrix
         Benchmark function
 
-        Iterate <matrix_test> N times,
+        Iterate <smatmul_test> N times,
         changing the matrix values slightly by a constant amount each time.
 */
 ee_u16 core_bench_matrix(mat_params *p, ee_s16 seed, ee_u16 crc) {
@@ -87,12 +87,12 @@ ee_u16 core_bench_matrix(mat_params *p, ee_s16 seed, ee_u16 crc) {
   MATDAT *B = p->B;
   MATDAT val = (MATDAT)seed;
 
-  crc = crc16(matrix_test(N, C, A, B, val), crc);
+  crc = crc16(smatmul_test(N, C, A, B, val), crc);
 
   return crc;
 }
 
-/* Function: matrix_test
+/* Function: smatmul_test
         Perform matrix manipulation.
 
         Parameters:
@@ -116,7 +116,7 @@ ee_u16 core_bench_matrix(mat_params *p, ee_s16 seed, ee_u16 crc) {
 
         After the last step, matrix A is back to original contents.
 */
-ee_s16 matrix_test(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B, MATDAT val) {
+ee_s16 smatmul_test(ee_u32 N, MATRES *C, MATDAT *A, MATDAT *B, MATDAT val) {
   ee_u16 crc = 0;
   MATDAT clipval = matrix_big(val);
 

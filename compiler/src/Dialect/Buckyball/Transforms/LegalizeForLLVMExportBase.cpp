@@ -41,6 +41,32 @@ uint64_t fieldBits(uint64_t val, int startBit, int endBit) {
   return (val & mask) << startBit;
 }
 
+int64_t addrBitsForDepth(int64_t bankDepth) {
+  if (bankDepth <= 1)
+    return -1;
+  int64_t bits = 0;
+  int64_t x = bankDepth - 1;
+  while (x) {
+    x >>= 1;
+    ++bits;
+  }
+  return bits;
+}
+
+uint64_t smatmulIterBits(int64_t op1Base, int64_t op2Base, int64_t wrBase,
+                         int64_t addrBits) {
+  if (addrBits < 1 || addrBits > 20)
+    llvm_unreachable("smatmul addrBits out of range");
+  if (3 * addrBits > 34)
+    llvm_unreachable("smatmul iter cannot hold three bases");
+  uint64_t mask = (1ULL << addrBits) - 1;
+  if ((uint64_t)op1Base > mask || (uint64_t)op2Base > mask ||
+      (uint64_t)wrBase > mask)
+    llvm_unreachable("smatmul base exceeds addrBits");
+  return (uint64_t)op1Base | ((uint64_t)op2Base << addrBits) |
+         ((uint64_t)wrBase << (2 * addrBits));
+}
+
 Value cstI64(OpBuilder &b, Location loc, uint64_t v) {
   return b.create<arith::ConstantOp>(loc, b.getI64Type(),
                                      b.getI64IntegerAttr(v));

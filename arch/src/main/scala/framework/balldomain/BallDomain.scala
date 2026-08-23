@@ -8,7 +8,7 @@ import framework.balldomain.bbus.BBus
 import framework.balldomain.decoder.BallDomainDecoder
 import framework.balldomain.rs.BallReservationStation
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
-import framework.balldomain.blink.mmio.MmioRead
+import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 
 /**
@@ -22,6 +22,8 @@ import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 class BallDomain(val b: GlobalConfig) extends Module {
   val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val totalMmioRead  = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
+  val totalMmioWrite = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
 
   @public
   val global_issue_i    = IO(Flipped(Decoupled(new GlobalSchedIssue(b))))
@@ -32,7 +34,9 @@ class BallDomain(val b: GlobalConfig) extends Module {
   @public
   val bankWrite         = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   @public
-  val mmioRead          = IO(Vec(b.ballDomain.ballNum, Flipped(new MmioRead(b))))
+  val mmioRead          = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
+  @public
+  val mmioWrite         = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
   @public
   val subRobReq         = IO(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
 
@@ -40,16 +44,16 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
   val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))
 
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
 // Global RS -> Decoder
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
   ballDecoder.cmd_i.valid := global_issue_i.valid
   ballDecoder.cmd_i.bits  := global_issue_i.bits.cmd
   global_issue_i.ready    := ballDecoder.cmd_i.ready
 
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
 // Decoder -> Local BallRS
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
   ballRs.ball_decode_cmd_i.valid           := ballDecoder.ball_decode_cmd_o.valid
   ballRs.ball_decode_cmd_i.bits.cmd        := ballDecoder.ball_decode_cmd_o.bits
   ballRs.ball_decode_cmd_i.bits.rob_id     := global_issue_i.bits.rob_id
@@ -57,26 +61,27 @@ class BallDomain(val b: GlobalConfig) extends Module {
   ballRs.ball_decode_cmd_i.bits.sub_rob_id := global_issue_i.bits.sub_rob_id
   ballDecoder.ball_decode_cmd_o.ready      := ballRs.ball_decode_cmd_i.ready
 
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
 // Local BallRS -> BBus
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
   bbus.cmdReq <> ballRs.issue_o.balls
   ballRs.commit_i.balls <> bbus.cmdResp
 
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
 // BBus -> Mem Domain
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
   bbus.mmioRead <> mmioRead
+  bbus.mmioWrite <> mmioWrite
 
   for (i <- 0 until b.ballDomain.ballNum) {
     subRobReq(i) <> bbus.subRobReq(i)
   }
 
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
 // Local RS completion -> Global RS
-//---------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//
   global_complete_o.valid           := ballRs.complete_o.valid
   global_complete_o.bits.rob_id     := ballRs.complete_o.bits.rob_id
   global_complete_o.bits.is_sub     := ballRs.complete_o.bits.is_sub

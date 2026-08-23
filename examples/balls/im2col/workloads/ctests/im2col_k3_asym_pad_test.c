@@ -1,0 +1,70 @@
+#include "buckyball.h"
+#include <bbhw/isa/isa.h>
+#include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
+#include <stdio.h>
+
+/* asym pad: padding=max(lo,hi)=2, start=padding-lo=1  (lo=1,hi=2) */
+enum { ITER = 6, K = 3, STRIDE = 1, PAD = 2, START = 1, LANES = 16 };
+enum {
+  OUT_DIM = (ITER + 2 * PAD - K - START) / STRIDE + 1,
+  WINDOWS = OUT_DIM * OUT_DIM,
+  KERNEL = K * K,
+  M_TILES = (WINDOWS + LANES - 1) / LANES,
+  K_TILES = (KERNEL + LANES - 1) / LANES,
+  OUT_ROWS = M_TILES * K_TILES * LANES,
+};
+
+static elem_t in[ITER * ITER] __attribute__((aligned(64))) = {
+    7,  -2, 3,  0,   5,  -6, 1, 8,  -9, 10, 11,  0,  -4, 12,  13, 14, 0,  16,
+    17, 0,  19, -20, 21, 22, 0, 24, 25, 26, -27, 28, 29, -30, 0,  32, 33, 34,
+};
+static elem_t out[OUT_ROWS * LANES] __attribute__((aligned(64)));
+static elem_t exp[OUT_ROWS * LANES] __attribute__((aligned(64)));
+
+static void build_expected(void) {
+  int w = 0;
+  clear_i8_matrix(exp, OUT_ROWS, LANES);
+  for (int orow = 0; orow < OUT_DIM; orow++) {
+    for (int ocol = 0; ocol < OUT_DIM; ocol++) {
+      for (int krow = 0; krow < K; krow++) {
+        for (int kcol = 0; kcol < K; kcol++) {
+          int ki = krow * K + kcol;
+          int bank_row =
+              ((w / LANES) * K_TILES + ki / LANES) * LANES + (w % LANES);
+          int row = START + orow * STRIDE + krow - PAD;
+          int col = START + ocol * STRIDE + kcol - PAD;
+          exp[bank_row * LANES + ki % LANES] =
+              (row < 0 || row >= ITER || col < 0 || col >= ITER)
+                  ? 0
+                  : in[row * ITER + col];
+        }
+      }
+      w++;
+    }
+  }
+}
+
+int main(void) {
+#ifdef MULTICORE
+  multicore(MULTICORE);
+#endif
+  clear_i8_matrix(out, OUT_ROWS, LANES);
+  build_expected();
+
+  bb_mem_alloc(0, 1, 1);
+  bb_mem_alloc(1, 1, 1);
+  bb_mvin((uintptr_t)in, 0, (ITER * ITER + LANES - 1) / LANES, 1);
+  bb_im2col_ex(0, 1, ITER, K, STRIDE, PAD, START, START);
+  bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
+  bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
+
+  if (compare_i8_matrices(out, exp, OUT_ROWS, LANES)) {
+    printf("im2col k3 6x6 asym pad PASSED\n");
+    return 0;
+  }
+  printf("im2col k3 6x6 asym pad FAILED\n");
+  return 1;
+}

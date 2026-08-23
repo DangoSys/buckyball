@@ -61,7 +61,8 @@ void configureMatrixMatmulLegalizeForExportTarget(LLVMConversionTarget &target,
                                                   bool stable);
 void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  RewritePatternSet &patterns,
-                                                 bool stable);
+                                                 bool stable,
+                                                 int64_t bankDepth);
 void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable);
 } // namespace mlir::buddy::buckyball
@@ -71,7 +72,6 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
     bool includeFuncOperandForwarding, bool stable, bool rushB) {
   (void)bankWidthBytes;
-  (void)bankDepth;
   (void)bankNum;
 
   populateBaseLegalizeForLLVMExportPatterns(
@@ -91,7 +91,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
   mlir::buddy::buckyball::populateReluLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
   mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
+      converter, patterns, stable, bankDepth);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(

@@ -22,8 +22,8 @@ The output dimension is:
 outputDim = floor((iter + 2 * padding - ksize) / stride) + 1
 ```
 
-Windows form the rows of MatrixBall operand A. The kernel elements form its K
-dimension. Output is stored in MatrixBall's `(M tile, K tile, tile row, lane)`
+Windows form the rows of SMatMulBall operand A. The kernel elements form its K
+dimension. Output is stored in SMatMulBall's `(M tile, K tile, tile row, lane)`
 layout, with both tile dimensions fixed at 16:
 
 ```text
@@ -62,7 +62,7 @@ inputRow * iter + inputCol
 - `Im2colConfigRegs.scala`: ISA field decoding and validation.
 - `Im2colWindow.scala`: output-window and kernel traversal.
 - `LineBufferManager.scala`: input preload and padded element selection.
-- `StreamWriter.scala`: MatrixBall-compatible tiled output packing and bank
+- `StreamWriter.scala`: SMatMulBall-compatible tiled output packing and bank
   writes.
 - `Im2colBall.scala`: Blink-compatible ball wrapper.
 - `configs/Im2colBallParam.scala`: maximum dimension and element width.

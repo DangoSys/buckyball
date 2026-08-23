@@ -2,13 +2,11 @@
 
 use super::super::bank::{bank_num, bank_size};
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
-use super::instruction::{ExecContext, Instruction};
+use super::instruction::{BallInstruction, ExecContext};
 
 pub struct Relu;
 
-impl Instruction for Relu {
-    const FUNCT: u32 = 50;
-
+impl BallInstruction for Relu {
     fn exec(xs1: u64, _xs2: u64, ctx: &mut ExecContext) -> u64 {
         let src = rs1_b0(xs1);
         let dst = rs1_b2(xs1);

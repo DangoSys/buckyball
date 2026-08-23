@@ -91,11 +91,11 @@ static LogicalResult getStaticRowStrideDiv16(MemRefType type, uint64_t &out) {
   return success();
 }
 
-class MatrixMatmulToBankSSAPattern : public OpRewritePattern<MatrixMatmulOp> {
+class MatrixMatmulToBankSSAPattern : public OpRewritePattern<SMatMulMatmulOp> {
 public:
-  using OpRewritePattern<MatrixMatmulOp>::OpRewritePattern;
+  using OpRewritePattern<SMatMulMatmulOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(MatrixMatmulOp op,
+  LogicalResult matchAndRewrite(SMatMulMatmulOp op,
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value aMem = op.getAMemArray();
@@ -122,7 +122,7 @@ public:
     if (m % 16 != 0 || k % 16 != 0 || n % 16 != 0)
       return rewriter.notifyMatchFailure(
           op,
-          "buckyball.matrix_matmul requires M, K and N to be multiples of 16");
+          "buckyball.smatmul_matmul requires M, K and N to be multiples of 16");
 
     uint64_t strideB = 0;
     uint64_t strideC = 0;
@@ -254,7 +254,7 @@ public:
               cstI64(b, bodyLoc, tile), cstI64(b, bodyLoc, 8));
           b.create<BankReleaseOp>(bodyLoc, aQuant.getOutBankOut());
 
-          auto cMul = b.create<BankMulWarp16Op>(
+          auto cMul = b.create<BankVecMat16Op>(
               bodyLoc, b.getI64Type(), aTrans.getOutBankOut(),
               bQuant.getOutBankOut(), cIn, cstI64(b, bodyLoc, tile),
               cstI64(b, bodyLoc, 0));
@@ -266,9 +266,10 @@ public:
     Value cAcc = kLoop.getResult(0);
     auto cFp32 = rewriter.create<BankAllocOp>(loc, rewriter.getI64Type());
     cFp32->setAttr("col", rewriter.getI64IntegerAttr(4));
-    auto cDequant = rewriter.create<BankInt2FpOp>(
+    auto cDequant = rewriter.create<BankInt2FpTensorOp>(
         loc, rewriter.getI64Type(), cAcc, cFp32.getBank(),
-        cstI64(rewriter, loc, depthC), dequantScaleBits);
+        cstI64(rewriter, loc, depthC), dequantScaleBits,
+        cstI64(rewriter, loc, 0));
     rewriter.create<BankReleaseOp>(loc, cAcc);
 
     auto cStore = rewriter.create<BankMvoutOp>(

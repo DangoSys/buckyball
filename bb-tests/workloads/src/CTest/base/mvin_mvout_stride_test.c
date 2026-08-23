@@ -64,12 +64,6 @@ int mvin_mvout_stride_test(void) {
 }
 
 int main() {
-#ifdef MULTICORE
-  multicore(MULTICORE);
-#endif
   int passed = mvin_mvout_stride_test();
-#ifdef MULTICORE
-  exit(0);
-#endif
   return passed ? 0 : 1;
 }

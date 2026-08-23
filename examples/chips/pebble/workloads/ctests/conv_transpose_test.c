@@ -1,6 +1,7 @@
 #include "pebble.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/transpose.h>
 #include <stdio.h>
 
 #ifndef TEST_CASE_NAME
@@ -42,6 +43,8 @@ int main(void) {
   bb_transpose(0, 1, PEBBLE_INT8_LANES, 8);
   bb_mvout((uintptr_t)actual, 1, k_elems, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
 
   int passed = 1;
   for (int row = 0; row < k_elems; ++row) {

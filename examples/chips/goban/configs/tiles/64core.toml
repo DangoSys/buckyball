@@ -18,5 +18,5 @@ defaultGroupCount = 1
 memCycles = 10
 
 [coreTemplate]
-include = "../../../../cores/goban/core.toml"
+include = "../../../../cores/goban/configs/default.toml"
 count = 64

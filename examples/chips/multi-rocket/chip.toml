@@ -1,10 +1,2 @@
 [chip]
-name = "multi-rocket"
-topology = "configs/multi-rocket.toml"
-compilerCore = "rocket"
-
-[runtime]
-bemu = "emu/Cargo.toml"
-bemuCore = "../../cores/goban/emu/Cargo.toml"
-bemuTile = "configs/tiles/32core.toml"
-workloads = "workloads"
+p2eConfig = "sims.p2e.MultiRocket32CoreP2EConfig"

@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import freechips.rocketchip.tile._
 import framework.balldomain.blink.{BankRead, BankWrite}
-import framework.balldomain.blink.mmio.MmioRead
+import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.top.GlobalConfig
@@ -20,6 +20,8 @@ import framework.memdomain.backend.MemBackend
 
 @instantiable
 class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
+  val totalMmioRead  = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
+  val totalMmioWrite = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
   val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
 
@@ -34,7 +36,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val ballDomain = new Bundle {
       val bankRead  = Vec(totalBallRead, new BankRead(b))
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
-      val mmioRead  = Vec(b.ballDomain.ballNum, new MmioRead(b))
+      val mmioRead  = Vec(totalMmioRead, new MmioRead(b))
+      val mmioWrite = Vec(totalMmioWrite, new MmioWrite(b))
     }
 
 // Outside Channel
@@ -86,13 +89,15 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     midend.io.bankRead(i).bankRead <> io.ballDomain.bankRead(i)
     midend.io.bankRead(i).is_shared := false.B
   }
+
   for (i <- 0 until totalBallWrite) {
     midend.io.bankWrite(i).bankWrite <> io.ballDomain.bankWrite(i)
     midend.io.bankWrite(i).is_shared := false.B
   }
+
   midend.io.bankRead(totalBallRead).bankRead <> frontend.io.interdma.bankRead
   midend.io.bankRead(totalBallRead).is_shared := frontend.io.interdma.read_is_shared
-  midend.io.hartid := io.hartid
+  midend.io.hartid                            := io.hartid
 
   midend.io.mem_req <> backend.io.mem_req
   backend.io.config <> frontend.io.config
@@ -107,21 +112,13 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   if (b.memDomain.mmioEnable) {
     val mmioPool: Instance[MmioPool] = Instantiate(new MmioPool(b))
 
-    // Alloc/dealloc from MemConfiger (mmio_set instruction)
-    mmioPool.io.alloc := frontend.io.mmioAlloc
-
-    // Dealloc from MemConfiger (implicit lifecycle: mem_dealloc with alloc=false)
-    // For now, tie off explicit dealloc (lifecycle managed by mmio_set with size_rows=0)
-    mmioPool.io.dealloc.valid := false.B
-    mmioPool.io.dealloc.bits  := 0.U
-
     // Write path: route MemLoader's bankWrite to MmioPool when is_mvin_mmio_active
     val destIsMmio = frontend.io.is_mvin_mmio_active
 
-    // Compute MMIO write parameters from MemLoader's mmio_addr/col
-    val mmioRowAddr  = frontend.io.mmio_addr(9, 4) + loaderBankWrite.io.req.bits.addr
-    val mmioBankIdx  = frontend.io.mmio_addr(16, 10)
-    val mmioByteMask = Wire(Vec(b.memDomain.bankMaskLen, Bool()))
+    // MMIO is one globally encoded byte space. Each DMA beat is 16 bytes and
+    // MmioPool stripes those bytes across the five physical byte banks.
+    val mmioWriteAddr = frontend.io.mmio_addr + loaderBankWrite.io.req.bits.addr * (b.memDomain.bankWidth / 8).U
+    val mmioByteMask  = Wire(Vec(b.memDomain.bankMaskLen, Bool()))
     for (k <- 0 until b.memDomain.bankMaskLen) {
       mmioByteMask(k) := k.U < frontend.io.mmio_col
     }
@@ -133,10 +130,10 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
     // Route write to MMIO or main bank based on is_mvin_mmio_active
     mmioPool.io.write.req.valid     := loaderBankWrite.io.req.valid && destIsMmio
-    mmioPool.io.write.req.bits.addr := mmioRowAddr
+    mmioPool.io.write.req.bits.addr := loaderBankWrite.io.req.bits.addr
     mmioPool.io.write.req.bits.data := loaderBankWrite.io.req.bits.data
     mmioPool.io.write.req.bits.mask := mmioByteMask
-    mmioPool.io.writeBankIdx        := mmioBankIdx
+    mmioPool.io.writeAddr           := mmioWriteAddr
 
     // Main bank write (when NOT mvin_mmio).
     dmaBankWrite.io.req.valid := loaderBankWrite.io.req.valid && !destIsMmio
@@ -165,21 +162,25 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     mmioPool.io.write.resp.ready := loaderBankWrite.io.resp.ready && destIsMmio
     dmaBankWrite.io.resp.ready   := loaderBankWrite.io.resp.ready && !destIsMmio
 
-    // Ball read path: connect Ball mmioRead to MmioPool
-    for (i <- 0 until b.ballDomain.ballNum) {
+    // Ball read path: connect every configured Blink MMIO line to MmioPool.
+    for (i <- 0 until totalMmioRead) {
       mmioPool.io.ballReq(i) <> io.ballDomain.mmioRead(i).req
       io.ballDomain.mmioRead(i).resp <> mmioPool.io.ballResp(i)
-      mmioPool.io.ballMetaBank(i) := io.ballDomain.mmioRead(i).meta_bank
+    }
+    for (i <- 0 until totalMmioWrite) {
+      mmioPool.io.ballWriteReq(i) <> io.ballDomain.mmioWrite(i).req
     }
   } else {
     dmaBankWrite <> loaderBankWrite
-    assert(!frontend.io.mmioAlloc.valid, "MemDomain MMIO is disabled, but mmio_set was issued")
     assert(!frontend.io.is_mvin_mmio_active, "MemDomain MMIO is disabled, but mvin_mmio was issued")
 
-    for (i <- 0 until b.ballDomain.ballNum) {
+    for (i <- 0 until totalMmioRead) {
       io.ballDomain.mmioRead(i).req.ready  := false.B
       io.ballDomain.mmioRead(i).resp.valid := false.B
       io.ballDomain.mmioRead(i).resp.bits  := 0.U.asTypeOf(io.ballDomain.mmioRead(i).resp.bits)
+    }
+    for (i <- 0 until totalMmioWrite) {
+      io.ballDomain.mmioWrite(i).req.ready := false.B
     }
   }
 

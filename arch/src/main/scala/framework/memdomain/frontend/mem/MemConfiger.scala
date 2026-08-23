@@ -5,7 +5,6 @@ import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.blink.BankWrite
 import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
-import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 class MemConfigerIO(val b: GlobalConfig) extends Bundle {
@@ -19,34 +18,30 @@ class MemConfigerIO(val b: GlobalConfig) extends Bundle {
 
 @instantiable
 class MemConfiger(val b: GlobalConfig) extends Module {
-
   val rob_id_width = log2Up(b.frontend.rob_entries)
 
   @public
   val io = IO(new Bundle {
-    val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
-    val cmdResp = Decoupled(new MemRsComplete(b))
-
+    val cmdReq    = Flipped(Decoupled(new MemRsIssue(b)))
+    val cmdResp   = Decoupled(new MemRsComplete(b))
     val config    = Decoupled(new MemConfigerIO(b))
     val hartid    = Input(UInt(b.core.xLen.W))
     val bankWrite = Flipped(new BankWrite(b))
-
-    // MMIO alloc/dealloc port
-    val mmioAlloc = Valid(new MmioAllocReq(b))
   })
 
   val idle :: config :: zeroReq :: zeroRun :: zeroWait :: resp :: Nil = Enum(6)
-  val state                                                           = RegInit(idle)
-  val alloc_reg                                                       = RegInit(false.B)
-  val is_shared_reg                                                   = RegInit(false.B)
-  val col_reg                                                         = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
-  val clear_reg                                                       = RegInit(false.B)
-  val vbank_id_reg                                                    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val rob_id_reg                                                      = RegInit(0.U(rob_id_width.W))
-  val is_sub_reg                                                      = RegInit(false.B)
-  val sub_rob_id_reg                                                  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val counter                                                         = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
-  val zeroLastRow                                                     = RegInit(false.B)
+
+  val state          = RegInit(idle)
+  val alloc_reg      = RegInit(false.B)
+  val is_shared_reg  = RegInit(false.B)
+  val col_reg        = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val clear_reg      = RegInit(false.B)
+  val vbank_id_reg   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rob_id_reg     = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg     = RegInit(false.B)
+  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val counter        = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val zeroLastRow    = RegInit(false.B)
 
   val zeroLines: Instance[ZeroLineGenerator] = Instantiate(new ZeroLineGenerator(b.memDomain.bankWidth))
 
@@ -62,12 +57,6 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.is_sub     := false.B
   io.cmdResp.bits.sub_rob_id := 0.U
 
-  // MMIO alloc defaults
-  io.mmioAlloc.valid          := false.B
-  io.mmioAlloc.bits.main_bank := 0.U
-  io.mmioAlloc.bits.mmio_addr := 0.U
-  io.mmioAlloc.bits.size_rows := 0.U
-
   io.bankWrite.io.req.valid     := false.B
   io.bankWrite.io.req.bits.addr := zeroLines.io.resp.bits.row(log2Ceil(b.memDomain.bankEntries) - 1, 0)
   io.bankWrite.io.req.bits.data := zeroLines.io.resp.bits.data
@@ -82,49 +71,28 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   zeroLines.io.req.bits.rows := b.memDomain.bankEntries.U
   zeroLines.io.resp.ready    := state === zeroRun && io.bankWrite.io.req.ready
 
-  val isMmioSet = io.cmdReq.valid && io.cmdReq.bits.cmd.is_mmio_set
-  io.cmdReq.ready := state === idle && (!isMmioSet || io.cmdResp.ready)
+  io.cmdReq.ready := state === idle
 
   when(state === idle) {
     when(io.cmdReq.valid) {
-      // Check if this is mmio_set instruction
-      when(io.cmdReq.bits.cmd.is_mmio_set) {
-        // mmio_set: rs1[9:0]=main_bank, rs2[15:0]=mmio_addr, rs2[23:16]=size_rows
-        val main_bank = io.cmdReq.bits.cmd.bank_id
-        val mmio_addr = io.cmdReq.bits.cmd.special(15, 0)
-        val size_rows = io.cmdReq.bits.cmd.special(23, 16)
+      when(io.cmdReq.fire) {
+        val rawCol  = io.cmdReq.bits.cmd.special(9, 5)
+        val alloc   = io.cmdReq.bits.cmd.special(10)
+        val fullCol = b.memDomain.bankNum.U(col_reg.getWidth.W)
 
-        io.mmioAlloc.valid          := io.cmdReq.fire
-        io.mmioAlloc.bits.main_bank := main_bank
-        io.mmioAlloc.bits.mmio_addr := mmio_addr
-        io.mmioAlloc.bits.size_rows := size_rows
-
-        // Immediate response (no state transition)
-        io.cmdResp.valid           := true.B
-        io.cmdResp.bits.rob_id     := io.cmdReq.bits.rob_id
-        io.cmdResp.bits.is_sub     := io.cmdReq.bits.is_sub
-        io.cmdResp.bits.sub_rob_id := io.cmdReq.bits.sub_rob_id
-
-      }.otherwise {
-        when(io.cmdReq.fire) {
-          val rawCol  = io.cmdReq.bits.cmd.special(9, 5)
-          val alloc   = io.cmdReq.bits.cmd.special(10)
-          val fullCol = b.memDomain.bankNum.U(col_reg.getWidth.W)
-
-          state          := config
-          col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
-          alloc_reg      := alloc
-          clear_reg      := io.cmdReq.bits.cmd.clear
-          is_shared_reg  := io.cmdReq.bits.cmd.is_shared
-          vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
-          rob_id_reg     := io.cmdReq.bits.rob_id
-          is_sub_reg     := io.cmdReq.bits.is_sub
-          sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
-          assert(
-            !(io.cmdReq.bits.cmd.clear && io.cmdReq.bits.cmd.is_shared),
-            "MSET clear is currently supported for private banks only"
-          )
-        }
+        state          := config
+        col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
+        alloc_reg      := alloc
+        clear_reg      := io.cmdReq.bits.cmd.clear
+        is_shared_reg  := io.cmdReq.bits.cmd.is_shared
+        vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
+        rob_id_reg     := io.cmdReq.bits.rob_id
+        is_sub_reg     := io.cmdReq.bits.is_sub
+        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+        assert(
+          !(io.cmdReq.bits.cmd.clear && io.cmdReq.bits.cmd.is_shared),
+          "MSET clear is currently supported for private banks only"
+        )
       }
     }
 

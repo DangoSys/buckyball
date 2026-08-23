@@ -191,7 +191,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
         (usingDebug.option(new DebugDecode)) ++:
         (usingNMI.option(new NMIDecode)) ++:
         (usingConditionalZero.option(new ConditionalZeroDecode)) ++:
-        Seq(new FenceIDecode(tile.dcache.flushOnFenceI)) ++:
+        Seq(new FenceIDecode(tile.dcache.flushOnFenceI || coreParams.haveCFlush)) ++:
         coreParams.haveCFlush.option(new CFlushDecode(tile.dcache.canSupportCFlushLine)) ++:
         rocketParams.haveCease.option(new CeaseDecode) ++:
         usingVector.option(new VCFGDecode) ++:
@@ -564,7 +564,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
       when(id_ctrl.mem_cmd === M_SFENCE && csr.io.status.v) {
         ex_ctrl.mem_cmd := M_HFENCEV
       }
-      if (tile.dcache.flushOnFenceI) {
+      if (tile.dcache.flushOnFenceI || coreParams.haveCFlush) {
         when(id_ctrl.fence_i) {
           ex_reg_mem_size := 0.U
         }

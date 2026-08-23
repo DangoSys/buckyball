@@ -1,14 +1,12 @@
 [package]
-name = "bemu-multi-rocket-chip"
+name = "bebop-chip-multi-rocket"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "bebop-multi-rocket"
+name = "bebop-chip-multi-rocket"
 path = "src/main.rs"
 
 [dependencies]
+bebop-bemu = { path = "../generated/bemu" }
 clap = { version = "4", features = ["derive"] }
-snafu = "0.8"
-toml = "0.8"
-core_bemu = { package = "bemu-goban", path = "../../../cores/goban/emu" }

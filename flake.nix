@@ -47,6 +47,8 @@
               mosoo.workerd
 
               rustTools.cargoNextest
+
+              systemTools.bazel
             ];
             shellHook = ''
               # Must run with cwd at the git checkout. Store copies from toString ./.
@@ -57,6 +59,7 @@
                 return 1 2>/dev/null || exit 1
               fi
               BB_ROOT="$PWD"
+              export DSH_HOME="$BB_ROOT/.dsh"
               if [ -d "$BB_ROOT/result/bin" ]; then
                 export PATH="$BB_ROOT/result/bin:$PATH"
               else
@@ -73,6 +76,9 @@
               export CUDA_HOME="${pkgs.cuda.cudatoolkit}"
               export CPATH="''${CUDA_HOME}/include''${CPATH:+:$CPATH}"
 
+              export CC="${pkgs.systemTools.clang}/bin/clang"
+              export CXX="${pkgs.systemTools.clang}/bin/clang++"
+
               # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
               if [ -z "$NIX_QUIET" ]; then
                 echo "================= Buckyball Environment Activated =========================" >&2
@@ -82,12 +88,14 @@
                 echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)" >&2
                 echo "Mill: $(mill --version 2>&1 | head -1)" >&2
                 echo "Cargo: $(cargo --version 2>&1 | head -1)" >&2
-                echo "npm: $(npm --version 2>&1 | head -1)" >&2
+                echo "pnpm: $(pnpm --version 2>&1 | head -1)" >&2
+                echo "CXX: $CXX" >&2
                 echo "bbdev: $(which bbdev)" >&2
                 echo "RISCV: $RISCV" >&2
                 echo "Yosys: $(yosys --version 2>&1 | head -1)" >&2
                 echo "OpenSTA: $(sta -version 2>&1 | head -1)" >&2
                 echo "Buddy MLIR: $(which buddy-opt)" >&2
+                echo "Bazel: $(command -v bazel)" >&2
                 echo "===========================================================================" >&2
               fi
             '';
@@ -126,6 +134,7 @@
               tools.opensta
               tools.lcov
               tools.verible
+              tools.buildifier
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -192,7 +201,8 @@
               systemTools.rsync
               systemTools.nodejs
               systemTools.git
-              # systemTools.npm
+              systemTools.pnpm
+              systemTools.bazel
 
               # Mosoo local development tools
               mosoo.bun

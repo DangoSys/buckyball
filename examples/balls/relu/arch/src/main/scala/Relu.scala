@@ -19,10 +19,14 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   val bankWidth  = b.memDomain.bankWidth
 
   // Get bandwidth from config
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "ReluBall")
-    .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
-  val inBW        = ballMapping.inBW
-  val outBW       = ballMapping.outBW
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "ReluBall")
+    .getOrElse(
+      throw new IllegalArgumentException("ReluBall not found in config")
+    )
+
+  val inBW  = ballMapping.inBW
+  val outBW = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {
@@ -55,9 +59,11 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
   val state                                      = RegInit(idle)
 
   val regArray = RegInit(
-    VecInit(Seq.fill(InputNum)(
-      VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
-    ))
+    VecInit(
+      Seq.fill(InputNum)(
+        VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
+      )
+    )
   )
 
   val readCounter  = RegInit(0.U(log2Ceil(InputNum + 1).W))
@@ -84,7 +90,9 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.valid     := false.B
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask := VecInit(
+      Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))
+    )
     io.bankWrite(i).io.resp.ready    := false.B
   }
 
@@ -176,7 +184,9 @@ class PipelinedRelu(val b: GlobalConfig) extends Module {
         }.otherwise {
           val nextCnt = writeCounter + 1.U
           writeCounter := nextCnt
-          writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(nextCnt)(j)))
+          writeDataReg := Cat(
+            (0 until InputNum).reverse.map(j => regArray(nextCnt)(j))
+          )
         }
       }
     }

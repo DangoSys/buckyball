@@ -1,5 +1,0 @@
-[core]
-name = "goban"
-kind = "buckyball"
-config = "core.toml"
-compiler = "compiler"

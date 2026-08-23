@@ -1,0 +1,56 @@
+name: pre-commit
+run-name: ${{ github.actor }} is running pre-commit 🚀
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: buckyball-cpu-server
+  cancel-in-progress: false
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: cpu-server
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
+    steps:
+      - name: Print information
+        run: |
+          echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔎 PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "🔎 Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}"
+          else
+            echo "🔎 Branch: ${{ github.ref_name }}"
+          fi
+          echo "🔎 Repository: ${{ github.repository }}"
+
+      - name: Reset to clean state
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          git fetch --force --prune origin "${{ github.ref }}"
+          git checkout --detach FETCH_HEAD
+          git reset --hard FETCH_HEAD
+          git clean -ffd
+          git submodule sync
+          git submodule update --init --force
+          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
+            git -C "$submodule" reset --hard
+            git -C "$submodule" clean -ffd
+          done
+
+      - name: Check pre-commit
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix develop -c pre-commit run --all-files --show-diff-on-failure --color=always

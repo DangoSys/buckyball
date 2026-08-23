@@ -54,7 +54,7 @@ void registerLowerBankSSAToIntrinsicsPass();
 void registerLowerBuckyballPass();
 void registerLowerBuckyballToBankSSAPass();
 void registerReportBankUsagePass();
-void populatePebbleMatrixMatmulToBankSSAPatterns(RewritePatternSet &patterns);
+void populatePebbleSMatMulMatmulToBankSSAPatterns(RewritePatternSet &patterns);
 void populatePebbleIm2colMatmulToBankSSAPatterns(RewritePatternSet &patterns);
 void populatePebbleMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
 void populatePebbleLowerBuckyballToBankSSAPatterns(RewritePatternSet &patterns);

@@ -1,5 +1,4 @@
 // CHECK: buckyball.intr.custom
-// CHECK-SAME: funct7 = 48
 // CHECK-NOT: buckyball.im2col
 // CHECK-NOT: buckyball.bank_im2col
 

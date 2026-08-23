@@ -7,7 +7,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
-import framework.memdomain.frontend.cmd.decoder.DISA.{MMIO_SET_BITPAT, MSET_BITPAT}
+import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
@@ -95,7 +95,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   def isMappingConfig(entry: GlobalRobEntry): Bool =
     entry.cmd.domain_id === DomainId.MEM &&
-      ((entry.cmd.cmd.funct === MSET_BITPAT) || (entry.cmd.cmd.funct === MMIO_SET_BITPAT))
+      (entry.cmd.cmd.funct === MSET_BITPAT)
 
   def touchesBank(access: BankAccessInfo, bank: UInt): Bool =
     (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||

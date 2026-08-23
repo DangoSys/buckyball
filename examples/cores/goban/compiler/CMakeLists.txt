@@ -5,4 +5,12 @@ endif()
 set(BB_CORE_NAME goban)
 set(BB_CORE_TARGET_PREFIX "")
 
+set(BB_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+if(NOT EXISTS "${BB_CORE_DIR}/isa/ballISA.h")
+  message(FATAL_ERROR "missing ${BB_CORE_DIR}/isa/ballISA.h")
+endif()
+get_filename_component(_BB_REPO_ROOT "${BB_CORE_DIR}/../../.." ABSOLUTE)
+include_directories(${BB_CORE_DIR}/isa)
+include_directories(${_BB_REPO_ROOT}/examples/balls)
+
 add_subdirectory(src)

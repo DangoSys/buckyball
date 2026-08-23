@@ -9,7 +9,7 @@ channel = 7
 
 [dma]
 nXacts = 8
-burstMaxBytes = 1024
+burstMaxBytes = 64
 busWidth = 128
 maxInFlightMemReqs = 16
 
@@ -21,10 +21,10 @@ readChannel = 4
 writeChannel = 4
 
 [mmio]
-enable = false
-bankNum = 16
-bankEntries = 64
-bankWidth = 128
+enable = true
+bankNum = 5
+bankEntries = 1024
+bankWidth = 8
 readWidth = 8
 
 [mem]

@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/relu.h>
 #include <stdio.h>
 
 #define ROWS 4
@@ -33,6 +34,8 @@ int main(void) {
   bb_relu(src, dst, ROWS);
   bb_mvout((uintptr_t)output, dst, ROWS, 1);
   bb_fence();
+  bb_mem_release(src);
+  bb_mem_release(dst);
 
   int passed = compare_i8_matrices(output, expected, ROWS, COLS);
   printf("ReLU test %s\n", passed ? "PASSED" : "FAILED");

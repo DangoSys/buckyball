@@ -10,8 +10,7 @@ case class VectorBallParam(
   lane:          Int,
   outputWidth:   Int,
   numMulThreads: Int,
-  numCasThreads: Int
-)
+  numCasThreads: Int)
 
 object VectorBallParam {
   implicit val rw: ReadWriter[VectorBallParam] = macroRW
@@ -29,4 +28,5 @@ object VectorBallParam {
       numCasThreads = BallParamLoader.int(tbl, "numCasThreads")
     )
   }
+
 }

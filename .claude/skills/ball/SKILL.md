@@ -12,7 +12,7 @@ description: Create a new Buckyball Ball operator named $ARGUMENTS, covering the
    - usually `examples/chips/<chip>/configs/tiles/cores/balldomains/*.toml`
 2. Check for partial existing implementation (incremental mode):
    - existing directory in `examples/balls/`
-   - existing ISA macro in `bb-tests/workloads/lib/bbhw/isa/`
+   - existing ISA macro in `examples/balls/<name>/workloads/isa/` (or base under `bb-tests/workloads/lib/bbhw/isa/`)
    - existing chip/ball ctests under `examples/` or `bb-tests/workloads/`
 3. Confirm with user:
    - target chip
@@ -47,7 +47,9 @@ Edit the chip balldomain TOML (the one selected by `cores/default.toml`, or the 
 
 ## Phase 4 - Add ISA C Macro
 
-Create `<funct7_decimal>_<name>.c` under `bb-tests/workloads/lib/bbhw/isa/`, then include it in `isa.h`.
+Create `examples/balls/<name>/workloads/isa/<name>.h` (include `<bbhw/isa/isa.h>`),
+then `#include <isa/<name>.h>` from the ball's ctests. Do **not** add ball ISA to
+central `bb-tests/workloads/lib/bbhw/isa/isa.h` (base mem/frontend only).
 
 ## Phase 5 - Add CTest
 

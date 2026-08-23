@@ -21,6 +21,6 @@ include "Buckyball.td"
 include "Fp2IntBall.td"
 include "Int2FpBall.td"
 include "TransposeBall.td"
-include "MatrixBall.td"
+include "SMatMulBall.td"
 
 #endif // GOBAN_BUCKYBALL_OPS

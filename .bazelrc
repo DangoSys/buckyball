@@ -1,0 +1,11 @@
+common --enable_bzlmod
+
+# Nix store must be visible to the sandbox (gcc lives there).
+build --sandbox_add_mount_pair=/nix/store
+
+# Repository rule reads RISCV at fetch time; keep it in the action env too.
+build --action_env=RISCV
+build --action_env=BUDDY_MLIR_BUILD_DIR
+build --action_env=LLVM_MLIR_BUILD_DIR
+
+build --//bazel/config:chip=toy

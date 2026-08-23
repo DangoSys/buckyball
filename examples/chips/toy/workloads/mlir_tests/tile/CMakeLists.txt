@@ -17,8 +17,8 @@ function(add_tile_matmul_test name)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
   endif()
-  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}_singlecore-baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}-linux)
+  set(BAREMETAL_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_tile_${name}-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_tile_${name}-linux)
 
   add_custom_command(
     OUTPUT ${OBJ}
@@ -144,21 +144,21 @@ function(add_tile_matmul_test name)
     VERBATIM
   )
 
-  add_custom_target(optest_tile_${name}_singlecore_baremetal
+  add_custom_target(mlirtest_tile_${name}_baremetal
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN})
 
-  add_custom_target(optest_tile_${name}_linux
+  add_custom_target(mlirtest_tile_${name}_linux
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
 
-  add_custom_target(optest_tile_${name}
-    DEPENDS optest_tile_${name}_linux
-      optest_tile_${name}_singlecore_baremetal
-    COMMENT "Building optest_tile_${name} for all platforms"
+  add_custom_target(mlirtest_tile_${name}
+    DEPENDS mlirtest_tile_${name}_linux
+      mlirtest_tile_${name}_baremetal
+    COMMENT "Building mlirtest_tile_${name} for all platforms"
   )
 
   add_toy_mlir_rushb(
     NAME ${name}
-    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_optest_tile_${name}
+    TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_tile_${name}
     CXX
     FRONT_PASSES -convert-tile-to-buckyball -lower-buckyball-to-bank-ssa
     SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC}
@@ -183,7 +183,7 @@ function(add_tile_matmul_contract_test name)
     VERBATIM
   )
 
-  add_custom_target(optest_tile_${name}_contract
+  add_custom_target(mlirtest_tile_${name}_contract
     COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
     DEPENDS ${OUT}
     COMMENT "Checking Tile matmul contract for ${name}"
@@ -206,7 +206,7 @@ function(add_tile_contract_test name)
     VERBATIM
   )
 
-  add_custom_target(optest_tile_${name}_contract
+  add_custom_target(mlirtest_tile_${name}_contract
     COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
     DEPENDS ${OUT}
     COMMENT "Checking Tile contract for ${name}"
@@ -221,7 +221,7 @@ add_tile_contract_test(conv2d_nhwc_hwcf_contract)
 add_tile_contract_test(conv2d_nhwc_hwcf_pad_contract)
 
 add_custom_target(tile-mlir-tests-build ALL DEPENDS
-  optest_tile_matmul_127x17_17x127
-  optest_tile_matmul_1x84_84x10
+  mlirtest_tile_matmul_127x17_17x127
+  mlirtest_tile_matmul_1x84_84x10
   COMMENT "Building all Tile MLIR tests"
   VERBATIM)

@@ -9,7 +9,6 @@ import framework.memdomain.frontend.mem.tlb.{BBTLBCluster, BBTLBExceptionIO, BBT
 import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
 import framework.balldomain.blink.{BankRead, BankWrite}
-import framework.memdomain.backend.mmio.MmioAllocReq
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd.decoder.MemDomainDecoder
@@ -52,7 +51,6 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val config = Decoupled(new MemConfigerIO(b))
 
     // MMIO outputs (to MmioPool via MemDomain)
-    val mmioAlloc           = Valid(new MmioAllocReq(b))
     val is_mvin_mmio_active = Output(Bool())
     val mmio_addr           = Output(UInt(17.W))
     val mmio_col            = Output(UInt(8.W))
@@ -132,7 +130,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   memRs.io.commit_i.st <> memStorer.io.cmdResp
   memRs.io.commit_i.cf <> configer.io.cmdResp
 
-//-----------------------------------------------------------------------------
+//===-------------------------------------------------------------------===//--
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
   pmc.io.ldReq_i.valid  := memRs.io.issue_o.ld.fire
@@ -236,7 +234,6 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.interdma.write_is_shared := Mux(selectConfigOwner, false.B, memLoader.io.is_shared)
 
   // MMIO signals from MemConfiger and MemLoader, exposed to MemDomain
-  io.mmioAlloc           := configer.io.mmioAlloc
   io.is_mvin_mmio_active := memLoader.io.is_mvin_mmio_active
   io.mmio_addr           := memLoader.io.mmio_addr
   io.mmio_col            := memLoader.io.mmio_col

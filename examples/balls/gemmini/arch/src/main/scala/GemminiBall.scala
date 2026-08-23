@@ -15,10 +15,14 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
     "GemminiBall requires frontend.sub_rob_enable=true because loop instructions emit SubROB rows"
   )
 
-  val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "GemminiBall")
-    .getOrElse(throw new IllegalArgumentException("GemminiBall not found in config"))
-  val inBW             = ballCommonConfig.inBW
-  val outBW            = ballCommonConfig.outBW
+  val ballCommonConfig = b.ballDomain.ballIdMappings
+    .find(_.ballName == "GemminiBall")
+    .getOrElse(
+      throw new IllegalArgumentException("GemminiBall not found in config")
+    )
+
+  val inBW  = ballCommonConfig.inBW
+  val outBW = ballCommonConfig.outBW
 
   @public
   val io = IO(new BlinkIO(b, inBW, outBW))
@@ -30,10 +34,17 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   // Sub-modules
   // =========================================================================
-  val exCtrl:         Instance[GemminiExCtrl]      = Instantiate(new GemminiExCtrl(b))
-  val matmulUnroller: Instance[LoopMatmulUnroller] = Instantiate(new LoopMatmulUnroller(b))
-  val convUnroller:   Instance[LoopConvUnroller]   = Instantiate(new LoopConvUnroller(b))
-  val encoder:        Instance[LoopCmdEncoder]     = Instantiate(new LoopCmdEncoder(b))
+  val exCtrl: Instance[GemminiExCtrl] = Instantiate(new GemminiExCtrl(b))
+
+  val matmulUnroller: Instance[LoopMatmulUnroller] = Instantiate(
+    new LoopMatmulUnroller(b)
+  )
+
+  val convUnroller: Instance[LoopConvUnroller] = Instantiate(
+    new LoopConvUnroller(b)
+  )
+
+  val encoder: Instance[LoopCmdEncoder] = Instantiate(new LoopCmdEncoder(b))
 
   // =========================================================================
   // Config registers for Loop modes
@@ -52,19 +63,58 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   // =========================================================================
   val funct7 = io.cmdReq.bits.cmd.funct7
 
+  def ballFunct(mnemonic: String): UInt =
+    b.ballDomain.ballISA
+      .find(_.mnemonic == mnemonic)
+      .map(_.funct7.U(7.W))
+      .getOrElse(throw new IllegalArgumentException(s"$mnemonic not found in ballISA"))
+
+  val configFunct     = ballFunct("GEMMINI_CONFIG")
+  val preloadFunct    = ballFunct("GEMMINI_PRELOAD")
+  val computePreFunct = ballFunct("GEMMINI_COMPUTE_PRELOADED")
+  val computeAccFunct = ballFunct("GEMMINI_COMPUTE_ACCUMULATED")
+  val flushFunct      = ballFunct("GEMMINI_FLUSH")
+
+  val loopWsConfigFuncts = Seq(
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_BOUNDS"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_ADDR_A"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_ADDR_B"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_ADDR_D"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_ADDR_C"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_STRIDES_AB"),
+    ballFunct("GEMMINI_LOOP_WS_CONFIG_STRIDES_DC")
+  )
+
+  val loopWsTriggerFunct = ballFunct("GEMMINI_LOOP_WS")
+
+  val loopConvConfigFuncts = Seq(
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_1"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_2"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_3"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_4"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_5"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_6"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_7"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_8"),
+    ballFunct("GEMMINI_LOOP_CONV_WS_CONFIG_9")
+  )
+
+  val loopConvTriggerFunct = ballFunct("GEMMINI_LOOP_CONV_WS")
+
   val rs2Data = io.cmdReq.bits.cmd.special
 
-  val isConfig     = funct7 === 0x02.U // GEMMINI_CONFIG (enable=000, opcode=2)
-  val isPreload    = funct7 === 0x35.U // GEMMINI_PRELOAD (enable=011, opcode=5)
-  val isComputePre = funct7 === 0x42.U // GEMMINI_COMPUTE_PRELOADED (enable=100, opcode=2)
-  val isComputeAcc = funct7 === 0x43.U // GEMMINI_COMPUTE_ACCUMULATED (enable=100, opcode=3)
-  val isFlush      = funct7 === 0x03.U // GEMMINI_FLUSH (enable=000, opcode=3)
-  val isExUnit     = isConfig || isPreload || isComputePre || isComputeAcc || isFlush
+  val isConfig     = funct7 === configFunct
+  val isPreload    = funct7 === preloadFunct
+  val isComputePre = funct7 === computePreFunct
+  val isComputeAcc = funct7 === computeAccFunct
+  val isFlush      = funct7 === flushFunct
+  val isExUnit     =
+    isConfig || isPreload || isComputePre || isComputeAcc || isFlush
 
-  val isLoopWsConfig    = funct7 >= 0x50.U && funct7 <= 0x56.U
-  val isLoopWsTrigger   = funct7 === 0x57.U
-  val isLoopConvConfig  = funct7 >= 0x60.U && funct7 <= 0x68.U
-  val isLoopConvTrigger = funct7 === 0x69.U
+  val isLoopWsConfig    = loopWsConfigFuncts.map(funct7 === _).reduce(_ || _)
+  val isLoopWsTrigger   = funct7 === loopWsTriggerFunct
+  val isLoopConvConfig  = loopConvConfigFuncts.map(funct7 === _).reduce(_ || _)
+  val isLoopConvTrigger = funct7 === loopConvTriggerFunct
 
   // =========================================================================
   // ExUnit path (non-Loop: CONFIG/PRELOAD/COMPUTE/FLUSH)
@@ -85,20 +135,20 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
     configRespBits.is_sub     := io.cmdReq.bits.is_sub
     configRespBits.sub_rob_id := io.cmdReq.bits.sub_rob_id
     switch(funct7) {
-      is(0x50.U) {
+      is(loopWsConfigFuncts(0)) {
         loopWsConfig.max_k := rs2Data(15, 0)
         loopWsConfig.max_j := rs2Data(31, 16)
         loopWsConfig.max_i := rs2Data(47, 32)
       }
-      is(0x51.U)(loopWsConfig.dram_addr_a := rs2Data(38, 0))
-      is(0x52.U)(loopWsConfig.dram_addr_b := rs2Data(38, 0))
-      is(0x53.U)(loopWsConfig.dram_addr_d := rs2Data(38, 0))
-      is(0x54.U)(loopWsConfig.dram_addr_c := rs2Data(38, 0))
-      is(0x55.U) {
+      is(loopWsConfigFuncts(1))(loopWsConfig.dram_addr_a := rs2Data(38, 0))
+      is(loopWsConfigFuncts(2))(loopWsConfig.dram_addr_b := rs2Data(38, 0))
+      is(loopWsConfigFuncts(3))(loopWsConfig.dram_addr_d := rs2Data(38, 0))
+      is(loopWsConfigFuncts(4))(loopWsConfig.dram_addr_c := rs2Data(38, 0))
+      is(loopWsConfigFuncts(5)) {
         loopWsConfig.stride_a := rs2Data(31, 0)
         loopWsConfig.stride_b := rs2Data(63, 32)
       }
-      is(0x56.U) {
+      is(loopWsConfigFuncts(6)) {
         loopWsConfig.stride_d := rs2Data(31, 0)
         loopWsConfig.stride_c := rs2Data(63, 32)
       }
@@ -111,32 +161,32 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
     configRespBits.is_sub     := io.cmdReq.bits.is_sub
     configRespBits.sub_rob_id := io.cmdReq.bits.sub_rob_id
     switch(funct7) {
-      is(0x60.U) {
+      is(loopConvConfigFuncts(0)) {
         loopConvConfig.batch_size  := rs2Data(15, 0)
         loopConvConfig.in_dim      := rs2Data(31, 16)
         loopConvConfig.in_channels := rs2Data(47, 32)
       }
-      is(0x61.U) {
+      is(loopConvConfigFuncts(1)) {
         loopConvConfig.out_channels := rs2Data(15, 0)
         loopConvConfig.out_dim      := rs2Data(31, 16)
         loopConvConfig.stride       := rs2Data(39, 32)
         loopConvConfig.padding      := rs2Data(47, 40)
       }
-      is(0x62.U) {
+      is(loopConvConfigFuncts(2)) {
         loopConvConfig.kernel_dim   := rs2Data(7, 0)
         loopConvConfig.pool_size    := rs2Data(15, 8)
         loopConvConfig.pool_stride  := rs2Data(23, 16)
         loopConvConfig.pool_padding := rs2Data(31, 24)
       }
-      is(0x63.U)(loopConvConfig.dram_addr_bias   := rs2Data(38, 0))
-      is(0x64.U)(loopConvConfig.dram_addr_input  := rs2Data(38, 0))
-      is(0x65.U)(loopConvConfig.dram_addr_weight := rs2Data(38, 0))
-      is(0x66.U)(loopConvConfig.dram_addr_output := rs2Data(38, 0))
-      is(0x67.U) {
+      is(loopConvConfigFuncts(3))(loopConvConfig.dram_addr_bias   := rs2Data(38, 0))
+      is(loopConvConfigFuncts(4))(loopConvConfig.dram_addr_input  := rs2Data(38, 0))
+      is(loopConvConfigFuncts(5))(loopConvConfig.dram_addr_weight := rs2Data(38, 0))
+      is(loopConvConfigFuncts(6))(loopConvConfig.dram_addr_output := rs2Data(38, 0))
+      is(loopConvConfigFuncts(7)) {
         loopConvConfig.input_stride  := rs2Data(31, 0)
         loopConvConfig.weight_stride := rs2Data(63, 32)
       }
-      is(0x68.U)(loopConvConfig.output_stride    := rs2Data(31, 0))
+      is(loopConvConfigFuncts(8))(loopConvConfig.output_stride    := rs2Data(31, 0))
     }
   }
 

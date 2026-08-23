@@ -35,7 +35,8 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
   val addrGen: Instance[LoopConvAddrGen] = Instantiate(new LoopConvAddrGen(b))
 
   // FSM states
-  val sIdle :: sAlloc :: sMvinInput :: sMvinWeight :: sCompute :: sMvout :: sFree :: sDone :: Nil = Enum(8)
+  val sIdle :: sAlloc :: sMvinInput :: sMvinWeight :: sCompute :: sMvout :: sFree :: sDone :: Nil =
+    Enum(8)
   val state                                                                                       = RegInit(sIdle)
 
   val cfg = Reg(new LoopConvWsConfig(b))
@@ -89,7 +90,8 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
     val v = Wire(Valid(new LoopSubCmd(b)))
     v.valid         := true.B
     v.bits          := 0.U.asTypeOf(new LoopSubCmd(b))
-    v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC else LoopSubCmdType.MSET_FREE)
+    v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC
+                       else LoopSubCmdType.MSET_FREE)
     v.bits.bank_id  := bankId
     v.bits.bank_row := row.U
     v.bits.bank_col := col.U
@@ -133,15 +135,18 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
     }.elsewhen(krow_reg + 1.U < cfg.kernel_dim) {
       kch_reg := 0.U; kcol_reg := 0.U; krow_reg := krow_reg + 1.U
     }.elsewhen(och_reg + DIM.U < cfg.out_channels) {
-      kch_reg := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := och_reg + DIM.U
+      kch_reg := 0.U; kcol_reg := 0.U; krow_reg := 0.U;
+      och_reg := och_reg + DIM.U
     }.elsewhen(ocol_reg + 1.U < cfg.out_dim) {
       kch_reg  := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := 0.U
       ocol_reg := ocol_reg + 1.U
     }.elsewhen(orow_reg + 1.U < cfg.out_dim) {
-      kch_reg  := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := 0.U; ocol_reg := 0.U
+      kch_reg  := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := 0.U;
+      ocol_reg := 0.U
       orow_reg := orow_reg + 1.U
     }.elsewhen(batch_reg + 1.U < cfg.batch_size) {
-      kch_reg   := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := 0.U; ocol_reg := 0.U; orow_reg := 0.U
+      kch_reg   := 0.U; kcol_reg := 0.U; krow_reg := 0.U; och_reg := 0.U;
+      ocol_reg  := 0.U; orow_reg := 0.U
       batch_reg := batch_reg + 1.U
     }.otherwise {
       state := sFree // All iterations done
@@ -167,9 +172,12 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
     // [MSET_alloc(input), MSET_alloc(weight), MSET_alloc(output), --]
     is(sAlloc) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := msetSlot(cfg.bank_input, alloc = true, row = 1, col = 1)
-      io.cmd.bits.slots(1) := msetSlot(cfg.bank_weight, alloc = true, row = 1, col = 1)
-      io.cmd.bits.slots(2) := msetSlot(cfg.bank_output, alloc = true, row = 1, col = 4)
+      io.cmd.bits
+        .slots(0)          := msetSlot(cfg.bank_input, alloc = true, row = 1, col = 1)
+      io.cmd.bits
+        .slots(1)          := msetSlot(cfg.bank_weight, alloc = true, row = 1, col = 1)
+      io.cmd.bits
+        .slots(2)          := msetSlot(cfg.bank_output, alloc = true, row = 1, col = 4)
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
         state := sMvinInput
@@ -182,10 +190,20 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
       val inputSlot = Mux(
         addrGen.io.isPadding,
         emptySlot(), // Skip MVIN if padding (load zeros implicitly)
-        mvinSlot(cfg.bank_input, addrGen.io.inputAddr, outRows(), inMemStride(cfg.input_stride))
+        mvinSlot(
+          cfg.bank_input,
+          addrGen.io.inputAddr,
+          outRows(),
+          inMemStride(cfg.input_stride)
+        )
       )
       io.cmd.bits.slots(0) := inputSlot
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_weight, addrGen.io.weightAddr, DIM.U, inMemStride(weightTileStride()))
+      io.cmd.bits.slots(1) := mvinSlot(
+        cfg.bank_weight,
+        addrGen.io.weightAddr,
+        DIM.U,
+        inMemStride(weightTileStride())
+      )
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
@@ -205,13 +223,17 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
       preSlot.bits.iter     := DIM.U
 
       val compSlot = Wire(Valid(new LoopSubCmd(b)))
-      compSlot.valid              := true.B
-      compSlot.bits               := 0.U.asTypeOf(new LoopSubCmd(b))
-      compSlot.bits.cmdType       := LoopSubCmdType.COMPUTE
-      compSlot.bits.op1_bank      := cfg.bank_input
-      compSlot.bits.op2_bank      := cfg.bank_weight
-      compSlot.bits.wr_bank       := cfg.bank_output
-      compSlot.bits.compute_mode  := Mux(isFirstK, 0.U, 1.U) // PRELOADED first, then ACCUMULATED
+      compSlot.valid             := true.B
+      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(b))
+      compSlot.bits.cmdType      := LoopSubCmdType.COMPUTE
+      compSlot.bits.op1_bank     := cfg.bank_input
+      compSlot.bits.op2_bank     := cfg.bank_weight
+      compSlot.bits.wr_bank      := cfg.bank_output
+      compSlot.bits.compute_mode := Mux(
+        isFirstK,
+        0.U,
+        1.U
+      ) // PRELOADED first, then ACCUMULATED
       compSlot.bits.iter          := DIM.U
       compSlot.bits.zero_op2      := cfg.no_bias
       compSlot.bits.zero_op1_tail := true.B
@@ -261,9 +283,12 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
     // [MSET_free(input), MSET_free(weight), MSET_free(output), --]
     is(sFree) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := msetSlot(cfg.bank_input, alloc = false, row = 0, col = 0)
-      io.cmd.bits.slots(1) := msetSlot(cfg.bank_weight, alloc = false, row = 0, col = 0)
-      io.cmd.bits.slots(2) := msetSlot(cfg.bank_output, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(0)          := msetSlot(cfg.bank_input, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(1)          := msetSlot(cfg.bank_weight, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(2)          := msetSlot(cfg.bank_output, alloc = false, row = 0, col = 0)
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
         state := sDone

@@ -4,8 +4,15 @@ import mill.define.Sources
 import mill.modules.Util
 import mill.scalalib.TestModule.ScalaTest
 import scalalib._
+import mill.javalib.JavaModule
 // support BSP
 import mill.bsp._
+
+object protoJava extends JavaModule {
+  override def millSourcePath = os.pwd / os.up / "bazel" / "proto" / "generated" / "java"
+  override def sources = T.sources(Seq(PathRef(millSourcePath)))
+  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:3.25.3")
+}
 
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
@@ -22,7 +29,8 @@ object buckyball extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    gemmini
+    gemmini,
+    protoJava
   )
 
   override def sources = T.sources {
@@ -61,7 +69,8 @@ object buckyball extends SbtModule { m =>
     ivy"org.yaml:snakeyaml:2.0",
     ivy"com.lihaoyi::sourcecode:0.3.0",
     ivy"com.lihaoyi::upickle:3.3.1",
-    ivy"tech.sparse::toml-scala:0.2.2"
+    ivy"tech.sparse::toml-scala:0.2.2",
+    ivy"com.google.protobuf:protobuf-java:3.25.3"
   )
 
   override def scalacPluginIvyDeps = Agg(

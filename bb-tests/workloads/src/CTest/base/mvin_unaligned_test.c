@@ -55,12 +55,6 @@ int mvin_unaligned_test(void) {
 }
 
 int main() {
-#ifdef MULTICORE
-  multicore(MULTICORE);
-#endif
   int passed = mvin_unaligned_test();
-#ifdef MULTICORE
-  exit(0);
-#endif
   return passed ? 0 : 1;
 }

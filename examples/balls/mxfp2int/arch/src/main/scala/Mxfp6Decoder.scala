@@ -15,7 +15,10 @@ object Mxfp6Decoder extends MxfpDecoder {
   val elemBits = 6
 
   def dequant(raw: UInt, scale: UInt): SInt = {
-    require(raw.getWidth == elemBits, s"Mxfp6Decoder expects $elemBits-bit raw, got ${raw.getWidth}")
+    require(
+      raw.getWidth == elemBits,
+      s"Mxfp6Decoder expects $elemBits-bit raw, got ${raw.getWidth}"
+    )
     val signedVal = raw.zext - 32.S(8.W) // SInt range -32..+31
     val shifted   = MxfpDecoder.scaleShift(signedVal, scale, 8)
     MxfpDecoder.saturateInt8(shifted)

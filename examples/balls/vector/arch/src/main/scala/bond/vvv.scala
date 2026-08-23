@@ -12,7 +12,11 @@ import examples.balls.vector.configs.VectorBallParam
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 @instantiable
-class VVV(val config: VectorBallParam, val inputWidth: Int, val outputWidth: Int) extends Bundle {
+class VVV(
+  val config:      VectorBallParam,
+  val inputWidth:  Int,
+  val outputWidth: Int)
+    extends Bundle {
   val lane = config.lane
 
   @public

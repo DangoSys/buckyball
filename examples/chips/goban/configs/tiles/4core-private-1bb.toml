@@ -18,13 +18,13 @@ defaultGroupCount = 1
 memCycles = 10
 
 [[cores]]
-include = "../../../../cores/goban/core.toml"
+include = "../../../../cores/goban/configs/default.toml"
 
 [[cores]]
-include = "../../../../cores/rocket/core.toml"
+include = "../../../../cores/rocket/configs/default.toml"
 
 [[cores]]
-include = "../../../../cores/rocket/core.toml"
+include = "../../../../cores/rocket/configs/default.toml"
 
 [[cores]]
-include = "../../../../cores/rocket/core.toml"
+include = "../../../../cores/rocket/configs/default.toml"

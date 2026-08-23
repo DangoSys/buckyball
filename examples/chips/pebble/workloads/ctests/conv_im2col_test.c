@@ -1,6 +1,7 @@
 #include "pebble.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 #ifndef TEST_CASE_NAME
@@ -57,6 +58,8 @@ int main(void) {
   bb_im2col(0, 1, t->input_h, t->kernel_h, t->stride, t->padding);
   bb_mvout((uintptr_t)actual, 1, rows, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
 
   int passed = 1;
   for (int row = 0; row < m_tiles * PEBBLE_INT8_LANES; ++row) {

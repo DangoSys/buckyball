@@ -18,7 +18,7 @@ def ReluOp : Buckyball_Op<"relu"> {
   let summary = "ReLU activation function";
   let description = [{
     Applies ReLU (Rectified Linear Unit) activation: max(0, x).
-    Corresponds to bb_relu instruction (funct7=50).
+    Corresponds to bb_relu instruction (funct7 from Core ballISA).
     Belongs to ReluBall (bid=1).
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,

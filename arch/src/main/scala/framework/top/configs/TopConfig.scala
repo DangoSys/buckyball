@@ -9,6 +9,6 @@ case class TopConfig(
 object TopConfig {
   implicit val rw: ReadWriter[TopConfig] = macroRW
 
-  /** Stub; real values come from TomlConfigLoader (tile + derived nCores). */
+  /** Stub; real values come from ChipBundleLoader (tile + derived nCores). */
   def apply(): TopConfig = TopConfig(memBallChannelNum = 0, nCores = 0)
 }

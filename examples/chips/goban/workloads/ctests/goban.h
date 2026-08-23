@@ -17,6 +17,7 @@
 #endif
 
 #define GOBAN_MAX_HARTS (GOBAN_CORES_PER_TILE * GOBAN_MAX_TILES)
+/* Must match frontend sharedBankIdBase in goban's frontend TOML. */
 #define GOBAN_SHARED_BANK_BASE 32
 
 static inline int bb_get_hart_id(void) {
