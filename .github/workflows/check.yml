@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: buckyball-ci-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: check
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
+    steps:
+      - name: Print information
+        run: |
+          echo "event=${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr=#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "branch=${{ github.head_ref }} -> ${{ github.base_ref }}"
+          else
+            echo "branch=${{ github.ref_name }}"
+          fi
+
+      - name: Reset to clean state
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          git fetch --force --prune origin "${{ github.ref }}"
+          git checkout --detach FETCH_HEAD
+          git reset --hard FETCH_HEAD
+          git clean -ffd
+          git submodule sync
+          git submodule update --init --force
+          for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
+            git -C "$submodule" reset --hard
+            git -C "$submodule" clean -ffd
+          done
+
+      - name: Check pre-commit
+        shell: zsh {0}
+        run: |
+          cd ~/Code/buckyball
+          nix develop -c pre-commit run --all-files --show-diff-on-failure --color=always
+
+  chip-check:
+    name: ${{ matrix.chip }}
+    needs: pre-commit
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            enable_rushb: true
+            run_batch_tests: true
+          - chip: pebble
+            enable_rushb: false
+            run_batch_tests: true
+          - chip: goban
+            enable_rushb: false
+            run_batch_tests: false
+          - chip: poly
+            enable_rushb: false
+            run_batch_tests: false
+          - chip: multi-rocket
+            enable_rushb: false
+            run_batch_tests: false
+    env:
+      ALL_PROXY: socks5h://127.0.0.1:7890
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Print information
+        run: |
+          echo "chip=${{ matrix.chip }}"
+          echo "event=${{ github.event_name }}"
+          echo "sha=${{ github.sha }}"
+
+      - name: Enter repo lock and checkout
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${{ github.sha }}" "${root}" "${{ github.ref }}"
+
+      - name: Nix build
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix build
+
+      - name: Build compiler and workloads
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev compiler --build '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'
+
+      - name: bemu batch
+        if: matrix.run_batch_tests
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test pk-tests --clean-before'
+
+      - name: verilator batch
+        if: matrix.run_batch_tests
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --clean-before'
+
+      - name: rushB batch
+        if: matrix.enable_rushb && matrix.run_batch_tests
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev workload --build '--chip ${{ matrix.chip }} --rushB bemu'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test pk-tests --rushB --clean-before'
+          nix develop -c bbdev workload --build '--chip ${{ matrix.chip }} --rushB verilator'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test pk-tests --rushB --clean-before'
+
+      - name: Detect bebop JUnit files
+        if: always() && matrix.run_batch_tests
+        id: junit
+        shell: zsh {0}
+        run: |
+          root="${BB_ROOT/#\~/$HOME}"
+          files=("${root}/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-"*.xml(N))
+          if (( ${#files} == 0 )); then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish bebop test report
+        if: always() && matrix.run_batch_tests && steps.junit.outputs.found == 'true'
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
+          check_name: "bebop nextest (${{ matrix.chip }})"
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload bebop JUnit artifacts
+        if: always() && matrix.run_batch_tests && steps.junit.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        env:
+          ALL_PROXY: ""
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
+        with:
+          name: bebop-nextest-junit-${{ matrix.chip }}
+          path: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
+
+      - name: Exit repo lock
+        if: always()
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${{ github.sha }}" "${root}" "${{ github.ref }}"

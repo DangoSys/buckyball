@@ -38,14 +38,9 @@ namespace {
 static llvm::Intrinsic::ID lookupStableIntrinsic(StringRef opName) {
   return llvm::StringSwitch<llvm::Intrinsic::ID>(opName)
       .Case("buckyball.intr.fence", llvm::Intrinsic::riscv_bb_fence)
-      .Case("buckyball.intr.im2col", llvm::Intrinsic::riscv_bb_im2col)
       .Case("buckyball.intr.mset", llvm::Intrinsic::riscv_bb_mset)
-      .Case("buckyball.intr.vecmat16", llvm::Intrinsic::riscv_bb_mul_warp16)
       .Case("buckyball.intr.mvin", llvm::Intrinsic::riscv_bb_mvin)
       .Case("buckyball.intr.mvout", llvm::Intrinsic::riscv_bb_mvout)
-      .Case("buckyball.intr.relu", llvm::Intrinsic::riscv_bb_relu)
-      .Case("buckyball.intr.bbfp.mul", llvm::Intrinsic::riscv_bb_bbfp_mul)
-      .Case("buckyball.intr.transpose", llvm::Intrinsic::riscv_bb_transpose)
       .Default(llvm::Intrinsic::not_intrinsic);
 }
 
