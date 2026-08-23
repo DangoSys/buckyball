@@ -19,7 +19,7 @@ concurrency:
 jobs:
   pre-commit:
     name: pre-commit
-    runs-on: cpu-server
+    runs-on: regression
     env:
       ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
