@@ -1,1 +1,24 @@
-../../examples/chips/multi-rocket/ci/check.yml
+name: Multi-Rocket Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: buckyball-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/chip-check.reusable.yml
+    with:
+      chip: multi-rocket
+      run_batch_tests: false

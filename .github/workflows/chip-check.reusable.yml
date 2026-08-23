@@ -6,6 +6,22 @@ on:
       chip:
         required: true
         type: string
+      verilator_config:
+        required: false
+        type: string
+        default: ""
+      rushb_verilator_config:
+        required: false
+        type: string
+        default: ""
+      enable_rushb:
+        required: false
+        type: boolean
+        default: false
+      run_batch_tests:
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -14,7 +30,7 @@ permissions:
 jobs:
   check:
     name: ${{ inputs.chip }}
-    runs-on: cpu-server
+    runs-on: buckyball-ppa-regression
     env:
       ALL_PROXY: socks5h://127.0.0.1:7890
       BB_ROOT: ~/Code/buckyball
@@ -47,14 +63,6 @@ jobs:
           cd "${root}"
           nix build
 
-      - name: Load chip CI env
-        id: cfg
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          bash "${root}/.github/scripts/chip_ci_env.sh" "${{ inputs.chip }}" "${root}" >> "$GITHUB_OUTPUT"
-
       - name: Build compiler and workloads
         shell: zsh {0}
         run: |
@@ -65,7 +73,7 @@ jobs:
           nix develop -c bbdev workload --build '--chip ${{ inputs.chip }}'
 
       - name: bemu batch
-        if: steps.cfg.outputs.run_batch_tests == 'true'
+        if: inputs.run_batch_tests
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -75,19 +83,19 @@ jobs:
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test pk-tests --clean-before'
 
       - name: verilator batch
-        if: steps.cfg.outputs.run_batch_tests == 'true' && steps.cfg.outputs.verilator_config != ''
+        if: inputs.run_batch_tests && inputs.verilator_config != ''
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-verilator --clean '--config ${{ steps.cfg.outputs.verilator_config }}'
-          nix develop -c bbdev bebop-verilator --verilog '--config ${{ steps.cfg.outputs.verilator_config }}'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ steps.cfg.outputs.verilator_config }}'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.verilator_config }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-verilator --clean '--config ${{ inputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --verilog '--config ${{ inputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ inputs.verilator_config }}'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ inputs.verilator_config }} --test elf-tests --clean-before'
 
       - name: rushB batch
-        if: steps.cfg.outputs.enable_rushb == 'true' && steps.cfg.outputs.rushb_verilator_config != ''
+        if: inputs.enable_rushb && inputs.rushb_verilator_config != ''
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -97,15 +105,15 @@ jobs:
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test elf-tests --rushB --clean-before'
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ inputs.chip }} --test pk-tests --rushB --clean-before'
 
-          nix develop -c bbdev bebop-verilator --clean '--config ${{ steps.cfg.outputs.rushb_verilator_config }}'
-          nix develop -c bbdev bebop-verilator --verilog '--config ${{ steps.cfg.outputs.rushb_verilator_config }}'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ steps.cfg.outputs.rushb_verilator_config }}'
+          nix develop -c bbdev bebop-verilator --clean '--config ${{ inputs.rushb_verilator_config }}'
+          nix develop -c bbdev bebop-verilator --verilog '--config ${{ inputs.rushb_verilator_config }}'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --config ${{ inputs.rushb_verilator_config }}'
           nix develop -c bbdev workload --build '--chip ${{ inputs.chip }} --rushB verilator'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.rushb_verilator_config }} --test elf-tests --rushB --clean-before'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ steps.cfg.outputs.rushb_verilator_config }} --test pk-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ inputs.rushb_verilator_config }} --test elf-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ inputs.chip }} --config ${{ inputs.rushb_verilator_config }} --test pk-tests --rushB --clean-before'
 
       - name: Detect bebop JUnit files
-        if: always() && steps.cfg.outputs.run_batch_tests == 'true'
+        if: always() && inputs.run_batch_tests
         id: junit
         shell: zsh {0}
         run: |
@@ -120,7 +128,7 @@ jobs:
           fi
 
       - name: Publish bebop test report
-        if: always() && steps.cfg.outputs.run_batch_tests == 'true' && steps.junit.outputs.found == 'true'
+        if: always() && inputs.run_batch_tests && steps.junit.outputs.found == 'true'
         uses: mikepenz/action-junit-report@v4
         with:
           report_paths: "~/Code/buckyball/bebop/target/${{ inputs.chip }}/nextest/junit-bbdev-*.xml"
@@ -129,7 +137,7 @@ jobs:
           include_passed: true
 
       - name: Upload bebop JUnit artifacts
-        if: always() && steps.cfg.outputs.run_batch_tests == 'true' && steps.junit.outputs.found == 'true'
+        if: always() && inputs.run_batch_tests && steps.junit.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         env:
           ALL_PROXY: ""
