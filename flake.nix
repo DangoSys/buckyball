@@ -138,6 +138,8 @@
               pkgs."pre-commit"
               # clang-format for pre-commit (language: system)
               pkgs.clang-tools
+              # protoc for bbdev config --install (chip.proto -> chip.pb)
+              pkgs.protobuf
 
               # Rust toolchain
               rustTools.rustc
