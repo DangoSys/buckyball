@@ -10,8 +10,8 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
+from utils.event_common import require_chip
 from utils.path import get_buckyball_path
-from bemu_common import bemu_manifest
 
 config = {
     "name": "bebop-bemu-batch-api",
@@ -27,7 +27,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
 
     chip = body.get("chip")
     try:
-        bemu_manifest(chip, get_buckyball_path())
+        require_chip({"chip": chip})
     except ValueError as e:
         return ApiResponse(
             status=400,

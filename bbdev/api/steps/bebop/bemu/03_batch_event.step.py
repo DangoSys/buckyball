@@ -29,6 +29,7 @@ from bemu_common import bemu_manifest
 from regression import regression_workload_toml
 from regression_harness import nextest_harness_args
 
+
 config = {
     "name": "bebop-bemu-batch",
     "description": "Run bebop bemu nextest batch regression",
@@ -52,7 +53,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    elf_root = chip_output_root(bbdir, chip)
     try:
         bemu_cargo_manifest = bemu_manifest(chip, bbdir)
     except ValueError as e:
@@ -63,6 +63,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    elf_root = chip_output_root(bbdir, chip)
 
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))

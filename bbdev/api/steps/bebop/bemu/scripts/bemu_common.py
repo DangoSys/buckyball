@@ -1,8 +1,7 @@
-import json
+import sys
 from pathlib import Path
 
-from utils.build import install_bundle
-from utils.chip import require_chip
+from utils.event_common import require_chip
 
 
 def _repo(bbdir: str | None) -> Path:
@@ -11,24 +10,29 @@ def _repo(bbdir: str | None) -> Path:
     return Path(bbdir or get_buckyball_path())
 
 
-def _chip_json(chip: str, bbdir: str | None = None) -> dict:
+def _chip(chip: str, bbdir: str | None = None):
+    chip = require_chip({"chip": chip})
     root = _repo(bbdir)
-    path = root / "examples" / "chips" / chip / "generated" / "chip.json"
+    scripts = root / "bbdev" / "api" / "steps" / "config" / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    import chip_pb2
+
+    path = root / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
     if not path.is_file():
-        install_bundle(str(root), chip)
-    if not path.is_file():
-        raise ValueError(f"missing {path} after bundle build")
-    return json.loads(path.read_text(encoding="utf-8"))
+        raise FileNotFoundError(f"missing {path}; run bbdev config --install")
+    msg = chip_pb2.Chip()
+    msg.ParseFromString(path.read_bytes())
+    return msg
 
 
 def bemu_manifest(chip: str, bbdir: str | None = None) -> Path:
     chip = require_chip({"chip": chip})
     root = _repo(bbdir)
-    install_bundle(str(root), chip)
-    manifest = root / "examples" / "chips" / chip / "generated" / "bemu" / "Cargo.toml"
-    if not manifest.is_file():
-        raise ValueError(f"missing {manifest}; bundle install failed")
-    return manifest
+    path = root / "examples" / "chips" / chip / "configs" / "generated" / "bemu" / "Cargo.toml"
+    if not path.is_file():
+        raise FileNotFoundError(f"missing {path}; run bbdev config --install")
+    return path
 
 
 def bemu_core_manifest(chip: str, bbdir: str | None = None) -> Path:
@@ -38,20 +42,14 @@ def bemu_core_manifest(chip: str, bbdir: str | None = None) -> Path:
 def chip_emu_manifest(chip: str, bbdir: str | None = None) -> Path | None:
     chip = require_chip({"chip": chip})
     root = _repo(bbdir)
-    main = _chip_json(chip, bbdir).get("bemu", {}).get("chipMain", "")
+    main = _chip(chip, bbdir).bemu.chip_main
     if not main:
         return None
-    manifest = root / "examples" / "chips" / chip / "emu" / "Cargo.toml"
-    if not manifest.is_file():
-        raise ValueError(f"missing chip emu manifest: {manifest}")
-    return manifest
+    return root / "examples" / "chips" / chip / "emu" / "Cargo.toml"
 
 
 def bemu_tile_index(chip: str, bbdir: str | None = None) -> int | None:
-    bemu = _chip_json(chip, bbdir).get("bemu", {})
-    if not bemu.get("chipMain", ""):
+    bemu = _chip(chip, bbdir).bemu
+    if not bemu.chip_main:
         return None
-    index = bemu.get("tileIndex", 0)
-    if not isinstance(index, int) or index < 0:
-        raise ValueError(f"chip {chip}: bemu.tileIndex must be a non-negative int")
-    return index
+    return bemu.tile_index

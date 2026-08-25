@@ -6,12 +6,19 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+mill_dir = os.path.dirname(__file__)
+mill_scripts = os.path.join(mill_dir, "scripts")
+if mill_dir not in sys.path:
+    sys.path.insert(0, mill_dir)
+if mill_scripts not in sys.path:
+    sys.path.insert(0, mill_scripts)
 
-from utils.event_common import check_result, get_origin_trace_id
-from utils.chip import require_chip
+from utils.event_common import require_chip
 from utils.path import get_buckyball_path
-from utils.rtl import run_chip_mill
-
+from utils.path import rtl_out
+import mill as mill_run
+from utils.event_common import check_result, get_origin_trace_id
+from utils.stream_run import stream_run_logger_async
 
 config = {
     "name": "vcs-verilog",
@@ -30,11 +37,21 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(ctx, 1, extra_fields={"task": "verilog", "error": str(exc)}, trace_id=origin_tid)
         return
     bbdir = get_buckyball_path()
+    arch = os.path.join(bbdir, "arch")
     try:
-        build_dir, returncode = await run_chip_mill(
-            ctx, bbdir, chip, "verilog", "vcs verilog",
-            input_data.get("output_dir"),
+        mill_config, build_dir = rtl_out(
+            bbdir, chip, "verilog", input_data.get("output_dir"),
         )
+        os.makedirs(build_dir, exist_ok=True)
+        returncode = (
+            await stream_run_logger_async(
+            cmd=mill_run.elaborate_cmd("sims.verilator.Elaborate", mill_config, build_dir),
+            logger=ctx.logger,
+            cwd=arch,
+            stdout_prefix="vcs verilog",
+            stderr_prefix="vcs verilog",
+            )
+        ).returncode
     except (ValueError, RuntimeError) as exc:
         await check_result(ctx, 1, extra_fields={"task": "verilog", "error": str(exc)}, trace_id=origin_tid)
         return

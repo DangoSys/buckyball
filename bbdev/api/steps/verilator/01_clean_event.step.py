@@ -8,8 +8,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, rtl_dir_for_clean
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -38,7 +38,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     bbdir = get_buckyball_path()
-    build_dir = rtl_dir_for_clean(
+    build_dir = rtl_dir(
         bbdir, chip,
         "verilog",
         input_data.get("output_dir"),

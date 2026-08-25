@@ -7,6 +7,7 @@ import os
 import shutil
 import shlex
 import sys
+from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -17,13 +18,13 @@ bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
-from utils.chip import require_chip
-from utils.build import install_bundle
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_verilator_build_dir
+from utils.event_common import require_chip
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
 from regression_harness import nextest_harness_args
+
 
 config = {
     "name": "bebop-verilator-batch",
@@ -50,6 +51,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+
     elf_root = chip_output_root(bbdir, chip)
 
     test_type = input_data.get("test", "elf-tests")
@@ -83,16 +85,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"rushB={rushB} diff={diff}"
     )
 
-    vsrc_dir = get_verilator_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
-    if not os.path.isdir(vsrc_dir):
-        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "vsrc_not_found", "vsrc_dir": vsrc_dir},
-            trace_id=origin_tid,
-        )
-        return
-
+    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))
@@ -104,18 +97,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     manifest = f"{bebop_dir}/Cargo.toml"
     features = "verilator"
     if diff:
-        try:
-            install_bundle(bbdir, chip)
-        except ValueError as error:
-            ctx.logger.error(str(error))
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={"error": "chip_manifest_not_found", "detail": str(error)},
-                trace_id=origin_tid,
-            )
-            return
         features = "verilator,bemu,difftest"
         preload = os.pathsep.join(
             path

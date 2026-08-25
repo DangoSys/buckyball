@@ -31,7 +31,7 @@ HTTP_PORT_END = 5500
 WORKFLOW_COMMANDS = {
     "verilator": {
         "clean": 'Clean build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate verilog files. Args: "--chip <chip> [--output-dir <dir>] [--balltype <type>]"',
+        "verilog": 'Generate verilog files. Args: "--chip <chip> [--output-dir <dir>]"',
         "build": 'Build simulation executable. Args: "--chip <chip> [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run simulation. Args: "--chip <chip> --binary <path> [--batch] [--output-dir <dir>]"',
         "run": 'Integrated build+sim+run. Args: "--chip <chip> --binary <path> [--batch] [--jobs <num>] [--output-dir <dir>]"',
@@ -59,7 +59,7 @@ WORKFLOW_COMMANDS = {
         "runworkload": "Run workload.",
     },
     "compiler": {
-        "build": 'Build compiler. Args: "--chip <chip>|--core <core> [--stable]"',
+        "build": 'Build compiler. Args: "--chip <chip>"',
     },
     "bebop-bemu": {
         "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"',
@@ -95,8 +95,12 @@ WORKFLOW_COMMANDS = {
         "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
     },
     "uvm": {
+        "verilog": 'Generate isolated Ball RTL for UVM. Args: "--balltype <type> --output-dir <dir>"',
         "build": 'Build a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>]"',
         "run": 'Build and run a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>] [--test <uvm_test>]"',
+    },
+    "config": {
+        "install": True,
     },
     "regression": {
         "buildbitstream": 'Build pebble p2e bitstream. Args: "--chip <chip> [--output-dir <dir>]"',

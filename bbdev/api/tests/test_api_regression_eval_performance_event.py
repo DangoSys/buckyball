@@ -66,7 +66,7 @@ def _patch_paths(mod, monkeypatch, tmp_path, vsrc):
     monkeypatch.setattr(mod, "get_buckyball_path", lambda: str(tmp_path))
     monkeypatch.setattr(mod, "resolve_chip_compiler_core",
                         lambda bb, chip: SimpleNamespace(name="pebbleCore"))
-    monkeypatch.setattr(mod, "get_verilator_build_dir",
+    monkeypatch.setattr(mod, "rtl_dir",
                         lambda bb, cfg, out: out or str(vsrc))
 
 

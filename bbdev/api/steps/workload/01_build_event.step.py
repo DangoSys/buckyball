@@ -10,9 +10,11 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.build import build_workload
 from utils.path import get_buckyball_path
 from utils.event_common import check_result, get_origin_trace_id
+
+sys.path.insert(0, os.path.join(get_buckyball_path(), "bb-tests", "workloads", "scripts"))
+import build as workload_build  # noqa: E402
 
 config = {
     "name": "workload-build",
@@ -157,7 +159,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             return
 
     try:
-        build_workload(
+        workload_build.build_workload(
             bbdir,
             chip,
             model=model.lower() if model else "",

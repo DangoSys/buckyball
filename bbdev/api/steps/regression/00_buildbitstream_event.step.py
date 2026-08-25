@@ -7,7 +7,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {

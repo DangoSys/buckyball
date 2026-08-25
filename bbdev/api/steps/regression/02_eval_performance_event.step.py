@@ -26,10 +26,12 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.build import build_workload
-from utils.path import get_buckyball_path, get_p2e_build_dir, get_run_log_dir
+from utils.path import get_buckyball_path, rtl_dir, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
+
+sys.path.insert(0, os.path.join(get_buckyball_path(), "bb-tests", "workloads", "scripts"))
+import build as workload_build  # noqa: E402
 
 regression_scripts = os.path.join(os.path.dirname(__file__), "scripts")
 if regression_scripts not in sys.path:
@@ -82,7 +84,7 @@ def _workload_build(bbdir, chip, model):
     model_key = model.lower()
     if MODEL_LAYOUT.get(model_key) is None:
         raise ValueError(f"Unknown model: {model}")
-    build_workload(bbdir, chip, model=model_key)
+    workload_build.build_workload(bbdir, chip, model=model_key)
 
 
 def _kernel_build_cmds(bbdir, model, dataset=""):
@@ -125,12 +127,10 @@ def _p2e_run_cmds(bbdir, bitstream, image_name, chip, input_data):
     multi_fpga = bool(input_data.get("multi-fpga", False))
     if not multi_fpga and _p2e.case_uses_multi_fpga(build_dir):
         multi_fpga = True
-    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
-    if not os.path.isdir(vsrc_dir):
-        raise FileNotFoundError(f"VSRC_PATH does not exist for P2E runtime: {vsrc_dir}")
+    vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = get_run_log_dir(bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir"))
-    os.makedirs(log_dir, exist_ok=True)
+    run_log = log_dir(bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir"))
+    os.makedirs(run_log, exist_ok=True)
     runtime_cmd = (
         f"env BEBOP_P2E_RUNTIME_ONLY=1 BEBOP_P2E_REBUILD_RUNTIME=1 "
         f'cargo run --release --features p2e -- build p2e '
@@ -147,7 +147,7 @@ def _p2e_run_cmds(bbdir, bitstream, image_name, chip, input_data):
     )
     if multi_fpga:
         run_cmd += " --multi-fpga"
-    return runtime_cmd, run_cmd, f"{bbdir}/bebop", log_dir, build_dir
+    return runtime_cmd, run_cmd, f"{bbdir}/bebop", run_log, build_dir
 
 
 def _perfetto_cmd(trace_dir, trace_toml, mlir_files):
@@ -261,7 +261,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx.logger.info(f"[eval-performance] model {model}: p2e runworkload")
         image_name = os.path.splitext(os.path.basename(fw_hex))[0]
         try:
-            runtime_cmd, run_cmd, bebop_cwd, log_dir, build_dir = _p2e_run_cmds(
+            runtime_cmd, run_cmd, bebop_cwd, run_log, build_dir = _p2e_run_cmds(
                 bbdir, bitstream, image_name, chip, input_data
             )
         except FileNotFoundError as e:
@@ -301,9 +301,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                         log_dir=log_dir)
             return
 
-        uart_path = Path(log_dir) / "uart_hart_0.log"
+        uart_path = Path(run_log) / "uart_hart_0.log"
         if not uart_path.is_file():
-            uart_path = Path(log_dir) / "uart.log"
+            uart_path = Path(run_log) / "uart.log"
         if not uart_path.is_file():
             ctx.logger.error(f"uart log missing under {log_dir}")
             await _fail(ctx, origin_tid, "uart_missing", model=model, log_dir=log_dir)
@@ -315,7 +315,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             await _fail(ctx, origin_tid, "accuracy_unparsable", model=model)
             return
 
-        cycle_dir = Path(log_dir) / "trace" / "cycle"
+        cycle_dir = Path(run_log) / "trace" / "cycle"
         if not cycle_dir.is_dir():
             ctx.logger.error(f"cycle trace dir missing: {cycle_dir}")
             await _fail(ctx, origin_tid, "cycle_trace_missing",
@@ -339,7 +339,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctx.logger.error(str(e))
             await _fail(ctx, origin_tid, "perfetto_inputs_missing", model=model)
             return
-        trace_dir = Path(log_dir) / "trace"
+        trace_dir = Path(run_log) / "trace"
         perf_cmd = _perfetto_cmd(
             trace_dir, pinputs["trace_toml"], pinputs["mlir_files"]
         )
@@ -366,7 +366,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             await _fail(ctx, origin_tid, "perfetto_cycles_failed", model=model)
             return
 
-        dest = Path(log_dir) / f"perfetto-{model}.json"
+        dest = Path(run_log) / f"perfetto-{model}.json"
         dest.write_text(json.dumps(perf_data, indent=2))
         model_results.append({
             "name": model,

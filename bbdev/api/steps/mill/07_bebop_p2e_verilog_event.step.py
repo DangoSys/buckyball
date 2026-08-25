@@ -6,10 +6,18 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+mill_dir = os.path.dirname(__file__)
+mill_scripts = os.path.join(mill_dir, "scripts")
+if mill_dir not in sys.path:
+    sys.path.insert(0, mill_dir)
+if mill_scripts not in sys.path:
+    sys.path.insert(0, mill_scripts)
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 from utils.path import get_buckyball_path
-from utils.rtl import run_chip_mill
+from utils.path import rtl_out
+from utils.stream_run import stream_run_logger_async
+import mill as mill_run
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -24,12 +32,25 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
+    arch = os.path.join(bbdir, "arch")
     try:
         chip = require_chip(input_data)
-        build_dir, returncode = await run_chip_mill(
-            ctx, bbdir, chip, "p2e", "bebop p2e verilog",
-            input_data.get("output_dir"),
+        mill_config, build_dir = rtl_out(
+            bbdir, chip, "p2e", input_data.get("output_dir"),
         )
+        os.makedirs(build_dir, exist_ok=True)
+        ctx.logger.info(f"Using mill config: {mill_config}")
+        ctx.logger.info(f"Using build directory: {build_dir}")
+        prefix = "bebop p2e verilog"
+        returncode = (
+            await stream_run_logger_async(
+            cmd=mill_run.elaborate_cmd("sims.p2e.Elaborate", mill_config, build_dir),
+            logger=ctx.logger,
+            cwd=arch,
+            stdout_prefix=prefix,
+            stderr_prefix=prefix,
+            )
+        ).returncode
     except (ValueError, RuntimeError) as error:
         ctx.logger.error(str(error))
         await check_result(

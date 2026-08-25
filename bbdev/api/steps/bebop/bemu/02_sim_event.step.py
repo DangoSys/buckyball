@@ -19,12 +19,13 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, get_bemu_log_dir, workload_tests_root
+from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, log_dir, workload_tests_root
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload, search_workload_all
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
 from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile_index, chip_emu_manifest
+
 
 PERFETTO_TARGETS = {
     "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
@@ -148,8 +149,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         clean_model_trace(binary_dir)
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = get_bemu_log_dir(bbdir, chip, timestamp, binary_name)
-    os.makedirs(log_dir, exist_ok=True)
+    run_log = log_dir(bbdir, chip, "verilog", timestamp, "bemu", binary_name)
+    os.makedirs(run_log, exist_ok=True)
 
     if input_data.get("rushB"):
         # rushB is a native ABI for one accelerator instance, so it remains a
@@ -202,7 +203,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "backend": "rushB",
                 "binary": binary_path,
                 "chip": chip,
-                "log_dir": log_dir,
+                "log_dir": run_log,
                 "timestamp": timestamp,
             },
             trace_id=origin_tid,
@@ -284,7 +285,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "task": "bemu",
                 "binary": binary_path,
                 "chip": chip,
-                "log_dir": log_dir,
+                "log_dir": run_log,
                 "timestamp": timestamp,
             },
             trace_id=origin_tid,
@@ -314,7 +315,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 extra_fields={
                     "task": "perfetto",
                     "binary": binary_path,
-                    "log_dir": log_dir,
+                    "log_dir": run_log,
                     "timestamp": timestamp,
                     "perfetto_target": perfetto_target,
                     "perfetto": perfetto_path,
@@ -331,7 +332,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "bemu",
             "binary": binary_path,
             "chip": chip,
-            "log_dir": log_dir,
+            "log_dir": run_log,
             "timestamp": timestamp,
             "perfetto_target": perfetto_target,
             "perfetto": perfetto_path,

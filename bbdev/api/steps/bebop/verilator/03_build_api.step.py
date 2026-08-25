@@ -1,7 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_verilator_build_dir
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 
 config = {
     "name": "bebop-verilator-build-api",
@@ -32,9 +32,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "chip": chip,
         "jobs": body.get("jobs", 16),
         "diff": bool(body.get("diff", False)),
-        "vsrc_dir": get_verilator_build_dir(
-            bbdir, chip,
-            body.get("vsrc-dir") or body.get("output-dir"),
+        "vsrc_dir": rtl_dir(
+            bbdir, chip, "verilog", body.get("vsrc-dir") or body.get("output-dir"),
         ),
     }
     await ctx.enqueue({"topic": "bebop.verilator.build", "data": {**data, "_trace_id": ctx.trace_id}})

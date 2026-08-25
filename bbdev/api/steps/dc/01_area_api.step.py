@@ -1,7 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import check_dc_rtl_args
+from utils.event_common import require_chip
 
 config = {
     "name": "dc-area-api",
@@ -14,14 +13,7 @@ config = {
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
-    try:
-        chip = require_chip(body)
-        subset = {"chip": chip}
-        if "top" in body:
-            subset["top"] = body.get("top")
-        check_dc_rtl_args(subset)
-    except ValueError as exc:
-        return ApiResponse(status=400, body={"error": str(exc)})
+    chip = require_chip(body)
     await ctx.enqueue(
         {
             "topic": "dc.verilog",

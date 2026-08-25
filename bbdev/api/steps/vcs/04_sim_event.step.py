@@ -11,8 +11,8 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_run_log_dir, get_vcs_build_dir, workload_build_dir, workload_tests_root
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, log_dir, rtl_dir, workload_build_dir, workload_tests_root
 from utils.search_workload import search_workload
 from utils.stream_run import stream_run_logger_async
 
@@ -55,26 +55,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if binary is None:
         await check_result(ctx, 1, extra_fields={"task": "sim", "error": f"binary not found: {binary_name}"}, trace_id=origin_tid)
         return
-    build_dir = get_vcs_build_dir(bbdir, chip, input_data.get("output_dir"))
+    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
     artifact_dir = Path(build_dir) / "vcs"
     simv = artifact_dir / "simv"
-    if not simv.is_file():
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": f"VCS executable missing: {simv}; run bbdev vcs --build first"}, trace_id=origin_tid)
-        return
-
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    log_dir = Path(get_run_log_dir(
+    run_log = Path(log_dir(
         bbdir, chip, "verilog", timestamp, "vcs", binary_name,
         input_data.get("output_dir"),
     ))
-    log_dir.mkdir(parents=True)
+    run_log.mkdir(parents=True)
     timeout_ns = input_data.get("timeout_ns", input_data.get("timeout-ns", "100000000"))
-    try:
-        if float(timeout_ns) <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": "timeout-ns must be a positive number"}, trace_id=origin_tid)
-        return
+    if float(timeout_ns) <= 0:
+        raise ValueError("timeout-ns must be a positive number")
     wave = input_data.get("waveform", input_data.get("wave"))
     wave_arg = "+vcd" if str(wave).lower() == "vcd" else ("+vpd" if wave else "")
     command = " ".join(
@@ -100,6 +92,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     await check_result(
         ctx,
         result.returncode,
-        extra_fields={"task": "sim", "simv": str(simv), "binary": binary, "log_dir": str(log_dir)},
+        extra_fields={"task": "sim", "simv": str(simv), "binary": binary, "log_dir": str(run_log)},
         trace_id=origin_tid,
     )

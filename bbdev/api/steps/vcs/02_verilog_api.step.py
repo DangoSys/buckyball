@@ -1,6 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 
 
 config = {

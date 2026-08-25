@@ -39,6 +39,8 @@ modules:
     config:
       adapter:
         class: modules::queue::BuiltinQueueAdapter
+        config:
+          max_attempts: 1
 
   # ── PubSub Module ──────────────────────────────────────────────────────
   - class: modules::pubsub::PubSubModule

@@ -123,7 +123,7 @@ def test_event_sets_processing_and_enqueues_verilog():
 def _patch_verilog(mod, monkeypatch, rc=0):
     monkeypatch.setattr(mod, "get_buckyball_path", lambda: "/tmp/bb")
     monkeypatch.setattr(
-        mod, "get_verilator_build_dir", lambda bb, cfg, out: out or "/tmp/bb/arch/build/cfg"
+        mod, "rtl_dir", lambda bb, cfg, out: out or "/tmp/bb/arch/build/cfg"
     )
     monkeypatch.setattr(mod, "cleanup_strays", lambda *a, **k: None)
     monkeypatch.setattr(mod, "normalize_p2e_timescale", lambda *a, **k: None)
@@ -198,7 +198,7 @@ def test_verilog_failure_with_flag_does_not_enqueue(monkeypatch):
 
 def _patch_buildbitstream(mod, monkeypatch):
     monkeypatch.setattr(mod, "get_buckyball_path", lambda: "/tmp/bb")
-    monkeypatch.setattr(mod, "get_verilator_build_dir", lambda bb, cfg, vsrc: vsrc or "/tmp/vsrc")
+    monkeypatch.setattr(mod, "rtl_dir", lambda bb, cfg, vsrc: vsrc or "/tmp/vsrc")
     monkeypatch.setattr(mod.os.path, "isdir", lambda p: True)
     monkeypatch.setattr(mod.os.path, "exists", lambda p: True)
     monkeypatch.setattr(mod.os, "makedirs", lambda *a, **k: None)

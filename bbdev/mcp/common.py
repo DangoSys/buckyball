@@ -335,28 +335,36 @@ def _load_toml(path: Path) -> Dict[str, Any]:
 
 def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     chip_root = REPO / "examples" / "chips" / chip
-    if not chip_root.is_dir():
-        raise FileNotFoundError(f"chip does not exist: {chip_root}")
-
-    parse = REPO / "bazel" / "configparse"
-    if str(parse) not in sys.path:
-        sys.path.insert(0, str(parse))
-    from chip_json import compiler_core, core_entry, load_topology
-
-    data = load_topology(REPO, chip)
-    core_name = compiler_core(data)
-    if not core_name:
+    cfg = json.loads(
+        (REPO / "examples" / "chips" / chip / "configs" / "generated" / "config" / "config.json")
+        .read_text(encoding="utf-8")
+    )
+    cores = []
+    for tile in cfg["designs"]["tiles"]:
+        cores.extend(tile["cores"])
+    seen = []
+    uniq = []
+    for core in cores:
+        key = core["balldomain"]["_file"]
+        if key not in seen:
+            seen.append(key)
+            uniq.append(core)
+    if len(uniq) != 1:
         raise ValueError(f"chip {chip} has no unique topology core")
-    core = core_entry(data, core_name)
-
+    core = uniq[0]
+    core_file = Path(core["_file"])
+    parts = core_file.parts
+    core_name = parts[parts.index("cores") + 1]
     core_root = REPO / "examples" / "cores" / core_name
     domains = core_root / "configs" / "balldomains"
 
     if balldomain is None:
-        bd = core.get("balldomain")
-        if not isinstance(bd, dict) or not isinstance(bd.get("_file"), str):
-            raise ValueError(f"chip {chip} core {core_name} has no balldomain")
-        path = (REPO / bd["_file"]).resolve()
+        bd = core["balldomain"]
+        path = Path(bd["_file"])
+        if not path.is_absolute():
+            path = (REPO / bd["_file"]).resolve()
+        else:
+            path = path.resolve()
     else:
         raw = Path(balldomain)
         if raw.is_absolute():
@@ -374,8 +382,6 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
         else:
             path = (domains / f"{balldomain}.toml").resolve()
 
-    if not path.is_file():
-        raise FileNotFoundError(f"balldomain toml does not exist: {path}")
     return path
 
 

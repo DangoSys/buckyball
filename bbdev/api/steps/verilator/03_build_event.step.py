@@ -10,8 +10,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
-from utils.path import gcc_lib_dir, get_buckyball_path, get_verilator_build_dir
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -29,9 +29,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     chip = require_chip(input_data)
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
-    build_dir = get_verilator_build_dir(
-        bbdir, chip,
-        input_data.get("output_dir"),
+    build_dir = rtl_dir(
+        bbdir, chip, "verilog", input_data.get("output_dir"),
     )
     coverage = input_data.get("coverage", False)
     ctx.logger.info(f"Using build directory: {build_dir}")
@@ -68,9 +67,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     result_dir = f"{bbdir}/result"
     result_lib = f"{result_dir}/lib"
-    if not os.path.isdir(result_lib):
-        raise RuntimeError(f"missing {result_lib}; run nix build")
-
     inc_flags = " ".join([
         f"-I{result_dir}/include",
         f"-I{build_dir}",
@@ -81,8 +77,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event.step.py).
     cflags = f"{inc_flags} -DBBSIM -DTOP_NAME='\"V{topname}\"' -std=c++17"
 
+    def _gcc_lib_dir(soname: str) -> str:
+        printed = subprocess.run(
+            ["g++", f"-print-file-name={soname}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return os.path.dirname(os.path.realpath(printed.stdout.strip()))
+
     rpath_dirs = []
-    for lib_dir in (result_lib, gcc_lib_dir("liblz4.so"), gcc_lib_dir("libstdc++.so")):
+    for lib_dir in (result_lib, _gcc_lib_dir("liblz4.so"), _gcc_lib_dir("libstdc++.so")):
         if lib_dir not in rpath_dirs:
             rpath_dirs.append(lib_dir)
     rpath_flags = " ".join(f"-Wl,-rpath,{lib_dir}" for lib_dir in rpath_dirs)

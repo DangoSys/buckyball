@@ -11,11 +11,18 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+mill_dir = os.path.dirname(__file__)
+mill_scripts = os.path.join(mill_dir, "scripts")
+if mill_dir not in sys.path:
+    sys.path.insert(0, mill_dir)
+if mill_scripts not in sys.path:
+    sys.path.insert(0, mill_scripts)
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 from utils.path import get_buckyball_path
-from utils.rtl import run_chip_mill
 from utils.stream_run import stream_run_logger_async
+from utils.path import rtl_out
+import mill as mill_run
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -25,13 +32,6 @@ config = {
     "triggers": [queue("bebop.verilator.verilog"), queue("bebop.verilator.run.verilog")],
     "enqueues": ["bebop.verilator.build", "bebop.verilator.run.build"],
 }
-
-
-def prepare_verilator_verilog(build_dir: str, arch_dir: str, logger):
-    unwanted = f"{arch_dir}/BBSimHarness.sv"
-    if os.path.isfile(unwanted):
-        os.remove(unwanted)
-        logger.info(f"Removed leaked mill output: {unwanted}")
 
 
 def check_verilog_output(build_dir: str) -> dict:
@@ -50,62 +50,40 @@ def check_verilog_output(build_dir: str) -> dict:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    arch_dir = f"{bbdir}/arch"
+    arch = os.path.join(bbdir, "arch")
     chip = None
-
-    if input_data.get("balltype"):
-        build_dir = input_data.get("output_dir")
-        if not build_dir:
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={
-                    "task": "validation",
-                    "error": "balltype mill requires output_dir",
-                    "example": 'bbdev bebop verilator --verilog "--balltype foo --output-dir <dir>"',
-                },
-                trace_id=origin_tid,
-            )
-            return
-        os.makedirs(build_dir, exist_ok=True)
-        command = (
-            f"mill -i __.test.runMain sims.verify.BallTopMain {input_data.get('balltype')} "
-            "--disable-annotation-unknown --strip-debug-info -O=debug "
-            f"--split-verilog -o={build_dir} "
+    try:
+        chip = require_chip(input_data)
+        mill_config, build_dir = rtl_out(
+            bbdir, chip, "verilog", input_data.get("output_dir"),
         )
+        os.makedirs(build_dir, exist_ok=True)
+        ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
-        result = await stream_run_logger_async(
-            cmd=command,
+        returncode = (
+            await stream_run_logger_async(
+            cmd=mill_run.elaborate_cmd("sims.verilator.Elaborate", mill_config, build_dir),
             logger=ctx.logger,
-            cwd=arch_dir,
+            cwd=arch,
             stdout_prefix="bebop verilator verilog",
             stderr_prefix="bebop verilator verilog",
+            )
+        ).returncode
+    except (ValueError, RuntimeError) as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "validation",
+                "error": str(error),
+                "example": 'bbdev bebop verilator --verilog "--chip toy"',
+            },
+            trace_id=origin_tid,
         )
-        returncode = result.returncode
-        prepare_verilator_verilog(build_dir, arch_dir, ctx.logger)
-    else:
-        try:
-            chip = require_chip(input_data)
-            build_dir, returncode = await run_chip_mill(
-                ctx, bbdir, chip, "verilog", "bebop verilator verilog",
-                input_data.get("output_dir"),
-            )
-        except (ValueError, RuntimeError) as error:
-            ctx.logger.error(str(error))
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={
-                    "task": "validation",
-                    "error": str(error),
-                    "example": 'bbdev bebop verilator --verilog "--chip toy"',
-                },
-                trace_id=origin_tid,
-            )
-            return
-        ctx.logger.info(f"Using chip: {chip}")
+        return
+    ctx.logger.info(f"Using chip: {chip}")
 
     output_status = check_verilog_output(build_dir)
     if returncode != 0:

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import sys
 import glob
 import re
@@ -13,9 +14,17 @@ if step_path not in sys.path:
     sys.path.insert(0, step_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_dc_analysis_dir
-from utils.rtl import run_chip_mill
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, log_dir
+from utils.stream_run import stream_run_logger_async
+mill_dir = os.path.join(os.path.dirname(__file__))
+mill_scripts = os.path.join(mill_dir, "scripts")
+if mill_dir not in sys.path:
+    sys.path.insert(0, mill_dir)
+if mill_scripts not in sys.path:
+    sys.path.insert(0, mill_scripts)
+from utils.path import rtl_out
+import mill as mill_run
 
 config = {
     "name": "dc-verilog",
@@ -77,12 +86,26 @@ def prepare_dc_verilog(build_dir: str):
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
+    arch = os.path.join(bbdir, "arch")
     try:
         chip = require_chip(input_data)
-        build_dir, returncode = await run_chip_mill(
-            ctx, bbdir, chip, "synth", "dc verilog",
-            input_data.get("output_dir"),
+        mill_config, build_dir = rtl_out(
+            bbdir, chip, "verilog", input_data.get("output_dir"),
         )
+        os.makedirs(build_dir, exist_ok=True)
+        ctx.logger.info(f"Using mill config: {mill_config}")
+        ctx.logger.info(f"Using build directory: {build_dir}")
+        returncode = (
+            await stream_run_logger_async(
+            cmd=mill_run.elaborate_cmd(
+                "sims.verilator.Elaborate", mill_config, build_dir, seq_mem=True,
+            ),
+            logger=ctx.logger,
+            cwd=arch,
+            stdout_prefix="dc verilog",
+            stderr_prefix="dc verilog",
+            )
+        ).returncode
     except (ValueError, RuntimeError) as error:
         _, failure_result = await check_result(
             ctx,
@@ -147,9 +170,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "_trace_id": origin_tid,
     }
     if input_data.get("from_power_workflow"):
-        payload["analysis_dir"] = get_dc_analysis_dir(bbdir, chip, "power")
+        payload["analysis_dir"] = log_dir(bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"), "dc", "power")
     elif input_data.get("from_area_workflow"):
-        payload["analysis_dir"] = get_dc_analysis_dir(bbdir, chip, "area")
+        payload["analysis_dir"] = log_dir(bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"), "dc", "area")
     await ctx.enqueue({"topic": "ip-replace.run", "data": payload})
 
     return

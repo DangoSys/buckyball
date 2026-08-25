@@ -42,23 +42,38 @@ def _hex_u(value: object, field: str, line_no: int) -> int:
 
 
 def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
-    parse = Path(bbdir) / "bazel" / "configparse"
-    if str(parse) not in sys.path:
-        sys.path.insert(0, str(parse))
-    from chip_json import compiler_core, core_entry, load_topology
+    path = (
+        Path(bbdir)
+        / "examples"
+        / "chips"
+        / chip
+        / "configs"
+        / "generated"
+        / "config"
+        / "config.json"
+    )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    cores = []
+    for tile in data["designs"]["tiles"]:
+        cores.extend(tile["cores"])
+    if len(cores) != 1:
+        # isomorphic tiles share the same core pkg; take first unique balldomain+_file
+        seen = []
+        uniq = []
+        for core in cores:
+            key = core["balldomain"]["_file"]
+            if key not in seen:
+                seen.append(key)
+                uniq.append(core)
+        if len(uniq) != 1:
+            raise ValueError(f"chip {chip} has no unique topology core")
+        core = uniq[0]
+    else:
+        core = cores[0]
 
-    data = load_topology(Path(bbdir), chip)
-    core_name = compiler_core(data)
-    if not core_name:
-        raise ValueError(f"chip {chip} has no unique topology core")
-    core = core_entry(data, core_name)
-    ball = core.get("balldomain")
-    if not isinstance(ball, dict):
-        raise ValueError(f"chip {chip} core {core_name} has no balldomain")
-    isa = ball.get("ballISA")
-    ball_path = ball.get("_file")
-    if not isinstance(isa, list) or not isa:
-        raise ValueError(f"balldomain missing ballISA: {ball_path}")
+    ball = core["balldomain"]
+    isa = ball["ballISA"]
+    ball_path = ball["_file"]
 
     names: dict[int, str] = dict(ISA)
     matrix: set[int] = set()
@@ -83,16 +98,9 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
         if mnemonic in MATRIX_MNEMONICS:
             matrix.add(funct)
 
-    mem = core.get("memdomain")
-    if not isinstance(mem, dict):
-        raise ValueError(f"chip {chip} core {core_name} has no memdomain")
-    bank = mem.get("bank")
-    mem_path = mem.get("_file")
-    if not isinstance(bank, dict):
-        raise ValueError(f"memdomain missing [bank]: {mem_path}")
-    entries = bank.get("entries")
-    if not isinstance(entries, int) or entries <= 0:
-        raise ValueError(f"memdomain bank.entries must be a positive int: {mem_path}")
+    mem = core["memdomain"]
+    bank = mem["bank"]
+    entries = bank["entries"]
     return names, matrix, entries
 
 

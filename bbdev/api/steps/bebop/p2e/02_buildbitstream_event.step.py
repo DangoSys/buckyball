@@ -16,8 +16,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
-from utils.path import bebop_cargo_env, get_buckyball_path, get_p2e_build_dir
+from utils.event_common import require_chip
+from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -45,16 +45,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
-    if not os.path.isdir(vsrc_dir):
-        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "vsrc_not_found", "vsrc_dir": vsrc_dir},
-            trace_id=origin_tid,
-        )
-        return
-
+    vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     build_dir = (
         input_data.get("build_dir")

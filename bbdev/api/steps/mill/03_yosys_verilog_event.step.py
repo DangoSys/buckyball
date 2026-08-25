@@ -13,10 +13,18 @@ if utils_path not in sys.path:
 step_path = os.path.dirname(__file__)
 if step_path not in sys.path:
     sys.path.insert(0, step_path)
+mill_dir = os.path.dirname(__file__)
+mill_scripts = os.path.join(mill_dir, "scripts")
+if mill_dir not in sys.path:
+    sys.path.insert(0, mill_dir)
+if mill_scripts not in sys.path:
+    sys.path.insert(0, mill_scripts)
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_run_log_dir
-from utils.rtl import run_chip_mill
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, log_dir
+from utils.stream_run import stream_run_logger_async
+from utils.path import rtl_out
+import mill as mill_run
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -166,12 +174,26 @@ def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
+    arch = os.path.join(bbdir, "arch")
     try:
         chip = require_chip(input_data)
-        build_dir, returncode = await run_chip_mill(
-            ctx, bbdir, chip, "synth", "yosys verilog",
-            input_data.get("output_dir"),
+        mill_config, build_dir = rtl_out(
+            bbdir, chip, "verilog", input_data.get("output_dir"),
         )
+        os.makedirs(build_dir, exist_ok=True)
+        ctx.logger.info(f"Using mill config: {mill_config}")
+        ctx.logger.info(f"Using build directory: {build_dir}")
+        returncode = (
+            await stream_run_logger_async(
+            cmd=mill_run.elaborate_cmd(
+                "sims.verilator.Elaborate", mill_config, build_dir, seq_mem=True,
+            ),
+            logger=ctx.logger,
+            cwd=arch,
+            stdout_prefix="yosys verilog",
+            stderr_prefix="yosys verilog",
+            )
+        ).returncode
     except (ValueError, RuntimeError) as error:
         success_result, failure_result = await check_result(
             ctx,
@@ -192,7 +214,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
     yosys_cfg = load_yosys_config()
     top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
-    yosys_log_dir = input_data.get("log_dir") or get_run_log_dir(
+    yosys_log_dir = input_data.get("log_dir") or log_dir(
         bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"),
         "yosys", top_module, input_data.get("output_dir"),
     )

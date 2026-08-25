@@ -1,7 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, rtl_dir_for_clean
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 
 config = {
     "name": "bebop-verilator-clean-api",
@@ -20,7 +20,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
-    build_dir = rtl_dir_for_clean(bbdir, chip, "verilog", body.get("output_dir"))
+    build_dir = rtl_dir(bbdir, chip, "verilog", body.get("output_dir"))
     data = {
         "chip": chip,
         "output_dir": build_dir,

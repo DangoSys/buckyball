@@ -2,7 +2,25 @@
 Common utility functions for all event steps.
 """
 
+import re
+
 from utils.process_registry import set_current_task_scope
+
+_CHIP_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def require_chip(data: dict) -> str:
+    chip = data.get("chip")
+    if not isinstance(chip, str) or not chip:
+        raise ValueError("Missing required parameter: --chip")
+    extra = data.get("config")
+    if isinstance(extra, str) and extra and extra != "None":
+        raise ValueError(
+            "do not pass --config; mill class comes from chip config sims"
+        )
+    if not _CHIP_RE.fullmatch(chip):
+        raise ValueError(f"invalid chip: {chip}")
+    return chip
 
 
 def get_origin_trace_id(input_data, ctx):

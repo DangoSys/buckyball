@@ -1,7 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_p2e_build_dir
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 
 config = {
     "name": "bebop-p2e-buildbitstream-api",
@@ -19,7 +19,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         chip = require_chip(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-    vsrc_dir = get_p2e_build_dir(bbdir, chip, body.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(bbdir, chip, "p2e", body.get("vsrc_dir"))
 
     data = {
         "chip": chip,

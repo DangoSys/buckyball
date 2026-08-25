@@ -13,8 +13,8 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_vcs_build_dir
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 
 
@@ -130,7 +130,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    build_dir = get_vcs_build_dir(bbdir, chip, input_data.get("output_dir"))
+    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
     vsrcs = sorted(
         path for path in (
             glob.glob(f"{build_dir}/**/*.v", recursive=True)

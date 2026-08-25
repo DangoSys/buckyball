@@ -150,7 +150,7 @@ def _prep_batch_case(tmp_path):
 
 def _patch_batch(mod, monkeypatch, tmp_path, vsrc, stdout="", stderr="", rc=0):
     monkeypatch.setattr(mod, "get_buckyball_path", lambda: str(tmp_path))
-    monkeypatch.setattr(mod, "get_verilator_build_dir", lambda *a, **k: vsrc)
+    monkeypatch.setattr(mod, "rtl_dir", lambda *a, **k: vsrc)
     monkeypatch.setattr(mod, "regression_workload_toml", lambda *a, **k: "/tmp/workloads-pk.toml")
 
     def fake_stream(**k):

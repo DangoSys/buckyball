@@ -10,8 +10,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
-from utils.path import get_arch_build_dir, get_buckyball_path, get_run_log_dir
+from utils.event_common import require_chip
+from utils.path import rtl_dir, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -66,7 +66,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     try:
         chip = require_chip(input_data)
-        build_dir = get_arch_build_dir(bbdir, chip, input_data.get("output_dir"))
+        build_dir = rtl_dir(bbdir, chip, "synth", input_data.get("output_dir"))
     except ValueError as exc:
         await check_result(
             ctx, 1, continue_run=False,
@@ -106,7 +106,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    yosys_output_dir = input_data.get("log_dir") or get_run_log_dir(
+    yosys_output_dir = input_data.get("log_dir") or log_dir(
         bbdir, chip, "synth", stamp, "yosys", top_module, input_data.get("output_dir"),
     )
     os.makedirs(yosys_output_dir, exist_ok=True)

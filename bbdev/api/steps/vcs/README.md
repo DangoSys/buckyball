@@ -3,6 +3,9 @@
 VCS follows the same user-facing stages as Verilator while keeping its own
 simulator products below `arch/build/<config>/vcs/`:
 
+`vcs.verilog` is implemented under `steps/mill/02_vcs_verilog_event.step.py`
+(same mill elaboration as Verilator). Flow:
+
 ```text
 vcs.verilog → vcs.build → vcs.sim
 ```

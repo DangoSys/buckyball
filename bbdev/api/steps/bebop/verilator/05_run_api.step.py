@@ -1,6 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 from utils.path import get_buckyball_path
 
 config = {
@@ -49,7 +49,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "chip": chip,
         "binary": binary,
-        "balltype": body.get("balltype"),
         "itrace": body.get("itrace", False),
         "mtrace": body.get("mtrace", False),
         "pmctrace": body.get("pmctrace", False),

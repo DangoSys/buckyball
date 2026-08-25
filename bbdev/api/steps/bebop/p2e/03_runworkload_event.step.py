@@ -18,8 +18,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.chip import require_chip
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_p2e_build_dir, get_run_log_dir
+from utils.event_common import require_chip
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, rtl_dir, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -147,22 +147,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         multi_fpga = True
         ctx.logger.info(f"Detected multi-FPGA P2E case: {build_dir}")
 
-    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
-    if not os.path.isdir(vsrc_dir):
-        ctx.logger.error(f"VSRC_PATH does not exist for P2E runtime: {vsrc_dir}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={
-                "error": "vsrc_not_found",
-                "vsrc_dir": vsrc_dir,
-            },
-            trace_id=origin_tid,
-        )
-        return
-
+    vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = get_run_log_dir(bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir"))
-    os.makedirs(log_dir, exist_ok=True)
+    run_log = log_dir(bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir"))
+    os.makedirs(run_log, exist_ok=True)
 
     # Rebuild the VVAC host runtime in the bitstream case.  The bitstream is
     # deliberately left in place, so runtime/DPIC changes never trigger FPGA synthesis.
@@ -238,9 +226,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "image": image_path,
             "bitstream": bitstream,
             "build_dir": build_dir,
-            "log_dir": log_dir,
-            "bdb_trace": os.path.join(log_dir, "bdb.ndjson"),
-            "uart_log": os.path.join(log_dir, "uart.log"),
+            "log_dir": run_log,
+            "bdb_trace": os.path.join(run_log, "bdb.ndjson"),
+            "uart_log": os.path.join(run_log, "uart.log"),
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

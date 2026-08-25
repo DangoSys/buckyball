@@ -1,7 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import get_buckyball_path, get_vcs_build_dir
+from utils.event_common import require_chip
+from utils.path import get_buckyball_path, rtl_dir
 
 
 config = {
@@ -30,7 +30,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "chip": chip,
         "jobs": jobs,
-        "output_dir": get_vcs_build_dir(bbdir, chip, body.get("output_dir")),
+        "output_dir": rtl_dir(bbdir, chip, "verilog", body.get("output_dir")),
     }
     await ctx.enqueue({"topic": "vcs.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

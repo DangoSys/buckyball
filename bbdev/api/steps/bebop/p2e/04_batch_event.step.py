@@ -19,8 +19,8 @@ bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
-from utils.chip import require_chip
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, get_p2e_build_dir
+from utils.event_common import require_chip
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
@@ -99,19 +99,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
     ctx.logger.info(f"P2E case dir (from bitstream): {build_dir}")
 
-    vsrc_dir = get_p2e_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
-    if not os.path.isdir(vsrc_dir):
-        ctx.logger.error(f"VSRC_PATH does not exist for P2E runtime: {vsrc_dir}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={
-                "error": "vsrc_not_found",
-                "vsrc_dir": vsrc_dir,
-            },
-            trace_id=origin_tid,
-        )
-        return
-
+    vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
     # Rebuild VVAC host runtime in the bitstream case (same as runworkload).
     runtime_cmd = (
         f"env BEBOP_P2E_RUNTIME_ONLY=1 BEBOP_P2E_REBUILD_RUNTIME=1 "

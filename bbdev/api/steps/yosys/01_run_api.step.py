@@ -3,7 +3,7 @@ import sys
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
+from utils.event_common import require_chip
 
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:

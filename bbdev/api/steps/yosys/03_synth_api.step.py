@@ -3,8 +3,8 @@ import sys
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.chip import require_chip
-from utils.path import get_arch_build_dir, get_buckyball_path
+from utils.event_common import require_chip
+from utils.path import rtl_dir, get_buckyball_path
 
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
@@ -26,7 +26,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
         chip = require_chip(body)
-        rtl = get_arch_build_dir(bbdir, chip, req_arg(body, "output_dir"))
+        rtl = rtl_dir(bbdir, chip, "synth", req_arg(body, "output_dir"))
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 

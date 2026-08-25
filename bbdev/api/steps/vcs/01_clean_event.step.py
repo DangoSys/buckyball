@@ -9,7 +9,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, get_vcs_build_dir
+from utils.path import get_buckyball_path, rtl_dir
 
 
 config = {
@@ -24,7 +24,7 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    build_dir = get_vcs_build_dir(bbdir, input_data.get("config"), input_data.get("output_dir"))
+    build_dir = rtl_dir(bbdir, input_data.get("config", "verilog"), input_data.get("output_dir"))
     artifact_dir = os.path.join(build_dir, "vcs")
     if os.path.isdir(artifact_dir):
         shutil.rmtree(artifact_dir)

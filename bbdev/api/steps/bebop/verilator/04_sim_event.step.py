@@ -8,6 +8,7 @@ import os
 import shlex
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -18,13 +19,13 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.chip import require_chip
-from utils.build import install_bundle
-from utils.path import bebop_target_dir, get_buckyball_path, get_run_log_dir, get_verilator_build_dir, workload_tests_root
+from utils.event_common import require_chip
+from utils.path import bebop_target_dir, get_buckyball_path, log_dir, rtl_dir, workload_tests_root
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
 from build_marker import build_marker_path, read_build_marker
+
 
 config = {
     "name": "bebop-verilator-sim",
@@ -60,6 +61,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
+
     diff = bool(input_data.get("diff", False))
     if diff and input_data.get("rushB"):
         ctx.logger.error("--diff and --rushB cannot be used together")
@@ -72,17 +74,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    vsrc_dir = get_verilator_build_dir(bbdir, chip, input_data.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
-    if not os.path.isdir(vsrc_dir):
-        ctx.logger.error(f"VSRC_PATH does not exist: {vsrc_dir}")
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "vsrc_not_found", "vsrc_dir": vsrc_dir},
-            trace_id=origin_tid,
-        )
-        return
-
     build_dir = bebop_dir
     chip = input_data.get("chip")
     if diff:
@@ -93,18 +86,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 1,
                 continue_run=False,
                 extra_fields={"error": "missing_chip"},
-                trace_id=origin_tid,
-            )
-            return
-        try:
-            install_bundle(bbdir, chip)
-        except ValueError as error:
-            ctx.logger.error(str(error))
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={"error": "chip_resolution_failed", "detail": str(error)},
                 trace_id=origin_tid,
             )
             return
@@ -184,8 +165,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"binary_path: {binary_path}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    log_dir = get_run_log_dir(bbdir, chip, "verilog", timestamp, "verilator", binary_name, input_data.get("vsrc_dir"))
-    os.makedirs(log_dir, exist_ok=True)
+    run_log = log_dir(bbdir, chip, "verilog", timestamp, "verilator", binary_name, input_data.get("vsrc_dir"))
+    os.makedirs(run_log, exist_ok=True)
 
     wave_arg = " --no-wave" if input_data.get("no-wave", False) or input_data.get("no_wave", False) else ""
     trace_args = ""
@@ -220,7 +201,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         run_cmd = (
             f"{shlex.quote(bebop_bin)} run verilator "
             f"--elf={shlex.quote(binary_path)} "
-            f"--log-dir={shlex.quote(log_dir)}"
+            f"--log-dir={shlex.quote(run_log)}"
             f"{' --diff' if diff else ''}"
             f"{wave_arg}"
             f"{trace_args}"
@@ -260,8 +241,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "diff": diff,
             "chip": chip,
             "binary": binary_path,
-            "log_dir": log_dir,
-            "bank_diff": os.path.join(log_dir, "bank_diff.ndjson") if diff else None,
+            "log_dir": run_log,
+            "bank_diff": os.path.join(run_log, "bank_diff.ndjson") if diff else None,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,
