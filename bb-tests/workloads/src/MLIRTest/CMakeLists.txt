@@ -4,25 +4,246 @@ if(NOT DEFINED BUDDY_BINARY_DIR)
     "BUDDY_BINARY_DIR must be set by the workload root.")
 endif()
 
+if(NOT DEFINED LLVM_BUILD_DIR)
+  message(FATAL_ERROR "LLVM_BUILD_DIR is not set")
+endif()
+
+if(NOT DEFINED BUDDY_OPT)
+  message(FATAL_ERROR "BUDDY_OPT is not set")
+endif()
+
+set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
+
+function(add_buckyball_mlir_contract TEST_NAME)
+  cmake_parse_arguments(ARG "" "" "PASSES" ${ARGN})
+
+  if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
+    message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
+  endif()
+
+  if(NOT ARG_PASSES)
+    set(ARG_PASSES ${BUCKYBALL_LOWER_BUCKYBALL})
+  endif()
+
+  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME}.mlir)
+  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.out.mlir)
+  set(TARGET ${BUCKYBALL_MLIR_TEST_PREFIX}-${TEST_NAME}-mlir-test)
+
+  add_custom_command(
+    OUTPUT ${OUT}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${ARG_PASSES} > ${OUT}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+    COMMENT "Building Buckyball MLIR contract IR: ${TARGET}"
+    VERBATIM)
+
+  add_custom_target(${TARGET}
+    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
+    DEPENDS ${OUT}
+    COMMENT "Checking Buckyball MLIR contract: ${TARGET}"
+    VERBATIM)
+
+  if(DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+    add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${TARGET})
+  endif()
+endfunction()
+
+# Bank-level / ball-op MLIR -> baremetal + linux ELF (same pipeline as toy MLIRTest).
+function(add_buckyball_mlir_test NAME)
+  cmake_parse_arguments(ARG "" "" "PASSES" ${ARGN})
+
+  if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
+    message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
+  endif()
+  if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir tests")
+  endif()
+  if(NOT DEFINED BUCKYBALL_MLIR_BANK_NUM)
+    message(FATAL_ERROR "BUCKYBALL_MLIR_BANK_NUM is not set")
+  endif()
+
+  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
+  set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
+  set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
+  set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
+  set(TEST_ID ${NAME})
+  if(NOT NAME MATCHES "^${PREFIX}_")
+    set(TEST_ID ${PREFIX}_${NAME})
+  endif()
+  set(BAREMETAL_BIN
+    ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}-linux)
+  set(BAREMETAL_TARGET mlirtest_${TEST_ID}_baremetal)
+  set(LINUX_TARGET mlirtest_${TEST_ID}_linux)
+  set(GROUP_TARGET mlirtest_${TEST_ID})
+
+  set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
+  set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
+    -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
+    -DBAREMETAL -Wl,-T,${BBSIM_LD})
+  set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
+  set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
+  set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+  set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
+  set(LLVM_MLIR_EXECUTION_ENGINE_DIR
+    ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
+
+  if(ARG_PASSES)
+    set(MLIR_PASSES ${ARG_PASSES})
+  else()
+    set(MLIR_PASSES
+      ${BUCKYBALL_ASSIGN_PHYSICAL_BANKS}
+      ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -lower-affine
+      -convert-scf-to-cf
+      -convert-cf-to-llvm
+      ${BUCKYBALL_LOWER_BUCKYBALL}
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts)
+  endif()
+
+  if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
+     NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
+    message(FATAL_ERROR
+      "rushB MLIR lowers require BUCKYBALL_LOWER_*_RUSHB "
+      "(define them in bb-tests/workloads/CMakeLists.txt)")
+  endif()
+
+  # Keep lower-buckyball before convert-arith-to-llvm (it emits arith).
+  # Insert intrinsics-to-rushb immediately before the final reconcile.
+  set(RUSHB_MLIR_PASSES)
+  set(RUSHB_HAS_RECONCILE FALSE)
+  foreach(MLIR_PASS ${MLIR_PASSES})
+    if(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}")
+      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS})
+    elseif(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BUCKYBALL}")
+      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB})
+    elseif(MLIR_PASS STREQUAL "-reconcile-unrealized-casts")
+      set(RUSHB_HAS_RECONCILE TRUE)
+      list(APPEND RUSHB_MLIR_PASSES
+        -lower-buckyball-intrinsics-to-rushb
+        -reconcile-unrealized-casts)
+    else()
+      list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
+    endif()
+  endforeach()
+  if(NOT RUSHB_HAS_RECONCILE)
+    message(FATAL_ERROR
+      "rushB pass rewrite for ${NAME} requires -reconcile-unrealized-casts")
+  endif()
+  set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-rushB.o)
+
+  add_custom_command(
+    OUTPUT ${OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${MLIR_PASSES} |
+    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
+    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
+      -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
+    COMMENT "Building ${NAME}.o from ${PREFIX} MLIR"
+    VERBATIM)
+
+  add_custom_command(
+    OUTPUT ${RUSHB_OBJ}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${RUSHB_MLIR_PASSES} |
+    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
+    ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
+    DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
+    COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
+    VERBATIM)
+
+  add_custom_command(
+    OUTPUT ${BAREMETAL_BIN}
+    COMMAND ${ELF_CC} ${C_FLAGS}
+      -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${BB_BALL_ISA_INCLUDE_DIR}
+      -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
+      ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSW_BAREMETAL_DIR}/syscalls.c
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
+      ${MAIN_SRC}
+      ${OBJ}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
+      ${BB_BALL_ISA_H}
+      ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
+    COMMENT "Linking ${BAREMETAL_BIN}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM)
+
+  add_custom_command(
+    OUTPUT ${LINUX_BIN}
+    COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
+      -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${BB_BALL_ISA_INCLUDE_DIR}
+      -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
+      ${CRUNNER_UTILS_SRC}
+      ${BBHW_MEM_C}
+      ${MAIN_SRC}
+      ${OBJ}
+    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${BB_BALL_ISA_H}
+    COMMENT "Linking ${LINUX_BIN}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM)
+
+  add_custom_target(${BAREMETAL_TARGET}
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN})
+  add_custom_target(${LINUX_TARGET}
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN})
+  add_custom_target(${GROUP_TARGET}
+    DEPENDS ${BAREMETAL_TARGET} ${LINUX_TARGET})
+
+  if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
+     DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+    add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}
+      CXX
+      OUTPUT_SUBDIR src/MLIRTest/rushB
+      SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC} ${RUSHB_OBJ}
+      INCLUDE_DIRS
+        ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
+        ${WORKLOAD_LIB_DIR}
+        ${WORKLOAD_LIB_DIR}/bbhw/mem
+        ${BB_BALL_ISA_INCLUDE_DIR}
+      DEPENDS ${RUSHB_OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
+              ${BB_BALL_ISA_H})
+  endif()
+
+  if(DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+    add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${GROUP_TARGET})
+  endif()
+endfunction()
+
 set(MLIRTEST_BASE_DIR ${MLIRTEST_WORKLOAD_DIR}/base)
 
 add_subdirectory(${MLIRTEST_WORKLOAD_DIR}/base
   ${CMAKE_CURRENT_BINARY_DIR}/mlir_tests/base)
 
 add_custom_target(balls-mlir-tests-build)
-file(GLOB BUCKYBALL_BALL_MLIR_CMAKES CONFIGURE_DEPENDS
-  "${BUCKYBALL_REPO_ROOT}/examples/balls/*/workloads/mlir_tests/CMakeLists.txt")
-foreach(BUCKYBALL_BALL_MLIR_CMAKE ${BUCKYBALL_BALL_MLIR_CMAKES})
-  get_filename_component(BUCKYBALL_BALL_MLIR_DIR
-    ${BUCKYBALL_BALL_MLIR_CMAKE} DIRECTORY)
-  get_filename_component(BUCKYBALL_BALL_WORKLOADS_DIR
-    ${BUCKYBALL_BALL_MLIR_DIR} DIRECTORY)
-  get_filename_component(BUCKYBALL_BALL_DIR
-    ${BUCKYBALL_BALL_WORKLOADS_DIR} DIRECTORY)
-  get_filename_component(BUCKYBALL_BALL_NAME ${BUCKYBALL_BALL_DIR} NAME)
-  add_subdirectory(
-    ${BUCKYBALL_BALL_MLIR_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_BALL_NAME}/mlir_tests)
+foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
+  foreach(BUCKYBALL_BALL_MAPPING IN LISTS BUCKYBALL_MLIR_BALL_NAMES)
+    string(REPLACE ":" ";" BUCKYBALL_BALL_PARTS "${BUCKYBALL_BALL_MAPPING}")
+    list(GET BUCKYBALL_BALL_PARTS 0 BUCKYBALL_BALL_DIR)
+    list(GET BUCKYBALL_BALL_PARTS 1 BUCKYBALL_BALL_CLASS)
+    string(REPLACE "," ";" BUCKYBALL_ACTIVE_BALLS
+      "${BUCKYBALL_TARGET_BALLS_${BUCKYBALL_TARGET}}")
+    list(FIND BUCKYBALL_ACTIVE_BALLS "${BUCKYBALL_BALL_CLASS}"
+      BUCKYBALL_BALL_INDEX)
+    if(BUCKYBALL_BALL_INDEX EQUAL -1)
+      continue()
+    endif()
+    set(BUCKYBALL_MLIR_ACTIVE_TARGET ${BUCKYBALL_TARGET})
+    add_subdirectory(
+      ${BUCKYBALL_REPO_ROOT}/examples/balls/${BUCKYBALL_BALL_DIR}/workloads/mlir_tests
+      ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR})
+  endforeach()
 endforeach()
 
 add_custom_target(MLIRTest-all ALL DEPENDS

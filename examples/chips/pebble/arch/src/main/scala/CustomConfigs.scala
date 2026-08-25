@@ -8,7 +8,7 @@ import framework.system.tile.WithBuckyballTiles
  */
 class BuckyballPebbleConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/pebble/generated/chip.pb") ++
+      new WithBuckyballTiles("../examples/chips/pebble/configs/generated/chip.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -16,7 +16,7 @@ class BuckyballPebbleConfig
 class RocketOnlyPebbleConfig
     extends Config(
       new WithBuckyballTiles(
-        "../examples/chips/pebble/generated/chip.pb",
+        "../examples/chips/pebble/configs/generated/chip.pb",
         withBuckyball = false
       ) ++
         new chipyard.config.WithSystemBusWidth(128) ++

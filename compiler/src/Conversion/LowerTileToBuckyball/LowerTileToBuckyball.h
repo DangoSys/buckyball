@@ -43,11 +43,11 @@ inline size_t cMvoutDepthLines(size_t mEl, size_t nEl) {
   return mEl * (nEl / kBankLane);
 }
 
-void populateMatrixTileMatMulPatterns(RewritePatternSet &patterns,
-                                      int64_t bankWidthBytes, int64_t bankDepth,
-                                      int64_t bankNum);
-
 void registerLowerTileToBuckyballPass();
+void populateSMatMulBallTileLoweringPatterns(RewritePatternSet &patterns,
+                                             int64_t bankWidthBytes,
+                                             int64_t bankDepth,
+                                             int64_t bankNum);
 
 } // namespace buddy
 } // namespace mlir

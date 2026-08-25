@@ -7,8 +7,7 @@
 #ifndef VECBALL_OPS
 #define VECBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 //===----------------------------------------------------------------------===//
 // VecBall operations
@@ -36,8 +35,5 @@ def BankVecMat16Op : Buckyball_Op<"bank_vecmat16"> {
   let assemblyFormat =
       "$op1Bank $op2Bank $wrBank $iter $mode attr-dict `:` type($op1Bank) type($op2Bank) type($wrBank) type($iter) type($mode)";
 }
-
-def VecMat16IntrOp : Buckyball_IntrOpBase<"vecmat16">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 #endif // VECBALL_OPS

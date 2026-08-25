@@ -15,20 +15,6 @@ void populateToyAssignPhysicalBankPatterns(RewritePatternSet &patterns,
 void populateToyLowerBuckyballToLLVMPatterns(RewritePatternSet &patterns);
 void configureToyLowerBuckyballToLLVMTarget(LLVMConversionTarget &target);
 void populateToyLowerBuckyballToBankSSAPatterns(RewritePatternSet &patterns);
-void populateToyMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
-
-void populateVectorAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                                 PhysicalBankState &state);
-void populateMatrixAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateIm2colAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
 
 } // namespace buddy
 } // namespace mlir

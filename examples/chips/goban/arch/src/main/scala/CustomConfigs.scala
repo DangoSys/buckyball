@@ -22,7 +22,7 @@ class WithGobanHartIdBits(nTiles: Int, nCoresPerTile: Int)
 class BuckyballGoban2CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 2) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t2c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t2c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -31,7 +31,7 @@ class BuckyballGoban2CoreConfig
 class BuckyballGoban4CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 4) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t4c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t4c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -40,7 +40,7 @@ class BuckyballGoban4CoreConfig
 class BuckyballGoban8CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 8) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t8c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t8c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -49,7 +49,7 @@ class BuckyballGoban8CoreConfig
 class BuckyballGoban16CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 16) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t16c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t16c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -58,7 +58,7 @@ class BuckyballGoban16CoreConfig
 class BuckyballGoban32CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 32) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t32c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t32c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -67,7 +67,7 @@ class BuckyballGoban32CoreConfig
 class BuckyballGoban64CoreConfig
     extends Config(
       new WithGobanHartIdBits(nTiles = 1, nCoresPerTile = 64) ++
-        new WithBuckyballTiles("../examples/chips/goban/generated/1t64c.pb") ++
+        new WithBuckyballTiles("../examples/chips/goban/configs/generated/1t64c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -76,7 +76,7 @@ class BuckyballGoban64CoreConfig
 // this config is incoherent
 class BuckyballGoban4Tile8CoreConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/goban/generated/4t16c.pb") ++
+      new WithBuckyballTiles("../examples/chips/goban/configs/generated/4t16c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -85,7 +85,7 @@ class BuckyballGoban4Tile8CoreConfig
 // this config is incoherent
 class BuckyballGoban4Tile16CoreConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/goban/generated/4t16c.pb") ++
+      new WithBuckyballTiles("../examples/chips/goban/configs/generated/4t16c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -94,7 +94,7 @@ class BuckyballGoban4Tile16CoreConfig
 // this config is incoherent
 class BuckyballGoban8Tile8CoreConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/goban/generated/8t8c.pb") ++
+      new WithBuckyballTiles("../examples/chips/goban/configs/generated/8t8c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -102,7 +102,7 @@ class BuckyballGoban8Tile8CoreConfig
 /** 24 BBTiles × 16 Buckyball cores each = 384 total. */
 class BuckyballGoban24Tile16CoreConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/goban/generated/24t16c.pb") ++
+      new WithBuckyballTiles("../examples/chips/goban/configs/generated/24t16c.pb") ++
         new chipyard.config.WithSystemBusWidth(256) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -116,7 +116,7 @@ class BuckyballGoban2Tile4CoreConfig
         hiddenHartBase = 2
       ) ++
         new WithBuckyballTiles(
-          "../examples/chips/goban/generated/2t4c-private.pb",
+          "../examples/chips/goban/configs/generated/2t4c-private.pb",
           hiddenHartBase = Some(2)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
@@ -132,7 +132,7 @@ class BuckyballGoban64Tile4CoreConfig
         hiddenHartBase = 64
       ) ++
         new WithBuckyballTiles(
-          "../examples/chips/goban/generated/64t4c-private.pb",
+          "../examples/chips/goban/configs/generated/64t4c-private.pb",
           hiddenHartBase = Some(64)
         ) ++
         new chipyard.config.WithSystemBusWidth(256) ++
@@ -143,7 +143,7 @@ class BuckyballGoban64Tile4CoreConfig
 class RocketOnlyGobanConfig
     extends Config(
       new WithBuckyballTiles(
-        "../examples/chips/goban/generated/chip.pb",
+        "../examples/chips/goban/configs/generated/chip.pb",
         withBuckyball = false
       ) ++
         new chipyard.config.WithSystemBusWidth(128) ++

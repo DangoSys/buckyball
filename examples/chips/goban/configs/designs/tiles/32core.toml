@@ -1,0 +1,23 @@
+# Goban Tile (32 identical cores)
+
+memBallChannelNum = 6
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[sharedMem]
+enable = true
+entries = 16384
+inputChannels = 32
+defaultGroupCount = 1
+memCycles = 10
+
+[coreTemplate]
+core_ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+include = "../../../../../cores/goban/configs/default.toml"
+count = 32

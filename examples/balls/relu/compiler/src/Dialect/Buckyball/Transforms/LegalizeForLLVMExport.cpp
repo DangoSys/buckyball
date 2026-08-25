@@ -3,8 +3,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
-#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -12,44 +12,36 @@ using namespace buddy::buckyball::legalize;
 
 namespace {
 struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
-  ReluLowering(LLVMTypeConverter &converter, bool stable)
-      : ConvertOpToLLVMPattern<ReluOp>(converter), stable(stable) {}
+  using ConvertOpToLLVMPattern<ReluOp>::ConvertOpToLLVMPattern;
 
   LogicalResult
   matchAndRewrite(ReluOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("ReluBall");
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getDepth());
-    if (stable) {
-      rewriter.replaceOpWithNewOp<ReluIntrOp>(op, rs1, adaptor.getStride());
-      return success();
-    }
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, adaptor.getStride(),
-        rewriter.getI32IntegerAttr(BB_FUNC7_RELU));
+        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7("RELU")));
     return success();
   }
-
-private:
-  bool stable = false;
 };
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateReluLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                RewritePatternSet &patterns,
-                                               bool stable) {
-  patterns.add<ReluLowering>(converter, stable);
+                                               bool stable, int64_t,
+                                               bool) {
+  (void)stable;
+  patterns.add<ReluLowering>(converter);
 }
 
-void configureReluLegalizeForExportTarget(LLVMConversionTarget &target,
+void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                           bool stable) {
-  if (stable)
-    target.addLegalOp<ReluIntrOp>();
-  else
-    target.addIllegalOp<ReluIntrOp>();
+  (void)stable;
   target.addIllegalOp<ReluOp>();
 }
 } // namespace mlir::buddy::buckyball

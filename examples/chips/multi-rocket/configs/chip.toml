@@ -1,0 +1,6 @@
+[designs]
+include = "designs/multi-rocket.toml"
+
+[sims]
+verilator = "sims.verilator.MultiRocket32CoreVerilatorConfig"
+p2e = "sims.p2e.MultiRocket32CoreP2EConfig"

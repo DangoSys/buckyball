@@ -7,8 +7,7 @@
 #ifndef RELUBALL_OPS
 #define RELUBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 //===----------------------------------------------------------------------===//
 // ReluBall operations
@@ -27,8 +26,5 @@ def ReluOp : Buckyball_Op<"relu"> {
                        "$depth `,` $stride attr-dict `:` "
                        "type($inputBankId)";
 }
-
-def ReluIntrOp : Buckyball_IntrOpBase<"relu">,
-  Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 #endif // RELUBALL_OPS

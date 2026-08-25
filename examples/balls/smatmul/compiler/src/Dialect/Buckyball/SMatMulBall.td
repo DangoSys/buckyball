@@ -3,8 +3,7 @@
 #ifndef SMATMULBALL_OPS
 #define SMATMULBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 def SMatMulMatmulOp : Buckyball_Op<"smatmul_matmul"> {
   let summary = "Logical matmul lowered to SMatMulBall (OS / WS)";

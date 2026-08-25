@@ -57,5 +57,3 @@ ucli.key
 nohup.out
 alib-52/
 
-# Bazel / chip bundle install outputs
-examples/chips/*/generated/

@@ -7,8 +7,7 @@
 #ifndef QUANTBALL_OPS
 #define QUANTBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 //===----------------------------------------------------------------------===//
 // Fp2IntBall operations

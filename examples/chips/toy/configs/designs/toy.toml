@@ -1,0 +1,8 @@
+# Toy: virtual single-core that mounts leftover balls.
+
+[top]
+nTiles = 1
+
+[[tiles]]
+tile_id = 0
+include = "tiles/default.toml"

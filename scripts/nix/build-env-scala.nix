@@ -13,8 +13,11 @@ let
     nativeBuildInputs = [ pkgs.makeWrapper ];
     installPhase = ''
       mkdir -p $out/bin
-      cp $src $out/bin/mill
-      chmod +x $out/bin/mill
+      install -m755 $src $out/bin/.mill-wrapped
+      makeWrapper $out/bin/.mill-wrapped $out/bin/mill \
+        --set JAVA_HOME ${pkgs.jdk17} \
+        --prefix PATH : ${pkgs.jdk17}/bin \
+        --unset LD_LIBRARY_PATH
     '';
     meta = with pkgs.lib; {
       description = "Mill build tool ${millVersion}";

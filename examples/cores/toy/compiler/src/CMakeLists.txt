@@ -25,13 +25,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/Dialect)
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/Dialect/Buckyball)
 
 set(TOY_BALL_COMPILER_DIALECT_DIRS
-  ${BB_REPO_ROOT}/examples/balls/vector/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
 )
 
 set(BB_CORE_BACKEND_INTRINSICS_DIR
@@ -55,7 +49,6 @@ endforeach()
 set(BB_BALL_BACKEND_INTRINSICS_DIRS ${BB_BALL_BACKEND_INTRINSICS_DIRS}
   CACHE INTERNAL "Buckyball ball backend intrinsic directories")
 
-# Add subdirectories
 add_subdirectory(Dialect)
 add_subdirectory(Conversion)
 add_subdirectory(Target)

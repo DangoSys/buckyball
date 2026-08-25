@@ -2,6 +2,7 @@ get_filename_component(BUCKYBALL_REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../../../
 
 add_custom_target(toy-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET toy-ctests-build)
+set(BUCKYBALL_CTEST_TARGET toy)
 
 add_subdirectory(ctests)
 add_subdirectory(mlir_tests)

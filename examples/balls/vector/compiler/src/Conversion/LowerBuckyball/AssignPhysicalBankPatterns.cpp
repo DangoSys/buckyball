@@ -10,7 +10,7 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateVectorAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+void populateVecBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 } // namespace mlir::buddy
 
@@ -31,7 +31,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateVectorAssignPhysicalBankPatterns(
+void mlir::buddy::populateVecBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankVecMat16Pattern>(patterns.getContext());

@@ -8,5 +8,5 @@ name = "bebop-chip-goban"
 path = "src/main.rs"
 
 [dependencies]
-bebop-bemu = { path = "../generated/bemu" }
+bebop-bemu = { path = "../configs/generated/bemu" }
 clap = { version = "4", features = ["derive"] }

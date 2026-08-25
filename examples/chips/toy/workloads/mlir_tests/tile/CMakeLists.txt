@@ -22,29 +22,29 @@ function(add_tile_matmul_test name)
 
   add_custom_command(
     OUTPUT ${OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_1_buckyball.mlir
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_2_bank_ssa.mlir
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_3_physical_banks.mlir
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       ${BUCKYBALL_LOWER_BUCKYBALL}
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_4_buckyball_intrinsics.mlir
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -58,10 +58,10 @@ function(add_tile_matmul_test name)
       -convert-func-to-llvm
       -reconcile-unrealized-casts
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_5_llvm.mlir
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -76,10 +76,10 @@ function(add_tile_matmul_test name)
       -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir
       > ${CMAKE_CURRENT_BINARY_DIR}/${name}_6.ll
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -159,6 +159,7 @@ function(add_tile_matmul_test name)
   add_toy_mlir_rushb(
     NAME ${name}
     TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_tile_${name}
+    TARGET toy
     CXX
     FRONT_PASSES -convert-tile-to-buckyball -lower-buckyball-to-bank-ssa
     SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC}
@@ -175,7 +176,7 @@ function(add_tile_matmul_contract_test name)
 
   add_custom_command(
     OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       "-convert-tile-to-buckyball=bank_depth=128"
       > ${OUT}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
@@ -197,7 +198,7 @@ function(add_tile_contract_test name)
 
   add_custom_command(
     OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
       > ${OUT}

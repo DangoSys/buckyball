@@ -1,8 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-exports_files(["ballISA.h"])
-
-filegroup(
-    name = "ballISA",
-    srcs = ["ballISA.h"],
-)

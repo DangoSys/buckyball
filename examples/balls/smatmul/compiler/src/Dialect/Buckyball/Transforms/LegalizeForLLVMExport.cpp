@@ -9,9 +9,9 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
 #include "Utils/BankUtils.h"
-#include "ballISA.h"
 
 #include "llvm/Support/ErrorHandling.h"
 
@@ -41,6 +41,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
   LogicalResult
   matchAndRewrite(SMatMulMatmulOp op, OpAdaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("SMatMulBall");
     Location loc = op.getLoc();
     Value aMem = op.getAMemArray();
     Value bMem = op.getBMemArray();
@@ -115,9 +116,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     rewriter.create<CustomIntrOp>(
         loc, cstI64(rewriter, loc, matrixRs1(aBank, bBank, cBank)),
         cstI64(rewriter, loc, matrixCfg(m, n, k)),
-        rewriter.getI32IntegerAttr(smatmulIsWs((int64_t)m)
-                                       ? BB_FUNC7_SMATMUL_WS
-                                       : BB_FUNC7_SMATMUL_OS));
+        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7(
+            smatmulIsWs((int64_t)m) ? "SMATMUL_WS" : "SMATMUL_OS")));
 
     Value rs1C = packRs1BankIter(rewriter, loc, cstI64(rewriter, loc, cBank),
                                  cstI64(rewriter, loc, depthC));
@@ -154,6 +154,7 @@ struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
   LogicalResult
   matchAndRewrite(SMatMulOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("SMatMulBall");
     if (stable)
       return rewriter.notifyMatchFailure(
           op, "SMatMulBall stable intrinsic is not available; use custom path");
@@ -177,8 +178,8 @@ struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
                                aw)));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, adaptor.getConfig(),
-        rewriter.getI32IntegerAttr(op.getWs() ? BB_FUNC7_SMATMUL_WS
-                                              : BB_FUNC7_SMATMUL_OS));
+        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7(
+            op.getWs() ? "SMATMUL_WS" : "SMATMUL_OS")));
     return success();
   }
 
@@ -190,26 +191,16 @@ private:
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateMatrixMatmulLegalizeForLLVMExportPatterns(
+void populateSMatMulBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    bool rushB) {
+    int64_t bankDepth, bool rushB) {
   patterns.add<SMatMulMatmulLowering>(converter, stable, rushB);
-}
-
-void configureMatrixMatmulLegalizeForExportTarget(LLVMConversionTarget &target,
-                                                  bool /*stable*/) {
-  target.addIllegalOp<SMatMulMatmulOp>();
-}
-
-void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable,
-                                                 int64_t bankDepth) {
   patterns.add<SMatMulLowering>(converter, stable, bankDepth);
 }
 
-void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool /*stable*/) {
+void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                 bool /*stable*/) {
+  target.addIllegalOp<SMatMulMatmulOp>();
   target.addIllegalOp<SMatMulOp, BankSMatMulOp>();
 }
 } // namespace mlir::buddy::buckyball

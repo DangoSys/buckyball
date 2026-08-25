@@ -10,9 +10,9 @@ channel = 1
 
 [dma]
 nXacts = 1
-burstMaxBytes = 64
+burstMaxBytes = 1024
 busWidth = 128
-maxInFlightMemReqs = 1
+maxInFlightMemReqs = 16
 
 [tlb]
 size = 1

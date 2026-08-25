@@ -10,7 +10,7 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateMatrixAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+void populateSMatMulBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 } // namespace mlir::buddy
 
@@ -35,7 +35,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateMatrixAssignPhysicalBankPatterns(
+void mlir::buddy::populateSMatMulBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankSMatMulPattern>(patterns.getContext());

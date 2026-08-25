@@ -313,10 +313,11 @@ private:
 
 } // namespace
 
-void mlir::buddy::populateMatrixTileMatMulPatterns(RewritePatternSet &patterns,
-                                                   int64_t bankWidthBytes,
-                                                   int64_t bankDepth,
-                                                   int64_t bankNum) {
+namespace mlir::buddy {
+void populateSMatMulBallTileLoweringPatterns(
+    RewritePatternSet &patterns, int64_t bankWidthBytes, int64_t bankDepth,
+    int64_t bankNum) {
   patterns.add<TileMatMulLowering>(patterns.getContext(), bankWidthBytes,
                                    bankDepth, bankNum);
 }
+} // namespace mlir::buddy

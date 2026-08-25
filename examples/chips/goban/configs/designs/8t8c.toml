@@ -1,0 +1,9 @@
+# Goban - 8 tile × 8 cores
+
+[top]
+nTiles = 8
+
+[tileTemplate]
+tile_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+include = "tiles/8core-incoherent.toml"
+count = 8

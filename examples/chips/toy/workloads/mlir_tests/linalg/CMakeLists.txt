@@ -18,7 +18,7 @@ function(add_linalg_contract_test name)
 
   add_custom_command(
     OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-linalg-to-tile
       > ${OUT}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
@@ -48,11 +48,11 @@ function(add_linalg_conv2d_test name main_src)
 
   add_custom_command(
     OUTPUT ${OBJ} ${LLVM_MLIR} ${LLVM_IR}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
       -convert-linalg-to-tile
       -convert-tile-to-buckyball
       -lower-buckyball-to-bank-ssa
-      "--assign-physical-banks=bank_num=16"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -139,6 +139,7 @@ function(add_linalg_conv2d_test name main_src)
   add_toy_mlir_rushb(
     NAME ${name}
     TARGET_STEM ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_${name}
+    TARGET toy
     CXX
     FRONT_PASSES
       -convert-linalg-to-tile
@@ -163,11 +164,11 @@ endfunction()
 # Compile matmul.mlir -> matmul.o
 add_custom_command(
     OUTPUT matmul.o
-    COMMAND ${BUDDY_OPT} ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir
+    COMMAND ${BUDDY_OPT} ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir --target=toy
         -convert-linalg-to-tile
         -convert-tile-to-buckyball
         -lower-buckyball-to-bank-ssa
-        "--assign-physical-banks=bank_num=16"
+        -assign-physical-banks
         ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
         -convert-linalg-to-loops
         -expand-strided-metadata

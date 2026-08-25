@@ -103,7 +103,4 @@ in
 
   # Verilog/SystemVerilog formatter for pre-commit
   verible = pkgs.verible;
-
-  # Bazel/Starlark formatter for pre-commit
-  buildifier = pkgs.bazel-buildtools;
 }

@@ -1,5 +1,0 @@
-load("@bb_cores//:workloads.bzl", "core_workloads")
-
-package(default_visibility = ["//visibility:public"])
-
-core_workloads("prefill")

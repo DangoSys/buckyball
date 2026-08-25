@@ -5,8 +5,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
-#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -19,6 +19,7 @@ struct Fp2IntLowering : public ConvertOpToLLVMPattern<Fp2IntOp> {
   LogicalResult
   matchAndRewrite(Fp2IntOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("Fp2IntBall");
     llvm::APInt daAddr(64, 0);
     if (!matchPattern(op.getDaAddr(), m_ConstantInt(&daAddr)) ||
         daAddr.getSExtValue() != 0)
@@ -29,21 +30,23 @@ struct Fp2IntLowering : public ConvertOpToLLVMPattern<Fp2IntOp> {
                                  adaptor.getOutputBankId(), adaptor.getIter());
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, adaptor.getDaAddr(),
-        rewriter.getI32IntegerAttr(BB_FUNC7_FP2INT));
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("FP2INT")));
     return success();
   }
 };
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateFp2IntLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+void populateFp2IntBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  RewritePatternSet &patterns,
-                                                 bool stable) {
+                                                 bool stable, int64_t,
+                                                 bool) {
   (void)stable;
   patterns.add<Fp2IntLowering>(converter);
 }
 
-void configureFp2IntLegalizeForExportTarget(LLVMConversionTarget &target,
+void configureFp2IntBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable) {
   (void)stable;
   target.addIllegalOp<Fp2IntOp, BankFp2IntOp>();

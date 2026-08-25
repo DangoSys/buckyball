@@ -1,0 +1,8 @@
+# Pebble top-level configuration
+
+[top]
+nTiles = 1
+
+[[tiles]]
+tile_id = 0
+include = "tiles/default.toml"

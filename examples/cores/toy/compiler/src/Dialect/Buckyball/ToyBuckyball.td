@@ -14,7 +14,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This is the Toy compiler's Buckyball dialect assembly.
+// Toy mounts leftover balls: Relu, Gemmini, Trace, Mxfp2Int.
+// Gemmini/Trace/Mxfp2Int lower outside this dialect (Gemmini dialect / custom).
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,14 +23,6 @@
 #define TOY_BUCKYBALL_OPS
 
 include "Buckyball.td"
-
-// Ball-specific operations
-include "VecBall.td"
 include "ReluBall.td"
-include "TransposeBall.td"
-include "Im2colBall.td"
-include "SMatMulBall.td"
-include "Fp2IntBall.td"
-include "Int2FpBall.td"
 
 #endif // TOY_BUCKYBALL_OPS

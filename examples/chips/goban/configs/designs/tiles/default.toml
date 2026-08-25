@@ -1,0 +1,24 @@
+# Goban Tile (default: 4 identical cores)
+
+memBallChannelNum = 6
+
+[privateDCache]
+enable = false
+ways = 4
+capacityKB = 256
+writeBytes = 8
+portFactor = 2
+memCycles = 10
+
+[sharedMem]
+enable = true
+virtualBankCount = 64
+entries = 16384
+inputChannels = 28
+defaultGroupCount = 1
+memCycles = 10
+
+[coreTemplate]
+core_ids = [0, 1, 2, 3]
+include = "../../../../../cores/goban/configs/default.toml"
+count = 4

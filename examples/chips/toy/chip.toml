@@ -1,3 +1,0 @@
-[chip]
-verilatorConfig = "sims.verilator.BuckyballToyVerilatorConfig"
-p2eConfig = "sims.p2e.P2EToyConfig"

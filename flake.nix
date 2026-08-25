@@ -42,13 +42,7 @@
               compiler.flatbuffers
               compiler.numactl
 
-              mosoo.bun
-              mosoo.just
-              mosoo.workerd
-
               rustTools.cargoNextest
-
-              systemTools.bazel
             ];
             shellHook = ''
               # Must run with cwd at the git checkout. Store copies from toString ./.
@@ -68,8 +62,6 @@
 
               source "$BB_ROOT/sourceme.sh"
 
-              export MINIFLARE_WORKERD_PATH="''${MINIFLARE_WORKERD_PATH:-${pkgs.mosoo.workerd}/bin/workerd}"
-
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
 
@@ -78,6 +70,9 @@
 
               export CC="${pkgs.systemTools.clang}/bin/clang"
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
+
+              export JAVA_HOME="${pkgs.jdk17}"
+              export PATH="$JAVA_HOME/bin:$PATH"
 
               # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
               if [ -z "$NIX_QUIET" ]; then
@@ -95,7 +90,6 @@
                 echo "Yosys: $(yosys --version 2>&1 | head -1)" >&2
                 echo "OpenSTA: $(sta -version 2>&1 | head -1)" >&2
                 echo "Buddy MLIR: $(which buddy-opt)" >&2
-                echo "Bazel: $(command -v bazel)" >&2
                 echo "===========================================================================" >&2
               fi
             '';
@@ -134,7 +128,6 @@
               tools.opensta
               tools.lcov
               tools.verible
-              tools.buildifier
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -143,7 +136,8 @@
               # python environment
               python.python3Packages
               pkgs."pre-commit"
-              pkgs.clang-tools  # clang-format for pre-commit (language: system)
+              # clang-format for pre-commit (language: system)
+              pkgs.clang-tools
 
               # Rust toolchain
               rustTools.rustc
@@ -202,12 +196,6 @@
               systemTools.nodejs
               systemTools.git
               systemTools.pnpm
-              systemTools.bazel
-
-              # Mosoo local development tools
-              mosoo.bun
-              mosoo.just
-              mosoo.workerd
 
               # CUDA toolkit (12.8, matches host driver) + host g++-13
               cuda.cudatoolkit

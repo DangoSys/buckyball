@@ -18,7 +18,6 @@ set(BUDDY_LLC ${BUDDY_BINARY_DIR}/buddy-llc)
 set(LLVM_BUILD_DIR ${BUDDY_MLIR_DIR}/llvm/build)
 
 set(BUCKYBALL_WORKLOAD_CHIP "" CACHE STRING "Buckyball chip for workloads")
-set(BUCKYBALL_WORKLOAD_CORE "" CACHE STRING "Compiler Core for workloads")
 if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
   message(FATAL_ERROR
     "BUCKYBALL_WORKLOAD_CHIP is required. Pass -DBUCKYBALL_WORKLOAD_CHIP=<chip>.")
@@ -29,11 +28,6 @@ if(NOT IS_DIRECTORY
     "Buckyball workload chip does not exist: ${BUCKYBALL_WORKLOAD_CHIP}")
 endif()
 message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
-if(BUCKYBALL_WORKLOAD_CORE STREQUAL "")
-  message(FATAL_ERROR
-    "BUCKYBALL_WORKLOAD_CORE is required. Pass it from Bazel/bbdev.")
-endif()
-message(STATUS "Buckyball workload compiler Core: ${BUCKYBALL_WORKLOAD_CORE}")
 
 if(NOT IS_ABSOLUTE "${Python3_EXECUTABLE}")
   find_program(BUCKYBALL_PYTHON3_EXECUTABLE NAMES python3)
@@ -43,53 +37,70 @@ if(NOT IS_ABSOLUTE "${Python3_EXECUTABLE}")
   set(Python3_EXECUTABLE "${BUCKYBALL_PYTHON3_EXECUTABLE}")
 endif()
 
-set(BUCKYBALL_CORE_DIR
-  "${BUCKYBALL_REPO_ROOT}/examples/cores/${BUCKYBALL_WORKLOAD_CORE}")
-if(NOT IS_DIRECTORY "${BUCKYBALL_CORE_DIR}")
-  message(FATAL_ERROR "Core does not exist: ${BUCKYBALL_CORE_DIR}")
-endif()
-
 foreach(_BUCKYBALL_REQ IN ITEMS
-    BUCKYBALL_MLIR_BANK_NUM
-    BUCKYBALL_MLIR_BANK_WIDTH_BITS
-    BUCKYBALL_MLIR_BANK_DEPTH
+    BUCKYBALL_CHIP_PB
     BUCKYBALL_CARGO_TARGET_DIR
     BUCKYBALL_RUSHB_BEMU_MANIFEST
     BUCKYBALL_RUSHB_BEMU_LIBRARY
     BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
   if(NOT DEFINED ${_BUCKYBALL_REQ} OR "${${_BUCKYBALL_REQ}}" STREQUAL "")
     message(FATAL_ERROR
-      "${_BUCKYBALL_REQ} must be passed by Bazel/bbdev (workload_cmake_defs.py)")
+      "${_BUCKYBALL_REQ} must be passed by bbdev config --install (cmake.defs)")
   endif()
 endforeach()
 
-math(EXPR BUCKYBALL_MLIR_BANK_WIDTH_BYTES
-  "${BUCKYBALL_MLIR_BANK_WIDTH_BITS} / 8")
-math(EXPR BUCKYBALL_MLIR_BANK_WIDTH_REMAINDER
-  "${BUCKYBALL_MLIR_BANK_WIDTH_BITS} % 8")
-if(BUCKYBALL_MLIR_BANK_WIDTH_BITS LESS 8 OR
-   NOT BUCKYBALL_MLIR_BANK_WIDTH_REMAINDER EQUAL 0)
+if(NOT EXISTS "${BUCKYBALL_CHIP_PB}")
+  message(FATAL_ERROR "missing Chip.pb: ${BUCKYBALL_CHIP_PB}")
+endif()
+set(BUCKYBALL_ISA_DIR "${CMAKE_BINARY_DIR}/generated/isa")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}"
+    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    --repo "${BUCKYBALL_REPO_ROOT}"
+    --chip-pb "${BUCKYBALL_CHIP_PB}"
+    --isa-dir "${BUCKYBALL_ISA_DIR}"
+    --print-targets
+    --print-target-balls
+    --print-core-targets
+  RESULT_VARIABLE BUCKYBALL_TARGET_REGISTRY_RESULT
+  OUTPUT_VARIABLE BUCKYBALL_TARGETS_RAW
+  ERROR_VARIABLE BUCKYBALL_TARGET_REGISTRY_ERROR)
+if(NOT BUCKYBALL_TARGET_REGISTRY_RESULT EQUAL 0)
   message(FATAL_ERROR
-    "Core bank width must be a positive whole number of bytes: ${BUCKYBALL_MLIR_BANK_WIDTH_BITS}")
+    "failed to generate target ISA headers: ${BUCKYBALL_TARGET_REGISTRY_ERROR}")
 endif()
-set(BUCKYBALL_CONVERT_TILE_TO_BUCKYBALL
-  "--convert-tile-to-buckyball=bank_width=${BUCKYBALL_MLIR_BANK_WIDTH_BYTES} bank_depth=${BUCKYBALL_MLIR_BANK_DEPTH} bank_num=${BUCKYBALL_MLIR_BANK_NUM}")
-set(BUCKYBALL_ASSIGN_PHYSICAL_BANKS
-  "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}")
-message(STATUS "Buckyball Core banks: ${BUCKYBALL_MLIR_BANK_NUM} x ${BUCKYBALL_MLIR_BANK_WIDTH_BITS}-bit x ${BUCKYBALL_MLIR_BANK_DEPTH}")
-
-if(NOT DEFINED BB_BALL_ISA_INCLUDE_DIR OR BB_BALL_ISA_INCLUDE_DIR STREQUAL "")
-  set(BB_BALL_ISA_INCLUDE_DIR "${BUCKYBALL_CORE_DIR}/isa")
+string(REPLACE "\n" ";" BUCKYBALL_TARGETS "${BUCKYBALL_TARGETS_RAW}")
+set(BUCKYBALL_TARGET_BALL_LINES)
+set(BUCKYBALL_CORE_TARGET_LINES)
+foreach(BUCKYBALL_TARGET_LINE ${BUCKYBALL_TARGETS})
+  if(BUCKYBALL_TARGET_LINE MATCHES "^([0-9]+):([^,]+)$")
+    set(BUCKYBALL_CORE_TARGET_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
+    list(APPEND BUCKYBALL_CORE_TARGET_LINES ${BUCKYBALL_TARGET_LINE})
+  elseif(BUCKYBALL_TARGET_LINE MATCHES "^([^:]+):(.*)$")
+    set(BUCKYBALL_TARGET_BALLS_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
+    list(APPEND BUCKYBALL_TARGET_BALL_LINES ${BUCKYBALL_TARGET_LINE})
+  endif()
+endforeach()
+list(REMOVE_ITEM BUCKYBALL_TARGETS ${BUCKYBALL_TARGET_BALL_LINES}
+  ${BUCKYBALL_CORE_TARGET_LINES} "")
+if(NOT BUCKYBALL_TARGETS)
+  message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
-set(BB_BALL_ISA_H "${BB_BALL_ISA_INCLUDE_DIR}/ballISA.h")
-if(NOT EXISTS "${BB_BALL_ISA_H}")
-  message(FATAL_ERROR "missing ${BB_BALL_ISA_H}")
-endif()
-
-if(NOT DEFINED BUCKYBALL_BALL_CTEST_DIRS)
-  message(FATAL_ERROR
-    "BUCKYBALL_BALL_CTEST_DIRS must be passed by Bazel/bbdev")
-endif()
+message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
+set(BUCKYBALL_BALL_NAMES
+  fp2int:Fp2IntBall
+  im2col:Im2colBall
+  int2fp:Int2FpBall
+  relu:ReluBall
+  smatmul:SMatMulBall
+  transpose:TransposeBall
+  vector:VecBall)
+set(BUCKYBALL_MLIR_BALL_NAMES
+  fp2int:Fp2IntBall
+  im2col:Im2colBall
+  int2fp:Int2FpBall
+  smatmul:SMatMulBall
+  transpose:TransposeBall)
 
 add_custom_target(rushB-bemu-workloads-build)
 add_custom_target(rushB-verilator-workloads-build)
@@ -272,13 +283,20 @@ file(GLOB BUCKYBALL_BALL_ISA_DEPS CONFIGURE_DEPENDS
   "${BUCKYBALL_REPO_ROOT}/examples/balls/*/workloads/isa/*")
 
 function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
+  if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for C tests")
+  endif()
+  list(FIND BUCKYBALL_TARGETS "${BUCKYBALL_CTEST_TARGET}" _buckyball_target_index)
+  if(_buckyball_target_index EQUAL -1)
+    message(FATAL_ERROR "unknown C test target: ${BUCKYBALL_CTEST_TARGET}")
+  endif()
   file(GLOB BUCKYBALL_ISA_DEPS CONFIGURE_DEPENDS
     ${WORKLOAD_LIB_DIR}/bbhw/isa/*)
   set(DEPS
     ${SOURCE_DIR}/${SOURCE_FILE}
     ${WORKLOAD_LIB_DIR}/buckyball.c
     ${WORKLOAD_LIB_DIR}/buckyball.h
-    ${BB_BALL_ISA_H}
+    ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     ${BUCKYBALL_BBHW_MEM_C}
     ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     ${BUCKYBALL_CHIP_COMMON_SOURCES}
@@ -301,7 +319,7 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     ${BUCKYBALL_CHIP_COMMON_SOURCES})
   target_include_directories(${EXECUTABLE} PRIVATE
     ${WORKLOAD_LIB_DIR}
-    ${BB_BALL_ISA_INCLUDE_DIR}
+    ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
     ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
     ${BUCKYBALL_BALL_WORKLOAD_DIRS}
     ${SOURCE_DIR})
@@ -335,7 +353,7 @@ function(add_buckyball_multicore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      -I${BB_BALL_ISA_INCLUDE_DIR}
+      -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
       ${BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS}
       ${BALL_ISA_INCLUDE_FLAGS}
       -I${SOURCE_DIR}
@@ -373,7 +391,7 @@ function(add_buckyball_singlecore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
-      -I${BB_BALL_ISA_INCLUDE_DIR}
+      -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
       ${BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS}
       ${BALL_ISA_INCLUDE_FLAGS}
       -I${SOURCE_DIR}
@@ -394,7 +412,10 @@ function(add_buckyball_ctest SOURCE_FILE)
       "BUCKYBALL_WORKLOAD_CHIP must be set before add_buckyball_ctest()")
   endif()
   get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
-  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${_stem}")
+  if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
+    message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for ${SOURCE_FILE}")
+  endif()
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${BUCKYBALL_CTEST_TARGET}_${_stem}")
   set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
   buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
@@ -419,7 +440,7 @@ function(add_buckyball_ctest SOURCE_FILE)
         ${BUCKYBALL_CHIP_COMMON_SOURCES}
       INCLUDE_DIRS
         ${WORKLOAD_LIB_DIR}
-        ${BB_BALL_ISA_INCLUDE_DIR}
+        ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
         ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
         ${BUCKYBALL_BALL_WORKLOAD_DIRS}
         ${SOURCE_DIR}
@@ -446,26 +467,41 @@ function(add_buckyball_ctests)
 endfunction()
 
 function(buckyball_add_ball_ctest_subdirs)
-  if(NOT DEFINED BUCKYBALL_BALL_CTEST_DIRS)
-    message(FATAL_ERROR "BUCKYBALL_BALL_CTEST_DIRS must be set before buckyball_add_ball_ctest_subdirs()")
-  endif()
-
-  foreach(BUCKYBALL_BALL_CTEST_DIR ${BUCKYBALL_BALL_CTEST_DIRS})
-    get_filename_component(BUCKYBALL_BALL_WORKLOADS_DIR ${BUCKYBALL_BALL_CTEST_DIR} DIRECTORY)
-    get_filename_component(BUCKYBALL_BALL_DIR ${BUCKYBALL_BALL_WORKLOADS_DIR} DIRECTORY)
-    get_filename_component(BUCKYBALL_BALL_NAME ${BUCKYBALL_BALL_DIR} NAME)
-    add_subdirectory(
-      ${BUCKYBALL_BALL_CTEST_DIR}
-      ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_BALL_NAME}/ctests)
+  foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
+    foreach(BUCKYBALL_BALL_MAPPING IN LISTS BUCKYBALL_BALL_NAMES)
+      string(REPLACE ":" ";" BUCKYBALL_BALL_PARTS "${BUCKYBALL_BALL_MAPPING}")
+      list(GET BUCKYBALL_BALL_PARTS 0 BUCKYBALL_BALL_DIR)
+      list(GET BUCKYBALL_BALL_PARTS 1 BUCKYBALL_BALL_CLASS)
+      string(REPLACE "," ";" BUCKYBALL_ACTIVE_BALLS
+        "${BUCKYBALL_TARGET_BALLS_${BUCKYBALL_TARGET}}")
+      list(FIND BUCKYBALL_ACTIVE_BALLS "${BUCKYBALL_BALL_CLASS}"
+        BUCKYBALL_BALL_INDEX)
+      if(BUCKYBALL_BALL_INDEX EQUAL -1)
+        continue()
+      endif()
+      set(BUCKYBALL_BALL_CTEST_DIR
+        ${BUCKYBALL_REPO_ROOT}/examples/balls/${BUCKYBALL_BALL_DIR}/workloads/ctests)
+      if(NOT IS_DIRECTORY ${BUCKYBALL_BALL_CTEST_DIR})
+        message(FATAL_ERROR "missing Ball CTest directory: ${BUCKYBALL_BALL_CTEST_DIR}")
+      endif()
+      set(BUCKYBALL_CTEST_TARGET ${BUCKYBALL_TARGET})
+      add_subdirectory(
+        ${BUCKYBALL_BALL_CTEST_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR}/ctests)
+    endforeach()
   endforeach()
 endfunction()
 
 function(add_toy_mlir_rushb)
-  cmake_parse_arguments(ARG "CXX" "NAME;TARGET_STEM"
+  cmake_parse_arguments(ARG "CXX" "NAME;TARGET_STEM;TARGET"
     "FRONT_PASSES;SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
 
-  if(NOT ARG_NAME OR NOT ARG_TARGET_STEM)
-    message(FATAL_ERROR "add_toy_mlir_rushb requires NAME and TARGET_STEM")
+  if(NOT ARG_NAME OR NOT ARG_TARGET_STEM OR NOT ARG_TARGET)
+    message(FATAL_ERROR "add_toy_mlir_rushb requires NAME, TARGET_STEM, and TARGET")
+  endif()
+  list(FIND BUCKYBALL_TARGETS "${ARG_TARGET}" _buckyball_target_index)
+  if(_buckyball_target_index EQUAL -1)
+    message(FATAL_ERROR "unknown Buckyball target: ${ARG_TARGET}")
   endif()
   if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
      NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
@@ -483,8 +519,9 @@ function(add_toy_mlir_rushb)
   add_custom_command(
     OUTPUT ${RUSHB_OBJ}
     COMMAND ${BUDDY_OPT} ${MLIR_SRC}
+      --target=${ARG_TARGET}
       ${ARG_FRONT_PASSES}
-      "--assign-physical-banks=bank_num=${BUCKYBALL_MLIR_BANK_NUM}"
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -518,8 +555,7 @@ function(add_toy_mlir_rushb)
     DEPENDS ${RUSHB_OBJ} ${ARG_DEPENDS})
 endfunction()
 
-set(BUCKYBALL_EXPECTED_COMPILER_DIR
-  "${BUCKYBALL_REPO_ROOT}/examples/cores/${BUCKYBALL_WORKLOAD_CORE}/compiler")
+set(BUCKYBALL_EXPECTED_COMPILER_DIR "${BUCKYBALL_REPO_ROOT}/compiler")
 set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
 if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
   message(FATAL_ERROR
@@ -541,10 +577,24 @@ get_filename_component(BUCKYBALL_COMPILER_DIR
   "${BUCKYBALL_COMPILER_DIR}" ABSOLUTE)
 if(NOT BUCKYBALL_COMPILER_DIR STREQUAL BUCKYBALL_EXPECTED_COMPILER_DIR)
   message(FATAL_ERROR
-    "Compiler Core mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
-    "whose compiler Core is ${BUCKYBALL_WORKLOAD_CORE}, "
-    "but BUDDY_EXTERNAL_DIALECTS_DIR is ${BUCKYBALL_COMPILER_DIR}. "
-    "The workload builder must select that Core's compiler build directory.")
+    "Compiler mismatch: workload chip is ${BUCKYBALL_WORKLOAD_CHIP}, "
+    "expected BUDDY_EXTERNAL_DIALECTS_DIR ${BUCKYBALL_EXPECTED_COMPILER_DIR}, "
+    "but got ${BUCKYBALL_COMPILER_DIR}.")
+endif()
+file(STRINGS "${BUCKYBALL_COMPILER_CACHE}" BUCKYBALL_COMPILER_PB_LINES
+  REGEX "^BUCKYBALL_CHIP_PB:[^=]+=")
+list(LENGTH BUCKYBALL_COMPILER_PB_LINES BUCKYBALL_COMPILER_PB_COUNT)
+if(NOT BUCKYBALL_COMPILER_PB_COUNT EQUAL 1)
+  message(FATAL_ERROR "BUCKYBALL_CHIP_PB is missing or ambiguous in ${BUCKYBALL_COMPILER_CACHE}")
+endif()
+list(GET BUCKYBALL_COMPILER_PB_LINES 0 BUCKYBALL_COMPILER_PB_LINE)
+string(REGEX REPLACE "^BUCKYBALL_CHIP_PB:[^=]+=" ""
+  BUCKYBALL_COMPILER_PB "${BUCKYBALL_COMPILER_PB_LINE}")
+get_filename_component(BUCKYBALL_COMPILER_PB "${BUCKYBALL_COMPILER_PB}" ABSOLUTE)
+get_filename_component(BUCKYBALL_WORKLOAD_PB "${BUCKYBALL_CHIP_PB}" ABSOLUTE)
+if(NOT BUCKYBALL_COMPILER_PB STREQUAL BUCKYBALL_WORKLOAD_PB)
+  message(FATAL_ERROR
+    "Compiler Chip.pb mismatch: compiler uses ${BUCKYBALL_COMPILER_PB}, workload uses ${BUCKYBALL_WORKLOAD_PB}")
 endif()
 
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)

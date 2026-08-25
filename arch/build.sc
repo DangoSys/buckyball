@@ -9,8 +9,20 @@ import mill.javalib.JavaModule
 import mill.bsp._
 
 object protoJava extends JavaModule {
-  override def millSourcePath = os.pwd / os.up / "bazel" / "proto" / "generated" / "java"
-  override def sources = T.sources(Seq(PathRef(millSourcePath)))
+  def protoDir = T {
+    os.pwd / os.up / "bbdev" / "api" / "steps" / "config" / "scripts" / "proto"
+  }
+
+  def generatedSources = T {
+    val dir = protoDir()
+    val proto = dir / "chip.proto"
+    if (!os.exists(proto)) {
+      throw new Exception(s"missing chip.proto: $proto")
+    }
+    os.proc("protoc", s"-I$dir", s"--java_out=${T.dest}", proto).call()
+    Seq(PathRef(T.dest))
+  }
+
   override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:3.25.3")
 }
 

@@ -7,8 +7,7 @@
 #ifndef DEQUANTBALL_OPS
 #define DEQUANTBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 //===----------------------------------------------------------------------===//
 // Int2FpBall operations

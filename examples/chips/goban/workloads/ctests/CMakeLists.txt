@@ -16,7 +16,7 @@ set(GOBAN_C_FLAGS
   -DBANK_NUM=64
   -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
-  -I${BB_BALL_ISA_INCLUDE_DIR}
+  -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
   -I${GOBAN_CTEST_DIR}
 )
 
@@ -43,7 +43,7 @@ function(add_goban_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
-      ${BB_BALL_ISA_H}
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban multicore baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -79,7 +79,7 @@ function(add_goban_64t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
-      ${BB_BALL_ISA_H}
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban 64t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -116,7 +116,7 @@ function(add_goban_2t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
-      ${BB_BALL_ISA_H}
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban 2t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

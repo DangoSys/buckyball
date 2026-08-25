@@ -604,13 +604,3 @@ class P2ETop extends RawModule {
   io.ddr4_en_vcc2v5      := top.io.ddr4_en_vcc2v5
   top.io.power_good      := io.power_good
 }
-
-object ElaborateP2ETop extends App {
-  import _root_.circt.stage.ChiselStage
-
-  ChiselStage.emitSystemVerilogFile(
-    new P2ETop,
-    firtoolOpts = args,
-    args = Array.empty
-  )
-}

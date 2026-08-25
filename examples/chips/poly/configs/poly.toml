@@ -1,8 +1,0 @@
-# Poly Chip: 4 homogeneous tiles, each 3 prefill + 2 decode Cores.
-
-[top]
-nTiles = 4
-
-[tileTemplate]
-include = "tiles/default.toml"
-count = 4

@@ -6,6 +6,7 @@ set(BUCKYBALL_CHIP_COMMON_HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/common/pebble.h)
 set(BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}/common)
+set(BUCKYBALL_CTEST_TARGET pebble)
 
 add_custom_target(pebble-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET pebble-ctests-build)

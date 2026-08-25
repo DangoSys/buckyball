@@ -10,7 +10,7 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+void populateInt2FpBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 } // namespace mlir::buddy
 
@@ -32,7 +32,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(
+void mlir::buddy::populateInt2FpBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankInt2FpPattern<BankInt2FpTensorOp, Int2FpTensorOp>,

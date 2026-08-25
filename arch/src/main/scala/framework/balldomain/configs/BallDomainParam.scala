@@ -10,8 +10,7 @@ case class BallIdMapping(
   inBW:          Int,
   outBW:         Int,
   mmioReadBW:    Int = 0,
-  mmioWriteBW:   Int = 0,
-  configBaseDir: String = "")
+  mmioWriteBW:   Int = 0)
 
 case class BallISAEntry(
   mnemonic: String,

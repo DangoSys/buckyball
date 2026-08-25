@@ -24,17 +24,17 @@ export LLVM_MLIR_BUILD_DIR="${BBDIR}/compiler/thirdparty/buddy-mlir/llvm/build"
 export PYTHONPATH="${LLVM_MLIR_BUILD_DIR}/tools/mlir/python_packages/mlir_core:${PYTHONPATH}"
 export RISCV="${BBDIR}/result"
 export PATH="${BBDIR}/thirdparty/libgloss/install/lib:$PATH"
-# Per-core symlinks: buddy-opt-<core>, buddy-translate-<core>, ...
+# Per-chip buddy-opt lives at compiler/thirdparty/buddy-mlir/build/<chip>/bin
 export PATH="${BUDDY_MLIR_BUILD_ROOT}/bin:${PATH}"
 
 # Optional interactive compiler session. Set before sourcing, e.g.:
-#   export BUCKYBALL_COMPILER_CORE=toy
+#   export BUCKYBALL_COMPILER_CHIP=toy
 # bbdev compiler/workload inject BUDDY_MLIR_BUILD_DIR per subprocess.
-if [ -n "${BUCKYBALL_COMPILER_CORE:-}" ]; then
-  export BUDDY_MLIR_BUILD_DIR="${BUDDY_MLIR_BUILD_ROOT}/cores/${BUCKYBALL_COMPILER_CORE}"
+if [ -n "${BUCKYBALL_COMPILER_CHIP:-}" ]; then
+  export BUDDY_MLIR_BUILD_DIR="${BUDDY_MLIR_BUILD_ROOT}/${BUCKYBALL_COMPILER_CHIP}"
   export BUDDY_BINARY_DIR="${BUDDY_MLIR_BUILD_DIR}/bin"
   if [ ! -d "${BUDDY_MLIR_BUILD_DIR}" ]; then
-    echo "ERROR: missing compiler build for core ${BUCKYBALL_COMPILER_CORE}: ${BUDDY_MLIR_BUILD_DIR}" >&2
+    echo "ERROR: missing compiler build for chip ${BUCKYBALL_COMPILER_CHIP}: ${BUDDY_MLIR_BUILD_DIR}" >&2
     return 1 2>/dev/null || exit 1
   fi
   export PYTHONPATH="${BUDDY_MLIR_BUILD_DIR}/python_packages:${PYTHONPATH}"

@@ -1,7 +1,7 @@
 robEntries = 16
 rsOutOfOrderResponse = true
 bankIdLen = 10
-vbankIdUpperBound = 15
+vbankIdUpperBound = 31
 sharedBankIdBase = 32
 iterLen = 34
 subRobEnable = false

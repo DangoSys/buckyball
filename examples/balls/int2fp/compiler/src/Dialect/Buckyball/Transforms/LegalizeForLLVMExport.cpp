@@ -7,8 +7,8 @@
 #include <type_traits>
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
-#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -23,6 +23,7 @@ struct Int2FpLowering : public ConvertOpToLLVMPattern<Op> {
   LogicalResult
   matchAndRewrite(Op op, typename Op::Adaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("Int2FpBall");
     llvm::APInt daAddr(64, 0);
     if (!matchPattern(op.getDaAddr(), m_ConstantInt(&daAddr)) ||
         daAddr.getSExtValue() != 0)
@@ -38,11 +39,12 @@ struct Int2FpLowering : public ConvertOpToLLVMPattern<Op> {
     Value dw = rewriter.create<arith::ShLIOp>(loc, adaptor.getDwAddr(),
                                               cstI64(rewriter, loc, 13));
     Value rs2 = rewriter.create<arith::OrIOp>(loc, adaptor.getDaAddr(), dw);
-    constexpr int funct7 = std::is_same_v<Op, Int2FpTensorOp>
-                               ? BB_FUNC7_INT2FP_TENSOR
-                               : BB_FUNC7_INT2FP_CHANNEL;
+    llvm::StringRef mnemonic = std::is_same_v<Op, Int2FpTensorOp>
+                                   ? "INT2FP_TENSOR"
+                                   : "INT2FP_CHANNEL";
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, rs2, rewriter.getI32IntegerAttr(funct7));
+        op, rs1, rs2,
+        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7(mnemonic)));
     return success();
   }
 };
@@ -50,15 +52,16 @@ struct Int2FpLowering : public ConvertOpToLLVMPattern<Op> {
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateInt2FpLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+void populateInt2FpBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  RewritePatternSet &patterns,
-                                                 bool stable) {
+                                                 bool stable, int64_t,
+                                                 bool) {
   (void)stable;
   patterns.add<Int2FpLowering<Int2FpTensorOp>, Int2FpLowering<Int2FpChannelOp>>(
       converter);
 }
 
-void configureInt2FpLegalizeForExportTarget(LLVMConversionTarget &target,
+void configureInt2FpBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable) {
   (void)stable;
   target.addIllegalOp<Int2FpTensorOp, Int2FpChannelOp, BankInt2FpTensorOp,

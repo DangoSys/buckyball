@@ -7,8 +7,7 @@
 #ifndef IM2COLBALL_OPS
 #define IM2COLBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 //===----------------------------------------------------------------------===//
 // Im2colBall operations

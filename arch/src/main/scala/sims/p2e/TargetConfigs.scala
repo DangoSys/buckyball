@@ -109,9 +109,16 @@ object Elaborate extends App {
         sys.exit(1)
     }
 
+  val firtoolOpts = args.drop(1)
+
   ChiselStage.emitSystemVerilogFile(
     new P2EHarness()(config.toInstance),
-    firtoolOpts = args.drop(1),
+    firtoolOpts = firtoolOpts,
+    args = Array.empty
+  )
+  ChiselStage.emitSystemVerilogFile(
+    new P2ETop,
+    firtoolOpts = firtoolOpts,
     args = Array.empty
   )
 }

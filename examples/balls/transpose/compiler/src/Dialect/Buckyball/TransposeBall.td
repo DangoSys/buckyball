@@ -7,8 +7,7 @@
 #ifndef TRANSPOSEBALL_OPS
 #define TRANSPOSEBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
 // Memref-level transpose (like smatmul_matmul). Chip bank-ssa decides
 // pad / tile / Bank* composition; this op carries no bank policy.

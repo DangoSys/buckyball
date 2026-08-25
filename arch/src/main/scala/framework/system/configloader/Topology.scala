@@ -11,7 +11,7 @@ private[configloader] case class SharedMemFields(
   sharedInputChannels:     Int,
   sharedDefaultGroupCount: Int)
 
-/** Top-level example topology loaded from ChipBundle. */
+/** Top-level example topology loaded from chip.pb. */
 case class ExampleTopology(tiles: Seq[TileTopology])
 
 /**

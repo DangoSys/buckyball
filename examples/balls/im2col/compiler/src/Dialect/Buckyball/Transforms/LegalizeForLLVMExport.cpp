@@ -4,8 +4,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
-#include "ballISA.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -19,6 +19,7 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
   LogicalResult
   matchAndRewrite(Im2colOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("Im2colBall");
     Location loc = op.getLoc();
     IntegerType i64 = rewriter.getI64Type();
     Value rs1 = rewriter.create<arith::OrIOp>(
@@ -55,7 +56,8 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
       return success();
     }
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, rs2, rewriter.getI32IntegerAttr(BB_FUNC7_IM2COL));
+        op, rs1, rs2,
+        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7("IM2COL")));
     return success();
   }
 
@@ -65,13 +67,14 @@ private:
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateIm2colLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+void populateIm2colBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  RewritePatternSet &patterns,
-                                                 bool stable) {
+                                                 bool stable, int64_t,
+                                                 bool) {
   patterns.add<Im2colLowering>(converter, stable);
 }
 
-void configureIm2colLegalizeForExportTarget(LLVMConversionTarget &target,
+void configureIm2colBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable) {
   if (stable)
     target.addLegalOp<Im2colIntrOp>();

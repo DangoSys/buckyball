@@ -15,7 +15,7 @@ class MultiRocket32CoreConfig
     extends Config(
       new WithMultiRocketHartIdBits(nTiles = 1, nCoresPerTile = 32) ++
         new WithBuckyballTiles(
-          "../examples/chips/multi-rocket/generated/chip.pb"
+          "../examples/chips/multi-rocket/configs/generated/chip.pb"
         ) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
@@ -26,7 +26,7 @@ class MultiRocket48CoreConfig
     extends Config(
       new WithMultiRocketHartIdBits(nTiles = 1, nCoresPerTile = 48) ++
         new WithBuckyballTiles(
-          "../examples/chips/multi-rocket/generated/1t48c.pb"
+          "../examples/chips/multi-rocket/configs/generated/1t48c.pb"
         ) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig

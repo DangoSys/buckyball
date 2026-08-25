@@ -5,7 +5,7 @@ import upickle.default._
 /**
  * MemDomain Parameter
  *
- * Real values are injected by `ChipBundleLoader`. The no-arg `apply()` is a
+ * Real values are injected by `ChipLoader`. The no-arg `apply()` is a
  * stub used only by `GlobalConfig()` before bundle overrides land — matching
  * how `BallDomainParam()` returns an empty default.
  */
@@ -41,7 +41,7 @@ case class MemDomainParam(
 object MemDomainParam {
   implicit val rw: ReadWriter[MemDomainParam] = macroRW
 
-  /** Stub default; real values come from ChipBundleLoader. */
+  /** Stub default; real values come from ChipLoader. */
   def apply(): MemDomainParam = MemDomainParam(
     bankNum = 0,
     bankWidth = 0,

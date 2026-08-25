@@ -6,7 +6,7 @@ ballIdMappings = [
   { ballId = 0, ballName = "ReluBall", ballClass = "examples.balls.relu.ReluBall", config = "../../../../balls/relu/configs/default.toml", inBW = 1, outBW = 1 },
   { ballId = 1, ballName = "GemminiBall", ballClass = "examples.balls.gemmini.GemminiBall", config = "../../../../balls/gemmini/configs/default.toml", inBW = 2, outBW = 4 },
   { ballId = 2, ballName = "TraceBall", ballClass = "examples.balls.trace.TraceBall", config = "../../../../balls/trace/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 3, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 3, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1, mmioReadBW = 1 },
 ]
 
 ballISA = [

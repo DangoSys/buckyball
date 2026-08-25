@@ -19,7 +19,7 @@ class WithToyHartIdBits(nTiles: Int, nCoresPerTile: Int)
  */
 class BuckyballToyConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/toy/generated/chip.pb") ++
+      new WithBuckyballTiles("../examples/chips/toy/configs/generated/chip.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -28,7 +28,7 @@ class BuckyballToyConfig
 class BuckyballToy4CoreConfig
     extends Config(
       new WithToyHartIdBits(nTiles = 1, nCoresPerTile = 4) ++
-        new WithBuckyballTiles("../examples/chips/toy/generated/1t4c.pb") ++
+        new WithBuckyballTiles("../examples/chips/toy/configs/generated/1t4c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -37,7 +37,7 @@ class BuckyballToy4CoreConfig
 class BuckyballToy8CoreConfig
     extends Config(
       new WithToyHartIdBits(nTiles = 1, nCoresPerTile = 8) ++
-        new WithBuckyballTiles("../examples/chips/toy/generated/1t8c.pb") ++
+        new WithBuckyballTiles("../examples/chips/toy/configs/generated/1t8c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -46,7 +46,7 @@ class BuckyballToy8CoreConfig
 class BuckyballToy16CoreConfig
     extends Config(
       new WithToyHartIdBits(nTiles = 1, nCoresPerTile = 16) ++
-        new WithBuckyballTiles("../examples/chips/toy/generated/1t16c.pb") ++
+        new WithBuckyballTiles("../examples/chips/toy/configs/generated/1t16c.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
@@ -58,7 +58,7 @@ class BuckyballToy16CoreConfig
 class RocketOnlyToyConfig
     extends Config(
       new WithBuckyballTiles(
-        "../examples/chips/toy/generated/chip.pb",
+        "../examples/chips/toy/configs/generated/chip.pb",
         withBuckyball = false
       ) ++
         new chipyard.config.WithSystemBusWidth(128) ++

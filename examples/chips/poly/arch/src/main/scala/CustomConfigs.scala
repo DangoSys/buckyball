@@ -11,7 +11,7 @@ class BuckyballPolyConfig
       new Config((site, here, up) => { case MaxHartIdBits =>
         log2Ceil(20)
       }) ++
-        new WithBuckyballTiles("../examples/chips/poly/generated/chip.pb") ++
+        new WithBuckyballTiles("../examples/chips/poly/configs/generated/chip.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )

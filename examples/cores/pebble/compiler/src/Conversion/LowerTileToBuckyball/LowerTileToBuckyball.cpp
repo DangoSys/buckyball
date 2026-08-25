@@ -37,7 +37,7 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
 using mlir::buddy::kDefaultBankWidthBytes;
-using mlir::buddy::populateMatrixTileMatMulPatterns;
+using mlir::buddy::populateSMatMulBallTileLoweringPatterns;
 
 namespace {
 
@@ -791,8 +791,8 @@ public:
 void mlir::populateLowerTileToBuckyballConversionPatterns(
     RewritePatternSet &patterns, int64_t bankWidthBytes, int64_t bankDepth,
     int64_t bankNum) {
-  populateMatrixTileMatMulPatterns(patterns, bankWidthBytes, bankDepth,
-                                   bankNum);
+  populateSMatMulBallTileLoweringPatterns(patterns, bankWidthBytes, bankDepth,
+                                           bankNum);
   patterns.add<TileTransposeLowering>(patterns.getContext());
   patterns.add<TileConv2dLowering>(patterns.getContext());
   patterns.add<TileDepthwiseConv2dLowering>(patterns.getContext());

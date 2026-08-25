@@ -1,7 +1,0 @@
-# Toy: virtual single-core that mounts leftover balls.
-
-[top]
-nTiles = 1
-
-[[tiles]]
-include = "tiles/default.toml"
