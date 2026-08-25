@@ -21,6 +21,7 @@
             # System tools
             curl
             git
+            protobuf
           ];
 
           shellHook = ''
