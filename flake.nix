@@ -43,6 +43,9 @@
               compiler.numactl
 
               rustTools.cargoNextest
+
+              # protoc for bbdev config --install (chip.proto -> chip.pb)
+              pkgs.protobuf
             ];
             shellHook = ''
               # Must run with cwd at the git checkout. Store copies from toString ./.
@@ -138,8 +141,6 @@
               pkgs."pre-commit"
               # clang-format for pre-commit (language: system)
               pkgs.clang-tools
-              # protoc for bbdev config --install (chip.proto -> chip.pb); .bin output only to avoid header conflict with python protobuf
-              pkgs.protobuf.bin
 
               # Rust toolchain
               rustTools.rustc
