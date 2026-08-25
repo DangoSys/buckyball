@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import os
 import re
 import sys
@@ -11,8 +12,12 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "scripts"))
-import build as compiler_build  # noqa: E402
+_compiler_build_path = os.path.join(os.path.dirname(__file__), "scripts", "build.py")
+_spec = importlib.util.spec_from_file_location("compiler_build_module", _compiler_build_path)
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"cannot load {_compiler_build_path}")
+compiler_build = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compiler_build)
 
 from utils.event_common import check_result, get_origin_trace_id
 

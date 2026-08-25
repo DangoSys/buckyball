@@ -115,7 +115,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(bemu_cargo_manifest.parent / "test-artifacts", ignore_errors=True)
         ctx.logger.info("Cleaned previous bebop test artifacts")
 
-    harness = nextest_harness_args(workload_toml, elf_root)
+    harness = nextest_harness_args(workload_toml, elf_root, env)
     nextest_cmd = (
         f"nix develop -c cargo nextest run --manifest-path {shlex.quote(str(bemu_cargo_manifest))} "
         "--test test_bemu "

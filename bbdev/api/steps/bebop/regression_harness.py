@@ -1,19 +1,12 @@
-import shlex
-
-
 def nextest_harness_args(
     workload_toml: str,
     bb_tests_root: str,
+    env: dict,
     *,
     p2e_bitstream: str | None = None,
 ) -> str:
-    args = [
-        "--",
-        "--workload-toml",
-        shlex.quote(workload_toml),
-        "--bb-tests-root",
-        shlex.quote(bb_tests_root),
-    ]
+    env["BEBOP_WORKLOAD_TOML"] = workload_toml
+    env["BEBOP_BB_TESTS_ROOT"] = bb_tests_root
     if p2e_bitstream:
-        args.extend(["--p2e-bitstream", shlex.quote(p2e_bitstream)])
-    return " ".join(args)
+        env["BEBOP_P2E_BITSTREAM"] = p2e_bitstream
+    return ""

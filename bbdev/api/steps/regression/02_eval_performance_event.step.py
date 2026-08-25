@@ -80,11 +80,13 @@ def _fail(ctx, origin_tid, error, **extra):
     return check_result(ctx, 1, continue_run=False, extra_fields=fields, trace_id=origin_tid)
 
 
-def _workload_build(bbdir, chip, model):
+def _workload_build(bbdir, chip, model, logger, task_scope):
     model_key = model.lower()
     if MODEL_LAYOUT.get(model_key) is None:
         raise ValueError(f"Unknown model: {model}")
-    workload_build.build_workload(bbdir, chip, model=model_key)
+    workload_build.build_workload(
+        bbdir, chip, model=model_key, logger=logger, task_scope=task_scope
+    )
 
 
 def _kernel_build_cmds(bbdir, model, dataset=""):
@@ -206,8 +208,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
         ctx.logger.info(f"[eval-performance] model {model}: workload build")
         try:
-            _workload_build(bbdir, chip, model)
-        except (ValueError, RuntimeError) as e:
+            _workload_build(bbdir, chip, model, ctx.logger, origin_tid)
+        except Exception as e:
             ctx.logger.error(str(e))
             await _fail(ctx, origin_tid, "workload_build_cmd", model=model)
             return

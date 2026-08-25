@@ -15,7 +15,6 @@ if str(_SCRIPTS) not in sys.path:
 import chip_pb2 as pb  # noqa: E402
 
 _ENGINE = Path("bebop/src/nodes/bemu")
-_CHIP_RS_DIR = _ENGINE / "src"
 _BEMU_CRATE = _ENGINE / "chip"
 
 
@@ -31,7 +30,6 @@ def load_chip(pb_path: Path) -> pb.Chip:
 
 def _emit_dispatch(chip: pb.Chip, bbdir: Path, out: Path) -> None:
     balls = list(chip.bemu.balls)
-    src_dir = bbdir / _CHIP_RS_DIR
     if not balls:
         out.write_text(
             "use crate::inst::instruction::ExecContext;\n\n"
@@ -55,13 +53,13 @@ def _emit_dispatch(chip: pb.Chip, bbdir: Path, out: Path) -> None:
     for ball in balls:
         if not ball.ball_dir.isidentifier():
             raise ValueError(f"ball_dir is not a Rust identifier: {ball.ball_dir!r}")
-        lib = bbdir / ball.emu_lib
+        lib = (bbdir / ball.emu_lib).resolve()
         if not lib.is_file():
             raise FileNotFoundError(f"missing ball emu: {lib}")
-        rel = Path(os.path.relpath(lib, src_dir)).as_posix()
-        if '"' in rel or "\\" in rel:
-            raise ValueError(f"ball emu path not usable in rust #[path]: {rel}")
-        lines.append(f'#[path = "{rel}"]')
+        path = str(lib)
+        if '"' in path or "\\" in path:
+            raise ValueError(f"ball emu path not usable in rust #[path]: {path}")
+        lines.append(f'#[path = "{path}"]')
         lines.append(f"mod {ball.ball_dir};")
         lines.append("")
 

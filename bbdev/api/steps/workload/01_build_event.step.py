@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 import re
@@ -13,8 +14,14 @@ if utils_path not in sys.path:
 from utils.path import get_buckyball_path
 from utils.event_common import check_result, get_origin_trace_id
 
-sys.path.insert(0, os.path.join(get_buckyball_path(), "bb-tests", "workloads", "scripts"))
-import build as workload_build  # noqa: E402
+_workload_build_path = os.path.join(
+    get_buckyball_path(), "bb-tests", "workloads", "scripts", "build.py"
+)
+_spec = importlib.util.spec_from_file_location("workload_build_module", _workload_build_path)
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"cannot load {_workload_build_path}")
+workload_build = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(workload_build)
 
 config = {
     "name": "workload-build",
@@ -165,8 +172,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             model=model.lower() if model else "",
             rushb=rushb_backend,
             stable=stable,
+            logger=ctx.logger,
+            task_scope=origin_tid,
         )
-    except (ValueError, RuntimeError) as error:
+    except Exception as error:
         ctx.logger.error(str(error))
         await check_result(
             ctx, 1, continue_run=False,

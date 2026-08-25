@@ -165,7 +165,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     env = os.environ.copy()
     env.update(cargo_env)
     env["OUT_PATH"] = build_dir
-    harness = nextest_harness_args(workload_toml, elf_root, p2e_bitstream=bitstream)
+    harness = nextest_harness_args(workload_toml, elf_root, env, p2e_bitstream=bitstream)
     nextest_cmd = (
         f"nix develop -c cargo {cargo_out} nextest run --release --features p2e "
         f"--test test_p2e --config-file \"{nextest_config}\" {harness}"

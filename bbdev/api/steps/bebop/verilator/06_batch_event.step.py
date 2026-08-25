@@ -117,7 +117,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(artifact_dir, ignore_errors=True)
         ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
 
-    harness = nextest_harness_args(workload_toml, elf_root)
+    harness = nextest_harness_args(workload_toml, elf_root, env)
     nextest_cmd = (
         f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(manifest)} "
         f"--features {shlex.quote(features)} --test test_verilator "
