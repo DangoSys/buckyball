@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -82,14 +82,31 @@ def _repo(raw: str | Path) -> Path:
     return root
 
 
-def _load_compiler(repo: Path):
-    path = repo / "bbdev" / "api" / "steps" / "compiler" / "scripts" / "build.py"
-    spec = importlib.util.spec_from_file_location("compiler_build", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+def _run(
+    cmd: list[str],
+    *,
+    cwd: Path,
+    prefix: str,
+    env: dict | None = None,
+    logger: object | None = None,
+    task_scope: str | None = None,
+) -> None:
+    if logger is None:
+        result = subprocess.run(cmd, cwd=cwd, env=env)
+    else:
+        from utils.stream_run import stream_run_logger
+
+        result = stream_run_logger(
+            cmd=shlex.join(cmd),
+            logger=logger,
+            cwd=str(cwd),
+            stdout_prefix=prefix,
+            stderr_prefix=prefix,
+            task_scope=task_scope,
+            env=env,
+        )
+    if result.returncode != 0:
+        raise RuntimeError(f"command failed ({result.returncode}): {' '.join(cmd)}")
 
 
 def _cmake_defs(repo: Path, chip: str) -> dict[str, str]:
@@ -106,16 +123,20 @@ def _cmake_defs(repo: Path, chip: str) -> dict[str, str]:
         values[key] = value
     required = (
         "BUCKYBALL_WORKLOAD_CHIP",
-        "BUCKYBALL_CARGO_TARGET_DIR",
-        "BUCKYBALL_RUSHB_BEMU_MANIFEST",
-        "BUCKYBALL_RUSHB_BEMU_LIBRARY",
-        "BUCKYBALL_RUSHB_VERILATOR_LIBRARY",
         "BUCKYBALL_CHIP_PB",
     )
     missing = [k for k in required if k not in values]
     if missing:
         raise RuntimeError(f"{path} missing {missing}")
     return values
+
+
+_RUSHB_DEFS = (
+    "BUCKYBALL_CARGO_TARGET_DIR",
+    "BUCKYBALL_RUSHB_BEMU_MANIFEST",
+    "BUCKYBALL_RUSHB_BEMU_LIBRARY",
+    "BUCKYBALL_RUSHB_VERILATOR_LIBRARY",
+)
 
 
 def _ninja_target(model: str, rushb: str | None) -> tuple[str, str]:
@@ -145,8 +166,16 @@ def _require_riscv() -> Path:
     return root
 
 
+def _workload_src(repo: Path) -> Path:
+    src = repo / "bb-tests" / "workloads"
+    cmake = src / "CMakeLists.txt"
+    if not cmake.is_file():
+        raise RuntimeError(f"missing {cmake}")
+    return src
+
+
 def _workload_build_dir(repo: Path, chip: str) -> Path:
-    return repo / "bb-tests" / "output" / chip / "workloads" / "build"
+    return repo / "bb-tests" / "workloads" / "build" / chip
 
 
 def build_workload(
@@ -156,6 +185,8 @@ def build_workload(
     model: str = "",
     rushb: str | None = None,
     stable: bool = False,
+    logger: object | None = None,
+    task_scope: str | None = None,
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_-]+", chip):
         raise ValueError(f"invalid chip: {chip}")
@@ -164,19 +195,35 @@ def build_workload(
 
     root = _repo(repo)
     defs = _cmake_defs(root, chip)
-    bemu_manifest = defs["BUCKYBALL_RUSHB_BEMU_MANIFEST"]
-    compiler = _load_compiler(root)
-    compiler_build = compiler.build_compiler(root, chip=chip)
+    if rushb:
+        missing = [k for k in _RUSHB_DEFS if k not in defs]
+        if missing:
+            raise RuntimeError(
+                f"missing {missing} in cmake.defs for rushB; run bbdev config --install"
+            )
+    compiler_build = root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
+    python = shutil.which("python3")
+    if not python:
+        raise RuntimeError("python3 not in PATH; enter nix develop")
 
-    env = os.environ.copy()
-    env["CARGO_TARGET_DIR"] = defs["BUCKYBALL_CARGO_TARGET_DIR"]
-    result = subprocess.run(
-        ["cargo", "build", "--release", "--manifest-path", bemu_manifest, "--lib"],
-        cwd=root,
-        env=env,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"cargo failed ({result.returncode})")
+    if rushb == "bemu":
+        env = os.environ.copy()
+        env["CARGO_TARGET_DIR"] = defs["BUCKYBALL_CARGO_TARGET_DIR"]
+        _run(
+            [
+                "cargo",
+                "build",
+                "--release",
+                "--manifest-path",
+                defs["BUCKYBALL_RUSHB_BEMU_MANIFEST"],
+                "--lib",
+            ],
+            cwd=root,
+            env=env,
+            prefix="workload cargo",
+            logger=logger,
+            task_scope=task_scope,
+        )
 
     riscv = _require_riscv()
     linux_cc = riscv / "bin" / "riscv64-unknown-linux-gnu-gcc"
@@ -184,6 +231,7 @@ def build_workload(
     if not linux_cc.is_file() or not linux_cxx.is_file():
         raise RuntimeError(f"missing RISC-V linux toolchain under {riscv / 'bin'}")
 
+    src = _workload_src(root)
     build = _workload_build_dir(root, chip)
     cmake_model, ninja_arg = _ninja_target(model.lower(), rushb)
     env = os.environ.copy()
@@ -192,37 +240,48 @@ def build_workload(
     env["CC"] = str(linux_cc)
     env["CXX"] = str(linux_cxx)
     env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
-    env["CARGO_TARGET_DIR"] = str(root / "bebop" / "target" / chip)
 
-    build.parent.mkdir(parents=True, exist_ok=True)
-    if build.is_dir():
-        shutil.rmtree(build)
-    build.mkdir()
+    build.mkdir(parents=True, exist_ok=True)
 
     cmake_args = [
         "cmake",
         "-G",
         "Ninja",
+        "-S",
+        str(src),
+        "-B",
+        str(build),
         f"-DBUCKYBALL_STABLE={'ON' if stable else 'OFF'}",
-        f"-DPython3_EXECUTABLE={compiler.compiler_python()}",
+        f"-DPython3_EXECUTABLE={python}",
         f"-DCMAKE_C_COMPILER={linux_cc}",
         f"-DCMAKE_CXX_COMPILER={linux_cxx}",
     ]
     for key, value in defs.items():
+        if key in _RUSHB_DEFS and not rushb:
+            continue
         cmake_args.append(f"-D{key}={value}")
     if cmake_model:
         cmake_args.extend(["-DMODEL=" + cmake_model, "-DARCH=buckyball"])
-    cmake_args.append("..")
 
-    result = subprocess.run(cmake_args, cwd=build, env=env)
-    if result.returncode != 0:
-        raise RuntimeError(f"cmake failed ({result.returncode})")
-    ninja = ["ninja", f"-j{os.cpu_count() or 1}"]
+    _run(
+        cmake_args,
+        cwd=root,
+        env=env,
+        prefix="workload configure",
+        logger=logger,
+        task_scope=task_scope,
+    )
+    ninja = ["ninja", "-C", str(build), f"-j{os.cpu_count() or 1}"]
     if ninja_arg:
         ninja.append(ninja_arg)
-    result = subprocess.run(ninja, cwd=build, env=env)
-    if result.returncode != 0:
-        raise RuntimeError(f"ninja failed ({result.returncode})")
+    _run(
+        ninja,
+        cwd=root,
+        env=env,
+        prefix="workload build",
+        logger=logger,
+        task_scope=task_scope,
+    )
 
 
 def main() -> None:

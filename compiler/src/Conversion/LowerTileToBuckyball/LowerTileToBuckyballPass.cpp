@@ -26,6 +26,11 @@ namespace mlir::buddy {
                                              int64_t, int64_t, int64_t);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_TILE_HOOK
+#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                \
+  void populate##CORE##CoreTileLoweringPatterns(RewritePatternSet &,         \
+                                                 int64_t, int64_t, int64_t);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_CORE_TILE_HOOK
 } // namespace mlir::buddy
 
 namespace {
@@ -69,6 +74,13 @@ public:
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_TILE_HOOK
     }
+#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                \
+    if (targetConfig.core == NAME)                                           \
+      mlir::buddy::populate##CORE##CoreTileLoweringPatterns(                 \
+          patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth, \
+          targetConfig.bankNum);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_CORE_TILE_HOOK
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
       signalPassFailure();

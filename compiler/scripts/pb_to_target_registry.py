@@ -12,6 +12,13 @@ def _die(message: str) -> None:
     raise ValueError(message)
 
 
+def _write(path: Path, content: str) -> None:
+    if path.is_file() and path.read_text(encoding="utf-8") == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def _load_proto(repo: Path):
     scripts = repo / "bbdev" / "api" / "steps" / "config" / "scripts"
     if not scripts.is_dir():
@@ -138,6 +145,37 @@ def _ball_compilers(chip, repo: Path):
     return result
 
 
+def _core_compilers(chip, repo: Path):
+    """Resolve optional Core-level composite lowering implementations."""
+    result = []
+    seen: set[str] = set()
+    for profile in chip.profiles:
+        core = _profile_core(chip, profile)
+        core_name = core.pkg
+        if not core_name.isidentifier():
+            _die(f"profile {profile.name}: invalid core package {core_name!r}")
+        if core_name in seen:
+            continue
+        source_dir = (
+            repo / "examples" / "cores" / core_name / "compiler" / "src" / "Conversion"
+        )
+        tile = source_dir / "LowerTileToBuckyball" / "CoreTileLowering.cpp"
+        bank_dir = source_dir / "LowerBuckyball"
+        bank = bank_dir / "CoreBankSSALowering.cpp"
+        if tile.is_file() != bank.is_file():
+            _die(f"Core {core_name}: tile and bank-SSA lowerings must be provided together")
+        if tile.is_file():
+            result.append(
+                {
+                    "name": core_name,
+                    "tile": tile,
+                    "bank_ssa": [bank, *sorted(bank_dir.glob("*Patterns.cpp"))],
+                }
+            )
+        seen.add(core_name)
+    return result
+
+
 def _emit_td(chip, repo: Path) -> str:
     lines = ["// Generated from Chip.pb. Do not edit.", 'include "Buckyball.td"']
     for ball in _ball_compilers(chip, repo):
@@ -147,6 +185,7 @@ def _emit_td(chip, repo: Path) -> str:
 
 def _emit_lowering_hooks(chip, repo: Path) -> str:
     balls = _ball_compilers(chip, repo)
+    cores = _core_compilers(chip, repo)
     lines = ["// Generated from Chip.pb. Do not edit.", ""]
     lines.append("#ifdef BUCKYBALL_LEGALIZE_HOOK")
     lines.extend(f"BUCKYBALL_LEGALIZE_HOOK({ball['name']})" for ball in balls)
@@ -168,6 +207,16 @@ def _emit_lowering_hooks(chip, repo: Path) -> str:
         for ball in balls
         if ball["bank_ssa"] is not None
     )
+    lines.extend(["#endif", "", "#ifdef BUCKYBALL_CORE_TILE_HOOK"])
+    lines.extend(
+        f'BUCKYBALL_CORE_TILE_HOOK({core["name"].capitalize()}, "{core["name"]}")'
+        for core in cores
+    )
+    lines.extend(["#endif", "", "#ifdef BUCKYBALL_CORE_BANK_SSA_HOOK"])
+    lines.extend(
+        f'BUCKYBALL_CORE_BANK_SSA_HOOK({core["name"].capitalize()}, "{core["name"]}")'
+        for core in cores
+    )
     lines.extend(["#endif", ""])
     return "\n".join(lines)
 
@@ -186,6 +235,18 @@ def _print_ball_paths(chip, repo: Path, kind: str) -> None:
         paths = [source for ball in balls for source in ball["tile_sources"]]
     else:
         _die(f"unsupported Ball compiler path kind: {kind}")
+    for path in paths:
+        print(path)
+
+
+def _print_core_paths(chip, repo: Path, kind: str) -> None:
+    cores = _core_compilers(chip, repo)
+    if kind == "tile":
+        paths = [core["tile"] for core in cores]
+    elif kind == "bank-ssa":
+        paths = [source for core in cores for source in core["bank_ssa"]]
+    else:
+        _die(f"unsupported Core compiler path kind: {kind}")
     for path in paths:
         print(path)
 
@@ -217,7 +278,7 @@ def _emit(chip, target: str | None = None) -> str:
         chunks.append("};\n")
         targets.append(
             "  {"
-            f"{_cxx_string(profile.name)}, {profile.bank_num}, "
+            f"{_cxx_string(profile.name)}, {_cxx_string(core.pkg)}, {profile.bank_num}, "
             f"{profile.bank_width}, {profile.bank_entries}, "
             f"llvm::ArrayRef(k{stem}Balls), llvm::ArrayRef(k{stem}Isa)"
             "},"
@@ -244,8 +305,7 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
         )
         lines.extend(["", "#endif", ""])
         header = isa_dir / profile.name / "ballISA.h"
-        header.parent.mkdir(parents=True, exist_ok=True)
-        header.write_text("\n".join(lines), encoding="utf-8")
+        _write(header, "\n".join(lines))
 
 
 def main() -> None:
@@ -261,13 +321,16 @@ def main() -> None:
         "--print-ball-compiler-paths",
         choices=("dialect-dir", "legalize", "assign", "bank-ssa", "tile"),
     )
+    parser.add_argument(
+        "--print-core-compiler-paths", choices=("bank-ssa", "tile")
+    )
     parser.add_argument("--print-targets", action="store_true")
     parser.add_argument("--print-target-balls", action="store_true")
     parser.add_argument("--print-core-targets", action="store_true")
     args = parser.parse_args()
 
     if (args.out is None and args.td_out is None and args.lowering_hooks_out is None and args.isa_dir is None
-            and args.print_ball_compiler_paths is None and not args.print_targets
+            and args.print_ball_compiler_paths is None and args.print_core_compiler_paths is None and not args.print_targets
             and not args.print_target_balls and not args.print_core_targets):
         _die("one output mode is required")
 
@@ -281,16 +344,11 @@ def main() -> None:
     chip = pb.Chip()
     chip.ParseFromString(pb_path.read_bytes())
     if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(_emit(chip, args.target), encoding="utf-8")
+        _write(args.out, _emit(chip, args.target))
     if args.td_out:
-        args.td_out.parent.mkdir(parents=True, exist_ok=True)
-        args.td_out.write_text(_emit_td(chip, repo), encoding="utf-8")
+        _write(args.td_out, _emit_td(chip, repo))
     if args.lowering_hooks_out:
-        args.lowering_hooks_out.parent.mkdir(parents=True, exist_ok=True)
-        args.lowering_hooks_out.write_text(
-            _emit_lowering_hooks(chip, repo), encoding="utf-8"
-        )
+        _write(args.lowering_hooks_out, _emit_lowering_hooks(chip, repo))
     if args.isa_dir:
         _emit_isa_headers(chip, args.isa_dir)
     if args.print_targets:
@@ -311,6 +369,8 @@ def main() -> None:
             print(f"{core.index}:{target}")
     if args.print_ball_compiler_paths:
         _print_ball_paths(chip, repo, args.print_ball_compiler_paths)
+    if args.print_core_compiler_paths:
+        _print_core_paths(chip, repo, args.print_core_compiler_paths)
 
 
 if __name__ == "__main__":

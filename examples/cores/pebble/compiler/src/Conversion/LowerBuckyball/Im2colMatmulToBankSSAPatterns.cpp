@@ -515,9 +515,12 @@ public:
 
 } // namespace
 
-void mlir::buddy::populatePebbleIm2colMatmulToBankSSAPatterns(
-    RewritePatternSet &patterns) {
+namespace mlir::buddy {
+
+void populatePebbleIm2colMatmulToBankSSAPatterns(RewritePatternSet &patterns) {
   patterns.add<Im2colMatmulToBankSSAPattern>(patterns.getContext());
   patterns.add<Im2colFatMatmulToBankSSAPattern>(patterns.getContext());
   patterns.add<Im2colDepthwiseMatmulToBankSSAPattern>(patterns.getContext());
 }
+
+} // namespace mlir::buddy

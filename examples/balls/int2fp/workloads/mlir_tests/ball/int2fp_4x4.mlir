@@ -20,7 +20,7 @@ func.func @main() -> i8 {
   func.call @prepare_scales() : () -> ()
 
   %input = memref.get_global @i32_in : memref<4x4xi32>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<4x4xf32>
+  %output = memref.alloc() alignment = 64 : memref<4x4xf32>
 
   %bin = buckyball.bank_alloc
   %bout = buckyball.bank_alloc

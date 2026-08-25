@@ -15,10 +15,17 @@ endif()
 set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 
 function(add_buckyball_mlir_contract TEST_NAME)
-  cmake_parse_arguments(ARG "" "" "PASSES" ${ARGN})
+  cmake_parse_arguments(ARG "" "TARGET" "PASSES" ${ARGN})
 
   if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
     message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
+  endif()
+  if(NOT ARG_TARGET)
+    message(FATAL_ERROR "${TEST_NAME}: TARGET is required")
+  endif()
+  list(FIND BUCKYBALL_TARGETS "${ARG_TARGET}" TARGET_INDEX)
+  if(TARGET_INDEX EQUAL -1)
+    message(FATAL_ERROR "${TEST_NAME}: unknown Buckyball target ${ARG_TARGET}")
   endif()
 
   if(NOT ARG_PASSES)
@@ -31,7 +38,7 @@ function(add_buckyball_mlir_contract TEST_NAME)
 
   add_custom_command(
     OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${ARG_PASSES} > ${OUT}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=${ARG_TARGET} ${ARG_PASSES} > ${OUT}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building Buckyball MLIR contract IR: ${TARGET}"
     VERBATIM)
@@ -49,7 +56,7 @@ endfunction()
 
 # Bank-level / ball-op MLIR -> baremetal + linux ELF (same pipeline as toy MLIRTest).
 function(add_buckyball_mlir_test NAME)
-  cmake_parse_arguments(ARG "" "" "PASSES" ${ARGN})
+  cmake_parse_arguments(ARG "" "TARGET" "PASSES" ${ARGN})
 
   if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
     message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
@@ -57,10 +64,18 @@ function(add_buckyball_mlir_test NAME)
   if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir tests")
   endif()
-  if(NOT DEFINED BUCKYBALL_MLIR_BANK_NUM)
-    message(FATAL_ERROR "BUCKYBALL_MLIR_BANK_NUM is not set")
+  if(NOT ARG_TARGET)
+    message(FATAL_ERROR "${NAME}: TARGET is required")
   endif()
-
+  list(FIND BUCKYBALL_TARGETS "${ARG_TARGET}" TARGET_INDEX)
+  if(TARGET_INDEX EQUAL -1)
+    message(FATAL_ERROR "${NAME}: unknown Buckyball target ${ARG_TARGET}")
+  endif()
+  set(BB_BALL_ISA_INCLUDE_DIR "${BUCKYBALL_ISA_DIR}/${ARG_TARGET}")
+  set(BB_BALL_ISA_H "${BB_BALL_ISA_INCLUDE_DIR}/ballISA.h")
+  if(NOT EXISTS "${BB_BALL_ISA_H}")
+    message(FATAL_ERROR "${NAME}: missing target ISA header ${BB_BALL_ISA_H}")
+  endif()
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
@@ -91,7 +106,7 @@ function(add_buckyball_mlir_test NAME)
     set(MLIR_PASSES ${ARG_PASSES})
   else()
     set(MLIR_PASSES
-      ${BUCKYBALL_ASSIGN_PHYSICAL_BANKS}
+      -assign-physical-banks
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata
@@ -105,55 +120,14 @@ function(add_buckyball_mlir_test NAME)
       -convert-func-to-llvm
       -reconcile-unrealized-casts)
   endif()
-
-  if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
-     NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
-    message(FATAL_ERROR
-      "rushB MLIR lowers require BUCKYBALL_LOWER_*_RUSHB "
-      "(define them in bb-tests/workloads/CMakeLists.txt)")
-  endif()
-
-  # Keep lower-buckyball before convert-arith-to-llvm (it emits arith).
-  # Insert intrinsics-to-rushb immediately before the final reconcile.
-  set(RUSHB_MLIR_PASSES)
-  set(RUSHB_HAS_RECONCILE FALSE)
-  foreach(MLIR_PASS ${MLIR_PASSES})
-    if(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}")
-      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS})
-    elseif(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BUCKYBALL}")
-      list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB})
-    elseif(MLIR_PASS STREQUAL "-reconcile-unrealized-casts")
-      set(RUSHB_HAS_RECONCILE TRUE)
-      list(APPEND RUSHB_MLIR_PASSES
-        -lower-buckyball-intrinsics-to-rushb
-        -reconcile-unrealized-casts)
-    else()
-      list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
-    endif()
-  endforeach()
-  if(NOT RUSHB_HAS_RECONCILE)
-    message(FATAL_ERROR
-      "rushB pass rewrite for ${NAME} requires -reconcile-unrealized-casts")
-  endif()
-  set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-rushB.o)
+  string(JOIN " " MLIR_PASS_COMMAND ${MLIR_PASSES})
 
   add_custom_command(
     OUTPUT ${OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${MLIR_PASSES} |
-    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
-      -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}
+    COMMAND bash -o pipefail -c
+      "${BUDDY_OPT} ${MLIR_SRC} --target=${ARG_TARGET} ${MLIR_PASS_COMMAND} | ${BUDDY_TRANSLATE} --buddy-to-llvmir | ${BUDDY_LLC} -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard -o ${OBJ}"
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building ${NAME}.o from ${PREFIX} MLIR"
-    VERBATIM)
-
-  add_custom_command(
-    OUTPUT ${RUSHB_OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} ${RUSHB_MLIR_PASSES} |
-    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
-    COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
     VERBATIM)
 
   add_custom_command(
@@ -203,6 +177,41 @@ function(add_buckyball_mlir_test NAME)
 
   if(DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
      DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+    if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
+       NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
+      message(FATAL_ERROR
+        "rushB MLIR lowers require BUCKYBALL_LOWER_*_RUSHB "
+        "(define them in bb-tests/workloads/CMakeLists.txt)")
+    endif()
+    set(RUSHB_MLIR_PASSES)
+    set(RUSHB_HAS_RECONCILE FALSE)
+    foreach(MLIR_PASS ${MLIR_PASSES})
+      if(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}")
+        list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS})
+      elseif(MLIR_PASS STREQUAL "${BUCKYBALL_LOWER_BUCKYBALL}")
+        list(APPEND RUSHB_MLIR_PASSES ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB})
+      elseif(MLIR_PASS STREQUAL "-reconcile-unrealized-casts")
+        set(RUSHB_HAS_RECONCILE TRUE)
+        list(APPEND RUSHB_MLIR_PASSES
+          -lower-buckyball-intrinsics-to-rushb
+          -reconcile-unrealized-casts)
+      else()
+        list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
+      endif()
+    endforeach()
+    if(NOT RUSHB_HAS_RECONCILE)
+      message(FATAL_ERROR
+        "rushB pass rewrite for ${NAME} requires -reconcile-unrealized-casts")
+    endif()
+    set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}-rushB.o)
+    string(JOIN " " RUSHB_MLIR_PASS_COMMAND ${RUSHB_MLIR_PASSES})
+    add_custom_command(
+      OUTPUT ${RUSHB_OBJ}
+      COMMAND bash -o pipefail -c
+        "${BUDDY_OPT} ${MLIR_SRC} --target=${ARG_TARGET} ${RUSHB_MLIR_PASS_COMMAND} | ${BUDDY_TRANSLATE} --buddy-to-llvmir | ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}"
+      DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
+      COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
+      VERBATIM)
     add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}
       CXX
       OUTPUT_SUBDIR src/MLIRTest/rushB

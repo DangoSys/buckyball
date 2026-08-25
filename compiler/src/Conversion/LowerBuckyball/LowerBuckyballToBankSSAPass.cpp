@@ -15,6 +15,10 @@ namespace mlir::buddy {
   void populate##BALL##LowerBuckyballToBankSSAPatterns(RewritePatternSet &);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_BANK_SSA_HOOK
+#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                            \
+  void populate##CORE##CoreBankSSALoweringPatterns(RewritePatternSet &);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_CORE_BANK_SSA_HOOK
 } // namespace mlir::buddy
 
 namespace {
@@ -43,6 +47,11 @@ public:
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_BANK_SSA_HOOK
     }
+#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                            \
+    if (buckyball_target::getBuckyballTarget().core == NAME)                \
+      mlir::buddy::populate##CORE##CoreBankSSALoweringPatterns(patterns);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_CORE_BANK_SSA_HOOK
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();
   }

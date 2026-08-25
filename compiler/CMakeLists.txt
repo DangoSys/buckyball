@@ -75,6 +75,24 @@ foreach(BB_BALL_SOURCE_KIND legalize assign tile)
     "${BB_BALL_SOURCE_PATHS}")
 endforeach()
 
+foreach(BB_CORE_SOURCE_KIND tile bank-ssa)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
+      --repo "${BB_REPO_ROOT}"
+      --chip-pb "${BUCKYBALL_CHIP_PB}"
+      --print-core-compiler-paths "${BB_CORE_SOURCE_KIND}"
+    RESULT_VARIABLE BB_CORE_SOURCE_RESULT
+    OUTPUT_VARIABLE BB_CORE_SOURCE_PATHS
+    ERROR_VARIABLE BB_CORE_SOURCE_ERROR)
+  if(NOT BB_CORE_SOURCE_RESULT EQUAL 0)
+    message(FATAL_ERROR
+      "failed to resolve ${BB_CORE_SOURCE_KIND} Core compiler sources:\n${BB_CORE_SOURCE_ERROR}")
+  endif()
+  string(STRIP "${BB_CORE_SOURCE_PATHS}" BB_CORE_SOURCE_PATHS)
+  string(REPLACE "\n" ";" BB_CORE_${BB_CORE_SOURCE_KIND}_SOURCES
+    "${BB_CORE_SOURCE_PATHS}")
+endforeach()
+
 execute_process(
   COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
     --repo "${BB_REPO_ROOT}"
@@ -125,6 +143,7 @@ add_mlir_library(LowerBuckyballPass
   "${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/ReportBankUsagePass.cpp"
   ${BB_assign_SOURCES}
   ${BB_BANK_SSA_SOURCES}
+  ${BB_CORE_bank-ssa_SOURCES}
   src/Conversion/LowerBuckyball/AssignPhysicalBanksPass.cpp
   src/Conversion/LowerBuckyball/LowerBuckyballPass.cpp
   src/Conversion/LowerBuckyball/LowerBuckyballToBankSSAPass.cpp
@@ -133,6 +152,7 @@ add_mlir_library(LowerBuckyballPass
 add_mlir_library(LowerTileToBuckyballPass
   src/Conversion/LowerTileToBuckyball/LowerTileToBuckyballPass.cpp
   ${BB_tile_SOURCES}
+  ${BB_CORE_tile_SOURCES}
   LINK_LIBS PUBLIC BuddyTile BuddyBuckyball MLIRLinalgDialect)
 
 add_mlir_translation_library(BuddyBuckyballToLLVMIRTranslation

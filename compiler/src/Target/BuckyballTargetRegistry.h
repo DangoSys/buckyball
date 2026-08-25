@@ -15,6 +15,7 @@ struct BuckyballIsaEntry {
 
 struct BuckyballTargetConfig {
   llvm::StringRef name;
+  llvm::StringRef core;
   int64_t bankNum;
   int64_t bankWidthBits;
   int64_t bankDepth;

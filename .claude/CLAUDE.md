@@ -79,11 +79,12 @@ Daily agent path:
 
 ### bbdev API wrappers (automatic server lifecycle + task status)
 All bbdev POST endpoints are exposed as `bbdev_*` tools. Daily path prefers:
-- `bbdev_compiler_build` / `bbdev_workload_{clean,build,tohex}`
+- `bbdev_config_install` / `bbdev_compiler_build` / `bbdev_workload_{clean,build,tohex}`
 - `bbdev_bemu_{sim,batch}`
 - `bbdev_bebop_verilator_{clean,verilog,build,sim,run,batch}` — bebop-accelerated RTL
 - `bbdev_verilator_{clean,verilog,build,sim,run}` — non-bebop Verilator RTL path
-- `bbdev_uvm_{build,run}` / `bbdev_yosys_{run,verilog,synth}`
+- `bbdev_vcs_{clean,verilog,build,sim,run}` — VCS RTL path
+- `bbdev_uvm_{verilog,build,run}` / `bbdev_yosys_{run,verilog,synth}`
 Also: `bbdev_bebop_p2e_*`, `bbdev_firesim_*`, `bbdev_dc_verilog`, `bbdev_kernel_build`
 
 Every `bbdev_*` task submission returns immediately with `accepted=true`,

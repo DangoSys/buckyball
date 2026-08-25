@@ -15,7 +15,7 @@ func.func @main() -> i8 {
   %da_addr = arith.constant 0 : i64
 
   %input = memref.get_global @fp_in : memref<1x16xf32>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<1x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<1x16xi8>
 
   %bin = buckyball.bank_alloc {col = 4 : i64}
   %bout = buckyball.bank_alloc

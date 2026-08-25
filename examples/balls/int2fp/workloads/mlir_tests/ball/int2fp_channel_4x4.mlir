@@ -9,7 +9,7 @@ func.func @main() -> i8 {
   %sixteen = arith.constant 16 : i64
   func.call @prepare_scales() : () -> ()
   %input = memref.get_global @input : memref<1x16xi32>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<1x16xf32>
+  %output = memref.alloc() alignment = 64 : memref<1x16xf32>
   %in = buckyball.bank_alloc {col = 4 : i64}
   %out = buckyball.bank_alloc {col = 4 : i64}
   %loaded = buckyball.bank_mvin %input %in %one %one : memref<1x16xi32> i64 i64 i64

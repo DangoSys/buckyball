@@ -5,8 +5,8 @@ func.func @main() -> i8 {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c16 = arith.constant 16 : index
-  %input = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
+  %input = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<16x16xi8>
   scf.for %i = %c0 to %c16 step %c1 {
     scf.for %j = %c0 to %c16 step %c1 {
       %ii = arith.index_cast %i : index to i8

@@ -10,9 +10,9 @@ func.func @main() -> i8 {
   %stride = arith.constant 1 : i64
   %cfg = arith.constant 268501008 : i64
 
-  %a = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %b = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %c = memref.alloc() {alignment = 64 : i64} : memref<16x16xi32>
+  %a = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %b = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %c = memref.alloc() alignment = 64 : memref<16x16xi32>
 
   linalg.fill ins(%one_i8 : i8) outs(%a : memref<16x16xi8>)
   linalg.fill ins(%one_i8 : i8) outs(%b : memref<16x16xi8>)

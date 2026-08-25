@@ -257,7 +257,10 @@ public:
 
 } // namespace
 
-void mlir::buddy::populatePebbleMemTransposeToBankSSAPatterns(
-    RewritePatternSet &patterns) {
+namespace mlir::buddy {
+
+void populatePebbleMemTransposeToBankSSAPatterns(RewritePatternSet &patterns) {
   patterns.add<MemTransposeToBankSSAPattern>(patterns.getContext());
 }
+
+} // namespace mlir::buddy

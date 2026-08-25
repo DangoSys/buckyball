@@ -38,11 +38,7 @@ if(NOT IS_ABSOLUTE "${Python3_EXECUTABLE}")
 endif()
 
 foreach(_BUCKYBALL_REQ IN ITEMS
-    BUCKYBALL_CHIP_PB
-    BUCKYBALL_CARGO_TARGET_DIR
-    BUCKYBALL_RUSHB_BEMU_MANIFEST
-    BUCKYBALL_RUSHB_BEMU_LIBRARY
-    BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+    BUCKYBALL_CHIP_PB)
   if(NOT DEFINED ${_BUCKYBALL_REQ} OR "${${_BUCKYBALL_REQ}}" STREQUAL "")
     message(FATAL_ERROR
       "${_BUCKYBALL_REQ} must be passed by bbdev config --install (cmake.defs)")
@@ -329,47 +325,8 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     DEPENDS ${EXECUTABLE})
 endfunction()
 
-function(add_buckyball_multicore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
-  set(EXECUTABLE "${TEST_NAME}-multicore-baremetal")
-  buckyball_ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE})
-
-  set(BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS)
-  foreach(CHIP_COMMON_INCLUDE_DIR ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS})
-    list(APPEND BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS -I${CHIP_COMMON_INCLUDE_DIR})
-  endforeach()
-  set(BALL_ISA_INCLUDE_FLAGS)
-  foreach(BALL_WORKLOAD_DIR ${BUCKYBALL_BALL_WORKLOAD_DIRS})
-    list(APPEND BALL_ISA_INCLUDE_FLAGS -I${BALL_WORKLOAD_DIR})
-  endforeach()
-
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMAND ${ELF_CC} ${BUCKYBALL_CTEST_C_FLAGS}
-      -o ${EXECUTABLE}
-      ${BBSW_BAREMETAL_DIR}/start.S
-      -DMULTICORE=3
-      ${WORKLOAD_LIB_DIR}/buckyball.c
-      ${BUCKYBALL_BBHW_MEM_C}
-      ${BUCKYBALL_CHIP_COMMON_SOURCES}
-      ${SOURCE_DIR}/${SOURCE_FILE}
-      -I${WORKLOAD_LIB_DIR}
-      -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
-      ${BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS}
-      ${BALL_ISA_INCLUDE_FLAGS}
-      -I${SOURCE_DIR}
-    DEPENDS
-      ${TEST_DEPS}
-      ${BBSW_BAREMETAL_DIR}/start.S
-    COMMENT "Building multicore baremetal executable: ${EXECUTABLE}"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  )
-
-  add_custom_target(${TEST_NAME}-multicore-baremetal-build
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
-endfunction()
-
-function(add_buckyball_singlecore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
-  set(EXECUTABLE "${TEST_NAME}-singlecore-baremetal")
+function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
+  set(EXECUTABLE "${TEST_NAME}-baremetal")
   buckyball_ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE})
 
   set(BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS)
@@ -398,11 +355,11 @@ function(add_buckyball_singlecore_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     DEPENDS
       ${TEST_DEPS}
       ${BBSW_BAREMETAL_DIR}/crt0.S
-    COMMENT "Building singlecore baremetal executable: ${EXECUTABLE}"
+    COMMENT "Building baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
-  add_custom_target(${TEST_NAME}-singlecore-baremetal-build
+  add_custom_target(${TEST_NAME}-baremetal-build
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
 endfunction()
 
@@ -415,15 +372,14 @@ function(add_buckyball_ctest SOURCE_FILE)
   if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for ${SOURCE_FILE}")
   endif()
-  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_${BUCKYBALL_CTEST_TARGET}_${_stem}")
+  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}_ctest_${_stem}")
   set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
   buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
   buckyball_ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE})
 
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-  add_buckyball_multicore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-  add_buckyball_singlecore_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
+  add_buckyball_baremetal_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   set(_rushb_ok TRUE)
   if(_stem MATCHES "^tlb_" OR _stem STREQUAL "test_vsetvli")
     set(_rushb_ok FALSE)
@@ -450,8 +406,7 @@ function(add_buckyball_ctest SOURCE_FILE)
   add_custom_target(${TEST_NAME}-ctest-build
     DEPENDS
       ${TEST_NAME}-linux-build
-      ${TEST_NAME}-multicore-baremetal-build
-      ${TEST_NAME}-singlecore-baremetal-build
+      ${TEST_NAME}-baremetal-build
     COMMENT "Building CTest workload ${TEST_NAME}"
   )
 

@@ -8,8 +8,8 @@ func.func @main() -> i8 {
   %c16 = arith.constant 16 : i32
   %depth = arith.constant 16 : i64
   %stride = arith.constant 1 : i64
-  %input = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
+  %input = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<16x16xi8>
 
   scf.for %i = %c0 to %n step %c1 {
     scf.for %j = %c0 to %n step %c1 {

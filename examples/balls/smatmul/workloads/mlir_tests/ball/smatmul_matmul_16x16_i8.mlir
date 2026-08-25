@@ -4,9 +4,9 @@ func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
   %one_i8 = arith.constant 1 : i8
   %zero_i32 = arith.constant 0 : i32
-  %a = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %b = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %c = memref.alloc() {alignment = 64 : i64} : memref<16x16xi32>
+  %a = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %b = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %c = memref.alloc() alignment = 64 : memref<16x16xi32>
 
   linalg.fill ins(%one_i8 : i8) outs(%a : memref<16x16xi8>)
   linalg.fill ins(%one_i8 : i8) outs(%b : memref<16x16xi8>)

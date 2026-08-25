@@ -788,70 +788,10 @@ public:
 
 } // namespace
 
-void mlir::populateLowerTileToBuckyballConversionPatterns(
-    RewritePatternSet &patterns, int64_t bankWidthBytes, int64_t bankDepth,
-    int64_t bankNum) {
-  populateSMatMulBallTileLoweringPatterns(patterns, bankWidthBytes, bankDepth,
-                                           bankNum);
-  patterns.add<TileTransposeLowering>(patterns.getContext());
-  patterns.add<TileConv2dLowering>(patterns.getContext());
-  patterns.add<TileDepthwiseConv2dLowering>(patterns.getContext());
+namespace mlir::buddy {
+void populatePebbleCoreTileLoweringPatterns(RewritePatternSet &patterns,
+                                            int64_t, int64_t, int64_t) {
+  patterns.add<TileConv2dLowering, TileDepthwiseConv2dLowering>(
+      patterns.getContext());
 }
-
-namespace {
-
-class LowerTileToBuckyballPass
-    : public PassWrapper<LowerTileToBuckyballPass, OperationPass<ModuleOp>> {
-public:
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTileToBuckyballPass)
-  StringRef getArgument() const final { return "convert-tile-to-buckyball"; }
-  StringRef getDescription() const final {
-    return "Convert Tile dialect to Buckyball dialect";
-  }
-  LowerTileToBuckyballPass() = default;
-  LowerTileToBuckyballPass(const LowerTileToBuckyballPass &) {}
-
-  Option<int64_t> bankWidthBytes{
-      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
-      llvm::cl::init(kDefaultBankWidthBytes)};
-  Option<int64_t> bankDepth{*this, "bank_depth",
-                            llvm::cl::desc("Bank depth (rows per bank)."),
-                            llvm::cl::init(1024)};
-  Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
-                          llvm::cl::init(8)};
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<::buddy::tile::TileDialect,
-                    ::buddy::buckyball::BuckyballDialect, func::FuncDialect,
-                    memref::MemRefDialect, arith::ArithDialect, scf::SCFDialect,
-                    linalg::LinalgDialect>();
-  }
-
-  void runOnOperation() override {
-    MLIRContext *context = &getContext();
-    ModuleOp module = getOperation();
-
-    ConversionTarget target(*context);
-    target.addLegalDialect<::buddy::buckyball::BuckyballDialect,
-                           memref::MemRefDialect, arith::ArithDialect,
-                           scf::SCFDialect, func::FuncDialect,
-                           linalg::LinalgDialect>();
-    target.addIllegalOp<::buddy::tile::TileMatMulOp>();
-    target.addIllegalOp<::buddy::tile::TileConv2dOp>();
-    target.addIllegalOp<::buddy::tile::TileDepthwiseConv2dOp>();
-    target.addIllegalOp<::buddy::tile::TileTransposeOp>();
-
-    RewritePatternSet patterns(context);
-    populateLowerTileToBuckyballConversionPatterns(patterns, bankWidthBytes,
-                                                   bankDepth, bankNum);
-
-    if (failed(applyPartialConversion(module, target, std::move(patterns))))
-      signalPassFailure();
-  }
-};
-
-} // namespace
-
-void mlir::buddy::registerLowerTileToBuckyballPass() {
-  PassRegistration<LowerTileToBuckyballPass>();
-}
+} // namespace mlir::buddy
