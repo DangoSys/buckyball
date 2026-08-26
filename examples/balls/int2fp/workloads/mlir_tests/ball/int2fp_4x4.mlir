@@ -29,6 +29,7 @@ func.func @main() -> i8 {
   buckyball.int2fp_tensor %loaded, %bout, %iter, %da_addr, %dw_addr : i64
   %stored = buckyball.bank_mvout %output %bout %depth %stride
       : memref<4x4xf32> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 

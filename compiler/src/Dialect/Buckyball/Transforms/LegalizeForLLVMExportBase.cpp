@@ -153,6 +153,23 @@ void emitMset(OpBuilder &b, Location loc, uint64_t bankId, uint64_t row,
   b.create<MsetIntrOp>(loc, cstI64(b, loc, rs1), cstI64(b, loc, rs2));
 }
 
+static void emitCacheAsm(OpBuilder &b, Location loc, StringRef assembly) {
+  auto tail = LLVM::TailCallKindAttr::get(
+      b.getContext(), LLVM::tailcallkind::TailCallKind::None);
+  LLVM::InlineAsmOp::create(b, loc, Type(), ValueRange{},
+                            b.getStringAttr(assembly),
+                            b.getStringAttr("~{memory}"), b.getUnitAttr(),
+                            UnitAttr(), tail, nullptr, nullptr);
+}
+
+void emitDmaCacheFlush(OpBuilder &b, Location loc) {
+  emitCacheAsm(b, loc, "fence.i");
+}
+
+void emitDmaCacheFence(OpBuilder &b, Location loc) {
+  emitCacheAsm(b, loc, "fence rw, rw\n\tfence.i");
+}
+
 static constexpr char kBbDmaTouchMvoutFn[] = "bb_dma_touch_mvout";
 static constexpr char kBbDmaBankSetColsFn[] = "bb_dma_bank_set_cols";
 
@@ -229,7 +246,9 @@ struct BuckyballFenceLowering : public ConvertOpToLLVMPattern<FenceOp> {
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value zero = cstI64(rewriter, loc, 0);
-    rewriter.replaceOpWithNewOp<FenceIntrOp>(op, zero, zero);
+    rewriter.create<FenceIntrOp>(loc, zero, zero);
+    emitDmaCacheFence(rewriter, loc);
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -265,6 +284,7 @@ struct BuckyballMvinLowering : public ConvertOpToLLVMPattern<MvinOp> {
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
+    emitDmaCacheFlush(rewriter, loc);
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
     Value rs2 =
@@ -292,6 +312,7 @@ struct BuckyballMvoutLowering : public ConvertOpToLLVMPattern<MvoutOp> {
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getOutput());
     emitBbDmaTouchMvout(rewriter, loc, memref.hostPtr, adaptor.getDepth(),
                         adaptor.getStride(), adaptor.getAddr());
+    emitDmaCacheFlush(rewriter, loc);
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
     Value rs2 =

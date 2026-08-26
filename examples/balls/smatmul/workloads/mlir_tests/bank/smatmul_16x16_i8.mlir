@@ -30,6 +30,7 @@ func.func @main() -> i8 {
       : i64 i64 i64 i64
   %stored = buckyball.bank_mvout %c %r %depth %stride
       : memref<16x16xi32> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %la : i64
   buckyball.bank_release %lb : i64
   buckyball.bank_release %stored : i64

@@ -46,6 +46,8 @@ mlir::Value packRs2MemStride(mlir::OpBuilder &b, mlir::Location loc,
                              mlir::Value memAddr, mlir::Value stride);
 void emitMset(mlir::OpBuilder &b, mlir::Location loc, uint64_t bankId,
               uint64_t row, uint64_t col, uint64_t alloc);
+void emitDmaCacheFlush(mlir::OpBuilder &b, mlir::Location loc);
+void emitDmaCacheFence(mlir::OpBuilder &b, mlir::Location loc);
 
 void populateBaseLegalizeForLLVMExportPatterns(
     mlir::LLVMTypeConverter &converter, mlir::RewritePatternSet &patterns,

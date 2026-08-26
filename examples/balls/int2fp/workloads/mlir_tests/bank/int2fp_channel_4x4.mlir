@@ -15,6 +15,7 @@ func.func @main() -> i8 {
   %loaded = buckyball.bank_mvin %input %in %one %one : memref<1x16xi32> i64 i64 i64
   %q = buckyball.bank_int2fp_channel %loaded %out %one %zero %sixteen : i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %q %one %one : memref<1x16xf32> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
   func.call @check_result(%output) : (memref<1x16xf32>) -> ()

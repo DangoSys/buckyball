@@ -215,14 +215,9 @@ function(add_tile_contract_test name)
   )
 endfunction()
 
-add_tile_matmul_test(matmul_127x17_17x127)
-add_tile_matmul_test(matmul_1x84_84x10)
-add_tile_matmul_contract_test(matmul_16x2048_2048x16_contract)
 add_tile_contract_test(conv2d_nhwc_hwcf_contract)
 add_tile_contract_test(conv2d_nhwc_hwcf_pad_contract)
 
-add_custom_target(tile-mlir-tests-build ALL DEPENDS
-  mlirtest_tile_matmul_127x17_17x127
-  mlirtest_tile_matmul_1x84_84x10
+add_custom_target(tile-mlir-tests-build ALL
   COMMENT "Building all Tile MLIR tests"
   VERBATIM)

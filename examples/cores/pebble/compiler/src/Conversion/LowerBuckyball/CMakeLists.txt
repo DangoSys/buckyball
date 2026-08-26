@@ -7,6 +7,7 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
+  CoreBankSSALowering.cpp
   AssignPhysicalBanksPass.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp

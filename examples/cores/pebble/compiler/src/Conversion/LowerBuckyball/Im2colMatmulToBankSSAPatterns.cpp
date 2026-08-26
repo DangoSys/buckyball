@@ -136,10 +136,15 @@ public:
     Value outB = allocBank(b, loc, 1, 4);
     uint64_t cfg = matrixRs2((uint64_t)wins, (uint64_t)kLane, (uint64_t)kElems);
 
-    for (int64_t n0 = 0; n0 < n; n0 += kLane) {
+    Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+    Value panelStep = b.create<arith::ConstantIndexOp>(loc, kLane);
+    Value panelEnd = b.create<arith::ConstantIndexOp>(loc, n);
+    auto panelLoop = b.create<scf::ForOp>(loc, zero, panelEnd, panelStep);
+    b.setInsertionPointToStart(panelLoop.getBody());
+    Value n0 = panelLoop.getInductionVar();
+    {
       Value bTile = b.create<memref::SubViewOp>(
-          loc, op.getFilter(),
-          SmallVector<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(n0)},
+          loc, op.getFilter(), SmallVector<OpFoldResult>{b.getIndexAttr(0), n0},
           SmallVector<OpFoldResult>{b.getIndexAttr(bRows),
                                     b.getIndexAttr(kLane)},
           SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
@@ -147,8 +152,13 @@ public:
       Value gemm =
           createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
                             createI64Const(b, loc, (int64_t)cfg), wins);
-      Value dwAddr =
-          createI64Const(b, loc, dwAddrBase + (perChannel ? n0 * 4 : 0));
+      Value dwAddr = createI64Const(b, loc, dwAddrBase);
+      if (perChannel) {
+        Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
+        dwAddr = b.create<arith::AddIOp>(
+            loc, dwAddr,
+            b.create<arith::MulIOp>(loc, n0I64, createI64Const(b, loc, 4)));
+      }
       Value fp =
           perChannel
               ? b.create<BankInt2FpChannelOp>(loc, outB.getType(), gemm, outB,
@@ -160,13 +170,13 @@ public:
                                              daAddr, dwAddr)
                     .getResult();
       Value cTile = b.create<memref::SubViewOp>(
-          loc, op.getOutput(),
-          SmallVector<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(n0)},
+          loc, op.getOutput(), SmallVector<OpFoldResult>{b.getIndexAttr(0), n0},
           SmallVector<OpFoldResult>{b.getIndexAttr(wins),
                                     b.getIndexAttr(kLane)},
           SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
       mvoutBank(b, loc, cTile, fp, wins, strideC);
     }
+    b.setInsertionPointAfter(panelLoop);
 
     releaseBank(b, loc, patch);
     releaseBank(b, loc, fIB);
@@ -270,11 +280,19 @@ public:
 
     b.create<linalg::FillOp>(loc, f0, op.getOutput());
     uint64_t cfg = matrixRs2((uint64_t)wins, (uint64_t)kLane, (uint64_t)kElems);
-    for (int64_t lc = 0; lc < nCin; ++lc) {
+    Value channelZero = b.create<arith::ConstantIndexOp>(loc, 0);
+    Value channelEnd = b.create<arith::ConstantIndexOp>(loc, nCin);
+    Value channelStep = b.create<arith::ConstantIndexOp>(loc, 1);
+    auto channelLoop =
+        b.create<scf::ForOp>(loc, channelZero, channelEnd, channelStep);
+    b.setInsertionPointToStart(channelLoop.getBody());
+    Value channel = channelLoop.getInductionVar();
+    {
+      Value inputOffset = b.create<arith::MulIOp>(
+          loc, channel, b.create<arith::ConstantIndexOp>(loc, inRows));
       Value plane = b.create<memref::SubViewOp>(
           loc, op.getInput(),
-          ArrayRef<OpFoldResult>{b.getIndexAttr(lc * inRows),
-                                 b.getIndexAttr(0)},
+          ArrayRef<OpFoldResult>{inputOffset, b.getIndexAttr(0)},
           ArrayRef<OpFoldResult>{b.getIndexAttr(inRows), b.getIndexAttr(kLane)},
           ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
 
@@ -288,11 +306,18 @@ public:
           createI64Const(b, loc, stride), createI64Const(b, loc, padding),
           b.getI64IntegerAttr(startRow), b.getI64IntegerAttr(startCol));
 
-      for (int64_t n0 = 0; n0 < n; n0 += kLane) {
+      Value panelZero = b.create<arith::ConstantIndexOp>(loc, 0);
+      Value panelStep = b.create<arith::ConstantIndexOp>(loc, kLane);
+      Value panelEnd = b.create<arith::ConstantIndexOp>(loc, n);
+      auto panelLoop =
+          b.create<scf::ForOp>(loc, panelZero, panelEnd, panelStep);
+      b.setInsertionPointToStart(panelLoop.getBody());
+      Value n0 = panelLoop.getInductionVar();
+      {
+        Value filterOffset = b.create<arith::MulIOp>(
+            loc, channel, b.create<arith::ConstantIndexOp>(loc, bRows));
         Value bTile = b.create<memref::SubViewOp>(
-            loc, op.getFilter(),
-            SmallVector<OpFoldResult>{b.getIndexAttr(lc * bRows),
-                                      b.getIndexAttr(n0)},
+            loc, op.getFilter(), SmallVector<OpFoldResult>{filterOffset, n0},
             SmallVector<OpFoldResult>{b.getIndexAttr(bRows),
                                       b.getIndexAttr(kLane)},
             SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
@@ -300,8 +325,13 @@ public:
         Value gemm =
             createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
                               createI64Const(b, loc, (int64_t)cfg), wins);
-        Value dwAddr =
-            createI64Const(b, loc, dwAddrBase + (perChannel ? n0 * 4 : 0));
+        Value dwAddr = createI64Const(b, loc, dwAddrBase);
+        if (perChannel) {
+          Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
+          dwAddr = b.create<arith::AddIOp>(
+              loc, dwAddr,
+              b.create<arith::MulIOp>(loc, n0I64, createI64Const(b, loc, 4)));
+        }
         Value fp =
             perChannel
                 ? b.create<BankInt2FpChannelOp>(loc, outB.getType(), gemm, outB,
@@ -313,13 +343,13 @@ public:
                                                daAddr, dwAddr)
                       .getResult();
         Value cTile = b.create<memref::SubViewOp>(
-            loc, partial,
-            SmallVector<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(n0)},
+            loc, partial, SmallVector<OpFoldResult>{b.getIndexAttr(0), n0},
             SmallVector<OpFoldResult>{b.getIndexAttr(wins),
                                       b.getIndexAttr(kLane)},
             SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
         mvoutBank(b, loc, cTile, fp, wins);
       }
+      b.setInsertionPointAfter(panelLoop);
 
       b.create<FenceOp>(loc);
       Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
@@ -341,6 +371,7 @@ public:
           op.getOutput(), ValueRange{row, col});
       b.setInsertionPointAfter(rowLoop);
     }
+    b.setInsertionPointAfter(channelLoop);
 
     releaseBank(b, loc, inFB);
     releaseBank(b, loc, inIB);
@@ -444,21 +475,29 @@ public:
     Value one = b.create<arith::ConstantIndexOp>(loc, 1);
     Value winsV = b.create<arith::ConstantIndexOp>(loc, wins);
 
-    for (int64_t lc = 0; lc < n; ++lc) {
+    Value channelEnd = b.create<arith::ConstantIndexOp>(loc, n);
+    auto channelLoop = b.create<scf::ForOp>(loc, zero, channelEnd, one);
+    b.setInsertionPointToStart(channelLoop.getBody());
+    Value channel = channelLoop.getInductionVar();
+    {
+      Value inputOffset = b.create<arith::MulIOp>(
+          loc, channel, b.create<arith::ConstantIndexOp>(loc, inRows));
       Value plane = b.create<memref::SubViewOp>(
           loc, op.getInput(),
-          ArrayRef<OpFoldResult>{b.getIndexAttr(lc * inRows),
-                                 b.getIndexAttr(0)},
+          ArrayRef<OpFoldResult>{inputOffset, b.getIndexAttr(0)},
           ArrayRef<OpFoldResult>{b.getIndexAttr(inRows), b.getIndexAttr(kLane)},
           ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
 
       b.create<linalg::FillOp>(loc, f0, fOne);
       for (int64_t k = 0; k < kElems; ++k) {
         Value rowV = b.create<arith::ConstantIndexOp>(loc, k);
-        Value srcRow = b.create<arith::ConstantIndexOp>(loc, lc * bRows + k);
-        Value colV = b.create<arith::ConstantIndexOp>(loc, lc);
+        Value srcRow = b.create<arith::AddIOp>(
+            loc,
+            b.create<arith::MulIOp>(
+                loc, channel, b.create<arith::ConstantIndexOp>(loc, bRows)),
+            rowV);
         Value wt = b.create<memref::LoadOp>(loc, op.getFilter(),
-                                            ValueRange{srcRow, colV});
+                                            ValueRange{srcRow, channel});
         b.create<memref::StoreOp>(loc, wt, fOne, ValueRange{rowV, zero});
       }
 
@@ -476,8 +515,15 @@ public:
       Value computed =
           createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
                             createI64Const(b, loc, (int64_t)cfg), wins);
-      Value dwAddr =
-          createI64Const(b, loc, dwAddrBase + (perChannel ? lc * 4 : 0));
+      Value dwAddr = createI64Const(b, loc, dwAddrBase);
+      if (perChannel) {
+        Value channelI64 =
+            b.create<arith::IndexCastOp>(loc, b.getI64Type(), channel);
+        dwAddr = b.create<arith::AddIOp>(
+            loc, dwAddr,
+            b.create<arith::MulIOp>(loc, channelI64,
+                                    createI64Const(b, loc, 4)));
+      }
       Value fp = perChannel ? b.create<BankInt2FpChannelOp>(
                                    loc, outB.getType(), computed, outB,
                                    createI64Const(b, loc, wins), daAddr, dwAddr)
@@ -489,14 +535,14 @@ public:
       mvoutBank(b, loc, tmpOut, fp, wins);
       b.create<FenceOp>(loc);
 
-      Value lcV = b.create<arith::ConstantIndexOp>(loc, lc);
       auto rL = b.create<scf::ForOp>(loc, zero, winsV, one);
       b.setInsertionPointToStart(rL.getBody());
       Value r = rL.getInductionVar();
       Value v = b.create<memref::LoadOp>(loc, tmpOut, ValueRange{r, zero});
-      b.create<memref::StoreOp>(loc, v, op.getOutput(), ValueRange{r, lcV});
+      b.create<memref::StoreOp>(loc, v, op.getOutput(), ValueRange{r, channel});
       b.setInsertionPointAfter(rL);
     }
+    b.setInsertionPointAfter(channelLoop);
 
     releaseBank(b, loc, inFB);
     releaseBank(b, loc, inIB);

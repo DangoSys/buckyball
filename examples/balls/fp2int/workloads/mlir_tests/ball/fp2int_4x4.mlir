@@ -23,6 +23,7 @@ func.func @main() -> i8 {
   buckyball.fp2int %loaded, %bout, %iter, %da_addr : i64
   %stored = buckyball.bank_mvout %output %bout %depth %stride
       : memref<1x16xi8> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 

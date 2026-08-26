@@ -92,7 +92,7 @@
                 echo "RISCV: $RISCV" >&2
                 echo "Yosys: $(yosys --version 2>&1 | head -1)" >&2
                 echo "OpenSTA: $(sta -version 2>&1 | head -1)" >&2
-                echo "Buddy MLIR: $(which buddy-opt)" >&2
+                # echo "Buddy MLIR: $(which buddy-opt)" >&2
                 echo "===========================================================================" >&2
               fi
             '';

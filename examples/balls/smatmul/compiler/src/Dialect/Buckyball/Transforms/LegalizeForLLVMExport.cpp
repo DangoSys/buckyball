@@ -9,8 +9,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Utils/BankUtils.h"
 
 #include "llvm/Support/ErrorHandling.h"
@@ -91,6 +91,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthA));
     Value rs2A =
         packRs2MemStride(rewriter, loc, aPtr, cstI64(rewriter, loc, 1));
+    emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvinOp>(
@@ -104,6 +105,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthB));
     Value rs2B =
         packRs2MemStride(rewriter, loc, bPtr, cstI64(rewriter, loc, 1));
+    emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvinOp>(
@@ -123,6 +125,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
         packRs2MemStride(rewriter, loc, cPtr, cstI64(rewriter, loc, 1));
+    emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvoutOp>(
@@ -134,6 +137,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
 
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
+    emitDmaCacheFence(rewriter, loc);
     emitMset(rewriter, loc, aBank, 0, 0, 0);
     emitMset(rewriter, loc, bBank, 0, 0, 0);
     emitMset(rewriter, loc, cBank, 0, 0, 0);
@@ -147,17 +151,13 @@ private:
 };
 
 struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
-  SMatMulLowering(LLVMTypeConverter &converter, bool stable, int64_t bankDepth)
-      : ConvertOpToLLVMPattern<SMatMulOp>(converter), stable(stable),
-        bankDepth(bankDepth) {}
+  SMatMulLowering(LLVMTypeConverter &converter, bool, int64_t bankDepth)
+      : ConvertOpToLLVMPattern<SMatMulOp>(converter), bankDepth(bankDepth) {}
 
   LogicalResult
   matchAndRewrite(SMatMulOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("SMatMulBall");
-    if (stable)
-      return rewriter.notifyMatchFailure(
-          op, "SMatMulBall stable intrinsic is not available; use custom path");
     if (bankDepth <= 1)
       return op.emitError("smatmul lowering requires bank_depth > 1");
     int64_t aw = addrBitsForDepth(bankDepth);
@@ -184,7 +184,6 @@ struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
   }
 
 private:
-  bool stable = false;
   int64_t bankDepth = 0;
 };
 

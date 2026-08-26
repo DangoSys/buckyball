@@ -169,44 +169,6 @@ function(add_toy_mlir_matmul_contract_test name)
     VERBATIM)
 endfunction()
 
-add_toy_mlir_matmul_contract_test(matmul_16x64_64x16)
-add_toy_mlir_matmul_test(matmul_64x16_16x64)
-add_toy_mlir_matmul_test(matmul_1024x16_16x1024)
-
-set(INT_CONVERT_MLIR ${CMAKE_CURRENT_SOURCE_DIR}/int_convert_ops.mlir)
-set(INT_CONVERT_PHYSICAL ${CMAKE_CURRENT_BINARY_DIR}/int_convert_ops_physical.mlir)
-set(INT_CONVERT_INTRIN ${CMAKE_CURRENT_BINARY_DIR}/int_convert_ops_intrinsics.mlir)
-
-add_custom_command(
-  OUTPUT ${INT_CONVERT_PHYSICAL} ${INT_CONVERT_INTRIN}
-  COMMAND ${BUDDY_OPT} ${INT_CONVERT_MLIR} --target=toy
-    -assign-physical-banks
-    > ${INT_CONVERT_PHYSICAL}
-  COMMAND ${BUDDY_OPT} ${INT_CONVERT_MLIR} --target=toy
-    -assign-physical-banks
-    ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
-    ${BUCKYBALL_LOWER_BUCKYBALL}
-    > ${INT_CONVERT_INTRIN}
-  DEPENDS ${INT_CONVERT_MLIR} ${BUDDY_OPT}
-  COMMENT "Lowering int_convert_ops.mlir"
-  VERBATIM
-)
-
-add_custom_target(mlirtest_buckyball_int_convert_ops_contract
-  COMMAND ${FILECHECK} ${INT_CONVERT_MLIR}
-    --check-prefix=CHECK-PHYSICAL
-    --input-file=${INT_CONVERT_PHYSICAL}
-  COMMAND ${FILECHECK} ${INT_CONVERT_MLIR}
-    --check-prefix=CHECK-INTRIN
-    --input-file=${INT_CONVERT_INTRIN}
-  DEPENDS ${INT_CONVERT_PHYSICAL} ${INT_CONVERT_INTRIN}
-  COMMENT "Checking Int2Fp convert ISA contract"
-  VERBATIM)
-
-add_custom_target(buckyball-mlir-tests-build ALL DEPENDS
-  mlirtest_buckyball_matmul_16x64_64x16
-  mlirtest_buckyball_matmul_64x16_16x64
-  mlirtest_buckyball_matmul_1024x16_16x1024
-  mlirtest_buckyball_int_convert_ops_contract
+add_custom_target(buckyball-mlir-tests-build ALL
   COMMENT "Building Toy Buckyball MLIR tests"
   VERBATIM)

@@ -1,4 +1,4 @@
-// CHECK: buckyball.intr.custom
+// CHECK: buckyball.intr.transpose
 // CHECK-NOT: buckyball.transpose
 
 func.func @main() -> i8 {

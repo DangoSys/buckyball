@@ -1,4 +1,4 @@
-// CHECK: buckyball.intr.custom
+// CHECK: buckyball.intr.im2col
 // CHECK-NOT: buckyball.im2col
 // CHECK-NOT: buckyball.bank_im2col
 

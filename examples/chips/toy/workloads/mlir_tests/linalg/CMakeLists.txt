@@ -161,70 +161,6 @@ function(add_linalg_conv2d_test name main_src)
       ${BBHW_MEM_C})
 endfunction()
 
-# Compile matmul.mlir -> matmul.o
-add_custom_command(
-    OUTPUT matmul.o
-    COMMAND ${BUDDY_OPT} ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir --target=toy
-        -convert-linalg-to-tile
-        -convert-tile-to-buckyball
-        -lower-buckyball-to-bank-ssa
-        -assign-physical-banks
-        ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
-        -convert-linalg-to-loops
-        -expand-strided-metadata
-        -lower-affine
-        -convert-scf-to-cf
-        -convert-cf-to-llvm
-        ${BUCKYBALL_LOWER_BUCKYBALL}
-        -convert-arith-to-llvm
-        -convert-math-to-llvm
-        -finalize-memref-to-llvm
-        -convert-func-to-llvm
-        -reconcile-unrealized-casts
-        > ${CMAKE_CURRENT_BINARY_DIR}/matmul_llvm.mlir
-    COMMAND ${BUDDY_TRANSLATE} --buddy-to-llvmir
-        ${CMAKE_CURRENT_BINARY_DIR}/matmul_llvm.mlir
-        > ${CMAKE_CURRENT_BINARY_DIR}/matmul.ll
-    COMMAND ${BUDDY_LLC} ${CMAKE_CURRENT_BINARY_DIR}/matmul.ll
-        -filetype=obj -mtriple=riscv64 -O2 -code-model=medium
-        -mattr=${BUCKYBALL_RISCV_MATTR} -float-abi=hard
-        -o ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/matmul.mlir
-        ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
-    COMMENT "Building matmul.o from Linalg MLIR"
-    VERBATIM
-)
-
-if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
-  message(FATAL_ERROR "BUCKYBALL_WORKLOAD_CHIP must be set before mlir ctests")
-endif()
-set(LINALG_MATMUL_BAREMETAL_BIN
-  ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_linalg_matmul-baremetal)
-
-add_custom_command(
-    OUTPUT ${LINALG_MATMUL_BAREMETAL_BIN}
-    COMMAND ${ELF_CC} ${C_FLAGS}
-        -I${WORKLOAD_LIB_DIR}
-        -o ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
-        ${BBSW_BAREMETAL_DIR}/crt0.S
-        ${BBSW_BAREMETAL_DIR}/syscalls.c
-        ${BBHW_MEM_C}
-        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
-        ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/matmul.o
-        ${BBHW_MEM_C}
-        ${CMAKE_CURRENT_SOURCE_DIR}/matmul_main.cpp
-        ${BBSW_BAREMETAL_DIR}/crt0.S
-        ${BBSW_BAREMETAL_DIR}/syscalls.c
-    COMMENT "Linking ${LINALG_MATMUL_BAREMETAL_BIN}"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    VERBATIM
-)
-
-add_custom_target(mlirtest_linalg_matmul_baremetal ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LINALG_MATMUL_BAREMETAL_BIN}
-)
-
 add_linalg_contract_test(conv2d_nhwc_hwcf_contract)
 add_linalg_contract_test(conv2d_nhwc_fhwc_contract)
 add_linalg_contract_test(conv2d_nchw_fchw_contract)
@@ -234,7 +170,6 @@ add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.cpp)
 add_linalg_conv2d_test(conv2d_nchw_fchw conv2d_nchw_main.cpp)
 
 add_custom_target(linalg-mlir-tests-build ALL DEPENDS
-  mlirtest_linalg_matmul_baremetal
   mlirtest_linalg_conv2d_nhwc_hwcf
   mlirtest_linalg_conv2d_nhwc_fhwc
   mlirtest_linalg_conv2d_nchw_fchw

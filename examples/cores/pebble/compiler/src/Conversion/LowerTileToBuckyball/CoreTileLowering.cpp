@@ -722,7 +722,9 @@ public:
     Value strideV = b.create<arith::ConstantIndexOp>(loc, stride);
     Value ohEnd = b.create<arith::ConstantIndexOp>(loc, OH);
     Value owEnd = b.create<arith::ConstantIndexOp>(loc, OW);
-    Value f0 =
+    Value f0 = b.create<arith::ConstantOp>(loc, b.getF32Type(),
+                                           b.getF32FloatAttr(0.0f));
+    Value i0 =
         b.create<arith::ConstantOp>(loc, b.getI8Type(), b.getI8IntegerAttr(0));
 
     Value inPack = b.create<memref::AllocOp>(
@@ -748,7 +750,7 @@ public:
       for (int64_t c0 = 0; c0 < C; c0 += nBatch) {
         int64_t nCh = C - c0 < nBatch ? C - c0 : nBatch;
         b.create<linalg::FillOp>(loc, f0, inPack);
-        b.create<linalg::FillOp>(loc, f0, fPack);
+        b.create<linalg::FillOp>(loc, i0, fPack);
 
         for (int64_t lc = 0; lc < nCh; ++lc) {
           Value cV = b.create<arith::ConstantIndexOp>(loc, c0 + lc);
