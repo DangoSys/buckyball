@@ -3,8 +3,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -33,15 +33,14 @@ struct VecMat16Lowering : public ConvertOpToLLVMPattern<VecMat16Op> {
 
 namespace mlir::buddy::buckyball {
 void populateVecBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable, int64_t,
-                                                 bool) {
+                                                  RewritePatternSet &patterns,
+                                                  bool stable, int64_t, bool) {
   (void)stable;
   patterns.add<VecMat16Lowering>(converter);
 }
 
 void configureVecBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable) {
+                                             bool stable) {
   (void)stable;
   target.addIllegalOp<VecMat16Op, BankVecMat16Op>();
 }

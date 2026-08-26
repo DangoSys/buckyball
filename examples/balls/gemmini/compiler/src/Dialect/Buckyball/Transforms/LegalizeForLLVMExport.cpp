@@ -39,7 +39,7 @@ void populateGemminiBallLegalizeForLLVMExportPatterns(
 }
 
 void configureGemminiBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                                  bool stable) {
+                                                 bool stable) {
   (void)stable;
   target.addIllegalOp<GemminiInstructionOp>();
 }

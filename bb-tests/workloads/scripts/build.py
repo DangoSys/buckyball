@@ -110,7 +110,16 @@ def _run(
 
 
 def _cmake_defs(repo: Path, chip: str) -> dict[str, str]:
-    path = repo / "examples" / "chips" / chip / "configs" / "generated" / "workload" / "cmake.defs"
+    path = (
+        repo
+        / "examples"
+        / "chips"
+        / chip
+        / "configs"
+        / "generated"
+        / "workload"
+        / "cmake.defs"
+    )
     if not path.is_file():
         raise RuntimeError(f"missing {path}; run bbdev config --install")
     values: dict[str, str] = {}
@@ -149,7 +158,9 @@ def _ninja_target(model: str, rushb: str | None) -> tuple[str, str]:
         if rushb:
             mapped = _RUSHB.get(model, {}).get(rushb)
             if not mapped:
-                raise ValueError(f"no rushB target for model {model!r} backend {rushb!r}")
+                raise ValueError(
+                    f"no rushB target for model {model!r} backend {rushb!r}"
+                )
             ninja_arg = mapped
     elif rushb:
         ninja_arg = f"rushB-{rushb}-workloads-build"

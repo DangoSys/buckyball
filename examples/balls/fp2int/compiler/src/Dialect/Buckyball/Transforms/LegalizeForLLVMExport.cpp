@@ -5,8 +5,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -38,16 +38,15 @@ struct Fp2IntLowering : public ConvertOpToLLVMPattern<Fp2IntOp> {
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateFp2IntBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable, int64_t,
-                                                 bool) {
+void populateFp2IntBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    int64_t, bool) {
   (void)stable;
   patterns.add<Fp2IntLowering>(converter);
 }
 
 void configureFp2IntBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable) {
+                                                bool stable) {
   (void)stable;
   target.addIllegalOp<Fp2IntOp, BankFp2IntOp>();
 }

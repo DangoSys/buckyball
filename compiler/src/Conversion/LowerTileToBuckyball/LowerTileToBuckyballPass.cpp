@@ -21,14 +21,14 @@ using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
 
 namespace mlir::buddy {
-#define BUCKYBALL_TILE_HOOK(BALL)                                           \
-  void populate##BALL##TileLoweringPatterns(RewritePatternSet &,            \
-                                             int64_t, int64_t, int64_t);
+#define BUCKYBALL_TILE_HOOK(BALL)                                              \
+  void populate##BALL##TileLoweringPatterns(RewritePatternSet &, int64_t,      \
+                                            int64_t, int64_t);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_TILE_HOOK
-#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                \
-  void populate##CORE##CoreTileLoweringPatterns(RewritePatternSet &,         \
-                                                 int64_t, int64_t, int64_t);
+#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                   \
+  void populate##CORE##CoreTileLoweringPatterns(RewritePatternSet &, int64_t,  \
+                                                int64_t, int64_t);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_CORE_TILE_HOOK
 } // namespace mlir::buddy
@@ -45,10 +45,10 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<tile::TileDialect, ::buddy::buckyball::BuckyballDialect,
-                    func::FuncDialect, memref::MemRefDialect,
-                    arith::ArithDialect, scf::SCFDialect,
-                    linalg::LinalgDialect>();
+    registry
+        .insert<tile::TileDialect, ::buddy::buckyball::BuckyballDialect,
+                func::FuncDialect, memref::MemRefDialect, arith::ArithDialect,
+                scf::SCFDialect, linalg::LinalgDialect>();
   }
 
   void runOnOperation() override {
@@ -65,20 +65,20 @@ public:
 
     RewritePatternSet patterns(context);
     for (llvm::StringRef ball : targetConfig.balls) {
-#define BUCKYBALL_TILE_HOOK(BALL)                                           \
-  if (ball == #BALL) {                                                       \
-    mlir::buddy::populate##BALL##TileLoweringPatterns(                      \
-        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,   \
-        targetConfig.bankNum);                                               \
+#define BUCKYBALL_TILE_HOOK(BALL)                                              \
+  if (ball == #BALL) {                                                         \
+    mlir::buddy::populate##BALL##TileLoweringPatterns(                         \
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,      \
+        targetConfig.bankNum);                                                 \
   }
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_TILE_HOOK
     }
-#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                \
-    if (targetConfig.core == NAME)                                           \
-      mlir::buddy::populate##CORE##CoreTileLoweringPatterns(                 \
-          patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth, \
-          targetConfig.bankNum);
+#define BUCKYBALL_CORE_TILE_HOOK(CORE, NAME)                                   \
+  if (targetConfig.core == NAME)                                               \
+    mlir::buddy::populate##CORE##CoreTileLoweringPatterns(                     \
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,      \
+        targetConfig.bankNum);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_CORE_TILE_HOOK
     if (failed(applyPartialConversion(getOperation(), target,

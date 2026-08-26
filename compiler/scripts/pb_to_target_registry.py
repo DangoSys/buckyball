@@ -36,7 +36,7 @@ def _target_name(core) -> str:
 def _cxx_string(value: str) -> str:
     if not value:
         _die("empty string is not a valid compiler target field")
-    if "\"" in value or "\\" in value:
+    if '"' in value or "\\" in value:
         _die(f"unsupported C++ string in chip.pb: {value!r}")
     return f'"{value}"'
 
@@ -46,7 +46,9 @@ def _profile_core(chip, profile):
     if not matches:
         _die(f"profile {profile.name}: no matching CoreInstance")
     first = matches[0]
-    expected_isa = [(entry.mnemonic, entry.funct7, entry.bid) for entry in first.balldomain.isa]
+    expected_isa = [
+        (entry.mnemonic, entry.funct7, entry.bid) for entry in first.balldomain.isa
+    ]
     expected_balls = [entry.ball_name for entry in first.balldomain.mappings]
     expected_bank = (first.mem.bank.num, first.mem.bank.width, first.mem.bank.entries)
     profile_bank = (profile.bank_num, profile.bank_width, profile.bank_entries)
@@ -56,7 +58,9 @@ def _profile_core(chip, profile):
             f"with CoreInstance bank={expected_bank}"
         )
     for core in matches[1:]:
-        isa = [(entry.mnemonic, entry.funct7, entry.bid) for entry in core.balldomain.isa]
+        isa = [
+            (entry.mnemonic, entry.funct7, entry.bid) for entry in core.balldomain.isa
+        ]
         balls = [entry.ball_name for entry in core.balldomain.mappings]
         bank = (core.mem.bank.num, core.mem.bank.width, core.mem.bank.entries)
         if isa != expected_isa or balls != expected_balls or bank != expected_bank:
@@ -102,7 +106,11 @@ def _ball_compilers(chip, repo: Path):
             if not ball_dir:
                 _die(f"profile {profile.name}: {ball_name} has no ball_dir")
             relative_dir = Path(ball_dir)
-            if relative_dir.is_absolute() or len(relative_dir.parts) != 1 or ball_dir in {".", ".."}:
+            if (
+                relative_dir.is_absolute()
+                or len(relative_dir.parts) != 1
+                or ball_dir in {".", ".."}
+            ):
                 _die(
                     f"profile {profile.name}: {ball_name} has invalid ball_dir "
                     f"{ball_dir!r}"
@@ -125,8 +133,18 @@ def _ball_compilers(chip, repo: Path):
             if not legalize.is_file():
                 _die(f"Ball {ball_name}: missing LLVM export lowering {legalize}")
 
-            assign = source_dir / "Conversion" / "LowerBuckyball" / "AssignPhysicalBankPatterns.cpp"
-            bank_ssa = source_dir / "Conversion" / "LowerBuckyball" / "LowerBuckyballToBankSSAPatterns.cpp"
+            assign = (
+                source_dir
+                / "Conversion"
+                / "LowerBuckyball"
+                / "AssignPhysicalBankPatterns.cpp"
+            )
+            bank_ssa = (
+                source_dir
+                / "Conversion"
+                / "LowerBuckyball"
+                / "LowerBuckyballToBankSSAPatterns.cpp"
+            )
             tile_dir = source_dir / "Conversion" / "LowerTileToBuckyball"
             result.append(
                 {
@@ -136,7 +154,9 @@ def _ball_compilers(chip, repo: Path):
                     "legalize": legalize,
                     "assign": assign if assign.is_file() else None,
                     "bank_ssa": bank_ssa if bank_ssa.is_file() else None,
-                    "tile_sources": sorted(tile_dir.glob("*.cpp")) if tile_dir.is_dir() else [],
+                    "tile_sources": (
+                        sorted(tile_dir.glob("*.cpp")) if tile_dir.is_dir() else []
+                    ),
                 }
             )
             seen[ball_name] = ball_dir
@@ -163,7 +183,9 @@ def _core_compilers(chip, repo: Path):
         bank_dir = source_dir / "LowerBuckyball"
         bank = bank_dir / "CoreBankSSALowering.cpp"
         if tile.is_file() != bank.is_file():
-            _die(f"Core {core_name}: tile and bank-SSA lowerings must be provided together")
+            _die(
+                f"Core {core_name}: tile and bank-SSA lowerings must be provided together"
+            )
         if tile.is_file():
             result.append(
                 {
@@ -197,9 +219,7 @@ def _emit_lowering_hooks(chip, repo: Path) -> str:
     )
     lines.extend(["#endif", "", "#ifdef BUCKYBALL_TILE_HOOK"])
     lines.extend(
-        f"BUCKYBALL_TILE_HOOK({ball['name']})"
-        for ball in balls
-        if ball["tile_sources"]
+        f"BUCKYBALL_TILE_HOOK({ball['name']})" for ball in balls if ball["tile_sources"]
     )
     lines.extend(["#endif", "", "#ifdef BUCKYBALL_BANK_SSA_HOOK"])
     lines.extend(
@@ -252,7 +272,9 @@ def _print_core_paths(chip, repo: Path, kind: str) -> None:
 
 
 def _emit(chip, target: str | None = None) -> str:
-    profiles = [profile for profile in chip.profiles if target is None or profile.name == target]
+    profiles = [
+        profile for profile in chip.profiles if target is None or profile.name == target
+    ]
     if not profiles:
         if target is None:
             _die("Chip.pb has no compiler profiles")
@@ -268,9 +290,13 @@ def _emit(chip, target: str | None = None) -> str:
         _validate_profile(profile, core)
         stem = profile.name
         chunks.append(f"static const llvm::StringRef k{stem}Balls[] = {{")
-        chunks.extend(f"  {_cxx_string(entry.ball_name)}," for entry in core.balldomain.mappings)
+        chunks.extend(
+            f"  {_cxx_string(entry.ball_name)}," for entry in core.balldomain.mappings
+        )
         chunks.append("};")
-        chunks.append(f"static const buckyball_target::BuckyballIsaEntry k{stem}Isa[] = {{")
+        chunks.append(
+            f"static const buckyball_target::BuckyballIsaEntry k{stem}Isa[] = {{"
+        )
         chunks.extend(
             f"  {{{_cxx_string(entry.mnemonic)}, {entry.funct7}}},"
             for entry in core.balldomain.isa
@@ -283,7 +309,9 @@ def _emit(chip, target: str | None = None) -> str:
             f"llvm::ArrayRef(k{stem}Balls), llvm::ArrayRef(k{stem}Isa)"
             "},"
         )
-    chunks.append("static const buckyball_target::BuckyballTargetConfig kBuckyballTargets[] = {")
+    chunks.append(
+        "static const buckyball_target::BuckyballTargetConfig kBuckyballTargets[] = {"
+    )
     chunks.extend(targets)
     chunks.append("};\n")
     return "\n".join(chunks)
@@ -321,17 +349,23 @@ def main() -> None:
         "--print-ball-compiler-paths",
         choices=("dialect-dir", "legalize", "assign", "bank-ssa", "tile"),
     )
-    parser.add_argument(
-        "--print-core-compiler-paths", choices=("bank-ssa", "tile")
-    )
+    parser.add_argument("--print-core-compiler-paths", choices=("bank-ssa", "tile"))
     parser.add_argument("--print-targets", action="store_true")
     parser.add_argument("--print-target-balls", action="store_true")
     parser.add_argument("--print-core-targets", action="store_true")
     args = parser.parse_args()
 
-    if (args.out is None and args.td_out is None and args.lowering_hooks_out is None and args.isa_dir is None
-            and args.print_ball_compiler_paths is None and args.print_core_compiler_paths is None and not args.print_targets
-            and not args.print_target_balls and not args.print_core_targets):
+    if (
+        args.out is None
+        and args.td_out is None
+        and args.lowering_hooks_out is None
+        and args.isa_dir is None
+        and args.print_ball_compiler_paths is None
+        and args.print_core_compiler_paths is None
+        and not args.print_targets
+        and not args.print_target_balls
+        and not args.print_core_targets
+    ):
         _die("one output mode is required")
 
     repo = args.repo.resolve()

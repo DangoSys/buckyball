@@ -42,8 +42,8 @@ void populateMxfp2IntBallLegalizeForLLVMExportPatterns(
   patterns.add<Mxfp2IntLowering>(converter);
 }
 
-void configureMxfp2IntBallLegalizeForExportTarget(
-    LLVMConversionTarget &target, bool stable) {
+void configureMxfp2IntBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                  bool stable) {
   (void)stable;
   target.addIllegalOp<Mxfp2IntOp, BankMxfp2IntOp>();
 }

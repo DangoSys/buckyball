@@ -7,9 +7,9 @@ using namespace llvm;
 
 namespace {
 
-cl::opt<std::string> buckyballTarget(
-    "target", cl::desc("Required Buckyball compiler target"),
-    cl::value_desc("target"));
+cl::opt<std::string>
+    buckyballTarget("target", cl::desc("Required Buckyball compiler target"),
+                    cl::value_desc("target"));
 
 #include "BuckyballTargetRegistry.inc"
 

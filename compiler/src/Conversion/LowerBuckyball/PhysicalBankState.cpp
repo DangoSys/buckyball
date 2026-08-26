@@ -33,7 +33,8 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
     // Optional Balls: use op names so Cores can omit generated C++ types.
     if (Operation *op = value.getDefiningOp()) {
       StringRef name = op->getName().getStringRef();
-      if (name == "buckyball.bank_transpose" || name == "buckyball.bank_fp2int" ||
+      if (name == "buckyball.bank_transpose" ||
+          name == "buckyball.bank_fp2int" ||
           name == "buckyball.bank_int2fp_tensor" ||
           name == "buckyball.bank_int2fp_channel") {
         value = op->getOperand(1);

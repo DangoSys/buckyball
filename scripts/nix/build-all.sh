@@ -96,7 +96,7 @@ if run_step "1"; then
   uv venv .venv --python python3 --seed
   uv pip install --python .venv/bin/python -r pyproject.toml
 
-  bbdev config --install 
+  bbdev config --install
 fi
 
 if run_step "2"; then

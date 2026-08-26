@@ -3,8 +3,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -24,7 +24,8 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
                                  adaptor.getOutputBankId(), adaptor.getDepth());
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, adaptor.getStride(),
-        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7("RELU")));
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("RELU")));
     return success();
   }
 };
@@ -32,15 +33,14 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
 
 namespace mlir::buddy::buckyball {
 void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                               RewritePatternSet &patterns,
-                                               bool stable, int64_t,
-                                               bool) {
+                                                   RewritePatternSet &patterns,
+                                                   bool stable, int64_t, bool) {
   (void)stable;
   patterns.add<ReluLowering>(converter);
 }
 
 void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                          bool stable) {
+                                              bool stable) {
   (void)stable;
   target.addIllegalOp<ReluOp>();
 }

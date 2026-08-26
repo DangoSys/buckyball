@@ -4,8 +4,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -57,7 +57,8 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
     }
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, rs2,
-        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7("IM2COL")));
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("IM2COL")));
     return success();
   }
 
@@ -67,15 +68,14 @@ private:
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateIm2colBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable, int64_t,
-                                                 bool) {
+void populateIm2colBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    int64_t, bool) {
   patterns.add<Im2colLowering>(converter, stable);
 }
 
 void configureIm2colBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable) {
+                                                bool stable) {
   if (stable)
     target.addLegalOp<Im2colIntrOp>();
   else

@@ -21,12 +21,12 @@ public:
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("TraceBall");
     Location loc = op.getLoc();
-    Value counter = rewriter.create<arith::ShLIOp>(
-        loc, adaptor.getCounterId(), cstI64(rewriter, loc, 4));
-    Value payload = rewriter.create<arith::ShLIOp>(
-        loc, adaptor.getPayload(), cstI64(rewriter, loc, 8));
-    Value rs2 = rewriter.create<arith::OrIOp>(loc, adaptor.getSubcommand(),
-                                               counter);
+    Value counter = rewriter.create<arith::ShLIOp>(loc, adaptor.getCounterId(),
+                                                   cstI64(rewriter, loc, 4));
+    Value payload = rewriter.create<arith::ShLIOp>(loc, adaptor.getPayload(),
+                                                   cstI64(rewriter, loc, 8));
+    Value rs2 =
+        rewriter.create<arith::OrIOp>(loc, adaptor.getSubcommand(), counter);
     rs2 = rewriter.create<arith::OrIOp>(loc, rs2, payload);
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, cstI64(rewriter, loc, 0), rs2,
@@ -48,7 +48,7 @@ void populateTraceBallLegalizeForLLVMExportPatterns(
 }
 
 void configureTraceBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                                bool stable) {
+                                               bool stable) {
   (void)stable;
   target.addIllegalOp<BdbCounterOp>();
 }

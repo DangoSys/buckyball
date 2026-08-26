@@ -3,8 +3,8 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -48,7 +48,7 @@ void populateTransposeBallLegalizeForLLVMExportPatterns(
 }
 
 void configureTransposeBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                               bool stable) {
+                                                   bool stable) {
   if (stable)
     target.addLegalOp<TransposeIntrOp>();
   else

@@ -11,7 +11,7 @@ using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
 void populateIm2colBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+                                                  PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {

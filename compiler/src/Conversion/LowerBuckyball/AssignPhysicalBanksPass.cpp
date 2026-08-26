@@ -1,5 +1,5 @@
-#include "Target/BuckyballTargetRegistry.h"
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -11,9 +11,9 @@
 using namespace mlir;
 
 namespace mlir::buddy {
-#define BUCKYBALL_ASSIGN_HOOK(BALL)                                         \
-  void populate##BALL##AssignPhysicalBankPatterns(RewritePatternSet &,      \
-                                                   PhysicalBankState &);
+#define BUCKYBALL_ASSIGN_HOOK(BALL)                                            \
+  void populate##BALL##AssignPhysicalBankPatterns(RewritePatternSet &,         \
+                                                  PhysicalBankState &);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_ASSIGN_HOOK
 } // namespace mlir::buddy
@@ -30,7 +30,8 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<arith::ArithDialect, ::buddy::buckyball::BuckyballDialect>();
+    registry
+        .insert<arith::ArithDialect, ::buddy::buckyball::BuckyballDialect>();
   }
 
   void runOnOperation() override {
@@ -41,8 +42,8 @@ public:
     RewritePatternSet patterns(&getContext());
     mlir::buddy::addBaseAssignPhysicalBankPatterns(patterns, state);
     for (llvm::StringRef ball : target.balls) {
-#define BUCKYBALL_ASSIGN_HOOK(BALL)                                         \
-  if (ball == #BALL)                                                         \
+#define BUCKYBALL_ASSIGN_HOOK(BALL)                                            \
+  if (ball == #BALL)                                                           \
     mlir::buddy::populate##BALL##AssignPhysicalBankPatterns(patterns, state);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_ASSIGN_HOOK

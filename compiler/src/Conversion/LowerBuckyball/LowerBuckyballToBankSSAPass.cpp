@@ -11,11 +11,11 @@
 using namespace mlir;
 
 namespace mlir::buddy {
-#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                        \
+#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                          \
   void populate##BALL##LowerBuckyballToBankSSAPatterns(RewritePatternSet &);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_BANK_SSA_HOOK
-#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                            \
+#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                               \
   void populate##CORE##CoreBankSSALoweringPatterns(RewritePatternSet &);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_CORE_BANK_SSA_HOOK
@@ -39,17 +39,16 @@ public:
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
-    for (llvm::StringRef ball :
-         buckyball_target::getBuckyballTarget().balls) {
-#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                        \
-  if (ball == #BALL)                                                          \
+    for (llvm::StringRef ball : buckyball_target::getBuckyballTarget().balls) {
+#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                          \
+  if (ball == #BALL)                                                           \
     mlir::buddy::populate##BALL##LowerBuckyballToBankSSAPatterns(patterns);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_BANK_SSA_HOOK
     }
-#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                            \
-    if (buckyball_target::getBuckyballTarget().core == NAME)                \
-      mlir::buddy::populate##CORE##CoreBankSSALoweringPatterns(patterns);
+#define BUCKYBALL_CORE_BANK_SSA_HOOK(CORE, NAME)                               \
+  if (buckyball_target::getBuckyballTarget().core == NAME)                     \
+    mlir::buddy::populate##CORE##CoreBankSSALoweringPatterns(patterns);
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_CORE_BANK_SSA_HOOK
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
