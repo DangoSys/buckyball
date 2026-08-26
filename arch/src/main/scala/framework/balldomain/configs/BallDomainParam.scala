@@ -3,14 +3,14 @@ package framework.balldomain.configs
 import upickle.default._
 
 case class BallIdMapping(
-  ballId:        Int,
-  ballName:      String,
-  ballClass:     String,
-  config:        Option[String] = None,
-  inBW:          Int,
-  outBW:         Int,
-  mmioReadBW:    Int = 0,
-  mmioWriteBW:   Int = 0)
+  ballId:      Int,
+  ballName:    String,
+  ballClass:   String,
+  config:      Option[String] = None,
+  inBW:        Int,
+  outBW:       Int,
+  mmioReadBW:  Int = 0,
+  mmioWriteBW: Int = 0)
 
 case class BallISAEntry(
   mnemonic: String,

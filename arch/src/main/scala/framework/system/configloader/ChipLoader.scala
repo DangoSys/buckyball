@@ -26,17 +26,17 @@ import scala.jdk.CollectionConverters._
 object ChipLoader {
 
   def load(pbPath: String): ExampleTopology = {
-    val path   = Paths.get(pbPath)
+    val path  = Paths.get(pbPath)
     if (!Files.isRegularFile(path)) {
       throw new RuntimeException(s"chip.pb does not exist: $pbPath")
     }
-    val repo = repoRoot(path)
-    val chip = Chip.parseFrom(Files.readAllBytes(path))
-    val cores  = chip.getCoresList.asScala.toSeq
+    val repo  = repoRoot(path)
+    val chip  = Chip.parseFrom(Files.readAllBytes(path))
+    val cores = chip.getCoresList.asScala.toSeq
     if (cores.isEmpty) {
       throw new RuntimeException(s"chip.pb has no cores: $pbPath")
     }
-    val tiles  = chip.getTilesList.asScala.map(parseTile(_, cores, repo)).toSeq
+    val tiles = chip.getTilesList.asScala.map(parseTile(_, cores, repo)).toSeq
     require(
       tiles.size == chip.getNTiles,
       s"chip.pb declares top.nTiles=${chip.getNTiles} but defines ${tiles.size} tile(s) in $pbPath"
@@ -45,10 +45,10 @@ object ChipLoader {
   }
 
   private def repoRoot(pb: Path): Path = {
-    val abs = pb.toAbsolutePath.normalize
-    val s = abs.toString
+    val abs    = pb.toAbsolutePath.normalize
+    val s      = abs.toString
     val marker = "/examples/chips/"
-    val i = s.lastIndexOf(marker)
+    val i      = s.lastIndexOf(marker)
     if (i < 0) {
       throw new RuntimeException(s"chip.pb is not under examples/chips: $pb")
     }
@@ -59,7 +59,7 @@ object ChipLoader {
     if (rel.isEmpty) {
       throw new RuntimeException(s"$what is empty")
     }
-    val p = Paths.get(rel)
+    val p        = Paths.get(rel)
     if (p.isAbsolute) {
       throw new RuntimeException(s"$what must be repo-relative: $rel")
     }
