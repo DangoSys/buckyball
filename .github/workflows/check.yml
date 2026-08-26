@@ -20,8 +20,6 @@ jobs:
   pre-commit:
     name: pre-commit
     runs-on: check
-    env:
-      ALL_PROXY: socks5h://127.0.0.1:7890
     steps:
       - name: Print information
         run: |
@@ -38,15 +36,16 @@ jobs:
         run: |
           set -euo pipefail
           root=~/Code/buckyball
-          setproxy
+          source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             prepare "${{ github.sha }}" "${root}" "${{ github.ref }}"
 
       - name: Check pre-commit
         shell: zsh {0}
         run: |
-          cd ~/Code/buckyball
-          setproxy
+          root=~/Code/buckyball
+          source "${root}/.github/scripts/setproxy.sh"
+          cd "${root}"
           nix develop -c pre-commit run --all-files --show-diff-on-failure --color=always
 
   chip-check:
@@ -73,7 +72,6 @@ jobs:
             enable_rushb: false
             run_batch_tests: false
     env:
-      ALL_PROXY: socks5h://127.0.0.1:7890
       BB_ROOT: ~/Code/buckyball
     steps:
       - name: Print information
@@ -87,6 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${{ github.sha }}" "${root}" "${{ github.ref }}"
 
