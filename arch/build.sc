@@ -23,7 +23,7 @@ object protoJava extends JavaModule {
     Seq(PathRef(T.dest))
   }
 
-  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:3.25.3")
+  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
 }
 
 object buckyball extends SbtModule { m =>
