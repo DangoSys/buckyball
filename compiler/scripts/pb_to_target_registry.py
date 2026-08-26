@@ -71,7 +71,10 @@ def _profile_core(chip, profile):
 def _validate_profile(profile, core) -> None:
     if not profile.name.isidentifier():
         _die(f"profile name is not a C++ identifier: {profile.name!r}")
-    if profile.bank_num == 0 or profile.bank_width == 0 or profile.bank_entries == 0:
+    has_balls = len(core.balldomain.mappings) > 0
+    if has_balls and (
+        profile.bank_num == 0 or profile.bank_width == 0 or profile.bank_entries == 0
+    ):
         _die(f"profile {profile.name}: bank geometry must be non-zero")
 
     balls = [entry.ball_name for entry in core.balldomain.mappings]
