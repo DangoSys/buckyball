@@ -131,7 +131,6 @@
               tools.opensta
               tools.lcov
               tools.verible
-              pkgs.protobuf
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
