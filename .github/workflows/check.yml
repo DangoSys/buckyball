@@ -38,6 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           root=~/Code/buckyball
+          setproxy
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             prepare "${{ github.sha }}" "${root}" "${{ github.ref }}"
 
@@ -45,6 +46,7 @@ jobs:
         shell: zsh {0}
         run: |
           cd ~/Code/buckyball
+          setproxy
           nix develop -c pre-commit run --all-files --show-diff-on-failure --color=always
 
   chip-check:
