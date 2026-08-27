@@ -24,7 +24,6 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
@@ -812,16 +811,6 @@ public:
         buckyball_target::getBuckyballTarget();
     MLIRContext *context = &getContext();
 
-    RewritePatternSet reluPatterns(context);
-    mlir::buddy::populateReluBallTileLoweringPatterns(
-        reluPatterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
-        targetConfig.bankNum);
-    if (failed(
-            applyPatternsGreedily(getOperation(), std::move(reluPatterns)))) {
-      signalPassFailure();
-      return;
-    }
-
     ConversionTarget target(*context);
     target.addLegalDialect<::buddy::buckyball::BuckyballDialect,
                            memref::MemRefDialect, arith::ArithDialect,
@@ -834,6 +823,9 @@ public:
         patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
         targetConfig.bankNum);
     mlir::buddy::populateTransposeBallTileLoweringPatterns(
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
+        targetConfig.bankNum);
+    mlir::buddy::populateReluBallTileLoweringPatterns(
         patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
         targetConfig.bankNum);
     patterns.add<TileConv2dLowering, TileDepthwiseConv2dLowering>(context);

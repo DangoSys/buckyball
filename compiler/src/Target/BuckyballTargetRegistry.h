@@ -30,6 +30,7 @@ struct BuckyballTargetConfig {
   llvm::ArrayRef<BuckyballIsaEntry> isa;
 };
 
+llvm::StringRef getRequestedBuckyballTarget();
 const BuckyballTargetConfig &getBuckyballTarget();
 int32_t getBuckyballFunct7(llvm::StringRef mnemonic);
 void requireBuckyballBall(llvm::StringRef ballName);

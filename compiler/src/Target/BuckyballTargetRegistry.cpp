@@ -1,29 +1,33 @@
 #include "Target/BuckyballTargetRegistry.h"
 
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
 namespace {
-
 cl::opt<std::string>
     buckyballTarget("target", cl::desc("Required Buckyball compiler target"),
                     cl::value_desc("target"));
+} // namespace
 
 #include "BuckyballTargetRegistry.inc"
 
-} // namespace
+llvm::StringRef buckyball_target::getRequestedBuckyballTarget() {
+  return buckyballTarget;
+}
 
 const buckyball_target::BuckyballTargetConfig &
 buckyball_target::getBuckyballTarget() {
-  if (buckyballTarget.empty())
+  llvm::StringRef requestedTarget = getRequestedBuckyballTarget();
+  if (requestedTarget.empty())
     report_fatal_error("--target is required for Buckyball lowering");
   for (const BuckyballTargetConfig &target : kBuckyballTargets) {
-    if (target.name == buckyballTarget)
+    if (target.name == requestedTarget)
       return target;
   }
-  report_fatal_error(Twine("unknown Buckyball target: ") + buckyballTarget);
+  report_fatal_error(Twine("unknown Buckyball target: ") + requestedTarget);
 }
 
 int32_t buckyball_target::getBuckyballFunct7(llvm::StringRef mnemonic) {

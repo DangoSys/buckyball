@@ -1,70 +1,25 @@
+#include "Buckyball/BuckyballOps.h"
+#include "Tile/TileOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/SymbolTable.h"
-
-#include "Buckyball/BuckyballOps.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
+namespace tile = ::buddy::tile;
 
 namespace {
-static bool getReluOperands(linalg::GenericOp generic, Value &input,
-                            Value &output) {
-  if (generic.getInputs().size() != 2 || generic.getOutputs().size() != 1)
-    return false;
-  Block &body = generic.getRegion().front();
-  if (body.getOperations().size() != 2)
-    return false;
-  auto maximum = dyn_cast<arith::MaxSIOp>(body.front());
-  auto yield = dyn_cast<linalg::YieldOp>(body.back());
-  if (!maximum || !yield || yield.getValues().size() != 1 ||
-      yield.getValues()[0] != maximum.getResult())
-    return false;
-  auto maps = generic.getIndexingMapsArray();
-  if (maps.size() != 3 || !maps[0].isIdentity() || !maps[1].isIdentity() ||
-      !maps[2].isIdentity())
-    return false;
-  for (utils::IteratorType iterator : generic.getIteratorTypesArray())
-    if (iterator != utils::IteratorType::parallel)
-      return false;
-  ValueRange args = body.getArguments();
-  if (args.size() != 3 ||
-      !((maximum.getLhs() == args[0] && maximum.getRhs() == args[1]) ||
-        (maximum.getLhs() == args[1] && maximum.getRhs() == args[0])))
-    return false;
-
-  Value zero = generic.getInputs()[1];
-  auto global = zero.getDefiningOp<memref::GetGlobalOp>();
-  if (!global)
-    return false;
-  auto constant = SymbolTable::lookupNearestSymbolFrom<memref::GlobalOp>(
-      global, global.getNameAttr());
-  auto values =
-      constant
-          ? dyn_cast_or_null<DenseElementsAttr>(constant.getConstantInitValue())
-          : nullptr;
-  if (!values || !values.isSplat() || !values.getSplatValue<APInt>().isZero())
-    return false;
-
-  input = generic.getInputs()[0];
-  output = generic.getOutputs()[0];
-  return true;
-}
-
-class TileReluLowering : public OpRewritePattern<linalg::GenericOp> {
+class TileReluLowering : public OpRewritePattern<tile::TileReluOp> {
 public:
-  using OpRewritePattern<linalg::GenericOp>::OpRewritePattern;
+  using OpRewritePattern<tile::TileReluOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(linalg::GenericOp op,
+  LogicalResult matchAndRewrite(tile::TileReluOp op,
                                 PatternRewriter &b) const override {
-    Value input;
-    Value output;
-    if (!getReluOperands(op, input, output))
-      return failure();
+    Value input = op.getInput();
+    Value output = op.getOutput();
     auto inputType = dyn_cast<MemRefType>(input.getType());
     auto outputType = dyn_cast<MemRefType>(output.getType());
     if (!inputType || !outputType || !inputType.hasStaticShape() ||
