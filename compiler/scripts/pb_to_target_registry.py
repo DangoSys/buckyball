@@ -298,6 +298,14 @@ def _emit(chip, target: str | None = None) -> str:
         )
         chunks.append("};")
         chunks.append(
+            f"static const buckyball_target::BuckyballBallMapping k{stem}BallMappings[] = {{"
+        )
+        chunks.extend(
+            f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}}},"
+            for entry in core.balldomain.mappings
+        )
+        chunks.append("};")
+        chunks.append(
             f"static const buckyball_target::BuckyballIsaEntry k{stem}Isa[] = {{"
         )
         chunks.extend(
@@ -309,7 +317,8 @@ def _emit(chip, target: str | None = None) -> str:
             "  {"
             f"{_cxx_string(profile.name)}, {_cxx_string(core.pkg)}, {profile.bank_num}, "
             f"{profile.bank_width}, {profile.bank_entries}, "
-            f"llvm::ArrayRef(k{stem}Balls), llvm::ArrayRef(k{stem}Isa)"
+            f"llvm::ArrayRef(k{stem}Balls), llvm::ArrayRef(k{stem}BallMappings), "
+            f"llvm::ArrayRef(k{stem}Isa)"
             "},"
         )
     chunks.append(

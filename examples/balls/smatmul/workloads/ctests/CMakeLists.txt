@@ -1,15 +1,6 @@
 add_buckyball_ctests(
-  smatmul_os_4x4_test.c
-  smatmul_os_16x16_test.c
-  smatmul_os_32x16_test.c
-  smatmul_os_48x16_test.c
-  smatmul_os_48x16x25_test.c
-  smatmul_os_64x16x25_test.c
-  smatmul_os_64x16x25_slim_test.c
-  smatmul_os_64x16x25_b051_test.c
-  smatmul_os_seq_n6_n16_test.c
-  smatmul_os_16x16_ones.c
-  smatmul_os_32x32_ones.c
-  smatmul_os_tail_5x7x3_test.c
-  smatmul_bank_os_1024x16x16_test.c
+  smatmul_16x16_test.c
+  smatmul_32x16x32_test.c
+  smatmul_ws_16x16_test.c
+  smatmul_ws_16x512_test.c
 )

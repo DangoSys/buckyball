@@ -26,8 +26,7 @@ public:
         op.getLoc(), op.getOp1Bank(), op.getOp2Bank(), op.getWrBank(),
         op.getConfig(), rewriter.getI64IntegerAttr(op.getOp1Base()),
         rewriter.getI64IntegerAttr(op.getOp2Base()),
-        rewriter.getI64IntegerAttr(op.getWrBase()),
-        rewriter.getBoolAttr(op.getWs()));
+        rewriter.getI64IntegerAttr(op.getWrBase()), op.getWsAttr());
     rewriter.replaceOp(op, op.getWrBank());
     return success();
   }

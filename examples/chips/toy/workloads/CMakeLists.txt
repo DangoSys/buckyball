@@ -8,9 +8,12 @@ add_subdirectory(ctests)
 add_subdirectory(mlir_tests)
 buckyball_add_ball_ctest_subdirs()
 
+add_custom_target(chip-ctests-build DEPENDS toy-ctests-build)
+add_custom_target(chip-mlirtests-build DEPENDS toy-mlir-tests-build)
+
 add_custom_target(chip-workloads-build ALL
   DEPENDS
-    toy-ctests-build
-    toy-mlir-tests-build
+    chip-ctests-build
+    chip-mlirtests-build
   COMMENT "Building toy workloads"
   VERBATIM)

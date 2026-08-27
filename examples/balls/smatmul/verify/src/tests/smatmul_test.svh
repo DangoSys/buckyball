@@ -1,7 +1,7 @@
 class smatmul_ball_test extends uvm_test;
   `uvm_component_utils(smatmul_ball_test)
 
-  typedef virtual bb_blink_if #(2, 4) vif_t;
+  typedef virtual bb_blink_if #(2, 2) vif_t;
   vif_t vif;
   smatmul_env env;
 
@@ -27,10 +27,10 @@ class smatmul_ball_test extends uvm_test;
   endtask
 
   task run_directed(int unsigned bid);
-    run_case(0, "DIR_OS_4x4", bid);
-    run_case(1, "DIR_OS_5x7x3", bid);
-    run_case(2, "DIR_OS_16x16", bid);
-    run_case(3, "DIR_WS_32x16", bid);
+    run_case(0, "DIR_OS_16x16", bid);
+    run_case(1, "DIR_OS_32x16", bid);
+    run_case(2, "DIR_WS_16x16", bid);
+    run_case(3, "DIR_WS_16x32", bid);
   endtask
 
   task run_random(int unsigned bid);

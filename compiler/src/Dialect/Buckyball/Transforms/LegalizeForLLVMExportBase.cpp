@@ -362,8 +362,7 @@ void populateBaseLegalizeForLLVMExportPatterns(
 void configureBaseLegalizeForExportTarget(LLVMConversionTarget &target) {
   target.addLegalOp<CustomIntrOp, FenceIntrOp, MsetIntrOp, MvinIntrOp,
                     MvoutIntrOp, RushBMvinOp, RushBMvoutOp>();
-  target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, MvoutOp, BankAllocOp,
-                      BankReleaseOp, BankMvinOp, BankMvoutOp>();
+  target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, MvoutOp>();
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalDialect<arith::ArithDialect>();
   target.addLegalDialect<LLVM::LLVMDialect>();

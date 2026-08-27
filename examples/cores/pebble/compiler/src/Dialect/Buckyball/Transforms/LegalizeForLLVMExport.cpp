@@ -51,6 +51,16 @@ void populateInt2FpLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                  bool stable);
 void configureInt2FpLegalizeForExportTarget(LLVMConversionTarget &target,
                                             bool stable);
+void populateMatAddLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                 RewritePatternSet &patterns,
+                                                 bool stable);
+void configureMatAddLegalizeForExportTarget(LLVMConversionTarget &target,
+                                            bool stable);
+void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                   RewritePatternSet &patterns,
+                                                   bool stable);
+void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                              bool stable);
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
@@ -74,6 +84,10 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
   mlir::buddy::buckyball::populateInt2FpLegalizeForLLVMExportPatterns(
       converter, patterns, stable);
+  mlir::buddy::buckyball::populateMatAddLegalizeForLLVMExportPatterns(
+      converter, patterns, stable);
+  mlir::buddy::buckyball::populateReluBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
@@ -91,4 +105,8 @@ void mlir::configureBuckyballLegalizeForExportTarget(
                                                                  stable);
   mlir::buddy::buckyball::configureInt2FpLegalizeForExportTarget(target,
                                                                  stable);
+  mlir::buddy::buckyball::configureMatAddLegalizeForExportTarget(target,
+                                                                 stable);
+  mlir::buddy::buckyball::configureReluBallLegalizeForExportTarget(target,
+                                                                   stable);
 }

@@ -4,40 +4,56 @@
 #include <isa/relu.h>
 #include <stdio.h>
 
-#define ROWS 4
-#define COLS 16
+#define ROWS 16
+#define COLUMNS 16
+#define ITER (ROWS * COLUMNS / 4)
 
-static elem_t input[ROWS * COLS] __attribute__((aligned(64))) = {
-    -7,  -6,  -5,  -4,  -3,  -2,  -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,
-    -17, -16, -15, -14, -13, -12, -11, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-    -27, -26, -25, -24, -23, -22, -21, 20, 21, 22, 23, 24, 25, 26, 27, 28,
-    -37, -36, -35, -34, -33, -32, -31, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-};
+static result_t input[ROWS * COLUMNS] __attribute__((aligned(64)));
+static result_t packed_input[ROWS * COLUMNS] __attribute__((aligned(64)));
+static result_t packed_output[ROWS * COLUMNS] __attribute__((aligned(64)));
+static result_t output[ROWS * COLUMNS] __attribute__((aligned(64)));
 
-static elem_t expected[ROWS * COLS] __attribute__((aligned(64)));
-static elem_t output[ROWS * COLS] __attribute__((aligned(64)));
+static void pack(const result_t *source, result_t *destination) {
+  for (int row = 0; row < ROWS; ++row) {
+    for (int column = 0; column < COLUMNS; ++column) {
+      int line = row * 4 + column / 4;
+      destination[line * 4 + column % 4] = source[row * COLUMNS + column];
+    }
+  }
+}
+
+static void unpack(const result_t *source, result_t *destination) {
+  for (int row = 0; row < ROWS; ++row) {
+    for (int column = 0; column < COLUMNS; ++column) {
+      int line = row * 4 + column / 4;
+      destination[row * COLUMNS + column] = source[line * 4 + column % 4];
+    }
+  }
+}
 
 int main(void) {
-#ifdef MULTICORE
-  multicore(MULTICORE);
-#endif
+  const uint32_t bank = 0;
 
-  for (int i = 0; i < ROWS * COLS; i++) {
-    expected[i] = input[i] < 0 ? 0 : input[i];
-  }
+  for (int i = 0; i < ROWS * COLUMNS; ++i)
+    input[i] = (i * 97 % 401) - 200;
 
-  const uint32_t src = 0;
-  const uint32_t dst = 1;
-  bb_mem_alloc(src, 1, 1);
-  bb_mem_alloc(dst, 1, 1);
-  bb_mvin((uintptr_t)input, src, ROWS, 1);
-  bb_relu(src, dst, ROWS);
-  bb_mvout((uintptr_t)output, dst, ROWS, 1);
+  pack(input, packed_input);
+  bb_mem_alloc(bank, 1, 1);
+  bb_mvin((uintptr_t)packed_input, bank, ITER, 1);
+  bb_relu(bank, 0, ITER, ITER);
+  bb_mvout((uintptr_t)packed_output, bank, ITER, 1);
   bb_fence();
-  bb_mem_release(src);
-  bb_mem_release(dst);
+  bb_mem_release(bank);
+  unpack(packed_output, output);
 
-  int passed = compare_i8_matrices(output, expected, ROWS, COLS);
-  printf("ReLU test %s\n", passed ? "PASSED" : "FAILED");
-  return passed ? 0 : 1;
+  for (int i = 0; i < ROWS * COLUMNS; ++i) {
+    result_t expected = input[i] < 0 ? 0 : input[i];
+    if (output[i] != expected) {
+      printf("relu mismatch at %d: got %d expected %d\n", i, output[i],
+             expected);
+      return 1;
+    }
+  }
+  printf("relu_test PASSED\n");
+  return 0;
 }

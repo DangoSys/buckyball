@@ -1,5 +1,2 @@
-# Relu Ball Configuration
-
+# ReluBall has no implementation-specific parameters.
 [ball]
-InputNum = 16
-inputWidth = 8

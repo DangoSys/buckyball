@@ -19,9 +19,9 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("ReluBall");
     Location loc = op.getLoc();
-    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
-                                 cstI64(rewriter, loc, 0),
-                                 adaptor.getOutputBankId(), adaptor.getDepth());
+    Value rs1 =
+        packRs1BanksIter(rewriter, loc, adaptor.getBankId(), adaptor.getGroup(),
+                         cstI64(rewriter, loc, 0), adaptor.getIter());
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, adaptor.getStride(),
         rewriter.getI32IntegerAttr(
@@ -34,14 +34,20 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
 namespace mlir::buddy::buckyball {
 void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                    RewritePatternSet &patterns,
-                                                   bool stable, int64_t, bool) {
-  (void)stable;
+                                                   bool, int64_t, bool) {
   patterns.add<ReluLowering>(converter);
 }
 
+// Toy still calls the hook directly with its older three-argument shape.
+void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                   RewritePatternSet &patterns,
+                                                   bool stable) {
+  populateReluBallLegalizeForLLVMExportPatterns(converter, patterns, stable, 0,
+                                                false);
+}
+
 void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                              bool stable) {
-  (void)stable;
-  target.addIllegalOp<ReluOp>();
+                                              bool) {
+  target.addIllegalOp<ReluOp, BankReluOp>();
 }
 } // namespace mlir::buddy::buckyball

@@ -16,30 +16,8 @@
 @UVM@/src/bb_blink_if.sv
 @UVM@/src/bb_uvm_pkg.sv
 
-@RTL@/ram_4x287.sv
-@RTL@/Queue4_BallRsIssue.sv
-@RTL@/ram_4x38.sv
-@RTL@/Queue4_SystolicRetireMeta.sv
-@RTL@/ram_4x43.sv
-@RTL@/Queue4_SystolicStoreMeta.sv
-@RTL@/ram_4x13.sv
-@RTL@/Queue4_BallRsComplete.sv
-@RTL@/SystolicArrayCtrl.sv
-@RTL@/ram_16x6.sv
-@RTL@/Queue16_ReadTag.sv
-@RTL@/ram_2x134.sv
-@RTL@/Queue2_RowData.sv
-@RTL@/SystolicArrayLoad.sv
-@RTL@/mem_8x3.sv
-@RTL@/Queue8_UInt3.sv
-@RTL@/ram_3x5.sv
-@RTL@/Queue3_UInt5.sv
-@RTL@/ram_2x841.sv
-@RTL@/Queue2_SystolicWsAccumReadEntry.sv
-@RTL@/Queue1_SystolicWsAccumResultEntry.sv
-@RTL@/wsAccMem_128x512.sv
-@RTL@/SystolicArrayEX.sv
-@RTL@/SystolicArrayStore.sv
+@RTL@/PE.sv
+@RTL@/Array.sv
 @RTL@/SMatMulUnit.sv
 @RTL@/SMatMulBall.sv
 

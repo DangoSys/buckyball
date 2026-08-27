@@ -6,359 +6,344 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
-import framework.balldomain.prototype.systolicarray.{
-  SystolicArrayConst,
-  SystolicArrayCtrl,
-  SystolicArrayEX,
-  SystolicArrayLoad,
-  SystolicArrayStore,
-  SystolicStoreWriteReq
-}
 
 @instantiable
 class SMatMulUnit(val b: GlobalConfig) extends Module {
-  private val accElemBits          = SystolicArrayConst.AccElemBits
-  private val writePorts           = SystolicArrayConst.StoreWritePorts
-  private val elemsPerPort         = SystolicArrayConst.StorePortElemCount
-  private val resultRowBits        = SystolicArrayConst.ResultRowBits
-  private val groupWidth           = log2Up(b.memDomain.bankNum)
-  private val writeDataEntries     = 2
-  private val writeDataIdxWidth    = log2Ceil(writeDataEntries)
-  private val writeDataCountWidth  = log2Ceil(writeDataEntries + 1)
-  private val writeTrackEntries    = 4
-  private val writeTrackIdxWidth   = log2Ceil(writeTrackEntries)
-  private val writeTrackCountWidth = log2Ceil(writeTrackEntries + 1)
-
-  private def portMask(validElems: UInt): UInt =
-    VecInit(
-      (0 until writePorts).map(port => (port * elemsPerPort).U < validElems)
-    ).asUInt
+  private val tile         = 16
+  private val addressWidth = log2Up(b.memDomain.bankEntries)
+  private val bankWidth    = log2Up(b.memDomain.bankNum)
 
   private val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "SMatMulBall")
-    .getOrElse(
-      throw new IllegalArgumentException("SMatMulBall not found in config")
-    )
+    .getOrElse(throw new IllegalArgumentException("SMatMulBall not found in config"))
 
-  private val inBW  = ballMapping.inBW
-  private val outBW = ballMapping.outBW
+  private val inBW         = ballMapping.inBW
+  private val outBW        = ballMapping.outBW
+  private val rowWords     = 4
+  private val outputRounds = rowWords / outBW
 
-  require(inBW >= 2, "SMatMulUnit requires at least two read ports for op1/op2")
+  require(inBW >= 2, "SMatMulBall requires SRAM read ports for A and B")
   require(
-    outBW >= writePorts,
-    "SMatMulUnit requires four write ports for one 16xi32 C row per Store write"
+    outBW > 0 && outBW <= rowWords && rowWords % outBW == 0,
+    "SMatMulBall outBW must divide four 128-bit result words"
   )
-  require(
-    b.memDomain.bankWidth == 128,
-    "SMatMulUnit expects 128-bit physical bank rows"
-  )
-  require(
-    b.memDomain.bankMaskLen == 16,
-    "SMatMulUnit expects byte write masks on 128-bit bank rows"
-  )
-  require(resultRowBits == writePorts * b.memDomain.bankWidth)
+  require(b.memDomain.bankWidth == 128, "SMatMulBall requires 128-bit SRAM rows")
+  require(b.memDomain.bankMaskLen == 16, "SMatMulBall requires sixteen byte enables")
+  require(3 * addressWidth <= b.frontend.iter_len, "SMatMulBall iter cannot hold three base lines")
 
   @public
   val io = IO(new Bundle {
-    val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
-    val cmdResp   = Decoupled(new BallRsComplete(b))
-    val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
-    val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-    val status    = new BallStatus
+    val cmdReq       = Flipped(Decoupled(new BallRsIssue(b)))
+    val cmdResp      = Decoupled(new BallRsComplete(b))
+    val bankRead     = Vec(inBW, Flipped(new BankRead(b)))
+    val bankWrite    = Vec(outBW, Flipped(new BankWrite(b)))
+    val channelReady = Input(Bool())
+    val status       = new BallStatus
   })
 
-  val resetActive = reset.asBool
+  val Seq(
+    idle,
+    waitForChannels,
+    clearAccumulator,
+    loadTile,
+    runArray,
+    readAccumulator,
+    writeAccumulator,
+    readResult,
+    holdResult,
+    writeResult,
+    waitForCWrite,
+    complete
+  ) = Enum(12)
 
-  val ctrl: Instance[SystolicArrayCtrl] = Instantiate(new SystolicArrayCtrl(b))
-  val load: Instance[SystolicArrayLoad] = Instantiate(new SystolicArrayLoad(b))
-  val ex:   Instance[SystolicArrayEX]   = Instantiate(new SystolicArrayEX(b))
+  val state = RegInit(idle)
 
-  val store: Instance[SystolicArrayStore] = Instantiate(
-    new SystolicArrayStore(b)
-  )
+  val robId              = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val isSub              = RegInit(false.B)
+  val subRobId           = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val aBank              = RegInit(0.U(bankWidth.W))
+  val bBank              = RegInit(0.U(bankWidth.W))
+  val cBank              = RegInit(0.U(bankWidth.W))
+  val aBaseLine          = RegInit(0.U(addressWidth.W))
+  val bBaseLine          = RegInit(0.U(addressWidth.W))
+  val cBaseLine          = RegInit(0.U(addressWidth.W))
+  val outputTileCount    = RegInit(0.U(12.W))
+  val panelCount         = RegInit(1.U(7.W))
+  val panelIndex         = RegInit(0.U(7.W))
+  val isWs               = RegInit(false.B)
+  val reductionTileCount = RegInit(0.U(12.W))
+  val outputTile         = RegInit(0.U(12.W))
+  val reductionTile      = RegInit(0.U(12.W))
+  val accumulatorRow     = RegInit(0.U(4.W))
+  val resultRow          = RegInit(0.U(4.W))
+  val outputRound        = RegInit(0.U(math.max(1, log2Up(outputRounds)).W))
+  val aRowsRequested     = RegInit(0.U(5.W))
+  val aRowsStored        = RegInit(0.U(5.W))
+  val bRowsRequested     = RegInit(0.U(5.W))
+  val bRowsStored        = RegInit(0.U(5.W))
+  val cRowData           = Reg(UInt(512.W))
 
-  ctrl.io.cmdReq.valid             := io.cmdReq.valid && !resetActive
-  ctrl.io.cmdReq.bits              := io.cmdReq.bits
-  io.cmdReq.ready                  := ctrl.io.cmdReq.ready && !resetActive
-  //
-  io.cmdResp.valid                 := ctrl.io.cmdResp_o.valid && !resetActive
-  io.cmdResp.bits                  := ctrl.io.cmdResp_o.bits
-  ctrl.io.cmdResp_o.ready          := io.cmdResp.ready && !resetActive
-  //
-  load.io.ctrl_ld_i.valid          := ctrl.io.ctrl_ld_o.valid
-  load.io.ctrl_ld_i.bits           := ctrl.io.ctrl_ld_o.bits
-  ctrl.io.ctrl_ld_o.ready          := load.io.ctrl_ld_i.ready
-  //
-  ex.io.load_ex_req_kind           := load.io.load_ex_req_kind
-  ex.io.load_ex_k_tile_kind        := load.io.load_ex_k_tile_kind
-  ex.io.load_ex_acc_slot           := load.io.load_ex_acc_slot
-  ex.io.load_ex_valid_m            := load.io.load_ex_valid_m
-  ex.io.load_ex_valid_n            := load.io.load_ex_valid_n
-  ex.io.load_ex_valid_k            := load.io.load_ex_valid_k
-  ex.io.load_ex_b_valid_n          := load.io.load_ex_b_valid_n
-  ex.io.load_ex_b_valid_k          := load.io.load_ex_b_valid_k
-  ex.io.load_ex_weight_generation  := load.io.load_ex_weight_generation
-  ex.io.load_ex_op1_i.valid        := load.io.load_ex_op1_o.valid
-  ex.io.load_ex_op1_i.bits         := load.io.load_ex_op1_o.bits
-  load.io.load_ex_op1_o.ready      := ex.io.load_ex_op1_i.ready
-  ex.io.load_ex_op2_i.valid        := load.io.load_ex_op2_o.valid
-  ex.io.load_ex_op2_i.bits         := load.io.load_ex_op2_o.bits
-  load.io.load_ex_op2_o.ready      := ex.io.load_ex_op2_i.ready
-  //
-  store.io.ex_st_i.valid           := ex.io.ex_st_o.valid
-  store.io.ex_st_i.bits            := ex.io.ex_st_o.bits
-  ex.io.ex_st_o.ready              := store.io.ex_st_i.ready
-  store.io.store_ctrl_resp_i.valid := ctrl.io.store_ctrl_resp_o.valid
-  store.io.store_ctrl_resp_i.bits  := ctrl.io.store_ctrl_resp_o.bits
-  ctrl.io.store_ctrl_resp_o.ready  := store.io.store_ctrl_resp_i.ready
-  ctrl.io.store_done_i             := store.io.store_done_o
+  val aRows       = Reg(Vec(tile, UInt(128.W)))
+  val bRows       = Reg(Vec(tile, UInt(128.W)))
+  val accumulator = SyncReadMem(tile, UInt(512.W))
+  val array: Instance[Array] = Instantiate(new Array)
 
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id  := 0.U
-    io.bankRead(i).ball_id := 0.U
+  val accumulatorRead    = state === readAccumulator || state === readResult
+  val accumulatorWrite   = state === clearAccumulator || state === writeAccumulator
+  val accumulatorAddress = Mux(state === readResult, resultRow, accumulatorRow)
+  val accumulatorData    = accumulator.read(accumulatorAddress, accumulatorRead)
+  assert(!(accumulatorRead && accumulatorWrite), "SMatMulBall accumulator SRAM is single-port")
+
+  val accumulatedResult = Wire(Vec(tile, UInt(32.W)))
+  for (column <- 0 until tile) {
+    val oldValue = accumulatorData(32 * column + 31, 32 * column).asSInt
+    val newValue = array.io.result(accumulatorRow)(32 * column + 31, 32 * column).asSInt
+    accumulatedResult(column) := (oldValue + newValue).asUInt
   }
-  //
-  io.bankRead(0).bank_id := load.io.op1_rd_bank_o
-  io.bankRead(0).group_id       := load.io.op1_rd_group_o
-  io.bankRead(0).io.req.valid   := load.io.bankReadReq(0).valid && !resetActive
-  io.bankRead(0).io.req.bits    := load.io.bankReadReq(0).bits
-  load.io.bankReadReq(0).ready  := io.bankRead(0).io.req.ready && !resetActive
-  load.io.bankReadResp(0).valid := io.bankRead(0).io.resp.valid
-  load.io.bankReadResp(0).bits  := io.bankRead(0).io.resp.bits
-  io.bankRead(0).io.resp.ready  := load.io.bankReadResp(0).ready && !resetActive
-  //
-  io.bankRead(1).bank_id        := load.io.op2_rd_bank_o
-  io.bankRead(1).group_id       := load.io.op2_rd_group_o
-  io.bankRead(1).io.req.valid   := load.io.bankReadReq(1).valid && !resetActive
-  io.bankRead(1).io.req.bits    := load.io.bankReadReq(1).bits
-  load.io.bankReadReq(1).ready  := io.bankRead(1).io.req.ready && !resetActive
-  load.io.bankReadResp(1).valid := io.bankRead(1).io.resp.valid
-  load.io.bankReadResp(1).bits  := io.bankRead(1).io.resp.bits
-  io.bankRead(1).io.resp.ready  := load.io.bankReadResp(1).ready && !resetActive
+  val accumulatedRow = Cat(accumulatedResult.reverse)
 
-  for (i <- 2 until inBW) {
-    io.bankRead(i).bank_id          := 0.U
-    io.bankRead(i).group_id         := 0.U
-    io.bankRead(i).io.req.valid     := false.B
-    io.bankRead(i).io.req.bits.addr := 0.U
-    io.bankRead(i).io.resp.ready    := false.B
-    load.io.bankReadReq(i).ready    := false.B
-    load.io.bankReadResp(i).valid   := false.B
-    load.io.bankReadResp(i).bits    := 0.U.asTypeOf(load.io.bankReadResp(i).bits)
+  val aTileLine = aBaseLine.pad(32) + ((outputTile * reductionTileCount + reductionTile) << 4)
+  val bTileLine = bBaseLine.pad(32) + Mux(isWs, panelIndex << 4, reductionTile << 4)
+  val wsLine    = panelIndex * (tile * outputRounds).U + resultRow * outputRounds.U + outputRound
+  val osLine    = (outputTile * tile.U + resultRow) * outputRounds.U + outputRound
+  val cLine     = cBaseLine.pad(32) + Mux(isWs, wsLine, osLine)
+  val aReadLine = aTileLine + aRowsRequested
+  val bReadLine = bTileLine + bRowsRequested
+
+  for (port <- 0 until inBW) {
+    io.bankRead(port).rob_id           := robId
+    io.bankRead(port).ball_id          := 0.U
+    io.bankRead(port).bank_id          := Mux(port.U === 0.U, aBank, bBank)
+    io.bankRead(port).group_id         := 0.U
+    io.bankRead(port).io.req.valid     := false.B
+    io.bankRead(port).io.req.bits.addr := 0.U
+    io.bankRead(port).io.resp.ready    := false.B
+  }
+  io.bankRead(0).group_id := 0.U
+  io.bankRead(0).io.req.valid     := state === loadTile && (!isWs || panelIndex === 0.U) && aRowsRequested < tile.U
+  io.bankRead(0).io.req.bits.addr := aReadLine(addressWidth - 1, 0)
+  io.bankRead(0).io.resp.ready    := state === loadTile && (!isWs || panelIndex === 0.U) && aRowsStored < tile.U
+  io.bankRead(1).group_id         := 0.U
+  io.bankRead(1).io.req.valid     := state === loadTile && bRowsRequested < tile.U
+  io.bankRead(1).io.req.bits.addr := bReadLine(addressWidth - 1, 0)
+  io.bankRead(1).io.resp.ready    := state === loadTile && bRowsStored < tile.U
+
+  val cWords = cRowData.asTypeOf(Vec(rowWords, UInt(128.W)))
+  for (port <- 0 until outBW) {
+    io.bankWrite(port).rob_id           := robId
+    io.bankWrite(port).ball_id          := 0.U
+    io.bankWrite(port).bank_id          := cBank
+    io.bankWrite(port).group_id         := port.U
+    io.bankWrite(port).io.req.bits.addr := cLine(addressWidth - 1, 0)
+    io.bankWrite(port).io.req.bits.data := cWords(outputRound * outBW.U + port.U)
+    io.bankWrite(port).io.req.bits.mask := VecInit(Seq.fill(16)(true.B))
+  }
+  for (port <- 0 until outBW) {
+    io.bankWrite(port).io.req.valid := state === writeResult
+  }
+  val allCWriteResponses = io.bankWrite.map(_.io.resp.valid).reduce(_ && _)
+  for (port <- 0 until outBW) {
+    io.bankWrite(port).io.resp.ready := state === waitForCWrite && allCWriteResponses
   }
 
-  // 两项数据队列只保留尚未完全发出的 C 行；请求全部发出后立即释放 512-bit 数据。
-  // 四项轻量 tracker 继续等待 bank response，从而保持原有的最大在途行数。
-  val writeData         = Reg(Vec(writeDataEntries, new SystolicStoreWriteReq(b)))
-  val writeDataTrack    = Reg(Vec(writeDataEntries, UInt(writeTrackIdxWidth.W)))
-  val writeDataReadPtr  = RegInit(0.U(writeDataIdxWidth.W))
-  val writeDataWritePtr = RegInit(0.U(writeDataIdxWidth.W))
-  val writeDataCount    = RegInit(0.U(writeDataCountWidth.W))
+  array.io.start := state === loadTile && aRowsStored === tile.U && bRowsStored === tile.U
+  array.io.aRows := aRows
+  array.io.bRows := bRows
 
-  val writeTrackValid = RegInit(VecInit(Seq.fill(writeTrackEntries)(false.B)))
+  io.cmdReq.ready            := state === idle
+  io.cmdResp.valid           := state === complete
+  io.cmdResp.bits.rob_id     := robId
+  io.cmdResp.bits.is_sub     := isSub
+  io.cmdResp.bits.sub_rob_id := subRobId
 
-  val writeTrackRequiredMask = RegInit(
-    VecInit(Seq.fill(writeTrackEntries)(0.U(writePorts.W)))
-  )
+  when(state === clearAccumulator) {
+    accumulator.write(accumulatorRow, 0.U)
+    when(accumulatorRow === 15.U) {
+      accumulatorRow := 0.U
+      reductionTile  := 0.U
+      aRowsRequested := Mux(isWs && panelIndex =/= 0.U, tile.U, 0.U)
+      aRowsStored    := Mux(isWs && panelIndex =/= 0.U, tile.U, 0.U)
+      bRowsRequested := 0.U
+      bRowsStored    := 0.U
+      state          := loadTile
+    }.otherwise {
+      accumulatorRow := accumulatorRow + 1.U
+    }
+  }
 
-  val writeTrackIssuedMask = RegInit(
-    VecInit(Seq.fill(writeTrackEntries)(0.U(writePorts.W)))
-  )
+  when(state === loadTile) {
+    when(io.bankRead(0).io.req.fire)(aRowsRequested := aRowsRequested + 1.U)
+    when(io.bankRead(1).io.req.fire)(bRowsRequested := bRowsRequested + 1.U)
+    when(io.bankRead(0).io.resp.fire) {
+      aRows(aRowsStored(3, 0)) := io.bankRead(0).io.resp.bits.data
+      aRowsStored              := aRowsStored + 1.U
+    }
+    when(io.bankRead(1).io.resp.fire) {
+      bRows(bRowsStored(3, 0)) := io.bankRead(1).io.resp.bits.data
+      bRowsStored              := bRowsStored + 1.U
+    }
+    when(aRowsStored === tile.U && bRowsStored === tile.U) {
+      state := runArray
+    }
+  }
 
-  val writeTrackAckMask = RegInit(
-    VecInit(Seq.fill(writeTrackEntries)(0.U(writePorts.W)))
-  )
+  when(state === runArray && array.io.done) {
+    accumulatorRow := 0.U
+    state          := readAccumulator
+  }
 
-  val writeTrackReadPtr  = RegInit(0.U(writeTrackIdxWidth.W))
-  val writeTrackWritePtr = RegInit(0.U(writeTrackIdxWidth.W))
-  val writeTrackCount    = RegInit(0.U(writeTrackCountWidth.W))
+  when(state === readAccumulator) {
+    state := writeAccumulator
+  }
 
-  val issueEntry      = writeData(writeDataReadPtr)
-  val issueEntryValid = writeDataCount =/= 0.U
-  val issueTrackIdx   = writeDataTrack(writeDataReadPtr)
-  val issuePortMask   = writeTrackRequiredMask(issueTrackIdx)
-
-  // bank response 不携带 Unit 自定义的行标签；对每个写口，从最早 entry 开始寻找
-  // 该口尚未确认的请求，即可按该口的 FIFO 顺序正确归属 response。
-  val responseTarget      = Wire(Vec(writePorts, UInt(writeTrackIdxWidth.W)))
-  val responseTargetValid = Wire(Vec(writePorts, Bool()))
-  for (port <- 0 until writePorts) {
-    responseTarget(port) := writeTrackReadPtr
-    var targetFound = false.B
-    for (offset <- 0 until writeTrackEntries) {
-      val candidateIdx          =
-        (writeTrackReadPtr + offset.U)(writeTrackIdxWidth - 1, 0)
-      val candidateWaitsForPort = writeTrackValid(candidateIdx) &&
-        writeTrackIssuedMask(candidateIdx)(port) && !writeTrackAckMask(
-          candidateIdx
-        )(port)
-      when(!targetFound && candidateWaitsForPort) {
-        responseTarget(port) := candidateIdx
+  when(state === writeAccumulator) {
+    accumulator.write(accumulatorRow, accumulatedRow)
+    when(accumulatorRow === 15.U) {
+      when(reductionTile + 1.U === reductionTileCount) {
+        resultRow := 0.U
+        state     := readResult
+      }.otherwise {
+        reductionTile  := reductionTile + 1.U
+        aRowsRequested := 0.U
+        aRowsStored    := 0.U
+        bRowsRequested := 0.U
+        bRowsStored    := 0.U
+        state          := loadTile
       }
-      targetFound = targetFound || candidateWaitsForPort
-    }
-    responseTargetValid(port) := targetFound
-  }
-
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id           := 0.U
-    io.bankWrite(i).ball_id          := 0.U
-    io.bankWrite(i).bank_id          := 0.U
-    io.bankWrite(i).group_id         := 0.U
-    io.bankWrite(i).io.req.valid     := false.B
-    io.bankWrite(i).io.req.bits.addr := 0.U
-    io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(b.memDomain.bankMaskLen)(false.B)
-    )
-    io.bankWrite(i).io.resp.ready    := false.B
-  }
-
-  for (port <- 0 until writePorts) {
-    val byteBase      = port * elemsPerPort
-    val groupWithPort = issueEntry.wr_group_base +& port.U(groupWidth.W)
-
-    io.bankWrite(port).rob_id           := issueEntry.rob_id
-    io.bankWrite(port).bank_id          := issueEntry.wr_bank
-    io.bankWrite(port).group_id         := groupWithPort(groupWidth - 1, 0)
-    io.bankWrite(port).io.req.valid     := issueEntryValid && issuePortMask(port) &&
-      !writeTrackIssuedMask(issueTrackIdx)(port) && !resetActive
-    io.bankWrite(port).io.req.bits.addr := issueEntry.wr_row_addr
-    io.bankWrite(port).io.req.bits.data := issueEntry.data(
-      (port + 1) * b.memDomain.bankWidth - 1,
-      port * b.memDomain.bankWidth
-    )
-
-    val mask = Wire(Vec(b.memDomain.bankMaskLen, Bool()))
-    for (byte <- 0 until b.memDomain.bankMaskLen) {
-      val logicalElem = (byteBase + byte / (accElemBits / 8)).U
-      mask(byte) := logicalElem < issueEntry.valid_elems
-    }
-    io.bankWrite(port).io.req.bits.mask := mask
-    io.bankWrite(port).io.resp.ready := responseTargetValid(
-      port
-    ) && !resetActive
-  }
-
-  val issueFireMask = VecInit(
-    (0 until writePorts).map(port => io.bankWrite(port).io.req.fire)
-  ).asUInt
-
-  val issueMaskAfterFire = writeTrackIssuedMask(issueTrackIdx) | issueFireMask
-
-  val issueEntryFinished = issueEntryValid &&
-    (writeTrackIssuedMask(issueTrackIdx) & issuePortMask) =/= issuePortMask &&
-    (issueMaskAfterFire & issuePortMask) === issuePortMask
-
-  val responseFire = Wire(Vec(writePorts, Bool()))
-  for (port  <- 0 until writePorts) {
-    responseFire(port) := responseTargetValid(port) && io
-      .bankWrite(port)
-      .io
-      .resp
-      .valid && !resetActive
-  }
-  val responseAckMask = Wire(Vec(writeTrackEntries, UInt(writePorts.W)))
-  for (entry <- 0 until writeTrackEntries) {
-    responseAckMask(entry) := VecInit((0 until writePorts).map { port =>
-      responseFire(port) && responseTarget(port) === entry.U(
-        writeTrackIdxWidth.W
-      )
-    }).asUInt
-  }
-
-  // 只允许队首在其所需 port 都返回 response 后退休，因而 Store/Ctrl 看到的
-  // wr_done_i 仍是一行一次且严格保序的完成脉冲。
-  val headPortMask         = writeTrackRequiredMask(writeTrackReadPtr)
-  val headAckAfterResponse = writeTrackAckMask(writeTrackReadPtr) |
-    responseAckMask(writeTrackReadPtr)
-
-  val headComplete = writeTrackValid(writeTrackReadPtr) &&
-    (writeTrackIssuedMask(writeTrackReadPtr) & headPortMask) === headPortMask &&
-    (headAckAfterResponse & headPortMask) === headPortMask
-
-  val canEnqueueData  = writeDataCount < writeDataEntries.U || issueEntryFinished
-  val canEnqueueTrack = writeTrackCount < writeTrackEntries.U || headComplete
-
-  store.io.wr_o.ready := canEnqueueData && canEnqueueTrack
-  store.io.wr_done_i  := headComplete
-  val writeEnqueue = store.io.wr_o.fire
-
-  for (entry <- 0 until writeTrackEntries) {
-    when(writeTrackValid(entry) && responseAckMask(entry).orR) {
-      writeTrackAckMask(entry) := writeTrackAckMask(entry) | responseAckMask(
-        entry
-      )
+    }.otherwise {
+      accumulatorRow := accumulatorRow + 1.U
+      state          := readAccumulator
     }
   }
 
-  when(issueFireMask.orR) {
-    writeTrackIssuedMask(issueTrackIdx) := issueMaskAfterFire
-  }
-  when(issueEntryFinished) {
-    writeDataReadPtr := writeDataReadPtr + 1.U
-  }
-  when(headComplete) {
-    writeTrackValid(writeTrackReadPtr) := false.B
-    writeTrackReadPtr                  := writeTrackReadPtr + 1.U
-  }
-  when(writeEnqueue) {
-    writeData(writeDataWritePtr)      := store.io.wr_o.bits
-    writeDataTrack(writeDataWritePtr) := writeTrackWritePtr
-    writeDataWritePtr                 := writeDataWritePtr + 1.U
-
-    writeTrackRequiredMask(writeTrackWritePtr) := portMask(
-      store.io.wr_o.bits.valid_elems
-    )
-    writeTrackIssuedMask(writeTrackWritePtr)   := 0.U
-    writeTrackAckMask(writeTrackWritePtr)      := 0.U
-    writeTrackValid(writeTrackWritePtr)        := true.B
-    writeTrackWritePtr                         := writeTrackWritePtr + 1.U
-  }
-  switch(Cat(writeEnqueue, issueEntryFinished)) {
-    is("b10".U)(writeDataCount := writeDataCount + 1.U)
-    is("b01".U)(writeDataCount := writeDataCount - 1.U)
-  }
-  switch(Cat(writeEnqueue, headComplete)) {
-    is("b10".U)(writeTrackCount := writeTrackCount + 1.U)
-    is("b01".U)(writeTrackCount := writeTrackCount - 1.U)
+  when(state === readResult) {
+    outputRound := 0.U
+    state       := holdResult
   }
 
-  when(writeEnqueue) {
+  when(state === holdResult) {
+    cRowData := accumulatorData
+    state    := writeResult
+  }
+
+  when(state === writeResult) {
+    val allCWriteRequests = io.bankWrite.map(_.io.req.ready).reduce(_ && _)
     assert(
-      portMask(store.io.wr_o.bits.valid_elems).orR,
-      "SMatMulUnit: write row has no valid port"
+      io.bankWrite.map(_.io.req.ready).map(_ === io.bankWrite(0).io.req.ready).reduce(_ && _),
+      "SMatMulBall C channels must be ready together"
     )
+    when(allCWriteRequests) {
+      state := waitForCWrite
+    }
   }
-  when(issueEntryValid) {
-    assert(
-      writeTrackValid(issueTrackIdx),
-      "SMatMulUnit: write data references an invalid response tracker"
-    )
-  }
-  assert(
-    writeDataCount <= writeDataEntries.U,
-    "SMatMulUnit: write data queue overflow"
-  )
-  assert(
-    writeTrackCount <= writeTrackEntries.U,
-    "SMatMulUnit: write response tracker overflow"
-  )
 
-  val hasInput  = RegInit(false.B)
-  val hasOutput = RegInit(false.B)
+  when(state === waitForCWrite) {
+    assert(
+      io.bankWrite.map(_.io.resp.valid).map(_ === io.bankWrite(0).io.resp.valid).reduce(_ && _),
+      "SMatMulBall C channels must respond together"
+    )
+    when(allCWriteResponses) {
+      when(outputRound =/= (outputRounds - 1).U) {
+        outputRound := outputRound + 1.U
+        state       := writeResult
+      }.otherwise {
+        when(resultRow === 15.U) {
+          when(isWs && panelIndex + 1.U < panelCount) {
+            panelIndex     := panelIndex + 1.U
+            accumulatorRow := 0.U
+            resultRow      := 0.U
+            bRowsRequested := 0.U
+            bRowsStored    := 0.U
+            state          := clearAccumulator
+          }.elsewhen(outputTile + 1.U === outputTileCount) {
+            state := complete
+          }.otherwise {
+            outputTile     := outputTile + 1.U
+            accumulatorRow := 0.U
+            state          := clearAccumulator
+          }
+        }.otherwise {
+          resultRow := resultRow + 1.U
+          state     := readResult
+        }
+      }
+    }
+  }
+
+  when(state === complete && io.cmdResp.fire) {
+    state := idle
+  }
 
   when(io.cmdReq.fire) {
-    hasInput := true.B
-  }
-  when(io.cmdResp.fire) {
-    hasOutput := false.B
-    hasInput  := false.B
-  }
-  when(io.cmdResp.valid && !hasOutput) {
-    hasOutput := true.B
+    val command     = io.cmdReq.bits.cmd
+    val rows        = command.rs2(11, 0)
+    val columns     = command.rs2(23, 12)
+    val reduction   = command.rs2(35, 24)
+    val commandIter = command.iter
+    robId              := io.cmdReq.bits.rob_id
+    isSub              := io.cmdReq.bits.is_sub
+    subRobId           := io.cmdReq.bits.sub_rob_id
+    aBank              := command.op1_bank
+    bBank              := command.op2_bank
+    cBank              := command.wr_bank
+    aBaseLine          := commandIter(addressWidth - 1, 0)
+    bBaseLine          := commandIter(2 * addressWidth - 1, addressWidth)
+    cBaseLine          := commandIter(3 * addressWidth - 1, 2 * addressWidth)
+    outputTileCount    := rows >> 4
+    panelCount         := columns >> 4
+    panelIndex         := 0.U
+    reductionTileCount := reduction >> 4
+    outputTile         := 0.U
+    accumulatorRow     := 0.U
+    resultRow          := 0.U
+    isWs               := command.funct7 === 68.U
+    assert(rows =/= 0.U && rows(3, 0) === 0.U, "SMatMulBall rows must be a non-zero multiple of 16")
+    assert(command.funct7 === 65.U || command.funct7 === 68.U, "SMatMulBall funct7 must select OS or WS")
+    when(command.funct7 === 68.U) {
+      assert(
+        rows === 16.U && reduction === 16.U && columns(3, 0) === 0.U &&
+          columns * outputRounds.U <= b.memDomain.bankEntries.U,
+        "SMATMUL_WS requires rows=k=16 and C to fit in its output groups"
+      )
+      assert(
+        command.op1_col === 1.U && command.op2_col === 1.U && command.wr_col === outBW.U,
+        "SMATMUL_WS bank groups mismatch"
+      )
+    }.otherwise {
+      assert(columns === 16.U, "SMATMUL_OS columns must be exactly 16")
+      assert(
+        command.op1_col === 1.U && command.op2_col === 1.U && command.wr_col === outBW.U,
+        "SMATMUL_OS bank groups mismatch"
+      )
+    }
+    assert(reduction =/= 0.U && reduction(3, 0) === 0.U, "SMatMulBall reduction must be a non-zero multiple of 16")
+    assert(command.rs2(63, 36) === 0.U, "SMatMulBall rs2[63:36] must be zero")
+    assert(commandIter(b.frontend.iter_len - 1, 3 * addressWidth) === 0.U, "SMatMulBall iter high bits must be zero")
+    assert(
+      command.op1_bank =/= command.op2_bank && command.op1_bank =/= command.wr_bank && command.op2_bank =/= command.wr_bank,
+      "SMatMulBall A, B, and C must use different SRAM banks"
+    )
+    assert(
+      commandIter(addressWidth - 1, 0) + (rows >> 4) * (reduction >> 4) * tile.U <= b.memDomain.bankEntries.U,
+      "SMatMulBall A does not fit in one bank"
+    )
+    assert(
+      commandIter(2 * addressWidth - 1, addressWidth) +
+        Mux(command.funct7 === 68.U, columns, reduction) <= b.memDomain.bankEntries.U,
+      "SMatMulBall B does not fit in one bank"
+    )
+    assert(
+      commandIter(3 * addressWidth - 1, 2 * addressWidth) +
+        Mux(command.funct7 === 68.U, columns * outputRounds.U, rows * outputRounds.U) <= b.memDomain.bankEntries.U,
+      "SMatMulBall C does not fit in its physical banks"
+    )
+    state              := waitForChannels
   }
 
-  io.status.idle    := resetActive || (!hasInput && !hasOutput && !ctrl.io.busy_o)
-  io.status.running := !resetActive && ctrl.io.busy_o
+  when(state === waitForChannels && io.channelReady) {
+    state := clearAccumulator
+  }
+
+  io.status.idle    := state === idle
+  io.status.running := state =/= idle
 }

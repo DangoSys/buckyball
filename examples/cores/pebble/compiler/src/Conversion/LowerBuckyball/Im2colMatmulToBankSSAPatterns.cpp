@@ -94,9 +94,10 @@ public:
     int64_t tile = tileH;
     int64_t wins = tile * tile;
     int64_t inRows = cdiv(inSize * inSize, kLane);
-    int64_t kTiles = cdiv(kElems, kLane);
-    int64_t bRows = kTiles * kLane;
-    int64_t aRows = cdiv(wins, kLane) * kTiles * kLane;
+    int64_t paddedWins = cdiv(wins, kLane) * kLane;
+    int64_t paddedK = cdiv(kElems, kLane) * kLane;
+    int64_t bRows = paddedK;
+    int64_t aRows = (paddedWins / kLane) * paddedK;
     if (aRows > kBankDepth)
       return op.emitError("im2col A layout exceeds bank depth");
     if (wins > kBankDepth)
@@ -107,11 +108,9 @@ public:
         oTy.getShape()[0] != wins || oTy.getShape()[1] != n)
       return op.emitError("im2col_matmul packed shape mismatch");
 
-    int64_t strideF = 0, strideC = 0;
-    if (failed(rowStrideDivLane(fTy, strideF)) ||
-        failed(rowStrideDivLane(oTy, strideC)))
-      return op.emitError(
-          "filter/output need static strided<[row,1]> row%16==0");
+    int64_t strideF = 0;
+    if (failed(rowStrideDivLane(fTy, strideF)))
+      return op.emitError("filter needs static strided<[row,1]> row%16==0");
 
     Value daAddr = createI64Const(b, loc, 0);
 
@@ -132,9 +131,9 @@ public:
     releaseBank(b, loc, quant);
 
     Value fIB = allocBank(b, loc, 1, 1);
-    Value accB = allocBank(b, loc, 1, 4);
-    Value outB = allocBank(b, loc, 1, 4);
-    uint64_t cfg = matrixRs2((uint64_t)wins, (uint64_t)kLane, (uint64_t)kElems);
+    Value accB = allocBank(b, loc, 1, 2);
+    Value outB = allocBank(b, loc, 1, 2);
+    uint64_t cfg = matrixRs2((uint64_t)paddedWins, 16, (uint64_t)paddedK);
 
     Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
     Value panelStep = b.create<arith::ConstantIndexOp>(loc, kLane);
@@ -151,7 +150,7 @@ public:
       Value fLoaded = mvinBank(b, loc, bTile, fIB, bRows, strideF);
       Value gemm =
           createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
-                            createI64Const(b, loc, (int64_t)cfg), wins);
+                            createI64Const(b, loc, (int64_t)cfg));
       Value dwAddr = createI64Const(b, loc, dwAddrBase);
       if (perChannel) {
         Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
@@ -161,20 +160,41 @@ public:
       }
       Value fp =
           perChannel
-              ? b.create<BankInt2FpChannelOp>(loc, outB.getType(), gemm, outB,
-                                              createI64Const(b, loc, wins),
-                                              daAddr, dwAddr)
+              ? b.create<BankInt2FpChannelOp>(
+                     loc, outB.getType(), gemm, outB,
+                     createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
                     .getResult()
-              : b.create<BankInt2FpTensorOp>(loc, outB.getType(), gemm, outB,
-                                             createI64Const(b, loc, wins),
-                                             daAddr, dwAddr)
+              : b.create<BankInt2FpTensorOp>(
+                     loc, outB.getType(), gemm, outB,
+                     createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
                     .getResult();
-      Value cTile = b.create<memref::SubViewOp>(
-          loc, op.getOutput(), SmallVector<OpFoldResult>{b.getIndexAttr(0), n0},
-          SmallVector<OpFoldResult>{b.getIndexAttr(wins),
-                                    b.getIndexAttr(kLane)},
-          SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
-      mvoutBank(b, loc, cTile, fp, wins, strideC);
+      Value packed = b.create<memref::AllocOp>(
+          loc, MemRefType::get({2 * paddedWins, 8}, b.getF32Type()));
+      mvoutBank(b, loc, packed, fp, 2 * paddedWins);
+      Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+      Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+      Value two = b.create<arith::ConstantIndexOp>(loc, 2);
+      Value eight = b.create<arith::ConstantIndexOp>(loc, 8);
+      Value sixteen = b.create<arith::ConstantIndexOp>(loc, kLane);
+      Value winsV = b.create<arith::ConstantIndexOp>(loc, wins);
+      Value n0V = n0;
+      auto rowLoop = b.create<scf::ForOp>(loc, zero, winsV, one);
+      b.setInsertionPointToStart(rowLoop.getBody());
+      Value row = rowLoop.getInductionVar();
+      auto colLoop = b.create<scf::ForOp>(loc, zero, sixteen, one);
+      b.setInsertionPointToStart(colLoop.getBody());
+      Value col = colLoop.getInductionVar();
+      Value packedRow =
+          b.create<arith::AddIOp>(loc, b.create<arith::MulIOp>(loc, row, two),
+                                  b.create<arith::DivUIOp>(loc, col, eight));
+      Value packedCol = b.create<arith::RemUIOp>(loc, col, eight);
+      Value value = b.create<memref::LoadOp>(loc, packed,
+                                             ValueRange{packedRow, packedCol});
+      Value outputCol = b.create<arith::AddIOp>(loc, n0V, col);
+      b.create<memref::StoreOp>(loc, value, op.getOutput(),
+                                ValueRange{row, outputCol});
+      b.setInsertionPointAfter(rowLoop);
+      b.create<memref::DeallocOp>(loc, packed);
     }
     b.setInsertionPointAfter(panelLoop);
 
@@ -247,9 +267,10 @@ public:
       return op.emitError("im2col_fat_matmul requires square output tile");
     int64_t wins = tileH * tileW;
     int64_t inRows = cdiv(inSize * inSize, kLane);
-    int64_t kTiles = cdiv(kElems, kLane);
-    int64_t bRows = kTiles * kLane;
-    int64_t aRowsSingle = cdiv(wins, kLane) * kTiles * kLane;
+    int64_t paddedWins = cdiv(wins, kLane) * kLane;
+    int64_t paddedK = cdiv(kElems, kLane) * kLane;
+    int64_t bRows = paddedK;
+    int64_t aRowsSingle = (paddedWins / kLane) * paddedK;
     if (aRowsSingle > kBankDepth)
       return op.emitError("im2col A layout exceeds bank depth");
     if (wins > kBankDepth)
@@ -275,11 +296,11 @@ public:
     Value inIB = allocBank(b, loc, 1, 1);
     Value patches = allocBank(b, loc, 1, 1);
     Value fIB = allocBank(b, loc, 1, 1);
-    Value accB = allocBank(b, loc, 1, 4);
-    Value outB = allocBank(b, loc, 1, 4);
+    Value accB = allocBank(b, loc, 1, 2);
+    Value outB = allocBank(b, loc, 1, 2);
 
     b.create<linalg::FillOp>(loc, f0, op.getOutput());
-    uint64_t cfg = matrixRs2((uint64_t)wins, (uint64_t)kLane, (uint64_t)kElems);
+    uint64_t cfg = matrixRs2((uint64_t)paddedWins, 16, (uint64_t)paddedK);
     Value channelZero = b.create<arith::ConstantIndexOp>(loc, 0);
     Value channelEnd = b.create<arith::ConstantIndexOp>(loc, nCin);
     Value channelStep = b.create<arith::ConstantIndexOp>(loc, 1);
@@ -324,7 +345,7 @@ public:
         Value fLoaded = mvinBank(b, loc, bTile, fIB, bRows, strideF);
         Value gemm =
             createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
-                              createI64Const(b, loc, (int64_t)cfg), wins);
+                              createI64Const(b, loc, (int64_t)cfg));
         Value dwAddr = createI64Const(b, loc, dwAddrBase);
         if (perChannel) {
           Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
@@ -334,20 +355,39 @@ public:
         }
         Value fp =
             perChannel
-                ? b.create<BankInt2FpChannelOp>(loc, outB.getType(), gemm, outB,
-                                                createI64Const(b, loc, wins),
-                                                daAddr, dwAddr)
+                ? b.create<BankInt2FpChannelOp>(
+                       loc, outB.getType(), gemm, outB,
+                       createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
                       .getResult()
-                : b.create<BankInt2FpTensorOp>(loc, outB.getType(), gemm, outB,
-                                               createI64Const(b, loc, wins),
-                                               daAddr, dwAddr)
+                : b.create<BankInt2FpTensorOp>(
+                       loc, outB.getType(), gemm, outB,
+                       createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
                       .getResult();
-        Value cTile = b.create<memref::SubViewOp>(
-            loc, partial, SmallVector<OpFoldResult>{b.getIndexAttr(0), n0},
-            SmallVector<OpFoldResult>{b.getIndexAttr(wins),
-                                      b.getIndexAttr(kLane)},
-            SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
-        mvoutBank(b, loc, cTile, fp, wins);
+        Value packed = b.create<memref::AllocOp>(
+            loc, MemRefType::get({2 * paddedWins, 8}, b.getF32Type()));
+        mvoutBank(b, loc, packed, fp, 2 * paddedWins);
+        Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+        Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+        Value two = b.create<arith::ConstantIndexOp>(loc, 2);
+        Value eight = b.create<arith::ConstantIndexOp>(loc, 8);
+        Value winsV = b.create<arith::ConstantIndexOp>(loc, wins);
+        auto rowLoop = b.create<scf::ForOp>(loc, zero, winsV, one);
+        b.setInsertionPointToStart(rowLoop.getBody());
+        Value row = rowLoop.getInductionVar();
+        auto colLoop = b.create<scf::ForOp>(loc, zero, panelStep, one);
+        b.setInsertionPointToStart(colLoop.getBody());
+        Value col = colLoop.getInductionVar();
+        Value packedRow =
+            b.create<arith::AddIOp>(loc, b.create<arith::MulIOp>(loc, row, two),
+                                    b.create<arith::DivUIOp>(loc, col, eight));
+        Value packedCol = b.create<arith::RemUIOp>(loc, col, eight);
+        Value value = b.create<memref::LoadOp>(
+            loc, packed, ValueRange{packedRow, packedCol});
+        Value outputCol = b.create<arith::AddIOp>(loc, n0, col);
+        b.create<memref::StoreOp>(loc, value, partial,
+                                  ValueRange{row, outputCol});
+        b.setInsertionPointAfter(rowLoop);
+        b.create<memref::DeallocOp>(loc, packed);
       }
       b.setInsertionPointAfter(panelLoop);
 
@@ -444,7 +484,9 @@ public:
     int64_t tile = tileH;
     int64_t wins = tile * tile;
     int64_t inRows = cdiv(inSize * inSize, kLane);
-    int64_t bRows = cdiv(kElems, kLane) * kLane;
+    int64_t paddedWins = cdiv(wins, kLane) * kLane;
+    int64_t paddedK = cdiv(kElems, kLane) * kLane;
+    int64_t bRows = paddedK;
     if (wins > kBankDepth)
       return op.emitError("im2col_depthwise_matmul output exceeds bank depth");
 
@@ -453,7 +495,7 @@ public:
         oTy.getShape()[0] != wins || oTy.getShape()[1] != kLane)
       return op.emitError("im2col_depthwise_matmul packed shape mismatch");
 
-    uint64_t cfg = matrixRs2((uint64_t)wins, 1, (uint64_t)kElems);
+    uint64_t cfg = matrixRs2((uint64_t)paddedWins, 16, (uint64_t)paddedK);
 
     Value daAddr = createI64Const(b, loc, 0);
 
@@ -462,14 +504,14 @@ public:
     Value fOne = b.create<memref::AllocOp>(
         loc, MemRefType::get({bRows, kLane}, b.getI8Type()));
     Value tmpOut = b.create<memref::AllocOp>(
-        loc, MemRefType::get({wins, kLane}, b.getF32Type()));
+        loc, MemRefType::get({2 * paddedWins, 8}, b.getF32Type()));
 
     Value inFB = allocBank(b, loc, 1, 4);
     Value inIB = allocBank(b, loc, 1, 1);
     Value patches = allocBank(b, loc, 1, 1);
     Value fIB = allocBank(b, loc, 1, 1);
-    Value accB = allocBank(b, loc, 1, 4);
-    Value outB = allocBank(b, loc, 1, 4);
+    Value accB = allocBank(b, loc, 1, 2);
+    Value outB = allocBank(b, loc, 1, 2);
 
     Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
     Value one = b.create<arith::ConstantIndexOp>(loc, 1);
@@ -514,7 +556,7 @@ public:
       Value fLoaded = mvinBank(b, loc, fOne, fIB, bRows);
       Value computed =
           createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
-                            createI64Const(b, loc, (int64_t)cfg), wins);
+                            createI64Const(b, loc, (int64_t)cfg));
       Value dwAddr = createI64Const(b, loc, dwAddrBase);
       if (perChannel) {
         Value channelI64 =
@@ -524,21 +566,26 @@ public:
             b.create<arith::MulIOp>(loc, channelI64,
                                     createI64Const(b, loc, 4)));
       }
-      Value fp = perChannel ? b.create<BankInt2FpChannelOp>(
-                                   loc, outB.getType(), computed, outB,
-                                   createI64Const(b, loc, wins), daAddr, dwAddr)
-                                  .getResult()
-                            : b.create<BankInt2FpTensorOp>(
-                                   loc, outB.getType(), computed, outB,
-                                   createI64Const(b, loc, wins), daAddr, dwAddr)
-                                  .getResult();
-      mvoutBank(b, loc, tmpOut, fp, wins);
+      Value fp =
+          perChannel
+              ? b.create<BankInt2FpChannelOp>(
+                     loc, outB.getType(), computed, outB,
+                     createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
+                    .getResult()
+              : b.create<BankInt2FpTensorOp>(
+                     loc, outB.getType(), computed, outB,
+                     createI64Const(b, loc, 2 * paddedWins), daAddr, dwAddr)
+                    .getResult();
+      mvoutBank(b, loc, tmpOut, fp, 2 * paddedWins);
       b.create<FenceOp>(loc);
 
       auto rL = b.create<scf::ForOp>(loc, zero, winsV, one);
       b.setInsertionPointToStart(rL.getBody());
       Value r = rL.getInductionVar();
-      Value v = b.create<memref::LoadOp>(loc, tmpOut, ValueRange{r, zero});
+      Value two = b.create<arith::ConstantIndexOp>(loc, 2);
+      Value packedRow = b.create<arith::MulIOp>(loc, r, two);
+      Value v =
+          b.create<memref::LoadOp>(loc, tmpOut, ValueRange{packedRow, zero});
       b.create<memref::StoreOp>(loc, v, op.getOutput(), ValueRange{r, channel});
       b.setInsertionPointAfter(rL);
     }

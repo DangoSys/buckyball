@@ -148,7 +148,17 @@ _RUSHB_DEFS = (
 )
 
 
-def _ninja_target(model: str, rushb: str | None) -> tuple[str, str]:
+def _ninja_target(
+    model: str,
+    rushb: str | None,
+    ctest: bool,
+    mlirtest: bool,
+) -> tuple[str, str]:
+    if ctest:
+        return "", "sync-ctest-bin"
+    if mlirtest:
+        return "", "sync-mlirtest-bin"
+
     cmake_model = ""
     ninja_arg = ""
     if model:
@@ -195,6 +205,8 @@ def build_workload(
     *,
     model: str = "",
     rushb: str | None = None,
+    ctest: bool = False,
+    mlirtest: bool = False,
     stable: bool = False,
     logger: object | None = None,
     task_scope: str | None = None,
@@ -203,6 +215,12 @@ def build_workload(
         raise ValueError(f"invalid chip: {chip}")
     if rushb is not None and rushb not in {"bemu", "verilator"}:
         raise ValueError(f"rushB must be bemu|verilator, got {rushb!r}")
+    if ctest and mlirtest:
+        raise ValueError("--ctest and --mlirtest cannot be used together")
+    if (ctest or mlirtest) and model:
+        raise ValueError("--ctest and --mlirtest cannot be used with --model")
+    if (ctest or mlirtest) and rushb:
+        raise ValueError("--ctest and --mlirtest cannot be used with --rushB")
 
     root = _repo(repo)
     defs = _cmake_defs(root, chip)
@@ -244,13 +262,13 @@ def build_workload(
 
     src = _workload_src(root)
     build = _workload_build_dir(root, chip)
-    cmake_model, ninja_arg = _ninja_target(model.lower(), rushb)
+    cmake_model, ninja_arg = _ninja_target(model.lower(), rushb, ctest, mlirtest)
     env = os.environ.copy()
     env["PATH"] = f"{riscv / 'bin'}:{env.get('PATH', '')}"
     env["RISCV"] = str(riscv)
+    env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
     env["CC"] = str(linux_cc)
     env["CXX"] = str(linux_cxx)
-    env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
 
     build.mkdir(parents=True, exist_ok=True)
 
@@ -301,6 +319,9 @@ def main() -> None:
     parser.add_argument("--chip", required=True)
     parser.add_argument("--model", default="")
     parser.add_argument("--rushb", choices=("bemu", "verilator"))
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--ctest", action="store_true")
+    scope.add_argument("--mlirtest", action="store_true")
     parser.add_argument("--stable", action="store_true")
     args = parser.parse_args()
     build_workload(
@@ -308,6 +329,8 @@ def main() -> None:
         args.chip,
         model=args.model,
         rushb=args.rushb,
+        ctest=args.ctest,
+        mlirtest=args.mlirtest,
         stable=args.stable,
     )
 

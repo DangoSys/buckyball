@@ -1,10 +1,6 @@
 add_buckyball_ctests(
   conv_im2col_test.c
   conv_transpose_test.c
-  conv_matmul_test.c
   conv_im2col_bank_test.c
   conv_transpose_bank_test.c
-  conv_matmul_bank_test.c
-  quant_online_gemm_test.c
-  mvout_fence_loop_test.c
 )

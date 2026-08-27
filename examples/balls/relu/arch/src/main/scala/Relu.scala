@@ -1,221 +1,163 @@
 package examples.balls.relu
 
 import chisel3._
-import chisel3.util._
-import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
-
-import examples.balls.vector._
-import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
+import chisel3.util._
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
+import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
-import examples.balls.relu.configs.ReluBallParam
 
 @instantiable
-class PipelinedRelu(val b: GlobalConfig) extends Module {
-  val ballConfig = ReluBallParam(b)
-  val InputNum   = ballConfig.InputNum
-  val inputWidth = ballConfig.inputWidth
-  val bankWidth  = b.memDomain.bankWidth
+class Relu(val b: GlobalConfig) extends Module {
+  private val addressWidth = log2Up(b.memDomain.bankEntries)
+  private val countWidth   = log2Up(b.memDomain.bankEntries + 1)
+  private val bankWidth    = log2Up(b.memDomain.bankNum)
 
-  // Get bandwidth from config
-  val ballMapping = b.ballDomain.ballIdMappings
+  private val mapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "ReluBall")
-    .getOrElse(
-      throw new IllegalArgumentException("ReluBall not found in config")
-    )
+    .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
 
-  val inBW  = ballMapping.inBW
-  val outBW = ballMapping.outBW
+  private val funct = b.ballDomain.ballISA
+    .find(_.mnemonic == "RELU")
+    .map(_.funct7)
+    .getOrElse(throw new IllegalArgumentException("RELU not found in ballISA"))
+
+  require(mapping.inBW == 1, "ReluBall requires one SRAM read port")
+  require(mapping.outBW == 1, "ReluBall requires one SRAM write port")
+  require(b.memDomain.bankWidth == 128, "ReluBall requires 128-bit SRAM rows")
+  require(b.memDomain.bankMaskLen == 16, "ReluBall requires sixteen byte enables")
 
   @public
   val io = IO(new Bundle {
-    val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
-    val cmdResp   = Decoupled(new BallRsComplete(b))
-    val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
-    val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-    val status    = new BallStatus
+    val cmdReq       = Flipped(Decoupled(new BallRsIssue(b)))
+    val cmdResp      = Decoupled(new BallRsComplete(b))
+    val channelReady = Input(Bool())
+    val bankRead     = Vec(1, Flipped(new BankRead(b)))
+    val bankWrite    = Vec(1, Flipped(new BankWrite(b)))
+    val status       = new BallStatus
   })
 
-  val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  val is_sub_reg     = RegInit(false.B)
-  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  when(io.cmdReq.fire) {
-    rob_id_reg     := io.cmdReq.bits.rob_id
-    is_sub_reg     := io.cmdReq.bits.is_sub
-    sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+  val Seq(idle, waitForChannels, readRequest, readResponse, writeRequest, writeResponse, complete) = Enum(7)
+  val state                                                                                        = RegInit(idle)
+
+  val robId    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  val isSub    = RegInit(false.B)
+  val subRobId = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val bank     = RegInit(0.U(bankWidth.W))
+  val group    = RegInit(0.U(bankWidth.W))
+  val iter     = RegInit(0.U(countWidth.W))
+  val stride   = RegInit(0.U(countWidth.W))
+  val segment  = RegInit(0.U(addressWidth.W))
+  val line     = RegInit(0.U(addressWidth.W))
+  val word     = Reg(UInt(128.W))
+
+  val relu = Wire(Vec(4, UInt(32.W)))
+  for (lane <- 0 until 4) {
+    val value = word(32 * lane + 31, 32 * lane).asSInt
+    relu(lane) := Mux(value < 0.S, 0.U, value.asUInt)
   }
-
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id  := rob_id_reg
-    io.bankRead(i).ball_id := 0.U
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id  := rob_id_reg
-    io.bankWrite(i).ball_id := 0.U
-  }
-
-  val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
-  val state                                      = RegInit(idle)
-
-  val regArray = RegInit(
-    VecInit(
-      Seq.fill(InputNum)(
-        VecInit(Seq.fill(InputNum)(0.U(inputWidth.W)))
-      )
-    )
-  )
-
-  val readCounter  = RegInit(0.U(log2Ceil(InputNum + 1).W))
-  val respCounter  = RegInit(0.U(log2Ceil(InputNum + 1).W))
-  val writeCounter = RegInit(0.U(log2Ceil(InputNum + 1).W))
-
-  val waddr_reg    = RegInit(0.U(b.frontend.iter_len.W))
-  val wbank_reg    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val raddr_reg    = RegInit(0.U(b.frontend.iter_len.W))
-  val rbank_reg    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val iter_reg     = RegInit(0.U(b.frontend.iter_len.W))
-  val cycle_reg    = RegInit(0.U(6.W))
-  val iterCnt      = RegInit(0.U(32.W))
-  val writeDataReg = Reg(UInt(bankWidth.W))
-  val writeMaskReg = Reg(Vec(b.memDomain.bankMaskLen, UInt(1.W)))
-
-  for (i <- 0 until inBW) {
-    io.bankRead(i).io.req.valid     := false.B
-    io.bankRead(i).io.req.bits.addr := 0.U
-    io.bankRead(i).io.resp.ready    := false.B
-  }
-
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).io.req.valid     := false.B
-    io.bankWrite(i).io.req.bits.addr := 0.U
-    io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))
-    )
-    io.bankWrite(i).io.resp.ready    := false.B
-  }
-
-  for (i <- 0 until inBW) {
-    io.bankRead(i).bank_id  := rbank_reg
-    io.bankRead(i).group_id := 0.U
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).bank_id  := wbank_reg
-    io.bankWrite(i).group_id := 0.U
-  }
+  val address = segment + line
 
   io.cmdReq.ready            := state === idle
-  io.cmdResp.valid           := false.B
-  io.cmdResp.bits.rob_id     := rob_id_reg
-  io.cmdResp.bits.is_sub     := is_sub_reg
-  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
+  io.cmdResp.valid           := state === complete
+  io.cmdResp.bits.rob_id     := robId
+  io.cmdResp.bits.is_sub     := isSub
+  io.cmdResp.bits.sub_rob_id := subRobId
+
+  io.bankRead(0).rob_id           := robId
+  io.bankRead(0).ball_id          := 0.U
+  io.bankRead(0).bank_id          := bank
+  io.bankRead(0).group_id         := group
+  io.bankRead(0).io.req.valid     := false.B
+  io.bankRead(0).io.req.bits.addr := address
+  io.bankRead(0).io.resp.ready    := false.B
+
+  io.bankWrite(0).rob_id           := robId
+  io.bankWrite(0).ball_id          := 0.U
+  io.bankWrite(0).bank_id          := bank
+  io.bankWrite(0).group_id         := group
+  io.bankWrite(0).io.req.valid     := false.B
+  io.bankWrite(0).io.req.bits.addr := address
+  io.bankWrite(0).io.req.bits.data := Cat(relu.reverse)
+  io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(16)(true.B))
+  io.bankWrite(0).io.resp.ready    := false.B
 
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        state        := sRead
-        readCounter  := 0.U
-        respCounter  := 0.U
-        writeCounter := 0.U
-        waddr_reg    := 0.U
-        wbank_reg    := io.cmdReq.bits.cmd.wr_bank
-        raddr_reg    := 0.U
-        rbank_reg    := io.cmdReq.bits.cmd.op1_bank
-        iter_reg     := io.cmdReq.bits.cmd.iter
-        cycle_reg    := (io.cmdReq.bits.cmd.iter +& (InputNum.U - 1.U)) / InputNum.U - 1.U
-      }
-      when(cycle_reg =/= 0.U) {
-        state        := sRead
-        readCounter  := 0.U
-        writeCounter := 0.U
-        respCounter  := 0.U
-        waddr_reg    := waddr_reg + InputNum.U
-        raddr_reg    := raddr_reg + InputNum.U
-        cycle_reg    := cycle_reg - 1.U
+        val command = io.cmdReq.bits.cmd
+        assert(command.funct7 === funct.U(7.W), "ReluBall funct7 must be RELU")
+        assert(command.wr_bank === 0.U, "ReluBall bank2 must be zero")
+        assert(command.op1_col =/= 0.U && command.op2_bank < command.op1_col, "ReluBall group is not allocated in bank")
+        assert(command.iter =/= 0.U && command.iter(3, 0) === 0.U, "ReluBall iter must be a positive multiple of 16")
+        assert(
+          command.special =/= 0.U && command.special <= b.memDomain.bankEntries.U,
+          "ReluBall stride must fit in one physical bank"
+        )
+        assert(
+          b.memDomain.bankEntries.U % command.special === 0.U,
+          "ReluBall stride must divide the physical bank depth"
+        )
+        assert(command.iter <= command.special, "ReluBall iter must not exceed stride")
+
+        robId    := io.cmdReq.bits.rob_id
+        isSub    := io.cmdReq.bits.is_sub
+        subRobId := io.cmdReq.bits.sub_rob_id
+        bank     := command.op1_bank
+        group    := command.op2_bank
+        iter     := command.iter
+        stride   := command.special
+        segment  := 0.U
+        line     := 0.U
+        state    := waitForChannels
       }
     }
 
-    is(sRead) {
+    is(waitForChannels) {
+      when(io.channelReady)(state := readRequest)
+    }
+
+    is(readRequest) {
+      io.bankRead(0).io.req.valid            := true.B
+      when(io.bankRead(0).io.req.fire)(state := readResponse)
+    }
+
+    is(readResponse) {
       io.bankRead(0).io.resp.ready := true.B
-
-      io.bankRead(0).io.req.valid     := (readCounter < InputNum.U)
-      io.bankRead(0).io.req.bits.addr := raddr_reg + readCounter
-
-      when(io.bankRead(0).io.req.fire) {
-        readCounter := readCounter + 1.U
-      }
-
-      val dataWord = io.bankRead(0).io.resp.bits.data
-
       when(io.bankRead(0).io.resp.fire) {
-        for (col <- 0 until InputNum) {
-          val hi     = (col + 1) * inputWidth - 1
-          val lo     = col * inputWidth
-          val raw    = dataWord(hi, lo)
-          val signed = raw.asSInt
-          val relu   = Mux(signed < 0.S, 0.S(inputWidth.W), signed)
-          regArray(respCounter)(col) := relu.asUInt
-        }
-        respCounter := respCounter + 1.U
-      }
-
-      when(io.bankRead(0).io.resp.fire && respCounter === (InputNum - 1).U) {
-        state        := sWrite
-        writeDataReg := Cat((0 until InputNum).reverse.map(j => regArray(0)(j)))
-        for (i <- 0 until b.memDomain.bankMaskLen) {
-          writeMaskReg(i) := 1.U(1.W)
-        }
+        word  := io.bankRead(0).io.resp.bits.data
+        state := writeRequest
       }
     }
 
-    is(sWrite) {
-      val hasMore = writeCounter < InputNum.U
+    is(writeRequest) {
+      io.bankWrite(0).io.req.valid            := true.B
+      when(io.bankWrite(0).io.req.fire)(state := writeResponse)
+    }
 
-      io.bankWrite(0).io.req.valid     := hasMore
-      io.bankWrite(0).io.req.bits.addr := waddr_reg + writeCounter
-      io.bankWrite(0).io.req.bits.data := writeDataReg
-      io.bankWrite(0).io.req.bits.mask := writeMaskReg
-      io.bankWrite(0).io.resp.ready    := true.B
-
-      when(io.bankWrite(0).io.req.fire) {
-        when(writeCounter === (InputNum - 1).U) {
-          state := complete
+    is(writeResponse) {
+      io.bankWrite(0).io.resp.ready := true.B
+      when(io.bankWrite(0).io.resp.fire) {
+        when(line +& 1.U === iter) {
+          when(segment +& stride === b.memDomain.bankEntries.U) {
+            state := complete
+          }.otherwise {
+            segment := segment + stride
+            line    := 0.U
+            state   := readRequest
+          }
         }.otherwise {
-          val nextCnt = writeCounter + 1.U
-          writeCounter := nextCnt
-          writeDataReg := Cat(
-            (0 until InputNum).reverse.map(j => regArray(nextCnt)(j))
-          )
+          line  := line + 1.U
+          state := readRequest
         }
       }
     }
 
     is(complete) {
-      io.bankWrite(0).io.resp.ready := true.B
-      when(cycle_reg === 0.U) {
-        io.cmdResp.valid       := true.B
-        io.cmdResp.bits.rob_id := rob_id_reg
-        when(io.cmdResp.fire) {
-          iterCnt := iterCnt + 1.U
-        }
-      }
-      state                         := idle
+      when(io.cmdResp.fire)(state := idle)
     }
   }
 
-  io.status.idle    := (state === idle)
-  io.status.running := (state === sRead) || (state === sWrite)
-
-  when(reset.asBool) {
-    for (i <- 0 until InputNum) {
-      for (j <- 0 until InputNum) {
-        regArray(i)(j) := 0.U
-      }
-    }
-    writeDataReg := 0.U
-    for (i <- 0 until b.memDomain.bankMaskLen) {
-      writeMaskReg(i) := 0.U
-    }
-  }
+  io.status.idle    := state === idle
+  io.status.running := state =/= idle
 }

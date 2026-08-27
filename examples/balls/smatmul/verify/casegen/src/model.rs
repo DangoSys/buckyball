@@ -1,7 +1,6 @@
 pub const TILE: usize = 16;
 pub const BANK_ROW_BYTES: usize = 16;
-pub const WRITE_PORTS: usize = 4;
-pub const ELEMS_PER_PORT: usize = 4;
+pub const VALUES_PER_WORD: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WriteExp {
@@ -11,139 +10,99 @@ pub struct WriteExp {
     pub mask: u16,
 }
 
-pub fn ceil_div(x: usize, d: usize) -> usize {
-    (x + d - 1) / d
-}
-
-pub fn a_rows(m: usize, k: usize) -> usize {
-    ceil_div(m, TILE) * ceil_div(k, TILE) * TILE
-}
-
-pub fn b_rows(n: usize, k: usize) -> usize {
-    if n == 0 || n > TILE {
-        panic!("b_rows: cols must be 1..{TILE}, got {n}");
-    }
-    ceil_div(k, TILE) * TILE
-}
-
-pub fn c_blocks(m: usize, n: usize) -> usize {
-    if n == 0 || n > TILE {
-        panic!("c_blocks: cols must be 1..{TILE}, got {n}");
-    }
-    m
-}
-
-pub fn pack_a(src: &[i8], m: usize, k: usize) -> Vec<u8> {
-    let kt = ceil_div(k, TILE);
-    let rows = a_rows(m, k);
-    let mut dst = vec![0u8; rows * TILE];
-    for r in 0..m {
-        for c in 0..k {
-            let mt = r / TILE;
-            let mr = r % TILE;
-            let kti = c / TILE;
-            let lane = c % TILE;
-            let bank_row = (mt * kt + kti) * TILE + mr;
-            dst[bank_row * TILE + lane] = src[r * k + c] as u8;
+pub fn pack_a(src: &[i8], rows: usize, k: usize) -> Vec<u8> {
+    assert_eq!(rows % TILE, 0);
+    assert_eq!(k % TILE, 0);
+    let mut packed = vec![0; rows * k];
+    for row in 0..rows {
+        for column in 0..k {
+            let line = (row / TILE * (k / TILE) + column / TILE) * TILE + row % TILE;
+            packed[line * TILE + column % TILE] = src[row * k + column] as u8;
         }
     }
-    dst
+    packed
 }
 
-pub fn pack_b(src: &[i8], k: usize, n: usize) -> Vec<u8> {
-    let rows = b_rows(n, k);
-    let mut dst = vec![0u8; rows * TILE];
-    for r in 0..k {
-        for c in 0..n {
-            let lane = c;
-            let kti = r / TILE;
-            let kr = r % TILE;
-            let bank_row = kti * TILE + kr;
-            dst[bank_row * TILE + lane] = src[r * n + c] as u8;
+pub fn pack_b_os(src: &[i8], k: usize) -> Vec<u8> {
+    assert_eq!(k % TILE, 0);
+    let mut packed = vec![0; k * TILE];
+    for row in 0..k {
+        for column in 0..TILE {
+            packed[row * TILE + column] = src[row * TILE + column] as u8;
         }
     }
-    dst
+    packed
 }
 
-pub fn matmul(a: &[i8], b: &[i8], m: usize, n: usize, k: usize) -> Vec<Vec<i32>> {
-    let mut c = vec![vec![0i32; n]; m];
-    for i in 0..m {
-        for j in 0..n {
-            let mut acc = 0i32;
-            for kk in 0..k {
-                acc += a[i * k + kk] as i32 * b[kk * n + j] as i32;
+pub fn pack_b_ws(src: &[i8], k: usize, columns: usize) -> Vec<u8> {
+    assert_eq!(k, TILE);
+    assert_eq!(columns % TILE, 0);
+    let mut packed = vec![0; k * columns];
+    for panel in 0..columns / TILE {
+        for row in 0..k {
+            for column in 0..TILE {
+                packed[(panel * TILE + row) * TILE + column] =
+                    src[row * columns + panel * TILE + column] as u8;
             }
-            c[i][j] = acc;
+        }
+    }
+    packed
+}
+
+pub fn matmul(a: &[i8], b: &[i8], rows: usize, columns: usize, k: usize) -> Vec<Vec<i32>> {
+    let mut c = vec![vec![0; columns]; rows];
+    for row in 0..rows {
+        for column in 0..columns {
+            for reduction in 0..k {
+                c[row][column] += a[row * k + reduction] as i32 * b[reduction * columns + column] as i32;
+            }
         }
     }
     c
 }
 
-pub fn emit_writes(c: &[Vec<i32>], m: usize, n: usize) -> Vec<WriteExp> {
-    if n == 0 || n > TILE {
-        panic!("emit_writes: cols must be 1..{TILE}, got {n}");
-    }
-    let mut out = Vec::new();
-    for row in 0..m {
-        let block = row;
-        let valid_elems = n;
-        for port in 0..WRITE_PORTS {
-            if port * ELEMS_PER_PORT >= valid_elems {
-                continue;
-            }
-            let mut data = [0u8; 16];
-            let mut mask = 0u16;
-            for sub in 0..ELEMS_PER_PORT {
-                let elem = port * ELEMS_PER_PORT + sub;
-                let off = sub * 4;
-                if elem < valid_elems {
-                    let v = c[row][elem];
-                    data[off..off + 4].copy_from_slice(&v.to_le_bytes());
-                    for b in 0..4 {
-                        mask |= 1u16 << (off + b);
+pub fn emit_writes(c: &[Vec<i32>], ws: bool, out_bw: usize) -> Vec<WriteExp> {
+    assert!(matches!(out_bw, 1 | 2 | 4));
+    let rows = c.len();
+    let columns = c[0].len();
+    assert_eq!(columns % TILE, 0);
+    let rounds = VALUES_PER_WORD / out_bw;
+    let mut writes = Vec::new();
+    for panel in 0..columns / TILE {
+        for row in 0..rows {
+            for round in 0..rounds {
+                let address = if ws {
+                    panel * TILE * rounds + row * rounds + round
+                } else {
+                    (row / TILE * TILE + row % TILE) * rounds + round
+                };
+                for group in 0..out_bw {
+                    let word = round * out_bw + group;
+                    let mut data = [0; BANK_ROW_BYTES];
+                    for lane in 0..VALUES_PER_WORD {
+                        let value = c[row][panel * TILE + word * VALUES_PER_WORD + lane];
+                        data[lane * 4..lane * 4 + 4].copy_from_slice(&value.to_le_bytes());
                     }
+                    writes.push(WriteExp { group: group as u32, addr: address as u32, data, mask: 0xffff });
                 }
             }
-            out.push(WriteExp {
-                group: port as u32,
-                addr: block as u32,
-                data,
-                mask,
-            });
         }
     }
-    out
+    writes
 }
 
-pub fn num_words(total_bytes: usize) -> usize {
-    assert_eq!(
-        total_bytes % BANK_ROW_BYTES,
-        0,
-        "total_bytes not a multiple of bank row"
-    );
-    total_bytes / BANK_ROW_BYTES
-}
-
-pub fn words_from_rows(rows: usize) -> usize {
-    num_words(rows * TILE)
+pub fn words(data: &[u8]) -> usize {
+    assert_eq!(data.len() % BANK_ROW_BYTES, 0);
+    data.len() / BANK_ROW_BYTES
 }
 
 pub fn encode_rs1(op1: u32, op2: u32, wr: u32) -> u64 {
-    if op1 >= 1024 || op2 >= 1024 || wr >= 1024 {
-        panic!("encode_rs1: bank out of 10-bit range");
-    }
+    assert!(op1 < 1024 && op2 < 1024 && wr < 1024);
     u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20)
 }
 
-pub fn encode_rs2(rows: u32, cols: u32, k: u32) -> u64 {
-    if rows == 0 || cols == 0 || k == 0 {
-        panic!("encode_rs2: rows/cols/k must be non-zero");
-    }
-    if rows > 0xfff || k > 0xfff {
-        panic!("encode_rs2: rows/k out of 12-bit range");
-    }
-    if cols > TILE as u32 {
-        panic!("encode_rs2: cols must be 1..{TILE}, got {cols}");
-    }
-    u64::from(rows) | (u64::from(cols) << 12) | (u64::from(k) << 24)
+pub fn encode_rs2(rows: u32, columns: u32, k: u32) -> u64 {
+    assert!(rows > 0 && columns > 0 && k > 0);
+    assert!(rows <= 0xfff && columns <= 0xfff && k <= 0xfff);
+    u64::from(rows) | (u64::from(columns) << 12) | (u64::from(k) << 24)
 }

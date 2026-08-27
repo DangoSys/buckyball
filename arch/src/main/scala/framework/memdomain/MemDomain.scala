@@ -33,6 +33,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val busy              = Output(Bool())
 
 // Inside Channel
+    val ballChannelActive = Input(Vec(b.ballDomain.ballNum, Bool()))
+    val ballChannelReady  = Output(Vec(b.ballDomain.ballNum, Bool()))
+
     val ballDomain = new Bundle {
       val bankRead  = Vec(totalBallRead, new BankRead(b))
       val bankWrite = Vec(totalBallWrite, new BankWrite(b))
@@ -89,6 +92,9 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     midend.io.bankRead(i).bankRead <> io.ballDomain.bankRead(i)
     midend.io.bankRead(i).is_shared := false.B
   }
+
+  midend.io.ballChannelActive := io.ballChannelActive
+  io.ballChannelReady         := midend.io.ballChannelReady
 
   for (i <- 0 until totalBallWrite) {
     midend.io.bankWrite(i).bankWrite <> io.ballDomain.bankWrite(i)

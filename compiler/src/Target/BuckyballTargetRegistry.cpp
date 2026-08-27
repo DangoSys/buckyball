@@ -45,3 +45,14 @@ void buckyball_target::requireBuckyballBall(llvm::StringRef ballName) {
   report_fatal_error(Twine("Buckyball target ") + target.name +
                      " does not enable Ball " + ballName);
 }
+
+const buckyball_target::BuckyballBallMapping &
+buckyball_target::getBuckyballBallMapping(llvm::StringRef ballName) {
+  const BuckyballTargetConfig &target = getBuckyballTarget();
+  for (const BuckyballBallMapping &mapping : target.ballMappings) {
+    if (mapping.name == ballName)
+      return mapping;
+  }
+  report_fatal_error(Twine("Buckyball target ") + target.name +
+                     " does not map Ball " + ballName);
+}

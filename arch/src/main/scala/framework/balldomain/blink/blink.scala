@@ -15,7 +15,8 @@ class BlinkIO(
   mmioWriteBW: Int = 0)
     extends Bundle
     with HasBallStatus {
-  val status = new BallStatus()
+  val status       = new BallStatus()
+  val channelReady = Input(Bool())
 
   val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
   val cmdResp   = Decoupled(new BallRsComplete(b))

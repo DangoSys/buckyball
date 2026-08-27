@@ -30,6 +30,7 @@ class SMatMulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
 
   smatmulArrayUnit.io.cmdReq <> io.cmdReq
   smatmulArrayUnit.io.cmdResp <> io.cmdResp
+  smatmulArrayUnit.io.channelReady := io.channelReady
 
   for (i <- 0 until inBW) {
     smatmulArrayUnit.io.bankRead(i) <> io.bankRead(i)

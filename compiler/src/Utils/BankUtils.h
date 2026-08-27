@@ -34,6 +34,8 @@
 namespace buddy {
 namespace buckyball {
 
+class BankSMatMulOp;
+
 /// Create i64 constant.
 static inline mlir::Value createI64Const(mlir::OpBuilder &b, mlir::Location loc,
                                          int64_t val) {
@@ -62,11 +64,11 @@ static inline uint64_t packBits(uint64_t val, int startBit, int endBit) {
 }
 
 static inline uint64_t matrixRs2(uint64_t rows, uint64_t cols, uint64_t k) {
-  if (rows == 0 || cols == 0 || k == 0 || rows > 0xfff || k > 0xfff ||
-      cols > 16) {
+  if (rows == 0 || cols == 0 || cols > 0xfff || k == 0 || rows > 0xfff ||
+      k > 0xfff || rows % 16 || cols % 16 || k % 16) {
     std::fprintf(
         stderr,
-        "matrix rs2: rows/k in 1..4095, cols in 1..16 (got %llu %llu %llu)\n",
+        "matrix rs2: rows/cols/k must fit in 12 bits (got %llu %llu %llu)\n",
         (unsigned long long)rows, (unsigned long long)cols,
         (unsigned long long)k);
     std::abort();
@@ -74,24 +76,13 @@ static inline uint64_t matrixRs2(uint64_t rows, uint64_t cols, uint64_t k) {
   return packBits(rows, 0, 11) | packBits(cols, 12, 23) | packBits(k, 24, 35);
 }
 
-static inline bool smatmulIsWs(int64_t rows) {
-  if (rows <= 0) {
-    std::fprintf(stderr, "smatmul mode: rows must be positive, got %lld\n",
-                 (long long)rows);
-    std::abort();
-  }
-  return ((rows + 15) / 16) >= 2;
-}
-
 static inline mlir::Value createBankSMatMul(mlir::OpBuilder &b,
                                             mlir::Location loc, mlir::Type wrTy,
                                             mlir::Value a, mlir::Value opB,
-                                            mlir::Value wr, mlir::Value cfg,
-                                            int64_t rows) {
+                                            mlir::Value wr, mlir::Value cfg) {
   return b.create<BankSMatMulOp>(loc, wrTy, a, opB, wr, cfg,
                                  b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
-                                 b.getI64IntegerAttr(0),
-                                 b.getBoolAttr(smatmulIsWs(rows)));
+                                 b.getI64IntegerAttr(0));
 }
 
 /// Allocate a bank with given row/col dimensions.

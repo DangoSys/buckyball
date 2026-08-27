@@ -564,6 +564,57 @@ public:
     Value ocPadV = b.create<arith::ConstantIndexOp>(loc, ocPad);
     Value ocEnd = b.create<arith::ConstantIndexOp>(loc, OC);
     Value oc0V = zero;
+    Value fatCinV = b.create<arith::ConstantIndexOp>(loc, fatCinMax);
+
+    auto emitFatBlock = [&](Value nV, Value ih0V, Value iw0V, Value c0V,
+                            int64_t nCin) {
+      b.create<linalg::FillOp>(loc, i0, fPack);
+      for (int64_t lc = 0; lc < nCin; ++lc) {
+        Value cV = b.create<arith::AddIOp>(
+            loc, c0V, b.create<arith::ConstantIndexOp>(loc, lc));
+        packInPlane(b, loc, plane, op.getInput(), nV, cV, ih0V, iw0V, inSize,
+                    inRows, H, W, padLow, zero, one, sixteen, f0);
+        copyPlaneRows(b, loc, plane, inPack, lc, inRows, zero, one, sixteen);
+      }
+      packFatFilter(b, loc, op.getFilter(), fPack, c0V, nCin, KH, KW, bRows,
+                    ocEnd, zero, one);
+      Value inSub = b.create<memref::SubViewOp>(
+          loc, inPack,
+          ArrayRef<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(0)},
+          ArrayRef<OpFoldResult>{b.getIndexAttr(nCin * inRows),
+                                 b.getIndexAttr(kLane)},
+          ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+      Value fSub = b.create<memref::SubViewOp>(
+          loc, fPack,
+          ArrayRef<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(0)},
+          ArrayRef<OpFoldResult>{b.getIndexAttr(nCin * bRows),
+                                 b.getIndexAttr(ocPad)},
+          ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+      auto matmul = b.create<Im2colFatMatmulOp>(
+          loc, inSub, fSub, tmpF, b.getI64IntegerAttr(inSize),
+          b.getI64IntegerAttr(KH), b.getI64IntegerAttr(ocPad),
+          b.getI64IntegerAttr(nCin), b.getI64IntegerAttr(stride),
+          b.getI64IntegerAttr(0));
+      matmul->setAttr("dwAddr", dwAddrAttr);
+      matmul->setAttr("dwBytes", dwBytesAttr);
+      matmul->setAttr("perChannel", perChannelAttr);
+      Value zI = b.create<arith::ConstantIndexOp>(loc, 0);
+      Value nRows = b.create<arith::ConstantIndexOp>(loc, wins);
+      auto rAdd = b.create<scf::ForOp>(loc, zI, nRows, one);
+      b.setInsertionPointToStart(rAdd.getBody());
+      auto cAdd = b.create<scf::ForOp>(loc, zI, ocPadV, one);
+      b.setInsertionPointToStart(cAdd.getBody());
+      Value aa = b.create<memref::LoadOp>(
+          loc, accF,
+          ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
+      Value tt = b.create<memref::LoadOp>(
+          loc, tmpF,
+          ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
+      b.create<memref::StoreOp>(
+          loc, b.create<arith::AddFOp>(loc, aa, tt), accF,
+          ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
+      b.setInsertionPointAfter(rAdd);
+    };
 
     for (int64_t n = 0; n < N; ++n) {
       Value nV = b.create<arith::ConstantIndexOp>(loc, n);
@@ -577,55 +628,18 @@ public:
       Value iw0V = b.create<arith::MulIOp>(loc, ow0, strideV);
 
       b.create<linalg::FillOp>(loc, f0, accF);
-      for (int64_t c0 = 0; c0 < C; c0 += fatCinMax) {
-        int64_t nCin = C - c0 < fatCinMax ? C - c0 : fatCinMax;
-        Value c0V = b.create<arith::ConstantIndexOp>(loc, c0);
-        b.create<linalg::FillOp>(loc, i0, fPack);
-        for (int64_t lc = 0; lc < nCin; ++lc) {
-          Value cV = b.create<arith::ConstantIndexOp>(loc, c0 + lc);
-          packInPlane(b, loc, plane, op.getInput(), nV, cV, ih0V, iw0V, inSize,
-                      inRows, H, W, padLow, zero, one, sixteen, f0);
-          copyPlaneRows(b, loc, plane, inPack, lc, inRows, zero, one, sixteen);
-        }
-        packFatFilter(b, loc, op.getFilter(), fPack, c0V, nCin, KH, KW, bRows,
-                      ocEnd, zero, one);
-        Value inSub = b.create<memref::SubViewOp>(
-            loc, inPack,
-            ArrayRef<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(0)},
-            ArrayRef<OpFoldResult>{b.getIndexAttr(nCin * inRows),
-                                   b.getIndexAttr(kLane)},
-            ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
-        Value fSub = b.create<memref::SubViewOp>(
-            loc, fPack,
-            ArrayRef<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(0)},
-            ArrayRef<OpFoldResult>{b.getIndexAttr(nCin * bRows),
-                                   b.getIndexAttr(ocPad)},
-            ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
-        auto matmul = b.create<Im2colFatMatmulOp>(
-            loc, inSub, fSub, tmpF, b.getI64IntegerAttr(inSize),
-            b.getI64IntegerAttr(KH), b.getI64IntegerAttr(ocPad),
-            b.getI64IntegerAttr(nCin), b.getI64IntegerAttr(stride),
-            b.getI64IntegerAttr(0));
-        matmul->setAttr("dwAddr", dwAddrAttr);
-        matmul->setAttr("dwBytes", dwBytesAttr);
-        matmul->setAttr("perChannel", perChannelAttr);
-        Value zI = b.create<arith::ConstantIndexOp>(loc, 0);
-        Value nRows = b.create<arith::ConstantIndexOp>(loc, wins);
-        auto rAdd = b.create<scf::ForOp>(loc, zI, nRows, one);
-        b.setInsertionPointToStart(rAdd.getBody());
-        auto cAdd = b.create<scf::ForOp>(loc, zI, ocPadV, one);
-        b.setInsertionPointToStart(cAdd.getBody());
-        Value aa = b.create<memref::LoadOp>(
-            loc, accF,
-            ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
-        Value tt = b.create<memref::LoadOp>(
-            loc, tmpF,
-            ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
-        b.create<memref::StoreOp>(
-            loc, b.create<arith::AddFOp>(loc, aa, tt), accF,
-            ValueRange{rAdd.getInductionVar(), cAdd.getInductionVar()});
-        b.setInsertionPointAfter(rAdd);
+      int64_t fullCin = (C / fatCinMax) * fatCinMax;
+      if (fullCin) {
+        Value fullCinV = b.create<arith::ConstantIndexOp>(loc, fullCin);
+        auto c0L = b.create<scf::ForOp>(loc, zero, fullCinV, fatCinV);
+        b.setInsertionPointToStart(c0L.getBody());
+        emitFatBlock(nV, ih0V, iw0V, c0L.getInductionVar(), fatCinMax);
+        b.setInsertionPointAfter(c0L);
       }
+      if (fullCin != C)
+        emitFatBlock(nV, ih0V, iw0V,
+                     b.create<arith::ConstantIndexOp>(loc, fullCin),
+                     C - fullCin);
 
       scatterOut(b, loc, accF, op.getOutput(), nV, oh0, ow0, oc0V, ocEnd, tileV,
                  ohEnd, owEnd, zero, one);

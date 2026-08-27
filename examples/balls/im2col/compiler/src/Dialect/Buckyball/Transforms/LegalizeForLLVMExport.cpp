@@ -65,6 +65,59 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
 private:
   bool stable = false;
 };
+struct BankIm2colLowering : public ConvertOpToLLVMPattern<BankIm2colOp> {
+  BankIm2colLowering(LLVMTypeConverter &converter, bool stable)
+      : ConvertOpToLLVMPattern<BankIm2colOp>(converter), stable(stable) {}
+
+  LogicalResult
+  matchAndRewrite(BankIm2colOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("Im2colBall");
+    Location loc = op.getLoc();
+    IntegerType i64 = rewriter.getI64Type();
+    Value rs1 = rewriter.create<arith::OrIOp>(
+        loc, i64, adaptor.getInBank(),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getOutBank(),
+                                       cstI64(rewriter, loc, 20)));
+    rs1 = rewriter.create<arith::OrIOp>(
+        loc, rs1,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getIter(),
+                                       cstI64(rewriter, loc, 30)));
+
+    Value rs2 = adaptor.getKsize();
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getStride(),
+                                       cstI64(rewriter, loc, 8)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getPadding(),
+                                       cstI64(rewriter, loc, 16)));
+    Value startCol = cstI64(rewriter, loc, op.getStartCol());
+    Value startRow = cstI64(rewriter, loc, op.getStartRow());
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, startCol,
+                                       cstI64(rewriter, loc, 24)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, startRow,
+                                       cstI64(rewriter, loc, 32)));
+
+    if (stable) {
+      rewriter.replaceOpWithNewOp<Im2colIntrOp>(op, rs1, rs2);
+      return success();
+    }
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, rs2,
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("IM2COL")));
+    return success();
+  }
+
+private:
+  bool stable = false;
+};
 } // namespace
 
 namespace mlir::buddy::buckyball {
@@ -72,6 +125,7 @@ void populateIm2colBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
     int64_t, bool) {
   patterns.add<Im2colLowering>(converter, stable);
+  patterns.add<BankIm2colLowering>(converter, stable);
 }
 
 void configureIm2colBallLegalizeForExportTarget(LLVMConversionTarget &target,

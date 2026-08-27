@@ -19,7 +19,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     op2_from_spad == 1'b1;
     op1_col == 5'd1;
     op2_col == 5'd1;
-    wr_col == 5'd4;
+    wr_col == SMATMUL_OUT_BW;
     meta_bank == 5'd0;
     iter == 34'd0;
     special == 64'd0;
@@ -38,7 +38,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     longint unsigned w_hi;
     int i;
 
-    rc = smatmul_case_load(seed, index, bid);
+    rc = smatmul_case_load(seed, index, bid, SMATMUL_OUT_BW);
     if (rc != 0) begin
       `uvm_fatal("CASE", $sformatf("smatmul_case_load returned %0d for index %0d", rc, index))
     end
@@ -57,7 +57,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     wr_bank       = cmd.wr_bank[4:0];
     op1_col       = 5'd1;
     op2_col       = 5'd1;
-    wr_col        = 5'd4;
+    wr_col        = SMATMUL_OUT_BW;
     rob_id        = cmd.rob_id[3:0];
     rs1           = {cmd.rs1_hi, cmd.rs1_lo};
     rs2           = {cmd.rs2_hi, cmd.rs2_lo};

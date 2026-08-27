@@ -1,54 +1,33 @@
 package examples.balls.relu
 
 import chisel3._
-import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
+import framework.balldomain.blink.{BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.blink.mmio.MmioRead
-import examples.balls.relu.PipelinedRelu
 import framework.top.GlobalConfig
 
-/**
- * ReluBall - A ReLU computation Ball that complies with the blink protocol.
- * Behavior: Read data from Scratchpad, perform element-wise ReLU (set negative values to 0),
- * then write back to Scratchpad.
- */
 @instantiable
-class ReluBall(val b: GlobalConfig) extends Module with HasBlink {
+class ReluBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStatus {
 
-  val ballCommonConfig = b.ballDomain.ballIdMappings
+  private val mapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "ReluBall")
-    .getOrElse(
-      throw new IllegalArgumentException("ReluBall not found in config")
-    )
-
-  val inBW  = ballCommonConfig.inBW
-  val outBW = ballCommonConfig.outBW
+    .getOrElse(throw new IllegalArgumentException("ReluBall not found in config"))
 
   @public
-  val io = IO(new BlinkIO(b, inBW, outBW))
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
 
   def blink: BlinkIO = io
+  def status = io.status
   dontTouch(io)
 
-  val reluUnit: Instance[PipelinedRelu] = Instantiate(new PipelinedRelu(b))
-
-  reluUnit.io.cmdReq <> io.cmdReq
-  reluUnit.io.cmdResp <> io.cmdResp
-
-  for (i <- 0 until inBW) {
-    reluUnit.io.bankRead(i) <> io.bankRead(i)
-  }
-
-  for (i <- 0 until outBW) {
-    reluUnit.io.bankWrite(i) <> io.bankWrite(i)
-  }
-
-  io.status <> reluUnit.io.status
-
-  io.subRobReq.valid := false.B
-  io.subRobReq.bits  := SubRobRow.tieOff(b)
-
-  // MMIO: this Ball does not consume MMIO metadata
+  val unit: Instance[Relu] = Instantiate(new Relu(b))
+  unit.io.cmdReq <> io.cmdReq
+  unit.io.cmdResp <> io.cmdResp
+  unit.io.channelReady := io.channelReady
+  unit.io.bankRead(0) <> io.bankRead(0)
+  unit.io.bankWrite(0) <> io.bankWrite(0)
+  io.status <> unit.io.status
+  io.subRobReq.valid   := false.B
+  io.subRobReq.bits    := SubRobRow.tieOff(b)
   MmioRead.tieOff(io.mmioRead)
 }

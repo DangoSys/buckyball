@@ -81,10 +81,11 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val robIssued   = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
   val robComplete = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
 
-  val headPtr     = RegInit(0.U(idWidth.W))
-  val tailPtr     = RegInit(0.U(idWidth.W))
-  val issuedCount = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols    = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  val headPtr          = RegInit(0.U(idWidth.W))
+  val tailPtr          = RegInit(0.U(idWidth.W))
+  val issuedCount      = RegInit(0.U(log2Up(robDepth + 1).W))
+  val bankCols         = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  val physicalBankBusy = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
 
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
   val isFull  = headPtr === tailPtr && robValid(headPtr)
@@ -124,6 +125,21 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val youngerWriteOlderWrite =
       younger.wr_bank_valid && older.wr_bank_valid && younger.wr_bank_id === older.wr_bank_id
     youngerReadOlderWrite || youngerWriteOlderRead || youngerWriteOlderWrite
+  }
+
+  def physicalBankBusyFor(access: BankAccessInfo): Bool = {
+    val busy = WireDefault(false.B)
+    for (bank <- 0 until b.memDomain.bankNum) {
+      val bankId = bank.U(b.frontend.bank_id_len.W)
+      when(
+        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
+          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
+          (access.wr_bank_valid && access.wr_bank_id === bankId)
+      ) {
+        busy := physicalBankBusy(bank)
+      }
+    }
+    busy
   }
 
   // ---------------------------------------------------------------------------
@@ -242,7 +258,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     }
     scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
     scoreboard.queryVec(i) := robEntries(ptr).renamedBankAccess
-    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) && !cfgHazard
+    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) && !cfgHazard &&
+      !physicalBankBusyFor(robEntries(ptr).cmd.bankAccess)
   }
 
   val hasReady       = scanReady.asUInt.orR
@@ -282,6 +299,18 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
+    val access = robEntries(actualIssuePtr).cmd.bankAccess
+    for (bank <- 0 until b.memDomain.bankNum) {
+      val bankId = bank.U(b.frontend.bank_id_len.W)
+      when(
+        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
+          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
+          (access.wr_bank_valid && access.wr_bank_id === bankId)
+      ) {
+        physicalBankBusy(bank) := true.B
+      }
+    }
+
     itraceIssue.io.is_issue    := 1.U
     itraceIssue.io.rob_id      := issueEntry.rob_id
     itraceIssue.io.domain_id   := issueEntry.cmd.domain_id
@@ -293,6 +322,20 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itraceIssue.io.rs2_data    := issueEntry.cmd.cmd.rs2Data
     itraceIssue.io.bank_enable := issueEntry.cmd.cmd.funct(6, 4)
     itraceIssue.io.enable      := true.B
+  }
+
+  when(io.complete.fire) {
+    val access = robEntries(io.complete.bits).cmd.bankAccess
+    for (bank <- 0 until b.memDomain.bankNum) {
+      val bankId = bank.U(b.frontend.bank_id_len.W)
+      when(
+        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
+          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
+          (access.wr_bank_valid && access.wr_bank_id === bankId)
+      ) {
+        physicalBankBusy(bank) := false.B
+      }
+    }
   }
 
   issuedCount := issuedCount + issueFired.asUInt - completeIssuedEntry.asUInt

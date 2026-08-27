@@ -1,6 +1,6 @@
-add_custom_target(base-MLIRTest-build)
+add_custom_target(base-mlirtest-build)
 
-set(BUCKYBALL_MLIR_GROUP_TARGET base-MLIRTest-build)
+set(BUCKYBALL_MLIR_GROUP_TARGET base-mlirtest-build)
 set(BUCKYBALL_MLIR_TEST_PREFIX base)
 
 foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)

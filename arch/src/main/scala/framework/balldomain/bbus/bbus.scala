@@ -31,21 +31,25 @@ class BBus(val b: GlobalConfig) extends Module {
 
   // Rs - bbus - balls
   @public
-  val cmdReq    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq            = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp           = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  @public
+  val ballChannelActive = IO(Output(Vec(numBalls, Bool())))
+  @public
+  val ballChannelReady  = IO(Input(Vec(numBalls, Bool())))
   // balls - bbus
   @public
-  val bankRead  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead          = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite         = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   @public
-  val mmioRead  = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
+  val mmioRead          = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
   @public
-  val mmioWrite = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
+  val mmioWrite         = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
   // balls - bbus - SubROB
   @public
-  val subRobReq = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
+  val subRobReq         = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
 
   require(b.ballDomain.ballIdMappings.length == numBalls, "ballNum must match ballIdMappings length")
 
@@ -96,6 +100,9 @@ class BBus(val b: GlobalConfig) extends Module {
   val targetMatches = VecInit(b.ballDomain.ballIdMappings.map(m => cmdRouter.io.cmdReq_o.bits.cmd.bid === m.ballId.U))
 
   for (i <- 0 until numBalls) {
+    ballChannelActive(i)        := balls(i).blink.status.running
+    balls(i).blink.channelReady := ballChannelReady(i)
+
     val targetMatch = targetMatches(i)
     balls(i).blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && !isBallInit && targetMatch
     balls(i).blink.cmdReq.bits  := cmdRouter.io.cmdReq_o.bits

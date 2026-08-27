@@ -20,7 +20,8 @@ typedef struct {
 import "DPI-C" function int smatmul_case_load(
   input int unsigned seed,
   input int unsigned index,
-  input int unsigned bid
+  input int unsigned bid,
+  input int unsigned out_bw
 );
 import "DPI-C" function void smatmul_case_cmd(output matrix_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned smatmul_case_a_word_lo(input int unsigned word_index);
@@ -40,8 +41,12 @@ import "DPI-C" function int unsigned smatmul_case_write_mask(input int unsigned 
 `ifndef SMATMUL_WS_FUNCT7
 `error "SMATMUL_WS_FUNCT7 must be provided by the selected Core ballISA"
 `endif
+`ifndef SMATMUL_OUT_BW
+`error "SMATMUL_OUT_BW must be provided by the selected Core ball mapping"
+`endif
 localparam int SMATMUL_OS_CORE_FUNCT7 = `SMATMUL_OS_FUNCT7;
 localparam int SMATMUL_WS_CORE_FUNCT7 = `SMATMUL_WS_FUNCT7;
+localparam int SMATMUL_OUT_BW = `SMATMUL_OUT_BW;
 localparam int MATRIX_MAX_WORDS = 32;
 localparam int MATRIX_TIMEOUT_CYCLES = 100000;
 localparam int MATRIX_SEED = 32'hCAFE_BABE;

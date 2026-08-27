@@ -24,9 +24,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Dialect)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/Dialect)
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/Dialect/Buckyball)
 
-set(TOY_BALL_COMPILER_DIALECT_DIRS
-  ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Dialect/Buckyball
-)
+set(TOY_BALL_COMPILER_DIALECT_DIRS)
 
 set(BB_CORE_BACKEND_INTRINSICS_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/Backend/include

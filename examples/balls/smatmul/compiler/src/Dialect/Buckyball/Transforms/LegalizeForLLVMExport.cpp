@@ -5,6 +5,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
 
@@ -63,9 +64,9 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
         cTy.getShape()[1] != (int64_t)n)
       return rewriter.notifyMatchFailure(op, "matmul shapes mismatch");
     // Bank-unit 8-bit path: N/K are one bank lane; M fills bank depth.
-    if (m == 0 || n == 0 || k == 0 || m > 1024 || n > 16 || k > 16)
+    if (m == 0 || n != 16 || k != 16 || m > 1024 || m % 16 != 0)
       return rewriter.notifyMatchFailure(
-          op, "smatmul_matmul bank unit requires M in 1..1024, N/K in 1..16");
+          op, "SMatMul requires M/K exactly 16 and N exactly 16");
     if (!aTy.getElementType().isInteger(8) ||
         !bTy.getElementType().isInteger(8) ||
         !cTy.getElementType().isInteger(32))
@@ -77,15 +78,18 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     const uint64_t cBank = 2;
     uint64_t depthA = m; // K <= 16 => one bank row per M row
     uint64_t depthB = k;
-    uint64_t depthC = m;
+    uint64_t depthC = 2 * m;
 
     emitMset(rewriter, loc, aBank, 1, 1, 1);
     emitMset(rewriter, loc, bBank, 1, 1, 1);
-    emitMset(rewriter, loc, cBank, 1, 4, 1);
+    emitMset(rewriter, loc, cBank, 1, 2, 1);
 
     Value aPtr = extractPtr(rewriter, loc, aMem);
     Value bPtr = extractPtr(rewriter, loc, bMem);
-    Value cPtr = extractPtr(rewriter, loc, cMem);
+    auto packedType = MemRefType::get({static_cast<int64_t>(depthC), 8},
+                                      cTy.getElementType());
+    Value packed = rewriter.create<memref::AllocOp>(loc, packedType);
+    Value packedPtr = extractPtr(rewriter, loc, packed);
 
     Value rs1A = packRs1BankIter(rewriter, loc, cstI64(rewriter, loc, aBank),
                                  cstI64(rewriter, loc, depthA));
@@ -118,19 +122,19 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     rewriter.create<CustomIntrOp>(
         loc, cstI64(rewriter, loc, matrixRs1(aBank, bBank, cBank)),
         cstI64(rewriter, loc, matrixCfg(m, n, k)),
-        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7(
-            smatmulIsWs((int64_t)m) ? "SMATMUL_WS" : "SMATMUL_OS")));
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("SMATMUL_OS")));
 
     Value rs1C = packRs1BankIter(rewriter, loc, cstI64(rewriter, loc, cBank),
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
-        packRs2MemStride(rewriter, loc, cPtr, cstI64(rewriter, loc, 1));
+        packRs2MemStride(rewriter, loc, packedPtr, cstI64(rewriter, loc, 1));
     emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvoutOp>(
           loc, rs1C, rs2C,
-          LLVM::IntToPtrOp::create(rewriter, loc, ptrType, cPtr));
+          LLVM::IntToPtrOp::create(rewriter, loc, ptrType, packedPtr));
     } else {
       rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
     }
@@ -138,6 +142,32 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
     emitDmaCacheFence(rewriter, loc);
+
+    Value indexZero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value indexOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+    Value indexTwo = rewriter.create<arith::ConstantIndexOp>(loc, 2);
+    Value indexEight = rewriter.create<arith::ConstantIndexOp>(loc, 8);
+    Value indexM = rewriter.create<arith::ConstantIndexOp>(loc, m);
+    Value indexN = rewriter.create<arith::ConstantIndexOp>(loc, n);
+    auto rowLoop =
+        rewriter.create<scf::ForOp>(loc, indexZero, indexM, indexOne);
+    rewriter.setInsertionPointToStart(rowLoop.getBody());
+    Value row = rowLoop.getInductionVar();
+    auto columnLoop =
+        rewriter.create<scf::ForOp>(loc, indexZero, indexN, indexOne);
+    rewriter.setInsertionPointToStart(columnLoop.getBody());
+    Value column = columnLoop.getInductionVar();
+    Value packedRow = rewriter.create<arith::AddIOp>(
+        loc, rewriter.create<arith::MulIOp>(loc, row, indexTwo),
+        rewriter.create<arith::DivUIOp>(loc, column, indexEight));
+    Value packedColumn =
+        rewriter.create<arith::RemUIOp>(loc, column, indexEight);
+    Value value = rewriter.create<memref::LoadOp>(
+        loc, packed, ValueRange{packedRow, packedColumn});
+    rewriter.create<memref::StoreOp>(loc, value, cMem, ValueRange{row, column});
+    rewriter.setInsertionPointAfter(rowLoop);
+    rewriter.create<memref::DeallocOp>(loc, packed);
+
     emitMset(rewriter, loc, aBank, 0, 0, 0);
     emitMset(rewriter, loc, bBank, 0, 0, 0);
     emitMset(rewriter, loc, cBank, 0, 0, 0);

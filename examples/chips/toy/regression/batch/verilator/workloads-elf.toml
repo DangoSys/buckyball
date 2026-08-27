@@ -2,7 +2,6 @@
 search_path = "workloads/src"
 tests = [
   "toy_ctest_mvin_mvout_test-baremetal",
-  "toy_ctest_relu_test-baremetal",
   "toy_ctest_bdb_counter_test-baremetal",
   "toy_ctest_gemmini_os_cisc_basic_test-baremetal",
   "toy_ctest_gemmini_os_cisc_atranspose_test-baremetal",

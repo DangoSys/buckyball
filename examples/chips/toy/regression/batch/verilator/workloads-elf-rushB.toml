@@ -2,7 +2,6 @@
 search_path = "workloads/src"
 tests = [
   "toy_ctest_mvin_mvout_test-rushB-verilator-run",
-  "toy_ctest_relu_test-rushB-verilator-run",
   "toy_ctest_bdb_counter_test-rushB-verilator-run",
   "toy_ctest_mvin_mvout_stride_test-rushB-verilator-run",
 ]

@@ -14,7 +14,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Toy mounts leftover balls: Relu, Gemmini, Trace, Mxfp2Int.
+// Toy mounts leftover balls: Gemmini, Trace, Mxfp2Int.
 // Gemmini/Trace/Mxfp2Int lower outside this dialect (Gemmini dialect / custom).
 //
 //===----------------------------------------------------------------------===//
@@ -23,6 +23,5 @@
 #define TOY_BUCKYBALL_OPS
 
 include "Buckyball.td"
-include "ReluBall.td"
 
 #endif // TOY_BUCKYBALL_OPS

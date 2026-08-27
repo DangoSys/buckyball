@@ -20,15 +20,15 @@ extern "C"
                       int64_t size0, int64_t size1, int64_t stride0,
                       int64_t stride1) {
   (void)allocated;
-  if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
+  if (size0 != 1024 || size1 != 8 || stride0 != 8 || stride1 != 1) {
     printf("FAILED: bank_smatmul shape %dx%d stride %dx%d\n", (int)size0,
            (int)size1, (int)stride0, (int)stride1);
     fail();
   }
 
   int32_t *out = aligned + offset;
-  for (int i = 0; i < 16; ++i) {
-    for (int j = 0; j < 16; ++j) {
+  for (int i = 0; i < 1024; ++i) {
+    for (int j = 0; j < 8; ++j) {
       int32_t got = out[i * stride0 + j * stride1];
       if (got != 16) {
         printf("FAILED: bank_smatmul out[%d][%d] exp=16 got=%d\n", i, j,
@@ -37,5 +37,5 @@ extern "C"
       }
     }
   }
-  printf("PASSED: matrix bank_smatmul 16x16 ones\n");
+  printf("PASSED: bank_smatmul WS 16x512\n");
 }

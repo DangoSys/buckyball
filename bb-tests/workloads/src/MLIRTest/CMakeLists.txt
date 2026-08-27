@@ -85,11 +85,11 @@ function(add_buckyball_mlir_test NAME)
     set(TEST_ID ${PREFIX}_${NAME})
   endif()
   set(BAREMETAL_BIN
-    ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}-baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}-linux)
-  set(BAREMETAL_TARGET mlirtest_${TEST_ID}_baremetal)
-  set(LINUX_TARGET mlirtest_${TEST_ID}_linux)
-  set(GROUP_TARGET mlirtest_${TEST_ID})
+    ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}-baremetal)
+  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}-linux)
+  set(BAREMETAL_TARGET ${BAREMETAL_BIN}-build)
+  set(LINUX_TARGET ${LINUX_BIN}-build)
+  set(GROUP_TARGET ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID})
 
   set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
   set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
@@ -212,7 +212,7 @@ function(add_buckyball_mlir_test NAME)
       DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
       COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
       VERBATIM)
-    add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}_mlirtest_${TEST_ID}
+    add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}
       CXX
       OUTPUT_SUBDIR src/MLIRTest/rushB
       SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC} ${RUSHB_OBJ}
@@ -256,6 +256,6 @@ foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
 endforeach()
 
 add_custom_target(MLIRTest-all ALL DEPENDS
-  base-MLIRTest-build
+  base-mlirtest-build
   balls-mlir-tests-build
 )

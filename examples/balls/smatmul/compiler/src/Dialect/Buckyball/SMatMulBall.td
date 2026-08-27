@@ -6,12 +6,11 @@
 include "Buckyball.td"
 
 def SMatMulMatmulOp : Buckyball_Op<"smatmul_matmul"> {
-  let summary = "Logical matmul lowered to SMatMulBall (OS / WS)";
+  let summary = "Logical matmul lowered to SMatMulBall";
   let description = [{
     Performs C[M,N] = A[M,K] x B[K,N] with int8 inputs / int32 output.
     Memrefs must already match the SMatMulBall bank tile layout. Logical N
     may exceed 16; bank lowering emits one 16-lane C panel at a time.
-    Compiler emits bb_smatmul_ws when ceil(M/16) >= 2, else bb_smatmul_os.
   }];
   let arguments = (ins MemRefRankOf<[AnyType], [2]>:$aMemArray,
                        MemRefRankOf<[AnyType], [2]>:$bMemArray,
@@ -24,12 +23,10 @@ def SMatMulMatmulOp : Buckyball_Op<"smatmul_matmul"> {
 }
 
 def SMatMulOp : Buckyball_Op<"smatmul"> {
-  let summary = "SMatMulBall compute (OS / WS)";
+  let summary = "SMatMulBall compute";
   let description = [{
-    ISA: bb_smatmul_os / bb_smatmul_ws(op1, op2, wr, rows, cols, k).
-    `config` is rs2 (rows/cols/k). cols must be 1..16.
-    `ws` selects the dataflow. The Core ballISA map assigns the instruction
-    encoding (SMATMUL_OS / SMATMUL_WS).
+    ISA: SMATMUL_OS or SMATMUL_WS, selected by the `ws` attribute.
+    `config` is rs2 (rows/cols/k).
   }];
   let arguments = (ins I64:$op1BankId, I64:$op2BankId,
                        I64:$resultBankId, I64:$config,

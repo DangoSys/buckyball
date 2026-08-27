@@ -7,7 +7,7 @@ class smatmul_scoreboard extends uvm_scoreboard;
   uvm_analysis_imp_write #(bb_blink_write_item, smatmul_scoreboard) write_imp;
   uvm_analysis_imp_resp #(bb_blink_resp_item, smatmul_scoreboard) resp_imp;
 
-  bb_blink_mem_model #(2, 4) mem_model;
+  bb_blink_mem_model #(2, 2) mem_model;
 
   smatmul_cmd_item stim_q[$];
   int unsigned exp_group[$];

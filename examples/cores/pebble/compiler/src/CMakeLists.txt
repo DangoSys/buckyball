@@ -28,6 +28,7 @@ set(PEBBLE_BALL_COMPILER_DIALECT_DIRS
   ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/matadd/compiler/src/Dialect/Buckyball
 )
 
 set(BB_CORE_BACKEND_INTRINSICS_DIR

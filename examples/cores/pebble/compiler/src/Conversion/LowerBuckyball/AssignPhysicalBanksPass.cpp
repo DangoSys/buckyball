@@ -22,6 +22,10 @@ void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
 void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                               PhysicalBankState &state);
+void populateMatAddAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                              PhysicalBankState &state);
+void populateReluBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
@@ -63,6 +67,8 @@ public:
     mlir::buddy::populateIm2colAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateFp2IntAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateMatAddAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateReluBallAssignPhysicalBankPatterns(patterns, state);
 
     walkAndApplyPatterns(func, std::move(patterns));
     if (failed(mlir::buddy::verifyNoBankSSAOps(func))) {

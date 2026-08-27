@@ -10,14 +10,6 @@
 using namespace mlir;
 using namespace buddy::buckyball::legalize;
 
-namespace mlir::buddy::buckyball {
-void populateReluLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                               RewritePatternSet &patterns,
-                                               bool stable);
-void configureReluLegalizeForExportTarget(LLVMConversionTarget &target,
-                                          bool stable);
-} // namespace mlir::buddy::buckyball
-
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
@@ -28,12 +20,11 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
 
   populateBaseLegalizeForLLVMExportPatterns(
       converter, patterns, includeFuncOperandForwarding, rushB);
-  mlir::buddy::buckyball::populateReluLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
+  (void)stable;
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target, bool stable) {
   configureBaseLegalizeForExportTarget(target);
-  mlir::buddy::buckyball::configureReluLegalizeForExportTarget(target, stable);
+  (void)stable;
 }

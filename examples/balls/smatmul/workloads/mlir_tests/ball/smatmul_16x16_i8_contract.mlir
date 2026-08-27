@@ -7,7 +7,7 @@ func.func @main() -> i8 {
   %cfg = arith.constant 268501008 : i64
   %a = buckyball.bank_alloc
   %b = buckyball.bank_alloc
-  %c = buckyball.bank_alloc {col = 4 : i64}
+  %c = buckyball.bank_alloc {col = 2 : i64}
   buckyball.smatmul %a, %b, %c, %cfg : i64
   buckyball.bank_release %a : i64
   buckyball.bank_release %b : i64

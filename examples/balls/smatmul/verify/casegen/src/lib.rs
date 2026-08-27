@@ -10,8 +10,8 @@ thread_local! {
 }
 
 #[no_mangle]
-pub extern "C" fn smatmul_case_load(seed: u32, index: u32, bid: u32) -> i32 {
-    let case = casegen::gen_case(seed, index, bid);
+pub extern "C" fn smatmul_case_load(seed: u32, index: u32, bid: u32, out_bw: u32) -> i32 {
+    let case = casegen::gen_case(seed, index, bid, out_bw as usize);
     let na = case.cmd.num_a_words as usize;
     let nb = case.cmd.num_b_words as usize;
     if na > MAX_WORDS || nb > MAX_WORDS {
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn dpi_load_then_cmd_and_words() {
-        assert_eq!(smatmul_case_load(0x1234, 0, 1), 0);
+        assert_eq!(smatmul_case_load(0x1234, 0, 1, 2), 0);
         let mut cmd = MatrixCmd {
             bid: 0,
             ws: 0,

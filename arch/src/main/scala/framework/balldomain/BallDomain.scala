@@ -30,6 +30,10 @@ class BallDomain(val b: GlobalConfig) extends Module {
   @public
   val global_complete_o = IO(Decoupled(new GlobalSchedComplete(b)))
   @public
+  val ballChannelActive = IO(Output(Vec(b.ballDomain.ballNum, Bool())))
+  @public
+  val ballChannelReady  = IO(Input(Vec(b.ballDomain.ballNum, Bool())))
+  @public
   val bankRead          = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
   val bankWrite         = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
@@ -72,6 +76,8 @@ class BallDomain(val b: GlobalConfig) extends Module {
 //===-------------------------------------------------------------------===//
   bbus.bankRead <> bankRead
   bbus.bankWrite <> bankWrite
+  ballChannelActive     := bbus.ballChannelActive
+  bbus.ballChannelReady := ballChannelReady
   bbus.mmioRead <> mmioRead
   bbus.mmioWrite <> mmioWrite
 
