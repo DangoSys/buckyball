@@ -7,6 +7,7 @@ module tb_top;
   SMatMulBall dut (
       .clock(intf.clock),
       .reset(intf.reset),
+      .io_channelReady(1'b1),
       .io_cmdReq_ready(intf.cmd_req_ready),
       .io_cmdReq_valid(intf.cmd_req_valid),
       .io_cmdReq_bits_cmd_bid(intf.cmd_req_bits_cmd_bid),
@@ -105,10 +106,7 @@ module tb_top;
       .io_bankWrite_1_io_resp_ready(intf.bank_write_resp_ready[1]),
       .io_bankWrite_1_io_resp_valid(intf.bank_write_resp_valid[1]),
       .io_bankWrite_1_io_resp_bits_ok(intf.bank_write_resp_ok[1]),
-      .io_subRobReq_ready(intf.sub_rob_req_ready),
-      .io_mmioRead_req_ready(intf.mmio_read_req_ready[0]),
-      .io_mmioRead_resp_valid(intf.mmio_read_resp_valid[0]),
-      .io_mmioRead_resp_bits_data(intf.mmio_read_resp_bits_data[0])
+      .io_subRobReq_ready(intf.sub_rob_req_ready)
   );
 
   initial begin

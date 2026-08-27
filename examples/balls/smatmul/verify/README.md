@@ -13,7 +13,7 @@ Verifies the generated `SMatMulBall` module using the shared Blink UVM framework
 - `src/env/smatmul_env.svh`: extends `bb_blink_env#(2,4)`
 - `src/tests/smatmul_test.svh`: directed 0..3, random 4..23
 - `src/pkg/smatmul_pkg.sv`: package entry
-- `src/tb_top.sv`: `bb_blink_if#(2,4)` + `SMatMulBall` (2 read, 4 write ports)
+- `src/tb_top.sv`: `bb_blink_if#(2,2)` + `SMatMulBall` (2 read, 2 write ports)
 - `filelists/smatmul_ball.f`: VCS filelist
 
 ## Test plan
@@ -72,18 +72,10 @@ bbdev uvm --build '--ball=matrix'
 bbdev uvm --run '--ball=matrix' -- '+BID=4'
 ```
 
-## Known DUT issue
-
-After mem-model multi-port fix (VCS no longer segfaults), pebble `+BID=1`
-still hangs on directed OS 4x4: reads complete (`r0=4 r1=4`) but only
-`wr=2/4` store rows appear and `cmd_resp` never fires. TIMEOUT fatals with
-those counts. Treat as DUT/RTL investigation; UVM stack is intentionally
-fail-hard so the hang is visible.
-
 ## Acceptance
 
 - [x] Layout matches Blink common + ball-local split; filelist uses `@UVM@` / `@RTL@`
 - [x] casegen whole-case DPI API; `cargo test` in casegen
 - [x] VCS build with `smatmul_ball.f` (no segfault on Instantiate DUT)
 - [x] `+BID=` required; pebble `+BID=1` / toy `+BID=4`
-- [ ] 23/23 functional pass — blocked on DUT hang above (`wr=2/4`)
+- [ ] 23/23 functional pass

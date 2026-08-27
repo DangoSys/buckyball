@@ -20,6 +20,7 @@
 @RTL@/Array.sv
 @RTL@/SMatMulUnit.sv
 @RTL@/SMatMulBall.sv
+@RTL@/accumulator_16x512.sv
 
 src/pkg/smatmul_pkg.sv
 src/tb_top.sv

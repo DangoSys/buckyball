@@ -32,14 +32,14 @@ struct MatAddLowering : public ConvertOpToLLVMPattern<MatAddOp> {
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateMatAddLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool) {
+void populateMatAddBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool, int64_t,
+    bool) {
   patterns.add<MatAddLowering>(converter);
 }
 
-void configureMatAddLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool) {
+void configureMatAddBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                bool) {
   target.addIllegalOp<MatAddOp, BankMatAddOp>();
 }
 } // namespace mlir::buddy::buckyball
