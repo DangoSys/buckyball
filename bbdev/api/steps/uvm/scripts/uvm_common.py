@@ -56,6 +56,7 @@ def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
             "SMATMUL_OS": "SMATMUL_OS_FUNCT7",
             "SMATMUL_WS": "SMATMUL_WS_FUNCT7",
         },
+        "matadd": {"MATADD": "MATADD_FUNCT7"},
         "im2col": {"IM2COL": "IM2COL_FUNCT7"},
         "transpose": {"TRANSPOSE": "TRANSPOSE_FUNCT7"},
     }.get(ball)
