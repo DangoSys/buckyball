@@ -83,23 +83,6 @@ if(NOT BUCKYBALL_TARGETS)
   message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
-set(BUCKYBALL_BALL_NAMES
-  fp2int:Fp2IntBall
-  im2col:Im2colBall
-  int2fp:Int2FpBall
-  matadd:MatAddBall
-  relu:ReluBall
-  smatmul:SMatMulBall
-  transpose:TransposeBall
-  vector:VecBall)
-set(BUCKYBALL_MLIR_BALL_NAMES
-  fp2int:Fp2IntBall
-  im2col:Im2colBall
-  int2fp:Int2FpBall
-  matadd:MatAddBall
-  relu:ReluBall
-  smatmul:SMatMulBall
-  transpose:TransposeBall)
 
 add_custom_target(rushB-bemu-workloads-build)
 add_custom_target(rushB-verilator-workloads-build)
@@ -236,28 +219,47 @@ function(add_buckyball_rushb_native TARGET_NAME)
   endforeach()
 endfunction()
 
-function(buckyball_add_ball_ctest_subdirs)
+function(buckyball_chip_ball_dirs OUT_VAR TARGET)
+  set(_raw "${BUCKYBALL_TARGET_BALLS_${TARGET}}")
+  if(_raw STREQUAL "")
+    set(${OUT_VAR} "" PARENT_SCOPE)
+    return()
+  endif()
+  string(REPLACE "," ";" _dirs "${_raw}")
+  foreach(_dir IN LISTS _dirs)
+    if(_dir STREQUAL "")
+      message(FATAL_ERROR "empty ball_dir on target ${TARGET}")
+    endif()
+  endforeach()
+  set(${OUT_VAR} "${_dirs}" PARENT_SCOPE)
+endfunction()
+
+function(buckyball_add_ball_workload_subdirs KIND)
+  if(NOT KIND STREQUAL "ctests" AND NOT KIND STREQUAL "mlir_tests")
+    message(FATAL_ERROR "unknown ball workload kind: ${KIND}")
+  endif()
   foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
-    foreach(BUCKYBALL_BALL_MAPPING IN LISTS BUCKYBALL_BALL_NAMES)
-      string(REPLACE ":" ";" BUCKYBALL_BALL_PARTS "${BUCKYBALL_BALL_MAPPING}")
-      list(GET BUCKYBALL_BALL_PARTS 0 BUCKYBALL_BALL_DIR)
-      list(GET BUCKYBALL_BALL_PARTS 1 BUCKYBALL_BALL_CLASS)
-      string(REPLACE "," ";" BUCKYBALL_ACTIVE_BALLS
-        "${BUCKYBALL_TARGET_BALLS_${BUCKYBALL_TARGET}}")
-      list(FIND BUCKYBALL_ACTIVE_BALLS "${BUCKYBALL_BALL_CLASS}"
-        BUCKYBALL_BALL_INDEX)
-      if(BUCKYBALL_BALL_INDEX EQUAL -1)
-        continue()
+    buckyball_chip_ball_dirs(_ball_dirs ${BUCKYBALL_TARGET})
+    foreach(BUCKYBALL_BALL_DIR IN LISTS _ball_dirs)
+      set(_src
+        ${BUCKYBALL_REPO_ROOT}/examples/balls/${BUCKYBALL_BALL_DIR}/workloads/${KIND})
+      if(NOT IS_DIRECTORY ${_src})
+        if(KIND STREQUAL "mlir_tests")
+          continue()
+        endif()
+        message(FATAL_ERROR "missing Ball ${KIND} directory: ${_src}")
       endif()
-      set(BUCKYBALL_BALL_CTEST_DIR
-        ${BUCKYBALL_REPO_ROOT}/examples/balls/${BUCKYBALL_BALL_DIR}/workloads/ctests)
-      if(NOT IS_DIRECTORY ${BUCKYBALL_BALL_CTEST_DIR})
-        message(FATAL_ERROR "missing Ball CTest directory: ${BUCKYBALL_BALL_CTEST_DIR}")
+      if(KIND STREQUAL "ctests")
+        set(BUCKYBALL_CTEST_TARGET ${BUCKYBALL_TARGET})
+        add_subdirectory(
+          ${_src}
+          ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR}/ctests)
+      else()
+        set(BUCKYBALL_MLIR_ACTIVE_TARGET ${BUCKYBALL_TARGET})
+        add_subdirectory(
+          ${_src}
+          ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR})
       endif()
-      set(BUCKYBALL_CTEST_TARGET ${BUCKYBALL_TARGET})
-      add_subdirectory(
-        ${BUCKYBALL_BALL_CTEST_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR}/ctests)
     endforeach()
   endforeach()
 endfunction()

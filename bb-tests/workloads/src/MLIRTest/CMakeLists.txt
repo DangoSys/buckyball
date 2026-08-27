@@ -33,8 +33,8 @@ function(add_buckyball_mlir_contract TEST_NAME)
   endif()
 
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME}.mlir)
-  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.out.mlir)
-  set(TARGET ${BUCKYBALL_MLIR_TEST_PREFIX}-${TEST_NAME}-mlir-test)
+  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}-${TEST_NAME}.out.mlir)
+  set(TARGET ${BUCKYBALL_MLIR_TEST_PREFIX}-${ARG_TARGET}-${TEST_NAME}-mlir-test)
 
   add_custom_command(
     OUTPUT ${OUT}
@@ -78,7 +78,7 @@ function(add_buckyball_mlir_test NAME)
   endif()
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
-  set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${NAME}.o)
+  set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}-${NAME}.o)
   set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
   set(TEST_ID ${NAME})
   if(NOT NAME MATCHES "^${PREFIX}_")
@@ -236,24 +236,7 @@ add_subdirectory(${MLIRTEST_WORKLOAD_DIR}/base
   ${CMAKE_CURRENT_BINARY_DIR}/mlir_tests/base)
 
 add_custom_target(balls-mlir-tests-build)
-foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
-  foreach(BUCKYBALL_BALL_MAPPING IN LISTS BUCKYBALL_MLIR_BALL_NAMES)
-    string(REPLACE ":" ";" BUCKYBALL_BALL_PARTS "${BUCKYBALL_BALL_MAPPING}")
-    list(GET BUCKYBALL_BALL_PARTS 0 BUCKYBALL_BALL_DIR)
-    list(GET BUCKYBALL_BALL_PARTS 1 BUCKYBALL_BALL_CLASS)
-    string(REPLACE "," ";" BUCKYBALL_ACTIVE_BALLS
-      "${BUCKYBALL_TARGET_BALLS_${BUCKYBALL_TARGET}}")
-    list(FIND BUCKYBALL_ACTIVE_BALLS "${BUCKYBALL_BALL_CLASS}"
-      BUCKYBALL_BALL_INDEX)
-    if(BUCKYBALL_BALL_INDEX EQUAL -1)
-      continue()
-    endif()
-    set(BUCKYBALL_MLIR_ACTIVE_TARGET ${BUCKYBALL_TARGET})
-    add_subdirectory(
-      ${BUCKYBALL_REPO_ROOT}/examples/balls/${BUCKYBALL_BALL_DIR}/workloads/mlir_tests
-      ${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR})
-  endforeach()
-endforeach()
+buckyball_add_ball_workload_subdirs(mlir_tests)
 
 add_custom_target(MLIRTest-all ALL DEPENDS
   base-mlirtest-build

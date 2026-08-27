@@ -6,7 +6,7 @@ set(BUCKYBALL_CTEST_TARGET toy)
 
 add_subdirectory(ctests)
 add_subdirectory(mlir_tests)
-buckyball_add_ball_ctest_subdirs()
+buckyball_add_ball_workload_subdirs(ctests)
 
 add_custom_target(chip-ctests-build DEPENDS toy-ctests-build)
 add_custom_target(chip-mlirtests-build DEPENDS toy-mlir-tests-build)

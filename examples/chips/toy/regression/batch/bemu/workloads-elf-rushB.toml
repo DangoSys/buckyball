@@ -1,12 +1,12 @@
 [workloads]
 search_path = "workloads/src"
 tests = [
-  "toy_ctest_mvin_mvout_test-rushB-bemu-run",
-  "toy_ctest_mvin_mvout_stride_test-rushB-bemu-run",
-  "toy_ctest_bdb_counter_test-rushB-bemu-run",
-  "toy_ctest_gemmini_os_risc_atranspose_test-rushB-bemu-run",
-  "toy_ctest_gemmini_os_risc_btranspose_test-rushB-bemu-run",
-  "toy_ctest_gemmini_os_risc_abtranspose_test-rushB-bemu-run",
-  "toy_ctest_gemmini_os_risc_shift_test-rushB-bemu-run",
-  "toy_ctest_gemmini_ws_risc_basic_test-rushB-bemu-run",
+  "toy-toy-ctest-mvin_mvout_test-rushB-bemu-run",
+  "toy-toy-ctest-mvin_mvout_stride_test-rushB-bemu-run",
+  "toy-toy-ctest-bdb_counter_test-rushB-bemu-run",
+  "toy-toy-ctest-gemmini_os_risc_atranspose_test-rushB-bemu-run",
+  "toy-toy-ctest-gemmini_os_risc_btranspose_test-rushB-bemu-run",
+  "toy-toy-ctest-gemmini_os_risc_abtranspose_test-rushB-bemu-run",
+  "toy-toy-ctest-gemmini_os_risc_shift_test-rushB-bemu-run",
+  "toy-toy-ctest-gemmini_ws_risc_basic_test-rushB-bemu-run",
 ]

@@ -163,8 +163,6 @@ def _ball_compilers(chip, repo: Path):
                 }
             )
             seen[ball_name] = ball_dir
-    if not result:
-        _die("Chip.pb enables no Balls")
     return result
 
 
@@ -292,33 +290,42 @@ def _emit(chip, target: str | None = None) -> str:
         core = _profile_core(chip, profile)
         _validate_profile(profile, core)
         stem = profile.name
-        chunks.append(f"static const llvm::StringRef k{stem}Balls[] = {{")
-        chunks.extend(
-            f"  {_cxx_string(entry.ball_name)}," for entry in core.balldomain.mappings
-        )
-        chunks.append("};")
-        chunks.append(
-            f"static const buckyball_target::BuckyballBallMapping k{stem}BallMappings[] = {{"
-        )
-        chunks.extend(
-            f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}}},"
-            for entry in core.balldomain.mappings
-        )
-        chunks.append("};")
-        chunks.append(
-            f"static const buckyball_target::BuckyballIsaEntry k{stem}Isa[] = {{"
-        )
-        chunks.extend(
-            f"  {{{_cxx_string(entry.mnemonic)}, {entry.funct7}}},"
-            for entry in core.balldomain.isa
-        )
-        chunks.append("};\n")
+        mappings = list(core.balldomain.mappings)
+        isa = list(core.balldomain.isa)
+        if mappings:
+            chunks.append(f"static const llvm::StringRef k{stem}Balls[] = {{")
+            chunks.extend(f"  {_cxx_string(entry.ball_name)}," for entry in mappings)
+            chunks.append("};")
+            chunks.append(
+                f"static const buckyball_target::BuckyballBallMapping k{stem}BallMappings[] = {{"
+            )
+            chunks.extend(
+                f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}}},"
+                for entry in mappings
+            )
+            chunks.append("};")
+            balls_ref = f"llvm::ArrayRef(k{stem}Balls)"
+            mappings_ref = f"llvm::ArrayRef(k{stem}BallMappings)"
+        else:
+            balls_ref = "llvm::ArrayRef<llvm::StringRef>()"
+            mappings_ref = "llvm::ArrayRef<buckyball_target::BuckyballBallMapping>()"
+        if isa:
+            chunks.append(
+                f"static const buckyball_target::BuckyballIsaEntry k{stem}Isa[] = {{"
+            )
+            chunks.extend(
+                f"  {{{_cxx_string(entry.mnemonic)}, {entry.funct7}}}," for entry in isa
+            )
+            chunks.append("};")
+            isa_ref = f"llvm::ArrayRef(k{stem}Isa)"
+        else:
+            isa_ref = "llvm::ArrayRef<buckyball_target::BuckyballIsaEntry>()"
+        chunks.append("")
         targets.append(
             "  {"
             f"{_cxx_string(profile.name)}, {_cxx_string(core.pkg)}, {profile.bank_num}, "
             f"{profile.bank_width}, {profile.bank_entries}, "
-            f"llvm::ArrayRef(k{stem}Balls), llvm::ArrayRef(k{stem}BallMappings), "
-            f"llvm::ArrayRef(k{stem}Isa)"
+            f"{balls_ref}, {mappings_ref}, {isa_ref}"
             "},"
         )
     chunks.append(
@@ -404,8 +411,17 @@ def main() -> None:
         for profile in chip.profiles:
             core = _profile_core(chip, profile)
             _validate_profile(profile, core)
-            balls = ",".join(entry.ball_name for entry in core.balldomain.mappings)
-            print(f"{profile.name}:{balls}")
+            dirs = []
+            seen = set()
+            for entry in core.balldomain.mappings:
+                ball_dir = entry.ball_dir
+                if not ball_dir:
+                    _die(f"profile {profile.name}: {entry.ball_name} has no ball_dir")
+                if ball_dir in seen:
+                    _die(f"profile {profile.name}: duplicate ball_dir {ball_dir!r}")
+                seen.add(ball_dir)
+                dirs.append(ball_dir)
+            print(f"{profile.name}:{','.join(dirs)}")
     if args.print_core_targets:
         targets = {profile.name for profile in chip.profiles}
         for core in chip.cores:
