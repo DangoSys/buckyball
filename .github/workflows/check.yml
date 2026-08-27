@@ -13,8 +13,12 @@ permissions:
   checks: write
 
 concurrency:
-  group: buckyball-ci-${{ github.sha }}
+  group: buckyball-ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
+
+env:
+  CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  CHECKOUT_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
 
 jobs:
   pre-commit:
@@ -24,6 +28,8 @@ jobs:
       - name: Print information
         run: |
           echo "event=${{ github.event_name }}"
+          echo "sha=${CHECKOUT_SHA}"
+          echo "ref=${CHECKOUT_REF}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "pr=#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
             echo "branch=${{ github.head_ref }} -> ${{ github.base_ref }}"
@@ -38,7 +44,7 @@ jobs:
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
-            prepare "${{ github.sha }}" "${root}" "${{ github.ref }}"
+            prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Check pre-commit
         shell: zsh {0}
@@ -78,7 +84,8 @@ jobs:
         run: |
           echo "chip=${{ matrix.chip }}"
           echo "event=${{ github.event_name }}"
-          echo "sha=${{ github.sha }}"
+          echo "sha=${CHECKOUT_SHA}"
+          echo "ref=${CHECKOUT_REF}"
 
       - name: Enter repo lock
         shell: zsh {0}
@@ -87,7 +94,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
-            enter "${{ github.sha }}" "${root}" "${{ github.ref }}"
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Nix build
         shell: zsh {0}
@@ -184,4 +191,4 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
-            exit "${{ github.sha }}" "${root}" "${{ github.ref }}"
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
