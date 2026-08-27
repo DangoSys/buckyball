@@ -76,7 +76,7 @@ jobs:
             run_batch_tests: false
           - chip: multi-rocket
             enable_rushb: false
-            run_batch_tests: false
+            run_batch_tests: true
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
