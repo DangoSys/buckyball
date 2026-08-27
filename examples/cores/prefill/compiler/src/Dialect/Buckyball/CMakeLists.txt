@@ -1,4 +1,4 @@
-set(LLVM_TARGET_DEFINITIONS PrefillBuckyball.td)
+set(LLVM_TARGET_DEFINITIONS ${BB_BUCKYBALL_DIALECT_TD})
 mlir_tablegen(Buckyball.h.inc -gen-op-decls)
 mlir_tablegen(Buckyball.cpp.inc -gen-op-defs)
 mlir_tablegen(BuckyballTypes.h.inc -gen-typedef-decls -typedefs-dialect=buckyball)
@@ -9,7 +9,7 @@ add_public_tablegen_target(${BB_CORE_TARGET_PREFIX}MLIRBuckyballIncGen)
 add_mlir_doc(PrefillBuckyball ${BB_CORE_TARGET_PREFIX}Buckyball Dialects/
   -gen-dialect-doc)
 
-set(LLVM_TARGET_DEFINITIONS PrefillBuckyball.td)
+set(LLVM_TARGET_DEFINITIONS ${BB_BUCKYBALL_DIALECT_TD})
 mlir_tablegen(BuckyballConversions.inc -gen-llvmir-conversions)
 add_public_tablegen_target(${BB_CORE_TARGET_PREFIX}BuddyBuckyballConversionsIncGen)
 

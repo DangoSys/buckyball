@@ -105,8 +105,8 @@ public:
     target.addIllegalOp<tile::TileTransposeOp>();
 
     RewritePatternSet patterns(context);
-    mlir::buddy::populateMatrixTileMatMulPatterns(patterns, bankWidthBytes,
-                                                  bankDepth, bankNum);
+    mlir::buddy::populateSMatMulBallTileLoweringPatterns(
+        patterns, bankWidthBytes, bankDepth, bankNum);
     patterns.add<TileTransposeLowering>(context);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))

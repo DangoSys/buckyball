@@ -196,11 +196,153 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
         _write(header, "\n".join(lines))
 
 
+def _emit_dialect_td(chip, repo: Path) -> str:
+    """Emit the union of Ball operation definitions selected by this Chip."""
+    ball_dirs: list[str] = []
+    seen: set[str] = set()
+    for profile in chip.profiles:
+        core = _profile_core(chip, profile)
+        for entry in core.balldomain.mappings:
+            ball_dir = entry.ball_dir
+            if not ball_dir:
+                _die(f"profile {profile.name}: {entry.ball_name} has no ball_dir")
+            if ball_dir in seen:
+                continue
+            td_dir = (
+                repo
+                / "examples"
+                / "balls"
+                / ball_dir
+                / "compiler"
+                / "src"
+                / "Dialect"
+                / "Buckyball"
+            )
+            td_files = sorted(td_dir.glob("*.td"))
+            if len(td_files) != 1:
+                _die(f"Ball {ball_dir}: expected one dialect TD file in {td_dir}")
+            seen.add(ball_dir)
+            ball_dirs.append(td_files[0].name)
+
+    lines = ["// Generated from Chip.pb. Do not edit.", 'include "Buckyball.td"']
+    lines.extend(f'include "{td_file}"' for td_file in ball_dirs)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _ball_dialect_dirs(chip, repo: Path) -> list[Path]:
+    result: list[Path] = []
+    seen: set[str] = set()
+    for profile in chip.profiles:
+        core = _profile_core(chip, profile)
+        for entry in core.balldomain.mappings:
+            ball_dir = entry.ball_dir
+            if not ball_dir or ball_dir in seen:
+                continue
+            result.append(
+                repo
+                / "examples"
+                / "balls"
+                / ball_dir
+                / "compiler"
+                / "src"
+                / "Dialect"
+                / "Buckyball"
+            )
+            seen.add(ball_dir)
+    return result
+
+
+def _ball_compilers(chip, repo: Path) -> list[dict[str, object]]:
+    """Resolve convention-based compiler contributions from selected Balls."""
+    result: list[dict[str, object]] = []
+    seen: dict[str, str] = {}
+    for profile in chip.profiles:
+        core = _profile_core(chip, profile)
+        _validate_profile(profile, core)
+        for entry in core.balldomain.mappings:
+            ball_name = entry.ball_name
+            ball_dir = entry.ball_dir
+            if not ball_name.isidentifier():
+                _die(f"profile {profile.name}: invalid Ball name {ball_name!r}")
+            if not ball_dir:
+                _die(f"profile {profile.name}: {ball_name} has no ball_dir")
+            if Path(ball_dir).is_absolute() or len(Path(ball_dir).parts) != 1:
+                _die(f"profile {profile.name}: invalid ball_dir {ball_dir!r}")
+            if ball_name in seen:
+                if seen[ball_name] != ball_dir:
+                    _die(f"Ball {ball_name} maps to multiple directories")
+                continue
+
+            source_dir = repo / "examples" / "balls" / ball_dir / "compiler" / "src"
+            dialect_dir = source_dir / "Dialect" / "Buckyball"
+            td_files = sorted(dialect_dir.glob("*.td"))
+            if len(td_files) != 1:
+                _die(f"Ball {ball_name}: expected one dialect TD in {dialect_dir}")
+            legalize = dialect_dir / "Transforms" / "LegalizeForLLVMExport.cpp"
+            if not legalize.is_file():
+                _die(f"Ball {ball_name}: missing LLVM export lowering {legalize}")
+            lower = source_dir / "Conversion" / "LowerBuckyball"
+            tile_dir = source_dir / "Conversion" / "LowerTileToBuckyball"
+            result.append(
+                {
+                    "name": ball_name,
+                    "dialect_dir": dialect_dir,
+                    "legalize": legalize,
+                    "assign": lower / "AssignPhysicalBankPatterns.cpp",
+                    "bank_ssa": lower / "LowerBuckyballToBankSSAPatterns.cpp",
+                    "tile": sorted(tile_dir.glob("*.cpp")) if tile_dir.is_dir() else [],
+                }
+            )
+            seen[ball_name] = ball_dir
+    return result
+
+
+def _emit_lowering_hooks(chip, repo: Path) -> str:
+    balls = _ball_compilers(chip, repo)
+    lines = ["// Generated from Chip.pb. Do not edit.", ""]
+    stages = (
+        ("BUCKYBALL_LEGALIZE_HOOK", "legalize"),
+        ("BUCKYBALL_ASSIGN_HOOK", "assign"),
+        ("BUCKYBALL_TILE_HOOK", "tile"),
+        ("BUCKYBALL_BANK_SSA_HOOK", "bank_ssa"),
+    )
+    for macro, field in stages:
+        lines.append(f"#ifdef {macro}")
+        for ball in balls:
+            value = ball[field]
+            if (
+                field == "legalize"
+                or (isinstance(value, list) and value)
+                or (isinstance(value, Path) and value.is_file())
+            ):
+                lines.append(f"{macro}({ball['name']})")
+        lines.extend(["#endif", ""])
+    return "\n".join(lines)
+
+
+def _print_ball_compiler_paths(chip, repo: Path, kind: str) -> None:
+    for ball in _ball_compilers(chip, repo):
+        if kind == "dialect-dir":
+            print(ball["dialect_dir"])
+        elif kind == "legalize":
+            print(ball["legalize"])
+        elif kind == "tile":
+            for source in ball["tile"]:
+                print(source)
+        else:
+            source = ball[kind]
+            if isinstance(source, Path) and source.is_file():
+                print(source)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--chip-pb", type=Path, required=True)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--out-dialect-td", type=Path)
+    parser.add_argument("--lowering-hooks-out", type=Path)
     parser.add_argument("--isa-dir", type=Path)
     parser.add_argument("--target")
     parser.add_argument("--print-core-compiler-dirs", action="store_true")
@@ -208,16 +350,25 @@ def main() -> None:
     parser.add_argument("--print-bank-targets", action="store_true")
     parser.add_argument("--print-target-balls", action="store_true")
     parser.add_argument("--print-core-targets", action="store_true")
+    parser.add_argument("--print-ball-dialect-dirs", action="store_true")
+    parser.add_argument(
+        "--print-ball-compiler-paths",
+        choices=("dialect-dir", "legalize", "assign", "bank_ssa", "tile"),
+    )
     args = parser.parse_args()
 
     if (
         args.out is None
+        and args.out_dialect_td is None
+        and args.lowering_hooks_out is None
         and args.isa_dir is None
         and not args.print_core_compiler_dirs
         and not args.print_targets
         and not args.print_bank_targets
         and not args.print_target_balls
         and not args.print_core_targets
+        and not args.print_ball_dialect_dirs
+        and args.print_ball_compiler_paths is None
     ):
         _die("one output mode is required")
 
@@ -232,6 +383,10 @@ def main() -> None:
     chip.ParseFromString(pb_path.read_bytes())
     if args.out:
         _write(args.out, _emit(chip, args.target))
+    if args.out_dialect_td:
+        _write(args.out_dialect_td, _emit_dialect_td(chip, repo))
+    if args.lowering_hooks_out:
+        _write(args.lowering_hooks_out, _emit_lowering_hooks(chip, repo))
     if args.isa_dir:
         _emit_isa_headers(chip, args.isa_dir)
     if args.print_targets:
@@ -263,6 +418,11 @@ def main() -> None:
             if target not in targets:
                 _die(f"CoreInstance {core.index}: no compiler profile {target}")
             print(f"{core.index}:{target}")
+    if args.print_ball_dialect_dirs:
+        for dialect_dir in _ball_dialect_dirs(chip, repo):
+            print(dialect_dir)
+    if args.print_ball_compiler_paths:
+        _print_ball_compiler_paths(chip, repo, args.print_ball_compiler_paths)
     if args.print_core_compiler_dirs:
         for compiler_dir in _core_compiler_dirs(chip, repo):
             print(compiler_dir)
