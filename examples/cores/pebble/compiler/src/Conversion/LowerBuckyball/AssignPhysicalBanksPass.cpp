@@ -12,18 +12,18 @@
 using namespace mlir;
 
 namespace mlir::buddy {
-void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                                 PhysicalBankState &state);
-void populateMatrixAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateIm2colAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
-void populateMatAddAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+void populateTransposeBallAssignPhysicalBankPatterns(
+    RewritePatternSet &patterns, PhysicalBankState &state);
+void populateSMatMulBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                   PhysicalBankState &state);
+void populateIm2colBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
+void populateFp2IntBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
+void populateInt2FpBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
+void populateMatAddBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
 void populateReluBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                                 PhysicalBankState &state);
 } // namespace mlir::buddy
@@ -62,12 +62,13 @@ public:
     mlir::buddy::PhysicalBankState state(bankNum);
     RewritePatternSet patterns(&getContext());
     mlir::buddy::addBaseAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateTransposeAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateMatrixAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateIm2colAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateFp2IntAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(patterns, state);
-    mlir::buddy::populateMatAddAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateTransposeBallAssignPhysicalBankPatterns(patterns,
+                                                                 state);
+    mlir::buddy::populateSMatMulBallAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateIm2colBallAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateFp2IntBallAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateInt2FpBallAssignPhysicalBankPatterns(patterns, state);
+    mlir::buddy::populateMatAddBallAssignPhysicalBankPatterns(patterns, state);
     mlir::buddy::populateReluBallAssignPhysicalBankPatterns(patterns, state);
 
     walkAndApplyPatterns(func, std::move(patterns));

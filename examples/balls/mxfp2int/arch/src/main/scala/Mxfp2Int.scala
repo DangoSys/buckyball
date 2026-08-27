@@ -92,9 +92,9 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
   }
 
   // FSM
-  val idle :: sReadReq :: sReadResp :: sMmioReq :: sMmioResp :: sWriteLo :: sWriteHi :: sComplete :: Nil =
-    Enum(8)
-  val state                                                                                              = RegInit(idle)
+  val idle :: sReadReq :: sReadResp :: sMmioReq :: sMmioResp :: sWriteLoReq :: sWriteLoResp :: sWriteHiReq :: sWriteHiResp :: sComplete :: Nil =
+    Enum(10)
+  val state                                                                                                                                    = RegInit(idle)
 
   // Per-instruction registers
   val raddr_reg     = RegInit(0.U(b.frontend.iter_len.W))
@@ -233,32 +233,44 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
       io.mmioRead.resp.ready := true.B
       when(io.mmioRead.resp.fire) {
         scaleReg := io.mmioRead.resp.bits.data(7, 0)
-        state    := sWriteLo
+        state    := sWriteLoReq
       }
     }
 
-    is(sWriteLo) {
+    is(sWriteLoReq) {
       io.bankWrite(0).io.req.valid     := true.B
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1)
       io.bankWrite(0).io.req.bits.data := outWordLo
       io.bankWrite(0).io.req.bits.mask := VecInit(
         Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W))
       )
-      io.bankWrite(0).io.resp.ready    := true.B
       when(io.bankWrite(0).io.req.fire) {
-        state := sWriteHi
+        state := sWriteLoResp
       }
     }
 
-    is(sWriteHi) {
+    is(sWriteLoResp) {
+      io.bankWrite(0).io.resp.ready := true.B
+      when(io.bankWrite(0).io.resp.fire) {
+        state := sWriteHiReq
+      }
+    }
+
+    is(sWriteHiReq) {
       io.bankWrite(0).io.req.valid     := true.B
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1) + 1.U
       io.bankWrite(0).io.req.bits.data := outWordHi
       io.bankWrite(0).io.req.bits.mask := VecInit(
         Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W))
       )
-      io.bankWrite(0).io.resp.ready    := true.B
       when(io.bankWrite(0).io.req.fire) {
+        state := sWriteHiResp
+      }
+    }
+
+    is(sWriteHiResp) {
+      io.bankWrite(0).io.resp.ready := true.B
+      when(io.bankWrite(0).io.resp.fire) {
         when(block_idx_reg === iter_reg - 1.U) {
           state := sComplete
         }.otherwise {

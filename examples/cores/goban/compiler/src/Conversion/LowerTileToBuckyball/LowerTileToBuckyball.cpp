@@ -34,6 +34,13 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
 
+namespace mlir::buddy {
+void populateSMatMulBallTileLoweringPatterns(RewritePatternSet &patterns,
+                                             int64_t bankWidthBytes,
+                                             int64_t bankDepth,
+                                             int64_t bankNum);
+} // namespace mlir::buddy
+
 namespace {
 class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
 public:

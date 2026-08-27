@@ -2,6 +2,18 @@ if(NOT DEFINED ELF_CC)
   set(ELF_CC "riscv64-unknown-elf-gcc")
 endif()
 
+if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
+  message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for goban ctests")
+endif()
+list(FIND BUCKYBALL_TARGETS "${BUCKYBALL_CTEST_TARGET}" _goban_target_index)
+if(_goban_target_index EQUAL -1)
+  message(FATAL_ERROR "unknown C test target: ${BUCKYBALL_CTEST_TARGET}")
+endif()
+if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
+  message(FATAL_ERROR
+    "missing target ISA header ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
+endif()
+
 get_filename_component(_BUCKYBALL_REPO_ROOT
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
 

@@ -66,6 +66,22 @@ if(NOT BUCKYBALL_TARGET_REGISTRY_RESULT EQUAL 0)
     "failed to generate target ISA headers: ${BUCKYBALL_TARGET_REGISTRY_ERROR}")
 endif()
 string(REPLACE "\n" ";" BUCKYBALL_TARGETS "${BUCKYBALL_TARGETS_RAW}")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}"
+    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    --repo "${BUCKYBALL_REPO_ROOT}"
+    --chip-pb "${BUCKYBALL_CHIP_PB}"
+    --print-bank-targets
+  RESULT_VARIABLE BUCKYBALL_BANK_TARGETS_RESULT
+  OUTPUT_VARIABLE BUCKYBALL_BANK_TARGETS_RAW
+  ERROR_VARIABLE BUCKYBALL_BANK_TARGETS_ERROR)
+if(NOT BUCKYBALL_BANK_TARGETS_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "failed to get compiler targets with banks: ${BUCKYBALL_BANK_TARGETS_ERROR}")
+endif()
+string(REPLACE "\n" ";" BUCKYBALL_BANK_TARGETS
+  "${BUCKYBALL_BANK_TARGETS_RAW}")
+list(REMOVE_ITEM BUCKYBALL_BANK_TARGETS "")
 set(BUCKYBALL_TARGET_BALL_LINES)
 set(BUCKYBALL_CORE_TARGET_LINES)
 foreach(BUCKYBALL_TARGET_LINE ${BUCKYBALL_TARGETS})
@@ -83,6 +99,7 @@ if(NOT BUCKYBALL_TARGETS)
   message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
+message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
 
 add_custom_target(rushB-bemu-workloads-build)
 add_custom_target(rushB-verilator-workloads-build)

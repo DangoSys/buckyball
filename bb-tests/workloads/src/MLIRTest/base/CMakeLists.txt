@@ -3,7 +3,7 @@ add_custom_target(base-mlirtest-build)
 set(BUCKYBALL_MLIR_GROUP_TARGET base-mlirtest-build)
 set(BUCKYBALL_MLIR_TEST_PREFIX base)
 
-foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
+foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_BANK_TARGETS)
   add_buckyball_mlir_contract(base_intrinsics_contract
     TARGET ${BUCKYBALL_TARGET}
     PASSES ${BUCKYBALL_LOWER_BUCKYBALL})

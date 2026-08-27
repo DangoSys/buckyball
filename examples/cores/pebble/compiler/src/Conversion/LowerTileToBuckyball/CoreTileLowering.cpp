@@ -24,9 +24,11 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
@@ -36,36 +38,22 @@
 using namespace mlir;
 using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
-using mlir::buddy::kDefaultBankWidthBytes;
-using mlir::buddy::populateSMatMulBallTileLoweringPatterns;
+
+namespace mlir::buddy {
+void populateSMatMulBallTileLoweringPatterns(RewritePatternSet &patterns,
+                                             int64_t bankWidthBytes,
+                                             int64_t bankDepth,
+                                             int64_t bankNum);
+void populateTransposeBallTileLoweringPatterns(RewritePatternSet &patterns,
+                                               int64_t bankWidthBytes,
+                                               int64_t bankDepth,
+                                               int64_t bankNum);
+void populateReluBallTileLoweringPatterns(RewritePatternSet &patterns,
+                                          int64_t bankWidthBytes,
+                                          int64_t bankDepth, int64_t bankNum);
+} // namespace mlir::buddy
 
 namespace {
-
-class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
-public:
-  using OpRewritePattern::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tile::TileTransposeOp op,
-                                PatternRewriter &rewriter) const override {
-    auto inputType = dyn_cast<MemRefType>(op.getAMemArray().getType());
-    auto outputType = dyn_cast<MemRefType>(op.getBMemArray().getType());
-    if (!inputType || !outputType || !inputType.hasStaticShape() ||
-        !outputType.hasStaticShape())
-      return op.emitError("requires static input and output memrefs");
-    if (inputType.getRank() != 2 || outputType.getRank() != 2)
-      return op.emitError("requires rank-2 memrefs");
-    if (outputType.getShape()[0] != inputType.getShape()[1] ||
-        outputType.getShape()[1] != inputType.getShape()[0])
-      return op.emitError("output shape must transpose the input shape");
-    if (inputType.getElementType() != outputType.getElementType())
-      return op.emitError("input/output element types must match");
-
-    rewriter.create<MemTransposeOp>(op.getLoc(), op.getAMemArray(),
-                                    op.getBMemArray());
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
 
 // Pebble im2col: square HxW, per-cin plane, K=k^2.
 constexpr int64_t kMaxIter = 34;
@@ -802,12 +790,62 @@ public:
   }
 };
 
+class LowerTileToBuckyballPass
+    : public PassWrapper<LowerTileToBuckyballPass, OperationPass<ModuleOp>> {
+public:
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTileToBuckyballPass)
+
+  StringRef getArgument() const final { return "convert-tile-to-buckyball"; }
+  StringRef getDescription() const final {
+    return "Convert Tile operations for the Pebble Core.";
+  }
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry
+        .insert<tile::TileDialect, ::buddy::buckyball::BuckyballDialect,
+                func::FuncDialect, memref::MemRefDialect, arith::ArithDialect,
+                scf::SCFDialect, linalg::LinalgDialect>();
+  }
+
+  void runOnOperation() override {
+    const buckyball_target::BuckyballTargetConfig &targetConfig =
+        buckyball_target::getBuckyballTarget();
+    MLIRContext *context = &getContext();
+
+    RewritePatternSet reluPatterns(context);
+    mlir::buddy::populateReluBallTileLoweringPatterns(
+        reluPatterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
+        targetConfig.bankNum);
+    if (failed(
+            applyPatternsGreedily(getOperation(), std::move(reluPatterns)))) {
+      signalPassFailure();
+      return;
+    }
+
+    ConversionTarget target(*context);
+    target.addLegalDialect<::buddy::buckyball::BuckyballDialect,
+                           memref::MemRefDialect, arith::ArithDialect,
+                           scf::SCFDialect, func::FuncDialect,
+                           linalg::LinalgDialect>();
+    target.addIllegalDialect<tile::TileDialect>();
+
+    RewritePatternSet patterns(context);
+    mlir::buddy::populateSMatMulBallTileLoweringPatterns(
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
+        targetConfig.bankNum);
+    mlir::buddy::populateTransposeBallTileLoweringPatterns(
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
+        targetConfig.bankNum);
+    patterns.add<TileConv2dLowering, TileDepthwiseConv2dLowering>(context);
+
+    if (failed(applyPartialConversion(getOperation(), target,
+                                      std::move(patterns))))
+      signalPassFailure();
+  }
+};
+
 } // namespace
 
-namespace mlir::buddy {
-void populatePebbleCoreTileLoweringPatterns(RewritePatternSet &patterns,
-                                            int64_t, int64_t, int64_t) {
-  patterns.add<TileConv2dLowering, TileDepthwiseConv2dLowering>(
-      patterns.getContext());
+void mlir::buddy::registerLowerTileToBuckyballPass() {
+  PassRegistration<LowerTileToBuckyballPass>();
 }
-} // namespace mlir::buddy

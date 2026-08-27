@@ -1,8 +1,16 @@
-get_filename_component(BUCKYBALL_REPO_ROOT
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
-set(BUCKYBALL_CTEST_TARGET prefill)
+add_custom_target(poly-ctests-build)
+set(BUCKYBALL_CTEST_GROUP_TARGET poly-ctests-build)
 
-add_subdirectory(
-  ${BUCKYBALL_REPO_ROOT}/examples/chips/goban/workloads
-  ${CMAKE_CURRENT_BINARY_DIR}/goban-workloads
-)
+add_subdirectory(ctests)
+add_subdirectory(mlir_tests)
+buckyball_add_ball_workload_subdirs(ctests)
+
+add_custom_target(chip-ctests-build DEPENDS poly-ctests-build)
+add_custom_target(chip-mlirtests-build DEPENDS poly-mlir-tests-build)
+
+add_custom_target(chip-workloads-build ALL
+  DEPENDS
+    chip-ctests-build
+    chip-mlirtests-build
+  COMMENT "Building poly workloads"
+  VERBATIM)

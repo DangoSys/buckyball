@@ -11,8 +11,8 @@ endif()
 get_filename_component(BB_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(BB_COMPILER_COMMON_DIR "${BB_REPO_ROOT}/compiler/src")
 set(BB_TARGET_REGISTRY_INC "${CMAKE_CURRENT_BINARY_DIR}/BuckyballTargetRegistry.inc")
-set(BB_TARGET_DEFINITIONS "${CMAKE_CURRENT_BINARY_DIR}/BuckyballAll.td")
-set(BB_BALL_LOWERING_HOOKS "${CMAKE_CURRENT_BINARY_DIR}/BuckyballBallLoweringHooks.inc")
+set(BB_TARGET_REGISTRY_SOURCE
+  "${BB_COMPILER_COMMON_DIR}/Target/BuckyballTargetRegistry.cpp")
 set(BB_TARGET_REGISTRY_GENERATOR
   "${BB_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py")
 
@@ -22,8 +22,6 @@ execute_process(
     --repo "${BB_REPO_ROOT}"
     --chip-pb "${BUCKYBALL_CHIP_PB}"
     --out "${BB_TARGET_REGISTRY_INC}"
-    --td-out "${BB_TARGET_DEFINITIONS}"
-    --lowering-hooks-out "${BB_BALL_LOWERING_HOOKS}"
   RESULT_VARIABLE BB_TARGET_REGISTRY_RESULT
   OUTPUT_VARIABLE BB_TARGET_REGISTRY_OUTPUT
   ERROR_VARIABLE BB_TARGET_REGISTRY_ERROR)
@@ -45,118 +43,22 @@ execute_process(
   COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
     --repo "${BB_REPO_ROOT}"
     --chip-pb "${BUCKYBALL_CHIP_PB}"
-    --print-ball-compiler-paths dialect-dir
-  RESULT_VARIABLE BB_BALL_DIALECT_DIR_RESULT
-  OUTPUT_VARIABLE BB_BALL_DIALECT_DIRS
-  ERROR_VARIABLE BB_BALL_DIALECT_DIR_ERROR)
-if(NOT BB_BALL_DIALECT_DIR_RESULT EQUAL 0)
+    --print-core-compiler-dirs
+  RESULT_VARIABLE BB_CORE_COMPILER_DIR_RESULT
+  OUTPUT_VARIABLE BB_CORE_COMPILER_DIRS
+  ERROR_VARIABLE BB_CORE_COMPILER_DIR_ERROR)
+if(NOT BB_CORE_COMPILER_DIR_RESULT EQUAL 0)
   message(FATAL_ERROR
-    "failed to resolve Ball compiler dialect directories:\n${BB_BALL_DIALECT_DIR_ERROR}")
+    "failed to resolve Core compiler package:\n${BB_CORE_COMPILER_DIR_ERROR}")
 endif()
-string(STRIP "${BB_BALL_DIALECT_DIRS}" BB_BALL_DIALECT_DIRS)
-string(REPLACE "\n" ";" BB_BALL_DIALECT_DIRS "${BB_BALL_DIALECT_DIRS}")
-include_directories(${BB_BALL_DIALECT_DIRS})
-
-foreach(BB_BALL_SOURCE_KIND legalize assign tile)
-  execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
-      --repo "${BB_REPO_ROOT}"
-      --chip-pb "${BUCKYBALL_CHIP_PB}"
-      --print-ball-compiler-paths "${BB_BALL_SOURCE_KIND}"
-    RESULT_VARIABLE BB_BALL_SOURCE_RESULT
-    OUTPUT_VARIABLE BB_BALL_SOURCE_PATHS
-    ERROR_VARIABLE BB_BALL_SOURCE_ERROR)
-  if(NOT BB_BALL_SOURCE_RESULT EQUAL 0)
-    message(FATAL_ERROR
-      "failed to resolve ${BB_BALL_SOURCE_KIND} Ball compiler sources:\n${BB_BALL_SOURCE_ERROR}")
-  endif()
-  string(STRIP "${BB_BALL_SOURCE_PATHS}" BB_BALL_SOURCE_PATHS)
-  string(REPLACE "\n" ";" BB_${BB_BALL_SOURCE_KIND}_SOURCES
-    "${BB_BALL_SOURCE_PATHS}")
-endforeach()
-
-foreach(BB_CORE_SOURCE_KIND tile bank-ssa)
-  execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
-      --repo "${BB_REPO_ROOT}"
-      --chip-pb "${BUCKYBALL_CHIP_PB}"
-      --print-core-compiler-paths "${BB_CORE_SOURCE_KIND}"
-    RESULT_VARIABLE BB_CORE_SOURCE_RESULT
-    OUTPUT_VARIABLE BB_CORE_SOURCE_PATHS
-    ERROR_VARIABLE BB_CORE_SOURCE_ERROR)
-  if(NOT BB_CORE_SOURCE_RESULT EQUAL 0)
-    message(FATAL_ERROR
-      "failed to resolve ${BB_CORE_SOURCE_KIND} Core compiler sources:\n${BB_CORE_SOURCE_ERROR}")
-  endif()
-  string(STRIP "${BB_CORE_SOURCE_PATHS}" BB_CORE_SOURCE_PATHS)
-  string(REPLACE "\n" ";" BB_CORE_${BB_CORE_SOURCE_KIND}_SOURCES
-    "${BB_CORE_SOURCE_PATHS}")
-endforeach()
-
-execute_process(
-  COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
-    --repo "${BB_REPO_ROOT}"
-    --chip-pb "${BUCKYBALL_CHIP_PB}"
-    --print-ball-compiler-paths bank-ssa
-  RESULT_VARIABLE BB_BANK_SSA_RESULT
-  OUTPUT_VARIABLE BB_BANK_SSA_SOURCES
-  ERROR_VARIABLE BB_BANK_SSA_ERROR)
-if(NOT BB_BANK_SSA_RESULT EQUAL 0)
+string(STRIP "${BB_CORE_COMPILER_DIRS}" BB_CORE_COMPILER_DIRS)
+string(REPLACE "\n" ";" BB_CORE_COMPILER_DIRS "${BB_CORE_COMPILER_DIRS}")
+list(LENGTH BB_CORE_COMPILER_DIRS BB_CORE_COMPILER_DIR_COUNT)
+if(NOT BB_CORE_COMPILER_DIR_COUNT EQUAL 1)
   message(FATAL_ERROR
-    "failed to resolve bank-ssa Ball compiler sources:\n${BB_BANK_SSA_ERROR}")
+    "a compiler build must select exactly one Core package; got: ${BB_CORE_COMPILER_DIRS}")
 endif()
-string(STRIP "${BB_BANK_SSA_SOURCES}" BB_BANK_SSA_SOURCES)
-string(REPLACE "\n" ";" BB_BANK_SSA_SOURCES "${BB_BANK_SSA_SOURCES}")
-
-set(LLVM_TARGET_DEFINITIONS "${BB_TARGET_DEFINITIONS}")
-mlir_tablegen(Buckyball.h.inc -gen-op-decls)
-mlir_tablegen(Buckyball.cpp.inc -gen-op-defs)
-mlir_tablegen(BuckyballTypes.h.inc -gen-typedef-decls -typedefs-dialect=buckyball)
-mlir_tablegen(BuckyballTypes.cpp.inc -gen-typedef-defs -typedefs-dialect=buckyball)
-mlir_tablegen(BuckyballDialect.h.inc -gen-dialect-decls -dialect=buckyball)
-mlir_tablegen(BuckyballDialect.cpp.inc -gen-dialect-defs -dialect=buckyball)
-add_public_tablegen_target(MLIRBuckyballIncGen)
-set(LLVM_TARGET_DEFINITIONS "${BB_TARGET_DEFINITIONS}")
-mlir_tablegen(BuckyballConversions.inc -gen-llvmir-conversions)
-add_public_tablegen_target(BuddyBuckyballConversionsIncGen)
-
-add_mlir_dialect_library(BuddyBuckyball
-  "${BB_COMPILER_COMMON_DIR}/Dialect/Buckyball/IR/BuckyballDialect.cpp"
-  src/Target/BuckyballTargetRegistry.cpp
-  LINK_LIBS PUBLIC MLIRIR MLIRLLVMDialect)
-target_include_directories(BuddyBuckyball PUBLIC
-  "${BB_COMPILER_COMMON_DIR}"
-  "${BB_COMPILER_COMMON_DIR}/Dialect"
-  "${BB_COMPILER_COMMON_DIR}/Dialect/Buckyball"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src"
-  "${CMAKE_CURRENT_BINARY_DIR}")
-
-add_mlir_dialect_library(BuddyBuckyballTransforms
-  "${BB_COMPILER_COMMON_DIR}/Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.cpp"
-  ${BB_legalize_SOURCES}
-  src/Dialect/Buckyball/Transforms/LegalizeForLLVMExport.cpp
-  LINK_LIBS PUBLIC BuddyBuckyball MLIRIR MLIRLLVMCommonConversion MLIRLLVMDialect)
-
-add_mlir_library(LowerBuckyballPass
-  "${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/BaseAssignPhysicalBankPatterns.cpp"
-  "${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/PhysicalBankState.cpp"
-  "${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/ReportBankUsagePass.cpp"
-  ${BB_assign_SOURCES}
-  ${BB_BANK_SSA_SOURCES}
-  ${BB_CORE_bank-ssa_SOURCES}
-  src/Conversion/LowerBuckyball/AssignPhysicalBanksPass.cpp
-  src/Conversion/LowerBuckyball/LowerBuckyballPass.cpp
-  src/Conversion/LowerBuckyball/LowerBuckyballToBankSSAPass.cpp
-  LINK_LIBS PUBLIC BuddyBuckyballTransforms MLIRLinalgDialect)
-
-add_mlir_library(LowerTileToBuckyballPass
-  src/Conversion/LowerTileToBuckyball/LowerTileToBuckyballPass.cpp
-  ${BB_tile_SOURCES}
-  ${BB_CORE_tile_SOURCES}
-  LINK_LIBS PUBLIC BuddyTile BuddyBuckyball MLIRLinalgDialect)
-
-add_mlir_translation_library(BuddyBuckyballToLLVMIRTranslation
-  "${BB_COMPILER_COMMON_DIR}/Target/LLVMIR/Dialect/Buckyball/BuckyballToLLVMIRTranslation.cpp"
-  DEPENDS BuddyBuckyballConversionsIncGen intrinsics_gen
-  LINK_COMPONENTS Core
-  LINK_LIBS PUBLIC MLIRIR MLIRSupport BuddyBuckyball)
+list(GET BB_CORE_COMPILER_DIRS 0 BB_CORE_COMPILER_DIR)
+get_filename_component(BB_CORE_COMPILER_NAME "${BB_CORE_COMPILER_DIR}" NAME)
+add_subdirectory("${BB_CORE_COMPILER_DIR}"
+  "${CMAKE_CURRENT_BINARY_DIR}/cores/${BB_CORE_COMPILER_NAME}")
