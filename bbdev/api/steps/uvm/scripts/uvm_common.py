@@ -75,7 +75,20 @@ def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
             values[mnemonic] = funct7
     if set(values) != set(required):
         raise ValueError(f"{domain_path} missing required {ball} ISA entries")
-    return [f"+define+{macro}={values[mnemonic]}" for mnemonic, macro in required.items()]
+    defines = [f"+define+{macro}={values[mnemonic]}" for mnemonic, macro in required.items()]
+    if ball == "smatmul":
+        mappings = domain.get("ballIdMappings")
+        if not isinstance(mappings, list):
+            raise ValueError(f"ballIdMappings missing from {domain_path}")
+        matching = [entry for entry in mappings
+                    if isinstance(entry, dict) and entry.get("ballName") == "SMatMulBall"]
+        if len(matching) != 1:
+            raise ValueError(f"{domain_path} must define exactly one SMatMulBall mapping")
+        out_bw = matching[0].get("outBW")
+        if not isinstance(out_bw, int) or out_bw <= 0 or out_bw > 4 or 4 % out_bw:
+            raise ValueError(f"invalid SMatMulBall outBW in {domain_path}")
+        defines.append(f"+define+SMATMUL_OUT_BW={out_bw}")
+    return defines
 
 
 def uvm_paths(bbdir: str, input_data: dict, ball_override: str | None = None) -> dict:

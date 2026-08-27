@@ -18,6 +18,7 @@ if utils_path not in sys.path:
 
 from utils.event_common import require_chip
 from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir
+from utils.p2e_timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -46,6 +47,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
+    normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     build_dir = (
         input_data.get("build_dir")

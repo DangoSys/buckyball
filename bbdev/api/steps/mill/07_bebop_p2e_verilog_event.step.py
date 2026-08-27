@@ -16,6 +16,7 @@ if mill_scripts not in sys.path:
 from utils.event_common import require_chip
 from utils.path import get_buckyball_path
 from utils.path import rtl_out
+from utils.p2e_timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
 import mill as mill_run
 from utils.event_common import check_result, get_origin_trace_id
@@ -51,6 +52,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             stderr_prefix=prefix,
             )
         ).returncode
+        if returncode == 0:
+            normalize_p2e_timescale(build_dir, ctx.logger)
     except (ValueError, RuntimeError) as error:
         ctx.logger.error(str(error))
         await check_result(

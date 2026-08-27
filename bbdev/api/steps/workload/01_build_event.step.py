@@ -76,7 +76,7 @@ def chips_for_model(bbdir: str, model_key: str) -> set[str]:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    allowed = {"chip", "model", "stable", "rushB", "_trace_id"}
+    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload build parameter(s): {', '.join(unknown)}")
@@ -133,6 +133,32 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    ctest = input_data.get("ctest", False)
+    mlirtest = input_data.get("mlirtest", False)
+    if not isinstance(ctest, bool) or not isinstance(mlirtest, bool):
+        ctx.logger.error("--ctest and --mlirtest must be boolean flags")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_test_scope"},
+            trace_id=origin_tid,
+        )
+        return
+    if ctest and mlirtest:
+        ctx.logger.error("--ctest and --mlirtest cannot be used together")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "conflicting_test_scope"},
+            trace_id=origin_tid,
+        )
+        return
+    if (ctest or mlirtest) and (model or rushb_backend):
+        ctx.logger.error("--ctest and --mlirtest cannot be used with --model or --rushB")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "test_scope_conflicts_with_workload"},
+            trace_id=origin_tid,
+        )
+        return
 
     if model:
         model_key = model.lower()
@@ -171,6 +197,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             chip,
             model=model.lower() if model else "",
             rushb=rushb_backend,
+            ctest=ctest,
+            mlirtest=mlirtest,
             stable=stable,
             logger=ctx.logger,
             task_scope=origin_tid,
@@ -186,7 +214,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     await check_result(
         ctx, 0, continue_run=False,
-        extra_fields={"chip": chip, "model": model, "rushB": rushb_backend},
+        extra_fields={
+            "chip": chip,
+            "model": model,
+            "rushB": rushb_backend,
+            "ctest": ctest,
+            "mlirtest": mlirtest,
+        },
         trace_id=origin_tid)
 
     return

@@ -236,7 +236,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "--elf",
             binary_path,
             "--log-dir",
-            log_dir,
+            run_log,
         ]
     else:
         cargo_args = [
@@ -251,7 +251,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "--elf",
             binary_path,
             "--log-dir",
-            log_dir,
+            run_log,
         ]
     if input_data.get("pk"):
         cargo_args.append("--pk")

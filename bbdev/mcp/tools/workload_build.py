@@ -13,6 +13,8 @@ def register(mcp):
         chip: str,
         model: Optional[str] = None,
         rushB: Optional[str] = None,
+        ctest: bool = False,
+        mlirtest: bool = False,
     ) -> str:
         """Build workloads for a chip. POST /workload/build."""
         if e := need("chip", chip):
@@ -24,4 +26,12 @@ def register(mcp):
             if rushB not in {"bemu", "verilator"}:
                 return err("rushB must be bemu or verilator")
             params["rushB"] = rushB
+        if ctest and mlirtest:
+            return err("ctest and mlirtest cannot be used together")
+        if (ctest or mlirtest) and (model or rushB):
+            return err("ctest and mlirtest cannot be used with model or rushB")
+        if ctest:
+            params["ctest"] = True
+        if mlirtest:
+            params["mlirtest"] = True
         return fmt(submit("/workload/build", params))

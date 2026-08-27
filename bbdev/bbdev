@@ -46,7 +46,7 @@ WORKFLOW_COMMANDS = {
     },
     "workload": {
         "clean": 'Clean workload output directory. Args: "--chip <chip>"',
-        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--stable] [--rushB <bemu|verilator>]"; without --model, --rushB builds CTest and MLIR rushB runners.',
+        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--stable] [--rushB <bemu|verilator>] [--ctest|--mlirtest]"; --ctest and --mlirtest are mutually exclusive local builds and cannot be combined with --model or --rushB.',
         "tohex": 'Convert chip workload ELF to hex. Args: "--chip <chip>"',
     },
     "kernel": {

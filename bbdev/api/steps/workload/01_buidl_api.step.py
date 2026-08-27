@@ -22,7 +22,7 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "model", "stable", "rushB"}
+    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest"}
     unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return ApiResponse(
@@ -58,11 +58,35 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=400,
             body={"error": "Invalid --rushB: expected bemu or verilator"},
         )
+    ctest = body.get("ctest", False)
+    mlirtest = body.get("mlirtest", False)
+    if not isinstance(ctest, bool) or not isinstance(mlirtest, bool):
+        return ApiResponse(
+            status=400,
+            body={"error": "--ctest and --mlirtest must be boolean flags"},
+        )
+    if ctest and mlirtest:
+        return ApiResponse(
+            status=400,
+            body={"error": "--ctest and --mlirtest cannot be used together"},
+        )
+    if (ctest or mlirtest) and body.get("model"):
+        return ApiResponse(
+            status=400,
+            body={"error": "--ctest and --mlirtest cannot be used with --model"},
+        )
+    if (ctest or mlirtest) and rushb_backend:
+        return ApiResponse(
+            status=400,
+            body={"error": "--ctest and --mlirtest cannot be used with --rushB"},
+        )
     data = {
         "chip": chip,
         "model": body.get("model", ""),
         "stable": stable,
         "rushB": rushb_backend,
+        "ctest": ctest,
+        "mlirtest": mlirtest,
     }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -28,6 +28,8 @@ bbdev workload --clean "--chip toy"
 - **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
 - **`rushB`** - Optional host-native backend: `bemu` or `verilator`. Requires
   `model`. It builds host-native CPU and rushB-lowered accelerator objects.
+- **`ctest`** - Build CTest workloads only. Cannot be combined with `model` or `rushB`.
+- **`mlirtest`** - Build MLIRTest workloads only. Cannot be combined with `model` or `rushB`.
 
 For chip workloads under paths like `*/chips/<chip>`, only the directory selected by `chip` is synced to `bb-tests/output/<chip>/workloads`.
 
@@ -47,6 +49,12 @@ bbdev workload --build "--chip pebble --model lenet --rushB verilator"
 
 # Build all workloads
 bbdev workload --build "--chip toy"
+
+# Build only CTest workloads
+bbdev workload --build "--chip pebble --ctest"
+
+# Build only MLIRTest workloads
+bbdev workload --build "--chip pebble --mlirtest"
 ```
 
 **Response**:
