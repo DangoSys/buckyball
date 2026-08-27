@@ -100,7 +100,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     script = (
         f"cd {shlex.quote(paths['verify_dir'])} && "
-        f"{shlex.quote(paths['simv'])} "
+        f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" {shlex.quote(paths['simv'])} "
         f"-sv_lib {shlex.quote(paths['dpi_lib'])} "
         f"+UVM_TESTNAME={shlex.quote(test)} "
         + " ".join(shlex.quote(word) for word in plusarg_words)
