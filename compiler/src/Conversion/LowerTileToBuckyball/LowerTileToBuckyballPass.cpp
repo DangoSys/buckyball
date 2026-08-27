@@ -62,7 +62,6 @@ public:
                            linalg::LinalgDialect>();
     target.addIllegalOp<tile::TileMatMulOp>();
     target.addIllegalOp<tile::TileTransposeOp>();
-    target.addIllegalOp<tile::TileReluOp>();
 
     RewritePatternSet patterns(context);
     for (llvm::StringRef ball : targetConfig.balls) {

@@ -48,9 +48,6 @@ void populateSMatMulBallTileLoweringPatterns(RewritePatternSet &patterns,
                                              int64_t bankWidthBytes,
                                              int64_t bankDepth,
                                              int64_t bankNum);
-void populateReluBallTileLoweringPatterns(RewritePatternSet &patterns,
-                                          int64_t bankWidthBytes,
-                                          int64_t bankDepth, int64_t bankNum);
 
 } // namespace buddy
 } // namespace mlir
