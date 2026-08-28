@@ -156,23 +156,28 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).hart_id          := io.hartid
     io.mem_req(i).rob_id           := 0.U
 
-    val isRead    = mappingTable(i).isRead
-    val rid       = mappingTable(i).id
-    val wid       = mappingTable(i).id
-    val ballRead  = io.bankRead(rid).bankRead.io
-    val ballWrite = io.bankWrite(wid).bankWrite.io
-    val rbank_id  = io.bankRead(rid).bankRead.bank_id
-    val wbank_id  = io.bankWrite(wid).bankWrite.bank_id
-    val rgroup_id = io.bankRead(rid).bankRead.group_id
-    val wgroup_id = io.bankWrite(wid).bankWrite.group_id
-    val r_shared  = io.bankRead(rid).is_shared
-    val w_shared  = io.bankWrite(wid).is_shared
-    val rrob_id   = io.bankRead(rid).bankRead.rob_id
-    val wrob_id   = io.bankWrite(wid).bankWrite.rob_id
+    val isRead        = mappingTable(i).isRead
+    val rid           = mappingTable(i).id
+    val wid           = mappingTable(i).id
+    val ballRead      = io.bankRead(rid).bankRead.io
+    val ballWrite     = io.bankWrite(wid).bankWrite.io
+    val rbank_id      = io.bankRead(rid).bankRead.bank_id
+    val wbank_id      = io.bankWrite(wid).bankWrite.bank_id
+    val rgroup_id     = io.bankRead(rid).bankRead.group_id
+    val wgroup_id     = io.bankWrite(wid).bankWrite.group_id
+    val r_shared      = io.bankRead(rid).is_shared
+    val w_shared      = io.bankWrite(wid).is_shared
+    val rrob_id       = io.bankRead(rid).bankRead.rob_id
+    val wrob_id       = io.bankWrite(wid).bankWrite.rob_id
+    // A released Ball cannot issue new traffic, but its final bank response
+    // still needs the existing route until the physical channel drains.
+    val ballRouteOpen = !mappingTable(i).isBall ||
+      io.ballChannelReady(mappingTable(i).ballId) ||
+      !io.ballChannelActive(mappingTable(i).ballId)
 
     when(mappingTable(i).valid) {
       when(isRead) {
-        when(!mappingTable(i).isBall || io.ballChannelReady(mappingTable(i).ballId)) {
+        when(ballRouteOpen) {
           io.mem_req(i).read <> ballRead
           io.mem_req(i).bank_id   := rbank_id
           io.mem_req(i).group_id  := rgroup_id
@@ -180,7 +185,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
           io.mem_req(i).rob_id    := rrob_id
         }
       }.otherwise {
-        when(!mappingTable(i).isBall || io.ballChannelReady(mappingTable(i).ballId)) {
+        when(ballRouteOpen) {
           io.mem_req(i).write <> ballWrite
           io.mem_req(i).bank_id   := wbank_id
           io.mem_req(i).group_id  := wgroup_id
@@ -211,8 +216,16 @@ class MemMidend(val b: GlobalConfig) extends Module {
   for (i <- 0 until b.memDomain.bankChannel) {
     val releaseCounter = RegInit(0.U(5.W))
 
-    when(mappingTable(i).valid && mappingTable(i).isBall &&
-      !io.ballChannelActive(mappingTable(i).ballId)) {
+    // Releasing a Ball's logical channel can precede the final bank response.
+    // Keep its physical route until that response has been consumed; otherwise
+    // the response loses its consumer and leaves the AccPipe busy.
+    val ballReleased   = mappingTable(i).isBall &&
+      !io.ballChannelActive(mappingTable(i).ballId)
+    val channelDrained = !(io.mem_req(i).read.resp.valid ||
+      io.mem_req(i).write.resp.valid || io.mem_req(i).read.req.valid ||
+      io.mem_req(i).write.req.valid)
+
+    when(mappingTable(i).valid && ballReleased && channelDrained) {
       mappingTable(i).valid  := false.B
       mappingTable(i).isRead := false.B
       mappingTable(i).id     := 0.U

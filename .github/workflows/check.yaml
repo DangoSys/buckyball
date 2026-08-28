@@ -63,7 +63,7 @@ jobs:
       matrix:
         include:
           - chip: toy
-            enable_rushb: true
+            enable_rushb: false
             run_bemu_elf_tests: true
             run_bemu_pk_tests: true
             run_verilator_batch_tests: true

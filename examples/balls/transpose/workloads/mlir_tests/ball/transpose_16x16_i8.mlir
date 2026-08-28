@@ -34,6 +34,7 @@ func.func @main() -> i8 {
   buckyball.transpose %loaded, %bout, %iter, %elem_bits : i64
   %stored = buckyball.bank_mvout %output %bout %depth %stride
       : memref<16x16xi8> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 
