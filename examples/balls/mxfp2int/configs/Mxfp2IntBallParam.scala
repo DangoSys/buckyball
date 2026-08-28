@@ -4,8 +4,7 @@ import framework.balldomain.configs.BallParamLoader
 import framework.top.GlobalConfig
 
 case class Mxfp2IntBallParam(
-  mxfpFormat: String
-)
+  mxfpFormat: String)
 
 object Mxfp2IntBallParam {
   private val ballName = "Mxfp2IntBall"
@@ -14,4 +13,5 @@ object Mxfp2IntBallParam {
     val tbl = BallParamLoader.ballTable(b, ballName)
     Mxfp2IntBallParam(mxfpFormat = BallParamLoader.str(tbl, "mxfpFormat"))
   }
+
 }

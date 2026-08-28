@@ -10,8 +10,8 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateTransposeAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                                 PhysicalBankState &state);
+void populateTransposeBallAssignPhysicalBankPatterns(
+    RewritePatternSet &patterns, PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
@@ -31,7 +31,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateTransposeAssignPhysicalBankPatterns(
+void mlir::buddy::populateTransposeBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankTransposePattern>(patterns.getContext());

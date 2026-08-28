@@ -17,13 +17,7 @@ pub fn output_rows(iter: usize, ksize: usize, stride: usize, padding: usize) -> 
     m_tiles * k_tiles * TILE
 }
 
-pub fn im2col(
-    src: &[u8],
-    iter: usize,
-    ksize: usize,
-    stride: usize,
-    padding: usize,
-) -> Vec<u8> {
+pub fn im2col(src: &[u8], iter: usize, ksize: usize, stride: usize, padding: usize) -> Vec<u8> {
     if src.len() != iter * iter {
         panic!(
             "im2col model: src len {} != iter*iter {}",

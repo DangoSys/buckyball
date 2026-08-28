@@ -8,7 +8,10 @@ import examples.balls.vector.op.CascadeOp
 
 class CasThread(config: VectorBallParam) extends BaseThread(config, "cascade") {
   val cascadeOp = Module(new CascadeOp(this.config))
-  val vvvBond   = IO(new VVV(this.config, this.config.outputWidth, this.config.outputWidth))
+
+  val vvvBond = IO(
+    new VVV(this.config, this.config.outputWidth, this.config.outputWidth)
+  )
 
   // Connect CascadeOp and VVVBond
   cascadeOp.io.in <> vvvBond.in

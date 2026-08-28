@@ -25,7 +25,7 @@ writeChannel = 4
 enable = true
 bankNum = 16
 bankEntries = 64
-bankWidth = 128
+bankWidth = 8
 readWidth = 8
 
 [mem]

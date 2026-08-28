@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 /* Fill exactly one bank: 34x34 k3 -> 1024 output rows. */

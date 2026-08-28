@@ -2,13 +2,11 @@ use super::super::bank::bank_num;
 use super::bank_matrix::read_i8_nn;
 use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
 use super::gemmini_state::gemini;
-use super::instruction::{ExecContext, Instruction};
+use super::instruction::{BallInstruction, ExecContext};
 
 pub struct GemminiPreload;
 
-impl Instruction for GemminiPreload {
-    const FUNCT: u32 = 53;
-
+impl BallInstruction for GemminiPreload {
     fn exec(xs1: u64, _xs2: u64, ctx: &mut ExecContext) -> u64 {
         let op1 = rs1_b0(xs1);
         let wr = rs1_b2(xs1);

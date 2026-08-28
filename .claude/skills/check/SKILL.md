@@ -16,9 +16,10 @@ Checks on that TOML:
 1. `ballNum` equals `ballIdMappings` length
 2. `ballId` is strictly increasing (`0, 1, 2, ...`) with no gaps
 3. no duplicated `ballId` / `ballName`
-4. no duplicated `funct7` / `mnemonic` in `ballISA`
+4. no duplicated `funct7` / `mnemonic` in `ballISA` (scope = this single balldomain / core; other cores may reuse the same funct7)
 5. every `ballISA.bid` exists in mappings; every ball has ≥1 ISA entry
 6. relative `config=` paths exist; `inBW`/`outBW` are positive
+7. ball ISA headers / MLIR must not hardcode ball `funct7` (encoding is generated from this TOML into `examples/cores/<core>/isa/ballISA.h`)
 
 Report pass/fail for each item.
 

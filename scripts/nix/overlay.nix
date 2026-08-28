@@ -16,6 +16,5 @@ final: prev:
     opensta = final.tools.opensta;
   };
   kernel = final.callPackage ./build-env-kernel.nix { };
-  mosoo = final.callPackage ./build-env-mosoo.nix { };
   cuda = final.callPackage ./build-env-cuda.nix { };
 }

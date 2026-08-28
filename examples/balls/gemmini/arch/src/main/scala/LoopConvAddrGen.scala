@@ -61,8 +61,10 @@ class LoopConvAddrGen(val b: GlobalConfig) extends Module {
 
   // Weight address: base + ((krow * kernel_dim + kcol) * in_channels + kch) * out_channels * elemSize
   //                      + och * elemSize
-  val weightOffset = ((io.krow * cfg.kernel_dim + io.kcol) * cfg.in_channels + io.kch) *
-    cfg.out_channels + io.och
+  val weightOffset =
+    ((io.krow * cfg.kernel_dim + io.kcol) * cfg.in_channels + io.kch) *
+      cfg.out_channels + io.och
+
   io.weightAddr := cfg.dram_addr_weight + weightOffset * elemSize.U
 
   // Output address: base + ((batch * out_dim * out_dim + orow * out_dim + ocol) * out_channels + och) * accBytes

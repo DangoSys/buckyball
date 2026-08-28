@@ -82,6 +82,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   }
 
   def getFreePbankId(): UInt = {
+    val hasFree     = mappingTable.map(_.valid === false.B).reduce(_ || _)
+    when(!hasFree) {
+      assert(false.B, "PrivateMemBackend allocation failed: no free physical bank\n")
+    }
     val freePbankId = mappingTable.indexWhere(_.valid === false.B)
     freePbankId
   }
@@ -130,6 +134,11 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
   when(io.config.fire) {
     when(io.config.bits.alloc) {
+      // Match bemu mset: realloc of the same vbank frees prior physical banks first.
+      // MemConfiger emits one fire per group; only group 0 drops the old mapping.
+      when(io.config.bits.group_id === 0.U) {
+        deleteEntry(io.config.bits.vbank_id)
+      }
       addEntry(
         io.config.bits.vbank_id,
         getFreePbankId(),
@@ -222,9 +231,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         (!mappingTable(j).is_multi ||
           (mappingTable(j).is_multi && (mappingTable(j).group_id === activeGroup)))
 
-      val hold_one = RegNext(hit_bank && req_valid, init = false.B)
-
-      when((hit_bank && req_valid) || hold_one) {
+      when(hit_bank && req_valid) {
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }

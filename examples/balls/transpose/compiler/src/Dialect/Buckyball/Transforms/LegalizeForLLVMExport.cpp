@@ -4,6 +4,7 @@
 
 #include "Buckyball/BuckyballOps.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball;
@@ -17,6 +18,7 @@ struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
   LogicalResult
   matchAndRewrite(TransposeOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("TransposeBall");
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
@@ -26,8 +28,37 @@ struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
                                                    adaptor.getElemBits());
       return success();
     }
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, adaptor.getElemBits(),
-                                              rewriter.getI32IntegerAttr(49));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, adaptor.getElemBits(),
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("TRANSPOSE")));
+    return success();
+  }
+
+private:
+  bool stable = false;
+};
+struct BankTransposeLowering : public ConvertOpToLLVMPattern<BankTransposeOp> {
+  BankTransposeLowering(LLVMTypeConverter &converter, bool stable)
+      : ConvertOpToLLVMPattern<BankTransposeOp>(converter), stable(stable) {}
+
+  LogicalResult
+  matchAndRewrite(BankTransposeOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("TransposeBall");
+    Location loc = op.getLoc();
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInBank(),
+                                 cstI64(rewriter, loc, 0), adaptor.getOutBank(),
+                                 adaptor.getIter());
+    if (stable) {
+      rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, rs1,
+                                                   adaptor.getElemBits());
+      return success();
+    }
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, adaptor.getElemBits(),
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("TRANSPOSE")));
     return success();
   }
 
@@ -37,13 +68,15 @@ private:
 } // namespace
 
 namespace mlir::buddy::buckyball {
-void populateTransposeLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable) {
+void populateTransposeBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    int64_t, bool) {
   patterns.add<TransposeLowering>(converter, stable);
+  patterns.add<BankTransposeLowering>(converter, stable);
 }
 
-void configureTransposeLegalizeForExportTarget(LLVMConversionTarget &target,
-                                               bool stable) {
+void configureTransposeBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                   bool stable) {
   if (stable)
     target.addLegalOp<TransposeIntrOp>();
   else

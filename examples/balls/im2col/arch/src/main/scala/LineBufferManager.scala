@@ -21,13 +21,15 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
-    .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("Im2colBall not found in config")
+    )
 
   private val inBW = map.inBW
 
   @public val io = IO(new Bundle {
-    val bankRead = Vec(inBW, Flipped(new BankRead(b)))
-    val start    = Input(Bool())
+    val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
+    val start     = Input(Bool())
     val inRows    = Input(UInt(16.W))
     val inCols    = Input(UInt(16.W))
     val rowStride = Input(UInt(8.W))
@@ -35,20 +37,20 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     val padding   = Input(UInt(8.W))
     val startRow  = Input(UInt(8.W))
     val startCol  = Input(UInt(8.W))
-    val outRow   = Input(UInt(16.W))
-    val outCol   = Input(UInt(16.W))
-    val kRowIdx  = Input(UInt(kW.W))
-    val kColIdx  = Input(UInt(kW.W))
-    val rBankId  = Input(UInt(log2Up(b.memDomain.bankNum).W))
-    val robId    = Input(UInt(log2Up(b.frontend.rob_entries).W))
-    val loadDone = Output(Bool())
-    val elemData = Output(UInt(elemWidth.W))
+    val outRow    = Input(UInt(16.W))
+    val outCol    = Input(UInt(16.W))
+    val kRowIdx   = Input(UInt(kW.W))
+    val kColIdx   = Input(UInt(kW.W))
+    val rBankId   = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val robId     = Input(UInt(log2Up(b.frontend.rob_entries).W))
+    val loadDone  = Output(Bool())
+    val elemData  = Output(UInt(elemWidth.W))
   })
 
-  private val buf     = RegInit(VecInit(Seq.fill(maxBeats)(0.U(bankWidth.W))))
-  private val active  = RegInit(false.B)
-  private val pending = RegInit(false.B)
-  private val beat    = RegInit(0.U(log2Ceil(maxBeats + 1).W))
+  private val buf        = RegInit(VecInit(Seq.fill(maxBeats)(0.U(bankWidth.W))))
+  private val active     = RegInit(false.B)
+  private val pending    = RegInit(false.B)
+  private val beat       = RegInit(0.U(log2Ceil(maxBeats + 1).W))
   private val totalBeats =
     ((io.inRows * io.inCols) + (lanesPerBeat - 1).U) / lanesPerBeat.U
 
@@ -87,15 +89,18 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
 
   private val paddedRow = io.startRow + io.outRow * io.rowStride + io.kRowIdx
   private val paddedCol = io.startCol + io.outCol * io.colStride + io.kColIdx
-  private val rowValid  = paddedRow >= io.padding && paddedRow < io.padding + io.inRows
-  private val colValid  = paddedCol >= io.padding && paddedCol < io.padding + io.inCols
+  private val rowValid  =
+    paddedRow >= io.padding && paddedRow < io.padding + io.inRows
+  private val colValid  =
+    paddedCol >= io.padding && paddedCol < io.padding + io.inCols
   private val inBound   = rowValid && colValid
   private val srcRow    = Mux(inBound, paddedRow - io.padding, 0.U)
   private val srcCol    = Mux(inBound, paddedCol - io.padding, 0.U)
   private val elemIndex = srcRow * io.inCols + srcCol
   private val beatIndex = elemIndex / lanesPerBeat.U
   private val laneIndex = elemIndex % lanesPerBeat.U
-  private val lanes     = buf(beatIndex).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
+  private val lanes     =
+    buf(beatIndex).asTypeOf(Vec(lanesPerBeat, UInt(elemWidth.W)))
 
   io.elemData := Mux(inBound, lanes(laneIndex), 0.U)
 }

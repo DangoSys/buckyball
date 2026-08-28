@@ -1,0 +1,6 @@
+[designs]
+include = "designs/toy.toml"
+
+[sims]
+verilator = "sims.verilator.BuckyballToyVerilatorConfig"
+p2e = "sims.p2e.P2EToyConfig"

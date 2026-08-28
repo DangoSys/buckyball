@@ -10,20 +10,20 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateVectorAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+void populateVecBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                               PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
 
-class BankMulWarp16Pattern : public OpRewritePattern<BankMulWarp16Op> {
+class BankVecMat16Pattern : public OpRewritePattern<BankVecMat16Op> {
 public:
-  using OpRewritePattern<BankMulWarp16Op>::OpRewritePattern;
+  using OpRewritePattern<BankVecMat16Op>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BankMulWarp16Op op,
+  LogicalResult matchAndRewrite(BankVecMat16Op op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.create<MulWarp16Op>(op.getLoc(), op.getOp1Bank(), op.getOp2Bank(),
-                                 op.getWrBank(), op.getIter(), op.getMode());
+    rewriter.create<VecMat16Op>(op.getLoc(), op.getOp1Bank(), op.getOp2Bank(),
+                                op.getWrBank(), op.getIter(), op.getMode());
     rewriter.replaceOp(op, op.getWrBank());
     return success();
   }
@@ -31,8 +31,8 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateVectorAssignPhysicalBankPatterns(
+void mlir::buddy::populateVecBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
-  patterns.add<BankMulWarp16Pattern>(patterns.getContext());
+  patterns.add<BankVecMat16Pattern>(patterns.getContext());
 }

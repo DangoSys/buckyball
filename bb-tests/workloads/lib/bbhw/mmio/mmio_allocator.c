@@ -1,28 +1,28 @@
 #include "mmio_allocator.h"
 
 void mmio_allocator_init(mmio_allocator_t *alloc) {
-  for (int i = 0; i < MMIO_BANK_NUM; i++) {
+  for (int i = 0; i < MMIO_LOGICAL_ROWS; i++) {
     alloc->bitmap[i] = 0;
   }
 }
 
 uint16_t mmio_allocator_alloc(mmio_allocator_t *alloc, uint16_t size_rows) {
-  if (size_rows == 0 || size_rows > MMIO_BANK_ENTRIES) {
+  if (size_rows == 0 || size_rows > MMIO_LOGICAL_ROWS) {
     return (uint16_t)-1;
   }
-  for (int b = 0; b < MMIO_BANK_NUM; b++) {
-    for (int start = 0; start + size_rows <= MMIO_BANK_ENTRIES; start++) {
-      uint64_t mask;
-      if (size_rows == 64) {
-        mask = ~(uint64_t)0;
-      } else {
-        mask = (((uint64_t)1 << size_rows) - 1) << start;
+  for (int start = 0; start + size_rows <= MMIO_LOGICAL_ROWS; start++) {
+    int free = 1;
+    for (int row = 0; row < size_rows; row++) {
+      if (alloc->bitmap[start + row]) {
+        free = 0;
+        break;
       }
-      if ((alloc->bitmap[b] & mask) == 0) {
-        alloc->bitmap[b] |= mask;
-        return (uint16_t)(MMIO_BANK_BASE(b) +
-                          start * (MMIO_BANK_WIDTH_BITS / 8));
+    }
+    if (free) {
+      for (int row = 0; row < size_rows; row++) {
+        alloc->bitmap[start + row] = 1;
       }
+      return (uint16_t)(start * MMIO_LOGICAL_ROW_BYTES);
     }
   }
   return (uint16_t)-1;
@@ -32,14 +32,11 @@ void mmio_allocator_free(mmio_allocator_t *alloc, uint16_t addr,
                          uint16_t size_rows) {
   if (size_rows == 0)
     return;
-  int bytes_per_row = MMIO_BANK_WIDTH_BITS / 8;
-  int b = addr / MMIO_BANK_BYTES;
-  int start = (addr % MMIO_BANK_BYTES) / bytes_per_row;
-  uint64_t mask;
-  if (size_rows == 64) {
-    mask = ~(uint64_t)0;
-  } else {
-    mask = (((uint64_t)1 << size_rows) - 1) << start;
+  int start = addr / MMIO_LOGICAL_ROW_BYTES;
+  if (start + size_rows > MMIO_LOGICAL_ROWS) {
+    return;
   }
-  alloc->bitmap[b] &= ~mask;
+  for (int row = 0; row < size_rows; row++) {
+    alloc->bitmap[start + row] = 0;
+  }
 }

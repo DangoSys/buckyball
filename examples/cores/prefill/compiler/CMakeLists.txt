@@ -4,4 +4,8 @@ endif()
 
 set(BB_CORE_NAME prefill)
 set(BB_CORE_TARGET_PREFIX "")
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../goban/compiler/src ${CMAKE_CURRENT_BINARY_DIR}/goban-src)
+
+set(BB_CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+get_filename_component(_BB_REPO_ROOT "${BB_CORE_DIR}/../../.." ABSOLUTE)
+include_directories(${_BB_REPO_ROOT}/examples/balls)
+add_subdirectory(src)

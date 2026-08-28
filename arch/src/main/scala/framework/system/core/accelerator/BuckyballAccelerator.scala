@@ -84,6 +84,9 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     frontend.io.ball_subrob_req_i(i) <> ballDomain.subRobReq(i)
   }
 
+  memDomain.io.ballChannelActive := ballDomain.ballChannelActive
+  ballDomain.ballChannelReady    := memDomain.io.ballChannelReady
+
   // --- Frontend -> MemDomain ---
   memDomain.io.global_issue_i <> frontend.io.mem_issue_o
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o
@@ -128,6 +131,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
   // --- BallDomain <-> MemDomain (MMIO read path) ---
   ballDomain.mmioRead <> memDomain.io.ballDomain.mmioRead
+  ballDomain.mmioWrite <> memDomain.io.ballDomain.mmioWrite
 
   // --- PTW ---
   io.ptw(0).req <> memDomain.io.ptw(0).req

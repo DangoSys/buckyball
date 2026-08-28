@@ -27,101 +27,19 @@
 #include "mlir/Transforms/DialectConversion.h"
 
 #include "Buckyball/BuckyballDialect.h"
-#include "Buckyball/BuckyballOps.h"
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
 
 using namespace mlir;
-using namespace ::buddy::buckyball;
-using namespace ::buddy::tile;
 namespace tile = ::buddy::tile;
 using mlir::buddy::kDefaultBankWidthBytes;
-using mlir::buddy::populateMatrixTileMatMulPatterns;
 
 namespace {
 
 static Value cstF32(OpBuilder &b, Location loc, float v) {
   return b.create<arith::ConstantOp>(loc, b.getF32Type(), b.getF32FloatAttr(v));
 }
-
-static Value packF32BitsAsI64(OpBuilder &b, Location loc, Value f32Val) {
-  Value i32Bits = b.create<arith::BitcastOp>(loc, b.getI32Type(), f32Val);
-  return b.create<arith::ExtUIOp>(loc, b.getI64Type(), i32Bits);
-}
-
-static Value buildTileAbsMax(PatternRewriter &rewriter, Location loc, Value mem,
-                             uint64_t rows, uint64_t cols) {
-  auto maxTy = MemRefType::get({1}, rewriter.getF32Type());
-  Value maxBuf = rewriter.create<memref::AllocOp>(loc, maxTy);
-
-  Value zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-  Value oneIdx = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-  Value rowsIdx = rewriter.create<arith::ConstantIndexOp>(loc, rows);
-  Value colsIdx = rewriter.create<arith::ConstantIndexOp>(loc, cols);
-  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
-
-  rewriter.create<memref::StoreOp>(loc, zeroF32, maxBuf, ValueRange{zeroIdx});
-
-  auto rowLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, rowsIdx, oneIdx);
-  rewriter.setInsertionPointToStart(rowLoop.getBody());
-  auto colLoop = rewriter.create<scf::ForOp>(loc, zeroIdx, colsIdx, oneIdx);
-  rewriter.setInsertionPointToStart(colLoop.getBody());
-
-  Value elem = rewriter.create<memref::LoadOp>(
-      loc, mem,
-      ValueRange{rowLoop.getInductionVar(), colLoop.getInductionVar()});
-  if (elem.getType() != rewriter.getF32Type())
-    elem = rewriter.create<arith::ExtFOp>(loc, rewriter.getF32Type(), elem);
-  Value neg = rewriter.create<arith::NegFOp>(loc, elem);
-  Value abs = rewriter.create<arith::MaximumFOp>(loc, elem, neg);
-  Value cur = rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
-  Value upd = rewriter.create<arith::MaximumFOp>(loc, cur, abs);
-  rewriter.create<memref::StoreOp>(loc, upd, maxBuf, ValueRange{zeroIdx});
-
-  rewriter.setInsertionPointAfter(rowLoop);
-  Value result =
-      rewriter.create<memref::LoadOp>(loc, maxBuf, ValueRange{zeroIdx});
-  rewriter.create<memref::DeallocOp>(loc, maxBuf);
-  return result;
-}
-
-static Value buildQuantScale(PatternRewriter &rewriter, Location loc,
-                             Value maxAbs) {
-  Value zeroF32 = cstF32(rewriter, loc, 0.0f);
-  Value oneF32 = cstF32(rewriter, loc, 1.0f);
-  Value qmaxF32 = cstF32(rewriter, loc, 127.0f);
-  Value hasData = rewriter.create<arith::CmpFOp>(loc, arith::CmpFPredicate::OGT,
-                                                 maxAbs, zeroF32);
-  Value scaled = rewriter.create<arith::DivFOp>(loc, qmaxF32, maxAbs);
-  return rewriter.create<arith::SelectOp>(loc, hasData, scaled, oneF32);
-}
-
-class TileTransposeLowering : public OpRewritePattern<tile::TileTransposeOp> {
-public:
-  using OpRewritePattern::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tile::TileTransposeOp op,
-                                PatternRewriter &rewriter) const override {
-    auto inputType = dyn_cast<MemRefType>(op.getAMemArray().getType());
-    auto outputType = dyn_cast<MemRefType>(op.getBMemArray().getType());
-    if (!inputType || !outputType || !inputType.hasStaticShape() ||
-        !outputType.hasStaticShape())
-      return op.emitError("requires static input and output memrefs");
-    if (inputType.getRank() != 2 || outputType.getRank() != 2)
-      return op.emitError("requires rank-2 memrefs");
-    if (outputType.getShape()[0] != inputType.getShape()[1] ||
-        outputType.getShape()[1] != inputType.getShape()[0])
-      return op.emitError("output shape must transpose the input shape");
-    if (inputType.getElementType() != outputType.getElementType())
-      return op.emitError("input/output element types must match");
-
-    rewriter.create<MemTransposeOp>(op.getLoc(), op.getAMemArray(),
-                                    op.getBMemArray());
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
 
 class TileConv2dLowering : public OpRewritePattern<tile::TileConv2dOp> {
 public:
@@ -249,22 +167,13 @@ private:
   int64_t bankWidthBytes, bankDepth;
 };
 
-void populateToyLocalTilePatterns(RewritePatternSet &patterns,
-                                  int64_t bankWidthBytes, int64_t bankDepth,
-                                  int64_t bankNum) {
-  patterns.add<TileTransposeLowering>(patterns.getContext());
-  patterns.add<TileConv2dLowering>(patterns.getContext(), bankWidthBytes,
-                                   bankDepth, bankNum);
-}
-
 } // namespace
 
 void mlir::populateLowerTileToBuckyballConversionPatterns(
     RewritePatternSet &patterns, int64_t bankWidthBytes, int64_t bankDepth,
     int64_t bankNum) {
-  populateMatrixTileMatMulPatterns(patterns, bankWidthBytes, bankDepth,
-                                   bankNum);
-  populateToyLocalTilePatterns(patterns, bankWidthBytes, bankDepth, bankNum);
+  patterns.add<TileConv2dLowering>(patterns.getContext(), bankWidthBytes,
+                                   bankDepth, bankNum);
 }
 
 namespace {

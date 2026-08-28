@@ -3,33 +3,37 @@ package framework.memdomain.backend.mmio
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.memdomain.backend.banks.SramWriteIO
 import framework.top.GlobalConfig
 
 /**
  * MmioBank: single MMIO SRAM bank.
  *
- *   Internal storage : mmioBankEntries x mmioBankWidth bits (default 64 x 128 = 1 KB)
- *   Write port       : full mmioBankWidth (from DMA), reuses SramWriteIO for compatibility
- *   Read port        : mmioReadWidth bits (default 8), via byte_offset mux from 128-bit word
+ *   Internal storage : mmioBankEntries x mmioReadWidth bits (default 1024 x 8 = 1 KB)
+ *   Write port       : one byte; MmioPool distributes DMA beats across banks.
+ *   Read port        : one byte.
  *
- * Read latency : 1 cycle (SyncReadMem) + combinational byte-mux registered = 1 cycle
- * Write/read   : single-port semantics. Write takes priority when both valid.
+ * Read latency : 1 cycle. Write/read uses single-port semantics; write wins.
  */
 @instantiable
 class MmioBank(val b: GlobalConfig) extends Module {
 
-  private val numEntries  = b.memDomain.mmioBankEntries
-  private val width       = b.memDomain.mmioBankWidth
-  private val bytesPerRow = width / 8
+  private val numEntries = b.memDomain.mmioBankEntries
+  require(
+    b.memDomain.mmioBankWidth == b.memDomain.mmioReadWidth,
+    "MmioBank requires one physical MMIO element per read"
+  )
+  require(
+    b.memDomain.mmioReadWidth == 8,
+    "MmioBank requires 8-bit MMIO elements"
+  )
 
   @public
   val io = IO(new Bundle {
-    val write = new SramWriteIO(b)
+    val write = new MmioBankWriteIO(b)
     val read  = new MmioBankReadIO(b)
   })
 
-  val mem = SyncReadMem(numEntries, UInt(width.W))
+  val mem = SyncReadMem(numEntries, UInt(b.memDomain.mmioReadWidth.W))
 
   io.write.req.ready := true.B
   io.read.req.ready  := !io.write.req.valid
@@ -37,16 +41,10 @@ class MmioBank(val b: GlobalConfig) extends Module {
   when(io.write.req.fire) {
     mem.write(io.write.req.bits.addr, io.write.req.bits.data)
   }
-  io.write.resp.valid   := RegNext(io.write.req.fire, false.B)
-  io.write.resp.bits.ok := RegNext(io.write.req.fire, false.B)
 
   val ren   = io.read.req.fire
   val rdata = mem.read(io.read.req.bits.addr, ren)
 
-  val byteOffsetReg = RegNext(io.read.req.bits.byte_offset, 0.U)
-  val byteSel       =
-    (rdata >> (byteOffsetReg << 3.U))(b.memDomain.mmioReadWidth - 1, 0)
-
   io.read.resp.valid     := RegNext(ren, false.B)
-  io.read.resp.bits.data := byteSel
+  io.read.resp.bits.data := rdata
 }

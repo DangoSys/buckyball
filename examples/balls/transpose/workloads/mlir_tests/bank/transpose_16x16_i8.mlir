@@ -14,8 +14,8 @@ func.func @main() -> i8 {
   %iter = arith.constant 16 : i64
   %elem_bits = arith.constant 8 : i64
 
-  %input = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
+  %input = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<16x16xi8>
 
   scf.for %i = %c0 to %n step %c1 {
     scf.for %j = %c0 to %n step %c1 {
@@ -36,6 +36,7 @@ func.func @main() -> i8 {
       : i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %t %depth %stride
       : memref<16x16xi8> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 

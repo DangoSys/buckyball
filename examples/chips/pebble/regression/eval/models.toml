@@ -1,0 +1,22 @@
+[eval]
+models = ["lenet", "mobilenet", "resnet", "yolo"]
+
+# dataset: path relative to /root (host: e2e/datasets/<leaf>).
+# metric: top1 -> uart "top1=c/n"; map -> uart "map=<float>"
+# Sample count = whatever is in that relative dataset dir.
+
+[eval.accuracy.lenet]
+metric = "top1"
+dataset = "datasets/MNIST"
+
+[eval.accuracy.mobilenet]
+metric = "top1"
+dataset = "datasets/ImageNet"
+
+[eval.accuracy.resnet]
+metric = "top1"
+dataset = "datasets/ImageNet"
+
+[eval.accuracy.yolo]
+metric = "map"
+dataset = "datasets/COCO"

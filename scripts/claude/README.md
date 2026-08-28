@@ -46,14 +46,16 @@ UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
 ### bbdev wrappers (all POST APIs)
 | Tool | API |
 |------|-----|
+| `bbdev_config_install` | `/config/install` |
 | `bbdev_compiler_build` | `/compiler/build` |
 | `bbdev_task_status` | State for a submitted `trace_id` |
 | `bbdev_workload_{clean,build,tohex}` | `/workload/{clean,build,tohex}` |
 | `bbdev_bemu_{sim,batch}` | `/bebop/bemu/{sim,batch}` |
 | `bbdev_bebop_verilator_*` | `/bebop/verilator/{clean,verilog,build,sim,run,batch}` |
 | `bbdev_verilator_*` | `/verilator/{clean,verilog,build,sim,run}` (non-bebop) |
+| `bbdev_vcs_*` | `/vcs/{clean,verilog,build,sim,run}` |
 | `bbdev_bebop_p2e_*` | `/bebop/p2e/{clean,verilog,buildbitstream,runworkload,batch}` |
-| `bbdev_uvm_{build,run}` | `/uvm/{build,run}` |
+| `bbdev_uvm_{verilog,build,run}` | `/uvm/{verilog,build,run}` |
 | `bbdev_yosys_{run,verilog,synth}` | `/yosys/{run,verilog,synth}` |
 | `bbdev_dc_verilog` | `/dc/verilog` |
 | `bbdev_firesim_*` | `/firesim/{enumeratefpgas,buildbitstream,infrasetup,runworkload}` |

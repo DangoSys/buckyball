@@ -7,10 +7,9 @@
 #ifndef TRANSPOSEBALL_OPS
 #define TRANSPOSEBALL_OPS
 
-include "BuckyballBase.td"
-include "BuckyballIntrinsics.td"
+include "Buckyball.td"
 
-// Memref-level transpose (like matrix_matmul). Chip bank-ssa decides
+// Memref-level transpose (like smatmul_matmul). Chip bank-ssa decides
 // pad / tile / Bank* composition; this op carries no bank policy.
 def MemTransposeOp : Buckyball_Op<"mem_transpose"> {
   let summary = "Logical matrix transpose on memrefs";
@@ -28,7 +27,7 @@ def TransposeOp : Buckyball_Op<"transpose"> {
   let summary = "Matrix transpose operation";
   let description = [{
     Transposes iter x W to W x iter in scratchpad banks.
-    funct7=49. ISA: bb_transpose(op1_bank, wr_bank, iter, elem_bits)
+    ISA: bb_transpose(op1_bank, wr_bank, iter, elem_bits); funct7 from Core ballISA.
     W = (bankWidth * cols) / elem_bits.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,

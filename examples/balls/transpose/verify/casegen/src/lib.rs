@@ -77,12 +77,18 @@ mod tests {
     fn dpi_load_then_cmd_and_words() {
         assert_eq!(transpose_case_load(0x1234, 0, 0), 0);
         let mut cmd = TransposeCmd {
-            bid: 0, funct7: 0, iter: 0, op1_bank: 0, wr_bank: 0,
-            op1_col: 0, wr_col: 0, rob_id: 0, elem_bits: 0,
-            num_src_words: 0, num_dst_words: 0,
+            bid: 0,
+            iter: 0,
+            op1_bank: 0,
+            wr_bank: 0,
+            op1_col: 0,
+            wr_col: 0,
+            rob_id: 0,
+            elem_bits: 0,
+            num_src_words: 0,
+            num_dst_words: 0,
         };
         transpose_case_cmd(&mut cmd as *mut TransposeCmd);
-        assert_eq!(cmd.funct7, 49);
         assert_eq!(cmd.iter, 16);
         assert_eq!(cmd.elem_bits, 8);
         assert_eq!(cmd.num_src_words, 16);

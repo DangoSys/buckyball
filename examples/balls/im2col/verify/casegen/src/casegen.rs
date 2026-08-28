@@ -1,6 +1,5 @@
 use crate::model;
 
-pub const FUNCT7: u32 = 48;
 pub const BANK_ROW_BYTES: usize = model::BANK_ROW_BYTES;
 pub const MAX_WORDS: usize = 128;
 pub const MAX_OUTPUT_ROWS: usize = 128;
@@ -9,7 +8,6 @@ pub const MAX_OUTPUT_ROWS: usize = 128;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Im2colCmd {
     pub bid: u32,
-    pub funct7: u32,
     pub iter: u32,
     pub ksize: u32,
     pub stride: u32,
@@ -107,7 +105,6 @@ fn build_case(
     Im2colCase {
         cmd: Im2colCmd {
             bid,
-            funct7: FUNCT7,
             iter: iter as u32,
             ksize: ksize as u32,
             stride: stride as u32,
@@ -129,8 +126,8 @@ fn directed_k3_pad0(bid: u32) -> Im2colCase {
     let iter = 6usize;
     let k = 3usize;
     let flat: [i8; 36] = [
-        -1, 2, 3, 4, -5, 6, 0, 8, 9, -10, 11, 12, 13, 0, -15, 16, 17, 18, 19, -20, 0, 22, 23,
-        -24, -25, 26, 27, 0, -29, 30, 31, 32, 33, -34, 0, 36,
+        -1, 2, 3, 4, -5, 6, 0, 8, 9, -10, 11, 12, 13, 0, -15, 16, 17, 18, 19, -20, 0, 22, 23, -24,
+        -25, 26, 27, 0, -29, 30, 31, 32, 33, -34, 0, 36,
     ];
     let bytes: Vec<u8> = flat.iter().map(|&x| x as u8).collect();
     build_case(bid, iter, k, 1, 0, 0, 1, 3, &bytes)
@@ -140,8 +137,8 @@ fn directed_k3_pad1(bid: u32) -> Im2colCase {
     let iter = 6usize;
     let k = 3usize;
     let flat: [i8; 36] = [
-        7, -2, 3, 0, 5, -6, 1, 8, -9, 10, 11, 0, -4, 12, 13, 14, 0, 16, 17, 0, 19, -20, 21, 22,
-        0, 24, 25, 26, -27, 28, 29, -30, 0, 32, 33, 34,
+        7, -2, 3, 0, 5, -6, 1, 8, -9, 10, 11, 0, -4, 12, 13, 14, 0, 16, 17, 0, 19, -20, 21, 22, 0,
+        24, 25, 26, -27, 28, 29, -30, 0, 32, 33, 34,
     ];
     let bytes: Vec<u8> = flat.iter().map(|&x| x as u8).collect();
     build_case(bid, iter, k, 1, 1, 0, 1, 5, &bytes)
@@ -225,7 +222,6 @@ mod tests {
     #[test]
     fn directed_k3_pad0_matches_ctest() {
         let case = gen_case(0, 0, 2);
-        assert_eq!(case.cmd.funct7, FUNCT7);
         assert_eq!(case.cmd.iter, 6);
         assert_eq!(case.cmd.ksize, 3);
         assert_eq!(case.cmd.stride, 1);

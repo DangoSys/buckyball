@@ -4,18 +4,21 @@ import org.chipsalliance.cde.config.Config
 import framework.system.tile.WithBuckyballTiles
 
 /**
- * Pebble example: one tile with TransposeBall and MatrixBall.
+ * Pebble example: one tile with TransposeBall and SMatMulBall.
  */
 class BuckyballPebbleConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/pebble/configs/pebble.toml") ++
+      new WithBuckyballTiles("../examples/chips/pebble/configs/generated/chip.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )
 
 class RocketOnlyPebbleConfig
     extends Config(
-      new WithBuckyballTiles("../examples/chips/pebble/configs/pebble.toml", withBuckyball = false) ++
+      new WithBuckyballTiles(
+        "../examples/chips/pebble/configs/generated/chip.pb",
+        withBuckyball = false
+      ) ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )

@@ -10,8 +10,8 @@ func.func @main() -> i8 {
   %c6 = arith.constant 6 : index
   %c16 = arith.constant 16 : index
 
-  %input = memref.alloc() {alignment = 64 : i64} : memref<3x16xi8>
-  %output = memref.alloc() {alignment = 64 : i64} : memref<16x16xi8>
+  %input = memref.alloc() alignment = 64 : memref<3x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<16x16xi8>
   linalg.fill ins(%zero_i8 : i8) outs(%input : memref<3x16xi8>)
   linalg.fill ins(%zero_i8 : i8) outs(%output : memref<16x16xi8>)
 

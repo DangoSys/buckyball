@@ -24,17 +24,14 @@ object BallParamLoader {
       case _                  => throw new RuntimeException("Expected TOML section [ball]")
     }
 
-  private def configPath(mapping: BallIdMapping): Option[String] = {
-    mapping.config.map { config =>
-      val path = Paths.get(config)
-      if (path.isAbsolute) {
-        throw new RuntimeException(s"Ball ${mapping.ballName} config must be relative to its balldomain TOML: $config")
-      }
-      if (mapping.configBaseDir.isEmpty) {
-        throw new RuntimeException(s"Ball ${mapping.ballName} config has no balldomain base directory")
-      }
-      Paths.get(mapping.configBaseDir).resolve(path).normalize().toString
+  private def configPath(mapping: BallIdMapping): String = {
+    val config = mapping.config.getOrElse(
+      throw new RuntimeException(s"Ball ${mapping.ballName} has no config")
+    )
+    if (!Paths.get(config).toFile.isFile) {
+      throw new RuntimeException(s"Ball ${mapping.ballName} config not found: $config")
     }
+    config
   }
 
   def ballTable(b: GlobalConfig, ballName: String): Map[String, Value] = {
@@ -42,10 +39,7 @@ object BallParamLoader {
       case Some(m) => m
       case None    => throw new RuntimeException(s"No ballIdMapping for ballName=$ballName")
     }
-    configPath(mapping) match {
-      case Some(path) => ball(load(path))
-      case None       => throw new RuntimeException(s"Ball $ballName has no config")
-    }
+    ball(load(configPath(mapping)))
   }
 
   def int(table: Map[String, Value], key: String): Int =

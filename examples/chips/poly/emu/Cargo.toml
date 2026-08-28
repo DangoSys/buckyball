@@ -1,14 +1,12 @@
 [package]
-name = "bemu-poly-chip"
+name = "bebop-chip-poly"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "bebop-poly"
+name = "bebop-chip-poly"
 path = "src/main.rs"
 
 [dependencies]
+bebop-bemu = { path = "../configs/generated/bemu" }
 clap = { version = "4", features = ["derive"] }
-snafu = "0.8"
-toml = "0.8"
-core_bemu = { package = "bemu-prefill", path = "../../../cores/prefill/emu" }

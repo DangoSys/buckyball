@@ -49,15 +49,15 @@ private:
 LogicalResult verifyNoBankSSAOps(Operation *root);
 void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                        PhysicalBankState &state);
+void populateSMatMulBallLowerBuckyballToBankSSAPatterns(
+    RewritePatternSet &patterns);
+void populateReluBallLowerBuckyballToBankSSAPatterns(
+    RewritePatternSet &patterns);
 void registerAssignPhysicalBanksPass();
-void registerLowerBankSSAToIntrinsicsPass();
 void registerLowerBuckyballPass();
+void registerLowerBankSSAToIntrinsicsPass();
 void registerLowerBuckyballToBankSSAPass();
 void registerReportBankUsagePass();
-void populatePebbleMatrixMatmulToBankSSAPatterns(RewritePatternSet &patterns);
-void populatePebbleIm2colMatmulToBankSSAPatterns(RewritePatternSet &patterns);
-void populatePebbleMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
-void populatePebbleLowerBuckyballToBankSSAPatterns(RewritePatternSet &patterns);
 
 } // namespace buddy
 } // namespace mlir

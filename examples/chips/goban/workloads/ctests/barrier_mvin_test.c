@@ -21,13 +21,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DIM    16
+#define DIM 16
 #define NCORES 4
 
 /* Per-core scratchpad buffers — compiler places these in BSS (all harts share
    the same virtual address space, but each core writes its own slot). */
-static elem_t  src[NCORES][DIM * DIM] __attribute__((aligned(128)));
-static elem_t  dst[NCORES][DIM * DIM] __attribute__((aligned(128)));
+static elem_t src[NCORES][DIM * DIM] __attribute__((aligned(128)));
+static elem_t dst[NCORES][DIM * DIM] __attribute__((aligned(128)));
 static volatile int core_ok[NCORES];
 
 int main(void) {
@@ -36,13 +36,13 @@ int main(void) {
   printf("[core %d] starting mvin/mvout\n", cid);
 
   /* ---- Step 1: fill src with a core-specific pattern ---- */
-  elem_t pat = (elem_t)(cid + 1);   /* core 0 → 1, core 1 → 2, … */
+  elem_t pat = (elem_t)(cid + 1); /* core 0 → 1, core 1 → 2, … */
   for (int i = 0; i < DIM * DIM; i++) {
     src[cid][i] = pat;
   }
 
   /* ---- Step 2: mvin → shared bank <cid> ---- */
-  int bank = cid;   /* each core uses its own bank, no conflict */
+  int bank = cid; /* each core uses its own bank, no conflict */
   bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)src[cid], bank, DIM, 1);
 
@@ -55,8 +55,8 @@ int main(void) {
   int ok = 1;
   for (int i = 0; i < DIM * DIM; i++) {
     if (dst[cid][i] != pat) {
-      printf("[core %d] ERROR at [%d]: got %d, expected %d\n",
-             cid, i, (int)dst[cid][i], (int)pat);
+      printf("[core %d] ERROR at [%d]: got %d, expected %d\n", cid, i,
+             (int)dst[cid][i], (int)pat);
       ok = 0;
       break;
     }

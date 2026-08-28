@@ -19,7 +19,9 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
     val ctrl_st_o = Decoupled(new ctrl_st_req(b))
     val ctrl_ex_o = Decoupled(new ctrl_ex_req(b))
 
-    val cmdResp_i = Flipped(Valid(new Bundle { val commit = Bool() })) // from store unit
+    val cmdResp_i = Flipped(Valid(new Bundle {
+      val commit = Bool()
+    })) // from store unit
   })
 
   val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
@@ -27,13 +29,21 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val iter           = RegInit(0.U(b.frontend.iter_len.W))
   val op1_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op1_bank_addr  = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val op2_bank_addr  = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val op2_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank_addr   = RegInit(0.U(12.W)) // New ISA: always 0, but keep for compatibility
-  val has_send       = RegInit(false.B)
-  val mode           = RegInit(0.U(1.W))
+
+  val op1_bank_addr = RegInit(
+    0.U(12.W)
+  ) // New ISA: always 0, but keep for compatibility
+  val op2_bank_addr = RegInit(
+    0.U(12.W)
+  ) // New ISA: always 0, but keep for compatibility
+  val op2_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wr_bank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+
+  val wr_bank_addr = RegInit(
+    0.U(12.W)
+  ) // New ISA: always 0, but keep for compatibility
+  val has_send = RegInit(false.B)
+  val mode     = RegInit(0.U(1.W))
 
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)

@@ -6,32 +6,34 @@ class fp2int_scoreboard extends uvm_scoreboard;
   uvm_analysis_imp_read #(bb_blink_read_item, fp2int_scoreboard) read_imp;
   uvm_analysis_imp_write #(bb_blink_write_item, fp2int_scoreboard) write_imp;
   uvm_analysis_imp_resp #(bb_blink_resp_item, fp2int_scoreboard) resp_imp;
+  uvm_analysis_imp_mmio_write #(bb_mmio_write_item, fp2int_scoreboard) mmio_write_imp;
 
   bb_blink_mem_model #(1, 1) mem_model;
 
   fp2int_cmd_item stim_q[$];
-  bit [127:0] expected_words[FP2INT_NUM_WORDS];
+  bit [127:0] expected_words[FP2INT_MAX_OUTPUT_WORDS];
   int unsigned expected_reads;
   int unsigned expected_writes;
   int unsigned cmd_count;
   int unsigned read_count;
   int unsigned write_count;
   int unsigned resp_count;
+  int unsigned mmio_write_count;
   int unsigned expect_group;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    stim_imp  = new("stim_imp", this);
-    cmd_imp   = new("cmd_imp", this);
-    read_imp  = new("read_imp", this);
+    stim_imp = new("stim_imp", this);
+    cmd_imp = new("cmd_imp", this);
+    read_imp = new("read_imp", this);
     write_imp = new("write_imp", this);
-    resp_imp  = new("resp_imp", this);
+    resp_imp = new("resp_imp", this);
+    mmio_write_imp = new("mmio_write_imp", this);
   endfunction
 
   function void write_stim(bb_blink_cmd_item item);
     fp2int_cmd_item fitem;
     fp2int_cmd_item clone;
-    int i;
     int row;
     int group;
 
@@ -50,47 +52,35 @@ class fp2int_scoreboard extends uvm_scoreboard;
       `uvm_fatal("SCB", "mem_model handle not set")
     end
     mem_model.clear_mem();
-    if (clone.is_i8()) begin
-      for (row = 0; row < clone.iter; row++) begin
-        for (group = 0; group < FP2INT_NUM_GROUPS; group++) begin
-          mem_model.load_word_g(int'(clone.op1_bank), group, row,
-                                clone.input_words[row*FP2INT_NUM_GROUPS+group]);
-        end
-      end
-    end else begin
-      for (i = 0; i < clone.iter; i++) begin
-        mem_model.load_word(int'(clone.op1_bank), i, clone.input_words[i]);
+    for (row = 0; row < clone.iter; row++) begin
+      for (group = 0; group < clone.op1_col; group++) begin
+        mem_model.load_word_g(int'(clone.op1_bank), group, row,
+                              clone.input_words[row*clone.op1_col+group]);
       end
     end
     mem_model.arm();
 
+    expected_writes = clone.num_src_words / FP2INT_NUM_WORDS;
+    expected_reads  = clone.num_src_words * 2;
     build_expected(clone);
-    expected_writes = clone.iter;
-    expected_reads = clone.is_i8() ? (clone.iter * FP2INT_NUM_GROUPS) : clone.iter;
     expect_group = 0;
   endfunction
 
   function void build_expected(fp2int_cmd_item item);
-    if (item.is_i8()) begin
-      for (int row = 0; row < item.iter; row++) begin
-        bit [127:0] packed_word = '0;
-        for (int group = 0; group < FP2INT_NUM_GROUPS; group++) begin
-          bit [127:0] src = item.input_words[row*FP2INT_NUM_GROUPS+group];
-          for (int lane = 0; lane < 4; lane++) begin
-            bit [31:0] fp_bits = src[lane*32+:32];
-            bit [ 7:0] q = fp2int_ref_i8(fp_bits, item.scale_bits);
-            packed_word[group*32+lane*8+:8] = q;
-          end
-        end
-        expected_words[row] = packed_word;
-      end
-    end else begin
-      for (int w = 0; w < item.iter; w++) begin
-        for (int e = 0; e < 4; e++) begin
-          expected_words[w][e*32+:32] =
-              fp2int_ref_i32(item.input_words[w][e*32+:32], item.scale_bits);
+    bit [31:0] quant_scale_bits;
+
+    quant_scale_bits = fp2int_quant_scale_bits(item.da_bits);
+    for (int word = 0; word < expected_writes; word++) begin
+      bit [127:0] packed_word = '0;
+      for (int source_word = 0; source_word < FP2INT_NUM_WORDS; source_word++) begin
+        bit [127:0] src = item.input_words[word*FP2INT_NUM_WORDS+source_word];
+        for (int lane = 0; lane < 4; lane++) begin
+          bit [31:0] fp_bits = src[lane*32+:32];
+          bit [ 7:0] q = fp2int_ref_i8(fp_bits, quant_scale_bits);
+          packed_word[source_word*32+lane*8+:8] = q;
         end
       end
+      expected_words[word] = packed_word;
     end
   endfunction
 
@@ -108,9 +98,8 @@ class fp2int_scoreboard extends uvm_scoreboard;
       `uvm_fatal("CMD", $sformatf("funct7 mismatch: got %0d exp %0d", got.funct7, exp.funct7))
     if (got.iter !== exp.iter)
       `uvm_fatal("CMD", $sformatf("iter mismatch: got %0d exp %0d", got.iter, exp.iter))
-    if (got.special[31:0] !== exp.scale_bits)
-      `uvm_fatal("CMD", $sformatf(
-                 "scale mismatch: got 0x%08h exp 0x%08h", got.special[31:0], exp.scale_bits))
+    if (got.special[12:0] !== exp.da_addr || got.special[63:13] !== '0)
+      `uvm_fatal("CMD", "Fp2Int special must contain only Da MMIO address")
     if (got.op1_bank !== exp.op1_bank || got.wr_bank !== exp.wr_bank)
       `uvm_fatal("CMD", "bank field mismatch")
     if (got.op1_col !== exp.op1_col || got.wr_col !== exp.wr_col)
@@ -129,20 +118,12 @@ class fp2int_scoreboard extends uvm_scoreboard;
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
 
-    if (stim.is_i8()) begin
-      expect_addr = read_count / FP2INT_NUM_GROUPS;
-      if (item.group_id !== expect_group[4:0])
-        `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp %0d", item.group_id, expect_group
-                   ))
-      if (item.addr !== expect_addr[6:0])
-        `uvm_fatal("READ", $sformatf("addr mismatch: got %0d exp %0d", item.addr, expect_addr))
-      expect_group = (expect_group + 1) % FP2INT_NUM_GROUPS;
-    end else begin
-      if (item.group_id !== 5'd0)
-        `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp 0", item.group_id))
-      if (item.addr !== read_count[6:0])
-        `uvm_fatal("READ", $sformatf("addr mismatch: got %0d exp %0d", item.addr, read_count))
-    end
+    expect_addr  = (read_count % stim.num_src_words) / stim.op1_col;
+    expect_group = (read_count % stim.num_src_words) % stim.op1_col;
+    if (item.group_id !== expect_group[4:0])
+      `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp %0d", item.group_id, expect_group))
+    if (item.addr !== expect_addr[6:0])
+      `uvm_fatal("READ", $sformatf("addr mismatch: got %0d exp %0d", item.addr, expect_addr))
 
     read_count++;
   endfunction
@@ -155,20 +136,32 @@ class fp2int_scoreboard extends uvm_scoreboard;
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== '0)
-      `uvm_fatal("WRITE", $sformatf("group_id mismatch: got %0d exp 0", item.group_id))
-    if (item.addr !== write_count[6:0])
-      `uvm_fatal("WRITE", $sformatf("addr mismatch: got %0d exp %0d", item.addr, write_count))
+    if (item.group_id !== (write_count % stim.wr_col))
+      `uvm_fatal("WRITE", $sformatf(
+                 "group mismatch: got %0d exp %0d", item.group_id, write_count % stim.wr_col))
+    if (item.addr !== (write_count / stim.wr_col))
+      `uvm_fatal("WRITE", $sformatf(
+                 "addr mismatch: got %0d exp %0d", item.addr, write_count / stim.wr_col))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))
-    if (item.data !== expected_words[item.addr])
+    if (item.data !== expected_words[write_count])
       `uvm_fatal("SCB", $sformatf(
                  "data mismatch at addr %0d: got 0x%032h exp 0x%032h",
-                 item.addr,
+                 write_count,
                  item.data,
-                 expected_words[item.addr]
+                 expected_words[write_count]
                  ))
     write_count++;
+  endfunction
+
+  function void write_mmio_write(bb_mmio_write_item item);
+    fp2int_cmd_item stim;
+    stim = current_stim("MMIO_WRITE");
+    if (item.addr !== stim.da_addr + mmio_write_count)
+      `uvm_fatal("MMIO", "Da write address mismatch")
+    if (item.data !== stim.da_bits[mmio_write_count*8+:8])
+      `uvm_fatal("MMIO", "Da write data mismatch")
+    mmio_write_count++;
   endfunction
 
   function void write_resp(bb_blink_resp_item item);
@@ -195,7 +188,7 @@ class fp2int_scoreboard extends uvm_scoreboard;
     return cmd_count == 1 &&
            read_count == expected_reads &&
            write_count == expected_writes &&
-           resp_count == 1;
+           resp_count == 1 && mmio_write_count == 4;
   endfunction
 
   function void reset_counters();
@@ -204,6 +197,7 @@ class fp2int_scoreboard extends uvm_scoreboard;
     read_count = 0;
     write_count = 0;
     resp_count = 0;
+    mmio_write_count = 0;
     expected_reads = 0;
     expected_writes = 0;
     expect_group = 0;

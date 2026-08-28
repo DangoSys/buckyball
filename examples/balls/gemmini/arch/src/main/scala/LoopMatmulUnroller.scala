@@ -76,7 +76,8 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     val v = Wire(Valid(new LoopSubCmd(b)))
     v.valid         := true.B
     v.bits          := 0.U.asTypeOf(new LoopSubCmd(b))
-    v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC else LoopSubCmdType.MSET_FREE)
+    v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC
+                       else LoopSubCmdType.MSET_FREE)
     v.bits.bank_id  := bankId
     v.bits.bank_row := row.U
     v.bits.bank_col := col.U
@@ -176,9 +177,16 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Row 0: [MSET_alloc(A), MSET_alloc(B), MSET_alloc(C), --]
     is(sAllocBanks) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := msetSlot(cfg.bank_a, alloc = true, row = 1, col = 1)
-      io.cmd.bits.slots(1) := msetSlot(cfg.bank_b, alloc = true, row = 1, col = 1)
-      io.cmd.bits.slots(2) := msetSlot(cfg.bank_c, alloc = true, row = 1, col = 4) // accWidth = 4x inputWidth
+      io.cmd.bits
+        .slots(0)          := msetSlot(cfg.bank_a, alloc = true, row = 1, col = 1)
+      io.cmd.bits
+        .slots(1)          := msetSlot(cfg.bank_b, alloc = true, row = 1, col = 1)
+      io.cmd.bits.slots(2) := msetSlot(
+        cfg.bank_c,
+        alloc = true,
+        row = 1,
+        col = 4
+      ) // accWidth = 4x inputWidth
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
         state := sPrimeLoad
@@ -188,8 +196,18 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Row 1: [MVIN_A(0), MVIN_B(0), --, --]
     is(sPrimeLoad) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvinSlot(cfg.bank_a, addrA(0.U, 0.U), DIM.U, inMemStride(cfg.stride_a))
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_b, addrB(0.U, 0.U), DIM.U, inMemStride(cfg.stride_b))
+      io.cmd.bits.slots(0) := mvinSlot(
+        cfg.bank_a,
+        addrA(0.U, 0.U),
+        DIM.U,
+        inMemStride(cfg.stride_a)
+      )
+      io.cmd.bits.slots(1) := mvinSlot(
+        cfg.bank_b,
+        addrB(0.U, 0.U),
+        DIM.U,
+        inMemStride(cfg.stride_b)
+      )
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
@@ -235,9 +253,24 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Main loop Row 2: [MVOUT(cur), MVIN_A(next), MVIN_B(next), --]
     is(sMainRow2) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U, outMemStride(cfg.stride_c))
-      io.cmd.bits.slots(1) := mvinSlot(cfg.bank_a, addrA(next_i, next_k), DIM.U, inMemStride(cfg.stride_a))
-      io.cmd.bits.slots(2) := mvinSlot(cfg.bank_b, addrB(next_k, next_j), DIM.U, inMemStride(cfg.stride_b))
+      io.cmd.bits.slots(0) := mvoutSlot(
+        cfg.bank_c,
+        addrC(i_reg, j_reg),
+        DIM.U,
+        outMemStride(cfg.stride_c)
+      )
+      io.cmd.bits.slots(1) := mvinSlot(
+        cfg.bank_a,
+        addrA(next_i, next_k),
+        DIM.U,
+        inMemStride(cfg.stride_a)
+      )
+      io.cmd.bits.slots(2) := mvinSlot(
+        cfg.bank_b,
+        addrB(next_k, next_j),
+        DIM.U,
+        inMemStride(cfg.stride_b)
+      )
       io.cmd.bits.slots(3) := emptySlot()
 
       when(io.cmd.fire) {
@@ -253,7 +286,12 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Drain: emit final MVOUT for last iteration
     is(sDrainLast) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := mvoutSlot(cfg.bank_c, addrC(i_reg, j_reg), DIM.U, outMemStride(cfg.stride_c))
+      io.cmd.bits.slots(0) := mvoutSlot(
+        cfg.bank_c,
+        addrC(i_reg, j_reg),
+        DIM.U,
+        outMemStride(cfg.stride_c)
+      )
       io.cmd.bits.slots(1) := emptySlot()
       io.cmd.bits.slots(2) := emptySlot()
       io.cmd.bits.slots(3) := emptySlot()
@@ -265,9 +303,12 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
     // Free: [MSET_free(A), MSET_free(B), MSET_free(C), --]
     is(sFreeBanks) {
       io.cmd.valid         := true.B
-      io.cmd.bits.slots(0) := msetSlot(cfg.bank_a, alloc = false, row = 0, col = 0)
-      io.cmd.bits.slots(1) := msetSlot(cfg.bank_b, alloc = false, row = 0, col = 0)
-      io.cmd.bits.slots(2) := msetSlot(cfg.bank_c, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(0)          := msetSlot(cfg.bank_a, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(1)          := msetSlot(cfg.bank_b, alloc = false, row = 0, col = 0)
+      io.cmd.bits
+        .slots(2)          := msetSlot(cfg.bank_c, alloc = false, row = 0, col = 0)
       io.cmd.bits.slots(3) := emptySlot()
       when(io.cmd.fire) {
         state := sDone

@@ -25,9 +25,12 @@
 //
 // funct7 = 0x23 (35 decimal)
 #define bb_mvin_mmio(dram_addr, mmio_addr, row, col)                           \
-  BUCKYBALL_INSTRUCTION_R_R(BB_ITER(row),                                      \
-                            (FIELD(dram_addr, 0, 38) |                         \
-                             FIELD(mmio_addr, 39, 55) | FIELD(col, 56, 63)),   \
-                            BB_MVIN_MMIO_FUNC7)
+  do {                                                                         \
+    bb_dma_cache_flush();                                                      \
+    BUCKYBALL_INSTRUCTION_R_R(BB_ITER(row),                                    \
+                              (FIELD(dram_addr, 0, 38) |                       \
+                               FIELD(mmio_addr, 39, 55) | FIELD(col, 56, 63)), \
+                              BB_MVIN_MMIO_FUNC7);                             \
+  } while (0)
 
 #endif // _BB_MVIN_MMIO_H_

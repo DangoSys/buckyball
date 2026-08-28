@@ -10,7 +10,7 @@ channel = 7
 
 [dma]
 nXacts = 8
-burstMaxBytes = 64
+burstMaxBytes = 1024
 busWidth = 128
 maxInFlightMemReqs = 16
 

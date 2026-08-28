@@ -17,7 +17,9 @@ class Transpose(val b: GlobalConfig) extends Module {
 
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "TransposeBall")
-    .getOrElse(throw new IllegalArgumentException("TransposeBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("TransposeBall not found in config")
+    )
 
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
@@ -83,7 +85,9 @@ class Transpose(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.valid     := false.B
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask := VecInit(
+      Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))
+    )
     io.bankWrite(i).io.resp.ready    := (state =/= idle)
   }
 
@@ -93,9 +97,9 @@ class Transpose(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.is_sub     := is_sub_reg
   io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
-  val elemBits = elem_reg
+  val elemBits  = elem_reg
   val elemBytes = elemBits >> 3
-  val epg       = (rowBytes.U / elemBytes)
+  val epg       = rowBytes.U / elemBytes
   val wElems    = ncol_reg * epg
   val total     = iter_reg * wElems
 
@@ -135,12 +139,20 @@ class Transpose(val b: GlobalConfig) extends Module {
         cached         := false.B
         assert(cmd.iter > 0.U, "Transpose iter must be > 0")
         assert(cmd.op1_bank =/= cmd.wr_bank, "Transpose op1 and wr must differ")
-        assert(cmd.op1_col === cmd.wr_col && cmd.op1_col =/= 0.U, "Transpose cols mismatch")
+        assert(
+          cmd.op1_col === cmd.wr_col && cmd.op1_col =/= 0.U,
+          "Transpose cols mismatch"
+        )
         assert(cmd.rs2(63, 8) === 0.U, "Transpose rs2[63:8] must be 0")
-        assert(cmd.rs2(7, 0) === 8.U || cmd.rs2(7, 0) === 32.U, "Transpose elem_bits")
-        assert(bankWidth.U % cmd.rs2(7, 0) === 0.U,
-          "Transpose bankWidth not divisible by elem_bits")
-        state := sRead
+        assert(
+          cmd.rs2(7, 0) === 8.U || cmd.rs2(7, 0) === 32.U,
+          "Transpose elem_bits"
+        )
+        assert(
+          bankWidth.U   % cmd.rs2(7, 0) === 0.U,
+          "Transpose bankWidth not divisible by elem_bits"
+        )
+        state          := sRead
       }
     }
 
@@ -171,15 +183,15 @@ class Transpose(val b: GlobalConfig) extends Module {
           wrGroup := dstGroup
           wrAddr  := dstVirtRow
         }
-        wrData   := base | (elem << wsh)
+        wrData := base | (elem << wsh)
         beatFill := beatFill + 1.U
         dstIdx   := dstIdx + 1.U
 
         val beatDone = (beatFill + 1.U === epg) || (dstIdx + 1.U === total)
         when(beatDone) {
           wrMask.foreach(_ := 1.U)
-          wrValid := true.B
-          state   := sWrite
+          wrValid          := true.B
+          state            := sWrite
         }
       }
     }

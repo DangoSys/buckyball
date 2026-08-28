@@ -11,22 +11,25 @@ import framework.top.GlobalConfig
 
 @instantiable
 class VecUnit(val b: GlobalConfig) extends Module {
-  val cfg = VectorBallParam(b)
+  val cfg  = VectorBallParam(b)
   val lane = cfg.lane
   val inW  = cfg.inputWidth
   val accW = cfg.outputWidth
 
-  require(lane == 16, "VecUnit mul_warp16 requires lane=16")
-  require(inW == 8, "VecUnit mul_warp16 requires int8 inputs")
-  require(accW == 32, "VecUnit mul_warp16 requires int32 accumulators")
+  require(lane == 16, "VecUnit vecmat16 requires lane=16")
+  require(inW == 8, "VecUnit vecmat16 requires int8 inputs")
+  require(accW == 32, "VecUnit vecmat16 requires int32 accumulators")
 
   val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "VecBall")
-    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("VecBall not found in config")
+    )
+
   val inBW  = map.inBW
   val outBW = map.outBW
-  require(inBW >= 2, "VecUnit mul_warp16 requires two read ports")
-  require(outBW >= 4, "VecUnit mul_warp16 requires four write ports")
+  require(inBW >= 2, "VecUnit vecmat16 requires two read ports")
+  require(outBW >= 4, "VecUnit vecmat16 requires four write ports")
 
   @public
   val io = IO(new Bundle {
@@ -37,7 +40,7 @@ class VecUnit(val b: GlobalConfig) extends Module {
     val status    = new BallStatus
   })
 
-  val core = Module(new MulWarp16(b, lane, inBW, outBW, inW, accW))
+  val core = Module(new VecMat16(b, lane, inBW, outBW, inW, accW))
   core.io.cmdReq <> io.cmdReq
   core.io.cmdResp <> io.cmdResp
   for (i <- 0 until inBW) { core.io.bankRead(i) <> io.bankRead(i) }

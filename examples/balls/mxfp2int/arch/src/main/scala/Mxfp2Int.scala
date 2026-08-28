@@ -41,23 +41,34 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
   val elemBits   = decoder.elemBits
 
   val bankWidth = b.memDomain.bankWidth
-  require(bankWidth == 128, s"Mxfp2IntBall requires bankWidth = 128, got $bankWidth")
+  require(
+    bankWidth == 128,
+    s"Mxfp2IntBall requires bankWidth = 128, got $bankWidth"
+  )
 
   val wordsPerBlock = ballConfig.mxfpFormat match {
     case "MXFP4" => 1
-    case "MXFP6" => 2 // padded: 192 bits data + 64 bits padding = 256 bits = 2 words
+    case "MXFP6" =>
+      2 // padded: 192 bits data + 64 bits padding = 256 bits = 2 words
     case "MXFP8" => 2
-    case _       => throw new IllegalArgumentException(s"Unsupported mxfpFormat: ${ballConfig.mxfpFormat}")
+    case _       =>
+      throw new IllegalArgumentException(
+        s"Unsupported mxfpFormat: ${ballConfig.mxfpFormat}"
+      )
   }
 
   val FP_PER_BLOCK        = 32
   val INT8_PER_WORD       = bankWidth / 8                // 16
   val OUT_WORDS_PER_BLOCK = FP_PER_BLOCK / INT8_PER_WORD // 2
 
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "Mxfp2IntBall")
-    .getOrElse(throw new IllegalArgumentException("Mxfp2IntBall not found in config"))
-  val inBW        = ballMapping.inBW
-  val outBW       = ballMapping.outBW
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "Mxfp2IntBall")
+    .getOrElse(
+      throw new IllegalArgumentException("Mxfp2IntBall not found in config")
+    )
+
+  val inBW  = ballMapping.inBW
+  val outBW = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {
@@ -81,8 +92,9 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
   }
 
   // FSM
-  val idle :: sReadReq :: sReadResp :: sMmioReq :: sMmioResp :: sWriteLo :: sWriteHi :: sComplete :: Nil = Enum(8)
-  val state                                                                                              = RegInit(idle)
+  val idle :: sReadReq :: sReadResp :: sMmioReq :: sMmioResp :: sWriteLoReq :: sWriteLoResp :: sWriteHiReq :: sWriteHiResp :: sComplete :: Nil =
+    Enum(10)
+  val state                                                                                                                                    = RegInit(idle)
 
   // Per-instruction registers
   val raddr_reg     = RegInit(0.U(b.frontend.iter_len.W))
@@ -93,8 +105,10 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
   val block_idx_reg = RegInit(0.U(b.frontend.iter_len.W))
   val word_idx_reg  = RegInit(0.U(2.W)) // 0..wordsPerBlock-1
 
-  val inputWordsReg = RegInit(VecInit(Seq.fill(2)(0.U(bankWidth.W)))) // max 2 words for MXFP6/8
-  val scaleReg      = RegInit(0.U(8.W))
+  val inputWordsReg = RegInit(
+    VecInit(Seq.fill(2)(0.U(bankWidth.W)))
+  ) // max 2 words for MXFP6/8
+  val scaleReg = RegInit(0.U(8.W))
 
   // Extract 32 FP elements from inputWordsReg based on format
   val fpElements = VecInit(Seq.tabulate(FP_PER_BLOCK) { i =>
@@ -107,17 +121,25 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
       // Cross-word boundary (only for MXFP6 if packed, but we use padded so this won't happen)
       val lowBits  = bankWidth - bitInWord
       val highBits = elemBits - lowBits
-      Cat(inputWordsReg(wordIdx + 1)(highBits - 1, 0), inputWordsReg(wordIdx)(bankWidth - 1, bitInWord))
+      Cat(
+        inputWordsReg(wordIdx + 1)(highBits - 1, 0),
+        inputWordsReg(wordIdx)(bankWidth - 1, bitInWord)
+      )
     } else {
       0.U(elemBits.W)
     }
   })
 
   // Combinationally compute all 32 INT8 values from the latched elements + scale
-  val int8Vec = VecInit(fpElements.map(raw => decoder.dequant(raw, scaleReg).asUInt))
+  val int8Vec = VecInit(
+    fpElements.map(raw => decoder.dequant(raw, scaleReg).asUInt)
+  )
 
   val outWordLo = Cat((0 until INT8_PER_WORD).map(i => int8Vec(i)).reverse)
-  val outWordHi = Cat((INT8_PER_WORD until FP_PER_BLOCK).map(i => int8Vec(i)).reverse)
+
+  val outWordHi = Cat(
+    (INT8_PER_WORD until FP_PER_BLOCK).map(i => int8Vec(i)).reverse
+  )
 
   // === Default IO ===
   for (i <- 0 until inBW) {
@@ -133,7 +155,9 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
     io.bankWrite(i).io.req.valid     := false.B
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W)))
+    io.bankWrite(i).io.req.bits.mask := VecInit(
+      Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))
+    )
     io.bankWrite(i).io.resp.ready    := false.B
     io.bankWrite(i).rob_id           := rob_id_reg
     io.bankWrite(i).ball_id          := 0.U
@@ -141,17 +165,16 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
     io.bankWrite(i).group_id         := 0.U
   }
 
-  io.mmioRead.req.valid         := false.B
-  io.mmioRead.req.bits.rel_addr := 0.U
-  io.mmioRead.resp.ready        := false.B
-  io.mmioRead.meta_bank         := wbank_reg
-  io.mmioRead.rob_id            := rob_id_reg
-  io.mmioRead.ball_id           := 0.U
-  io.cmdReq.ready               := state === idle
-  io.cmdResp.valid              := false.B
-  io.cmdResp.bits.rob_id        := rob_id_reg
-  io.cmdResp.bits.is_sub        := is_sub_reg
-  io.cmdResp.bits.sub_rob_id    := sub_rob_id_reg
+  io.mmioRead.req.valid      := false.B
+  io.mmioRead.req.bits.addr  := 0.U
+  io.mmioRead.resp.ready     := false.B
+  io.mmioRead.rob_id         := rob_id_reg
+  io.mmioRead.ball_id        := 0.U
+  io.cmdReq.ready            := state === idle
+  io.cmdResp.valid           := false.B
+  io.cmdResp.bits.rob_id     := rob_id_reg
+  io.cmdResp.bits.is_sub     := is_sub_reg
+  io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
   // === FSM ===
   switch(state) {
@@ -173,8 +196,12 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
     }
 
     is(sReadReq) {
-      io.bankRead(0).io.req.valid     := true.B
-      io.bankRead(0).io.req.bits.addr := raddr_reg + block_idx_reg * wordsPerBlock.U + word_idx_reg
+      io.bankRead(0).io.req.valid := true.B
+      io.bankRead(0)
+        .io
+        .req
+        .bits
+        .addr                     := raddr_reg + block_idx_reg * wordsPerBlock.U + word_idx_reg
       when(io.bankRead(0).io.req.fire) {
         state := sReadResp
       }
@@ -195,8 +222,8 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
     }
 
     is(sMmioReq) {
-      io.mmioRead.req.valid         := true.B
-      io.mmioRead.req.bits.rel_addr := block_idx_reg
+      io.mmioRead.req.valid     := true.B
+      io.mmioRead.req.bits.addr := block_idx_reg
       when(io.mmioRead.req.fire) {
         state := sMmioResp
       }
@@ -206,28 +233,44 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
       io.mmioRead.resp.ready := true.B
       when(io.mmioRead.resp.fire) {
         scaleReg := io.mmioRead.resp.bits.data(7, 0)
-        state    := sWriteLo
+        state    := sWriteLoReq
       }
     }
 
-    is(sWriteLo) {
+    is(sWriteLoReq) {
       io.bankWrite(0).io.req.valid     := true.B
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1)
       io.bankWrite(0).io.req.bits.data := outWordLo
-      io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
-      io.bankWrite(0).io.resp.ready    := true.B
+      io.bankWrite(0).io.req.bits.mask := VecInit(
+        Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W))
+      )
       when(io.bankWrite(0).io.req.fire) {
-        state := sWriteHi
+        state := sWriteLoResp
       }
     }
 
-    is(sWriteHi) {
+    is(sWriteLoResp) {
+      io.bankWrite(0).io.resp.ready := true.B
+      when(io.bankWrite(0).io.resp.fire) {
+        state := sWriteHiReq
+      }
+    }
+
+    is(sWriteHiReq) {
       io.bankWrite(0).io.req.valid     := true.B
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1) + 1.U
       io.bankWrite(0).io.req.bits.data := outWordHi
-      io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W)))
-      io.bankWrite(0).io.resp.ready    := true.B
+      io.bankWrite(0).io.req.bits.mask := VecInit(
+        Seq.fill(b.memDomain.bankMaskLen)(1.U(1.W))
+      )
       when(io.bankWrite(0).io.req.fire) {
+        state := sWriteHiResp
+      }
+    }
+
+    is(sWriteHiResp) {
+      io.bankWrite(0).io.resp.ready := true.B
+      when(io.bankWrite(0).io.resp.fire) {
         when(block_idx_reg === iter_reg - 1.U) {
           state := sComplete
         }.otherwise {

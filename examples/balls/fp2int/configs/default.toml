@@ -2,4 +2,4 @@
 
 [ball]
 inputType = "FP32"
-outputType = "INT32"
+outputType = "INT8"

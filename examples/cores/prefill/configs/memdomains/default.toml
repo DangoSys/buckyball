@@ -1,16 +1,17 @@
 # Poly Prefill Core Memory Domain Configuration
 # Private (per-core) memory parameters. Shared memory lives in the tile TOML.
+# Long prompt batches need more resident activation and weight tiles.
 
 [bank]
-num = 16
+num = 32
 width = 128
-entries = 1024
+entries = 2048
 maskLen = 16
 channel = 7
 
 [dma]
 nXacts = 8
-burstMaxBytes = 64
+burstMaxBytes = 1024
 busWidth = 128
 maxInFlightMemReqs = 16
 

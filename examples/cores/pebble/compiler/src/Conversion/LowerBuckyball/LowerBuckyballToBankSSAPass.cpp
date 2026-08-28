@@ -15,6 +15,10 @@
 
 using namespace mlir;
 
+namespace mlir::buddy {
+void populatePebbleCoreBankSSALoweringPatterns(RewritePatternSet &patterns);
+}
+
 namespace {
 
 class LowerBuckyballToBankSSAPass
@@ -36,7 +40,7 @@ public:
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
-    mlir::buddy::populatePebbleLowerBuckyballToBankSSAPatterns(patterns);
+    mlir::buddy::populatePebbleCoreBankSSALoweringPatterns(patterns);
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();
   }

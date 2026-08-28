@@ -10,7 +10,7 @@ class im2col_cmd_item extends bb_blink_cmd_item;
   bit [127:0] dst_words[IM2COL_MAX_WORDS];
 
   constraint legal_c {
-    funct7 == IM2COL_FUNCT7[6:0];
+    funct7 == IM2COL_CORE_FUNCT7[6:0];
     op1_en == 1'b1;
     op2_en == 1'b0;
     wr_spad_en == 1'b1;
@@ -43,7 +43,7 @@ class im2col_cmd_item extends bb_blink_cmd_item;
     im2col_case_cmd(cmd);
 
     bid           = cmd.bid[4:0];
-    funct7        = cmd.funct7[6:0];
+    funct7        = IM2COL_CORE_FUNCT7[6:0];
     iter          = cmd.iter;
     ksize         = cmd.ksize;
     stride        = cmd.stride;

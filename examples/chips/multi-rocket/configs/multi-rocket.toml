@@ -1,7 +1,0 @@
-# multi-rocket - 1 tile × 32 Rocket-only cores
-
-[top]
-nTiles = 1
-
-[[tiles]]
-include = "tiles/32core.toml"

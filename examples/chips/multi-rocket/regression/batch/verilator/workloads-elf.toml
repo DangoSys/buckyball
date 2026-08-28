@@ -1,0 +1,22 @@
+[workloads]
+search_path = "workloads/src"
+tests = [
+  "embench_aha-mont64-baremetal",
+  "embench_crc32-baremetal",
+  "embench_edn-baremetal",
+  # "embench_huffbench-baremetal",
+  "embench_matmult-int-baremetal",
+  "embench_minver-baremetal",
+  "embench_nbody-baremetal",
+  "embench_nettle-aes-baremetal",
+  "embench_nettle-sha256-baremetal",
+  "embench_nsichneu-baremetal",
+  # "embench_picojpeg-baremetal",
+  # "embench_qrduino-baremetal",
+  "embench_sglib-combined-baremetal",
+  "embench_slre-baremetal",
+  "embench_st-baremetal",
+  "embench_statemate-baremetal",
+  "embench_ud-baremetal",
+  # "embench_wikisort-baremetal",
+]

@@ -1,0 +1,9 @@
+# Goban - 2 tiles x 4 cores each (8 harts total)
+
+[top]
+nTiles = 2
+
+[tileTemplate]
+tile_ids = [0, 1]
+include = "tiles/4core-private-1bb.toml"
+count = 2

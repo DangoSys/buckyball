@@ -1,6 +1,6 @@
 # Toy Core Configuration (default)
 
-balldomain = "balldomains/full.toml"
+balldomain = "balldomains/default.toml"
 memdomain  = "memdomains/default.toml"
 frontend   = "frontends/demo.toml"
 gpdomain   = "gpdomains/default.toml"
@@ -13,6 +13,7 @@ useVM = true
 useZba = true
 useZbb = true
 useZbs = true
+haveCFlush = false
 
 [rocketCore.mulDiv]
 enable = true

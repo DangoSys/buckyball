@@ -29,6 +29,7 @@
 
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 using namespace mlir;
 using namespace buddy::buckyball;
 
@@ -38,6 +39,9 @@ using namespace buddy::buckyball;
 #include "Buckyball.cpp.inc"
 
 void BuckyballDialect::initialize() {
+  // Keep the target registry in the dialect library even for Ball-free Cores.
+  // Otherwise the static linker drops the command-line option definition.
+  static_cast<void>(buckyball_target::getRequestedBuckyballTarget());
   addOperations<
 #define GET_OP_LIST
 #include "Buckyball.cpp.inc"

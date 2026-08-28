@@ -79,7 +79,6 @@ mod tests {
         assert_eq!(im2col_case_load(0x1234, 0, 2), 0);
         let mut cmd = Im2colCmd {
             bid: 0,
-            funct7: 0,
             iter: 0,
             ksize: 0,
             stride: 0,
@@ -93,7 +92,6 @@ mod tests {
             num_dst_words: 0,
         };
         im2col_case_cmd(&mut cmd as *mut Im2colCmd);
-        assert_eq!(cmd.funct7, 48);
         assert_eq!(cmd.iter, 6);
         assert_eq!(cmd.ksize, 3);
         assert_eq!(cmd.num_src_words, 3);

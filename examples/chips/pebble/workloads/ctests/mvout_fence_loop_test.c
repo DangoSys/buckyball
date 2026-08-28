@@ -2,6 +2,7 @@
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
 #include <bbhw/mem/params.h>
+#include <isa/smatmul.h>
 #include <stdio.h>
 
 /* Closer to MobileNet tile epilogue: compute, mvout, fence, bank
@@ -39,7 +40,7 @@ int main(void) {
     bb_mvin((uintptr_t)a, 0, M, 1);
     bb_mvin((uintptr_t)b, 1, K, 1);
     bb_mvin((uintptr_t)zero, 2, M, 1);
-    bb_matrix_mnk(0, 1, 2, M, N, K);
+    bb_smatmul_os(0, 1, 2, M, N, K);
     bb_mvout((uintptr_t)out, 2, M, 1);
     bb_fence();
 

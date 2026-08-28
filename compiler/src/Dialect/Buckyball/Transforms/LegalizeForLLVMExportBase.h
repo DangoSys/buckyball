@@ -30,6 +30,9 @@ namespace buckyball {
 namespace legalize {
 
 uint64_t fieldBits(uint64_t val, int startBit, int endBit);
+int64_t addrBitsForDepth(int64_t bankDepth);
+uint64_t smatmulIterBits(int64_t op1Base, int64_t op2Base, int64_t wrBase,
+                         int64_t addrBits);
 
 mlir::Value cstI64(mlir::OpBuilder &b, mlir::Location loc, uint64_t v);
 mlir::Value extractPtr(mlir::OpBuilder &b, mlir::Location loc,
@@ -43,6 +46,8 @@ mlir::Value packRs2MemStride(mlir::OpBuilder &b, mlir::Location loc,
                              mlir::Value memAddr, mlir::Value stride);
 void emitMset(mlir::OpBuilder &b, mlir::Location loc, uint64_t bankId,
               uint64_t row, uint64_t col, uint64_t alloc);
+void emitDmaCacheFlush(mlir::OpBuilder &b, mlir::Location loc);
+void emitDmaCacheFence(mlir::OpBuilder &b, mlir::Location loc);
 
 void populateBaseLegalizeForLLVMExportPatterns(
     mlir::LLVMTypeConverter &converter, mlir::RewritePatternSet &patterns,

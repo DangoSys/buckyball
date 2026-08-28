@@ -4,8 +4,27 @@ import mill.define.Sources
 import mill.modules.Util
 import mill.scalalib.TestModule.ScalaTest
 import scalalib._
+import mill.javalib.JavaModule
 // support BSP
 import mill.bsp._
+
+object protoJava extends JavaModule {
+  def protoDir = T {
+    os.pwd / os.up / "bbdev" / "api" / "steps" / "config" / "scripts" / "proto"
+  }
+
+  def generatedSources = T {
+    val dir = protoDir()
+    val proto = dir / "chip.proto"
+    if (!os.exists(proto)) {
+      throw new Exception(s"missing chip.proto: $proto")
+    }
+    os.proc("protoc", s"-I$dir", s"--java_out=${T.dest}", proto).call()
+    Seq(PathRef(T.dest))
+  }
+
+  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
+}
 
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
@@ -22,7 +41,8 @@ object buckyball extends SbtModule { m =>
   // Add chipyard and rocket-chip dependencies
   override def moduleDeps = Seq(
     chipyard,
-    gemmini
+    gemmini,
+    protoJava
   )
 
   override def sources = T.sources {
@@ -61,7 +81,8 @@ object buckyball extends SbtModule { m =>
     ivy"org.yaml:snakeyaml:2.0",
     ivy"com.lihaoyi::sourcecode:0.3.0",
     ivy"com.lihaoyi::upickle:3.3.1",
-    ivy"tech.sparse::toml-scala:0.2.2"
+    ivy"tech.sparse::toml-scala:0.2.2",
+    ivy"com.google.protobuf:protobuf-java:3.25.3"
   )
 
   override def scalacPluginIvyDeps = Agg(

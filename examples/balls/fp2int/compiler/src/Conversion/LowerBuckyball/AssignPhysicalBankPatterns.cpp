@@ -10,8 +10,8 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateFp2IntAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+void populateFp2IntBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
@@ -23,7 +23,7 @@ public:
   LogicalResult matchAndRewrite(BankFp2IntOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.create<Fp2IntOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                              op.getIter(), op.getScale());
+                              op.getIter(), op.getDaAddr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }
@@ -31,7 +31,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateFp2IntAssignPhysicalBankPatterns(
+void mlir::buddy::populateFp2IntBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankFp2IntPattern>(patterns.getContext());

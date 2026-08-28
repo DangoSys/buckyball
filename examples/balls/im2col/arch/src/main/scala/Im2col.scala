@@ -17,7 +17,9 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   private val map = b.ballDomain.ballIdMappings
     .find(_.ballName == "Im2colBall")
-    .getOrElse(throw new IllegalArgumentException("Im2colBall not found in config"))
+    .getOrElse(
+      throw new IllegalArgumentException("Im2colBall not found in config")
+    )
 
   private val inBW  = map.inBW
   private val outBW = map.outBW
@@ -35,8 +37,12 @@ class Im2col(val b: GlobalConfig) extends Module {
 
   val cfg = Module(new Im2colConfigRegs(b, maxIter, maxKSize, maxPad))
   val win = Module(new Im2colWindow(maxKSize, b.frontend.iter_len))
-  val lineBuf: Instance[LineBufferManager] = Instantiate(new LineBufferManager(b))
-  val writer:  Instance[StreamWriter]      = Instantiate(new StreamWriter(b))
+
+  val lineBuf: Instance[LineBufferManager] = Instantiate(
+    new LineBufferManager(b)
+  )
+
+  val writer: Instance[StreamWriter] = Instantiate(new StreamWriter(b))
 
   val running     = RegInit(false.B)
   val inputReady  = RegInit(false.B)
@@ -63,8 +69,8 @@ class Im2col(val b: GlobalConfig) extends Module {
     respPending := false.B
   }
 
-  win.io.init     := io.cmdReq.fire
-  win.io.next     := false.B
+  win.io.init      := io.cmdReq.fire
+  win.io.next      := false.B
   win.io.inRows    := cfg.io.inRows
   win.io.inCols    := cfg.io.inCols
   win.io.kRows     := cfg.io.kRows
@@ -81,7 +87,7 @@ class Im2col(val b: GlobalConfig) extends Module {
   for (i <- 0 until inBW) {
     lineBuf.io.bankRead(i) <> io.bankRead(i)
   }
-  lineBuf.io.start   := cmdStart
+  lineBuf.io.start     := cmdStart
   lineBuf.io.inRows    := cfg.io.inRows
   lineBuf.io.inCols    := cfg.io.inCols
   lineBuf.io.rowStride := cfg.io.rowStride
@@ -89,12 +95,12 @@ class Im2col(val b: GlobalConfig) extends Module {
   lineBuf.io.padding   := cfg.io.padding
   lineBuf.io.startRow  := cfg.io.startRow
   lineBuf.io.startCol  := cfg.io.startCol
-  lineBuf.io.outRow  := win.io.outRow
-  lineBuf.io.outCol  := win.io.outCol
-  lineBuf.io.kRowIdx := win.io.kRowIdx
-  lineBuf.io.kColIdx := win.io.kColIdx
-  lineBuf.io.rBankId := cfg.io.rBank
-  lineBuf.io.robId   := cfg.io.robId
+  lineBuf.io.outRow    := win.io.outRow
+  lineBuf.io.outCol    := win.io.outCol
+  lineBuf.io.kRowIdx   := win.io.kRowIdx
+  lineBuf.io.kColIdx   := win.io.kColIdx
+  lineBuf.io.rBankId   := cfg.io.rBank
+  lineBuf.io.robId     := cfg.io.robId
 
   for (i <- 0 until outBW) {
     writer.io.bankWrite(i) <> io.bankWrite(i)
@@ -110,8 +116,11 @@ class Im2col(val b: GlobalConfig) extends Module {
   writer.io.kRows        := cfg.io.kRows
   writer.io.kCols        := cfg.io.kCols
   val paddedCols = cfg.io.inCols +& (cfg.io.padding << 1)
-  val outputCols = ((paddedCols - cfg.io.kCols - cfg.io.startCol) /
-    cfg.io.colStride) + 1.U
+
+  val outputCols =
+    ((paddedCols - cfg.io.kCols - cfg.io.startCol) /
+      cfg.io.colStride) + 1.U
+
   writer.io.windowIdx := win.io.outRow * outputCols + win.io.outCol
 
   when(cmdStart) {

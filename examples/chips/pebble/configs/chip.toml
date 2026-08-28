@@ -1,0 +1,6 @@
+[designs]
+include = "designs/pebble.toml"
+
+[sims]
+verilator = "sims.verilator.BuckyballPebbleVerilatorConfig"
+p2e = "sims.p2e.P2EPebbleLinuxConfig"

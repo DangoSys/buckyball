@@ -1,6 +1,5 @@
 typedef struct {
   int unsigned bid;
-  int unsigned funct7;
   int unsigned iter;
   int unsigned op1_bank;
   int unsigned wr_bank;
@@ -23,7 +22,10 @@ import "DPI-C" function longint unsigned transpose_case_src_word_hi(input int un
 import "DPI-C" function longint unsigned transpose_case_dst_word_lo(input int unsigned word_index);
 import "DPI-C" function longint unsigned transpose_case_dst_word_hi(input int unsigned word_index);
 
-localparam int TRANSPOSE_FUNCT7 = 7'd49;
+`ifndef TRANSPOSE_FUNCT7
+`error "TRANSPOSE_FUNCT7 must be provided by the selected Core ballISA"
+`endif
+localparam int TRANSPOSE_CORE_FUNCT7 = `TRANSPOSE_FUNCT7;
 localparam int TRANSPOSE_MAX_WORDS = 16;
 localparam int TRANSPOSE_TIMEOUT_CYCLES = 2000;
 localparam int TRANSPOSE_SEED = 32'hCAFE_BABE;

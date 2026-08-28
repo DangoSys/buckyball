@@ -99,7 +99,10 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     when(!found) {
       assert(false.B, "SharedMemBackend release missing allocation: hart=%d vbank=%d\n", hart_id, vbank_id)
     }
+    clearVbank(hart_id, vbank_id)
+  }
 
+  def clearVbank(hart_id: UInt, vbank_id: UInt): Unit = {
     for (i <- 0 until totalBanks) {
       when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
         mappingTable(i).valid := false.B
@@ -161,6 +164,9 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
   when(io.config.fire) {
     when(io.config.bits.alloc) {
+      when(io.config.bits.group_id === 0.U) {
+        clearVbank(io.config.bits.hart_id, io.config.bits.vbank_id)
+      }
       val pbankId = getFreePbankId()
       printf(
         p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +

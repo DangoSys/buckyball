@@ -7,20 +7,17 @@
 // rs1[63:30]:  iter (number of MXFP blocks to process)
 //
 // For MXFP4: each block = 32 x 4-bit FP = 16 bytes input → 32 bytes INT8 output
-// Scale: per-block E8M0 (8-bit) from MMIO, indexed by block_idx
-// MMIO region must be bound to wr_bank (BANK2) via bb_mmio_set beforehand.
+// Scale: per-block E8M0 (8-bit) from MMIO, indexed by block_idx.
 //
 //===-----------------------------------------------------------------===//
 
 use super::super::bank::{bank_width, mmio_read_byte};
 use super::decode::{rs1_b0, rs1_b2, rs1_iter};
-use super::instruction::{ExecContext, Instruction};
+use super::instruction::{BallInstruction, ExecContext};
 
 pub struct Mxfp2Int;
 
-impl Instruction for Mxfp2Int {
-    const FUNCT: u32 = 55;
-
+impl BallInstruction for Mxfp2Int {
     fn exec(xs1: u64, _xs2: u64, ctx: &mut ExecContext) -> u64 {
         let in_bank = rs1_b0(xs1) as u32;
         let out_bank = rs1_b2(xs1) as u32;
@@ -40,13 +37,8 @@ impl Instruction for Mxfp2Int {
         const BYTES_PER_OUTPUT_BLOCK: usize = 32; // 32 x INT8
 
         for block_idx in 0..iter {
-            // Read E8M0 scale from MMIO (meta_bank = out_bank, rel_addr = block_idx)
-            let scale_e8m0 = mmio_read_byte(
-                ctx.mmio_banks,
-                ctx.mmio_region_table,
-                out_bank as usize,
-                block_idx,
-            );
+            // Read E8M0 scale from the globally encoded MMIO address space.
+            let scale_e8m0 = mmio_read_byte(ctx.mmio_banks, block_idx);
 
             // Read input MXFP4 block (16 bytes = 1 bank row)
             let in_row_addr = block_idx;

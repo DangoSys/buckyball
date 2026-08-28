@@ -3,6 +3,7 @@
 #include <bbhw/mem/mem.h>
 #include <bbhw/mmio/mmio_allocator.c>
 #include <bbhw/mmio/mmio_allocator.h>
+#include <isa/mxfp2int.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -58,7 +59,6 @@ int main(void) {
   const uint32_t out_bank = 1;
   bb_mem_alloc(in_bank, 1, 1);
   bb_mem_alloc(out_bank, 1, 1);
-  bb_mmio_set(out_bank, mmio_addr, 1);
   bb_mvin_mmio((uintptr_t)scales_e8m0, mmio_addr, 1, NUM_BLOCKS);
   bb_mvin((uintptr_t)input_mxfp4, in_bank, NUM_BLOCKS, 1);
   bb_mxfp2int(in_bank, out_bank, NUM_BLOCKS);
@@ -77,7 +77,6 @@ int main(void) {
     }
   }
 
-  bb_mmio_set(out_bank, 0, 0);
   bb_mem_release(in_bank);
   bb_mem_release(out_bank);
   mmio_allocator_free(&mmio_alloc, mmio_addr, 1);

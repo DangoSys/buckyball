@@ -38,11 +38,11 @@ Against `examples/balls/<name>/` and the target chip, list gaps:
 | Small tests | Short shapes, hand vectors, edge/illegal | bemu + Verilator |
 | Bank tests | `iter≈BANK_LINES`, `srand`/`rand`; soft numeric may report LOSS | **bemu only** |
 | Integration tests | Real consumers; must update on contract changes | bemu; small paths may use Verilator |
-| MLIR | Under `examples/balls/<name>/workloads/mlir_tests/`; **not** under chip | FileCheck + optest ELF → bemu regression |
+| MLIR | Under `examples/balls/<name>/workloads/mlir_tests/`; **not** under chip | FileCheck + mlirtest ELF → bemu regression |
 | UVM | Stimulus/scoreboard on the same contract | **After RTL is green** |
 
-- MLIR: keep `bank` Op and lowered `ball` Op separate (see transpose: contract + optest)
-- New ctest / optest → chip **bemu** `workloads-elf.toml` + `workloads-pk.toml`
+- MLIR: keep `bank` Op and lowered `ball` Op separate (see transpose: contract + mlirtest)
+- New ctest / mlirtest → chip **bemu** `workloads-elf.toml` + `workloads-pk.toml`
 - Verilator lists take **small tests only**, not bank tests
 
 ## Phase 2 - One semantics across the stack
@@ -78,7 +78,7 @@ Copy and tick:
 ```
 - [ ] Contract (fields, shapes, illegal table) + validate pass
 - [ ] Small suite bemu green; bank tests bemu green
-- [ ] bank/ball MLIR OpTest + listed in bemu regression
+- [ ] bank/ball MLIRTest + listed in bemu regression
 - [ ] RTL aligned + Verilator small tests green
 - [ ] Integration tests synced; UVM (after RTL)
 ```

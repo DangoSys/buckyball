@@ -24,11 +24,19 @@ include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/Dialect/Buckyball)
 
 set(PEBBLE_BALL_COMPILER_DIALECT_DIRS
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/matrix/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/matadd/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Dialect/Buckyball
 )
+
+set(BB_CORE_BACKEND_INTRINSICS_DIR
+  ${CMAKE_CURRENT_SOURCE_DIR}/Backend/include
+  CACHE INTERNAL "Buckyball chip backend intrinsic directory")
+
+set(BB_BALL_BACKEND_INTRINSICS_DIRS)
 
 foreach(PEBBLE_BALL_COMPILER_DIALECT_DIR ${PEBBLE_BALL_COMPILER_DIALECT_DIRS})
   if(NOT EXISTS ${PEBBLE_BALL_COMPILER_DIALECT_DIR})
@@ -36,7 +44,15 @@ foreach(PEBBLE_BALL_COMPILER_DIALECT_DIR ${PEBBLE_BALL_COMPILER_DIALECT_DIRS})
       "Missing pebble ball compiler dialect dir: ${PEBBLE_BALL_COMPILER_DIALECT_DIR}")
   endif()
   include_directories(${PEBBLE_BALL_COMPILER_DIALECT_DIR})
+  get_filename_component(PEBBLE_BALL_COMPILER_DIR
+    ${PEBBLE_BALL_COMPILER_DIALECT_DIR}/../..
+    ABSOLUTE)
+  list(APPEND BB_BALL_BACKEND_INTRINSICS_DIRS
+    ${PEBBLE_BALL_COMPILER_DIR}/Backend/include)
 endforeach()
+
+set(BB_BALL_BACKEND_INTRINSICS_DIRS ${BB_BALL_BACKEND_INTRINSICS_DIRS}
+  CACHE INTERNAL "Buckyball ball backend intrinsic directories")
 
 add_subdirectory(Dialect)
 add_subdirectory(Conversion)

@@ -51,29 +51,13 @@ typedef int32_t result_t;
                : "memory")
 #endif
 
-// Include all instruction definitions
+// Base (mem/frontend) instruction definitions only.
+// Ball-specific ISA macros live under examples/balls/<ball>/workloads/isa/.
 #include "00_fence.c"
 #include "01_barrier.c"
-#include "02_gemmini_config.c"
-#include "03_gemmini_flush.c"
-#include "04_bdb_counter.c"
 #include "16_mvout.c"
 #include "32_mset.c"
 #include "33_mvin.c"
-#include "34_mmio_set.c"
 #include "35_mvin_mmio.c"
-#include "48_im2col.c"
-#include "49_transpose.c"
-#include "50_relu.c"
-#include "51_fp2int.c"
-#include "52_int2fp.c"
-#include "53_gemmini_preload.c"
-#include "55_mxfp2int.c"
-#include "64_mul_warp16.c"
-#include "65_matrix.c"
-#include "66_gemmini_compute_preloaded.c"
-#include "67_gemmini_compute_accumulated.c"
-#include "80_gemmini_loop_ws.c"
-#include "96_gemmini_loop_conv_ws.c"
 
 #endif // BUCKYBALL_ISA_H

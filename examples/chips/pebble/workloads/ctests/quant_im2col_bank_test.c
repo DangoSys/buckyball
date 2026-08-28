@@ -2,6 +2,7 @@
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
 #include <bbhw/mem/params.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 /* Same bank-fill shape as conv_im2col_bank; different seed. */
@@ -56,6 +57,8 @@ int main(void) {
   bb_im2col(0, 1, ITER, K, STRIDE, PAD);
   bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
   int ok = compare_i8_matrices(out, exp, OUT_ROWS, LANES);
   printf("quant_im2col_bank %s\n", ok ? "PASS" : "FAIL");
   return ok ? 0 : 1;

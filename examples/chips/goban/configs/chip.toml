@@ -1,0 +1,6 @@
+[designs]
+include = "designs/goban.toml"
+
+[sims]
+verilator = "sims.verilator.BuckyballGoban2CoreVerilatorConfig"
+p2e = "sims.p2e.BuckyballGoban2CoreP2EConfig"

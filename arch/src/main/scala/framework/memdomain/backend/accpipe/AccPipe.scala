@@ -40,8 +40,9 @@ class AccPipe(val b: GlobalConfig) extends Module {
   val rd_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
   val wr_hold     = RegInit(false.B)
   val wr_ok_reg   = RegInit(false.B)
+  val busy_reg    = RegInit(false.B)
 
-  val canStart    = !rd_hold && !wr_hold && !io.sramRead.resp.valid && !io.sramWrite.resp.valid
+  val canStart    = !busy_reg && !rd_hold && !wr_hold && !io.sramRead.resp.valid && !io.sramWrite.resp.valid
   val hasWriteReq = io.mem_req.write.req.valid
   val wrReq       = canStart && hasWriteReq
   val rdReq       = canStart && !hasWriteReq && io.mem_req.read.req.valid
@@ -91,5 +92,12 @@ class AccPipe(val b: GlobalConfig) extends Module {
     bank_id_reg  := io.mem_req.bank_id
   }
 
-  io.busy := false.B
+  when(io.mem_req.read.req.fire || io.mem_req.write.req.fire) {
+    busy_reg := true.B
+  }
+  when(io.mem_req.read.resp.fire || io.mem_req.write.resp.fire) {
+    busy_reg := false.B
+  }
+
+  io.busy := busy_reg
 }

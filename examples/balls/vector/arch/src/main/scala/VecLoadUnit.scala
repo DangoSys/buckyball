@@ -26,9 +26,13 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   val rob_id_width = log2Up(b.frontend.rob_entries)
 
   // Get bandwidth from config (use first VecBall mapping)
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
-    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
-  val inBW        = ballMapping.inBW
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "VecBall")
+    .getOrElse(
+      throw new IllegalArgumentException("VecBall not found in config")
+    )
+
+  val inBW = ballMapping.inBW
 
   @public
   val io = IO(new Bundle {
@@ -97,7 +101,11 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   when(state === busy && io.ld_ex_o.ready && !wait1_reg) {
     io.bankReadReq(0).valid     := op1_iter_counter < iter
     io.bankReadReq(0).bits.addr := op1_addr + op1_iter_counter
-    op1_iter_counter            := Mux(io.bankReadReq(0).ready, op1_iter_counter + 1.U, op1_iter_counter)
+    op1_iter_counter            := Mux(
+      io.bankReadReq(0).ready,
+      op1_iter_counter + 1.U,
+      op1_iter_counter
+    )
     wait1_reg                   := Mux((op1_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
     when(io.bankReadReq(0).fire) {}
   }
@@ -105,7 +113,11 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
   when(state === busy && io.ld_ex_o.ready && !wait2_reg) {
     io.bankReadReq(1).valid     := op2_iter_counter < iter
     io.bankReadReq(1).bits.addr := op2_addr + op2_iter_counter
-    op2_iter_counter            := Mux(io.bankReadReq(1).ready, op2_iter_counter + 1.U, op2_iter_counter)
+    op2_iter_counter            := Mux(
+      io.bankReadReq(1).ready,
+      op2_iter_counter + 1.U,
+      op2_iter_counter
+    )
     wait2_reg                   := Mux((op2_iter_counter + 1.U) % 16.U === 0.U, 1.U, 0.U)
     when(io.bankReadReq(1).fire) {}
   }
@@ -133,8 +145,10 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
 
   io.ld_ex_o.valid := both_valid
   when(both_valid) {
-    io.ld_ex_o.bits.op1  := bankRespQueue0.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
-    io.ld_ex_o.bits.op2  := bankRespQueue1.io.deq.bits.data.asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+    io.ld_ex_o.bits.op1  := bankRespQueue0.io.deq.bits.data
+      .asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
+    io.ld_ex_o.bits.op2  := bankRespQueue1.io.deq.bits.data
+      .asTypeOf(Vec(InputNum, UInt(inputWidth.W)))
     io.ld_ex_o.bits.iter := ld_ex_iter_reg
   }.otherwise {
     io.ld_ex_o.bits.iter := 0.U

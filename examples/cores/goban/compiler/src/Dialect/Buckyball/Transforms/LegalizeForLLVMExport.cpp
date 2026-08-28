@@ -21,30 +21,23 @@ using namespace mlir;
 using namespace buddy::buckyball::legalize;
 
 namespace mlir::buddy::buckyball {
-void populateTransposeLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable);
-void configureTransposeLegalizeForExportTarget(LLVMConversionTarget &target,
-                                               bool stable);
-void populateMatrixLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable);
-void configureMatrixLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable);
-void populateMatrixMatmulLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    bool rushB);
-void configureMatrixMatmulLegalizeForExportTarget(LLVMConversionTarget &target,
-                                                  bool stable);
-void populateFp2IntLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable);
-void configureFp2IntLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable);
-void populateInt2FpLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                 RewritePatternSet &patterns,
-                                                 bool stable);
-void configureInt2FpLegalizeForExportTarget(LLVMConversionTarget &target,
-                                            bool stable);
+void populateTransposeBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
+                                                        RewritePatternSet &,
+                                                        bool, int64_t, bool);
+void configureTransposeBallLegalizeForExportTarget(LLVMConversionTarget &,
+                                                   bool);
+void populateSMatMulBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
+                                                      RewritePatternSet &, bool,
+                                                      int64_t, bool);
+void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
+void populateFp2IntBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
+                                                     RewritePatternSet &, bool,
+                                                     int64_t, bool);
+void configureFp2IntBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
+void populateInt2FpBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
+                                                     RewritePatternSet &, bool,
+                                                     int64_t, bool);
+void configureInt2FpBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
@@ -52,34 +45,29 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
     bool includeFuncOperandForwarding, bool stable, bool rushB) {
   (void)bankWidthBytes;
-  (void)bankDepth;
   (void)bankNum;
 
   populateBaseLegalizeForLLVMExportPatterns(
       converter, patterns, includeFuncOperandForwarding, rushB);
-  mlir::buddy::buckyball::populateFp2IntLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
-  mlir::buddy::buckyball::populateInt2FpLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
-  mlir::buddy::buckyball::populateTransposeLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
-  mlir::buddy::buckyball::populateMatrixLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
-  mlir::buddy::buckyball::populateMatrixMatmulLegalizeForLLVMExportPatterns(
-      converter, patterns, stable, rushB);
+  mlir::buddy::buckyball::populateFp2IntBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
+  mlir::buddy::buckyball::populateInt2FpBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
+  mlir::buddy::buckyball::populateTransposeBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
+  mlir::buddy::buckyball::populateSMatMulBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target, bool stable) {
   configureBaseLegalizeForExportTarget(target);
-  mlir::buddy::buckyball::configureFp2IntLegalizeForExportTarget(target,
-                                                                 stable);
-  mlir::buddy::buckyball::configureInt2FpLegalizeForExportTarget(target,
-                                                                 stable);
-  mlir::buddy::buckyball::configureTransposeLegalizeForExportTarget(target,
-                                                                    stable);
-  mlir::buddy::buckyball::configureMatrixLegalizeForExportTarget(target,
-                                                                 stable);
-  mlir::buddy::buckyball::configureMatrixMatmulLegalizeForExportTarget(target,
-                                                                       stable);
+  mlir::buddy::buckyball::configureFp2IntBallLegalizeForExportTarget(target,
+                                                                     stable);
+  mlir::buddy::buckyball::configureInt2FpBallLegalizeForExportTarget(target,
+                                                                     stable);
+  mlir::buddy::buckyball::configureTransposeBallLegalizeForExportTarget(target,
+                                                                        stable);
+  mlir::buddy::buckyball::configureSMatMulBallLegalizeForExportTarget(target,
+                                                                      stable);
 }

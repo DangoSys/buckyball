@@ -35,9 +35,13 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   val accWidth = config.outputWidth
 
   // Get bandwidth from config (use first VecBall mapping)
-  val ballMapping = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
-    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
-  val outBW       = ballMapping.outBW
+  val ballMapping = b.ballDomain.ballIdMappings
+    .find(_.ballName == "VecBall")
+    .getOrElse(
+      throw new IllegalArgumentException("VecBall not found in config")
+    )
+
+  val outBW = ballMapping.outBW
 
   @public
   val io = IO(new Bundle {
@@ -55,7 +59,9 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
 
-  val writeQueues = VecInit(Seq.fill(outBW)(Module(new Queue(new BankWriteEntry(b), 16)).io))
+  val writeQueues = VecInit(
+    Seq.fill(outBW)(Module(new Queue(new BankWriteEntry(b), 16)).io)
+  )
 
 // -----------------------------------------------------------------------------
 // Set registers when Ctrl instruction arrives

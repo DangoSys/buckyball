@@ -1,6 +1,6 @@
 pub(crate) use crate::inst::{decode, instruction};
 
-use crate::inst::instruction::{ExecContext, Instruction};
+use crate::inst::instruction::{BallInstruction, ExecContext};
 
 #[path = "50_relu.rs"]
 mod f50_relu;
@@ -17,11 +17,9 @@ pub fn execute_known(
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f50_relu::Relu as Instruction>::FUNCT => {
-            Some(<f50_relu::Relu as Instruction>::exec(xs1, xs2, ctx))
-        }
-        _ => None,
+    match crate::config::ball_domain::mnemonic_for_funct(funct).as_deref() {
+        Some("RELU") => Some(f50_relu::Relu::exec(xs1, xs2, ctx)),
+        Some(_) | None => None,
     }
 }
 
@@ -29,10 +27,8 @@ pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> O
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f50_relu::Relu as Instruction>::FUNCT => {
-            Some(<f50_relu::Relu as Instruction>::latency(xs1, xs2))
-        }
-        _ => None,
+    match crate::config::ball_domain::mnemonic_for_funct(funct).as_deref() {
+        Some("RELU") => Some(f50_relu::Relu::latency(xs1, xs2)),
+        Some(_) | None => None,
     }
 }

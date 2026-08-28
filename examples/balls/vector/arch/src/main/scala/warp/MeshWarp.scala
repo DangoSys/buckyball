@@ -45,7 +45,9 @@ class MeshWarp(val config: VectorBallParam) extends Module {
 
     // Connect cascade thread's second input and output ready signal
     if (i == 0) {
-      casBond.in.bits.in2 := VecInit(Seq.fill(config.lane)(0.U(config.outputWidth.W)))
+      casBond.in.bits.in2 := VecInit(
+        Seq.fill(config.lane)(0.U(config.outputWidth.W))
+      )
       // First cascade thread's valid is determined by mulBond's output valid
       casBond.in.valid    := mulBond.out.valid
       // First cascade thread's output ready is connected to next cascade thread's input ready
@@ -56,7 +58,9 @@ class MeshWarp(val config: VectorBallParam) extends Module {
       // Directly connect output to input
       casBond.in.bits.in2 := casThreads(i - 1).vvvBond.out.bits.out
       // casBond's valid is jointly determined by previous casBond's output valid and current mulBond's output valid
-      casBond.in.valid    := casThreads(i - 1).vvvBond.out.valid || mulBond.out.valid
+      casBond.in.valid    := casThreads(
+        i - 1
+      ).vvvBond.out.valid || mulBond.out.valid
       // Middle cascade thread's output ready is connected to next cascade thread's input ready
       if (i < config.numCasThreads - 1) {
         casBond.out.ready := casThreads(i + 1).vvvBond.in.ready
@@ -71,8 +75,12 @@ class MeshWarp(val config: VectorBallParam) extends Module {
       io.in.ready         := mulBond.in.ready
     }.otherwise {
       mulBond.in.valid    := false.B
-      mulBond.in.bits.in1 := VecInit(Seq.fill(config.lane)(0.U(config.inputWidth.W)))
-      mulBond.in.bits.in2 := VecInit(Seq.fill(config.lane)(0.U(config.inputWidth.W)))
+      mulBond.in.bits.in1 := VecInit(
+        Seq.fill(config.lane)(0.U(config.inputWidth.W))
+      )
+      mulBond.in.bits.in2 := VecInit(
+        Seq.fill(config.lane)(0.U(config.inputWidth.W))
+      )
     }
   }
 

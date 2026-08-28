@@ -5,9 +5,9 @@ func.func @main() -> i8 {
   %zero_f32 = arith.constant 0.0 : f32
   %one_f32 = arith.constant 1.0 : f32
 
-  %input = memref.alloc() {alignment = 16 : i64} : memref<1x4x1x8xf32>
-  %filter = memref.alloc() {alignment = 16 : i64} : memref<6x1x1x8xf32>
-  %output = memref.alloc() {alignment = 16 : i64} : memref<1x4x1x6xf32>
+  %input = memref.alloc() : memref<1x4x1x8xf32>
+  %filter = memref.alloc() : memref<6x1x1x8xf32>
+  %output = memref.alloc() : memref<1x4x1x6xf32>
 
   linalg.fill ins(%one_f32 : f32) outs(%input : memref<1x4x1x8xf32>)
   linalg.fill ins(%one_f32 : f32) outs(%filter : memref<6x1x1x8xf32>)

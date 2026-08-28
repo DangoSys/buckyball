@@ -14,10 +14,14 @@ import framework.top.GlobalConfig
 @instantiable
 class VecBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStatus {
 
-  val ballCommonConfig = b.ballDomain.ballIdMappings.find(_.ballName == "VecBall")
-    .getOrElse(throw new IllegalArgumentException("VecBall not found in config"))
-  val inBW             = ballCommonConfig.inBW
-  val outBW            = ballCommonConfig.outBW
+  val ballCommonConfig = b.ballDomain.ballIdMappings
+    .find(_.ballName == "VecBall")
+    .getOrElse(
+      throw new IllegalArgumentException("VecBall not found in config")
+    )
+
+  val inBW  = ballCommonConfig.inBW
+  val outBW = ballCommonConfig.outBW
 
   @public
   val io = IO(new BlinkIO(b, inBW, outBW))

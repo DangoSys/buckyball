@@ -46,24 +46,18 @@ After the first time installation, you can enter the environment anytime by runn
 nix develop
 ```
 
-<!-- **3. Verify Installation**
+**3. Verify Installation**
 
 Run Verilator simulation test to verify installation:
 
 ```bash
-bbdev verilator --run '--jobs 16 --binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --batch'
-``` -->
+bbdev verilator --run '--jobs 16 --chip toy --binary toy-toy-vecunit_matmul_ones-baremetal --batch'
+```
 
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --itrace --mtrace --pmctrace --ctrace --banktrace'
-```
-
-Run Verilator with BEMU Bank DiffTest enabled:
-
-```bash
-bbdev bebop-verilator --run '--diff --binary toy_vecunit_matmul_ones-singlecore-baremetal --config sims.verilator.BuckyballToyVerilatorConfig --no-wave'
+bbdev bebop-verilator --run '--chip toy --binary toy-toy-vecunit_matmul_ones-baremetal --itrace --mtrace --pmctrace --ctrace --banktrace'
 ```
 
 ## Tutorial

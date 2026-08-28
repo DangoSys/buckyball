@@ -37,7 +37,7 @@ Blink command fields (not ISA rs packing):
 - `ksize` = cmd.special[7:0]
 - `stride` = cmd.special[15:8]
 - `padding` = cmd.special[23:16]
-- banks = op1_bank / wr_bank, funct7 = 48
+- banks = op1_bank / wr_bank; funct7 is injected from the selected Core ballISA
 - TB: op1_col=1, wr_col=1, rs1=0, rs2=0
 
 ## BID (required)

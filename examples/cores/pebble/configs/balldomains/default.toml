@@ -1,19 +1,25 @@
 # Pebble ball domain configuration
 
-ballNum = 5
+ballNum = 7
 
 ballIdMappings = [
   { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 1, ballName = "MatrixBall", ballClass = "examples.balls.matrix.MatrixBall", config = "balls/matrix/lane16.toml", inBW = 2, outBW = 4 },
+  { ballId = 1, ballName = "SMatMulBall", ballClass = "examples.balls.smatmul.SMatMulBall", config = "../../../../balls/smatmul/configs/lane16.toml", inBW = 2, outBW = 2 },
   { ballId = 2, ballName = "Im2colBall", ballClass = "examples.balls.im2col.Im2colBall", config = "../../../../balls/im2col/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 3, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "../../../../balls/fp2int/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 4, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 1, outBW = 1 }
+  { ballId = 3, ballName = "Fp2IntBall", ballClass = "examples.balls.fp2int.Fp2IntBall", config = "../../../../balls/fp2int/configs/default.toml", inBW = 1, outBW = 1, mmioWriteBW = 4 },
+  { ballId = 4, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 1, outBW = 1, mmioReadBW = 4 },
+  { ballId = 5, ballName = "ReluBall", ballClass = "examples.balls.relu.ReluBall", config = "../../../../balls/relu/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 6, ballName = "MatAddBall", ballClass = "examples.balls.matadd.MatAddBall", config = "../../../../balls/matadd/configs/default.toml", inBW = 2, outBW = 1 }
 ]
 
 ballISA = [
   { mnemonic = "TRANSPOSE", funct7 = 49, bid = 0 },
-  { mnemonic = "MATRIX", funct7 = 65, bid = 1 },
+  { mnemonic = "SMATMUL_OS", funct7 = 65, bid = 1 },
+  { mnemonic = "SMATMUL_WS", funct7 = 68, bid = 1 },
   { mnemonic = "IM2COL", funct7 = 48, bid = 2 },
   { mnemonic = "FP2INT", funct7 = 51, bid = 3 },
-  { mnemonic = "INT2FP", funct7 = 52, bid = 4 }
+  { mnemonic = "INT2FP_TENSOR", funct7 = 52, bid = 4 },
+  { mnemonic = "INT2FP_CHANNEL", funct7 = 54, bid = 4 },
+  { mnemonic = "RELU", funct7 = 50, bid = 5 },
+  { mnemonic = "MATADD", funct7 = 64, bid = 6 }
 ]

@@ -52,7 +52,11 @@ object MxfpDecoder {
     val shift    = scale.zext - 127.S(10.W)
     val absShift = Mux(shift >= 0.S, shift, -shift)(4, 0)
     val widened  = value.pad(32)
-    Mux(shift >= 0.S, (widened << absShift).asSInt, (widened >> absShift).asSInt)
+    Mux(
+      shift >= 0.S,
+      (widened << absShift).asSInt,
+      (widened >> absShift).asSInt
+    )
   }
 
   /**
@@ -62,7 +66,8 @@ object MxfpDecoder {
     case "MXFP4" => Mxfp4Decoder
     case "MXFP6" => Mxfp6Decoder
     case "MXFP8" => Mxfp8Decoder
-    case _       => throw new IllegalArgumentException(s"Unsupported MXFP format: $format")
+    case _       =>
+      throw new IllegalArgumentException(s"Unsupported MXFP format: $format")
   }
 
 }

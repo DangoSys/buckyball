@@ -8,7 +8,7 @@ class transpose_cmd_item extends bb_blink_cmd_item;
   bit [127:0] dst_words[TRANSPOSE_MAX_WORDS];
 
   constraint legal_c {
-    funct7 == TRANSPOSE_FUNCT7[6:0];
+    funct7 == TRANSPOSE_CORE_FUNCT7[6:0];
     op1_en == 1'b1;
     op2_en == 1'b0;
     wr_spad_en == 1'b1;
@@ -41,7 +41,7 @@ class transpose_cmd_item extends bb_blink_cmd_item;
     transpose_case_cmd(cmd);
 
     bid           = cmd.bid[4:0];
-    funct7        = cmd.funct7[6:0];
+    funct7        = TRANSPOSE_CORE_FUNCT7[6:0];
     iter          = cmd.iter;
     op1_bank      = cmd.op1_bank[4:0];
     wr_bank       = cmd.wr_bank[4:0];

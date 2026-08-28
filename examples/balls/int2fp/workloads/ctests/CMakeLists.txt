@@ -1,12 +1,8 @@
 add_buckyball_ctests(
-  int2fp_int32_to_fp32_test.c
-  int2fp_int8_to_fp32_test.c
-  int2fp_int32_to_int8_test.c
-  int2fp_int32_to_fp32_col2_test.c
-  int2fp_int32_to_fp32_col4_test.c
-  int2fp_bank_int32_to_fp32_test.c
-  int2fp_bank_int8_to_fp32_test.c
-  int2fp_bank_int32_to_int8_test.c
-  int2fp_bank_int32_to_fp32_col2_test.c
-  int2fp_bank_int32_to_fp32_col4_test.c
+  int2fp_tensor_values_test.c
+  int2fp_tensor_groups_test.c
+  int2fp_tensor_rows_test.c
+  int2fp_channel_lanes_test.c
+  int2fp_channel_base_test.c
+  int2fp_channel_two_rows_test.c
 )

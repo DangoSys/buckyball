@@ -10,33 +10,21 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateInt2FpAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+void populateInt2FpBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
 
-class BankInt2FpPattern : public OpRewritePattern<BankInt2FpOp> {
+template <typename BankOp, typename PhysicalOp>
+class BankInt2FpPattern : public OpRewritePattern<BankOp> {
 public:
-  using OpRewritePattern<BankInt2FpOp>::OpRewritePattern;
+  using OpRewritePattern<BankOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BankInt2FpOp op,
+  LogicalResult matchAndRewrite(BankOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.create<Int2FpOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                              op.getIter(), op.getScale());
-    rewriter.replaceOp(op, op.getOutBank());
-    return success();
-  }
-};
-
-class BankInt32ToInt8Pattern : public OpRewritePattern<BankInt32ToInt8Op> {
-public:
-  using OpRewritePattern<BankInt32ToInt8Op>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(BankInt32ToInt8Op op,
-                                PatternRewriter &rewriter) const override {
-    rewriter.create<Int32ToInt8Op>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                                   op.getIter(), op.getScale());
+    rewriter.create<PhysicalOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
+                                op.getIter(), op.getDaAddr(), op.getDwAddr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }
@@ -44,9 +32,10 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateInt2FpAssignPhysicalBankPatterns(
+void mlir::buddy::populateInt2FpBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
-  patterns.add<BankInt2FpPattern, BankInt32ToInt8Pattern>(
+  patterns.add<BankInt2FpPattern<BankInt2FpTensorOp, Int2FpTensorOp>,
+               BankInt2FpPattern<BankInt2FpChannelOp, Int2FpChannelOp>>(
       patterns.getContext());
 }

@@ -1,11 +1,9 @@
-set(CTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/CTest)
 get_filename_component(REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
-set(TOY_WORKLOAD_COMMON_DIR ${REPO_ROOT}/examples/chips/toy/workloads/common)
-set(MODELTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/ModelTest)
-set(OPTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/OpTest)
-set(TUTORIAL_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/tutorial)
 
+set(CTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/CTest)
+set(MLIRTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/MLIRTest)
+set(MODELTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/ModelTest)
+
+include(${MLIRTEST_WORKLOAD_DIR}/CMakeLists.txt)
 add_subdirectory(CTest)
 add_subdirectory(ModelTest)
-add_subdirectory(OpTest)
-add_subdirectory(tutorial)

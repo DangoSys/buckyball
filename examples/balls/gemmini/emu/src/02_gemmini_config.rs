@@ -1,13 +1,11 @@
 //===- 02_gemmini_config.rs - GEMMINI_CONFIG instruction -------------------===//
 
 use super::gemmini_state::gemini;
-use super::instruction::{ExecContext, Instruction};
+use super::instruction::{BallInstruction, ExecContext};
 
 pub struct GemminiConfig;
 
-impl Instruction for GemminiConfig {
-    const FUNCT: u32 = 2;
-
+impl BallInstruction for GemminiConfig {
     fn exec(_xs1: u64, xs2: u64, _ctx: &mut ExecContext) -> u64 {
         let mut g = gemini().lock().unwrap();
         g.cfg.dataflow = ((xs2 >> 4) & 1) as u8;

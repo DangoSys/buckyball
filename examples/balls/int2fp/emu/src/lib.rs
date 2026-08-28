@@ -1,9 +1,8 @@
 pub(crate) use crate::inst::{decode, instruction};
 
-use crate::inst::instruction::{ExecContext, Instruction};
+use crate::inst::instruction::ExecContext;
 
-#[path = "52_int2fp.rs"]
-mod f52_int2fp;
+mod int2fp;
 
 const BALL_CLASS: &str = "examples.balls.int2fp.Int2FpBall";
 
@@ -17,11 +16,10 @@ pub fn execute_known(
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f52_int2fp::Int2Fp as Instruction>::FUNCT => {
-            Some(<f52_int2fp::Int2Fp as Instruction>::exec(xs1, xs2, ctx))
-        }
-        _ => None,
+    match crate::config::ball_domain::mnemonic_for_funct(funct).as_deref() {
+        Some("INT2FP_TENSOR") => Some(int2fp::exec_int2fp(xs1, xs2, ctx, false)),
+        Some("INT2FP_CHANNEL") => Some(int2fp::exec_int2fp(xs1, xs2, ctx, true)),
+        Some(_) | None => None,
     }
 }
 
@@ -29,10 +27,8 @@ pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> O
     if ball_class != BALL_CLASS {
         return None;
     }
-    match funct {
-        <f52_int2fp::Int2Fp as Instruction>::FUNCT => {
-            Some(<f52_int2fp::Int2Fp as Instruction>::latency(xs1, xs2))
-        }
-        _ => None,
+    match crate::config::ball_domain::mnemonic_for_funct(funct).as_deref() {
+        Some("INT2FP_TENSOR") | Some("INT2FP_CHANNEL") => Some(int2fp::latency(xs1)),
+        Some(_) | None => None,
     }
 }

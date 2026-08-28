@@ -10,8 +10,8 @@ using namespace mlir;
 using namespace ::buddy::buckyball;
 
 namespace mlir::buddy {
-void populateIm2colAssignPhysicalBankPatterns(RewritePatternSet &patterns,
-                                              PhysicalBankState &state);
+void populateIm2colBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
+                                                  PhysicalBankState &state);
 } // namespace mlir::buddy
 
 namespace {
@@ -24,7 +24,8 @@ public:
                                 PatternRewriter &rewriter) const override {
     rewriter.create<Im2colOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
                               op.getIter(), op.getKsize(), op.getStride(),
-                              op.getPadding());
+                              op.getPadding(), op.getStartRowAttr(),
+                              op.getStartColAttr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }
@@ -32,7 +33,7 @@ public:
 
 } // namespace
 
-void mlir::buddy::populateIm2colAssignPhysicalBankPatterns(
+void mlir::buddy::populateIm2colBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
   patterns.add<BankIm2colPattern>(patterns.getContext());

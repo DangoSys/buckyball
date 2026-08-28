@@ -1,5 +1,5 @@
 // CHECK: buckyball.intr.custom
-// CHECK-SAME: funct7 = 49
+// CHECK-SAME: funct7 = 49 : i32
 // CHECK-NOT: buckyball.transpose
 
 func.func @main() -> i8 {

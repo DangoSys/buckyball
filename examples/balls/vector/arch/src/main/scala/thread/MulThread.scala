@@ -7,8 +7,11 @@ import examples.balls.vector.bond.VVV
 import examples.balls.vector.op.MulOp
 
 class MulThread(config: VectorBallParam) extends BaseThread(config, "mul") {
-  val mulOp   = Module(new MulOp(this.config))
-  val vvvBond = IO(new VVV(this.config, this.config.inputWidth, this.config.outputWidth))
+  val mulOp = Module(new MulOp(this.config))
+
+  val vvvBond = IO(
+    new VVV(this.config, this.config.inputWidth, this.config.outputWidth)
+  )
 
   // Connect MulOp and VVVBond
   mulOp.io.in <> vvvBond.in

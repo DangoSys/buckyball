@@ -74,16 +74,6 @@ static inline uint64_t rdcycle(void) {
 }
 
 int main(void) {
-#ifdef MULTICORE
-  unsigned long hartid;
-  __asm__ volatile("csrr %0, mhartid" : "=r"(hartid));
-  if (hartid != 0) {
-    while (1) {
-      __asm__ volatile("wfi");
-    }
-  }
-#endif
-
   int failures = 0;
   uint64_t total = 0;
 

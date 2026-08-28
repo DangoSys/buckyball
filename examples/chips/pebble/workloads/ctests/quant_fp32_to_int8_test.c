@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/fp2int.h>
 #include <stdio.h>
 
 #define INPUT_N 36
@@ -15,8 +16,9 @@ static const float input_fp32[INPUT_N] = {
 };
 
 static const int8_t expected[INPUT_N] = {
-    1, 3,  5, 7,  9, 11, 3, 1,  -1, -3, -5, -7, 5,  -1, -5, 3,  -3, 7,
-    7, -3, 3, -5, 1, -3, 9, -5, -3, 1,  5,  -1, 11, -7, 7,  -3, -1, 3,
+    12,  35,  58,  81, 104, 127, 35,  12,  -12, -35, -58, -81,
+    58,  -12, -58, 35, -35, 81,  81,  -35, 35,  -58, 12,  -35,
+    104, -58, -35, 12, 58,  -12, 127, -81, 81,  -35, -12, 35,
 };
 
 static float packed[ROWS * 16] __attribute__((aligned(64)));
@@ -36,9 +38,11 @@ int main(void) {
   bb_mem_alloc(0, 1, 4);
   bb_mem_alloc(1, 1, 1);
   bb_mvin((uintptr_t)packed, 0, ROWS, 1);
-  bb_fp2int(0, 1, ROWS, SCALE);
+  bb_fp2int(0, 1, ROWS, 0);
   bb_mvout((uintptr_t)actual, 1, ROWS, 1);
   bb_fence();
+  bb_mem_release(0);
+  bb_mem_release(1);
 
   int passed = 1;
   for (int i = 0; i < INPUT_N; ++i) {

@@ -1,21 +1,17 @@
 use clap::Parser;
-use core_bemu::{BemuInstance, SharedMemory, TraceConfig};
+use bebop_bemu::{tile_topology, BemuInstance, SharedMemory, TraceConfig};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 
-#[allow(dead_code)]
-#[path = "../../../../../bebop/src/nodes/bemu/build_support/config_loader.rs"]
-mod config_loader;
-
 const DRAM_SIZE: usize = 1 << 30;
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Tile TOML. The file must contain [[cores]] or [coreTemplate].
-    #[arg(long)]
-    tile: PathBuf,
+    /// Tile index in the chip bundle.
+    #[arg(long, default_value_t = 0)]
+    tile_index: usize,
     #[arg(long)]
     elf: PathBuf,
     #[arg(long)]
@@ -63,16 +59,15 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<(), String> {
-    let tile = absolute(&args.tile)?;
     let elf = absolute(&args.elf)?;
     let log_dir = absolute(&args.log_dir)?;
-    let topology = config_loader::parse_tile_config(&tile);
+    let topology = tile_topology(args.tile_index);
     if topology.cores.is_empty() {
-        return Err(format!("tile has no Core instances: {}", tile.display()));
+        return Err(format!("tile {} has no Core instances", args.tile_index));
     }
     eprintln!(
-        "[INFO] Goban Chip BEMU: tile={} cores={} shared_dram={}MiB",
-        tile.display(),
+        "[INFO] Goban Chip BEMU: tile_index={} cores={} shared_dram={}MiB",
+        args.tile_index,
         topology.cores.len(),
         DRAM_SIZE >> 20
     );
@@ -87,7 +82,7 @@ fn run(args: Args) -> Result<(), String> {
     let (prepared_tx, prepared_rx) = mpsc::channel();
     let mut workers = Vec::with_capacity(topology.cores.len());
 
-    for (hart_id, (core_name, core_path, _)) in topology.cores.into_iter().enumerate() {
+    for (hart_id, (core_name, core_index)) in topology.cores.into_iter().enumerate() {
         let elf = elf.clone();
         let worker_log = log_dir.join(format!("hart-{hart_id}"));
         let memory = Arc::clone(&memory);
@@ -106,7 +101,7 @@ fn run(args: Args) -> Result<(), String> {
                     run_core(
                         hart_id,
                         &core_name,
-                        &core_path,
+                        core_index,
                         &elf,
                         &worker_log,
                         pk,
@@ -153,7 +148,7 @@ fn run(args: Args) -> Result<(), String> {
 fn run_core(
     hart_id: usize,
     core_name: &str,
-    core_path: &Path,
+    core_index: usize,
     elf: &Path,
     log_dir: &Path,
     pk: bool,
@@ -168,8 +163,7 @@ fn run_core(
     virtual_bank_count: usize,
 ) -> Result<(), String> {
     eprintln!(
-        "[INFO] starting Core worker hart={hart_id} core={core_name} config={}",
-        core_path.display()
+        "[INFO] starting Core worker hart={hart_id} core={core_name} core_index={core_index}"
     );
     let prepared_bemu = (|| {
         let _turn = schedule.lock().map_err(|_| "BEMU scheduler poisoned".to_string())?;
@@ -178,7 +172,7 @@ fn run_core(
             TraceConfig::new(false, false),
             disasm,
             tool_profile,
-            core_path,
+            core_index,
             hart_id,
             Some(Arc::clone(&memory)),
             Some(virtual_bank_count),

@@ -21,6 +21,7 @@ class int2fp_env extends bb_blink_env #(1, 1);
     cmd_agent.cmd_ap.connect(scb.cmd_imp);
     cmd_agent.cmd_ap.connect(icov.cmd_imp);
     read_mon.read_ap.connect(scb.read_imp);
+    mmio_read_mon.read_ap.connect(scb.mmio_read_imp);
     write_mon.write_ap.connect(scb.write_imp);
     resp_mon.resp_ap.connect(scb.resp_imp);
   endfunction

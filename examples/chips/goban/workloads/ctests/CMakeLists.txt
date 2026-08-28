@@ -2,9 +2,20 @@ if(NOT DEFINED ELF_CC)
   set(ELF_CC "riscv64-unknown-elf-gcc")
 endif()
 
+if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
+  message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for goban ctests")
+endif()
+list(FIND BUCKYBALL_TARGETS "${BUCKYBALL_CTEST_TARGET}" _goban_target_index)
+if(_goban_target_index EQUAL -1)
+  message(FATAL_ERROR "unknown C test target: ${BUCKYBALL_CTEST_TARGET}")
+endif()
+if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
+  message(FATAL_ERROR
+    "missing target ISA header ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
+endif()
+
 get_filename_component(_BUCKYBALL_REPO_ROOT
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
-include(${_BUCKYBALL_REPO_ROOT}/examples/chips/cmake/BuckyballCtestLimits.cmake)
 
 set(GOBAN_CTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GOBAN_LD ${GOBAN_CTEST_DIR}/goban.ld)
@@ -17,6 +28,7 @@ set(GOBAN_C_FLAGS
   -DBANK_NUM=64
   -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
+  -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
   -I${GOBAN_CTEST_DIR}
 )
 
@@ -43,6 +55,7 @@ function(add_goban_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban multicore baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -78,6 +91,7 @@ function(add_goban_64t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban 64t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -114,6 +128,7 @@ function(add_goban_2t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     COMMENT "Building goban 2t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

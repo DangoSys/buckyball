@@ -1,20 +1,12 @@
 [package]
-name = "bemu-goban-chip"
+name = "bebop-chip-goban"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "bebop-goban"
+name = "bebop-chip-goban"
 path = "src/main.rs"
 
-[[test]]
-name = "test_verilator"
-path = "../../../../bebop/tests/test_verilator.rs"
-harness = false
-required-features = ["verilator"]
-
 [dependencies]
+bebop-bemu = { path = "../configs/generated/bemu" }
 clap = { version = "4", features = ["derive"] }
-snafu = "0.8"
-toml = "0.8"
-core_bemu = { package = "bemu-goban", path = "../../../cores/goban/emu" }

@@ -5,15 +5,13 @@ import org.chipsalliance.cde.config.Config
 import freechips.rocketchip.tile.MaxHartIdBits
 import framework.system.tile.WithBuckyballTiles
 
-class WithPolyHartIdBits extends Config((site, here, up) => {
-  case MaxHartIdBits => log2Ceil(5)
-})
-
-/** One Poly Tile: 3 prefill Cores followed by 2 decode Cores. */
+/** Four Poly tiles: 3 prefill + 2 decode Cores per tile (20 harts). */
 class BuckyballPolyConfig
     extends Config(
-      new WithPolyHartIdBits ++
-        new WithBuckyballTiles("../examples/chips/poly/configs/poly.toml") ++
+      new Config((site, here, up) => { case MaxHartIdBits =>
+        log2Ceil(20)
+      }) ++
+        new WithBuckyballTiles("../examples/chips/poly/configs/generated/chip.pb") ++
         new chipyard.config.WithSystemBusWidth(128) ++
         new sims.base.BuckyballBaseConfig
     )

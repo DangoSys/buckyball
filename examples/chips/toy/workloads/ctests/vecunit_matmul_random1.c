@@ -1,6 +1,8 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/transpose.h>
+#include <isa/vecmat16.h>
 #include <stdio.h>
 
 #define DIM 16
@@ -34,7 +36,7 @@ int main(void) {
   bb_mvin((uintptr_t)input_a, op1, DIM, 1);
   bb_mvin((uintptr_t)input_b, op2, DIM, 1);
   bb_transpose(op1, a_t, DIM, 8);
-  bb_mul_warp16(a_t, op2, acc, DIM, 0);
+  bb_vecmat16(a_t, op2, acc, DIM, 0);
   bb_mvout((uintptr_t)output, acc, DIM, 1);
   bb_fence();
 

@@ -1,7 +1,0 @@
-# Toy Example - 1 tile x 4 Buckyball cores
-
-[top]
-nTiles = 1
-
-[[tiles]]
-include = "tiles/4core.toml"

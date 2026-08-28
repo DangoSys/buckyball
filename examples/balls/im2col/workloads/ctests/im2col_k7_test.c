@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
+#include <isa/im2col.h>
 #include <stdio.h>
 
 enum { ITER = 7, K = 7, STRIDE = 1, PAD = 0, LANES = 16 };

@@ -1,6 +1,5 @@
 use crate::model;
 
-pub const FUNCT7: u32 = 49;
 pub const BANK_ROW_BYTES: usize = 16;
 pub const MAX_ITER: usize = 16;
 pub const MAX_WORDS: usize = MAX_ITER;
@@ -9,7 +8,6 @@ pub const MAX_WORDS: usize = MAX_ITER;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TransposeCmd {
     pub bid: u32,
-    pub funct7: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
@@ -77,7 +75,6 @@ fn directed_i8(bid: u32) -> TransposeCase {
     TransposeCase {
         cmd: TransposeCmd {
             bid,
-            funct7: FUNCT7,
             iter: iter as u32,
             op1_bank: 0,
             wr_bank: 1,
@@ -99,13 +96,15 @@ fn directed_i32(bid: u32) -> TransposeCase {
     let cols = 1usize;
     let w = cols * (BANK_ROW_BYTES / elem_bytes);
     let total = iter * w;
-    let src: Vec<u8> = (0..total).map(|i| i as u32).flat_map(|v| v.to_le_bytes()).collect();
+    let src: Vec<u8> = (0..total)
+        .map(|i| i as u32)
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
     let dst = model::transpose_bytes(&src, iter, w, elem_bytes);
     let nwords = model::num_words(total * elem_bytes) as u32;
     TransposeCase {
         cmd: TransposeCmd {
             bid,
-            funct7: FUNCT7,
             iter: iter as u32,
             op1_bank: 0,
             wr_bank: 1,
@@ -148,7 +147,6 @@ fn random_case(seed: u32, index: u32, bid: u32) -> TransposeCase {
     TransposeCase {
         cmd: TransposeCmd {
             bid,
-            funct7: FUNCT7,
             iter: iter as u32,
             op1_bank,
             wr_bank,
@@ -205,7 +203,10 @@ mod tests {
     fn model_transpose_i32_roundtrip() {
         let iter = 8;
         let w = 4;
-        let src: Vec<u8> = (0..iter * w).map(|i| i as u32).flat_map(|v| v.to_le_bytes()).collect();
+        let src: Vec<u8> = (0..iter * w)
+            .map(|i| i as u32)
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
         let dst = model::transpose_bytes(&src, iter, w, 4);
         for r in 0..iter {
             for c in 0..w {
@@ -220,7 +221,6 @@ mod tests {
     fn directed_i8_matches_ctest_shape() {
         let case = gen_case(0x1234, 0, 0);
         assert_eq!(case.cmd.bid, 0);
-        assert_eq!(case.cmd.funct7, FUNCT7);
         assert_eq!(case.cmd.iter, 16);
         assert_eq!(case.cmd.elem_bits, 8);
         assert_eq!(case.cmd.op1_bank, 0);

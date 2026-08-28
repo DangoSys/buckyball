@@ -33,8 +33,8 @@ set(COREMARK_C_FLAGS
   -DBUCKYBALL_WORKLOAD=1
 )
 
-function(add_coremark_singlecore_target)
-  set(EXECUTABLE "coremark_singlecore-baremetal")
+function(add_coremark_target)
+  set(EXECUTABLE "coremark-baremetal")
 
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
@@ -49,44 +49,13 @@ function(add_coremark_singlecore_target)
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${BBSW_BAREMETAL_DIR}/test.c
-    COMMENT "Building coremark singlecore: ${EXECUTABLE}"
+    COMMENT "Building coremark: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
-  add_custom_target(coremark_singlecore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
+  add_custom_target(coremark-all
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
+    COMMENT "Building coremark for Buckyball")
 endfunction()
 
-function(add_coremark_multicore_target)
-  set(EXECUTABLE "coremark_multicore-baremetal")
-
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMAND ${ELF_CC} ${COREMARK_C_FLAGS} -o ${EXECUTABLE}
-      ${BBSW_BAREMETAL_DIR}/start.S
-      -DMULTICORE=3
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      ${BBSW_BAREMETAL_DIR}/test.c
-      ${COREMARK_SOURCES}
-      -lm
-    DEPENDS ${COREMARK_SOURCES}
-      ${COREMARK_HEADERS}
-      ${BBSW_BAREMETAL_DIR}/start.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      ${BBSW_BAREMETAL_DIR}/test.c
-    COMMENT "Building coremark multicore: ${EXECUTABLE}"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  )
-
-  add_custom_target(coremark_multicore_baremetal
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE})
-endfunction()
-
-add_coremark_singlecore_target()
-add_coremark_multicore_target()
-
-add_custom_target(coremark-all DEPENDS
-  coremark_singlecore_baremetal
-  coremark_multicore_baremetal
-  COMMENT "Building all coremark benchmarks for Buckyball"
-)
+add_coremark_target()
