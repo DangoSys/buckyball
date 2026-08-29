@@ -2,17 +2,12 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/BaseAssignPhysicalBankPatterns.cpp
   ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/PhysicalBankState.cpp
   ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/ReportBankUsagePass.cpp
-  ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
+  ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/AssignPhysicalBanksPass.cpp
+  ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/ReportCycleEstimatePass.cpp
+  ${BB_assign_SOURCES}
   ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Conversion/LowerBuckyball/LowerBuckyballToBankSSAPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/matadd/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
-  ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Conversion/LowerBuckyball/AssignPhysicalBankPatterns.cpp
   ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Conversion/LowerBuckyball/LowerBuckyballToBankSSAPatterns.cpp
   CoreBankSSALowering.cpp
-  AssignPhysicalBanksPass.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
   Im2colMatmulToBankSSAPatterns.cpp

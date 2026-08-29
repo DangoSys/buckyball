@@ -20,6 +20,10 @@
 using namespace mlir;
 using namespace ::buddy::buckyball;
 
+namespace mlir::buddy {
+void registerReportCycleEstimatePass();
+}
+
 namespace {
 
 static FlatSymbolRefAttr getOrInsertRushBFunction(OpBuilder &builder,
@@ -249,6 +253,7 @@ public:
 
 void mlir::buddy::registerLowerBuckyballPass() {
   PassRegistration<LowerBuckyballToLLVMPass>();
+  registerReportCycleEstimatePass();
 }
 
 void mlir::buddy::registerLowerBankSSAToIntrinsicsPass() {

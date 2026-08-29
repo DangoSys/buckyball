@@ -83,6 +83,24 @@ foreach(BB_BALL_DIALECT_DIR ${BB_BALL_DIALECT_DIRS})
   include_directories("${BB_BALL_DIALECT_DIR}")
 endforeach()
 
+# Both single-core and heterogeneous builds use the generated hook names in
+# AssignPhysicalBanksPass.  Compile only the Ball assign patterns selected by
+# this Chip.pb; the framework itself keeps no Ball list.
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
+    --repo "${BB_REPO_ROOT}"
+    --chip-pb "${BUCKYBALL_CHIP_PB}"
+    --print-ball-compiler-paths assign
+  RESULT_VARIABLE BB_ASSIGN_SOURCES_RESULT
+  OUTPUT_VARIABLE BB_ASSIGN_SOURCES_RAW
+  ERROR_VARIABLE BB_ASSIGN_SOURCES_ERROR)
+if(NOT BB_ASSIGN_SOURCES_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "failed to resolve assign Ball compiler sources:\n${BB_ASSIGN_SOURCES_ERROR}")
+endif()
+string(STRIP "${BB_ASSIGN_SOURCES_RAW}" BB_ASSIGN_SOURCES_RAW)
+string(REPLACE "\n" ";" BB_assign_SOURCES "${BB_ASSIGN_SOURCES_RAW}")
+
 execute_process(
   COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
     --repo "${BB_REPO_ROOT}"
@@ -107,7 +125,7 @@ else()
   # A heterogeneous chip owns more than one Core lowering policy.  Build its
   # dialect and public passes once; the selected target chooses its Ball set
   # from Chip.pb at pass execution time.
-  foreach(BB_BALL_SOURCE_KIND legalize assign bank_ssa tile)
+  foreach(BB_BALL_SOURCE_KIND legalize bank_ssa tile)
     execute_process(
       COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
         --repo "${BB_REPO_ROOT}"
