@@ -301,57 +301,53 @@ public:
       return op.emitError("filter needs static strided<[row,1]> row%16==0");
 
     Value daAddr = createI64Const(b, loc, 0);
-
-    Value f0 = b.create<arith::ConstantOp>(loc, b.getF32Type(),
-                                           b.getF32FloatAttr(0.0f));
-    Value partial = b.create<memref::AllocOp>(
-        loc, MemRefType::get({wins, n}, b.getF32Type()));
-
-    Value inIB = allocBank(b, loc, 1, 1);
-    Value patches = allocBank(b, loc, 1, 1);
-    Value fIB = allocBank(b, loc, 1, 1);
-    Value packed = b.create<memref::AllocOp>(
-        loc, MemRefType::get({outputRounds * paddedWins, outputGroups * 4},
-                             b.getF32Type()));
-
-    b.create<linalg::FillOp>(loc, f0, op.getOutput());
+    const int64_t cLines = outputRounds * paddedWins;
+    Value cLinesV = createI64Const(b, loc, cLines);
     uint64_t cfg = matrixRs2((uint64_t)paddedWins, 16, (uint64_t)paddedK);
-    Value channelZero = b.create<arith::ConstantIndexOp>(loc, 0);
-    Value channelEnd = b.create<arith::ConstantIndexOp>(loc, nCin);
-    Value channelStep = b.create<arith::ConstantIndexOp>(loc, 1);
-    auto channelLoop =
-        b.create<scf::ForOp>(loc, channelZero, channelEnd, channelStep);
-    b.setInsertionPointToStart(channelLoop.getBody());
-    Value channel = channelLoop.getInductionVar();
+
+    Value packed = b.create<memref::AllocOp>(
+        loc, MemRefType::get({cLines, outputGroups * 4}, b.getF32Type()));
+
+    Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+    Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+    Value panelEnd = b.create<arith::ConstantIndexOp>(loc, n);
+    Value panelStep = b.create<arith::ConstantIndexOp>(loc, kLane);
+    auto panelLoop = b.create<scf::ForOp>(loc, zero, panelEnd, panelStep);
+    b.setInsertionPointToStart(panelLoop.getBody());
+    Value n0 = panelLoop.getInductionVar();
     {
-      Value inputOffset = b.create<arith::MulIOp>(
-          loc, channel, b.create<arith::ConstantIndexOp>(loc, inRows));
-      Value plane = b.create<memref::SubViewOp>(
-          loc, op.getInput(),
-          ArrayRef<OpFoldResult>{inputOffset, b.getIndexAttr(0)},
-          ArrayRef<OpFoldResult>{b.getIndexAttr(inRows), b.getIndexAttr(kLane)},
-          ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+      // Keep only INT32 accumulator live across cin. Per-cin input/filter
+      // banks are released before matadd so peak fits bank_num=8 @ outBW=2.
+      Value accBank = allocBank(b, loc, 1, outputGroups);
 
-      Value inFB = allocBank(b, loc, 1, kFp2IntSrcGroups);
-      Value loaded = mvinBank(b, loc, plane, inFB, inRows);
-      Value quant =
-          b.create<BankFp2IntOp>(loc, inIB.getType(), loaded, inIB,
-                                 createI64Const(b, loc, inRows), daAddr);
-      releaseBank(b, loc, inFB);
-      Value patch = b.create<BankIm2colOp>(
-          loc, patches.getType(), quant, patches,
-          createI64Const(b, loc, inSize), createI64Const(b, loc, ksize),
-          createI64Const(b, loc, stride), createI64Const(b, loc, padding),
-          b.getI64IntegerAttr(startRow), b.getI64IntegerAttr(startCol));
+      for (int64_t ci = 0; ci < nCin; ++ci) {
+        Value channel = b.create<arith::ConstantIndexOp>(loc, ci);
 
-      Value panelZero = b.create<arith::ConstantIndexOp>(loc, 0);
-      Value panelStep = b.create<arith::ConstantIndexOp>(loc, kLane);
-      Value panelEnd = b.create<arith::ConstantIndexOp>(loc, n);
-      auto panelLoop =
-          b.create<scf::ForOp>(loc, panelZero, panelEnd, panelStep);
-      b.setInsertionPointToStart(panelLoop.getBody());
-      Value n0 = panelLoop.getInductionVar();
-      {
+        Value inputOffset = b.create<arith::MulIOp>(
+            loc, channel, b.create<arith::ConstantIndexOp>(loc, inRows));
+        Value plane = b.create<memref::SubViewOp>(
+            loc, op.getInput(),
+            ArrayRef<OpFoldResult>{inputOffset, b.getIndexAttr(0)},
+            ArrayRef<OpFoldResult>{b.getIndexAttr(inRows),
+                                   b.getIndexAttr(kLane)},
+            ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+
+        Value inIB = allocBank(b, loc, 1, 1);
+        Value inFB = allocBank(b, loc, 1, kFp2IntSrcGroups);
+        Value loaded = mvinBank(b, loc, plane, inFB, inRows);
+        Value quant =
+            b.create<BankFp2IntOp>(loc, inIB.getType(), loaded, inIB,
+                                   createI64Const(b, loc, inRows), daAddr);
+        releaseBank(b, loc, inFB);
+
+        Value patches = allocBank(b, loc, 1, 1);
+        Value patch = b.create<BankIm2colOp>(
+            loc, patches.getType(), quant, patches,
+            createI64Const(b, loc, inSize), createI64Const(b, loc, ksize),
+            createI64Const(b, loc, stride), createI64Const(b, loc, padding),
+            b.getI64IntegerAttr(startRow), b.getI64IntegerAttr(startCol));
+        releaseBank(b, loc, quant);
+
         Value filterOffset = b.create<arith::MulIOp>(
             loc, channel, b.create<arith::ConstantIndexOp>(loc, bRows));
         Value bTile = b.create<memref::SubViewOp>(
@@ -359,87 +355,76 @@ public:
             SmallVector<OpFoldResult>{b.getIndexAttr(bRows),
                                       b.getIndexAttr(kLane)},
             SmallVector<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1)});
+        Value fIB = allocBank(b, loc, 1, 1);
         Value fLoaded = mvinBank(b, loc, bTile, fIB, bRows, strideF);
-        Value accB = allocBank(b, loc, 1, outputGroups);
-        Value gemm =
-            createBankSMatMul(b, loc, accB.getType(), patch, fLoaded, accB,
-                              createI64Const(b, loc, (int64_t)cfg));
-        Value dwAddr = createI64Const(b, loc, dwAddrBase);
-        if (perChannel) {
-          Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
-          dwAddr = b.create<arith::AddIOp>(
-              loc, dwAddr,
-              b.create<arith::MulIOp>(loc, n0I64, createI64Const(b, loc, 4)));
-        }
-        Value outB = allocBank(b, loc, 1, outputGroups);
-        Value fp = perChannel
-                       ? b.create<BankInt2FpChannelOp>(
-                              loc, outB.getType(), gemm, outB,
-                              createI64Const(b, loc, outputRounds * paddedWins),
-                              daAddr, dwAddr)
-                             .getResult()
-                       : b.create<BankInt2FpTensorOp>(
-                              loc, outB.getType(), gemm, outB,
-                              createI64Const(b, loc, outputRounds * paddedWins),
-                              daAddr, dwAddr)
-                             .getResult();
-        releaseBank(b, loc, accB);
-        mvoutBank(b, loc, packed, fp, outputRounds * paddedWins);
-        releaseBank(b, loc, outB);
-        Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-        Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-        Value rounds = b.create<arith::ConstantIndexOp>(loc, outputRounds);
-        Value packCols =
-            b.create<arith::ConstantIndexOp>(loc, outputGroups * 4);
-        Value winsV = b.create<arith::ConstantIndexOp>(loc, wins);
-        auto rowLoop = b.create<scf::ForOp>(loc, zero, winsV, one);
-        b.setInsertionPointToStart(rowLoop.getBody());
-        Value row = rowLoop.getInductionVar();
-        auto colLoop = b.create<scf::ForOp>(loc, zero, panelStep, one);
-        b.setInsertionPointToStart(colLoop.getBody());
-        Value col = colLoop.getInductionVar();
-        Value packedRow = b.create<arith::AddIOp>(
-            loc, b.create<arith::MulIOp>(loc, row, rounds),
-            b.create<arith::DivUIOp>(loc, col, packCols));
-        Value packedCol = b.create<arith::RemUIOp>(loc, col, packCols);
-        Value value = b.create<memref::LoadOp>(
-            loc, packed, ValueRange{packedRow, packedCol});
-        Value outputCol = b.create<arith::AddIOp>(loc, n0, col);
-        b.create<memref::StoreOp>(loc, value, partial,
-                                  ValueRange{row, outputCol});
-        b.setInsertionPointAfter(rowLoop);
-      }
-      b.setInsertionPointAfter(panelLoop);
 
+        if (ci == 0) {
+          (void)createBankSMatMul(b, loc, accBank.getType(), patch, fLoaded,
+                                  accBank,
+                                  createI64Const(b, loc, (int64_t)cfg));
+          releaseBank(b, loc, patch);
+          releaseBank(b, loc, fIB);
+        } else {
+          Value gemmTmp = allocBank(b, loc, 1, outputGroups);
+          Value gemm =
+              createBankSMatMul(b, loc, gemmTmp.getType(), patch, fLoaded,
+                                gemmTmp, createI64Const(b, loc, (int64_t)cfg));
+          releaseBank(b, loc, patch);
+          releaseBank(b, loc, fIB);
+
+          Value spare = allocBank(b, loc, 1, outputGroups);
+          (void)b.create<BankMatAddOp>(loc, spare.getType(), accBank, gemm,
+                                       spare, cLinesV);
+          releaseBank(b, loc, accBank);
+          releaseBank(b, loc, gemmTmp);
+          accBank = spare;
+        }
+      }
+
+      Value dwAddr = createI64Const(b, loc, dwAddrBase);
+      if (perChannel) {
+        Value n0I64 = b.create<arith::IndexCastOp>(loc, b.getI64Type(), n0);
+        dwAddr = b.create<arith::AddIOp>(
+            loc, dwAddr,
+            b.create<arith::MulIOp>(loc, n0I64, createI64Const(b, loc, 4)));
+      }
+      Value outB = allocBank(b, loc, 1, outputGroups);
+      Value fp =
+          perChannel
+              ? b.create<BankInt2FpChannelOp>(loc, outB.getType(), accBank,
+                                              outB, cLinesV, daAddr, dwAddr)
+                    .getResult()
+              : b.create<BankInt2FpTensorOp>(loc, outB.getType(), accBank, outB,
+                                             cLinesV, daAddr, dwAddr)
+                    .getResult();
+      releaseBank(b, loc, accBank);
+      mvoutBank(b, loc, packed, fp, cLines);
+      releaseBank(b, loc, outB);
       b.create<FenceOp>(loc);
-      Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-      Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+
+      Value rounds = b.create<arith::ConstantIndexOp>(loc, outputRounds);
+      Value packCols = b.create<arith::ConstantIndexOp>(loc, outputGroups * 4);
       Value winsV = b.create<arith::ConstantIndexOp>(loc, wins);
-      Value nV = b.create<arith::ConstantIndexOp>(loc, n);
       auto rowLoop = b.create<scf::ForOp>(loc, zero, winsV, one);
       b.setInsertionPointToStart(rowLoop.getBody());
-      auto colLoop = b.create<scf::ForOp>(loc, zero, nV, one);
-      b.setInsertionPointToStart(colLoop.getBody());
       Value row = rowLoop.getInductionVar();
+      auto colLoop = b.create<scf::ForOp>(loc, zero, panelStep, one);
+      b.setInsertionPointToStart(colLoop.getBody());
       Value col = colLoop.getInductionVar();
-      Value accumulated =
-          b.create<memref::LoadOp>(loc, op.getOutput(), ValueRange{row, col});
-      Value addend =
-          b.create<memref::LoadOp>(loc, partial, ValueRange{row, col});
-      b.create<memref::StoreOp>(
-          loc, b.create<arith::AddFOp>(loc, accumulated, addend),
-          op.getOutput(), ValueRange{row, col});
+      Value packedRow = b.create<arith::AddIOp>(
+          loc, b.create<arith::MulIOp>(loc, row, rounds),
+          b.create<arith::DivUIOp>(loc, col, packCols));
+      Value packedCol = b.create<arith::RemUIOp>(loc, col, packCols);
+      Value value = b.create<memref::LoadOp>(loc, packed,
+                                             ValueRange{packedRow, packedCol});
+      Value outputCol = b.create<arith::AddIOp>(loc, n0, col);
+      b.create<memref::StoreOp>(loc, value, op.getOutput(),
+                                ValueRange{row, outputCol});
       b.setInsertionPointAfter(rowLoop);
     }
-    b.setInsertionPointAfter(channelLoop);
+    b.setInsertionPointAfter(panelLoop);
     b.create<memref::DeallocOp>(loc, packed);
-
-    releaseBank(b, loc, inIB);
-    releaseBank(b, loc, patches);
-    releaseBank(b, loc, fIB);
     b.create<FenceOp>(loc);
-
-    b.create<memref::DeallocOp>(loc, partial);
     b.eraseOp(op);
     return success();
   }
