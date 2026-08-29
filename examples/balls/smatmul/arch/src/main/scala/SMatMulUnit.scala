@@ -88,10 +88,18 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   val accumulator = SyncReadMem(tile, UInt(512.W))
   val array: Instance[Array] = Instantiate(new Array)
 
-  val accumulatorRead    = state === readAccumulator || state === readResult
-  val accumulatorWrite   = state === clearAccumulator || state === writeAccumulator
-  val accumulatorAddress = Mux(state === readResult, resultRow, accumulatorRow)
-  val accumulatorData    = accumulator.read(accumulatorAddress, accumulatorRead)
+  val accumulatorRead      = state === readAccumulator || state === readResult
+  val accumulatorWrite     = state === clearAccumulator || state === writeAccumulator
+  val accumulatorAddress   = Mux(state === readResult, resultRow, accumulatorRow)
+  val accumulatorWriteData = Wire(UInt(512.W))
+
+  val accumulatorData = accumulator.readWrite(
+    accumulatorAddress,
+    accumulatorWriteData,
+    accumulatorRead || accumulatorWrite,
+    accumulatorWrite
+  )
+
   assert(!(accumulatorRead && accumulatorWrite), "SMatMulBall accumulator SRAM is single-port")
 
   val accumulatedResult = Wire(Vec(tile, UInt(32.W)))
@@ -101,6 +109,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     accumulatedResult(column) := (oldValue + newValue).asUInt
   }
   val accumulatedRow = Cat(accumulatedResult.reverse)
+  accumulatorWriteData := Mux(state === clearAccumulator, 0.U(512.W), accumulatedRow)
 
   val aTileLine = aBaseLine.pad(32) + ((outputTile * reductionTileCount + reductionTile) << 4)
   val bTileLine = bBaseLine.pad(32) + Mux(isWs, panelIndex << 4, reductionTile << 4)
@@ -157,7 +166,6 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.sub_rob_id := subRobId
 
   when(state === clearAccumulator) {
-    accumulator.write(accumulatorRow, 0.U)
     when(accumulatorRow === 15.U) {
       accumulatorRow := 0.U
       reductionTile  := 0.U
@@ -197,7 +205,6 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   }
 
   when(state === writeAccumulator) {
-    accumulator.write(accumulatorRow, accumulatedRow)
     when(accumulatorRow === 15.U) {
       when(reductionTile + 1.U === reductionTileCount) {
         resultRow := 0.U

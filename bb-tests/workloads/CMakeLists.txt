@@ -101,6 +101,14 @@ endif()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
 
+function(buckyball_assign_physical_banks TARGET OUT)
+  set(_bank_num_var "BUCKYBALL_BANK_NUM_${TARGET}")
+  if(NOT DEFINED ${_bank_num_var} OR "${${_bank_num_var}}" STREQUAL "")
+    message(FATAL_ERROR "${TARGET}: missing ${_bank_num_var} from chip config")
+  endif()
+  set(${OUT} "-assign-physical-banks=bank_num=${${_bank_num_var}}" PARENT_SCOPE)
+endfunction()
+
 add_custom_target(rushB-bemu-workloads-build)
 add_custom_target(rushB-verilator-workloads-build)
 
@@ -297,6 +305,8 @@ function(add_toy_mlir_rushb)
     message(FATAL_ERROR
       "add_toy_mlir_rushb requires BUCKYBALL_LOWER_*_RUSHB")
   endif()
+
+  buckyball_assign_physical_banks(${ARG_TARGET} _assign_physical_banks)
   if(NOT DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST OR
      NOT DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
     return()
@@ -310,7 +320,7 @@ function(add_toy_mlir_rushb)
     COMMAND ${BUDDY_OPT} ${MLIR_SRC}
       --target=${ARG_TARGET}
       ${ARG_FRONT_PASSES}
-      -assign-physical-banks
+      ${_assign_physical_banks}
       ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata

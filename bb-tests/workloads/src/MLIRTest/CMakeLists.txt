@@ -27,10 +27,19 @@ function(add_buckyball_mlir_contract TEST_NAME)
   if(TARGET_INDEX EQUAL -1)
     message(FATAL_ERROR "${TEST_NAME}: unknown Buckyball target ${ARG_TARGET}")
   endif()
+  buckyball_assign_physical_banks(${ARG_TARGET} ASSIGN_PHYSICAL_BANKS)
 
   if(NOT ARG_PASSES)
     set(ARG_PASSES ${BUCKYBALL_LOWER_BUCKYBALL})
   endif()
+  set(MLIR_PASSES)
+  foreach(PASS IN LISTS ARG_PASSES)
+    if(PASS STREQUAL "-assign-physical-banks")
+      list(APPEND MLIR_PASSES ${ASSIGN_PHYSICAL_BANKS})
+    else()
+      list(APPEND MLIR_PASSES ${PASS})
+    endif()
+  endforeach()
 
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME}.mlir)
   set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}-${TEST_NAME}.out.mlir)
@@ -38,7 +47,7 @@ function(add_buckyball_mlir_contract TEST_NAME)
 
   add_custom_command(
     OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=${ARG_TARGET} ${ARG_PASSES} > ${OUT}
+    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=${ARG_TARGET} ${MLIR_PASSES} > ${OUT}
     DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
     COMMENT "Building Buckyball MLIR contract IR: ${TARGET}"
     VERBATIM)
@@ -71,6 +80,7 @@ function(add_buckyball_mlir_test NAME)
   if(TARGET_INDEX EQUAL -1)
     message(FATAL_ERROR "${NAME}: unknown Buckyball target ${ARG_TARGET}")
   endif()
+  buckyball_assign_physical_banks(${ARG_TARGET} ASSIGN_PHYSICAL_BANKS)
   set(BB_BALL_ISA_INCLUDE_DIR "${BUCKYBALL_ISA_DIR}/${ARG_TARGET}")
   set(BB_BALL_ISA_H "${BB_BALL_ISA_INCLUDE_DIR}/ballISA.h")
   if(NOT EXISTS "${BB_BALL_ISA_H}")
@@ -103,10 +113,17 @@ function(add_buckyball_mlir_test NAME)
     ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
 
   if(ARG_PASSES)
-    set(MLIR_PASSES ${ARG_PASSES})
+    set(MLIR_PASSES)
+    foreach(PASS IN LISTS ARG_PASSES)
+      if(PASS STREQUAL "-assign-physical-banks")
+        list(APPEND MLIR_PASSES ${ASSIGN_PHYSICAL_BANKS})
+      else()
+        list(APPEND MLIR_PASSES ${PASS})
+      endif()
+    endforeach()
   else()
     set(MLIR_PASSES
-      -assign-physical-banks
+      ${ASSIGN_PHYSICAL_BANKS}
       ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
       -convert-linalg-to-loops
       -expand-strided-metadata

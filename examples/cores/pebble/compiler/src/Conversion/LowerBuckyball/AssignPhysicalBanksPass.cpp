@@ -44,7 +44,7 @@ public:
 
   Option<int64_t> bankNum{*this, "bank_num",
                           llvm::cl::desc("Number of physical banks."),
-                          llvm::cl::init(16)};
+                          llvm::cl::init(0)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry

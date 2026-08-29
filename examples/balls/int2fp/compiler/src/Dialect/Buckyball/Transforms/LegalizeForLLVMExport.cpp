@@ -28,10 +28,14 @@ struct Int2FpLowering : public ConvertOpToLLVMPattern<Op> {
     if (!matchPattern(op.getDaAddr(), m_ConstantInt(&daAddr)) ||
         daAddr.getSExtValue() != 0)
       return op.emitError("INT2FP Da address must be 0");
-    llvm::APInt dwAddr(64, 0);
-    if (!matchPattern(op.getDwAddr(), m_ConstantInt(&dwAddr)) ||
-        dwAddr.getSExtValue() < 16 || dwAddr.getSExtValue() % 4 != 0)
-      return op.emitError("INT2FP Dw address must be >= 16 and 4-byte aligned");
+    llvm::APInt dwConst(64, 0);
+    if (matchPattern(op.getDwAddr(), m_ConstantInt(&dwConst))) {
+      if (dwConst.getSExtValue() < 16 || dwConst.getSExtValue() % 4 != 0)
+        return op.emitError(
+            "INT2FP Dw address must be >= 16 and 4-byte aligned");
+    }
+    if (adaptor.getInputBankId() == adaptor.getOutputBankId())
+      return op.emitError("INT2FP forbids in-place dequantization");
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),

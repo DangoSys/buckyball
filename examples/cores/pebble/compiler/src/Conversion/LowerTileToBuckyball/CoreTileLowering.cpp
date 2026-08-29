@@ -62,14 +62,26 @@ constexpr int64_t kLane = 16;
 
 static int64_t cdiv(int64_t a, int64_t b) { return (a + b - 1) / b; }
 
+static int64_t smatmulOutputRounds() {
+  const int64_t outBW =
+      buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW;
+  if (outBW <= 0 || outBW > 4 || 4 % outBW)
+    return 0;
+  return 4 / outBW;
+}
+
 static int64_t pickTile(int64_t outDim, int64_t ksize, int64_t stride) {
   int64_t kElems = ksize * ksize;
+  int64_t outputRounds = smatmulOutputRounds();
+  if (outputRounds == 0)
+    return 0;
   for (int64_t t = outDim; t >= 1; --t) {
     int64_t inSize = (t - 1) * stride + ksize;
     if (inSize > kMaxIter)
       continue;
-    int64_t rows = cdiv(t * t, kLane) * cdiv(kElems, kLane) * kLane;
-    if (rows <= kBankLines)
+    int64_t paddedWins = cdiv(t * t, kLane) * kLane;
+    int64_t rows = (paddedWins / kLane) * cdiv(kElems, kLane) * kLane;
+    if (rows <= kBankLines && paddedWins * outputRounds <= kBankLines)
       return t;
   }
   return 0;
@@ -90,6 +102,9 @@ static int64_t pickFatCin(int64_t kElems, int64_t wins) {
 static int64_t pickTileForConv(int64_t outDim, int64_t ksize, int64_t stride,
                                int64_t cin) {
   int64_t kElems = ksize * ksize;
+  int64_t outputRounds = smatmulOutputRounds();
+  if (outputRounds == 0)
+    return 0;
   int64_t bestT = 0;
   int64_t bestScore = INT64_MAX;
   for (int64_t t = outDim; t >= 1; --t) {
@@ -97,8 +112,9 @@ static int64_t pickTileForConv(int64_t outDim, int64_t ksize, int64_t stride,
     if (inSize > kMaxIter)
       continue;
     int64_t wins = t * t;
-    int64_t rows = cdiv(wins, kLane) * cdiv(kElems, kLane) * kLane;
-    if (rows > kBankLines)
+    int64_t paddedWins = cdiv(wins, kLane) * kLane;
+    int64_t rows = (paddedWins / kLane) * cdiv(kElems, kLane) * kLane;
+    if (rows > kBankLines || paddedWins * outputRounds > kBankLines)
       continue;
     int64_t fat = pickFatCin(kElems, wins);
     if (fat < 1)
@@ -443,16 +459,19 @@ public:
           b.create<memref::StoreOp>(loc, wt, bPack, ValueRange{cPv, oLocal});
           b.setInsertionPointAfter(cPackL);
 
-          if (mPad <= kBankLines) {
+          const int64_t maxMRows = kBankLines / smatmulOutputRounds();
+          if (maxMRows == 0)
+            return op.emitError("SMatMulBall outBW leaves no C bank capacity");
+          if (mPad <= maxMRows) {
             b.create<linalg::FillOp>(loc, f0, cPack);
             auto matmul = b.create<SMatMulMatmulOp>(loc, aPack, bPack, cPack);
             matmul->setAttr("dwAddr", panelDwAddr);
             matmul->setAttr("dwBytes", panelDwBytes);
             matmul->setAttr("perChannel", perChannelAttr);
           } else {
-            int64_t aligned = (mPad / kBankLines) * kBankLines;
+            int64_t aligned = (mPad / maxMRows) * maxMRows;
             int64_t rem = mPad - aligned;
-            Value step = b.create<arith::ConstantIndexOp>(loc, kBankLines);
+            Value step = b.create<arith::ConstantIndexOp>(loc, maxMRows);
             Value alignedV = b.create<arith::ConstantIndexOp>(loc, aligned);
             auto mL = b.create<scf::ForOp>(loc, zero, alignedV, step);
             b.setInsertionPointToStart(mL.getBody());
@@ -460,7 +479,7 @@ public:
                 loc, aPack,
                 SmallVector<OpFoldResult>{mL.getInductionVar(),
                                           b.getIndexAttr(0)},
-                SmallVector<OpFoldResult>{b.getIndexAttr(kBankLines),
+                SmallVector<OpFoldResult>{b.getIndexAttr(maxMRows),
                                           b.getIndexAttr(kPad)},
                 SmallVector<OpFoldResult>{b.getIndexAttr(1),
                                           b.getIndexAttr(1)});
@@ -468,7 +487,7 @@ public:
                 loc, cPack,
                 SmallVector<OpFoldResult>{mL.getInductionVar(),
                                           b.getIndexAttr(0)},
-                SmallVector<OpFoldResult>{b.getIndexAttr(kBankLines),
+                SmallVector<OpFoldResult>{b.getIndexAttr(maxMRows),
                                           b.getIndexAttr(kLane)},
                 SmallVector<OpFoldResult>{b.getIndexAttr(1),
                                           b.getIndexAttr(1)});
@@ -521,7 +540,10 @@ public:
     int64_t inSize = (tile - 1) * stride + KH;
     int64_t inRows = cdiv(inSize * inSize, kLane);
     int64_t bRows = cdiv(kElems, kLane) * kLane;
-    if (wins > kBankLines)
+    int64_t outputRounds = smatmulOutputRounds();
+    if (outputRounds == 0)
+      return op.emitError("SMatMulBall outBW invalid");
+    if (cdiv(wins, kLane) * kLane * outputRounds > kBankLines)
       return op.emitError("conv M pad exceeds bank depth");
 
     Value sixteen = b.create<arith::ConstantIndexOp>(loc, kLane);
@@ -737,6 +759,7 @@ public:
     Value plane = b.create<memref::AllocOp>(
         loc, MemRefType::get({inRows, kLane}, b.getF32Type()));
 
+    b.create<linalg::FillOp>(loc, f0, op.getOutput());
     for (int64_t n = 0; n < N; ++n) {
       Value nV = b.create<arith::ConstantIndexOp>(loc, n);
       auto oh0L = b.create<scf::ForOp>(loc, zero, ohEnd, tileV);

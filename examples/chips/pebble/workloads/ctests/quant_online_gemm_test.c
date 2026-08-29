@@ -37,15 +37,18 @@ int main(void) {
   for (int k = 0; k < 16; ++k)
     weight[k * 16] = 1;
   bb_mvin_mmio((uintptr_t)dw, 16, 1, 4);
-  bb_mem_alloc(0, TILE_ROWS, 4);
+  // Two physical groups hold each logical FP32 row in two consecutive lines.
+  bb_mem_alloc(0, TILE_ROWS * 2, 2);
   bb_mem_alloc(1, TILE_ROWS, 1);
   bb_mem_alloc(2, TILE_COLS, 1);
   bb_mem_alloc(3, TILE_ROWS * OUTPUT_ROUNDS, 2);
-  bb_mem_alloc(4, TILE_ROWS * OUTPUT_ROUNDS, 2);
-  bb_mvin((uintptr_t)activation, 0, TILE_ROWS, 1);
+  bb_mvin((uintptr_t)activation, 0, TILE_ROWS * 2, 1);
   bb_mvin((uintptr_t)weight, 2, TILE_COLS, 1);
   bb_mvin((uintptr_t)zero, 3, TILE_ROWS * OUTPUT_ROUNDS, 1);
-  bb_fp2int(0, 1, TILE_ROWS, 0);
+  bb_fp2int(0, 1, TILE_ROWS * 2, 0);
+  bb_fence();
+  bb_mem_release(0);
+  bb_mem_alloc(4, TILE_ROWS * OUTPUT_ROUNDS, 2);
   bb_smatmul_os(1, 2, 3, TILE_ROWS, TILE_COLS, TILE_COLS);
   bb_int2fp_tensor(3, 4, TILE_ROWS * OUTPUT_ROUNDS, 0, 16);
   bb_mvout((uintptr_t)output, 4, TILE_ROWS * OUTPUT_ROUNDS, 1);
@@ -58,7 +61,6 @@ int main(void) {
       ok = 0;
     }
   }
-  bb_mem_release(0);
   bb_mem_release(1);
   bb_mem_release(2);
   bb_mem_release(3);

@@ -29,6 +29,7 @@ namespace {
 constexpr int64_t kLane = 16;
 constexpr int64_t kBankDepth = 1024;
 constexpr int64_t kMmioBytes = 5 * 1024;
+constexpr int64_t kFp2IntSrcGroups = 4;
 
 struct OutputPack {
   Value value;
@@ -97,18 +98,18 @@ public:
       return op.emitError("Dw scale range exceeds Pebble MMIO space");
     const int64_t kTiles = K / kLane;
     const int64_t aRowsPerMTile = K;
-    const int64_t maxMChunk = (kBankDepth / aRowsPerMTile) * kLane;
+    const int64_t maxMByA = (kBankDepth / aRowsPerMTile) * kLane;
+    const int64_t maxMByC = (kBankDepth / outputRounds / kLane) * kLane;
+    const int64_t maxMChunk = std::min(maxMByA, maxMByC);
     if (maxMChunk == 0)
-      return op.emitError("K exceeds activation-bank packing capacity");
+      return op.emitError(
+          "K/outBW exceeds activation or result bank packing capacity");
 
     SmallVector<Value> activationPacks;
     SmallVector<Value> weightPacks;
     SmallVector<OutputPack> outputPacks;
-    Value aF = allocBank(b, loc, 1, 4);
     Value aI = allocBank(b, loc, 1, 1);
     Value bI = allocBank(b, loc, 1, 1);
-    Value cB = allocBank(b, loc, 1, outputGroups);
-    Value cF = allocBank(b, loc, 1, outputGroups);
 
     // Quantize each activation chunk once, then reuse its Da and INT8 bank
     // across every output panel. The panel loop only changes the weight/Dw
@@ -157,9 +158,11 @@ public:
                                 ValueRange{packedRow, column});
       b.setInsertionPointAfter(mLoop);
       activationPacks.push_back(aPack);
+      Value aF = allocBank(b, loc, 1, kFp2IntSrcGroups);
       Value aL = mvinBank(b, loc, aPack, aF, aRows, 1);
       Value aQ = b.create<BankFp2IntOp>(loc, aI.getType(), aL, aI,
                                         createI64Const(b, loc, aRows), daAddr);
+      releaseBank(b, loc, aF);
 
       for (int64_t n0 = 0; n0 < N; n0 += kLane) {
         int64_t dwAddr = dwAddrBase + (perChannel ? n0 * 4 : 0);
@@ -186,8 +189,10 @@ public:
         b.setInsertionPointAfter(bRowLoop);
         weightPacks.push_back(bPack);
         Value bL = mvinBank(b, loc, bPack, bI, aRowsPerMTile);
+        Value cB = allocBank(b, loc, 1, outputGroups);
         Value cO = createBankSMatMul(b, loc, cB.getType(), aQ, bL, cB,
                                      createI64Const(b, loc, (int64_t)cfg));
+        Value cF = allocBank(b, loc, 1, outputGroups);
         Value fp = perChannel
                        ? b.create<BankInt2FpChannelOp>(
                               loc, cF.getType(), cO, cF,
@@ -199,20 +204,19 @@ public:
                               createI64Const(b, loc, outputRounds * mChunk),
                               daAddr, dwAddrValue)
                              .getResult();
+        releaseBank(b, loc, cB);
         auto cPackType = MemRefType::get(
             {outputRounds * mChunk, outputGroups * 4}, b.getF32Type());
         Value cPack = b.create<memref::AllocOp>(loc, cPackType);
         mvoutBank(b, loc, cPack, fp, outputRounds * mChunk, 1);
+        releaseBank(b, loc, cF);
         outputPacks.push_back({cPack, m0, mChunk, n0, kLane});
       }
       m0 += mChunk;
     }
 
-    releaseBank(b, loc, aF);
     releaseBank(b, loc, aI);
     releaseBank(b, loc, bI);
-    releaseBank(b, loc, cB);
-    releaseBank(b, loc, cF);
 
     b.create<FenceOp>(loc);
     for (const OutputPack &pack : outputPacks) {

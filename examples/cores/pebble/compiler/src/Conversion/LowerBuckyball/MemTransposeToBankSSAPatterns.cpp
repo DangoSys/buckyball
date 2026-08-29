@@ -76,8 +76,7 @@ static void emitBankTranspose(OpBuilder &b, Location loc, Value inContig,
 
 // dst[i,j] = src[j, c0+i]; dst:[h,rows] src:[rows,cols]
 static void gatherCols(OpBuilder &b, Location loc, Value src, Value dst,
-                       int64_t rows, int64_t c0, int64_t h) {
-  Value c0v = b.create<arith::ConstantIndexOp>(loc, c0);
+                       int64_t rows, Value c0, int64_t h) {
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   Value one = b.create<arith::ConstantIndexOp>(loc, 1);
   Value hUb = b.create<arith::ConstantIndexOp>(loc, h);
@@ -87,7 +86,7 @@ static void gatherCols(OpBuilder &b, Location loc, Value src, Value dst,
     OpBuilder::InsertionGuard g(b);
     b.setInsertionPointToStart(iLoop.getBody());
     Value i = iLoop.getInductionVar();
-    Value col = b.create<arith::AddIOp>(loc, c0v, i);
+    Value col = b.create<arith::AddIOp>(loc, c0, i);
     auto jLoop = b.create<scf::ForOp>(loc, zero, rUb, one);
     b.setInsertionPointToStart(jLoop.getBody());
     Value j = jLoop.getInductionVar();
@@ -98,8 +97,7 @@ static void gatherCols(OpBuilder &b, Location loc, Value src, Value dst,
 
 // dst[c0+i, j] = src[j, i]; src:[rows,h] dst:[cols,rows]
 static void scatterCols(OpBuilder &b, Location loc, Value src, Value dst,
-                        int64_t rows, int64_t c0, int64_t h) {
-  Value c0v = b.create<arith::ConstantIndexOp>(loc, c0);
+                        int64_t rows, Value c0, int64_t h) {
   Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
   Value one = b.create<arith::ConstantIndexOp>(loc, 1);
   Value hUb = b.create<arith::ConstantIndexOp>(loc, h);
@@ -109,7 +107,7 @@ static void scatterCols(OpBuilder &b, Location loc, Value src, Value dst,
     OpBuilder::InsertionGuard g(b);
     b.setInsertionPointToStart(iLoop.getBody());
     Value i = iLoop.getInductionVar();
-    Value row = b.create<arith::AddIOp>(loc, c0v, i);
+    Value row = b.create<arith::AddIOp>(loc, c0, i);
     auto jLoop = b.create<scf::ForOp>(loc, zero, rUb, one);
     b.setInsertionPointToStart(jLoop.getBody());
     Value j = jLoop.getInductionVar();
@@ -158,8 +156,13 @@ public:
     int64_t colsPad = alignUp(cols, eprI);
     int64_t maxW = eprI * kMaxGroups;
 
-    auto inPadTy = MemRefType::get({rowsPad, colsPad}, elemTy);
-    auto outPadTy = MemRefType::get({colsPad, rowsPad}, elemTy);
+    // A fixed full-depth tile lets the long dimension remain an scf loop.
+    // The extra tail is zero-padded and discarded by outView below.
+    bool fat = rowsPad <= maxW && colsPad > rowsPad;
+    bool chunkedFat = fat && colsPad > kBankDepth;
+    int64_t colsStorage = chunkedFat ? alignUp(colsPad, kBankDepth) : colsPad;
+    auto inPadTy = MemRefType::get({rowsPad, colsStorage}, elemTy);
+    auto outPadTy = MemRefType::get({colsStorage, rowsPad}, elemTy);
     Value inPad = rewriter.create<memref::AllocOp>(loc, inPadTy);
     Value outPad = rewriter.create<memref::AllocOp>(loc, outPadTy);
     rewriter.create<linalg::FillOp>(loc, ValueRange{zero}, ValueRange{inPad});
@@ -176,24 +179,43 @@ public:
     rewriter.create<memref::CopyOp>(loc, input, inView);
 
     // Fat [R,C] with R fitting in bank width: pack C as iter (long side).
-    bool fat = rowsPad <= maxW && colsPad > rowsPad;
     if (fat) {
       if (rowsPad % eprI != 0)
         return op.emitError("fat transpose rowsPad not bank-row aligned");
       int64_t groups = rowsPad / eprI;
-      for (int64_t c0 = 0; c0 < colsPad;) {
-        int64_t h = std::min(kBankDepth, colsPad - c0);
-        auto inContigTy = MemRefType::get({h, rowsPad}, elemTy);
-        auto outContigTy = MemRefType::get({rowsPad, h}, elemTy);
+      if (chunkedFat) {
+        Value zeroIndex = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+        Value chunkEnd =
+            rewriter.create<arith::ConstantIndexOp>(loc, colsStorage);
+        Value chunkStep =
+            rewriter.create<arith::ConstantIndexOp>(loc, kBankDepth);
+        auto chunkLoop =
+            rewriter.create<scf::ForOp>(loc, zeroIndex, chunkEnd, chunkStep);
+        rewriter.setInsertionPointToStart(chunkLoop.getBody());
+        Value c0 = chunkLoop.getInductionVar();
+        auto inContigTy = MemRefType::get({kBankDepth, rowsPad}, elemTy);
+        auto outContigTy = MemRefType::get({rowsPad, kBankDepth}, elemTy);
         Value inContig = rewriter.create<memref::AllocOp>(loc, inContigTy);
         Value outContig = rewriter.create<memref::AllocOp>(loc, outContigTy);
-        gatherCols(rewriter, loc, inPad, inContig, rowsPad, c0, h);
-        emitBankTranspose(rewriter, loc, inContig, outContig, h, groups,
-                          elemBits);
-        scatterCols(rewriter, loc, outContig, outPad, rowsPad, c0, h);
+        gatherCols(rewriter, loc, inPad, inContig, rowsPad, c0, kBankDepth);
+        emitBankTranspose(rewriter, loc, inContig, outContig, kBankDepth,
+                          groups, elemBits);
+        scatterCols(rewriter, loc, outContig, outPad, rowsPad, c0, kBankDepth);
         rewriter.create<memref::DeallocOp>(loc, inContig);
         rewriter.create<memref::DeallocOp>(loc, outContig);
-        c0 += h;
+        rewriter.setInsertionPointAfter(chunkLoop);
+      } else {
+        Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+        auto inContigTy = MemRefType::get({colsPad, rowsPad}, elemTy);
+        auto outContigTy = MemRefType::get({rowsPad, colsPad}, elemTy);
+        Value inContig = rewriter.create<memref::AllocOp>(loc, inContigTy);
+        Value outContig = rewriter.create<memref::AllocOp>(loc, outContigTy);
+        gatherCols(rewriter, loc, inPad, inContig, rowsPad, c0, colsPad);
+        emitBankTranspose(rewriter, loc, inContig, outContig, colsPad, groups,
+                          elemBits);
+        scatterCols(rewriter, loc, outContig, outPad, rowsPad, c0, colsPad);
+        rewriter.create<memref::DeallocOp>(loc, inContig);
+        rewriter.create<memref::DeallocOp>(loc, outContig);
       }
     } else {
       for (int64_t r0 = 0; r0 < rowsPad;) {
