@@ -139,8 +139,6 @@ def install_workload(chip: pb.Chip, bbdir: Path, name: str, gen: Path) -> Path:
         ),
         "BUCKYBALL_CHIP_PB": str(gen / "chip.pb"),
     }
-    for profile in chip.profiles:
-        defs[f"BUCKYBALL_BANK_NUM_{profile.name}"] = str(profile.bank_num)
     out = gen / "workload" / "cmake.defs"
     out.parent.mkdir(parents=True, exist_ok=True)
     body = "".join(f"{k}={v}\n" for k, v in sorted(defs.items()))
