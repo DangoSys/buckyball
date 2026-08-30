@@ -152,8 +152,11 @@ function(add_buckyball_ctest SOURCE_FILE)
   if(_rushb_ok AND
      DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
      DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
+    buckyball_rushb_default_accelerator(
+      _rushb_accelerator "${BUCKYBALL_CTEST_TARGET}")
     add_buckyball_rushb_native(${TEST_NAME}
       OUTPUT_SUBDIR src/CTest/rushB
+      ACCELERATOR_ID ${_rushb_accelerator}
       SOURCES
         ${SOURCE_DIR}/${SOURCE_FILE}
         ${WORKLOAD_LIB_DIR}/buckyball.c

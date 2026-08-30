@@ -231,7 +231,11 @@ def build_workload(
                 f"missing {missing} in cmake.defs for rushB; run bbdev config --install"
             )
     compiler_build = root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
-    python = shutil.which("python3")
+    riscv = _require_riscv()
+    project_python = riscv / "bin" / "python3"
+    python = (
+        str(project_python) if project_python.is_file() else shutil.which("python3")
+    )
     if not python:
         raise RuntimeError("python3 not in PATH; enter nix develop")
 
@@ -254,7 +258,6 @@ def build_workload(
             task_scope=task_scope,
         )
 
-    riscv = _require_riscv()
     linux_cc = riscv / "bin" / "riscv64-unknown-linux-gnu-gcc"
     linux_cxx = riscv / "bin" / "riscv64-unknown-linux-gnu-g++"
     if not linux_cc.is_file() or not linux_cxx.is_file():

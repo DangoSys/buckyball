@@ -229,9 +229,11 @@ function(add_buckyball_mlir_test NAME)
       DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
       COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
       VERBATIM)
+    buckyball_rushb_default_accelerator(_rushb_accelerator "${ARG_TARGET}")
     add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}
       CXX
       OUTPUT_SUBDIR src/MLIRTest/rushB
+      ACCELERATOR_ID ${_rushb_accelerator}
       SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC} ${RUSHB_OBJ}
       INCLUDE_DIRS
         ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
