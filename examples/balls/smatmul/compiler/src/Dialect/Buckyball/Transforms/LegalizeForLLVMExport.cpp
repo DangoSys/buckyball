@@ -95,7 +95,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthA));
     Value rs2A =
         packRs2MemStride(rewriter, loc, aPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvinOp>(
@@ -109,7 +110,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthB));
     Value rs2B =
         packRs2MemStride(rewriter, loc, bPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvinOp>(
@@ -129,7 +131,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
         packRs2MemStride(rewriter, loc, packedPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFlush(rewriter, loc);
     if (rushB) {
       Type ptrType = LLVM::LLVMPointerType::get(rewriter.getContext());
       rewriter.create<RushBMvoutOp>(
@@ -141,7 +144,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
 
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
-    emitDmaCacheFence(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFence(rewriter, loc);
 
     Value indexZero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value indexOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);

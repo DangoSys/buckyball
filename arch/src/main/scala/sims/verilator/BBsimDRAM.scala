@@ -185,6 +185,11 @@ class BBSimDRAM(
       |  reg [1:0] __b_resp_reg;
       |
       |  always @(posedge clock) begin
+      |    if (!initialized) begin
+      |      channel = bbsim_memory_init(CHIP_ID, MEM_SIZE, WORD_SIZE, LINE_SIZE, ID_BITS, CLOCK_HZ, MEM_BASE);
+      |      initialized = 1'b1;
+      |    end
+      |
       |    if (reset) begin
       |      __ar_ready = 1'b0;
       |      __aw_ready = 1'b0;
@@ -198,11 +203,6 @@ class BBSimDRAM(
       |      __r_valid_reg  <= 1'b0;
       |      __b_valid_reg  <= 1'b0;
       |    end else begin
-      |      if (!initialized) begin
-      |        channel = bbsim_memory_init(CHIP_ID, MEM_SIZE, WORD_SIZE, LINE_SIZE, ID_BITS, CLOCK_HZ, MEM_BASE);
-      |        initialized = 1'b1;
-      |      end
-      |
       |      bbsim_memory_tick(
       |        channel,
       |
