@@ -208,7 +208,9 @@ function(add_buckyball_rushb_native TARGET_NAME)
       set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_BEMU_LIBRARY})
       set(RUSHB_LIBRARY_NAME bebop_bemu)
       set(RUSHB_BUILD_RUNTIME
-        COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${BUCKYBALL_CARGO_TARGET_DIR}
+        COMMAND ${CMAKE_COMMAND} -E env
+                --unset=CC --unset=CXX
+                CARGO_TARGET_DIR=${BUCKYBALL_CARGO_TARGET_DIR}
                 cargo build --release --manifest-path ${BUCKYBALL_RUSHB_BEMU_MANIFEST} --lib)
       set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_BEMU_MANIFEST})
     else()
