@@ -51,8 +51,8 @@ def _rushb_targets(chip) -> list[tuple[int, str]]:
             core = chip.cores[core_index]
             if not core.balldomain.mappings:
                 continue
-            accelerator_id = (tile_id << 16) | local_id
-            result.append((accelerator_id, _target_name(core)))
+            core_id = (tile_id << 16) | local_id
+            result.append((core_id, _target_name(core)))
     return result
 
 
@@ -445,12 +445,10 @@ def main() -> None:
             print(f"{core.index}:{target}")
     if args.print_rushb_targets:
         targets = {profile.name for profile in chip.profiles}
-        for accelerator_id, target in _rushb_targets(chip):
+        for core_id, target in _rushb_targets(chip):
             if target not in targets:
-                _die(
-                    f"rushB accelerator {accelerator_id}: no compiler profile {target}"
-                )
-            print(f"{accelerator_id}:{target}")
+                _die(f"rushB Core {core_id}: no compiler profile {target}")
+            print(f"{core_id}:{target}")
     if args.print_ball_dialect_dirs:
         for dialect_dir in _ball_dialect_dirs(chip, repo):
             print(dialect_dir)

@@ -27,7 +27,7 @@
 #if defined(BUCKYBALL_RUSHB)
 #define bb_mvin_mmio(dram_addr, mmio_addr, row, col)                           \
   do {                                                                         \
-    rushb_mvin_mmio((uint64_t)BB_ITER(row),                                    \
+    rushb_mvin_mmio(BUCKYBALL_RUSHB_CORE, (uint64_t)BB_ITER(row),              \
                     (uint64_t)(FIELD(dram_addr, 0, 38) |                       \
                                FIELD(mmio_addr, 39, 55) | FIELD(col, 56, 63)), \
                     (const void *)(uintptr_t)(dram_addr));                     \

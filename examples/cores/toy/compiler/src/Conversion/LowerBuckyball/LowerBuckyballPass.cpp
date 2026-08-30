@@ -154,6 +154,9 @@ class LowerBuckyballIntrinsicsToRushBPass
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
       LowerBuckyballIntrinsicsToRushBPass)
+  LowerBuckyballIntrinsicsToRushBPass() = default;
+  LowerBuckyballIntrinsicsToRushBPass(
+      const LowerBuckyballIntrinsicsToRushBPass &) {}
 
   StringRef getArgument() const final {
     return "lower-buckyball-intrinsics-to-rushb";
@@ -161,6 +164,11 @@ public:
   StringRef getDescription() const final {
     return "Lower Buckyball intrinsic ops to the rushB host ABI.";
   }
+
+  Option<int64_t> coreId{
+      *this, "core_id",
+      llvm::cl::desc("RushB Core ID passed to every host ABI call."),
+      llvm::cl::init(0)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<LLVM::LLVMDialect, ::buddy::buckyball::BuckyballDialect>();
@@ -180,14 +188,19 @@ public:
     Type voidType = LLVM::LLVMVoidType::get(&getContext());
 
     auto call = [&](Operation *op, StringRef name, ValueRange operands) {
+      SmallVector<Value> arguments;
+      arguments.push_back(LLVM::ConstantOp::create(
+          builder, op->getLoc(), i32Type,
+          builder.getI32IntegerAttr(static_cast<int32_t>(coreId))));
+      arguments.append(operands.begin(), operands.end());
       SmallVector<Type> argumentTypes;
-      argumentTypes.reserve(operands.size());
-      for (Value operand : operands)
+      argumentTypes.reserve(arguments.size());
+      for (Value operand : arguments)
         argumentTypes.push_back(operand.getType());
       auto type = LLVM::LLVMFunctionType::get(voidType, argumentTypes);
       auto callee = getOrInsertRushBFunction(builder, module, name, type);
       LLVM::CallOp::create(builder, op->getLoc(), TypeRange{}, callee,
-                           operands);
+                           arguments);
       op->erase();
     };
 

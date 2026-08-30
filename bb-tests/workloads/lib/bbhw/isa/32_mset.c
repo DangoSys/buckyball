@@ -14,10 +14,11 @@
 
 #if defined(BUCKYBALL_RUSHB)
 #define bb_mset(bank_id, alloc, row, col)                                      \
-  rushb_mset((uint64_t)BB_BANK0(bank_id),                                      \
+  rushb_mset(BUCKYBALL_RUSHB_CORE, (uint64_t)BB_BANK0(bank_id),                \
              (uint64_t)BB_MSET_RS2(row, col, alloc, 0))
 #define bb_mset_clear(bank_id, row, col)                                       \
-  rushb_mset((uint64_t)BB_BANK0(bank_id), (uint64_t)BB_MSET_RS2(row, col, 1, 1))
+  rushb_mset(BUCKYBALL_RUSHB_CORE, (uint64_t)BB_BANK0(bank_id),                \
+             (uint64_t)BB_MSET_RS2(row, col, 1, 1))
 #else
 #define bb_mset(bank_id, alloc, row, col)                                      \
   BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(bank_id),                                 \

@@ -42,12 +42,7 @@ import freechips.rocketchip.util.BooleanToAugmentedBoolean
 import framework.top.GlobalConfig
 import framework.system.core.rocket.RocketBB
 import framework.system.core.rocket.id.RVVRoCCDecode
-import framework.system.core.accelerator.{
-  BuckyballAccelerator,
-  BuckyballRushBKey,
-  RushBAcceleratorId,
-  RushBCommandBridge
-}
+import framework.system.core.accelerator.{BuckyballAccelerator, BuckyballRushBKey, RushBCommandBridge, RushBCoreId}
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
@@ -637,7 +632,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       acc.map { accelerator =>
         if (rushBEnabled) {
           val source = Module(new RushBCommandBridge(
-            RushBAcceleratorId(outer.bbParams.tileId, i),
+            RushBCoreId(outer.bbParams.tileId, i),
             accelerator.b.core.xLen
           ))
           source.io.retired := accelerator.io.retired

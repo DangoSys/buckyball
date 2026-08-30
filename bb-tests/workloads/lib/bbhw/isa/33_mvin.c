@@ -9,7 +9,8 @@
 #define bb_mvin(mem_addr, bank_id, depth, stride)                              \
   do {                                                                         \
     bb_dma_cache_flush();                                                      \
-    rushb_mvin((uint64_t)(BB_BANK0(bank_id) | BB_ITER(depth)),                 \
+    rushb_mvin(BUCKYBALL_RUSHB_CORE,                                           \
+               (uint64_t)(BB_BANK0(bank_id) | BB_ITER(depth)),                 \
                (uint64_t)(FIELD(mem_addr, 0, 38) | FIELD(stride, 39, 57)),     \
                (const void *)(uintptr_t)(mem_addr));                           \
   } while (0)

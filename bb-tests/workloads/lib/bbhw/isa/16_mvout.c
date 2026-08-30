@@ -26,6 +26,7 @@
     BB_MVOUT_TOUCH(_bb_mo_addr, _bb_mo_depth, _bb_mo_stride, _bb_mo_bank);     \
     bb_dma_cache_flush();                                                      \
     rushb_mvout(                                                               \
+        BUCKYBALL_RUSHB_CORE,                                                  \
         (uint64_t)(BB_BANK0(_bb_mo_bank) | BB_ITER(_bb_mo_depth)),             \
         (uint64_t)(FIELD(_bb_mo_addr, 0, 38) | FIELD(_bb_mo_stride, 39, 57)),  \
         (void *)_bb_mo_addr);                                                  \
