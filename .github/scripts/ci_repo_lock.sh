@@ -23,9 +23,9 @@ exec 9>"${LOCK_FILE}"
 
 repo_reset() {
   cd "${repo}"
-  git fetch --force --prune origin "${git_ref}"
-  git checkout --detach FETCH_HEAD
-  git reset --hard FETCH_HEAD
+  git fetch --force --prune origin "${want_sha}"
+  git checkout --detach "${want_sha}"
+  git reset --hard "${want_sha}"
   git clean -ffd
   git submodule sync
   git submodule update --init --force

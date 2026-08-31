@@ -13,7 +13,7 @@ permissions:
   checks: write
 
 concurrency:
-  group: buckyball-ci-${{ github.event.pull_request.head.sha || github.sha }}
+  group: buckyball-ci-check
   cancel-in-progress: false
 
 env:
