@@ -148,6 +148,7 @@
               rustTools.cargoNextest
               rustTools.rustfmt
               rustTools.clippy
+              rustTools.rustAnalyzer
 
               # bbdev dependencies
               bbdev.iii

@@ -7,4 +7,5 @@
   cargoNextest = pkgs.cargo-nextest;
   rustfmt = pkgs.rustfmt;
   clippy = pkgs.clippy;
+  rustAnalyzer = pkgs.rust-analyzer;
 }
