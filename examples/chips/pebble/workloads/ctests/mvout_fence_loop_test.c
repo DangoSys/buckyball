@@ -8,7 +8,7 @@
 /* Closer to MobileNet tile epilogue: compute, mvout, fence, bank
  * release/realloc, second mvout, fence. Hang was after ~24 tiles. */
 #define M 16
-#define N 1
+#define N 16
 #define K 16
 #define LOOPS 24
 

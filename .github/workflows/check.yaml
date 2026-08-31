@@ -68,7 +68,7 @@ jobs:
             run_bemu_pk_tests: true
             run_verilator_batch_tests: true
           - chip: pebble
-            enable_rushb: false
+            enable_rushb: true
             run_bemu_elf_tests: true
             run_bemu_pk_tests: true
             run_verilator_batch_tests: true
