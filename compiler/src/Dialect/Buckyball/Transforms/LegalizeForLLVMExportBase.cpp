@@ -240,17 +240,23 @@ class ForwardOperands : public OpConversionPattern<OpTy> {
 };
 
 struct BuckyballFenceLowering : public ConvertOpToLLVMPattern<FenceOp> {
-  using ConvertOpToLLVMPattern<FenceOp>::ConvertOpToLLVMPattern;
+  BuckyballFenceLowering(LLVMTypeConverter &converter, bool rushB)
+      : ConvertOpToLLVMPattern<FenceOp>(converter), rushB(rushB) {}
+
   LogicalResult
   matchAndRewrite(FenceOp op, OpAdaptor,
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
-    emitDmaCacheFence(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFence(rewriter, loc);
     rewriter.eraseOp(op);
     return success();
   }
+
+private:
+  bool rushB;
 };
 
 struct BuckyballMsetLowering : public ConvertOpToLLVMPattern<MsetOp> {
@@ -284,7 +290,8 @@ struct BuckyballMvinLowering : public ConvertOpToLLVMPattern<MvinOp> {
                   ConversionPatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
-    emitDmaCacheFlush(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFlush(rewriter, loc);
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
     Value rs2 =
@@ -312,7 +319,8 @@ struct BuckyballMvoutLowering : public ConvertOpToLLVMPattern<MvoutOp> {
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getOutput());
     emitBbDmaTouchMvout(rewriter, loc, memref.hostPtr, adaptor.getDepth(),
                         adaptor.getStride(), adaptor.getAddr());
-    emitDmaCacheFlush(rewriter, loc);
+    if (!rushB)
+      emitDmaCacheFlush(rewriter, loc);
     Value rs1 =
         packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
     Value rs2 =
@@ -352,7 +360,7 @@ void populateBaseLegalizeForLLVMExportPatterns(
                  ForwardOperands<func::ReturnOp>>(converter,
                                                   &converter.getContext());
   }
-  patterns.add<BuckyballFenceLowering>(converter);
+  patterns.add<BuckyballFenceLowering>(converter, rushB);
   patterns.add<BuckyballMsetLowering>(converter);
   patterns.add<BuckyballMvinLowering>(converter, rushB);
   patterns.add<BuckyballMvoutLowering>(converter, rushB);

@@ -11,7 +11,7 @@
    On RV32 we read low/high and detect rollover to produce a 64-bit value. */
 unsigned long long read_rdcycle(void) {
 #if defined(BUCKYBALL_RUSHB)
-  return rushb_cycles();
+  return rushb_cycles(BUCKYBALL_RUSHB_CORE);
 #elif defined(__riscv_xlen) && __riscv_xlen == 64
   unsigned long long cycles;
   asm volatile("rdcycle %0" : "=r"(cycles));
@@ -287,7 +287,7 @@ void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols) {
 }
 unsigned long long read_cycle(void) {
 #if defined(BUCKYBALL_RUSHB)
-  return rushb_cycles();
+  return rushb_cycles(BUCKYBALL_RUSHB_CORE);
 #else
   unsigned long long c;
   asm volatile("csrr %0, cycle" : "=r"(c));

@@ -6,6 +6,10 @@
 
 #if defined(BUCKYBALL_RUSHB)
 #include <buckyball/rushb.h>
+#if !defined(BUCKYBALL_RUSHB_CORE_ID)
+#error "RushB workloads require a Core ID"
+#endif
+#define BUCKYBALL_RUSHB_CORE (uint32_t)BUCKYBALL_RUSHB_CORE_ID
 #endif
 
 // Data type for matrix elements
@@ -41,7 +45,8 @@ typedef int32_t result_t;
 #if defined(BUCKYBALL_RUSHB)
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
   do {                                                                         \
-    rushb_custom((uint64_t)(rs1_val), (uint64_t)(rs2_val), (uint32_t)(func7)); \
+    rushb_custom(BUCKYBALL_RUSHB_CORE, (uint64_t)(rs1_val),                    \
+                 (uint64_t)(rs2_val), (uint32_t)(func7));                      \
   } while (0)
 #else
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \

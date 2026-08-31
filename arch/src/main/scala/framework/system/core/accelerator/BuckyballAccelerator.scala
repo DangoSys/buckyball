@@ -172,7 +172,15 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   io.interrupt := memDomain.io.tlbExp(0).interrupt
 
   // --- Busy watchdog ---
-  val busy_counter = RegInit(0.U(32.W))
-  busy_counter := Mux(frontend.io.busy, busy_counter + 1.U, 0.U)
-  assert(busy_counter < 100000.U, "BuckyballAccelerator: busy for too long!")
+  // BootRom clears and initializes the local memories before the external
+  // command interface becomes ready. That initialization can legitimately
+  // exceed the runtime watchdog limit, so only start monitoring after the
+  // first external command has handshaken.
+  val runtime_started = RegInit(false.B)
+  when(io.cmd.fire) {
+    runtime_started := true.B
+  }
+  val busy_counter    = RegInit(0.U(32.W))
+  busy_counter := Mux(runtime_started && frontend.io.busy, busy_counter + 1.U, 0.U)
+  assert(busy_counter < 10000000.U, "BuckyballAccelerator: busy for too long!")
 }

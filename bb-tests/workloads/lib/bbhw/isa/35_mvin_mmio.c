@@ -24,6 +24,15 @@
 //   [63:56] = col (write mask: valid bytes per row, 1..16)
 //
 // funct7 = 0x23 (35 decimal)
+#if defined(BUCKYBALL_RUSHB)
+#define bb_mvin_mmio(dram_addr, mmio_addr, row, col)                           \
+  do {                                                                         \
+    rushb_mvin_mmio(BUCKYBALL_RUSHB_CORE, (uint64_t)BB_ITER(row),              \
+                    (uint64_t)(FIELD(dram_addr, 0, 38) |                       \
+                               FIELD(mmio_addr, 39, 55) | FIELD(col, 56, 63)), \
+                    (const void *)(uintptr_t)(dram_addr));                     \
+  } while (0)
+#else
 #define bb_mvin_mmio(dram_addr, mmio_addr, row, col)                           \
   do {                                                                         \
     bb_dma_cache_flush();                                                      \
@@ -32,5 +41,6 @@
                                FIELD(mmio_addr, 39, 55) | FIELD(col, 56, 63)), \
                               BB_MVIN_MMIO_FUNC7);                             \
   } while (0)
+#endif
 
 #endif // _BB_MVIN_MMIO_H_

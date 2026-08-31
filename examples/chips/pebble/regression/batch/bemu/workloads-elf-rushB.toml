@@ -1,0 +1,8 @@
+[workloads]
+search_path = "workloads/src"
+tests = [
+  "pebble-pebble-ctest-mvin_mvout_test-rushB-bemu-run",
+  "pebble-pebble-ctest-mvin_mvout_stride_test-rushB-bemu-run",
+  "pebble-pebble-ctest-mvout_fence_loop_test-rushB-bemu-run",
+  "pebble-pebble-mlirtest-tile_conv2d_12x12_k5-rushB-bemu-run",
+]

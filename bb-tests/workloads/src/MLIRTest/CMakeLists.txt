@@ -200,6 +200,7 @@ function(add_buckyball_mlir_test NAME)
         "rushB MLIR lowers require BUCKYBALL_LOWER_*_RUSHB "
         "(define them in bb-tests/workloads/CMakeLists.txt)")
     endif()
+    buckyball_rushb_default_core(_rushb_core "${ARG_TARGET}")
     set(RUSHB_MLIR_PASSES)
     set(RUSHB_HAS_RECONCILE FALSE)
     foreach(MLIR_PASS ${MLIR_PASSES})
@@ -210,7 +211,7 @@ function(add_buckyball_mlir_test NAME)
       elseif(MLIR_PASS STREQUAL "-reconcile-unrealized-casts")
         set(RUSHB_HAS_RECONCILE TRUE)
         list(APPEND RUSHB_MLIR_PASSES
-          -lower-buckyball-intrinsics-to-rushb
+          "-lower-buckyball-intrinsics-to-rushb=core_id=${_rushb_core}"
           -reconcile-unrealized-casts)
       else()
         list(APPEND RUSHB_MLIR_PASSES ${MLIR_PASS})
@@ -232,6 +233,7 @@ function(add_buckyball_mlir_test NAME)
     add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}
       CXX
       OUTPUT_SUBDIR src/MLIRTest/rushB
+      CORE_ID ${_rushb_core}
       SOURCES ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${MAIN_SRC} ${RUSHB_OBJ}
       INCLUDE_DIRS
         ${LLVM_MLIR_EXECUTION_ENGINE_DIR}

@@ -163,7 +163,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   }
   val hasCommit = commitScan.asUInt.orR
   val tailAlias = Wire(UInt(b.frontend.bank_id_len.W))
-  tailAlias := (b.frontend.vbank_id_upper_bound + 1).U + tailPtr
+  tailAlias :=
+    (b.frontend.vbank_id_upper_bound + 1).U(b.frontend.bank_id_len.W) + tailPtr
 
   val tailAliasLive = WireDefault(false.B)
   for (i <- 0 until robDepth) {

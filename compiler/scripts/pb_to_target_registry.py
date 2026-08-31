@@ -33,6 +33,29 @@ def _target_name(core) -> str:
     return core.role or core.pkg
 
 
+def _rushb_targets(chip) -> list[tuple[int, str]]:
+    result: list[tuple[int, str]] = []
+    for tile_id, tile in enumerate(chip.tiles):
+        if tile_id > 0xFFFF:
+            _die(f"tile index does not fit rushB ABI: {tile_id}")
+        for local_id, core_index in enumerate(tile.core_indices):
+            if local_id > 0xFFFF:
+                _die(
+                    f"tile {tile_id}: local Core index does not fit rushB ABI: {local_id}"
+                )
+            if core_index >= len(chip.cores):
+                _die(
+                    f"tile {tile_id}: Core index {core_index} out of range "
+                    f"(n={len(chip.cores)})"
+                )
+            core = chip.cores[core_index]
+            if not core.balldomain.mappings:
+                continue
+            core_id = (tile_id << 16) | local_id
+            result.append((core_id, _target_name(core)))
+    return result
+
+
 def _cxx_string(value: str) -> str:
     if not value:
         _die("empty string is not a valid compiler target field")
@@ -350,6 +373,7 @@ def main() -> None:
     parser.add_argument("--print-bank-targets", action="store_true")
     parser.add_argument("--print-target-balls", action="store_true")
     parser.add_argument("--print-core-targets", action="store_true")
+    parser.add_argument("--print-rushb-targets", action="store_true")
     parser.add_argument("--print-ball-dialect-dirs", action="store_true")
     parser.add_argument(
         "--print-ball-compiler-paths",
@@ -367,6 +391,7 @@ def main() -> None:
         and not args.print_bank_targets
         and not args.print_target_balls
         and not args.print_core_targets
+        and not args.print_rushb_targets
         and not args.print_ball_dialect_dirs
         and args.print_ball_compiler_paths is None
     ):
@@ -418,6 +443,12 @@ def main() -> None:
             if target not in targets:
                 _die(f"CoreInstance {core.index}: no compiler profile {target}")
             print(f"{core.index}:{target}")
+    if args.print_rushb_targets:
+        targets = {profile.name for profile in chip.profiles}
+        for core_id, target in _rushb_targets(chip):
+            if target not in targets:
+                _die(f"rushB Core {core_id}: no compiler profile {target}")
+            print(f"{core_id}:{target}")
     if args.print_ball_dialect_dirs:
         for dialect_dir in _ball_dialect_dirs(chip, repo):
             print(dialect_dir)

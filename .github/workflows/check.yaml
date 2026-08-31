@@ -63,12 +63,12 @@ jobs:
       matrix:
         include:
           - chip: toy
-            enable_rushb: false
+            enable_rushb: true
             run_bemu_elf_tests: true
             run_bemu_pk_tests: true
             run_verilator_batch_tests: true
           - chip: pebble
-            enable_rushb: false
+            enable_rushb: true
             run_bemu_elf_tests: true
             run_bemu_pk_tests: true
             run_verilator_batch_tests: true
@@ -164,6 +164,9 @@ jobs:
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }} --rushB bemu'
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test elf-tests --rushB --clean-before'
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test pk-tests --rushB --clean-before'
+          nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }} --rushB'
+          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --rushB'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }} --rushB'
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }} --rushB verilator'
           nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --rushB --clean-before'
           nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test pk-tests --rushB --clean-before'

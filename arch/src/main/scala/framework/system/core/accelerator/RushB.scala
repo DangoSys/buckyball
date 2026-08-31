@@ -8,14 +8,14 @@ import framework.system.core.rocket.RoCCCommandBB
 /** Enables the Verilator-only rushB command source at elaboration time. */
 case object BuckyballRushBKey extends Field[Boolean](false)
 
-/** rushB ABI ID: tile ID in the high half, local accelerator index below it. */
-object RushBAcceleratorId {
+/** rushB ABI ID: tile ID in the high half, local Core index below it. */
+object RushBCoreId {
   private val LocalIdBits = 16
   private val LocalIdMask = (1 << LocalIdBits) - 1
 
   def apply(tileId: Int, localIndex: Int): Int = {
     require(tileId >= 0 && tileId < (1 << LocalIdBits), s"tile ID does not fit rushB ABI: $tileId")
-    require(localIndex >= 0 && localIndex <= LocalIdMask, s"accelerator index does not fit rushB ABI: $localIndex")
+    require(localIndex >= 0 && localIndex <= LocalIdMask, s"Core index does not fit rushB ABI: $localIndex")
     (tileId << LocalIdBits) | localIndex
   }
 
@@ -24,14 +24,14 @@ object RushBAcceleratorId {
 /**
  * Stable DPI boundary for host-driven RTL simulation.
  *
- * One instance is created for every Buckyball accelerator. The accelerator ID
- * is an ABI identifier, not a hart ID: heterogeneous systems may assign
- * arbitrary hart IDs and may give individual accelerators different configs.
+ * One instance is created for every RushB-capable Core. The Core ID is an ABI
+ * identifier, not a hart ID: heterogeneous systems may assign arbitrary hart
+ * IDs and may give individual Cores different configs.
  */
-class RushBCommandDPI(acceleratorId: Int, xLen: Int)
+class RushBCommandDPI(coreId: Int, xLen: Int)
     extends BlackBox(Map(
-      "ACCELERATOR_ID" -> acceleratorId,
-      "XLEN"           -> xLen
+      "CORE_ID" -> coreId,
+      "XLEN"    -> xLen
     ))
     with HasBlackBoxInline {
 
@@ -49,7 +49,7 @@ class RushBCommandDPI(acceleratorId: Int, xLen: Int)
     "RushBCommandDPI.v",
     """
       |module RushBCommandDPI #(
-      |  parameter integer ACCELERATOR_ID = 0,
+      |  parameter integer CORE_ID = 0,
       |  parameter integer XLEN = 64
       |)(
       |  input clock, input ready, input retired,
@@ -58,36 +58,36 @@ class RushBCommandDPI(acceleratorId: Int, xLen: Int)
       |  output logic [XLEN-1:0] rs1Data, output logic [XLEN-1:0] rs2Data
       |);
       |  import "DPI-C" function void verilator_rushb_peek(
-      |    input int accelerator_id,
+      |    input int core_id,
       |    output bit valid,
       |    output longint unsigned xs1_data,
       |    output longint unsigned xs2_data,
       |    output int unsigned funct);
-      |  import "DPI-C" function void verilator_rushb_accept(input int accelerator_id);
+      |  import "DPI-C" function void verilator_rushb_accept(input int core_id);
       |  import "DPI-C" function void verilator_rushb_observe(
-      |    input int accelerator_id, input bit valid, input bit ready);
+      |    input int core_id, input bit valid, input bit ready);
       |  import "DPI-C" function void verilator_rushb_report(
-      |    input int accelerator_id, input bit retired);
+      |    input int core_id, input bit retired);
       |
       |  bit accept_pending = 1'b0;
       |  int unsigned dpi_funct;
       |
       |  always @(posedge clock) begin
-      |    verilator_rushb_observe(ACCELERATOR_ID, valid, ready);
+      |    verilator_rushb_observe(CORE_ID, valid, ready);
       |    accept_pending <= valid && ready;
-      |    verilator_rushb_report(ACCELERATOR_ID, retired);
+      |    verilator_rushb_report(CORE_ID, retired);
       |  end
       |
       |  always @(negedge clock) begin
       |    if (accept_pending) begin
-      |      verilator_rushb_accept(ACCELERATOR_ID);
+      |      verilator_rushb_accept(CORE_ID);
       |      accept_pending <= 1'b0;
       |      valid = 1'b0;
       |    end else if (!valid) begin
       |      // DPI calls mutate C++ state without creating an RTL event. Load a
       |      // one-entry register on the falling edge, so command bits are
       |      // stable for the full following sampling edge.
-      |      verilator_rushb_peek(ACCELERATOR_ID, valid, rs1Data, rs2Data, dpi_funct);
+      |      verilator_rushb_peek(CORE_ID, valid, rs1Data, rs2Data, dpi_funct);
       |      funct = dpi_funct[6:0];
       |    end
       |  end
@@ -103,14 +103,14 @@ class RushBCommandDPI(acceleratorId: Int, xLen: Int)
   )
 }
 
-class RushBCommandBridge(acceleratorId: Int, xLen: Int) extends Module {
+class RushBCommandBridge(coreId: Int, xLen: Int) extends Module {
 
   val io = IO(new Bundle {
     val cmd     = Decoupled(new RoCCCommandBB(xLen))
     val retired = Input(Bool())
   })
 
-  val dpi = Module(new RushBCommandDPI(acceleratorId, xLen))
+  val dpi = Module(new RushBCommandDPI(coreId, xLen))
   dpi.io.clock   := clock
   dpi.io.ready   := io.cmd.ready
   dpi.io.retired := io.retired

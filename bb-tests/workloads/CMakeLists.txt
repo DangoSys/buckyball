@@ -57,7 +57,7 @@ execute_process(
     --isa-dir "${BUCKYBALL_ISA_DIR}"
     --print-targets
     --print-target-balls
-    --print-core-targets
+    --print-rushb-targets
   RESULT_VARIABLE BUCKYBALL_TARGET_REGISTRY_RESULT
   OUTPUT_VARIABLE BUCKYBALL_TARGETS_RAW
   ERROR_VARIABLE BUCKYBALL_TARGET_REGISTRY_ERROR)
@@ -83,23 +83,49 @@ string(REPLACE "\n" ";" BUCKYBALL_BANK_TARGETS
   "${BUCKYBALL_BANK_TARGETS_RAW}")
 list(REMOVE_ITEM BUCKYBALL_BANK_TARGETS "")
 set(BUCKYBALL_TARGET_BALL_LINES)
-set(BUCKYBALL_CORE_TARGET_LINES)
+set(BUCKYBALL_RUSHB_TARGET_LINES)
 foreach(BUCKYBALL_TARGET_LINE ${BUCKYBALL_TARGETS})
   if(BUCKYBALL_TARGET_LINE MATCHES "^([0-9]+):([^,]+)$")
-    set(BUCKYBALL_CORE_TARGET_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
-    list(APPEND BUCKYBALL_CORE_TARGET_LINES ${BUCKYBALL_TARGET_LINE})
+    list(APPEND BUCKYBALL_RUSHB_TARGET_LINES ${BUCKYBALL_TARGET_LINE})
   elseif(BUCKYBALL_TARGET_LINE MATCHES "^([^:]+):(.*)$")
     set(BUCKYBALL_TARGET_BALLS_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
     list(APPEND BUCKYBALL_TARGET_BALL_LINES ${BUCKYBALL_TARGET_LINE})
   endif()
 endforeach()
 list(REMOVE_ITEM BUCKYBALL_TARGETS ${BUCKYBALL_TARGET_BALL_LINES}
-  ${BUCKYBALL_CORE_TARGET_LINES} "")
+  ${BUCKYBALL_RUSHB_TARGET_LINES} "")
 if(NOT BUCKYBALL_TARGETS)
   message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
+message(STATUS "Buckyball rushB targets: ${BUCKYBALL_RUSHB_TARGET_LINES}")
+
+function(buckyball_rushb_cores OUT_VAR TARGET)
+  set(_cores)
+  foreach(_entry IN LISTS BUCKYBALL_RUSHB_TARGET_LINES)
+    if(_entry MATCHES "^([0-9]+):(.+)$")
+      set(_core "${CMAKE_MATCH_1}")
+      set(_target "${CMAKE_MATCH_2}")
+      if(_target STREQUAL "${TARGET}")
+        list(APPEND _cores "${_core}")
+      endif()
+    endif()
+  endforeach()
+  set(${OUT_VAR} "${_cores}" PARENT_SCOPE)
+endfunction()
+
+function(buckyball_rushb_default_core OUT_VAR TARGET)
+  buckyball_rushb_cores(_cores "${TARGET}")
+  # Core ID 0 is valid, but CMake treats the string "0" as false.
+  # Test for an empty list explicitly so the first Core is accepted.
+  if("${_cores}" STREQUAL "")
+    message(FATAL_ERROR
+      "target '${TARGET}' has no RushB-capable Core in Chip.pb")
+  endif()
+  list(GET _cores 0 _core)
+  set(${OUT_VAR} "${_core}" PARENT_SCOPE)
+endfunction()
 
 function(buckyball_assign_physical_banks TARGET OUT)
   list(FIND BUCKYBALL_BANK_TARGETS "${TARGET}" _bank_target_index)
@@ -127,7 +153,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -Wl,--no-dynamic-linker")
 
 function(add_buckyball_rushb_native TARGET_NAME)
-  cmake_parse_arguments(ARG "CXX" "OUTPUT_SUBDIR" "SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
+  cmake_parse_arguments(ARG "CXX" "OUTPUT_SUBDIR;CORE_ID" "SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
 
   if(NOT ARG_SOURCES)
     message(FATAL_ERROR "${TARGET_NAME}: rushB runner has no sources")
@@ -139,6 +165,13 @@ function(add_buckyball_rushb_native TARGET_NAME)
   if(NOT DEFINED BUILD_BIN_DIR OR NOT DEFINED OUTPUT_BIN_DIR)
     message(FATAL_ERROR
       "add_buckyball_rushb_native requires BUILD_BIN_DIR and OUTPUT_BIN_DIR")
+  endif()
+  if(NOT DEFINED ARG_CORE_ID OR ARG_CORE_ID STREQUAL "")
+    set(ARG_CORE_ID 0)
+  endif()
+  if(NOT ARG_CORE_ID MATCHES "^[0-9]+$")
+    message(FATAL_ERROR
+      "${TARGET_NAME}: RushB CORE_ID must be a non-negative integer")
   endif()
 
   set(RUSHB_OUTPUT_ROOT ${OUTPUT_BIN_DIR}/${ARG_OUTPUT_SUBDIR})
@@ -171,7 +204,9 @@ function(add_buckyball_rushb_native TARGET_NAME)
       set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_BEMU_LIBRARY})
       set(RUSHB_LIBRARY_NAME bebop_bemu)
       set(RUSHB_BUILD_RUNTIME
-        COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${BUCKYBALL_CARGO_TARGET_DIR}
+        COMMAND ${CMAKE_COMMAND} -E env
+                --unset=CC --unset=CXX
+                CARGO_TARGET_DIR=${BUCKYBALL_CARGO_TARGET_DIR}
                 cargo build --release --manifest-path ${BUCKYBALL_RUSHB_BEMU_MANIFEST} --lib)
       set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_BEMU_MANIFEST})
     else()
@@ -221,6 +256,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
       OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_BUILD_DIR}
       COMMAND ${RUSHB_COMPILER} -no-pie ${RUSHB_STANDARD} -O2 -DBUCKYBALL_RUSHB
+              -DBUCKYBALL_RUSHB_CORE_ID=${ARG_CORE_ID}
               ${RUSHB_INCLUDE_ARGS}
               ${ARG_SOURCES} ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c
               -L${RUSHB_LIBRARY_DIR} -l${RUSHB_LIBRARY_NAME}
@@ -311,6 +347,7 @@ function(add_toy_mlir_rushb)
      NOT DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
     return()
   endif()
+  buckyball_rushb_default_core(RUSHB_CORE_ID "${ARG_TARGET}")
 
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_NAME}.mlir)
   set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ARG_NAME}-rushB.o)
@@ -332,7 +369,7 @@ function(add_toy_mlir_rushb)
       -convert-math-to-llvm
       -finalize-memref-to-llvm
       -convert-func-to-llvm
-      -lower-buckyball-intrinsics-to-rushb
+      "-lower-buckyball-intrinsics-to-rushb=core_id=${RUSHB_CORE_ID}"
       -reconcile-unrealized-casts |
     ${BUDDY_TRANSLATE} --buddy-to-llvmir |
     ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
@@ -349,6 +386,7 @@ function(add_toy_mlir_rushb)
   add_buckyball_rushb_native(${ARG_TARGET_STEM}
     ${RUSHB_CXX_FLAG}
     OUTPUT_SUBDIR src/CTest/rushB
+    CORE_ID ${RUSHB_CORE_ID}
     SOURCES ${ARG_SOURCES} ${RUSHB_OBJ}
     INCLUDE_DIRS ${ARG_INCLUDE_DIRS}
     DEPENDS ${RUSHB_OBJ} ${ARG_DEPENDS})
