@@ -74,7 +74,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir,
+        chip,
+        "verilog",
+        input_data.get("vsrc_dir"),
+        rushb=bool(input_data.get("rushB", False)),
+    )
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     build_dir = bebop_dir
     chip = input_data.get("chip")
@@ -192,7 +198,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         backend_library = f"{bebop_target_dir(bbdir, chip)}/release/deps/libbebop_verilator.so"
         binary_dir = os.path.dirname(binary_path)
         copy_cmd = shlex.join(["cmake", "-E", "copy_if_different", backend_library, binary_dir])
-        inner_cmd = f"cd {shlex.quote(binary_dir)} && {copy_cmd} && exec {shlex.quote(binary_path)}"
+        library_env = f"LD_LIBRARY_PATH={shlex.quote(binary_dir)}:${{LD_LIBRARY_PATH:-}}"
+        inner_cmd = (
+            f"cd {shlex.quote(binary_dir)} && {copy_cmd} && "
+            f"{library_env} exec {shlex.quote(binary_path)}"
+        )
         run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
         ctx.logger.info(f"Running rushB Verilator: {run_cmd}")
         stdout_prefix = "rushB verilator"

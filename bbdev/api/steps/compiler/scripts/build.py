@@ -47,14 +47,22 @@ def _run(
         raise RuntimeError(f"command failed ({result.returncode}): {' '.join(cmd)}")
 
 
-def compiler_python() -> str:
-    python = shutil.which("python3")
-    if not python:
-        raise RuntimeError("python3 not in PATH; enter nix develop")
-    probe = subprocess.run([python, "-c", "import nanobind"], capture_output=True)
-    if probe.returncode != 0:
-        raise RuntimeError(f"python3 lacks nanobind ({python}); enter nix develop")
-    return python
+def compiler_python(repo: str | Path) -> str:
+    root = _repo(repo)
+    candidates = [root / "result" / "bin" / "python3"]
+    path_python = shutil.which("python3")
+    if path_python:
+        candidates.append(Path(path_python))
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        probe = subprocess.run(
+            [str(candidate), "-c", "import nanobind"], capture_output=True
+        )
+        if probe.returncode == 0:
+            return str(candidate)
+    checked = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(f"python3 with nanobind not found (checked: {checked})")
 
 
 def build_llvm(
@@ -67,7 +75,7 @@ def build_llvm(
     if not llvm_src.is_dir():
         raise RuntimeError(f"missing LLVM source: {llvm_src}")
 
-    python = compiler_python()
+    python = compiler_python(root)
     cmake = [
         "cmake",
         "-G",
@@ -129,7 +137,7 @@ def build_compiler(
         raise RuntimeError(f"missing {chip_pb}; run bbdev config --install")
     buddy = root / "compiler" / "thirdparty" / "buddy-mlir"
     llvm = build_llvm(root, logger=logger, task_scope=task_scope)
-    python = compiler_python()
+    python = compiler_python(root)
     build = compiler_build_dir(root, chip)
     build.mkdir(parents=True, exist_ok=True)
     cmake = [

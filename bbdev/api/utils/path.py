@@ -67,7 +67,7 @@ def chip_arch_root(bbdir, chip):
     return os.path.join(bbdir, "arch", "build", _chip_name(chip))
 
 
-def sim_name(bbdir, chip, product):
+def sim_name(bbdir, chip, product, *, rushb=False):
     if product not in _PRODUCT:
         raise ValueError(f"invalid rtl product: {product}")
     path = (
@@ -80,17 +80,24 @@ def sim_name(bbdir, chip, product):
         / "config"
         / "config.json"
     )
-    return json.loads(path.read_text(encoding="utf-8"))["sims"][_PRODUCT[product]]
+    name = json.loads(path.read_text(encoding="utf-8"))["sims"][_PRODUCT[product]]
+    if not rushb:
+        return name
+    if product != "verilog" or not name.endswith("VerilatorConfig"):
+        raise ValueError(f"rushB RTL is not supported for product {product}: {name}")
+    return f"{name[:-len('VerilatorConfig')]}RushBVerilatorConfig"
 
 
-def rtl_dir(bbdir, chip, product, output_dir=None):
+def rtl_dir(bbdir, chip, product, output_dir=None, *, rushb=False):
     if output_dir:
         return output_dir
-    return os.path.join(chip_arch_root(bbdir, chip), sim_name(bbdir, chip, product))
+    return os.path.join(
+        chip_arch_root(bbdir, chip), sim_name(bbdir, chip, product, rushb=rushb)
+    )
 
 
-def rtl_out(bbdir, chip, product, output_dir=None):
-    name = sim_name(bbdir, chip, product)
+def rtl_out(bbdir, chip, product, output_dir=None, *, rushb=False):
+    name = sim_name(bbdir, chip, product, rushb=rushb)
     out = output_dir or os.path.join(chip_arch_root(bbdir, chip), name)
     return name, out
 

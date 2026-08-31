@@ -55,7 +55,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         chip = require_chip(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "verilog", input_data.get("output_dir"),
+            bbdir,
+            chip,
+            "verilog",
+            input_data.get("output_dir"),
+            rushb=bool(input_data.get("rushB", False)),
         )
         os.makedirs(build_dir, exist_ok=True)
         ctx.logger.info(f"Using mill config: {mill_config}")

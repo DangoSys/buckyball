@@ -85,7 +85,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"rushB={rushB} diff={diff}"
     )
 
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir,
+        chip,
+        "verilog",
+        input_data.get("vsrc_dir"),
+        rushb=rushB,
+    )
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))

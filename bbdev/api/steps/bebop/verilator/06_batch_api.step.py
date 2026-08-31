@@ -42,7 +42,9 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "--diff and --rushB cannot be used together"},
         )
 
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir, chip, "verilog", body.get("vsrc_dir"), rushb=rushB
+    )
 
     data = {
         "chip": chip,

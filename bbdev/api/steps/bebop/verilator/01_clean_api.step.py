@@ -20,10 +20,14 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
-    build_dir = rtl_dir(bbdir, chip, "verilog", body.get("output_dir"))
+    rushb = bool(body.get("rushB", False))
+    build_dir = rtl_dir(
+        bbdir, chip, "verilog", body.get("output_dir"), rushb=rushb
+    )
     data = {
         "chip": chip,
         "output_dir": build_dir,
+        "rushB": rushb,
     }
     await ctx.enqueue({"topic": "bebop.verilator.clean", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

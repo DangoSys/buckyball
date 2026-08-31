@@ -37,7 +37,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
+    build_dir = rtl_dir(
+        bbdir,
+        chip,
+        "verilog",
+        input_data.get("output_dir"),
+        rushb=bool(input_data.get("rushB", False)),
+    )
 
     command = f"rm -rf {build_dir}"
     result = await stream_run_logger_async(
