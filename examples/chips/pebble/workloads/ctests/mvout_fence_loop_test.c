@@ -11,6 +11,7 @@
 #define N 16
 #define K 16
 #define LOOPS 24
+#define OUTPUT_GROUPS 2
 
 static elem_t a[M * K] __attribute__((aligned(64)));
 static elem_t b[K * 16] __attribute__((aligned(64)));
@@ -36,7 +37,7 @@ int main(void) {
   for (int i = 0; i < LOOPS; ++i) {
     bb_mem_alloc(0, 1, 1);
     bb_mem_alloc(1, 1, 1);
-    bb_mem_alloc(2, 1, 4);
+    bb_mem_alloc(2, 1, OUTPUT_GROUPS);
     bb_mvin((uintptr_t)a, 0, M, 1);
     bb_mvin((uintptr_t)b, 1, K, 1);
     bb_mvin((uintptr_t)zero, 2, M, 1);
@@ -45,7 +46,7 @@ int main(void) {
     bb_fence();
 
     bb_mem_release(2);
-    bb_mem_alloc(2, 1, 4);
+    bb_mem_alloc(2, 1, OUTPUT_GROUPS);
     bb_mvin((uintptr_t)zero, 2, M, 1);
     bb_mvout((uintptr_t)out, 2, M, 1);
     bb_fence();
