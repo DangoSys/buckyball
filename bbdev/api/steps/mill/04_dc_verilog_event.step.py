@@ -1,8 +1,8 @@
 import os
-from datetime import datetime
 import sys
 import glob
 import re
+from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -31,7 +31,7 @@ config = {
     "description": "generate RTL and memory metadata for downstream DC/tapeout flow",
     "flows": ["dc"],
     "triggers": [queue("dc.verilog")],
-    "enqueues": ["ip-replace.run"],
+    "enqueues": ["ip.generate"],
 }
 
 
@@ -63,9 +63,12 @@ def prepare_dc_verilog(build_dir: str):
     )
     stub_dir = os.path.join(build_dir, "dc_stubs")
     os.makedirs(stub_dir, exist_ok=True)
+    skip_dirs = {os.path.join(build_dir, name) for name in ("ip-generate", "ip-replace", "dc_stubs")}
     kept = []
     stubbed_dpi = []
     for path in vsrcs:
+        if any(path == d or path.startswith(d + os.sep) for d in skip_dirs):
+            continue
         if is_dpi_source(path):
             stub_path = os.path.join(stub_dir, f"stub_{os.path.basename(path)}")
             with open(stub_path, "w") as f:
@@ -146,10 +149,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"{'...' if len(stubbed_dpi) > 10 else ''}"
         )
 
+    need_ip = bool(
+        input_data.get("from_area_workflow") or input_data.get("from_power_workflow")
+    )
     await check_result(
         ctx,
         0,
-        continue_run=True,
+        continue_run=need_ip,
         extra_fields={
             "task": "verilog",
             "source_list": source_list_path,
@@ -158,21 +164,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         },
         trace_id=origin_tid,
     )
+    if not need_ip:
+        return
 
     payload = {
         **input_data,
-        "source_list": source_list_path,
-        "ip_replace_output_dir": os.path.join(build_dir, "ip-replace"),
+        "chip": chip,
         "consumer": "dc",
-        "mem_conf": mem_conf,
         "top": top_module,
-        "next_topic": "dc.area" if input_data.get("from_area_workflow") or input_data.get("from_power_workflow") else None,
+        "next_topic": "dc.area",
         "_trace_id": origin_tid,
     }
     if input_data.get("from_power_workflow"):
-        payload["analysis_dir"] = log_dir(bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"), "dc", "power")
-    elif input_data.get("from_area_workflow"):
-        payload["analysis_dir"] = log_dir(bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"), "dc", "area")
-    await ctx.enqueue({"topic": "ip-replace.run", "data": payload})
+        payload["analysis_dir"] = log_dir(
+            bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "power"
+        )
+    else:
+        payload["analysis_dir"] = log_dir(
+            bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "area"
+        )
+    await ctx.enqueue({"topic": "ip.generate", "data": payload})
 
     return

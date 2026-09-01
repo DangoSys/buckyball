@@ -58,7 +58,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
     artifact_dir = Path(build_dir) / "vcs"
     simv = artifact_dir / "simv"
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = Path(log_dir(
         bbdir, chip, "verilog", timestamp, "vcs", binary_name,
         input_data.get("output_dir"),

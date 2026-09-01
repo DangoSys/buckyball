@@ -8,9 +8,9 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-step_path = os.path.dirname(__file__)
-if step_path not in sys.path:
-    sys.path.insert(0, step_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path, workload_build_dir, workload_tests_root
@@ -23,7 +23,7 @@ config = {
     "description": "rerun chip-owned simulation and produce activity for PTPX",
     "flows": ["dc"],
     "triggers": [queue("dc.sim")],
-    "enqueues": ["dc.power"],
+    "enqueues": ["pt.run"],
 }
 
 
@@ -62,7 +62,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if not os.path.isfile(explicit_activity):
             await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"activity file does not exist: {explicit_activity}"}, trace_id=origin_tid)
             return
-        await ctx.enqueue({"topic": "dc.power", "data": {**input_data, "activity": explicit_activity, "format": activity_format, "_trace_id": origin_tid}})
+        await ctx.enqueue({"topic": "pt.run", "data": {**input_data, "activity": explicit_activity, "format": activity_format, "_trace_id": origin_tid}})
         return
 
     if shutil.which("bash") is None:
@@ -157,4 +157,4 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         trace_id=origin_tid,
     )
     if result.returncode == 0:
-        await ctx.enqueue({"topic": "dc.power", "data": {**input_data, "activity": activity_path, "format": activity_format, "strip_path": contract.power_strip_path, "_trace_id": origin_tid}})
+        await ctx.enqueue({"topic": "pt.run", "data": {**input_data, "activity": activity_path, "format": activity_format, "strip_path": contract.power_strip_path, "_trace_id": origin_tid}})

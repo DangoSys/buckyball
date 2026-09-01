@@ -32,7 +32,7 @@ config = {
     "description": "generate verilog for yosys flow",
     "flows": ["yosys"],
     "triggers": [queue("yosys.run"), queue("yosys.verilog")],
-    "enqueues": ["ip-replace.run"],
+    "enqueues": ["ip.generate"],
 }
 
 
@@ -215,7 +215,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     yosys_cfg = load_yosys_config()
     top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
     yosys_log_dir = input_data.get("log_dir") or log_dir(
-        bbdir, chip, "synth", datetime.now().strftime("%Y%m%d-%H%M%S-%f"),
+        bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"),
         "yosys", top_module, input_data.get("output_dir"),
     )
     ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
@@ -240,26 +240,28 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
 
+    need_ip = bool(input_data.get("from_run_workflow"))
     await check_result(
         ctx,
         0,
-        continue_run=True,
+        continue_run=need_ip,
         extra_fields={"task": "verilog", "source_list": source_list_path, "mem_conf": mem_conf},
         trace_id=origin_tid,
     )
+    if not need_ip:
+        return
 
     await ctx.enqueue(
         {
-            "topic": "ip-replace.run",
+            "topic": "ip.generate",
             "data": {
                 **input_data,
-                "source_list": source_list_path,
-                "ip_replace_output_dir": yosys_log_dir,
+                "chip": chip,
                 "consumer": "yosys",
                 "top": top_module,
-                "mem_conf": mem_conf,
-                "next_topic": "yosys.synth" if input_data.get("from_run_workflow") else None,
-                "task": "run" if input_data.get("from_run_workflow") else "verilog",
+                "log_dir": yosys_log_dir,
+                "next_topic": "yosys.synth",
+                "task": "run",
                 "_trace_id": origin_tid,
             },
         }

@@ -86,8 +86,9 @@ WORKFLOW_COMMANDS = {
         "area": 'Generate RTL, run DC synthesis, and report area under log/<timestamp>/<chip>/<config>/area. Args: "--chip <chip> [--top <module>]".',
         "power": 'Generate RTL, run chip-owned power simulation, then run PrimeTime PX under log/<timestamp>/<chip>/<config>/power. Args: "--chip <chip> [--top <module>] [--workload <built ELF name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format <saif|vcd|fsdb>]".',
     },
-    "ip-replace": {
-        "run": 'Replace behavioral IP RTL. Args: "--source-list <file> --output-dir <dir> [--top <module>] [--consumer <dc|yosys>]"',
+    "ip": {
+        "generate": 'Generate SRAM macros from elaborator mems.conf under arch/build/<chip>/<config>. Args: "--chip <chip> [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>] [--next-topic <topic>]"',
+        "replace": 'Assemble top-scoped synthesis RTL plus SRAM macros under arch/build/<chip>/<config>. Args: "--chip <chip> [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>] [--next-topic <topic>]"',
     },
     "yosys": {
         "run": 'Run yosys flow. Args: "[--top <top_module>] [--chip <chip>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
@@ -555,7 +556,8 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
 
     print(f"\nTask completed on http://{HOST}:{port}")
     if task_result and not task_result.get("success", False):
-        print("Error: Task failed")
+        err = task_result.get("error") or task_result
+        print(f"Error: Task failed: {err}")
         return 1
     return 0
 

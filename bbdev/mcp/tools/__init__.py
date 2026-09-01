@@ -33,6 +33,7 @@ from . import bebop_p2e_batch
 from . import dc_verilog
 from . import dc_area
 from . import dc_power
+from . import ip_generate
 from . import ip_replace
 from . import firesim_enumeratefpgas
 from . import firesim_buildbitstream
@@ -79,6 +80,7 @@ MODULES = [
     dc_verilog,
     dc_area,
     dc_power,
+    ip_generate,
     ip_replace,
     firesim_enumeratefpgas,
     firesim_buildbitstream,

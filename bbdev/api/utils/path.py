@@ -4,8 +4,6 @@ import re
 import subprocess
 from pathlib import Path
 
-_PRODUCT = {"verilog": "verilator", "synth": "verilator", "p2e": "p2e"}
-
 
 def get_buckyball_path():
     current_dir = os.path.dirname(__file__)
@@ -68,7 +66,11 @@ def chip_arch_root(bbdir, chip):
 
 
 def sim_name(bbdir, chip, product, *, rushb=False):
-    if product not in _PRODUCT:
+    if product == "verilog" or product == "synth":
+        sim_key = "verilator"
+    elif product == "p2e":
+        sim_key = "p2e"
+    else:
         raise ValueError(f"invalid rtl product: {product}")
     path = (
         Path(bbdir)
@@ -80,7 +82,7 @@ def sim_name(bbdir, chip, product, *, rushb=False):
         / "config"
         / "config.json"
     )
-    name = json.loads(path.read_text(encoding="utf-8"))["sims"][_PRODUCT[product]]
+    name = json.loads(path.read_text(encoding="utf-8"))["sims"][sim_key]
     if not rushb:
         return name
     if product != "verilog" or not name.endswith("VerilatorConfig"):

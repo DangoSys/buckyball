@@ -1,3 +1,4 @@
+import json
 import os
 import shlex
 import shutil
@@ -12,14 +13,14 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-step_path = os.path.dirname(__file__)
-if step_path not in sys.path:
-    sys.path.insert(0, step_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger_async
-from tapeout import get_tapeout_contract, technology_settings, write_run_tcl
+from tapeout import clock_period_ns, get_tapeout_contract, write_run_tcl
 
 config = {
     "name": "dc-area",
@@ -83,7 +84,27 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(report_dir, exist_ok=True)
     try:
-        tech = technology_settings()
+        gman = input_data.get("generate_manifest")
+        if not isinstance(gman, str) or not gman:
+            rman = input_data.get("replace_manifest")
+            if isinstance(rman, str) and os.path.isfile(rman):
+                with open(rman, encoding="utf-8") as handle:
+                    gman = json.load(handle).get("generate_manifest")
+        if not isinstance(gman, str) or not os.path.isfile(gman):
+            raise ValueError("missing generate_manifest with link_dbs")
+        with open(gman, encoding="utf-8") as handle:
+            link_dbs = json.load(handle).get("link_dbs")
+        if not isinstance(link_dbs, list) or not link_dbs:
+            raise ValueError(f"generate_manifest.link_dbs empty: {gman}")
+        for path in link_dbs:
+            if not isinstance(path, str) or not os.path.isfile(path):
+                raise ValueError(f"sram db missing: {path}")
+        tech = {
+            "target_library": contract.target_library,
+            "synthetic_library": contract.synthetic_library,
+            "link_library": list(contract.link_library) + list(link_dbs),
+            "max_cores": contract.max_cores,
+        }
         run_config = write_run_tcl(
             os.path.join(analysis_dir, "run.tcl"),
             {
@@ -91,12 +112,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "source_list": source_list_path,
                 "output_dir": output_dir,
                 "report_dir": report_dir,
-                "clock_port": contract.clock_port,
-                "clock_period_ns": contract.clock_period_ns,
+                "sdc": str(contract.constraints_sdc),
                 **tech,
             },
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         await check_result(ctx, 1, continue_run=False, extra_fields={"task": "dc", "error": str(exc)}, trace_id=origin_tid)
         return
     script_path = contract.dc_script
@@ -104,9 +124,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Running chip-owned DC synthesis for {contract.chip}, top {top_module}: {script_path}")
     result = await stream_run_logger_async(
         cmd=(
-            f"dc_shell -f {shlex.quote(str(script_path))} "
+            f"set -o pipefail; dc_shell -f {shlex.quote(str(script_path))} "
             f"-x {shlex.quote('set RUN_CONFIG ' + '{' + str(run_config) + '}')} "
-            f"> {shlex.quote(dc_log)} 2>&1"
+            f"2>&1 | tee {shlex.quote(dc_log)}"
         ),
         logger=ctx.logger,
         cwd=os.path.dirname(script_path),
@@ -123,7 +143,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "run_config": str(run_config),
         "chip": contract.chip,
         "tapeout_dir": str(contract.root),
-        "sram_manifest": (input_data.get("sram_collateral") or {}).get("sram_manifest"),
+        "replace_manifest": input_data.get("replace_manifest"),
     }
 
     if result.returncode == 0 and input_data.get("from_regression_area_power"):
@@ -153,7 +173,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        freq = 1000.0 / contract.clock_period_ns
+        freq = 1000.0 / clock_period_ns(contract)
         merge_metrics(get_buckyball_path(), area=area, freq=freq)
         extra_fields["area"] = area
         extra_fields["freq"] = freq

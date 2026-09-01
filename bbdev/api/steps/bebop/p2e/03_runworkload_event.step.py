@@ -19,7 +19,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, rtl_dir, log_dir
+from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, log_dir, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 

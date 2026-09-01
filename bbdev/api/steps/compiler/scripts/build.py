@@ -1,17 +1,11 @@
 from __future__ import annotations
 
+import fcntl
 import os
 import shlex
 import shutil
 import subprocess
 from pathlib import Path
-
-
-def _repo(raw: str | Path) -> Path:
-    root = Path(raw).resolve()
-    if not root.is_dir():
-        raise ValueError(f"repo does not exist: {root}")
-    return root
 
 
 def _run(
@@ -48,7 +42,7 @@ def _run(
 
 
 def compiler_python(repo: str | Path) -> str:
-    root = _repo(repo)
+    root = Path(repo).resolve()
     candidates = [root / "result" / "bin" / "python3"]
     path_python = shutil.which("python3")
     if path_python:
@@ -68,7 +62,7 @@ def compiler_python(repo: str | Path) -> str:
 def build_llvm(
     repo: str | Path, *, logger: object | None = None, task_scope: str | None = None
 ) -> Path:
-    root = _repo(repo)
+    root = Path(repo).resolve()
     buddy = root / "compiler" / "thirdparty" / "buddy-mlir"
     llvm_src = buddy / "llvm" / "llvm"
     llvm_build = buddy / "llvm" / "build"
@@ -95,23 +89,26 @@ def build_llvm(
         f"-DPython3_EXECUTABLE={python}",
         f"-DPython_EXECUTABLE={python}",
     ]
-    if not (llvm_build / "build.ninja").is_file():
+    llvm_build.mkdir(parents=True, exist_ok=True)
+    with open(llvm_build / ".bbdev.lock", "a+b") as lockf:
+        fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+        if not (llvm_build / "build.ninja").is_file():
+            _run(
+                cmake,
+                repo=root,
+                cwd=buddy,
+                logger=logger,
+                task_scope=task_scope,
+                output_prefix="compiler llvm configure",
+            )
         _run(
-            cmake,
+            ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
             repo=root,
             cwd=buddy,
             logger=logger,
             task_scope=task_scope,
-            output_prefix="compiler llvm configure",
+            output_prefix="compiler llvm build",
         )
-    _run(
-        ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
-        repo=root,
-        cwd=buddy,
-        logger=logger,
-        task_scope=task_scope,
-        output_prefix="compiler llvm build",
-    )
     mlir_cmake = llvm_build / "lib" / "cmake" / "mlir"
     if not mlir_cmake.is_dir():
         raise RuntimeError(f"LLVM/MLIR build failed: missing {mlir_cmake}")
@@ -119,7 +116,7 @@ def build_llvm(
 
 
 def compiler_build_dir(repo: str | Path, chip: str) -> Path:
-    return _repo(repo) / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
+    return Path(repo).resolve() / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
 
 
 def build_compiler(
@@ -129,7 +126,7 @@ def build_compiler(
     logger: object | None = None,
     task_scope: str | None = None,
 ) -> Path:
-    root = _repo(repo)
+    root = Path(repo).resolve()
     if not chip:
         raise ValueError("chip is required")
     chip_pb = root / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"

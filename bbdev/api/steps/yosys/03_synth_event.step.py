@@ -81,13 +81,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if isinstance(liberty, str):
         liberty = os.path.expandvars(os.path.expanduser(liberty))
 
-    source_list_path = input_data.get("source_list") or os.path.join(build_dir, "yosys_sources.list")
-    if not os.path.exists(source_list_path):
-        success_result, failure_result = await check_result(
+    source_list_path = input_data.get("source_list")
+    if not isinstance(source_list_path, str) or not os.path.isfile(source_list_path):
+        _, failure_result = await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"task": "synth", "error": "missing yosys_sources.list, run yosys verilog first"},
+            extra_fields={"task": "synth", "error": "missing prepared yosys source list"},
             trace_id=origin_tid,
         )
         return failure_result
@@ -96,23 +96,21 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         vsrcs = [line.strip() for line in f.readlines() if line.strip()]
 
     if not vsrcs:
-        success_result, failure_result = await check_result(
+        _, failure_result = await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"task": "synth", "error": "empty yosys_sources.list"},
+            extra_fields={"task": "synth", "error": "empty source list"},
             trace_id=origin_tid,
         )
         return failure_result
 
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     yosys_output_dir = input_data.get("log_dir") or log_dir(
         bbdir, chip, "synth", stamp, "yosys", top_module, input_data.get("output_dir"),
     )
     os.makedirs(yosys_output_dir, exist_ok=True)
     ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
-
-    sram_collateral = input_data.get("sram_collateral") or {}
 
     read_commands = "\n".join([f"read_verilog -sv {src}" for src in vsrcs])
     yosys_script = f"{yosys_output_dir}/synth_area.ys"
@@ -150,8 +148,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     extra = {
         "task": "synth",
         "output_dir": yosys_output_dir,
-        "sram_manifest": sram_collateral.get("sram_manifest"),
-        "sram_memory_count": sram_collateral.get("sram_memory_count", 0),
+        "replace_manifest": input_data.get("replace_manifest"),
     }
     netlist_file = f"{yosys_output_dir}/synth_netlist.v"
     timing_report_file = f"{yosys_output_dir}/timing_report.txt"
