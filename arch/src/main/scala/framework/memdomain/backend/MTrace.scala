@@ -2,8 +2,8 @@ package framework.memdomain.backend
 
 import chisel3._
 import chisel3.util._
+import framework.dpi.DpiGuard
 
-// DPI-C BlackBox for memory trace
 class MTraceDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -27,24 +27,6 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
   setInline(
     "MTraceDPI.v",
     """
-      |import "DPI-C" context function void dpi_mtrace(
-      |  input int unsigned is_write,
-      |  input int unsigned is_shared,
-      |  input int unsigned channel,
-      |  input int unsigned hart_id_lo,
-      |  input int unsigned hart_id_hi,
-      |  input int unsigned rob_id,
-      |  input int unsigned vbank_id,
-      |  input int unsigned pbank_id,
-      |  input int unsigned group_id,
-      |  input int unsigned addr,
-      |  input int unsigned write_mask,
-      |  input int unsigned data_lo_lo,
-      |  input int unsigned data_lo_hi,
-      |  input int unsigned data_hi_lo,
-      |  input int unsigned data_hi_hi
-      |);
-      |
       |module MTraceDPI(
       |  input clock,
       |  input reset,
@@ -62,53 +44,70 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [63:0] data_hi,
       |  input enable
       |);
-      |  reg [7:0]  is_write_reg;
-      |  reg [7:0]  is_shared_reg;
-      |  reg [31:0] channel_reg;
-      |  reg [63:0] hart_id_reg;
-      |  reg [31:0] rob_id_reg;
-      |  reg [31:0] vbank_id_reg;
-      |  reg [31:0] pbank_id_reg;
-      |  reg [31:0] group_id_reg;
-      |  reg [31:0] addr_reg;
-      |  reg [31:0] write_mask_reg;
-      |  reg [63:0] data_lo_reg;
-      |  reg [63:0] data_hi_reg;
-      |  reg        valid_reg;
-      |
-      |  always @(posedge clock) begin
-      |    if (reset) begin
-      |      valid_reg <= 1'b0;
-      |    end else begin
-      |      if (valid_reg) begin
-      |        dpi_mtrace(is_write_reg, is_shared_reg, channel_reg, hart_id_reg[31:0], hart_id_reg[63:32], rob_id_reg, vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
-      |      end
-      |
-      |      valid_reg <= enable;
-      |      if (enable) begin
-      |        is_write_reg  <= is_write;
-      |        is_shared_reg <= is_shared;
-      |        channel_reg   <= channel;
-      |        hart_id_reg   <= hart_id;
-      |        rob_id_reg    <= rob_id;
-      |        vbank_id_reg  <= vbank_id;
-      |        pbank_id_reg  <= pbank_id;
-      |        group_id_reg  <= group_id;
-      |        addr_reg      <= addr;
-      |        write_mask_reg <= write_mask;
-      |        data_lo_reg   <= data_lo;
-      |        data_hi_reg   <= data_hi;
-      |      end
-      |    end
-      |  end
-      |endmodule
+      |""".stripMargin + DpiGuard.wrap("""
+                                         |  import "DPI-C" context function void dpi_mtrace(
+                                         |    input int unsigned is_write,
+                                         |    input int unsigned is_shared,
+                                         |    input int unsigned channel,
+                                         |    input int unsigned hart_id_lo,
+                                         |    input int unsigned hart_id_hi,
+                                         |    input int unsigned rob_id,
+                                         |    input int unsigned vbank_id,
+                                         |    input int unsigned pbank_id,
+                                         |    input int unsigned group_id,
+                                         |    input int unsigned addr,
+                                         |    input int unsigned write_mask,
+                                         |    input int unsigned data_lo_lo,
+                                         |    input int unsigned data_lo_hi,
+                                         |    input int unsigned data_hi_lo,
+                                         |    input int unsigned data_hi_hi
+                                         |  );
+                                         |  reg [7:0]  is_write_reg;
+                                         |  reg [7:0]  is_shared_reg;
+                                         |  reg [31:0] channel_reg;
+                                         |  reg [63:0] hart_id_reg;
+                                         |  reg [31:0] rob_id_reg;
+                                         |  reg [31:0] vbank_id_reg;
+                                         |  reg [31:0] pbank_id_reg;
+                                         |  reg [31:0] group_id_reg;
+                                         |  reg [31:0] addr_reg;
+                                         |  reg [31:0] write_mask_reg;
+                                         |  reg [63:0] data_lo_reg;
+                                         |  reg [63:0] data_hi_reg;
+                                         |  reg        valid_reg;
+                                         |
+                                         |  always @(posedge clock) begin
+                                         |    if (reset) begin
+                                         |      valid_reg <= 1'b0;
+                                         |    end else begin
+                                         |      if (valid_reg) begin
+                                         |        dpi_mtrace(is_write_reg, is_shared_reg, channel_reg, hart_id_reg[31:0], hart_id_reg[63:32], rob_id_reg, vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
+                                         |      end
+                                         |
+                                         |      valid_reg <= enable;
+                                         |      if (enable) begin
+                                         |        is_write_reg  <= is_write;
+                                         |        is_shared_reg <= is_shared;
+                                         |        channel_reg   <= channel;
+                                         |        hart_id_reg   <= hart_id;
+                                         |        rob_id_reg    <= rob_id;
+                                         |        vbank_id_reg  <= vbank_id;
+                                         |        pbank_id_reg  <= pbank_id;
+                                         |        group_id_reg  <= group_id;
+                                         |        addr_reg      <= addr;
+                                         |        write_mask_reg <= write_mask;
+                                         |        data_lo_reg   <= data_lo;
+                                         |        data_hi_reg   <= data_hi;
+                                         |      end
+                                         |    end
+                                         |  end
+                                         |""".stripMargin) +
+      """
+        |endmodule
     """.stripMargin
   )
 }
 
-// Write generation is observed before the request reaches the SPM backend.
-// Together with MTraceDPI arrival events this supplies the two counters used
-// by DiffTest-N's Bank-Stable Boundary.
 class MTraceIssueDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
@@ -125,15 +124,6 @@ class MTraceIssueDPI extends BlackBox with HasBlackBoxInline {
   setInline(
     "MTraceIssueDPI.v",
     """
-      |import "DPI-C" context function void dpi_mtrace_issue(
-      |  input int unsigned hart_id_lo,
-      |  input int unsigned hart_id_hi,
-      |  input int unsigned is_shared,
-      |  input int unsigned rob_id,
-      |  input int unsigned vbank_id,
-      |  input int unsigned group_id
-      |);
-      |
       |module MTraceIssueDPI(
       |  input clock,
       |  input reset,
@@ -144,31 +134,42 @@ class MTraceIssueDPI extends BlackBox with HasBlackBoxInline {
       |  input [31:0] group_id,
       |  input enable
       |);
-      |  reg [63:0] hart_id_reg;
-      |  reg [7:0] is_shared_reg;
-      |  reg [31:0] rob_id_reg;
-      |  reg [31:0] vbank_id_reg;
-      |  reg [31:0] group_id_reg;
-      |  reg valid_reg;
-      |
-      |  always @(posedge clock) begin
-      |    if (reset) begin
-      |      valid_reg <= 1'b0;
-      |    end else begin
-      |      if (valid_reg) begin
-      |        dpi_mtrace_issue(hart_id_reg[31:0], hart_id_reg[63:32], is_shared_reg, rob_id_reg, vbank_id_reg, group_id_reg);
-      |      end
-      |      valid_reg <= enable;
-      |      if (enable) begin
-      |        hart_id_reg  <= hart_id;
-      |        is_shared_reg <= is_shared;
-      |        rob_id_reg   <= rob_id;
-      |        vbank_id_reg <= vbank_id;
-      |        group_id_reg <= group_id;
-      |      end
-      |    end
-      |  end
-      |endmodule
+      |""".stripMargin + DpiGuard.wrap("""
+                                         |  import "DPI-C" context function void dpi_mtrace_issue(
+                                         |    input int unsigned hart_id_lo,
+                                         |    input int unsigned hart_id_hi,
+                                         |    input int unsigned is_shared,
+                                         |    input int unsigned rob_id,
+                                         |    input int unsigned vbank_id,
+                                         |    input int unsigned group_id
+                                         |  );
+                                         |  reg [63:0] hart_id_reg;
+                                         |  reg [7:0] is_shared_reg;
+                                         |  reg [31:0] rob_id_reg;
+                                         |  reg [31:0] vbank_id_reg;
+                                         |  reg [31:0] group_id_reg;
+                                         |  reg valid_reg;
+                                         |
+                                         |  always @(posedge clock) begin
+                                         |    if (reset) begin
+                                         |      valid_reg <= 1'b0;
+                                         |    end else begin
+                                         |      if (valid_reg) begin
+                                         |        dpi_mtrace_issue(hart_id_reg[31:0], hart_id_reg[63:32], is_shared_reg, rob_id_reg, vbank_id_reg, group_id_reg);
+                                         |      end
+                                         |      valid_reg <= enable;
+                                         |      if (enable) begin
+                                         |        hart_id_reg  <= hart_id;
+                                         |        is_shared_reg <= is_shared;
+                                         |        rob_id_reg   <= rob_id;
+                                         |        vbank_id_reg <= vbank_id;
+                                         |        group_id_reg <= group_id;
+                                         |      end
+                                         |    end
+                                         |  end
+                                         |""".stripMargin) +
+      """
+        |endmodule
     """.stripMargin
   )
 }
