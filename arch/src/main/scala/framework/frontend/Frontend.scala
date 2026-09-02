@@ -78,11 +78,11 @@ class Frontend(val b: GlobalConfig) extends Module {
   io.resp <> scheduler.io.scheduler_rocc_o.resp
 
   // io.busy = 1 means NPU will block CPU
-  // This is the only time when NPU will block CPU: RoB can't accept new 
-  // instructions (like meet fence, RoB full, barrier) 
+  // This is the only time when NPU will block CPU: RoB can't accept new
+  // instructions (like meet fence, RoB full, barrier)
   //
-  // Why we add boot.io.active here is because when boot is active, RoB is 
-  // typically full with mset instructions. This situation is not need to 
+  // Why we add boot.io.active here is because when boot is active, RoB is
+  // typically full with mset instructions. This situation is not need to
   // block CPU.
   io.busy    := !boot.io.active && scheduler.io.scheduler_rocc_o.busy
   io.retired := scheduler.io.retired
