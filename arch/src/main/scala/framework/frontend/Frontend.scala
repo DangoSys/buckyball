@@ -57,6 +57,7 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   gDecoder.io.id_i.valid    := Mux(boot.io.active, boot.io.cmd.valid, io.cmd.valid)
   gDecoder.io.id_i.bits.cmd := Mux(boot.io.active, boot.io.cmd.bits.cmd, io.cmd.bits.cmd)
+  // RoCC can't accept new instructions when boot is active
   io.cmd.ready              := !boot.io.active && gDecoder.io.id_i.ready
 
   scheduler.io.decode_cmd_i <> gDecoder.io.id_o
@@ -75,7 +76,15 @@ class Frontend(val b: GlobalConfig) extends Module {
   }
 
   io.resp <> scheduler.io.scheduler_rocc_o.resp
-  io.busy    := boot.io.active || scheduler.io.scheduler_rocc_o.busy
+
+  // io.busy = 1 means NPU will block CPU
+  // This is the only time when NPU will block CPU: RoB can't accept new 
+  // instructions (like meet fence, RoB full, barrier) 
+  //
+  // Why we add boot.io.active here is because when boot is active, RoB is 
+  // typically full with mset instructions. This situation is not need to 
+  // block CPU.
+  io.busy    := !boot.io.active && scheduler.io.scheduler_rocc_o.busy
   io.retired := scheduler.io.retired
 
   // Barrier passthrough
