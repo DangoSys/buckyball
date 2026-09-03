@@ -91,7 +91,6 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          source ~/.zshrc
           nix develop -c bbdev config --install
 
       - name: DC area

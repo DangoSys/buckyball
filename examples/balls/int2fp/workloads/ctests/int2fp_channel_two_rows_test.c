@@ -10,10 +10,9 @@ static int32_t input[32] __attribute__((aligned(64))) = {
     16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
 };
 static float output[32] __attribute__((aligned(64)));
-static const float da[4] __attribute__((aligned(64))) = {0.5f};
-static const float dw[16] __attribute__((aligned(64))) = {
-    0.25f,  0.5f,  0.75f,  1.0f, 1.25f, 1.5f, 1.75f, 2.0f,
-    0.125f, 0.25f, 0.375f, 0.5f, 2.25f, 2.5f, 2.75f, 3.0f,
+static const float scale[16] __attribute__((aligned(64))) = {
+    0.125f,  0.25f,  0.375f,  0.5f,  0.625f, 0.75f, 0.875f, 1.0f,
+    0.0625f, 0.125f, 0.1875f, 0.25f, 1.125f, 1.25f, 1.375f, 1.5f,
 };
 static const float expected[32] = {
     1, 2, 3, 4, 5,  6,  7,  8,  0.5f, 1, 1.5f, 2, 9,  10, 11, 12,
@@ -24,12 +23,11 @@ int main(void) {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  bb_mvin_mmio((uintptr_t)da, 0, 1, 4);
-  bb_mvin_mmio((uintptr_t)dw, 16, 4, 16);
-  bb_mem_alloc(0, 4, 1);
+  bb_mem_alloc(0, 8, 1);
   bb_mem_alloc(1, 4, 1);
-  bb_mem_alloc(2, 4, 1);
-  bb_mvin((uintptr_t)input, 0, 4, 1);
+  bb_mem_alloc(2, 8, 1);
+  bb_mvin((uintptr_t)input, 0, 8, 1);
+  bb_mvin((uintptr_t)scale, 1, 4, 1);
   bb_int32_to_fp32(0, 1, 2, 8, 0);
   bb_mvout((uintptr_t)output, 2, 8, 1);
   bb_fence();

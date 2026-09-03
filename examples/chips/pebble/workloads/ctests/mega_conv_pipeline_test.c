@@ -22,7 +22,7 @@ int main(void) {
     bias[row] = row - 8;
     scale[row] = 1.0f;
     for (int col = 0; col < 16; ++col)
-      weight[row * 16 + col] = row < 9 ? 1 : 0;
+      weight[row * 16 + col] = col < 9 ? 1 : 0;
   }
 
   for (int bank = 0; bank < 7; ++bank)
