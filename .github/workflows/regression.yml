@@ -100,6 +100,7 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
+          source ~/.zshrc
           # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
           nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
 
@@ -110,6 +111,7 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
+          source ~/.zshrc
           nix develop -c bbdev dc --power '--chip ${{ matrix.chip }}'
 
       - name: Exit repo lock
