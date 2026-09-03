@@ -1,6 +1,6 @@
 [mcp_servers.buckyball-dev]
 command = "bash"
-args = ["scripts/claude/run_mcp_server.sh"]
+args = [ "scripts/claude/run_mcp_server.sh" ]
 
 [mcp_servers.waveform-mcp]
 command = "thirdparty/waveform-mcp/target/release/waveform-mcp"

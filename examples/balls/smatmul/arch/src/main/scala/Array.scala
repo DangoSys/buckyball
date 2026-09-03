@@ -20,22 +20,29 @@ class Array extends Module {
   val running = RegInit(false.B)
   val cycle   = RegInit(0.U(6.W))
   val pe      = Seq.tabulate(tile, tile)((_, _) => Instantiate(new PE))
+  val aShift  = Reg(Vec(tile, UInt(128.W)))
+  val lastCyc = 46.U
 
   when(io.start) {
     assert(!running, "Array: start while array is running")
     running := true.B
     cycle   := 0.U
+    aShift  := io.aRows
   }.elsewhen(running) {
-    when(cycle === 45.U) {
+    when(cycle === lastCyc) {
       running := false.B
     }.otherwise {
       cycle := cycle + 1.U
     }
+    for (row <- 0 until tile) {
+      when(cycle >= row.U && cycle < (row + tile).U) {
+        aShift(row) := aShift(row) >> 8
+      }
+    }
   }
 
   for (row <- 0 until tile) {
-    val aCycle = cycle - row.U
-    val aWord  = (io.aRows(row) >> (aCycle << 3))(7, 0).asSInt
+    val aWord  = aShift(row)(7, 0).asSInt
     val aValid = running && cycle >= row.U && cycle < (row + tile).U
 
     for (column <- 0 until tile) {
@@ -50,7 +57,7 @@ class Array extends Module {
 
       val bCycle = cycle - column.U
       val bRow   = bCycle(3, 0)
-      val bWord  = (io.bRows(bRow)(8 * column + 7, 8 * column)).asSInt
+      val bWord  = io.bRows(bRow)(8 * column + 7, 8 * column).asSInt
       val bValid = running && cycle >= column.U && cycle < (column + tile).U
       if (row == 0) {
         pe(row)(column).io.bIn      := bWord
@@ -65,5 +72,5 @@ class Array extends Module {
   for (row <- 0 until tile) {
     io.result(row) := Cat((0 until tile).reverse.map(column => pe(row)(column).io.sum.asUInt))
   }
-  io.done := running && cycle === 45.U
+  io.done := running && cycle === lastCyc
 }

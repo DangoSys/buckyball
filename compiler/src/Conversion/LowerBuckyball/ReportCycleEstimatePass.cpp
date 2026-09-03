@@ -9,6 +9,7 @@
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -26,7 +27,6 @@ using namespace ::buddy::buckyball;
 namespace {
 constexpr int64_t kTile = 16;
 constexpr int64_t kBankWidthBits = 128;
-constexpr int64_t kBankDepth = 1024;
 
 static std::optional<int64_t> getConstI64(Value v) {
   if (auto c = v.getDefiningOp<arith::ConstantOp>())
@@ -39,10 +39,8 @@ static std::optional<int64_t> getConstI64(Value v) {
 enum Unit {
   U_NONE,
   U_SMATMUL,
-  U_MATADD,
-  U_FP2INT,
-  U_INT2FP,
-  U_RELU,
+  U_IM2COL,
+  U_QUANT,
   U_TRANS,
   U_MVIN,
   U_MVOUT,
@@ -63,6 +61,12 @@ public:
 
   void runOnOperation() override {
     func::FuncOp func = getOperation();
+    const int64_t bankDepth = buckyball_target::getBuckyballTarget().bankDepth;
+    if (bankDepth <= 0) {
+      func.emitError("cycle estimation requires target bankDepth > 0");
+      signalPassFailure();
+      return;
+    }
     DenseMap<int64_t, int64_t> bankBusy;
     DenseMap<int, int64_t> unitBusy;
     int64_t total = 0, totalStall = 0, fenceStall = 0, idx = 0;
@@ -163,63 +167,56 @@ public:
             rd.push_back(*a);
           if (b)
             rd.push_back(*b);
-          if (c)
+          if (c && o.getLast())
             wr.push_back(*c);
-          emit(o.getWs() ? "smatmul_ws" : "smatmul_os",
-               r * col * k / kTile + r * col / 2, rd, wr, U_SMATMUL, false);
+          emit("smatmul_os", r * col * k / kTile + r * col / 2, rd, wr,
+               U_SMATMUL, false);
           continue;
         }
-        if (auto o = dyn_cast<MatAddOp>(op)) {
-          auto a = getConstI64(o.getABankId()), b = getConstI64(o.getBBankId()),
-               c = getConstI64(o.getCBankId()), it = getConstI64(o.getIter());
-          SmallVector<int64_t> rd, wr;
-          if (a)
-            rd.push_back(*a);
-          if (b)
-            rd.push_back(*b);
-          if (c)
-            wr.push_back(*c);
-          emit("matadd", it ? *it * 4 : 0, rd, wr, U_MATADD, false);
+        if (auto o = dyn_cast<SMatMulBiasOp>(op)) {
+          auto bias = getConstI64(o.getBiasBankId());
+          emit("smatmul_bias", 4,
+               bias ? SmallVector<int64_t>{*bias} : SmallVector<int64_t>{}, {},
+               U_SMATMUL, false);
           continue;
         }
-        if (auto o = dyn_cast<Fp2IntOp>(op)) {
+        if (auto o = dyn_cast<Im2colOp>(op)) {
+          auto in = getConstI64(o.getInputBankId()),
+               out = getConstI64(o.getOutputBankId()),
+               ksize = getConstI64(o.getKsize());
+          int64_t count = o.getWindowCount();
+          int64_t lat = ksize && count > 0
+                            ? std::max(count * *ksize * *ksize, int64_t(16))
+                            : 0;
+          emit("im2col", lat,
+               in ? SmallVector<int64_t>{*in} : SmallVector<int64_t>{},
+               out ? SmallVector<int64_t>{*out} : SmallVector<int64_t>{},
+               U_IM2COL, false);
+          continue;
+        }
+        if (auto o = dyn_cast<QuantF32ToI8Op>(op)) {
           auto in = getConstI64(o.getInputBankId()),
                out = getConstI64(o.getOutputBankId()),
                it = getConstI64(o.getIter());
-          emit("fp2int", it ? std::max(*it, int64_t(1)) : 0,
+          emit("quant_f32_to_i8", it ? std::max(*it, int64_t(1)) : 0,
                in ? SmallVector<int64_t>{*in} : SmallVector<int64_t>{},
                out ? SmallVector<int64_t>{*out} : SmallVector<int64_t>{},
-               U_FP2INT, false);
+               U_QUANT, false);
           continue;
         }
-        if (auto o = dyn_cast<Int2FpTensorOp>(op)) {
+        if (auto o = dyn_cast<QuantI32ToI8Op>(op)) {
           auto in = getConstI64(o.getInputBankId()),
+               scale = getConstI64(o.getScaleBankId()),
                out = getConstI64(o.getOutputBankId()),
                it = getConstI64(o.getIter());
-          emit("int2fp", it ? std::max(*it, int64_t(1)) : 0,
-               in ? SmallVector<int64_t>{*in} : SmallVector<int64_t>{},
+          SmallVector<int64_t> rd;
+          if (in)
+            rd.push_back(*in);
+          if (scale)
+            rd.push_back(*scale);
+          emit("quant_i32_to_i8", it ? std::max(*it, int64_t(1)) + 4 : 0, rd,
                out ? SmallVector<int64_t>{*out} : SmallVector<int64_t>{},
-               U_INT2FP, false);
-          continue;
-        }
-        if (auto o = dyn_cast<Int2FpChannelOp>(op)) {
-          auto in = getConstI64(o.getInputBankId()),
-               out = getConstI64(o.getOutputBankId()),
-               it = getConstI64(o.getIter());
-          emit("int2fp_ch", it ? std::max(*it, int64_t(1)) : 0,
-               in ? SmallVector<int64_t>{*in} : SmallVector<int64_t>{},
-               out ? SmallVector<int64_t>{*out} : SmallVector<int64_t>{},
-               U_INT2FP, false);
-          continue;
-        }
-        if (auto o = dyn_cast<ReluOp>(op)) {
-          auto b = getConstI64(o.getBankId()), it = getConstI64(o.getIter()),
-               st = getConstI64(o.getStride());
-          int64_t lat = (it && st && *st > 0) ? kBankDepth / *st * *it * 4 : 0;
-          emit("relu", lat,
-               b ? SmallVector<int64_t>{*b} : SmallVector<int64_t>{},
-               b ? SmallVector<int64_t>{*b} : SmallVector<int64_t>{}, U_RELU,
-               false);
+               U_QUANT, false);
           continue;
         }
         if (auto o = dyn_cast<TransposeOp>(op)) {
@@ -264,9 +261,8 @@ public:
                    << byCount[kv.first] << " ops)\n";
 
     // Per-unit stall breakdown
-    static const char *uNames[] = {"none",   "smatmul", "matadd",    "fp2int",
-                                   "int2fp", "relu",    "transpose", "mvin",
-                                   "mvout",  "fence"};
+    static const char *uNames[] = {"none",      "smatmul", "im2col", "quant",
+                                   "transpose", "mvin",    "mvout",  "fence"};
     llvm::errs() << "  --- per-unit (blocked = unit free but bank busy) ---\n";
     for (int u = U_SMATMUL; u <= U_MVOUT; ++u) {
       if (unitOps.count(u) && unitOps[u] > 0)

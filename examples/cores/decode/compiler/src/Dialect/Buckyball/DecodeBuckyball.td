@@ -18,7 +18,7 @@
 #define DECODE_BUCKYBALL_OPS
 
 include "Buckyball.td"
-include "Fp2IntBall.td"
+include "ToInt8Ball.td"
 include "Int2FpBall.td"
 include "TransposeBall.td"
 include "VecBall.td"

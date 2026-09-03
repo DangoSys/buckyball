@@ -129,6 +129,148 @@ def BankMvoutOp : Buckyball_Op<"bank_mvout"> {
 }
 
 //===----------------------------------------------------------------------===//
+// Mega kernel operations
+//===----------------------------------------------------------------------===//
+
+def QuantizeTensorF32ToI8Op : Buckyball_Op<"quantize_tensor_f32_to_i8"> {
+  let summary = "Quantize one FP32 model input tensor to INT8";
+  let arguments = (ins MemRefRankOf<[F32], [2, 4]>:$input,
+                       MemRefRankOf<[I8], [2, 4]>:$output,
+                       F32Attr:$scale,
+                       BoolAttr:$nchwToNhwc);
+  let assemblyFormat = [{$input $output attr-dict `:` type($input) type($output)}];
+}
+
+def MegaYieldOp : Buckyball_Op<"mega_yield", [Terminator]> {
+  let summary = "Terminate a Buckyball MegaKernel region";
+  let assemblyFormat = "attr-dict";
+}
+
+def MegaKernelOp : Buckyball_Op<"mega_kernel", [
+    SingleBlockImplicitTerminator<"MegaYieldOp">]> {
+  let summary = "One cross-layer resident quantized kernel";
+  let arguments = (ins AnyMemRef:$input,
+                       AnyMemRef:$output);
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{$input $output attr-dict `:`
+    type($input) type($output) $body}];
+}
+
+def MegaMatmulOp : Buckyball_Op<"mega_matmul"> {
+  let summary = "Quantized MatMul stage inside a MegaKernel";
+  let description = [{
+    One INT8 MatMul stage. Bias is already converted offline to INT32. A
+    non-final result is requantized to INT8 and stays inside the MegaKernel.
+  }];
+  let arguments = (ins MemRefRankOf<[I8], [2]>:$input,
+                       MemRefRankOf<[I8], [2]>:$weight,
+                       MemRefRankOf<[I32], [1]>:$bias,
+                       MemRefRankOf<[F32], [1]>:$scale,
+                       MemRefRankOf<[I8], [1]>:$lut,
+                       MemRefRankOf<[I8, F32], [2]>:$output,
+                       I64Attr:$activation);
+  let assemblyFormat = [{$input $weight $bias $scale $lut $output attr-dict `:`
+    type($input) type($weight) type($bias) type($scale) type($lut) type($output)}];
+}
+
+def MegaConv2dOp : Buckyball_Op<"mega_conv2d"> {
+  let summary = "Quantized convolution stage inside a MegaKernel";
+  let description = [{
+    One resident NHWC INT8 convolution stage. Bias is already converted
+    offline to INT32. A non-final result is requantized to INT8 and stays
+    inside the MegaKernel.
+  }];
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$weight,
+                       MemRefRankOf<[I32], [1]>:$bias,
+                       MemRefRankOf<[F32], [1]>:$scale,
+                       MemRefRankOf<[I8], [1]>:$lut,
+                       MemRefRankOf<[I8, F32], [4]>:$output,
+                       I64Attr:$stride,
+                       I64Attr:$padLow,
+                       I64Attr:$padHigh,
+                       I64Attr:$activation);
+  let assemblyFormat = [{$input $weight $bias $scale $lut $output attr-dict `:`
+    type($input) type($weight) type($bias) type($scale) type($lut) type($output)}];
+}
+
+def MegaConv2dDepthwiseOp : Buckyball_Op<"mega_conv2d_depthwise"> {
+  let summary = "Quantized depthwise stage inside a MegaKernel";
+  let description = [{
+    One complete resident NHWC INT8 depthwise convolution layer with channel
+    multiplier one. Bias is converted offline to INT32 and output is
+    requantized to INT8 before leaving the mega kernel.
+  }];
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$weight,
+                       MemRefRankOf<[I32], [1]>:$bias,
+                       MemRefRankOf<[F32], [1]>:$scale,
+                       MemRefRankOf<[I8], [1]>:$lut,
+                       MemRefRankOf<[I8, F32], [4]>:$output,
+                       I64Attr:$stride,
+                       I64Attr:$padLow,
+                       I64Attr:$padHigh,
+                       I64Attr:$activation);
+  let assemblyFormat = [{$input $weight $bias $scale $lut $output attr-dict `:`
+    type($input) type($weight) type($bias) type($scale) type($lut) type($output)}];
+}
+
+def MegaMaxPool2dOp : Buckyball_Op<"mega_max_pool2d"> {
+  let summary = "INT8 MaxPool2D stage inside a MegaKernel";
+  let description = [{
+    Max pooling preserves the INT8 quantization scale. An intermediate output
+    is NHWC; a final output is NCHW so a following reshape preserves PyTorch
+    flatten order without a transpose operation.
+  }];
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       I64Attr:$kernel,
+                       I64Attr:$stride,
+                       I64Attr:$padding,
+                       BoolAttr:$finalOutput);
+  let assemblyFormat = [{$input $output attr-dict `:`
+    type($input) type($output)}];
+}
+
+def MegaGlobalAvgPoolOp : Buckyball_Op<"mega_global_avg_pool"> {
+  let summary = "Global-average an INT8 NHWC tensor inside a MegaKernel";
+  let description = [{
+    This is the explicit X-memory boundary used by an SE branch. The result is
+    requantized to INT8 before the following pointwise stage.
+  }];
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       F32Attr:$inputScale,
+                       F32Attr:$outputScale);
+  let assemblyFormat = [{$input $output attr-dict `:`
+    type($input) type($output)}];
+}
+
+def MegaInt8MulOp : Buckyball_Op<"mega_int8_mul"> {
+  let summary = "Scaled INT8 broadcast multiply inside a MegaKernel";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$lhs,
+                       MemRefRankOf<[I8], [4]>:$rhs,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       F32Attr:$lhsScale,
+                       F32Attr:$rhsScale,
+                       F32Attr:$outputScale);
+  let assemblyFormat = [{$lhs $rhs $output attr-dict `:`
+    type($lhs) type($rhs) type($output)}];
+}
+
+def MegaInt8AddOp : Buckyball_Op<"mega_int8_add"> {
+  let summary = "Scaled INT8 residual add inside a MegaKernel";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$lhs,
+                       MemRefRankOf<[I8], [4]>:$rhs,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       F32Attr:$lhsScale,
+                       F32Attr:$rhsScale,
+                       F32Attr:$outputScale);
+  let assemblyFormat = [{$lhs $rhs $output attr-dict `:`
+    type($lhs) type($rhs) type($output)}];
+}
+
+//===----------------------------------------------------------------------===//
 // LLVM intrinsic operations
 //===----------------------------------------------------------------------===//
 

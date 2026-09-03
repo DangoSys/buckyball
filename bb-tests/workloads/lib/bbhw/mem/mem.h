@@ -1,7 +1,7 @@
 #ifndef _MEM_H_
 #define _MEM_H_
 
-#include "params.h"
+#include <params.h>
 
 #include <stddef.h>
 #include <stdint.h>

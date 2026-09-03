@@ -103,7 +103,7 @@ static inline void matrix_hw(const elem_t *a, const elem_t *b, result_t *c,
   bb_mem_alloc(c_bank, 1, 2);
   bb_mvin((uintptr_t)a, a_bank, matrix_a_lines(rows, k), 1);
   bb_mvin((uintptr_t)b, b_bank, k, 1);
-  bb_smatmul_os(a_bank, b_bank, c_bank, rows, MATRIX_TILE, k);
+  bb_smatmul_os(a_bank, b_bank, c_bank, rows, MATRIX_TILE, k, 1, 1);
   bb_mvout((uintptr_t)c, c_bank, 2 * rows, 1);
   bb_fence();
   bb_mem_release(a_bank);

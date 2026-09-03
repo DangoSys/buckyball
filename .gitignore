@@ -56,3 +56,10 @@ ucli.key
 /MODULE.bazel.lock
 nohup.out
 alib-52/
+lc_output.txt
+
+.cursor/
+.claude/
+.codex/
+
+skills-lock.json

@@ -11,6 +11,14 @@
       "type": "stdio",
       "command": "./thirdparty/waveform-mcp/target/release/waveform-mcp",
       "args": []
+    },
+    "bbdev": {
+      "command": "./scripts/claude/run_mcp_server.sh",
+      "args": []
+    },
+    "waveform": {
+      "command": "./thirdparty/waveform-mcp/target/release/waveform-mcp",
+      "args": []
     }
   }
 }

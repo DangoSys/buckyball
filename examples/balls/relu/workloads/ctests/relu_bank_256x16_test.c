@@ -4,9 +4,14 @@
 #include <isa/relu.h>
 #include <stdio.h>
 
-#define ROWS 256
+#define I32_LANES (BANK_WIDTH / 32)
 #define COLUMNS 16
-#define ITER 1024
+#define ROWS (BANK_LINES * I32_LANES / COLUMNS)
+#define ITER BANK_LINES
+_Static_assert(BANK_WIDTH % 32 == 0, "relu bank pack needs i32 lanes");
+_Static_assert(COLUMNS % I32_LANES == 0, "relu bank pack needs even columns");
+_Static_assert(ROWS *(COLUMNS / I32_LANES) == BANK_LINES,
+               "relu bank test must fill one bank");
 
 static result_t input[ROWS * COLUMNS] __attribute__((aligned(64)));
 static result_t packed_input[ROWS * COLUMNS] __attribute__((aligned(64)));
@@ -16,16 +21,18 @@ static result_t output[ROWS * COLUMNS] __attribute__((aligned(64)));
 static void pack(const result_t *source, result_t *destination) {
   for (int row = 0; row < ROWS; ++row)
     for (int column = 0; column < COLUMNS; ++column) {
-      int line = row * 4 + column / 4;
-      destination[line * 4 + column % 4] = source[row * COLUMNS + column];
+      int line = row * (COLUMNS / I32_LANES) + column / I32_LANES;
+      destination[line * I32_LANES + column % I32_LANES] =
+          source[row * COLUMNS + column];
     }
 }
 
 static void unpack(const result_t *source, result_t *destination) {
   for (int row = 0; row < ROWS; ++row)
     for (int column = 0; column < COLUMNS; ++column) {
-      int line = row * 4 + column / 4;
-      destination[row * COLUMNS + column] = source[line * 4 + column % 4];
+      int line = row * (COLUMNS / I32_LANES) + column / I32_LANES;
+      destination[row * COLUMNS + column] =
+          source[line * I32_LANES + column % I32_LANES];
     }
 }
 

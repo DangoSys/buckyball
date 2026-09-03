@@ -4,124 +4,59 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
+import examples.balls.common.Fp32Mul
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
-import framework.balldomain.blink.mmio.MmioRead
+import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
 
-/** INT32 accumulator dequantization: FP32 = INT32 * Da * Dw. */
 @instantiable
 class Int2Fp(val b: GlobalConfig) extends Module {
-  val bankWidth    = b.memDomain.bankWidth
-  require(bankWidth == 128, s"Int2FpBall requires bankWidth = 128, got $bankWidth")
-  val elemsPerWord = bankWidth / 32
 
-  val ballMapping = b.ballDomain.ballIdMappings
+  private val mapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "Int2FpBall")
     .getOrElse(throw new IllegalArgumentException("Int2FpBall not found in config"))
 
-  val inBW       = ballMapping.inBW
-  val outBW      = ballMapping.outBW
-  val mmioReadBW = ballMapping.mmioReadBW
-  require(inBW >= 1 && outBW >= 1, "Int2Fp requires bank read/write lines")
-  require(mmioReadBW == 4, "Int2Fp requires four MMIO byte read lines")
-
-  val tensorFunct = b.ballDomain.ballISA
-    .find(_.mnemonic == "INT2FP_TENSOR")
+  private val funct = b.ballDomain.ballISA
+    .find(_.mnemonic == "INT32_TO_FP32")
     .map(_.funct7)
-    .getOrElse(throw new IllegalArgumentException("INT2FP_TENSOR not found in ballISA"))
+    .getOrElse(throw new IllegalArgumentException("INT32_TO_FP32 not found in ballISA"))
 
-  val channelFunct = b.ballDomain.ballISA
-    .find(_.mnemonic == "INT2FP_CHANNEL")
-    .map(_.funct7)
-    .getOrElse(throw new IllegalArgumentException("INT2FP_CHANNEL not found in ballISA"))
+  require(b.memDomain.bankWidth == 128, "Int2FpBall requires 128-bit bank rows")
+  require(mapping.inBW == 2, "Int2FpBall requires inBW=2")
+  require(mapping.outBW == 1, "Int2FpBall requires outBW=1")
+  require((funct >> 4) == 4, "INT32_TO_FP32 must encode two reads and one write")
 
-  @public
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp   = Decoupled(new BallRsComplete(b))
-    val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
-    val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
-    val mmioRead  = Vec(mmioReadBW, Flipped(new MmioRead(b)))
+    val bankRead  = Vec(mapping.inBW, Flipped(new BankRead(b)))
+    val bankWrite = Vec(mapping.outBW, Flipped(new BankWrite(b)))
     val status    = new BallStatus
   })
 
-  val idle :: sActReq :: sActResp :: sTensorReq :: sTensorResp :: sReadReq :: sReadResp :: sChannelReq :: sChannelResp :: sWriteReq :: sWriteResp :: complete :: Nil =
-    Enum(12)
-  val state                                                                                                                                                          = RegInit(idle)
+  private val idle :: readReq :: readResp :: convert :: multiply :: writeReq :: writeResp :: complete :: Nil =
+    Enum(8)
+  private val state                                                                                          = RegInit(idle)
 
-  val robIdReg      = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  val isSubReg      = RegInit(false.B)
-  val subRobIdReg   = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val rbankReg      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wbankReg      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val iterReg       = RegInit(0.U(b.frontend.iter_len.W))
-  val actAddrReg    = RegInit(0.U(log2Ceil(b.memDomain.mmioTotalBytes).W))
-  val weightAddrReg = RegInit(0.U(log2Ceil(b.memDomain.mmioTotalBytes).W))
-  val perChannelReg = RegInit(false.B)
-  val daReg         = RegInit(0.U(32.W))
-  val tensorDwReg   = RegInit(0.U(32.W))
-  val rowReg        = RegInit(0.U(b.frontend.iter_len.W))
-  val groupReg      = RegInit(0.U(2.W))
-  val lastGroupReg  = RegInit(0.U(2.W))
-  val laneReg       = RegInit(0.U(2.W))
-  val srcWordReg    = RegInit(0.U(bankWidth.W))
-  val writeWordReg  = RegInit(0.U(bankWidth.W))
+  private val robIdReg    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val isSubReg    = RegInit(false.B)
+  private val subRobIdReg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  private val inputBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val scaleBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val outputBank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val iterReg     = RegInit(0.U(b.frontend.iter_len.W))
+  private val rowReg      = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  private val reluReg     = RegInit(false.B)
+  private val inputData   = Reg(UInt(128.W))
+  private val scaleData   = Reg(UInt(128.W))
+  private val fpInputs    = Reg(Vec(4, UInt(32.W)))
+  private val fpOutputs   = Reg(Vec(4, UInt(32.W)))
+  private val mulStarted  = RegInit(false.B)
+  private val mulDone     = RegInit(VecInit(Seq.fill(4)(false.B)))
+  private val writeData   = Reg(UInt(128.W))
+  private val multipliers = Seq.fill(4)(Module(new Fp32Mul))
 
-  for (i <- 0 until inBW) {
-    io.bankRead(i).rob_id           := robIdReg
-    io.bankRead(i).ball_id          := 0.U
-    io.bankRead(i).bank_id          := rbankReg
-    io.bankRead(i).group_id         := groupReg
-    io.bankRead(i).io.req.valid     := false.B
-    io.bankRead(i).io.req.bits.addr := 0.U
-    io.bankRead(i).io.resp.ready    := false.B
-  }
-  for (i <- 0 until outBW) {
-    io.bankWrite(i).rob_id           := robIdReg
-    io.bankWrite(i).ball_id          := 0.U
-    io.bankWrite(i).bank_id          := wbankReg
-    io.bankWrite(i).group_id         := groupReg
-    io.bankWrite(i).io.req.valid     := false.B
-    io.bankWrite(i).io.req.bits.addr := 0.U
-    io.bankWrite(i).io.req.bits.data := 0.U
-    io.bankWrite(i).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(false.B))
-    io.bankWrite(i).io.resp.ready    := false.B
-  }
-  for (i <- 0 until mmioReadBW) {
-    io.mmioRead(i).rob_id        := robIdReg
-    io.mmioRead(i).ball_id       := 0.U
-    io.mmioRead(i).req.valid     := false.B
-    io.mmioRead(i).req.bits.addr := 0.U
-    io.mmioRead(i).resp.ready    := false.B
-  }
-
-  io.cmdReq.ready            := state === idle
-  io.cmdResp.valid           := state === complete
-  io.cmdResp.bits.rob_id     := robIdReg
-  io.cmdResp.bits.is_sub     := isSubReg
-  io.cmdResp.bits.sub_rob_id := subRobIdReg
-
-  def fp32Multiply(a: UInt, bv: UInt): UInt = {
-    val aSign   = a(31); val bSign                   = bv(31)
-    val aExp    = a(30, 23); val bExp                = bv(30, 23)
-    val aMant   = Cat(1.U(1.W), a(22, 0)); val bMant = Cat(1.U(1.W), bv(22, 0))
-    val prod    = (aMant * bMant)(47, 0)
-    val sig     = Wire(UInt(24.W)); val guard        = Wire(Bool()); val round = Wire(Bool()); val sticky = Wire(Bool());
-    val norm    = Wire(UInt(2.W))
-    when(prod(47)) { sig := prod(47, 24); guard := prod(23); round := prod(22); sticky := prod(21, 0).orR; norm := 1.U }
-      .otherwise { sig := prod(46, 23); guard := prod(22); round := prod(21); sticky := prod(20, 0).orR; norm := 0.U }
-    val rounded = sig +& (guard && (round || sticky || sig(0))).asUInt
-    val exp     = aExp +& bExp +& norm +& rounded(24) - 127.U
-    val result  = Wire(UInt(32.W))
-    when((aExp === 0.U && a(22, 0) === 0.U) || (bExp === 0.U && bv(22, 0) === 0.U))(result := 0.U)
-      .elsewhen(exp(9))(result := 0.U)
-      .elsewhen(exp(8))(result := Cat(aSign ^ bSign, 255.U(8.W), 0.U(23.W)))
-      .otherwise(result := Cat(aSign ^ bSign, exp(7, 0), Mux(rounded(24), rounded(23, 1), rounded(22, 0))))
-    result
-  }
-
-  def int32ToFp32(value: UInt): UInt = {
+  private def int32ToFp32(value: UInt): UInt = {
     val sign        = value(31)
     val abs         = Mux(sign, (~value).asUInt + 1.U, value)
     val zero        = abs === 0.U
@@ -138,137 +73,133 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     Mux(zero, 0.U, Cat(sign, exponent, Mux(carry, 0.U(23.W), significand)))
   }
 
-  def scaleResponse: UInt = Cat(io.mmioRead.reverse.map(_.resp.bits.data))
-  def isFinitePositiveScale(bits: UInt): Bool =
-    !bits(31) && bits(30, 23) =/= 255.U && bits(30, 0) =/= 0.U
-  def allMmioReqFire:  Bool = io.mmioRead.map(_.req.fire).reduceLeft((x: Bool, y: Bool) => x && y)
-  def allMmioRespFire: Bool = io.mmioRead.map(_.resp.fire).reduceLeft((x: Bool, y: Bool) => x && y)
+  private def positiveFinite(value: UInt): Bool =
+    !value(31) && value(30, 23) =/= 255.U && value(30, 0) =/= 0.U
 
-  def driveScaleReq(addr: UInt): Unit = for (i <- 0 until mmioReadBW) {
-    io.mmioRead(i).req.valid     := true.B
-    io.mmioRead(i).req.bits.addr := addr + i.U
+  for (i <- 0 until mapping.inBW) {
+    io.bankRead(i).rob_id           := robIdReg
+    io.bankRead(i).ball_id          := 0.U
+    io.bankRead(i).bank_id          := Mux(i.U === 0.U, inputBank, scaleBank)
+    io.bankRead(i).group_id         := 0.U
+    io.bankRead(i).io.req.valid     := false.B
+    io.bankRead(i).io.req.bits.addr := Mux(i.U === 0.U, rowReg, rowReg(1, 0))
+    io.bankRead(i).io.resp.ready    := false.B
+  }
+  io.bankWrite(0).rob_id := robIdReg
+  io.bankWrite(0).ball_id          := 0.U
+  io.bankWrite(0).bank_id          := outputBank
+  io.bankWrite(0).group_id         := 0.U
+  io.bankWrite(0).io.req.valid     := false.B
+  io.bankWrite(0).io.req.bits.addr := rowReg
+  io.bankWrite(0).io.req.bits.data := writeData
+  io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
+  io.bankWrite(0).io.resp.ready    := false.B
+
+  for (i <- 0 until 4) {
+    multipliers(i).io.start := false.B
+    multipliers(i).io.a     := fpInputs(i)
+    multipliers(i).io.b     := scaleData(32 * i + 31, 32 * i)
   }
 
-  def driveScaleResp(): Unit = for (i <- 0 until mmioReadBW) io.mmioRead(i).resp.ready := true.B
-
-  def dequantLane(word: UInt, lane: UInt, dw: UInt): UInt = {
-    val acc = (word >> (lane << 5.U))(31, 0)
-    fp32Multiply(int32ToFp32(acc), fp32Multiply(daReg, dw))
-  }
+  io.cmdReq.ready            := state === idle
+  io.cmdResp.valid           := state === complete
+  io.cmdResp.bits.rob_id     := robIdReg
+  io.cmdResp.bits.is_sub     := isSubReg
+  io.cmdResp.bits.sub_rob_id := subRobIdReg
+  io.status.idle             := state === idle
+  io.status.running          := state =/= idle && state =/= complete
 
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        assert(io.cmdReq.bits.cmd.iter > 0.U, "Int2Fp iter must be > 0")
+        val cmd = io.cmdReq.bits.cmd
+        assert(cmd.funct7 === funct.U, "Int2FpBall received an unknown funct7")
+        assert(cmd.iter > 0.U && cmd.iter(1, 0) === 0.U, "INT32_TO_FP32 iter must be a positive multiple of four")
+        assert(cmd.iter <= b.memDomain.bankEntries.U, "INT32_TO_FP32 input exceeds bank depth")
         assert(
-          io.cmdReq.bits.cmd.op1_col === io.cmdReq.bits.cmd.wr_col && io.cmdReq.bits.cmd.op1_col >= 1.U && io.cmdReq.bits.cmd.op1_col <= 4.U,
-          "Int2Fp requires matching 1..4 accumulator/output groups"
-        )
-        assert(io.cmdReq.bits.cmd.op1_bank =/= io.cmdReq.bits.cmd.wr_bank, "Int2Fp forbids in-place dequantization")
-        assert(
-          io.cmdReq.bits.cmd.funct7 === tensorFunct.U(7.W) ||
-            io.cmdReq.bits.cmd.funct7 === channelFunct.U(7.W),
-          "Int2Fp funct7 must be INT2FP_TENSOR or INT2FP_CHANNEL"
-        )
-        assert(io.cmdReq.bits.cmd.special(63, 26) === 0.U, "Int2Fp reserves special[63:26]")
-        assert(io.cmdReq.bits.cmd.special(12, 0) === 0.U, "Int2Fp Da address must be 0")
-        assert(io.cmdReq.bits.cmd.special(25, 13) >= 16.U, "Int2Fp Dw address must be >= 16")
-        assert(io.cmdReq.bits.cmd.special(1, 0) === 0.U, "Int2Fp Da address must be 4-byte aligned")
-        assert(io.cmdReq.bits.cmd.special(14, 13) === 0.U, "Int2Fp Dw address must be 4-byte aligned")
-        assert(
-          (io.cmdReq.bits.cmd.special(12, 0) +& 3.U) < b.memDomain.mmioTotalBytes.U,
-          "Int2Fp Da address exceeds MMIO space"
+          cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U,
+          "INT32_TO_FP32 operands must each occupy one bank"
         )
         assert(
-          (io.cmdReq.bits.cmd.special(25, 13) +& 3.U) < b.memDomain.mmioTotalBytes.U,
-          "Int2Fp Dw address exceeds MMIO space"
+          cmd.op1_bank =/= cmd.op2_bank && cmd.op1_bank =/= cmd.wr_bank && cmd.op2_bank =/= cmd.wr_bank,
+          "INT32_TO_FP32 banks must be distinct"
         )
-        when(io.cmdReq.bits.cmd.funct7 === channelFunct.U(7.W)) {
-          assert(
-            (io.cmdReq.bits.cmd.special(25, 13) +& (io.cmdReq.bits.cmd.op1_col << 4.U)) <= b.memDomain.mmioTotalBytes.U,
-            "Int2Fp channel Dw range exceeds MMIO space"
-          )
+        assert(cmd.rs2(63, 1) === 0.U, "INT32_TO_FP32 reserves rs2[63:1]")
+
+        robIdReg    := io.cmdReq.bits.rob_id
+        isSubReg    := io.cmdReq.bits.is_sub
+        subRobIdReg := io.cmdReq.bits.sub_rob_id
+        inputBank   := cmd.op1_bank
+        scaleBank   := cmd.op2_bank
+        outputBank  := cmd.wr_bank
+        iterReg     := cmd.iter
+        rowReg      := 0.U
+        reluReg     := cmd.rs2(0)
+        state       := readReq
+      }
+    }
+    is(readReq) {
+      for (i <- 0 until mapping.inBW) io.bankRead(i).io.req.valid := true.B
+      when(io.bankRead.map(_.io.req.fire).reduce(_ && _)) {
+        state := readResp
+      }
+    }
+    is(readResp) {
+      for (i <- 0 until mapping.inBW) io.bankRead(i).io.resp.ready := true.B
+      when(io.bankRead.map(_.io.resp.fire).reduce(_ && _)) {
+        inputData := io.bankRead(0).io.resp.bits.data
+        scaleData := io.bankRead(1).io.resp.bits.data
+        state     := convert
+      }
+    }
+    is(convert) {
+      for (i <- 0 until 4) {
+        val value = inputData(32 * i + 31, 32 * i)
+        val scale = scaleData(32 * i + 31, 32 * i)
+        assert(positiveFinite(scale), "INT32_TO_FP32 scales must be finite and positive")
+        fpInputs(i) := int32ToFp32(Mux(reluReg && value(31), 0.U, value))
+        mulDone(i)  := false.B
+      }
+      mulStarted := false.B
+      state := multiply
+    }
+    is(multiply) {
+      when(!mulStarted) {
+        for (i <- 0 until 4) multipliers(i).io.start := true.B
+        mulStarted := true.B
+      }
+      for (i <- 0 until 4) {
+        when(multipliers(i).io.done) {
+          fpOutputs(i) := multipliers(i).io.result
+          mulDone(i)   := true.B
         }
-        robIdReg      := io.cmdReq.bits.rob_id; isSubReg                           := io.cmdReq.bits.is_sub; subRobIdReg := io.cmdReq.bits.sub_rob_id
-        rbankReg      := io.cmdReq.bits.cmd.op1_bank; wbankReg                     := io.cmdReq.bits.cmd.wr_bank;
-        iterReg       := io.cmdReq.bits.cmd.iter
-        actAddrReg    := io.cmdReq.bits.cmd.special(12, 0); weightAddrReg          := io.cmdReq.bits.cmd.special(25, 13)
-        perChannelReg := io.cmdReq.bits.cmd.funct7 === channelFunct.U(7.W); rowReg := 0.U; groupReg                      := 0.U;
-        laneReg       := 0.U
-        lastGroupReg  := io.cmdReq.bits.cmd.op1_col - 1.U; writeWordReg            := 0.U
-        state         := sActReq
+      }
+      when(mulDone.asUInt.andR) {
+        writeData := Cat(fpOutputs.reverse)
+        state     := writeReq
       }
     }
-    is(sActReq) { driveScaleReq(actAddrReg); when(allMmioReqFire)(state := sActResp) }
-    is(sActResp) {
-      driveScaleResp()
-      when(allMmioRespFire) {
-        assert(isFinitePositiveScale(scaleResponse), "Int2Fp Da must be finite and positive")
-        daReg := scaleResponse
-        state := sTensorReq
+    is(writeReq) {
+      io.bankWrite(0).io.req.valid := true.B
+      when(io.bankWrite(0).io.req.fire) {
+        state := writeResp
       }
     }
-    is(sTensorReq) {
-      when(perChannelReg)(state := sReadReq)
-        .otherwise { driveScaleReq(weightAddrReg); when(allMmioReqFire)(state := sTensorResp) }
-    }
-    is(sTensorResp) {
-      driveScaleResp()
-      when(allMmioRespFire) {
-        assert(isFinitePositiveScale(scaleResponse), "Int2Fp Dw must be finite and positive")
-        tensorDwReg := scaleResponse
-        state       := sReadReq
-      }
-    }
-    is(sReadReq) {
-      io.bankRead(0).io.req.valid            := true.B; io.bankRead(0).io.req.bits.addr := rowReg
-      when(io.bankRead(0).io.req.fire)(state := sReadResp)
-    }
-    is(sReadResp) {
-      io.bankRead(0).io.resp.ready := true.B
-      when(io.bankRead(0).io.resp.fire) {
-        srcWordReg := io.bankRead(0).io.resp.bits.data; laneReg := 0.U; writeWordReg := 0.U
-        when(perChannelReg)(state := sChannelReq)
-          .otherwise {
-            val result =
-              Cat((0 until elemsPerWord).reverse.map(i => dequantLane(io.bankRead(0).io.resp.bits.data, i.U, tensorDwReg)))
-            writeWordReg := result
-            state        := sWriteReq
-          }
-      }
-    }
-    is(sChannelReq) {
-      val channelAddr = weightAddrReg + ((groupReg * 4.U + laneReg) << 2.U)
-      assert(channelAddr +& 3.U < b.memDomain.mmioTotalBytes.U, "Int2Fp channel Dw address exceeds MMIO space")
-      driveScaleReq(channelAddr)
-      when(allMmioReqFire)(state := sChannelResp)
-    }
-    is(sChannelResp) {
-      driveScaleResp()
-      when(allMmioRespFire) {
-        assert(isFinitePositiveScale(scaleResponse), "Int2Fp Dw must be finite and positive")
-        val next = writeWordReg | (dequantLane(srcWordReg, laneReg, scaleResponse) << (laneReg << 5.U))
-        writeWordReg := next
-        when(laneReg === 3.U)(state := sWriteReq).otherwise { laneReg := laneReg + 1.U; state := sChannelReq }
-      }
-    }
-    is(sWriteReq) {
-      io.bankWrite(0).io.req.valid            := true.B; io.bankWrite(0).io.req.bits.addr := rowReg
-      io.bankWrite(0).io.req.bits.data        := writeWordReg;
-      io.bankWrite(0).io.req.bits.mask        := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
-      when(io.bankWrite(0).io.req.fire)(state := sWriteResp)
-    }
-    is(sWriteResp) {
+    is(writeResp) {
       io.bankWrite(0).io.resp.ready := true.B
       when(io.bankWrite(0).io.resp.fire) {
-        when(groupReg === lastGroupReg && rowReg === iterReg - 1.U)(state := complete)
-          .elsewhen(groupReg === lastGroupReg) { groupReg := 0.U; rowReg := rowReg + 1.U; state := sReadReq }
-          .otherwise { groupReg := groupReg + 1.U; state := sReadReq }
+        when(rowReg === iterReg - 1.U) {
+          state := complete
+        }.otherwise {
+          rowReg := rowReg + 1.U
+          state  := readReq
+        }
       }
     }
-    is(complete)(when(io.cmdResp.fire)(state := idle))
+    is(complete) {
+      when(io.cmdResp.fire) {
+        state := idle
+      }
+    }
   }
-
-  io.status.idle    := state === idle
-  io.status.running := state =/= idle && state =/= complete
 }

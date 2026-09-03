@@ -34,14 +34,32 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
     if (Operation *op = value.getDefiningOp()) {
       StringRef name = op->getName().getStringRef();
       if (name == "buckyball.bank_transpose" ||
-          name == "buckyball.bank_fp2int" ||
-          name == "buckyball.bank_int2fp_tensor" ||
-          name == "buckyball.bank_int2fp_channel") {
+          name == "buckyball.bank_quant_f32_to_i8") {
         value = op->getOperand(1);
         continue;
       }
+      if (name == "buckyball.bank_quant_i32_to_i8") {
+        value = op->getOperand(2);
+        continue;
+      }
+      if (name == "buckyball.bank_int32_to_fp32") {
+        value = op->getOperand(2);
+        continue;
+      }
+      if (name == "buckyball.bank_smatmul_bias") {
+        value = op->getOperand(0);
+        continue;
+      }
       if (name == "buckyball.bank_im2col") {
-        value = op->getResult(0);
+        value = op->getOperand(1);
+        continue;
+      }
+      if (name == "buckyball.bank_lut") {
+        value = op->getOperand(2);
+        continue;
+      }
+      if (name == "buckyball.bank_maxpool") {
+        value = op->getOperand(1);
         continue;
       }
       if (name == "buckyball.bank_smatmul" ||

@@ -71,31 +71,49 @@ class MmioPool(val b: GlobalConfig) extends Module {
 
   val finalWriteGroup = writeActive &&
     (writeCursorReg +& b.memDomain.mmioBankNum.U >= dmaBytes.U)
-  for (bankIdx <- 0 until b.memDomain.mmioBankNum) {
-    val byteMatch      = VecInit((0 until b.memDomain.mmioBankNum).map { offset =>
-      val byteIdx  = writeCursorReg +& offset.U
-      val byteAddr = writeAddrReg + byteIdx
-      byteIdx < dmaBytes.U && (byteAddr % b.memDomain.mmioBankNum.U === bankIdx.U)
-    })
-    val selectedOffset = PriorityEncoder(byteMatch)
-    val selectedByte   = writeCursorReg +& selectedOffset
-    val selectedAddr   = writeAddrReg + selectedByte
-    val dmaWriteValid  = writeActive && byteMatch.asUInt.orR
-    val dmaWriteAddr   = (selectedAddr / b.memDomain.mmioBankNum.U)(log2Ceil(b.memDomain.mmioBankEntries) - 1, 0)
-    val selectedData   = (writeDataReg >> (selectedByte << 3.U))(7, 0)
-    val dmaWriteData   = Mux(writeMaskReg(selectedByte), selectedData, 0.U)
 
-    if (mmioWritePorts == 0) {
+  if (mmioWritePorts == 0) {
+    for (bankIdx <- 0 until b.memDomain.mmioBankNum) {
+      val byteMatch      = VecInit((0 until b.memDomain.mmioBankNum).map { offset =>
+        val byteIdx  = writeCursorReg +& offset.U
+        val byteAddr = writeAddrReg + byteIdx
+        byteIdx < dmaBytes.U && (byteAddr % b.memDomain.mmioBankNum.U === bankIdx.U)
+      })
+      val selectedOffset = PriorityEncoder(byteMatch)
+      val selectedByte   = writeCursorReg +& selectedOffset
+      val selectedAddr   = writeAddrReg + selectedByte
+      val dmaWriteValid  = writeActive && byteMatch.asUInt.orR
+      val dmaWriteAddr   = (selectedAddr / b.memDomain.mmioBankNum.U)(log2Ceil(b.memDomain.mmioBankEntries) - 1, 0)
+      val selectedData   = (writeDataReg >> (selectedByte << 3.U))(7, 0)
+      val dmaWriteData   = Mux(writeMaskReg(selectedByte), selectedData, 0.U)
       banks(bankIdx).io.write.req.valid     := dmaWriteValid
       banks(bankIdx).io.write.req.bits.addr := dmaWriteAddr
       banks(bankIdx).io.write.req.bits.data := dmaWriteData
-    } else {
+    }
+  } else {
+    val bwV = RegInit(VecInit(Seq.fill(mmioWritePorts)(false.B)))
+    val bwA = Reg(Vec(mmioWritePorts, UInt(log2Ceil(b.memDomain.mmioTotalBytes).W)))
+    val bwD = Reg(Vec(mmioWritePorts, UInt(b.memDomain.mmioReadWidth.W)))
+
+    for (bankIdx <- 0 until b.memDomain.mmioBankNum) {
+      val byteMatch      = VecInit((0 until b.memDomain.mmioBankNum).map { offset =>
+        val byteIdx  = writeCursorReg +& offset.U
+        val byteAddr = writeAddrReg + byteIdx
+        byteIdx < dmaBytes.U && (byteAddr % b.memDomain.mmioBankNum.U === bankIdx.U)
+      })
+      val selectedOffset = PriorityEncoder(byteMatch)
+      val selectedByte   = writeCursorReg +& selectedOffset
+      val selectedAddr   = writeAddrReg + selectedByte
+      val dmaWriteValid  = writeActive && byteMatch.asUInt.orR
+      val dmaWriteAddr   = (selectedAddr / b.memDomain.mmioBankNum.U)(log2Ceil(b.memDomain.mmioBankEntries) - 1, 0)
+      val selectedData   = (writeDataReg >> (selectedByte << 3.U))(7, 0)
+      val dmaWriteData   = Mux(writeMaskReg(selectedByte), selectedData, 0.U)
+
       val ballMatches = VecInit((0 until mmioWritePorts).map { i =>
-        io.ballWriteReq(i).valid &&
-        (io.ballWriteReq(i).bits.addr % b.memDomain.mmioBankNum.U === bankIdx.U)
+        bwV(i) && (bwA(i) % b.memDomain.mmioBankNum.U === bankIdx.U)
       })
       val ballIdx     = PriorityEncoder(ballMatches)
-      val ballAddr    = io.ballWriteReq(ballIdx).bits.addr
+      val ballAddr    = bwA(ballIdx)
       assert(
         PopCount(ballMatches) <= 1.U,
         "MmioPool: multiple Ball writes target one MMIO bank in a cycle"
@@ -110,26 +128,31 @@ class MmioPool(val b: GlobalConfig) extends Module {
         dmaWriteAddr,
         (ballAddr / b.memDomain.mmioBankNum.U)(log2Ceil(b.memDomain.mmioBankEntries) - 1, 0)
       )
-      banks(bankIdx).io.write.req.bits.data := Mux(
-        dmaWriteValid,
-        dmaWriteData,
-        io.ballWriteReq(ballIdx).bits.data
+      banks(bankIdx).io.write.req.bits.data := Mux(dmaWriteValid, dmaWriteData, bwD(ballIdx))
+    }
+
+    for (i <- 0 until mmioWritePorts) {
+      val targetBank  = bwA(i) % b.memDomain.mmioBankNum.U
+      val targetReady = Mux1H(
+        UIntToOH(targetBank, b.memDomain.mmioBankNum),
+        banks.map(_.io.write.req.ready)
+      )
+      val taken       = bwV(i) && !writeActive && targetReady
+      io.ballWriteReq(i).ready := !bwV(i) || taken
+      when(taken && !io.ballWriteReq(i).fire) {
+        bwV(i) := false.B
+      }
+      when(io.ballWriteReq(i).fire) {
+        bwV(i) := true.B
+        bwA(i) := io.ballWriteReq(i).bits.addr
+        bwD(i) := io.ballWriteReq(i).bits.data
+      }
+      assert(
+        !(io.ballWriteReq(i).valid &&
+          (io.ballWriteReq(i).bits.addr >= b.memDomain.mmioTotalBytes.U)),
+        "MmioPool: Ball write exceeds the MMIO address space"
       )
     }
-  }
-
-  for (i <- 0 until mmioWritePorts) {
-    val targetBank  = io.ballWriteReq(i).bits.addr % b.memDomain.mmioBankNum.U
-    val targetReady = Mux1H(
-      UIntToOH(targetBank, b.memDomain.mmioBankNum),
-      banks.map(_.io.write.req.ready)
-    )
-    io.ballWriteReq(i).ready := !writeActive && targetReady
-    assert(
-      !(io.ballWriteReq(i).valid &&
-        (io.ballWriteReq(i).bits.addr >= b.memDomain.mmioTotalBytes.U)),
-      "MmioPool: Ball write exceeds the MMIO address space"
-    )
   }
 
   io.write.resp.valid   := finalWriteGroup

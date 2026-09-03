@@ -1,13 +1,14 @@
 # Buckyball Agent Workflow (MCP + bbdev)
 
 Agents talk to bbdev through the project MCP server. Humans use `bbdev` CLI.
-Config is the repo-root `.mcp.json` — shared by Claude Code, Codex, Cursor, and any stdio MCP host.
+Cursor reads `.cursor/mcp.json`; Codex reads `.codex/config.toml`. Same two servers, maintained separately (JSON vs TOML).
 
 ## Layout
 
 ```
 User / Agent host
-  └── .mcp.json → bash scripts/claude/run_mcp_server.sh
+    └── .cursor/mcp.json | .codex/config.toml
+          → bash scripts/claude/run_mcp_server.sh
                     └── nix develop -c python3 bbdev/mcp/__main__.py
                           ├── validate
                           └── bbdev_*  → bbdev HTTP (submit + trace_id)
@@ -15,10 +16,11 @@ User / Agent host
 
 | File | Role |
 |------|------|
-| `.mcp.json` | Host-agnostic MCP registration |
+| `.cursor/mcp.json` | Cursor MCP servers |
+| `.codex/config.toml` | Codex MCP servers |
 | `scripts/claude/run_mcp_server.sh` | cd to repo root, `NIX_QUIET=1`, clean stdout |
 | `bbdev/mcp/` | MCP package: `common.py`, `server.py`, `tools/*.py` |
-| `.claude/CLAUDE.md` | Agent rules |
+| `AGENTS.md` | Agent rules |
 | `docs/zh/设计文档/主线架构/0.0.1/工具链/` | Human CLI docs |
 
 ## Daily path
@@ -85,11 +87,11 @@ the current MCP server; any other unknown trace fails.
 
 | Trigger | Skill |
 |---------|-------|
-| `/ball <Name>` | `.claude/skills/ball` |
-| `/ball-align` | `.claude/skills/ball-align` (also `.codex/skills/`, `.cursor/skills/`) |
-| `/verify <Name>` | `.claude/skills/verify` |
-| `/optimize <Name>` | `.claude/skills/optimize` |
-| `/check` | `.claude/skills/check` |
+| `/ball-align` | `.agents/skills/ball-align` |
+| `/chip-designer` | `.agents/skills/chip-designer` |
+| `/verify <Name>` | `.agents/skills/verify` |
+| `/check` | `.agents/skills/check` |
+| `/waveform` | `.agents/skills/waveform` |
 
 ## Smoke test
 

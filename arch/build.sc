@@ -273,6 +273,18 @@ object chipyard extends SbtModule {
     chipyardSources ++ stageSources ++ frameworkSources
   }
 
+  override def resources = T.sources {
+    val fwRes = os.pwd / os.up / "thirdparty" / "soc-framework" / "src" / "main" / "resources"
+    val cyRes = millSourcePath / "generators" / "chipyard" / "src" / "main" / "resources"
+    if (!os.exists(fwRes)) {
+      throw new Exception(s"missing soc-framework resources: $fwRes")
+    }
+    if (!os.exists(cyRes)) {
+      throw new Exception(s"missing chipyard resources: $cyRes")
+    }
+    Seq(PathRef(fwRes), PathRef(cyRes))
+  }
+
   // Keep the Chipyard integration limited to the generators installed by download.sh.
   override def moduleDeps = Seq(
     testchipip,
@@ -1057,4 +1069,16 @@ object fpga_shells extends SbtModule {
     ivy"org.chipsalliance:::chisel-plugin:6.7.0"
   )
 
+}
+
+// Classic SFC MacroCompiler. Isolated from the Chisel-6 mill tree.
+object tapeout extends SbtModule {
+  override def millSourcePath =
+    os.pwd / "thirdparty" / "chipyard" / "tools" / "tapeout"
+  override def scalaVersion = "2.13.16"
+
+  override def ivyDeps = Agg(
+    ivy"edu.berkeley.cs::firrtl:1.5.6",
+    ivy"com.typesafe.play::play-json:2.9.2"
+  )
 }

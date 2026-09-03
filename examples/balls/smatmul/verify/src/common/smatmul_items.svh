@@ -1,118 +1,78 @@
 class smatmul_cmd_item extends bb_blink_cmd_item;
   `uvm_object_utils(smatmul_cmd_item)
 
-  bit [31:0] m;
-  bit [31:0] n;
-  bit [31:0] k;
-  bit [31:0] num_a_words;
-  bit [31:0] num_b_words;
-  bit [31:0] num_writes;
-  bit [127:0] a_words[MATRIX_MAX_WORDS];
-  bit [127:0] b_words[MATRIX_MAX_WORDS];
-
-  constraint legal_c {
-    funct7 inside {SMATMUL_OS_CORE_FUNCT7[6:0], SMATMUL_WS_CORE_FUNCT7[6:0]};
-    op1_en == 1'b1;
-    op2_en == 1'b1;
-    wr_spad_en == 1'b1;
-    op1_from_spad == 1'b1;
-    op2_from_spad == 1'b1;
-    op1_col == 5'd1;
-    op2_col == 5'd1;
-    wr_col == SMATMUL_OUT_BW;
-    meta_bank == 5'd0;
-    iter == 34'd0;
-    special == 64'd0;
-    is_sub == 1'b0;
-    sub_rob_id == 8'h00;
-  }
+  bit [31:0] kind;
+  bit [31:0] command_index;
+  bit [31:0] command_count;
+  bit [31:0] op1_words;
+  bit [31:0] op2_words;
 
   function new(string name = "smatmul_cmd_item");
     super.new(name);
   endfunction
 
-  function void load_rust_case(int unsigned seed, int unsigned index, int unsigned bid);
+  function void load_rust_command(int unsigned index);
     matrix_cmd_dpi_t cmd;
-    int unsigned rc;
-    longint unsigned w_lo;
-    longint unsigned w_hi;
-    int i;
-
-    rc = smatmul_case_load(seed, index, bid, SMATMUL_OUT_BW);
-    if (rc != 0) begin
-      `uvm_fatal("CASE", $sformatf("smatmul_case_load returned %0d for index %0d", rc, index))
+    smatmul_case_cmd(index, cmd);
+    if (cmd.kind > 1) begin
+      `uvm_fatal("CASE", $sformatf("invalid command kind %0d", cmd.kind))
     end
-    smatmul_case_cmd(cmd);
 
+    kind = cmd.kind;
+    command_index = index;
+    command_count = smatmul_case_num_commands();
     bid = cmd.bid[4:0];
-    if (cmd.ws > 1) begin
-      `uvm_fatal("CASE", $sformatf("invalid ws selector %0d", cmd.ws))
-    end
-    funct7        = cmd.ws ? SMATMUL_WS_CORE_FUNCT7[6:0] : SMATMUL_OS_CORE_FUNCT7[6:0];
-    m             = cmd.m;
-    n             = cmd.n;
-    k             = cmd.k;
-    op1_bank      = cmd.op1_bank[4:0];
-    op2_bank      = cmd.op2_bank[4:0];
-    wr_bank       = cmd.wr_bank[4:0];
-    op1_col       = 5'd1;
-    op2_col       = 5'd1;
-    wr_col        = SMATMUL_OUT_BW;
-    rob_id        = cmd.rob_id[3:0];
-    rs1           = {cmd.rs1_hi, cmd.rs1_lo};
-    rs2           = {cmd.rs2_hi, cmd.rs2_lo};
-    num_a_words   = cmd.num_a_words;
-    num_b_words   = cmd.num_b_words;
-    num_writes    = cmd.num_writes;
+    rob_id = cmd.rob_id[3:0];
+    op1_words = cmd.op1_words;
+    op2_words = cmd.op2_words;
+    rs1 = {cmd.rs1_hi, cmd.rs1_lo};
+    rs2 = {cmd.rs2_hi, cmd.rs2_lo};
+    op1_bank = rs1[4:0];
+    op2_bank = rs1[14:10];
+    wr_bank = rs1[24:20];
+    iter = rs1[63:30];
+    special = 64'd0;
+    meta_bank = 5'd0;
+    is_sub = 1'b0;
+    sub_rob_id = 8'd0;
 
-    op1_en        = 1'b1;
-    op2_en        = 1'b1;
-    wr_spad_en    = 1'b1;
-    op1_from_spad = 1'b1;
-    op2_from_spad = 1'b1;
-    meta_bank     = 5'd0;
-    iter          = 34'd0;
-    special       = 64'd0;
-    is_sub        = 1'b0;
-    sub_rob_id    = 8'h00;
-
-    if (num_a_words > MATRIX_MAX_WORDS || num_b_words > MATRIX_MAX_WORDS) begin
-      `uvm_fatal("CASE", $sformatf("word count out of range a=%0d b=%0d", num_a_words, num_b_words))
-    end
-    if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank) begin
-      `uvm_fatal("CASE", "banks must be distinct")
-    end
-    if (op1_bank > 7 || op2_bank > 7 || wr_bank > 7) begin
-      `uvm_fatal("CASE", "banks must be in 0..7")
-    end
-
-    for (i = 0; i < num_a_words; i++) begin
-      w_lo = smatmul_case_a_word_lo(i);
-      w_hi = smatmul_case_a_word_hi(i);
-      a_words[i] = {w_hi, w_lo};
-    end
-    for (i = 0; i < num_b_words; i++) begin
-      w_lo = smatmul_case_b_word_lo(i);
-      w_hi = smatmul_case_b_word_hi(i);
-      b_words[i] = {w_hi, w_lo};
+    if (kind == 0) begin
+      funct7 = SMATMUL_BIAS_CORE_FUNCT7[6:0];
+      op1_en = 1'b1;
+      op2_en = 1'b0;
+      wr_spad_en = 1'b0;
+      op1_from_spad = 1'b1;
+      op2_from_spad = 1'b0;
+      op1_col = 5'd1;
+      op2_col = 5'd0;
+      wr_col = 5'd0;
+      if (rs1[29:10] != 0 || iter != 4 || rs2 != 0 || op1_words != 4)
+        `uvm_fatal("CASE", "invalid bias command")
+    end else begin
+      funct7 = SMATMUL_OS_CORE_FUNCT7[6:0];
+      op1_en = 1'b1;
+      op2_en = 1'b1;
+      wr_spad_en = 1'b1;
+      op1_from_spad = 1'b1;
+      op2_from_spad = 1'b1;
+      op1_col = 5'd1;
+      op2_col = 5'd1;
+      wr_col = 5'd1;
+      if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank)
+        `uvm_fatal("CASE", "SMATMUL_OS banks must be distinct")
+      if (rs2[63:26] != 0 || rs2[23:12] != 16 || iter != 16)
+        `uvm_fatal("CASE", "invalid SMATMUL_OS shape or reserved bits")
     end
   endfunction
 
   function void do_copy(uvm_object rhs);
     smatmul_cmd_item rhs_;
     super.do_copy(rhs);
-    if (!$cast(rhs_, rhs)) begin
-      `uvm_fatal("COPY", "rhs is not smatmul_cmd_item")
-    end
-    m = rhs_.m;
-    n = rhs_.n;
-    k = rhs_.k;
-    num_a_words = rhs_.num_a_words;
-    num_b_words = rhs_.num_b_words;
-    num_writes = rhs_.num_writes;
-    for (int i = 0; i < MATRIX_MAX_WORDS; i++) begin
-      a_words[i] = rhs_.a_words[i];
-      b_words[i] = rhs_.b_words[i];
-    end
+    if (!$cast(rhs_, rhs)) `uvm_fatal("COPY", "rhs is not smatmul_cmd_item")
+    kind = rhs_.kind;
+    command_index = rhs_.command_index;
+    command_count = rhs_.command_count;
+    op1_words = rhs_.op1_words;
+    op2_words = rhs_.op2_words;
   endfunction
 endclass

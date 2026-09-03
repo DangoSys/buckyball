@@ -22,6 +22,7 @@
 #include "mlir/IR/PatternMatch.h"
 
 #include "Buckyball/BuckyballOps.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Utils/BankUtils.h"
 
 #include <algorithm>
@@ -32,7 +33,6 @@ using namespace ::buddy::buckyball;
 namespace {
 
 constexpr int64_t kBankWidthBytes = 16;
-constexpr int64_t kBankDepth = 1024;
 constexpr int64_t kMaxGroups = 4;
 
 static int64_t alignUp(int64_t x, int64_t a) {
@@ -67,7 +67,7 @@ static void emitBankTranspose(OpBuilder &b, Location loc, Value inContig,
   Value loaded = mvinBank(b, loc, inContig, src, rows, /*stride=*/1);
   Value transposed = b.create<BankTransposeOp>(
       loc, dst.getType(), loaded, dst, createI64Const(b, loc, rows),
-      createI64Const(b, loc, elemBits));
+      createI64Const(b, loc, elemBits), createI64ConstU(b, loc, UINT64_MAX));
   mvoutBank(b, loc, outContig, transposed, rows, /*stride=*/1);
   b.create<FenceOp>(loc);
   releaseBank(b, loc, loaded);
@@ -123,6 +123,7 @@ public:
   LogicalResult matchAndRewrite(MemTransposeOp op,
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
+    const int64_t bankDepth = buckyball_target::getBuckyballTarget().bankDepth;
     Value input = op.getInput();
     Value output = op.getOutput();
     auto inputType = dyn_cast<MemRefType>(input.getType());
@@ -159,8 +160,8 @@ public:
     // A fixed full-depth tile lets the long dimension remain an scf loop.
     // The extra tail is zero-padded and discarded by outView below.
     bool fat = rowsPad <= maxW && colsPad > rowsPad;
-    bool chunkedFat = fat && colsPad > kBankDepth;
-    int64_t colsStorage = chunkedFat ? alignUp(colsPad, kBankDepth) : colsPad;
+    bool chunkedFat = fat && colsPad > bankDepth;
+    int64_t colsStorage = chunkedFat ? alignUp(colsPad, bankDepth) : colsPad;
     auto inPadTy = MemRefType::get({rowsPad, colsStorage}, elemTy);
     auto outPadTy = MemRefType::get({colsStorage, rowsPad}, elemTy);
     Value inPad = rewriter.create<memref::AllocOp>(loc, inPadTy);
@@ -184,26 +185,20 @@ public:
         return op.emitError("fat transpose rowsPad not bank-row aligned");
       int64_t groups = rowsPad / eprI;
       if (chunkedFat) {
-        Value zeroIndex = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-        Value chunkEnd =
-            rewriter.create<arith::ConstantIndexOp>(loc, colsStorage);
-        Value chunkStep =
-            rewriter.create<arith::ConstantIndexOp>(loc, kBankDepth);
-        auto chunkLoop =
-            rewriter.create<scf::ForOp>(loc, zeroIndex, chunkEnd, chunkStep);
-        rewriter.setInsertionPointToStart(chunkLoop.getBody());
-        Value c0 = chunkLoop.getInductionVar();
-        auto inContigTy = MemRefType::get({kBankDepth, rowsPad}, elemTy);
-        auto outContigTy = MemRefType::get({rowsPad, kBankDepth}, elemTy);
-        Value inContig = rewriter.create<memref::AllocOp>(loc, inContigTy);
-        Value outContig = rewriter.create<memref::AllocOp>(loc, outContigTy);
-        gatherCols(rewriter, loc, inPad, inContig, rowsPad, c0, kBankDepth);
-        emitBankTranspose(rewriter, loc, inContig, outContig, kBankDepth,
-                          groups, elemBits);
-        scatterCols(rewriter, loc, outContig, outPad, rowsPad, c0, kBankDepth);
-        rewriter.create<memref::DeallocOp>(loc, inContig);
-        rewriter.create<memref::DeallocOp>(loc, outContig);
-        rewriter.setInsertionPointAfter(chunkLoop);
+        for (int64_t c0i = 0; c0i < colsStorage; c0i += bankDepth) {
+          int64_t h = std::min(bankDepth, colsStorage - c0i);
+          Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, c0i);
+          auto inContigTy = MemRefType::get({h, rowsPad}, elemTy);
+          auto outContigTy = MemRefType::get({rowsPad, h}, elemTy);
+          Value inContig = rewriter.create<memref::AllocOp>(loc, inContigTy);
+          Value outContig = rewriter.create<memref::AllocOp>(loc, outContigTy);
+          gatherCols(rewriter, loc, inPad, inContig, rowsPad, c0, h);
+          emitBankTranspose(rewriter, loc, inContig, outContig, h, groups,
+                            elemBits);
+          scatterCols(rewriter, loc, outContig, outPad, rowsPad, c0, h);
+          rewriter.create<memref::DeallocOp>(loc, inContig);
+          rewriter.create<memref::DeallocOp>(loc, outContig);
+        }
       } else {
         Value c0 = rewriter.create<arith::ConstantIndexOp>(loc, 0);
         auto inContigTy = MemRefType::get({colsPad, rowsPad}, elemTy);
@@ -219,7 +214,7 @@ public:
       }
     } else {
       for (int64_t r0 = 0; r0 < rowsPad;) {
-        int64_t h = std::min(kBankDepth, rowsPad - r0);
+        int64_t h = std::min(bankDepth, rowsPad - r0);
         for (int64_t c0 = 0; c0 < colsPad;) {
           int64_t w = std::min(maxW, colsPad - c0);
           if (w % eprI != 0)

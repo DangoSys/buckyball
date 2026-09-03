@@ -4,9 +4,9 @@
 #include <isa/im2col.h>
 #include <stdio.h>
 
-/* Fill exactly one bank: 32x32 k1 -> 1024 output rows. */
-enum { ITER = 32, K = 1, STRIDE = 1, PAD = 0, LANES = 16, SEED = 0x11 };
+enum { LANES = BANK_WIDTH / 8, K = 1, STRIDE = 1, PAD = 0, SEED = 0x11 };
 enum {
+  ITER = BANK_ISQRT,
   OUT_DIM = (ITER + 2 * PAD - K) / STRIDE + 1,
   WINDOWS = OUT_DIM * OUT_DIM,
   KERNEL = K * K,
@@ -14,6 +14,7 @@ enum {
   K_TILES = (KERNEL + LANES - 1) / LANES,
   OUT_ROWS = M_TILES * K_TILES * LANES,
 };
+_Static_assert(ITER *ITER == BANK_LINES, "BANK_LINES must be a perfect square");
 _Static_assert(OUT_ROWS == BANK_LINES, "bank test must fill one bank");
 
 static elem_t in[ITER * ITER] __attribute__((aligned(64)));
@@ -60,10 +61,7 @@ int main(void) {
   bb_mem_release(0);
   bb_mem_release(1);
 
-  if (compare_i8_matrices(out, exp, OUT_ROWS, LANES)) {
-    printf("im2col bank k1 32x32 PASSED\n");
-    return 0;
-  }
-  printf("im2col bank k1 32x32 FAILED\n");
-  return 1;
+  int ok = compare_i8_matrices(out, exp, OUT_ROWS, LANES);
+  printf("im2col bank k1 %dx%d %s\n", ITER, ITER, ok ? "PASSED" : "FAILED");
+  return ok ? 0 : 1;
 }

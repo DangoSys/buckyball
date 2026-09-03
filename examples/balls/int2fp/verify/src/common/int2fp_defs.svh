@@ -38,7 +38,7 @@ localparam int INT2FP_CHANNEL_CORE_FUNCT7 = `INT2FP_CHANNEL_FUNCT7;
 localparam int INT2FP_NUM_GROUPS = 4;
 localparam int INT2FP_MAX_ITER = 16;
 localparam int INT2FP_MAX_WORDS = INT2FP_MAX_ITER * INT2FP_NUM_GROUPS;
-localparam int INT2FP_TIMEOUT_CYCLES = 4000;
+localparam int INT2FP_TIMEOUT_CYCLES = 20000;
 
 function automatic int unsigned int2fp_require_bid();
   int unsigned bid;

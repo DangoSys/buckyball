@@ -65,7 +65,7 @@ static inline uint64_t packBits(uint64_t val, int startBit, int endBit) {
 
 static inline uint64_t matrixRs2(uint64_t rows, uint64_t cols, uint64_t k) {
   if (rows == 0 || cols == 0 || cols > 0xfff || k == 0 || rows > 0xfff ||
-      k > 0xfff || rows % 16 || cols % 16 || k % 16) {
+      k > 0xfff || (rows != 1 && rows % 16) || cols % 16 || k % 16) {
     std::fprintf(
         stderr,
         "matrix rs2: rows/cols/k must fit in 12 bits (got %llu %llu %llu)\n",
@@ -81,8 +81,7 @@ static inline mlir::Value createBankSMatMul(mlir::OpBuilder &b,
                                             mlir::Value a, mlir::Value opB,
                                             mlir::Value wr, mlir::Value cfg) {
   return b.create<BankSMatMulOp>(loc, wrTy, a, opB, wr, cfg,
-                                 b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
-                                 b.getI64IntegerAttr(0));
+                                 b.getBoolAttr(true), b.getBoolAttr(true));
 }
 
 /// Allocate a bank with given row/col dimensions.

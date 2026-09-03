@@ -54,9 +54,8 @@ class Transpose(val b: GlobalConfig) extends Module {
   val state                                      = RegInit(idle)
 
   // Walk destination dense index 0 .. iter*W-1, filling write beats.
-  val dstIdx   = RegInit(0.U(32.W))
   val pending  = RegInit(false.B)
-  val wrData   = RegInit(0.U(bankWidth.W))
+  val wrBytes  = Reg(Vec(rowBytes, UInt(8.W)))
   val wrMask   = RegInit(VecInit(Seq.fill(b.memDomain.bankMaskLen)(0.U(1.W))))
   val wrGroup  = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
   val wrAddr   = RegInit(0.U(b.frontend.iter_len.W))
@@ -67,6 +66,15 @@ class Transpose(val b: GlobalConfig) extends Module {
   val cacheAddr  = RegInit(0.U(b.frontend.iter_len.W))
   val cacheGroup = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
   val cacheData  = RegInit(0.U(bankWidth.W))
+
+  val srcR         = RegInit(0.U(b.frontend.iter_len.W))
+  val srcC         = RegInit(0.U(32.W))
+  val dstVirtRow   = RegInit(0.U(b.frontend.iter_len.W))
+  val dstVirtCol   = RegInit(0.U(32.W))
+  val epgReg       = RegInit(0.U(8.W))
+  val wElemsReg    = RegInit(0.U(32.W))
+  val elemBytesReg = RegInit(0.U(8.W))
+  val lastBeat     = RegInit(false.B)
 
   for (i <- 0 until inBW) {
     io.bankRead(i).rob_id           := rob_id_reg
@@ -97,26 +105,21 @@ class Transpose(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.is_sub     := is_sub_reg
   io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
 
-  val elemBits  = elem_reg
-  val elemBytes = elemBits >> 3
-  val epg       = rowBytes.U / elemBytes
-  val wElems    = ncol_reg * epg
-  val total     = iter_reg * wElems
+  require(isPow2(rowBytes), "Transpose rowBytes must be power of 2")
 
-  // Decode dest linear index -> (virt_row, group, lane) and src (r,c).
-  val dCol = Mux(iter_reg === 0.U, 0.U, dstIdx / iter_reg) // c in W×iter
-  val dRow = Mux(iter_reg === 0.U, 0.U, dstIdx % iter_reg) // r
-  val srcR = dRow
-  val srcC = dCol
+  val laneBitsI8  = log2Ceil(rowBytes)
+  val laneBitsI32 = log2Ceil(rowBytes / 4)
 
-  val srcGroup = srcC / epg
-  val srcLane  = srcC % epg
+  val isI8     = elemBytesReg === 1.U
+  val srcLane  = Mux(isI8, srcC(laneBitsI8 - 1, 0), srcC(laneBitsI32 - 1, 0))
+  val srcGroup = Mux(isI8, srcC >> laneBitsI8.U, srcC >> laneBitsI32.U)
+    .asTypeOf(UInt(log2Up(b.memDomain.bankNum + 1).W))
   val srcAddr  = srcR
 
-  val dstVirtRow = Mux(wElems === 0.U, 0.U, dstIdx / wElems)
-  val dstVirtCol = Mux(wElems === 0.U, 0.U, dstIdx % wElems)
-  val dstGroup   = dstVirtCol / epg
-  val dstLane    = dstVirtCol % epg
+  val dstGroup = Mux(isI8, dstVirtCol >> laneBitsI8.U, dstVirtCol >> laneBitsI32.U)
+    .asTypeOf(UInt(log2Up(b.memDomain.bankNum + 1).W))
+  val bytes    = cacheData.asTypeOf(Vec(rowBytes, UInt(8.W)))
+  val words    = cacheData.asTypeOf(Vec(rowBytes / 4, UInt(32.W)))
 
   val needRead = !cached || cacheAddr =/= srcAddr || cacheGroup =/= srcGroup
 
@@ -132,11 +135,19 @@ class Transpose(val b: GlobalConfig) extends Module {
         ncol_reg       := cmd.op1_col
         iter_reg       := cmd.iter
         elem_reg       := cmd.rs2(7, 0)
-        dstIdx         := 0.U
         pending        := false.B
         wrValid        := false.B
         beatFill       := 0.U
         cached         := false.B
+        srcR           := 0.U
+        srcC           := 0.U
+        dstVirtRow     := 0.U
+        dstVirtCol     := 0.U
+        lastBeat       := false.B
+        val i8 = cmd.rs2(7, 0) === 8.U
+        elemBytesReg := Mux(i8, 1.U, 4.U)
+        epgReg       := Mux(i8, rowBytes.U, (rowBytes / 4).U)
+        wElemsReg    := Mux(i8, cmd.op1_col << laneBitsI8.U, cmd.op1_col << laneBitsI32.U)
         assert(cmd.iter > 0.U, "Transpose iter must be > 0")
         assert(cmd.op1_bank =/= cmd.wr_bank, "Transpose op1 and wr must differ")
         assert(
@@ -149,10 +160,10 @@ class Transpose(val b: GlobalConfig) extends Module {
           "Transpose elem_bits"
         )
         assert(
-          bankWidth.U   % cmd.rs2(7, 0) === 0.U,
+          bankWidth.U % cmd.rs2(7, 0) === 0.U,
           "Transpose bankWidth not divisible by elem_bits"
         )
-        state          := sRead
+        state        := sRead
       }
     }
 
@@ -174,23 +185,41 @@ class Transpose(val b: GlobalConfig) extends Module {
       }
 
       when(cached && !needRead && !wrValid) {
-        val shift = srcLane * elemBytes * 8.U
-        val mask  = (1.U << (elemBytes * 8.U)) - 1.U
-        val elem  = (cacheData >> shift) & mask
-        val wsh   = dstLane * elemBytes * 8.U
-        val base  = Mux(beatFill === 0.U, 0.U, wrData)
         when(beatFill === 0.U) {
           wrGroup := dstGroup
           wrAddr  := dstVirtRow
+          wrBytes := VecInit(Seq.fill(rowBytes)(0.U(8.W)))
         }
-        wrData := base | (elem << wsh)
+        when(isI8) {
+          wrBytes(beatFill) := bytes(srcLane)
+        }.otherwise {
+          val w = words(srcLane)
+          wrBytes(beatFill << 2)         := w(7, 0)
+          wrBytes((beatFill << 2) + 1.U) := w(15, 8)
+          wrBytes((beatFill << 2) + 2.U) := w(23, 16)
+          wrBytes((beatFill << 2) + 3.U) := w(31, 24)
+        }
         beatFill := beatFill + 1.U
-        dstIdx   := dstIdx + 1.U
 
-        val beatDone = (beatFill + 1.U === epg) || (dstIdx + 1.U === total)
+        val lastElem = (srcR === iter_reg - 1.U) && (srcC === wElemsReg - 1.U)
+        when(srcR === iter_reg - 1.U) {
+          srcR := 0.U
+          srcC := srcC + 1.U
+        }.otherwise {
+          srcR := srcR + 1.U
+        }
+        when(dstVirtCol === wElemsReg - 1.U) {
+          dstVirtCol := 0.U
+          dstVirtRow := dstVirtRow + 1.U
+        }.otherwise {
+          dstVirtCol := dstVirtCol + 1.U
+        }
+
+        val beatDone = (beatFill + 1.U === epgReg) || lastElem
         when(beatDone) {
           wrMask.foreach(_ := 1.U)
           wrValid          := true.B
+          lastBeat         := lastElem
           state            := sWrite
         }
       }
@@ -200,12 +229,15 @@ class Transpose(val b: GlobalConfig) extends Module {
       io.bankWrite(0).group_id         := wrGroup
       io.bankWrite(0).io.req.valid     := wrValid
       io.bankWrite(0).io.req.bits.addr := wrAddr
-      io.bankWrite(0).io.req.bits.data := wrData
+      io.bankWrite(0).io.req.bits.data := wrBytes.asUInt
       io.bankWrite(0).io.req.bits.mask := wrMask
+      io.bankWrite(0).io.resp.ready    := true.B
       when(io.bankWrite(0).io.req.fire) {
         wrValid  := false.B
         beatFill := 0.U
-        when(dstIdx === total) {
+      }
+      when(io.bankWrite(0).io.resp.fire) {
+        when(lastBeat) {
           state := complete
         }.otherwise {
           state := sRead

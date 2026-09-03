@@ -16,6 +16,7 @@
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
 #include "Buckyball/Transform.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
@@ -52,14 +53,6 @@ public:
     return "Lower Pebble Buckyball dialect ops.";
   }
 
-  Option<int64_t> bankWidthBytes{
-      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
-      llvm::cl::init(16)};
-  Option<int64_t> bankDepth{*this, "bank_depth",
-                            llvm::cl::desc("Depth of each bank."),
-                            llvm::cl::init(1024)};
-  Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
-                          llvm::cl::init(8)};
   Option<bool> stable{*this, "stable",
                       llvm::cl::desc("Use stable LLVM Buckyball intrinsics."),
                       llvm::cl::init(false)};
@@ -73,6 +66,7 @@ public:
   }
 
   void runOnOperation() override {
+    const auto &targetConfig = buckyball_target::getBuckyballTarget();
     MLIRContext *context = &getContext();
     ModuleOp module = getOperation();
     LLVMTypeConverter converter(context);
@@ -83,7 +77,8 @@ public:
     target.addLegalDialect<cf::ControlFlowDialect, func::FuncDialect,
                            scf::SCFDialect>();
     populateBuckyballLegalizeForLLVMExportPatterns(
-        converter, patterns, bankWidthBytes, bankDepth, bankNum,
+        converter, patterns, targetConfig.bankWidthBits / 8,
+        targetConfig.bankDepth, targetConfig.bankNum,
         /*includeFuncOperandForwarding=*/false, stable, rushB);
 
     ConversionConfig config;
@@ -107,14 +102,6 @@ public:
     return "Lower Pebble bank-SSA and Buckyball ops to intrinsic ops.";
   }
 
-  Option<int64_t> bankWidthBytes{
-      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
-      llvm::cl::init(16)};
-  Option<int64_t> bankDepth{*this, "bank_depth",
-                            llvm::cl::desc("Depth of each bank."),
-                            llvm::cl::init(1024)};
-  Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
-                          llvm::cl::init(8)};
   Option<bool> stable{*this, "stable",
                       llvm::cl::desc("Use stable LLVM Buckyball intrinsics."),
                       llvm::cl::init(false)};
@@ -129,6 +116,7 @@ public:
   }
 
   void runOnOperation() override {
+    const auto &targetConfig = buckyball_target::getBuckyballTarget();
     MLIRContext *context = &getContext();
     ModuleOp module = getOperation();
     LLVMTypeConverter converter(context);
@@ -138,7 +126,8 @@ public:
     configureBuckyballLegalizeForExportTarget(target, stable);
     target.addLegalDialect<func::FuncDialect, scf::SCFDialect>();
     populateBuckyballLegalizeForLLVMExportPatterns(
-        converter, patterns, bankWidthBytes, bankDepth, bankNum,
+        converter, patterns, targetConfig.bankWidthBits / 8,
+        targetConfig.bankDepth, targetConfig.bankNum,
         /*includeFuncOperandForwarding=*/false, stable, rushB);
 
     ConversionConfig config;

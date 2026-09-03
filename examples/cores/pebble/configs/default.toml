@@ -29,7 +29,7 @@ fLen = 64
 [rocketCore.dcache]
 nSets = 32
 nWays = 4
-nMSHRs = 4
+nMSHRs = 0
 
 [rocketCore.icache]
 nSets = 64

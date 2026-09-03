@@ -83,8 +83,12 @@ function(add_buckyball_mlir_test NAME)
   buckyball_assign_physical_banks(${ARG_TARGET} ASSIGN_PHYSICAL_BANKS)
   set(BB_BALL_ISA_INCLUDE_DIR "${BUCKYBALL_ISA_DIR}/${ARG_TARGET}")
   set(BB_BALL_ISA_H "${BB_BALL_ISA_INCLUDE_DIR}/ballISA.h")
+  set(BB_PARAMS_H "${BB_BALL_ISA_INCLUDE_DIR}/params.h")
   if(NOT EXISTS "${BB_BALL_ISA_H}")
     message(FATAL_ERROR "${NAME}: missing target ISA header ${BB_BALL_ISA_H}")
+  endif()
+  if(NOT EXISTS "${BB_PARAMS_H}")
+    message(FATAL_ERROR "${NAME}: missing target params.h ${BB_PARAMS_H}")
   endif()
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
@@ -162,7 +166,7 @@ function(add_buckyball_mlir_test NAME)
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
-      ${BB_BALL_ISA_H}
+      ${BB_BALL_ISA_H} ${BB_PARAMS_H}
       ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -181,6 +185,7 @@ function(add_buckyball_mlir_test NAME)
       ${MAIN_SRC}
       ${OBJ}
     DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${BB_BALL_ISA_H}
+            ${BB_PARAMS_H}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM)
@@ -241,7 +246,7 @@ function(add_buckyball_mlir_test NAME)
         ${WORKLOAD_LIB_DIR}/bbhw/mem
         ${BB_BALL_ISA_INCLUDE_DIR}
       DEPENDS ${RUSHB_OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
-              ${BB_BALL_ISA_H})
+              ${BB_BALL_ISA_H} ${BB_PARAMS_H})
   endif()
 
   if(DEFINED BUCKYBALL_MLIR_GROUP_TARGET)

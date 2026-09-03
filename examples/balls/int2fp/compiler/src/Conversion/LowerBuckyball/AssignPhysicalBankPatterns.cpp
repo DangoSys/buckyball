@@ -16,15 +16,15 @@ void populateInt2FpBallAssignPhysicalBankPatterns(RewritePatternSet &patterns,
 
 namespace {
 
-template <typename BankOp, typename PhysicalOp>
-class BankInt2FpPattern : public OpRewritePattern<BankOp> {
+class BankInt32ToFp32Pattern : public OpRewritePattern<BankInt32ToFp32Op> {
 public:
-  using OpRewritePattern<BankOp>::OpRewritePattern;
+  using OpRewritePattern<BankInt32ToFp32Op>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(BankOp op,
+  LogicalResult matchAndRewrite(BankInt32ToFp32Op op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.create<PhysicalOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                                op.getIter(), op.getDaAddr(), op.getDwAddr());
+    rewriter.create<Int32ToFp32Op>(op.getLoc(), op.getInBank(),
+                                   op.getScaleBank(), op.getOutBank(),
+                                   op.getIter(), op.getReluAttr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }
@@ -35,7 +35,5 @@ public:
 void mlir::buddy::populateInt2FpBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
-  patterns.add<BankInt2FpPattern<BankInt2FpTensorOp, Int2FpTensorOp>,
-               BankInt2FpPattern<BankInt2FpChannelOp, Int2FpChannelOp>>(
-      patterns.getContext());
+  patterns.add<BankInt32ToFp32Pattern>(patterns.getContext());
 }

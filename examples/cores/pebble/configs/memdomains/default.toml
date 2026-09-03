@@ -1,11 +1,11 @@
 # Pebble core memory domain configuration
 
 [bank]
-num = 8
+num = 24
 width = 128
-entries = 1024
+entries = 64
 maskLen = 16
-channel = 7
+channel = 13
 
 [dma]
 nXacts = 8
@@ -21,7 +21,7 @@ readChannel = 4
 writeChannel = 4
 
 [mmio]
-enable = true
+enable = false
 bankNum = 5
 bankEntries = 1024
 bankWidth = 8

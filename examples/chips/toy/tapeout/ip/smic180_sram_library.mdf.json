@@ -1,0 +1,66 @@
+[
+  {
+    "type": "sram",
+    "name": "chipyard_sram_32x128",
+    "width": 128,
+    "depth": "32",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_32x22",
+    "width": 22,
+    "depth": "32",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x21",
+    "width": 21,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x22",
+    "width": 22,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x8",
+    "width": 8,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x32",
+    "width": 32,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x64",
+    "width": 64,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_1024x8",
+    "width": 8,
+    "depth": "1024",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEN", "write enable port polarity": "active low", "chip enable port name": "CEN", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  }
+]

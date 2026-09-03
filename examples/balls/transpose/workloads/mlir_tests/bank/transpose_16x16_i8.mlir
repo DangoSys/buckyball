@@ -13,6 +13,7 @@ func.func @main() -> i8 {
   %stride = arith.constant 1 : i64
   %iter = arith.constant 16 : i64
   %elem_bits = arith.constant 8 : i64
+  %row_mask = arith.constant -1 : i64
 
   %input = memref.alloc() alignment = 64 : memref<16x16xi8>
   %output = memref.alloc() alignment = 64 : memref<16x16xi8>
@@ -32,8 +33,8 @@ func.func @main() -> i8 {
   %bout = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %bin %depth %stride
       : memref<16x16xi8> i64 i64 i64
-  %t = buckyball.bank_transpose %loaded %bout %iter %elem_bits
-      : i64 i64 i64 i64
+  %t = buckyball.bank_transpose %loaded %bout %iter %elem_bits %row_mask
+      : i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %t %depth %stride
       : memref<16x16xi8> i64 i64 i64
   buckyball.fence

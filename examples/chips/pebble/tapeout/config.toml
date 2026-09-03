@@ -1,14 +1,112 @@
 [tapeout]
 top = "DigitalTop"
-clock_port = "auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock"
-clock_period_ns = 10.0
+sram_process = "smic180"
+sram_mdf = "ip/smic180_sram_library.mdf.json"
+constraints_sdc = "area/constraints.sdc"
+target_library = "/home/bb-runner/Code/eda/D_libraries/SMIC180/SCC018UG_UHD_RVT_V0.4a/SCC018UG_UHD_RVT_V0p4a/liberty/1.8v/scc018ug_uhd_rvt_ss_v1p62_125c_ccs.db"
+synthetic_library = [
+  "/home/bb-runner/Code/eda/A_packages/tools/syn/R-2020.09-SP5/libraries/syn/dw_foundation.sldb",
+  "/home/bb-runner/Code/eda/A_packages/tools/syn/R-2020.09-SP5/libraries/syn/standard.sldb",
+]
+link_library = []
+max_cores = 32
 power_format = "vcd"
-# Default 1 ms boot skip and 4 ms measurement window at 100 MHz. Workloads can
-# override both values with --start-ns/--end-ns.
 power_start_ns = "1000000"
 power_end_ns = "5000000"
-dc_script = "dc.tcl"
-power_script = "power.tcl"
-power_sim_script = "power_sim.sh"
-# VCD comes from GatePowerHarness.dut; PTPX reads DigitalTop directly.
+dc_script = "area/dc.tcl"
+power_script = "power/power.tcl"
+power_sim_script = "power/power_sim.sh"
 power_strip_path = "GatePowerHarness.dut"
+
+sram_corner = "ss"
+lc_shell = "/home/bb-runner/Code/eda/A_packages/tools/lc/R-2020.09-SP5/bin/lc_shell"
+
+[[tapeout.sram]]
+name = "chipyard_sram_32x128"
+words = 32
+mux = 4
+bits = 128
+
+[[tapeout.sram]]
+name = "chipyard_sram_32x22"
+words = 32
+mux = 4
+bits = 22
+
+[[tapeout.sram]]
+name = "chipyard_sram_64x21"
+words = 64
+mux = 8
+bits = 21
+
+[[tapeout.sram]]
+name = "chipyard_sram_64x22"
+words = 64
+mux = 8
+bits = 22
+
+[[tapeout.sram]]
+name = "chipyard_sram_512x8"
+words = 512
+mux = 8
+bits = 8
+
+[[tapeout.sram]]
+name = "chipyard_sram_512x32"
+words = 512
+mux = 8
+bits = 32
+
+[[tapeout.sram]]
+name = "chipyard_sram_512x64"
+words = 512
+mux = 8
+bits = 64
+
+[[tapeout.sram]]
+name = "chipyard_sram_1024x8"
+words = 1024
+mux = 8
+bits = 8
+
+[[tapeout.sram]]
+name = "chipyard_sram_32x21"
+words = 32
+mux = 4
+bits = 21
+
+[[tapeout.sram]]
+name = "chipyard_sram_32x23"
+words = 32
+mux = 4
+bits = 23
+
+[[tapeout.sram]]
+name = "chipyard_sram_64x8"
+words = 64
+mux = 8
+bits = 8
+
+[[tapeout.sram]]
+name = "chipyard_sram_64x128"
+words = 64
+mux = 8
+bits = 128
+
+[[tapeout.sram]]
+name = "chipyard_sram_128x8"
+words = 128
+mux = 8
+bits = 8
+
+[[tapeout.sram]]
+name = "chipyard_sram_256x32"
+words = 256
+mux = 8
+bits = 32
+
+[[tapeout.sram]]
+name = "chipyard_sram_256x64"
+words = 256
+mux = 8
+bits = 64

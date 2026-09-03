@@ -9,6 +9,10 @@ set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
 set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
+if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/toy/params.h")
+  message(FATAL_ERROR "missing ${BUCKYBALL_ISA_DIR}/toy/params.h")
+endif()
+set(TOY_ISA_DIR ${BUCKYBALL_ISA_DIR}/toy)
 
 function(add_toy_mlir_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
@@ -98,7 +102,7 @@ function(add_toy_mlir_matmul_test name)
     COMMAND ${ELF_CC} ${C_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
-      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${TOY_ISA_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
@@ -110,6 +114,7 @@ function(add_toy_mlir_matmul_test name)
       ${MAIN_SRC}
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C}
+      ${TOY_ISA_DIR}/params.h
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
@@ -122,7 +127,7 @@ function(add_toy_mlir_matmul_test name)
     COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
-      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${TOY_ISA_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C}
@@ -132,6 +137,7 @@ function(add_toy_mlir_matmul_test name)
       ${MAIN_SRC}
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C}
+      ${TOY_ISA_DIR}/params.h
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -154,8 +160,8 @@ function(add_toy_mlir_matmul_test name)
     INCLUDE_DIRS
       ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       ${WORKLOAD_LIB_DIR}
-      ${WORKLOAD_LIB_DIR}/bbhw/mem
-    DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C})
+      ${TOY_ISA_DIR}
+    DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${TOY_ISA_DIR}/params.h)
 endfunction()
 
 function(add_toy_mlir_matmul_contract_test name)

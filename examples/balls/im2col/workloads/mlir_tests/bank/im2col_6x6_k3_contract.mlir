@@ -10,6 +10,8 @@ func.func @main() -> i8 {
   %in = buckyball.bank_alloc
   %out = buckyball.bank_alloc
   %r = buckyball.bank_im2col %in %out %iter %ksize %stride %padding
+      {inputBase = 5 : i64, lane = 7 : i64, startRow = 0 : i64,
+       startCol = 0 : i64, windowStart = 0 : i64, windowCount = 16 : i64}
       : i64 i64 i64 i64 i64 i64
   buckyball.bank_release %in : i64
   buckyball.bank_release %r : i64

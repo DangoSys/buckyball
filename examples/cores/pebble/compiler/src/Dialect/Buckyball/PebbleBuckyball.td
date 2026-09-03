@@ -21,9 +21,9 @@ include "Buckyball.td"
 include "TransposeBall.td"
 include "SMatMulBall.td"
 include "Im2colBall.td"
-include "Fp2IntBall.td"
+include "ToInt8Ball.td"
 include "Int2FpBall.td"
-include "MatAddBall.td"
-include "ReluBall.td"
+include "LutBall.td"
+include "MaxPoolBall.td"
 
 #endif // PEBBLE_BUCKYBALL_OPS

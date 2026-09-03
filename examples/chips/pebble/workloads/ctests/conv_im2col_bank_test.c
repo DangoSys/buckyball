@@ -1,13 +1,14 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <bbhw/mem/params.h>
 #include <isa/im2col.h>
+#include <params.h>
 #include <stdio.h>
 
-/* 34x34 k3 -> exactly one bank of im2col rows. */
-enum { ITER = 34, K = 3, STRIDE = 1, PAD = 0, LANES = 16, SEED = 0xC1 };
+/* k3 fills exactly one bank of im2col rows. */
+enum { LANES = BANK_WIDTH / 8, K = 3, STRIDE = 1, PAD = 0, SEED = 0xC1 };
 enum {
+  ITER = BANK_ISQRT + K - 1,
   OUT_DIM = (ITER + 2 * PAD - K) / STRIDE + 1,
   WINDOWS = OUT_DIM * OUT_DIM,
   KERNEL = K * K,
@@ -15,6 +16,8 @@ enum {
   K_TILES = (KERNEL + LANES - 1) / LANES,
   OUT_ROWS = M_TILES * K_TILES * LANES,
 };
+_Static_assert(BANK_ISQRT *BANK_ISQRT == BANK_LINES,
+               "BANK_LINES must be a perfect square");
 _Static_assert(OUT_ROWS == BANK_LINES, "bank test must fill one bank");
 
 static elem_t in[ITER * ITER] __attribute__((aligned(64)));

@@ -22,10 +22,11 @@ public:
 
   LogicalResult matchAndRewrite(BankIm2colOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.create<Im2colOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                              op.getIter(), op.getKsize(), op.getStride(),
-                              op.getPadding(), op.getStartRowAttr(),
-                              op.getStartColAttr());
+    rewriter.create<Im2colOp>(
+        op.getLoc(), op.getInBank(), op.getOutBank(), op.getIter(),
+        op.getKsize(), op.getStride(), op.getPadding(), op.getInputBaseAttr(),
+        op.getLaneAttr(), op.getStartRowAttr(), op.getStartColAttr(),
+        op.getWindowStartAttr(), op.getWindowCountAttr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

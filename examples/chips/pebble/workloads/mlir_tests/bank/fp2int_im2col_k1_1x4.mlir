@@ -28,7 +28,7 @@ func.func @main() -> i8 {
   %q = buckyball.bank_fp2int %loaded %bq %iter %da_addr
       : i64 i64 i64 i64
   %im = buckyball.bank_im2col %q %bout %iter %ksize %stride %pad
-      : i64 i64 i64 i64 i64 i64
+      {inputBase = 0 : i64} : i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %im %depth_out %stride
       : memref<16x16xi8> i64 i64 i64
   buckyball.bank_release %loaded : i64

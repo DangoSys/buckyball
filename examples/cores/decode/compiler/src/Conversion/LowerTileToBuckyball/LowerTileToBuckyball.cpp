@@ -70,16 +70,6 @@ public:
   LowerTileToBuckyballPass() = default;
   LowerTileToBuckyballPass(const LowerTileToBuckyballPass &) {}
 
-  Option<int64_t> bankWidthBytes{
-      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
-      llvm::cl::init(16)};
-  Option<int64_t> bankDepth{*this, "bank_depth",
-                            llvm::cl::desc("Bank depth (rows per bank)."),
-                            llvm::cl::init(1024)};
-  Option<int64_t> bankNum{*this, "bank_num",
-                          llvm::cl::desc("Number of physical banks."),
-                          llvm::cl::init(20)};
-
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
         .insert<tile::TileDialect, ::buddy::buckyball::BuckyballDialect,

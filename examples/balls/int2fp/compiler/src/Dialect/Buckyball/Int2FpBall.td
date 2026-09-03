@@ -1,11 +1,11 @@
 //===-- Int2FpBall.td - Int2FpBall operations --------------*- tablegen -*-===//
 //
-// Int2FpBall operations for dequantization / requantization.
+// Int2FpBall operations for Mega Kernel output conversion.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef DEQUANTBALL_OPS
-#define DEQUANTBALL_OPS
+#ifndef INT2FPBALL_OPS
+#define INT2FPBALL_OPS
 
 include "Buckyball.td"
 
@@ -13,37 +13,28 @@ include "Buckyball.td"
 // Int2FpBall operations
 //===----------------------------------------------------------------------===//
 
-class Int2FpBaseOp<string mnemonic, string summaryText> : Buckyball_Op<mnemonic> {
-  let summary = summaryText;
+def Int32ToFp32Op : Buckyball_Op<"int32_to_fp32"> {
+  let summary = "Convert INT32 accumulators to FP32";
   let description = [{
-    Dequantizes INT32 accumulators to FP32 using Da and Dw scales in MMIO.
+    Converts four INT32 values per input row to FP32 and multiplies them by
+    the matching values from a 16-channel FP32 scale bank. Scale rows repeat
+    every four accumulator rows.
   }];
-  let arguments = (ins I64:$inputBankId, I64:$outputBankId,
-                       I64:$iter, I64:$daAddr, I64:$dwAddr);
-  let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $daAddr `,` $dwAddr attr-dict `:` "
+  let arguments = (ins I64:$inputBankId, I64:$scaleBankId,
+                       I64:$outputBankId, I64:$iter, BoolAttr:$relu);
+  let assemblyFormat = "$inputBankId `,` $scaleBankId `,` $outputBankId `,` "
+                       "$iter attr-dict `:` "
                        "type($inputBankId)";
 }
 
-def Int2FpTensorOp : Int2FpBaseOp<"int2fp_tensor",
-    "Per-tensor INT32 accumulator dequantization">;
-
-def Int2FpChannelOp : Int2FpBaseOp<"int2fp_channel",
-    "Per-output-channel INT32 accumulator dequantization">;
-
-class BankInt2FpBaseOp<string mnemonic, string summaryText> : Buckyball_Op<mnemonic> {
-  let summary = summaryText;
-  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$daAddr,
-                       I64:$dwAddr);
+def BankInt32ToFp32Op : Buckyball_Op<"bank_int32_to_fp32"> {
+  let summary = "INT32 to FP32 conversion with virtual bank handles";
+  let arguments = (ins I64:$inBank, I64:$scaleBank, I64:$outBank,
+                       I64:$iter, BoolAttr:$relu);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $daAddr $dwAddr attr-dict `:` type($inBank) type($outBank) type($iter) type($daAddr) type($dwAddr)";
+      "$inBank $scaleBank $outBank $iter attr-dict `:` "
+      "type($inBank) type($scaleBank) type($outBank) type($iter)";
 }
 
-def BankInt2FpTensorOp : BankInt2FpBaseOp<"bank_int2fp_tensor",
-    "Per-tensor dequantization using virtual bank handles">;
-
-def BankInt2FpChannelOp : BankInt2FpBaseOp<"bank_int2fp_channel",
-    "Per-output-channel dequantization using virtual bank handles">;
-
-#endif // DEQUANTBALL_OPS
+#endif // INT2FPBALL_OPS

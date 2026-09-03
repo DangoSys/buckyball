@@ -1,8 +1,8 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <bbhw/mem/params.h>
 #include <isa/smatmul.h>
+#include <params.h>
 #include <stdio.h>
 
 #define M BANK_LINES

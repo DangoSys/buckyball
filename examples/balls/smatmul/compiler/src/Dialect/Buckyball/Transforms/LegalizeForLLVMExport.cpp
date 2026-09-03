@@ -22,16 +22,12 @@ using namespace buddy::buckyball::legalize;
 
 namespace {
 
-uint64_t matrixCfg(uint64_t rows, uint64_t cols, uint64_t k) {
-  if (rows == 0 || cols == 0 || k == 0 || rows > 0xfff || k > 0xfff ||
-      cols > 16)
-    llvm::report_fatal_error("matrix cfg: rows/k in 1..4095, cols in 1..16");
+uint64_t matrixCfg(uint64_t rows, uint64_t cols, bool first = true,
+                   bool last = true) {
+  if (rows == 0 || cols == 0 || rows > 0xfff || cols > 16)
+    llvm::report_fatal_error("matrix cfg: rows in 1..4095, cols in 1..16");
   return fieldBits(rows, 0, 11) | fieldBits(cols, 12, 23) |
-         fieldBits(k, 24, 35);
-}
-
-uint64_t matrixRs1(uint64_t op1, uint64_t op2, uint64_t wr) {
-  return fieldBits(op1, 0, 9) | fieldBits(op2, 10, 19) | fieldBits(wr, 20, 29);
+         (uint64_t(first) << 24) | (uint64_t(last) << 25);
 }
 
 struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
@@ -63,10 +59,15 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     if (k != kb || cTy.getShape()[0] != (int64_t)m ||
         cTy.getShape()[1] != (int64_t)n)
       return rewriter.notifyMatchFailure(op, "matmul shapes mismatch");
-    // Bank-unit 8-bit path: N/K are one bank lane; M fills bank depth.
-    if (m == 0 || n != 16 || k != 16 || m > 1024 || m % 16 != 0)
+    const int64_t bankDepth = buckyball_target::getBuckyballTarget().bankDepth;
+    if (bankDepth <= 0)
+      return op.emitError("smatmul lowering requires target bankDepth > 0");
+    // A occupies m lines, B occupies k lines, and packed int32 C occupies 2m.
+    if (m == 0 || n != 16 || k != 16 || m % 16 != 0 ||
+        m > static_cast<uint64_t>(bankDepth / 2) ||
+        k > static_cast<uint64_t>(bankDepth))
       return rewriter.notifyMatchFailure(
-          op, "SMatMul requires M/K exactly 16 and N exactly 16");
+          op, "SMatMul requires K/N exactly 16 and A/B/C to fit their banks");
     if (!aTy.getElementType().isInteger(8) ||
         !bTy.getElementType().isInteger(8) ||
         !cTy.getElementType().isInteger(32))
@@ -122,8 +123,12 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     }
 
     rewriter.create<CustomIntrOp>(
-        loc, cstI64(rewriter, loc, matrixRs1(aBank, bBank, cBank)),
-        cstI64(rewriter, loc, matrixCfg(m, n, k)),
+        loc,
+        packRs1BanksIter(rewriter, loc, cstI64(rewriter, loc, aBank),
+                         cstI64(rewriter, loc, bBank),
+                         cstI64(rewriter, loc, cBank),
+                         cstI64(rewriter, loc, k)),
+        cstI64(rewriter, loc, matrixCfg(m, n)),
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("SMATMUL_OS")));
 
@@ -185,40 +190,56 @@ private:
 };
 
 struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
-  SMatMulLowering(LLVMTypeConverter &converter, bool, int64_t bankDepth)
-      : ConvertOpToLLVMPattern<SMatMulOp>(converter), bankDepth(bankDepth) {}
+  SMatMulLowering(LLVMTypeConverter &converter, bool, int64_t)
+      : ConvertOpToLLVMPattern<SMatMulOp>(converter) {}
 
   LogicalResult
   matchAndRewrite(SMatMulOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("SMatMulBall");
-    if (bankDepth <= 1)
-      return op.emitError("smatmul lowering requires bank_depth > 1");
-    int64_t aw = addrBitsForDepth(bankDepth);
-    if (aw < 1 || 3 * aw > 34)
-      return op.emitError(
-          "smatmul iter cannot hold three bases from bank_depth");
-    uint64_t mask = (1ULL << aw) - 1;
-    if ((uint64_t)op.getOp1Base() > mask || (uint64_t)op.getOp2Base() > mask ||
-        (uint64_t)op.getWrBase() > mask)
-      return op.emitError("smatmul base exceeds log2(bank_depth)");
-
     Location loc = op.getLoc();
+    auto config = op.getConfig().getDefiningOp<arith::ConstantOp>();
+    if (!config)
+      return op.emitError("smatmul config must be a constant");
+    auto configAttr = dyn_cast<IntegerAttr>(config.getValue());
+    if (!configAttr)
+      return op.emitError("smatmul config must be an integer constant");
+    uint64_t cfg = configAttr.getValue().getZExtValue();
+    uint64_t rows = cfg & 0xfff;
+    uint64_t cols = (cfg >> 12) & 0xfff;
+    uint64_t k = (cfg >> 24) & 0xfff;
     Value rs1 = packRs1BanksIter(
         rewriter, loc, adaptor.getOp1BankId(), adaptor.getOp2BankId(),
-        adaptor.getResultBankId(),
-        cstI64(rewriter, loc,
-               smatmulIterBits(op.getOp1Base(), op.getOp2Base(), op.getWrBase(),
-                               aw)));
+        adaptor.getResultBankId(), cstI64(rewriter, loc, k));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, adaptor.getConfig(),
-        rewriter.getI32IntegerAttr(buckyball_target::getBuckyballFunct7(
-            op.getWs() ? "SMATMUL_WS" : "SMATMUL_OS")));
+        op, rs1,
+        cstI64(rewriter, loc,
+               matrixCfg(rows, cols, op.getFirst(), op.getLast())),
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("SMATMUL_OS")));
     return success();
   }
 
 private:
-  int64_t bankDepth = 0;
+};
+
+struct SMatMulBiasLowering : public ConvertOpToLLVMPattern<SMatMulBiasOp> {
+  SMatMulBiasLowering(LLVMTypeConverter &converter, bool)
+      : ConvertOpToLLVMPattern<SMatMulBiasOp>(converter) {}
+
+  LogicalResult
+  matchAndRewrite(SMatMulBiasOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    buckyball_target::requireBuckyballBall("SMatMulBall");
+    Location loc = op.getLoc();
+    Value rs1 = packRs1BankIter(rewriter, loc, adaptor.getBiasBankId(),
+                                cstI64(rewriter, loc, 4));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(
+        op, rs1, cstI64(rewriter, loc, 0),
+        rewriter.getI32IntegerAttr(
+            buckyball_target::getBuckyballFunct7("SMATMUL_BIAS")));
+    return success();
+  }
 };
 
 } // namespace
@@ -229,11 +250,13 @@ void populateSMatMulBallLegalizeForLLVMExportPatterns(
     int64_t bankDepth, bool rushB) {
   patterns.add<SMatMulMatmulLowering>(converter, stable, rushB);
   patterns.add<SMatMulLowering>(converter, stable, bankDepth);
+  patterns.add<SMatMulBiasLowering>(converter, stable);
 }
 
 void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                                  bool /*stable*/) {
   target.addIllegalOp<SMatMulMatmulOp>();
-  target.addIllegalOp<SMatMulOp, BankSMatMulOp>();
+  target.addIllegalOp<SMatMulOp, BankSMatMulOp, SMatMulBiasOp,
+                      BankSMatMulBiasOp>();
 }
 } // namespace mlir::buddy::buckyball

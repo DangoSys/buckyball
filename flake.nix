@@ -15,6 +15,9 @@
             overlays = [ overlay ];
             inherit system;
             config.allowUnfree = true;
+            config.permittedInsecurePackages = [
+              "openjdk-8u502-b07"
+            ];
           };
 
           defaultShell = pkgs.mkShell {
@@ -46,6 +49,9 @@
 
               # protoc for bbdev config --install (chip.proto -> chip.pb)
               pkgs.protobuf
+
+              pkgs.xorg-server
+              pkgs.jdk8
             ];
             shellHook = ''
               # Must run with cwd at the git checkout. Store copies from toString ./.
@@ -75,7 +81,9 @@
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
 
               export JAVA_HOME="${pkgs.jdk17}"
-              export PATH="$JAVA_HOME/bin:$PATH"
+              # used by smic180
+              export S018SP_JAVA="${pkgs.jdk8}/bin/java"
+              export PATH="$JAVA_HOME/bin:${pkgs.xorg-server}/bin:$PATH"
 
               # Banner must go to stderr. stdout is reserved for MCP stdio / machine parsers.
               if [ -z "$NIX_QUIET" ]; then

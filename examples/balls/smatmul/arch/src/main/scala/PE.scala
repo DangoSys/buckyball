@@ -30,8 +30,8 @@ class PE extends Module {
     accumulator := 0.S
     aPipeValid  := false.B
     bPipeValid  := false.B
-  }.elsewhen(io.aInValid && io.bInValid) {
-    accumulator := accumulator + (io.aIn * io.bIn)
+  }.elsewhen(aPipeValid && bPipeValid) {
+    accumulator := accumulator + (aPipe * bPipe)
   }
   when(!io.clear) {
     aPipe      := io.aIn

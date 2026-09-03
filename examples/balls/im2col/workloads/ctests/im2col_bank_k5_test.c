@@ -5,13 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 27x27 k5 -> 1088 rows: fills bank0 (1024) and spills 64 rows to bank1. */
+/* k5 spills past one bank: OUT_ROWS > BANK_LINES. */
 enum {
   ITER = 27,
   K = 5,
   STRIDE = 1,
   PAD = 0,
-  LANES = 16,
+  LANES = BANK_WIDTH / 8,
   N_GROUPS = 2,
   SEED = 0x55,
 };

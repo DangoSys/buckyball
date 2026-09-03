@@ -26,8 +26,6 @@ namespace buddy {
 
 inline constexpr int64_t kDefaultBankWidthBytes = 16;
 inline constexpr size_t kBankLane = 16;
-inline constexpr size_t kMaxMvinDepth8b = 1024;
-inline constexpr size_t kMaxMvoutDepth32b = 256;
 
 inline size_t ceilDiv(size_t a, size_t b) { return (a + b - 1) / b; }
 

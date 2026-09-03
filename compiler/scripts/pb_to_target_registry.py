@@ -200,6 +200,54 @@ def _emit(chip, target: str | None = None) -> str:
     return "\n".join(chunks)
 
 
+def _isqrt(n: int) -> int:
+    if n <= 0:
+        _die(f"isqrt of non-positive {n}")
+    x = n
+    while True:
+        y = (x + n // x) // 2
+        if y >= x:
+            return x
+        x = y
+
+
+def _emit_params_header(profile, core, isa_dir: Path) -> None:
+    bank = core.mem.bank
+    mmio = core.mem.mmio
+    if bank.num == 0 or bank.width == 0 or bank.entries == 0:
+        _die(f"profile {profile.name}: bank geometry must be non-zero")
+    if bank.width % 8 != 0:
+        _die(f"profile {profile.name}: bank.width must be a multiple of 8")
+    if mmio.bank_num == 0 or mmio.bank_entries == 0 or mmio.bank_width == 0:
+        _die(f"profile {profile.name}: mmio geometry must be non-zero")
+    if mmio.bank_width % 8 != 0:
+        _die(f"profile {profile.name}: mmio.bank_width must be a multiple of 8")
+    row_bytes = bank.width // 8
+    mmio_bytes = mmio.bank_num * mmio.bank_entries * (mmio.bank_width // 8)
+    if mmio_bytes % row_bytes != 0:
+        _die(
+            f"profile {profile.name}: MMIO bytes {mmio_bytes} is not a multiple of "
+            f"SRAM row bytes {row_bytes}"
+        )
+    lines = [
+        "/* Generated from Chip.pb. Do not edit. */",
+        "#ifndef BBHW_PARAMS_H",
+        "#define BBHW_PARAMS_H",
+        "",
+        f"#define BANK_NUM {bank.num}",
+        f"#define BANK_WIDTH {bank.width}",
+        f"#define BANK_LINES {bank.entries}",
+        f"#define BANK_ISQRT {_isqrt(bank.entries)}",
+        f"#define MMIO_BANK_NUM {mmio.bank_num}",
+        f"#define MMIO_BANK_ENTRIES {mmio.bank_entries}",
+        f"#define MMIO_BANK_WIDTH_BITS {mmio.bank_width}",
+        "",
+        "#endif",
+        "",
+    ]
+    _write(isa_dir / profile.name / "params.h", "\n".join(lines))
+
+
 def _emit_isa_headers(chip, isa_dir: Path) -> None:
     """Emit one C ISA header per compiler target.
 
@@ -217,6 +265,7 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
         lines.extend(["", "#endif", ""])
         header = isa_dir / profile.name / "ballISA.h"
         _write(header, "\n".join(lines))
+        _emit_params_header(profile, core, isa_dir)
 
 
 def _emit_dialect_td(chip, repo: Path) -> str:

@@ -1,42 +1,27 @@
 set(BUCKYBALL_MLIR_GROUP_TARGET pebble-mlir-tests-build)
 set(BUCKYBALL_MLIR_TEST_PREFIX tile)
 
-set(PEBBLE_TILE_TO_ELF_PASSES
-  -convert-tile-to-buckyball
-  -lower-buckyball-to-bank-ssa
-  -assign-physical-banks
-  ${BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS}
-  -convert-linalg-to-loops
-  -expand-strided-metadata
-  -lower-affine
-  -convert-scf-to-cf
-  -convert-cf-to-llvm
-  ${BUCKYBALL_LOWER_BUCKYBALL}
-  -convert-arith-to-llvm
-  -convert-math-to-llvm
-  -finalize-memref-to-llvm
-  -convert-func-to-llvm
-  -reconcile-unrealized-casts)
+set(PEBBLE_MEGA_REGION_PASSES
+  -convert-tile-to-buckyball)
 
-add_buckyball_mlir_test(tile_matmul_16x16_i8 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_matmul_16x16_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_matmul_1x256x120_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_matmul_1x576x1024_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_matmul_1x1024x1000_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_matmul_5x3072x768_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_transpose_16x16_i8 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_transpose_80x80_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_transpose_120x256_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_contract(mega_matmul_contract
+  TARGET pebble
+  PASSES ${PEBBLE_MEGA_REGION_PASSES})
 
-add_buckyball_mlir_test(tile_transpose_128x128_dynstride_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_transpose_1024x576_dynstride_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_transpose_matmul_120x256_f32 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_6x6_k3 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_1x1_c16_oc8 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_1x1_c16_oc16 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_1x1_c16_oc24 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_1x1_c240_oc64 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_8x8_1x1_c16_oc24 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_8x8_k3_c2_oc2 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_12x12_k5 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
-add_buckyball_mlir_test(tile_conv2d_28x28_k5 TARGET pebble PASSES ${PEBBLE_TILE_TO_ELF_PASSES})
+add_buckyball_mlir_contract(mega_matmul_bank_contract
+  TARGET pebble
+  PASSES
+    -convert-tile-to-buckyball
+    -lower-buckyball-to-bank-ssa
+    -assign-physical-banks)
+
+add_buckyball_mlir_contract(mega_conv2d_contract
+  TARGET pebble
+  PASSES ${PEBBLE_MEGA_REGION_PASSES})
+
+add_buckyball_mlir_contract(mega_conv2d_bank_contract
+  TARGET pebble
+  PASSES
+    -convert-tile-to-buckyball
+    -lower-buckyball-to-bank-ssa
+    -assign-physical-banks)

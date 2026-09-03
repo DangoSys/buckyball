@@ -1,11 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <bbhw/mem/params.h>
 #include <isa/smatmul.h>
+#include <params.h>
 #include <stdio.h>
 
-/* One bank of A rows: M=1024, N=1, K=16. */
+/* One bank of A rows. */
 #define M BANK_LINES
 #define N 1
 #define K 16
