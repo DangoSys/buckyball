@@ -50,18 +50,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    path = chip_output_root(bbdir, chip)
+    output_path = chip_output_root(bbdir, chip)
+    build_path = os.path.join(bbdir, "bb-tests", "workloads", "build", chip)
 
-    if os.path.exists(path):
-        ctx.logger.info("Removing workload output directory", {"path": path})
-        shutil.rmtree(path)
-    else:
-        ctx.logger.info("Workload output directory already clean", {"path": path})
+    for path in (output_path, build_path):
+        if os.path.exists(path):
+            ctx.logger.info("Removing workload directory", {"path": path})
+            shutil.rmtree(path)
+        else:
+            ctx.logger.info("Workload directory already clean", {"path": path})
 
     await check_result(
         ctx,
         0,
         continue_run=False,
-        extra_fields={"task": "clean", "chip": chip, "path": path},
+        extra_fields={
+            "task": "clean",
+            "chip": chip,
+            "output_path": output_path,
+            "build_path": build_path,
+        },
         trace_id=origin_tid,
     )
