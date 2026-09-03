@@ -25,37 +25,51 @@ struct MaxPoolLowering : public ConvertOpToLLVMPattern<MaxPoolOp> {
     int64_t kernel = op.getKernel();
     int64_t stride = op.getStride();
     int64_t padding = op.getPadding();
-    int64_t inputBase = op.getInputBase();
-    int64_t outputBase = op.getOutputBase();
-    int64_t outputStride = op.getOutputStride();
+    int64_t startRow = op.getStartRow();
+    int64_t startCol = op.getStartCol();
     auto iterOp = op.getIter().getDefiningOp<arith::ConstantOp>();
     auto iterAttr =
         iterOp ? dyn_cast<IntegerAttr>(iterOp.getValue()) : IntegerAttr();
-    if (!iterAttr || inputSide <= 0 || inputSide > 255 || outputSide <= 0 ||
-        outputSide > 255 || kernel <= 0 || kernel > 255 || stride <= 0 ||
-        stride > 255 || padding < 0 || padding > 255 || inputBase < 0 ||
-        inputBase > 255 || outputBase < 0 || outputBase > 255 ||
-        outputStride < outputSide || outputStride > 255 ||
-        inputBase + inputSide * inputSide > bankDepth ||
+    if (!iterAttr || inputSide <= 0 || inputSide > 15 || outputSide <= 0 ||
+        outputSide > 15 || kernel <= 0 || kernel > 15 || stride <= 0 ||
+        stride > 15 || padding < 0 || padding > 15 || startRow < 0 ||
+        startRow > 15 || startCol < 0 || startCol > 15 ||
+        inputSide * inputSide > bankDepth ||
         outputSide * outputSide != iterAttr.getInt() ||
-        outputBase + (outputSide - 1) * outputStride + outputSide > bankDepth ||
-        inputSide + 2 * padding - kernel != (outputSide - 1) * stride)
+        inputSide + 2 * padding < kernel + startRow ||
+        inputSide + 2 * padding < kernel + startCol ||
+        inputSide + 2 * padding - kernel - startRow !=
+            (outputSide - 1) * stride ||
+        inputSide + 2 * padding - kernel - startCol !=
+            (outputSide - 1) * stride)
       return op.emitError("MaxPool shape does not fit one physical bank tile");
 
     Location loc = op.getLoc();
     Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
                                  cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
-    uint64_t rs2 = static_cast<uint64_t>(inputSide) |
-                   (static_cast<uint64_t>(outputSide) << 8) |
-                   (static_cast<uint64_t>(kernel) << 16) |
-                   (static_cast<uint64_t>(stride) << 24) |
-                   (static_cast<uint64_t>(padding) << 32) |
-                   (static_cast<uint64_t>(inputBase) << 40) |
-                   (static_cast<uint64_t>(outputBase) << 48) |
-                   (static_cast<uint64_t>(outputStride) << 56);
+    uint64_t geometry = static_cast<uint64_t>(inputSide) |
+                        (static_cast<uint64_t>(outputSide) << 4) |
+                        (static_cast<uint64_t>(kernel) << 8) |
+                        (static_cast<uint64_t>(stride) << 12) |
+                        (static_cast<uint64_t>(padding) << 16) |
+                        (static_cast<uint64_t>(startRow) << 38) |
+                        (static_cast<uint64_t>(startCol) << 42);
+    Value rs2 = cstI64(rewriter, loc, geometry);
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getInputBase(),
+                                       cstI64(rewriter, loc, 20)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputBase(),
+                                       cstI64(rewriter, loc, 26)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputStride(),
+                                       cstI64(rewriter, loc, 32)));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, cstI64(rewriter, loc, rs2),
+        op, rs1, rs2,
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("MAXPOOL")));
     return success();

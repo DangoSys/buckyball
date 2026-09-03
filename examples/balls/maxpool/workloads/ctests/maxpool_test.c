@@ -24,7 +24,7 @@ int main(void) {
   bb_mem_alloc(1, 1, 1);
   bb_mvin((uintptr_t)input, 0, 64, 1);
   bb_mvin((uintptr_t)output, 1, 64, 1);
-  bb_maxpool(0, 1, 6, 3, 2, 2, 0, INPUT_BASE, OUTPUT_BASE, OUTPUT_STRIDE);
+  bb_maxpool(0, 1, 6, 3, 2, 2, 0, INPUT_BASE, OUTPUT_BASE, OUTPUT_STRIDE, 0, 0);
   bb_mvout((uintptr_t)output, 1, 64, 1);
   bb_fence();
 

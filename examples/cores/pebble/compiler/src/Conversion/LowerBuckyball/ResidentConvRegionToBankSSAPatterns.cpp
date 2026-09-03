@@ -676,10 +676,12 @@ public:
                    b.getI64IntegerAttr(inputSide), b.getI64IntegerAttr(side),
                    b.getI64IntegerAttr(stage.kernel),
                    b.getI64IntegerAttr(stage.stride), b.getI64IntegerAttr(0),
-                   b.getI64IntegerAttr(sourceSlot * source.panelRows),
-                   b.getI64IntegerAttr(destinationSlot * destination.panelRows +
-                                       destinationBase),
-                   b.getI64IntegerAttr(destinationStride))
+                   createI64Const(b, loc, sourceSlot * source.panelRows),
+                   createI64Const(b, loc,
+                                  destinationSlot * destination.panelRows +
+                                      destinationBase),
+                   createI64Const(b, loc, destinationStride),
+                   b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                   .getOutBankOut();
         }
         releaseTile(source);

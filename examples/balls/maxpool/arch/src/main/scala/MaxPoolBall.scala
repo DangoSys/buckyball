@@ -42,9 +42,11 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   private val kernel                                                               = RegInit(0.U(8.W))
   private val stride                                                               = RegInit(0.U(8.W))
   private val padding                                                              = RegInit(0.U(8.W))
-  private val inputBase                                                            = RegInit(0.U(8.W))
-  private val outputBase                                                           = RegInit(0.U(8.W))
-  private val outputStride                                                         = RegInit(0.U(8.W))
+  private val inputBase                                                            = RegInit(0.U(6.W))
+  private val outputBase                                                           = RegInit(0.U(6.W))
+  private val outputStride                                                         = RegInit(0.U(6.W))
+  private val startRow                                                             = RegInit(0.U(4.W))
+  private val startCol                                                             = RegInit(0.U(4.W))
   private val outputRow                                                            = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val outputY                                                              = RegInit(0.U(8.W))
   private val outputX                                                              = RegInit(0.U(8.W))
@@ -53,8 +55,8 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   private val maximum                                                              = RegInit(VecInit(Seq.fill(16)("h80".U(8.W))))
   private val writeData                                                            = Reg(UInt(128.W))
 
-  private val sourceY       = outputY * stride +& kernelY
-  private val sourceX       = outputX * stride +& kernelX
+  private val sourceY       = outputY * stride +& kernelY +& startRow
+  private val sourceX       = outputX * stride +& kernelX +& startCol
   private val sourceValid   = sourceY >= padding && sourceX >= padding &&
     sourceY < padding +& inputSide && sourceX < padding +& inputSide
   private val inputY        = sourceY - padding
@@ -97,15 +99,18 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        val cmd         = io.cmdReq.bits.cmd
-        val inSide      = cmd.rs2(7, 0)
-        val outSide     = cmd.rs2(15, 8)
-        val kernelSize  = cmd.rs2(23, 16)
-        val poolStride  = cmd.rs2(31, 24)
-        val poolPadding = cmd.rs2(39, 32)
-        val inBase      = cmd.rs2(47, 40)
-        val outBase     = cmd.rs2(55, 48)
-        val outStride   = cmd.rs2(63, 56)
+        val cmd          = io.cmdReq.bits.cmd
+        val inSide       = cmd.rs2(3, 0)
+        val outSide      = cmd.rs2(7, 4)
+        val kernelSize   = cmd.rs2(11, 8)
+        val poolStride   = cmd.rs2(15, 12)
+        val poolPadding  = cmd.rs2(19, 16)
+        val inBase       = cmd.rs2(25, 20)
+        val outBase      = cmd.rs2(31, 26)
+        val outStride    = cmd.rs2(37, 32)
+        val poolStartRow = cmd.rs2(41, 38)
+        val poolStartCol = cmd.rs2(45, 42)
+        assert(cmd.rs2(63, 46) === 0.U, "MAXPOOL reserved rs2 bits must be zero")
         assert(cmd.funct7 === funct.U, "MaxPoolBall funct7 must be MAXPOOL")
         assert(cmd.rs1(19, 10) === 0.U, "MAXPOOL reserves input bank 1")
         assert(
@@ -130,8 +135,12 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
           "MAXPOOL output tile exceeds bank depth"
         )
         assert(
-          inSide +& (poolPadding << 1) >= kernelSize &&
-            inSide +& (poolPadding << 1) - kernelSize === (outSide - 1.U) * poolStride,
+          inSide +& (poolPadding << 1) >= kernelSize +& poolStartRow &&
+            inSide +& (poolPadding << 1) - kernelSize - poolStartRow ===
+            (outSide - 1.U) * poolStride &&
+            inSide +& (poolPadding << 1) >= kernelSize +& poolStartCol &&
+            inSide +& (poolPadding << 1) - kernelSize - poolStartCol ===
+            (outSide - 1.U) * poolStride,
           "MAXPOOL pooling geometry is inconsistent"
         )
 
@@ -149,6 +158,8 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
         inputBase    := inBase
         outputBase   := outBase
         outputStride := outStride
+        startRow     := poolStartRow
+        startCol     := poolStartCol
         outputRow    := 0.U
         outputY      := 0.U
         outputX      := 0.U

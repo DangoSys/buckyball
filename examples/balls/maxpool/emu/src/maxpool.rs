@@ -9,14 +9,16 @@ impl BallInstruction for MaxPool {
         let input_bank = rs1_b0(xs1);
         let output_bank = rs1_b2(xs1);
         let iter = rs1_iter(xs1) as usize;
-        let input_side = (xs2 & 0xff) as usize;
-        let output_side = ((xs2 >> 8) & 0xff) as usize;
-        let kernel = ((xs2 >> 16) & 0xff) as usize;
-        let stride = ((xs2 >> 24) & 0xff) as usize;
-        let padding = ((xs2 >> 32) & 0xff) as usize;
-        let input_base = ((xs2 >> 40) & 0xff) as usize;
-        let output_base = ((xs2 >> 48) & 0xff) as usize;
-        let output_stride = ((xs2 >> 56) & 0xff) as usize;
+        let input_side = (xs2 & 0xf) as usize;
+        let output_side = ((xs2 >> 4) & 0xf) as usize;
+        let kernel = ((xs2 >> 8) & 0xf) as usize;
+        let stride = ((xs2 >> 12) & 0xf) as usize;
+        let padding = ((xs2 >> 16) & 0xf) as usize;
+        let input_base = ((xs2 >> 20) & 0x3f) as usize;
+        let output_base = ((xs2 >> 26) & 0x3f) as usize;
+        let output_stride = ((xs2 >> 32) & 0x3f) as usize;
+        let start_row = ((xs2 >> 38) & 0xf) as usize;
+        let start_col = ((xs2 >> 42) & 0xf) as usize;
 
         if rs1_b1(xs1) != 0 {
             panic!("maxpool: input bank 1 must be zero");
@@ -40,8 +42,12 @@ impl BallInstruction for MaxPool {
             || input_base + input_side * input_side > bank_lines()
             || output_side * output_side != iter
             || output_base + (output_side - 1) * output_stride + output_side > bank_lines()
-            || input_side + 2 * padding < kernel
-            || input_side + 2 * padding - kernel != (output_side - 1) * stride
+            || input_side + 2 * padding < kernel + start_row
+            || input_side + 2 * padding < kernel + start_col
+            || input_side + 2 * padding - kernel - start_row
+                != (output_side - 1) * stride
+            || input_side + 2 * padding - kernel - start_col
+                != (output_side - 1) * stride
         {
             panic!("maxpool: illegal square pooling geometry");
         }
@@ -56,8 +62,10 @@ impl BallInstruction for MaxPool {
                 let mut maximum = [-128i8; 16];
                 for kernel_y in 0..kernel {
                     for kernel_x in 0..kernel {
-                        let input_y = (output_y * stride + kernel_y) as isize - padding as isize;
-                        let input_x = (output_x * stride + kernel_x) as isize - padding as isize;
+                        let input_y = (output_y * stride + kernel_y + start_row) as isize
+                            - padding as isize;
+                        let input_x = (output_x * stride + kernel_x + start_col) as isize
+                            - padding as isize;
                         if input_y < 0
                             || input_x < 0
                             || input_y >= input_side as isize
@@ -84,14 +92,16 @@ impl BallInstruction for MaxPool {
 
     fn latency(xs1: u64, xs2: u64) -> u64 {
         let iter = rs1_iter(xs1);
-        let input_side = xs2 & 0xff;
-        let output_side = (xs2 >> 8) & 0xff;
-        let kernel = (xs2 >> 16) & 0xff;
-        let stride = (xs2 >> 24) & 0xff;
-        let padding = (xs2 >> 32) & 0xff;
-        let input_base = (xs2 >> 40) & 0xff;
-        let output_base = (xs2 >> 48) & 0xff;
-        let output_stride = (xs2 >> 56) & 0xff;
+        let input_side = xs2 & 0xf;
+        let output_side = (xs2 >> 4) & 0xf;
+        let kernel = (xs2 >> 8) & 0xf;
+        let stride = (xs2 >> 12) & 0xf;
+        let padding = (xs2 >> 16) & 0xf;
+        let input_base = (xs2 >> 20) & 0x3f;
+        let output_base = (xs2 >> 26) & 0x3f;
+        let output_stride = (xs2 >> 32) & 0x3f;
+        let start_row = (xs2 >> 38) & 0xf;
+        let start_col = (xs2 >> 42) & 0xf;
         if rs1_b1(xs1) != 0
             || input_side == 0
             || output_side == 0
@@ -102,8 +112,12 @@ impl BallInstruction for MaxPool {
             || output_side * output_side != iter
             || output_base + (output_side - 1) * output_stride + output_side
                 > bank_lines() as u64
-            || input_side + 2 * padding < kernel
-            || input_side + 2 * padding - kernel != (output_side - 1) * stride
+            || input_side + 2 * padding < kernel + start_row
+            || input_side + 2 * padding < kernel + start_col
+            || input_side + 2 * padding - kernel - start_row
+                != (output_side - 1) * stride
+            || input_side + 2 * padding - kernel - start_col
+                != (output_side - 1) * stride
         {
             panic!("maxpool: illegal encoding");
         }

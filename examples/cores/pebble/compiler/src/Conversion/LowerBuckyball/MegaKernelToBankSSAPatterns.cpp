@@ -525,8 +525,10 @@ public:
                  b.getI64IntegerAttr(inputSide), b.getI64IntegerAttr(side),
                  b.getI64IntegerAttr(stage.kernel),
                  b.getI64IntegerAttr(stage.stride), b.getI64IntegerAttr(0),
-                 b.getI64IntegerAttr(0), b.getI64IntegerAttr(destinationBase),
-                 b.getI64IntegerAttr(destinationStride))
+                 createI64Const(b, loc, 0),
+                 createI64Const(b, loc, destinationBase),
+                 createI64Const(b, loc, destinationStride),
+                 b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                 .getOutBankOut();
         releaseBank(b, loc, source);
         return destination;
