@@ -24,11 +24,12 @@ int main(void) {
 #endif
   bb_mvin_mmio((uintptr_t)da, 0, 1, 4);
   bb_mvin_mmio((uintptr_t)dw, 64, 4, 16);
-  bb_mem_alloc(0, 1, 4);
-  bb_mem_alloc(1, 1, 4);
-  bb_mvin((uintptr_t)input, 0, 1, 1);
-  bb_int2fp_channel(0, 1, 1, 0, 64);
-  bb_mvout((uintptr_t)output, 1, 1, 1);
+  bb_mem_alloc(0, 4, 1);
+  bb_mem_alloc(1, 4, 1);
+  bb_mem_alloc(2, 4, 1);
+  bb_mvin((uintptr_t)input, 0, 4, 1);
+  bb_int32_to_fp32(0, 1, 2, 4, 0);
+  bb_mvout((uintptr_t)output, 2, 4, 1);
   bb_fence();
   for (int i = 0; i < 16; ++i) {
     if (output[i] != expected[i]) {

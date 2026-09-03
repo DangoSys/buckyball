@@ -87,8 +87,8 @@ int main(void) {
   bb_fence();
   bb_matadd(2, 4, 6, CL);
   bb_fence();
-  bb_int2fp_tensor(6, 3, CL, 0, 16);
-  bb_mvout((uintptr_t)out, 3, CL, 1);
+  bb_int32_to_fp32(6, 3, 5, CL, 0);
+  bb_mvout((uintptr_t)out, 5, CL, 1);
   bb_fence();
   for (int r = 0; r < WINS; ++r)
     for (int c = 0; c < T; ++c) {

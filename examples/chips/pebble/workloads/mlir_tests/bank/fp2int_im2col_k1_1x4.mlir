@@ -25,8 +25,8 @@ func.func @main() -> i8 {
   %bout = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %bin %depth_in %stride
       : memref<1x16xf32> i64 i64 i64
-  %q = buckyball.bank_fp2int %loaded %bq %iter %da_addr
-      : i64 i64 i64 i64
+  %q = buckyball.bank_quant_f32_to_i8 %loaded %bq %iter 1.0
+      : i64 i64 i64 f32
   %base = arith.constant 0 : i64
   %lane = arith.constant 0 : i64
   %im = buckyball.bank_im2col %q %bout %iter %ksize %stride %pad %base %lane

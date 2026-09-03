@@ -24,6 +24,8 @@ jobs:
     name: run
     runs-on: check
     environment: regression
+    env:
+      BB_ROOT: ~/Code/buckyball
     steps:
       - name: Print information
         run: |
@@ -36,13 +38,6 @@ jobs:
             echo "branch=${{ github.ref_name }}"
           fi
 
-  prepare-repo:
-    name: prepare-repo
-    needs: gate
-    runs-on: check
-    env:
-      BB_ROOT: ~/Code/buckyball
-    steps:
       - name: Prepare repo
         shell: zsh {0}
         run: |
@@ -54,7 +49,7 @@ jobs:
 
   eval-area-power:
     name: eval-area-power-${{ matrix.chip }}
-    needs: prepare-repo
+    needs: gate
     runs-on: check
     strategy:
       fail-fast: false
@@ -128,7 +123,7 @@ jobs:
 
   fpga-bitstream:
     name: fpga-bitstream-${{ matrix.chip }}
-    needs: prepare-repo
+    needs: gate
     runs-on: check
     strategy:
       fail-fast: false

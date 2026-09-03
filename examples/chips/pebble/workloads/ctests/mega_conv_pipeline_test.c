@@ -31,7 +31,7 @@ int main(void) {
   bb_mvin((uintptr_t)weight, 2, 16, 1);
   bb_mvin((uintptr_t)bias, 3, 4, 1);
   bb_mvin((uintptr_t)scale, 5, 4, 1);
-  bb_im2col_window(0, 1, 6, 3, 1, 0, 0, 0, 0, 16);
+  bb_im2col(0, 1, 6, 3, 1, 0, 0, 0, 0, 0, 0, 16);
   bb_smatmul_bias(3);
   bb_smatmul_os(1, 2, 4, 16, 16, 16, 1, 1);
   bb_quant_i32_to_i8(4, 5, 6, 64, 0, 4, 4, 4, 0);
