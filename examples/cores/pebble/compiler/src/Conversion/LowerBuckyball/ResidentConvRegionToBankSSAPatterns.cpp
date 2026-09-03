@@ -781,18 +781,22 @@ public:
 
     Stage &finalStage = stages.back();
     int64_t finalPanels = finalStage.outputChannels / kTile;
+    // Generate the region once for all output-channel panels.  Rebuilding the
+    // producer tree once per panel is quadratic in stage count and was the
+    // source of multi-gigabyte compiler RSS on ResNet.
+    TileBanks output = allocateTile(finalPanels, 1, zeroI8);
+    if (output.banks.size() != 1 ||
+        failed(emitInto(stages.size() - 1, 0, 0, 1, 1, zero, finalPanels,
+                        output, 0, 1)))
+      return failure();
+    Value packed = b.create<memref::AllocOp>(
+        loc, MemRefType::get({finalPanels, kTile}, b.getI8Type()));
+    Value stored = mvoutBank(b, loc, packed, output.banks.front(), finalPanels);
+    b.create<FenceOp>(loc);
     auto panelLoop = b.create<scf::ForOp>(
         loc, zero, b.create<arith::ConstantIndexOp>(loc, finalPanels), one);
     b.setInsertionPointToStart(panelLoop.getBody());
     Value panel = panelLoop.getInductionVar();
-    TileBanks output = allocateTile(1, 1, zeroI8);
-    if (output.banks.size() != 1 ||
-        failed(emitInto(stages.size() - 1, 0, 0, 1, 1, panel, 1, output, 0, 1)))
-      return failure();
-    Value packed = b.create<memref::AllocOp>(
-        loc, MemRefType::get({1, kTile}, b.getI8Type()));
-    Value stored = mvoutBank(b, loc, packed, output.banks.front(), 1);
-    b.create<FenceOp>(loc);
     auto outputLoop = b.create<scf::ForOp>(
         loc, zero, b.create<arith::ConstantIndexOp>(loc, kTile), one);
     b.setInsertionPointToStart(outputLoop.getBody());
@@ -802,15 +806,16 @@ public:
         b.create<arith::MulIOp>(loc, panel,
                                 b.create<arith::ConstantIndexOp>(loc, kTile)),
         lane);
-    Value value = b.create<memref::LoadOp>(loc, packed, ValueRange{zero, lane});
+    Value value =
+        b.create<memref::LoadOp>(loc, packed, ValueRange{panel, lane});
     b.create<memref::StoreOp>(loc, value, kernel.getOutput(),
                               ValueRange{zero, zero, zero, channel});
     b.setInsertionPointAfter(outputLoop);
+    b.setInsertionPointAfter(panelLoop);
     releaseBank(b, loc, stored);
     for (Value pack : hostPacks)
       b.create<memref::DeallocOp>(loc, pack);
     b.create<memref::DeallocOp>(loc, packed);
-    b.setInsertionPointAfter(panelLoop);
     b.eraseOp(kernel);
     return success();
   }

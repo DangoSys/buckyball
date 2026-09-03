@@ -25,52 +25,8 @@ jobs:
     runs-on: check
     environment: regression
     steps:
-      - run: echo "approved"
-
-  chip:
-    name: ${{ matrix.chip }}
-    needs: gate
-    runs-on: check
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - chip: toy
-            run_area: false
-            run_fpga_check: false
-            run_power: false
-            run_model: false
-          - chip: pebble
-            run_area: true
-            run_fpga_check: false
-            run_power: false
-            run_model: false
-          - chip: goban
-            run_area: false
-            run_fpga_check: false
-            run_power: false
-            run_model: false
-          - chip: poly
-            run_area: false
-            run_fpga_check: false
-            run_power: false
-            run_model: false
-          - chip: multi-rocket
-            run_area: false
-            run_fpga_check: false
-            run_power: false
-            run_model: false
-    env:
-      BB_ROOT: ~/Code/buckyball
-    steps:
       - name: Print information
         run: |
-          echo "chip=${{ matrix.chip }}"
-          echo "run_area=${{ matrix.run_area }}"
-          echo "run_fpga_check=${{ matrix.run_fpga_check }}"
-          echo "run_power=${{ matrix.run_power }}"
-          echo "run_model=${{ matrix.run_model }}"
-          echo "event=${{ github.event_name }}"
           echo "sha=${CHECKOUT_SHA}"
           echo "ref=${CHECKOUT_REF}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -81,7 +37,7 @@ jobs:
           fi
 
       - name: Enter repo lock
-        if: matrix.run_area || matrix.run_fpga_check || matrix.run_power || matrix.run_model
+        if: matrix.run_area || matrix.run_power
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -93,7 +49,7 @@ jobs:
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Install config
-        if: matrix.run_area || matrix.run_fpga_check || matrix.run_power || matrix.run_model
+        if: matrix.run_area || matrix.run_power
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -101,6 +57,33 @@ jobs:
           cd "${root}"
           nix develop -c bbdev config --install
 
+  eval-area-power:
+    name: eval-area-power-${{ matrix.chip }}
+    needs: gate
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            run_area: false
+            run_power: false
+          - chip: pebble
+            run_area: true
+            run_power: false
+          - chip: goban
+            run_area: false
+            run_power: false
+          - chip: poly
+            run_area: false
+            run_power: false
+          - chip: multi-rocket
+            run_area: false
+            run_power: false
+    env:
+      BB_ROOT: ~/Code/buckyball
+      SNPSLMD_LICENSE_FILE: 26000@127.0.0.1
+    steps:
       - name: DC area
         if: matrix.run_area
         shell: zsh {0}
@@ -111,6 +94,67 @@ jobs:
           # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
           nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
 
+      - name: DC power
+        if: matrix.run_power
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev dc --power '--chip ${{ matrix.chip }}'
+
+      - name: Exit repo lock
+        if: always() && (matrix.run_area || matrix.run_power)
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+  eval-performance:
+    name: eval-performance-${{ matrix.chip }}-${{ matrix.model }}
+    needs: gate
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            run_fpga_check: false
+            run_model: false
+            model: none
+          - chip: pebble
+            run_fpga_check: false
+            run_model: true
+            model: lenet
+          - chip: pebble
+            run_fpga_check: false
+            run_model: true
+            model: mobilenet
+          - chip: pebble
+            run_fpga_check: false
+            run_model: true
+            model: resnet
+          - chip: pebble
+            run_fpga_check: false
+            run_model: true
+            model: yolo
+          - chip: goban
+            run_fpga_check: false
+            run_model: false
+            model: none
+          - chip: poly
+            run_fpga_check: false
+            run_model: false
+            model: none
+          - chip: multi-rocket
+            run_fpga_check: false
+            run_model: false
+            model: none
+    env:
+      BB_ROOT: ~/Code/buckyball
+    steps:
       - name: FPGA buildbitstream
         if: matrix.run_fpga_check || matrix.run_model
         shell: zsh {0}
@@ -118,7 +162,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev regression --buildbitstream '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
 
       - name: FPGA check
         if: matrix.run_fpga_check
@@ -133,16 +178,25 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev regression --check "--chip ${{ matrix.chip }} --bitstream ${bits[1]}"
+          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
+          nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
+          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
+          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
 
-      - name: DC power
-        if: matrix.run_power
+      - name: Model Build
+        if: matrix.run_model
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev dc --power '--chip ${{ matrix.chip }}'
+          if [ "${{ matrix.model }}" = "none" ]; then
+            echo "ERROR: run_model=true requires a real model, got model=none" >&2
+            exit 1
+          fi
+
+          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
+          nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
 
       - name: Model performance
         if: matrix.run_model
@@ -157,10 +211,11 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev regression --eval-performance "--chip ${{ matrix.chip }} --bitstream ${bits[1]}"
+
+          nix develop -c bbdev bebop-p2e --runworkload "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --model ${{ matrix.model }}"
 
       - name: Exit repo lock
-        if: always() && (matrix.run_area || matrix.run_fpga_check || matrix.run_power || matrix.run_model)
+        if: always() && (matrix.run_fpga_check || matrix.run_model)
         shell: zsh {0}
         run: |
           set -euo pipefail
