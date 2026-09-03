@@ -1,0 +1,29 @@
+ 
+                             Library Compiler (TM)
+                                 DesignWare (R)
+
+               Version R-2020.09-SP5 for linux64 - Apr 14, 2021 
+
+                    Copyright (c) 1988 - 2021 Synopsys, Inc.
+   This software and the associated documentation are proprietary to Synopsys,
+ Inc. This software may only be used in accordance with the terms and conditions
+ of a written license agreement with Synopsys, Inc. All other use, reproduction,
+            or distribution of this software is strictly prohibited.
+
+Initializing...
+read_lib {/home/wanghui/Code/buckyball/arch/build/pebble/sims.tapeout.BuckyballPebbleTapeoutConfig-ip-db/chipyard_sram_64x8/chipyard_sram_64x8_ss_1.62_125.lib}
+Reading '/home/wanghui/Code/buckyball/arch/build/pebble/sims.tapeout.BuckyballPebbleTapeoutConfig-ip-db/chipyard_sram_64x8/chipyard_sram_64x8_ss_1.62_125.lib' ...
+Warning: Line 50, The 'internal_power_calculation' attribute in char_config group is required for NLPM library. 
+        No default can be applied to this attribute. (LBDB-366)
+Information: Line 235, Cell 'chipyard_sram_64x8', The cell 'chipyard_sram_64x8' contiains memory/memory_read/memory_write groups which are deprecated, use the is_memory_cell attribute instead. (LIBG-280)
+Technology library 'chipyard_sram_64x8_ss_1.62_125' read successfully
+1
+write_lib [get_object_name [get_libs *]] -format db -output {/home/wanghui/Code/buckyball/arch/build/pebble/sims.tapeout.BuckyballPebbleTapeoutConfig-ip-db/chipyard_sram_64x8/chipyard_sram_64x8_ss_1.62_125.db}
+Wrote the 'chipyard_sram_64x8_ss_1.62_125' library to '/home/wanghui/Code/buckyball/arch/build/pebble/sims.tapeout.BuckyballPebbleTapeoutConfig-ip-db/chipyard_sram_64x8/chipyard_sram_64x8_ss_1.62_125.db' successfully
+1
+exit
+Maximum memory usage for this session: 84.32 MB
+CPU usage for this session:      1 seconds (  0.00 hours)
+Elapsed time for this session:      1 seconds (  0.00 hours)
+Thank you for using Library Compiler.
+

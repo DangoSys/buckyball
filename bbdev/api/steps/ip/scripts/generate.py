@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 _DC = Path(__file__).resolve().parents[2] / "dc" / "scripts"
@@ -11,6 +13,9 @@ if str(_DC) not in sys.path:
 from tapeout import SramGeom, get_tapeout_contract
 from macro_compiler import run_macro_compiler
 from sram_compiler import generate_sram_dbs, leaf_names_from_macros
+
+_MODULE = re.compile(r"(?m)^module\s+(\w+)\s*\(")
+_INST = re.compile(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_$]*)\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(")
 
 
 def pad_mems_conf(text: str) -> str:
@@ -24,16 +29,11 @@ def pad_mems_conf(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def geoms_from_macros(
-    *,
-    macros_v: Path,
-    sram_table: dict[str, SramGeom],
-    mdf: Path,
-) -> list[SramGeom]:
+def load_mdf(mdf: Path) -> dict[str, tuple[int, int]]:
     raw = json.loads(mdf.read_text())
     if not isinstance(raw, list):
         raise ValueError(f"mdf must be a list: {mdf}")
-    index: dict[str, dict] = {}
+    index: dict[str, tuple[int, int]] = {}
     for entry in raw:
         if not isinstance(entry, dict):
             raise ValueError(f"mdf entry must be object: {mdf}")
@@ -42,8 +42,104 @@ def geoms_from_macros(
             raise ValueError(f"mdf entry missing name: {mdf}")
         if name in index:
             raise ValueError(f"duplicate mdf name {name}: {mdf}")
-        index[name] = entry
+        try:
+            depth = int(entry["depth"])
+            width = int(entry["width"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"mdf entry {name} missing depth/width") from exc
+        if depth <= 0 or width <= 0:
+            raise ValueError(f"mdf entry {name}: depth/width must be positive")
+        index[name] = (depth, width)
+    return index
 
+
+def parse_mems(text: str) -> list[tuple[str, int, int]]:
+    out: list[tuple[str, int, int]] = []
+    for i, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 6 or parts[0] != "name" or parts[2] != "depth" or parts[4] != "width":
+            raise ValueError(f"mems.conf:{i}: expected 'name <id> depth <n> width <n> ...', got {line!r}")
+        try:
+            depth = int(parts[3])
+            width = int(parts[5])
+        except ValueError as exc:
+            raise ValueError(f"mems.conf:{i}: depth/width not int") from exc
+        if depth <= 0 or width <= 0:
+            raise ValueError(f"mems.conf:{i}: depth/width must be positive")
+        out.append((parts[1], depth, width))
+    if not out:
+        raise ValueError("empty mems.conf")
+    return out
+
+
+def module_insts(text: str) -> dict[str, Counter[str]]:
+    hits = list(_MODULE.finditer(text))
+    out: dict[str, Counter[str]] = {}
+    for i, m in enumerate(hits):
+        name = m.group(1)
+        if name in out:
+            raise ValueError(f"duplicate module {name}")
+        start = m.end()
+        end = hits[i + 1].start() if i + 1 < len(hits) else len(text)
+        counts: Counter[str] = Counter()
+        for inst in _INST.finditer(text[start:end]):
+            leaf = inst.group(1)
+            if leaf in ("module", "assign", "wire", "input", "output"):
+                raise ValueError(f"module {name}: refused instance parse {leaf!r}")
+            counts[leaf] += 1
+        out[name] = counts
+    return out
+
+
+def check_mapping(*, mems_text: str, macros_v: Path, mdf: dict[str, tuple[int, int]]) -> None:
+    if not macros_v.is_file():
+        raise FileNotFoundError(f"missing macros verilog: {macros_v}")
+    insts = module_insts(macros_v.read_text())
+    lib = ", ".join(f"{n}={d}x{w}" for n, (d, w) in sorted(mdf.items()))
+    errs: list[str] = []
+    for name, depth, width in parse_mems(mems_text):
+        need = depth * width
+        if name not in insts:
+            errs.append(f"{name}: missing module for {depth}x{width} ({need} bits)")
+            continue
+        counts = insts[name]
+        if not counts:
+            errs.append(f"{name}: empty mapping for {depth}x{width} ({need} bits)")
+            continue
+        got = 0
+        parts = []
+        unknown = False
+        for leaf, n in sorted(counts.items()):
+            if leaf not in mdf:
+                errs.append(f"{name}: unknown leaf {leaf}")
+                unknown = True
+                break
+            d, w = mdf[leaf]
+            got += n * d * w
+            parts.append(f"{n}x {leaf} ({d}x{w})")
+        if unknown:
+            continue
+        if got != need:
+            errs.append(
+                f"{name}: need {depth}x{width} = {need} bits, "
+                f"got {' + '.join(parts)} = {got} bits"
+            )
+    if errs:
+        raise RuntimeError(
+            "SRAM mapping mismatch:\n  " + "\n  ".join(errs) + f"\nlibrary: {lib}"
+        )
+
+
+def geoms_from_macros(
+    *,
+    macros_v: Path,
+    sram_table: dict[str, SramGeom],
+    mdf: Path,
+) -> list[SramGeom]:
+    index = load_mdf(mdf)
     names = leaf_names_from_macros(macros_v, set(sram_table) | set(index))
     geoms: list[SramGeom] = []
     for name in names:
@@ -51,12 +147,7 @@ def geoms_from_macros(
             raise ValueError(f"sram leaf {name} missing from tapeout.sram")
         if name not in index:
             raise ValueError(f"sram leaf {name} missing from mdf: {mdf}")
-        entry = index[name]
-        try:
-            depth = int(entry["depth"])
-            width = int(entry["width"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"mdf entry {name} missing depth/width") from exc
+        depth, width = index[name]
         geom = sram_table[name]
         if depth != geom.words:
             raise ValueError(
@@ -111,6 +202,11 @@ def generate_sram(
         verilog=verilog,
         firrtl=firrtl,
         arch_dir=arch_dir,
+    )
+    check_mapping(
+        mems_text=padded,
+        macros_v=verilog,
+        mdf=load_mdf(contract.sram_mdf),
     )
     geoms = geoms_from_macros(
         macros_v=verilog,

@@ -35,7 +35,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "binary": binary,
         "batch": bool(body.get("batch", False)),
         "jobs": jobs,
-        "output_dir": rtl_dir(bbdir, chip, "verilog", body.get("output_dir")),
+        "output_dir": rtl_dir(bbdir, chip, "tapeout", body.get("output_dir")),
         "from_run_workflow": True,
     }
     await ctx.enqueue({"topic": "vcs.verilog", "data": {**data, "_trace_id": ctx.trace_id}})

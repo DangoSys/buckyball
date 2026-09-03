@@ -54,7 +54,7 @@ def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
         },
         "smatmul": {
             "SMATMUL_OS": "SMATMUL_OS_FUNCT7",
-            "SMATMUL_WS": "SMATMUL_WS_FUNCT7",
+            "SMATMUL_BIAS": "SMATMUL_BIAS_FUNCT7",
         },
         "matadd": {"MATADD": "MATADD_FUNCT7"},
         "im2col": {"IM2COL": "IM2COL_FUNCT7"},
@@ -85,10 +85,11 @@ def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
                     if isinstance(entry, dict) and entry.get("ballName") == "SMatMulBall"]
         if len(matching) != 1:
             raise ValueError(f"{domain_path} must define exactly one SMatMulBall mapping")
+        in_bw = matching[0].get("inBW")
         out_bw = matching[0].get("outBW")
-        if not isinstance(out_bw, int) or out_bw <= 0 or out_bw > 4 or 4 % out_bw:
-            raise ValueError(f"invalid SMatMulBall outBW in {domain_path}")
-        defines.append(f"+define+SMATMUL_OUT_BW={out_bw}")
+        if in_bw != 2 or out_bw != 1:
+            raise ValueError(f"SMatMulBall must use inBW=2,outBW=1 in {domain_path}")
+        defines.append("+define+SMATMUL_OUT_BW=1")
     return defines
 
 

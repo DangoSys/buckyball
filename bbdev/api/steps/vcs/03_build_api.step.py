@@ -30,7 +30,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "chip": chip,
         "jobs": jobs,
-        "output_dir": rtl_dir(bbdir, chip, "verilog", body.get("output_dir")),
+        "output_dir": rtl_dir(bbdir, chip, "tapeout", body.get("output_dir")),
     }
     await ctx.enqueue({"topic": "vcs.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

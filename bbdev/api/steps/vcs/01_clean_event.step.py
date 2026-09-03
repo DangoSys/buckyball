@@ -24,7 +24,8 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    build_dir = rtl_dir(bbdir, input_data.get("config", "verilog"), input_data.get("output_dir"))
+    chip = input_data.get("chip")
+    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
     artifact_dir = os.path.join(build_dir, "vcs")
     if os.path.isdir(artifact_dir):
         shutil.rmtree(artifact_dir)

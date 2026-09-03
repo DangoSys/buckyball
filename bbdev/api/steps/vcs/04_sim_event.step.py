@@ -55,12 +55,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if binary is None:
         await check_result(ctx, 1, extra_fields={"task": "sim", "error": f"binary not found: {binary_name}"}, trace_id=origin_tid)
         return
-    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
+    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
     artifact_dir = Path(build_dir) / "vcs"
     simv = artifact_dir / "simv"
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = Path(log_dir(
-        bbdir, chip, "verilog", timestamp, "vcs", binary_name,
+        bbdir, chip, "tapeout", timestamp, "vcs", binary_name,
         input_data.get("output_dir"),
     ))
     run_log.mkdir(parents=True)

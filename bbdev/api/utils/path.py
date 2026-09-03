@@ -68,6 +68,8 @@ def chip_arch_root(bbdir, chip):
 def sim_name(bbdir, chip, product, *, rushb=False):
     if product == "verilog" or product == "synth":
         sim_key = "verilator"
+    elif product == "tapeout":
+        sim_key = "tapeout"
     elif product == "p2e":
         sim_key = "p2e"
     else:

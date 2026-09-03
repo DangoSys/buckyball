@@ -25,7 +25,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "topic": "vcs.clean",
             "data": {
                 "chip": chip,
-                "output_dir": rtl_dir(bbdir, chip, "verilog", body.get("output_dir")),
+                "output_dir": rtl_dir(bbdir, chip, "tapeout", body.get("output_dir")),
                 "_trace_id": ctx.trace_id,
             },
         }

@@ -37,7 +37,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if not isinstance(top, str) or not top:
             raise ValueError("top must be a non-empty string")
         bbdir = Path(get_buckyball_path()).resolve()
-        build_dir = Path(rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))).resolve()
+        build_dir = Path(rtl_dir(bbdir, chip, "tapeout" if consumer == "dc" else "verilog", input_data.get("output_dir"))).resolve()
         man = generate_sram(bbdir=bbdir, chip=chip, build_dir=build_dir)
     except Exception as exc:
         _, failure_result = await check_result(

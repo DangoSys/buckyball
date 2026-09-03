@@ -40,7 +40,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     arch = os.path.join(bbdir, "arch")
     try:
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "verilog", input_data.get("output_dir"),
+            bbdir, chip, "tapeout", input_data.get("output_dir"),
         )
         os.makedirs(build_dir, exist_ok=True)
         returncode = (

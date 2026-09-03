@@ -40,7 +40,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             raise ValueError("top must be a non-empty string")
 
         bbdir = Path(get_buckyball_path()).resolve()
-        build_dir = Path(rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))).resolve()
+        build_dir = Path(rtl_dir(bbdir, chip, "tapeout" if consumer == "dc" else "verilog", input_data.get("output_dir"))).resolve()
         source_list_path = build_dir / _SOURCE_LIST[consumer]
         if not source_list_path.is_file():
             raise FileNotFoundError(f"missing source list: {source_list_path}")

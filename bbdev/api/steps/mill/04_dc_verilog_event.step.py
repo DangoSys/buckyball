@@ -93,7 +93,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         chip = require_chip(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "verilog", input_data.get("output_dir"),
+            bbdir, chip, "tapeout", input_data.get("output_dir"),
         )
         os.makedirs(build_dir, exist_ok=True)
         ctx.logger.info(f"Using mill config: {mill_config}")
@@ -177,11 +177,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     }
     if input_data.get("from_power_workflow"):
         payload["analysis_dir"] = log_dir(
-            bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "power"
+            bbdir, chip, "tapeout", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "power"
         )
     else:
         payload["analysis_dir"] = log_dir(
-            bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "area"
+            bbdir, chip, "tapeout", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "area"
         )
     await ctx.enqueue({"topic": "ip.generate", "data": payload})
 

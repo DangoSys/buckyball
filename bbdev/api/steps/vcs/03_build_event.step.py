@@ -130,7 +130,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
+    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
     vsrcs = sorted(
         path for path in (
             glob.glob(f"{build_dir}/**/*.v", recursive=True)
