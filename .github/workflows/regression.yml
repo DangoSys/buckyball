@@ -1,12 +1,10 @@
 name: regression
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 permissions:
@@ -24,6 +22,7 @@ env:
 jobs:
   chip:
     name: ${{ matrix.chip }}
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'regression')
     runs-on: check
     strategy:
       fail-fast: false
