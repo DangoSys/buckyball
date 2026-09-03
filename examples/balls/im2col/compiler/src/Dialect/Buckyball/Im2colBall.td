@@ -104,11 +104,12 @@ def Im2colOp : Buckyball_Op<"im2col"> {
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$iter, I64:$ksize, I64:$stride, I64:$padding,
-                       I64Attr:$inputBase, I64Attr:$lane,
+                       I64:$inputBase, I64:$lane,
                        I64Attr:$startRow, I64Attr:$startCol,
                        I64Attr:$windowStart, I64Attr:$windowCount);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $ksize `,` $stride `,` $padding attr-dict `:` "
+                       "$iter `,` $ksize `,` $stride `,` $padding `,` "
+                       "$inputBase `,` $lane attr-dict `:` "
                        "type($inputBankId)";
 }
 
@@ -116,12 +117,14 @@ def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
   let summary = "Im2col using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$ksize,
                        I64:$stride, I64:$padding,
-                       I64Attr:$inputBase, I64Attr:$lane,
+                       I64:$inputBase, I64:$lane,
                        I64Attr:$startRow, I64Attr:$startCol,
                        I64Attr:$windowStart, I64Attr:$windowCount);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $ksize $stride $padding attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) type($stride) type($padding)";
+      "$inBank $outBank $iter $ksize $stride $padding $inputBase $lane "
+      "attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) "
+      "type($stride) type($padding) type($inputBase) type($lane)";
 }
 
 def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,

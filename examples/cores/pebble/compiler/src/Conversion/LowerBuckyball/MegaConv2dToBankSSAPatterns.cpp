@@ -322,8 +322,8 @@ public:
             loc, patchState.getType(), inputLoaded, patchState,
             createI64Const(b, loc, blockInputSize),
             createI64Const(b, loc, kernelSize), createI64Const(b, loc, stride),
+            createI64Const(b, loc, 0), createI64Const(b, loc, 0),
             createI64Const(b, loc, 0), b.getI64IntegerAttr(0),
-            b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
             b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
             b.getI64IntegerAttr(blockWindows));
         Value weightLoaded =

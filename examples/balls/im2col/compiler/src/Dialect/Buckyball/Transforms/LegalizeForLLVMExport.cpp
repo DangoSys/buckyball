@@ -16,10 +16,10 @@ using namespace buddy::buckyball::legalize;
 namespace {
 static LogicalResult
 validateIm2colEncoding(Operation *op, Value iterValue, Value ksizeValue,
-                       Value strideValue, Value paddingValue, int64_t inputBase,
-                       int64_t lane, int64_t startRow, int64_t startCol,
-                       int64_t windowStart, int64_t windowCount,
-                       int64_t bankDepth) {
+                       Value strideValue, Value paddingValue,
+                       Value inputBaseValue, Value laneValue, int64_t startRow,
+                       int64_t startCol, int64_t windowStart,
+                       int64_t windowCount, int64_t bankDepth) {
   auto getConst = [](Value value) -> std::optional<int64_t> {
     if (auto constant = value.getDefiningOp<arith::ConstantOp>())
       if (auto attr = dyn_cast<IntegerAttr>(constant.getValue()))
@@ -30,16 +30,19 @@ validateIm2colEncoding(Operation *op, Value iterValue, Value ksizeValue,
   auto ksize = getConst(ksizeValue);
   auto stride = getConst(strideValue);
   auto padding = getConst(paddingValue);
+  auto inputBase = getConst(inputBaseValue);
+  auto lane = getConst(laneValue);
   if (!iter || !ksize || !stride || !padding)
     return op->emitError(
         "Im2col instruction requires constant iter/ksize/stride/padding");
   if (*iter <= 0 || *ksize <= 0 || *ksize > 255 || *stride <= 0 ||
       *stride > 255 || *padding < 0 || *padding > 255 || startRow < 0 ||
-      startRow > 255 || startCol < 0 || startCol > 255 || inputBase < 0 ||
-      inputBase >= 64 || lane < 0 || lane >= 16)
+      startRow > 255 || startCol < 0 || startCol > 255 ||
+      (inputBase && (*inputBase < 0 || *inputBase >= 64)) ||
+      (lane && (*lane < 0 || *lane >= 16)))
     return op->emitError("Im2col instruction field out of range");
   int64_t inputRows = *iter * *iter;
-  if (inputBase + inputRows > bankDepth)
+  if (inputBase && *inputBase + inputRows > bankDepth)
     return op->emitError("Im2col input range exceeds the physical bank depth");
   if (startRow > *padding || startCol > *padding)
     return op->emitError("Im2col startRow/startCol must not exceed padding");
@@ -104,12 +107,11 @@ struct Im2colLowering : public ConvertOpToLLVMPattern<Im2colOp> {
                                        cstI64(rewriter, loc, 32)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc,
-                                       cstI64(rewriter, loc, op.getInputBase()),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getInputBase(),
                                        cstI64(rewriter, loc, 40)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, cstI64(rewriter, loc, op.getLane()),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getLane(),
                                        cstI64(rewriter, loc, 46)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
@@ -178,12 +180,11 @@ struct BankIm2colLowering : public ConvertOpToLLVMPattern<BankIm2colOp> {
                                        cstI64(rewriter, loc, 32)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc,
-                                       cstI64(rewriter, loc, op.getInputBase()),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getInputBase(),
                                        cstI64(rewriter, loc, 40)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, cstI64(rewriter, loc, op.getLane()),
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getLane(),
                                        cstI64(rewriter, loc, 46)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,

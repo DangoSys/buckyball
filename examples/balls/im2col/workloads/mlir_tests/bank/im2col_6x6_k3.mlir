@@ -41,10 +41,12 @@ func.func @main() -> i8 {
   %out = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %in %din %s
       : memref<64x16xi8> i64 i64 i64
+  %inputBase = arith.constant 5 : i64
+  %lane = arith.constant 7 : i64
   %next = buckyball.bank_im2col %loaded %out %iter %ksize %stride %padding
-      {inputBase = 5 : i64, lane = 7 : i64, startRow = 0 : i64,
+      %inputBase %lane {startRow = 0 : i64,
        startCol = 0 : i64, windowStart = 0 : i64, windowCount = 16 : i64}
-      : i64 i64 i64 i64 i64 i64
+      : i64 i64 i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %next %dout %s
       : memref<16x16xi8> i64 i64 i64
   buckyball.bank_release %loaded : i64

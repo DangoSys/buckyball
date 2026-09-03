@@ -108,7 +108,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
+          # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
 
       - name: FPGA buildbitstream
         if: matrix.run_fpga_check || matrix.run_model

@@ -735,8 +735,8 @@ public:
                           createI64Const(b, loc, stage.kernel),
                           createI64Const(b, loc, stage.stride),
                           createI64Const(b, loc, 0),
-                          b.getI64IntegerAttr(slot * panelRows),
-                          b.getI64IntegerAttr(lane), b.getI64IntegerAttr(0),
+                          createI64Const(b, loc, slot * panelRows),
+                          createI64Const(b, loc, lane), b.getI64IntegerAttr(0),
                           b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
                           b.getI64IntegerAttr(side * side))
                          .getOutBankOut();
@@ -1603,8 +1603,9 @@ public:
             loc, patchState.getType(), transposed, patchState,
             createI64Const(b, loc, haloSide),
             createI64Const(b, loc, kernelSize), createI64Const(b, loc, stride),
-            createI64Const(b, loc, 0), b.getI64IntegerAttr(channel * planeRows),
-            b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
+            createI64Const(b, loc, 0),
+            createI64Const(b, loc, channel * planeRows),
+            createI64Const(b, loc, 0), b.getI64IntegerAttr(0),
             b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
             b.getI64IntegerAttr(blockWindows));
         patchState = patch;
