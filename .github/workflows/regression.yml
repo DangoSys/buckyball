@@ -4,12 +4,12 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 permissions:
   contents: read
   checks: write
+  deployments: write
 
 concurrency:
   group: buckyball-regression-${{ github.event.pull_request.head.sha || github.sha }}
@@ -20,9 +20,16 @@ env:
   CHECKOUT_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
 
 jobs:
+  gate:
+    name: run
+    runs-on: check
+    environment: regression
+    steps:
+      - run: echo "approved"
+
   chip:
     name: ${{ matrix.chip }}
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'regression')
+    needs: gate
     runs-on: check
     strategy:
       fail-fast: false
