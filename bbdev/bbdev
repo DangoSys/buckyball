@@ -206,10 +206,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         group = cmd_parser.add_mutually_exclusive_group(required=True)
         for op_name, op_help in operations.items():
             if op_help is True:
-                group.add_argument(f"--{op_name}", action="store_true", help=f"{op_name.capitalize()}.")
+                group.add_argument(
+                    f"--{op_name}",
+                    dest=op_name,
+                    action="store_true",
+                    help=f"{op_name.capitalize()}.",
+                )
             else:
                 group.add_argument(
                     f"--{op_name}",
+                    dest=op_name,
                     type=str,
                     nargs="?",
                     const="",
