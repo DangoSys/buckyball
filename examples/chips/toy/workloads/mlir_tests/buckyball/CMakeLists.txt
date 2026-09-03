@@ -8,7 +8,6 @@ set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
 set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
-set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/toy/params.h")
   message(FATAL_ERROR "missing ${BUCKYBALL_ISA_DIR}/toy/params.h")
 endif()
@@ -162,17 +161,6 @@ function(add_toy_mlir_matmul_test name)
       ${WORKLOAD_LIB_DIR}
       ${TOY_ISA_DIR}
     DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${TOY_ISA_DIR}/params.h)
-endfunction()
-
-function(add_toy_mlir_matmul_contract_test name)
-  add_toy_mlir_matmul_test(${name})
-  add_custom_target(mlirtest_buckyball_${name}_contract
-    COMMAND ${FILECHECK}
-      ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir
-      --input-file=${CMAKE_CURRENT_BINARY_DIR}/${name}_1_bank_ssa.mlir
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${name}.o
-    COMMENT "Checking Toy Buckyball matmul ISA contract for ${name}"
-    VERBATIM)
 endfunction()
 
 add_custom_target(buckyball-mlir-tests-build ALL

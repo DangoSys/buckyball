@@ -1,11 +1,10 @@
 func.func private @check_result(memref<4x4xf32>) -> ()
 
 memref.global "private" constant @input : memref<4x4xi32> = dense<[
-  [1, 2, 3, -1], [-2, 0, 4, 5],
-  [10, -10, 7, 100], [-100, 8, 16, -8]
+  [-8, -1, 0, 1], [2, -3, 4, -5],
+  [6, 7, -8, 9], [-10, 11, 12, -13]
 ]>
-memref.global "private" constant @scales : memref<4x4xf32> =
-    dense<1.250000e-01>
+memref.global "private" constant @scales : memref<4x4xf32> = dense<1.0>
 
 func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
@@ -21,9 +20,10 @@ func.func @main() -> i8 {
       : memref<4x4xi32> i64 i64 i64
   %loaded_scales = buckyball.bank_mvin %scales %scale_bank %depth %stride
       : memref<4x4xf32> i64 i64 i64
-  buckyball.int32_to_fp32
-      %loaded_input, %loaded_scales, %output_bank, %depth {relu = false} : i64
-  %stored = buckyball.bank_mvout %output %output_bank %depth %stride
+  %result = buckyball.bank_int32_to_fp32
+      %loaded_input %loaded_scales %output_bank %depth {relu = true}
+      : i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %depth %stride
       : memref<4x4xf32> i64 i64 i64
   buckyball.fence
   func.call @check_result(%output) : (memref<4x4xf32>) -> ()

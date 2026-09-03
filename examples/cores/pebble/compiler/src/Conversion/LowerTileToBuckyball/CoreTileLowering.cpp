@@ -119,7 +119,7 @@ public:
             bias.getShape()[0] != n || scale.getShape()[0] != n ||
             lut.getShape()[0] != (matmul.getActivation() == 2 ? 256 : 1) ||
             matmul.getActivation() < 0 || matmul.getActivation() > 2 ||
-            (last && matmul.getActivation() == 2) ||
+            matmul.getOutputScale().convertToDouble() <= 0.0 ||
             (last ? !output.getElementType().isF32()
                   : !output.getElementType().isInteger(8)))
           return matmul.emitError(
@@ -127,7 +127,8 @@ public:
         rewriter.create<MegaMatmulOp>(
             matmul.getLoc(), matmul.getInput(), matmul.getWeight(),
             matmul.getBias(), matmul.getScale(), matmul.getLut(),
-            matmul.getOutput(), matmul.getActivationAttr());
+            matmul.getOutput(), matmul.getActivationAttr(),
+            matmul.getOutputScaleAttr());
         continue;
       }
 
@@ -182,11 +183,14 @@ public:
         double outputScale = int8Mul
                                  ? int8Mul.getOutputScale().convertToDouble()
                                  : int8Add.getOutputScale().convertToDouble();
+        int64_t activation =
+            int8Mul ? int8Mul.getActivation() : int8Add.getActivation();
         if ((last ? outputValue != op.getOutput()
                   : outputValue == op.getOutput()) ||
             !lhsType.hasStaticShape() || !rhsType.hasStaticShape() ||
             !outputType.hasStaticShape() || lhsScale <= 0.0 ||
-            rhsScale <= 0.0 || outputScale <= 0.0)
+            rhsScale <= 0.0 || outputScale <= 0.0 || activation < 0 ||
+            activation > 1)
           return stage->emitError("Mega INT8 elementwise contract is invalid");
         for (int64_t dimension = 0; dimension < 4; ++dimension) {
           int64_t out = outputType.getShape()[dimension];
@@ -201,15 +205,15 @@ public:
           return int8Add.emitError(
               "Mega residual add requires equal input types");
         if (int8Mul)
-          rewriter.create<MegaInt8MulOp>(int8Mul.getLoc(), lhs, rhs,
-                                         outputValue, int8Mul.getLhsScaleAttr(),
-                                         int8Mul.getRhsScaleAttr(),
-                                         int8Mul.getOutputScaleAttr());
+          rewriter.create<MegaInt8MulOp>(
+              int8Mul.getLoc(), lhs, rhs, outputValue,
+              int8Mul.getLhsScaleAttr(), int8Mul.getRhsScaleAttr(),
+              int8Mul.getOutputScaleAttr(), int8Mul.getActivationAttr());
         else
-          rewriter.create<MegaInt8AddOp>(int8Add.getLoc(), lhs, rhs,
-                                         outputValue, int8Add.getLhsScaleAttr(),
-                                         int8Add.getRhsScaleAttr(),
-                                         int8Add.getOutputScaleAttr());
+          rewriter.create<MegaInt8AddOp>(
+              int8Add.getLoc(), lhs, rhs, outputValue,
+              int8Add.getLhsScaleAttr(), int8Add.getRhsScaleAttr(),
+              int8Add.getOutputScaleAttr(), int8Add.getActivationAttr());
         continue;
       }
 
@@ -259,8 +263,10 @@ public:
           scale.getShape()[0] != expectedChannels || stride <= 0 ||
           lut.getRank() != 1 || !lut.getElementType().isInteger(8) ||
           lut.getShape()[0] != (activation == 2 ? 256 : 1) || activation < 0 ||
-          activation > 2 || (last && activation == 2) || padLow < 0 ||
-          padHigh < 0 || is[1] + padLow + padHigh < fs[0] ||
+          activation > 2 ||
+          (conv ? conv.getOutputScale() : depthwise.getOutputScale())
+                  .convertToDouble() <= 0.0 ||
+          padLow < 0 || padHigh < 0 || is[1] + padLow + padHigh < fs[0] ||
           is[2] + padLow + padHigh < fs[1] ||
           outHeight != (is[1] + padLow + padHigh - fs[0]) / stride + 1 ||
           outWidth != (is[2] + padLow + padHigh - fs[1]) / stride + 1 ||
@@ -274,12 +280,13 @@ public:
             depthwise.getLoc(), inputValue, filterValue, biasValue, scaleValue,
             lutValue, outputValue, depthwise.getStrideAttr(),
             depthwise.getPadLowAttr(), depthwise.getPadHighAttr(),
-            depthwise.getActivationAttr());
+            depthwise.getActivationAttr(), depthwise.getOutputScaleAttr());
       else
         rewriter.create<MegaConv2dOp>(
             conv.getLoc(), inputValue, filterValue, biasValue, scaleValue,
             lutValue, outputValue, conv.getStrideAttr(), conv.getPadLowAttr(),
-            conv.getPadHighAttr(), conv.getActivationAttr());
+            conv.getPadHighAttr(), conv.getActivationAttr(),
+            conv.getOutputScaleAttr());
     }
     rewriter.create<MegaYieldOp>(op.getLoc());
     rewriter.eraseOp(op);

@@ -750,7 +750,8 @@ public:
       auto stage = cast<MegaConv2dOp>(operation);
       b.create<MegaMatmulOp>(loc, stageInput, weights[index], stage.getBias(),
                              stage.getScale(), stage.getLut(), outputs[index],
-                             stage.getActivationAttr());
+                             stage.getActivationAttr(),
+                             stage.getOutputScaleAttr());
       stageInput = outputs[index];
     }
     b.create<MegaYieldOp>(loc);

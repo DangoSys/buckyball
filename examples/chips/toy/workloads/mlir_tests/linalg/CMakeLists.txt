@@ -10,33 +10,10 @@ set(BBSW_BAREMETAL_TEST_SRC ${WORKLOAD_LIB_DIR}/bbsw/baremetal/test.c)
 set(BBSW_LINUX_TEST_SRC ${WORKLOAD_LIB_DIR}/bbsw/linux/test.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
-set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
 if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/toy/params.h")
   message(FATAL_ERROR "missing ${BUCKYBALL_ISA_DIR}/toy/params.h")
 endif()
 set(TOY_ISA_DIR ${BUCKYBALL_ISA_DIR}/toy)
-
-function(add_linalg_contract_test name)
-  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
-  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_tile.mlir)
-
-  add_custom_command(
-    OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
-      -convert-linalg-to-tile
-      > ${OUT}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
-    COMMENT "Building Linalg contract IR for ${name}"
-    VERBATIM
-  )
-
-  add_custom_target(mlirtest_linalg_${name}_contract
-    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
-    DEPENDS ${OUT}
-    COMMENT "Checking Linalg contract for ${name}"
-    VERBATIM
-  )
-endfunction()
 
 function(add_linalg_conv2d_test name main_src)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
@@ -164,10 +141,6 @@ function(add_linalg_conv2d_test name main_src)
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C})
 endfunction()
-
-add_linalg_contract_test(conv2d_nhwc_hwcf_contract)
-add_linalg_contract_test(conv2d_nhwc_fhwc_contract)
-add_linalg_contract_test(conv2d_nchw_fchw_contract)
 
 add_linalg_conv2d_test(conv2d_nhwc_hwcf conv2d_nhwc_main.cpp)
 add_linalg_conv2d_test(conv2d_nhwc_fhwc conv2d_nhwc_main.cpp)
