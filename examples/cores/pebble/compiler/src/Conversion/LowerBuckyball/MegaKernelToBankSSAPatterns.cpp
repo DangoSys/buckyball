@@ -15,6 +15,7 @@
 #include "llvm/Support/MathExtras.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <iterator>
 
@@ -39,12 +40,11 @@ public:
     if (body.without_terminator().empty() ||
         !isa<MegaConv2dOp, MegaConv2dDepthwiseOp>(body.front()))
       return failure();
-    if (!isa<MegaMaxPool2dOp>(*std::prev(body.without_terminator().end())))
-      return failure();
 
     struct Stage {
       Operation *op;
       Value input;
+      Value rhs;
       Value output;
       Value weight;
       Value bias;
@@ -59,12 +59,16 @@ public:
       int64_t stride;
       int64_t padding;
       int64_t activation;
+      float lhsScale;
+      float rhsScale;
+      float outputScale;
       bool depthwise;
       bool pool;
+      bool add;
+      bool globalAvg;
     };
 
     SmallVector<Stage> stages;
-    Value expectedInput = kernel.getInput();
     for (auto [index, operation] : llvm::enumerate(body.without_terminator())) {
       bool last =
           index + 1 ==
@@ -75,9 +79,9 @@ public:
         auto output = dyn_cast<MemRefType>(pool.getOutput().getType());
         if (!input || !output || !input.hasStaticShape() ||
             !output.hasStaticShape() || input.getRank() != 4 ||
-            output.getRank() != 4 || pool.getInput() != expectedInput ||
-            pool.getFinalOutput() != last || input.getShape()[0] != 1 ||
-            output.getShape()[0] != 1 || !input.getElementType().isInteger(8) ||
+            output.getRank() != 4 || pool.getFinalOutput() != last ||
+            input.getShape()[0] != 1 || output.getShape()[0] != 1 ||
+            !input.getElementType().isInteger(8) ||
             !output.getElementType().isInteger(8) || pool.getKernel() <= 0 ||
             pool.getKernel() > 8 || pool.getStride() <= 0 ||
             pool.getPadding() < 0)
@@ -85,17 +89,25 @@ public:
         int64_t inH = input.getShape()[1];
         int64_t inW = input.getShape()[2];
         int64_t channels = input.getShape()[3];
-        int64_t outH = last ? output.getShape()[2] : output.getShape()[1];
-        int64_t outW = last ? output.getShape()[3] : output.getShape()[2];
-        int64_t outC = last ? output.getShape()[1] : output.getShape()[3];
+        int64_t outH =
+            pool.getFinalOutput() ? output.getShape()[2] : output.getShape()[1];
+        int64_t outW =
+            pool.getFinalOutput() ? output.getShape()[3] : output.getShape()[2];
+        int64_t outC =
+            pool.getFinalOutput() ? output.getShape()[1] : output.getShape()[3];
         if (channels <= 0 || outC != channels ||
-            inH + 2 * pool.getPadding() - pool.getKernel() !=
-                (outH - 1) * pool.getStride() ||
-            inW + 2 * pool.getPadding() - pool.getKernel() !=
-                (outW - 1) * pool.getStride())
+            (inH + 2 * pool.getPadding() - pool.getKernel()) /
+                        pool.getStride() +
+                    1 !=
+                outH ||
+            (inW + 2 * pool.getPadding() - pool.getKernel()) /
+                        pool.getStride() +
+                    1 !=
+                outW)
           return pool.emitError("MaxPool shape is inconsistent");
         stages.push_back({&operation,
                           pool.getInput(),
+                          {},
                           pool.getOutput(),
                           {},
                           {},
@@ -110,9 +122,84 @@ public:
                           static_cast<int64_t>(pool.getStride()),
                           static_cast<int64_t>(pool.getPadding()),
                           0,
+                          0.0f,
+                          0.0f,
+                          0.0f,
                           false,
-                          true});
-        expectedInput = pool.getOutput();
+                          true,
+                          false,
+                          false});
+        continue;
+      }
+
+      if (auto add = dyn_cast<MegaInt8AddOp>(operation)) {
+        auto lhs = dyn_cast<MemRefType>(add.getLhs().getType());
+        auto rhs = dyn_cast<MemRefType>(add.getRhs().getType());
+        auto output = dyn_cast<MemRefType>(add.getOutput().getType());
+        if (!lhs || !rhs || !output || !lhs.hasStaticShape() ||
+            !rhs.hasStaticShape() || !output.hasStaticShape() ||
+            lhs.getRank() != 4 || rhs != lhs || output != lhs ||
+            lhs.getShape()[0] != 1 || !lhs.getElementType().isInteger(8) ||
+            add.getActivation() < 0 || add.getActivation() > 1 ||
+            add.getLhsScale().convertToFloat() <= 0.0f ||
+            add.getRhsScale().convertToFloat() <= 0.0f ||
+            add.getOutputScale().convertToFloat() <= 0.0f)
+          return add.emitError("unsupported INT8 Add stage in Conv MegaKernel");
+        auto shape = lhs.getShape();
+        stages.push_back({&operation,
+                          add.getLhs(),
+                          add.getRhs(),
+                          add.getOutput(),
+                          {},
+                          {},
+                          {},
+                          shape[1],
+                          shape[2],
+                          shape[3],
+                          shape[1],
+                          shape[2],
+                          shape[3],
+                          1,
+                          1,
+                          0,
+                          static_cast<int64_t>(add.getActivation()),
+                          add.getLhsScale().convertToFloat(),
+                          add.getRhsScale().convertToFloat(),
+                          add.getOutputScale().convertToFloat(),
+                          false,
+                          false,
+                          true,
+                          false});
+        continue;
+      }
+
+      if (auto average = dyn_cast<MegaGlobalAvgPoolOp>(operation)) {
+        auto input = dyn_cast<MemRefType>(average.getInput().getType());
+        auto output = dyn_cast<MemRefType>(average.getOutput().getType());
+        if (!input || !output || !input.hasStaticShape() ||
+            !output.hasStaticShape() || input.getRank() != 4 ||
+            output.getRank() != 4 || input.getShape()[0] != 1 ||
+            output.getShape() !=
+                ArrayRef<int64_t>({1, 1, 1, input.getShape()[3]}) ||
+            !input.getElementType().isInteger(8) ||
+            !output.getElementType().isInteger(8) ||
+            average.getInputScale().convertToFloat() <= 0.0f ||
+            average.getOutputScale().convertToFloat() <= 0.0f)
+          return average.emitError(
+              "unsupported GlobalAvgPool stage in Conv MegaKernel");
+        auto shape = input.getShape();
+        stages.push_back({&operation, average.getInput(),
+                          {},         average.getOutput(),
+                          {},         {},
+                          {},         shape[1],
+                          shape[2],   shape[3],
+                          1,          1,
+                          shape[3],   1,
+                          1,          0,
+                          0,          average.getInputScale().convertToFloat(),
+                          0.0f,       average.getOutputScale().convertToFloat(),
+                          false,      false,
+                          false,      true});
         continue;
       }
 
@@ -121,7 +208,7 @@ public:
       if (!conv && !depthwise)
         return operation.emitError(
             "Conv MegaKernel currently accepts only Conv2D, depthwise Conv2D, "
-            "and MaxPool2D stages");
+            "MaxPool2D, GlobalAvgPool, and INT8 Add stages");
       Value inputValue = conv ? conv.getInput() : depthwise.getInput();
       Value weightValue = conv ? conv.getWeight() : depthwise.getWeight();
       Value biasValue = conv ? conv.getBias() : depthwise.getBias();
@@ -144,9 +231,8 @@ public:
           !bias.hasStaticShape() || !scale.hasStaticShape() ||
           !lut.hasStaticShape() || !output.hasStaticShape() ||
           input.getRank() != 4 || weight.getRank() != 4 ||
-          output.getRank() != 4 || inputValue != expectedInput || last ||
-          input.getShape()[0] != 1 || output.getShape()[0] != 1 ||
-          !input.getElementType().isInteger(8) ||
+          output.getRank() != 4 || input.getShape()[0] != 1 ||
+          output.getShape()[0] != 1 || !input.getElementType().isInteger(8) ||
           !weight.getElementType().isInteger(8) ||
           !bias.getElementType().isInteger(32) ||
           !scale.getElementType().isF32() ||
@@ -173,20 +259,52 @@ public:
           !weightShapeMatches || bias.getShape() != ArrayRef<int64_t>({outC}) ||
           scale.getShape() != ArrayRef<int64_t>({outC}) || lut.getRank() != 1 ||
           lut.getShape()[0] != 1 ||
-          inH + 2 * padLow - kernelSize != (outH - 1) * stride ||
-          inW + 2 * padLow - kernelSize != (outW - 1) * stride)
+          (inH + 2 * padLow - kernelSize) / stride + 1 != outH ||
+          (inW + 2 * padLow - kernelSize) / stride + 1 != outW)
         return operation.emitError(
             "Conv shape or quantization data is inconsistent");
-      stages.push_back({&operation, inputValue, outputValue, weightValue,
-                        biasValue, scaleValue, inH, inW, inC, outH, outW, outC,
-                        kernelSize, stride, padLow, activation, isDepthwise,
+      stages.push_back({&operation,
+                        inputValue,
+                        {},
+                        outputValue,
+                        weightValue,
+                        biasValue,
+                        scaleValue,
+                        inH,
+                        inW,
+                        inC,
+                        outH,
+                        outW,
+                        outC,
+                        kernelSize,
+                        stride,
+                        padLow,
+                        activation,
+                        0.0f,
+                        0.0f,
+                        conv ? conv.getOutputScale().convertToFloat()
+                             : depthwise.getOutputScale().convertToFloat(),
+                        isDepthwise,
+                        false,
+                        false,
                         false});
-      expectedInput = outputValue;
     }
-    if (stages.empty() || expectedInput != kernel.getOutput() ||
-        !stages.back().pool)
+    if (stages.empty() || stages.back().output != kernel.getOutput())
       return kernel.emitError(
-          "resident Conv MegaKernel must currently end in INT8 MaxPool2D");
+          "Conv MegaKernel final stage must produce the kernel output");
+
+    DenseMap<Value, int64_t> producer;
+    for (auto [stageIndex, stage] : llvm::enumerate(stages)) {
+      if (producer.contains(stage.output))
+        return stage.op->emitError(
+            "Conv MegaKernel has multiple producers for one tensor");
+      for (Value input : {stage.input, stage.rhs}) {
+        if (input && input != kernel.getInput() && !producer.contains(input))
+          return stage.op->emitError(
+              "Conv MegaKernel input is not produced by an earlier stage");
+      }
+      producer[stage.output] = stageIndex;
+    }
 
     const auto &target = buckyball_target::getBuckyballTarget();
     if (target.bankWidthBits != 128 || target.bankDepth != 64 ||
@@ -208,57 +326,6 @@ public:
                                                 b.getI32IntegerAttr(0));
     Value oneF32 = b.create<arith::ConstantOp>(loc, b.getF32Type(),
                                                b.getF32FloatAttr(1.0));
-
-    SmallVector<SmallVector<Value>> biasBanks(stages.size());
-    SmallVector<SmallVector<Value>> scaleBanks(stages.size());
-    for (auto [stageIndex, stage] : llvm::enumerate(stages)) {
-      if (stage.pool)
-        continue;
-      for (int64_t channelBase = 0; channelBase < stage.outputChannels;
-           channelBase += kTile) {
-        int64_t validChannels =
-            std::min(kTile, stage.outputChannels - channelBase);
-        Value biasPack = b.create<memref::AllocOp>(
-            loc, MemRefType::get({4, 4}, b.getI32Type()));
-        Value scalePack = b.create<memref::AllocOp>(
-            loc, MemRefType::get({4, 4}, b.getF32Type()));
-        hostPacks.push_back(biasPack);
-        hostPacks.push_back(scalePack);
-        b.create<linalg::FillOp>(loc, zeroI32, biasPack);
-        b.create<linalg::FillOp>(loc, oneF32, scalePack);
-        Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-        Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-        Value four = b.create<arith::ConstantIndexOp>(loc, 4);
-        auto rowLoop = b.create<scf::ForOp>(loc, zero, four, one);
-        b.setInsertionPointToStart(rowLoop.getBody());
-        Value row = rowLoop.getInductionVar();
-        auto columnLoop = b.create<scf::ForOp>(loc, zero, four, one);
-        b.setInsertionPointToStart(columnLoop.getBody());
-        Value column = columnLoop.getInductionVar();
-        Value lane = b.create<arith::AddIOp>(
-            loc, b.create<arith::MulIOp>(loc, row, four), column);
-        Value laneIsValid = b.create<arith::CmpIOp>(
-            loc, arith::CmpIPredicate::ult, lane,
-            b.create<arith::ConstantIndexOp>(loc, validChannels));
-        auto copy = b.create<scf::IfOp>(loc, laneIsValid);
-        b.setInsertionPointToStart(&copy.getThenRegion().front());
-        Value channel = b.create<arith::AddIOp>(
-            loc, lane, b.create<arith::ConstantIndexOp>(loc, channelBase));
-        b.create<memref::StoreOp>(
-            loc, b.create<memref::LoadOp>(loc, stage.bias, channel), biasPack,
-            ValueRange{row, column});
-        b.create<memref::StoreOp>(
-            loc, b.create<memref::LoadOp>(loc, stage.scale, channel), scalePack,
-            ValueRange{row, column});
-        b.setInsertionPointAfter(rowLoop);
-        Value biasBank = allocBank(b, loc, 1, 1);
-        biasBanks[stageIndex].push_back(
-            mvinBank(b, loc, biasPack, biasBank, 4));
-        Value scaleBank = allocBank(b, loc, 1, 1);
-        scaleBanks[stageIndex].push_back(
-            mvinBank(b, loc, scalePack, scaleBank, 4));
-      }
-    }
 
     auto makeFilledBank = [&](Value fill) {
       Value pack = b.create<memref::AllocOp>(
@@ -285,6 +352,120 @@ public:
               target.bankDepth) {
         stage.op->emitError("requested resident output tile is invalid");
         return {};
+      }
+
+      if (stage.add) {
+        if (stage.input == kernel.getInput() ||
+            stage.rhs == kernel.getInput()) {
+          stage.op->emitError("INT8 Add directly consuming the MegaKernel "
+                              "input is unsupported");
+          return {};
+        }
+        Value lhs = makeFilledBank(zeroI8);
+        lhs = emitStage(producer.lookup(stage.input), y0, x0, height, width,
+                        channelBase, lhs, destinationBase, destinationStride);
+        if (!lhs)
+          return {};
+        Value rhs = makeFilledBank(zeroI8);
+        rhs = emitStage(producer.lookup(stage.rhs), y0, x0, height, width,
+                        channelBase, rhs, destinationBase, destinationStride);
+        if (!rhs)
+          return {};
+        Value lhsRatio = b.create<arith::ConstantOp>(
+            loc, b.getF32Type(),
+            b.getF32FloatAttr(stage.lhsScale / stage.outputScale));
+        Value rhsRatio = b.create<arith::ConstantOp>(
+            loc, b.getF32Type(),
+            b.getF32FloatAttr(stage.rhsScale / stage.outputScale));
+        destination = b.create<BankInt8AddOp>(
+                           loc, destination.getType(), lhs, rhs, destination,
+                           createI64Const(b, loc, target.bankDepth), lhsRatio,
+                           rhsRatio, b.getBoolAttr(stage.activation == 1))
+                          .getOutputBankOut();
+        releaseBank(b, loc, lhs);
+        releaseBank(b, loc, rhs);
+        return destination;
+      }
+
+      if (stage.globalAvg) {
+        if (destinationBase != 0 || destinationStride != 1 || y0 != 0 ||
+            x0 != 0 || height != 1 || width != 1 ||
+            stage.input == kernel.getInput()) {
+          stage.op->emitError("invalid resident GlobalAvgPool request");
+          return {};
+        }
+        int64_t inputElements = stage.inputHeight * stage.inputWidth;
+        if (inputElements > target.bankDepth) {
+          stage.op->emitError(
+              "GlobalAvgPool spatial extent exceeds one physical bank");
+          return {};
+        }
+        Value source = makeFilledBank(zeroI8);
+        source = emitStage(producer.lookup(stage.input), 0, 0,
+                           stage.inputHeight, stage.inputWidth, channelBase,
+                           source, 0, stage.inputWidth);
+        if (!source)
+          return {};
+
+        Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+        Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+        Value sixteen = b.create<arith::ConstantIndexOp>(loc, kTile);
+        Value onesPack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({4, kTile}, b.getI8Type()));
+        Value biasPack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({4, 4}, b.getI32Type()));
+        Value scalePack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({4, 4}, b.getF32Type()));
+        hostPacks.append({onesPack, biasPack, scalePack});
+        b.create<linalg::FillOp>(loc, zeroI8, onesPack);
+        b.create<linalg::FillOp>(loc, zeroI32, biasPack);
+        Value ratio = b.create<arith::ConstantOp>(
+            loc, b.getF32Type(),
+            b.getF32FloatAttr(stage.lhsScale /
+                              (inputElements * stage.outputScale)));
+        b.create<linalg::FillOp>(loc, ratio, scalePack);
+        auto onesLoop = b.create<scf::ForOp>(
+            loc, zero, b.create<arith::ConstantIndexOp>(loc, inputElements),
+            one);
+        b.setInsertionPointToStart(onesLoop.getBody());
+        Value index = onesLoop.getInductionVar();
+        b.create<memref::StoreOp>(
+            loc,
+            b.create<arith::ConstantOp>(loc, b.getI8Type(),
+                                        b.getI8IntegerAttr(1)),
+            onesPack,
+            ValueRange{b.create<arith::DivUIOp>(loc, index, sixteen),
+                       b.create<arith::RemUIOp>(loc, index, sixteen)});
+        b.setInsertionPointAfter(onesLoop);
+
+        Value onesBank = allocBank(b, loc, 1, 1);
+        Value onesLoaded = mvinBank(b, loc, onesPack, onesBank, 4);
+        Value biasBank = allocBank(b, loc, 1, 1);
+        Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
+        Value biasState =
+            b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+        Value scaleBank = allocBank(b, loc, 1, 1);
+        Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
+        Value result = allocBank(b, loc, 1, 1);
+        result =
+            b.create<BankSMatMulOp>(
+                 loc, result.getType(), onesLoaded, source, result,
+                 createI64ConstU(b, loc, matrixRs2(1, kTile, target.bankDepth)),
+                 b.getBoolAttr(true), b.getBoolAttr(true))
+                .getWrBankOut();
+        destination =
+            b.create<BankQuantI32ToI8Op>(
+                 loc, destination.getType(), result, scaleLoaded, destination,
+                 createI64Const(b, loc, 4), b.getI64IntegerAttr(0),
+                 b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                 b.getI64IntegerAttr(1), b.getBoolAttr(false))
+                .getOutBankOut();
+        releaseBank(b, loc, source);
+        releaseBank(b, loc, onesLoaded);
+        releaseBank(b, loc, biasState);
+        releaseBank(b, loc, scaleLoaded);
+        releaseBank(b, loc, result);
+        return destination;
       }
 
       if (stage.pool) {
@@ -325,10 +506,15 @@ public:
         int64_t validYEnd = std::min(stage.inputHeight, sourceY + inputSide);
         int64_t validXEnd = std::min(stage.inputWidth, sourceX + inputSide);
         if (validY < validYEnd && validX < validXEnd) {
-          source = emitStage(stageIndex - 1, validY, validX, validYEnd - validY,
-                             validXEnd - validX, channelBase, source,
-                             (validY - sourceY) * inputSide + validX - sourceX,
-                             inputSide);
+          if (stage.input == kernel.getInput()) {
+            stage.op->emitError("MaxPool directly consuming the MegaKernel "
+                                "input is unsupported");
+            return {};
+          }
+          source = emitStage(
+              producer.lookup(stage.input), validY, validX, validYEnd - validY,
+              validXEnd - validX, channelBase, source,
+              (validY - sourceY) * inputSide + validX - sourceX, inputSide);
           if (!source)
             return {};
         }
@@ -399,7 +585,7 @@ public:
             loc, MemRefType::get({target.bankDepth, kTile}, b.getI8Type()));
         hostPacks.push_back(pack);
         b.create<linalg::FillOp>(loc, zeroI8, pack);
-        if (stageIndex == 0) {
+        if (stage.input == kernel.getInput()) {
           int64_t firstPanel = bankIndex * panelsPerBank;
           int64_t lastPanel = std::min(inputPanels, firstPanel + panelsPerBank);
           for (int64_t panel = firstPanel; panel < lastPanel; ++panel) {
@@ -468,7 +654,7 @@ public:
             mvinBank(b, loc, pack, sourceBank, target.bankDepth));
       }
 
-      if (stageIndex > 0) {
+      if (stage.input != kernel.getInput()) {
         int64_t validY = std::max<int64_t>(0, sourceY);
         int64_t validX = std::max<int64_t>(0, sourceX);
         int64_t validYEnd = std::min(stage.inputHeight, sourceY + inputSide);
@@ -479,12 +665,13 @@ public:
             int64_t slot = panel % panelsPerBank;
             int64_t sourceChannelBase =
                 stage.depthwise ? channelBase : panel * kTile;
-            sourceBanks[bankIndex] = emitStage(
-                stageIndex - 1, validY, validX, validYEnd - validY,
-                validXEnd - validX, sourceChannelBase, sourceBanks[bankIndex],
-                slot * panelRows + (validY - sourceY) * inputSide + validX -
-                    sourceX,
-                inputSide);
+            sourceBanks[bankIndex] =
+                emitStage(producer.lookup(stage.input), validY, validX,
+                          validYEnd - validY, validXEnd - validX,
+                          sourceChannelBase, sourceBanks[bankIndex],
+                          slot * panelRows + (validY - sourceY) * inputSide +
+                              validX - sourceX,
+                          inputSide);
             if (!sourceBanks[bankIndex])
               return {};
           }
@@ -493,12 +680,40 @@ public:
 
       int64_t validOutputChannels =
           std::min(kTile, stage.outputChannels - channelBase);
-      size_t outputPanel = channelBase / kTile;
-      Value biasLoaded = biasBanks[stageIndex][outputPanel];
+      Value biasPack = b.create<memref::AllocOp>(
+          loc, MemRefType::get({4, 4}, b.getI32Type()));
+      Value scalePack = b.create<memref::AllocOp>(
+          loc, MemRefType::get({4, 4}, b.getF32Type()));
+      hostPacks.push_back(biasPack);
+      hostPacks.push_back(scalePack);
+      b.create<linalg::FillOp>(loc, zeroI32, biasPack);
+      b.create<linalg::FillOp>(loc, oneF32, scalePack);
+      Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+      Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+      auto parameterLoop = b.create<scf::ForOp>(
+          loc, zero, b.create<arith::ConstantIndexOp>(loc, validOutputChannels),
+          one);
+      b.setInsertionPointToStart(parameterLoop.getBody());
+      Value lane = parameterLoop.getInductionVar();
+      Value channel = b.create<arith::AddIOp>(
+          loc, lane, b.create<arith::ConstantIndexOp>(loc, channelBase));
+      Value group = b.create<arith::DivUIOp>(
+          loc, lane, b.create<arith::ConstantIndexOp>(loc, 4));
+      Value groupLane = b.create<arith::RemUIOp>(
+          loc, lane, b.create<arith::ConstantIndexOp>(loc, 4));
+      b.create<memref::StoreOp>(
+          loc, b.create<memref::LoadOp>(loc, stage.bias, channel), biasPack,
+          ValueRange{group, groupLane});
+      b.create<memref::StoreOp>(
+          loc, b.create<memref::LoadOp>(loc, stage.scale, channel), scalePack,
+          ValueRange{group, groupLane});
+      b.setInsertionPointAfter(parameterLoop);
+      Value biasBank = allocBank(b, loc, 1, 1);
+      Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
       Value biasState =
           b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
-      biasBanks[stageIndex][outputPanel] = biasState;
-      Value scaleLoaded = scaleBanks[stageIndex][outputPanel];
+      Value scaleBank = allocBank(b, loc, 1, 1);
+      Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
       Value patchState = allocBank(b, loc, 1, 1);
       Value weightState = allocBank(b, loc, 1, 1);
       Value resultState = allocBank(b, loc, 1, 1);
@@ -601,6 +816,8 @@ public:
       releaseBank(b, loc, patchState);
       releaseBank(b, loc, weightState);
       releaseBank(b, loc, resultState);
+      releaseBank(b, loc, biasState);
+      releaseBank(b, loc, scaleLoaded);
       return destination;
     };
 
@@ -640,17 +857,21 @@ public:
               loc, b.create<arith::MulIOp>(loc, y, widthValue), x);
           Value value =
               b.create<memref::LoadOp>(loc, packed, ValueRange{position, lane});
-          b.create<memref::StoreOp>(
-              loc, value, kernel.getOutput(),
-              ValueRange{
-                  zero,
-                  b.create<arith::AddIOp>(
-                      loc, lane,
-                      b.create<arith::ConstantIndexOp>(loc, channelBase)),
-                  b.create<arith::AddIOp>(
-                      loc, y, b.create<arith::ConstantIndexOp>(loc, y0)),
-                  b.create<arith::AddIOp>(
-                      loc, x, b.create<arith::ConstantIndexOp>(loc, x0))});
+          Value outputChannel = b.create<arith::AddIOp>(
+              loc, lane, b.create<arith::ConstantIndexOp>(loc, channelBase));
+          Value outputY = b.create<arith::AddIOp>(
+              loc, y, b.create<arith::ConstantIndexOp>(loc, y0));
+          Value outputX = b.create<arith::AddIOp>(
+              loc, x, b.create<arith::ConstantIndexOp>(loc, x0));
+          if (finalStage.pool &&
+              cast<MegaMaxPool2dOp>(finalStage.op).getFinalOutput())
+            b.create<memref::StoreOp>(
+                loc, value, kernel.getOutput(),
+                ValueRange{zero, outputChannel, outputY, outputX});
+          else
+            b.create<memref::StoreOp>(
+                loc, value, kernel.getOutput(),
+                ValueRange{zero, outputY, outputX, outputChannel});
           b.setInsertionPointAfter(copyOutputY);
           releaseBank(b, loc, stored);
           b.create<memref::DeallocOp>(loc, packed);
@@ -660,12 +881,6 @@ public:
         }
       }
     }
-    for (auto &stageBanks : biasBanks)
-      for (Value bank : stageBanks)
-        releaseBank(b, loc, bank);
-    for (auto &stageBanks : scaleBanks)
-      for (Value bank : stageBanks)
-        releaseBank(b, loc, bank);
     b.eraseOp(kernel);
     return success();
   }
