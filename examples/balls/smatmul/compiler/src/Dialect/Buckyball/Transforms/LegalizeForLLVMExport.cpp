@@ -24,8 +24,9 @@ namespace {
 
 uint64_t matrixCfg(uint64_t rows, uint64_t cols, bool first = true,
                    bool last = true) {
-  if (rows == 0 || cols == 0 || rows > 0xfff || cols > 16)
-    llvm::report_fatal_error("matrix cfg: rows in 1..4095, cols in 1..16");
+  if (rows == 0 || rows > 0xfff || (rows != 1 && rows % 16) || cols != 16)
+    llvm::report_fatal_error(
+        "matrix cfg: rows must be 1 or a multiple of 16 and cols must be 16");
   return fieldBits(rows, 0, 11) | fieldBits(cols, 12, 23) |
          (uint64_t(first) << 24) | (uint64_t(last) << 25);
 }
@@ -190,8 +191,8 @@ private:
 };
 
 struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
-  SMatMulLowering(LLVMTypeConverter &converter, bool, int64_t)
-      : ConvertOpToLLVMPattern<SMatMulOp>(converter) {}
+  SMatMulLowering(LLVMTypeConverter &converter, bool, int64_t bankDepth)
+      : ConvertOpToLLVMPattern<SMatMulOp>(converter), bankDepth(bankDepth) {}
 
   LogicalResult
   matchAndRewrite(SMatMulOp op, OpAdaptor adaptor,
@@ -208,19 +209,43 @@ struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
     uint64_t rows = cfg & 0xfff;
     uint64_t cols = (cfg >> 12) & 0xfff;
     uint64_t k = (cfg >> 24) & 0xfff;
+    if (rows == 0 || (rows != 1 && rows % 16) || cols != 16 || k == 0 ||
+        k % 16 || rows * 4 > static_cast<uint64_t>(bankDepth))
+      return op.emitError("SMatMul matrix shape or C footprint is invalid");
+    auto base = adaptor.getOutputBase().getDefiningOp<arith::ConstantOp>();
+    auto baseAttr =
+        base ? dyn_cast<IntegerAttr>(base.getValue()) : IntegerAttr();
+    if (!baseAttr || baseAttr.getInt() < 0 ||
+        baseAttr.getInt() + rows * 4 > bankDepth)
+      return op.emitError(
+          "SMatMul outputBase must be constant and fit C in bank");
     Value rs1 = packRs1BanksIter(
         rewriter, loc, adaptor.getOp1BankId(), adaptor.getOp2BankId(),
         adaptor.getResultBankId(), cstI64(rewriter, loc, k));
+    Value rs2 = cstI64(rewriter, loc, matrixCfg(rows, cols, false, false));
+    Value first = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(),
+                                                  adaptor.getFirst());
+    Value last = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(),
+                                                 adaptor.getLast());
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, first, cstI64(rewriter, loc, 24)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, last, cstI64(rewriter, loc, 25)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputBase(),
+                                       cstI64(rewriter, loc, 26)));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1,
-        cstI64(rewriter, loc,
-               matrixCfg(rows, cols, op.getFirst(), op.getLast())),
+        op, rs1, rs2,
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("SMATMUL_OS")));
     return success();
   }
 
 private:
+  int64_t bankDepth;
 };
 
 struct SMatMulBiasLowering : public ConvertOpToLLVMPattern<SMatMulBiasOp> {
@@ -232,10 +257,19 @@ struct SMatMulBiasLowering : public ConvertOpToLLVMPattern<SMatMulBiasOp> {
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("SMatMulBall");
     Location loc = op.getLoc();
+    auto base = adaptor.getInputBase().getDefiningOp<arith::ConstantOp>();
+    auto baseAttr =
+        base ? dyn_cast<IntegerAttr>(base.getValue()) : IntegerAttr();
+    if (!baseAttr || baseAttr.getInt() < 0 ||
+        baseAttr.getInt() + 4 >
+            static_cast<int64_t>(
+                buckyball_target::getBuckyballTarget().bankDepth))
+      return op.emitError(
+          "SMatMul bias inputBase must be constant and fit in bank");
     Value rs1 = packRs1BankIter(rewriter, loc, adaptor.getBiasBankId(),
                                 cstI64(rewriter, loc, 4));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, cstI64(rewriter, loc, 0),
+        op, rs1, adaptor.getInputBase(),
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("SMATMUL_BIAS")));
     return success();

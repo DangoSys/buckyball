@@ -244,6 +244,7 @@ public:
             "MegaKernel convolution requires static shapes");
 
       int64_t stride = conv ? conv.getStride() : depthwise.getStride();
+      int64_t kernel = conv ? conv.getKernel() : depthwise.getKernel();
       int64_t padLow = conv ? conv.getPadLow() : depthwise.getPadLow();
       int64_t padHigh = conv ? conv.getPadHigh() : depthwise.getPadHigh();
       int64_t activation =
@@ -254,10 +255,14 @@ public:
       int64_t outChannels = last ? os[1] : os[3];
       int64_t outHeight = last ? os[2] : os[1];
       int64_t outWidth = last ? os[3] : os[2];
-      int64_t expectedChannels = depthwise ? is[3] : fs[3];
-      if (is[0] <= 0 || is[1] <= 0 || is[2] <= 0 || is[3] <= 0 || fs[0] <= 0 ||
-          fs[1] <= 0 || fs[2] != is[3] || fs[3] <= 0 ||
-          (depthwise && fs[3] != 1) || os[0] != is[0] ||
+      int64_t expectedChannels = depthwise ? is[3] : outChannels;
+      int64_t paddedKernel = ((kernel * kernel + 15) / 16) * 16;
+      bool filterShapeValid =
+          depthwise ? fs == ArrayRef<int64_t>({kernel, kernel, is[3], 1})
+                    : fs == ArrayRef<int64_t>({(outChannels + 15) / 16, is[3],
+                                               paddedKernel, 16});
+      if (is[0] <= 0 || is[1] <= 0 || is[2] <= 0 || is[3] <= 0 || kernel <= 0 ||
+          kernel > 7 || !filterShapeValid || os[0] != is[0] ||
           outChannels != expectedChannels ||
           bias.getShape()[0] != expectedChannels ||
           scale.getShape()[0] != expectedChannels || stride <= 0 ||
@@ -266,10 +271,10 @@ public:
           activation > 2 ||
           (conv ? conv.getOutputScale() : depthwise.getOutputScale())
                   .convertToDouble() <= 0.0 ||
-          padLow < 0 || padHigh < 0 || is[1] + padLow + padHigh < fs[0] ||
-          is[2] + padLow + padHigh < fs[1] ||
-          outHeight != (is[1] + padLow + padHigh - fs[0]) / stride + 1 ||
-          outWidth != (is[2] + padLow + padHigh - fs[1]) / stride + 1 ||
+          padLow < 0 || padHigh < 0 || is[1] + padLow + padHigh < kernel ||
+          is[2] + padLow + padHigh < kernel ||
+          outHeight != (is[1] + padLow + padHigh - kernel) / stride + 1 ||
+          outWidth != (is[2] + padLow + padHigh - kernel) / stride + 1 ||
           (last ? !output.getElementType().isF32()
                 : !output.getElementType().isInteger(8)))
         return stage->emitError(
@@ -278,15 +283,16 @@ public:
       if (depthwise)
         rewriter.create<MegaConv2dDepthwiseOp>(
             depthwise.getLoc(), inputValue, filterValue, biasValue, scaleValue,
-            lutValue, outputValue, depthwise.getStrideAttr(),
-            depthwise.getPadLowAttr(), depthwise.getPadHighAttr(),
-            depthwise.getActivationAttr(), depthwise.getOutputScaleAttr());
+            lutValue, outputValue, depthwise.getKernelAttr(),
+            depthwise.getStrideAttr(), depthwise.getPadLowAttr(),
+            depthwise.getPadHighAttr(), depthwise.getActivationAttr(),
+            depthwise.getOutputScaleAttr());
       else
         rewriter.create<MegaConv2dOp>(
             conv.getLoc(), inputValue, filterValue, biasValue, scaleValue,
-            lutValue, outputValue, conv.getStrideAttr(), conv.getPadLowAttr(),
-            conv.getPadHighAttr(), conv.getActivationAttr(),
-            conv.getOutputScaleAttr());
+            lutValue, outputValue, conv.getKernelAttr(), conv.getStrideAttr(),
+            conv.getPadLowAttr(), conv.getPadHighAttr(),
+            conv.getActivationAttr(), conv.getOutputScaleAttr());
     }
     rewriter.create<MegaYieldOp>(op.getLoc());
     rewriter.eraseOp(op);

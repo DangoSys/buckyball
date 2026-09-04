@@ -67,7 +67,7 @@ static void emitBankTranspose(OpBuilder &b, Location loc, Value inContig,
   Value loaded = mvinBank(b, loc, inContig, src, rows, /*stride=*/1);
   Value transposed = b.create<BankTransposeOp>(
       loc, dst.getType(), loaded, dst, createI64Const(b, loc, rows),
-      createI64Const(b, loc, elemBits), createI64ConstU(b, loc, UINT64_MAX));
+      createI64Const(b, loc, elemBits));
   mvoutBank(b, loc, outContig, transposed, rows, /*stride=*/1);
   b.create<FenceOp>(loc);
   releaseBank(b, loc, loaded);

@@ -38,10 +38,9 @@ struct MaxPoolLowering : public ConvertOpToLLVMPattern<MaxPoolOp> {
         outputSide * outputSide != iterAttr.getInt() ||
         inputSide + 2 * padding < kernel + startRow ||
         inputSide + 2 * padding < kernel + startCol ||
-        inputSide + 2 * padding - kernel - startRow !=
-            (outputSide - 1) * stride ||
-        inputSide + 2 * padding - kernel - startCol !=
-            (outputSide - 1) * stride)
+        startRow + (outputSide - 1) * stride + kernel >
+            inputSide + 2 * padding ||
+        startCol + (outputSide - 1) * stride + kernel > inputSide + 2 * padding)
       return op.emitError("MaxPool shape does not fit one physical bank tile");
 
     Location loc = op.getLoc();

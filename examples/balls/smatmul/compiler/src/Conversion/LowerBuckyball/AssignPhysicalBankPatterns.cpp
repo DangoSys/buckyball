@@ -23,8 +23,8 @@ public:
   LogicalResult matchAndRewrite(BankSMatMulOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.create<SMatMulOp>(op.getLoc(), op.getOp1Bank(), op.getOp2Bank(),
-                               op.getWrBank(), op.getConfig(),
-                               op.getFirstAttr(), op.getLastAttr());
+                               op.getWrBank(), op.getConfig(), op.getFirst(),
+                               op.getLast(), op.getOutputBase());
     rewriter.replaceOp(op, op.getWrBank());
     return success();
   }
@@ -36,7 +36,8 @@ public:
 
   LogicalResult matchAndRewrite(BankSMatMulBiasOp op,
                                 PatternRewriter &rewriter) const override {
-    rewriter.create<SMatMulBiasOp>(op.getLoc(), op.getBiasBank());
+    rewriter.create<SMatMulBiasOp>(op.getLoc(), op.getBiasBank(),
+                                   op.getInputBase());
     rewriter.replaceOp(op, op.getBiasBank());
     return success();
   }

@@ -63,7 +63,7 @@ int main(void) {
   bb_mem_alloc(2, 1, 4);
   bb_mvin((uintptr_t)matrix_a, 0, a_rows, 1);
   bb_mvin((uintptr_t)matrix_b, 1, k_elems, 1);
-  bb_smatmul_os(0, 1, 2, wins, 1, k_elems, 1, 1);
+  bb_smatmul_os(0, 1, 2, wins, 1, k_elems, 1, 1, 0);
   bb_mvout((uintptr_t)packed_c, 2, wins, 1);
   bb_fence();
   bb_mem_release(0);

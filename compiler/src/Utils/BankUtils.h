@@ -50,6 +50,12 @@ static inline mlir::Value createI64ConstU(mlir::OpBuilder &b,
                                            b.getI64IntegerAttr(val));
 }
 
+static inline mlir::Value createI1Const(mlir::OpBuilder &b, mlir::Location loc,
+                                        bool val) {
+  return b.create<mlir::arith::ConstantOp>(loc, b.getI1Type(),
+                                           b.getBoolAttr(val));
+}
+
 /// Pack bit field: extract bits [startBit, endBit] from val and shift to
 /// position.
 static inline uint64_t packBits(uint64_t val, int startBit, int endBit) {
@@ -80,8 +86,9 @@ static inline mlir::Value createBankSMatMul(mlir::OpBuilder &b,
                                             mlir::Location loc, mlir::Type wrTy,
                                             mlir::Value a, mlir::Value opB,
                                             mlir::Value wr, mlir::Value cfg) {
-  return b.create<BankSMatMulOp>(loc, wrTy, a, opB, wr, cfg,
-                                 b.getBoolAttr(true), b.getBoolAttr(true));
+  return b.create<BankSMatMulOp>(
+      loc, wrTy, a, opB, wr, cfg, createI1Const(b, loc, true),
+      createI1Const(b, loc, true), createI64Const(b, loc, 0));
 }
 
 /// Allocate a bank with given row/col dimensions.

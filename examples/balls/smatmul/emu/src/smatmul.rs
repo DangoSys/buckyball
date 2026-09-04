@@ -15,6 +15,7 @@ struct Chain {
     rows: usize,
     cols: usize,
     output_bank: u64,
+    output_base: usize,
     accumulators: Vec<i32>,
 }
 
@@ -36,14 +37,18 @@ fn write_i32(bank: &mut [u8], row: usize, lane: usize, value: i32) {
 
 pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let bank = rs1_b0(xs1);
-    if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 != 0 {
-        panic!("smatmul_bias: bank1/bank2/rs2 must be zero and iter must be four");
+    let input_base = (xs2 & 0x3f) as usize;
+    if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 >> 6 != 0 {
+        panic!("smatmul_bias: bank1/bank2/rs2[63:6] must be zero and iter must be four");
     }
     if bank >= bank_num() as u64 {
         panic!("smatmul_bias: invalid bank id");
     }
     if !ctx.cfgs[bank as usize].allocated || ctx.cfgs[bank as usize].cols != 1 {
         panic!("smatmul_bias: bias bank must be one allocated column");
+    }
+    if input_base + 4 > bank_lines() {
+        panic!("smatmul_bias: inputBase plus four rows exceeds bank depth");
     }
     let mut state = smatmul_state().lock().unwrap();
     if state.chain.is_some() {
@@ -53,7 +58,7 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let mut bias = [0i32; TILE];
     for group in 0..4 {
         for lane in 0..4 {
-            bias[group * 4 + lane] = read_i32(&ctx.banks[physical], group, lane);
+            bias[group * 4 + lane] = read_i32(&ctx.banks[physical], input_base + group, lane);
         }
     }
     state.bias = Some(bias);
@@ -69,8 +74,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let k = rs1_iter(xs1) as usize;
     let first = (xs2 >> 24) & 1 != 0;
     let last = (xs2 >> 25) & 1 != 0;
-    if xs2 >> 26 != 0 {
-        panic!("smatmul: rs2[63:26] must be zero");
+    let output_base = ((xs2 >> 26) & 0x3f) as usize;
+    if xs2 >> 32 != 0 {
+        panic!("smatmul: rs2[63:32] must be zero");
     }
     if (rows != 1 && (rows == 0 || rows % TILE != 0))
         || cols != TILE
@@ -101,7 +107,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let a_rows = if rows == 1 { k / TILE } else { rows * k / TILE };
     let b_rows = k;
     let c_rows = rows * 4;
-    if a_rows > bank_lines() || b_rows > bank_lines() || c_rows > bank_lines() {
+    if a_rows > bank_lines() || b_rows > bank_lines() || output_base + c_rows > bank_lines() {
         panic!("smatmul: bank footprint exceeds bank depth");
     }
 
@@ -121,6 +127,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             rows,
             cols,
             output_bank: c_bank,
+            output_base,
             accumulators,
         }
     } else {
@@ -132,6 +139,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if chain.rows != rows
         || chain.cols != cols
         || chain.output_bank != c_bank
+        || chain.output_base != output_base
     {
         panic!("smatmul: continuation changed output shape or destination");
     }
@@ -162,7 +170,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             for col in 0..cols {
                 write_i32(
                     &mut ctx.banks[pc],
-                    row * 4 + col / 4,
+                    output_base + row * 4 + col / 4,
                     col % 4,
                     chain.accumulators[row * cols + col],
                 );
@@ -175,8 +183,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 }
 
 pub(crate) fn bias_latency(xs1: u64, xs2: u64) -> u64 {
-    if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 != 0 {
-        panic!("smatmul_bias: unused fields must be zero");
+    let input_base = xs2 & 0x3f;
+    if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 >> 6 != 0 || input_base + 4 > bank_lines() as u64 {
+        panic!("smatmul_bias: illegal inputBase or reserved fields");
     }
     4
 }
@@ -185,11 +194,13 @@ pub(crate) fn latency(xs1: u64, xs2: u64) -> u64 {
     let rows = xs2 & 0xfff;
     let cols = (xs2 >> 12) & 0xfff;
     let k = rs1_iter(xs1);
-    if xs2 >> 26 != 0
+    let output_base = (xs2 >> 26) & 0x3f;
+    if xs2 >> 32 != 0
         || (rows != 1 && (rows == 0 || rows % 16 != 0))
         || cols != 16
         || k == 0
         || k % 16 != 0
+        || output_base + rows * 4 > bank_lines() as u64
     {
         panic!("smatmul: illegal matrix encoding");
     }

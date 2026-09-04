@@ -50,7 +50,7 @@ static void run_cin(const int8_t *img, const int8_t *wt, int32_t *c,
   bb_mvin((uintptr_t)img, 0, (IN * IN + T - 1) / T, 1);
   bb_im2col(0, 1, IN, KS, ST, 0);
   bb_mvin((uintptr_t)wt, 0, PK, 1);
-  bb_smatmul_os(1, 0, cb, PW, T, PK, 1, 1);
+  bb_smatmul_os(1, 0, cb, PW, T, PK, 1, 1, 0);
   bb_mvout((uintptr_t)c, cb, CL, 1);
   bb_fence();
   bb_mem_release(0);

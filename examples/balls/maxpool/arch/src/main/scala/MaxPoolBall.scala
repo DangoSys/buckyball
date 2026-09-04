@@ -135,12 +135,10 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
           "MAXPOOL output tile exceeds bank depth"
         )
         assert(
-          inSide +& (poolPadding << 1) >= kernelSize +& poolStartRow &&
-            inSide +& (poolPadding << 1) - kernelSize - poolStartRow ===
-            (outSide - 1.U) * poolStride &&
-            inSide +& (poolPadding << 1) >= kernelSize +& poolStartCol &&
-            inSide +& (poolPadding << 1) - kernelSize - poolStartCol ===
-            (outSide - 1.U) * poolStride,
+          poolStartRow +& (outSide - 1.U) * poolStride +& kernelSize <=
+            inSide +& (poolPadding << 1) &&
+            poolStartCol +& (outSide - 1.U) * poolStride +& kernelSize <=
+            inSide +& (poolPadding << 1),
           "MAXPOOL pooling geometry is inconsistent"
         )
 

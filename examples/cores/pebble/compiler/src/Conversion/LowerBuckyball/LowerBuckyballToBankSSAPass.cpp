@@ -18,7 +18,9 @@ using namespace mlir;
 
 namespace mlir::buddy {
 void populatePebbleCoreBankSSALoweringPatterns(RewritePatternSet &patterns);
-}
+void populatePebbleResidentConvRegionToBankSSAPatterns(
+    RewritePatternSet &patterns);
+} // namespace mlir::buddy
 
 namespace {
 
@@ -40,6 +42,14 @@ public:
   }
 
   void runOnOperation() override {
+    RewritePatternSet residentPatterns(&getContext());
+    mlir::buddy::populatePebbleResidentConvRegionToBankSSAPatterns(
+        residentPatterns);
+    if (failed(applyPatternsGreedily(getOperation(),
+                                     std::move(residentPatterns)))) {
+      signalPassFailure();
+      return;
+    }
     RewritePatternSet patterns(&getContext());
     mlir::buddy::populatePebbleCoreBankSSALoweringPatterns(patterns);
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns)))) {

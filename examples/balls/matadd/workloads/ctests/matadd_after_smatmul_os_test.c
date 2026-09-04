@@ -49,7 +49,7 @@ static void gemm_os(const int8_t *a, const int8_t *b, int32_t *c, uint32_t cb) {
   bb_mem_alloc(cb, 1, G);
   bb_mvin((uintptr_t)pa, 0, M * (K / T), 1);
   bb_mvin((uintptr_t)pb, 1, K, 1);
-  bb_smatmul_os(0, 1, cb, M, T, K, 1, 1);
+  bb_smatmul_os(0, 1, cb, M, T, K, 1, 1, 0);
   bb_mvout((uintptr_t)c, cb, CL, 1);
   bb_fence();
   bb_mem_release(0);

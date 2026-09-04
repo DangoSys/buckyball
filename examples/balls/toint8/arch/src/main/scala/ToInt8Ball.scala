@@ -50,6 +50,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   private val scaleBank    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val outputBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val iterReg      = RegInit(0.U(b.frontend.iter_len.W))
+  private val inputBaseReg = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val inputRow     = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val outputRow    = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val outputWidth  = RegInit(0.U(7.W))
@@ -156,10 +157,12 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
           val stride     = cmd.rs2(28, 22)
           val outputRows = cmd.iter >> 2
           val outputEnd  = outputBase +& ((height - 1.U) * stride) +& width
-          assert(cmd.rs2(63, 29) === 0.U, "QUANT_I32_TO_I8 reserves rs2[63:29]")
+          val inputBase  = cmd.rs2(34, 29)
+          assert(cmd.rs2(63, 35) === 0.U, "QUANT_I32_TO_I8 reserves rs2[63:35]")
           assert(width > 0.U && height > 0.U && stride >= width, "QUANT_I32_TO_I8 output geometry is invalid")
           assert(width * height === outputRows, "QUANT_I32_TO_I8 iter does not match output geometry")
           assert(outputEnd <= b.memDomain.bankEntries.U, "QUANT_I32_TO_I8 output exceeds bank depth")
+          assert(inputBase +& cmd.iter <= b.memDomain.bankEntries.U, "QUANT_I32_TO_I8 input exceeds bank depth")
         }
 
         robIdReg     := io.cmdReq.bits.rob_id
@@ -169,6 +172,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
         scaleBank    := cmd.op2_bank
         outputBank   := cmd.wr_bank
         iterReg      := cmd.iter
+        inputBaseReg := Mux(isI32, cmd.rs2(34, 29), 0.U)
         inputRow     := 0.U
         outputRow    := Mux(isI32, cmd.rs2(7, 1), 0.U)
         outputWidth  := Mux(isI32, cmd.rs2(14, 8), 0.U)
@@ -210,7 +214,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
 
     is(inputReq) {
       io.bankRead(0).io.req.valid     := true.B
-      io.bankRead(0).io.req.bits.addr := inputRow
+      io.bankRead(0).io.req.bits.addr := inputBaseReg +& inputRow
       when(io.bankRead(0).io.req.fire) {
         state := inputResp
       }

@@ -23,8 +23,7 @@ public:
   LogicalResult matchAndRewrite(BankTransposeOp op,
                                 PatternRewriter &rewriter) const override {
     rewriter.create<TransposeOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
-                                 op.getIter(), op.getElemBits(),
-                                 op.getRowMask());
+                                 op.getIter(), op.getElemBits());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

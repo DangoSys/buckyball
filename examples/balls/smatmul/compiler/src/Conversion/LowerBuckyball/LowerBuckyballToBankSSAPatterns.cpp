@@ -110,8 +110,8 @@ public:
 
       Value biasBank = allocBank(b, loc, 1, 1);
       Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-      Value biasState =
-          b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+      Value biasState = b.create<BankSMatMulBiasOp>(
+          loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
       Value scaleBank = allocBank(b, loc, 1, 1);
       Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
 
@@ -206,7 +206,9 @@ public:
             auto smatmul = b.create<BankSMatMulOp>(
                 loc, resultState.getType(), aLoaded, wLoaded, resultState,
                 createI64Const(b, loc, static_cast<int64_t>(cfg)),
-                b.getBoolAttr(k0 == 0), b.getBoolAttr(k0 + thisK == paddedK));
+                createI1Const(b, loc, k0 == 0),
+                createI1Const(b, loc, k0 + thisK == paddedK),
+                createI64Const(b, loc, 0));
             resultState = smatmul.getWrBankOut();
             aBank = aLoaded;
             wBank = wLoaded;
@@ -226,7 +228,7 @@ public:
                        loc, outputBank.getType(), resultState, scaleLoaded,
                        outputBank,
                        createI64Const(b, loc, tileCount * kInt32RowsPerTile),
-                       b.getI64IntegerAttr(0),
+                       createI64Const(b, loc, 0), createI64Const(b, loc, 0),
                        b.getI64IntegerAttr(tileCount * kTile),
                        b.getI64IntegerAttr(1),
                        b.getI64IntegerAttr(tileCount * kTile),

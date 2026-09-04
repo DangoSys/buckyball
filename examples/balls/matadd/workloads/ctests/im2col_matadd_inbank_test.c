@@ -65,12 +65,12 @@ int main(void) {
   bb_mvin((uintptr_t)img0, 0, (IN * IN + T - 1) / T, 1);
   bb_im2col(0, 1, IN, KS, ST, 0);
   bb_mvin((uintptr_t)wt0, 0, PK, 1);
-  bb_smatmul_os(1, 0, 2, PW, T, PK, 1, 1);
+  bb_smatmul_os(1, 0, 2, PW, T, PK, 1, 1, 0);
   bb_fence();
   bb_mvin((uintptr_t)img1, 0, (IN * IN + T - 1) / T, 1);
   bb_im2col(0, 1, IN, KS, ST, 0);
   bb_mvin((uintptr_t)wt1, 0, PK, 1);
-  bb_smatmul_os(1, 0, 4, PW, T, PK, 1, 1);
+  bb_smatmul_os(1, 0, 4, PW, T, PK, 1, 1, 0);
   bb_fence();
   bb_matadd(2, 4, 6, CL);
   bb_fence();

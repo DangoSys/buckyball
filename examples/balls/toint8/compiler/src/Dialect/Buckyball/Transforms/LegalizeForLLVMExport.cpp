@@ -57,23 +57,41 @@ struct QuantI32ToI8Lowering : public ConvertOpToLLVMPattern<QuantI32ToI8Op> {
       return op.emitError(
           "INT32 to INT8 iter must be a multiple of four within bank depth");
     int64_t outputRows = iterAttr.getInt() / 4;
-    int64_t outputBase = op.getOutputBaseAttr().getInt();
     int64_t outputWidth = op.getOutputWidthAttr().getInt();
     int64_t outputHeight = op.getOutputHeightAttr().getInt();
     int64_t outputStride = op.getOutputStrideAttr().getInt();
-    if (outputBase < 0 || outputBase >= bankDepth || outputWidth <= 0 ||
-        outputHeight <= 0 || outputStride < outputWidth ||
-        outputWidth * outputHeight != outputRows ||
-        outputBase + (outputHeight - 1) * outputStride + outputWidth >
+    auto outputBaseOp =
+        adaptor.getOutputBase().getDefiningOp<arith::ConstantOp>();
+    auto inputBaseOp =
+        adaptor.getInputBase().getDefiningOp<arith::ConstantOp>();
+    auto outputBaseAttr = outputBaseOp
+                              ? dyn_cast<IntegerAttr>(outputBaseOp.getValue())
+                              : IntegerAttr();
+    auto inputBaseAttr = inputBaseOp
+                             ? dyn_cast<IntegerAttr>(inputBaseOp.getValue())
+                             : IntegerAttr();
+    if (outputWidth <= 0 || outputHeight <= 0 || outputStride < outputWidth ||
+        outputWidth * outputHeight != outputRows || outputWidth >= 128 ||
+        outputHeight >= 128 || outputStride >= 128 || !outputBaseAttr ||
+        !inputBaseAttr || outputBaseAttr.getInt() < 0 ||
+        inputBaseAttr.getInt() < 0 ||
+        outputBaseAttr.getInt() + (outputHeight - 1) * outputStride +
+                outputWidth >
             bankDepth ||
-        outputBase >= 128 || outputWidth >= 128 || outputHeight >= 128 ||
-        outputStride >= 128)
+        inputBaseAttr.getInt() + iterAttr.getInt() > bankDepth)
       return op.emitError(
           "INT32 to INT8 output tile is invalid for the physical bank");
-    Value rs2 =
+    Value rs2 = rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputBase(),
+                                               cstI64(rewriter, loc, 1));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
         cstI64(rewriter, loc,
-               (outputBase << 1) | (outputWidth << 8) | (outputHeight << 15) |
-                   (outputStride << 22) | (op.getRelu() ? 1 : 0));
+               (outputWidth << 8) | (outputHeight << 15) |
+                   (outputStride << 22) | (op.getRelu() ? 1 : 0)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getInputBase(),
+                                       cstI64(rewriter, loc, 29)));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
         op, rs1, rs2,
         rewriter.getI32IntegerAttr(

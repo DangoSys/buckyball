@@ -83,9 +83,10 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
         panic!("quant_i32_to_i8: iter must be a positive multiple of four within bank depth");
     }
-    if xs2 >> 29 != 0 {
-        panic!("quant_i32_to_i8: rs2[63:29] must be zero");
+    if xs2 >> 35 != 0 {
+        panic!("quant_i32_to_i8: rs2[63:35] must be zero");
     }
+    let input_base = ((xs2 >> 29) & 0x3f) as usize;
     let output_base = ((xs2 >> 1) & 0x7f) as usize;
     let output_width = ((xs2 >> 8) & 0x7f) as usize;
     let output_height = ((xs2 >> 15) & 0x7f) as usize;
@@ -98,6 +99,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         || output_base
             .checked_add((output_height - 1) * output_stride + output_width)
             .is_none_or(|end| end > bank_lines())
+        || input_base + iter > bank_lines()
     {
         panic!("quant_i32_to_i8: invalid output tile");
     }
@@ -124,7 +126,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     for output_row in 0..iter / 4 {
         let mut packed = [0u8; 16];
         for group in 0..4 {
-            let input_row = output_row * 4 + group;
+            let input_row = input_base + output_row * 4 + group;
             let base = input_row * 16;
             for lane in 0..4 {
                 let offset = base + lane * 4;
@@ -156,7 +158,8 @@ pub(crate) fn f32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
 
 pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
     let iter = rs1_iter(xs1);
-    if xs2 >> 29 != 0 {
+    let input_base = (xs2 >> 29) & 0x3f;
+    if xs2 >> 35 != 0 {
         panic!("quant_i32_to_i8: illegal encoding");
     }
     let output_base = (xs2 >> 1) & 0x7f;
@@ -171,6 +174,7 @@ pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
         || output_width * output_height != iter / 4
         || output_base + (output_height - 1) * output_stride + output_width
             > bank_lines() as u64
+        || input_base + iter > bank_lines() as u64
     {
         panic!("quant_i32_to_i8: illegal encoding");
     }

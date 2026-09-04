@@ -28,9 +28,9 @@ int main(void) {
   bb_mvin((uintptr_t)weight0, 2, 16, 1);
   bb_mvin((uintptr_t)identity, 3, 16, 1);
   bb_mvin((uintptr_t)weight1, 4, 16, 1);
-  bb_smatmul_bias(0);
-  bb_smatmul_os(1, 2, 5, 16, 16, 16, 1, 0);
-  bb_smatmul_os(3, 4, 5, 16, 16, 16, 0, 1);
+  bb_smatmul_bias(0, 0);
+  bb_smatmul_os(1, 2, 5, 16, 16, 16, 1, 0, 0);
+  bb_smatmul_os(3, 4, 5, 16, 16, 16, 0, 1, 0);
   bb_mvout((uintptr_t)actual, 5, 64, 1);
   bb_fence();
 

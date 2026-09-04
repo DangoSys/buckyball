@@ -21,7 +21,7 @@ int main(void) {
   bb_mem_alloc(2, 1, 1);
   bb_mvin((uintptr_t)input, 0, 16, 1);
   bb_mvin((uintptr_t)scales, 1, 4, 1);
-  bb_quant_i32_to_i8(0, 1, 2, 16, 3, 2, 2, 4, 1);
+  bb_quant_i32_to_i8(0, 1, 2, 16, 0, 3, 2, 2, 4, 1);
   bb_mvout((uintptr_t)actual, 2, 12, 1);
   bb_fence();
 

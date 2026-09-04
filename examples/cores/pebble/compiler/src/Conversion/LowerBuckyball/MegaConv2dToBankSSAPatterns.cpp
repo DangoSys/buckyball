@@ -160,8 +160,8 @@ public:
 
     Value biasBank = allocBank(b, loc, 1, 1);
     Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-    Value biasState =
-        b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+    Value biasState = b.create<BankSMatMulBiasOp>(
+        loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
     Value scaleBank = allocBank(b, loc, 1, 1);
     Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
 
@@ -333,7 +333,8 @@ public:
                  loc, accumulatorState.getType(), patchLoaded, weightLoaded,
                  accumulatorState,
                  createI64ConstU(b, loc, matrixRs2(paddedM, kTile, kernelRows)),
-                 b.getBoolAttr(first), b.getBoolAttr(last))
+                 createI1Const(b, loc, first), createI1Const(b, loc, last),
+                 createI64Const(b, loc, 0))
                 .getWrBankOut();
         return {inputLoaded, patchLoaded, weightLoaded, accumulated};
       };
@@ -378,8 +379,9 @@ public:
               : b.create<BankQuantI32ToI8Op>(
                      loc, outputBank.getType(), resultState, scaleLoaded,
                      outputBank, createI64Const(b, loc, paddedM * 4),
-                     b.getI64IntegerAttr(0), b.getI64IntegerAttr(paddedM),
-                     b.getI64IntegerAttr(1), b.getI64IntegerAttr(paddedM),
+                     createI64Const(b, loc, 0), createI64Const(b, loc, 0),
+                     b.getI64IntegerAttr(paddedM), b.getI64IntegerAttr(1),
+                     b.getI64IntegerAttr(paddedM),
                      b.getBoolAttr(op.getActivation() == 1))
                     .getOutBankOut();
       releaseBank(b, loc, resultState);

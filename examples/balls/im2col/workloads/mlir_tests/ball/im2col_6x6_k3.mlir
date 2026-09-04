@@ -49,6 +49,7 @@ func.func @main() -> i8 {
        startCol = 0 : i64, windowStart = 0 : i64, windowCount = 16 : i64} : i64
   %stored = buckyball.bank_mvout %output %out %dout %s
       : memref<16x16xi8> i64 i64 i64
+  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 

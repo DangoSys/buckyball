@@ -29,10 +29,10 @@ def SMatMulOp : Buckyball_Op<"smatmul"> {
   }];
   let arguments = (ins I64:$op1BankId, I64:$op2BankId,
                        I64:$resultBankId, I64:$config,
-                       DefaultValuedAttr<BoolAttr, "true">:$first,
-                       DefaultValuedAttr<BoolAttr, "true">:$last);
+                       I1:$first, I1:$last, I64:$outputBase);
   let assemblyFormat = "$op1BankId `,` $op2BankId `,` $resultBankId `,` "
-                       "$config attr-dict `:` "
+                       "$config `,` $first `,` $last `,` $outputBase "
+                       "attr-dict `:` "
                        "type($op1BankId)";
 }
 
@@ -42,26 +42,28 @@ def SMatMulBiasOp : Buckyball_Op<"smatmul_bias"> {
     Reads four 128-bit SRAM rows containing 16 INT32 bias values. SMatMulBall
     uses the retained vector to initialize every new 16x16 accumulator tile.
   }];
-  let arguments = (ins I64:$biasBankId);
-  let assemblyFormat = "$biasBankId attr-dict `:` type($biasBankId)";
+  let arguments = (ins I64:$biasBankId, I64:$inputBase);
+  let assemblyFormat = "$biasBankId `,` $inputBase attr-dict `:` "
+                       "type($biasBankId)";
 }
 
 def BankSMatMulOp : Buckyball_Op<"bank_smatmul"> {
   let summary = "SMatMulBall compute with virtual bank handles";
   let arguments = (ins I64:$op1Bank, I64:$op2Bank, I64:$wrBank, I64:$config,
-                       DefaultValuedAttr<BoolAttr, "true">:$first,
-                       DefaultValuedAttr<BoolAttr, "true">:$last);
+                       I1:$first, I1:$last, I64:$outputBase);
   let results = (outs I64:$wrBankOut);
   let assemblyFormat =
-      "$op1Bank $op2Bank $wrBank $config attr-dict `:` "
+      "$op1Bank $op2Bank $wrBank $config $first $last $outputBase "
+      "attr-dict `:` "
       "type($op1Bank) type($op2Bank) type($wrBank) type($config)";
 }
 
 def BankSMatMulBiasOp : Buckyball_Op<"bank_smatmul_bias"> {
   let summary = "SMatMul bias preload with a virtual bank handle";
-  let arguments = (ins I64:$biasBank);
+  let arguments = (ins I64:$biasBank, I64:$inputBase);
   let results = (outs I64:$biasBankOut);
-  let assemblyFormat = "$biasBank attr-dict `:` type($biasBank)";
+  let assemblyFormat = "$biasBank $inputBase attr-dict `:` "
+                       "type($biasBank) type($inputBase)";
 }
 
 #endif // SMATMULBALL_OPS

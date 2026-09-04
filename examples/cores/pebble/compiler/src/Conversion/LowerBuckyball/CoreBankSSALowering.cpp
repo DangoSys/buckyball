@@ -11,7 +11,6 @@ void populatePebbleMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
 void populatePebbleQuantizeTensorToBankSSAPatterns(RewritePatternSet &patterns);
 
 void populatePebbleCoreBankSSALoweringPatterns(RewritePatternSet &patterns) {
-  populatePebbleResidentConvRegionToBankSSAPatterns(patterns);
   populatePebbleMegaKernelToBankSSAPatterns(patterns);
   populatePebbleMegaConv2dToBankSSAPatterns(patterns);
   populatePebbleMemTransposeToBankSSAPatterns(patterns);

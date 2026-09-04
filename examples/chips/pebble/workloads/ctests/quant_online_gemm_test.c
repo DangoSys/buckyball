@@ -49,7 +49,7 @@ int main(void) {
   bb_fence();
   bb_mem_release(0);
   bb_mem_alloc(4, TILE_ROWS * OUTPUT_ROUNDS, 2);
-  bb_smatmul_os(1, 2, 3, TILE_ROWS, TILE_COLS, TILE_COLS, 1, 1);
+  bb_smatmul_os(1, 2, 3, TILE_ROWS, TILE_COLS, TILE_COLS, 1, 1, 0);
   bb_int32_to_fp32(3, 5, 4, TILE_ROWS * OUTPUT_ROUNDS, 0);
   bb_mvout((uintptr_t)output, 4, TILE_ROWS * OUTPUT_ROUNDS, 1);
   bb_fence();

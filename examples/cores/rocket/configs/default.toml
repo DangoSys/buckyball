@@ -1,5 +1,7 @@
 # Goban Rocket-only core configuration
 
+memdomain = "memdomains/default.toml"
+
 [rocketCore]
 xLen = 64
 pgLevels = 3

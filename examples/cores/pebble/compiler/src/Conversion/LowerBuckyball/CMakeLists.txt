@@ -11,6 +11,7 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   LowerBuckyballToBankSSAPass.cpp
   MegaKernelToBankSSAPatterns.cpp
   ResidentConvRegionToBankSSAPatterns.cpp
+  PointConvRegionToBankSSAPatterns.cpp
   MegaConv2dToBankSSAPatterns.cpp
   MemTransposeToBankSSAPatterns.cpp
   QuantizeTensorToBankSSAPatterns.cpp

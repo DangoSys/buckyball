@@ -13,6 +13,9 @@ func.func @main() -> i8 {
   %depth64 = arith.constant 64 : i64
   %stride = arith.constant 1 : i64
   %config = arith.constant 268501008 : i64
+  %true = arith.constant true
+  %false = arith.constant false
+  %zero64 = arith.constant 0 : i64
 
   %identity = memref.alloc() alignment = 64 : memref<16x16xi8>
   %weight0 = memref.alloc() alignment = 64 : memref<16x16xi8>
@@ -59,11 +62,9 @@ func.func @main() -> i8 {
       : memref<16x16xi8> i64 i64 i64
   %loaded_b1 = buckyball.bank_mvin %weight1 %b1_bank %depth16 %stride
       : memref<16x16xi8> i64 i64 i64
-  buckyball.smatmul_bias %loaded_bias : i64
-  buckyball.smatmul %loaded_a0, %loaded_b0, %result_bank, %config
-      {last = false} : i64
-  buckyball.smatmul %loaded_a1, %loaded_b1, %result_bank, %config
-      {first = false} : i64
+  buckyball.smatmul_bias %loaded_bias, %zero64 : i64
+  buckyball.smatmul %loaded_a0, %loaded_b0, %result_bank, %config, %true, %false, %zero64 : i64
+  buckyball.smatmul %loaded_a1, %loaded_b1, %result_bank, %config, %false, %true, %zero64 : i64
   %stored = buckyball.bank_mvout %output %result_bank %depth64 %stride
       : memref<64x4xi32> i64 i64 i64
   buckyball.fence

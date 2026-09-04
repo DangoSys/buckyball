@@ -12,6 +12,8 @@ func.func @main() -> i8 {
   %depth16 = arith.constant 16 : i64
   %depth4 = arith.constant 4 : i64
   %depth12 = arith.constant 12 : i64
+  %output_base = arith.constant 3 : i64
+  %zero64 = arith.constant 0 : i64
   %stride = arith.constant 1 : i64
   %input = memref.alloc() alignment = 64 : memref<16x4xi32>
   %scales = memref.alloc() alignment = 64 : memref<4x4xf32>
@@ -43,9 +45,9 @@ func.func @main() -> i8 {
   %loaded_output = buckyball.bank_mvin %output_seed %output_bank %depth12 %stride
       : memref<12x16xi8> i64 i64 i64
   buckyball.quant_i32_to_i8
-      %loaded_input, %loaded_scales, %loaded_output, %depth16
-      {outputBase = 3 : i64, outputHeight = 2 : i64,
-       outputStride = 4 : i64, outputWidth = 2 : i64, relu = true} : i64
+      %loaded_input, %loaded_scales, %loaded_output, %depth16, %output_base, %zero64
+      {outputHeight = 2 : i64,
+       outputStride = 4 : i64, outputWidth = 2 : i64, relu = true} : i64 i64 i64
   %stored = buckyball.bank_mvout %output %loaded_output %depth12 %stride
       : memref<12x16xi8> i64 i64 i64
   buckyball.fence

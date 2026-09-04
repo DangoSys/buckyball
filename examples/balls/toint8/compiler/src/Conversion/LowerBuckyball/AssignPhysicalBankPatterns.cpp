@@ -38,8 +38,9 @@ public:
                                 PatternRewriter &rewriter) const override {
     rewriter.create<QuantI32ToI8Op>(
         op.getLoc(), op.getInBank(), op.getScaleBank(), op.getOutBank(),
-        op.getIter(), op.getOutputBaseAttr(), op.getOutputWidthAttr(),
-        op.getOutputHeightAttr(), op.getOutputStrideAttr(), op.getReluAttr());
+        op.getIter(), op.getOutputBase(), op.getInputBase(),
+        op.getOutputWidthAttr(), op.getOutputHeightAttr(),
+        op.getOutputStrideAttr(), op.getReluAttr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

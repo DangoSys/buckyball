@@ -79,14 +79,17 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   private val biasValid   = RegInit(false.B)
   private val chainLive   = RegInit(false.B)
   private val biasBank    = RegInit(0.U(bankWidth.W))
+  private val biasBase    = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val biasRow     = RegInit(0.U(2.W))
   private val biasWords   = Reg(Vec(resultWords, UInt(128.W)))
 
   private val aBank      = RegInit(0.U(bankWidth.W))
   private val bBank      = RegInit(0.U(bankWidth.W))
   private val cBank      = RegInit(0.U(bankWidth.W))
+  private val cBase      = RegInit(0.U(addressWidth.W))
   private val chainRows  = RegInit(0.U(12.W))
   private val chainCBank = RegInit(0.U(bankWidth.W))
+  private val chainCBase = RegInit(0.U(addressWidth.W))
 
   private val outputTileCount    = RegInit(0.U(8.W))
   private val reductionTileCount = RegInit(0.U(8.W))
@@ -143,7 +146,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   )
 
   private val bTileLine = reductionTile << 4
-  private val cLine     = (resultGlobalRow << 2) + outputWord
+  private val cLine     = cBase +& (resultGlobalRow << 2) +& outputWord
 
   for (port <- 0 until mapping.inBW) {
     io.bankRead(port).rob_id           := robId
@@ -162,7 +165,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   )
   io.bankRead(0).io.req.bits.addr := Mux(
     state === biasReadReq,
-    biasRow.pad(addressWidth),
+    (biasBase +& biasRow)(addressWidth - 1, 0),
     (aTileLine + aRowsRequested)(addressWidth - 1, 0)
   )
   io.bankRead(0).io.resp.ready    := state === biasReadResp || (state === loadTile && aRowsStored < tile.U)
@@ -215,13 +218,18 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     when(isBias) {
       assert(command.rs1(29, 10) === 0.U, "SMATMUL_BIAS reserves bank1 and bank2")
       assert(command.iter === 4.U, "SMATMUL_BIAS iter must be four rows")
-      assert(command.rs2 === 0.U, "SMATMUL_BIAS requires rs2=0")
+      assert(command.rs2(63, 6) === 0.U, "SMATMUL_BIAS reserves rs2[63:6]")
+      assert(
+        command.rs2(5, 0) +& 4.U <= b.memDomain.bankEntries.U,
+        "SMATMUL_BIAS inputBase plus four rows must fit one bank"
+      )
       assert(
         command.op1_col === 1.U && command.op2_col === 0.U && command.wr_col === 0.U,
         "SMATMUL_BIAS requires exactly one input bank"
       )
       assert(!chainLive, "SMATMUL_BIAS cannot replace bias during an accumulation chain")
       biasBank := command.op1_bank
+      biasBase := command.rs2(5, 0)
       biasRow  := 0.U
     }.otherwise {
       assert(command.rs1(19, 10) < b.memDomain.bankNum.U, "SMATMUL_OS input bank 1 is invalid")
@@ -241,24 +249,29 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       )
       assert(columns === tile.U, "SMATMUL_OS N must be 16")
       assert(reduction =/= 0.U && reduction(3, 0) === 0.U, "SMATMUL_OS K must be a positive multiple of 16")
-      assert(command.rs2(63, 26) === 0.U, "SMATMUL_OS reserves rs2[63:26]")
+      assert(command.rs2(63, 32) === 0.U, "SMATMUL_OS reserves rs2[63:32]")
       assert(
         Mux(rows === 1.U, reduction >> 4, (rows >> 4) * reduction) <= b.memDomain.bankEntries.U,
         "SMATMUL_OS A footprint exceeds bank depth"
       )
       assert(reduction <= b.memDomain.bankEntries.U, "SMATMUL_OS B footprint exceeds bank depth")
-      assert(rows * resultWords.U <= b.memDomain.bankEntries.U, "SMATMUL_OS C footprint exceeds bank depth")
+      assert(
+        command.rs2(31, 26) +& rows * resultWords.U <= b.memDomain.bankEntries.U,
+        "SMATMUL_OS C footprint exceeds bank depth"
+      )
       when(first) {
         assert(!chainLive, "SMATMUL_OS first block cannot start while a chain is live")
         assert(biasValid, "SMATMUL_OS first block requires a bias preload")
         chainLive  := true.B
         chainRows  := rows
         chainCBank := command.wr_bank
+        chainCBase := command.rs2(31, 26)
       }.otherwise {
         assert(chainLive, "SMATMUL_OS continuation requires a live chain")
         assert(
-          rows === chainRows && command.wr_bank === chainCBank,
-          "SMATMUL_OS continuation changed M or C destination"
+          rows === chainRows && command.wr_bank === chainCBank &&
+            command.rs2(31, 26) === chainCBase,
+          "SMATMUL_OS continuation changed M or C destination/base"
         )
       }
 
@@ -268,6 +281,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       aBank              := command.op1_bank
       bBank              := command.op2_bank
       cBank              := command.wr_bank
+      cBase              := command.rs2(31, 26)
       outputTileCount    := Mux(rows === 1.U, 1.U, rows >> 4)
       reductionTileCount := reduction >> 4
       outputTile         := 0.U
@@ -334,7 +348,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       bRows(bRowsStored(3, 0)) := io.bankRead(1).io.resp.bits.data
       bRowsStored              := bRowsStored + 1.U
     }
-    when(aRowsStored === tile.U && bRowsStored === tile.U) {
+    when(aRowsStored === Mux(vectorMode, 1.U, tile.U) && bRowsStored === tile.U) {
       state := runArray
     }
   }

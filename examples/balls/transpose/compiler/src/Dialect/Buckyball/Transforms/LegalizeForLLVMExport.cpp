@@ -12,9 +12,8 @@ using namespace buddy::buckyball;
 using namespace buddy::buckyball::legalize;
 
 namespace {
-static FailureOr<Value> encodeElementMode(Operation *op, Value elemBits,
-                                          Value iter, int64_t bankDepth,
-                                          ConversionPatternRewriter &rewriter) {
+static LogicalResult validateTranspose(Operation *op, Value elemBits,
+                                       Value iter, int64_t bankDepth) {
   auto constant = elemBits.getDefiningOp<arith::ConstantOp>();
   auto value =
       constant ? dyn_cast<IntegerAttr>(constant.getValue()) : IntegerAttr();
@@ -23,12 +22,10 @@ static FailureOr<Value> encodeElementMode(Operation *op, Value elemBits,
   auto iterOp = iter.getDefiningOp<arith::ConstantOp>();
   auto iterAttr =
       iterOp ? dyn_cast<IntegerAttr>(iterOp.getValue()) : IntegerAttr();
-  if (!iterAttr || iterAttr.getInt() <= 0 || iterAttr.getInt() > bankDepth ||
-      iterAttr.getInt() > 64)
+  if (!iterAttr || iterAttr.getInt() <= 0 || iterAttr.getInt() > bankDepth)
     return op->emitError(
-        "Transpose iter must be a positive constant within the bank depth "
-        "and 64-bit row mask");
-  return cstI64(rewriter, op->getLoc(), value.getInt() == 32 ? 1 : 0);
+        "Transpose iter must be a positive constant within the bank depth");
+  return success();
 }
 
 struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
@@ -42,19 +39,19 @@ struct TransposeLowering : public ConvertOpToLLVMPattern<TransposeOp> {
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("TransposeBall");
     Location loc = op.getLoc();
-    FailureOr<Value> mode = encodeElementMode(
-        op, op.getElemBits(), op.getIter(), bankDepth, rewriter);
-    if (failed(mode))
+    if (failed(
+            validateTranspose(op, op.getElemBits(), op.getIter(), bankDepth)))
       return failure();
-    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(), *mode,
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInputBankId(),
+                                 cstI64(rewriter, loc, 0),
                                  adaptor.getOutputBankId(), adaptor.getIter());
     if (stable) {
       rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, rs1,
-                                                   adaptor.getRowMask());
+                                                   adaptor.getElemBits());
       return success();
     }
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, adaptor.getRowMask(),
+        op, rs1, adaptor.getElemBits(),
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("TRANSPOSE")));
     return success();
@@ -75,19 +72,19 @@ struct BankTransposeLowering : public ConvertOpToLLVMPattern<BankTransposeOp> {
                   ConversionPatternRewriter &rewriter) const override {
     buckyball_target::requireBuckyballBall("TransposeBall");
     Location loc = op.getLoc();
-    FailureOr<Value> mode = encodeElementMode(
-        op, op.getElemBits(), op.getIter(), bankDepth, rewriter);
-    if (failed(mode))
+    if (failed(
+            validateTranspose(op, op.getElemBits(), op.getIter(), bankDepth)))
       return failure();
-    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInBank(), *mode,
-                                 adaptor.getOutBank(), adaptor.getIter());
+    Value rs1 = packRs1BanksIter(rewriter, loc, adaptor.getInBank(),
+                                 cstI64(rewriter, loc, 0), adaptor.getOutBank(),
+                                 adaptor.getIter());
     if (stable) {
       rewriter.replaceOpWithNewOp<TransposeIntrOp>(op, rs1,
-                                                   adaptor.getRowMask());
+                                                   adaptor.getElemBits());
       return success();
     }
     rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, adaptor.getRowMask(),
+        op, rs1, adaptor.getElemBits(),
         rewriter.getI32IntegerAttr(
             buckyball_target::getBuckyballFunct7("TRANSPOSE")));
     return success();

@@ -2,9 +2,9 @@
 # Not referenced by rocket configs/default.toml (tiles stay rocket-only).
 
 [bank]
-num = 1
+num = 16
 width = 128
-entries = 1
+entries = 16
 maskLen = 16
 channel = 1
 

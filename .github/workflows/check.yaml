@@ -122,6 +122,7 @@ jobs:
           cd "${root}"
           nix develop -c bbdev config --install
           nix develop -c bbdev compiler --build '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev workload --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'
 
       - name: bemu ELF batch

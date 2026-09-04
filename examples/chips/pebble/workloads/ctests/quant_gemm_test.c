@@ -37,7 +37,7 @@ int main(void) {
   bb_mvin((uintptr_t)matrix_a, 0, NUM_WINDOWS, 1);
   bb_mvin((uintptr_t)matrix_b, 1, KERNEL_ELEMS, 1);
   bb_mvin((uintptr_t)zero, 2, NUM_WINDOWS, 1);
-  bb_smatmul_os(0, 1, 2, NUM_WINDOWS, 1, KERNEL_ELEMS, 1, 1);
+  bb_smatmul_os(0, 1, 2, NUM_WINDOWS, 1, KERNEL_ELEMS, 1, 1, 0);
   bb_mvout((uintptr_t)actual, 2, NUM_WINDOWS, 1);
   bb_fence();
   bb_mem_release(0);

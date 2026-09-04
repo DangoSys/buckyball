@@ -442,8 +442,8 @@ public:
         Value onesLoaded = mvinBank(b, loc, onesPack, onesBank, 4);
         Value biasBank = allocBank(b, loc, 1, 1);
         Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-        Value biasState =
-            b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+        Value biasState = b.create<BankSMatMulBiasOp>(
+            loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
         Value scaleBank = allocBank(b, loc, 1, 1);
         Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
         Value result = allocBank(b, loc, 1, 1);
@@ -451,15 +451,16 @@ public:
             b.create<BankSMatMulOp>(
                  loc, result.getType(), onesLoaded, source, result,
                  createI64ConstU(b, loc, matrixRs2(1, kTile, target.bankDepth)),
-                 b.getBoolAttr(true), b.getBoolAttr(true))
+                 createI1Const(b, loc, true), createI1Const(b, loc, true),
+                 createI64Const(b, loc, 0))
                 .getWrBankOut();
-        destination =
-            b.create<BankQuantI32ToI8Op>(
-                 loc, destination.getType(), result, scaleLoaded, destination,
-                 createI64Const(b, loc, 4), b.getI64IntegerAttr(0),
-                 b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                 b.getI64IntegerAttr(1), b.getBoolAttr(false))
-                .getOutBankOut();
+        destination = b.create<BankQuantI32ToI8Op>(
+                           loc, destination.getType(), result, scaleLoaded,
+                           destination, createI64Const(b, loc, 4),
+                           createI64Const(b, loc, 0), createI64Const(b, loc, 0),
+                           b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                           b.getI64IntegerAttr(1), b.getBoolAttr(false))
+                          .getOutBankOut();
         releaseBank(b, loc, source);
         releaseBank(b, loc, onesLoaded);
         releaseBank(b, loc, biasState);
@@ -712,8 +713,8 @@ public:
       b.setInsertionPointAfter(parameterLoop);
       Value biasBank = allocBank(b, loc, 1, 1);
       Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-      Value biasState =
-          b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+      Value biasState = b.create<BankSMatMulBiasOp>(
+          loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
       Value scaleBank = allocBank(b, loc, 1, 1);
       Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
       Value patchState = allocBank(b, loc, 1, 1);
@@ -800,16 +801,18 @@ public:
                  loc, resultState.getType(), patchState, weightState,
                  resultState,
                  createI64ConstU(b, loc, matrixRs2(kTile, kTile, paddedK)),
-                 b.getBoolAttr(accumulation == 0),
-                 b.getBoolAttr(accumulation + 1 == accumulationCount))
+                 createI1Const(b, loc, accumulation == 0),
+                 createI1Const(b, loc, accumulation + 1 == accumulationCount),
+                 createI64Const(b, loc, 0))
                 .getWrBankOut();
       }
 
       destination = b.create<BankQuantI32ToI8Op>(
                          loc, destination.getType(), resultState, scaleLoaded,
                          destination, createI64Const(b, loc, side * side * 4),
-                         b.getI64IntegerAttr(destinationBase),
-                         b.getI64IntegerAttr(side), b.getI64IntegerAttr(side),
+                         createI64Const(b, loc, destinationBase),
+                         createI64Const(b, loc, 0), b.getI64IntegerAttr(side),
+                         b.getI64IntegerAttr(side),
                          b.getI64IntegerAttr(destinationStride),
                          b.getBoolAttr(stage.activation == 1))
                         .getOutBankOut();
@@ -1283,32 +1286,6 @@ public:
         loc, b.create<arith::MulIOp>(loc, outputY0, strideValue), paddingValue);
     Value globalX0 = b.create<arith::SubIOp>(
         loc, b.create<arith::MulIOp>(loc, outputX0, strideValue), paddingValue);
-    Value rowMask = createI64ConstU(b, loc, 0);
-    for (int64_t position = 0; position < haloElements; ++position) {
-      Value y = b.create<arith::AddIOp>(
-          loc, globalY0,
-          b.create<arith::ConstantIndexOp>(loc, position / haloSide));
-      Value x = b.create<arith::AddIOp>(
-          loc, globalX0,
-          b.create<arith::ConstantIndexOp>(loc, position % haloSide));
-      Value valid = b.create<arith::AndIOp>(
-          loc,
-          b.create<arith::AndIOp>(
-              loc,
-              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, y, zero),
-              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, y,
-                                      intermediateSizeValue)),
-          b.create<arith::AndIOp>(
-              loc,
-              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, x, zero),
-              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, x,
-                                      intermediateSizeValue)));
-      Value bit = createI64ConstU(b, loc, UINT64_C(1) << position);
-      Value selected = b.create<arith::SelectOp>(loc, valid, bit,
-                                                 createI64ConstU(b, loc, 0));
-      rowMask = b.create<arith::OrIOp>(loc, rowMask, selected);
-    }
-
     auto loadBiasAndScale = [&](Value bias, Value scale, int64_t channels,
                                 int64_t channelBase) -> SmallVector<Value> {
       Value biasPack = b.create<memref::AllocOp>(
@@ -1339,8 +1316,8 @@ public:
       b.setInsertionPointAfter(channelLoop);
       Value biasBank = allocBank(b, loc, 1, 1);
       Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-      Value biasState =
-          b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+      Value biasState = b.create<BankSMatMulBiasOp>(
+          loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
       Value scaleBank = allocBank(b, loc, 1, 1);
       Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
       return {biasState, scaleLoaded};
@@ -1528,7 +1505,9 @@ public:
                  loc, resultState.getType(), activation, weightLoaded,
                  resultState,
                  createI64ConstU(b, loc, matrixRs2(kTile, kTile, rows)),
-                 b.getBoolAttr(k0 == 0), b.getBoolAttr(k0 + rows == paddedK))
+                 createI1Const(b, loc, k0 == 0),
+                 createI1Const(b, loc, k0 + rows == paddedK),
+                 createI64Const(b, loc, 0))
                 .getWrBankOut();
         if (!bankInput)
           releaseBank(b, loc, activation);
@@ -1536,9 +1515,10 @@ public:
       }
       Value converted = b.create<BankQuantI32ToI8Op>(
           loc, outputBank.getType(), resultState, params[1], outputBank,
-          createI64Const(b, loc, 64), b.getI64IntegerAttr(outputBase),
-          b.getI64IntegerAttr(16), b.getI64IntegerAttr(1),
-          b.getI64IntegerAttr(16), b.getBoolAttr(stage.getActivation() == 1));
+          createI64Const(b, loc, 64), createI64Const(b, loc, outputBase),
+          createI64Const(b, loc, 0), b.getI64IntegerAttr(16),
+          b.getI64IntegerAttr(1), b.getI64IntegerAttr(16),
+          b.getBoolAttr(stage.getActivation() == 1));
       releaseBank(b, loc, resultState);
       releaseBank(b, loc, params[0]);
       releaseBank(b, loc, params[1]);
@@ -1592,7 +1572,7 @@ public:
       Value transposedBank = allocBank(b, loc, 1, 1);
       Value transposed = b.create<BankTransposeOp>(
           loc, transposedBank.getType(), expanded, transposedBank,
-          createI64Const(b, loc, haloRows), createI64Const(b, loc, 8), rowMask);
+          createI64Const(b, loc, haloRows), createI64Const(b, loc, 8));
       releaseBank(b, loc, expanded);
 
       SmallVector<Value> params = loadBiasAndScale(
@@ -1642,8 +1622,9 @@ public:
                  resultState,
                  createI64ConstU(b, loc,
                                  matrixRs2(kTile, kTile, depthwiseKernelRows)),
-                 b.getBoolAttr(channel == 0),
-                 b.getBoolAttr(channel + 1 == kTile))
+                 createI1Const(b, loc, channel == 0),
+                 createI1Const(b, loc, channel + 1 == kTile),
+                 createI64Const(b, loc, 0))
                 .getWrBankOut();
       }
 
@@ -1704,7 +1685,8 @@ public:
         depthwiseBanks.back() = b.create<BankQuantI32ToI8Op>(
             loc, depthwiseBanks.back().getType(), resultState, params[1],
             depthwiseBanks.back(), createI64Const(b, loc, 64),
-            b.getI64IntegerAttr((panel % 4) * kTile), b.getI64IntegerAttr(16),
+            createI64Const(b, loc, (panel % 4) * kTile),
+            createI64Const(b, loc, 0), b.getI64IntegerAttr(16),
             b.getI64IntegerAttr(1), b.getI64IntegerAttr(16),
             b.getBoolAttr(depthwise.getActivation() == 1));
         depthwiseK.back() += kTile;
@@ -1766,8 +1748,9 @@ public:
                    loc, resultState.getType(), activation, weightLoaded,
                    resultState,
                    createI64ConstU(b, loc, matrixRs2(kTile, kTile, rows)),
-                   b.getBoolAttr(index == 0),
-                   b.getBoolAttr(index + 1 == depthwiseBanks.size()))
+                   createI1Const(b, loc, index == 0),
+                   createI1Const(b, loc, index + 1 == depthwiseBanks.size()),
+                   createI64Const(b, loc, 0))
                   .getWrBankOut();
           releaseBank(b, loc, weightLoaded);
           kBase += rows;
@@ -2017,8 +2000,8 @@ public:
 
         Value biasBank = allocBank(b, loc, 1, 1);
         Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-        Value biasState =
-            b.create<BankSMatMulBiasOp>(loc, biasLoaded.getType(), biasLoaded);
+        Value biasState = b.create<BankSMatMulBiasOp>(
+            loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
         Value scaleBank = allocBank(b, loc, 1, 1);
         Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
         Value weightBank = allocBank(b, loc, 1, 1);
@@ -2065,8 +2048,9 @@ public:
           auto smatmul = b.create<BankSMatMulOp>(
               loc, resultState.getType(), activation, weightBank, resultState,
               createI64ConstU(b, loc, matrixRs2(1, kTile, thisK)),
-              b.getBoolAttr(chunk == 0),
-              b.getBoolAttr(chunk + 1 == chunkCount));
+              createI1Const(b, loc, chunk == 0),
+              createI1Const(b, loc, chunk + 1 == chunkCount),
+              createI64Const(b, loc, 0));
           resultState = smatmul.getWrBankOut();
           if (stageIndex == 0)
             releaseBank(b, loc, activation);
@@ -2090,8 +2074,9 @@ public:
           Value converted = b.create<BankQuantI32ToI8Op>(
               loc, packedOutput.getType(), resultState, scaleLoaded,
               packedOutput, createI64Const(b, loc, 4),
-              b.getI64IntegerAttr(packedRows), b.getI64IntegerAttr(1),
+              createI64Const(b, loc, packedRows), createI64Const(b, loc, 0),
               b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+              b.getI64IntegerAttr(1),
               b.getBoolAttr(stage.getActivation() == 1));
           releaseBank(b, loc, resultState);
           packedOutput = converted;

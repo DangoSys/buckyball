@@ -26,8 +26,8 @@ int main(void) {
   bb_mvin((uintptr_t)bias, 0, 4, 1);
   bb_mvin((uintptr_t)input, 1, K / 16, 1);
   bb_mvin((uintptr_t)weight, 2, K, 1);
-  bb_smatmul_bias(0);
-  bb_smatmul_os(1, 2, 3, 1, 16, K, 1, 1);
+  bb_smatmul_bias(0, 0);
+  bb_smatmul_os(1, 2, 3, 1, 16, K, 1, 1, 0);
   bb_mvout((uintptr_t)actual, 3, 4, 1);
   bb_fence();
 

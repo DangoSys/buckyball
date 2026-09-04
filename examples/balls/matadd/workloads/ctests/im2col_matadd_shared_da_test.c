@@ -78,12 +78,12 @@ int main(void) {
   bb_mvin((uintptr_t)qbank, 0, IR, 1);
   bb_im2col(0, 1, IN, KS, 1, 0);
   bb_mvin((uintptr_t)wt, 0, PK, 1);
-  bb_smatmul_os(1, 0, 2, PW, T, PK, 1, 1);
+  bb_smatmul_os(1, 0, 2, PW, T, PK, 1, 1, 0);
   bb_fence();
   bb_mvin((uintptr_t)(qbank + IR * T), 0, IR, 1);
   bb_im2col(0, 1, IN, KS, 1, 0);
   bb_mvin((uintptr_t)(wt + PK * T), 0, PK, 1);
-  bb_smatmul_os(1, 0, 4, PW, T, PK, 1, 1);
+  bb_smatmul_os(1, 0, 4, PW, T, PK, 1, 1, 0);
   bb_fence();
   bb_matadd(2, 4, 6, CL);
   bb_fence();

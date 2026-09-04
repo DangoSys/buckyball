@@ -44,10 +44,10 @@ impl BallInstruction for MaxPool {
             || output_base + (output_side - 1) * output_stride + output_side > bank_lines()
             || input_side + 2 * padding < kernel + start_row
             || input_side + 2 * padding < kernel + start_col
-            || input_side + 2 * padding - kernel - start_row
-                != (output_side - 1) * stride
-            || input_side + 2 * padding - kernel - start_col
-                != (output_side - 1) * stride
+            || start_row + (output_side - 1) * stride + kernel
+                > input_side + 2 * padding
+            || start_col + (output_side - 1) * stride + kernel
+                > input_side + 2 * padding
         {
             panic!("maxpool: illegal square pooling geometry");
         }
@@ -114,10 +114,10 @@ impl BallInstruction for MaxPool {
                 > bank_lines() as u64
             || input_side + 2 * padding < kernel + start_row
             || input_side + 2 * padding < kernel + start_col
-            || input_side + 2 * padding - kernel - start_row
-                != (output_side - 1) * stride
-            || input_side + 2 * padding - kernel - start_col
-                != (output_side - 1) * stride
+            || start_row + (output_side - 1) * stride + kernel
+                > input_side + 2 * padding
+            || start_col + (output_side - 1) * stride + kernel
+                > input_side + 2 * padding
         {
             panic!("maxpool: illegal encoding");
         }
