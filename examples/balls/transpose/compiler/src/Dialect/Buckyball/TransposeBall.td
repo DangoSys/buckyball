@@ -27,7 +27,8 @@ def TransposeOp : Buckyball_Op<"transpose"> {
   let summary = "Matrix transpose operation";
   let description = [{
     Transposes iter x W to W x iter in scratchpad banks.
-    ISA: bb_transpose(op1_bank, wr_bank, iter, elem_bits); funct7 from Core ballISA.
+    ISA: bb_transpose(op1_bank, wr_bank, iter, elem_bits); funct7
+    from Core ballISA.
     W = (bankWidth * cols) / elem_bits.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,

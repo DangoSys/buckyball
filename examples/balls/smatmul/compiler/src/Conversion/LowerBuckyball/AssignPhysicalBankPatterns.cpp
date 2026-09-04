@@ -22,12 +22,23 @@ public:
 
   LogicalResult matchAndRewrite(BankSMatMulOp op,
                                 PatternRewriter &rewriter) const override {
-    auto matrix = rewriter.create<SMatMulOp>(
-        op.getLoc(), op.getOp1Bank(), op.getOp2Bank(), op.getWrBank(),
-        op.getConfig(), rewriter.getI64IntegerAttr(op.getOp1Base()),
-        rewriter.getI64IntegerAttr(op.getOp2Base()),
-        rewriter.getI64IntegerAttr(op.getWrBase()), op.getWsAttr());
+    rewriter.create<SMatMulOp>(op.getLoc(), op.getOp1Bank(), op.getOp2Bank(),
+                               op.getWrBank(), op.getConfig(), op.getFirst(),
+                               op.getLast(), op.getOutputBase());
     rewriter.replaceOp(op, op.getWrBank());
+    return success();
+  }
+};
+
+class BankSMatMulBiasPattern : public OpRewritePattern<BankSMatMulBiasOp> {
+public:
+  using OpRewritePattern<BankSMatMulBiasOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BankSMatMulBiasOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.create<SMatMulBiasOp>(op.getLoc(), op.getBiasBank(),
+                                   op.getInputBase());
+    rewriter.replaceOp(op, op.getBiasBank());
     return success();
   }
 };
@@ -37,5 +48,6 @@ public:
 void mlir::buddy::populateSMatMulBallAssignPhysicalBankPatterns(
     RewritePatternSet &patterns, mlir::buddy::PhysicalBankState &state) {
   (void)state;
-  patterns.add<BankSMatMulPattern>(patterns.getContext());
+  patterns.add<BankSMatMulPattern, BankSMatMulBiasPattern>(
+      patterns.getContext());
 }

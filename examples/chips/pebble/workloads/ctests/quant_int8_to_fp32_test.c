@@ -29,10 +29,12 @@ int main(void) {
   bb_mvin_mmio((uintptr_t)(&da_scale), 0, 1, 4);
   bb_mvin_mmio((uintptr_t)(&dw_scale), 16, 1, 4);
   bb_mem_alloc(0, 1, 1);
-  bb_mem_alloc(1, 1, 4);
+  bb_mem_alloc(1, 4, 1);
+  bb_mem_alloc(2, 1, 1);
   bb_mvin((uintptr_t)input, 0, 1, 1);
-  bb_int2fp_tensor(0, 1, 1, 0, 16);
-  bb_mvout((uintptr_t)actual, 1, 1, 1);
+  bb_mvin((uintptr_t)&dw_scale, 1, 4, 1);
+  bb_int32_to_fp32(0, 1, 2, 1, 0);
+  bb_mvout((uintptr_t)actual, 2, 1, 1);
   bb_fence();
   bb_mem_release(0);
   bb_mem_release(1);

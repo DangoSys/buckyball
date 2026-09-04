@@ -3,17 +3,17 @@
 using namespace mlir;
 
 namespace mlir::buddy {
-void populateSMatMulBallLowerBuckyballToBankSSAPatterns(
+void populatePebbleMegaKernelToBankSSAPatterns(RewritePatternSet &patterns);
+void populatePebbleResidentConvRegionToBankSSAPatterns(
     RewritePatternSet &patterns);
-void populateReluBallLowerBuckyballToBankSSAPatterns(
-    RewritePatternSet &patterns);
-void populatePebbleIm2colMatmulToBankSSAPatterns(RewritePatternSet &patterns);
+void populatePebbleMegaConv2dToBankSSAPatterns(RewritePatternSet &patterns);
 void populatePebbleMemTransposeToBankSSAPatterns(RewritePatternSet &patterns);
+void populatePebbleQuantizeTensorToBankSSAPatterns(RewritePatternSet &patterns);
 
 void populatePebbleCoreBankSSALoweringPatterns(RewritePatternSet &patterns) {
-  populateSMatMulBallLowerBuckyballToBankSSAPatterns(patterns);
-  populateReluBallLowerBuckyballToBankSSAPatterns(patterns);
-  populatePebbleIm2colMatmulToBankSSAPatterns(patterns);
+  populatePebbleMegaKernelToBankSSAPatterns(patterns);
+  populatePebbleMegaConv2dToBankSSAPatterns(patterns);
   populatePebbleMemTransposeToBankSSAPatterns(patterns);
+  populatePebbleQuantizeTensorToBankSSAPatterns(patterns);
 }
 } // namespace mlir::buddy

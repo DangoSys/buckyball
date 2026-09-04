@@ -1,0 +1,317 @@
+name: regression
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  deployments: write
+
+concurrency:
+  group: buckyball-regression-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  CHECKOUT_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+
+jobs:
+  gate:
+    name: run
+    runs-on: check
+    environment: regression
+    env:
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Print information
+        run: |
+          echo "sha=${CHECKOUT_SHA}"
+          echo "ref=${CHECKOUT_REF}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr=#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            echo "branch=${{ github.head_ref }} -> ${{ github.base_ref }}"
+          else
+            echo "branch=${{ github.ref_name }}"
+          fi
+
+      - name: Prepare repo
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+  eval-area-power:
+    name: eval-area-power-${{ matrix.chip }}
+    needs: gate
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            run_area: false
+            run_power: false
+          - chip: pebble
+            run_area: true
+            run_power: false
+          - chip: goban
+            run_area: false
+            run_power: false
+          - chip: poly
+            run_area: false
+            run_power: false
+          - chip: multi-rocket
+            run_area: false
+            run_power: false
+    env:
+      BB_ROOT: ~/Code/buckyball
+      SNPSLMD_LICENSE_FILE: 26000@127.0.0.1
+    steps:
+      - name: Enter repo lock
+        if: matrix.run_area || matrix.run_power
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+      - name: Install config
+        if: matrix.run_area || matrix.run_power
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev config --install
+
+      - name: DC area
+        if: matrix.run_area
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          set +u
+          source ~/.zshrc
+          set -u
+          # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
+
+      - name: DC power
+        if: matrix.run_power
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          set +u
+          source ~/.zshrc
+          set -u
+          nix develop -c bbdev dc --power '--chip ${{ matrix.chip }}'
+
+      - name: Exit repo lock
+        if: always() && (matrix.run_area || matrix.run_power)
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+  fpga-bitstream:
+    name: fpga-bitstream-${{ matrix.chip }}
+    needs: gate
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            build_bitstream: false
+          - chip: pebble
+            build_bitstream: true
+          - chip: goban
+            build_bitstream: false
+          - chip: poly
+            build_bitstream: false
+          - chip: multi-rocket
+            build_bitstream: false
+    env:
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Enter repo lock
+        if: matrix.build_bitstream
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+      - name: Install config
+        if: matrix.build_bitstream
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev config --install
+
+      - name: FPGA buildbitstream
+        if: matrix.build_bitstream
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          rm -rf "${root}"/bebop/build/"${{ matrix.chip }}"-*/
+          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          if (( ${#bits} != 1 )); then
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            printf '%s\n' "${bits[@]}" >&2
+            exit 1
+          fi
+          echo "bitstream=${bits[1]}"
+
+      - name: Exit repo lock
+        if: always() && matrix.build_bitstream
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+  fpga-check:
+    name: fpga-check-${{ matrix.chip }}
+    needs: fpga-bitstream
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            run_fpga_check: false
+          - chip: pebble
+            run_fpga_check: false
+          - chip: goban
+            run_fpga_check: false
+          - chip: poly
+            run_fpga_check: false
+          - chip: multi-rocket
+            run_fpga_check: false
+    env:
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Enter repo lock
+        if: matrix.run_fpga_check
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+      - name: FPGA check
+        if: matrix.run_fpga_check
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          if (( ${#bits} != 1 )); then
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            printf '%s\n' "${bits[@]}" >&2
+            exit 1
+          fi
+          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
+          nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
+          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
+          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
+
+      - name: Exit repo lock
+        if: always() && matrix.run_fpga_check
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+  eval-performance:
+    name: eval-performance-${{ matrix.chip }}-${{ matrix.model }}
+    needs: fpga-bitstream
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: pebble
+            model: lenet
+          - chip: pebble
+            model: mobilenet
+          - chip: pebble
+            model: resnet
+          - chip: pebble
+            model: yolo
+    env:
+      BB_ROOT: ~/Code/buckyball
+    steps:
+      - name: Enter repo lock
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+      - name: Model build
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          if [ "${{ matrix.model }}" = "none" ]; then
+            echo "ERROR: eval-performance requires a real model, got model=none" >&2
+            exit 1
+          fi
+          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
+          nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
+
+      - name: Model performance
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          if (( ${#bits} != 1 )); then
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            printf '%s\n' "${bits[@]}" >&2
+            exit 1
+          fi
+          nix develop -c bbdev bebop-p2e --runworkload "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --model ${{ matrix.model }}"
+
+      - name: Exit repo lock
+        if: always()
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"

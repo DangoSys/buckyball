@@ -96,17 +96,20 @@ def Im2colOp : Buckyball_Op<"im2col"> {
   let summary = "Image-to-column transformation for convolution";
   let description = [{
     Transforms image data into column format for efficient convolution.
-    Corresponds to bb_im2col instruction (funct7 from Core ballISA).
-    Ball id (BID) is chip-specific via balldomain TOML; do not hardcode.
-    ISA: bb_im2col_ex(op1, wr, iter, ksize, stride, padding, start_row, start_col)
+    Each input bank row is one spatial position with 16 INT8 channels.
+    inputBase selects the first spatial row and lane selects one channel.
+    windowStart/windowCount select a contiguous output-window range and rebase
+    it to row zero in the output bank.
     Legal range is defined in examples/balls/im2col/configs/default.toml.
   }];
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$iter, I64:$ksize, I64:$stride, I64:$padding,
-                       DefaultValuedAttr<I64Attr, "0">:$startRow,
-                       DefaultValuedAttr<I64Attr, "0">:$startCol);
+                       I64:$inputBase, I64:$lane,
+                       I64Attr:$startRow, I64Attr:$startCol,
+                       I64Attr:$windowStart, I64Attr:$windowCount);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $ksize `,` $stride `,` $padding attr-dict `:` "
+                       "$iter `,` $ksize `,` $stride `,` $padding `,` "
+                       "$inputBase `,` $lane attr-dict `:` "
                        "type($inputBankId)";
 }
 
@@ -114,11 +117,14 @@ def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
   let summary = "Im2col using virtual bank handles";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$ksize,
                        I64:$stride, I64:$padding,
-                       DefaultValuedAttr<I64Attr, "0">:$startRow,
-                       DefaultValuedAttr<I64Attr, "0">:$startCol);
+                       I64:$inputBase, I64:$lane,
+                       I64Attr:$startRow, I64Attr:$startCol,
+                       I64Attr:$windowStart, I64Attr:$windowCount);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $ksize $stride $padding attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) type($stride) type($padding)";
+      "$inBank $outBank $iter $ksize $stride $padding $inputBase $lane "
+      "attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) "
+      "type($stride) type($padding) type($inputBase) type($lane)";
 }
 
 def Im2colIntrOp : Buckyball_IntrOpBase<"im2col">,

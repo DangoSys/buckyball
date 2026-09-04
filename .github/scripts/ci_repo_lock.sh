@@ -42,6 +42,18 @@ repo_reset() {
 
 repo_prepare() {
   flock 9
+  have_sha="$(git -C "${repo}" rev-parse HEAD 2>/dev/null || true)"
+  refcount="$(cat "${REFCOUNT_FILE}" 2>/dev/null || echo 0)"
+  if [[ "${refcount}" != "0" ]]; then
+    if [[ "${have_sha}" != "${want_sha}" ]]; then
+      echo "ERROR: cannot prepare ${want_sha}; busy with ${have_sha} refcount=${refcount}" >&2
+      flock -u 9
+      exit 1
+    fi
+    echo "${want_sha}" > "${ACTIVE_SHA_FILE}"
+    flock -u 9
+    return 0
+  fi
   repo_reset
   echo "${want_sha}" > "${ACTIVE_SHA_FILE}"
   echo 0 > "${REFCOUNT_FILE}"

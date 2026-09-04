@@ -26,10 +26,12 @@ set(PEBBLE_BALL_COMPILER_DIALECT_DIRS
   ${BB_REPO_ROOT}/examples/balls/transpose/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/im2col/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/fp2int/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/toint8/compiler/src/Dialect/Buckyball
   ${BB_REPO_ROOT}/examples/balls/int2fp/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/matadd/compiler/src/Dialect/Buckyball
-  ${BB_REPO_ROOT}/examples/balls/relu/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/lut/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/maxpool/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/int8add/compiler/src/Dialect/Buckyball
+  ${BB_REPO_ROOT}/examples/balls/int8mul/compiler/src/Dialect/Buckyball
 )
 
 set(BB_CORE_BACKEND_INTRINSICS_DIR

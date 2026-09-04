@@ -58,6 +58,7 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     ${WORKLOAD_LIB_DIR}/buckyball.c
     ${WORKLOAD_LIB_DIR}/buckyball.h
     ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+    ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
     ${BBHW_MEM_C}
     ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     ${BUCKYBALL_CHIP_COMMON_SOURCES}

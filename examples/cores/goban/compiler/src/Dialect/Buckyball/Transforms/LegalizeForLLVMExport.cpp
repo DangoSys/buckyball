@@ -30,10 +30,10 @@ void populateSMatMulBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
                                                       RewritePatternSet &, bool,
                                                       int64_t, bool);
 void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
-void populateFp2IntBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
+void populateToInt8BallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
                                                      RewritePatternSet &, bool,
                                                      int64_t, bool);
-void configureFp2IntBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
+void configureToInt8BallLegalizeForExportTarget(LLVMConversionTarget &, bool);
 void populateInt2FpBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
                                                      RewritePatternSet &, bool,
                                                      int64_t, bool);
@@ -49,7 +49,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
 
   populateBaseLegalizeForLLVMExportPatterns(
       converter, patterns, includeFuncOperandForwarding, rushB);
-  mlir::buddy::buckyball::populateFp2IntBallLegalizeForLLVMExportPatterns(
+  mlir::buddy::buckyball::populateToInt8BallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
   mlir::buddy::buckyball::populateInt2FpBallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
@@ -62,7 +62,7 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target, bool stable) {
   configureBaseLegalizeForExportTarget(target);
-  mlir::buddy::buckyball::configureFp2IntBallLegalizeForExportTarget(target,
+  mlir::buddy::buckyball::configureToInt8BallLegalizeForExportTarget(target,
                                                                      stable);
   mlir::buddy::buckyball::configureInt2FpBallLegalizeForExportTarget(target,
                                                                      stable);

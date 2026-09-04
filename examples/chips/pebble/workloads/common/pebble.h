@@ -2,11 +2,12 @@
 #define PEBBLE_H
 
 #include "buckyball.h"
+#include <params.h>
 #include <stddef.h>
 
 enum {
-  PEBBLE_INT8_LANES = 16,
-  PEBBLE_ACC_LANES = 16,
+  PEBBLE_INT8_LANES = BANK_WIDTH / 8,
+  PEBBLE_ACC_LANES = BANK_WIDTH / 8,
 };
 
 /*

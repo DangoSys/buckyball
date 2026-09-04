@@ -4,16 +4,19 @@
 #include <isa/im2col.h>
 #include <stdio.h>
 
-/* Fill exactly one bank: 22x22 k7 -> 1024 output rows. */
-enum { ITER = 22, K = 7, STRIDE = 1, PAD = 0, LANES = 16, SEED = 0x77 };
+enum { LANES = BANK_WIDTH / 8, K = 7, STRIDE = 1, PAD = 0, SEED = 0x77 };
 enum {
-  OUT_DIM = (ITER + 2 * PAD - K) / STRIDE + 1,
+  OUT_DIM = BANK_ISQRT / 2,
+  ITER = OUT_DIM + K - 1,
   WINDOWS = OUT_DIM * OUT_DIM,
   KERNEL = K * K,
   M_TILES = (WINDOWS + LANES - 1) / LANES,
   K_TILES = (KERNEL + LANES - 1) / LANES,
   OUT_ROWS = M_TILES * K_TILES * LANES,
 };
+_Static_assert(BANK_ISQRT *BANK_ISQRT == BANK_LINES,
+               "BANK_LINES must be a perfect square");
+_Static_assert(K_TILES == 4, "k7 bank fill needs K_TILES=4");
 _Static_assert(OUT_ROWS == BANK_LINES, "bank test must fill one bank");
 
 static elem_t in[ITER * ITER] __attribute__((aligned(64)));
@@ -60,10 +63,7 @@ int main(void) {
   bb_mem_release(0);
   bb_mem_release(1);
 
-  if (compare_i8_matrices(out, exp, OUT_ROWS, LANES)) {
-    printf("im2col bank k7 22x22 PASSED\n");
-    return 0;
-  }
-  printf("im2col bank k7 22x22 FAILED\n");
-  return 1;
+  int ok = compare_i8_matrices(out, exp, OUT_ROWS, LANES);
+  printf("im2col bank k7 %dx%d %s\n", ITER, ITER, ok ? "PASSED" : "FAILED");
+  return ok ? 0 : 1;
 }

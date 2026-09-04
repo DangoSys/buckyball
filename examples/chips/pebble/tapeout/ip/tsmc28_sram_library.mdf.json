@@ -1,0 +1,117 @@
+[
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x8",
+    "width": 8,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x8",
+    "width": 8,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 0}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_8192x8",
+    "width": 8,
+    "depth": "8192",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_8x24",
+    "width": 24,
+    "depth": "8",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_8x26",
+    "width": 26,
+    "depth": "8",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_32x22",
+    "width": 22,
+    "depth": "32",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x21",
+    "width": 21,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x22",
+    "width": 22,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_64x32",
+    "width": 32,
+    "depth": "64",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 2}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x32",
+    "width": 32,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 0}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_512x64",
+    "width": 64,
+    "depth": "512",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 0}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_1024x17",
+    "width": 17,
+    "depth": "1024",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}],
+    "extra ports": [{"name": "RTSEL", "width": 2, "type": "constant", "value": 0}, {"name": "WTSEL", "width": 2, "type": "constant", "value": 0}]
+  },
+  {
+    "type": "sram",
+    "name": "chipyard_sram_16384x64",
+    "width": 64,
+    "depth": "16384",
+    "family": "1rw",
+    "ports": [{"address port name": "A", "address port polarity": "active high", "clock port name": "CLK", "clock port polarity": "positive edge", "write enable port name": "WEB", "write enable port polarity": "active low", "chip enable port name": "CEB", "chip enable port polarity": "active low", "input port name": "D", "input port polarity": "active high", "output port name": "Q", "output port polarity": "active high"}]
+  }
+]

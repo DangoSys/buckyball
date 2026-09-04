@@ -50,6 +50,12 @@ static inline mlir::Value createI64ConstU(mlir::OpBuilder &b,
                                            b.getI64IntegerAttr(val));
 }
 
+static inline mlir::Value createI1Const(mlir::OpBuilder &b, mlir::Location loc,
+                                        bool val) {
+  return b.create<mlir::arith::ConstantOp>(loc, b.getI1Type(),
+                                           b.getBoolAttr(val));
+}
+
 /// Pack bit field: extract bits [startBit, endBit] from val and shift to
 /// position.
 static inline uint64_t packBits(uint64_t val, int startBit, int endBit) {
@@ -65,7 +71,7 @@ static inline uint64_t packBits(uint64_t val, int startBit, int endBit) {
 
 static inline uint64_t matrixRs2(uint64_t rows, uint64_t cols, uint64_t k) {
   if (rows == 0 || cols == 0 || cols > 0xfff || k == 0 || rows > 0xfff ||
-      k > 0xfff || rows % 16 || cols % 16 || k % 16) {
+      k > 0xfff || (rows != 1 && rows % 16) || cols % 16 || k % 16) {
     std::fprintf(
         stderr,
         "matrix rs2: rows/cols/k must fit in 12 bits (got %llu %llu %llu)\n",
@@ -80,9 +86,9 @@ static inline mlir::Value createBankSMatMul(mlir::OpBuilder &b,
                                             mlir::Location loc, mlir::Type wrTy,
                                             mlir::Value a, mlir::Value opB,
                                             mlir::Value wr, mlir::Value cfg) {
-  return b.create<BankSMatMulOp>(loc, wrTy, a, opB, wr, cfg,
-                                 b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
-                                 b.getI64IntegerAttr(0));
+  return b.create<BankSMatMulOp>(
+      loc, wrTy, a, opB, wr, cfg, createI1Const(b, loc, true),
+      createI1Const(b, loc, true), createI64Const(b, loc, 0));
 }
 
 /// Allocate a bank with given row/col dimensions.

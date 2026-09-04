@@ -1,3 +1,4 @@
++lint=TFIPC-L
 +incdir+@UVM@/src
 +incdir+@UVM@/src/agents/cmd
 +incdir+@UVM@/src/agents/mem
@@ -20,7 +21,7 @@
 @RTL@/Array.sv
 @RTL@/SMatMulUnit.sv
 @RTL@/SMatMulBall.sv
-@RTL@/accumulator_16x512.sv
+@RTL@/accumulator_64x512.sv
 
 src/pkg/smatmul_pkg.sv
 src/tb_top.sv

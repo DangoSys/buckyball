@@ -36,26 +36,38 @@ void populateIm2colBallLegalizeForLLVMExportPatterns(
     int64_t bankDepth, bool rushB);
 void configureIm2colBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                                 bool stable);
-void populateFp2IntBallLegalizeForLLVMExportPatterns(
+void populateToInt8BallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
     int64_t bankDepth, bool rushB);
-void configureFp2IntBallLegalizeForExportTarget(LLVMConversionTarget &target,
+void configureToInt8BallLegalizeForExportTarget(LLVMConversionTarget &target,
                                                 bool stable);
 void populateInt2FpBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
     int64_t bankDepth, bool rushB);
 void configureInt2FpBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                                 bool stable);
-void populateMatAddBallLegalizeForLLVMExportPatterns(
+void populateLutBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
+                                                  RewritePatternSet &patterns,
+                                                  bool stable,
+                                                  int64_t bankDepth,
+                                                  bool rushB);
+void configureLutBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                             bool stable);
+void populateMaxPoolBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
     int64_t bankDepth, bool rushB);
-void configureMatAddBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                                bool stable);
-void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                   RewritePatternSet &patterns,
-                                                   bool stable);
-void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,
-                                              bool stable);
+void configureMaxPoolBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                 bool stable);
+void populateInt8AddBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    int64_t bankDepth, bool rushB);
+void configureInt8AddBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                 bool stable);
+void populateInt8MulBallLegalizeForLLVMExportPatterns(
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
+    int64_t bankDepth, bool rushB);
+void configureInt8MulBallLegalizeForExportTarget(LLVMConversionTarget &target,
+                                                 bool stable);
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
@@ -73,14 +85,18 @@ void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
   mlir::buddy::buckyball::populateIm2colBallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
-  mlir::buddy::buckyball::populateFp2IntBallLegalizeForLLVMExportPatterns(
+  mlir::buddy::buckyball::populateToInt8BallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
   mlir::buddy::buckyball::populateInt2FpBallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
-  mlir::buddy::buckyball::populateMatAddBallLegalizeForLLVMExportPatterns(
+  mlir::buddy::buckyball::populateLutBallLegalizeForLLVMExportPatterns(
       converter, patterns, stable, bankDepth, rushB);
-  mlir::buddy::buckyball::populateReluBallLegalizeForLLVMExportPatterns(
-      converter, patterns, stable);
+  mlir::buddy::buckyball::populateMaxPoolBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
+  mlir::buddy::buckyball::populateInt8AddBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
+  mlir::buddy::buckyball::populateInt8MulBallLegalizeForLLVMExportPatterns(
+      converter, patterns, stable, bankDepth, rushB);
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
@@ -92,12 +108,16 @@ void mlir::configureBuckyballLegalizeForExportTarget(
                                                                         stable);
   mlir::buddy::buckyball::configureIm2colBallLegalizeForExportTarget(target,
                                                                      stable);
-  mlir::buddy::buckyball::configureFp2IntBallLegalizeForExportTarget(target,
+  mlir::buddy::buckyball::configureToInt8BallLegalizeForExportTarget(target,
                                                                      stable);
   mlir::buddy::buckyball::configureInt2FpBallLegalizeForExportTarget(target,
                                                                      stable);
-  mlir::buddy::buckyball::configureMatAddBallLegalizeForExportTarget(target,
-                                                                     stable);
-  mlir::buddy::buckyball::configureReluBallLegalizeForExportTarget(target,
-                                                                   stable);
+  mlir::buddy::buckyball::configureLutBallLegalizeForExportTarget(target,
+                                                                  stable);
+  mlir::buddy::buckyball::configureMaxPoolBallLegalizeForExportTarget(target,
+                                                                      stable);
+  mlir::buddy::buckyball::configureInt8AddBallLegalizeForExportTarget(target,
+                                                                      stable);
+  mlir::buddy::buckyball::configureInt8MulBallLegalizeForExportTarget(target,
+                                                                      stable);
 }

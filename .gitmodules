@@ -58,3 +58,9 @@
 [submodule "thirdparty/soc-framework"]
 	path = thirdparty/soc-framework
 	url = https://github.com/DangoSys/soc-framework.git
+[submodule ".agents/skills"]
+	path = .agents/skills
+	url = https://github.com/DangoSys/skills.git
+[submodule ".agents/mcps"]
+	path = .agents/mcps
+	url = https://github.com/DangoSys/mcps.git

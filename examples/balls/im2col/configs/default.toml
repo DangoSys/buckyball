@@ -8,6 +8,8 @@
 #   start_row / start_col in 0 ..= padding   (asym pad: pad=max(lo,hi), start=pad-lo)
 #   paddedSize = iter + 2*padding >= ksize + start
 #   op1_bank != wr_bank
+#   inputBase + iter*iter <= bankEntries
+#   lane in 0 .. 15
 #   outputDim = floor((iter + 2*padding - ksize - start) / stride) + 1
 #   M = outputDim * outputDim
 #   K = ksize * ksize
@@ -15,11 +17,10 @@
 #   outputRows <= bankEntries   # bankEntries from chip memdomain
 #
 # Partial final K-tile lanes and partial final M-tile rows are zero.
-# maxIter=34 covers bank-level ctests that fill BANK_LINES (1024) output rows.
-# Bank-level binaries are bemu-only (not in verilator regression).
+# One bank row is one spatial position with 16 INT8 channels.
 
 [ball]
 inputWidth = 8
-maxIter = 34
+maxIter = 8
 maxKSize = 7
 maxPadding = 7

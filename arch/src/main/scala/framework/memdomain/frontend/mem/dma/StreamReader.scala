@@ -64,29 +64,27 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val firstData      = RegInit(0.U(beatBits.W))
   val respValid      = RegInit(false.B)
   val respData       = RegInit(0.U(beatBits.W))
+  val groupIdx       = RegInit(0.U(6.W))
+  val readVaddr      = RegInit(0.U(64.W))
+  val rowSkip        = RegInit(0.U(32.W))
 
-  val beatIdx    = bytesRequested >> lgBeat
-  val rowIdx     = beatIdx / reqReg.groups
-  val groupIdx   = beatIdx % reqReg.groups
-  val readOffset = (rowIdx * reqReg.groups * reqReg.stride + groupIdx) * beatBytes.U
-  val read_vaddr = reqReg.vaddr + readOffset
-  val addrOffset = if (beatBytes == 1) 0.U(1.W) else read_vaddr(lgBeat - 1, 0)
+  val addrOffset = if (beatBytes == 1) 0.U(1.W) else readVaddr(lgBeat - 1, 0)
 
   val alignedReadVaddr =
     if (beatBytes == 1) {
-      read_vaddr
+      readVaddr
     } else {
-      Cat(read_vaddr(63, lgBeat), 0.U(lgBeat.W))
+      Cat(readVaddr(63, lgBeat), 0.U(lgBeat.W))
     }
 
   val secondReadVaddr = alignedReadVaddr + beatBytes.U
   val needUnaligned   = if (beatBytes == 1) false.B else addrOffset =/= 0.U
-  val issueVaddr      = Mux(needUnaligned, Mux(readSecond, secondReadVaddr, alignedReadVaddr), read_vaddr)
+  val issueVaddr      = Mux(needUnaligned, Mux(readSecond, secondReadVaddr, alignedReadVaddr), readVaddr)
 
   val bytesLeft       = reqReg.len - bytesRequested
   val groupsLeftInRow = reqReg.groups - groupIdx
-  val rowBytesLeft    = groupsLeftInRow * beatBytes.U
-  val pageBytesLeft   = (1.U << b.core.pgIdxBits) - read_vaddr(b.core.pgIdxBits - 1, 0)
+  val rowBytesLeft    = groupsLeftInRow << lgBeat
+  val pageBytesLeft   = (1.U << b.core.pgIdxBits) - readVaddr(b.core.pgIdxBits - 1, 0)
   val maxBurstBytes   = Seq(bytesLeft, rowBytesLeft, pageBytesLeft, burstMaxBytes.U).reduce((a, c) => Mux(a < c, a, c))
 
   val burstCandidates = Iterator.iterate(beatBytes)(_ * 2).takeWhile(_ <= burstMaxBytes).toSeq
@@ -94,7 +92,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val (readBytes, readLgSize) = burstCandidates.foldLeft((beatBytes.U(32.W), lgBeat.U)) {
     case ((bestBytes, bestLg), size) =>
       val lgSize  = log2Ceil(size)
-      val aligned = if (size == 1) true.B else read_vaddr(lgSize - 1, 0) === 0.U
+      val aligned = if (size == 1) true.B else readVaddr(lgSize - 1, 0) === 0.U
       val fits    = maxBurstBytes >= size.U
       (Mux(fits && aligned, size.U, bestBytes), Mux(fits && aligned, lgSize.U, bestLg))
   }
@@ -139,6 +137,15 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     unalignedTxn := needUnaligned
     when(!needUnaligned) {
       bytesRequested := bytesRequested + readBytes
+      val nextG = groupIdx + (readBytes >> lgBeat)
+      assert(nextG <= reqReg.groups, "StreamReader burst crossed row")
+      when(nextG === reqReg.groups) {
+        groupIdx  := 0.U
+        readVaddr := readVaddr + readBytes + (rowSkip << lgBeat)
+      }.otherwise {
+        groupIdx  := nextG
+        readVaddr := readVaddr + readBytes
+      }
     }
   }
 
@@ -183,6 +190,13 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     respValid      := false.B
     bytesRequested := bytesRequested + beatBytes.U
     bytesReceived  := bytesReceived + beatBytes.U
+    when(groupIdx + 1.U === reqReg.groups) {
+      groupIdx  := 0.U
+      readVaddr := readVaddr + beatBytes.U + (rowSkip << lgBeat)
+    }.otherwise {
+      groupIdx  := groupIdx + 1.U
+      readVaddr := readVaddr + beatBytes.U
+    }
     state          := Mux(lastResp, s_idle, s_run)
   }
 
@@ -195,6 +209,8 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.busy := (state =/= s_idle) || inflight || respValid
 
   when(io.req.fire) {
+    assert(io.req.bits.groups >= 1.U, "StreamReader groups must be >= 1")
+    assert(io.req.bits.stride >= 1.U, "StreamReader stride must be >= 1")
     reqReg         := io.req.bits
     bytesRequested := 0.U
     bytesReceived  := 0.U
@@ -204,6 +220,9 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     respValid      := false.B
     firstData      := 0.U
     respData       := 0.U
+    groupIdx       := 0.U
+    readVaddr      := io.req.bits.vaddr
+    rowSkip        := io.req.bits.groups * (io.req.bits.stride - 1.U)
     state          := Mux(io.req.bits.len === 0.U, s_idle, s_run)
   }
 

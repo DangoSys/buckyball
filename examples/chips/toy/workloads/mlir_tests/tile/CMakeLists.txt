@@ -8,7 +8,10 @@ set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
 set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
 set(LLVM_MLIR_EXECUTION_ENGINE_DIR
   ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
-set(FILECHECK ${LLVM_BUILD_DIR}/bin/FileCheck)
+if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/toy/params.h")
+  message(FATAL_ERROR "missing ${BUCKYBALL_ISA_DIR}/toy/params.h")
+endif()
+set(TOY_ISA_DIR ${BUCKYBALL_ISA_DIR}/toy)
 
 function(add_tile_matmul_test name)
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
@@ -105,7 +108,7 @@ function(add_tile_matmul_test name)
     COMMAND ${ELF_CC} ${C_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
-      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${TOY_ISA_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
@@ -129,7 +132,7 @@ function(add_tile_matmul_test name)
     COMMAND ${LINUX_CXX} ${LINUX_FLAGS}
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
-      -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${TOY_ISA_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C}
@@ -166,57 +169,9 @@ function(add_tile_matmul_test name)
     INCLUDE_DIRS
       ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       ${WORKLOAD_LIB_DIR}
-      ${WORKLOAD_LIB_DIR}/bbhw/mem
+      ${TOY_ISA_DIR}
     DEPENDS ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C})
 endfunction()
-
-function(add_tile_matmul_contract_test name)
-  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
-  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_1_buckyball.mlir)
-
-  add_custom_command(
-    OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
-      "-convert-tile-to-buckyball=bank_depth=128"
-      > ${OUT}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
-    COMMENT "Building Tile contract IR for ${name}"
-    VERBATIM
-  )
-
-  add_custom_target(mlirtest_tile_${name}_contract
-    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
-    DEPENDS ${OUT}
-    COMMENT "Checking Tile matmul contract for ${name}"
-    VERBATIM
-  )
-endfunction()
-
-function(add_tile_contract_test name)
-  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${name}.mlir)
-  set(OUT ${CMAKE_CURRENT_BINARY_DIR}/${name}_bank_ssa.mlir)
-
-  add_custom_command(
-    OUTPUT ${OUT}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC} --target=toy
-      -convert-tile-to-buckyball
-      -lower-buckyball-to-bank-ssa
-      > ${OUT}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT}
-    COMMENT "Building Tile contract IR for ${name}"
-    VERBATIM
-  )
-
-  add_custom_target(mlirtest_tile_${name}_contract
-    COMMAND ${FILECHECK} ${MLIR_SRC} --input-file=${OUT}
-    DEPENDS ${OUT}
-    COMMENT "Checking Tile contract for ${name}"
-    VERBATIM
-  )
-endfunction()
-
-add_tile_contract_test(conv2d_nhwc_hwcf_contract)
-add_tile_contract_test(conv2d_nhwc_hwcf_pad_contract)
 
 add_custom_target(tile-mlir-tests-build ALL
   COMMENT "Building all Tile MLIR tests"

@@ -1,126 +1,156 @@
 use crate::model;
 
-pub const MAX_WORDS: usize = 32;
+pub const BIAS_BANK: u32 = 0;
+pub const C_BANK: u32 = 5;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MatrixCmd {
+    pub kind: u32,
     pub bid: u32,
-    pub ws: u32,
-    pub m: u32,
-    pub n: u32,
-    pub k: u32,
-    pub op1_bank: u32,
-    pub op2_bank: u32,
-    pub wr_bank: u32,
     pub rob_id: u32,
+    pub op1_words: u32,
+    pub op2_words: u32,
     pub rs1_lo: u32,
     pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
-    pub num_a_words: u32,
-    pub num_b_words: u32,
-    pub num_writes: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatrixCase {
-    pub cmd: MatrixCmd,
-    pub a: Vec<u8>,
-    pub b: Vec<u8>,
+    pub commands: Vec<MatrixCmd>,
+    pub bias: Vec<u8>,
+    pub a: Vec<Vec<u8>>,
+    pub b: Vec<Vec<u8>>,
     pub writes: Vec<model::WriteExp>,
 }
 
-impl MatrixCase {
-    pub fn a_word_lo(&self, index: usize) -> u64 { word_lo(&self.a, index) }
-    pub fn a_word_hi(&self, index: usize) -> u64 { word_hi(&self.a, index) }
-    pub fn b_word_lo(&self, index: usize) -> u64 { word_lo(&self.b, index) }
-    pub fn b_word_hi(&self, index: usize) -> u64 { word_hi(&self.b, index) }
-}
-
-fn word_lo(data: &[u8], index: usize) -> u64 {
-    let offset = index * model::BANK_ROW_BYTES;
-    u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap())
-}
-
-fn word_hi(data: &[u8], index: usize) -> u64 {
-    let offset = index * model::BANK_ROW_BYTES + 8;
-    u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap())
-}
-
-pub fn gen_case(seed: u32, index: u32, bid: u32, out_bw: usize) -> MatrixCase {
+pub fn gen_case(seed: u32, index: u32, bid: u32) -> MatrixCase {
     match index {
-        0 => build_case(bid, false, 16, 16, 16, out_bw, seed, 7),
-        1 => build_case(bid, false, 32, 16, 16, out_bw, seed, 8),
-        2 => build_case(bid, true, 16, 16, 16, out_bw, seed, 9),
-        3 => build_case(bid, true, 16, 32, 16, out_bw, seed, 10),
-        _ => random_case(seed, index, bid, out_bw),
+        0 => build_case(seed, bid, 16, 1),
+        1 => build_case(seed, bid, 16, 2),
+        2 => build_case(seed ^ index, bid, 16, 1),
+        _ => {
+            let mut rng = Rng::new(seed, index);
+            let blocks = 1 + (rng.next() % 2) as usize;
+            build_case(rng.next(), bid, 16, blocks)
+        }
     }
 }
 
-fn build_case(bid: u32, ws: bool, rows: usize, columns: usize, k: usize,
-              out_bw: usize, seed: u32, rob_id: u32) -> MatrixCase {
-    assert!(matches!(out_bw, 1 | 2 | 4));
-    assert_eq!(rows % model::TILE, 0);
-    assert_eq!(columns % model::TILE, 0);
-    assert_eq!(k % model::TILE, 0);
-    if ws { assert_eq!(rows, model::TILE); assert_eq!(k, model::TILE); }
-    let mut rng = Rng::new(seed, rows as u32 ^ columns as u32 ^ k as u32);
-    let a: Vec<i8> = (0..rows * k).map(|_| rng.value()).collect();
-    let b: Vec<i8> = (0..k * columns).map(|_| rng.value()).collect();
-    let a_packed = model::pack_a(&a, rows, k);
-    let b_packed = if ws { model::pack_b_ws(&b, k, columns) } else { model::pack_b_os(&b, k) };
-    let writes = model::emit_writes(&model::matmul(&a, &b, rows, columns, k), ws, out_bw);
-    assert!(model::words(&a_packed) <= MAX_WORDS);
-    assert!(model::words(&b_packed) <= MAX_WORDS);
+fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize) -> MatrixCase {
+    assert!(matches!(rows, 16 | 32 | 64));
+    assert!(matches!(blocks, 1 | 2));
+    assert!(rows * model::RESULT_WORDS <= model::BANK_DEPTH);
+    let mut rng = Rng::new(seed, rows as u32 ^ blocks as u32);
+    let bias_values: Vec<i32> = (0..model::TILE).map(|_| rng.value() as i32).collect();
+    let mut bias = Vec::with_capacity(4 * model::ROW_BYTES);
+    for chunk in bias_values.chunks(4) {
+        for value in chunk {
+            bias.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+
+    let mut a = Vec::with_capacity(blocks);
+    let mut b = Vec::with_capacity(blocks);
+    let mut result = vec![bias_values.clone(); rows];
+    let mut commands = Vec::with_capacity(blocks + 1);
+    commands.push(MatrixCmd {
+        kind: 0,
+        bid,
+        rob_id: 0,
+        op1_words: 4,
+        rs1_lo: model::encode_rs1(BIAS_BANK, 0, 0, 4) as u32,
+        rs1_hi: (model::encode_rs1(BIAS_BANK, 0, 0, 4) >> 32) as u32,
+        ..MatrixCmd::default()
+    });
+
+    for block in 0..blocks {
+        let a_bank = 1 + 2 * block as u32;
+        let b_bank = 2 + 2 * block as u32;
+        let a_values: Vec<i8> = (0..rows * model::TILE).map(|_| rng.value()).collect();
+        let b_values: Vec<i8> = (0..model::TILE * model::TILE)
+            .map(|_| rng.value())
+            .collect();
+        let a_packed = model::pack_a(&a_values, rows);
+        let b_packed = model::pack_b(&b_values);
+        a.push(a_packed);
+        b.push(b_packed);
+        for row in 0..rows {
+            for column in 0..model::TILE {
+                for k in 0..model::TILE {
+                    result[row][column] = result[row][column].wrapping_add(
+                        a_values[row * model::TILE + k] as i32
+                            * b_values[k * model::TILE + column] as i32,
+                    );
+                }
+            }
+        }
+        let rs1 = model::encode_rs1(a_bank, b_bank, C_BANK, model::TILE as u64);
+        let rs2 = model::encode_rs2(rows, block == 0, block + 1 == blocks);
+        commands.push(MatrixCmd {
+            kind: 1,
+            bid,
+            rob_id: (block + 1) as u32,
+            op1_words: rows as u32,
+            op2_words: model::TILE as u32,
+            rs1_lo: rs1 as u32,
+            rs1_hi: (rs1 >> 32) as u32,
+            rs2_lo: rs2 as u32,
+            rs2_hi: (rs2 >> 32) as u32,
+        });
+    }
+
     MatrixCase {
-        cmd: MatrixCmd {
-            bid, ws: ws as u32, m: rows as u32, n: columns as u32, k: k as u32,
-            op1_bank: 0, op2_bank: 1, wr_bank: 2, rob_id,
-            rs1_lo: model::encode_rs1(0, 1, 2) as u32,
-            rs1_hi: (model::encode_rs1(0, 1, 2) >> 32) as u32,
-            rs2_lo: model::encode_rs2(rows as u32, columns as u32, k as u32) as u32,
-            rs2_hi: (model::encode_rs2(rows as u32, columns as u32, k as u32) >> 32) as u32,
-            num_a_words: model::words(&a_packed) as u32,
-            num_b_words: model::words(&b_packed) as u32,
-            num_writes: writes.len() as u32,
-        },
-        a: a_packed, b: b_packed, writes,
+        commands,
+        bias,
+        a,
+        b,
+        writes: model::emit_writes(&result),
     }
 }
 
-fn random_case(seed: u32, index: u32, bid: u32, out_bw: usize) -> MatrixCase {
-    let mut rng = Rng::new(seed, index);
-    let ws = rng.next() & 1 != 0;
-    let rows = if ws { 16 } else if rng.next() & 1 == 0 { 16 } else { 32 };
-    let columns = if ws && rng.next() & 1 != 0 { 32 } else { 16 };
-    build_case(bid, ws, rows, columns, 16, out_bw, rng.next(), rng.next() & 15)
+struct Rng {
+    state: u64,
 }
 
-struct Rng { state: u64 }
 impl Rng {
-    fn new(seed: u32, salt: u32) -> Self { Self { state: u64::from(seed) << 32 | u64::from(salt) } }
-    fn next(&mut self) -> u32 { self.state ^= self.state << 13; self.state ^= self.state >> 7; self.state ^= self.state << 17; self.state as u32 }
-    fn value(&mut self) -> i8 { (self.next() % 23) as i8 - 11 }
+    fn new(seed: u32, salt: u32) -> Self {
+        Self {
+            state: u64::from(seed) << 32 | u64::from(salt),
+        }
+    }
+    fn next(&mut self) -> u32 {
+        self.state ^= self.state << 13;
+        self.state ^= self.state >> 7;
+        self.state ^= self.state << 17;
+        self.state as u32
+    }
+    fn value(&mut self) -> i8 {
+        (self.next() % 17) as i8 - 8
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn os_uses_two_compact_rounds() {
-        let case = gen_case(1, 0, 1, 2);
-        assert_eq!(case.cmd.ws, 0);
-        assert_eq!(case.cmd.num_writes, 32);
-        assert_eq!(case.writes[0].group, 0);
-        assert_eq!(case.writes[1].group, 1);
-        assert_eq!(case.writes[2].addr, 1);
+    fn single_block_fills_one_result_bank() {
+        let case = gen_case(1, 2, 1);
+        assert_eq!(case.commands.len(), 2);
+        assert_eq!(case.writes.len(), 64);
+        assert_eq!(case.writes.last().unwrap().addr, 63);
     }
+
     #[test]
-    fn ws_second_panel_follows_first() {
-        let case = gen_case(1, 3, 1, 2);
-        assert_eq!(case.cmd.ws, 1);
-        assert_eq!(case.cmd.num_b_words, 32);
-        assert_eq!(case.writes[32].addr, 32);
+    fn two_blocks_encode_one_live_chain() {
+        let case = gen_case(1, 1, 1);
+        assert_eq!(case.commands.len(), 3);
+        assert_eq!((case.commands[1].rs2_lo >> 24) & 3, 1);
+        assert_eq!((case.commands[2].rs2_lo >> 24) & 3, 2);
+        assert_eq!(case.commands[1].rs1_lo, 1 | (2 << 10) | (5 << 20));
+        assert_eq!(case.commands[2].rs1_lo, 3 | (4 << 10) | (5 << 20));
     }
 }

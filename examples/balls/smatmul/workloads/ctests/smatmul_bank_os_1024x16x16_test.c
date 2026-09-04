@@ -1,5 +1,5 @@
 #include "smatmul_test_common.h"
-#include <bbhw/mem/params.h>
+#include <params.h>
 
 #define M BANK_LINES
 #define N MATRIX_TILE

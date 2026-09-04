@@ -27,6 +27,7 @@
 #include "mlir/Transforms/DialectConversion.h"
 
 #include "Buckyball/BuckyballDialect.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
 #include "Tile/Transform.h"
@@ -189,15 +190,6 @@ public:
   LowerTileToBuckyballPass() = default;
   LowerTileToBuckyballPass(const LowerTileToBuckyballPass &) {}
 
-  Option<int64_t> bankWidthBytes{
-      *this, "bank_width", llvm::cl::desc("Physical bank width in bytes."),
-      llvm::cl::init(kDefaultBankWidthBytes)};
-  Option<int64_t> bankDepth{*this, "bank_depth",
-                            llvm::cl::desc("Bank depth (rows per bank)."),
-                            llvm::cl::init(1024)};
-  Option<int64_t> bankNum{*this, "bank_num", llvm::cl::desc("Number of banks."),
-                          llvm::cl::init(16)};
-
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<::buddy::tile::TileDialect,
                     ::buddy::buckyball::BuckyballDialect, func::FuncDialect,
@@ -206,6 +198,7 @@ public:
   }
 
   void runOnOperation() override {
+    const auto &targetConfig = buckyball_target::getBuckyballTarget();
     MLIRContext *context = &getContext();
     ModuleOp module = getOperation();
 
@@ -217,8 +210,9 @@ public:
     target.addIllegalDialect<::buddy::tile::TileDialect>();
 
     RewritePatternSet patterns(context);
-    populateLowerTileToBuckyballConversionPatterns(patterns, bankWidthBytes,
-                                                   bankDepth, bankNum);
+    populateLowerTileToBuckyballConversionPatterns(
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
+        targetConfig.bankNum);
 
     if (failed(applyPartialConversion(module, target, std::move(patterns))))
       signalPassFailure();

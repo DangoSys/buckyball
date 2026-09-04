@@ -19,6 +19,7 @@ usage() {
   echo "   6. bebop build"
   echo "   7. verify build"
   echo "   8. pre-commit hooks installation"
+  echo "   9. register project MCP"
   echo ""
   echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
   echo ""
@@ -146,6 +147,12 @@ if run_step "8"; then
   pre-commit install
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)
   cp "${BBDIR}/scripts/pre-commit-hook.sh" "${BBDIR}/.git/hooks/pre-commit"
+fi
+
+if run_step "9"; then
+  begin_step "9" "register project MCP and Skills"
+  bash "${BBDIR}/.agents/mcps/scripts/install.sh"
+  bash "${BBDIR}/.agents/skills/scripts/install.sh"
 fi
 
 begin_step "END" "Setup completed successfully!"

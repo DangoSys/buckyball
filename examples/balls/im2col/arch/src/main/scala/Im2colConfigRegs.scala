@@ -12,133 +12,84 @@ class Im2colConfigRegs(
   maxPadding: Int)
     extends Module {
 
-  private val kW           = log2Ceil(maxKSize + 1)
-  private val bankEntries  = b.memDomain.bankEntries
-  private val bankNum      = b.memDomain.bankNum
-  private val maxFootprint = bankEntries * bankNum
-  private val tile         = 16
+  private val kW = log2Ceil(maxKSize + 1)
 
   val io = IO(new Bundle {
-    val cmd       = Input(new BallRsIssue(b))
-    val load      = Input(Bool())
-    val invalid   = Output(Bool())
-    val robId     = Output(UInt(log2Up(b.frontend.rob_entries).W))
-    val isSub     = Output(Bool())
-    val subRobId  = Output(UInt(log2Up(b.frontend.sub_rob_depth * 4).W))
-    val rBank     = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val wBank     = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val legacy    = Output(Bool())
-    val inRows    = Output(UInt(16.W))
-    val inCols    = Output(UInt(16.W))
-    val kRows     = Output(UInt(kW.W))
-    val kCols     = Output(UInt(kW.W))
-    val rowStride = Output(UInt(8.W))
-    val colStride = Output(UInt(8.W))
-    val padding   = Output(UInt(8.W))
-    val startRow  = Output(UInt(8.W))
-    val startCol  = Output(UInt(8.W))
+    val cmd         = Input(new BallRsIssue(b))
+    val load        = Input(Bool())
+    val invalid     = Output(Bool())
+    val robId       = Output(UInt(log2Up(b.frontend.rob_entries).W))
+    val isSub       = Output(Bool())
+    val subRobId    = Output(UInt(log2Up(b.frontend.sub_rob_depth * 4).W))
+    val rBank       = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val wBank       = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val inputSize   = Output(UInt(16.W))
+    val kernel      = Output(UInt(kW.W))
+    val stride      = Output(UInt(8.W))
+    val padding     = Output(UInt(8.W))
+    val startRow    = Output(UInt(8.W))
+    val startCol    = Output(UInt(8.W))
+    val inputBase   = Output(UInt(6.W))
+    val lane        = Output(UInt(4.W))
+    val windowStart = Output(UInt(6.W))
+    val windowCount = Output(UInt(7.W))
   })
 
-  private val robId     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  private val isSub     = RegInit(false.B)
-  private val subRobId  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val rBank     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val wBank     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val legacyReg = RegInit(false.B)
-  private val inRows    = RegInit(0.U(16.W))
-  private val inCols    = RegInit(0.U(16.W))
-  private val kRows     = RegInit(0.U(kW.W))
-  private val kCols     = RegInit(0.U(kW.W))
-  private val rowStride = RegInit(1.U(8.W))
-  private val colStride = RegInit(1.U(8.W))
-  private val padding   = RegInit(0.U(8.W))
-  private val startRow  = RegInit(0.U(8.W))
-  private val startCol  = RegInit(0.U(8.W))
-
-  val legacy       = io.cmd.cmd.iter === 0.U
-  val cmdInRows    = Mux(legacy, io.cmd.cmd.special(31, 24), io.cmd.cmd.iter)
-  val cmdInCols    = Mux(legacy, io.cmd.cmd.special(23, 16), io.cmd.cmd.iter)
-  val cmdKRows     =
-    Mux(legacy, io.cmd.cmd.special(15, 8), io.cmd.cmd.special(7, 0))
-  val cmdKCols     = io.cmd.cmd.special(7, 0)
-  val cmdRowStride = Mux(legacy, 1.U, io.cmd.cmd.special(15, 8))
-  val cmdColStride =
-    Mux(legacy, io.cmd.cmd.special(55, 48), io.cmd.cmd.special(15, 8))
-  val cmdPadding   = Mux(legacy, 0.U, io.cmd.cmd.special(23, 16))
-  val cmdStartRow  =
-    Mux(legacy, io.cmd.cmd.special(47, 40), io.cmd.cmd.special(39, 32))
-  val cmdStartCol  =
-    Mux(legacy, io.cmd.cmd.special(39, 32), io.cmd.cmd.special(31, 24))
-  val cmdRBank     = io.cmd.cmd.op1_bank
-  val cmdWBank     = io.cmd.cmd.wr_bank
+  private val robId       = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val isSub       = RegInit(false.B)
+  private val subRobId    = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  private val rBank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val wBank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val inputSize   = RegInit(0.U(16.W))
+  private val kernel      = RegInit(0.U(kW.W))
+  private val stride      = RegInit(0.U(8.W))
+  private val padding     = RegInit(0.U(8.W))
+  private val startRow    = RegInit(0.U(8.W))
+  private val startCol    = RegInit(0.U(8.W))
+  private val inputBase   = RegInit(0.U(6.W))
+  private val lane        = RegInit(0.U(4.W))
+  private val windowStart = RegInit(0.U(6.W))
+  private val windowCount = RegInit(0.U(7.W))
 
   when(io.load) {
-    robId     := io.cmd.rob_id
-    isSub     := io.cmd.is_sub
-    subRobId  := io.cmd.sub_rob_id
-    rBank     := cmdRBank
-    wBank     := cmdWBank
-    legacyReg := legacy
-    inRows    := cmdInRows
-    inCols    := cmdInCols
-    kRows     := cmdKRows(kW - 1, 0)
-    kCols     := cmdKCols(kW - 1, 0)
-    rowStride := cmdRowStride
-    colStride := cmdColStride
-    padding   := cmdPadding
-    startRow  := cmdStartRow
-    startCol  := cmdStartCol
+    robId       := io.cmd.rob_id
+    isSub       := io.cmd.is_sub
+    subRobId    := io.cmd.sub_rob_id
+    rBank       := io.cmd.cmd.op1_bank
+    wBank       := io.cmd.cmd.wr_bank
+    inputSize   := io.cmd.cmd.iter
+    kernel      := io.cmd.cmd.rs2(7, 0)(kW - 1, 0)
+    stride      := io.cmd.cmd.rs2(15, 8)
+    padding     := io.cmd.cmd.rs2(23, 16)
+    startCol    := io.cmd.cmd.rs2(31, 24)
+    startRow    := io.cmd.cmd.rs2(39, 32)
+    inputBase   := io.cmd.cmd.rs2(45, 40)
+    lane        := io.cmd.cmd.rs2(49, 46)
+    windowStart := io.cmd.cmd.rs2(55, 50)
+    windowCount := io.cmd.cmd.rs2(62, 56)
   }
 
-  val paddedRows = cmdInRows +& (cmdPadding << 1)
-  val paddedCols = cmdInCols +& (cmdPadding << 1)
+  private val padded = inputSize +& (padding << 1)
+  io.invalid := inputSize === 0.U || inputSize > maxIter.U ||
+    kernel === 0.U || kernel > maxKSize.U || stride === 0.U ||
+    padding > maxPadding.U || startRow > padding || startCol > padding ||
+    inputBase +& inputSize * inputSize > b.memDomain.bankEntries.U ||
+    padded < kernel + startRow || padded < kernel + startCol ||
+    windowCount === 0.U || rBank === wBank
 
-  val shapeOk = (cmdInRows >= 1.U) && (cmdInRows <= maxIter.U) &&
-    (cmdInCols >= 1.U) && (cmdInCols <= maxIter.U) &&
-    (cmdKRows >= 1.U) && (cmdKRows <= maxKSize.U) &&
-    (cmdKCols >= 1.U) && (cmdKCols <= maxKSize.U) &&
-    (cmdRowStride >= 1.U) && (cmdColStride >= 1.U) &&
-    (cmdPadding <= maxPadding.U) &&
-    (cmdStartRow <= cmdPadding) && (cmdStartCol <= cmdPadding) &&
-    (paddedRows >= cmdKRows + cmdStartRow) &&
-    (paddedCols >= cmdKCols + cmdStartCol) &&
-    (cmdRBank =/= cmdWBank)
-
-  val outRows = Mux(
-    shapeOk,
-    ((paddedRows - cmdKRows - cmdStartRow) / cmdRowStride) + 1.U,
-    0.U
-  )
-
-  val outCols = Mux(
-    shapeOk,
-    ((paddedCols - cmdKCols - cmdStartCol) / cmdColStride) + 1.U,
-    0.U
-  )
-
-  val windows     = outRows * outCols
-  val kElems      = cmdKRows * cmdKCols
-  val mTiles      = (windows +& (tile - 1).U) / tile.U
-  val kTiles      = (kElems +& (tile - 1).U) / tile.U
-  val tiledRows   = mTiles * kTiles * tile.U
-  val legacyBeats = (windows * kElems +& (tile - 1).U) / tile.U
-  val footprint   = Mux(legacy, legacyBeats, tiledRows)
-
-  // Matches emu capacity (groups * bank_lines); StreamWriter spans multi-group addrs.
-  io.invalid   := !shapeOk || (footprint > maxFootprint.U)
-  io.robId     := Mux(io.load, io.cmd.rob_id, robId)
-  io.isSub     := Mux(io.load, io.cmd.is_sub, isSub)
-  io.subRobId  := Mux(io.load, io.cmd.sub_rob_id, subRobId)
-  io.rBank     := Mux(io.load, cmdRBank, rBank)
-  io.wBank     := Mux(io.load, cmdWBank, wBank)
-  io.legacy    := Mux(io.load, legacy, legacyReg)
-  io.inRows    := Mux(io.load, cmdInRows, inRows)
-  io.inCols    := Mux(io.load, cmdInCols, inCols)
-  io.kRows     := Mux(io.load, cmdKRows(kW - 1, 0), kRows)
-  io.kCols     := Mux(io.load, cmdKCols(kW - 1, 0), kCols)
-  io.rowStride := Mux(io.load, cmdRowStride, rowStride)
-  io.colStride := Mux(io.load, cmdColStride, colStride)
-  io.padding   := Mux(io.load, cmdPadding, padding)
-  io.startRow  := Mux(io.load, cmdStartRow, startRow)
-  io.startCol  := Mux(io.load, cmdStartCol, startCol)
+  io.robId       := robId
+  io.isSub       := isSub
+  io.subRobId    := subRobId
+  io.rBank       := rBank
+  io.wBank       := wBank
+  io.inputSize   := inputSize
+  io.kernel      := kernel
+  io.stride      := stride
+  io.padding     := padding
+  io.startRow    := startRow
+  io.startCol    := startCol
+  io.inputBase   := inputBase
+  io.lane        := lane
+  io.windowStart := windowStart
+  io.windowCount := windowCount
 }

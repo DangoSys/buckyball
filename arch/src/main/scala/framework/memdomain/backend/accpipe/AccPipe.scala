@@ -42,43 +42,39 @@ class AccPipe(val b: GlobalConfig) extends Module {
   val wr_ok_reg   = RegInit(false.B)
   val busy_reg    = RegInit(false.B)
 
-  val canStart    = !busy_reg && !rd_hold && !wr_hold && !io.sramRead.resp.valid && !io.sramWrite.resp.valid
+  val canStart    = !busy_reg && !rd_hold && !wr_hold
   val hasWriteReq = io.mem_req.write.req.valid
   val wrReq       = canStart && hasWriteReq
   val rdReq       = canStart && !hasWriteReq && io.mem_req.read.req.valid
 
   io.sramRead.req.valid     := rdReq
   io.sramRead.req.bits.addr := io.mem_req.read.req.bits.addr
-  io.sramRead.resp.ready    := true.B
+  io.sramRead.resp.ready    := !rd_hold
 
   io.sramWrite.req.valid     := wrReq
   io.sramWrite.req.bits.addr := io.mem_req.write.req.bits.addr
   io.sramWrite.req.bits.data := io.mem_req.write.req.bits.data
   io.sramWrite.req.bits.mask := io.mem_req.write.req.bits.mask
-  io.sramWrite.resp.ready    := true.B
+  io.sramWrite.resp.ready    := !wr_hold
 
   io.mem_req.read.req.ready      := canStart && !hasWriteReq && io.sramRead.req.ready
-  io.mem_req.read.resp.valid     := rd_hold || io.sramRead.resp.valid
-  io.mem_req.read.resp.bits.data := Mux(rd_hold, rd_data_reg, io.sramRead.resp.bits.data)
+  io.mem_req.read.resp.valid     := rd_hold
+  io.mem_req.read.resp.bits.data := rd_data_reg
 
   io.mem_req.write.req.ready    := canStart && io.sramWrite.req.ready
-  io.mem_req.write.resp.valid   := wr_hold || io.sramWrite.resp.valid
-  io.mem_req.write.resp.bits.ok := Mux(wr_hold, wr_ok_reg, io.sramWrite.resp.bits.ok)
+  io.mem_req.write.resp.valid   := wr_hold
+  io.mem_req.write.resp.bits.ok := wr_ok_reg
 
-  when(rd_hold) {
-    when(io.mem_req.read.resp.ready) {
-      rd_hold := false.B
-    }
-  }.elsewhen(io.sramRead.resp.valid && !io.mem_req.read.resp.ready) {
+  when(rd_hold && io.mem_req.read.resp.ready) {
+    rd_hold := false.B
+  }.elsewhen(io.sramRead.resp.fire) {
     rd_hold     := true.B
     rd_data_reg := io.sramRead.resp.bits.data
   }
 
-  when(wr_hold) {
-    when(io.mem_req.write.resp.ready) {
-      wr_hold := false.B
-    }
-  }.elsewhen(io.sramWrite.resp.valid && !io.mem_req.write.resp.ready) {
+  when(wr_hold && io.mem_req.write.resp.ready) {
+    wr_hold := false.B
+  }.elsewhen(io.sramWrite.resp.fire) {
     wr_hold   := true.B
     wr_ok_reg := io.sramWrite.resp.bits.ok
   }

@@ -3,22 +3,19 @@
 
 #include <bbhw/isa/bb_func7.h>
 #include <bbhw/isa/isa.h>
+#define BB_SMATMUL_CFG(rows, cols, first, last, output_base)                   \
+  (FIELD((rows), 0, 11) | FIELD((cols), 12, 23) | FIELD((first), 24, 24) |     \
+   FIELD((last), 25, 25) | FIELD((output_base), 26, 31))
 
-#define BB_SMATMUL_CFG(rows, cols, k)                                          \
-  (FIELD((rows), 0, 11) | FIELD((cols), 12, 23) | FIELD((k), 24, 35))
+#define bb_smatmul_bias(bias_bank, input_base)                                 \
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(bias_bank) | BB_ITER(4),                  \
+                            FIELD((input_base), 0, 5), BB_FUNC7(SMATMUL_BIAS))
 
-#define BB_SMATMUL_RS1(op1_bank_id, op2_bank_id, wr_bank_id)                   \
-  (BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) | BB_BANK2(wr_bank_id) |      \
-   BB_ITER(0))
-
-#define bb_smatmul_os(op1_bank_id, op2_bank_id, wr_bank_id, rows, cols, k)     \
+#define bb_smatmul_os(a_bank, b_bank, c_bank, rows, cols, k, first, last,      \
+                      output_base)                                             \
   BUCKYBALL_INSTRUCTION_R_R(                                                   \
-      BB_SMATMUL_RS1(op1_bank_id, op2_bank_id, wr_bank_id),                    \
-      BB_SMATMUL_CFG(rows, cols, k), BB_FUNC7(SMATMUL_OS))
-
-#define bb_smatmul_ws(op1_bank_id, op2_bank_id, wr_bank_id, rows, cols, k)     \
-  BUCKYBALL_INSTRUCTION_R_R(                                                   \
-      BB_SMATMUL_RS1(op1_bank_id, op2_bank_id, wr_bank_id),                    \
-      BB_SMATMUL_CFG(rows, cols, k), BB_FUNC7(SMATMUL_WS))
+      BB_BANK0(a_bank) | BB_BANK1(b_bank) | BB_BANK2(c_bank) | BB_ITER(k),     \
+      BB_SMATMUL_CFG(rows, cols, first, last, output_base),                    \
+      BB_FUNC7(SMATMUL_OS))
 
 #endif // _BB_SMATMUL_H_

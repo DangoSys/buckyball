@@ -29,8 +29,6 @@ using mlir::buddy::bMvinDepthLines;
 using mlir::buddy::ceilDiv;
 using mlir::buddy::cMvoutDepthLines;
 using mlir::buddy::kBankLane;
-using mlir::buddy::kMaxMvinDepth8b;
-using mlir::buddy::kMaxMvoutDepth32b;
 
 namespace {
 
@@ -166,9 +164,9 @@ public:
       return tileMatMulOp.emitError("M does not split into bank-depth units");
 
     if (!isWideFloat && !isQuantized) {
-      if (aMvinDepthLines(mTileSize, kTileSize) > kMaxMvinDepth8b ||
-          bMvinDepthLines(kTileSize, nTileSize) > kMaxMvinDepth8b ||
-          cMvoutDepthLines(mTileSize, nTileSize) > kMaxMvoutDepth32b)
+      if (aMvinDepthLines(mTileSize, kTileSize) > (size_t)bankDepth ||
+          bMvinDepthLines(kTileSize, nTileSize) > (size_t)bankDepth ||
+          cMvoutDepthLines(mTileSize, nTileSize) > (size_t)bankDepth)
         return tileMatMulOp.emitError(
             "bank-unit matmul exceeds 8-bit mvin or 32-bit mvout depth");
     }

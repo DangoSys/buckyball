@@ -13,6 +13,10 @@ if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
   message(FATAL_ERROR
     "missing target ISA header ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h")
 endif()
+if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h")
+  message(FATAL_ERROR
+    "missing target params.h ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h")
+endif()
 
 get_filename_component(_BUCKYBALL_REPO_ROOT
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
@@ -25,7 +29,6 @@ set(GOBAN_C_FLAGS
   -g -fno-common -O2 -static
   -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
-  -DBANK_NUM=64
   -Wl,-T,${GOBAN_LD}
   -I${WORKLOAD_LIB_DIR}
   -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
@@ -56,6 +59,7 @@ function(add_goban_test_target STEM SOURCE_FILE)
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
       ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
     COMMENT "Building goban multicore baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -92,6 +96,7 @@ function(add_goban_64t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
       ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
     COMMENT "Building goban 64t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -129,6 +134,7 @@ function(add_goban_2t4c_test_target STEM SOURCE_FILE)
       ${GOBAN_MEM_RUNTIME}
       ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
       ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
     COMMENT "Building goban 2t4c baremetal: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

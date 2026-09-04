@@ -3,9 +3,12 @@
 .motia/
 .bsp/
 .dsh/
+.cursor/
+.claude/
+.codex/
+result
 out/
 .Xil/
-result
 
 CLAUDE.local.md
 node_modules/
@@ -56,3 +59,6 @@ ucli.key
 /MODULE.bazel.lock
 nohup.out
 alib-52/
+lc_output.txt
+
+skills-lock.json

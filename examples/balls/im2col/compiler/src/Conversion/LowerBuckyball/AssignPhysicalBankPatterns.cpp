@@ -24,8 +24,9 @@ public:
                                 PatternRewriter &rewriter) const override {
     rewriter.create<Im2colOp>(op.getLoc(), op.getInBank(), op.getOutBank(),
                               op.getIter(), op.getKsize(), op.getStride(),
-                              op.getPadding(), op.getStartRowAttr(),
-                              op.getStartColAttr());
+                              op.getPadding(), op.getInputBase(), op.getLane(),
+                              op.getStartRowAttr(), op.getStartColAttr(),
+                              op.getWindowStartAttr(), op.getWindowCountAttr());
     rewriter.replaceOp(op, op.getOutBank());
     return success();
   }

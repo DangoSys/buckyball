@@ -97,6 +97,12 @@ list(REMOVE_ITEM BUCKYBALL_TARGETS ${BUCKYBALL_TARGET_BALL_LINES}
 if(NOT BUCKYBALL_TARGETS)
   message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
+foreach(_BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
+  if(NOT EXISTS "${BUCKYBALL_ISA_DIR}/${_BUCKYBALL_TARGET}/params.h")
+    message(FATAL_ERROR
+      "missing generated params.h for target ${_BUCKYBALL_TARGET}")
+  endif()
+endforeach()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
 message(STATUS "Buckyball rushB targets: ${BUCKYBALL_RUSHB_TARGET_LINES}")

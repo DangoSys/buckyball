@@ -17,6 +17,8 @@ class MemStorer(val b: GlobalConfig) extends Module {
   private val line_bytes  = b.memDomain.bankWidth / 8
   // We pack/send 16B aligned beats to DMA
   private val align_bytes = 16
+  require(isPow2(line_bytes), "MemStorer line_bytes must be power of 2")
+  private val lgLine      = log2Ceil(line_bytes)
 
   @public
   val io = IO(new Bundle {
@@ -28,7 +30,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
 
     val bankRead = Flipped(new BankRead(b))
 
-    // Query interface to get group count
+    val query_valid       = Output(Bool())
     val query_vbank_id    = Output(UInt(8.W))
     val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
@@ -40,23 +42,23 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // State
   // -----------------------------
-  val s_idle :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_wait_dma_resp :: s_done :: Nil =
-    Enum(7)
-  val state                                                                                                                = RegInit(s_idle)
+  val s_idle :: s_setup :: s_mul :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_wait_dma_resp :: s_done :: Nil =
+    Enum(9)
+  val state                                                                                                                                    = RegInit(s_idle)
 
   val rob_id_reg      = RegInit(0.U(rob_id_width.W))
   val is_sub_reg      = RegInit(false.B)
   val sub_rob_id_reg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val mem_addr_reg    = RegInit(0.U(b.memDomain.memAddrLen.W))
   val iter_reg        = RegInit(0.U(b.frontend.iter_len.W))
-  val stride_reg      = RegInit(0.U(19.W))
   val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val group_count_reg = RegInit(1.U(log2Up(b.memDomain.bankNum + 1).W)) // Store group count for current operation
+  val stride_reg      = RegInit(1.U(19.W))
+  val group_count_reg = RegInit(1.U(log2Up(b.memDomain.bankNum + 1).W))
   val is_shared_reg   = RegInit(false.B)
 
-  // Address and group counters
-  val addr_counter  = RegInit(0.U(b.frontend.iter_len.W))             // Row address counter
-  val group_counter = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W)) // Group counter within a row
+  val addr_counter  = RegInit(0.U(b.frontend.iter_len.W))
+  val group_counter = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val cursor        = RegInit(0.U(b.memDomain.memAddrLen.W))
+  val rowDelta      = RegInit(0.U(b.memDomain.memAddrLen.W))
 
   // -----------------------------
   // Pending buffer for SRAM resp
@@ -79,21 +81,19 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.cmdReq.ready := (state === s_idle)
 
   when(io.cmdReq.fire && io.cmdReq.bits.cmd.is_store) {
+    val strideIn = io.cmdReq.bits.cmd.special(57, 39)
+    assert(strideIn >= 1.U, "MemStorer stride must be >= 1")
     rob_id_reg     := io.cmdReq.bits.rob_id
     is_sub_reg     := io.cmdReq.bits.is_sub
     sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
-    mem_addr_reg   := io.cmdReq.bits.cmd.mem_addr
     rd_bank_reg    := io.cmdReq.bits.cmd.bank_id
-    stride_reg     := io.cmdReq.bits.cmd.special(57, 39)
+    stride_reg     := strideIn
+    iter_reg       := io.cmdReq.bits.cmd.iter
+    is_shared_reg  := io.cmdReq.bits.cmd.is_shared
 
-    // Query and save group count
-    group_count_reg := io.query_group_count
-    iter_reg        := io.cmdReq.bits.cmd.iter
-    is_shared_reg   := io.cmdReq.bits.cmd.is_shared
-
-    // Initialize counters
     addr_counter  := 0.U
     group_counter := 0.U
+    cursor        := io.cmdReq.bits.cmd.mem_addr
 
     pending     := false.B
     split_valid := false.B
@@ -101,17 +101,23 @@ class MemStorer(val b: GlobalConfig) extends Module {
     split_data  := 0.U
     split_mask  := 0.U
 
-    state := s_issue_sram_req
+    state := s_setup
   }
 
-  // Drive query interface
-  // When idle and cmdReq is valid, query the incoming bank_id
-  // Otherwise use the registered bank_id
-  val incomingStoreQuery = state === s_idle && io.cmdReq.valid && io.cmdReq.bits.cmd.is_store
-  val activeStoreQuery   = state =/= s_idle
-  val storeQueryActive   = incomingStoreQuery || activeStoreQuery
-  io.query_vbank_id  := Mux(state === s_idle && io.cmdReq.valid, io.cmdReq.bits.cmd.bank_id, rd_bank_reg)
-  io.query_is_shared := storeQueryActive && Mux(incomingStoreQuery, io.cmdReq.bits.cmd.is_shared, is_shared_reg)
+  io.query_valid     := state === s_setup
+  io.query_vbank_id  := rd_bank_reg
+  io.query_is_shared := is_shared_reg && (state === s_setup)
+
+  when(state === s_setup) {
+    assert(io.query_group_count >= 1.U, "MemStorer groups must be >= 1")
+    group_count_reg := io.query_group_count
+    state           := s_mul
+  }
+
+  when(state === s_mul) {
+    rowDelta := ((group_count_reg * (stride_reg - 1.U)) + 1.U) << lgLine
+    state    := s_issue_sram_req
+  }
 
   // -----------------------------
   // SRAM read request
@@ -150,19 +156,10 @@ class MemStorer(val b: GlobalConfig) extends Module {
     state      := s_have_sram_beat
   }
 
-  // -----------------------------
-  // Address calculation:
-  // base + row * groups * line_bytes * stride + group * line_bytes
-  // -----------------------------
-  val row_offset       = addr_counter * group_count_reg * line_bytes.U * stride_reg
-  val group_offset     = group_counter * line_bytes.U
-  val current_mem_addr =
-    mem_addr_reg + row_offset + group_offset
-
-  val addr_offset = current_mem_addr(log2Ceil(align_bytes) - 1, 0)
+  val addr_offset = cursor(log2Ceil(align_bytes) - 1, 0)
 
   val aligned_addr = Cat(
-    current_mem_addr(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)),
+    cursor(b.memDomain.memAddrLen - 1, log2Ceil(align_bytes)),
     0.U(log2Ceil(align_bytes).W)
   )
 
@@ -230,9 +227,11 @@ class MemStorer(val b: GlobalConfig) extends Module {
       when(iter_reg =/= 0.U) {
         when(group_counter + 1.U < group_count_reg) {
           group_counter := group_counter + 1.U
+          cursor        := cursor + line_bytes.U
         }.otherwise {
           group_counter := 0.U
           addr_counter  := addr_counter + 1.U
+          cursor        := cursor + rowDelta
         }
       }
 

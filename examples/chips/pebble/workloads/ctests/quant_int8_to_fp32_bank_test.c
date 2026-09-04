@@ -1,13 +1,13 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <bbhw/mem/params.h>
 #include <isa/int2fp.h>
 #include <math.h>
+#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define LANES 16
+#define LANES (BANK_WIDTH / 8)
 #define NELEM (BANK_LINES * LANES)
 #define DA 1.0f
 #define DW 1.0f
@@ -31,12 +31,14 @@ int main(void) {
     actual[i] = 0.0f;
   }
   bb_mvin_mmio((uintptr_t)(&da_scale), 0, 1, 4);
-  bb_mvin_mmio((uintptr_t)(&dw_scale), 16, 1, 4);
+  bb_mvin_mmio((uintptr_t)(&dw_scale), BANK_WIDTH / 8, 1, 4);
   bb_mem_alloc(0, BANK_LINES, 1);
-  bb_mem_alloc(1, BANK_LINES, 4);
+  bb_mem_alloc(1, BANK_LINES, 1);
+  bb_mem_alloc(2, BANK_LINES, 1);
   bb_mvin((uintptr_t)input_i32, 0, BANK_LINES, 1);
-  bb_int2fp_tensor(0, 1, BANK_LINES, 0, 16);
-  bb_mvout((uintptr_t)actual, 1, BANK_LINES, 1);
+  bb_mvin((uintptr_t)&dw_scale, 1, 4, 1);
+  bb_int32_to_fp32(0, 1, 2, BANK_LINES, 0);
+  bb_mvout((uintptr_t)actual, 2, BANK_LINES, 1);
   bb_fence();
   bb_mem_release(0);
   bb_mem_release(1);
