@@ -854,9 +854,6 @@ public:
         return success();
       }
 
-      bool streamMaterializedInput =
-          !stage.pool && !stage.depthwise && stage.input != kernel.getInput() &&
-          materialized.contains(producer.lookup(stage.input));
       int64_t maxSide = std::min<int64_t>({4, height, width});
       while (maxSide > 0) {
         int64_t inputSide = (maxSide - 1) * stage.stride + stage.kernel;
@@ -868,9 +865,8 @@ public:
                                     ? target.bankDepth / inputPanelRows
                                     : 0;
         int64_t inputBanks =
-            streamMaterializedInput ? (panelsPerBank ? 1 : target.bankNum + 1)
-            : panelsPerBank ? (inputPanels + panelsPerBank - 1) / panelsPerBank
-                            : target.bankNum + 1;
+            panelsPerBank ? (inputPanels + panelsPerBank - 1) / panelsPerBank
+                          : target.bankNum + 1;
         int64_t reservedBanks = stage.input == kernel.getInput() ? 6 : 11;
         if (stage.activation == 2)
           reservedBanks += 2;
@@ -983,7 +979,7 @@ public:
         Value bank = allocBank(b, loc, 1, 1);
         source.banks.push_back(mvinBank(b, loc, pack, bank, target.bankDepth));
         b.create<memref::DeallocOp>(loc, pack);
-      } else if (!streamMaterializedInput) {
+      } else {
         source = allocateTile(inputPanelCount, inputSide * inputSide,
                               stage.pool ? minI8 : zeroI8);
         if (failed(
@@ -1294,33 +1290,13 @@ public:
           states.assign(channelLoop.getResults().begin(),
                         channelLoop.getResults().end());
         };
-        if (streamMaterializedInput) {
-          for (int64_t inputPanel = 0; inputPanel < inputPanelCount;
-               ++inputPanel) {
-            TileBanks streamedSource =
-                allocateTile(1, inputSide * inputSide, zeroI8);
-            if (streamedSource.banks.size() != 1)
-              return stage.op->emitError(
-                  "streamed Conv input panel must fit one bank");
-            if (failed(
-                    emitInto(producer.lookup(stage.input), sourceY, sourceX,
-                             inputSide, inputSide,
-                             b.create<arith::ConstantIndexOp>(loc, inputPanel),
-                             1, streamedSource, 0, inputSide)))
-              return failure();
-            accumulateSource(streamedSource.banks.front(), inputPanel,
-                             inputPanel + 1, streamedSource.panelRows);
-            releaseTile(streamedSource);
-          }
-        } else {
-          for (size_t sourceBank = 0; sourceBank < source.banks.size();
-               ++sourceBank) {
-            int64_t sourcePanelBegin = sourceBank * source.panelsPerBank;
-            int64_t sourcePanelEnd = std::min<int64_t>(
-                inputPanelCount, sourcePanelBegin + source.panelsPerBank);
-            accumulateSource(source.banks[sourceBank], sourcePanelBegin,
-                             sourcePanelEnd, source.panelRows);
-          }
+        for (size_t sourceBank = 0; sourceBank < source.banks.size();
+             ++sourceBank) {
+          int64_t sourcePanelBegin = sourceBank * source.panelsPerBank;
+          int64_t sourcePanelEnd = std::min<int64_t>(
+              inputPanelCount, sourcePanelBegin + source.panelsPerBank);
+          accumulateSource(source.banks[sourceBank], sourcePanelBegin,
+                           sourcePanelEnd, source.panelRows);
         }
         releaseBank(b, loc, states[0]);
         releaseBank(b, loc, states[1]);

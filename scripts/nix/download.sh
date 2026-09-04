@@ -20,7 +20,7 @@ begin_step() {
   echo -e "${NC}"
 }
 
-begin_step "0-1" "submodules init"
+begin_step "0-2" "submodules init"
 cd ${BBDIR}
 git submodule update --init --progress \
   arch/thirdparty/chipyard \
@@ -36,7 +36,9 @@ git submodule update --init --progress \
   verify \
   thirdparty/firesim \
   thirdparty/soc-framework \
-  thirdparty/waveform-mcp
+  thirdparty/waveform-mcp \
+  .agents/skills \
+  .agents/mcps
 git submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   bb-tests/thirdparty/linux \
   bb-tests/thirdparty/opensbi
@@ -68,7 +70,7 @@ git -C ${CYDIR} submodule update --init --checkout --force generators/testchipip
 git -C ${CYDIR} submodule update --init --checkout --force generators/rocket-chip-blocks
 git -C ${CYDIR} submodule update --init --checkout --force generators/gemmini
 
-begin_step "0-2" "verify chipyard nested pins"
+begin_step "0-3" "verify chipyard nested pins"
 require_chipyard_nested() {
   local rel=$1
   shift
@@ -108,5 +110,5 @@ require_chipyard_nested generators/diplomacy
 require_chipyard_nested generators/rocc-acc-utils
 require_chipyard_nested generators/bar-fetchers
 
-begin_step "0-3" "buddy-mlir llvm init"
+begin_step "0-4" "buddy-mlir llvm init"
 git -C ${BBDIR}/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

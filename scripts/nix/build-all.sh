@@ -11,6 +11,7 @@ usage() {
   echo ""
   echo "Helper script to fully initialize repository that wraps other scripts."
   echo "By default it initializes/installs things in the following order:"
+  echo "   0. Nix environment (then git submodules, using nix git)"
   echo "   1. bbdev install"
   echo "   2. Compiler installation"
   echo "   3. RTL pre-compile sources"
@@ -76,9 +77,7 @@ function begin_step
   echo -e "${NC}"
 }
 
-${BBDIR}/scripts/nix/download.sh
-
-begin_step "0-2" "Nix environment setup"
+begin_step "0-1" "Nix environment setup"
 cd ${BBDIR}
 nix build
 if [ "${INSTALL_IN_NIX}" != "1" ]; then
@@ -88,6 +87,8 @@ if [ "${INSTALL_IN_NIX}" != "1" ]; then
   done
   exec nix develop --command bash ${BBDIR}/scripts/nix/build-all.sh --install-in-nix ${SKIP_ARGS} ${VERBOSE_FLAG}
 fi
+
+${BBDIR}/scripts/nix/download.sh
 
 if run_step "1"; then
   begin_step "1" "bbdev install"
