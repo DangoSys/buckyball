@@ -49,12 +49,11 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   private val reluReg     = RegInit(false.B)
   private val inputData   = Reg(UInt(128.W))
   private val scaleData   = Reg(UInt(128.W))
-  private val fpInputs    = Reg(Vec(4, UInt(32.W)))
   private val fpOutputs   = Reg(Vec(4, UInt(32.W)))
   private val mulStarted  = RegInit(false.B)
-  private val mulDone     = RegInit(VecInit(Seq.fill(4)(false.B)))
+  private val laneReg     = RegInit(0.U(2.W))
   private val writeData   = Reg(UInt(128.W))
-  private val multipliers = Seq.fill(4)(Module(new Fp32Mul))
+  private val multiplier  = Module(new Fp32Mul)
 
   private def int32ToFp32(value: UInt): UInt = {
     val sign        = value(31)
@@ -95,11 +94,11 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
   io.bankWrite(0).io.resp.ready    := false.B
 
-  for (i <- 0 until 4) {
-    multipliers(i).io.start := false.B
-    multipliers(i).io.a     := fpInputs(i)
-    multipliers(i).io.b     := scaleData(32 * i + 31, 32 * i)
-  }
+  private val inputValue = (inputData >> (laneReg << 5))(31, 0)
+  private val scaleValue = (scaleData >> (laneReg << 5))(31, 0)
+  multiplier.io.start := false.B
+  multiplier.io.a     := int32ToFp32(Mux(reluReg && inputValue(31), 0.U, inputValue))
+  multiplier.io.b     := scaleValue
 
   io.cmdReq.ready            := state === idle
   io.cmdResp.valid           := state === complete
@@ -154,29 +153,27 @@ class Int2Fp(val b: GlobalConfig) extends Module {
     }
     is(convert) {
       for (i <- 0 until 4) {
-        val value = inputData(32 * i + 31, 32 * i)
         val scale = scaleData(32 * i + 31, 32 * i)
         assert(positiveFinite(scale), "INT32_TO_FP32 scales must be finite and positive")
-        fpInputs(i) := int32ToFp32(Mux(reluReg && value(31), 0.U, value))
-        mulDone(i)  := false.B
       }
       mulStarted := false.B
-      state := multiply
+      laneReg := 0.U
+      state   := multiply
     }
     is(multiply) {
       when(!mulStarted) {
-        for (i <- 0 until 4) multipliers(i).io.start := true.B
-        mulStarted := true.B
+        multiplier.io.start := true.B
+        mulStarted          := true.B
       }
-      for (i <- 0 until 4) {
-        when(multipliers(i).io.done) {
-          fpOutputs(i) := multipliers(i).io.result
-          mulDone(i)   := true.B
+      when(multiplier.io.done) {
+        fpOutputs(laneReg) := multiplier.io.result
+        when(laneReg === 3.U) {
+          writeData := Cat(multiplier.io.result, fpOutputs(2), fpOutputs(1), fpOutputs(0))
+          state     := writeReq
+        }.otherwise {
+          laneReg    := laneReg + 1.U
+          mulStarted := false.B
         }
-      }
-      when(mulDone.asUInt.andR) {
-        writeData := Cat(fpOutputs.reverse)
-        state     := writeReq
       }
     }
     is(writeReq) {

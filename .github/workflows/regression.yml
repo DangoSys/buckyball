@@ -174,9 +174,10 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
+          rm -rf "${root}"/bebop/build/"${{ matrix.chip }}"-*/
           nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
-          bits=("${root}"/bebop/target/"${{ matrix.chip }}"/**/bitstream.bit(N))
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2
@@ -231,7 +232,7 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          bits=("${root}"/bebop/target/"${{ matrix.chip }}"/**/bitstream.bit(N))
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2
@@ -298,7 +299,7 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          bits=("${root}"/bebop/target/"${{ matrix.chip }}"/**/bitstream.bit(N))
+          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2

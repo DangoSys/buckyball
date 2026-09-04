@@ -17,6 +17,8 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   private val lanesPerBeat = bankWidth / elemWidth
   require(isPow2(lanesPerBeat), "LineBuffer lanesPerBeat must be power of 2")
   private val maxBeats     = maxIter * maxIter
+  require(isPow2(maxBeats) && maxBeats >= 2, "LineBuffer depth must be an even power of two")
+  private val halfBeats    = maxBeats / 2
   private val kW           = log2Ceil(maxKSize + 1)
   private val addrW        = log2Ceil(b.memDomain.bankEntries)
 
@@ -50,7 +52,8 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     val elemData  = Output(UInt(elemWidth.W))
   })
 
-  private val buf      = RegInit(VecInit(Seq.fill(maxBeats)(0.U(bankWidth.W))))
+  private val bufLo    = SyncReadMem(halfBeats, UInt(bankWidth.W))
+  private val bufHi    = SyncReadMem(halfBeats, UInt(bankWidth.W))
   private val active   = RegInit(false.B)
   private val pending  = RegInit(false.B)
   private val beat     = RegInit(0.U(addrW.W))
@@ -84,8 +87,7 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   }
 
   when(io.bankRead(0).io.resp.fire) {
-    buf(beat) := io.bankRead(0).io.resp.bits.data.asUInt
-    pending   := false.B
+    pending := false.B
     when(beat +& 1.U === beatsReg) {
       active := false.B
     }.otherwise {
@@ -93,29 +95,56 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     }
   }
 
-  private val paddedRow = io.startRow +& (io.outRow(dimW - 1, 0) * io.rowStride) +& io.kRowIdx
-  private val paddedCol = io.startCol +& (io.outCol(dimW - 1, 0) * io.colStride) +& io.kColIdx
-  private val rowValid  =
+  private val paddedRow   = io.startRow +& (io.outRow(dimW - 1, 0) * io.rowStride) +& io.kRowIdx
+  private val paddedCol   = io.startCol +& (io.outCol(dimW - 1, 0) * io.colStride) +& io.kColIdx
+  private val rowValid    =
     paddedRow >= io.padding && paddedRow < io.padding + io.inRows
-  private val colValid  =
+  private val colValid    =
     paddedCol >= io.padding && paddedCol < io.padding + io.inCols
-  private val inBound   = rowValid && colValid
-  private val srcRow    = Mux(inBound, paddedRow - io.padding, 0.U)
-  private val srcCol    = Mux(inBound, paddedCol - io.padding, 0.U)
-  private val elemIndex = srcRow(dimW - 1, 0) * io.inCols(dimW - 1, 0) + srcCol(dimW - 1, 0)
-  private val beatIndex = elemIndex
-  private val laneIndex = io.lane
-  private val beatR     = RegInit(0.U(log2Ceil(maxBeats).W))
-  private val laneR     = RegInit(0.U(log2Ceil(lanesPerBeat).W))
-  private val boundR    = RegInit(false.B)
-  private val beatData  = RegInit(0.U(bankWidth.W))
-  private val laneD     = RegInit(0.U(log2Ceil(lanesPerBeat).W))
-  private val boundD    = RegInit(false.B)
-  private val elemHold  = RegInit(0.U(elemWidth.W))
-  beatR    := beatIndex
+  private val inBound     = rowValid && colValid
+  private val srcRow      = Mux(inBound, paddedRow - io.padding, 0.U)
+  private val srcCol      = Mux(inBound, paddedCol - io.padding, 0.U)
+  private val elemIndex   = srcRow(dimW - 1, 0) * io.inCols(dimW - 1, 0) + srcCol(dimW - 1, 0)
+  private val beatIndex   = elemIndex
+  private val laneIndex   = io.lane
+  private val memoryWrite = io.bankRead(0).io.resp.fire
+  private val memoryRead  = !active
+
+  private val memoryAddress = Mux(
+    memoryWrite,
+    beat(log2Ceil(maxBeats) - 1, 0),
+    beatIndex(log2Ceil(maxBeats) - 1, 0)
+  )
+
+  private val memoryBank   = memoryAddress(log2Ceil(maxBeats) - 1)
+  private val memoryRow    = memoryAddress(log2Ceil(halfBeats) - 1, 0)
+  private val memoryEnable = memoryWrite || memoryRead
+
+  private val loData = bufLo.readWrite(
+    memoryRow,
+    io.bankRead(0).io.resp.bits.data.asUInt,
+    memoryEnable && !memoryBank,
+    memoryWrite
+  )
+
+  private val hiData = bufHi.readWrite(
+    memoryRow,
+    io.bankRead(0).io.resp.bits.data.asUInt,
+    memoryEnable && memoryBank,
+    memoryWrite
+  )
+
+  private val readBank   = RegEnable(memoryBank, false.B, memoryRead)
+  private val memoryData = Mux(readBank, hiData, loData)
+  private val laneR      = RegInit(0.U(log2Ceil(lanesPerBeat).W))
+  private val boundR     = RegInit(false.B)
+  private val beatData   = RegInit(0.U(bankWidth.W))
+  private val laneD      = RegInit(0.U(log2Ceil(lanesPerBeat).W))
+  private val boundD     = RegInit(false.B)
+  private val elemHold   = RegInit(0.U(elemWidth.W))
   laneR    := laneIndex
   boundR   := inBound
-  beatData := buf(beatR)
+  beatData := memoryData
   laneD    := laneR
   boundD   := boundR
   private val lanes =

@@ -64,38 +64,32 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   private val inputData    = Reg(UInt(128.W))
   private val outputData   = RegInit(0.U(128.W))
   private val writeData    = Reg(UInt(128.W))
+  private val lane         = RegInit(0.U(2.W))
+  private val outputBytes  = Reg(Vec(4, UInt(8.W)))
 
   private def positiveFinite(value: UInt): Bool =
     !value(31) && value(30, 23) =/= 255.U && value(30, 0) =/= 0.U
 
-  private val intToFloat = Seq.fill(4)(Module(new INToRecFN(32, 8, 24)))
-  private val multiply   = Seq.fill(4)(Module(new MulRecFN(8, 24)))
-  private val floatToInt = Seq.fill(4)(Module(new RecFNToIN(8, 24, 8)))
-  private val quantized  = Wire(Vec(4, UInt(8.W)))
+  private val intToFloat = Module(new INToRecFN(32, 8, 24))
+  private val multiply   = Module(new MulRecFN(8, 24))
+  private val floatToInt = Module(new RecFNToIN(8, 24, 8))
+  private val input      = (inputData >> (lane << 5))(31, 0)
+  private val scale      = Mux(i32Mode, scales(Cat(inputRow(1, 0), lane)), tensorScale)
 
-  for (lane <- 0 until 4) {
-    val input = inputData(32 * lane + 31, 32 * lane)
-    val scale = Mux(i32Mode, scales(Cat(inputRow(1, 0), lane.U(2.W))), tensorScale)
+  intToFloat.io.signedIn       := true.B
+  intToFloat.io.in             := input
+  intToFloat.io.roundingMode   := round_near_even
+  intToFloat.io.detectTininess := tininess_afterRounding
 
-    intToFloat(lane).io.signedIn       := true.B
-    intToFloat(lane).io.in             := input
-    intToFloat(lane).io.roundingMode   := round_near_even
-    intToFloat(lane).io.detectTininess := tininess_afterRounding
+  multiply.io.a              := Mux(i32Mode, intToFloat.io.out, recFNFromFN(8, 24, input))
+  multiply.io.b              := recFNFromFN(8, 24, scale)
+  multiply.io.roundingMode   := round_near_even
+  multiply.io.detectTininess := tininess_afterRounding.asBool
 
-    multiply(lane).io.a              := Mux(
-      i32Mode,
-      intToFloat(lane).io.out,
-      recFNFromFN(8, 24, input)
-    )
-    multiply(lane).io.b              := recFNFromFN(8, 24, scale)
-    multiply(lane).io.roundingMode   := round_near_even
-    multiply(lane).io.detectTininess := tininess_afterRounding.asBool
-
-    floatToInt(lane).io.in           := multiply(lane).io.out
-    floatToInt(lane).io.roundingMode := round_near_even
-    floatToInt(lane).io.signedOut    := true.B
-    quantized(lane)                  := Mux(reluReg && floatToInt(lane).io.out(7), 0.U, floatToInt(lane).io.out)
-  }
+  floatToInt.io.in           := multiply.io.out
+  floatToInt.io.roundingMode := round_near_even
+  floatToInt.io.signedOut    := true.B
+  private val quantized = Mux(reluReg && floatToInt.io.out(7), 0.U, floatToInt.io.out)
 
   io.cmdReq.ready            := state === idle
   io.cmdResp.valid           := state === complete
@@ -183,6 +177,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
         reluReg      := isI32 && cmd.rs2(0)
         tensorScale  := cmd.rs2(31, 0)
         outputData   := 0.U
+        lane         := 0.U
         state        := Mux(isI32, scaleReq, inputReq)
       }
     }
@@ -224,26 +219,30 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
       io.bankRead(0).io.resp.ready := true.B
       when(io.bankRead(0).io.resp.fire) {
         inputData := io.bankRead(0).io.resp.bits.data
+        lane      := 0.U
         state     := pack
       }
     }
 
     is(pack) {
       when(!i32Mode) {
-        for (lane <- 0 until 4) {
-          assert(inputData(32 * lane + 30, 32 * lane + 23) =/= 255.U, "QUANT_F32_TO_I8 input must be finite")
-        }
+        assert(input(30, 23) =/= 255.U, "QUANT_F32_TO_I8 input must be finite")
       }
-      val bytes    = Cat(quantized.reverse)
-      val nextWord = outputData | (bytes << (inputRow(1, 0) << 5))
-      when(inputRow(1, 0) === 3.U) {
-        writeData  := nextWord
-        outputData := 0.U
-        state      := writeReq
+      outputBytes(lane) := quantized
+      when(lane === 3.U) {
+        val bytes    = Cat(quantized, outputBytes(2), outputBytes(1), outputBytes(0))
+        val nextWord = outputData | (bytes << (inputRow(1, 0) << 5))
+        when(inputRow(1, 0) === 3.U) {
+          writeData  := nextWord
+          outputData := 0.U
+          state      := writeReq
+        }.otherwise {
+          outputData := nextWord
+          inputRow   := inputRow + 1.U
+          state      := inputReq
+        }
       }.otherwise {
-        outputData := nextWord
-        inputRow   := inputRow + 1.U
-        state      := inputReq
+        lane := lane + 1.U
       }
     }
 

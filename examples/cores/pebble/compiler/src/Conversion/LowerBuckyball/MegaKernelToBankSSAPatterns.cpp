@@ -242,18 +242,21 @@ public:
       int64_t inH = input.getShape()[1];
       int64_t inW = input.getShape()[2];
       int64_t inC = input.getShape()[3];
-      int64_t kernelSize = weight.getShape()[0];
+      int64_t kernelSize = conv ? conv.getKernel() : depthwise.getKernel();
       int64_t outH = output.getShape()[1];
       int64_t outW = output.getShape()[2];
       int64_t outC = output.getShape()[3];
       bool isDepthwise = static_cast<bool>(depthwise);
+      int64_t paddedKernel =
+          (kernelSize * kernelSize + kTile - 1) / kTile * kTile;
       bool weightShapeMatches =
           isDepthwise
               ? weight.getShape() ==
                         ArrayRef<int64_t>({kernelSize, kernelSize, inC, 1}) &&
                     outC == inC
               : weight.getShape() ==
-                    ArrayRef<int64_t>({kernelSize, kernelSize, inC, outC});
+                    ArrayRef<int64_t>(
+                        {(outC + kTile - 1) / kTile, inC, paddedKernel, kTile});
       if (inH <= 0 || inW <= 0 || inC <= 0 || outH <= 0 || outW <= 0 ||
           outC <= 0 || kernelSize <= 0 || kernelSize > 7 ||
           !weightShapeMatches || bias.getShape() != ArrayRef<int64_t>({outC}) ||
@@ -744,16 +747,14 @@ public:
                           b.getI64IntegerAttr(side * side))
                          .getOutBankOut();
 
-        Value weightPack = b.create<memref::AllocOp>(
-            loc, MemRefType::get({paddedK, kTile}, b.getI8Type()));
-        hostPacks.push_back(weightPack);
-        b.create<linalg::FillOp>(loc, zeroI8, weightPack);
-        if (inputChannel < stage.inputChannels) {
-          int64_t copies =
-              stage.depthwise
-                  ? (inputChannel < stage.outputChannels ? kernelElements : 0)
-                  : kernelElements * validOutputChannels;
-          if (copies > 0) {
+        Value weightPack;
+        if (stage.depthwise) {
+          weightPack = b.create<memref::AllocOp>(
+              loc, MemRefType::get({paddedK, kTile}, b.getI8Type()));
+          hostPacks.push_back(weightPack);
+          b.create<linalg::FillOp>(loc, zeroI8, weightPack);
+          if (inputChannel < stage.inputChannels &&
+              inputChannel < stage.outputChannels) {
             Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
             Value one = b.create<arith::ConstantIndexOp>(loc, 1);
             Value kernelSize =
@@ -765,35 +766,37 @@ public:
             b.setInsertionPointToStart(copyWeightX.getBody());
             Value kx = copyWeightX.getInductionVar();
             Value outputLaneBegin =
-                stage.depthwise
-                    ? b.create<arith::ConstantIndexOp>(loc, accumulation)
-                    : zero;
+                b.create<arith::ConstantIndexOp>(loc, accumulation);
             Value outputLaneEnd =
-                stage.depthwise
-                    ? b.create<arith::ConstantIndexOp>(loc, accumulation + 1)
-                    : b.create<arith::ConstantIndexOp>(loc,
-                                                       validOutputChannels);
+                b.create<arith::ConstantIndexOp>(loc, accumulation + 1);
             auto copyWeightLane =
                 b.create<scf::ForOp>(loc, outputLaneBegin, outputLaneEnd, one);
             b.setInsertionPointToStart(copyWeightLane.getBody());
             Value outputLane = copyWeightLane.getInductionVar();
             Value weightRow = b.create<arith::AddIOp>(
                 loc, b.create<arith::MulIOp>(loc, ky, kernelSize), kx);
-            Value outputChannel =
-                stage.depthwise
-                    ? zero
-                    : b.create<arith::AddIOp>(
-                          loc, outputLane,
-                          b.create<arith::ConstantIndexOp>(loc, channelBase));
             Value value = b.create<memref::LoadOp>(
                 loc, stage.weight,
                 ValueRange{ky, kx,
                            b.create<arith::ConstantIndexOp>(loc, inputChannel),
-                           outputChannel});
+                           zero});
             b.create<memref::StoreOp>(loc, value, weightPack,
                                       ValueRange{weightRow, outputLane});
             b.setInsertionPointAfter(copyWeightY);
           }
+        } else {
+          SmallVector<OpFoldResult> weightOffsets = {
+              b.getIndexAttr(channelBase / kTile), b.getIndexAttr(inputChannel),
+              b.getIndexAttr(0), b.getIndexAttr(0)};
+          SmallVector<OpFoldResult> weightSizes = {
+              b.getIndexAttr(1), b.getIndexAttr(1), b.getIndexAttr(paddedK),
+              b.getIndexAttr(kTile)};
+          SmallVector<OpFoldResult> weightStrides(4, b.getIndexAttr(1));
+          Value weightSlice = b.create<memref::SubViewOp>(
+              loc, stage.weight, weightOffsets, weightSizes, weightStrides);
+          weightPack = b.create<memref::CollapseShapeOp>(
+              loc, weightSlice,
+              SmallVector<ReassociationIndices>{{0, 1, 2}, {3}});
         }
         weightState = mvinBank(b, loc, weightPack, weightState, paddedK);
         resultState =
