@@ -92,6 +92,7 @@ name = "chipyard_sram_64x128"
 words = 64
 mux = 8
 bits = 128
+bitwrite = true
 
 [[tapeout.sram]]
 name = "chipyard_sram_128x8"

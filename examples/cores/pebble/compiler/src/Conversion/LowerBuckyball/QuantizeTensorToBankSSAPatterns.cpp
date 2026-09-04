@@ -71,72 +71,92 @@ public:
                                                 b.getF32FloatAttr(0.0));
     int64_t maxElements = target.bankDepth * 4;
 
-    for (int64_t offset = 0; offset < elements; offset += maxElements) {
-      int64_t validElements = std::min(maxElements, elements - offset);
-      int64_t paddedElements = (validElements + 15) / 16 * 16;
-      int64_t inputRows = paddedElements / 4;
-      int64_t outputRows = paddedElements / 16;
-      auto inputPackTy = MemRefType::get({inputRows, 4}, b.getF32Type());
-      auto outputPackTy = MemRefType::get({outputRows, 16}, b.getI8Type());
-      Value inputPack = b.create<memref::AllocOp>(loc, inputPackTy);
-      Value outputPack = b.create<memref::AllocOp>(loc, outputPackTy);
-      b.create<linalg::FillOp>(loc, zeroF32, inputPack);
+    Value elementCount = b.create<arith::ConstantIndexOp>(loc, elements);
+    Value chunkSize = b.create<arith::ConstantIndexOp>(loc, maxElements);
+    auto chunkLoop = b.create<scf::ForOp>(loc, zero, elementCount, chunkSize,
+                                          ValueRange{inputBank, outputBank});
+    b.setInsertionPointToStart(chunkLoop.getBody());
+    Value offset = chunkLoop.getInductionVar();
+    ValueRange bankStates = chunkLoop.getRegionIterArgs();
+    auto inputPackTy = MemRefType::get({target.bankDepth, 4}, b.getF32Type());
+    auto outputPackTy =
+        MemRefType::get({target.bankDepth / 4, 16}, b.getI8Type());
+    Value inputPack = b.create<memref::AllocOp>(loc, inputPackTy);
+    Value outputPack = b.create<memref::AllocOp>(loc, outputPackTy);
+    b.create<linalg::FillOp>(loc, zeroF32, inputPack);
 
-      Value end = b.create<arith::ConstantIndexOp>(loc, validElements);
-      Value offsetValue = b.create<arith::ConstantIndexOp>(loc, offset);
-      auto copyIn = b.create<scf::ForOp>(loc, zero, end, one);
-      b.setInsertionPointToStart(copyIn.getBody());
-      Value i = copyIn.getInductionVar();
-      Value linear = b.create<arith::AddIOp>(loc, offsetValue, i);
-      SmallVector<Value, 4> outputIndices(outputTy.getRank());
-      Value remaining = linear;
-      for (int64_t dim = outputTy.getRank() - 1; dim >= 0; --dim) {
-        Value extent = b.create<arith::ConstantIndexOp>(loc, outputShape[dim]);
-        outputIndices[dim] = b.create<arith::RemUIOp>(loc, remaining, extent);
-        remaining = b.create<arith::DivUIOp>(loc, remaining, extent);
-      }
-      SmallVector<Value, 4> indices(outputTy.getRank());
-      if (nchwToNhwc) {
-        indices[0] = outputIndices[0];
-        indices[1] = outputIndices[3];
-        indices[2] = outputIndices[1];
-        indices[3] = outputIndices[2];
-      } else {
-        indices = outputIndices;
-      }
-      Value value = b.create<memref::LoadOp>(loc, op.getInput(), indices);
-      Value packRow = b.create<arith::DivUIOp>(loc, i, four);
-      Value packColumn = b.create<arith::RemUIOp>(loc, i, four);
-      b.create<memref::StoreOp>(loc, value, inputPack,
-                                ValueRange{packRow, packColumn});
-      b.setInsertionPointAfter(copyIn);
-
-      inputBank = mvinBank(b, loc, inputPack, inputBank, inputRows);
-      outputBank = b.create<BankQuantF32ToI8Op>(
-          loc, outputBank.getType(), inputBank, outputBank,
-          createI64Const(b, loc, inputRows), scale);
-      outputBank = mvoutBank(b, loc, outputPack, outputBank, outputRows);
-      b.create<FenceOp>(loc);
-
-      auto copyOut = b.create<scf::ForOp>(loc, zero, end, one);
-      b.setInsertionPointToStart(copyOut.getBody());
-      i = copyOut.getInductionVar();
-      linear = b.create<arith::AddIOp>(loc, offsetValue, i);
-      remaining = linear;
-      for (int64_t dim = outputTy.getRank() - 1; dim >= 0; --dim) {
-        Value extent = b.create<arith::ConstantIndexOp>(loc, outputShape[dim]);
-        indices[dim] = b.create<arith::RemUIOp>(loc, remaining, extent);
-        remaining = b.create<arith::DivUIOp>(loc, remaining, extent);
-      }
-      packRow = b.create<arith::DivUIOp>(loc, i, sixteen);
-      packColumn = b.create<arith::RemUIOp>(loc, i, sixteen);
-      value = b.create<memref::LoadOp>(loc, outputPack,
-                                       ValueRange{packRow, packColumn});
-      b.create<memref::StoreOp>(loc, value, op.getOutput(), indices);
-      b.setInsertionPointAfter(copyOut);
-      b.create<memref::DeallocOp>(loc, inputPack);
-      b.create<memref::DeallocOp>(loc, outputPack);
+    auto copyIn = b.create<scf::ForOp>(loc, zero, chunkSize, one);
+    b.setInsertionPointToStart(copyIn.getBody());
+    Value i = copyIn.getInductionVar();
+    Value linear = b.create<arith::AddIOp>(loc, offset, i);
+    auto inputValid = b.create<scf::IfOp>(
+        loc,
+        b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, linear,
+                                elementCount),
+        false);
+    b.setInsertionPointToStart(&inputValid.getThenRegion().front());
+    SmallVector<Value, 4> outputIndices(outputTy.getRank());
+    Value remaining = linear;
+    for (int64_t dim = outputTy.getRank() - 1; dim >= 0; --dim) {
+      Value extent = b.create<arith::ConstantIndexOp>(loc, outputShape[dim]);
+      outputIndices[dim] = b.create<arith::RemUIOp>(loc, remaining, extent);
+      remaining = b.create<arith::DivUIOp>(loc, remaining, extent);
     }
+    SmallVector<Value, 4> indices(outputTy.getRank());
+    if (nchwToNhwc) {
+      indices[0] = outputIndices[0];
+      indices[1] = outputIndices[3];
+      indices[2] = outputIndices[1];
+      indices[3] = outputIndices[2];
+    } else {
+      indices = outputIndices;
+    }
+    Value value = b.create<memref::LoadOp>(loc, op.getInput(), indices);
+    Value packRow = b.create<arith::DivUIOp>(loc, i, four);
+    Value packColumn = b.create<arith::RemUIOp>(loc, i, four);
+    b.create<memref::StoreOp>(loc, value, inputPack,
+                              ValueRange{packRow, packColumn});
+    b.setInsertionPointAfter(inputValid);
+    b.setInsertionPointAfter(copyIn);
+
+    Value inputNext =
+        mvinBank(b, loc, inputPack, bankStates[0], target.bankDepth);
+    Value outputNext = b.create<BankQuantF32ToI8Op>(
+        loc, bankStates[1].getType(), inputNext, bankStates[1],
+        createI64Const(b, loc, target.bankDepth), scale);
+    outputNext =
+        mvoutBank(b, loc, outputPack, outputNext, target.bankDepth / 4);
+    b.create<FenceOp>(loc);
+
+    auto copyOut = b.create<scf::ForOp>(loc, zero, chunkSize, one);
+    b.setInsertionPointToStart(copyOut.getBody());
+    i = copyOut.getInductionVar();
+    linear = b.create<arith::AddIOp>(loc, offset, i);
+    auto outputValid = b.create<scf::IfOp>(
+        loc,
+        b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, linear,
+                                elementCount),
+        false);
+    b.setInsertionPointToStart(&outputValid.getThenRegion().front());
+    remaining = linear;
+    for (int64_t dim = outputTy.getRank() - 1; dim >= 0; --dim) {
+      Value extent = b.create<arith::ConstantIndexOp>(loc, outputShape[dim]);
+      indices[dim] = b.create<arith::RemUIOp>(loc, remaining, extent);
+      remaining = b.create<arith::DivUIOp>(loc, remaining, extent);
+    }
+    packRow = b.create<arith::DivUIOp>(loc, i, sixteen);
+    packColumn = b.create<arith::RemUIOp>(loc, i, sixteen);
+    value = b.create<memref::LoadOp>(loc, outputPack,
+                                     ValueRange{packRow, packColumn});
+    b.create<memref::StoreOp>(loc, value, op.getOutput(), indices);
+    b.setInsertionPointAfter(outputValid);
+    b.setInsertionPointAfter(copyOut);
+    b.create<memref::DeallocOp>(loc, inputPack);
+    b.create<memref::DeallocOp>(loc, outputPack);
+    b.create<scf::YieldOp>(loc, ValueRange{inputNext, outputNext});
+    b.setInsertionPointAfter(chunkLoop);
+    inputBank = chunkLoop.getResult(0);
+    outputBank = chunkLoop.getResult(1);
 
     releaseBank(b, loc, inputBank);
     releaseBank(b, loc, outputBank);

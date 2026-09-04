@@ -179,7 +179,10 @@
         "input port name": "D",
         "input port polarity": "active high",
         "output port name": "Q",
-        "output port polarity": "active high"
+        "output port polarity": "active high",
+        "mask port name": "BWEN",
+        "mask port polarity": "active low",
+        "mask granularity": 1
       }
     ]
   },

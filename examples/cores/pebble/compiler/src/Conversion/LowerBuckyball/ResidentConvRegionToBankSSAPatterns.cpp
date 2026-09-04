@@ -449,6 +449,12 @@ public:
       int64_t panelCount;
     };
 
+    int64_t cachedStage = -1;
+    TileBanks *cachedTile = nullptr;
+    Value cachedY;
+    Value cachedX;
+    int64_t cachedWidth = 0;
+
     auto allocateTile = [&](int64_t panelCount, int64_t panelRows, Value fill) {
       TileBanks tile{{}, panelRows, target.bankDepth / panelRows, panelCount};
       if (panelRows <= 0 || panelRows > target.bankDepth ||
@@ -488,6 +494,49 @@ public:
           destinationBase + (height - 1) * destinationStride + width >
               destination.panelRows)
         return stage.op->emitError("invalid resident tile request");
+
+      if (cachedStage == stageIndex) {
+        if (!cachedTile || cachedTile->panelCount != panelCount)
+          return stage.op->emitError("cached residual tile layout mismatch");
+        SmallVector<Value> destinationStates(destination.banks.begin(),
+                                             destination.banks.end());
+        for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
+          int64_t sourceBank = localPanel / cachedTile->panelsPerBank;
+          int64_t sourceSlot = localPanel % cachedTile->panelsPerBank;
+          int64_t destinationBank = localPanel / destination.panelsPerBank;
+          int64_t destinationSlot = localPanel % destination.panelsPerBank;
+          Value sourceBase = b.create<arith::IndexCastOp>(
+              loc, b.getI64Type(),
+              b.create<arith::AddIOp>(
+                  loc,
+                  b.create<arith::ConstantIndexOp>(
+                      loc, sourceSlot * cachedTile->panelRows),
+                  b.create<arith::AddIOp>(
+                      loc,
+                      b.create<arith::MulIOp>(
+                          loc, b.create<arith::SubIOp>(loc, y0, cachedY),
+                          b.create<arith::ConstantIndexOp>(loc, cachedWidth)),
+                      b.create<arith::SubIOp>(loc, x0, cachedX))));
+          destinationStates[destinationBank] =
+              b.create<BankMaxPoolOp>(
+                   loc, destinationStates[destinationBank].getType(),
+                   cachedTile->banks[sourceBank],
+                   destinationStates[destinationBank],
+                   createI64Const(b, loc, height * width),
+                   b.getI64IntegerAttr(cachedWidth), b.getI64IntegerAttr(width),
+                   b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                   b.getI64IntegerAttr(0), sourceBase,
+                   createI64Const(b, loc,
+                                  destinationSlot * destination.panelRows +
+                                      destinationBase),
+                   createI64Const(b, loc, destinationStride),
+                   b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
+                  .getOutBankOut();
+        }
+        destination.banks.assign(destinationStates.begin(),
+                                 destinationStates.end());
+        return success();
+      }
 
       if (materialized.contains(stageIndex)) {
         SmallVector<Value> packs;
@@ -574,49 +623,83 @@ public:
       }
 
       auto maskInvalidOutput = [&]() {
-        for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
-          int64_t bankIndex = localPanel / destination.panelsPerBank;
-          int64_t bankSlot = localPanel % destination.panelsPerBank;
-          for (int64_t localY = 0; localY < height; ++localY) {
-            for (int64_t localX = 0; localX < width; ++localX) {
-              Value globalY = b.create<arith::AddIOp>(
-                  loc, y0, b.create<arith::ConstantIndexOp>(loc, localY));
-              Value globalX = b.create<arith::AddIOp>(
-                  loc, x0, b.create<arith::ConstantIndexOp>(loc, localX));
-              Value yInvalid = b.create<arith::OrIOp>(
+        for (size_t bankIndex = 0; bankIndex < destination.banks.size();
+             ++bankIndex) {
+          int64_t panelBegin = bankIndex * destination.panelsPerBank;
+          int64_t panelEnd = std::min<int64_t>(
+              panelCount, panelBegin + destination.panelsPerBank);
+          auto panelLoop = b.create<scf::ForOp>(
+              loc, b.create<arith::ConstantIndexOp>(loc, panelBegin),
+              b.create<arith::ConstantIndexOp>(loc, panelEnd), one,
+              ValueRange{destination.banks[bankIndex]});
+          b.setInsertionPointToStart(panelLoop.getBody());
+          Value localPanel = panelLoop.getInductionVar();
+          Value panelState = panelLoop.getRegionIterArgs().front();
+          auto yLoop = b.create<scf::ForOp>(
+              loc, zero, b.create<arith::ConstantIndexOp>(loc, height), one,
+              ValueRange{panelState});
+          b.setInsertionPointToStart(yLoop.getBody());
+          Value localY = yLoop.getInductionVar();
+          Value yState = yLoop.getRegionIterArgs().front();
+          auto xLoop = b.create<scf::ForOp>(
+              loc, zero, b.create<arith::ConstantIndexOp>(loc, width), one,
+              ValueRange{yState});
+          b.setInsertionPointToStart(xLoop.getBody());
+          Value localX = xLoop.getInductionVar();
+          Value xState = xLoop.getRegionIterArgs().front();
+          Value globalY = b.create<arith::AddIOp>(loc, y0, localY);
+          Value globalX = b.create<arith::AddIOp>(loc, x0, localX);
+          Value yInvalid = b.create<arith::OrIOp>(
+              loc,
+              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, globalY,
+                                      zero),
+              b.create<arith::CmpIOp>(
+                  loc, arith::CmpIPredicate::sge, globalY,
+                  b.create<arith::ConstantIndexOp>(loc, stage.outputHeight)));
+          Value xInvalid = b.create<arith::OrIOp>(
+              loc,
+              b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, globalX,
+                                      zero),
+              b.create<arith::CmpIOp>(
+                  loc, arith::CmpIPredicate::sge, globalX,
+                  b.create<arith::ConstantIndexOp>(loc, stage.outputWidth)));
+          auto invalid = b.create<scf::IfOp>(
+              loc, b.create<arith::OrIOp>(loc, yInvalid, xInvalid), false);
+          b.setInsertionPointToStart(&invalid.getThenRegion().front());
+          Value bankSlot = b.create<arith::SubIOp>(
+              loc, localPanel,
+              b.create<arith::ConstantIndexOp>(loc, panelBegin));
+          Value outputBase = b.create<arith::IndexCastOp>(
+              loc, b.getI64Type(),
+              b.create<arith::AddIOp>(
                   loc,
-                  b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
-                                          globalY, zero),
-                  b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge,
-                                          globalY,
-                                          b.create<arith::ConstantIndexOp>(
-                                              loc, stage.outputHeight)));
-              Value xInvalid = b.create<arith::OrIOp>(
-                  loc,
-                  b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
-                                          globalX, zero),
-                  b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge,
-                                          globalX,
-                                          b.create<arith::ConstantIndexOp>(
-                                              loc, stage.outputWidth)));
-              auto invalid = b.create<scf::IfOp>(
-                  loc, b.create<arith::OrIOp>(loc, yInvalid, xInvalid), false);
-              b.setInsertionPointToStart(&invalid.getThenRegion().front());
-              b.create<BankMaxPoolOp>(
-                  loc, destination.banks[bankIndex].getType(), zeroBank,
-                  destination.banks[bankIndex], createI64Const(b, loc, 1),
-                  b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                  b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                  b.getI64IntegerAttr(0), createI64Const(b, loc, 0),
-                  createI64Const(b, loc,
-                                 bankSlot * destination.panelRows +
-                                     destinationBase +
-                                     localY * destinationStride + localX),
-                  createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
-                  b.getI64IntegerAttr(0));
-              b.setInsertionPointAfter(invalid);
-            }
-          }
+                  b.create<arith::AddIOp>(
+                      loc,
+                      b.create<arith::MulIOp>(loc, bankSlot,
+                                              b.create<arith::ConstantIndexOp>(
+                                                  loc, destination.panelRows)),
+                      b.create<arith::ConstantIndexOp>(loc, destinationBase)),
+                  b.create<arith::AddIOp>(
+                      loc,
+                      b.create<arith::MulIOp>(loc, localY,
+                                              b.create<arith::ConstantIndexOp>(
+                                                  loc, destinationStride)),
+                      localX)));
+          b.create<BankMaxPoolOp>(
+              loc, xState.getType(), zeroBank, xState,
+              createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
+              b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+              b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
+              createI64Const(b, loc, 0), outputBase, createI64Const(b, loc, 1),
+              b.getI64IntegerAttr(0), b.getI64IntegerAttr(0));
+          b.setInsertionPointAfter(invalid);
+          b.create<scf::YieldOp>(loc, xState);
+          b.setInsertionPointAfter(xLoop);
+          b.create<scf::YieldOp>(loc, xLoop.getResult(0));
+          b.setInsertionPointAfter(yLoop);
+          b.create<scf::YieldOp>(loc, yLoop.getResult(0));
+          b.setInsertionPointAfter(panelLoop);
+          destination.banks[bankIndex] = panelLoop.getResult(0);
         }
       };
 
@@ -627,6 +710,52 @@ public:
         Value rhsRatio = b.create<arith::ConstantOp>(
             loc, b.getF32Type(),
             b.getF32FloatAttr(stage.rhsScale / stage.outputScale));
+
+        int64_t residualStage = producer.lookup(stage.rhs);
+        int64_t branchStage = producer.lookup(stage.input);
+        Value residualY = y0;
+        Value residualX = x0;
+        int64_t residualHeight = height;
+        int64_t residualWidth = width;
+        for (int64_t cursor = branchStage; cursor != residualStage;) {
+          Stage &branch = stages[cursor];
+          if (branch.add || branch.average ||
+              branch.input == kernel.getInput() ||
+              !producer.contains(branch.input))
+            return stage.op->emitError(
+                "INT8 Add main branch must be a linear Conv chain from rhs");
+          residualY = b.create<arith::SubIOp>(
+              loc,
+              b.create<arith::MulIOp>(
+                  loc, residualY,
+                  b.create<arith::ConstantIndexOp>(loc, branch.stride)),
+              b.create<arith::ConstantIndexOp>(loc, branch.padding));
+          residualX = b.create<arith::SubIOp>(
+              loc,
+              b.create<arith::MulIOp>(
+                  loc, residualX,
+                  b.create<arith::ConstantIndexOp>(loc, branch.stride)),
+              b.create<arith::ConstantIndexOp>(loc, branch.padding));
+          residualHeight = (residualHeight - 1) * branch.stride + branch.kernel;
+          residualWidth = (residualWidth - 1) * branch.stride + branch.kernel;
+          int64_t next = producer.lookup(branch.input);
+          if (next >= cursor)
+            return stage.op->emitError("INT8 Add branch is not acyclic");
+          cursor = next;
+        }
+        TileBanks residual =
+            allocateTile(panelCount, residualHeight * residualWidth, zeroI8);
+        if (residual.banks.empty() ||
+            failed(emitInto(residualStage, residualY, residualX, residualHeight,
+                            residualWidth, firstPanel, panelCount, residual, 0,
+                            residualWidth)))
+          return failure();
+        cachedStage = residualStage;
+        cachedTile = &residual;
+        cachedY = residualY;
+        cachedX = residualX;
+        cachedWidth = residualWidth;
+
         TileBanks lhs = allocateTile(panelCount, destination.panelRows, zeroI8);
         if (failed(emitInto(producer.lookup(stage.input), y0, x0, height, width,
                             firstPanel, panelCount, lhs, destinationBase,
@@ -637,6 +766,8 @@ public:
                             firstPanel, panelCount, rhs, destinationBase,
                             destinationStride)))
           return failure();
+        cachedStage = -1;
+        cachedTile = nullptr;
         if (lhs.banks.size() != destination.banks.size() ||
             rhs.banks.size() != destination.banks.size())
           return stage.op->emitError("INT8 Add bank layouts do not match");
@@ -649,6 +780,7 @@ public:
         }
         releaseTile(lhs);
         releaseTile(rhs);
+        releaseTile(residual);
         maskInvalidOutput();
         return success();
       }
@@ -666,10 +798,19 @@ public:
                             firstPanel, panelCount, gate, 0, 1)))
           return stage.op->emitError("INT8 Mul gate must fit one bank");
 
-        for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
-          Value panel = b.create<arith::AddIOp>(
-              loc, firstPanel,
-              b.create<arith::ConstantIndexOp>(loc, localPanel));
+        for (size_t destinationBank = 0;
+             destinationBank < destination.banks.size(); ++destinationBank) {
+          int64_t panelBegin = destinationBank * destination.panelsPerBank;
+          int64_t panelEnd = std::min<int64_t>(
+              panelCount, panelBegin + destination.panelsPerBank);
+          auto panelLoop = b.create<scf::ForOp>(
+              loc, b.create<arith::ConstantIndexOp>(loc, panelBegin),
+              b.create<arith::ConstantIndexOp>(loc, panelEnd), one,
+              ValueRange{destination.banks[destinationBank]});
+          b.setInsertionPointToStart(panelLoop.getBody());
+          Value localPanel = panelLoop.getInductionVar();
+          Value destinationState = panelLoop.getRegionIterArgs().front();
+          Value panel = b.create<arith::AddIOp>(loc, firstPanel, localPanel);
           TileBanks input = allocateTile(1, height * width, zeroI8);
           if (failed(emitInto(producer.lookup(stage.input), y0, x0, height,
                               width, panel, 1, input, 0, width)))
@@ -679,27 +820,36 @@ public:
                             loc, multiplied.getType(), gate.banks.front(),
                             input.banks.front(), multiplied,
                             createI64Const(b, loc, height * width), ratio,
-                            createI64Const(b, loc, localPanel))
+                            b.create<arith::IndexCastOp>(loc, b.getI64Type(),
+                                                         localPanel))
                            .getOutputBankOut();
 
-          int64_t destinationBank = localPanel / destination.panelsPerBank;
-          int64_t destinationSlot = localPanel % destination.panelsPerBank;
-          destination.banks[destinationBank] =
+          Value destinationSlot = b.create<arith::SubIOp>(
+              loc, localPanel,
+              b.create<arith::ConstantIndexOp>(loc, panelBegin));
+          Value outputBase = b.create<arith::IndexCastOp>(
+              loc, b.getI64Type(),
+              b.create<arith::AddIOp>(
+                  loc,
+                  b.create<arith::MulIOp>(loc, destinationSlot,
+                                          b.create<arith::ConstantIndexOp>(
+                                              loc, destination.panelRows)),
+                  b.create<arith::ConstantIndexOp>(loc, destinationBase)));
+          Value destinationNext =
               b.create<BankMaxPoolOp>(
-                   loc, destination.banks[destinationBank].getType(),
-                   multiplied, destination.banks[destinationBank],
-                   createI64Const(b, loc, height * width),
+                   loc, destinationState.getType(), multiplied,
+                   destinationState, createI64Const(b, loc, height * width),
                    b.getI64IntegerAttr(width), b.getI64IntegerAttr(width),
                    b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
                    b.getI64IntegerAttr(0), createI64Const(b, loc, 0),
-                   createI64Const(b, loc,
-                                  destinationSlot * destination.panelRows +
-                                      destinationBase),
-                   createI64Const(b, loc, destinationStride),
+                   outputBase, createI64Const(b, loc, destinationStride),
                    b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                   .getOutBankOut();
           releaseTile(input);
           releaseBank(b, loc, multiplied);
+          b.create<scf::YieldOp>(loc, destinationNext);
+          b.setInsertionPointAfter(panelLoop);
+          destination.banks[destinationBank] = panelLoop.getResult(0);
         }
         releaseTile(gate);
         maskInvalidOutput();
@@ -865,8 +1015,9 @@ public:
                                     ? target.bankDepth / inputPanelRows
                                     : 0;
         int64_t inputBanks =
-            panelsPerBank ? (inputPanels + panelsPerBank - 1) / panelsPerBank
-                          : target.bankNum + 1;
+            stage.depthwise ? (panelsPerBank ? 1 : target.bankNum + 1)
+            : panelsPerBank ? (inputPanels + panelsPerBank - 1) / panelsPerBank
+                            : target.bankNum + 1;
         int64_t reservedBanks = stage.input == kernel.getInput() ? 6 : 11;
         if (stage.activation == 2)
           reservedBanks += 2;
@@ -979,7 +1130,7 @@ public:
         Value bank = allocBank(b, loc, 1, 1);
         source.banks.push_back(mvinBank(b, loc, pack, bank, target.bankDepth));
         b.create<memref::DeallocOp>(loc, pack);
-      } else {
+      } else if (!stage.depthwise) {
         source = allocateTile(inputPanelCount, inputSide * inputSide,
                               stage.pool ? minI8 : zeroI8);
         if (failed(
@@ -1029,13 +1180,20 @@ public:
         SmallVector<Value> destinationStates(destination.banks.begin(),
                                              destination.banks.end());
         for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
-          int64_t sourceBank = localPanel / source.panelsPerBank;
-          int64_t sourceSlot = localPanel % source.panelsPerBank;
           int64_t destinationBank = localPanel / destination.panelsPerBank;
           int64_t destinationSlot = localPanel % destination.panelsPerBank;
           Value outputPanel = b.create<arith::AddIOp>(
               loc, firstPanel,
               b.create<arith::ConstantIndexOp>(loc, localPanel));
+          TileBanks panelSource =
+              allocateTile(1, inputSide * inputSide, zeroI8);
+          if (panelSource.banks.size() != 1)
+            return stage.op->emitError(
+                "Depthwise Conv input panel must fit one bank");
+          if (failed(emitInto(producer.lookup(stage.input), sourceY, sourceX,
+                              inputSide, inputSide, outputPanel, 1, panelSource,
+                              0, inputSide)))
+            return failure();
           SmallVector<OpFoldResult> parameterOffsets = {
               outputPanel, b.getIndexAttr(0), b.getIndexAttr(0)};
           SmallVector<OpFoldResult> parameterSizes = {
@@ -1062,64 +1220,77 @@ public:
           Value patchState = allocBank(b, loc, 1, 1);
           Value weightState = allocBank(b, loc, 1, 1);
           Value resultState = allocBank(b, loc, 1, 1);
-          for (int64_t lane = 0; lane < kTile; ++lane) {
-            patchState =
-                b.create<BankIm2colOp>(
-                     loc, patchState.getType(), source.banks[sourceBank],
-                     patchState, createI64Const(b, loc, inputSide),
-                     createI64Const(b, loc, stage.kernel),
-                     createI64Const(b, loc, stage.stride),
-                     createI64Const(b, loc, 0),
-                     createI64Const(b, loc, sourceSlot * source.panelRows),
-                     createI64Const(b, loc, lane), b.getI64IntegerAttr(0),
-                     b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
-                     b.getI64IntegerAttr(side * side))
-                    .getOutBankOut();
+          auto laneLoop = b.create<scf::ForOp>(
+              loc, zero, b.create<arith::ConstantIndexOp>(loc, kTile), one,
+              ValueRange{patchState, weightState, resultState});
+          b.setInsertionPointToStart(laneLoop.getBody());
+          Value lane = laneLoop.getInductionVar();
+          ValueRange laneStates = laneLoop.getRegionIterArgs();
+          Value laneI64 =
+              b.create<arith::IndexCastOp>(loc, b.getI64Type(), lane);
+          Value patchNext =
+              b.create<BankIm2colOp>(
+                   loc, laneStates[0].getType(), panelSource.banks.front(),
+                   laneStates[0], createI64Const(b, loc, inputSide),
+                   createI64Const(b, loc, stage.kernel),
+                   createI64Const(b, loc, stage.stride),
+                   createI64Const(b, loc, 0), createI64Const(b, loc, 0),
+                   laneI64, b.getI64IntegerAttr(0), b.getI64IntegerAttr(0),
+                   b.getI64IntegerAttr(0), b.getI64IntegerAttr(side * side))
+                  .getOutBankOut();
 
-            Value weightPack = b.create<memref::AllocOp>(
-                loc, MemRefType::get({paddedK, kTile}, b.getI8Type()));
-            b.create<linalg::FillOp>(loc, zeroI8, weightPack);
-            Value outputChannel = b.create<arith::AddIOp>(
-                loc,
-                b.create<arith::MulIOp>(
-                    loc, outputPanel,
-                    b.create<arith::ConstantIndexOp>(loc, kTile)),
-                b.create<arith::ConstantIndexOp>(loc, lane));
-            auto validChannel = b.create<scf::IfOp>(
-                loc,
-                b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
-                                        outputChannel,
-                                        b.create<arith::ConstantIndexOp>(
-                                            loc, stage.outputChannels)),
-                false);
-            b.setInsertionPointToStart(&validChannel.getThenRegion().front());
-            for (int64_t ky = 0; ky < stage.kernel; ++ky) {
-              for (int64_t kx = 0; kx < stage.kernel; ++kx) {
-                Value weight = b.create<memref::LoadOp>(
-                    loc, stage.weight,
-                    ValueRange{b.create<arith::ConstantIndexOp>(loc, ky),
-                               b.create<arith::ConstantIndexOp>(loc, kx),
-                               outputChannel, zero});
-                b.create<memref::StoreOp>(
-                    loc, weight, weightPack,
-                    ValueRange{b.create<arith::ConstantIndexOp>(
-                                   loc, ky * stage.kernel + kx),
-                               b.create<arith::ConstantIndexOp>(loc, lane)});
-              }
+          Value weightPack = b.create<memref::AllocOp>(
+              loc, MemRefType::get({paddedK, kTile}, b.getI8Type()));
+          b.create<linalg::FillOp>(loc, zeroI8, weightPack);
+          Value outputChannel = b.create<arith::AddIOp>(
+              loc,
+              b.create<arith::MulIOp>(
+                  loc, outputPanel,
+                  b.create<arith::ConstantIndexOp>(loc, kTile)),
+              lane);
+          auto validChannel = b.create<scf::IfOp>(
+              loc,
+              b.create<arith::CmpIOp>(
+                  loc, arith::CmpIPredicate::slt, outputChannel,
+                  b.create<arith::ConstantIndexOp>(loc, stage.outputChannels)),
+              false);
+          b.setInsertionPointToStart(&validChannel.getThenRegion().front());
+          for (int64_t ky = 0; ky < stage.kernel; ++ky) {
+            for (int64_t kx = 0; kx < stage.kernel; ++kx) {
+              Value weight = b.create<memref::LoadOp>(
+                  loc, stage.weight,
+                  ValueRange{b.create<arith::ConstantIndexOp>(loc, ky),
+                             b.create<arith::ConstantIndexOp>(loc, kx),
+                             outputChannel, zero});
+              b.create<memref::StoreOp>(
+                  loc, weight, weightPack,
+                  ValueRange{b.create<arith::ConstantIndexOp>(
+                                 loc, ky * stage.kernel + kx),
+                             lane});
             }
-            b.setInsertionPointAfter(validChannel);
-            weightState = mvinBank(b, loc, weightPack, weightState, paddedK);
-            b.create<memref::DeallocOp>(loc, weightPack);
-            resultState =
-                b.create<BankSMatMulOp>(
-                     loc, resultState.getType(), patchState, weightState,
-                     resultState,
-                     createI64ConstU(b, loc, matrixRs2(kTile, kTile, paddedK)),
-                     createI1Const(b, loc, lane == 0),
-                     createI1Const(b, loc, lane + 1 == kTile),
-                     createI64Const(b, loc, 0))
-                    .getWrBankOut();
           }
+          b.setInsertionPointAfter(validChannel);
+          Value weightNext =
+              mvinBank(b, loc, weightPack, laneStates[1], paddedK);
+          b.create<memref::DeallocOp>(loc, weightPack);
+          Value first = b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
+                                                lane, zero);
+          Value last = b.create<arith::CmpIOp>(
+              loc, arith::CmpIPredicate::eq, lane,
+              b.create<arith::ConstantIndexOp>(loc, kTile - 1));
+          Value resultNext =
+              b.create<BankSMatMulOp>(
+                   loc, laneStates[2].getType(), patchNext, weightNext,
+                   laneStates[2],
+                   createI64ConstU(b, loc, matrixRs2(kTile, kTile, paddedK)),
+                   first, last, createI64Const(b, loc, 0))
+                  .getWrBankOut();
+          b.create<scf::YieldOp>(loc,
+                                 ValueRange{patchNext, weightNext, resultNext});
+          b.setInsertionPointAfter(laneLoop);
+          patchState = laneLoop.getResult(0);
+          weightState = laneLoop.getResult(1);
+          resultState = laneLoop.getResult(2);
           releaseBank(b, loc, patchState);
           releaseBank(b, loc, weightState);
 
@@ -1161,12 +1332,12 @@ public:
           releaseBank(b, loc, quantizedState);
           if (transformed)
             releaseBank(b, loc, transformed);
+          releaseTile(panelSource);
         }
         destination.banks.assign(destinationStates.begin(),
                                  destinationStates.end());
         if (lutLoaded)
           releaseBank(b, loc, lutLoaded);
-        releaseTile(source);
         maskInvalidOutput();
         return success();
       }
@@ -1368,15 +1539,25 @@ public:
           b.create<arith::ConstantIndexOp>(loc, side));
       b.setInsertionPointToStart(xLoop.getBody());
       Value x = xLoop.getInductionVar();
-      TileBanks output = allocateTile(panelCount, side * side, zeroI8);
-      if (failed(emitInto(stageIndex, y, x, side, side, zero, panelCount,
-                          output, 0, side)))
+      scf::ForOp depthwisePanelLoop;
+      Value firstPanel = zero;
+      int64_t requestedPanels = panelCount;
+      if (stage.depthwise) {
+        depthwisePanelLoop = b.create<scf::ForOp>(
+            loc, zero, b.create<arith::ConstantIndexOp>(loc, panelCount), one);
+        b.setInsertionPointToStart(depthwisePanelLoop.getBody());
+        firstPanel = depthwisePanelLoop.getInductionVar();
+        requestedPanels = 1;
+      }
+      TileBanks output = allocateTile(requestedPanels, side * side, zeroI8);
+      if (failed(emitInto(stageIndex, y, x, side, side, firstPanel,
+                          requestedPanels, output, 0, side)))
         return failure();
 
       for (size_t bankIndex = 0; bankIndex < output.banks.size(); ++bankIndex) {
         int64_t panelBegin = bankIndex * output.panelsPerBank;
-        int64_t panelEnd =
-            std::min<int64_t>(panelCount, panelBegin + output.panelsPerBank);
+        int64_t panelEnd = std::min<int64_t>(requestedPanels,
+                                             panelBegin + output.panelsPerBank);
         Value pack = b.create<memref::AllocOp>(
             loc, MemRefType::get({target.bankDepth, kTile}, b.getI8Type()));
         output.banks[bankIndex] =
@@ -1387,9 +1568,11 @@ public:
             loc, b.create<arith::ConstantIndexOp>(loc, panelBegin),
             b.create<arith::ConstantIndexOp>(loc, panelEnd), one);
         b.setInsertionPointToStart(panelLoop.getBody());
-        Value panel = panelLoop.getInductionVar();
+        Value panelInRequest = panelLoop.getInductionVar();
+        Value panel = b.create<arith::AddIOp>(loc, firstPanel, panelInRequest);
         Value localPanel = b.create<arith::SubIOp>(
-            loc, panel, b.create<arith::ConstantIndexOp>(loc, panelBegin));
+            loc, panelInRequest,
+            b.create<arith::ConstantIndexOp>(loc, panelBegin));
         auto localYLoop = b.create<scf::ForOp>(
             loc, zero, b.create<arith::ConstantIndexOp>(loc, side), one);
         b.setInsertionPointToStart(localYLoop.getBody());
@@ -1447,6 +1630,8 @@ public:
         b.create<memref::DeallocOp>(loc, pack);
       }
       releaseTile(output);
+      if (depthwisePanelLoop)
+        b.setInsertionPointAfter(depthwisePanelLoop);
       b.setInsertionPointAfter(xLoop);
       b.setInsertionPointAfter(yLoop);
       materialized.insert(stageIndex);
