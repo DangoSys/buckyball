@@ -161,6 +161,45 @@ def geoms_from_macros(
     return geoms
 
 
+def check_bitwrite_contract(geoms: list[SramGeom], mdf: Path, macros_v: Path, sram_table: dict[str, SramGeom]) -> None:
+    raw = json.loads(mdf.read_text())
+    if not isinstance(raw, list):
+        raise ValueError(f"mdf must be a list: {mdf}")
+    by_name: dict[str, dict] = {}
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValueError(f"mdf entry must be object: {mdf}")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"mdf entry missing name: {mdf}")
+        if name in by_name:
+            raise ValueError(f"duplicate mdf name {name}: {mdf}")
+        by_name[name] = entry
+    for g in geoms:
+        if g.name not in by_name:
+            raise ValueError(f"sram leaf {g.name} missing from mdf: {mdf}")
+        ports = by_name[g.name].get("ports")
+        if not isinstance(ports, list) or len(ports) != 1:
+            raise ValueError(f"{g.name}: expected exactly 1 mdf port")
+        p = ports[0]
+        if not isinstance(p, dict):
+            raise ValueError(f"{g.name}: mdf port must be object")
+        mask_name = p.get("mask port name")
+        if g.bitwrite:
+            if mask_name != "BWEN":
+                raise ValueError(f"{g.name}: bitwrite requires mask port BWEN, got {mask_name!r}")
+            if p.get("mask port polarity") != "active low":
+                raise ValueError(f"{g.name}: BWEN polarity must be active low")
+            if p.get("mask granularity") != 1:
+                raise ValueError(f"{g.name}: BWEN mask granularity must be 1")
+        elif mask_name is not None:
+            raise ValueError(f"{g.name}: mask port {mask_name!r} but bitwrite is false")
+    used = {g.name for g in geoms}
+    for geom in sram_table.values():
+        if geom.bitwrite and geom.name not in used:
+            raise RuntimeError(f"bitwrite sram {geom.name} not instantiated in {macros_v}")
+
+
 def _leaf_paths(cache_dir: Path, name: str, corner: str) -> dict[str, str]:
     leaf = cache_dir / name
     return {
@@ -213,6 +252,7 @@ def generate_sram(
         sram_table=contract.sram_table,
         mdf=contract.sram_mdf,
     )
+    check_bitwrite_contract(geoms, contract.sram_mdf, verilog, contract.sram_table)
     ip_db = build_dir.parent / f"{build_dir.name}-ip-db"
     db_paths, corner_tag = generate_sram_dbs(
         geoms=geoms,

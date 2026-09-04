@@ -24,6 +24,7 @@ class SramGeom:
     words: int
     mux: int
     bits: int
+    bitwrite: bool = False
 
 
 @dataclass(frozen=True)
@@ -88,10 +89,15 @@ def get_tapeout_contract(bbdir: str | os.PathLike[str], chip: str, top: str | No
     with (root / "config.toml").open("rb") as f:
         s = tomllib.load(f)["tapeout"]
 
-    sram_table = {
-        row["name"]: SramGeom(row["name"], row["words"], row["mux"], row["bits"])
-        for row in s["sram"]
-    }
+    sram_table = {}
+    for row in s["sram"]:
+        name = row["name"]
+        if name in sram_table:
+            raise ValueError(f"duplicate tapeout.sram name {name}")
+        bitwrite = row["bitwrite"] if "bitwrite" in row else False
+        if not isinstance(bitwrite, bool):
+            raise ValueError(f"tapeout.sram {name}: bitwrite must be bool, got {bitwrite!r}")
+        sram_table[name] = SramGeom(name, row["words"], row["mux"], row["bits"], bitwrite)
 
     pw = s.get("power_workload")
     return TapeoutContract(
