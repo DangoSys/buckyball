@@ -64,6 +64,7 @@ public:
       float outputScale;
       bool pool;
       bool add;
+      bool multiply;
       bool average;
       bool depthwise;
     };
@@ -236,11 +237,11 @@ public:
         if (!lhs || !rhs || !output || !lhs.hasStaticShape() ||
             !rhs.hasStaticShape() || !output.hasStaticShape() ||
             lhs.getRank() != 4 || rhs != lhs || output != lhs ||
-            lhs.getShape()[0] != 1 || lhs.getShape()[3] % kTile != 0 ||
-            !lhs.getElementType().isInteger(8) || add.getActivation() < 0 ||
-            add.getActivation() > 1 || !std::isfinite(lhsScale) ||
-            !std::isfinite(rhsScale) || !std::isfinite(outputScale) ||
-            lhsScale <= 0.0f || rhsScale <= 0.0f || outputScale <= 0.0f)
+            lhs.getShape()[0] != 1 || !lhs.getElementType().isInteger(8) ||
+            add.getActivation() < 0 || add.getActivation() > 1 ||
+            !std::isfinite(lhsScale) || !std::isfinite(rhsScale) ||
+            !std::isfinite(outputScale) || lhsScale <= 0.0f ||
+            rhsScale <= 0.0f || outputScale <= 0.0f)
           return add.emitError("unsupported INT8 Add stage in resident region");
         auto shape = lhs.getShape();
         stage.input = add.getLhs();
@@ -255,6 +256,40 @@ public:
         stage.rhsScale = rhsScale;
         stage.outputScale = outputScale;
         stage.add = true;
+      } else if (auto multiply = dyn_cast<MegaInt8MulOp>(operation)) {
+        auto gate = dyn_cast<MemRefType>(multiply.getLhs().getType());
+        auto input = dyn_cast<MemRefType>(multiply.getRhs().getType());
+        auto output = dyn_cast<MemRefType>(multiply.getOutput().getType());
+        float gateScale = multiply.getLhsScale().convertToFloat();
+        float inputScale = multiply.getRhsScale().convertToFloat();
+        float outputScale = multiply.getOutputScale().convertToFloat();
+        if (!gate || !input || !output || !gate.hasStaticShape() ||
+            !input.hasStaticShape() || !output.hasStaticShape() ||
+            gate.getRank() != 4 || input.getRank() != 4 || output != input ||
+            gate.getShape()[0] != 1 || gate.getShape()[1] != 1 ||
+            gate.getShape()[2] != 1 || input.getShape()[0] != 1 ||
+            gate.getShape()[3] != input.getShape()[3] ||
+            input.getShape()[3] <= 0 || input.getShape()[3] > 64 * kTile ||
+            !gate.getElementType().isInteger(8) ||
+            !input.getElementType().isInteger(8) ||
+            multiply.getActivation() != 0 || !std::isfinite(gateScale) ||
+            !std::isfinite(inputScale) || !std::isfinite(outputScale) ||
+            gateScale <= 0.0f || inputScale <= 0.0f || outputScale <= 0.0f)
+          return multiply.emitError(
+              "INT8 Mul requires [1,1,1,C] gate and [1,H,W,C] input, "
+              "1 <= C <= 1024, and activation=0");
+        auto shape = input.getShape();
+        stage.input = multiply.getRhs();
+        stage.rhs = multiply.getLhs();
+        stage.output = multiply.getOutput();
+        stage.inputHeight = stage.outputHeight = shape[1];
+        stage.inputWidth = stage.outputWidth = shape[2];
+        stage.inputChannels = stage.outputChannels = shape[3];
+        stage.kernel = stage.stride = 1;
+        stage.lhsScale = gateScale;
+        stage.rhsScale = inputScale;
+        stage.outputScale = outputScale;
+        stage.multiply = true;
       } else if (auto average = dyn_cast<MegaGlobalAvgPoolOp>(operation)) {
         auto input = dyn_cast<MemRefType>(average.getInput().getType());
         auto output = dyn_cast<MemRefType>(average.getOutput().getType());
@@ -263,7 +298,7 @@ public:
         if (!input || !output || !input.hasStaticShape() ||
             !output.hasStaticShape() || input.getRank() != 4 ||
             output.getRank() != 4 || input.getShape()[0] != 1 ||
-            input.getShape()[3] % kTile != 0 ||
+            input.getShape()[3] <= 0 || input.getShape()[3] > 64 * kTile ||
             output.getShape() !=
                 ArrayRef<int64_t>({1, 1, 1, input.getShape()[3]}) ||
             !input.getElementType().isInteger(8) ||
@@ -287,7 +322,7 @@ public:
       } else {
         return operation.emitError(
             "resident Conv region supports Conv, Depthwise Conv, MaxPool, "
-            "INT8 Add, and GlobalAvgPool stages");
+            "INT8 Add, INT8 Mul, and GlobalAvgPool stages");
       }
 
       if (stage.input != kernel.getInput() && !producer.contains(stage.input))
@@ -339,7 +374,7 @@ public:
     DenseMap<Operation *, Value> packedScales;
     DenseMap<Operation *, Value> packedLuts;
     for (Stage &stage : stages) {
-      if (stage.pool || stage.add || stage.average)
+      if (stage.pool || stage.add || stage.multiply || stage.average)
         continue;
       int64_t outputPanels = (stage.outputChannels + kTile - 1) / kTile;
       Value biasPack = b.create<memref::AllocOp>(
@@ -618,113 +653,173 @@ public:
         return success();
       }
 
+      if (stage.multiply) {
+        if (height * width > target.bankDepth)
+          return stage.op->emitError("INT8 Mul tile exceeds one bank");
+        Value ratio = b.create<arith::ConstantOp>(
+            loc, b.getF32Type(),
+            b.getF32FloatAttr(stage.lhsScale * stage.rhsScale /
+                              stage.outputScale));
+        TileBanks gate = allocateTile(panelCount, 1, zeroI8);
+        if (gate.banks.size() != 1 ||
+            failed(emitInto(producer.lookup(stage.rhs), zero, zero, 1, 1,
+                            firstPanel, panelCount, gate, 0, 1)))
+          return stage.op->emitError("INT8 Mul gate must fit one bank");
+
+        for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
+          Value panel = b.create<arith::AddIOp>(
+              loc, firstPanel,
+              b.create<arith::ConstantIndexOp>(loc, localPanel));
+          TileBanks input = allocateTile(1, height * width, zeroI8);
+          if (failed(emitInto(producer.lookup(stage.input), y0, x0, height,
+                              width, panel, 1, input, 0, width)))
+            return failure();
+          Value multiplied = allocBank(b, loc, 1, 1);
+          multiplied = b.create<BankInt8MulOp>(
+                            loc, multiplied.getType(), gate.banks.front(),
+                            input.banks.front(), multiplied,
+                            createI64Const(b, loc, height * width), ratio,
+                            createI64Const(b, loc, localPanel))
+                           .getOutputBankOut();
+
+          int64_t destinationBank = localPanel / destination.panelsPerBank;
+          int64_t destinationSlot = localPanel % destination.panelsPerBank;
+          destination.banks[destinationBank] =
+              b.create<BankMaxPoolOp>(
+                   loc, destination.banks[destinationBank].getType(),
+                   multiplied, destination.banks[destinationBank],
+                   createI64Const(b, loc, height * width),
+                   b.getI64IntegerAttr(width), b.getI64IntegerAttr(width),
+                   b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                   b.getI64IntegerAttr(0), createI64Const(b, loc, 0),
+                   createI64Const(b, loc,
+                                  destinationSlot * destination.panelRows +
+                                      destinationBase),
+                   createI64Const(b, loc, destinationStride),
+                   b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
+                  .getOutBankOut();
+          releaseTile(input);
+          releaseBank(b, loc, multiplied);
+        }
+        releaseTile(gate);
+        maskInvalidOutput();
+        return success();
+      }
+
       if (stage.average) {
         if (height != 1 || width != 1 || destinationBase != 0 ||
-            destinationStride != 1)
+            destinationStride != 1 || destination.banks.size() != 1)
           return stage.op->emitError("invalid GlobalAvgPool output tile");
         int64_t inputRows = stage.inputHeight * stage.inputWidth;
-        if (inputRows > target.bankDepth)
-          return stage.op->emitError(
-              "GlobalAvgPool input panel exceeds one bank");
-        constexpr int64_t panelsPerGroup = 4;
-        if (panelCount % panelsPerGroup || destination.banks.size() != 1)
-          return stage.op->emitError("GlobalAvgPool requires groups of four "
-                                     "panels in one output bank");
-        auto groupLoop = b.create<scf::ForOp>(
-            loc, zero, b.create<arith::ConstantIndexOp>(loc, panelCount),
-            b.create<arith::ConstantIndexOp>(loc, panelsPerGroup),
-            ValueRange{destination.banks.front()});
-        b.setInsertionPointToStart(groupLoop.getBody());
-        Value group = groupLoop.getInductionVar();
-        Value destinationState = groupLoop.getRegionIterArgs().front();
-        Value groupFirstPanel = b.create<arith::AddIOp>(loc, firstPanel, group);
-        TileBanks source = allocateTile(panelsPerGroup, inputRows, zeroI8);
-        if (failed(emitInto(producer.lookup(stage.input), zero, zero,
-                            stage.inputHeight, stage.inputWidth,
-                            groupFirstPanel, panelsPerGroup, source, 0,
-                            stage.inputWidth)))
-          return failure();
-        for (int64_t localPanel = 0; localPanel < panelsPerGroup;
-             ++localPanel) {
-          Value onesPack = b.create<memref::AllocOp>(
-              loc, MemRefType::get({4, kTile}, b.getI8Type()));
-          Value biasPack = b.create<memref::AllocOp>(
-              loc, MemRefType::get({4, 4}, b.getI32Type()));
-          Value scalePack = b.create<memref::AllocOp>(
-              loc, MemRefType::get({4, 4}, b.getF32Type()));
-          b.create<linalg::FillOp>(loc, zeroI8, onesPack);
-          b.create<linalg::FillOp>(loc, zeroI32, biasPack);
-          Value ratio = b.create<arith::ConstantOp>(
-              loc, b.getF32Type(),
-              b.getF32FloatAttr(stage.lhsScale /
-                                (inputRows * stage.outputScale)));
-          b.create<linalg::FillOp>(loc, ratio, scalePack);
-          auto onesLoop = b.create<scf::ForOp>(
-              loc, zero, b.create<arith::ConstantIndexOp>(loc, inputRows), one);
-          b.setInsertionPointToStart(onesLoop.getBody());
-          Value index = onesLoop.getInductionVar();
-          Value sixteen = b.create<arith::ConstantIndexOp>(loc, kTile);
-          b.create<memref::StoreOp>(
-              loc,
-              b.create<arith::ConstantOp>(loc, b.getI8Type(),
-                                          b.getI8IntegerAttr(1)),
-              onesPack,
-              ValueRange{b.create<arith::DivUIOp>(loc, index, sixteen),
-                         b.create<arith::RemUIOp>(loc, index, sixteen)});
-          b.setInsertionPointAfter(onesLoop);
+        Value oneI8 = b.create<arith::ConstantOp>(loc, b.getI8Type(),
+                                                  b.getI8IntegerAttr(1));
+        Value ratio = b.create<arith::ConstantOp>(
+            loc, b.getF32Type(),
+            b.getF32FloatAttr(stage.lhsScale /
+                              (inputRows * stage.outputScale)));
+        Value onesPack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({1, kTile}, b.getI8Type()));
+        Value biasPack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({4, 4}, b.getI32Type()));
+        Value scalePack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({4, 4}, b.getF32Type()));
+        b.create<linalg::FillOp>(loc, oneI8, onesPack);
+        b.create<linalg::FillOp>(loc, zeroI32, biasPack);
+        b.create<linalg::FillOp>(loc, ratio, scalePack);
 
-          Value onesBank = allocBank(b, loc, 1, 1);
-          Value onesLoaded = mvinBank(b, loc, onesPack, onesBank, 4);
-          Value biasBank = allocBank(b, loc, 1, 1);
-          Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
-          Value biasState = b.create<BankSMatMulBiasOp>(
-              loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
-          Value scaleBank = allocBank(b, loc, 1, 1);
-          Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
-          Value result = allocBank(b, loc, 1, 1);
-          result = b.create<BankSMatMulOp>(
-                        loc, result.getType(), onesLoaded,
-                        source.banks[localPanel], result,
-                        createI64ConstU(b, loc,
-                                        matrixRs2(1, kTile, target.bankDepth)),
-                        createI1Const(b, loc, true),
-                        createI1Const(b, loc, true), createI64Const(b, loc, 0))
-                       .getWrBankOut();
-          Value quantized = allocBank(b, loc, 1, 1);
-          quantized = b.create<BankQuantI32ToI8Op>(
-                           loc, quantized.getType(), result, scaleLoaded,
-                           quantized, createI64Const(b, loc, 4),
-                           createI64Const(b, loc, 0), createI64Const(b, loc, 0),
-                           b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                           b.getI64IntegerAttr(1), b.getBoolAttr(false))
-                          .getOutBankOut();
-          Value destinationBase = b.create<arith::IndexCastOp>(
-              loc, b.getI64Type(),
-              b.create<arith::AddIOp>(
-                  loc, group,
-                  b.create<arith::ConstantIndexOp>(loc, localPanel)));
-          destinationState =
-              b.create<BankMaxPoolOp>(
-                   loc, destinationState.getType(), quantized, destinationState,
-                   createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
-                   b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                   b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
-                   createI64Const(b, loc, 0), destinationBase,
-                   createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
-                   b.getI64IntegerAttr(0))
-                  .getOutBankOut();
-          releaseBank(b, loc, onesLoaded);
-          releaseBank(b, loc, biasState);
-          releaseBank(b, loc, scaleLoaded);
-          releaseBank(b, loc, result);
-          releaseBank(b, loc, quantized);
-          b.create<memref::DeallocOp>(loc, onesPack);
-          b.create<memref::DeallocOp>(loc, biasPack);
-          b.create<memref::DeallocOp>(loc, scalePack);
-        }
+        auto panelLoop = b.create<scf::ForOp>(
+            loc, zero, b.create<arith::ConstantIndexOp>(loc, panelCount), one,
+            ValueRange{destination.banks.front()});
+        b.setInsertionPointToStart(panelLoop.getBody());
+        Value localPanel = panelLoop.getInductionVar();
+        Value destinationState = panelLoop.getRegionIterArgs().front();
+        Value panel = b.create<arith::AddIOp>(loc, firstPanel, localPanel);
+
+        Value onesBank = allocBank(b, loc, 1, 1);
+        Value onesLoaded = mvinBank(b, loc, onesPack, onesBank, 1);
+        Value biasBank = allocBank(b, loc, 1, 1);
+        Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
+        Value biasState = b.create<BankSMatMulBiasOp>(
+            loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
+        releaseBank(b, loc, biasState);
+        Value scaleBank = allocBank(b, loc, 1, 1);
+        Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
+        Value result = allocBank(b, loc, 1, 1);
+
+        Value four = b.create<arith::ConstantIndexOp>(loc, 4);
+        auto yLoop = b.create<scf::ForOp>(
+            loc, zero, b.create<arith::ConstantIndexOp>(loc, stage.inputHeight),
+            four, ValueRange{result});
+        b.setInsertionPointToStart(yLoop.getBody());
+        Value y = yLoop.getInductionVar();
+        Value yState = yLoop.getRegionIterArgs().front();
+        auto xLoop = b.create<scf::ForOp>(
+            loc, zero, b.create<arith::ConstantIndexOp>(loc, stage.inputWidth),
+            four, ValueRange{yState});
+        b.setInsertionPointToStart(xLoop.getBody());
+        Value x = xLoop.getInductionVar();
+        Value xState = xLoop.getRegionIterArgs().front();
+        TileBanks source = allocateTile(1, kTile, zeroI8);
+        if (failed(emitInto(producer.lookup(stage.input), y, x, 4, 4, panel, 1,
+                            source, 0, 4)))
+          return failure();
+        Value first = b.create<arith::AndIOp>(
+            loc,
+            b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, y, zero),
+            b.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, x, zero));
+        Value last = b.create<arith::AndIOp>(
+            loc,
+            b.create<arith::CmpIOp>(
+                loc, arith::CmpIPredicate::sge,
+                b.create<arith::AddIOp>(loc, y, four),
+                b.create<arith::ConstantIndexOp>(loc, stage.inputHeight)),
+            b.create<arith::CmpIOp>(
+                loc, arith::CmpIPredicate::sge,
+                b.create<arith::AddIOp>(loc, x, four),
+                b.create<arith::ConstantIndexOp>(loc, stage.inputWidth)));
+        Value resultNext =
+            b.create<BankSMatMulOp>(
+                 loc, xState.getType(), onesLoaded, source.banks.front(),
+                 xState, createI64ConstU(b, loc, matrixRs2(1, kTile, kTile)),
+                 first, last, createI64Const(b, loc, 0))
+                .getWrBankOut();
         releaseTile(source);
-        b.create<scf::YieldOp>(loc, destinationState);
-        b.setInsertionPointAfter(groupLoop);
+        b.create<scf::YieldOp>(loc, resultNext);
+        b.setInsertionPointAfter(xLoop);
+        b.create<scf::YieldOp>(loc, xLoop.getResult(0));
+        b.setInsertionPointAfter(yLoop);
+        Value resultState = yLoop.getResult(0);
+        releaseBank(b, loc, onesLoaded);
+
+        Value quantized = allocBank(b, loc, 1, 1);
+        quantized = b.create<BankQuantI32ToI8Op>(
+                         loc, quantized.getType(), resultState, scaleLoaded,
+                         quantized, createI64Const(b, loc, 4),
+                         createI64Const(b, loc, 0), createI64Const(b, loc, 0),
+                         b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                         b.getI64IntegerAttr(1), b.getBoolAttr(false))
+                        .getOutBankOut();
+        releaseBank(b, loc, resultState);
+        releaseBank(b, loc, scaleLoaded);
+        Value outputBase =
+            b.create<arith::IndexCastOp>(loc, b.getI64Type(), localPanel);
+        Value destinationNext =
+            b.create<BankMaxPoolOp>(
+                 loc, destinationState.getType(), quantized, destinationState,
+                 createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
+                 b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                 b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
+                 createI64Const(b, loc, 0), outputBase,
+                 createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
+                 b.getI64IntegerAttr(0))
+                .getOutBankOut();
+        releaseBank(b, loc, quantized);
+        b.create<scf::YieldOp>(loc, destinationNext);
+        b.setInsertionPointAfter(panelLoop);
+        destination.banks.front() = panelLoop.getResult(0);
+        b.create<memref::DeallocOp>(loc, onesPack);
+        b.create<memref::DeallocOp>(loc, biasPack);
+        b.create<memref::DeallocOp>(loc, scalePack);
         return success();
       }
 
@@ -930,6 +1025,7 @@ public:
           Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
           Value biasState = b.create<BankSMatMulBiasOp>(
               loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
+          releaseBank(b, loc, biasState);
           Value scaleBank = allocBank(b, loc, 1, 1);
           Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
           Value patchState = allocBank(b, loc, 1, 1);
@@ -993,6 +1089,8 @@ public:
                      createI64Const(b, loc, 0))
                     .getWrBankOut();
           }
+          releaseBank(b, loc, patchState);
+          releaseBank(b, loc, weightState);
 
           Value quantized = allocBank(b, loc, 1, 1);
           Value quantizedState =
@@ -1004,6 +1102,8 @@ public:
                    b.getI64IntegerAttr(side),
                    b.getBoolAttr(stage.activation == 1))
                   .getOutBankOut();
+          releaseBank(b, loc, resultState);
+          releaseBank(b, loc, scaleLoaded);
           Value transformed;
           Value outputState = quantizedState;
           if (stage.activation == 2) {
@@ -1027,11 +1127,6 @@ public:
                    outputBase, createI64Const(b, loc, destinationStride),
                    b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                   .getOutBankOut();
-          releaseBank(b, loc, biasState);
-          releaseBank(b, loc, scaleLoaded);
-          releaseBank(b, loc, patchState);
-          releaseBank(b, loc, weightState);
-          releaseBank(b, loc, resultState);
           releaseBank(b, loc, quantizedState);
           if (transformed)
             releaseBank(b, loc, transformed);
@@ -1087,6 +1182,7 @@ public:
         Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
         Value biasState = b.create<BankSMatMulBiasOp>(
             loc, biasLoaded.getType(), biasLoaded, createI64Const(b, loc, 0));
+        releaseBank(b, loc, biasState);
         Value scaleBank = allocBank(b, loc, 1, 1);
         Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
         Value patch = allocBank(b, loc, 1, 1);
@@ -1165,6 +1261,8 @@ public:
           states.assign(channelLoop.getResults().begin(),
                         channelLoop.getResults().end());
         }
+        releaseBank(b, loc, states[0]);
+        releaseBank(b, loc, states[1]);
         Value destinationSlot = b.create<arith::SubIOp>(
             loc, localPanel, b.create<arith::ConstantIndexOp>(loc, panelBegin));
         Value outputBase = b.create<arith::IndexCastOp>(
@@ -1185,6 +1283,8 @@ public:
                  b.getI64IntegerAttr(side),
                  b.getBoolAttr(stage.activation == 1))
                 .getOutBankOut();
+        releaseBank(b, loc, states[2]);
+        releaseBank(b, loc, scaleLoaded);
         Value transformed;
         Value outputState = quantizedState;
         if (stage.activation == 2) {
@@ -1204,11 +1304,6 @@ public:
                  createI64Const(b, loc, destinationStride),
                  b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                 .getOutBankOut();
-        releaseBank(b, loc, biasState);
-        releaseBank(b, loc, scaleLoaded);
-        releaseBank(b, loc, patch);
-        releaseBank(b, loc, weightBank);
-        releaseBank(b, loc, result);
         releaseBank(b, loc, quantized);
         if (transformed)
           releaseBank(b, loc, transformed);
@@ -1306,7 +1401,14 @@ public:
     };
 
     for (auto [stageIndex, stage] : llvm::enumerate(stages)) {
-      if ((stage.pool || stage.add) && failed(materializeStage(stageIndex)))
+      if (stage.multiply && stage.input != kernel.getInput()) {
+        int64_t inputStage = producer.lookup(stage.input);
+        if (!materialized.contains(inputStage) &&
+            failed(materializeStage(inputStage)))
+          return failure();
+      }
+      if ((stage.pool || stage.add) && !materialized.contains(stageIndex) &&
+          failed(materializeStage(stageIndex)))
         return failure();
     }
 

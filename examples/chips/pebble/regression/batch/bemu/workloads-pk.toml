@@ -10,6 +10,7 @@ tests = [
   "pebble-pebble-ctest-smatmul_single_block_test-linux",
   "pebble-pebble-ctest-im2col_window_test-linux",
   "pebble-pebble-ctest-mega_conv_pipeline_test-linux",
+  "pebble-pebble-ctest-int8mul_test-linux",
   "pebble-pebble-mlirtest-ball_smatmul_bias_accumulate-linux",
   "pebble-pebble-mlirtest-bank_smatmul_bias_accumulate-linux",
   "pebble-pebble-mlirtest-ball_quant_f32_to_i8-linux",

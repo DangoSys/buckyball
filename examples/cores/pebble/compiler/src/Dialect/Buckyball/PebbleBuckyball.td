@@ -26,5 +26,6 @@ include "Int2FpBall.td"
 include "LutBall.td"
 include "MaxPoolBall.td"
 include "Int8AddBall.td"
+include "Int8MulBall.td"
 
 #endif // PEBBLE_BUCKYBALL_OPS

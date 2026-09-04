@@ -1,6 +1,6 @@
 # Pebble ball domain configuration
 
-ballNum = 8
+ballNum = 9
 
 ballIdMappings = [
   { ballId = 0, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 },
@@ -10,7 +10,8 @@ ballIdMappings = [
   { ballId = 4, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 2, outBW = 1 },
   { ballId = 5, ballName = "LutBall", ballClass = "examples.balls.lut.LutBall", config = "../../../../balls/lut/configs/default.toml", inBW = 2, outBW = 1 },
   { ballId = 6, ballName = "MaxPoolBall", ballClass = "examples.balls.maxpool.MaxPoolBall", config = "../../../../balls/maxpool/configs/default.toml", inBW = 1, outBW = 1 },
-  { ballId = 7, ballName = "Int8AddBall", ballClass = "examples.balls.int8add.Int8AddBall", config = "../../../../balls/int8add/configs/default.toml", inBW = 2, outBW = 1 }
+  { ballId = 7, ballName = "Int8AddBall", ballClass = "examples.balls.int8add.Int8AddBall", config = "../../../../balls/int8add/configs/default.toml", inBW = 2, outBW = 1 },
+  { ballId = 8, ballName = "Int8MulBall", ballClass = "examples.balls.int8mul.Int8MulBall", config = "../../../../balls/int8mul/configs/default.toml", inBW = 2, outBW = 1 }
 ]
 
 ballISA = [
@@ -24,5 +25,6 @@ ballISA = [
   { mnemonic = "LUT", funct7 = 66, bid = 5 },
   { mnemonic = "MAXPOOL", funct7 = 50, bid = 6 },
   { mnemonic = "INT8ADD", funct7 = 69, bid = 7 },
-  { mnemonic = "INT8ADD_RELU", funct7 = 70, bid = 7 }
+  { mnemonic = "INT8ADD_RELU", funct7 = 70, bid = 7 },
+  { mnemonic = "INT8MUL", funct7 = 71, bid = 8 }
 ]

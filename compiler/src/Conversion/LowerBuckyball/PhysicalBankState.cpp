@@ -66,6 +66,10 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
         value = op->getOperand(2);
         continue;
       }
+      if (name == "buckyball.bank_int8mul") {
+        value = op->getOperand(2);
+        continue;
+      }
       if (name == "buckyball.bank_smatmul" ||
           name == "buckyball.bank_vecmat16") {
         value = op->getOperand(2);

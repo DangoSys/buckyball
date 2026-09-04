@@ -34,6 +34,7 @@ tests = [
   "pebble-pebble-mlirtest-ball_int2fp_relu_4x4-baremetal",
   "pebble-pebble-mlirtest-bank_int2fp_relu_4x4-baremetal",
   "pebble-pebble-ctest-mega_conv_pipeline_test-baremetal",
+  "pebble-pebble-ctest-int8mul_test-baremetal",
   "pebble-pebble-mlirtest-tile_mega_matmul-baremetal",
   "pebble-pebble-mlirtest-tile_mega_conv2d-baremetal",
 ]
