@@ -433,13 +433,6 @@ def _validate(path: Path) -> Dict[str, Any]:
                 {"ballName": name, "config": cfg_rel, "resolved": str(cfg_path)}
             )
             continue
-        ball_cfg = _load_toml(cfg_path)
-        ball = ball_cfg.get("ball")
-        if not isinstance(ball, dict):
-            missing_config.append(
-                {"ballName": name, "config": cfg_rel, "error": "missing [ball]"}
-            )
-
     funct7s = [e.get("funct7") for e in isa]
     mnemonics = [e.get("mnemonic") for e in isa]
     bids = [e.get("bid") for e in isa]

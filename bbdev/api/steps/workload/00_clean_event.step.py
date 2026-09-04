@@ -10,7 +10,7 @@ if utils_path not in sys.path:
 
 from utils.event_common import require_chip
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import chip_output_root, get_buckyball_path
+from utils.path import chip_output_root, get_buckyball_path, workload_build_dir
 
 config = {
     "name": "workload-clean",
@@ -51,7 +51,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     bbdir = get_buckyball_path()
     output_path = chip_output_root(bbdir, chip)
-    build_path = os.path.join(bbdir, "bb-tests", "workloads", "build", chip)
+    build_path = workload_build_dir(bbdir, chip)
 
     for path in (output_path, build_path):
         if os.path.exists(path):
