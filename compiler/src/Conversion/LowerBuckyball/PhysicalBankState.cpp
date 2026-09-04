@@ -15,7 +15,7 @@ PhysicalBankState::PhysicalBankState(int64_t bankNum)
     : bankNum(bankNum), used(bankNum, 0) {}
 
 std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
-  for (unsigned depth = 0; depth != 16; ++depth) {
+  while (true) {
     if (auto cst = value.getDefiningOp<arith::ConstantOp>()) {
       auto attr = dyn_cast<IntegerAttr>(cst.getValue());
       if (!attr)
@@ -91,7 +91,6 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
     }
     return std::nullopt;
   }
-  return std::nullopt;
 }
 
 std::optional<int64_t> PhysicalBankState::tryAlloc(int64_t row, int64_t col) {

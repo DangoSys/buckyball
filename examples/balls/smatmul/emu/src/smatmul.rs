@@ -1,7 +1,7 @@
 use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
-use std::sync::{Mutex, OnceLock};
+use std::cell::RefCell;
 
 const TILE: usize = 16;
 
@@ -19,10 +19,8 @@ struct Chain {
     accumulators: Vec<i32>,
 }
 
-static STATE: OnceLock<Mutex<State>> = OnceLock::new();
-
-fn smatmul_state() -> &'static Mutex<State> {
-    STATE.get_or_init(|| Mutex::new(State::default()))
+thread_local! {
+    static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
 fn read_i32(bank: &[u8], row: usize, lane: usize) -> i32 {
@@ -50,10 +48,6 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if input_base + 4 > bank_lines() {
         panic!("smatmul_bias: inputBase plus four rows exceeds bank depth");
     }
-    let mut state = smatmul_state().lock().unwrap();
-    if state.chain.is_some() {
-        panic!("smatmul_bias: cannot replace bias during an accumulation chain");
-    }
     let physical = pbank(ctx.bank_map, bank);
     let mut bias = [0i32; TILE];
     for group in 0..4 {
@@ -61,7 +55,13 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             bias[group * 4 + lane] = read_i32(&ctx.banks[physical], input_base + group, lane);
         }
     }
-    state.bias = Some(bias);
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if state.chain.is_some() {
+            panic!("smatmul_bias: cannot replace bias during an accumulation chain");
+        }
+        state.bias = Some(bias);
+    });
     0
 }
 
@@ -78,11 +78,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if xs2 >> 32 != 0 {
         panic!("smatmul: rs2[63:32] must be zero");
     }
-    if (rows != 1 && (rows == 0 || rows % TILE != 0))
-        || cols != TILE
-        || k == 0
-        || k % TILE != 0
-    {
+    if (rows != 1 && (rows == 0 || rows % TILE != 0)) || cols != TILE || k == 0 || k % TILE != 0 {
         panic!("smatmul: M must be one or a positive multiple of 16, K must be a positive multiple of 16, and N must be 16");
     }
     if a_bank >= bank_num() as u64 || b_bank >= bank_num() as u64 || c_bank >= bank_num() as u64 {
@@ -111,31 +107,33 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("smatmul: bank footprint exceeds bank depth");
     }
 
-    let mut state = smatmul_state().lock().unwrap();
-    let mut chain = if first {
-        if state.chain.is_some() {
-            panic!("smatmul: first block issued while another chain is live");
+    let mut chain = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if first {
+            if state.chain.is_some() {
+                panic!("smatmul: first block issued while another chain is live");
+            }
+            let bias = state
+                .bias
+                .unwrap_or_else(|| panic!("smatmul: bias must be preloaded before first block"));
+            let mut accumulators = vec![0i32; rows * cols];
+            for row in 0..rows {
+                accumulators[row * cols..(row + 1) * cols].copy_from_slice(&bias);
+            }
+            Chain {
+                rows,
+                cols,
+                output_bank: c_bank,
+                output_base,
+                accumulators,
+            }
+        } else {
+            state
+                .chain
+                .take()
+                .unwrap_or_else(|| panic!("smatmul: continuation has no live chain"))
         }
-        let bias = state
-            .bias
-            .unwrap_or_else(|| panic!("smatmul: bias must be preloaded before first block"));
-        let mut accumulators = vec![0i32; rows * cols];
-        for row in 0..rows {
-            accumulators[row * cols..(row + 1) * cols].copy_from_slice(&bias);
-        }
-        Chain {
-            rows,
-            cols,
-            output_bank: c_bank,
-            output_base,
-            accumulators,
-        }
-    } else {
-        state
-            .chain
-            .take()
-            .unwrap_or_else(|| panic!("smatmul: continuation has no live chain"))
-    };
+    });
     if chain.rows != rows
         || chain.cols != cols
         || chain.output_bank != c_bank
@@ -147,19 +145,32 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let pa = pbank(ctx.bank_map, a_bank);
     let pb = pbank(ctx.bank_map, b_bank);
     let k_tiles = k / TILE;
-    for row in 0..rows {
+    let row_bytes = bank_row_bytes();
+
+    // Keep the hardware-visible operation unchanged, but traverse the data in
+    // the layout used by the banks.  The old col->k loop repeatedly computed
+    // addresses and reread the same B row for every output lane.  This order
+    // reads one A byte and one complete B row, then updates all 16 lanes.
+    // Wrapping arithmetic is intentionally retained to match the accumulator
+    // semantics of the RTL and the previous emulator implementation.
+    for inner in 0..k {
+        let b_base = ((inner / TILE) * TILE + inner % TILE) * row_bytes;
+        let b_row = &ctx.banks[pb][b_base..b_base + cols];
+        let mut b_values = [0i32; TILE];
         for col in 0..cols {
-            let acc = &mut chain.accumulators[row * cols + col];
-            for inner in 0..k {
-                let a_row = if rows == 1 {
-                    inner / TILE
-                } else {
-                    ((row / TILE) * k_tiles + inner / TILE) * TILE + row % TILE
-                };
-                let b_row = (inner / TILE) * TILE + inner % TILE;
-                let a = ctx.banks[pa][a_row * bank_row_bytes() + inner % TILE] as i8;
-                let b = ctx.banks[pb][b_row * bank_row_bytes() + col] as i8;
-                *acc = acc.wrapping_add((a as i32).wrapping_mul(b as i32));
+            b_values[col] = b_row[col] as i8 as i32;
+        }
+        for row in 0..rows {
+            let a_row = if rows == 1 {
+                inner / TILE
+            } else {
+                ((row / TILE) * k_tiles + inner / TILE) * TILE + row % TILE
+            };
+            let a = ctx.banks[pa][a_row * row_bytes + inner % TILE] as i8 as i32;
+            let acc_base = row * cols;
+            let acc_row = &mut chain.accumulators[acc_base..acc_base + cols];
+            for col in 0..cols {
+                acc_row[col] = acc_row[col].wrapping_add(a.wrapping_mul(b_values[col]));
             }
         }
     }
@@ -177,14 +188,19 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             }
         }
     } else {
-        state.chain = Some(chain);
+        STATE.with(|state| state.borrow_mut().chain = Some(chain));
     }
     0
 }
 
 pub(crate) fn bias_latency(xs1: u64, xs2: u64) -> u64 {
     let input_base = xs2 & 0x3f;
-    if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 >> 6 != 0 || input_base + 4 > bank_lines() as u64 {
+    if rs1_b1(xs1) != 0
+        || rs1_b2(xs1) != 0
+        || rs1_iter(xs1) != 4
+        || xs2 >> 6 != 0
+        || input_base + 4 > bank_lines() as u64
+    {
         panic!("smatmul_bias: illegal inputBase or reserved fields");
     }
     4
