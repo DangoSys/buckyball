@@ -11,6 +11,7 @@
 
 #include "Buckyball/BuckyballOps.h"
 #include "Target/BuckyballTargetRegistry.h"
+#include "Trace/TraceOps.h"
 #include "Utils/BankUtils.h"
 #include "llvm/Support/MathExtras.h"
 
@@ -1823,9 +1824,15 @@ public:
   }
 };
 
-class MegaKernelToBankSSAPattern : public OpRewritePattern<MegaKernelOp> {
+class MatmulMegaKernelToBankSSAPattern : public OpRewritePattern<MegaKernelOp> {
 public:
-  using OpRewritePattern::OpRewritePattern;
+  MatmulMegaKernelToBankSSAPattern(MLIRContext *context, bool traceMegaStages,
+                                   int64_t traceMegaStageStart,
+                                   int64_t traceMegaStageLimit)
+      : OpRewritePattern<MegaKernelOp>(context),
+        traceMegaStages(traceMegaStages),
+        traceMegaStageStart(traceMegaStageStart),
+        traceMegaStageLimit(traceMegaStageLimit) {}
 
   LogicalResult matchAndRewrite(MegaKernelOp kernel,
                                 PatternRewriter &b) const override {
@@ -2105,6 +2112,46 @@ public:
       if (lutBank)
         releaseBank(b, loc, lutBank);
 
+      bool traceStage =
+          traceMegaStages && !last &&
+          static_cast<int64_t>(stageIndex) >= traceMegaStageStart &&
+          (traceMegaStageLimit < 0 ||
+           static_cast<int64_t>(stageIndex) < traceMegaStageLimit);
+      if (traceStage) {
+        b.create<FenceOp>(loc);
+        int64_t channelBase = 0;
+        for (auto [bankIndex, output] : llvm::enumerate(outputs)) {
+          int64_t rows = outputK[bankIndex] / kTile;
+          Value pack = b.create<memref::AllocOp>(
+              loc, MemRefType::get({rows, kTile}, b.getI8Type()));
+          hostPacks.push_back(pack);
+          outputs[bankIndex] = mvoutBank(b, loc, pack, output, rows);
+          b.create<FenceOp>(loc);
+          int64_t validChannels = std::min(outputK[bankIndex], n - channelBase);
+          auto channelLoop = b.create<scf::ForOp>(
+              loc, zero, b.create<arith::ConstantIndexOp>(loc, validChannels),
+              one);
+          b.setInsertionPointToStart(channelLoop.getBody());
+          Value channel = channelLoop.getInductionVar();
+          Value row = b.create<arith::DivUIOp>(loc, channel, sixteen);
+          Value column = b.create<arith::RemUIOp>(loc, channel, sixteen);
+          Value value =
+              b.create<memref::LoadOp>(loc, pack, ValueRange{row, column});
+          Value outputChannel = b.create<arith::AddIOp>(
+              loc, b.create<arith::ConstantIndexOp>(loc, channelBase), channel);
+          b.create<memref::StoreOp>(loc, value, stage.getOutput(),
+                                    ValueRange{zero, outputChannel});
+          b.setInsertionPointAfter(channelLoop);
+          channelBase += outputK[bankIndex];
+        }
+        auto id = b.getI64IntegerAttr(1000 + stageIndex);
+        auto trace = b.create<::buddy::trace::EndOp>(
+            loc, stage.getOutput().getType(), stage.getOutput(), id,
+            b.getStringAttr("mega-matmul-stage"));
+        trace->setAttr("id_path", b.getArrayAttr({id}));
+        trace->setAttr("buckyball.stage_trace", b.getUnitAttr());
+      }
+
       for (Value activation : activationBanks)
         releaseBank(b, loc, activation);
       activationBanks = outputs;
@@ -2127,6 +2174,16 @@ public:
                                     ValueRange{zero, outputN});
           b.setInsertionPointAfter(outputLoop);
         }
+        if (traceMegaStages &&
+            traceMegaStageStart <= static_cast<int64_t>(stageIndex) &&
+            (traceMegaStageLimit < 0 ||
+             static_cast<int64_t>(stageIndex) < traceMegaStageLimit)) {
+          auto id = b.getI64IntegerAttr(1001);
+          auto trace = b.create<::buddy::trace::EndOp>(
+              loc, stage.getOutput().getType(), stage.getOutput(), id,
+              b.getStringAttr("classifier-output"));
+          trace->setAttr("id_path", b.getArrayAttr({id}));
+        }
       }
     }
 
@@ -2137,15 +2194,22 @@ public:
     b.eraseOp(kernel);
     return success();
   }
+
+private:
+  bool traceMegaStages;
+  int64_t traceMegaStageStart;
+  int64_t traceMegaStageLimit;
 };
 
 } // namespace
 
 namespace mlir::buddy {
-void populatePebbleMegaKernelToBankSSAPatterns(RewritePatternSet &patterns) {
-  patterns
-      .add<LinearConvPoolMegaKernelPattern, ConvMegaKernelPreparationPattern,
-           ConvMegaKernelToBankSSAPattern, MegaKernelToBankSSAPattern>(
-          patterns.getContext());
+void populatePebbleMegaKernelToBankSSAPatterns(RewritePatternSet &patterns,
+                                               bool traceMegaStages,
+                                               int64_t traceMegaStageStart,
+                                               int64_t traceMegaStageLimit) {
+  patterns.add<MatmulMegaKernelToBankSSAPattern>(
+      patterns.getContext(), traceMegaStages, traceMegaStageStart,
+      traceMegaStageLimit);
 }
 } // namespace mlir::buddy

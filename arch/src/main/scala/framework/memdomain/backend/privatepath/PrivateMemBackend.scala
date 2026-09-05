@@ -55,10 +55,17 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val group_id = UInt(log2Up(b.memDomain.bankNum).W)
   }
 
-  val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
+  val mappingTable             = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
+  // Virtual bank ids are encoded in the five-bit mapping-table field.  They
+  // are not limited to the number of physical banks: several virtual banks
+  // may be live at once and each can map to one or more physical banks.
+  // Keep one entry for every representable vbank id so group-count queries do
+  // not alias unrelated allocations (e.g. vbank 9 with vbank 1).
+  private val virtualBankCount = 1 << 5
 
-  def isAcc(vbank_id: UInt): Bool =
-    mappingTable.map(entry => entry.valid && (entry.vbank_id === vbank_id) && entry.is_multi).reduce(_ || _)
+  val groupCountByVbank = RegInit(
+    VecInit(Seq.fill(virtualBankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W)))
+  )
 
   def addEntry(
     vbank_id: UInt,
@@ -112,7 +119,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
 
-    accPipes(i).io.is_multi := isAcc(io.mem_req(i).bank_id)
+    accPipes(i).io.is_multi := false.B
   }
 
   banks.zipWithIndex.foreach {
@@ -133,6 +140,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   when(io.config.fire) {
+    val vbank = io.config.bits.vbank_id(4, 0)
     when(io.config.bits.alloc) {
       // Match bemu mset: realloc of the same vbank frees prior physical banks first.
       // MemConfiger emits one fire per group; only group 0 drops the old mapping.
@@ -145,21 +153,19 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         io.config.bits.is_multi,
         io.config.bits.group_id
       )
+      groupCountByVbank(vbank) := Mux(io.config.bits.is_multi, io.config.bits.group_id +& 1.U, 1.U)
     }.otherwise {
       deleteEntry(io.config.bits.vbank_id)
+      groupCountByVbank(vbank) := 0.U
     }
   }
 
   // -----------------------------------------------------------------------------
   // Query interface: return group count for a given vbank_id
   // -----------------------------------------------------------------------------
-  val groupCounts = mappingTable.map { entry =>
-    val matches = entry.valid && (entry.vbank_id === io.query_vbank_id)
-    val count   = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
-    Mux(matches, count, 0.U)
-  }
-
-  io.query_group_count := groupCounts.reduce((a, b) => Mux(a > b, a, b))
+  val queryVbankId = RegNext(io.query_vbank_id, 0.U)
+  val queryVbank   = queryVbankId(4, 0)
+  io.query_group_count := RegNext(groupCountByVbank(queryVbank), 0.U)
 
   // -----------------------------------------------------------------------------
   // Connect AccPipe and Banks
@@ -190,24 +196,18 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    val activeBank  = Mux(accPipes(i).io.busy, accPipes(i).io.bank_id, io.mem_req(i).bank_id)
-    val activeGroup = Mux(accPipes(i).io.busy, accPipes(i).io.group_id, io.mem_req(i).group_id)
-    val req_valid   = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid || accPipes(i).io.busy
-
-    val tracePbankId = Wire(UInt(32.W))
-    tracePbankId := 0.U
-    for (j <- 0 until b.memDomain.bankNum) {
-      val trace_hit_bank = mappingTable(j).valid && (mappingTable(j).vbank_id === activeBank) &&
-        (!mappingTable(j).is_multi ||
-          (mappingTable(j).is_multi && (mappingTable(j).group_id === activeGroup)))
-      when(trace_hit_bank) {
-        tracePbankId := j.U
-      }
+    val routePbank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+    val routeMatch = VecInit(mappingTable.map(entry =>
+      entry.valid && entry.vbank_id === io.mem_req(i).bank_id &&
+        (!entry.is_multi || entry.group_id === io.mem_req(i).group_id)
+    ))
+    when(io.mem_req(i).read.req.fire || io.mem_req(i).write.req.fire) {
+      routePbank := PriorityEncoder(routeMatch)
     }
 
-    // Memory trace: read request
-    when(io.mem_req(i).read.req.fire) {
-      emitTrace(i, 0.U, tracePbankId, io.mem_req(i).read.req.bits.addr, 0.U, 0.U, 0.U, true.B)
+    // Requests are attributed once the selected SRAM accepts them.
+    when(accPipes(i).io.sramRead.req.fire) {
+      emitTrace(i, 0.U, routePbank, accPipes(i).io.sramRead.req.bits.addr, 0.U, 0.U, 0.U, true.B)
     }
 
     // Arrival trace: the write has crossed arbitration and is accepted by the
@@ -217,7 +217,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
       emitTrace(
         i,
         1.U,
-        tracePbankId,
+        routePbank,
         accPipes(i).io.sramWrite.req.bits.addr,
         accPipes(i).io.sramWrite.req.bits.mask.asUInt,
         accPipes(i).io.sramWrite.req.bits.data(63, 0),
@@ -227,11 +227,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     }
 
     for (j <- 0 until b.memDomain.bankNum) {
-      val hit_bank = mappingTable(j).valid && (mappingTable(j).vbank_id === activeBank) &&
-        (!mappingTable(j).is_multi ||
-          (mappingTable(j).is_multi && (mappingTable(j).group_id === activeGroup)))
-
-      when(hit_bank && req_valid) {
+      when(accPipes(i).io.busy && routePbank === j.U) {
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }

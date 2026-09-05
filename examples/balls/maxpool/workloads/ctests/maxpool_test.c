@@ -62,6 +62,19 @@ int main(void) {
           return 1;
         }
   }
+
+  for (int channel = 0; channel < 16; ++channel)
+    input[63 * 16 + channel] = (int8_t)(channel - 8);
+  bb_mvin((uintptr_t)input, 0, 64, 1);
+  bb_maxpool(0, 1, 7, 1, 1, 1, 0, 63, 0, 1, 0, 0);
+  bb_mvout((uintptr_t)output, 1, 1, 1);
+  bb_fence();
+  for (int channel = 0; channel < 16; ++channel)
+    if (output[channel] != (int8_t)(channel - 8)) {
+      printf("maxpool subwindow FAIL c=%d expected=%d actual=%d\n", channel,
+             channel - 8, output[channel]);
+      return 1;
+    }
   printf("maxpool PASS\n");
   return 0;
 }

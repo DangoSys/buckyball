@@ -1,5 +1,5 @@
 use super::super::bank::{bank_lines, bank_num};
-use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
+use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallInstruction, ExecContext};
 
 pub struct Lut;
@@ -22,23 +22,38 @@ impl BallInstruction for Lut {
         if input_bank == lut_bank || input_bank == output_bank || lut_bank == output_bank {
             panic!("lut: banks must be distinct");
         }
-        for bank in [input_bank, lut_bank, output_bank] {
-            if !ctx.cfgs[bank as usize].allocated || ctx.cfgs[bank as usize].cols != 1 {
-                panic!("lut: each operand must occupy one allocated bank");
-            }
+        if !ctx.cfgs[input_bank as usize].allocated
+            || ctx.cfgs[input_bank as usize].cols != 1
+            || !ctx.cfgs[output_bank as usize].allocated
+            || ctx.cfgs[output_bank as usize].cols != 1
+        {
+            panic!("lut: input and output must each occupy one allocated bank");
+        }
+        let lut_cols = ctx.cfgs[lut_bank as usize].cols;
+        if !ctx.cfgs[lut_bank as usize].allocated || (lut_cols != 1 && lut_cols != 4) {
+            panic!("lut: table must occupy one or four allocated banks");
         }
         if iter == 0 || iter > bank_lines() {
             panic!("lut: iter must fit in one bank");
         }
 
-        let pl = pbank(ctx.bank_map, lut_bank);
-        let mut table = [0u8; 256];
-        table.copy_from_slice(&ctx.banks[pl][..256]);
         let pi = pbank(ctx.bank_map, input_bank);
         let po = pbank(ctx.bank_map, output_bank);
-        let (input, output) = ctx.banks.read_write(pi, po);
-        for byte in 0..iter * 16 {
-            output[byte] = table[input[byte] as usize];
+        for row in 0..iter {
+            let mut result = [0u8; 16];
+            for channel in 0..16 {
+                let input = ctx.banks[pi][row * 16 + channel] as usize;
+                let flat = if lut_cols == 4 {
+                    channel * 256 + input
+                } else {
+                    input
+                };
+                let group = flat / 1024;
+                let offset = flat % 1024;
+                let pl = pbank_group(ctx.bank_map, lut_bank, group as u64);
+                result[channel] = ctx.banks[pl][offset];
+            }
+            ctx.banks[po][row * 16..(row + 1) * 16].copy_from_slice(&result);
         }
         0
     }
@@ -48,6 +63,6 @@ impl BallInstruction for Lut {
         if xs2 != 0 || iter == 0 || iter > bank_lines() as u64 {
             panic!("lut: illegal encoding");
         }
-        32 + iter * 4
+        2 + iter * 36
     }
 }

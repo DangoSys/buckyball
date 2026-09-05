@@ -33,8 +33,21 @@ struct MaxPoolLowering : public ConvertOpToLLVMPattern<MaxPoolOp> {
     if (!iterAttr || inputSide <= 0 || inputSide > 15 || outputSide <= 0 ||
         outputSide > 15 || kernel <= 0 || kernel > 15 || stride <= 0 ||
         stride > 15 || padding < 0 || padding > 15 || startRow < 0 ||
-        startRow > 15 || startCol < 0 || startCol > 15 ||
-        inputSide * inputSide > bankDepth ||
+        startRow > 15 || startCol < 0 || startCol > 15)
+      return op.emitError("MaxPool shape does not fit one physical bank tile");
+
+    int64_t lastSourceRow = startRow + (outputSide - 1) * stride + kernel - 1;
+    int64_t lastSourceCol = startCol + (outputSide - 1) * stride + kernel - 1;
+    int64_t inputEnd = padding + inputSide;
+    bool readsInput = startRow < inputEnd && startCol < inputEnd &&
+                      lastSourceRow >= padding && lastSourceCol >= padding;
+    int64_t inputFootprint = 0;
+    if (readsInput) {
+      int64_t maxInputRow = std::min(lastSourceRow, inputEnd - 1) - padding;
+      int64_t maxInputCol = std::min(lastSourceCol, inputEnd - 1) - padding;
+      inputFootprint = maxInputRow * inputSide + maxInputCol + 1;
+    }
+    if (inputFootprint > bankDepth ||
         outputSide * outputSide != iterAttr.getInt() ||
         inputSide + 2 * padding < kernel + startRow ||
         inputSide + 2 * padding < kernel + startCol ||

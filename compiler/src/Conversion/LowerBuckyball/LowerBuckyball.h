@@ -27,9 +27,11 @@ public:
   explicit PhysicalBankState(int64_t bankNum);
 
   int64_t getBankNum() const { return bankNum; }
+  int64_t getUsedCount() const;
   bool empty() const { return vm.empty(); }
 
   std::optional<int64_t> getConstI64(Value value) const;
+  std::optional<BankSlot> getSlot(Value value) const;
   std::optional<int64_t> tryAlloc(int64_t row, int64_t col);
   LogicalResult release(Operation *op, int64_t bank);
 

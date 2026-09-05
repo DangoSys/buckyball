@@ -21,7 +21,10 @@ class Array extends Module {
   val cycle   = RegInit(0.U(6.W))
   val pe      = Seq.tabulate(tile, tile)((_, _) => Instantiate(new PE))
   val aShift  = Reg(Vec(tile, UInt(128.W)))
-  val lastCyc = 46.U
+  // The PE product register adds one cycle between the systolic operands and
+  // the accumulator.  Keep the final drain cycle explicit so the last tile
+  // product is included before done is asserted.
+  val lastCyc = 47.U
 
   when(io.start) {
     assert(!running, "Array: start while array is running")

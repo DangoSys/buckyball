@@ -239,16 +239,19 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until totalChannel) {
-    val req_valid = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
+    val activeHart  = Mux(accPipes(i).io.busy, accPipes(i).io.hart_id, io.mem_req(i).hart_id)
+    val activeBank  = Mux(accPipes(i).io.busy, accPipes(i).io.bank_id, io.mem_req(i).bank_id)
+    val activeGroup = Mux(accPipes(i).io.busy, accPipes(i).io.group_id, io.mem_req(i).group_id)
+    val req_valid   = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid || accPipes(i).io.busy
 
     val tracePbankId = Wire(UInt(32.W))
     tracePbankId := 0.U
     for (j <- 0 until totalBanks) {
       val trace_hit_bank = mappingTable(j).valid &&
-        (mappingTable(j).hart_id === io.mem_req(i).hart_id) &&
-        (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+        (mappingTable(j).hart_id === activeHart) &&
+        (mappingTable(j).vbank_id === activeBank) &&
         (!mappingTable(j).is_multi ||
-          (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
+          (mappingTable(j).is_multi && (mappingTable(j).group_id === activeGroup)))
       when(trace_hit_bank) {
         tracePbankId := j.U
       }
@@ -275,14 +278,12 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     for (j <- 0 until totalBanks) {
       val hit_bank = mappingTable(j).valid &&
-        (mappingTable(j).hart_id === io.mem_req(i).hart_id) &&
-        (mappingTable(j).vbank_id === io.mem_req(i).bank_id) &&
+        (mappingTable(j).hart_id === activeHart) &&
+        (mappingTable(j).vbank_id === activeBank) &&
         (!mappingTable(j).is_multi ||
-          (mappingTable(j).is_multi && (mappingTable(j).group_id === io.mem_req(i).group_id)))
+          (mappingTable(j).is_multi && (mappingTable(j).group_id === activeGroup)))
 
-      val hold_one = RegNext(hit_bank && req_valid, init = false.B)
-
-      when((hit_bank && req_valid) || hold_one) {
+      when(hit_bank && req_valid) {
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }

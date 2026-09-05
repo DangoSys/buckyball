@@ -40,13 +40,9 @@ import "DPI-C" function longint unsigned smatmul_case_write_data_hi(input int un
 `ifndef SMATMUL_BIAS_FUNCT7
 `error "SMATMUL_BIAS_FUNCT7 must be provided by the selected Core ballISA"
 `endif
-`ifndef SMATMUL_OUT_BW
-`error "SMATMUL_OUT_BW must be provided by the selected Core ball mapping"
-`endif
 
 localparam int SMATMUL_OS_CORE_FUNCT7 = `SMATMUL_OS_FUNCT7;
 localparam int SMATMUL_BIAS_CORE_FUNCT7 = `SMATMUL_BIAS_FUNCT7;
-localparam int SMATMUL_OUT_BW = `SMATMUL_OUT_BW;
 localparam int MATRIX_TIMEOUT_CYCLES = 200000;
 localparam int MATRIX_SEED = 32'hCAFE_BABE;
 

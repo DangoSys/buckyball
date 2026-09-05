@@ -1,7 +1,7 @@
 class im2col_ball_test extends uvm_test;
   `uvm_component_utils(im2col_ball_test)
 
-  typedef virtual bb_blink_if #(1, 1) vif_t;
+  typedef virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) vif_t;
   vif_t vif;
   im2col_env env;
 

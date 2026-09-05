@@ -1,7 +1,7 @@
 class smatmul_ball_test extends uvm_test;
   `uvm_component_utils(smatmul_ball_test)
 
-  typedef virtual bb_blink_if #(2, 1) vif_t;
+  typedef virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) vif_t;
   vif_t vif;
   smatmul_env env;
 
@@ -13,7 +13,6 @@ class smatmul_ball_test extends uvm_test;
     super.build_phase(phase);
     if (!uvm_config_db#(vif_t)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "bb_blink_if not found")
-    if (SMATMUL_OUT_BW != 1) `uvm_fatal("CONFIG", "current SMatMul contract requires outBW=1")
     env = smatmul_env::type_id::create("env", this);
   endfunction
 

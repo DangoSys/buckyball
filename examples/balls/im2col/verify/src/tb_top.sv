@@ -2,7 +2,7 @@ module tb_top;
   import uvm_pkg::*;
   import im2col_pkg::*;
 
-  bb_blink_if #(1, 1) intf ();
+  bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) intf ();
 
   Im2colBall dut (
       .clock(intf.clock),
@@ -71,9 +71,11 @@ module tb_top;
       .io_bankWrite_0_io_resp_valid(intf.bank_write_resp_valid[0]),
       .io_bankWrite_0_io_resp_bits_ok(intf.bank_write_resp_ok[0]),
       .io_subRobReq_ready(intf.sub_rob_req_ready),
-      .io_mmioRead_req_ready(intf.mmio_read_req_ready[0]),
-      .io_mmioRead_resp_valid(intf.mmio_read_resp_valid[0]),
-      .io_mmioRead_resp_bits_data(intf.mmio_read_resp_bits_data[0])
+      .io_status_idle(),
+      .io_status_running(),
+      .io_channelReady(1'b1),
+      .io_bankRead_0_ball_id(),
+      .io_bankWrite_0_ball_id()
   );
 
   initial begin
@@ -83,7 +85,7 @@ module tb_top;
   end
 
   initial begin
-    uvm_config_db#(virtual bb_blink_if #(1, 1))::set(null, "*", "vif", intf);
+    uvm_config_db#(virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW))::set(null, "*", "vif", intf);
     run_test("im2col_ball_test");
   end
 endmodule

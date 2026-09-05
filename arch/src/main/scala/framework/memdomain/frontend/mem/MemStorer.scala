@@ -42,9 +42,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
   // -----------------------------
   // State
   // -----------------------------
-  val s_idle :: s_setup :: s_mul :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_wait_dma_resp :: s_done :: Nil =
-    Enum(9)
-  val state                                                                                                                                    = RegInit(s_idle)
+  val s_idle :: s_setup :: s_query :: s_query_wait :: s_mul :: s_issue_sram_req :: s_wait_sram_resp :: s_have_sram_beat :: s_push_dma :: s_wait_dma_resp :: s_done :: Nil =
+    Enum(11)
+  val state                                                                                                                                                               = RegInit(s_idle)
 
   val rob_id_reg      = RegInit(0.U(rob_id_width.W))
   val is_sub_reg      = RegInit(false.B)
@@ -109,6 +109,14 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.query_is_shared := is_shared_reg && (state === s_setup)
 
   when(state === s_setup) {
+    state := s_query
+  }
+
+  when(state === s_query) {
+    state := s_query_wait
+  }
+
+  when(state === s_query_wait) {
     assert(io.query_group_count >= 1.U, "MemStorer groups must be >= 1")
     group_count_reg := io.query_group_count
     state           := s_mul

@@ -2,40 +2,42 @@
 
 Verifies the generated `Int2FpBall` module using the shared Blink UVM framework.
 
+RTL contract: one mnemonic `INT32_TO_FP32`, `inBW=2` (input + scale banks),
+`outBW=1`, `rs2[0]=relu`, `rs2[63:1]=0`, iter a positive multiple of 4.
+Scales are bank rows, not MMIO.
+
 ## Structure
 
 - `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM agents and base env
-- `src/common/int2fp_defs.svh`: DPI imports, `int2fp_require_bid`, timeouts
+- `src/common/int2fp_defs.svh`: DPI imports, `INT32_TO_FP32_FUNCT7`, timeouts
 - `src/common/int2fp_items.svh`: `int2fp_cmd_item` with `load_rust_case`
-  (`special[12:0]=Da`, `special[25:13]=Dw`; tensor/channel use separate funct7)
 - `src/seq/int2fp_sequences.svh`: one-case sequence
-- `src/cov/int2fp_cov.svh`: iter {1,16} coverage
-- `src/env/int2fp_scoreboard.svh`: preload mem model and compare writes vs DPI
-- `src/env/int2fp_env.svh`: extends `bb_blink_env#(1,1)`
-- `src/tests/int2fp_*_test.svh`: one directed case per UVM test
+- `src/cov/int2fp_cov.svh`: relu `{0,1}` and iter `{4,8,16}`, 100% or fatal
+- `src/env/int2fp_scoreboard.svh`: preload src/scale banks, compare writes vs DPI dst
+- `src/env/int2fp_env.svh`: extends `bb_blink_env #(BB_IN_BW, BB_OUT_BW)`
+- `src/tests/int2fp_test.svh`: `int2fp_ball_test` loops cases 0..5
 - `src/pkg/int2fp_pkg.sv`: package entry
-- `src/tb_top.sv`: `bb_blink_if#(1,1)` + `Int2FpBall`
+- `src/tb_top.sv`: `bb_blink_if #(BB_IN_BW, BB_OUT_BW)` + `Int2FpBall` (2 read, 1 write)
 - `filelists/int2fp_ball.f`: VCS filelist (`@UVM@` / `@RTL@`)
 
 ## Test plan
 
-The test names are:
+`+UVM_TESTNAME=int2fp_ball_test` runs six directed cases:
 
-- `int2fp_tensor_rows_test`: 16-row tensor scale
-- `int2fp_channel_lanes_test`: four-group channel scale with distinct `Dw`
-- `int2fp_tensor_groups_test`: four-group tensor scale traversal
-- `int2fp_channel_base_test`: channel scale at MMIO byte address 64
-- `int2fp_channel_two_rows_test`: two rows reuse all sixteen channel scales
+| Index | iter | relu | Intent |
+|-------|------|------|--------|
+| 0 | 4 | 0 | MLIR-scale values |
+| 1 | 4 | 1 | relu clamps negatives |
+| 2 | 8 | 0 | eight-row, no relu |
+| 3 | 8 | 1 | eight-row, relu |
+| 4 | 16 | 0 | sixteen-row, no relu |
+| 5 | 16 | 1 | sixteen-row, relu |
 
-Each case: reset, preload src words and the four Da/Dw MMIO bytes into `mem_model`,
-drive one command, wait for `scb.done()` or timeout at 4000 cycles. Scoreboard
-compares observed writes with DPI `int2fp_ref_fp32`, including `Da * Dw` for
-per-tensor and per-channel weights. The tensor path requires eight MMIO byte
-reads (four Da bytes followed by four tensor-Dw bytes).
-
-The core's `ballISA` assigns separate funct7 values to `INT2FP_TENSOR` and
-`INT2FP_CHANNEL` (Pebble uses 52 and 54). The Ball does not define these
-numbers.
+Each case: reset, preload 16-byte i32 input rows and f32 scale rows into
+`mem_model`, drive one `INT32_TO_FP32` command, wait for `scb.done()` or
+timeout at 20000 cycles. Expected dst = `f32(i32) * scale` with relu clamp
+on the integer before convert. `int2fp_cov` fatals unless relu and iter bins
+are 100%.
 
 ## BID (required)
 
@@ -44,45 +46,32 @@ numbers.
 | Config | Plusarg |
 |--------|---------|
 | `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=4` |
-| `sims.verilator.BuckyballToyVerilatorConfig` (full.toml) | `+BID=6` |
 
 ```console
-./simv +UVM_TESTNAME=int2fp_channel_two_rows_test +BID=4
+./simv +UVM_TESTNAME=int2fp_ball_test +BID=4
 ```
 
-## Build
+## Build / Run
 
-Enter the shared UVM/VCS environment:
+Enter the shared UVM/VCS environment and build the DPI reference library:
 
 ```console
 nix develop ../../../../verify
-```
-
-Build the DPI reference library:
-
-```console
 cargo build --manifest-path casegen/Cargo.toml
 ```
 
-Compile from this directory (resolve `@UVM@` / `@RTL@` first, or use bbdev):
+Human:
 
 ```console
-vcs -full64 -sverilog -timescale=1ns/1ps \
-  $VCS_UVM_ARGS \
-  -sv_lib casegen/target/debug/libint2fp_casegen \
-  -f filelists/int2fp_ball.f
+bbdev uvm --run '--chip pebble'
+bbdev uvm --run '--chip pebble --ball int2fp'
 ```
 
-Run:
+Agent (MCP):
 
-```console
-./simv +UVM_TESTNAME=int2fp_channel_two_rows_test +BID=4
+```text
+bbdev_uvm_run(chip="pebble", ball="int2fp")
 ```
 
-Or via bbdev:
-
-```console
-bbdev uvm --build '--ball=int2fp' --config sims.verilator.BuckyballPebbleVerilatorConfig \
-  --core-config examples/cores/pebble/configs/default.toml
-bbdev uvm --run '--ball=int2fp --test int2fp_channel_two_rows_test --plusargs +BID=4'
-```
+bbdev injects `INT32_TO_FP32_FUNCT7`, `BB_IN_BW`, `BB_OUT_BW`, `+BID`, and
+`+UVM_TESTNAME=int2fp_ball_test` from pebble chip.pb.

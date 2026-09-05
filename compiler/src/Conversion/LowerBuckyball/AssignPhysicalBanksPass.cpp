@@ -3,8 +3,12 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Visitors.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/WalkPatternRewriteDriver.h"
+#include "mlir/Rewrite/FrozenRewritePatternSet.h"
+#include "mlir/Rewrite/PatternApplicator.h"
+
+#include <functional>
 
 #include "Buckyball/BuckyballDialect.h"
 
@@ -48,8 +52,32 @@ public:
 #include "BuckyballBallLoweringHooks.inc"
 #undef BUCKYBALL_ASSIGN_HOOK
     }
-    walkAndApplyPatterns(func, std::move(patterns));
-    if (failed(mlir::buddy::verifyNoBankSSAOps(func)) || !state.empty())
+    FrozenRewritePatternSet frozen(std::move(patterns));
+    PatternApplicator applicator(frozen);
+    applicator.applyDefaultCostModel();
+    PatternRewriter rewriter(&getContext());
+    bool assignmentFailed = false;
+    std::function<void(Region &)> visitRegion = [&](Region &region) {
+      for (Block &block : region) {
+        for (auto it = block.begin(); it != block.end();) {
+          if (assignmentFailed)
+            return;
+          Operation *op = &*it++;
+          if (succeeded(applicator.matchAndRewrite(op, rewriter)))
+            continue;
+          if (op->getName().getStringRef().starts_with("buckyball.bank_")) {
+            assignmentFailed = true;
+            return;
+          }
+          for (Region &nested : op->getRegions())
+            visitRegion(nested);
+        }
+      }
+    };
+    for (Region &region : func->getRegions())
+      visitRegion(region);
+    if (assignmentFailed ||
+        mlir::failed(mlir::buddy::verifyNoBankSSAOps(func)) || !state.empty())
       signalPassFailure();
   }
 };

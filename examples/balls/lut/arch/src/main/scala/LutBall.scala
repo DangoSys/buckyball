@@ -30,22 +30,21 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
   def status: BallStatus = io.status
   dontTouch(io)
 
-  private val idle :: lutReq :: lutResp :: inputReq :: inputResp :: transform :: writeReq :: writeResp :: complete :: Nil =
-    Enum(9)
-  private val state                                                                                                       = RegInit(idle)
-  private val robId                                                                                                       = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  private val isSub                                                                                                       = RegInit(false.B)
-  private val subRobId                                                                                                    = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val inputBank                                                                                                   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val lutBank                                                                                                     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val outputBank                                                                                                  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val iter                                                                                                        = RegInit(0.U(b.frontend.iter_len.W))
-  private val lutRow                                                                                                      = RegInit(0.U(4.W))
-  private val inputRow                                                                                                    = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
-  private val inputData                                                                                                   = Reg(UInt(128.W))
-  private val laneGroup                                                                                                   = RegInit(0.U(2.W))
-  private val table                                                                                                       = Reg(Vec(256, UInt(8.W)))
-  private val outputWord                                                                                                  = Reg(Vec(16, UInt(8.W)))
+  private val idle :: inputReq :: inputResp :: lutReq :: lutResp :: writeReq :: writeResp :: complete :: Nil =
+    Enum(8)
+  private val state                                                                                          = RegInit(idle)
+  private val robId                                                                                          = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val isSub                                                                                          = RegInit(false.B)
+  private val subRobId                                                                                       = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  private val inputBank                                                                                      = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val lutBank                                                                                        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val outputBank                                                                                     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val iter                                                                                           = RegInit(0.U(b.frontend.iter_len.W))
+  private val inputRow                                                                                       = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  private val inputData                                                                                      = Reg(UInt(128.W))
+  private val laneTable                                                                                      = RegInit(false.B)
+  private val lookupLane                                                                                     = RegInit(0.U(4.W))
+  private val outputWord                                                                                     = Reg(Vec(16, UInt(8.W)))
 
   io.cmdReq.ready            := state === idle
   io.cmdResp.valid           := state === complete
@@ -64,7 +63,8 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
     io.bankRead(port).io.resp.ready    := false.B
   }
   io.bankRead(0).bank_id := inputBank
-  io.bankRead(1).bank_id := lutBank
+  io.bankRead(1).bank_id  := lutBank
+  io.bankRead(1).group_id := Mux(laneTable, lookupLane >> 2, 0.U)
 
   io.bankWrite(0).rob_id           := robId
   io.bankWrite(0).ball_id          := 0.U
@@ -89,8 +89,8 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
         assert(cmd.rs2 === 0.U, "LutBall reserves rs2")
         assert(cmd.iter > 0.U && cmd.iter <= b.memDomain.bankEntries.U, "LutBall iter must fit in one bank")
         assert(
-          cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U,
-          "LutBall operands must each occupy one bank"
+          cmd.op1_col === 1.U && (cmd.op2_col === 1.U || cmd.op2_col === 4.U) && cmd.wr_col === 1.U,
+          "LutBall requires col=1 input/output and col=1 or col=4 table"
         )
         assert(
           cmd.op1_bank =/= cmd.op2_bank && cmd.op1_bank =/= cmd.wr_bank &&
@@ -104,24 +104,10 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
         lutBank    := cmd.op2_bank
         outputBank := cmd.wr_bank
         iter       := cmd.iter
-        lutRow     := 0.U
         inputRow   := 0.U
-        laneGroup  := 0.U
-        state      := lutReq
-      }
-    }
-    is(lutReq) {
-      io.bankRead(1).io.req.valid            := true.B
-      io.bankRead(1).io.req.bits.addr        := lutRow
-      when(io.bankRead(1).io.req.fire)(state := lutResp)
-    }
-    is(lutResp) {
-      io.bankRead(1).io.resp.ready := true.B
-      when(io.bankRead(1).io.resp.fire) {
-        for (lane <- 0 until 16)
-          table(Cat(lutRow, lane.U(4.W))) := io.bankRead(1).io.resp.bits.data(8 * lane + 7, 8 * lane)
-        when(lutRow === 15.U)(state := inputReq)
-          .otherwise { lutRow := lutRow + 1.U; state := lutReq }
+        laneTable  := cmd.op2_col === 4.U
+        lookupLane := 0.U
+        state      := inputReq
       }
     }
     is(inputReq) {
@@ -132,18 +118,30 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
     is(inputResp) {
       io.bankRead(0).io.resp.ready := true.B
       when(io.bankRead(0).io.resp.fire) {
-        inputData := io.bankRead(0).io.resp.bits.data
-        laneGroup := 0.U
-        state     := transform
+        inputData  := io.bankRead(0).io.resp.bits.data
+        lookupLane := 0.U
+        state      := lutReq
       }
     }
-    is(transform) {
-      for (lane <- 0 until 4) {
-        val index = Cat(laneGroup, lane.U(2.W))
-        outputWord(index) := table((inputData >> (index << 3))(7, 0))
+    is(lutReq) {
+      val inputByte = (inputData >> (lookupLane << 3))(7, 0)
+      io.bankRead(1).io.req.valid            := true.B
+      io.bankRead(1).io.req.bits.addr        := Mux(
+        laneTable,
+        Cat(lookupLane(1, 0), inputByte(7, 4)),
+        inputByte(7, 4)
+      )
+      when(io.bankRead(1).io.req.fire)(state := lutResp)
+    }
+    is(lutResp) {
+      val inputByte = (inputData >> (lookupLane << 3))(7, 0)
+      io.bankRead(1).io.resp.ready := true.B
+      when(io.bankRead(1).io.resp.fire) {
+        outputWord(lookupLane) :=
+          (io.bankRead(1).io.resp.bits.data >> (inputByte(3, 0) << 3))(7, 0)
+        when(lookupLane === 15.U)(state := writeReq)
+          .otherwise { lookupLane := lookupLane + 1.U; state := lutReq }
       }
-      when(laneGroup === 3.U)(state := writeReq)
-        .otherwise(laneGroup := laneGroup + 1.U)
     }
     is(writeReq) {
       io.bankWrite(0).io.req.valid            := true.B

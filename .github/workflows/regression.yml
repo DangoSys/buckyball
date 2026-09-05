@@ -127,6 +127,68 @@ jobs:
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
+  verification:
+    name: verification-${{ matrix.chip }}
+    needs: gate
+    runs-on: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - chip: toy
+            run_uvm: false
+          - chip: pebble
+            run_uvm: true
+          - chip: goban
+            run_uvm: false
+          - chip: poly
+            run_uvm: false
+          - chip: multi-rocket
+            run_uvm: false
+    env:
+      BB_ROOT: ~/Code/buckyball
+      SNPSLMD_LICENSE_FILE: 26000@127.0.0.1
+    steps:
+      - name: Enter repo lock
+        if: matrix.run_uvm
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          source "${root}/.github/scripts/setproxy.sh"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+      - name: Install config
+        if: matrix.run_uvm
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev config --install
+
+      - name: Chip UVM
+        if: matrix.run_uvm
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          set +u
+          source ~/.zshrc
+          set -u
+          nix develop -c bbdev uvm --run '--chip ${{ matrix.chip }}'
+
+      - name: Exit repo lock
+        if: always() && matrix.run_uvm
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+            exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
   fpga-bitstream:
     name: fpga-bitstream-${{ matrix.chip }}
     needs: gate
@@ -136,15 +198,15 @@ jobs:
       matrix:
         include:
           - chip: toy
-            build_bitstream: false
+            build_bitstream: true
           - chip: pebble
             build_bitstream: true
           - chip: goban
-            build_bitstream: false
+            build_bitstream: true
           - chip: poly
-            build_bitstream: false
+            build_bitstream: true
           - chip: multi-rocket
-            build_bitstream: false
+            build_bitstream: true
     env:
       BB_ROOT: ~/Code/buckyball
     steps:

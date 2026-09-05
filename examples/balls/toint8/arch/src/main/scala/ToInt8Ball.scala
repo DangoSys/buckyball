@@ -3,8 +3,9 @@ package examples.balls.toint8
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import hardfloat.{recFNFromFN, INToRecFN, MulRecFN, RecFNToIN}
+import hardfloat.{recFNFromFN, INToRecFN, RecFNToIN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
+import freechips.rocketchip.tile.MulAddRecFNPipe
 
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
@@ -39,9 +40,9 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   def status: BallStatus = io.status
   dontTouch(io)
 
-  private val idle :: scaleReq :: scaleResp :: inputReq :: inputResp :: pack :: writeReq :: writeResp :: complete :: Nil =
-    Enum(9)
-  private val state                                                                                                      = RegInit(idle)
+  private val idle :: scaleReq :: scaleResp :: inputReq :: inputResp :: pack :: packDrain :: writeReq :: writeResp :: complete :: Nil =
+    Enum(10)
+  private val state                                                                                                                   = RegInit(idle)
 
   private val robIdReg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   private val isSubReg     = RegInit(false.B)
@@ -51,7 +52,8 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   private val outputBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   private val iterReg      = RegInit(0.U(b.frontend.iter_len.W))
   private val inputBaseReg = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
-  private val inputRow     = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  // Relative row within the command.  inputBaseReg is the absolute bank row.
+  private val relativeRow  = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val outputRow    = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val outputWidth  = RegInit(0.U(7.W))
   private val outputStride = RegInit(0.U(7.W))
@@ -71,25 +73,58 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
     !value(31) && value(30, 23) =/= 255.U && value(30, 0) =/= 0.U
 
   private val intToFloat = Module(new INToRecFN(32, 8, 24))
-  private val multiply   = Module(new MulRecFN(8, 24))
+  // The unpipelined recoded-float multiplier was the critical Buckyball path
+  // (about 8.5 ns before clock uncertainty).  FMA mode with c=0 preserves the
+  // multiplication result while splitting the datapath into three stages.
+  private val multiply   = Module(new MulAddRecFNPipe(3, 8, 24))
   private val floatToInt = Module(new RecFNToIN(8, 24, 8))
   private val input      = (inputData >> (lane << 5))(31, 0)
-  private val scale      = Mux(i32Mode, scales(Cat(inputRow(1, 0), lane)), tensorScale)
+  private val scale      = Mux(i32Mode, scales(Cat(relativeRow(1, 0), lane)), tensorScale)
+  private val packIssue  = state === pack
+
+  private val inputStage0  = RegEnable(input, packIssue)
+  private val scaleStage0  = RegEnable(scale, packIssue)
+  private val laneStage0   = RegEnable(lane, packIssue)
+  private val convertValid = RegNext(packIssue, false.B)
+
+  private val multiplyInput = RegEnable(
+    Mux(i32Mode, intToFloat.io.out, recFNFromFN(8, 24, inputStage0)),
+    convertValid
+  )
+
+  private val multiplyScale = RegEnable(recFNFromFN(8, 24, scaleStage0), convertValid)
+  private val laneStage1    = RegEnable(laneStage0, convertValid)
+  private val multiplyValid = RegNext(convertValid, false.B)
+
+  private val multiplyResult = RegEnable(multiply.io.out, multiply.io.validout)
+  private val multiplyLane   = Pipe(multiplyValid, laneStage1, 3)
+  private val laneStage2     = RegEnable(multiplyLane.bits, multiply.io.validout)
+  private val toIntValid     = RegNext(multiply.io.validout, false.B)
+
+  private val quantizedResult = RegEnable(
+    Mux(reluReg && floatToInt.io.out(7), 0.U, floatToInt.io.out),
+    toIntValid
+  )
+
+  private val quantizedLane  = RegEnable(laneStage2, toIntValid)
+  private val quantizedValid = RegNext(toIntValid, false.B)
 
   intToFloat.io.signedIn       := true.B
-  intToFloat.io.in             := input
+  intToFloat.io.in             := inputStage0
   intToFloat.io.roundingMode   := round_near_even
   intToFloat.io.detectTininess := tininess_afterRounding
 
-  multiply.io.a              := Mux(i32Mode, intToFloat.io.out, recFNFromFN(8, 24, input))
-  multiply.io.b              := recFNFromFN(8, 24, scale)
+  multiply.io.a              := multiplyInput
+  multiply.io.b              := multiplyScale
+  multiply.io.c              := recFNFromFN(8, 24, 0.U)
+  multiply.io.op             := 0.U
+  multiply.io.validin        := multiplyValid
   multiply.io.roundingMode   := round_near_even
-  multiply.io.detectTininess := tininess_afterRounding.asBool
+  multiply.io.detectTininess := tininess_afterRounding.asUInt
 
-  floatToInt.io.in           := multiply.io.out
+  floatToInt.io.in           := multiplyResult
   floatToInt.io.roundingMode := round_near_even
   floatToInt.io.signedOut    := true.B
-  private val quantized = Mux(reluReg && floatToInt.io.out(7), 0.U, floatToInt.io.out)
 
   io.cmdReq.ready            := state === idle
   io.cmdResp.valid           := state === complete
@@ -167,7 +202,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
         outputBank   := cmd.wr_bank
         iterReg      := cmd.iter
         inputBaseReg := Mux(isI32, cmd.rs2(34, 29), 0.U)
-        inputRow     := 0.U
+        relativeRow  := 0.U
         outputRow    := Mux(isI32, cmd.rs2(7, 1), 0.U)
         outputWidth  := Mux(isI32, cmd.rs2(14, 8), 0.U)
         outputStride := Mux(isI32, cmd.rs2(28, 22), 0.U)
@@ -209,7 +244,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
 
     is(inputReq) {
       io.bankRead(0).io.req.valid     := true.B
-      io.bankRead(0).io.req.bits.addr := inputBaseReg +& inputRow
+      io.bankRead(0).io.req.bits.addr := inputBaseReg +& relativeRow
       when(io.bankRead(0).io.req.fire) {
         state := inputResp
       }
@@ -228,23 +263,14 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
       when(!i32Mode) {
         assert(input(30, 23) =/= 255.U, "QUANT_F32_TO_I8 input must be finite")
       }
-      outputBytes(lane) := quantized
       when(lane === 3.U) {
-        val bytes    = Cat(quantized, outputBytes(2), outputBytes(1), outputBytes(0))
-        val nextWord = outputData | (bytes << (inputRow(1, 0) << 5))
-        when(inputRow(1, 0) === 3.U) {
-          writeData  := nextWord
-          outputData := 0.U
-          state      := writeReq
-        }.otherwise {
-          outputData := nextWord
-          inputRow   := inputRow + 1.U
-          state      := inputReq
-        }
+        state := packDrain
       }.otherwise {
         lane := lane + 1.U
       }
     }
+
+    is(packDrain) {}
 
     is(writeReq) {
       io.bankWrite(0).io.req.valid := true.B
@@ -256,10 +282,10 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
     is(writeResp) {
       io.bankWrite(0).io.resp.ready := true.B
       when(io.bankWrite(0).io.resp.fire) {
-        when(inputRow === iterReg - 1.U) {
+        when(relativeRow === iterReg - 1.U) {
           state := complete
         }.otherwise {
-          inputRow := inputRow + 1.U
+          relativeRow := relativeRow + 1.U
           when(outputColumn === outputWidth - 1.U) {
             outputRow    := outputRow + outputStride - outputWidth + 1.U
             outputColumn := 0.U
@@ -267,7 +293,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
             outputRow    := outputRow + 1.U
             outputColumn := outputColumn + 1.U
           }
-          state    := inputReq
+          state       := inputReq
         }
       }
     }
@@ -275,6 +301,23 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
     is(complete) {
       when(io.cmdResp.fire) {
         state := idle
+      }
+    }
+  }
+
+  when((state === pack || state === packDrain) && quantizedValid) {
+    outputBytes(quantizedLane) := quantizedResult
+    when(quantizedLane === 3.U) {
+      val bytes    = Cat(quantizedResult, outputBytes(2), outputBytes(1), outputBytes(0))
+      val nextWord = outputData | (bytes << (relativeRow(1, 0) << 5))
+      when(relativeRow(1, 0) === 3.U) {
+        writeData  := nextWord
+        outputData := 0.U
+        state      := writeReq
+      }.otherwise {
+        outputData  := nextWord
+        relativeRow := relativeRow + 1.U
+        state       := inputReq
       }
     }
   }

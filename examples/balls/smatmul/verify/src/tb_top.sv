@@ -2,7 +2,7 @@ module tb_top;
   import uvm_pkg::*;
   import smatmul_pkg::*;
 
-  bb_blink_if #(2, 1) intf ();
+  bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) intf ();
 
   SMatMulBall dut (
       .clock(intf.clock),
@@ -95,7 +95,7 @@ module tb_top;
   end
 
   initial begin
-    uvm_config_db#(virtual bb_blink_if #(2, 1))::set(null, "*", "vif", intf);
+    uvm_config_db#(virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW))::set(null, "*", "vif", intf);
     run_test("smatmul_ball_test");
   end
 endmodule

@@ -63,8 +63,16 @@ class MemMidend(val b: GlobalConfig) extends Module {
 
   val mappingTable = RegInit(VecInit(Seq.fill(b.memDomain.bankChannel)(0.U.asTypeOf(new MappingTableEntry))))
 
+  // A route stays assigned until its Ball releases it (or a frontend channel
+  // drains), so maintain the reverse ownership at allocation time.  This keeps
+  // readiness and pending detection from repeatedly scanning every backend
+  // channel for the same port.
+  private val portSlots  = math.max(totalRead, totalWrite)
+  val readPortAllocated  = RegInit(VecInit(Seq.fill(portSlots)(false.B)))
+  val writePortAllocated = RegInit(VecInit(Seq.fill(portSlots)(false.B)))
+
   def isAllocated(isRead: Bool, id: UInt): Bool =
-    mappingTable.map(entry => entry.valid && entry.isRead === isRead && entry.id === id).reduce(_ || _)
+    Mux(isRead, readPortAllocated(id), writePortAllocated(id))
 
   val readPortBall = b.ballDomain.ballIdMappings.zipWithIndex.flatMap { case (mapping, ball) =>
     Seq.fill(mapping.inBW)(ball)
@@ -140,6 +148,12 @@ class MemMidend(val b: GlobalConfig) extends Module {
       MuxLookup(port, 0.U)(readPortBall.zipWithIndex.map { case (ball, i) => i.U -> ball.U }.toSeq),
       MuxLookup(port - totalRead.U, 0.U)(writePortBall.zipWithIndex.map { case (ball, i) => i.U -> ball.U }.toSeq)
     )
+
+    when(port < totalRead.U) {
+      readPortAllocated(port) := true.B
+    }.otherwise {
+      writePortAllocated(port - totalRead.U) := true.B
+    }
   }
 
   // Connect mapped entries to backend channels
@@ -231,6 +245,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
       mappingTable(i).id     := 0.U
       mappingTable(i).isBall := false.B
       mappingTable(i).ballId := 0.U
+      when(mappingTable(i).isRead) {
+        readPortAllocated(mappingTable(i).id) := false.B
+      }.otherwise {
+        writePortAllocated(mappingTable(i).id) := false.B
+      }
       releaseCounter         := 0.U
     }.elsewhen(mappingTable(i).valid && !mappingTable(i).isBall && !(io.mem_req(i).read.resp.valid ||
       io.mem_req(i).write.resp.valid || io.mem_req(i).read.req.valid ||
@@ -244,6 +263,11 @@ class MemMidend(val b: GlobalConfig) extends Module {
         mappingTable(i).id     := 0.U
         mappingTable(i).isBall := false.B
         mappingTable(i).ballId := 0.U
+        when(mappingTable(i).isRead) {
+          readPortAllocated(mappingTable(i).id) := false.B
+        }.otherwise {
+          writePortAllocated(mappingTable(i).id) := false.B
+        }
       }
     }.otherwise {
       releaseCounter := 0.U

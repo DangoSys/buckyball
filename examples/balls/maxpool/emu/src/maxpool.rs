@@ -4,6 +4,54 @@ use super::instruction::{BallInstruction, ExecContext};
 
 pub struct MaxPool;
 
+fn legal_geometry(
+    input_side: u64,
+    output_side: u64,
+    kernel: u64,
+    stride: u64,
+    padding: u64,
+    input_base: u64,
+    output_base: u64,
+    output_stride: u64,
+    start_row: u64,
+    start_col: u64,
+) -> bool {
+    if input_side == 0
+        || output_side == 0
+        || kernel == 0
+        || stride == 0
+        || output_stride < output_side
+    {
+        return false;
+    }
+
+    let padded_side = input_side + 2 * padding;
+    let last_row = start_row + (output_side - 1) * stride + kernel - 1;
+    let last_col = start_col + (output_side - 1) * stride + kernel - 1;
+    if kernel + start_row > padded_side
+        || kernel + start_col > padded_side
+        || last_row >= padded_side
+        || last_col >= padded_side
+        || output_base + (output_side - 1) * output_stride + output_side
+            > bank_lines() as u64
+    {
+        return false;
+    }
+
+    let input_end = padding + input_side;
+    let reads_input = start_row < input_end
+        && start_col < input_end
+        && last_row >= padding
+        && last_col >= padding;
+    if !reads_input {
+        return true;
+    }
+
+    let max_row = last_row.min(input_end - 1) - padding;
+    let max_col = last_col.min(input_end - 1) - padding;
+    input_base + max_row * input_side + max_col < bank_lines() as u64
+}
+
 impl BallInstruction for MaxPool {
     fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let input_bank = rs1_b0(xs1);
@@ -34,20 +82,20 @@ impl BallInstruction for MaxPool {
                 panic!("maxpool: each operand must occupy one allocated bank");
             }
         }
-        if input_side == 0
-            || output_side == 0
-            || kernel == 0
-            || stride == 0
-            || output_stride < output_side
-            || input_base + input_side * input_side > bank_lines()
+        if xs2 >> 46 != 0
             || output_side * output_side != iter
-            || output_base + (output_side - 1) * output_stride + output_side > bank_lines()
-            || input_side + 2 * padding < kernel + start_row
-            || input_side + 2 * padding < kernel + start_col
-            || start_row + (output_side - 1) * stride + kernel
-                > input_side + 2 * padding
-            || start_col + (output_side - 1) * stride + kernel
-                > input_side + 2 * padding
+            || !legal_geometry(
+                input_side as u64,
+                output_side as u64,
+                kernel as u64,
+                stride as u64,
+                padding as u64,
+                input_base as u64,
+                output_base as u64,
+                output_stride as u64,
+                start_row as u64,
+                start_col as u64,
+            )
         {
             panic!("maxpool: illegal square pooling geometry");
         }
@@ -103,21 +151,20 @@ impl BallInstruction for MaxPool {
         let start_row = (xs2 >> 38) & 0xf;
         let start_col = (xs2 >> 42) & 0xf;
         if rs1_b1(xs1) != 0
-            || input_side == 0
-            || output_side == 0
-            || kernel == 0
-            || stride == 0
-            || output_stride < output_side
-            || input_base + input_side * input_side > bank_lines() as u64
+            || xs2 >> 46 != 0
             || output_side * output_side != iter
-            || output_base + (output_side - 1) * output_stride + output_side
-                > bank_lines() as u64
-            || input_side + 2 * padding < kernel + start_row
-            || input_side + 2 * padding < kernel + start_col
-            || start_row + (output_side - 1) * stride + kernel
-                > input_side + 2 * padding
-            || start_col + (output_side - 1) * stride + kernel
-                > input_side + 2 * padding
+            || !legal_geometry(
+                input_side,
+                output_side,
+                kernel,
+                stride,
+                padding,
+                input_base,
+                output_base,
+                output_stride,
+                start_row,
+                start_col,
+            )
         {
             panic!("maxpool: illegal encoding");
         }

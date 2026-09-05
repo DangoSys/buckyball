@@ -1,4 +1,4 @@
-class toint8_env extends bb_blink_env #(1, 1);
+class toint8_env extends bb_blink_env #(`BB_IN_BW, `BB_OUT_BW);
   `uvm_component_utils(toint8_env)
 
   toint8_scoreboard scb;
@@ -22,7 +22,6 @@ class toint8_env extends bb_blink_env #(1, 1);
     cmd_agent.cmd_ap.connect(fcov.cmd_imp);
     read_mon.read_ap.connect(scb.read_imp);
     write_mon.write_ap.connect(scb.write_imp);
-    mmio_write_mon.write_ap.connect(scb.mmio_write_imp);
     resp_mon.resp_ap.connect(scb.resp_imp);
   endfunction
 endclass

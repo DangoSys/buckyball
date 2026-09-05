@@ -2,10 +2,9 @@
 
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
+#include "Buckyball/BuckyballOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/PatternMatch.h"
-
-#include "Buckyball/BuckyballOps.h"
 
 using namespace mlir;
 using namespace mlir::buddy;
@@ -26,8 +25,14 @@ public:
       return op.emitError("assign-physical-banks: invalid bank shape");
 
     auto base = state.tryAlloc(row, col);
-    if (!base)
-      return op.emitError("assign-physical-banks: out of physical banks");
+    if (!base) {
+      InFlightDiagnostic diagnostic =
+          op.emitError("assign-physical-banks: out of physical banks");
+      diagnostic << " (request=" << row << "x" << col
+                 << ", used=" << state.getUsedCount() << "/"
+                 << state.getBankNum() << ")";
+      return failure();
+    }
 
     state.createMset(rewriter, op.getLoc(), static_cast<uint64_t>(*base), true,
                      row, col);
@@ -48,9 +53,10 @@ public:
   LogicalResult matchAndRewrite(BankReleaseOp op,
                                 PatternRewriter &rewriter) const override {
     auto bank = state.getConstI64(op.getBank());
-    if (!bank)
+    if (!bank) {
       return op.emitError(
           "assign-physical-banks: release bank id is not constant");
+    }
     if (failed(state.release(op, *bank)))
       return failure();
 

@@ -39,8 +39,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val is_shared = Output(Bool())
   })
 
-  val s_idle :: s_setup :: s_mul :: s_dma_req :: s_dma_wait :: s_wait_write_resp :: s_done :: Nil = Enum(7)
-  val state                                                                                       = RegInit(s_idle)
+  val s_idle :: s_setup :: s_query :: s_query_wait :: s_mul :: s_dma_req :: s_dma_wait :: s_wait_write_resp :: s_done :: Nil =
+    Enum(9)
+  val state                                                                                                                  = RegInit(s_idle)
 
   val rob_id_reg     = RegInit(0.U(rob_id_width.W))
   val is_sub_reg     = RegInit(false.B)
@@ -147,6 +148,14 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.query_is_shared := is_shared_reg && (state === s_setup)
 
   when(state === s_setup) {
+    state := s_query
+  }
+
+  when(state === s_query) {
+    state := s_query_wait
+  }
+
+  when(state === s_query_wait) {
     assert(io.query_group_count >= 1.U, "MemLoader groups must be >= 1")
     group_count_reg := io.query_group_count
     state           := s_mul

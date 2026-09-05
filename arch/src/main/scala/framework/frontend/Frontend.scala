@@ -50,7 +50,8 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   val gDecoder:  Instance[GlobalDecoder]   = Instantiate(new GlobalDecoder(b))
   val scheduler: Instance[GlobalScheduler] = Instantiate(new GlobalScheduler(b))
-  val boot:      Instance[BootRom]         = Instantiate(new BootRom(b))
+
+  val boot: Instance[BootRom] = Instantiate(new BootRom(b))
 
   boot.io.schedulerIdle := scheduler.io.idle
   boot.io.cmd.ready     := boot.io.active && gDecoder.io.id_i.ready

@@ -267,8 +267,11 @@ public:
           bias.getShape()[0] != expectedChannels ||
           scale.getShape()[0] != expectedChannels || stride <= 0 ||
           lut.getRank() != 1 || !lut.getElementType().isInteger(8) ||
-          lut.getShape()[0] != (activation == 2 ? 256 : 1) || activation < 0 ||
-          activation > 2 ||
+          (activation == 2
+               ? (lut.getShape()[0] != 256 &&
+                  (!conv || outChannels != 16 || lut.getShape()[0] != 4096))
+               : lut.getShape()[0] != 1) ||
+          activation < 0 || activation > 2 ||
           (conv ? conv.getOutputScale() : depthwise.getOutputScale())
                   .convertToDouble() <= 0.0 ||
           padLow < 0 || padHigh < 0 || is[1] + padLow + padHigh < kernel ||

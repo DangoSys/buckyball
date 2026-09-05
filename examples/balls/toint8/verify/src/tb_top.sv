@@ -2,7 +2,7 @@ module tb_top;
   import uvm_pkg::*;
   import toint8_pkg::*;
 
-  bb_blink_if #(1, 1) intf ();
+  bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) intf ();
 
   ToInt8Ball dut (
       .clock(intf.clock),
@@ -71,30 +71,11 @@ module tb_top;
       .io_bankWrite_0_io_resp_valid(intf.bank_write_resp_valid[0]),
       .io_bankWrite_0_io_resp_bits_ok(intf.bank_write_resp_ok[0]),
       .io_subRobReq_ready(intf.sub_rob_req_ready),
-      .io_mmioWrite_0_ball_id(),
-      .io_mmioWrite_0_rob_id(),
-      .io_mmioWrite_0_req_ready(intf.mmio_write_req_ready[0]),
-      .io_mmioWrite_0_req_valid(intf.mmio_write_req_valid[0]),
-      .io_mmioWrite_0_req_bits_addr(intf.mmio_write_req_addr[0]),
-      .io_mmioWrite_0_req_bits_data(intf.mmio_write_req_data[0]),
-      .io_mmioWrite_1_ball_id(),
-      .io_mmioWrite_1_rob_id(),
-      .io_mmioWrite_1_req_ready(intf.mmio_write_req_ready[1]),
-      .io_mmioWrite_1_req_valid(intf.mmio_write_req_valid[1]),
-      .io_mmioWrite_1_req_bits_addr(intf.mmio_write_req_addr[1]),
-      .io_mmioWrite_1_req_bits_data(intf.mmio_write_req_data[1]),
-      .io_mmioWrite_2_ball_id(),
-      .io_mmioWrite_2_rob_id(),
-      .io_mmioWrite_2_req_ready(intf.mmio_write_req_ready[2]),
-      .io_mmioWrite_2_req_valid(intf.mmio_write_req_valid[2]),
-      .io_mmioWrite_2_req_bits_addr(intf.mmio_write_req_addr[2]),
-      .io_mmioWrite_2_req_bits_data(intf.mmio_write_req_data[2]),
-      .io_mmioWrite_3_ball_id(),
-      .io_mmioWrite_3_rob_id(),
-      .io_mmioWrite_3_req_ready(intf.mmio_write_req_ready[3]),
-      .io_mmioWrite_3_req_valid(intf.mmio_write_req_valid[3]),
-      .io_mmioWrite_3_req_bits_addr(intf.mmio_write_req_addr[3]),
-      .io_mmioWrite_3_req_bits_data(intf.mmio_write_req_data[3])
+      .io_status_idle(),
+      .io_status_running(),
+      .io_channelReady(1'b1),
+      .io_bankRead_0_ball_id(),
+      .io_bankWrite_0_ball_id()
   );
 
   initial begin
@@ -103,7 +84,7 @@ module tb_top;
   end
 
   initial begin
-    uvm_config_db#(virtual bb_blink_if #(1, 1))::set(null, "*", "vif", intf);
-    run_test();
+    uvm_config_db#(virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW))::set(null, "*", "vif", intf);
+    run_test("toint8_ball_test");
   end
 endmodule

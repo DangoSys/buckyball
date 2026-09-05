@@ -4,7 +4,7 @@
 include "Buckyball.td"
 
 def LutOp : Buckyball_Op<"lut"> {
-  let summary = "Apply a 256-entry INT8 lookup table";
+  let summary = "Apply a shared or 16-lane INT8 lookup table";
   let arguments = (ins I64:$inputBankId, I64:$lutBankId,
                        I64:$outputBankId, I64:$iter);
   let assemblyFormat = "$inputBankId `,` $lutBankId `,` $outputBankId `,` "
@@ -12,7 +12,7 @@ def LutOp : Buckyball_Op<"lut"> {
 }
 
 def BankLutOp : Buckyball_Op<"bank_lut"> {
-  let summary = "Apply a 256-entry INT8 lookup table with virtual banks";
+  let summary = "Apply a shared or 16-lane INT8 lookup table with virtual banks";
   let arguments = (ins I64:$inBank, I64:$lutBank, I64:$outBank, I64:$iter);
   let results = (outs I64:$outBankOut);
   let assemblyFormat = "$inBank $lutBank $outBank $iter attr-dict `:` "

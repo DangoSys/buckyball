@@ -14,7 +14,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   val robDepth     = b.frontend.rob_entries
   val idWidth      = log2Up(robDepth)
-  val scoreBankNum = 1 << b.frontend.bank_id_len
+  val scoreBankNum = b.frontend.vbank_id_upper_bound + 1 + robDepth
 
   require(
     b.frontend.vbank_id_upper_bound < b.memDomain.bankNum,
@@ -48,7 +48,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     )
   )
 
-  val scoreboard: Instance[BankScoreboard] = Instantiate(new BankScoreboard(scoreBankNum, robDepth))
+  val scoreboard: Instance[BankScoreboard] =
+    Instantiate(new BankScoreboard(b.frontend.bank_id_len, scoreBankNum, robDepth))
 
   // ---------------------------------------------------------------------------
   // Instruction trace (DPI-C, defined in ITraceDPI.scala)
@@ -127,20 +128,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     youngerReadOlderWrite || youngerWriteOlderRead || youngerWriteOlderWrite
   }
 
-  def physicalBankBusyFor(access: BankAccessInfo): Bool = {
-    val busy = WireDefault(false.B)
-    for (bank <- 0 until b.memDomain.bankNum) {
-      val bankId = bank.U(b.frontend.bank_id_len.W)
-      when(
-        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
-          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
-          (access.wr_bank_valid && access.wr_bank_id === bankId)
-      ) {
-        busy := physicalBankBusy(bank)
-      }
-    }
-    busy
-  }
+  def physicalBankBusyFor(access: BankAccessInfo): Bool =
+    (access.rd_bank_0_valid && physicalBankBusy(access.rd_bank_0_id)) ||
+      (access.rd_bank_1_valid && physicalBankBusy(access.rd_bank_1_id)) ||
+      (access.wr_bank_valid && physicalBankBusy(access.wr_bank_id))
 
   // ---------------------------------------------------------------------------
   // Allocate: enqueue decoded instruction into ROB

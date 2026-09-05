@@ -58,10 +58,9 @@ object BankAccessInfo {
 //====----------------------------------------------------------====//
 
 @instantiable
-class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
+class BankScoreboard(val bankIdLen: Int, val bankNum: Int, val robEntries: Int) extends Module {
 
-  val bankIdLen = log2Up(bankNum)
-  val cntWidth  = log2Ceil(robEntries + 1)
+  val cntWidth = log2Ceil(robEntries + 1)
 
   @public
   val alloc     = IO(Flipped(Valid(new BankAccessInfo(bankIdLen))))
@@ -80,11 +79,12 @@ class BankScoreboard(val bankNum: Int, val robEntries: Int) extends Module {
 
   val bankRdCount = RegInit(VecInit(Seq.fill(bankNum)(0.U(cntWidth.W))))
   val bankWrBusy  = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
+  private def bankIndex(id: UInt): UInt = id(log2Ceil(bankNum) - 1, 0)
 
   // --- Hazard detection (reads current register state) ---
   private def hazardOf(q: BankAccessInfo): Bool = {
-    val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(q.rd_bank_0_id)
-    val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(q.rd_bank_1_id)
+    val rd0_hazard = q.rd_bank_0_valid && bankWrBusy(bankIndex(q.rd_bank_0_id))
+    val rd1_hazard = q.rd_bank_1_valid && bankWrBusy(bankIndex(q.rd_bank_1_id))
     // Write hazard is NOT checked here. BAT eliminates WAW/WAR by giving each
     // write a unique alias that no other instruction uses. Checking wr_hazard
     // would falsely block the writer itself, since alloc marks the writer's

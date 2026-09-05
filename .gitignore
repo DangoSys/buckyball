@@ -6,6 +6,7 @@
 .cursor/
 .claude/
 .codex/
+.claude-code/
 result
 out/
 .Xil/
@@ -23,7 +24,7 @@ index.html
 *.dot
 *.svf
 /command.log
-/dramsim3.*
+dramsim3*
 
 # Vivado / Webtalk session files (root-level)
 /vivado*.jou
@@ -62,3 +63,4 @@ alib-52/
 lc_output.txt
 
 skills-lock.json
+.mcp.json

@@ -17,8 +17,6 @@ class GpDomain(val b: GlobalConfig) extends Module {
     val busy              = Output(Bool())
   })
 
-  io.global_issue_i.ready := io.global_complete_o.ready
-
 // -----------------------------------------------------------------------------
 // Decode Stage
 // -----------------------------------------------------------------------------
@@ -28,10 +26,17 @@ class GpDomain(val b: GlobalConfig) extends Module {
   decoder.io.inst_i <> io.global_issue_i.bits.cmd.cmd
   val decoded = decoder.io.decoded_o
 
-  io.global_complete_o.valid           := io.global_issue_i.valid
-  io.global_complete_o.bits.rob_id     := io.global_issue_i.bits.rob_id
-  io.global_complete_o.bits.is_sub     := io.global_issue_i.bits.is_sub
-  io.global_complete_o.bits.sub_rob_id := io.global_issue_i.bits.sub_rob_id
+  // GP operations are architecturally fire-and-forget, but completing them
+  // combinationally feeds the scheduler's completion arbiter in the same
+  // cycle. A one-entry queue preserves II=1 while cutting that issue ->
+  // complete path at a register boundary.
+  val completeQ = Module(new Queue(new GlobalSchedComplete(b), 1, pipe = true))
+  io.global_issue_i.ready          := completeQ.io.enq.ready
+  completeQ.io.enq.valid           := io.global_issue_i.valid
+  completeQ.io.enq.bits.rob_id     := io.global_issue_i.bits.rob_id
+  completeQ.io.enq.bits.is_sub     := io.global_issue_i.bits.is_sub
+  completeQ.io.enq.bits.sub_rob_id := io.global_issue_i.bits.sub_rob_id
+  io.global_complete_o <> completeQ.io.deq
 
   io.busy := false.B
 

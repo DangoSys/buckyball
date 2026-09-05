@@ -179,7 +179,8 @@ def MegaConv2dOp : Buckyball_Op<"mega_conv2d"> {
   let description = [{
     One resident NHWC INT8 convolution stage. Bias is already converted
     offline to INT32. A non-final result is requantized to INT8 and stays
-    inside the MegaKernel.
+    inside the MegaKernel. Activation LUTs contain either one shared
+    256-entry table or sixteen channel-major tables.
   }];
   let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
                        MemRefRankOf<[I8], [4]>:$weight,

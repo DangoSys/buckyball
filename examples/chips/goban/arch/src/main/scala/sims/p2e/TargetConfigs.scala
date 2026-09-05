@@ -8,9 +8,23 @@ class BuckyballGoban2CoreP2EConfig
         new examples.goban.BuckyballGoban2CoreConfig
     )
 
+class BuckyballGoban2CoreLinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban2CoreConfig
+    )
+
 class BuckyballGoban4CoreP2EConfig
     extends Config(
       new P2EBaseConfig ++
+        new examples.goban.BuckyballGoban4CoreConfig
+    )
+
+class BuckyballGoban4CoreLinuxP2EConfig
+    extends Config(
+      new WithLinuxBootROM ++
+        new P2EBaseConfig ++
         new examples.goban.BuckyballGoban4CoreConfig
     )
 

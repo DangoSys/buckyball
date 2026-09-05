@@ -1,4 +1,4 @@
-class smatmul_env extends bb_blink_env #(2, 1);
+class smatmul_env extends bb_blink_env #(`BB_IN_BW, `BB_OUT_BW);
   `uvm_component_utils(smatmul_env)
 
   smatmul_scoreboard scb;

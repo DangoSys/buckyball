@@ -22,6 +22,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val busy     = Output(Bool())
     val group_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
     val bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val hart_id  = Output(UInt(b.core.xLen.W))
   })
 
   // Each group has its own physical bank, so no address shifting is needed.
@@ -35,65 +36,86 @@ class AccPipe(val b: GlobalConfig) extends Module {
   //Bank_id output
   val bank_id_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
   io.bank_id := bank_id_reg
+  val hart_id_reg = RegInit(0.U(b.core.xLen.W))
+  io.hart_id := hart_id_reg
 
+  val rd_queued   = RegInit(false.B)
+  val rd_inflight = RegInit(false.B)
   val rd_hold     = RegInit(false.B)
+  val rd_addr     = Reg(UInt(log2Ceil(b.memDomain.bankEntries).W))
   val rd_data_reg = RegInit(0.U(b.memDomain.bankWidth.W))
+  val wr_queued   = RegInit(false.B)
+  val wr_inflight = RegInit(false.B)
   val wr_hold     = RegInit(false.B)
+  val wr_addr     = Reg(UInt(log2Ceil(b.memDomain.bankEntries).W))
+  val wr_data     = Reg(UInt(b.memDomain.bankWidth.W))
+  val wr_mask     = Reg(Vec(b.memDomain.bankMaskLen, Bool()))
   val wr_ok_reg   = RegInit(false.B)
-  val busy_reg    = RegInit(false.B)
 
-  val canStart    = !busy_reg && !rd_hold && !wr_hold
+  val canStart    = !rd_queued && !rd_inflight && !rd_hold && !wr_queued && !wr_inflight && !wr_hold
   val hasWriteReq = io.mem_req.write.req.valid
-  val wrReq       = canStart && hasWriteReq
-  val rdReq       = canStart && !hasWriteReq && io.mem_req.read.req.valid
+  val wrReq       = wr_queued
+  val rdReq       = rd_queued
 
   io.sramRead.req.valid     := rdReq
-  io.sramRead.req.bits.addr := io.mem_req.read.req.bits.addr
+  io.sramRead.req.bits.addr := rd_addr
   io.sramRead.resp.ready    := !rd_hold
 
   io.sramWrite.req.valid     := wrReq
-  io.sramWrite.req.bits.addr := io.mem_req.write.req.bits.addr
-  io.sramWrite.req.bits.data := io.mem_req.write.req.bits.data
-  io.sramWrite.req.bits.mask := io.mem_req.write.req.bits.mask
+  io.sramWrite.req.bits.addr := wr_addr
+  io.sramWrite.req.bits.data := wr_data
+  io.sramWrite.req.bits.mask := wr_mask
   io.sramWrite.resp.ready    := !wr_hold
 
-  io.mem_req.read.req.ready      := canStart && !hasWriteReq && io.sramRead.req.ready
+  io.mem_req.read.req.ready      := canStart && !hasWriteReq
   io.mem_req.read.resp.valid     := rd_hold
   io.mem_req.read.resp.bits.data := rd_data_reg
 
-  io.mem_req.write.req.ready    := canStart && io.sramWrite.req.ready
+  io.mem_req.write.req.ready    := canStart
   io.mem_req.write.resp.valid   := wr_hold
   io.mem_req.write.resp.bits.ok := wr_ok_reg
 
-  when(rd_hold && io.mem_req.read.resp.ready) {
-    rd_hold := false.B
-  }.elsewhen(io.sramRead.resp.fire) {
+  when(io.mem_req.read.req.fire) {
+    rd_queued    := true.B
+    rd_addr      := io.mem_req.read.req.bits.addr
+    group_id_reg := io.mem_req.group_id
+    bank_id_reg  := io.mem_req.bank_id
+    hart_id_reg  := io.mem_req.hart_id
+  }
+  when(io.sramRead.req.fire) {
+    rd_queued   := false.B
+    rd_inflight := true.B
+  }
+  when(io.sramRead.resp.fire) {
+    rd_inflight := false.B
     rd_hold     := true.B
     rd_data_reg := io.sramRead.resp.bits.data
   }
+  when(rd_hold && io.mem_req.read.resp.ready) {
+    rd_hold := false.B
+  }
 
+  when(io.mem_req.write.req.fire) {
+    wr_queued    := true.B
+    wr_addr      := io.mem_req.write.req.bits.addr
+    wr_data      := io.mem_req.write.req.bits.data
+    wr_mask      := io.mem_req.write.req.bits.mask
+    group_id_reg := io.mem_req.group_id
+    bank_id_reg  := io.mem_req.bank_id
+    hart_id_reg  := io.mem_req.hart_id
+  }
+  when(io.sramWrite.req.fire) {
+    wr_queued   := false.B
+    wr_inflight := true.B
+  }
+  when(io.sramWrite.resp.fire) {
+    wr_inflight := false.B
+    wr_hold     := true.B
+    wr_ok_reg   := io.sramWrite.resp.bits.ok
+  }
   when(wr_hold && io.mem_req.write.resp.ready) {
     wr_hold := false.B
-  }.elsewhen(io.sramWrite.resp.fire) {
-    wr_hold   := true.B
-    wr_ok_reg := io.sramWrite.resp.bits.ok
   }
 
-  when(io.mem_req.read.req.fire) {
-    group_id_reg := io.mem_req.group_id
-    bank_id_reg  := io.mem_req.bank_id
-  }
-  when(io.mem_req.write.req.fire) {
-    group_id_reg := io.mem_req.group_id
-    bank_id_reg  := io.mem_req.bank_id
-  }
-
-  when(io.mem_req.read.req.fire || io.mem_req.write.req.fire) {
-    busy_reg := true.B
-  }
-  when(io.mem_req.read.resp.fire || io.mem_req.write.resp.fire) {
-    busy_reg := false.B
-  }
-
-  io.busy := busy_reg
+  io.busy := rd_queued || rd_inflight || rd_hold || wr_queued || wr_inflight || wr_hold
 }

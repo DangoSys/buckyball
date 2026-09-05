@@ -99,17 +99,17 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   switch(state) {
     is(idle) {
       when(io.cmdReq.fire) {
-        val cmd          = io.cmdReq.bits.cmd
-        val inSide       = cmd.rs2(3, 0)
-        val outSide      = cmd.rs2(7, 4)
-        val kernelSize   = cmd.rs2(11, 8)
-        val poolStride   = cmd.rs2(15, 12)
-        val poolPadding  = cmd.rs2(19, 16)
-        val inBase       = cmd.rs2(25, 20)
-        val outBase      = cmd.rs2(31, 26)
-        val outStride    = cmd.rs2(37, 32)
-        val poolStartRow = cmd.rs2(41, 38)
-        val poolStartCol = cmd.rs2(45, 42)
+        val cmd           = io.cmdReq.bits.cmd
+        val inSide        = cmd.rs2(3, 0)
+        val outSide       = cmd.rs2(7, 4)
+        val kernelSize    = cmd.rs2(11, 8)
+        val poolStride    = cmd.rs2(15, 12)
+        val poolPadding   = cmd.rs2(19, 16)
+        val inBase        = cmd.rs2(25, 20)
+        val outBase       = cmd.rs2(31, 26)
+        val outStride     = cmd.rs2(37, 32)
+        val poolStartRow  = cmd.rs2(41, 38)
+        val poolStartCol  = cmd.rs2(45, 42)
         assert(cmd.rs2(63, 46) === 0.U, "MAXPOOL reserved rs2 bits must be zero")
         assert(cmd.funct7 === funct.U, "MaxPoolBall funct7 must be MAXPOOL")
         assert(cmd.rs1(19, 10) === 0.U, "MAXPOOL reserves input bank 1")
@@ -128,7 +128,17 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
           "MAXPOOL dimensions must be positive"
         )
         assert(outStride >= outSide, "MAXPOOL output stride is too small")
-        assert(inBase +& inSide * inSide <= b.memDomain.bankEntries.U, "MAXPOOL input tile exceeds bank depth")
+        val lastSourceRow = poolStartRow +& (outSide - 1.U) * poolStride +& (kernelSize - 1.U)
+        val lastSourceCol = poolStartCol +& (outSide - 1.U) * poolStride +& (kernelSize - 1.U)
+        val inputEnd      = poolPadding +& inSide
+        val readsInput    = poolStartRow < inputEnd && poolStartCol < inputEnd &&
+          lastSourceRow >= poolPadding && lastSourceCol >= poolPadding
+        val maxInputRow   = Mux(lastSourceRow < inputEnd, lastSourceRow - poolPadding, inSide - 1.U)
+        val maxInputCol   = Mux(lastSourceCol < inputEnd, lastSourceCol - poolPadding, inSide - 1.U)
+        assert(
+          !readsInput || inBase +& maxInputRow * inSide +& maxInputCol < b.memDomain.bankEntries.U,
+          "MAXPOOL input window exceeds bank depth"
+        )
         assert(
           outSide * outSide === cmd.iter &&
             outBase +& (outSide - 1.U) * outStride +& outSide <= b.memDomain.bankEntries.U,

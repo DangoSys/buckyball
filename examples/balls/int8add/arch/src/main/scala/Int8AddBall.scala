@@ -3,8 +3,9 @@ package examples.balls.int8add
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
-import hardfloat.{recFNFromFN, AddRecFN, INToRecFN, MulRecFN, RecFNToIN}
+import hardfloat.{rawFloatFromRecFN, recFNFromFN, PipelinedAddRawFN, RecFNToIN, RoundRawFNToRecFN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
+import freechips.rocketchip.tile.{MulAddRecFNPipe, PipelinedINToRecFN}
 
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
@@ -37,69 +38,108 @@ class Int8AddBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   def status: BallStatus = io.status
   dontTouch(io)
 
-  private val idle :: waitForChannels :: readRequest :: readResponse :: calculate :: writeRequest :: writeResponse :: complete :: Nil =
-    Enum(8)
-  private val state                                                                                                                   = RegInit(idle)
-  private val robId                                                                                                                   = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
-  private val isSub                                                                                                                   = RegInit(false.B)
-  private val subRobId                                                                                                                = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val lhsBank                                                                                                                 = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val rhsBank                                                                                                                 = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val outputBank                                                                                                              = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val groups                                                                                                                  = RegInit(0.U(5.W))
-  private val group                                                                                                                   = RegInit(0.U(5.W))
-  private val iter                                                                                                                    = RegInit(0.U(b.frontend.iter_len.W))
-  private val row                                                                                                                     = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
-  private val lhsRatio                                                                                                                = Reg(UInt(32.W))
-  private val rhsRatio                                                                                                                = Reg(UInt(32.W))
-  private val relu                                                                                                                    = RegInit(false.B)
-  private val lhsWord                                                                                                                 = Reg(UInt(128.W))
-  private val rhsWord                                                                                                                 = Reg(UInt(128.W))
-  private val lhsRequested                                                                                                            = RegInit(false.B)
-  private val rhsRequested                                                                                                            = RegInit(false.B)
-  private val lhsReceived                                                                                                             = RegInit(false.B)
-  private val rhsReceived                                                                                                             = RegInit(false.B)
-  private val lane                                                                                                                    = RegInit(0.U(4.W))
-  private val outputWord                                                                                                              = Reg(Vec(16, UInt(8.W)))
+  private val idle :: waitForChannels :: readRequest :: readResponse :: calculate :: calculateDrain :: writeRequest :: writeResponse :: complete :: Nil =
+    Enum(9)
+  private val state                                                                                                                                     = RegInit(idle)
+  private val robId                                                                                                                                     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
+  private val isSub                                                                                                                                     = RegInit(false.B)
+  private val subRobId                                                                                                                                  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  private val lhsBank                                                                                                                                   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val rhsBank                                                                                                                                   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val outputBank                                                                                                                                = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val groups                                                                                                                                    = RegInit(0.U(5.W))
+  private val group                                                                                                                                     = RegInit(0.U(5.W))
+  private val iter                                                                                                                                      = RegInit(0.U(b.frontend.iter_len.W))
+  private val row                                                                                                                                       = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  private val lhsRatio                                                                                                                                  = Reg(UInt(32.W))
+  private val rhsRatio                                                                                                                                  = Reg(UInt(32.W))
+  private val relu                                                                                                                                      = RegInit(false.B)
+  private val lhsWord                                                                                                                                   = Reg(UInt(128.W))
+  private val rhsWord                                                                                                                                   = Reg(UInt(128.W))
+  private val lhsRequested                                                                                                                              = RegInit(false.B)
+  private val rhsRequested                                                                                                                              = RegInit(false.B)
+  private val lhsReceived                                                                                                                               = RegInit(false.B)
+  private val rhsReceived                                                                                                                               = RegInit(false.B)
+  private val lane                                                                                                                                      = RegInit(0.U(4.W))
+  private val completed                                                                                                                                 = RegInit(0.U(5.W))
+  private val outputWord                                                                                                                                = Reg(Vec(16, UInt(8.W)))
 
   private def positiveFinite(value: UInt): Bool =
     !value(31) && value(30, 23) =/= 255.U && value(30, 0) =/= 0.U
 
-  private val lhsToFloat = Module(new INToRecFN(8, 8, 24))
-  private val rhsToFloat = Module(new INToRecFN(8, 8, 24))
-  private val lhsMul     = Module(new MulRecFN(8, 24))
-  private val rhsMul     = Module(new MulRecFN(8, 24))
-  private val add        = Module(new AddRecFN(8, 24))
-  private val toInt      = Module(new RecFNToIN(8, 24, 8))
-  private val lhsValue   = (lhsWord >> (lane << 3))(7, 0)
-  private val rhsValue   = (rhsWord >> (lane << 3))(7, 0)
+  private val lhsToFloat     = Module(new PipelinedINToRecFN(8, 8, 24))
+  private val rhsToFloat     = Module(new PipelinedINToRecFN(8, 8, 24))
+  private val lhsMul         = Module(new MulAddRecFNPipe(3, 8, 24))
+  private val rhsMul         = Module(new MulAddRecFNPipe(3, 8, 24))
+  private val add            = Module(new PipelinedAddRawFN(8, 24))
+  private val round          = Module(new RoundRawFNToRecFN(8, 24, 0))
+  private val toInt          = Module(new RecFNToIN(8, 24, 8))
+  private val lhsValue       = (lhsWord >> (lane << 3))(7, 0)
+  private val rhsValue       = (rhsWord >> (lane << 3))(7, 0)
+  private val calculateIssue = state === calculate
 
+  private val ratioStage0    = RegEnable(lhsRatio, calculateIssue)
+  private val ratioStage1    = RegEnable(ratioStage0, RegNext(calculateIssue, false.B))
+  private val rhsRatioStage0 = RegEnable(rhsRatio, calculateIssue)
+  private val rhsRatioStage1 = RegEnable(rhsRatioStage0, RegNext(calculateIssue, false.B))
+  private val laneStage0     = RegEnable(lane, calculateIssue)
+  private val laneStage1     = RegEnable(laneStage0, RegNext(calculateIssue, false.B))
+
+  private val conversionValid = lhsToFloat.io.validout
+  private val productLane     = Pipe(conversionValid, laneStage1, 3)
+
+  private val addResult     = add.io.rawOut
+  private val addLane       = Pipe(lhsMul.io.validout, productLane.bits, 4)
+  private val addValid      = add.io.validout
+  private val roundedResult = RegEnable(round.io.out, addValid)
+  private val roundedLane   = RegEnable(addLane, addValid)
+  private val resultValid   = RegNext(addValid, false.B)
+
+  lhsToFloat.io.validin        := calculateIssue
   lhsToFloat.io.signedIn       := true.B
   lhsToFloat.io.in             := lhsValue
+  lhsToFloat.io.bypassIn       := lhsValue
   lhsToFloat.io.roundingMode   := round_near_even
   lhsToFloat.io.detectTininess := tininess_afterRounding
+  lhsToFloat.io.typeTagIn      := 0.U
+  lhsToFloat.io.wflagsIn       := false.B
+  rhsToFloat.io.validin        := calculateIssue
   rhsToFloat.io.signedIn       := true.B
   rhsToFloat.io.in             := rhsValue
+  rhsToFloat.io.bypassIn       := rhsValue
   rhsToFloat.io.roundingMode   := round_near_even
   rhsToFloat.io.detectTininess := tininess_afterRounding
+  rhsToFloat.io.typeTagIn      := 0.U
+  rhsToFloat.io.wflagsIn       := false.B
 
+  lhsMul.io.validin        := conversionValid
+  lhsMul.io.op             := 0.U
   lhsMul.io.a              := lhsToFloat.io.out
-  lhsMul.io.b              := recFNFromFN(8, 24, lhsRatio)
+  lhsMul.io.b              := recFNFromFN(8, 24, ratioStage1)
+  lhsMul.io.c              := recFNFromFN(8, 24, 0.U)
   lhsMul.io.roundingMode   := round_near_even
-  lhsMul.io.detectTininess := tininess_afterRounding.asBool
+  lhsMul.io.detectTininess := tininess_afterRounding.asUInt
+  rhsMul.io.validin        := conversionValid
+  rhsMul.io.op             := 0.U
   rhsMul.io.a              := rhsToFloat.io.out
-  rhsMul.io.b              := recFNFromFN(8, 24, rhsRatio)
+  rhsMul.io.b              := recFNFromFN(8, 24, rhsRatioStage1)
+  rhsMul.io.c              := recFNFromFN(8, 24, 0.U)
   rhsMul.io.roundingMode   := round_near_even
-  rhsMul.io.detectTininess := tininess_afterRounding.asBool
+  rhsMul.io.detectTininess := tininess_afterRounding.asUInt
 
-  add.io.subOp          := false.B
-  add.io.a              := lhsMul.io.out
-  add.io.b              := rhsMul.io.out
-  add.io.roundingMode   := round_near_even
-  add.io.detectTininess := tininess_afterRounding.asBool
-  toInt.io.in           := add.io.out
-  toInt.io.roundingMode := round_near_even
-  toInt.io.signedOut    := true.B
+  add.io.validin          := lhsMul.io.validout
+  add.io.subOp            := false.B
+  add.io.a                := rawFloatFromRecFN(8, 24, lhsMul.io.out)
+  add.io.b                := rawFloatFromRecFN(8, 24, rhsMul.io.out)
+  add.io.roundingMode     := round_near_even
+  round.io.invalidExc     := add.io.invalidExc
+  round.io.infiniteExc    := false.B
+  round.io.in             := addResult
+  round.io.roundingMode   := round_near_even
+  round.io.detectTininess := tininess_afterRounding
+  toInt.io.in             := roundedResult
+  toInt.io.roundingMode   := round_near_even
+  toInt.io.signedOut      := true.B
   private val result = Mux(relu && toInt.io.out(7), 0.U, toInt.io.out)
 
   io.cmdReq.ready            := state === idle
@@ -191,18 +231,19 @@ class Int8AddBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
       when(io.bankRead(0).io.resp.fire) { lhsWord := io.bankRead(0).io.resp.bits.data; lhsReceived := true.B }
       when(io.bankRead(1).io.resp.fire) { rhsWord := io.bankRead(1).io.resp.bits.data; rhsReceived := true.B }
       when((lhsReceived || io.bankRead(0).io.resp.fire) && (rhsReceived || io.bankRead(1).io.resp.fire)) {
-        lane  := 0.U
-        state := calculate
+        lane      := 0.U
+        completed := 0.U
+        state     := calculate
       }
     }
     is(calculate) {
-      outputWord(lane) := result
       when(lane === 15.U) {
-        state := writeRequest
+        state := calculateDrain
       }.otherwise {
         lane := lane + 1.U
       }
     }
+    is(calculateDrain) {}
     is(writeRequest) {
       io.bankWrite(0).io.req.valid            := true.B
       when(io.bankWrite(0).io.req.fire)(state := writeResponse)
@@ -223,6 +264,14 @@ class Int8AddBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
     }
     is(complete) {
       when(io.cmdResp.fire)(state := idle)
+    }
+  }
+
+  when((state === calculate || state === calculateDrain) && resultValid) {
+    outputWord(roundedLane.bits) := result
+    completed                    := completed + 1.U
+    when(completed === 15.U) {
+      state := writeRequest
     }
   }
 }
