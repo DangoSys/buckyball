@@ -196,18 +196,27 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   }
 
   for (i <- 0 until b.memDomain.bankChannel) {
-    val routePbank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-    val routeMatch = VecInit(mappingTable.map(entry =>
+    val routePbank        = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+    val routeMatch        = VecInit(mappingTable.map(entry =>
       entry.valid && entry.vbank_id === io.mem_req(i).bank_id &&
         (!entry.is_multi || entry.group_id === io.mem_req(i).group_id)
     ))
+    val requestRoute      = PriorityEncoder(routeMatch)
+    val requestRouteValid = routeMatch.asUInt.orR
+    // Before the first request is accepted, the pipe is idle and has no
+    // latched route yet.  Select the bank from the live request in that cycle;
+    // once accepted, keep using the latched route until the response drains.
+    val activeRoute       = Mux(accPipes(i).io.busy, routePbank, requestRoute)
+    val requestActive     = io.mem_req(i).read.req.valid ||
+      io.mem_req(i).write.req.valid || accPipes(i).io.busy
+    val activeRouteValid  = Mux(accPipes(i).io.busy, true.B, requestRouteValid)
     when(io.mem_req(i).read.req.fire || io.mem_req(i).write.req.fire) {
-      routePbank := PriorityEncoder(routeMatch)
+      routePbank := requestRoute
     }
 
     // Requests are attributed once the selected SRAM accepts them.
     when(accPipes(i).io.sramRead.req.fire) {
-      emitTrace(i, 0.U, routePbank, accPipes(i).io.sramRead.req.bits.addr, 0.U, 0.U, 0.U, true.B)
+      emitTrace(i, 0.U, activeRoute, accPipes(i).io.sramRead.req.bits.addr, 0.U, 0.U, 0.U, true.B)
     }
 
     // Arrival trace: the write has crossed arbitration and is accepted by the
@@ -217,7 +226,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
       emitTrace(
         i,
         1.U,
-        routePbank,
+        activeRoute,
         accPipes(i).io.sramWrite.req.bits.addr,
         accPipes(i).io.sramWrite.req.bits.mask.asUInt,
         accPipes(i).io.sramWrite.req.bits.data(63, 0),
@@ -227,7 +236,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     }
 
     for (j <- 0 until b.memDomain.bankNum) {
-      when(accPipes(i).io.busy && routePbank === j.U) {
+      when(requestActive && activeRouteValid && activeRoute === j.U) {
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }
