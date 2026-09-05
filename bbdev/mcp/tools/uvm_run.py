@@ -2,25 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from common import submit, err, fmt, need, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_uvm_run(
-        ball: str,
-        filelist: Optional[str] = None,
-        test: Optional[str] = None,
-    ) -> str:
+    def bbdev_uvm_run(chip: str, ball: Optional[str] = None) -> str:
         """Build and run a Ball UVM simulation. POST /uvm/run."""
-        if e := need("ball", ball):
+        if e := need("chip", chip):
             return err(e)
-        params: Dict[str, Any] = {"ball": ball}
-        if filelist:
-            params["filelist"] = filelist
-        if test:
-            params["test"] = test
+        params = {"chip": chip}
+        if ball:
+            params["ball"] = ball
         return fmt(submit("/uvm/run", params))
-

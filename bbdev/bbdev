@@ -167,8 +167,16 @@ def cleanup_config(config_path: str):
 
 
 def load_host_environment() -> None:
-    """No-op placeholder: host EDA env (TARGET_LIBRARY etc.) comes from the user shell (zshrc)."""
-    return
+    """Import the host login-shell environment used by the EDA tools."""
+    result = subprocess.run(
+        ["zsh", "-lic", "env -0"],
+        check=True,
+        capture_output=True,
+    )
+    for item in result.stdout.split(b"\0"):
+        if item:
+            key, value = item.split(b"=", 1)
+            os.environ[key.decode()] = value.decode()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

@@ -10,20 +10,14 @@ config = {
 
 
 def check_args(body: dict) -> str | None:
-    allowed = {"ball", "filelist", "test", "plusargs"}
+    allowed = {"chip", "ball"}
     for key in body:
         if key not in allowed:
             return f"Unexpected parameter: --{key}"
-    ball = body.get("ball")
-    if not ball or ball is True:
-        return "Missing required parameter: --ball=<name>"
-    if body.get("filelist") is True:
-        return "Parameter --filelist requires a path value"
-    if body.get("test") is True:
-        return "Parameter --test requires a value"
-    plusargs = body.get("plusargs")
-    if not isinstance(plusargs, str) or not plusargs:
-        return "Missing required parameter: --plusargs='+BID=<n>'"
+    if not body.get("chip") or body.get("chip") is True:
+        return "Missing required parameter: --chip"
+    if body.get("ball") is True:
+        return "Parameter --ball requires a value"
     return None
 
 

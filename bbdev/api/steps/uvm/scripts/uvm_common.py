@@ -1,359 +1,206 @@
 import os
-import re
 import shlex
 import sys
 import tomllib
+from datetime import datetime
+from pathlib import Path
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+config_scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", "scripts"))
+if config_scripts not in sys.path:
+    sys.path.insert(0, config_scripts)
 
-from utils.stream_run import StreamResult, stream_run_logger
-
-
-def default_test_name(ball: str) -> str:
-    if ball == "fp2int":
-        return "fp2int_scale_rows_test"
-    if ball == "int2fp":
-        return "int2fp_channel_two_rows_test"
-    return f"{ball}_ball_test"
+import chip_pb2
+from utils.path import get_buckyball_path, log_dir
+from utils.stream_run import stream_run_logger
 
 
-def config_dir_name(config: str) -> str:
-    if not isinstance(config, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", config):
-        raise ValueError("invalid config name")
-    return config
+def load_chip(bbdir: str, chip: str):
+    path = Path(bbdir) / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
+    msg = chip_pb2.Chip()
+    msg.ParseFromString(path.read_bytes())
+    if not msg.name or not msg.cores:
+        raise ValueError(f"empty chip.pb: {path}")
+    return msg
 
 
-def core_ball_isa_defines(bbdir: str, input_data: dict, ball: str) -> list[str]:
-    core_config = input_data.get("core_config")
-    if not isinstance(core_config, str) or not core_config:
-        raise ValueError("Missing required parameter: --core-config=<path>")
-    path = core_config if os.path.isabs(core_config) else os.path.join(bbdir, core_config)
-    path = os.path.abspath(path)
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"core_config not found: {path}")
-    with open(path, "rb") as src:
-        core = tomllib.load(src)
-    rel_domain = core.get("balldomain")
-    if not isinstance(rel_domain, str) or not rel_domain:
-        raise ValueError(f"core_config missing balldomain: {path}")
-    domain_path = os.path.abspath(os.path.join(os.path.dirname(path), rel_domain))
-    if not os.path.isfile(domain_path):
-        raise FileNotFoundError(f"balldomain not found: {domain_path}")
-    with open(domain_path, "rb") as src:
-        domain = tomllib.load(src)
-    entries = domain.get("ballISA")
-    if not isinstance(entries, list):
-        raise ValueError(f"ballISA missing from {domain_path}")
-    required = {
-        "fp2int": {"FP2INT": "FP2INT_FUNCT7"},
-        "int2fp": {
-            "INT2FP_TENSOR": "INT2FP_TENSOR_FUNCT7",
-            "INT2FP_CHANNEL": "INT2FP_CHANNEL_FUNCT7",
-        },
-        "smatmul": {
-            "SMATMUL_OS": "SMATMUL_OS_FUNCT7",
-            "SMATMUL_BIAS": "SMATMUL_BIAS_FUNCT7",
-        },
-        "matadd": {"MATADD": "MATADD_FUNCT7"},
-        "im2col": {"IM2COL": "IM2COL_FUNCT7"},
-        "transpose": {"TRANSPOSE": "TRANSPOSE_FUNCT7"},
-    }.get(ball)
-    if required is None:
-        return []
-    values = {}
-    for entry in entries:
-        if not isinstance(entry, dict):
-            raise ValueError(f"invalid ballISA entry in {domain_path}")
-        mnemonic = entry.get("mnemonic")
-        funct7 = entry.get("funct7")
-        if mnemonic in required:
-            if not isinstance(funct7, int) or funct7 < 0 or funct7 > 127:
-                raise ValueError(f"invalid funct7 for {mnemonic} in {domain_path}")
-            if mnemonic in values:
-                raise ValueError(f"duplicate {mnemonic} in {domain_path}")
-            values[mnemonic] = funct7
-    if set(values) != set(required):
-        raise ValueError(f"{domain_path} missing required {ball} ISA entries")
-    defines = [f"+define+{macro}={values[mnemonic]}" for mnemonic, macro in required.items()]
-    if ball == "smatmul":
-        mappings = domain.get("ballIdMappings")
-        if not isinstance(mappings, list):
-            raise ValueError(f"ballIdMappings missing from {domain_path}")
-        matching = [entry for entry in mappings
-                    if isinstance(entry, dict) and entry.get("ballName") == "SMatMulBall"]
-        if len(matching) != 1:
-            raise ValueError(f"{domain_path} must define exactly one SMatMulBall mapping")
-        in_bw = matching[0].get("inBW")
-        out_bw = matching[0].get("outBW")
-        if in_bw != 2 or out_bw != 1:
-            raise ValueError(f"SMatMulBall must use inBW=2,outBW=1 in {domain_path}")
-        defines.append("+define+SMATMUL_OUT_BW=1")
-    return defines
+def ball_domain(chip):
+    d0 = chip.cores[0].balldomain
+    key = [(m.ball_id, m.ball_dir, m.in_bw, m.out_bw) for m in d0.mappings]
+    isa = [(e.mnemonic, e.funct7, e.bid) for e in d0.isa]
+    for core in chip.cores[1:]:
+        k = [(m.ball_id, m.ball_dir, m.in_bw, m.out_bw) for m in core.balldomain.mappings]
+        i = [(e.mnemonic, e.funct7, e.bid) for e in core.balldomain.isa]
+        if k != key or i != isa:
+            raise ValueError("chip.pb cores have different balldomains")
+    return d0
 
 
-def uvm_paths(bbdir: str, input_data: dict, ball_override: str | None = None) -> dict:
-    ball = ball_override or input_data.get("ball")
-    if not isinstance(ball, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", ball):
-        raise ValueError("invalid ball name")
-
-    config = input_data.get("config")
-    config_dir = config_dir_name(config) if config else None
-    ball_dir = os.path.join(bbdir, "examples", "balls", ball)
-    verify_dir = os.path.join(ball_dir, "verify")
-    casegen_dir = os.path.join(verify_dir, "casegen")
-    verify_env = os.path.join(bbdir, "verify")
-    build_dir = os.path.join(verify_dir, "build")
-    sim_dir = os.path.join(build_dir, config_dir) if config_dir else os.path.join(build_dir, "current")
-    simv = os.path.join(sim_dir, "simv")
-    csrc_dir = os.path.join(sim_dir, "csrc")
-    core_config = input_data.get("core_config")
-    core_dir = None
-    if config_dir:
-        if not isinstance(core_config, str) or not core_config:
-            raise ValueError("Missing required parameter: --core-config=<path>")
-        core_path = core_config if os.path.isabs(core_config) else os.path.join(bbdir, core_config)
-        core_dir = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(core_path))))
-    rtl_dir = os.path.join(bbdir, "arch", "build", core_dir, config_dir) if config_dir else None
-
-    return {
-        "ball": ball,
-        "config": config_dir,
-        "ball_dir": ball_dir,
-        "verify_dir": verify_dir,
-        "casegen_dir": casegen_dir,
-        "verify_env": verify_env,
-        "build_dir": build_dir,
-        "sim_dir": sim_dir,
-        "simv": simv,
-        "csrc_dir": csrc_dir,
-        "rtl_dir": rtl_dir,
-    }
+def selected_mappings(domain, ball: str | None):
+    if ball is None:
+        return list(domain.mappings)
+    for m in domain.mappings:
+        if m.ball_dir == ball:
+            return [m]
+    raise ValueError(f"ball {ball!r} not in chip.pb")
 
 
-def checked_paths(bbdir: str, input_data: dict, ball_override: str | None = None) -> dict:
-    paths = uvm_paths(bbdir, input_data, ball_override)
-    for key in ("ball_dir", "verify_dir", "casegen_dir", "verify_env"):
-        if not os.path.isdir(paths[key]):
-            raise FileNotFoundError(f"{key} not found: {paths[key]}")
-    if paths["rtl_dir"] and not os.path.isdir(paths["rtl_dir"]):
-        raise FileNotFoundError(f"rtl_dir not found: {paths['rtl_dir']}")
-
-    cargo_toml = os.path.join(paths["casegen_dir"], "Cargo.toml")
-    if not os.path.isfile(cargo_toml):
-        raise FileNotFoundError(f"Cargo.toml not found: {cargo_toml}")
-
-    filelist = resolve_filelist(paths["verify_dir"], input_data.get("filelist"), paths["ball"])
-    crate = read_crate_name(cargo_toml)
-    dpi_lib = os.path.join(paths["casegen_dir"], "target", "debug", f"lib{crate.replace('-', '_')}")
-
-    paths.update({
-        "cargo_toml": cargo_toml,
-        "filelist": filelist,
-        "filelist_arg": prepare_filelist(paths, filelist),
-        "crate": crate,
-        "dpi_lib": dpi_lib,
-    })
-    return paths
-
-
-def checked_run_paths(bbdir: str, input_data: dict) -> dict:
-    paths = uvm_paths(bbdir, input_data)
-    for key in ("ball_dir", "verify_dir", "casegen_dir", "verify_env"):
-        if not os.path.isdir(paths[key]):
-            raise FileNotFoundError(f"{key} not found: {paths[key]}")
-
-    cargo_toml = os.path.join(paths["casegen_dir"], "Cargo.toml")
-    if not os.path.isfile(cargo_toml):
-        raise FileNotFoundError(f"Cargo.toml not found: {cargo_toml}")
-
-    crate = read_crate_name(cargo_toml)
-    dpi_lib = os.path.join(paths["casegen_dir"], "target", "debug", f"lib{crate.replace('-', '_')}")
-    paths.update({
-        "cargo_toml": cargo_toml,
-        "crate": crate,
-        "dpi_lib": dpi_lib,
-    })
-    return paths
-
-
-def discover_uvm_balls(bbdir: str) -> list[str]:
-    balls_dir = os.path.join(bbdir, "examples", "balls")
-    if not os.path.isdir(balls_dir):
-        return []
-    balls = []
-    for name in sorted(os.listdir(balls_dir)):
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
-            continue
-        verify_dir = os.path.join(balls_dir, name, "verify")
-        filelist_dir = os.path.join(verify_dir, "filelists")
-        casegen_toml = os.path.join(verify_dir, "casegen", "Cargo.toml")
-        if os.path.isdir(filelist_dir) and os.path.isfile(casegen_toml):
-            balls.append(name)
-    return balls
-
-
-def resolve_filelist(verify_dir: str, arg, ball: str) -> str:
-    if arg is True:
-        raise ValueError("parameter --filelist requires a path value")
-
-    if arg:
-        path = arg if os.path.isabs(arg) else os.path.join(verify_dir, arg)
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"filelist not found: {path}")
-        return os.path.abspath(path)
-
-    default = os.path.join(verify_dir, "filelists", f"{ball}_ball_toy.f")
-    if os.path.isfile(default):
-        return default
-
-    filelist_dir = os.path.join(verify_dir, "filelists")
-    if not os.path.isdir(filelist_dir):
-        raise FileNotFoundError(f"filelist directory not found: {filelist_dir}")
-    found = [
-        os.path.join(filelist_dir, name)
-        for name in os.listdir(filelist_dir)
-        if name.endswith(".f")
+def vcs_defines(domain, mapping):
+    defs = [
+        f"+define+BB_IN_BW={mapping.in_bw}",
+        f"+define+BB_OUT_BW={mapping.out_bw}",
+        f"+define+BB_MMIO_READ_BW={mapping.mmio_read_bw}",
+        f"+define+BB_MMIO_WRITE_BW={mapping.mmio_write_bw}",
     ]
-    if len(found) != 1:
-        raise RuntimeError(f"expected exactly one filelist under {filelist_dir}, found {len(found)}")
-    return found[0]
+    for e in domain.isa:
+        if e.bid == mapping.ball_id:
+            defs.append(f"+define+{e.mnemonic}_FUNCT7={e.funct7}")
+    return defs
 
 
-def filelist_arg(verify_dir: str, filelist: str) -> str:
-    rel = os.path.relpath(filelist, verify_dir)
-    if rel.startswith(".."):
-        return filelist
-    return rel
+def _filelist(verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, sim_dir: Path) -> str:
+    src = verify_dir / "filelists" / f"{ball_dir}_ball.f"
+    dst = sim_dir / f"{ball_dir}_ball.f"
+    sim_dir.mkdir(parents=True, exist_ok=True)
+    text = src.read_text()
+    dst.write_text(text.replace("@UVM@", uvm_rel).replace("@RTL@", rtl_rel))
+    return str(dst.relative_to(verify_dir))
 
 
-def prepare_filelist(paths: dict, filelist: str) -> str:
-    os.makedirs(paths["sim_dir"], exist_ok=True)
-    generated = os.path.join(paths["sim_dir"], os.path.basename(filelist))
-    rel_rtl_dir = os.path.relpath(paths["rtl_dir"], paths["verify_dir"]) if paths["rtl_dir"] else None
-    rel_uvm_dir = os.path.relpath(os.path.join(paths["verify_env"], "uvm"), paths["verify_dir"])
-    with open(filelist, "r") as src, open(generated, "w") as dst:
-        for line in src:
-            original = line
-            line = line.replace("@UVM@", rel_uvm_dir)
-            if "@RTL@" in line:
-                if not rel_rtl_dir:
-                    raise ValueError("filelist uses @RTL@ but --config was not provided")
-                line = line.replace("@RTL@", rel_rtl_dir)
-            elif re.search(r"(?:\.\./)+arch/build/[^/\s]+/", original):
-                raise ValueError("filelist must use @RTL@ instead of hard-coded arch/build/<config>")
-            if re.search(r"(?:\.\./)+verify/uvm/", original):
-                raise ValueError("filelist must use @UVM@ instead of hard-coded verify/uvm")
-            dst.write(line)
-    return filelist_arg(paths["verify_dir"], generated)
-
-
-def read_crate_name(cargo_toml: str) -> str:
-    with open(cargo_toml, "rb") as f:
-        data = tomllib.load(f)
-    name = data.get("package", {}).get("name")
-    if not name:
-        raise ValueError(f"package.name not found in {cargo_toml}")
-    return name
-
-
-def failed_result(message: str) -> StreamResult:
-    return StreamResult(returncode=1, stdout="", stderr=message)
-
-
-def run_uvm_build_one(bbdir: str, input_data: dict, ctx, ball: str) -> tuple[StreamResult, dict]:
-    try:
-        paths = checked_paths(bbdir, input_data, ball)
-        isa_defines = core_ball_isa_defines(bbdir, input_data, ball)
-    except Exception as e:
-        ctx.logger.error(str(e))
-        return failed_result(str(e)), {"task": "build", "error": str(e)}
-
-    info = {
-        "task": "build",
-        "ball": paths["ball"],
-        "config": paths["config"],
-        "verify_dir": paths["verify_dir"],
-        "filelist": paths["filelist"],
-        "resolved_filelist": os.path.join(paths["verify_dir"], paths["filelist_arg"]),
-        "simv": paths["simv"],
-        "dpi_lib": paths["dpi_lib"],
-        "core_config": input_data.get("core_config"),
-    }
-
-    cargo_cmd = (
-        f"nix develop {shlex.quote(paths['verify_env'])} --command "
-        f"cargo build --manifest-path {shlex.quote(paths['cargo_toml'])}"
+def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) -> None:
+    ball = mapping.ball_dir
+    verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
+    casegen = verify_dir / "casegen" / "Cargo.toml"
+    rtl_dir = Path(bbdir) / "arch" / "build" / chip_name / mill_cfg
+    sim_dir = verify_dir / "build" / chip_name
+    uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
+    rtl_rel = os.path.relpath(rtl_dir, verify_dir)
+    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, sim_dir)
+    cargo = (
+        f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
+        f"cargo build --manifest-path {shlex.quote(str(casegen))}"
     )
-    ctx.logger.info(f"Building UVM DPI reference for ball {paths['ball']}")
-    cargo_result = stream_run_logger(
-        cmd=cargo_cmd,
-        logger=ctx.logger,
-        cwd=bbdir,
-        stdout_prefix="uvm dpi build",
-        stderr_prefix="uvm dpi build",
-    )
-    if cargo_result.returncode != 0:
-        return cargo_result, info
-
+    r = stream_run_logger(cmd=cargo, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm dpi", stderr_prefix="uvm dpi")
+    if r.returncode != 0:
+        raise RuntimeError(f"cargo build failed for {ball}")
+    crate = tomllib.loads(casegen.read_text()).get("package", {}).get("name")
+    if not crate:
+        raise ValueError(f"package.name missing in {casegen}")
+    simv = sim_dir / "simv"
+    csrc = sim_dir / "csrc"
+    hier = sim_dir / "cm_hier.cfg"
+    sim_dir.mkdir(parents=True, exist_ok=True)
+    hier.write_text("+tree tb_top.dut\n")
     script = (
-        f"cd {shlex.quote(paths['verify_dir'])} && "
-        f"rm -rf {shlex.quote(paths['csrc_dir'])} {shlex.quote(paths['simv'])} {shlex.quote(paths['simv'])}.daidir && "
-        f"mkdir -p {shlex.quote(paths['sim_dir'])} {shlex.quote(paths['csrc_dir'])} && "
+        f"cd {shlex.quote(str(verify_dir))} && "
+        f"rm -rf {shlex.quote(str(csrc))} {shlex.quote(str(simv))} {shlex.quote(str(simv))}.daidir && "
+        f"mkdir -p {shlex.quote(str(sim_dir))} {shlex.quote(str(csrc))} && "
         "vcs -full64 -sverilog -timescale=1ns/1ps -debug_access+all "
         "${=VCS_UVM_ARGS} "
-        + " ".join(shlex.quote(value) for value in isa_defines)
-        + " "
-        f"-Mdir={shlex.quote(paths['csrc_dir'])} "
-        f"-o {shlex.quote(paths['simv'])} "
-        f"-f {shlex.quote(paths['filelist_arg'])}"
+        + " ".join(shlex.quote(d) for d in vcs_defines(domain, mapping))
+        + f" -cm line+cond+tgl+assert -cm_hier {shlex.quote(str(hier))} "
+        f"-Mdir={shlex.quote(str(csrc))} -o {shlex.quote(str(simv))} "
+        f"-f {shlex.quote(flist)}"
     )
-    vcs_cmd = f"nix develop {shlex.quote(paths['verify_env'])} --command zsh -c {shlex.quote(script)}"
+    vcs = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -c {shlex.quote(script)}"
+    r = stream_run_logger(cmd=vcs, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm vcs", stderr_prefix="uvm vcs")
+    if r.returncode != 0:
+        raise RuntimeError(f"vcs failed for {ball}")
 
-    ctx.logger.info(f"Building UVM simulation for ball {paths['ball']} config {paths['config']}")
-    vcs_result = stream_run_logger(
-        cmd=vcs_cmd,
-        logger=ctx.logger,
-        cwd=bbdir,
-        stdout_prefix="uvm vcs build",
-        stderr_prefix="uvm vcs build",
+
+def run_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx, cov_dir: str) -> None:
+    ball = mapping.ball_dir
+    verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
+    simv = verify_dir / "build" / chip_name / "simv"
+    if not simv.is_file():
+        build_ball(bbdir, chip_name, mill_cfg, domain, mapping, ctx)
+    crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())["package"]["name"]
+    dpi = verify_dir / "casegen" / "target" / "debug" / f"lib{crate.replace('-', '_')}"
+    test = f"{ball}_ball_test"
+    script = (
+        f"cd {shlex.quote(str(verify_dir))} && "
+        f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" {shlex.quote(str(simv))} "
+        f"-sv_lib {shlex.quote(str(dpi))} "
+        f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.ball_id} "
+        f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
     )
-    if vcs_result.returncode == 0:
-        current = os.path.join(paths["build_dir"], "current")
-        os.makedirs(paths["build_dir"], exist_ok=True)
-        tmp = f"{current}.tmp"
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
-        os.symlink(paths["config"], tmp)
-        os.replace(tmp, current)
-    return vcs_result, info
+    cmd = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -ic {shlex.quote(script)}"
+    r = stream_run_logger(cmd=cmd, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm run", stderr_prefix="uvm run")
+    if r.returncode != 0:
+        raise RuntimeError(f"uvm run failed for {ball} test={test}")
+    Path(cov_dir).mkdir(parents=True, exist_ok=True)
+    urg = (
+        f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
+        f"urg -dir {shlex.quote(str(simv))}.vdb -format text -report {shlex.quote(cov_dir)}"
+    )
+    r = stream_run_logger(cmd=urg, logger=ctx.logger, cwd=str(verify_dir), stdout_prefix="uvm urg", stderr_prefix="uvm urg")
+    if r.returncode != 0:
+        raise RuntimeError(f"urg failed for {ball}")
 
 
-def run_uvm_build(bbdir: str, input_data: dict, ctx) -> tuple[StreamResult, dict]:
-    config = input_data.get("config")
-    if not config or config is True:
-        return failed_result("Missing required parameter: --config=<name>"), {
-            "task": "build",
-            "error": "missing_config",
-        }
+def dashboard_summary(cov_dir: str) -> dict[str, str]:
+    path = Path(cov_dir) / "dashboard.txt"
+    lines = path.read_text().splitlines()
+    i = 0
+    while i < len(lines) and "Total Coverage Summary" not in lines[i]:
+        i += 1
+    if i >= len(lines):
+        raise RuntimeError(f"Total Coverage Summary missing in {path}")
+    i += 1
+    while i < len(lines) and not lines[i].strip().startswith("SCORE"):
+        i += 1
+    if i + 1 >= len(lines):
+        raise RuntimeError(f"SCORE row missing in {path}")
+    keys = lines[i].split()
+    vals = lines[i + 1].split()
+    if len(vals) != len(keys):
+        raise RuntimeError(f"SCORE/value mismatch in {path}: {keys!r} vs {vals!r}")
+    return dict(zip(keys, vals))
 
-    ball = input_data.get("ball")
-    balls = [ball] if ball and ball is not True else discover_uvm_balls(bbdir)
-    if not balls:
-        return failed_result("No UVM balls found"), {"task": "build", "error": "no_uvm_balls"}
 
-    built = []
-    for one_ball in balls:
-        result, info = run_uvm_build_one(bbdir, input_data, ctx, one_ball)
-        if result.returncode != 0:
-            return result, {**info, "built": built}
-        built.append(one_ball)
-
-    return StreamResult(returncode=0, stdout="", stderr=""), {
-        "task": "build",
-        "config": config,
-        "built": built,
-    }
+def run_chip(bbdir: str, chip: str, ball: str | None, ctx, do_run: bool) -> dict:
+    msg = load_chip(bbdir, chip)
+    domain = ball_domain(msg)
+    mill_cfg = msg.mill.verilator_config
+    maps = selected_mappings(domain, ball)
+    ran = []
+    covs = []
+    run_root = None
+    if do_run:
+        stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+        run_name = "all" if ball is None else maps[0].ball_dir
+        run_root = log_dir(bbdir, chip, "verilog", stamp, "uvm", run_name)
+    for m in maps:
+        if do_run:
+            cov = (
+                os.path.join(run_root, m.ball_dir, "coverage")
+                if ball is None
+                else os.path.join(run_root, "coverage")
+            )
+            run_ball(bbdir, chip, mill_cfg, domain, m, ctx, cov)
+            if not (Path(cov) / "dashboard.txt").is_file():
+                raise RuntimeError(f"urg wrote no dashboard.txt under {cov}")
+            covs.append((m.ball_dir, cov))
+        else:
+            build_ball(bbdir, chip, mill_cfg, domain, m, ctx)
+        ran.append(m.ball_dir)
+    info = {"chip": chip, "mill": mill_cfg, "balls": ran}
+    if do_run and ball is None:
+        index_dir = Path(run_root) / "coverage"
+        index_dir.mkdir(parents=True, exist_ok=True)
+        body = ["ball_dir score line cond toggle assert group result"]
+        for b, p in covs:
+            s = dashboard_summary(p)
+            body.append(
+                f"{b} {s['SCORE']} {s['LINE']} {s['COND']} {s['TOGGLE']} "
+                f"{s.get('ASSERT', '--')} {s['GROUP']} pass"
+            )
+        index = index_dir / "index.txt"
+        index.write_text("\n".join(body) + "\n")
+        info["index"] = str(index)
+        info["log"] = run_root
+    elif do_run:
+        info["log"] = run_root
+    return info

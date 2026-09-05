@@ -13,6 +13,7 @@ appendonlydir/
 dump.rdb
 *.log
 *.jou
+dramsim3*
 output/
 result/
 

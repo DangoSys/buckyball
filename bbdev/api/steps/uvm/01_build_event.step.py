@@ -13,7 +13,7 @@ if step_dir not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
-from scripts.uvm_common import run_uvm_build
+from scripts.uvm_common import run_chip
 
 config = {
     "name": "uvm-build",
@@ -28,11 +28,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
 
-    result, info = await asyncio.to_thread(run_uvm_build, bbdir, input_data, ctx)
+    try:
+        info = await asyncio.to_thread(
+            run_chip, bbdir, input_data["chip"], input_data.get("ball"), ctx, False
+        )
+    except Exception as e:
+        ctx.logger.error(str(e))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": str(e)},
+            trace_id=origin_tid,
+        )
+        return
+
     await check_result(
         ctx,
-        result.returncode,
+        0,
         continue_run=False,
-        extra_fields=info,
+        extra_fields={"task": "build", **info},
         trace_id=origin_tid,
     )

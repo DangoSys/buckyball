@@ -13,6 +13,9 @@ def search_workload(search_dir: str, filename: str) -> Optional[str]:
     Returns:
       Absolute path of the found file, or None if not found
     """
+    if os.path.isfile(filename):
+        return os.path.abspath(filename)
+
     if not os.path.exists(search_dir):
         return None
 

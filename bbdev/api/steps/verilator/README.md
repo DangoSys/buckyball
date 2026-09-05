@@ -15,14 +15,21 @@ Hardware simulation workflow based on Verilator in the Buckyball framework, prov
   - Default value: `16`
 - **`binary`** [Required] - Test binary file path
   - Default value: `""`
+- **`batch`** - Run without the interactive monitor
+- **`no-wave`** - Disable FST waveform generation
+- **`itrace`**, **`mtrace`**, **`pmctrace`**, **`ctrace`**, **`banktrace`** - Enable selected BDB traces
+
+Direct Verilator uses `BBSimHarness` and therefore requires a baremetal RISC-V
+ELF linked into the simulated `0x80000000` DRAM window. Linux workload ELFs
+must be run with `bebop-verilator` instead.
 
 **Example**:
 ```bash
 # bbdev wrapper
-bbdev verilator --run "jobs 256 --binary ${buckyball}/bb-tests/output/toy/workloads/src/ctest_mvin_mvout_alternate_test-baremetal --batch"
+bbdev verilator --run "--chip toy --jobs 16 --binary toy-toy-ctest-mvin_mvout_test-baremetal --batch"
 
 # Raw command
-curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"jobs": 8, "binary": "/home/user/test.elf"}'
+curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"chip":"toy", "jobs":8, "binary":"toy-toy-ctest-mvin_mvout_test-baremetal", "batch":true}'
 ```
 
 
@@ -77,6 +84,12 @@ curl -X POST http://localhost:5000/verilator/build -d '{"jobs": 16}'
 **Parameters**:
 
 - **`binary`** [Required] - Custom test binary file path
+- **`batch`** - Run without the interactive monitor
+- **`no-wave`** - Disable FST waveform generation
+- **`itrace`**, **`mtrace`**, **`pmctrace`**, **`ctrace`**, **`banktrace`** - Enable selected BDB traces
+
+The binary may be a workload filename or an existing absolute path. It must be
+a baremetal ELF; Linux workload ELFs require `bebop-verilator`.
 
 **Example**:
 ```bash

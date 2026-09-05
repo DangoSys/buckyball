@@ -19,7 +19,7 @@ ISA = {
     35: "mvin_mmio",
 }
 
-MATRIX_MNEMONICS = frozenset({"MATRIX", "MATRIX_F32"})
+MATRIX_MNEMONICS = frozenset({"MATRIX", "MATRIX_F32", "SMATMUL_OS"})
 
 _API = Path(__file__).resolve().parents[4]
 if str(_API) not in sys.path:
@@ -104,8 +104,8 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
     return names, matrix, entries
 
 
-def _mnk(rs2: int) -> tuple[int, int, int]:
-    return rs2 & 0xFFF, (rs2 >> 12) & 0xFFF, (rs2 >> 24) & 0xFFF
+def _mnk(rs1: int, rs2: int) -> tuple[int, int, int]:
+    return rs2 & 0xFFF, (rs2 >> 12) & 0xFFF, rs1 >> 30
 
 
 def analysis_dir(
@@ -170,8 +170,9 @@ def analysis_dir(
                 funct_cyc[name] += delta
                 prev_clk = clk
                 if funct in matrix:
+                    rs1 = _hex_u(obj.get("rs1"), "rs1", line_no)
                     rs2 = _hex_u(obj.get("rs2"), "rs2", line_no)
-                    mnk_n[_mnk(rs2)] += 1
+                    mnk_n[_mnk(rs1, rs2)] += 1
             elif kind == "mtrace":
                 n_mtrace += 1
                 rows = obj.get("rows")

@@ -12,8 +12,9 @@ def register(mcp):
     def bbdev_verilator_run(
         binary: str,
         chip: str,
-        batch: bool = True,
+        batch: bool = False,
         coverage: bool = False,
+        no_wave: bool = False,
         jobs: Optional[int] = None,
         itrace: bool = False,
         mtrace: bool = False,
@@ -31,6 +32,7 @@ def register(mcp):
             "chip": chip,
             "batch": batch,
             "coverage": coverage,
+            "no-wave": no_wave,
             "itrace": itrace,
             "mtrace": mtrace,
             "pmctrace": pmctrace,
