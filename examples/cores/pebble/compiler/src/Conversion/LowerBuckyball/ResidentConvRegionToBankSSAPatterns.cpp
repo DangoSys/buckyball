@@ -508,6 +508,11 @@ public:
       }
     }
 
+    // One resident zero tile is enough for all invalid-edge masking.  Keep it
+    // live for the whole region instead of issuing an MVIN for every mask.
+    Value zeroBank = allocBank(b, loc, 1, 1);
+    zeroBank = mvinBank(b, loc, zeroPack, zeroBank, target.bankDepth);
+
     DenseSet<int64_t> materialized;
 
     struct TileBanks {
@@ -713,8 +718,6 @@ public:
       }
 
       auto maskInvalidOutput = [&]() {
-        Value zeroBank = allocBank(b, loc, 1, 1);
-        zeroBank = mvinBank(b, loc, zeroPack, zeroBank, target.bankDepth);
         for (size_t bankIndex = 0; bankIndex < destination.banks.size();
              ++bankIndex) {
           int64_t panelBegin = bankIndex * destination.panelsPerBank;
@@ -793,7 +796,6 @@ public:
           b.setInsertionPointAfter(panelLoop);
           destination.banks[bankIndex] = panelLoop.getResult(0);
         }
-        releaseBank(b, loc, zeroBank);
       };
 
       if (stage.add) {
@@ -935,19 +937,29 @@ public:
               createI64Const(b, loc, target.bankDepth), lhsRatio, rhsRatio,
               b.getBoolAttr(stage.activation == 1));
           int64_t destinationBank = panelBegin / destination.panelsPerBank;
-          int64_t destinationSlot = panelBegin % destination.panelsPerBank;
-          b.create<BankMaxPoolOp>(
-              loc, destination.banks[destinationBank].getType(),
-              sum.banks.front(), destination.banks[destinationBank],
-              createI64Const(b, loc, height * width),
-              b.getI64IntegerAttr(height), b.getI64IntegerAttr(width),
-              b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-              b.getI64IntegerAttr(0), createI64Const(b, loc, 0),
-              createI64Const(b, loc,
-                             destinationSlot * destination.panelRows +
-                                 destinationBase),
-              createI64Const(b, loc, destinationStride), b.getI64IntegerAttr(0),
-              b.getI64IntegerAttr(0));
+          Value destinationState = destination.banks[destinationBank];
+          // BankInt8Add writes all panel rows into one bank.  MaxPool's
+          // iteration count is one spatial tile, so copy each output panel
+          // separately instead of copying only panel 0.
+          for (int64_t localPanel = 0; localPanel < chunkCount; ++localPanel) {
+            int64_t destinationSlot =
+                (panelBegin + localPanel) % destination.panelsPerBank;
+            destinationState =
+                b.create<BankMaxPoolOp>(
+                     loc, destinationState.getType(), sum.banks.front(),
+                     destinationState, createI64Const(b, loc, height * width),
+                     b.getI64IntegerAttr(height), b.getI64IntegerAttr(width),
+                     b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                     b.getI64IntegerAttr(0),
+                     createI64Const(b, loc, localPanel * destination.panelRows),
+                     createI64Const(b, loc,
+                                    destinationSlot * destination.panelRows +
+                                        destinationBase),
+                     createI64Const(b, loc, destinationStride),
+                     b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
+                    .getOutBankOut();
+          }
+          destination.banks[destinationBank] = destinationState;
           releaseTile(lhs);
           releaseTile(rhs);
           releaseTile(sum);
@@ -1184,6 +1196,9 @@ public:
         return success();
       }
 
+      bool streamMaterializedInput =
+          !stage.pool && !stage.depthwise && stage.input != kernel.getInput() &&
+          materialized.contains(producer.lookup(stage.input));
       int64_t maxSide = std::min<int64_t>({4, height, width});
       while (maxSide > 0) {
         int64_t inputSide = (maxSide - 1) * stage.stride + stage.kernel;
@@ -1195,7 +1210,8 @@ public:
                                     ? target.bankDepth / inputPanelRows
                                     : 0;
         int64_t inputBanks =
-            stage.depthwise ? (panelsPerBank ? 1 : target.bankNum + 1)
+            streamMaterializedInput ? (panelsPerBank ? 1 : target.bankNum + 1)
+            : stage.depthwise       ? (panelsPerBank ? 1 : target.bankNum + 1)
             : panelsPerBank ? (inputPanels + panelsPerBank - 1) / panelsPerBank
                             : target.bankNum + 1;
         int64_t reservedBanks = stage.input == kernel.getInput() ? 6 : 11;
@@ -1355,7 +1371,7 @@ public:
         }
         maskInvalidOutput();
         return success();
-      } else if (!stage.depthwise) {
+      } else if (!stage.depthwise && !streamMaterializedInput) {
         source = allocateTile(inputPanelCount, inputSide * inputSide, zeroI8);
         if (failed(emitInto(producer.lookup(stage.input), sourceY, sourceX,
                             inputSide, inputSide, zero, inputPanelCount, source,
@@ -1662,6 +1678,33 @@ public:
           ensureStates();
           accumulateSource(source.banks.front(), 0, inputPanelCount,
                            source.panelRows);
+        } else if (streamMaterializedInput) {
+          ensureStates();
+          int64_t streamedPanelsPerBank =
+              target.bankDepth / (inputSide * inputSide);
+          if (streamedPanelsPerBank <= 0)
+            return stage.op->emitError(
+                "streamed Conv input panel does not fit one bank");
+          for (int64_t inputPanel = 0; inputPanel < inputPanelCount;
+               inputPanel += streamedPanelsPerBank) {
+            int64_t panelCountInBank = std::min<int64_t>(
+                streamedPanelsPerBank, inputPanelCount - inputPanel);
+            TileBanks streamedSource =
+                allocateTile(panelCountInBank, inputSide * inputSide, zeroI8);
+            if (streamedSource.banks.size() != 1)
+              return stage.op->emitError(
+                  "streamed Conv input panel group must fit one bank");
+            if (failed(
+                    emitInto(producer.lookup(stage.input), sourceY, sourceX,
+                             inputSide, inputSide,
+                             b.create<arith::ConstantIndexOp>(loc, inputPanel),
+                             panelCountInBank, streamedSource, 0, inputSide)))
+              return failure();
+            accumulateSource(streamedSource.banks.front(), inputPanel,
+                             inputPanel + panelCountInBank,
+                             streamedSource.panelRows);
+            releaseTile(streamedSource);
+          }
         } else {
           ensureStates();
           for (size_t sourceBank = 0; sourceBank < source.banks.size();
@@ -1935,6 +1978,7 @@ public:
       return failure();
     for (auto &entry : gateCaches)
       releaseTile(entry.second);
+    releaseBank(b, loc, zeroBank);
     for (Value pack : hostPacks)
       b.create<memref::DeallocOp>(loc, pack);
     b.eraseOp(kernel);

@@ -311,10 +311,11 @@ public:
     }
 
     const auto &target = buckyball_target::getBuckyballTarget();
-    if (target.bankWidthBits != 128 || target.bankDepth != 64 ||
-        target.bankNum != 24)
+    if (target.bankWidthBits != 128 || target.bankDepth < 4 ||
+        target.bankDepth % 4 != 0 || target.bankNum <= 0)
       return kernel.emitError(
-          "resident Conv MegaKernel requires the Pebble 24x64x128 bank layout");
+          "resident Conv MegaKernel requires 128-bit banks with a positive "
+          "bank count and a depth divisible by 4");
     if (buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW != 1)
       return kernel.emitError(
           "resident Conv MegaKernel requires SMatMul outBW=1");
@@ -1187,10 +1188,10 @@ public:
           "FP32 scale, and FP32 final output");
 
     const auto &target = buckyball_target::getBuckyballTarget();
-    if (target.bankWidthBits != 128 || target.bankDepth < 64 ||
-        !llvm::isPowerOf2_64(target.bankDepth))
+    if (target.bankWidthBits != 128 || target.bankDepth < 4 ||
+        target.bankDepth % 4 != 0 || !llvm::isPowerOf2_64(target.bankDepth))
       return kernel.emitError("Conv MegaKernel requires 128-bit power-of-two "
-                              "banks with at least 64 rows");
+                              "banks with a depth divisible by 4");
     if (buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW != 1)
       return kernel.emitError("Conv MegaKernel requires SMatMulBall outBW=1");
 

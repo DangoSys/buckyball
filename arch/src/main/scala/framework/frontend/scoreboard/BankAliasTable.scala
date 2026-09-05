@@ -113,9 +113,20 @@ class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: In
           assert(aliasInUse(i), "BAT free on non-allocated alias")
           aliasInUse(i) := false.B
 
-          // Restore old alias only if mapping still points to this entry's alias.
+          // Restore the predecessor only if it is still live.  A younger write
+          // can commit after an older write to the same vbank; in that case the
+          // older alias has already been freed and must not be resurrected.
           when(v2a(entWrVbank(i)) === entNewAlias(i)) {
-            v2a(entWrVbank(i)) := entOldAlias(i)
+            val oldAlias    = entOldAlias(i)
+            val oldIsExtra  = oldAlias >= aliasBase.U(aliasIdLen.W)
+            val oldAliasIdx = oldAlias - aliasBase.U(aliasIdLen.W)
+            val oldIsLive   = oldIsExtra &&
+              aliasInUse(oldAliasIdx(robIdLen - 1, 0))
+            v2a(entWrVbank(i)) := Mux(
+              oldIsExtra,
+              Mux(oldIsLive, oldAlias, entWrVbank(i)),
+              oldAlias
+            )
           }
         }
         entHasWrite(i) := false.B

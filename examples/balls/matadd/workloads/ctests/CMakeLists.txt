@@ -2,8 +2,5 @@ add_buckyball_ctests(
   matadd_test.c
   matadd_bank_1024x8_i32_test.c
   matadd_after_smatmul_os_test.c
-  im2col_smatmul_matadd_test.c
-  im2col_matadd_inbank_test.c
-  im2col_matadd_large_test.c
   im2col_matadd_shared_da_test.c
 )

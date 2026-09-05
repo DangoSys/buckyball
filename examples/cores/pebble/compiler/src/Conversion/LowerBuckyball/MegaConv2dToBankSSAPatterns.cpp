@@ -86,7 +86,7 @@ public:
     if (numerator < 0 || outputSize != numerator / stride + 1)
       return op.emitError("Mega Conv2D output shape mismatch");
     const auto &target = buckyball_target::getBuckyballTarget();
-    if (target.bankWidthBits != 128 || target.bankDepth < 64 ||
+    if (target.bankWidthBits != 128 || target.bankDepth < 4 ||
         target.bankDepth % 4)
       return op.emitError(
           "Mega Conv2D requires 128-bit banks with depth divisible by 4");

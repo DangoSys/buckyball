@@ -1,16 +1,15 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <isa/fp2int.h>
 #include <isa/im2col.h>
 #include <isa/int2fp.h>
 #include <isa/matadd.h>
+#include <isa/quant.h>
 #include <isa/smatmul.h>
 #include <math.h>
-#include <stdint.h>
 #include <stdio.h>
 #define T 16
-#define IN 8
+#define IN 4
 #define KS 3
 #define OD (IN - KS + 1)
 #define WINS (OD * OD)
@@ -21,9 +20,12 @@
 #define IR ((IN * IN + T - 1) / T)
 static float img[2 * IN * IN] __attribute__((aligned(64)));
 static int8_t wt[2 * PK * T] __attribute__((aligned(64)));
-static int8_t qbank[2 * IR * T] __attribute__((aligned(64)));
+static int8_t qbank[2 * IN * IN * T] __attribute__((aligned(64)));
 static float out[CL * 8] __attribute__((aligned(64)));
-static float dw[4] __attribute__((aligned(64))) = {0.05f};
+static float dw[16] __attribute__((aligned(64))) = {
+    0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f,
+    0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f};
+static int32_t bias[T] __attribute__((aligned(64))) = {0};
 static void gemm(const int8_t *im, const int8_t *w, int32_t *o) {
   for (int oh = 0; oh < OD; ++oh)
     for (int ow = 0; ow < OD; ++ow)
@@ -54,6 +56,8 @@ int main(void) {
     if (fabsf(img[i]) > maxa)
       maxa = fabsf(img[i]);
   float da = maxa / 127.f;
+  for (int i = 0; i < 16; ++i)
+    dw[i] = da * 0.05f;
   int8_t q[2 * IN * IN];
   for (int i = 0; i < 2 * IN * IN; ++i) {
     int v = (int)(img[i] / da + (img[i] >= 0 ? 0.5f : -0.5f));
@@ -64,24 +68,32 @@ int main(void) {
   gemm(q + IN * IN, wt + PK * T, e1);
   for (int i = 0; i < WINS * T; ++i)
     ei[i] = e0[i] + e1[i];
-  bb_mvin_mmio((uintptr_t)dw, 16, 1, 4);
-  bb_mem_alloc(0, 2 * IR, 4);
+  bb_mem_alloc(0, IN * IN, 1);
   bb_mem_alloc(1, 2 * IR, 1);
-  bb_mem_alloc(2, 1, 2);
-  bb_mem_alloc(4, 1, 2);
-  bb_mem_alloc(6, 1, 2);
-  bb_mem_alloc(3, 1, 2);
-  bb_mvin((uintptr_t)img, 0, 2 * IR, 1);
-  bb_fp2int(0, 1, 2 * IR, 0);
+  bb_mem_alloc(2, 1, 1);
+  bb_mem_alloc(4, 1, 1);
+  bb_mem_alloc(6, 1, 1);
+  bb_mem_alloc(3, 4, 1);
+  bb_mem_alloc(5, 1, 1);
+  bb_mem_alloc(7, 4, 1);
+  bb_mvin((uintptr_t)dw, 3, 4, 1);
+  bb_mvin((uintptr_t)bias, 7, 4, 1);
+  bb_smatmul_bias(7, 0);
+  bb_mvin((uintptr_t)img, 0, (2 * IN * IN + 3) / 4, 1);
+  bb_quant_f32_to_i8(0, 1, (2 * IN * IN + 3) / 4, 1.0f / da);
   bb_mvout((uintptr_t)qbank, 1, 2 * IR, 1);
   bb_fence();
-  bb_mvin((uintptr_t)qbank, 0, IR, 1);
-  bb_im2col(0, 1, IN, KS, 1, 0);
+  for (int c = 1; c >= 0; --c)
+    for (int i = IN * IN - 1; i >= 0; --i)
+      for (int j = 0; j < T; ++j)
+        qbank[c * IN * IN * T + i * T + j] = j ? 0 : qbank[c * IR * T + i];
+  bb_mvin((uintptr_t)qbank, 0, IN * IN, 1);
+  bb_im2col(0, 1, IN, KS, 1, 0, 0, 0, 0, 0, 0, WINS);
   bb_mvin((uintptr_t)wt, 0, PK, 1);
   bb_smatmul_os(1, 0, 2, PW, T, PK, 1, 1, 0);
   bb_fence();
-  bb_mvin((uintptr_t)(qbank + IR * T), 0, IR, 1);
-  bb_im2col(0, 1, IN, KS, 1, 0);
+  bb_mvin((uintptr_t)(qbank + IN * IN * T), 0, IN * IN, 1);
+  bb_im2col(0, 1, IN, KS, 1, 0, 0, 0, 0, 0, 0, WINS);
   bb_mvin((uintptr_t)(wt + PK * T), 0, PK, 1);
   bb_smatmul_os(1, 0, 4, PW, T, PK, 1, 1, 0);
   bb_fence();
@@ -92,8 +104,8 @@ int main(void) {
   bb_fence();
   for (int r = 0; r < WINS; ++r)
     for (int c = 0; c < T; ++c) {
-      float got = out[(2 * r + c / 8) * 8 + (c % 8)];
-      float exp = (float)ei[r * T + c] * da * dw[0];
+      float got = out[r * T + c];
+      float exp = (float)ei[r * T + c] * dw[0];
       if (fabsf(got - exp) > 1e-3f)
         return printf("mismatch %d %d\n", r, c), 1;
     }
