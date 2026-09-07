@@ -53,8 +53,6 @@ void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                        PhysicalBankState &state);
 void populateSMatMulBallLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns);
-void populateReluBallLowerBuckyballToBankSSAPatterns(
-    RewritePatternSet &patterns);
 void registerAssignPhysicalBanksPass();
 void registerLowerBuckyballPass();
 void registerLowerBankSSAToIntrinsicsPass();
