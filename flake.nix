@@ -62,7 +62,6 @@
                 return 1 2>/dev/null || exit 1
               fi
               BB_ROOT="$PWD"
-              export DSH_HOME="$BB_ROOT/.dsh"
               if [ -d "$BB_ROOT/result/bin" ]; then
                 export PATH="$BB_ROOT/result/bin:$PATH"
               else
