@@ -1,0 +1,7 @@
+# NliBall has no private configuration parameters.
+#
+# The NLI segment table (cutpoints / slopes / intercepts) is a runtime input:
+# it is loaded into the coefficient bank with MVIN before issue, so a single
+# NliBall approximates any non-linear function without a config rebuild.
+
+[ball]
