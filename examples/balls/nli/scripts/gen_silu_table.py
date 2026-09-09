@@ -17,14 +17,15 @@ Scheme (matches the NliBall RTL + BEMU emulator bit-exactly):
 The interior cutpoints are optimized with coordinate descent to minimise the
 maximum absolute error against the true SiLU across the whole INT8 domain.
 """
+
 from __future__ import annotations
 
 import math
 
 LO = -128
 HI = 127
-N_SEG = 16          # 16 segments -> 15 interior cutpoints
-Q7 = 128            # slope fixed-point scale
+N_SEG = 16  # 16 segments -> 15 interior cutpoints
+Q7 = 128  # slope fixed-point scale
 
 
 def silu(x: float) -> float:
@@ -60,7 +61,7 @@ def eval_int(x: int, cutpoints, slopes, intercepts) -> int:
         if x >= c:
             seg += 1
     prod = slopes[seg] * x
-    term = prod >> 7          # arithmetic shift: floor for negatives
+    term = prod >> 7  # arithmetic shift: floor for negatives
     return max(-128, min(127, term + intercepts[seg]))
 
 
@@ -95,7 +96,11 @@ def optimize(cutpoints, slopes, intercepts):
         iters += 1
         for i in range(len(cutpoints)):
             lo_bound = LO + 1 if i == 0 else cutpoints[i - 1] + 1
-            hi_bound = HI - (len(cutpoints) - 1 - i) if i == len(cutpoints) - 1 else cutpoints[i + 1] - 1
+            hi_bound = (
+                HI - (len(cutpoints) - 1 - i)
+                if i == len(cutpoints) - 1
+                else cutpoints[i + 1] - 1
+            )
             best = cutpoints[i]
             best_val = current_max
             for cand in range(lo_bound, hi_bound + 1):
