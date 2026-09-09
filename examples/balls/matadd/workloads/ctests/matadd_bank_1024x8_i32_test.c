@@ -43,6 +43,6 @@ int main(void) {
       return 1;
     }
   }
-  printf("matadd_bank_1024x8_i32 PASSED\n");
+  printf("matadd bank test PASSED\n");
   return 0;
 }

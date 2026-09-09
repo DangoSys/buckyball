@@ -86,6 +86,16 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
                   .getResults()[resultNumber];
       continue;
     }
+    if (auto ifOp = value.getDefiningOp<scf::IfOp>()) {
+      unsigned resultNumber = cast<OpResult>(value).getResultNumber();
+      auto thenYield = cast<scf::YieldOp>(ifOp.getThenRegion().front().back());
+      auto elseYield = cast<scf::YieldOp>(ifOp.getElseRegion().front().back());
+      auto thenBank = getConstI64(thenYield.getResults()[resultNumber]);
+      auto elseBank = getConstI64(elseYield.getResults()[resultNumber]);
+      if (!thenBank || !elseBank || *thenBank != *elseBank)
+        return std::nullopt;
+      return thenBank;
+    }
     if (auto argument = dyn_cast<BlockArgument>(value)) {
       auto forOp = dyn_cast<scf::ForOp>(argument.getOwner()->getParentOp());
       if (!forOp || argument.getArgNumber() == 0)

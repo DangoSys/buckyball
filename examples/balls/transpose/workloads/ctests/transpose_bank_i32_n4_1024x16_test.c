@@ -43,10 +43,10 @@ int main(void) {
 
   for (int i = 0; i < COLS * ROWS; ++i) {
     if (output_matrix[i] != expected_matrix[i]) {
-      printf("Transpose bank i32 n4 1024x16 FAILED at %d\n", i);
+      printf("Transpose bank i32 n4 FAILED at %d\n", i);
       return 1;
     }
   }
-  printf("Transpose bank i32 n4 1024x16 PASSED\n");
+  printf("Transpose bank i32 n4 PASSED\n");
   return 0;
 }

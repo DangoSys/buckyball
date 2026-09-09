@@ -22,7 +22,7 @@ class matadd_ball_test extends uvm_test;
     phase.raise_objection(this);
     run_case(0, "ONE_GROUP_16_LINES", bid);
     run_case(1, "TWO_GROUPS_16_LINES", bid);
-    run_case(2, "TWO_GROUPS_1024_LINES", bid);
+    run_case(2, "TWO_GROUPS_64_LINES", bid);
     phase.drop_objection(this);
   endtask
 

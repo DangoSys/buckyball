@@ -31,9 +31,9 @@ int main(void) {
   matrix_hw_ws(pa, pb, pc, M, N, K);
   matrix_unpack_c(pc, out, M, N);
   if (!compare_u32_matrices(out, exp_, M, N)) {
-    printf("smatmul_bank_os_1024x16x16 FAILED\n");
+    printf("smatmul bank OS FAILED\n");
     return 1;
   }
-  printf("smatmul_bank_os_1024x16x16 PASSED\n");
+  printf("smatmul bank OS PASSED\n");
   return 0;
 }

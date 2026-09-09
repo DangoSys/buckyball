@@ -88,6 +88,9 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
         assert(cmd.funct7 === funct.U, "LutBall funct7 must be LUT")
         assert(cmd.rs2 === 0.U, "LutBall reserves rs2")
         assert(cmd.iter > 0.U && cmd.iter <= b.memDomain.bankEntries.U, "LutBall iter must fit in one bank")
+        assert(cmd.op1_bank < b.memDomain.bankNum.U, "LutBall input bank is invalid")
+        assert(cmd.op2_bank < b.memDomain.bankNum.U, "LutBall table bank is invalid")
+        assert(cmd.wr_bank < b.memDomain.bankNum.U, "LutBall output bank is invalid")
         assert(
           cmd.op1_col === 1.U && (cmd.op2_col === 1.U || cmd.op2_col === 4.U) && cmd.wr_col === 1.U,
           "LutBall requires col=1 input/output and col=1 or col=4 table"

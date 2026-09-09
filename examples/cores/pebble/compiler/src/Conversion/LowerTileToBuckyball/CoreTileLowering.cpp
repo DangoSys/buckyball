@@ -252,9 +252,13 @@ public:
       auto is = input.getShape();
       auto fs = filter.getShape();
       auto os = output.getShape();
-      int64_t outChannels = last ? os[1] : os[3];
-      int64_t outHeight = last ? os[2] : os[1];
-      int64_t outWidth = last ? os[3] : os[2];
+      // An INT8 boundary is still an intermediate NHWC result even when it
+      // is the last stage of this split MegaKernel segment. Only FP32 marks
+      // the model-visible NCHW output layout.
+      bool finalOutput = last && output.getElementType().isF32();
+      int64_t outChannels = finalOutput ? os[1] : os[3];
+      int64_t outHeight = finalOutput ? os[2] : os[1];
+      int64_t outWidth = finalOutput ? os[3] : os[2];
       int64_t expectedChannels = depthwise ? is[3] : outChannels;
       int64_t paddedKernel = ((kernel * kernel + 15) / 16) * 16;
       bool filterShapeValid =
@@ -278,7 +282,8 @@ public:
           is[2] + padLow + padHigh < kernel ||
           outHeight != (is[1] + padLow + padHigh - kernel) / stride + 1 ||
           outWidth != (is[2] + padLow + padHigh - kernel) / stride + 1 ||
-          (last ? !output.getElementType().isF32()
+          (last ? (!output.getElementType().isF32() &&
+                   !output.getElementType().isInteger(8))
                 : !output.getElementType().isInteger(8)))
         return stage->emitError(
             "MegaKernel convolution shape or output type mismatch");

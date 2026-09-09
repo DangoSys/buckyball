@@ -95,6 +95,9 @@ class MatAdd(val b: GlobalConfig) extends Module {
         val command = io.cmdReq.bits.cmd
         assert(command.funct7 === funct.U(7.W), "MatAddBall funct7 must be MATADD")
         assert(command.op1_en && command.op2_en && command.wr_spad_en, "MatAddBall requires two inputs and one output")
+        assert(command.op1_bank < b.memDomain.bankNum.U, "MatAddBall input bank 0 is invalid")
+        assert(command.op2_bank < b.memDomain.bankNum.U, "MatAddBall input bank 1 is invalid")
+        assert(command.wr_bank < b.memDomain.bankNum.U, "MatAddBall output bank is invalid")
         assert(
           command.op1_bank =/= command.op2_bank && command.op1_bank =/= command.wr_bank &&
             command.op2_bank =/= command.wr_bank,

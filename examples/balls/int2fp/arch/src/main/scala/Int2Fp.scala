@@ -115,6 +115,9 @@ class Int2Fp(val b: GlobalConfig) extends Module {
         assert(cmd.funct7 === funct.U, "Int2FpBall received an unknown funct7")
         assert(cmd.iter > 0.U && cmd.iter(1, 0) === 0.U, "INT32_TO_FP32 iter must be a positive multiple of four")
         assert(cmd.iter <= b.memDomain.bankEntries.U, "INT32_TO_FP32 input exceeds bank depth")
+        assert(cmd.op1_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 input bank is invalid")
+        assert(cmd.op2_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 scale bank is invalid")
+        assert(cmd.wr_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 output bank is invalid")
         assert(
           cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U,
           "INT32_TO_FP32 operands must each occupy one bank"
