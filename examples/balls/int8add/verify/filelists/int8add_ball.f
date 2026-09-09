@@ -18,13 +18,12 @@
 
 @RTL@/RoundAnyRawFNToRecFN_ie4_is8_oe8_os24.sv
 @RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
-@RTL@/MulFullRawFN.sv
-@RTL@/AddRawFN.sv
-@RTL@/MulRawFN.sv
+@RTL@/MulAddRecFNToRaw_preMul_e8_s24.sv
+@RTL@/MulAddRecFNToRaw_postMul_e8_s24.sv
+@RTL@/MulAddRecFNPipe_l3_e8_s24.sv
+@RTL@/PipelinedINToRecFN_3.sv
+@RTL@/PipelinedAddRawFN.sv
 @RTL@/RoundRawFNToRecFN_e8_s24.sv
-@RTL@/INToRecFN_i8_e8_s24.sv
-@RTL@/MulRecFN.sv
-@RTL@/AddRecFN.sv
 @RTL@/RecFNToIN_e8_s24_i8.sv
 @RTL@/Int8AddBall.sv
 
