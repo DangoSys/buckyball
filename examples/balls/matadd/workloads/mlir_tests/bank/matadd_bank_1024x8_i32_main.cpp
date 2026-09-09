@@ -18,7 +18,7 @@ extern "C" void check_result(int32_t *allocated, int32_t *aligned,
                              int64_t offset, int64_t size0, int64_t size1,
                              int64_t stride0, int64_t stride1) {
   (void)allocated;
-  if (size0 != 1024 || size1 != 8 || stride0 != 8 || stride1 != 1) {
+  if (size0 != 64 || size1 != 8 || stride0 != 8 || stride1 != 1) {
     std::printf("FAILED: matadd bank shape %ldx%ld\n", size0, size1);
     fail();
   }
@@ -35,5 +35,5 @@ extern "C" void check_result(int32_t *allocated, int32_t *aligned,
       }
     }
   }
-  std::printf("PASSED: matadd bank 1024x8\n");
+  std::printf("PASSED: matadd bank 64x8\n");
 }

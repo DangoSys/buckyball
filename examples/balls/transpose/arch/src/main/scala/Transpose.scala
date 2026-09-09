@@ -149,6 +149,8 @@ class Transpose(val b: GlobalConfig) extends Module {
         epgReg       := Mux(i8, rowBytes.U, (rowBytes / 4).U)
         wElemsReg    := Mux(i8, cmd.op1_col << laneBitsI8.U, cmd.op1_col << laneBitsI32.U)
         assert(cmd.iter > 0.U, "Transpose iter must be > 0")
+        assert(cmd.op1_bank < b.memDomain.bankNum.U, "Transpose input bank is invalid")
+        assert(cmd.wr_bank < b.memDomain.bankNum.U, "Transpose output bank is invalid")
         assert(cmd.op1_bank =/= cmd.wr_bank, "Transpose op1 and wr must differ")
         assert(
           cmd.op1_col === cmd.wr_col && cmd.op1_col =/= 0.U,

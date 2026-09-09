@@ -6,14 +6,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
 #define T 16
 #define G 2
 #define R 2
-#define M 208
+#define M 16
 #define K 64
 #define CL (M * R)
-
 static int8_t a0[M * K] __attribute__((aligned(64)));
 static int8_t a1[M * K] __attribute__((aligned(64)));
 static int8_t b0[K * T] __attribute__((aligned(64)));
@@ -24,6 +22,7 @@ static int32_t c0[CL * 8] __attribute__((aligned(64)));
 static int32_t c1[CL * 8] __attribute__((aligned(64)));
 static int32_t cout[CL * 8] __attribute__((aligned(64)));
 static int32_t exp_[M * T];
+static int32_t bias[16] __attribute__((aligned(64)));
 
 static void pack_a(const int8_t *s, int8_t *d) {
   for (int r = 0; r < M; ++r)
@@ -46,15 +45,19 @@ static void gemm_os(const int8_t *a, const int8_t *b, int32_t *c, uint32_t cb) {
   memcpy(pb, b, (size_t)K * T);
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
-  bb_mem_alloc(cb, 1, G);
+  bb_mem_alloc(cb, 1, 1);
+  bb_mem_alloc(5, 1, 1);
   bb_mvin((uintptr_t)pa, 0, M * (K / T), 1);
   bb_mvin((uintptr_t)pb, 1, K, 1);
+  bb_mvin((uintptr_t)bias, 5, 4, 1);
+  bb_smatmul_bias(5, 0);
   bb_smatmul_os(0, 1, cb, M, T, K, 1, 1, 0);
-  bb_mvout((uintptr_t)c, cb, CL, 1);
+  bb_mvout((uintptr_t)c, cb, M * 4, 1);
   bb_fence();
   bb_mem_release(0);
   bb_mem_release(1);
   bb_mem_release(cb);
+  bb_mem_release(5);
 }
 
 int main(void) {

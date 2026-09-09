@@ -36,9 +36,9 @@ int main(void) {
   bb_mem_release(dst);
 
   if (compare_i8_matrices(output_matrix, expected_matrix, COLS, ROWS)) {
-    printf("Transpose bank i8 n2 1024x32 PASSED\n");
+    printf("Transpose bank i8 n2 PASSED\n");
     return 0;
   }
-  printf("Transpose bank i8 n2 1024x32 FAILED\n");
+  printf("Transpose bank i8 n2 FAILED\n");
   return 1;
 }

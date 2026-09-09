@@ -82,11 +82,22 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val robIssued   = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
   val robComplete = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
 
-  val headPtr          = RegInit(0.U(idWidth.W))
-  val tailPtr          = RegInit(0.U(idWidth.W))
-  val issuedCount      = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols         = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
-  val physicalBankBusy = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(false.B)))
+  val headPtr                       = RegInit(0.U(idWidth.W))
+  val tailPtr                       = RegInit(0.U(idWidth.W))
+  val issuedCount                   = RegInit(0.U(log2Up(robDepth + 1).W))
+  val bankCols                      = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  // Physical-bank ownership is a bit mask.  IDs outside the physical-bank
+  // range intentionally map to no bit, matching the old equality scan.
+  private val physicalBankMaskWidth = b.memDomain.bankNum
+  val physicalBankBusy              = RegInit(0.U(physicalBankMaskWidth.W))
+
+  // Dependency state is maintained incrementally instead of rebuilding all
+  // older-entry comparisons every cycle. A bit in slot k names the ROB slot
+  // that currently blocks k. Ordinary RAW dependencies disappear at complete;
+  // dependencies involving a mapping/config instruction disappear at commit.
+  // Keeping one union mask is sufficient because a config dependency is never
+  // allowed to clear earlier than commit, even when it also looks like a RAW.
+  val dependencyMask = RegInit(VecInit(Seq.fill(robDepth)(0.U(robDepth.W))))
 
   val isEmpty = headPtr === tailPtr && !robValid(headPtr)
   val isFull  = headPtr === tailPtr && robValid(headPtr)
@@ -99,39 +110,40 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     entry.cmd.domain_id === DomainId.MEM &&
       (entry.cmd.cmd.funct === MSET_BITPAT)
 
-  def touchesBank(access: BankAccessInfo, bank: UInt): Bool =
-    (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
-      (access.rd_bank_1_valid && access.rd_bank_1_id === bank) ||
-      (access.wr_bank_valid && access.wr_bank_id === bank)
-
-  def bankOverlap(a: BankAccessInfo, b: BankAccessInfo): Bool =
-    (a.rd_bank_0_valid && touchesBank(b, a.rd_bank_0_id)) ||
-      (a.rd_bank_1_valid && touchesBank(b, a.rd_bank_1_id)) ||
-      (a.wr_bank_valid && touchesBank(b, a.wr_bank_id))
-
   def accessUsesBank(access: BankAccessInfo, bank: UInt): Bool =
     (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
       (access.rd_bank_1_valid && access.rd_bank_1_id === bank) ||
       (access.wr_bank_valid && access.wr_bank_id === bank)
 
-  def hasRawHazard(younger: BankAccessInfo, older: BankAccessInfo): Bool = {
-    val youngerReadOlderWrite  =
-      older.wr_bank_valid &&
-        ((younger.rd_bank_0_valid && younger.rd_bank_0_id === older.wr_bank_id) ||
-          (younger.rd_bank_1_valid && younger.rd_bank_1_id === older.wr_bank_id))
-    val youngerWriteOlderRead  =
-      younger.wr_bank_valid &&
-        ((older.rd_bank_0_valid && younger.wr_bank_id === older.rd_bank_0_id) ||
-          (older.rd_bank_1_valid && younger.wr_bank_id === older.rd_bank_1_id))
-    val youngerWriteOlderWrite =
-      younger.wr_bank_valid && older.wr_bank_valid && younger.wr_bank_id === older.wr_bank_id
-    youngerReadOlderWrite || youngerWriteOlderRead || youngerWriteOlderWrite
+  // Raw accesses use the physical bank namespace.  Build one mask per ROB
+  // slot once, then hazard checks become mask intersections instead of
+  // repeating multiple ID equality comparators for every ROB pair.  Bank IDs
+  // are five bits wide for pebble, but codes 24..31 are invalid; suppressing
+  // them before UIntToOH preserves the old equality-scan behavior exactly.
+  private val hazardBankCount = b.memDomain.bankNum
+
+  def rawReadMask(access: BankAccessInfo): UInt = {
+    val rd0 = Mux(
+      access.rd_bank_0_valid && access.rd_bank_0_id < hazardBankCount.U,
+      UIntToOH(access.rd_bank_0_id, hazardBankCount),
+      0.U(hazardBankCount.W)
+    )
+    val rd1 = Mux(
+      access.rd_bank_1_valid && access.rd_bank_1_id < hazardBankCount.U,
+      UIntToOH(access.rd_bank_1_id, hazardBankCount),
+      0.U(hazardBankCount.W)
+    )
+    rd0 | rd1
   }
 
-  def physicalBankBusyFor(access: BankAccessInfo): Bool =
-    (access.rd_bank_0_valid && physicalBankBusy(access.rd_bank_0_id)) ||
-      (access.rd_bank_1_valid && physicalBankBusy(access.rd_bank_1_id)) ||
-      (access.wr_bank_valid && physicalBankBusy(access.wr_bank_id))
+  def rawWriteMask(access: BankAccessInfo): UInt = Mux(
+    access.wr_bank_valid && access.wr_bank_id < hazardBankCount.U,
+    UIntToOH(access.wr_bank_id, hazardBankCount),
+    0.U(hazardBankCount.W)
+  )
+
+  def rawUseMask(access: BankAccessInfo): UInt =
+    rawReadMask(access) | rawWriteMask(access)
 
   // ---------------------------------------------------------------------------
   // Allocate: enqueue decoded instruction into ROB
@@ -172,6 +184,39 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // Mark write alias as busy in scoreboard at alloc time (not issue time).
   scoreboard.alloc.valid := io.alloc.fire && io.alloc.bits.bankAccess.wr_bank_valid
   scoreboard.alloc.bits  := bat.io.alloc_renamed
+
+  // Bank masks are shared by allocation and issue. This avoids rebuilding the
+  // UIntToOH decoders once for every older-entry comparison at allocation.
+  val entryRawReads  = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
+  val entryRawWrites = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
+  val entryIsConfig  = Wire(Vec(robDepth, Bool()))
+  for (slot <- 0 until robDepth) {
+    entryRawReads(slot)  := rawReadMask(robEntries(slot).cmd.bankAccess)
+    entryRawWrites(slot) := rawWriteMask(robEntries(slot).cmd.bankAccess)
+    entryIsConfig(slot)  := isMappingConfig(robEntries(slot))
+  }
+
+  // A newly allocated entry is always younger than all currently valid ROB
+  // entries (tailPtr points at the first free slot). Capture its older-entry
+  // dependencies once here; issue no longer repeats pairwise comparisons.
+  val allocReadMask       = rawReadMask(io.alloc.bits.bankAccess)
+  val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
+  val allocIsConfig       = io.alloc.bits.domain_id === DomainId.MEM &&
+    (io.alloc.bits.cmd.funct === MSET_BITPAT)
+  val allocDependencyBits = Wire(Vec(robDepth, Bool()))
+  for (older <- 0 until robDepth) {
+    val olderUseMask   = entryRawReads(older) | entryRawWrites(older)
+    val rawConflict    = ((allocReadMask & entryRawWrites(older)) |
+      (allocWriteMask & olderUseMask)).orR
+    val configConflict = (allocIsConfig || entryIsConfig(older)) &&
+      ((allocReadMask | allocWriteMask) & olderUseMask).orR
+    // Config conflicts include entries that have completed but are waiting to
+    // commit. RAW conflicts only include entries that are still executing.
+    allocDependencyBits(older) :=
+      (robValid(older) && !robComplete(older) && rawConflict) ||
+        (robValid(older) && configConflict)
+  }
+  val allocDependencies = allocDependencyBits.asUInt
 
   when(io.alloc.fire) {
     itraceAlloc.io.is_issue    := 2.U
@@ -225,33 +270,36 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     itraceComp.io.enable      := true.B
   }
 
+  val completedBitMask = Mux(
+    io.complete.fire,
+    UIntToOH(io.complete.bits, robDepth),
+    0.U(robDepth.W)
+  )
+
   // ---------------------------------------------------------------------------
   // Issue: scan from head for first issuable entry (valid && !issued && !complete)
   // ---------------------------------------------------------------------------
-  val scanValid = Wire(Vec(robDepth, Bool()))
-  val scanReady = Wire(Vec(robDepth, Bool()))
+  val scanValid     = Wire(Vec(robDepth, Bool()))
+  val scanReady     = Wire(Vec(robDepth, Bool()))
+  val physicalMasks = Wire(Vec(robDepth, UInt(physicalBankMaskWidth.W)))
+  for (slot <- 0 until robDepth) {
+    // The physical busy mask uses exactly the same private-bank namespace as
+    // the raw hazard masks.  Reusing these masks avoids a second bank-ID
+    // decoder for every ROB slot.
+    physicalMasks(slot) := entryRawReads(slot) | entryRawWrites(slot)
+  }
+
+  // Check each candidate against older ROB entries using mask intersections.
+  // The masks are precomputed once per slot, so this retains the original
+  // age-sensitive RAW/WAR/WAW semantics without replicating three equality
+  // comparators for every bank access pair.
   for (i <- 0 until robDepth) {
-    val ptr       = robIdx(wrapPtr(headPtr + i.U))
-    val cfgHazard = WireDefault(false.B)
-    for (j <- 0 until i) {
-      val olderPtr         = robIdx(wrapPtr(headPtr + j.U))
-      val olderLive        = robValid(olderPtr) && !robComplete(olderPtr)
-      val olderUncommitted = robValid(olderPtr)
-      val cfgPair          = isMappingConfig(robEntries(ptr)) || isMappingConfig(robEntries(olderPtr))
-      when(olderLive && hasRawHazard(robEntries(ptr).cmd.bankAccess, robEntries(olderPtr).cmd.bankAccess)) {
-        cfgHazard := true.B
-      }
-      when(olderUncommitted && cfgPair && bankOverlap(
-        robEntries(ptr).cmd.bankAccess,
-        robEntries(olderPtr).cmd.bankAccess
-      )) {
-        cfgHazard := true.B
-      }
-    }
-    scanValid(i) := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
+    val ptr = robIdx(wrapPtr(headPtr + i.U))
+    scanValid(i)           := robValid(ptr) && !robIssued(ptr) && !robComplete(ptr)
     scoreboard.queryVec(i) := robEntries(ptr).renamedBankAccess
-    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) && !cfgHazard &&
-      !physicalBankBusyFor(robEntries(ptr).cmd.bankAccess)
+    scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) &&
+      !dependencyMask(ptr).orR &&
+      !(physicalMasks(ptr) & physicalBankBusy).orR
   }
 
   val hasReady       = scanReady.asUInt.orR
@@ -261,73 +309,84 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   scoreboard.query := robEntries(actualIssuePtr).renamedBankAccess
   val canIssue = hasReady
 
-  val issueEntry = Wire(new GlobalRobEntry(b))
-  issueEntry             := robEntries(actualIssuePtr)
-  issueEntry.cmd.op1_col := Mux(
-    issueEntry.cmd.bankAccess.rd_bank_0_valid,
-    bankCols(issueEntry.cmd.bankAccess.rd_bank_0_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+  val issueStageValid = RegInit(false.B)
+  val issueStageEntry = Reg(new GlobalRobEntry(b))
+  val issueStageFire  = issueStageValid && !io.subRobActive && io.issue.ready
+  val issueStageReady = !issueStageValid || issueStageFire
+
+  // Keep the wide ROB entry and bank-column mux one register boundary away
+  // from the age/scoreboard scan. The pointer stage can accept one candidate
+  // per cycle; the payload stage drains at one per cycle, so steady-state II
+  // remains one while the extra latency is hidden by in-flight commands.
+  val issuePtrValid = RegInit(false.B)
+  val issuePtr      = Reg(UInt(idWidth.W))
+  val issuePtrFire  = issuePtrValid && issueStageReady
+  val issuePtrReady = !issuePtrValid || issuePtrFire
+  val issueLoad     = canIssue && !io.subRobActive && issuePtrReady
+  val issuePayload  = Wire(new GlobalRobEntry(b))
+  issuePayload             := robEntries(issuePtr)
+  issuePayload.cmd.op1_col := Mux(
+    issuePayload.cmd.bankAccess.rd_bank_0_valid,
+    bankCols(issuePayload.cmd.bankAccess.rd_bank_0_id(log2Up(b.memDomain.bankNum) - 1, 0)),
     0.U
   )
-  issueEntry.cmd.op2_col := Mux(
-    issueEntry.cmd.bankAccess.rd_bank_1_valid,
-    bankCols(issueEntry.cmd.bankAccess.rd_bank_1_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+  issuePayload.cmd.op2_col := Mux(
+    issuePayload.cmd.bankAccess.rd_bank_1_valid,
+    bankCols(issuePayload.cmd.bankAccess.rd_bank_1_id(log2Up(b.memDomain.bankNum) - 1, 0)),
     0.U
   )
-  issueEntry.cmd.wr_col  := Mux(
-    issueEntry.cmd.bankAccess.wr_bank_valid,
-    bankCols(issueEntry.cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+  issuePayload.cmd.wr_col  := Mux(
+    issuePayload.cmd.bankAccess.wr_bank_valid,
+    bankCols(issuePayload.cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)),
     0.U
   )
 
-  io.issue.valid := canIssue && !io.subRobActive
-  io.issue.bits  := issueEntry
+  io.issue.valid := issueStageValid && !io.subRobActive
+  io.issue.bits  := issueStageEntry
+
+  when(issuePtrReady) {
+    issuePtrValid := issueLoad
+    when(issueLoad) {
+      issuePtr := actualIssuePtr
+    }
+  }
+  when(issueStageReady) {
+    issueStageValid := issuePtrValid
+    when(issuePtrFire) {
+      issueStageEntry := issuePayload
+    }
+  }
 
   scoreboard.issue.valid := false.B
   scoreboard.issue.bits  := 0.U.asTypeOf(scoreboard.issue.bits)
 
-  when(io.issue.fire) {
+  when(issueLoad) {
     robIssued(actualIssuePtr) := true.B
     issueFired                := true.B
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
-    val access = robEntries(actualIssuePtr).cmd.bankAccess
-    for (bank <- 0 until b.memDomain.bankNum) {
-      val bankId = bank.U(b.frontend.bank_id_len.W)
-      when(
-        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
-          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
-          (access.wr_bank_valid && access.wr_bank_id === bankId)
-      ) {
-        physicalBankBusy(bank) := true.B
-      }
-    }
-
     itraceIssue.io.is_issue    := 1.U
-    itraceIssue.io.rob_id      := issueEntry.rob_id
-    itraceIssue.io.domain_id   := issueEntry.cmd.domain_id
-    itraceIssue.io.funct       := issueEntry.cmd.cmd.funct
-    itraceIssue.io.pc          := issueEntry.cmd.cmd.pc
-    itraceIssue.io.rs1_idx     := issueEntry.cmd.cmd.rs1
-    itraceIssue.io.rs2_idx     := issueEntry.cmd.cmd.rs2
-    itraceIssue.io.rs1_data    := issueEntry.cmd.cmd.rs1Data
-    itraceIssue.io.rs2_data    := issueEntry.cmd.cmd.rs2Data
-    itraceIssue.io.bank_enable := issueEntry.cmd.cmd.funct(6, 4)
+    itraceIssue.io.rob_id      := robEntries(actualIssuePtr).rob_id
+    itraceIssue.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
+    itraceIssue.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
+    itraceIssue.io.pc          := robEntries(actualIssuePtr).cmd.cmd.pc
+    itraceIssue.io.rs1_idx     := robEntries(actualIssuePtr).cmd.cmd.rs1
+    itraceIssue.io.rs2_idx     := robEntries(actualIssuePtr).cmd.cmd.rs2
+    itraceIssue.io.rs1_data    := robEntries(actualIssuePtr).cmd.cmd.rs1Data
+    itraceIssue.io.rs2_data    := robEntries(actualIssuePtr).cmd.cmd.rs2Data
+    itraceIssue.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
     itraceIssue.io.enable      := true.B
   }
 
-  when(io.complete.fire) {
-    val access = robEntries(io.complete.bits).cmd.bankAccess
-    for (bank <- 0 until b.memDomain.bankNum) {
-      val bankId = bank.U(b.frontend.bank_id_len.W)
-      when(
-        (access.rd_bank_0_valid && access.rd_bank_0_id === bankId) ||
-          (access.rd_bank_1_valid && access.rd_bank_1_id === bankId) ||
-          (access.wr_bank_valid && access.wr_bank_id === bankId)
-      ) {
-        physicalBankBusy(bank) := false.B
-      }
-    }
+  // Preserve the original update ordering when issue and complete coincide:
+  // a completion clears ownership after the newly issued transaction marks
+  // its banks busy.
+  val issuedPhysicalMask    = Mux(issueLoad, physicalMasks(actualIssuePtr), 0.U)
+  val completedPhysicalMask = Mux(io.complete.fire, physicalMasks(io.complete.bits), 0.U)
+  when(issueLoad || io.complete.fire) {
+    physicalBankBusy :=
+      (physicalBankBusy & ~completedPhysicalMask) | issuedPhysicalMask
   }
 
   issuedCount := issuedCount + issueFired.asUInt - completeIssuedEntry.asUInt
@@ -355,6 +414,25 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       robValid(i)    := false.B
       robIssued(i)   := false.B
       robComplete(i) := false.B
+    }
+  }
+
+  // Maintain dependency masks at the same architectural events that gate the
+  // issue scan. A dependency involving a config entry (on either side) clears
+  // only at commit; all other dependencies clear at complete. This is the
+  // union-mask form of the former separate RAW/config masks.
+  val configEntryMask = entryIsConfig.asUInt
+  for (slot <- 0 until robDepth) {
+    val isAllocatedSlot = io.alloc.fire && tailPtr === slot.U
+    val slotIsConfig    = Mux(isAllocatedSlot, allocIsConfig, entryIsConfig(slot))
+    // Each dependency bit names the older entry that blocks this slot. Keep a
+    // config-related edge through completion when either endpoint is config.
+    val configRelated   = configEntryMask | Fill(robDepth, slotIsConfig)
+    val clearMask       = commitMask.asUInt | (completedBitMask & ~configRelated)
+    when(isAllocatedSlot) {
+      dependencyMask(slot) := allocDependencies & ~clearMask
+    }.otherwise {
+      dependencyMask(slot) := dependencyMask(slot) & ~clearMask
     }
   }
 
