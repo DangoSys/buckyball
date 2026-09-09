@@ -425,43 +425,6 @@ public:
     if (buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW != 1)
       return kernel.emitError("resident Conv region requires SMatMul outBW=1");
 
-    // Physical-bank lowering needs a compile-time panel offset whenever a
-    // tile is retained for a residual branch spanning multiple banks.  Mark
-    // only those common-ancestor stages for static panel emission; all other
-    // stages keep a runtime panel loop so their pipeline is emitted once.
-    DenseSet<int64_t> staticPanelStages;
-    for (auto [addIndex, addStage] : llvm::enumerate(stages)) {
-      if (!addStage.add)
-        continue;
-      int64_t branchStage = producer.lookup(addStage.input);
-      DenseSet<int64_t> branchAncestors;
-      for (int64_t cursor = branchStage;;) {
-        branchAncestors.insert(cursor);
-        if (stages[cursor].input == kernel.getInput())
-          break;
-        if (!producer.contains(stages[cursor].input))
-          return addStage.op->emitError(
-              "INT8 Add main branch has no region producer");
-        int64_t next = producer.lookup(stages[cursor].input);
-        if (next >= cursor)
-          return addStage.op->emitError("INT8 Add branch is not acyclic");
-        cursor = next;
-      }
-      int64_t residualStage = producer.lookup(addStage.rhs);
-      while (!branchAncestors.contains(residualStage)) {
-        if (!producer.contains(stages[residualStage].input))
-          break;
-        int64_t next = producer.lookup(stages[residualStage].input);
-        if (next >= residualStage)
-          return addStage.op->emitError("INT8 Add branch is not acyclic");
-        residualStage = next;
-      }
-      if (branchAncestors.contains(residualStage)) {
-        staticPanelStages.insert(residualStage);
-        staticPanelStages.insert(addIndex);
-      }
-    }
-
     Location loc = kernel.getLoc();
     b.setInsertionPoint(kernel);
     Value zeroI8 =
@@ -686,37 +649,14 @@ public:
       if (residualCache.stage == stageIndex)
         cache = &residualCache;
       if (cache) {
-        IntegerAttr::ValueType firstPanelValue;
-        bool staticPanel =
-            matchPattern(firstPanel, m_ConstantInt(&firstPanelValue));
-        if (cache->tile.banks.size() != 1 && !staticPanel)
-          return stage.op->emitError(
-              "cached tile panel offset must be constant");
-        int64_t firstPanelIndex =
-            staticPanel ? firstPanelValue.getSExtValue() : 0;
-        if ((staticPanel &&
-             (firstPanelIndex < 0 ||
-              firstPanelIndex + panelCount > cache->tile.panelCount)) ||
-            (!staticPanel && panelCount > cache->tile.panelCount))
+        if (cache->tile.banks.size() != 1 ||
+            panelCount > cache->tile.panelCount)
           return stage.op->emitError("cached tile layout mismatch");
         SmallVector<Value> destinationStates(destination.banks.begin(),
                                              destination.banks.end());
         for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
-          Value sourcePanel =
-              staticPanel
-                  ? Value(b.create<arith::ConstantIndexOp>(
-                        loc, firstPanelIndex + localPanel))
-                  : b.create<arith::AddIOp>(
-                        loc, firstPanel,
-                        b.create<arith::ConstantIndexOp>(loc, localPanel));
-          int64_t sourceBank = staticPanel ? (firstPanelIndex + localPanel) /
-                                                 cache->tile.panelsPerBank
-                                           : 0;
-          Value sourceSlot = staticPanel
-                                 ? Value(b.create<arith::ConstantIndexOp>(
-                                       loc, (firstPanelIndex + localPanel) %
-                                                cache->tile.panelsPerBank))
-                                 : sourcePanel;
+          int64_t sourceBank = 0;
+          Value sourceSlot = b.create<arith::ConstantIndexOp>(loc, localPanel);
           int64_t destinationBank = localPanel / destination.panelsPerBank;
           int64_t destinationSlot = localPanel % destination.panelsPerBank;
           Value sourceBase = b.create<arith::IndexCastOp>(
@@ -921,6 +861,29 @@ public:
         releaseBank(b, loc, zeroBank);
       };
 
+      if (stage.add && (height != 1 || width != 1)) {
+        if (failed(emitInto(stageIndex, y0, x0, 1, 1, firstPanel, panelCount,
+                            destination, destinationBase, destinationStride)))
+          return failure();
+        if (width > 1 &&
+            failed(
+                emitInto(stageIndex, y0,
+                         b.create<arith::AddIOp>(
+                             loc, x0, b.create<arith::ConstantIndexOp>(loc, 1)),
+                         1, width - 1, firstPanel, panelCount, destination,
+                         destinationBase + 1, destinationStride)))
+          return failure();
+        if (height > 1 &&
+            failed(emitInto(
+                stageIndex,
+                b.create<arith::AddIOp>(
+                    loc, y0, b.create<arith::ConstantIndexOp>(loc, 1)),
+                x0, height - 1, width, firstPanel, panelCount, destination,
+                destinationBase + destinationStride, destinationStride)))
+          return failure();
+        return success();
+      }
+
       if (stage.add) {
         Value lhsRatio = b.create<arith::ConstantOp>(
             loc, b.getF32Type(),
@@ -998,14 +961,11 @@ public:
         if (residualPanelsPerBank <= 0)
           return stage.op->emitError(
               "INT8 Add residual tile does not fit one bank");
-        // The main branch may need every channel panel of the common
-        // residual stage as its input. Keep that complete panel set in the
-        // cache for this spatial tile; only the bank packing, not the channel
-        // count, may be split.
-        // Int8Add consumes one packed bank per operand.  The residual cache
-        // may span banks, but the Add operands and result must each fit one.
-        int64_t chunkPanels =
-            std::min<int64_t>(residualPanels, destination.panelsPerBank);
+        // Add is emitted one output panel at a time.  Cache only that panel
+        // so a dynamic panel index always maps to slot zero in one bank.
+        int64_t chunkPanels = std::min<int64_t>(
+            residualPanels,
+            std::min(destination.panelsPerBank, residualPanelsPerBank));
         if (chunkPanels <= 0)
           return stage.op->emitError("INT8 Add panel chunk is empty");
 
@@ -1036,11 +996,11 @@ public:
             return failure();
 
           TileBanks residual =
-              allocateTile(residualPanels, residualPanelRows, zeroI8);
+              allocateTile(chunkCount, residualPanelRows, zeroI8);
           if (residual.banks.empty() ||
               failed(emitInto(residualStage, residualY, residualX,
-                              residualHeight, residualWidth, zero,
-                              residualPanels, residual, 0, residualWidth)))
+                              residualHeight, residualWidth, chunkFirstPanel,
+                              chunkCount, residual, 0, residualWidth)))
             return failure();
           residualCache.stage = residualStage;
           residualCache.tile = residual;
@@ -2431,23 +2391,14 @@ public:
           target.bankDepth / (side * side * outputStorageFactor);
       if (panelsPerBank <= 0)
         return stage.op->emitError("resident output tile does not fit bank");
-      if (staticPanelStages.contains(stageIndex)) {
-        for (int64_t panel = 0; panel < panelCount; panel += panelsPerBank) {
-          int64_t requestedPanels =
-              std::min<int64_t>(panelsPerBank, panelCount - panel);
-          if (failed(emitOutput(b.create<arith::ConstantIndexOp>(loc, panel),
-                                requestedPanels)))
-            return failure();
-        }
-      } else {
-        // Keep non-cached panel traversal in the generated IR.
-        auto panelLoop = b.create<scf::ForOp>(
-            loc, zero, b.create<arith::ConstantIndexOp>(loc, panelCount), one);
-        b.setInsertionPointToStart(panelLoop.getBody());
-        if (failed(emitOutput(panelLoop.getInductionVar(), 1)))
-          return failure();
-        b.setInsertionPointAfter(panelLoop);
-      }
+      // Keep panel traversal in the generated IR.  Emitting one copy per
+      // compile-time panel makes a deep region grow with channel count.
+      auto panelLoop = b.create<scf::ForOp>(
+          loc, zero, b.create<arith::ConstantIndexOp>(loc, panelCount), one);
+      b.setInsertionPointToStart(panelLoop.getBody());
+      if (failed(emitOutput(panelLoop.getInductionVar(), 1)))
+        return failure();
+      b.setInsertionPointAfter(panelLoop);
       b.setInsertionPointAfter(xLoop);
       b.setInsertionPointAfter(yLoop);
       // A zero limit is the debug mode for the normal resident path: do not
