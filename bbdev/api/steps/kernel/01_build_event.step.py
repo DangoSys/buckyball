@@ -157,10 +157,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
 
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
-    output_dir = os.path.join(bbdir, "bb-tests", "output", "kernel")
-
-    os.makedirs(output_dir, exist_ok=True)
-
     try:
         hart_params = hart_count_params(input_data)
         model = kernel_model(input_data)
@@ -173,6 +169,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
+    output_dir = os.path.join(bbdir, "bb-tests", "output", "kernel")
+    if chip:
+        output_dir = os.path.join(output_dir, chip)
+    os.makedirs(output_dir, exist_ok=True)
     kernel_build = kernel_build_dir(
         bbdir, hart_params, model, chip, interactive=interactive
     )

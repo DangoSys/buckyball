@@ -172,6 +172,7 @@ def build_compiler(
             "buddy-opt",
             "buddy-translate",
             "buddy-llc",
+            "rax-pack",
             "python-package-buddy",
             "BuddyMLIRPythonModules",
         ],
@@ -180,7 +181,7 @@ def build_compiler(
         task_scope=task_scope,
         output_prefix="compiler build",
     )
-    for tool in ("buddy-opt", "buddy-translate", "buddy-llc"):
+    for tool in ("buddy-opt", "buddy-translate", "buddy-llc", "rax-pack"):
         if not (build / "bin" / tool).is_file():
             raise RuntimeError(f"compiler build failed: missing {build / 'bin' / tool}")
     return build

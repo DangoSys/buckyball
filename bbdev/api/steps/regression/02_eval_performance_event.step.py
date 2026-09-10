@@ -89,10 +89,12 @@ def _workload_build(bbdir, chip, model, logger, task_scope):
     )
 
 
-def _kernel_build_cmds(bbdir, model, dataset=""):
+def _kernel_build_cmds(bbdir, chip, model, dataset=""):
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     hart_params = {"visible": 64, "total": 64, "hidden_base": 64}
-    kernel_build = _kernel.kernel_build_dir(bbdir, hart_params, model=model)
+    kernel_build = _kernel.kernel_build_dir(
+        bbdir, hart_params, model=model, chip=chip
+    )
     ds_arg = ""
     if dataset:
         ds_arg = f" -DBUCKYBALL_MODEL_DATASET={shlex.quote(dataset)}"
@@ -102,14 +104,17 @@ def _kernel_build_cmds(bbdir, model, dataset=""):
         f"-DBUCKYBALL_TOTAL_HART_COUNT=64 "
         f"-DBUCKYBALL_HIDDEN_HART_BASE=64 "
         f"-DBUCKYBALL_KERNEL_MODEL={model} "
-        f"-DBUCKYBALL_KERNEL_CHIP= "
+        f"-DBUCKYBALL_KERNEL_CHIP={chip} "
         f"-DBUCKYBALL_KERNEL_INTERACTIVE=OFF"
         f"{ds_arg}"
     )
     build = f"cmake --build {kernel_build} --target kernel-build"
     payload = _kernel.fw_payload_name(hart_params, model=model)
-    fw_bin = os.path.join(bbdir, "bb-tests", "output", "kernel", f"{payload}.bin")
-    fw_hex = os.path.join(bbdir, "bb-tests", "output", "kernel", f"{payload}.hex")
+    kernel_output = os.path.join(
+        bbdir, "bb-tests", "output", "kernel", chip
+    )
+    fw_bin = os.path.join(kernel_output, f"{payload}.bin")
+    fw_hex = os.path.join(kernel_output, f"{payload}.hex")
     return configure, build, fw_bin, fw_hex
 
 
@@ -118,7 +123,7 @@ def _p2e_run_cmds(bbdir, bitstream, image_name, chip, input_data):
     if not image_path:
         raise FileNotFoundError(
             f"image .hex not found for name: {image_name} "
-            f"(searched bb-tests/output/{chip}/workloads/)"
+            f"(expected bb-tests/output/kernel/{chip}/)"
         )
     bitstream = os.path.abspath(bitstream)
     build_dir = os.path.dirname(os.path.dirname(bitstream))
@@ -226,7 +231,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         spec = acc_specs[model]
         try:
             k_cfg, k_build, fw_bin, fw_hex = _kernel_build_cmds(
-                bbdir, model, dataset=spec["dataset"],
+                bbdir, chip, model, dataset=spec["dataset"],
             )
         except ValueError as e:
             ctx.logger.error(str(e))

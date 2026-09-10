@@ -11,6 +11,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -19,7 +20,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, log_dir, rtl_dir
+from utils.path import bebop_cargo_env, get_buckyball_path, log_dir, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -33,16 +34,11 @@ config = {
 
 
 def resolve_image(bbdir: str, image_name: str, chip: str) -> str:
-    """Search chip workload build output recursively for <image_name>.hex."""
-    workload_root = os.path.join(chip_output_root(bbdir, chip), "workloads")
-    matches = glob.glob(f"{workload_root}/**/{image_name}.hex", recursive=True)
-    if not matches:
-        return ""
-    if len(matches) > 1:
-        raise ValueError(
-            f"multiple .hex files for {image_name!r} under {workload_root}: {matches}"
-        )
-    return matches[0]
+    """Resolve a kernel image name to its deterministic output path."""
+    image_name = image_name.replace(r"\_", "_")
+    filename = image_name if image_name.endswith(".hex") else f"{image_name}.hex"
+    path = Path(bbdir) / "bb-tests" / "output" / "kernel" / chip / filename
+    return str(path) if path.is_file() else ""
 
 
 def resolve_runtime_config(bitstream: str, requested_config: object) -> str:
@@ -114,7 +110,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if not image_path:
         ctx.logger.error(
             f"image .hex not found for name: {image_name} "
-            f"(searched bb-tests/output/{chip}/workloads/)"
+            f"(expected bb-tests/output/kernel/{chip}/)"
         )
         await check_result(
             ctx, 1, continue_run=False,
@@ -169,10 +165,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop p2e runtime",
         env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
     )
+    runtime_lib_dir = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm")
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
-    libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
-    if runtime_result.returncode != 0 or not all(os.path.isfile(path) for path in (rtcfg_path, libvctb_path)):
-        missing = [path for path in (rtcfg_path, libvctb_path) if not os.path.isfile(path)]
+    libvctb_path = os.path.join(runtime_lib_dir, "libvCtb.so")
+    libstdcxx_path = os.path.join(runtime_lib_dir, "libstdc++.so.6")
+    bebop_p2e_path = os.path.join(build_dir, "bebop-p2e")
+    runtime_artifacts = (rtcfg_path, libvctb_path, libstdcxx_path, bebop_p2e_path)
+    if runtime_result.returncode != 0 or not all(os.path.isfile(path) for path in runtime_artifacts):
+        missing = [path for path in runtime_artifacts if not os.path.isfile(path)]
         if missing:
             ctx.logger.error(f"P2E runtime artifacts missing: {missing}")
         await check_result(
@@ -189,14 +189,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    # ── Run bebop run p2e ─────────────────────────────────────────────────
+    # Run the case-local executable produced above.  It must load the VVAC
+    # runtime's libstdc++ (6.0.25), not Cargo/Nix's newer libstdc++; mixing the
+    # two ABIs crashes inside ICtbMgr::init().  Apply LD_LIBRARY_PATH only to
+    # the runtime process so Cargo itself keeps its normal library environment.
     run_cmd = (
-        f"cargo run --release --features p2e "
-        f"--config=\"env.OUT_PATH='{build_dir}'\" "
-        f"-- run p2e "
+        f"\"{bebop_p2e_path}\" run p2e "
         f"--image=\"{image_path}\" "
         f"--bitstream=\"{bitstream}\" "
-        f"--log-dir=\"{log_dir}\""
+        f"--log-dir=\"{run_log}\""
     )
     if multi_fpga:
         run_cmd += " --multi-fpga"
@@ -208,13 +209,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if input_data.get(trace_name, False):
             run_cmd += f" --{trace_name}"
     ctx.logger.info(f"Running bebop p2e runworkload: {run_cmd}")
+    run_env = {**os.environ.copy(), **bebop_cargo_env(bbdir, chip)}
+    inherited_library_path = run_env.get("LD_LIBRARY_PATH")
+    run_env["LD_LIBRARY_PATH"] = (
+        f"{runtime_lib_dir}:{inherited_library_path}"
+        if inherited_library_path
+        else runtime_lib_dir
+    )
     run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e runworkload",
         stderr_prefix="bebop p2e runworkload",
-        env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
+        env=run_env,
     )
 
     await check_result(
