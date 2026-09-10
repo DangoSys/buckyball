@@ -1,11 +1,12 @@
 # Toy: virtual single-core. Mounts leftover balls not used by pebble/poly/goban.
 
-ballNum = 3
+ballNum = 4
 
 ballIdMappings = [
   { ballId = 0, ballName = "GemminiBall", ballClass = "examples.balls.gemmini.GemminiBall", config = "../../../../balls/gemmini/configs/default.toml", inBW = 2, outBW = 4 },
   { ballId = 1, ballName = "TraceBall", ballClass = "examples.balls.trace.TraceBall", config = "../../../../balls/trace/configs/default.toml", inBW = 1, outBW = 1 },
   { ballId = 2, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1, mmioReadBW = 1 },
+  { ballId = 3, ballName = "NliBall", ballClass = "examples.balls.nli.NliBall", config = "../../../../balls/nli/configs/default.toml", inBW = 2, outBW = 1 },
 ]
 
 ballISA = [
@@ -34,4 +35,5 @@ ballISA = [
   { mnemonic = "GEMMINI_LOOP_CONV_WS", funct7 = 105, bid = 0 },
   { mnemonic = "BDB_COUNTER", funct7 = 4, bid = 1 },
   { mnemonic = "MXFP2INT", funct7 = 55, bid = 2 },
+  { mnemonic = "NLI", funct7 = 73, bid = 3 },
 ]
