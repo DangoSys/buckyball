@@ -119,9 +119,12 @@ def run_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx, co
     crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())["package"]["name"]
     dpi = verify_dir / "casegen" / "target" / "debug" / f"lib{crate.replace('-', '_')}"
     test = f"{ball}_ball_test"
+    verify_config = verify_dir / "build" / chip_name / "verify_config.env"
+    bank_entries = load_chip(bbdir, chip_name).cores[0].mem.bank.entries
+    verify_config.write_text(f"bank_entries={bank_entries}\nball_id={mapping.ball_id}\n")
     script = (
         f"cd {shlex.quote(str(verify_dir))} && "
-        f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" {shlex.quote(str(simv))} "
+        f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} {shlex.quote(str(simv))} "
         f"-sv_lib {shlex.quote(str(dpi))} "
         f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.ball_id} "
         f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
@@ -195,7 +198,7 @@ def run_chip(bbdir: str, chip: str, ball: str | None, ctx, do_run: bool) -> dict
             s = dashboard_summary(p)
             body.append(
                 f"{b} {s['SCORE']} {s['LINE']} {s['COND']} {s['TOGGLE']} "
-                f"{s.get('ASSERT', '--')} {s['GROUP']} pass"
+                f"{s.get('ASSERT', '--')} {s.get('GROUP', '--')} pass"
             )
         index = index_dir / "index.txt"
         index.write_text("\n".join(body) + "\n")
