@@ -25,7 +25,7 @@ if scripts_path not in sys.path:
 from utils.path import bebop_cargo_env, get_buckyball_path, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_manifest
+from bemu_common import bemu_manifest, chip_emu_manifest
 from regression import regression_workload_toml
 from regression_harness import nextest_harness_args
 
@@ -53,8 +53,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    rushB = bool(input_data.get("rushB", False))
     try:
         bemu_cargo_manifest = bemu_manifest(chip, bbdir)
+        if not rushB:
+            chip_emu = chip_emu_manifest(chip, bbdir)
+            if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(encoding="utf-8"):
+                bemu_cargo_manifest = chip_emu
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -68,7 +73,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))
     test_type = input_data.get("test", "elf-tests")
-    rushB = bool(input_data.get("rushB", False))
     try:
         workload_toml = regression_workload_toml(
             chip, "bemu", test_type, bbdir, rushB=rushB
