@@ -20,7 +20,7 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from utils.event_common import require_chip
-from utils.path import bebop_target_dir, get_buckyball_path, log_dir, rtl_dir, workload_tests_root
+from utils.path import bebop_target_dir, get_buckyball_path, log_dir, rtl_dir, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
@@ -152,14 +152,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     binary_name = input_data.get("binary", "")
-    workload_root = workload_tests_root(bbdir, chip)
-    binary_path = None
-    if diff and chip:
-        binary_path = search_workload(
-            f"{workload_root}/CTest/chips/{chip}", binary_name
-        )
-    if binary_path is None:
-        binary_path = search_workload(workload_root, binary_name)
+    binary_path = search_workload(workloads_output_root(bbdir), binary_name)
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(

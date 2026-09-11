@@ -22,7 +22,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path
+from utils.path import bebop_cargo_env, get_buckyball_path, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from bemu_common import bemu_manifest
@@ -63,7 +63,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    elf_root = chip_output_root(bbdir, chip)
+    elf_root = workloads_output_root(bbdir)
 
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))

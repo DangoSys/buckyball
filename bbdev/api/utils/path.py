@@ -43,6 +43,10 @@ def chip_output_root(bbdir, chip):
     return os.path.join(bbdir, "bb-tests", "output", chip)
 
 
+def workloads_output_root(bbdir):
+    return os.path.join(bbdir, "bb-tests", "output")
+
+
 def workload_build_dir(bbdir, chip):
     chip = _chip_name(chip)
     return os.path.join(bbdir, "bb-tests", "workloads", "build", chip)

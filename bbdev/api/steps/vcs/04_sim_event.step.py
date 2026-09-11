@@ -12,7 +12,7 @@ if utils_path not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.event_common import require_chip
-from utils.path import get_buckyball_path, log_dir, rtl_dir, workload_build_dir, workload_tests_root
+from utils.path import get_buckyball_path, log_dir, rtl_dir, workload_build_dir, workloads_output_root
 from utils.search_workload import search_workload
 from utils.stream_run import stream_run_logger_async
 
@@ -30,7 +30,7 @@ def _resolve_binary(bbdir: str, chip: str, binary: str) -> str | None:
     if os.path.isfile(binary):
         return os.path.abspath(binary)
     for root in (
-        workload_tests_root(bbdir, chip),
+        workloads_output_root(bbdir),
         os.path.join(workload_build_dir(bbdir, chip), "src"),
     ):
         found = search_workload(root, binary)

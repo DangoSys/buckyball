@@ -19,9 +19,9 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, log_dir, workload_tests_root
+from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, log_dir, workloads_output_root
 from utils.stream_run import stream_run_logger_async
-from utils.search_workload import search_workload, search_workload_all
+from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
 from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile_index, chip_emu_manifest
@@ -69,18 +69,7 @@ def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     if Path(binary_name).name != binary_name:
         return None
 
-    workload_root = workload_tests_root(bbdir, chip)
-    chip_root = f"{workload_root}/CTest/chips/{chip}"
-    chip_binary = search_workload(chip_root, binary_name)
-    if chip_binary is not None:
-        return chip_binary
-
-    matches = search_workload_all(workload_root, binary_name)
-    chip_marker = f"{os.path.sep}CTest{os.path.sep}chips{os.path.sep}"
-    non_chip_matches = [path for path in matches if chip_marker not in path]
-    if len(non_chip_matches) == 1:
-        return non_chip_matches[0]
-    return None
+    return search_workload(workloads_output_root(bbdir), binary_name)
 
 
 def is_native_host_elf(path: str) -> bool:

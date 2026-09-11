@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import fcntl
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -115,27 +117,45 @@ def build_llvm(
     return llvm_build
 
 
-def compiler_build_dir(repo: str | Path, chip: str) -> Path:
-    return Path(repo).resolve() / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
+def compiler_build_dir(repo: str | Path, instance: str) -> Path:
+    return (
+        Path(repo).resolve()
+        / "compiler"
+        / "thirdparty"
+        / "buddy-mlir"
+        / "build"
+        / instance
+    )
 
 
 def build_compiler(
     repo: str | Path,
     *,
     chip: str,
+    instance: str | None = None,
+    chip_pb: str | Path | None = None,
     logger: object | None = None,
     task_scope: str | None = None,
 ) -> Path:
     root = Path(repo).resolve()
     if not chip:
         raise ValueError("chip is required")
-    chip_pb = root / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
-    if not chip_pb.is_file():
-        raise RuntimeError(f"missing {chip_pb}; run bbdev config --install")
+    build_instance = instance or chip
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", build_instance):
+        raise ValueError(f"invalid compiler build instance: {build_instance}")
+    if (instance is None) != (chip_pb is None):
+        raise ValueError("compiler variant requires both instance and chip_pb")
+    selected_pb = (
+        Path(chip_pb).resolve()
+        if chip_pb is not None
+        else root / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
+    )
+    if not selected_pb.is_file():
+        raise RuntimeError(f"missing {selected_pb}; generate the requested chip.pb first")
     buddy = root / "compiler" / "thirdparty" / "buddy-mlir"
     llvm = build_llvm(root, logger=logger, task_scope=task_scope)
     python = compiler_python(root)
-    build = compiler_build_dir(root, chip)
+    build = compiler_build_dir(root, build_instance)
     build.mkdir(parents=True, exist_ok=True)
     cmake = [
         "cmake",
@@ -146,7 +166,7 @@ def build_compiler(
         "-B",
         str(build),
         f"-DBUDDY_EXTERNAL_DIALECTS_DIR={root / 'compiler'}",
-        f"-DBUCKYBALL_CHIP_PB={chip_pb}",
+        f"-DBUCKYBALL_CHIP_PB={selected_pb}",
         f"-DMLIR_DIR={llvm / 'lib' / 'cmake' / 'mlir'}",
         f"-DLLVM_DIR={llvm / 'lib' / 'cmake' / 'llvm'}",
         "-DLLVM_ENABLE_ASSERTIONS=ON",
@@ -185,3 +205,22 @@ def build_compiler(
         if not (build / "bin" / tool).is_file():
             raise RuntimeError(f"compiler build failed: missing {build / 'bin' / tool}")
     return build
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build a chip compiler instance")
+    parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument("--chip", required=True)
+    parser.add_argument("--instance")
+    parser.add_argument("--chip-pb", type=Path)
+    args = parser.parse_args()
+    build_compiler(
+        args.repo,
+        chip=args.chip,
+        instance=args.instance,
+        chip_pb=args.chip_pb,
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -40,6 +40,7 @@ module BBSimVcsHarness;
   initial begin
     if ($value$plusargs("timeout-ns=%d", timeout_ns)) begin end
     repeat (10) @(posedge clock);
+    @(negedge clock);
     reset = 1'b0;
     #(timeout_ns);
     $fatal(1, "VCS simulation timed out after %0d ns", timeout_ns);
@@ -130,7 +131,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
+    build_dir = rtl_dir(
+        bbdir,
+        chip,
+        "verilog" if input_data.get("bebop_vcs") else "tapeout",
+        input_data.get("output_dir"),
+    )
     vsrcs = sorted(
         path for path in (
             glob.glob(f"{build_dir}/**/*.v", recursive=True)
@@ -187,6 +193,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         [
             "env -u NIX_LDFLAGS -u NIX_CFLAGS_COMPILE -u NIX_LDFLAGS_FOR_TARGET -u NIX_CFLAGS_COMPILE_FOR_TARGET -u CPATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CXXFLAGS -u LDFLAGS",
             "vcs -full64 -sverilog -timescale=1ns/1ps -cpp g++ -cc g++ -ld g++",
+            "+define+PRINTF_COND=0" if input_data.get("bebop_vcs") else "",
             "-top BBSimVcsHarness -debug_access+all -hsopt=off",
             f"-j {jobs}",
             f"-Mdir={shlex.quote(str(artifact_dir / 'csrc'))}",

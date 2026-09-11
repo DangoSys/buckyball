@@ -13,7 +13,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import require_chip
-from utils.path import get_buckyball_path, log_dir, rtl_dir, workload_tests_root
+from utils.path import get_buckyball_path, log_dir, rtl_dir, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
@@ -118,7 +118,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     coverage = input_data.get("coverage", False)
 
-    workload_root = workload_tests_root(bbdir, chip)
+    workload_root = workloads_output_root(bbdir)
     binary_path = search_workload(workload_root, binary_name)
     ctx.logger.info(f"binary_path: {binary_path}")
     if binary_path is None:

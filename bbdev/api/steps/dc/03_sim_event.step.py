@@ -13,7 +13,7 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, workload_build_dir, workload_tests_root
+from utils.path import get_buckyball_path, workload_build_dir, workloads_output_root
 from utils.search_workload import search_workload
 from utils.stream_run import stream_run_logger_async
 from tapeout import get_tapeout_contract, resolve_power_window, write_run_env
@@ -84,7 +84,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     workload = None
     for root in (
-        workload_tests_root(bbdir, chip),
+        workloads_output_root(bbdir),
         os.path.join(workload_build_dir(bbdir, chip), "src"),
     ):
         workload = search_workload(root, str(workload_name))

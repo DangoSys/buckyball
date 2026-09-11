@@ -74,6 +74,11 @@ WORKFLOW_COMMANDS = {
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--rushB] [--clean-before]"',
     },
+    "bebop-vcs": {
+        "verilog": 'Generate Bebop VCS RTL once. Args: "--chip <chip>"',
+        "build": 'Build the reusable Bebop VCS simv. Args: "--chip <chip> [--jobs <num>]"',
+        "batch": 'Run Bebop VCS workload batch. Args: "--chip <chip> --test <elf-tests|pk-tests>"',
+    },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--output-dir <dir>]"',

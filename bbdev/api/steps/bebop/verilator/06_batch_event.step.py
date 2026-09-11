@@ -19,7 +19,7 @@ if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
 from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, chip_output_root, get_buckyball_path, rtl_dir
+from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
@@ -52,7 +52,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    elf_root = chip_output_root(bbdir, chip)
+    elf_root = workloads_output_root(bbdir)
 
     test_type = input_data.get("test", "elf-tests")
     rushB = bool(input_data.get("rushB", False))

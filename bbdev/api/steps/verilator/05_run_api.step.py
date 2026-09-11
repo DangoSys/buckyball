@@ -8,7 +8,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import require_chip
-from utils.path import get_buckyball_path, workload_tests_root
+from utils.path import get_buckyball_path, workloads_output_root
 from utils.search_workload import search_workload
 
 config = {
@@ -38,7 +38,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
-    search_dir = workload_tests_root(get_buckyball_path(), chip)
+    search_dir = workloads_output_root(get_buckyball_path())
     if search_workload(search_dir, binary) is None:
         return ApiResponse(
             status=400,
