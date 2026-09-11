@@ -26,7 +26,7 @@ WORKER_PORT_START = 49200
 WORKER_PORT_END = 49500
 HTTP_PORT_START = 5100
 HTTP_PORT_END = 5500
-SERVER_START_LOCK = "/tmp/buckyball-bbdev-server-start.lock"
+SERVER_START_LOCK = os.path.join(workflow_dir, "data", "server-start.lock")
 
 # Subcommand definitions: {name: {operation: help_text, ...}}
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
