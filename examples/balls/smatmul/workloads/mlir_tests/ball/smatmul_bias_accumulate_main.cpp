@@ -27,8 +27,7 @@ extern "C" void check_result(int32_t *allocated, int32_t *aligned,
       int32_t actual = output[bank_row * row_stride + bank_lane * lane_stride];
       int32_t expected = column - 8;
       for (int k = 0; k < 16; ++k)
-        expected += (row - k) * (k + column) +
-                    (row + k) * (2 * k - column);
+        expected += (row - k) * (k + column) + (row + k) * (2 * k - column);
       if (actual != expected) {
         printf("FAILED: smatmul bias row=%d column=%d expected=%d actual=%d\n",
                row, column, expected, actual);

@@ -4,7 +4,8 @@
 
 enum { DIM = 16 };
 static int8_t input[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(128)));
-static int8_t output[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(128)));
+static int8_t output[BB_CORES_PER_TILE][DIM * DIM]
+    __attribute__((aligned(128)));
 static volatile int core_ok[BB_CORES_PER_TILE];
 static volatile int test_ok;
 

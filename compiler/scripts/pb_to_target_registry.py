@@ -218,10 +218,11 @@ def _emit_params_header(profile, core, virtual_bank_num: int, isa_dir: Path) -> 
         _die(f"profile {profile.name}: bank geometry must be non-zero")
     if bank.width % 8 != 0:
         _die(f"profile {profile.name}: bank.width must be a multiple of 8")
-    if virtual_bank_num < bank.num or virtual_bank_num <= core.frontend.vbank_id_upper_bound:
-        _die(
-            f"profile {profile.name}: invalid virtual bank count {virtual_bank_num}"
-        )
+    if (
+        virtual_bank_num < bank.num
+        or virtual_bank_num <= core.frontend.vbank_id_upper_bound
+    ):
+        _die(f"profile {profile.name}: invalid virtual bank count {virtual_bank_num}")
     if mmio.bank_num == 0 or mmio.bank_entries == 0 or mmio.bank_width == 0:
         _die(f"profile {profile.name}: mmio geometry must be non-zero")
     if mmio.bank_width % 8 != 0:
@@ -282,9 +283,7 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
         ]
 
     reference = signature(chip.tiles[0])
-    profile_ids = {
-        profile.name: index for index, profile in enumerate(chip.profiles)
-    }
+    profile_ids = {profile.name: index for index, profile in enumerate(chip.profiles)}
     if len(profile_ids) != len(chip.profiles):
         _die("chip has duplicate compiler profile names")
     slot_profiles = []
@@ -305,7 +304,9 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
     shared_bank_entries = chip.cores[chip.tiles[0].core_indices[0]].mem.bank.entries
     if shared.enable:
         if shared.entries == 0 or shared.entries % shared_bank_entries:
-            _die("tile 0: shared entries must be a non-zero multiple of slot 0 bank depth")
+            _die(
+                "tile 0: shared entries must be a non-zero multiple of slot 0 bank depth"
+            )
         shared_physical_bank_num = shared.entries // shared_bank_entries
     else:
         shared_physical_bank_num = 0

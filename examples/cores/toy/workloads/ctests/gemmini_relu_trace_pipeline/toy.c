@@ -20,7 +20,7 @@ static int32_t output[DIM * DIM] __attribute__((aligned(64)));
 #ifdef __cplusplus
 extern "C"
 #endif
-int toy_core(core_id_t id) {
+    int toy_core(core_id_t id) {
   (void)id;
   for (int row = 0; row < DIM; ++row)
     for (int col = 0; col < DIM; ++col) {

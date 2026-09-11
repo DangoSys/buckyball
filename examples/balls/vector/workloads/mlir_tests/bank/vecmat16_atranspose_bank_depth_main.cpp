@@ -12,11 +12,10 @@ extern "C" void check_result(int32_t *, int32_t *data, int64_t offset,
     for (int column = 0; column < 16; ++column) {
       int32_t expected = 0;
       for (int k = 0; k < BANK_LINES; ++k)
-        expected += ((3 * k + 5 * row) % 7 - 3) *
-                    ((2 * k + 3 * column) % 5 - 2);
+        expected +=
+            ((3 * k + 5 * row) % 7 - 3) * ((2 * k + 3 * column) % 5 - 2);
       if (data[offset + row * stride + column] != expected) {
-        printf("vecmat16 bank-depth mismatch row=%d column=%d\n", row,
-               column);
+        printf("vecmat16 bank-depth mismatch row=%d column=%d\n", row, column);
         exit(1);
       }
     }

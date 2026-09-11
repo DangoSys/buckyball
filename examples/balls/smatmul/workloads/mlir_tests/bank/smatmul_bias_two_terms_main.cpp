@@ -13,8 +13,7 @@ extern "C" void check_result(int32_t *, int32_t *data, int64_t offset,
       int bank_lane = column % 4;
       int32_t expected = column - 8;
       for (int k = 0; k < 16; ++k)
-        expected += (matrix_row % 16 - k) *
-                    ((k + column) + (2 * k - column));
+        expected += (matrix_row % 16 - k) * ((k + column) + (2 * k - column));
       if (data[offset + bank_row * stride + bank_lane] != expected) {
         printf("smatmul bank mismatch row=%d column=%d\n", matrix_row, column);
         exit(1);

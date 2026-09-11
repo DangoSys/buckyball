@@ -29,8 +29,7 @@ extern "C"
     for (int j = 0; j < 16; ++j) {
       int32_t expected = 0;
       for (int k = 0; k < 16; ++k)
-        expected += ((3 * i + 5 * k) % 7 - 3) *
-                    ((2 * k + 3 * j) % 5 - 2);
+        expected += ((3 * i + 5 * k) % 7 - 3) * ((2 * k + 3 * j) % 5 - 2);
       if (out[i * stride0 + j * stride1] != expected) {
         fail();
       }

@@ -13,8 +13,7 @@
 
 enum { DIM = 16 };
 static int8_t input[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(64)));
-static int8_t weight[BB_CORES_PER_TILE][DIM * DIM]
-    __attribute__((aligned(64)));
+static int8_t weight[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(64)));
 static int32_t bias[BB_CORES_PER_TILE][DIM] __attribute__((aligned(64)));
 static float scale[BB_CORES_PER_TILE][DIM] __attribute__((aligned(64)));
 static int8_t output[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(64)));
@@ -22,7 +21,7 @@ static int8_t output[BB_CORES_PER_TILE][DIM * DIM] __attribute__((aligned(64)));
 #ifdef __cplusplus
 extern "C"
 #endif
-int goban_core(core_id_t id) {
+    int goban_core(core_id_t id) {
   int slot = id.core;
   for (int row = 0; row < DIM; ++row)
     for (int col = 0; col < DIM; ++col) {

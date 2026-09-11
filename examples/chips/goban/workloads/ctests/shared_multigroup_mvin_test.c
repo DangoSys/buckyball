@@ -15,9 +15,10 @@
 #define NCORES BB_CORES_PER_TILE
 #define ELEMS (ROWS * ROW_ELEMS * GROUPS)
 
-_Static_assert(BB_SHARED_PHYSICAL_BANK_NUM >= BB_CORES_PER_TILE &&
-                   BB_SHARED_PHYSICAL_BANK_NUM % BB_CORES_PER_TILE == 0,
-               "shared multigroup test requires at least one shared bank per core");
+_Static_assert(
+    BB_SHARED_PHYSICAL_BANK_NUM >= BB_CORES_PER_TILE &&
+        BB_SHARED_PHYSICAL_BANK_NUM % BB_CORES_PER_TILE == 0,
+    "shared multigroup test requires at least one shared bank per core");
 
 static elem_t src[NCORES][ELEMS] __attribute__((aligned(128)));
 static elem_t dst[NCORES][ELEMS] __attribute__((aligned(128)));

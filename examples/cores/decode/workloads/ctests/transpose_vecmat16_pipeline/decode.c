@@ -17,7 +17,7 @@ static int32_t expected[BB_CORES_PER_TILE][DIM * DIM]
 #ifdef __cplusplus
 extern "C"
 #endif
-int decode_core(core_id_t id) {
+    int decode_core(core_id_t id) {
   int8_t *lhs = a[id.core], *rhs = b[id.core];
   for (int row = 0; row < DIM; ++row)
     for (int col = 0; col < DIM; ++col) {

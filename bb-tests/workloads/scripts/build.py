@@ -250,12 +250,7 @@ def build_workload(
                 f"missing {missing} in cmake.defs for rushB; run bbdev config --install"
             )
     compiler_build = (
-        root
-        / "compiler"
-        / "thirdparty"
-        / "buddy-mlir"
-        / "build"
-        / build_instance
+        root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / build_instance
     )
     riscv = _require_riscv()
     project_python = riscv / "bin" / "python3"

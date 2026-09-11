@@ -22,16 +22,15 @@ static uint32_t fpbits(int value) {
   int exp = 0;
   for (uint32_t bits = mag; bits > 1; bits >>= 1)
     ++exp;
-  return sign | (uint32_t)(exp + 127) << 23 |
-         (mag - (1u << exp)) << (23 - exp);
+  return sign | (uint32_t)(exp + 127) << 23 | (mag - (1u << exp)) << (23 - exp);
 }
 
 int main(void) {
   int core = (int)bb_get_core_id().core;
   for (int r = 0; r < DIM; ++r)
     for (int c = 0; c < DIM; ++c) {
-      a[core][r * DIM + c] = c == r ? (r % 3) + 1
-                                     : (c == (r + 1) % DIM ? -1 : 0);
+      a[core][r * DIM + c] =
+          c == r ? (r % 3) + 1 : (c == (r + 1) % DIM ? -1 : 0);
       b[core][r * DIM + c] = (r * 5 + c * 3 + core) % 7 - 3;
       scale[core][r * DIM + c] = 0x3f800000u;
     }

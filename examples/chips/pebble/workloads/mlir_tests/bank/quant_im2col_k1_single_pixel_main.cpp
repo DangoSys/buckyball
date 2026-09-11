@@ -21,8 +21,9 @@ extern "C"
                       int64_t stride1) {
   (void)allocated;
   if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
-    printf("FAILED: quant_im2col_k1_single_pixel shape %ldx%ld stride %ldx%ld\n",
-           (long)size0, (long)size1, (long)stride0, (long)stride1);
+    printf(
+        "FAILED: quant_im2col_k1_single_pixel shape %ldx%ld stride %ldx%ld\n",
+        (long)size0, (long)size1, (long)stride0, (long)stride1);
     fail();
   }
 

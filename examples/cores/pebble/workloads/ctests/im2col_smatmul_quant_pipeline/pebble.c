@@ -24,7 +24,7 @@ static int8_t output[BB_CORES_PER_TILE][WINDOWS * LANES]
 #ifdef __cplusplus
 extern "C"
 #endif
-int pebble_core(core_id_t id) {
+    int pebble_core(core_id_t id) {
   int core = id.core;
   for (int row = 0; row < INPUT_ROWS; ++row)
     input[core][row * LANES] = (3 * row + 1) % 7 - 3;
@@ -54,8 +54,8 @@ int pebble_core(core_id_t id) {
       for (int ky = 0; ky < 3; ++ky)
         for (int kx = 0; kx < 3; ++kx) {
           int k = ky * 3 + kx, row = (y + ky) * 6 + x + kx;
-          expected += input[core][row * LANES] *
-                      weight[core][k * LANES + channel];
+          expected +=
+              input[core][row * LANES] * weight[core][k * LANES + channel];
         }
       if (output[core][window * LANES + channel] != expected)
         return 1;

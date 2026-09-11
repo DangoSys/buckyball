@@ -60,8 +60,8 @@ extern "C" void check_result(int8_t *allocated, int8_t *aligned, int64_t offset,
               expected = second[2 * y + dy][2 * x + dx][channel];
         int actual = output[channel * channel_stride + y * height_stride + x];
         if (actual != expected) {
-          printf("FAILED: mega_conv2d c=%d y=%d x=%d exp=%d got=%d\n",
-                 channel, y, x, expected, actual);
+          printf("FAILED: mega_conv2d c=%d y=%d x=%d exp=%d got=%d\n", channel,
+                 y, x, expected, actual);
           fail();
         }
       }

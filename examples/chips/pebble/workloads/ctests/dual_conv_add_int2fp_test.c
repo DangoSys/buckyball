@@ -73,7 +73,7 @@ int main(void) {
   for (int row = 0; row < WINDOWS; ++row)
     for (int column = 0; column < TILE; ++column)
       if (fabsf(output[row * TILE + column] -
-                 expected(row, column) * scale[column]) > 1e-3f) {
+                expected(row, column) * scale[column]) > 1e-3f) {
         printf("dual conv add mismatch row=%d column=%d\n", row, column);
         return 1;
       }

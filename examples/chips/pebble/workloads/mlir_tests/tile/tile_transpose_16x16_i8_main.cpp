@@ -5,15 +5,16 @@
 static void fail(void) {
 #ifdef BAREMETAL
   *(volatile uint32_t *)0x60000000 = 1;
-  while (1) {}
+  while (1) {
+  }
 #else
   exit(1);
 #endif
 }
 
 extern "C" void check_result(int8_t *, int8_t *out, int64_t offset,
-                             int64_t rows, int64_t columns,
-                             int64_t row_stride, int64_t column_stride) {
+                             int64_t rows, int64_t columns, int64_t row_stride,
+                             int64_t column_stride) {
   if (rows != 16 || columns != 16 || row_stride != 16 || column_stride != 1)
     fail();
   for (int i = 0; i < 16; ++i)
