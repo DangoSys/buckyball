@@ -120,7 +120,13 @@ function(add_buckyball_mlir_test NAME)
     math(EXPR BB_BANK_SQUARE "${BB_BANK_ISQRT} * ${BB_BANK_ISQRT}")
     math(EXPR BB_SMM_M "${BB_BANK_LINES} / 4")
     math(EXPR BB_SMM_CONFIG "${BB_SMM_M} | (16 << 12) | (16 << 24)")
-    math(EXPR BB_QUANT_I32_OUTPUT_ROWS "${BB_BANK_LINES} / 4")
+    # QUANT_I32_TO_I8 has a seven-bit outputHeight field, so one instruction
+    # can consume at most 508 packed INT32 bank rows.
+    math(EXPR BB_QUANT_I32_INPUT_ROWS "${BB_BANK_LINES} - (${BB_BANK_LINES} % 4)")
+    if(BB_QUANT_I32_INPUT_ROWS GREATER 508)
+      set(BB_QUANT_I32_INPUT_ROWS 508)
+    endif()
+    math(EXPR BB_QUANT_I32_OUTPUT_ROWS "${BB_QUANT_I32_INPUT_ROWS} / 4")
     math(EXPR BB_MXFP_BLOCKS "${BB_BANK_LINES} / 2")
     math(EXPR BB_MXFP_MMIO_ROWS "${BB_MXFP_BLOCKS} / 16")
     if(BB_BANK_LINES LESS 1 OR BB_BANK_ISQRT LESS 1 OR BB_BANK_I8_LANES LESS 1 OR

@@ -136,15 +136,15 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_uvm: false
+            run_uvm: true
           - chip: pebble
             run_uvm: true
           - chip: goban
-            run_uvm: false
+            run_uvm: true
           - chip: poly
-            run_uvm: false
+            run_uvm: true
           - chip: multi-rocket
-            run_uvm: false
+            run_uvm: true
     env:
       BB_ROOT: ~/Code/buckyball
       SNPSLMD_LICENSE_FILE: 26000@127.0.0.1
@@ -265,15 +265,15 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: pebble
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: goban
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: poly
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: multi-rocket
-            run_fpga_check: false
+            run_fpga_check: true
     env:
       BB_ROOT: ~/Code/buckyball
     steps:

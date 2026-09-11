@@ -5,7 +5,8 @@
 extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
                              int64_t rows, int64_t lanes, int64_t stride,
                              int64_t lane_stride) {
-  if (rows != BANK_LINES / 4 || lanes != BANK_WIDTH / 8 || stride != lanes ||
+  const int expected_rows = (BANK_LINES < 508 ? BANK_LINES : 508) / 4;
+  if (rows != expected_rows || lanes != BANK_WIDTH / 8 || stride != lanes ||
       lane_stride != 1)
     exit(1);
   for (int row = 0; row < rows; ++row)

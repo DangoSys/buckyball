@@ -1,8 +1,8 @@
 [workloads]
 tests = [
-  "goban-1t2c-goban-ctest-chip-barrier_test-multicore-baremetal",
-  "goban-1t2c-goban-ctest-chip-shared_same_vbank_test-multicore-baremetal",
-  "goban-1t2c-goban-ctest-chip-shared_multigroup_mvin_test-multicore-baremetal",
-  "goban-1t2c-goban-ctest-chip-shared_transpose_test-multicore-baremetal",
-  "goban-1t2c-goban-ctest-chip-shared_smatmul_quant_int2fp_pipeline_test-multicore-baremetal",
+  "goban-goban-ctest-chip-barrier_test-multicore-baremetal",
+  "goban-goban-ctest-chip-shared_same_vbank_test-multicore-baremetal",
+  "goban-goban-ctest-chip-shared_multigroup_mvin_test-multicore-baremetal",
+  "goban-goban-ctest-chip-shared_transpose_test-multicore-baremetal",
+  "goban-goban-ctest-chip-shared_smatmul_quant_int2fp_pipeline_test-multicore-baremetal",
 ]
