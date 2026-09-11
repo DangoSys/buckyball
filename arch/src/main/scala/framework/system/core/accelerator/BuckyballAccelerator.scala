@@ -56,7 +56,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
-    val shared_query_vbank_id    = Output(UInt(8.W))
+    val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
     // Barrier interface — connected to tile-level BarrierUnit

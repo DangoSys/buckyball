@@ -46,7 +46,7 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
     val outCol    = Input(UInt(16.W))
     val kRowIdx   = Input(UInt(kW.W))
     val kColIdx   = Input(UInt(kW.W))
-    val rBankId   = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val rBankId   = Input(UInt(b.memDomain.vbankIdWidth.W))
     val robId     = Input(UInt(log2Up(b.frontend.rob_entries).W))
     val loadDone  = Output(Bool())
     val elemData  = Output(UInt(elemWidth.W))

@@ -74,7 +74,13 @@ fn run(args: Args) -> Result<(), String> {
 
     let core_count = topology.cores.len();
     let virtual_bank_count = topology.virtual_bank_count;
-    let memory = SharedMemory::new(DRAM_SIZE, core_count);
+    let memory = SharedMemory::new(
+        DRAM_SIZE,
+        core_count,
+        topology.shared_physical_bank_count,
+        topology.shared_bank_size,
+        virtual_bank_count,
+    );
     let schedule = Arc::new(Mutex::new(()));
     let start = Arc::new(StartGate::new());
     let done = Arc::new(AtomicBool::new(false));

@@ -1,4 +1,3 @@
 add_buckyball_ctests(
-  relu_test.c
-  relu_bank_256x16_test.c
+  relu_i32_16x16_test.c
 )

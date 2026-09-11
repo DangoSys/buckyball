@@ -4,6 +4,7 @@
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -56,7 +57,8 @@ public:
       llvm::cl::init(0)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<arith::ArithDialect, memref::MemRefDialect, scf::SCFDialect,
+    registry.insert<arith::ArithDialect, cf::ControlFlowDialect,
+                    memref::MemRefDialect, scf::SCFDialect,
                     linalg::LinalgDialect, ::buddy::buckyball::BuckyballDialect,
                     ::buddy::trace::BuddyTraceDialect>();
   }

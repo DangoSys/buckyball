@@ -63,6 +63,7 @@ typedef int32_t result_t;
 #include "16_mvout.c"
 #include "32_mset.c"
 #include "33_mvin.c"
+#include "34_mvin_2d.c"
 #include "35_mvin_mmio.c"
 
 #endif // BUCKYBALL_ISA_H

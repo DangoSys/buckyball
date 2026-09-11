@@ -27,7 +27,11 @@ extern "C"
   int32_t *out = aligned + offset;
   for (int i = 0; i < 16; ++i) {
     for (int j = 0; j < 16; ++j) {
-      if (out[i * stride0 + j * stride1] != 16) {
+      int32_t expected = 0;
+      for (int k = 0; k < 16; ++k)
+        expected += ((3 * i + 5 * k) % 7 - 3) *
+                    ((2 * k + 3 * j) % 5 - 2);
+      if (out[i * stride0 + j * stride1] != expected) {
         fail();
       }
     }

@@ -20,10 +20,11 @@ int main() {
 
   printf("=== Gemmini WS RISC in_shift Test ===\n");
 
-  for (int i = 0; i < DIM * DIM; i++) {
-    mat_a[i] = (elem_t)((i + 1) % 128);
-    mat_b[i] = (elem_t)((2 * (i + 1)) % 128);
-  }
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
   clear_u8_matrix(mat_d, DIM, DIM);
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
   for (int i = 0; i < DIM * DIM; i++)
@@ -38,8 +39,8 @@ int main() {
   bb_mvin((uintptr_t)mat_a, bank_a, DIM, 1);
   bb_mvin((uintptr_t)mat_d, bank_d, DIM, 1);
   bb_gemmini_config(1, 0, 0, 0, SHIFT);
-  bb_gemmini_preload(bank_w, bank_c, DIM);
-  bb_gemmini_compute_preloaded(bank_a, bank_d, bank_c, DIM);
+  bb_gemmini_preload(bank_w, bank_c, DIM, 0, 0);
+  bb_gemmini_compute_preloaded(bank_a, bank_d, bank_c, DIM, 0, 0, 0);
   bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
   bb_fence();
   bb_mem_release(bank_w);

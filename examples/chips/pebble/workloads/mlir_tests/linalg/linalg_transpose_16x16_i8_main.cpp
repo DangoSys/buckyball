@@ -24,7 +24,7 @@ extern "C"
   int8_t *out = aligned + offset;
   for (int i = 0; i < 16; ++i)
     for (int j = 0; j < 16; ++j)
-      if (out[i * stride0 + j * stride1] != (int8_t)(i + j))
+      if (out[i * stride0 + j * stride1] != (int8_t)(3 * j + 5 * i))
         fail();
   printf("PASSED: linalg.transpose 16x16 i8\n");
 }

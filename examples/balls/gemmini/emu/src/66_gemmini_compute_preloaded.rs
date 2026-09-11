@@ -1,5 +1,4 @@
-use super::super::bank::bank_num;
-use super::bank_matrix::{read_i32_nn, read_i8_nn, write_i32_nn_groups};
+use super::bank_matrix::{read_i32_nn_at, read_i8_nn_at, write_i32_nn_groups_at};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::gemmini_state::{gemini, in_shift as apply_in_shift};
 use super::instruction::{BallInstruction, ExecContext};
@@ -13,23 +12,17 @@ impl BallInstruction for GemminiComputePreloaded {
         let wr = rs1_b2(xs1);
         let n = rs1_iter(xs1) as usize;
 
-        if op_a >= bank_num() as u64 || op_b >= bank_num() as u64 || wr >= bank_num() as u64 {
-            panic!("gemmini_compute_preloaded: invalid bank_id");
-        }
-        if !ctx.cfgs[op_a as usize].allocated
-            || !ctx.cfgs[op_b as usize].allocated
-            || !ctx.cfgs[wr as usize].allocated
-        {
+        if !ctx.config(op_a).allocated || !ctx.config(op_b).allocated || !ctx.config(wr).allocated {
             panic!("gemmini_compute_preloaded: bank not allocated");
         }
         if n == 0 || n > 64 {
             panic!("gemmini_compute_preloaded: bad iter");
         }
 
-        let pa = pbank(ctx.bank_map, op_a);
-        let pb = pbank(ctx.bank_map, op_b);
-        let pw: Vec<_> = (0..ctx.cfgs[wr as usize].cols)
-            .map(|group| pbank_group(ctx.bank_map, wr, group))
+        let pa = pbank(ctx, op_a);
+        let pb = pbank(ctx, op_b);
+        let pw: Vec<_> = (0..ctx.config(wr).cols)
+            .map(|group| pbank_group(ctx, wr, group))
             .collect();
         let gm = gemini().lock().unwrap();
         let df = gm.cfg.dataflow;
@@ -40,11 +33,14 @@ impl BallInstruction for GemminiComputePreloaded {
         drop(gm);
         let zero_op2 = ((xs2 >> 4) & 1) != 0;
         let zero_op1_tail = ((xs2 >> 5) & 1) != 0;
-        let op1_valid_rows = ctx.cfgs[op_a as usize].valid_rows.min(n as u64) as usize;
+        let a_base = ((xs2 >> 6) & 0x3ff) as usize;
+        let b_base = ((xs2 >> 16) & 0x3ff) as usize;
+        let out_base = ((xs2 >> 26) & 0x3ff) as usize;
+        let op1_valid_rows = ctx.config(op_a).valid_rows.min(n as u64) as usize;
 
         if df == 1 {
             let b = ws_b.expect("gemmini_compute_preloaded: WS missing preload");
-            let mut a = read_i8_nn(&ctx.banks, pa, n);
+            let mut a = read_i8_nn_at(&ctx.banks, pa, a_base, n);
             if zero_op1_tail {
                 for row in &mut a[op1_valid_rows..] {
                     row.fill(0);
@@ -53,7 +49,7 @@ impl BallInstruction for GemminiComputePreloaded {
             let d = if zero_op2 {
                 vec![vec![0i32; n]; n]
             } else {
-                read_i32_nn(&ctx.banks, pb, n)
+                read_i32_nn_at(&ctx.banks, pb, b_base, n)
             };
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
@@ -66,17 +62,17 @@ impl BallInstruction for GemminiComputePreloaded {
                     c[i][j] = apply_in_shift(acc, shift);
                 }
             }
-            write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);
+            write_i32_nn_groups_at(&mut ctx.banks, &pw, out_base, &c, n);
         } else {
             // OS mode: per RTL GemminiExCtrlPreloadStates, preload feeds D=0 to
             // mesh in OS mode, so the accumulator starts at zero.
-            let mut a = read_i8_nn(&ctx.banks, pa, n);
+            let mut a = read_i8_nn_at(&ctx.banks, pa, a_base, n);
             if zero_op1_tail {
                 for row in &mut a[op1_valid_rows..] {
                     row.fill(0);
                 }
             }
-            let b = read_i8_nn(&ctx.banks, pb, n);
+            let b = read_i8_nn_at(&ctx.banks, pb, b_base, n);
             let mut c = vec![vec![0i32; n]; n];
             for i in 0..n {
                 for j in 0..n {
@@ -89,7 +85,7 @@ impl BallInstruction for GemminiComputePreloaded {
                     c[i][j] = apply_in_shift(acc, shift);
                 }
             }
-            write_i32_nn_groups(&mut ctx.banks, &pw, &c, n);
+            write_i32_nn_groups_at(&mut ctx.banks, &pw, out_base, &c, n);
         }
         0
     }

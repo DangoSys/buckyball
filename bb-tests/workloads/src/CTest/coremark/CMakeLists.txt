@@ -4,6 +4,7 @@ set(CTEST_COREMARK_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/coremark)
 set(COREMARK_PORT_DIR ${CTEST_COREMARK_WORKLOAD_DIR}/buckyball)
 set(COREMARK_SRC_DIR ${CTEST_COREMARK_WORKLOAD_DIR}/src)
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
+list(GET BUCKYBALL_TARGETS 0 COREMARK_CORE)
 
 set(COREMARK_SOURCES
   ${COREMARK_SRC_DIR}/core_list_join.c
@@ -34,7 +35,8 @@ set(COREMARK_C_FLAGS
 )
 
 function(add_coremark_target)
-  set(EXECUTABLE "coremark-baremetal")
+  buckyball_ctest_name(COREMARK_NAME ${COREMARK_CORE} benchmark-coremark)
+  set(EXECUTABLE "${COREMARK_NAME}-baremetal")
 
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}

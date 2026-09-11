@@ -100,7 +100,7 @@ fn pack_lane_table(table: &[u8]) -> Vec<u8> {
     for row in 0..64 {
         for group in 0..4 {
             for byte in 0..16 {
-                packed[row * 64 + group * 16 + byte] =
+                packed[group * 64 * 16 + row * 16 + byte] =
                     table[(group * 4 + row / 16) * 256 + (row % 16) * 16 + byte];
             }
         }

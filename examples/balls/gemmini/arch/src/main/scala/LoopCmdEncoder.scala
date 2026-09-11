@@ -12,7 +12,7 @@ import framework.frontend.decoder.DomainId
 /** Converts LoopCmd (logical) → SubRobRow (hardware PostGDCmd) for SubROB. */
 @instantiable
 class LoopCmdEncoder(val b: GlobalConfig) extends Module {
-  val bankIdLen = log2Up(b.memDomain.bankNum)
+  val bankIdLen = b.memDomain.vbankIdWidth
 
   def ballFunct(mnemonic: String): UInt =
     b.ballDomain.ballISA

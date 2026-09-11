@@ -18,4 +18,31 @@ def GemminiInstructionOp : Buckyball_Op<"gemmini"> {
   let assemblyFormat = "$mnemonic $rs1 `,` $rs2 attr-dict `:` type($rs1)";
 }
 
+def BankGemminiPreloadOp : Buckyball_Op<"bank_gemmini_preload"> {
+  let summary = "BankSSA Gemmini preload";
+  let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$inBase,
+                       I64:$outBase);
+  let results = (outs I64:$outBankOut);
+  let assemblyFormat = "$inBank $outBank $iter $inBase $outBase attr-dict `:` "
+                       "type($inBank) type($outBank) type($iter) type($inBase) type($outBase)";
+}
+
+def BankGemminiComputePreloadedOp : Buckyball_Op<"bank_gemmini_compute_preloaded"> {
+  let summary = "BankSSA Gemmini compute using preloaded state";
+  let arguments = (ins I64:$aBank, I64:$bBank, I64:$outBank, I64:$iter,
+                       I64:$aBase, I64:$bBase, I64:$outBase);
+  let results = (outs I64:$outBankOut);
+  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase attr-dict `:` "
+                       "type($aBank) type($bBank) type($outBank) type($iter) type($aBase) type($bBase) type($outBase)";
+}
+
+def BankGemminiComputeAccumulatedOp : Buckyball_Op<"bank_gemmini_compute_accumulated"> {
+  let summary = "BankSSA Gemmini compute accumulating the output bank";
+  let arguments = (ins I64:$aBank, I64:$bBank, I64:$outBank, I64:$iter,
+                       I64:$aBase, I64:$bBase, I64:$outBase);
+  let results = (outs I64:$outBankOut);
+  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase attr-dict `:` "
+                       "type($aBank) type($bBank) type($outBank) type($iter) type($aBase) type($bBase) type($outBase)";
+}
+
 #endif // GEMMINI_BALL_OPS

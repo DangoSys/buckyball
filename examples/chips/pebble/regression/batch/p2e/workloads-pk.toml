@@ -1,5 +1,4 @@
 [workloads]
-search_path = "kernel"
 tests = [
-  "fw_payload-pebble-pk",
+  "fw_payload-pebble-pk.hex",
 ]

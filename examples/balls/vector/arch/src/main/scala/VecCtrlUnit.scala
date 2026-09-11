@@ -28,7 +28,7 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
   val is_sub_reg     = RegInit(false.B)
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val iter           = RegInit(0.U(b.frontend.iter_len.W))
-  val op1_bank       = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_bank       = RegInit(0.U(b.memDomain.vbankIdWidth.W))
 
   val op1_bank_addr = RegInit(
     0.U(12.W)
@@ -36,8 +36,8 @@ class VecCtrlUnit(val b: GlobalConfig) extends Module {
   val op2_bank_addr = RegInit(
     0.U(12.W)
   ) // New ISA: always 0, but keep for compatibility
-  val op2_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op2_bank = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val wr_bank  = RegInit(0.U(b.memDomain.vbankIdWidth.W))
 
   val wr_bank_addr = RegInit(
     0.U(12.W)

@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
+use super::super::bank::{bank_lines, bank_row_bytes};
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
@@ -27,21 +27,15 @@ impl Int8Mul {
         let iter = rs1_iter(xs1) as usize;
         let (ratio, gate_row) = Self::fields(xs2);
 
-        if gate_bank >= bank_num() as u64
-            || input_bank >= bank_num() as u64
-            || output_bank >= bank_num() as u64
-        {
-            panic!("int8mul: invalid bank id");
-        }
         if gate_bank == input_bank || gate_bank == output_bank || input_bank == output_bank {
             panic!("int8mul: banks must be distinct");
         }
         if iter == 0 || iter > bank_lines() {
             panic!("int8mul: iter must fit one physical bank");
         }
-        let gate = &ctx.cfgs[gate_bank as usize];
-        let input = &ctx.cfgs[input_bank as usize];
-        let output = &ctx.cfgs[output_bank as usize];
+        let gate = *ctx.config(gate_bank);
+        let input = *ctx.config(input_bank);
+        let output = *ctx.config(output_bank);
         if !gate.allocated || !input.allocated || !output.allocated {
             panic!("int8mul: all banks must be allocated");
         }
@@ -50,9 +44,9 @@ impl Int8Mul {
         }
 
         for group in 0..gate.cols as usize {
-            let pg = pbank_group(ctx.bank_map, gate_bank, group as u64);
-            let pi = pbank_group(ctx.bank_map, input_bank, group as u64);
-            let po = pbank_group(ctx.bank_map, output_bank, group as u64);
+            let pg = pbank_group(ctx, gate_bank, group as u64);
+            let pi = pbank_group(ctx, input_bank, group as u64);
+            let po = pbank_group(ctx, output_bank, group as u64);
             let gate_base = gate_row * bank_row_bytes();
             let mut gate_values = [0u8; 16];
             gate_values.copy_from_slice(&ctx.banks[pg][gate_base..gate_base + 16]);

@@ -79,15 +79,13 @@ class im2col_scoreboard extends uvm_scoreboard;
       `uvm_fatal("CMD", "column field mismatch")
     if (got.rob_id !== exp.rob_id)
       `uvm_fatal("CMD", $sformatf("rob_id mismatch: got %0d exp %0d", got.rob_id, exp.rob_id))
-    if (got.special[7:0] !== exp.ksize[7:0])
-      `uvm_fatal("CMD", $sformatf("ksize mismatch: got %0d exp %0d", got.special[7:0], exp.ksize))
-    if (got.special[15:8] !== exp.stride[7:0])
-      `uvm_fatal("CMD", $sformatf("stride mismatch: got %0d exp %0d", got.special[15:8], exp.stride
-                 ))
-    if (got.special[23:16] !== exp.padding[7:0])
-      `uvm_fatal("CMD", $sformatf(
-                 "padding mismatch: got %0d exp %0d", got.special[23:16], exp.padding))
-    if (got.rs1 !== 64'd0 || got.rs2 !== 64'd0) `uvm_fatal("CMD", "rs1/rs2 must be 0")
+    if (got.rs2[7:0] !== exp.ksize[7:0])
+      `uvm_fatal("CMD", $sformatf("ksize mismatch: got %0d exp %0d", got.rs2[7:0], exp.ksize))
+    if (got.rs2[15:8] !== exp.stride[7:0])
+      `uvm_fatal("CMD", $sformatf("stride mismatch: got %0d exp %0d", got.rs2[15:8], exp.stride))
+    if (got.rs2[23:16] !== exp.padding[7:0])
+      `uvm_fatal("CMD", $sformatf("padding mismatch: got %0d exp %0d", got.rs2[23:16], exp.padding))
+    if (got.rs1 !== 64'd0) `uvm_fatal("CMD", "rs1 must be 0")
   endfunction
 
   function void write_read(bb_blink_read_item item);

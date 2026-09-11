@@ -17,12 +17,12 @@ int main(void) {
   for (int i = 0; i < 36 * 16; ++i)
     input[i] = 0;
   for (int i = 0; i < 36; ++i)
-    input[i * 16] = 1;
+    input[i * 16] = (3 * i + 1) % 7 - 3;
   for (int row = 0; row < 16; ++row) {
     bias[row] = row - 8;
     scale[row] = 1.0f;
     for (int col = 0; col < 16; ++col)
-      weight[row * 16 + col] = row < 9 ? 1 : 0;
+      weight[row * 16 + col] = row < 9 ? (2 * row + 3 * col) % 5 - 2 : 0;
   }
 
   for (int bank = 0; bank < 7; ++bank)
@@ -40,7 +40,12 @@ int main(void) {
 
   for (int window = 0; window < 16; ++window) {
     for (int channel = 0; channel < 16; ++channel) {
-      int expected = 9 + bias[channel];
+      int expected = bias[channel], y = window / 4, x = window % 4;
+      for (int ky = 0; ky < 3; ++ky)
+        for (int kx = 0; kx < 3; ++kx) {
+          int k = ky * 3 + kx, row = (y + ky) * 6 + x + kx;
+          expected += input[row * 16] * weight[k * 16 + channel];
+        }
       int index = window * 16 + channel;
       if (output[index] != expected) {
         printf("mega_conv_pipeline FAIL window=%d channel=%d expected=%d "

@@ -99,8 +99,8 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
   // Per-instruction registers
   val raddr_reg     = RegInit(0.U(b.frontend.iter_len.W))
   val waddr_reg     = RegInit(0.U(b.frontend.iter_len.W))
-  val rbank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wbank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rbank_reg     = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val wbank_reg     = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val iter_reg      = RegInit(0.U(b.frontend.iter_len.W))
   val block_idx_reg = RegInit(0.U(b.frontend.iter_len.W))
   val word_idx_reg  = RegInit(0.U(2.W)) // 0..wordsPerBlock-1

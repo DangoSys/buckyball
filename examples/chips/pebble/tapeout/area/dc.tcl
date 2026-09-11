@@ -44,6 +44,9 @@ if {[sizeof_collection $sram_designs] > 0} {
   set_dont_touch $sram_designs
 }
 read_sdc [file normalize $RUN_SDC]
+if {[sizeof_collection [all_clocks]] == 0} {
+  error "SDC created no clocks"
+}
 set_load 2.0 [all_outputs]
 compile_ultra -area_high_effort_script -no_autoungroup -no_boundary_optimization
 set_fix_multiple_port_nets -all -buffer_constants

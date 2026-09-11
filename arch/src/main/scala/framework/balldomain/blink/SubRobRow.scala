@@ -24,7 +24,7 @@ object SubRobRow {
     val w = Wire(new SubRobRow(b))
     w.ball_id       := 0.U
     w.master_rob_id := 0.U
-    val bankIdLen = log2Up(b.memDomain.bankNum)
+    val bankIdLen = b.frontend.bank_id_len
     for (i <- 0 until 4) {
       w.slots(i).valid            := false.B
       w.slots(i).cmd.domain_id    := 0.U

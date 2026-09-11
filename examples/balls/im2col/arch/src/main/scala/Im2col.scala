@@ -5,7 +5,6 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import examples.balls.im2col.configs.Im2colBallParam
-import examples.balls.common.RestoringDiv
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
 
@@ -80,9 +79,9 @@ class Im2col(val b: GlobalConfig) extends Module {
   when(io.cmdReq.fire) {
     val command = io.cmdReq.bits.cmd
     assert(command.funct7 === im2colFunct.U, "Im2colBall received an unknown funct7")
-    assert(command.rs1(9, 0) < b.memDomain.bankNum.U, "IM2COL input bank is invalid")
+    assert(command.rs1(9, 0) < b.memDomain.virtualBankCount.U, "IM2COL input bank is invalid")
     assert(command.rs1(19, 10) === 0.U, "IM2COL reserves input bank 1")
-    assert(command.rs1(29, 20) < b.memDomain.bankNum.U, "IM2COL output bank is invalid")
+    assert(command.rs1(29, 20) < b.memDomain.virtualBankCount.U, "IM2COL output bank is invalid")
     assert(command.rs2(63) === 0.U, "IM2COL reserves rs2[63]")
     assert(command.iter(b.frontend.iter_len - 1, 16) === 0.U, "IM2COL input size exceeds 16 bits")
     assert(

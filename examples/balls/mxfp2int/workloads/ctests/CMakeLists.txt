@@ -1,3 +1,3 @@
 add_buckyball_ctests(
-  mxfp2int_test.c
+  mxfp4_e8m0_two_block_test.c
 )

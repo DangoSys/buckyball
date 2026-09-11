@@ -83,6 +83,21 @@ public:
   }
 };
 
+class BankMvin2dPattern : public OpRewritePattern<BankMvin2dOp> {
+public:
+  using OpRewritePattern<BankMvin2dOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(BankMvin2dOp op,
+                                PatternRewriter &rewriter) const override {
+    rewriter.create<Mvin2dOp>(op.getLoc(), op.getInput(), op.getBank(),
+                              op.getHeight(), op.getPixelBytes(),
+                              op.getSourceWidth(), op.getDstBase(),
+                              op.getWidth(), op.getValidBytes());
+    rewriter.replaceOp(op, op.getBank());
+    return success();
+  }
+};
+
 class BankMvoutPattern : public OpRewritePattern<BankMvoutOp> {
 public:
   using OpRewritePattern<BankMvoutOp>::OpRewritePattern;
@@ -120,7 +135,8 @@ void addBaseAssignPhysicalBankPatterns(RewritePatternSet &patterns,
                                        PhysicalBankState &state) {
   patterns.add<BankAllocPattern, BankReleasePattern>(patterns.getContext(),
                                                      state);
-  patterns.add<BankMvinPattern, BankMvoutPattern>(patterns.getContext());
+  patterns.add<BankMvinPattern, BankMvin2dPattern, BankMvoutPattern>(
+      patterns.getContext());
 }
 
 } // namespace mlir::buddy

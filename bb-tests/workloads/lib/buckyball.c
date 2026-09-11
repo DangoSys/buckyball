@@ -250,13 +250,13 @@ result_t gemmini_in_shift(result_t v, int shift) {
   if (shift >= 32)
     return 0;
 
-  uint32_t x = (uint32_t)v;
   uint32_t s = (uint32_t)shift;
-  uint32_t point_five = (x >> (s - 1)) & 1;
-  uint32_t zeros = (s <= 1) ? 0 : ((x & ((1u << (s - 1)) - 1)) != 0);
-  uint32_t ones_digit = (x >> s) & 1;
+  uint32_t bits = (uint32_t)v;
+  uint32_t point_five = (bits >> (s - 1)) & 1;
+  uint32_t zeros = (s <= 1) ? 0 : ((bits & ((1u << (s - 1)) - 1)) != 0);
+  uint32_t ones_digit = (bits >> s) & 1;
   uint32_t r = point_five & (zeros | ones_digit);
-  return (result_t)((x >> s) + r);
+  return (v >> s) + (result_t)r;
 }
 
 // CPU matrix multiplication (used to generate expected results)

@@ -1,1 +1,1 @@
-add_buckyball_ctests(int8add_test.c)
+add_buckyball_ctests(int8add_scaled_test.c int8add_relu_test.c)

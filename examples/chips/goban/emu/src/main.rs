@@ -1,5 +1,5 @@
-use clap::Parser;
 use bebop_bemu::{tile_topology, BemuInstance, SharedMemory, TraceConfig};
+use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
@@ -22,6 +22,10 @@ struct Args {
     disasm: bool,
     #[arg(long = "tool-profile")]
     tool_profile: bool,
+    #[arg(long)]
+    itrace: bool,
+    #[arg(long)]
+    mtrace: bool,
 }
 
 struct StartGate {
@@ -38,9 +42,15 @@ impl StartGate {
     }
 
     fn wait(&self) -> Result<(), String> {
-        let mut result = self.result.lock().map_err(|_| "BEMU start gate poisoned".to_string())?;
+        let mut result = self
+            .result
+            .lock()
+            .map_err(|_| "BEMU start gate poisoned".to_string())?;
         while result.is_none() {
-            result = self.ready.wait(result).map_err(|_| "BEMU start gate poisoned".to_string())?;
+            result = self
+                .ready
+                .wait(result)
+                .map_err(|_| "BEMU start gate poisoned".to_string())?;
         }
         result.as_ref().expect("BEMU start gate was set").clone()
     }
@@ -74,7 +84,13 @@ fn run(args: Args) -> Result<(), String> {
 
     let core_count = topology.cores.len();
     let virtual_bank_count = topology.virtual_bank_count;
-    let memory = SharedMemory::new(DRAM_SIZE, core_count);
+    let memory = SharedMemory::new(
+        DRAM_SIZE,
+        core_count,
+        topology.shared_physical_bank_count,
+        topology.shared_bank_size,
+        virtual_bank_count,
+    );
     let schedule = Arc::new(Mutex::new(()));
     let start = Arc::new(StartGate::new());
     let done = Arc::new(AtomicBool::new(false));
@@ -82,7 +98,8 @@ fn run(args: Args) -> Result<(), String> {
     let (prepared_tx, prepared_rx) = mpsc::channel();
     let mut workers = Vec::with_capacity(topology.cores.len());
 
-    for (hart_id, (core_name, core_index)) in topology.cores.into_iter().enumerate() {
+    for (local_id, (core_name, core_index)) in topology.cores.into_iter().enumerate() {
+        let hart_id = args.tile_index * core_count + local_id;
         let elf = elf.clone();
         let worker_log = log_dir.join(format!("hart-{hart_id}"));
         let memory = Arc::clone(&memory);
@@ -94,12 +111,14 @@ fn run(args: Args) -> Result<(), String> {
         let pk = args.pk;
         let disasm = args.disasm;
         let tool_profile = args.tool_profile;
+        let trace = TraceConfig::new(args.itrace, args.mtrace);
         workers.push(
             thread::Builder::new()
                 .name(format!("core-{hart_id}-{core_name}"))
                 .spawn(move || {
                     run_core(
                         hart_id,
+                        local_id,
                         &core_name,
                         core_index,
                         &elf,
@@ -107,6 +126,7 @@ fn run(args: Args) -> Result<(), String> {
                         pk,
                         disasm,
                         tool_profile,
+                        trace,
                         memory,
                         schedule,
                         start,
@@ -123,7 +143,10 @@ fn run(args: Args) -> Result<(), String> {
 
     let mut preparation_error = None;
     for _ in 0..workers.len() {
-        if let Err(error) = prepared_rx.recv().map_err(|_| "Core worker exited before initialization".to_string())? {
+        if let Err(error) = prepared_rx
+            .recv()
+            .map_err(|_| "Core worker exited before initialization".to_string())?
+        {
             preparation_error.get_or_insert(error);
         }
     }
@@ -147,6 +170,7 @@ fn run(args: Args) -> Result<(), String> {
 #[allow(clippy::too_many_arguments)]
 fn run_core(
     hart_id: usize,
+    local_id: usize,
     core_name: &str,
     core_index: usize,
     elf: &Path,
@@ -154,6 +178,7 @@ fn run_core(
     pk: bool,
     disasm: bool,
     tool_profile: bool,
+    trace: TraceConfig,
     memory: Arc<SharedMemory>,
     schedule: Arc<Mutex<()>>,
     start: Arc<StartGate>,
@@ -166,10 +191,12 @@ fn run_core(
         "[INFO] starting Core worker hart={hart_id} core={core_name} core_index={core_index}"
     );
     let prepared_bemu = (|| {
-        let _turn = schedule.lock().map_err(|_| "BEMU scheduler poisoned".to_string())?;
+        let _turn = schedule
+            .lock()
+            .map_err(|_| "BEMU scheduler poisoned".to_string())?;
         let mut bemu = BemuInstance::new_with_core_hart(
             log_dir,
-            TraceConfig::new(false, false),
+            trace,
             disasm,
             tool_profile,
             core_index,
@@ -197,7 +224,9 @@ fn run_core(
 
     loop {
         let barrier_hit = {
-            let _turn = schedule.lock().map_err(|_| "BEMU scheduler poisoned".to_string())?;
+            let _turn = schedule
+                .lock()
+                .map_err(|_| "BEMU scheduler poisoned".to_string())?;
             if done.load(Ordering::Acquire) {
                 bemu.stop(exit_code.load(Ordering::Acquire));
                 break;
@@ -211,7 +240,7 @@ fn run_core(
             bemu.barrier_hit()
         };
         if barrier_hit {
-            memory.wait_barrier(hart_id);
+            memory.wait_barrier(local_id);
         }
         if bemu.finished() {
             let code = bemu.exit_code().unwrap_or(1);

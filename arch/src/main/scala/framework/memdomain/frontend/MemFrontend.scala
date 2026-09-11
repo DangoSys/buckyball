@@ -56,7 +56,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val mmio_col            = Output(UInt(8.W))
 
     // Query interface to backend for group count
-    val query_vbank_id    = Output(UInt(8.W))
+    val query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 

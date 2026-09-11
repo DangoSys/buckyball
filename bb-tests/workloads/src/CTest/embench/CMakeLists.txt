@@ -7,6 +7,7 @@ set(CTEST_EMBENCH_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/embench)
 set(EMBENCH_SUPPORT_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/support)
 set(EMBENCH_SRC_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/src)
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
+list(GET BUCKYBALL_TARGETS 0 EMBENCH_CORE)
 
 set(EMBENCH_SUPPORT_SOURCES
   ${EMBENCH_SUPPORT_DIR}/main.c
@@ -42,7 +43,9 @@ set(EMBENCH_TOP_OBJ_FLAGS
 
 function(add_embench_target BMARK_NAME)
   file(GLOB BMARK_SOURCES "${EMBENCH_SRC_DIR}/${BMARK_NAME}/*.c")
-  set(EXECUTABLE "embench_${BMARK_NAME}-baremetal")
+  buckyball_ctest_name(EMBENCH_NAME ${EMBENCH_CORE}
+    benchmark-embench_${BMARK_NAME})
+  set(EXECUTABLE "${EMBENCH_NAME}-baremetal")
 
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
@@ -117,7 +120,8 @@ function(add_embench_top_target)
   add_embench_top_benchmark(ud ud)
   add_embench_top_benchmark(wikisort wikisort)
 
-  set(EXECUTABLE "embench_top-baremetal")
+  buckyball_ctest_name(EMBENCH_TOP_NAME ${EMBENCH_CORE} benchmark-embench_top)
+  set(EXECUTABLE "${EMBENCH_TOP_NAME}-baremetal")
   add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}

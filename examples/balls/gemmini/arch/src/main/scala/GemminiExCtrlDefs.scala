@@ -34,9 +34,9 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq(b)))
     val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
     val bankWrite    = Vec(outBW, Flipped(new SramWriteIO(b)))
-    val op1_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val op2_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val wr_bank_o    = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val op1_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
+    val op2_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
+    val wr_bank_o    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val status       = new BallStatus
   })
 
@@ -86,9 +86,12 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     if (w >= 8) x(7, 0) else Cat(0.U((8 - w).W), x)
   }
 
-  val op1_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op2_bank = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wr_bank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_bank = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val op2_bank = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val wr_bank  = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val op1_base = RegInit(0.U(10.W))
+  val op2_base = RegInit(0.U(10.W))
+  val wr_base  = RegInit(0.U(10.W))
   io.op1_bank_o := op1_bank
   io.op2_bank_o := op2_bank
   io.wr_bank_o  := wr_bank

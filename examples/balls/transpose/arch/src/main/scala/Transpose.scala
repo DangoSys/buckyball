@@ -44,8 +44,8 @@ class Transpose(val b: GlobalConfig) extends Module {
   val is_sub_reg     = RegInit(false.B)
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
 
-  val rbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val wbank_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rbank_reg = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val wbank_reg = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val ncol_reg  = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
   val iter_reg  = RegInit(0.U(b.frontend.iter_len.W))
   val elem_reg  = RegInit(0.U(8.W))
@@ -149,8 +149,8 @@ class Transpose(val b: GlobalConfig) extends Module {
         epgReg       := Mux(i8, rowBytes.U, (rowBytes / 4).U)
         wElemsReg    := Mux(i8, cmd.op1_col << laneBitsI8.U, cmd.op1_col << laneBitsI32.U)
         assert(cmd.iter > 0.U, "Transpose iter must be > 0")
-        assert(cmd.op1_bank < b.memDomain.bankNum.U, "Transpose input bank is invalid")
-        assert(cmd.wr_bank < b.memDomain.bankNum.U, "Transpose output bank is invalid")
+        assert(cmd.op1_bank < b.memDomain.virtualBankCount.U, "Transpose input bank is invalid")
+        assert(cmd.wr_bank < b.memDomain.virtualBankCount.U, "Transpose output bank is invalid")
         assert(cmd.op1_bank =/= cmd.wr_bank, "Transpose op1 and wr must differ")
         assert(
           cmd.op1_col === cmd.wr_col && cmd.op1_col =/= 0.U,

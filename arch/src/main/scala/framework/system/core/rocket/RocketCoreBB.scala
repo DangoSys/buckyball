@@ -1098,7 +1098,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
       blocked && !io.dmem.perf.grant
     }
 
-    val rocc_blocked = Reg(Bool())
+    val rocc_blocked = RegInit(false.B)
     rocc_blocked := !wb_xcpt && !io.rocc.cmd.ready && (io.rocc.cmd.valid || rocc_blocked)
 
     val ctrl_stalld =

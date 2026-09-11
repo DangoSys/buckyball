@@ -1,4 +1,4 @@
-use super::super::bank::{bank_num, bank_size};
+use super::super::bank::bank_size;
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallInstruction, ExecContext};
 
@@ -14,10 +14,7 @@ impl BallInstruction for Relu {
         if rs1_b2(xs1) != 0 {
             panic!("relu: bank2 must be zero");
         }
-        if bank >= bank_num() as u64 {
-            panic!("relu: invalid bank id");
-        }
-        let config = ctx.cfgs[bank as usize];
+        let config = *ctx.config(bank);
         if !config.allocated {
             panic!("relu: bank not allocated");
         }
@@ -32,15 +29,14 @@ impl BallInstruction for Relu {
             panic!("relu: stride must divide the physical bank depth");
         }
 
-        let physical = pbank_group(ctx.bank_map, bank, group);
+        let physical = pbank_group(ctx, bank, group);
         for segment in (0..lines).step_by(stride) {
             for line in 0..iter {
                 let offset = (segment + line) * 16;
                 for lane in 0..4 {
                     let byte = offset + lane * 4;
-                    let value = i32::from_le_bytes(
-                        ctx.banks[physical][byte..byte + 4].try_into().unwrap(),
-                    );
+                    let value =
+                        i32::from_le_bytes(ctx.banks[physical][byte..byte + 4].try_into().unwrap());
                     ctx.banks[physical][byte..byte + 4]
                         .copy_from_slice(&value.max(0).to_le_bytes());
                 }

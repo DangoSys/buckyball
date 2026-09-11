@@ -40,6 +40,7 @@ static llvm::Intrinsic::ID lookupStableIntrinsic(StringRef opName) {
       .Case("buckyball.intr.fence", llvm::Intrinsic::riscv_bb_fence)
       .Case("buckyball.intr.mset", llvm::Intrinsic::riscv_bb_mset)
       .Case("buckyball.intr.mvin", llvm::Intrinsic::riscv_bb_mvin)
+      .Case("buckyball.intr.mvin_mmio", llvm::Intrinsic::riscv_bb_mvin_mmio)
       .Case("buckyball.intr.mvout", llvm::Intrinsic::riscv_bb_mvout)
       .Default(llvm::Intrinsic::not_intrinsic);
 }

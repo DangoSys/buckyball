@@ -34,8 +34,8 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   private val robId                                                                = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   private val isSub                                                                = RegInit(false.B)
   private val subRobId                                                             = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val inputBank                                                            = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val outputBank                                                           = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val inputBank                                                            = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  private val outputBank                                                           = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   private val iter                                                                 = RegInit(0.U(b.frontend.iter_len.W))
   private val inputSide                                                            = RegInit(0.U(8.W))
   private val outputSide                                                           = RegInit(0.U(8.W))
@@ -114,8 +114,8 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
         assert(cmd.funct7 === funct.U, "MaxPoolBall funct7 must be MAXPOOL")
         assert(cmd.rs1(19, 10) === 0.U, "MAXPOOL reserves input bank 1")
         assert(
-          cmd.rs1(9, 0) < b.memDomain.bankNum.U &&
-            cmd.rs1(29, 20) < b.memDomain.bankNum.U,
+          cmd.rs1(9, 0) < b.memDomain.virtualBankCount.U &&
+            cmd.rs1(29, 20) < b.memDomain.virtualBankCount.U,
           "MAXPOOL bank id is invalid"
         )
         assert(

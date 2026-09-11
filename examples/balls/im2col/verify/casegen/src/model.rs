@@ -1,6 +1,20 @@
 pub const TILE: usize = 16;
 pub const BANK_ROW_BYTES: usize = TILE;
 
+pub fn bank_entries() -> usize {
+    let config = match std::env::var("BB_VERIFY_CONFIG") {
+        Ok(path) => path,
+        Err(_) if cfg!(test) => return 64,
+        Err(_) => panic!("BB_VERIFY_CONFIG is required"),
+    };
+    let text = std::fs::read_to_string(config).expect("failed to read BB_VERIFY_CONFIG");
+    text.lines()
+        .find_map(|line| line.strip_prefix("bank_entries="))
+        .unwrap_or_else(|| panic!("bank_entries missing from BB_VERIFY_CONFIG"))
+        .parse()
+        .expect("invalid bank_entries in BB_VERIFY_CONFIG")
+}
+
 pub fn output_rows(iter: usize, ksize: usize, stride: usize, padding: usize) -> usize {
     if iter == 0 || ksize == 0 || stride == 0 {
         panic!("im2col model: iter/ksize/stride must be >= 1");
@@ -74,9 +88,10 @@ pub fn im2col(src: &[u8], iter: usize, ksize: usize, stride: usize, padding: usi
 }
 
 pub fn pack_bank_words(flat: &[u8]) -> Vec<u8> {
-    let nwords = flat.len().div_ceil(BANK_ROW_BYTES);
-    let mut out = vec![0u8; nwords * BANK_ROW_BYTES];
-    out[..flat.len()].copy_from_slice(flat);
+    let mut out = vec![0u8; flat.len() * BANK_ROW_BYTES];
+    for (index, value) in flat.iter().enumerate() {
+        out[index * BANK_ROW_BYTES] = *value;
+    }
     out
 }
 

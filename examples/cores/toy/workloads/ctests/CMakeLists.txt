@@ -1,0 +1,1 @@
+add_subdirectory(gemmini_relu_trace_pipeline)

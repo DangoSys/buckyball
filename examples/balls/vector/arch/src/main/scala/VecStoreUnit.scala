@@ -9,7 +9,7 @@ import framework.top.GlobalConfig
 import examples.balls.vector.configs.VectorBallParam
 
 class ctrl_st_req(b: GlobalConfig) extends Bundle {
-  val wr_bank      = UInt(log2Up(b.memDomain.bankNum).W)
+  val wr_bank      = UInt(b.memDomain.vbankIdWidth.W)
   val wr_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
   val iter         = UInt(b.frontend.iter_len.W)
 }
@@ -48,11 +48,11 @@ class VecStoreUnit(val b: GlobalConfig) extends Module {
     val ctrl_st_i = Flipped(Decoupled(new ctrl_st_req(b)))
     val ex_st_i   = Flipped(Decoupled(new ex_st_req(b)))
     val bankWrite = Vec(outBW, Flipped(new SramWriteIO(b)))
-    val wr_bank_o = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val wr_bank_o = Output(UInt(b.memDomain.vbankIdWidth.W))
     val cmdResp_o = Valid(new Bundle { val commit = Bool() })
   })
 
-  val wr_bank             = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val wr_bank             = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val wr_bank_addr        = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val iter                = RegInit(0.U(b.frontend.iter_len.W))
   val iter_counter        = RegInit(0.U(b.frontend.iter_len.W))

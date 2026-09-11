@@ -157,13 +157,73 @@ public:
             input.getRank() != 4 || output.getRank() != 4 ||
             !input.getElementType().isInteger(8) ||
             !output.getElementType().isInteger(8) ||
-            maxPool.getFinalOutput() != last || maxPool.getKernel() <= 0 ||
+            (maxPool.getFinalOutput() && !last) || maxPool.getKernel() <= 0 ||
             maxPool.getStride() <= 0 || maxPool.getPadding() < 0)
           return maxPool.emitError("Mega MaxPool2D contract is invalid");
         rewriter.create<MegaMaxPool2dOp>(
             maxPool.getLoc(), maxPool.getInput(), maxPool.getOutput(),
             maxPool.getKernelAttr(), maxPool.getStrideAttr(),
             maxPool.getPaddingAttr(), maxPool.getFinalOutputAttr());
+        continue;
+      }
+
+      if (auto slice = dyn_cast<tile::TileMegaChannelSliceOp>(stage)) {
+        auto input = cast<MemRefType>(slice.getInput().getType());
+        auto output = cast<MemRefType>(slice.getOutput().getType());
+        if (!input.hasStaticShape() || !output.hasStaticShape() ||
+            input.getShape()[0] != output.getShape()[0] ||
+            input.getShape()[1] != output.getShape()[1] ||
+            input.getShape()[2] != output.getShape()[2] ||
+            slice.getOffset() < 0 || slice.getOffset() % 16 != 0 ||
+            output.getShape()[3] % 16 != 0 ||
+            slice.getOffset() + output.getShape()[3] > input.getShape()[3])
+          return slice.emitError("Mega channel slice contract is invalid");
+        rewriter.create<MegaChannelSliceOp>(slice.getLoc(), slice.getInput(),
+                                            slice.getOutput(),
+                                            slice.getOffsetAttr());
+        continue;
+      }
+
+      if (auto concat = dyn_cast<tile::TileMegaChannelConcatOp>(stage)) {
+        auto output = cast<MemRefType>(concat.getOutput().getType());
+        auto segments = concat.getSegments();
+        if (concat.getInputs().empty() ||
+            segments.size() != concat.getInputs().size())
+          return concat.emitError("Mega channel concat contract is invalid");
+        int64_t channels = 0;
+        for (auto [inputValue, segment] :
+             llvm::zip(concat.getInputs(), segments)) {
+          auto input = cast<MemRefType>(inputValue.getType());
+          if (!input.hasStaticShape() || segment <= 0 || segment % 16 != 0 ||
+              input.getShape()[0] != output.getShape()[0] ||
+              input.getShape()[1] != output.getShape()[1] ||
+              input.getShape()[2] != output.getShape()[2] ||
+              input.getShape()[3] != segment)
+            return concat.emitError("Mega channel concat contract is invalid");
+          channels += segment;
+        }
+        if (channels != output.getShape()[3])
+          return concat.emitError(
+              "Mega channel concat output channels are invalid");
+        rewriter.create<MegaChannelConcatOp>(
+            concat.getLoc(), concat.getInputs(), concat.getOutput(),
+            concat.getSegmentsAttr());
+        continue;
+      }
+
+      if (auto resize = dyn_cast<tile::TileMegaResizeNearestOp>(stage)) {
+        auto input = cast<MemRefType>(resize.getInput().getType());
+        auto output = cast<MemRefType>(resize.getOutput().getType());
+        if (!input.hasStaticShape() || !output.hasStaticShape() ||
+            resize.getScaleH() <= 0 || resize.getScaleW() <= 0 ||
+            input.getShape()[0] != output.getShape()[0] ||
+            input.getShape()[3] != output.getShape()[3] ||
+            output.getShape()[1] != input.getShape()[1] * resize.getScaleH() ||
+            output.getShape()[2] != input.getShape()[2] * resize.getScaleW())
+          return resize.emitError("Mega resize-nearest contract is invalid");
+        rewriter.create<MegaResizeNearestOp>(
+            resize.getLoc(), resize.getInput(), resize.getOutput(),
+            resize.getScaleHAttr(), resize.getScaleWAttr());
         continue;
       }
 

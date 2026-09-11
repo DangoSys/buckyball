@@ -26,7 +26,7 @@ extern "C"
   for (int b = 0; b < 100; ++b)
     for (int a = 0; a < 84; ++a) {
       float got = out[b * st1 + a * st2];
-      float exp = (float)(a + b);
+      float exp = (float)(3 * a + 5 * b);
       if (fabsf(got - exp) > 1e-5f)
         fail();
     }

@@ -1,31 +1,19 @@
 #include "goban.h"
 #include "scu.h"
 
-#define NCORES 4
-#ifndef NTILES
-#define NTILES 64
-#endif
-#ifndef HIDDEN_HART_BASE
-#define HIDDEN_HART_BASE 64
-#endif
-
-static int expected_hart_id(int tile, int cid) {
-  return cid == 0 ? tile : HIDDEN_HART_BASE + tile * (NCORES - 1) + (cid - 1);
-}
-
 static void wait_all_ready(int hart) {
   scu_set_ready(hart, 1);
   if (hart == 0) {
     int ready = 0;
     while (!ready) {
       ready = 1;
-      for (int i = 0; i < NTILES * NCORES; ++i) {
+      for (int i = 0; i < BB_TILE_NUM * BB_CORES_PER_TILE; ++i) {
         if (scu_get_ready(i) != 1)
           ready = 0;
       }
       scu_poll_pause();
     }
-    for (int i = 0; i < NTILES * NCORES; ++i)
+    for (int i = 0; i < BB_TILE_NUM * BB_CORES_PER_TILE; ++i)
       scu_set_ready(i, 2);
     return;
   }
@@ -35,11 +23,12 @@ static void wait_all_ready(int hart) {
 
 int main(void) {
   int hart = bb_get_hart_id();
-  int tile = bb_get_tile_id();
-  int cid = bb_get_tile_core_id();
+  core_id_t id = bb_get_core_id();
+  int tile = (int)id.tile;
+  int cid = (int)id.core;
 
-  if (hart < 0 || hart >= NTILES * NCORES || tile < 0 || tile >= NTILES ||
-      cid < 0 || cid >= NCORES || hart != expected_hart_id(tile, cid)) {
+  if (hart >= BB_TILE_NUM * BB_CORES_PER_TILE || tile >= BB_TILE_NUM ||
+      cid >= BB_CORES_PER_TILE || hart != tile * BB_CORES_PER_TILE + cid) {
     while (1)
       asm volatile("wfi");
   }

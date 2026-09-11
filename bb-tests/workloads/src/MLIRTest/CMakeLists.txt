@@ -13,6 +13,73 @@ if(NOT DEFINED BUDDY_OPT)
 endif()
 
 # Bank-level / ball-op MLIR -> baremetal + linux ELF (same pipeline as toy MLIRTest).
+function(buckyball_enforce_mlir_test_line_limit SOURCE_FILE)
+  if(NOT EXISTS "${SOURCE_FILE}")
+    message(FATAL_ERROR "MLIR test source does not exist: ${SOURCE_FILE}")
+  endif()
+  file(READ "${SOURCE_FILE}" _content)
+  string(REGEX MATCHALL "\n" _newlines "${_content}")
+  list(LENGTH _newlines _lines)
+  string(REGEX MATCH "[^\n]$" _trailing_content "${_content}")
+  if(_trailing_content)
+    math(EXPR _lines "${_lines} + 1")
+  endif()
+  if(_lines GREATER 100)
+    message(FATAL_ERROR
+      "MLIR test exceeds 100 lines: ${SOURCE_FILE} (${_lines} lines). "
+      "Split it into one focused test per file.")
+  endif()
+endfunction()
+
+function(buckyball_require_smatmul_bank_shape TARGET)
+  set(_params "${BUCKYBALL_ISA_DIR}/${TARGET}/params.h")
+  file(STRINGS "${_params}" _bank_lines REGEX "^#define BANK_LINES ")
+  file(STRINGS "${_params}" _bank_width REGEX "^#define BANK_WIDTH ")
+  string(REGEX REPLACE ".* " "" _lines "${_bank_lines}")
+  string(REGEX REPLACE ".* " "" _width "${_bank_width}")
+  math(EXPR _line_remainder "${_lines} % 64")
+  if(NOT (_width EQUAL 128) OR _lines LESS 64 OR
+     NOT (_line_remainder EQUAL 0))
+    message(FATAL_ERROR
+      "SMatMul BankOp test requires BANK_WIDTH=128 and BANK_LINES a multiple "
+      "of 64 (got width=${_width}, lines=${_lines})")
+  endif()
+endfunction()
+
+function(buckyball_require_quant_i32_bank_shape TARGET)
+  set(_params "${BUCKYBALL_ISA_DIR}/${TARGET}/params.h")
+  file(STRINGS "${_params}" _bank_lines REGEX "^#define BANK_LINES ")
+  string(REGEX REPLACE ".* " "" _lines "${_bank_lines}")
+  math(EXPR _remainder "${_lines} % 4")
+  if(_lines LESS 4 OR NOT (_remainder EQUAL 0))
+    message(FATAL_ERROR
+      "ToInt8 INT32 BankOp test requires BANK_LINES divisible by four "
+      "(got lines=${_lines})")
+  endif()
+endfunction()
+
+function(buckyball_require_mxfp2int_bank_shape TARGET)
+  set(_params "${BUCKYBALL_ISA_DIR}/${TARGET}/params.h")
+  file(STRINGS "${_params}" _bank_lines REGEX "^#define BANK_LINES ")
+  string(REGEX REPLACE ".* " "" _lines "${_bank_lines}")
+  math(EXPR _remainder "${_lines} % 32")
+  if(_lines LESS 32 OR NOT (_remainder EQUAL 0))
+    message(FATAL_ERROR
+      "Mxfp2Int BankOp test requires BANK_LINES divisible by 32 "
+      "(got lines=${_lines})")
+  endif()
+endfunction()
+
+function(buckyball_require_min_bank_lines TARGET MINIMUM BALL)
+  set(_params "${BUCKYBALL_ISA_DIR}/${TARGET}/params.h")
+  file(STRINGS "${_params}" _bank_lines REGEX "^#define BANK_LINES ")
+  string(REGEX REPLACE ".* " "" _lines "${_bank_lines}")
+  if(_lines LESS MINIMUM)
+    message(FATAL_ERROR
+      "${BALL} BankOp test requires BANK_LINES >= ${MINIMUM} (got ${_lines})")
+  endif()
+endfunction()
+
 function(add_buckyball_mlir_test NAME)
   cmake_parse_arguments(ARG "" "TARGET" "PASSES" ${ARGN})
 
@@ -40,19 +107,44 @@ function(add_buckyball_mlir_test NAME)
     message(FATAL_ERROR "${NAME}: missing target params.h ${BB_PARAMS_H}")
   endif()
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
+  set(MLIR_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir.in)
+  if(EXISTS ${MLIR_TEMPLATE})
+    file(STRINGS ${BB_PARAMS_H} _bank_lines REGEX "^#define BANK_LINES ")
+    file(STRINGS ${BB_PARAMS_H} _bank_width REGEX "^#define BANK_WIDTH ")
+    file(STRINGS ${BB_PARAMS_H} _bank_isqrt REGEX "^#define BANK_ISQRT ")
+    string(REGEX REPLACE ".* " "" BB_BANK_LINES "${_bank_lines}")
+    string(REGEX REPLACE ".* " "" BB_BANK_WIDTH_BITS "${_bank_width}")
+    string(REGEX REPLACE ".* " "" BB_BANK_ISQRT "${_bank_isqrt}")
+    math(EXPR BB_BANK_I8_LANES "${BB_BANK_WIDTH_BITS} / 8")
+    math(EXPR BB_BANK_I32_LANES "${BB_BANK_WIDTH_BITS} / 32")
+    math(EXPR BB_BANK_SQUARE "${BB_BANK_ISQRT} * ${BB_BANK_ISQRT}")
+    math(EXPR BB_SMM_M "${BB_BANK_LINES} / 4")
+    math(EXPR BB_SMM_CONFIG "${BB_SMM_M} | (16 << 12) | (16 << 24)")
+    math(EXPR BB_QUANT_I32_OUTPUT_ROWS "${BB_BANK_LINES} / 4")
+    math(EXPR BB_MXFP_BLOCKS "${BB_BANK_LINES} / 2")
+    math(EXPR BB_MXFP_MMIO_ROWS "${BB_MXFP_BLOCKS} / 16")
+    if(BB_BANK_LINES LESS 1 OR BB_BANK_ISQRT LESS 1 OR BB_BANK_I8_LANES LESS 1 OR
+       BB_BANK_I32_LANES LESS 1)
+      message(FATAL_ERROR "${NAME}: invalid generated bank parameters")
+    endif()
+    set(MLIR_SRC ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}-${NAME}.mlir)
+    configure_file(${MLIR_TEMPLATE} ${MLIR_SRC} @ONLY)
+  endif()
   set(MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}_main.cpp)
+  buckyball_enforce_mlir_test_line_limit(${MLIR_SRC})
+  buckyball_enforce_mlir_test_line_limit(${MAIN_SRC})
   set(OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ARG_TARGET}-${NAME}.o)
   set(PREFIX ${BUCKYBALL_MLIR_TEST_PREFIX})
-  set(TEST_ID ${NAME})
-  if(NOT NAME MATCHES "^${PREFIX}_")
-    set(TEST_ID ${PREFIX}_${NAME})
+  set(TEST_CASE ${NAME})
+  if(NAME MATCHES "^${PREFIX}_(.+)$")
+    set(TEST_CASE ${CMAKE_MATCH_1})
   endif()
-  set(BAREMETAL_BIN
-    ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}-baremetal)
-  set(LINUX_BIN ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}-linux)
+  buckyball_mlirtest_name(TEST_NAME ${ARG_TARGET} ${PREFIX}_${TEST_CASE})
+  set(BAREMETAL_BIN ${TEST_NAME}-baremetal)
+  set(LINUX_BIN ${TEST_NAME}-linux)
   set(BAREMETAL_TARGET ${BAREMETAL_BIN}-build)
   set(LINUX_TARGET ${LINUX_BIN}-build)
-  set(GROUP_TARGET ${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID})
+  set(GROUP_TARGET ${TEST_NAME})
 
   set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
   set(C_FLAGS -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
@@ -184,7 +276,7 @@ function(add_buckyball_mlir_test NAME)
       DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
       COMMENT "Building rushB ${NAME}.o from ${PREFIX} MLIR"
       VERBATIM)
-    add_buckyball_rushb_native(${BUCKYBALL_WORKLOAD_CHIP}-${ARG_TARGET}-mlirtest-${TEST_ID}
+    add_buckyball_rushb_native(${TEST_NAME}
       CXX
       OUTPUT_SUBDIR src/MLIRTest/rushB
       CORE_ID ${_rushb_core}

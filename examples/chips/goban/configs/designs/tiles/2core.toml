@@ -12,6 +12,7 @@ memCycles = 10
 
 [sharedMem]
 enable = true
+virtualBankCount = 64
 entries = 16384
 inputChannels = 14
 defaultGroupCount = 1

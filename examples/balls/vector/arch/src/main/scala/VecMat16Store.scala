@@ -9,7 +9,7 @@ class VecMat16Store(val b: GlobalConfig, lane: Int, accWidth: Int) extends Modul
 
   val io = IO(new Bundle {
     val start     = Input(Bool())
-    val wrBank    = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val wrBank    = Input(UInt(b.memDomain.vbankIdWidth.W))
     val robId     = Input(UInt(log2Up(b.frontend.rob_entries).W))
     val acc       = Input(Vec(lane, Vec(lane, UInt(accWidth.W))))
     val bankWrite = Vec(4, Flipped(new BankWrite(b)))

@@ -19,8 +19,11 @@ int main() {
 
   printf("=== Gemmini OS RISC a_transpose Test ===\n");
 
-  init_u8_random_matrix(mat_a, DIM, DIM, 42);
-  init_u8_random_matrix(mat_b, DIM, DIM, 84);
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
   transpose_u8_matrix(mat_a, mat_at, DIM, DIM);
   cpu_matmul(mat_at, mat_b, expected, DIM, DIM, DIM);
 
@@ -31,8 +34,8 @@ int main() {
   bb_mvin((uintptr_t)mat_a, bank_a, DIM, 1);
   bb_mvin((uintptr_t)mat_b, bank_b, DIM, 1);
   bb_gemmini_config(0, 0, 1, 0, 0);
-  bb_gemmini_preload(bank_a, bank_c, DIM);
-  bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM);
+  bb_gemmini_preload(bank_a, bank_c, DIM, 0, 0);
+  bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM, 0, 0, 0);
   bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
   bb_fence();
   bb_mem_release(bank_a);

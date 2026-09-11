@@ -14,6 +14,7 @@ case class MemDomainParam(
   bankWidth:               Int,
   bankEntries:             Int,
   bankMaskLen:             Int,
+  virtualBankCount:        Int,
   sharedEnable:            Boolean,
   sharedEntries:           Int,
   sharedInputChannels:     Int,
@@ -36,6 +37,7 @@ case class MemDomainParam(
   // MMIO derived values
   val mmioBankBytes:  Int = mmioBankEntries * (mmioBankWidth / 8)
   val mmioTotalBytes: Int = mmioBankNum * mmioBankBytes
+  val vbankIdWidth:   Int = chisel3.util.log2Up(virtualBankCount)
 }
 
 object MemDomainParam {
@@ -47,6 +49,7 @@ object MemDomainParam {
     bankWidth = 0,
     bankEntries = 0,
     bankMaskLen = 0,
+    virtualBankCount = 0,
     sharedEnable = false,
     sharedEntries = 0,
     sharedInputChannels = 0,

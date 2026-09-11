@@ -294,6 +294,85 @@ private:
   bool rushB;
 };
 
+struct BuckyballMvin2dLowering : public ConvertOpToLLVMPattern<Mvin2dOp> {
+  BuckyballMvin2dLowering(LLVMTypeConverter &converter, bool rushB)
+      : ConvertOpToLLVMPattern<Mvin2dOp>(converter), rushB(rushB) {}
+
+  LogicalResult
+  matchAndRewrite(Mvin2dOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (rushB)
+      return op.emitError("mvin_2d is not supported by rushB");
+    Location loc = op.getLoc();
+    MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
+    emitDmaCacheFlush(rewriter, loc);
+    Value rs1 =
+        packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getHeight());
+    Value address = rewriter.create<arith::AndIOp>(
+        loc, memref.address, cstI64(rewriter, loc, 0xffff'ffffULL));
+    Value pixel = rewriter.create<arith::AndIOp>(loc, adaptor.getPixelBytes(),
+                                                 cstI64(rewriter, loc, 0x3ff));
+    Value pixelUnits =
+        rewriter.create<arith::DivUIOp>(loc, pixel, cstI64(rewriter, loc, 8));
+    Value width = rewriter.create<arith::SubIOp>(loc, adaptor.getWidth(),
+                                                 cstI64(rewriter, loc, 1));
+    Value valid = rewriter.create<arith::RemUIOp>(loc, adaptor.getValidBytes(),
+                                                  cstI64(rewriter, loc, 16));
+    Value rs2 = rewriter.create<arith::OrIOp>(
+        loc, address,
+        rewriter.create<arith::ShLIOp>(loc, pixelUnits,
+                                       cstI64(rewriter, loc, 32)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getSourceWidth(),
+                                       cstI64(rewriter, loc, 39)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, adaptor.getDstBase(),
+                                       cstI64(rewriter, loc, 49)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, width, cstI64(rewriter, loc, 55)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, valid, cstI64(rewriter, loc, 58)));
+    rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, rs2,
+                                              rewriter.getI32IntegerAttr(34));
+    return success();
+  }
+
+private:
+  bool rushB;
+};
+
+struct BuckyballMvinMmioLowering : public ConvertOpToLLVMPattern<MvinMmioOp> {
+  using ConvertOpToLLVMPattern<MvinMmioOp>::ConvertOpToLLVMPattern;
+  LogicalResult
+  matchAndRewrite(MvinMmioOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
+    emitDmaCacheFlush(rewriter, loc);
+    Value rs1 = rewriter.create<arith::ShLIOp>(loc, adaptor.getRows(),
+                                               cstI64(rewriter, loc, 30));
+    Value address = rewriter.create<arith::AndIOp>(
+        loc, memref.address, cstI64(rewriter, loc, (1ULL << 39) - 1));
+    Value mmio = rewriter.create<arith::AndIOp>(
+        loc, adaptor.getMmioAddr(), cstI64(rewriter, loc, (1ULL << 17) - 1));
+    Value columns = rewriter.create<arith::AndIOp>(loc, adaptor.getColumns(),
+                                                   cstI64(rewriter, loc, 0xff));
+    Value rs2 = rewriter.create<arith::OrIOp>(
+        loc, address,
+        rewriter.create<arith::ShLIOp>(loc, mmio, cstI64(rewriter, loc, 39)));
+    rs2 = rewriter.create<arith::OrIOp>(
+        loc, rs2,
+        rewriter.create<arith::ShLIOp>(loc, columns,
+                                       cstI64(rewriter, loc, 56)));
+    rewriter.replaceOpWithNewOp<MvinMmioIntrOp>(op, rs1, rs2);
+    return success();
+  }
+};
+
 struct BuckyballMvoutLowering : public ConvertOpToLLVMPattern<MvoutOp> {
   BuckyballMvoutLowering(LLVMTypeConverter &converter, bool rushB)
       : ConvertOpToLLVMPattern<MvoutOp>(converter), rushB(rushB) {}
@@ -349,14 +428,17 @@ void populateBaseLegalizeForLLVMExportPatterns(
   patterns.add<BuckyballFenceLowering>(converter, rushB);
   patterns.add<BuckyballMsetLowering>(converter);
   patterns.add<BuckyballMvinLowering>(converter, rushB);
+  patterns.add<BuckyballMvin2dLowering>(converter, rushB);
+  patterns.add<BuckyballMvinMmioLowering>(converter);
   patterns.add<BuckyballMvoutLowering>(converter, rushB);
   patterns.add<BuckyballInstLowering>(converter);
 }
 
 void configureBaseLegalizeForExportTarget(LLVMConversionTarget &target) {
   target.addLegalOp<CustomIntrOp, FenceIntrOp, MsetIntrOp, MvinIntrOp,
-                    MvoutIntrOp, RushBMvinOp, RushBMvoutOp>();
-  target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, MvoutOp>();
+                    MvinMmioIntrOp, MvoutIntrOp, RushBMvinOp, RushBMvoutOp>();
+  target.addIllegalOp<FenceOp, InstOp, MsetOp, MvinOp, Mvin2dOp, MvinMmioOp,
+                      MvoutOp>();
   target.addLegalDialect<memref::MemRefDialect>();
   target.addLegalDialect<arith::ArithDialect>();
   target.addLegalDialect<LLVM::LLVMDialect>();

@@ -31,7 +31,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     val bankRead = Flipped(new BankRead(b))
 
     val query_valid       = Output(Bool())
-    val query_vbank_id    = Output(UInt(8.W))
+    val query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
@@ -50,7 +50,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val is_sub_reg      = RegInit(false.B)
   val sub_rob_id_reg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
   val iter_reg        = RegInit(0.U(b.frontend.iter_len.W))
-  val rd_bank_reg     = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val rd_bank_reg     = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val stride_reg      = RegInit(1.U(19.W))
   val group_count_reg = RegInit(1.U(log2Up(b.memDomain.bankNum + 1).W))
   val is_shared_reg   = RegInit(false.B)
@@ -104,9 +104,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
     state := s_setup
   }
 
-  io.query_valid     := state === s_setup
+  io.query_valid     := state === s_setup || state === s_query || state === s_query_wait
   io.query_vbank_id  := rd_bank_reg
-  io.query_is_shared := is_shared_reg && (state === s_setup)
+  io.query_is_shared := is_shared_reg && io.query_valid
 
   when(state === s_setup) {
     state := s_query

@@ -25,9 +25,9 @@ class im2col_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    cur_ksize = int'(item.special[7:0]);
-    cur_stride = int'(item.special[15:8]);
-    cur_pad = int'(item.special[23:16]);
+    cur_ksize = int'(item.rs2[7:0]);
+    cur_stride = int'(item.rs2[15:8]);
+    cur_pad = int'(item.rs2[23:16]);
     cur_iter = int'(item.iter);
     cmd_count++;
     cmd_cg.sample();

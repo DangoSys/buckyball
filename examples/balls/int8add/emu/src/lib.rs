@@ -1,6 +1,6 @@
 pub(crate) use crate::inst::{decode, instruction};
 
-use crate::inst::instruction::{BallInstruction, ExecContext};
+use crate::inst::instruction::ExecContext;
 
 mod int8add;
 

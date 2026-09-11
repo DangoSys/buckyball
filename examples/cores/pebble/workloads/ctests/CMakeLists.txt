@@ -1,0 +1,1 @@
+add_subdirectory(im2col_smatmul_quant_pipeline)

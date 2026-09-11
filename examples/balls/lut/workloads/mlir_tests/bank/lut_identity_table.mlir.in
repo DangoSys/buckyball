@@ -1,0 +1,54 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %lanes = arith.constant @BB_BANK_I8_LANES@ : index
+  %sixteen = arith.constant 16 : index
+  %depth = arith.constant @BB_BANK_LINES@ : i64
+  %table_depth = arith.constant 16 : i64
+  %stride = arith.constant 1 : i64
+  %lanes_i32 = arith.constant @BB_BANK_I8_LANES@ : i32
+  %sixteen_i32 = arith.constant 16 : i32
+  %input = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %table = memref.alloc() : memref<16x16xi8>
+  %output = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  scf.for %row = %zero to %sixteen step %one {
+    scf.for %lane = %zero to %sixteen step %one {
+      %row32 = arith.index_cast %row : index to i32
+      %lane32 = arith.index_cast %lane : index to i32
+      %base = arith.muli %row32, %sixteen_i32 : i32
+      %index = arith.addi %base, %lane32 : i32
+      %value = arith.trunci %index : i32 to i8
+      memref.store %value, %table[%row, %lane] : memref<16x16xi8>
+    }
+  }
+  scf.for %row = %zero to %rows step %one {
+    scf.for %lane = %zero to %lanes step %one {
+      %row32 = arith.index_cast %row : index to i32
+      %lane32 = arith.index_cast %lane : index to i32
+      %base = arith.muli %row32, %lanes_i32 : i32
+      %index = arith.addi %base, %lane32 : i32
+      %value = arith.trunci %index : i32 to i8
+      memref.store %value, %input[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+    }
+  }
+  %input_bank = buckyball.bank_alloc
+  %table_bank = buckyball.bank_alloc
+  %output_bank = buckyball.bank_alloc
+  %loaded_input = buckyball.bank_mvin %input %input_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %loaded_table = buckyball.bank_mvin %table %table_bank %table_depth %stride : memref<16x16xi8> i64 i64 i64
+  %result = buckyball.bank_lut %loaded_input %loaded_table %output_bank %depth : i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+  buckyball.bank_release %loaded_input : i64
+  buckyball.bank_release %loaded_table : i64
+  buckyball.bank_release %stored : i64
+  memref.dealloc %input : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %table : memref<16x16xi8>
+  memref.dealloc %output : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  return %zero_i8 : i8
+}

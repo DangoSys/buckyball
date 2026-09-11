@@ -19,8 +19,11 @@ int main() {
 
   printf("=== Gemmini OS CISC b_transpose Test ===\n");
 
-  init_u8_random_matrix(mat_a, DIM, DIM, 42);
-  init_u8_random_matrix(mat_b, DIM, DIM, 84);
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
   transpose_u8_matrix(mat_b, mat_bt, DIM, DIM);
   cpu_matmul(mat_a, mat_bt, expected, DIM, DIM, DIM);
 

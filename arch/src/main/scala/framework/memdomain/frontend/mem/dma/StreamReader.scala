@@ -93,7 +93,8 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     case ((bestBytes, bestLg), size) =>
       val lgSize  = log2Ceil(size)
       val aligned = if (size == 1) true.B else readVaddr(lgSize - 1, 0) === 0.U
-      val fits    = maxBurstBytes >= size.U
+      val fits    = maxBurstBytes >= size.U &&
+        edge.manager.supportsGetFast(io.tlb.resp.bits.paddr, lgSize.U)
       (Mux(fits && aligned, size.U, bestBytes), Mux(fits && aligned, lgSize.U, bestLg))
   }
 
@@ -123,6 +124,10 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val tlbOk    = io.tlb.resp.valid && !io.tlb.resp.bits.miss && !tlbFault
 
   assert(!(state === s_run && tlbFault && !inflight && !respValid), "DMA load TLB fault")
+  assert(
+    !(tlbOk && !edge.manager.supportsGetFast(io.tlb.resp.bits.paddr, readLgSize)),
+    "DMA slave does not support one bus-width Get"
+  )
 
   io.tl.a.valid :=
     tlbOk && !inflight && !respValid && state =/= s_idle

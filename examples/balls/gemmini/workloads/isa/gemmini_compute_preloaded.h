@@ -12,10 +12,12 @@
 // wr_bank_id: bank for C output
 // iter: number of rows
 #define bb_gemmini_compute_preloaded(op1_bank_id, op2_bank_id, wr_bank_id,     \
-                                     iter)                                     \
-  BUCKYBALL_INSTRUCTION_R_R((BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) |   \
-                             BB_BANK2(wr_bank_id) | BB_ITER(iter)),            \
-                            BB_GEMMINI_COMPUTE_PRELOADED_RS2,                  \
-                            BB_FUNC7(GEMMINI_COMPUTE_PRELOADED))
+                                     iter, op1_base, op2_base, wr_base)        \
+  BUCKYBALL_INSTRUCTION_R_R(                                                   \
+      (BB_BANK0(op1_bank_id) | BB_BANK1(op2_bank_id) | BB_BANK2(wr_bank_id) |  \
+       BB_ITER(iter)),                                                         \
+      BB_GEMMINI_COMPUTE_PRELOADED_RS2 | ((uint64_t)(op1_base) << 6) |         \
+          ((uint64_t)(op2_base) << 16) | ((uint64_t)(wr_base) << 26),          \
+      BB_FUNC7(GEMMINI_COMPUTE_PRELOADED))
 
 #endif // _BB_GEMMINI_COMPUTE_PRELOADED_H_
