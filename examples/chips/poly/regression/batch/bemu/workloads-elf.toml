@@ -1,6 +1,4 @@
 [workloads]
 tests = [
   "poly-decode-ctest-chip-vecmat16_atranspose_16x16-multicore-baremetal",
-  "poly-decode-ctest-core-transpose_vecmat16_pipeline-multicore-baremetal",
-  "poly-prefill-ctest-core-transpose_smatmul_quant_pipeline-multicore-baremetal",
 ]

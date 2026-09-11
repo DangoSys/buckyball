@@ -47,6 +47,14 @@ jobs:
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
+      - name: Install config
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev config --install
+
   eval-area-power:
     name: eval-area-power-${{ matrix.chip }}
     needs: gate
@@ -83,15 +91,6 @@ jobs:
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
-
-      - name: Install config
-        if: matrix.run_area || matrix.run_power
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
 
       - name: DC area
         if: matrix.run_area
@@ -159,15 +158,6 @@ jobs:
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
-      - name: Install config
-        if: matrix.run_uvm
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
-
       - name: Chip UVM
         if: matrix.run_uvm
         shell: zsh {0}
@@ -219,15 +209,6 @@ jobs:
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
-
-      - name: Install config
-        if: matrix.build_bitstream
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
 
       - name: FPGA buildbitstream
         if: matrix.build_bitstream

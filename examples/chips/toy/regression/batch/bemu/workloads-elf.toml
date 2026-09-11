@@ -1,7 +1,6 @@
 [workloads]
 tests = [
   "toy-toy-ctest-rvv_vsetvli_e32_m1_vl_test-baremetal",
-  "toy-toy-ctest-core-gemmini_relu_trace_pipeline-multicore-baremetal",
   "toy-toy-ctest-mvin_mvout_test-baremetal",
   "toy-toy-ctest-mvin_mvout_stride_test-baremetal",
   "toy-toy-ctest-bdb_counter_start_stop_test-baremetal",

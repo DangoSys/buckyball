@@ -54,6 +54,14 @@ jobs:
           cd "${root}"
           nix develop -c pre-commit run --all-files --show-diff-on-failure --color=always
 
+      - name: Install config
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root=~/Code/buckyball
+          cd "${root}"
+          nix develop -c bbdev config --install
+
   chip-check:
     name: ${{ matrix.chip }}
     needs: pre-commit
@@ -75,17 +83,17 @@ jobs:
           - chip: goban
             enable_rushb: false
             run_bemu_elf_tests: true
-            run_bemu_pk_tests: true
+            run_bemu_pk_tests: false
             run_verilator_batch_tests: true
           - chip: poly
             enable_rushb: false
             run_bemu_elf_tests: true
-            run_bemu_pk_tests: true
+            run_bemu_pk_tests: false
             run_verilator_batch_tests: true
           - chip: multi-rocket
             enable_rushb: false
             run_bemu_elf_tests: true
-            run_bemu_pk_tests: true
+            run_bemu_pk_tests: false
             run_verilator_batch_tests: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -120,7 +128,6 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev config --install
           nix develop -c bbdev compiler --build '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'

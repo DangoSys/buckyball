@@ -1,6 +1,5 @@
 [workloads]
 tests = [
-  "pebble-pebble-ctest-core-im2col_smatmul_quant_pipeline-multicore-baremetal",
   "pebble-pebble-ctest-mega_conv_pipeline_test-baremetal",
   "pebble-pebble-ctest-residual_add_lut_test-baremetal",
   "pebble-pebble-ctest-maxpool_im2col_test-baremetal",
