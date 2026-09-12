@@ -28,6 +28,7 @@ object SubRobRow {
     for (i <- 0 until 4) {
       w.slots(i).valid            := false.B
       w.slots(i).cmd.domain_id    := 0.U
+      w.slots(i).cmd.ball_bid     := 0.U
       w.slots(i).cmd.cmd.raw_inst := 0.U
       w.slots(i).cmd.cmd.pc       := 0.U
       w.slots(i).cmd.cmd.funct    := 0.U

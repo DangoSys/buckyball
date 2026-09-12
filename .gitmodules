@@ -64,3 +64,6 @@
 [submodule ".agents/mcps"]
 	path = .agents/mcps
 	url = https://github.com/DangoSys/mcps.git
+[submodule "arch/src/main/scala/framework/root"]
+	path = arch/src/main/scala/framework/root
+	url = https://github.com/DangoSys/root.git

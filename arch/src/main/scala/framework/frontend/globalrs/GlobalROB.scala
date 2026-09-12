@@ -199,6 +199,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
   val allocIsConfig       = io.alloc.bits.domain_id === DomainId.MEM &&
     (io.alloc.bits.cmd.funct === MSET_BITPAT)
+  val allocIsBall         = io.alloc.bits.domain_id === DomainId.BALL
   val allocDependencyBits = Wire(Vec(robDepth, Bool()))
   for (older <- 0 until robDepth) {
     val olderUseMask   = entryRawReads(older) | entryRawWrites(older)
@@ -206,10 +207,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       (allocWriteMask & olderUseMask)).orR
     val configConflict = (allocIsConfig || entryIsConfig(older)) &&
       ((allocReadMask | allocWriteMask) & olderUseMask).orR
+    val sameBall = allocIsBall &&
+      robEntries(older).cmd.domain_id === DomainId.BALL &&
+      robEntries(older).cmd.ball_bid === io.alloc.bits.ball_bid
     // Config conflicts include entries that have completed but are waiting to
-    // commit. RAW conflicts only include entries that are still executing.
+    // commit. RAW conflicts and same-Ball commands release at completion.
     allocDependencyBits(older) :=
-      (robValid(older) && !robComplete(older) && rawConflict) ||
+      (robValid(older) && !robComplete(older) && (rawConflict || sameBall)) ||
         (robValid(older) && configConflict)
   }
   val allocDependencies = allocDependencyBits.asUInt

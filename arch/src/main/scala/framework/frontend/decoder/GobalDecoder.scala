@@ -21,6 +21,7 @@ class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
 
 class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val domain_id  = UInt(4.W)
+  val ball_bid   = UInt(5.W)
   val cmd        = new RoCCCommandBB(b.core.xLen)
   val bankAccess = new BankAccessInfo(b.frontend.bank_id_len)
   val op1_col    = UInt(log2Up(b.memDomain.bankNum + 1).W)
@@ -105,6 +106,13 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val hasRd1 = enableBits === 4.U
   val hasWr  = enableBits === 2.U || enableBits === 3.U || enableBits === 4.U
 
+  val ballBid = WireDefault(0.U(5.W))
+  b.ballDomain.ballISA.foreach { entry =>
+    when(func7 === entry.funct7.U) {
+      ballBid := entry.bid.U
+    }
+  }
+
   bankAccess.rd_bank_0_valid := hasRd0
   bankAccess.rd_bank_0_id    := rs1(bankIdLen - 1, 0)
   bankAccess.rd_bank_1_valid := hasRd1
@@ -129,6 +137,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   // Output control
   io.id_o.valid           := io.id_i.valid
   io.id_o.bits.domain_id  := domain_id
+  io.id_o.bits.ball_bid   := ballBid
   io.id_o.bits.cmd        := io.id_i.bits.cmd
   io.id_o.bits.bankAccess := bankAccess
   io.id_o.bits.op1_col    := 0.U
