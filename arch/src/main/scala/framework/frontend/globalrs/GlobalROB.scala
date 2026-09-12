@@ -207,7 +207,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       (allocWriteMask & olderUseMask)).orR
     val configConflict = (allocIsConfig || entryIsConfig(older)) &&
       ((allocReadMask | allocWriteMask) & olderUseMask).orR
-    val sameBall = allocIsBall &&
+    val sameBall       = allocIsBall &&
       robEntries(older).cmd.domain_id === DomainId.BALL &&
       robEntries(older).cmd.ball_bid === io.alloc.bits.ball_bid
     // Config conflicts include entries that have completed but are waiting to
