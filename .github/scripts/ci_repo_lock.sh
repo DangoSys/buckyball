@@ -27,6 +27,9 @@ repo_reset() {
   git checkout --detach "${want_sha}"
   git reset --hard "${want_sha}"
   git clean -ffd
+  rm -rf arch/out
+  rm -rf compiler/thirdparty/buddy-mlir/llvm/build
+  rm -rf compiler/thirdparty/buddy-mlir/build
   git submodule sync
   git submodule update --init --force
   for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
