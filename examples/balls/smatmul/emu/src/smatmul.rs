@@ -28,11 +28,6 @@ fn read_i32(bank: &[u8], row: usize, lane: usize) -> i32 {
     i32::from_le_bytes(bank[offset..offset + 4].try_into().unwrap())
 }
 
-fn write_i32(bank: &mut [u8], row: usize, lane: usize, value: i32) {
-    let offset = row * bank_row_bytes() + lane * 4;
-    bank[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-}
-
 pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let bank = rs1_b0(xs1);
     let input_base = (xs2 & 0x3f) as usize;
@@ -171,12 +166,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let pc = pbank(ctx, c_bank);
         for row in 0..rows {
             for col in 0..cols {
-                write_i32(
-                    &mut ctx.banks[pc],
-                    output_base + row * 4 + col / 4,
-                    col % 4,
-                    chain.accumulators[row * cols + col],
-                );
+                let offset = (output_base + row * 4 + col / 4) * bank_row_bytes() + col % 4 * 4;
+                ctx.banks[pc][offset..offset + 4]
+                    .copy_from_slice(&chain.accumulators[row * cols + col].to_le_bytes());
             }
         }
     } else {
