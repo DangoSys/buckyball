@@ -324,6 +324,22 @@ def build_workload(
         logger=logger,
         task_scope=task_scope,
     )
+    _run(
+        [
+            "ninja",
+            "-C",
+            str(compiler_build),
+            f"-j{os.cpu_count() or 1}",
+            f"buckyball-compiler-{chip}",
+            "buddy-opt",
+            "frontend/Python/python-package-buddy",
+        ],
+        cwd=root,
+        env=env,
+        prefix="buddy python package",
+        logger=logger,
+        task_scope=task_scope,
+    )
     ninja = ["ninja", "-C", str(build), f"-j{os.cpu_count() or 1}"]
     if ninja_arg:
         ninja.append(ninja_arg)

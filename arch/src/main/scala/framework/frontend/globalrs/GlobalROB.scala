@@ -8,6 +8,7 @@ import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
 import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
+import framework.memdomain.backend.shared.SharedMemLayout
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
@@ -85,7 +86,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val headPtr                = RegInit(0.U(idWidth.W))
   val tailPtr                = RegInit(0.U(idWidth.W))
   val issuedCount            = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  private val bankColWidth   = log2Up(b.memDomain.bankNum + 1)
+  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(bankColWidth.W))))
   // In-flight ownership is tracked in the architectural vbank namespace.
   private val vbankMaskWidth = b.memDomain.virtualBankCount
   val vbankBusy              = RegInit(0.U(vbankMaskWidth.W))
@@ -401,10 +403,20 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     commitMask(i) := hits.reduce(_ || _)
     when(commitMask(i)) {
       when(robEntries(i).cmd.domain_id === DomainId.MEM && robEntries(i).cmd.cmd.funct === MSET_BITPAT) {
-        val bank = robEntries(i).cmd.bankAccess.wr_bank_id(b.memDomain.vbankIdWidth - 1, 0)
-        val col  = robEntries(i).cmd.cmd.rs2Data(9, 5)
+        val bankId = robEntries(i).cmd.bankAccess.wr_bank_id
+        val bank   = bankId(b.memDomain.vbankIdWidth - 1, 0)
+        val col    = robEntries(i).cmd.cmd.rs2Data(9, 5)
         when(robEntries(i).cmd.cmd.rs2Data(10)) {
-          bankCols(bank) := Mux(col === 0.U, b.memDomain.bankNum.U, col)
+          val fullCol = if (b.memDomain.sharedEnable) {
+            Mux(
+              bankId >= b.frontend.shared_bank_id_base.U && bankId < b.memDomain.virtualBankCount.U,
+              SharedMemLayout.totalBank(b).U(bankColWidth.W),
+              b.memDomain.bankNum.U(bankColWidth.W)
+            )
+          } else {
+            b.memDomain.bankNum.U(bankColWidth.W)
+          }
+          bankCols(bank) := Mux(col === 0.U, fullCol, col)
         }.otherwise {
           bankCols(bank) := 0.U
         }
