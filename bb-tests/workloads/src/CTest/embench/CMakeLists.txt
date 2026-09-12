@@ -106,17 +106,20 @@ function(add_embench_top_target)
   add_embench_top_benchmark(edn edn)
   add_embench_top_benchmark(huffbench huffbench)
   add_embench_top_benchmark(matmult-int matmult_int)
+  add_embench_top_benchmark(md5sum md5sum)
   add_embench_top_benchmark(minver minver)
   add_embench_top_benchmark(nbody nbody)
   add_embench_top_benchmark(nettle-aes nettle_aes)
   add_embench_top_benchmark(nettle-sha256 nettle_sha256)
   add_embench_top_benchmark(nsichneu nsichneu)
   add_embench_top_benchmark(picojpeg picojpeg)
+  add_embench_top_benchmark(primecount primecount)
   add_embench_top_benchmark(qrduino qrduino)
   add_embench_top_benchmark(sglib-combined sglib_combined)
   add_embench_top_benchmark(slre slre)
   add_embench_top_benchmark(st st)
   add_embench_top_benchmark(statemate statemate)
+  add_embench_top_benchmark(tarfind tarfind)
   add_embench_top_benchmark(ud ud)
   add_embench_top_benchmark(wikisort wikisort)
 
@@ -157,17 +160,20 @@ add_embench_target(cubic)
 add_embench_target(edn)
 add_embench_target(huffbench)
 add_embench_target(matmult-int)
+add_embench_target(md5sum)
 add_embench_target(minver)
 add_embench_target(nbody)
 add_embench_target(nettle-aes)
 add_embench_target(nettle-sha256)
 add_embench_target(nsichneu)
 add_embench_target(picojpeg)
+add_embench_target(primecount)
 add_embench_target(qrduino)
 add_embench_target(sglib-combined)
 add_embench_target(slre)
 add_embench_target(st)
 add_embench_target(statemate)
+add_embench_target(tarfind)
 add_embench_target(ud)
 add_embench_target(wikisort)
 add_embench_top_target()
@@ -175,10 +181,12 @@ add_embench_top_target()
 # Master embench build target (excludes cubic due to long double link issue)
 add_custom_target(embench-all DEPENDS
   embench_aha-mont64 embench_crc32 embench_edn
-  embench_huffbench embench_matmult-int embench_minver embench_nbody
+  embench_huffbench embench_matmult-int embench_md5sum embench_minver
+  embench_nbody
   embench_nettle-aes embench_nettle-sha256 embench_nsichneu
-  embench_picojpeg embench_qrduino embench_sglib-combined
-  embench_slre embench_st embench_statemate embench_ud embench_wikisort
+  embench_picojpeg embench_primecount embench_qrduino embench_sglib-combined
+  embench_slre embench_st embench_statemate embench_tarfind embench_ud
+  embench_wikisort
   embench_top
-  COMMENT "Building all embench benchmarks for Buckyball (18/19, cubic excluded)"
+  COMMENT "Building all embench benchmarks for Buckyball (21/22, cubic excluded)"
 )
