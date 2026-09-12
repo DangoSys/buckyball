@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.blink.BankWrite
+import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
@@ -78,7 +79,15 @@ class MemConfiger(val b: GlobalConfig) extends Module {
       when(io.cmdReq.fire) {
         val rawCol  = io.cmdReq.bits.cmd.special(9, 5)
         val alloc   = io.cmdReq.bits.cmd.special(10)
-        val fullCol = b.memDomain.bankNum.U(col_reg.getWidth.W)
+        val fullCol = if (b.memDomain.sharedEnable) {
+          Mux(
+            io.cmdReq.bits.cmd.is_shared,
+            SharedMemLayout.totalBank(b).U(col_reg.getWidth.W),
+            b.memDomain.bankNum.U(col_reg.getWidth.W)
+          )
+        } else {
+          b.memDomain.bankNum.U(col_reg.getWidth.W)
+        }
 
         state          := config
         col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))

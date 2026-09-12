@@ -77,6 +77,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   ): Unit = {
     val duplicate = mappingTable.map(entry =>
       entry.valid &&
+        !(group_id === 0.U && entry.hart_id === hart_id && entry.vbank_id === vbank_id) &&
         (entry.hart_id === hart_id) &&
         (entry.vbank_id === vbank_id) &&
         (entry.group_id === group_id)
@@ -108,16 +109,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         mappingTable(i).valid := false.B
       }
     }
-  }
-
-  def getFreePbankId(): UInt = {
-    val hasFree = mappingTable.map(_.valid === false.B).reduce(_ || _)
-    when(!hasFree) {
-      assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
-    }
-
-    val freePbankId = mappingTable.indexWhere(_.valid === false.B)
-    freePbankId
   }
 
   // -----------------------------------------------------------------------------
@@ -156,7 +147,18 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  io.config.ready := true.B
+  val realloc       = io.config.bits.group_id === 0.U
+
+  val freePbankMask = VecInit(mappingTable.map(entry =>
+    !entry.valid ||
+      (realloc && entry.hart_id === io.config.bits.hart_id && entry.vbank_id === io.config.bits.vbank_id)
+  ))
+
+  val hasFreePbank  = freePbankMask.asUInt.orR
+  io.config.ready := !io.config.bits.alloc || hasFreePbank
+  when(io.config.valid && io.config.bits.alloc && !hasFreePbank) {
+    assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
+  }
 
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
@@ -167,7 +169,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       when(io.config.bits.group_id === 0.U) {
         clearVbank(io.config.bits.hart_id, io.config.bits.vbank_id)
       }
-      val pbankId = getFreePbankId()
+      val pbankId = PriorityEncoder(freePbankMask)
       printf(
         p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +
           p"group=${io.config.bits.group_id} pbank=$pbankId is_multi=${io.config.bits.is_multi}\n"
