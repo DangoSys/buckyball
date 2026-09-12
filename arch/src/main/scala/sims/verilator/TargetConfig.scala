@@ -146,9 +146,13 @@ object Elaborate extends App {
         sys.exit(1)
     }
 
+  val targetDir = sys.env.get("BB_VERILATOR_TARGET_DIR")
+    .map(dir => Seq(s"-o=$dir"))
+    .getOrElse(Seq.empty)
+
   ChiselStage.emitSystemVerilogFile(
     new BBSimHarness()(config.toInstance),
-    firtoolOpts = args.drop(1),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog") ++ targetDir,
     args = Array.empty
   )
 }

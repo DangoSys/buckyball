@@ -18,7 +18,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val config  = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
-    val query_vbank_id    = Input(UInt(8.W))
+    val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
     val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
   })
 
@@ -50,22 +50,22 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
-    val vbank_id = UInt(5.W)
+    val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
     val group_id = UInt(log2Up(b.memDomain.bankNum).W)
   }
 
-  val mappingTable              = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
+  val mappingTable                = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
   // The frontend contract reserves [0, vbank_id_upper_bound] for private
-  // banks.  Keep the direct route table at that architectural size instead
-  // of materializing all 32 encodings of the five-bit wire field.
-  private val privateVbankCount = b.frontend.vbank_id_upper_bound + 1
+  // banks. Keep the direct route table at that architectural size.
+  private val privateVbankCount   = b.frontend.vbank_id_upper_bound + 1
   require(
-    privateVbankCount > 0 && privateVbankCount <= (1 << 5),
-    s"private vbank table size ($privateVbankCount) must fit the five-bit vbank namespace"
+    privateVbankCount > 0 && privateVbankCount <= b.memDomain.virtualBankCount,
+    s"private vbank table size ($privateVbankCount) exceeds virtualBankCount(${b.memDomain.virtualBankCount})"
   )
-  private val groupIndexWidth   = log2Up(b.memDomain.bankNum)
-  private val pbankIndexWidth   = log2Up(b.memDomain.bankNum)
+  private val groupIndexWidth     = log2Up(b.memDomain.bankNum)
+  private val pbankIndexWidth     = log2Up(b.memDomain.bankNum)
+  private val privateVbankIdWidth = log2Up(privateVbankCount)
 
   // A non-multi vbank has exactly one route, so keep that common case as a
   // small indexed table.  Multi-bank mappings retain their per-group entries
@@ -78,9 +78,8 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     VecInit(Seq.fill(privateVbankCount)(0.U(pbankIndexWidth.W)))
   )
 
-  // Virtual bank ids are encoded in the five-bit mapping-table field. The
-  // private namespace is bounded by the frontend contract, while multi-bank
-  // groups remain represented individually in mappingTable.
+  // The private namespace is bounded by the frontend contract, while
+  // multi-bank groups remain represented individually in mappingTable.
   val groupCountByVbank = RegInit(
     VecInit(Seq.fill(privateVbankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W)))
   )
@@ -158,14 +157,15 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
 
   when(io.config.fire) {
-    val vbank = io.config.bits.vbank_id(4, 0)
+    val vbank    = io.config.bits.vbank_id
+    val vbankIdx = vbank(privateVbankIdWidth - 1, 0)
     when(io.config.bits.alloc) {
       val freePbank = getFreePbankId()
       // Match bemu mset: realloc of the same vbank frees prior physical banks first.
       // MemConfiger emits one fire per group; only group 0 drops the old mapping.
       when(io.config.bits.group_id === 0.U) {
         deleteEntry(io.config.bits.vbank_id)
-        singleRouteValid(vbank) := false.B
+        singleRouteValid(vbankIdx) := false.B
       }
       addEntry(
         io.config.bits.vbank_id,
@@ -174,14 +174,14 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         io.config.bits.group_id
       )
       when(!io.config.bits.is_multi) {
-        singleRoutePbank(vbank) := freePbank
-        singleRouteValid(vbank) := true.B
+        singleRoutePbank(vbankIdx) := freePbank
+        singleRouteValid(vbankIdx) := true.B
       }
-      groupCountByVbank(vbank) := Mux(io.config.bits.is_multi, io.config.bits.group_id +& 1.U, 1.U)
+      groupCountByVbank(vbankIdx) := Mux(io.config.bits.is_multi, io.config.bits.group_id +& 1.U, 1.U)
     }.otherwise {
       deleteEntry(io.config.bits.vbank_id)
-      singleRouteValid(vbank)  := false.B
-      groupCountByVbank(vbank) := 0.U
+      singleRouteValid(vbankIdx)  := false.B
+      groupCountByVbank(vbankIdx) := 0.U
     }
   }
 
@@ -189,7 +189,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // Query interface: return group count for a given vbank_id
   // -----------------------------------------------------------------------------
   val queryVbankId = RegNext(io.query_vbank_id, 0.U)
-  val queryVbank   = queryVbankId(4, 0)
+  val queryVbank   = queryVbankId(privateVbankIdWidth - 1, 0)
   io.query_group_count := RegNext(groupCountByVbank(queryVbank), 0.U)
 
   // -----------------------------------------------------------------------------
@@ -234,13 +234,11 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val routePbankReg     = RegInit(0.U(pbankIndexWidth.W))
     val routeValidReg     = RegInit(false.B)
     val routePending      = RegInit(false.B)
-    // The private vbank namespace is five bits wide even when a chip has
-    // fewer than 32 physical banks (e.g. Toy/Goban use a four-bit bank ID).
-    // Zero-extend the request ID instead of slicing a potentially narrow bus.
-    val requestVbank      = io.mem_req(i).bank_id.pad(5)
+    val requestVbank      = io.mem_req(i).bank_id
+    val requestVbankIdx   = requestVbank(privateVbankIdWidth - 1, 0)
     val requestGroup      = io.mem_req(i).group_id(groupIndexWidth - 1, 0)
-    val singleRoute       = singleRoutePbank(requestVbank)
-    val singleValid       = singleRouteValid(requestVbank)
+    val singleRoute       = singleRoutePbank(requestVbankIdx)
+    val singleValid       = singleRouteValid(requestVbankIdx)
     val multiRouteMatch   = VecInit(mappingTable.map(entry =>
       entry.valid && entry.is_multi &&
         entry.vbank_id === requestVbank && entry.group_id === requestGroup

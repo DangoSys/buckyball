@@ -31,7 +31,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val mmio_col            = Output(UInt(8.W))  // rs2[63:56]: valid bytes per row
 
     val query_valid       = Output(Bool())
-    val query_vbank_id    = Output(UInt(8.W))
+    val query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
 
@@ -50,7 +50,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val iter_cmd       = Reg(UInt(b.frontend.iter_len.W))
   val iter_reg       = Reg(UInt(b.frontend.iter_len.W))
   val resp_count     = RegInit(0.U(log2Up(16).W))
-  val wr_bank_reg    = Reg(UInt(log2Up(b.memDomain.bankNum).W))
+  val wr_bank_reg    = Reg(UInt(b.memDomain.vbankIdWidth.W))
   val stride_reg     = Reg(UInt(19.W))
   val is_shared_reg  = RegInit(false.B)
 
@@ -143,9 +143,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
     }
   }
 
-  io.query_valid     := state === s_setup
+  io.query_valid     := state === s_setup || state === s_query || state === s_query_wait
   io.query_vbank_id  := wr_bank_reg
-  io.query_is_shared := is_shared_reg && (state === s_setup)
+  io.query_is_shared := is_shared_reg && io.query_valid
 
   when(state === s_setup) {
     state := s_query

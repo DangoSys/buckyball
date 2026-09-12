@@ -28,7 +28,7 @@ extern "C"
       for (int w = 0; w < 3; ++w)
         for (int i = 0; i < 8; ++i) {
           float got = out[o * st0 + h * st1 + w * st2 + i * st3];
-          float exp = (float)(o + i + h + w);
+          float exp = (float)(53 * o + 7 * i + 3 * h + w);
           if (fabsf(got - exp) > 1e-5f)
             fail();
         }

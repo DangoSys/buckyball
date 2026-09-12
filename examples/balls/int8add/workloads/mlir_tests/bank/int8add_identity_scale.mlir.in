@@ -1,0 +1,43 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %lanes = arith.constant @BB_BANK_I8_LANES@ : index
+  %depth = arith.constant @BB_BANK_LINES@ : i64
+  %stride = arith.constant 1 : i64
+  %ratio = arith.constant 1.0 : f32
+  %a = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %b = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %out = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  scf.for %row = %zero to %rows step %one {
+    scf.for %lane = %zero to %lanes step %one {
+      %r = arith.index_cast %row : index to i32
+      %l = arith.index_cast %lane : index to i32
+      %a32 = arith.subi %l, %r : i32
+      %b32 = arith.subi %r, %l : i32
+      %a8 = arith.trunci %a32 : i32 to i8
+      %b8 = arith.trunci %b32 : i32 to i8
+      memref.store %a8, %a[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+      memref.store %b8, %b[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+    }
+  }
+  %a_bank = buckyball.bank_alloc
+  %b_bank = buckyball.bank_alloc
+  %out_bank = buckyball.bank_alloc
+  %a_loaded = buckyball.bank_mvin %a %a_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %b_loaded = buckyball.bank_mvin %b %b_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %result = buckyball.bank_int8add %a_loaded %b_loaded %out_bank %depth %ratio %ratio {relu = false} : i64 i64 i64 i64 f32
+  %stored = buckyball.bank_mvout %out %result %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%out) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+  buckyball.bank_release %a_loaded : i64
+  buckyball.bank_release %b_loaded : i64
+  buckyball.bank_release %stored : i64
+  memref.dealloc %a : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %b : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %out : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  return %zero_i8 : i8
+}

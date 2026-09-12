@@ -83,6 +83,7 @@ mod tests {
             ksize: 0,
             stride: 0,
             padding: 0,
+            window_count: 0,
             op1_bank: 0,
             wr_bank: 0,
             op1_col: 0,
@@ -94,7 +95,7 @@ mod tests {
         im2col_case_cmd(&mut cmd as *mut Im2colCmd);
         assert_eq!(cmd.iter, 6);
         assert_eq!(cmd.ksize, 3);
-        assert_eq!(cmd.num_src_words, 3);
+        assert_eq!(cmd.num_src_words, 36);
         assert_eq!(cmd.num_dst_words, 16);
         let _lo = im2col_case_src_word_lo(0);
         let _hi = im2col_case_src_word_hi(0);

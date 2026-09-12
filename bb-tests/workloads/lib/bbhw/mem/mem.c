@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static uint8_t bank_cols[BANK_NUM];
+static uint8_t bank_cols[VIRTUAL_BANK_NUM];
 static uint8_t bank_cols_init;
 
 static void ensure_bank_cols(void) {
@@ -11,14 +11,14 @@ static void ensure_bank_cols(void) {
 
   if (bank_cols_init)
     return;
-  for (i = 0; i < BANK_NUM; i++)
+  for (i = 0; i < VIRTUAL_BANK_NUM; i++)
     bank_cols[i] = 1;
   bank_cols_init = 1;
 }
 
 void bb_dma_bank_set_cols(uint32_t bank_id, uint32_t cols) {
   ensure_bank_cols();
-  if (bank_id >= BANK_NUM) {
+  if (bank_id >= VIRTUAL_BANK_NUM) {
     fprintf(stderr, "bb_dma_bank_set_cols: bank_id %u out of range\n", bank_id);
     exit(1);
   }
@@ -27,7 +27,7 @@ void bb_dma_bank_set_cols(uint32_t bank_id, uint32_t cols) {
 
 uint32_t bb_dma_bank_cols(uint32_t bank_id) {
   ensure_bank_cols();
-  if (bank_id >= BANK_NUM) {
+  if (bank_id >= VIRTUAL_BANK_NUM) {
     fprintf(stderr, "bb_dma_bank_cols: bank_id %u out of range\n", bank_id);
     exit(1);
   }

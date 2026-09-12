@@ -21,7 +21,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
 
     val busy     = Output(Bool())
     val group_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val bank_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val bank_id  = Output(UInt(b.memDomain.vbankIdWidth.W))
     val hart_id  = Output(UInt(b.core.xLen.W))
   })
 
@@ -34,7 +34,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
   io.group_id := group_id_reg
 
   //Bank_id output
-  val bank_id_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val bank_id_reg = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   io.bank_id := bank_id_reg
   val hart_id_reg = RegInit(0.U(b.core.xLen.W))
   io.hart_id := hart_id_reg

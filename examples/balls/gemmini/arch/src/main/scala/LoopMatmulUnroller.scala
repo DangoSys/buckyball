@@ -23,7 +23,7 @@ class LoopMatmulUnroller(val b: GlobalConfig) extends Module {
   val elemSize  = config.inputWidth / 8
   val accBytes  = config.accWidth / 8
   val bankBytes = b.memDomain.bankWidth / 8
-  val bankIdLen = log2Up(b.memDomain.bankNum)
+  val bankIdLen = b.memDomain.vbankIdWidth
 
   @public
   val io = IO(new Bundle {

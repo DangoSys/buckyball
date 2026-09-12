@@ -2,9 +2,16 @@ func.func private @check_result(memref<1x16x2x2xi8>) -> ()
 
 func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
-  %one_i8 = arith.constant 1 : i8
   %zero_i32 = arith.constant 0 : i32
   %one_f32 = arith.constant 1.0 : f32
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c2 = arith.constant 2 : index
+  %c3 = arith.constant 3 : index
+  %c4 = arith.constant 4 : index
+  %c5 = arith.constant 5 : index
+  %c7 = arith.constant 7 : index
+  %c16 = arith.constant 16 : index
   %input = memref.alloc() alignment = 64 : memref<1x4x4x2xi8>
   %conv_weight = memref.alloc() alignment = 64 : memref<1x2x16x16xi8>
   %conv_bias = memref.alloc() alignment = 64 : memref<16xi32>
@@ -16,13 +23,54 @@ func.func @main() -> i8 {
   %depthwise_scale = memref.alloc() alignment = 64 : memref<16xf32>
   %depthwise_output = memref.alloc() alignment = 64 : memref<1x4x4x16xi8>
   %output = memref.alloc() alignment = 64 : memref<1x16x2x2xi8>
-  linalg.fill ins(%one_i8 : i8) outs(%input : memref<1x4x4x2xi8>)
-  linalg.fill ins(%one_i8 : i8) outs(%conv_weight : memref<1x2x16x16xi8>)
-  linalg.fill ins(%zero_i32 : i32) outs(%conv_bias : memref<16xi32>)
+  scf.for %h = %c0 to %c4 step %c1 {
+    scf.for %w = %c0 to %c4 step %c1 {
+      scf.for %ic = %c0 to %c2 step %c1 {
+        %h3 = arith.muli %h, %c3 : index
+        %w2 = arith.muli %w, %c2 : index
+        %sum0 = arith.addi %h3, %w2 : index
+        %sum = arith.addi %sum0, %ic : index
+        %rem = arith.remui %sum, %c7 : index
+        %signed = arith.subi %rem, %c3 : index
+        %value = arith.index_cast %signed : index to i8
+        memref.store %value, %input[%c0, %h, %w, %ic] : memref<1x4x4x2xi8>
+      }
+    }
+  }
+  scf.for %ic = %c0 to %c2 step %c1 {
+    scf.for %p = %c0 to %c16 step %c1 {
+      scf.for %oc = %c0 to %c16 step %c1 {
+        %oc3 = arith.muli %oc, %c3 : index
+        %sum0 = arith.addi %p, %ic : index
+        %sum = arith.addi %sum0, %oc3 : index
+        %rem = arith.remui %sum, %c5 : index
+        %signed = arith.subi %rem, %c2 : index
+        %value = arith.index_cast %signed : index to i8
+        memref.store %value, %conv_weight[%c0, %ic, %p, %oc] : memref<1x2x16x16xi8>
+      }
+    }
+  }
+  scf.for %oc = %c0 to %c16 step %c1 {
+    %signed = arith.subi %oc, %c4 : index
+    %value = arith.index_cast %signed : index to i32
+    memref.store %value, %conv_bias[%oc] : memref<16xi32>
+  }
   linalg.fill ins(%one_f32 : f32) outs(%conv_scale : memref<16xf32>)
   linalg.fill ins(%zero_i8 : i8) outs(%lut : memref<1xi8>)
   linalg.fill ins(%zero_i8 : i8) outs(%intermediate : memref<1x4x4x16xi8>)
-  linalg.fill ins(%one_i8 : i8) outs(%depthwise_weight : memref<3x3x16x1xi8>)
+  scf.for %kh = %c0 to %c3 step %c1 {
+    scf.for %kw = %c0 to %c3 step %c1 {
+      scf.for %oc = %c0 to %c16 step %c1 {
+        %kw2 = arith.muli %kw, %c2 : index
+        %sum0 = arith.addi %kh, %kw2 : index
+        %sum = arith.addi %sum0, %oc : index
+        %rem = arith.remui %sum, %c5 : index
+        %signed = arith.subi %rem, %c2 : index
+        %value = arith.index_cast %signed : index to i8
+        memref.store %value, %depthwise_weight[%kh, %kw, %oc, %c0] : memref<3x3x16x1xi8>
+      }
+    }
+  }
   linalg.fill ins(%zero_i32 : i32) outs(%depthwise_bias : memref<16xi32>)
   linalg.fill ins(%one_f32 : f32) outs(%depthwise_scale : memref<16xf32>)
   linalg.fill ins(%zero_i8 : i8) outs(%depthwise_output : memref<1x4x4x16xi8>)
@@ -48,16 +96,5 @@ func.func @main() -> i8 {
         : memref<1x4x4x16xi8> memref<1x16x2x2xi8>
   }
   func.call @check_result(%output) : (memref<1x16x2x2xi8>) -> ()
-  memref.dealloc %input : memref<1x4x4x2xi8>
-  memref.dealloc %conv_weight : memref<1x2x16x16xi8>
-  memref.dealloc %conv_bias : memref<16xi32>
-  memref.dealloc %conv_scale : memref<16xf32>
-  memref.dealloc %lut : memref<1xi8>
-  memref.dealloc %intermediate : memref<1x4x4x16xi8>
-  memref.dealloc %depthwise_weight : memref<3x3x16x1xi8>
-  memref.dealloc %depthwise_bias : memref<16xi32>
-  memref.dealloc %depthwise_scale : memref<16xf32>
-  memref.dealloc %depthwise_output : memref<1x4x4x16xi8>
-  memref.dealloc %output : memref<1x16x2x2xi8>
   return %zero_i8 : i8
 }

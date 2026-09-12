@@ -10,7 +10,7 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
     when(cfg_dataflow === Dataflow.OS.id.U) {
       when(read_row_cnt < total_rows) {
         io.bankReadReq(0).valid     := true.B
-        io.bankReadReq(0).bits.addr := read_row_cnt
+        io.bankReadReq(0).bits.addr := op1_base + read_row_cnt
         when(io.bankReadReq(0).ready) {
           read_row_cnt := read_row_cnt + 1.U
         }
@@ -25,8 +25,8 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
         // feed its columns bottom-up in sPreloadFeed.
         io.bankReadReq(0).bits.addr := Mux(
           cfg_bd_transpose,
-          read_row_cnt,
-          total_rows - 1.U - read_row_cnt
+          op1_base + read_row_cnt,
+          op1_base + total_rows - 1.U - read_row_cnt
         )
         when(io.bankReadReq(0).ready) {
           read_row_cnt := read_row_cnt + 1.U

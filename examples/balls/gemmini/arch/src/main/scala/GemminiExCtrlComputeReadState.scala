@@ -16,9 +16,9 @@ trait GemminiExCtrlComputeReadState { this: GemminiExCtrl =>
     }.elsewhen(read_row_cnt < total_rows) {
       val op1Zero = zero_op1_tail && read_row_cnt =/= 0.U
       io.bankReadReq(0).valid     := !op1Zero && !read_done(0)
-      io.bankReadReq(0).bits.addr := read_row_cnt
+      io.bankReadReq(0).bits.addr := op1_base + read_row_cnt
       io.bankReadReq(1).valid     := !zero_op2 && !read_done(1)
-      io.bankReadReq(1).bits.addr := read_row_cnt
+      io.bankReadReq(1).bits.addr := op2_base + read_row_cnt
       when(io.bankReadReq(0).fire) {
         read_done(0) := true.B
       }

@@ -11,7 +11,8 @@ import framework.top.GlobalConfig
 class Relu(val b: GlobalConfig) extends Module {
   private val addressWidth = log2Up(b.memDomain.bankEntries)
   private val countWidth   = log2Up(b.memDomain.bankEntries + 1)
-  private val bankWidth    = log2Up(b.memDomain.bankNum)
+  private val bankIdWidth  = b.memDomain.vbankIdWidth
+  private val groupWidth   = log2Up(b.memDomain.bankNum)
 
   private val mapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "ReluBall")
@@ -43,8 +44,8 @@ class Relu(val b: GlobalConfig) extends Module {
   val robId    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   val isSub    = RegInit(false.B)
   val subRobId = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val bank     = RegInit(0.U(bankWidth.W))
-  val group    = RegInit(0.U(bankWidth.W))
+  val bank     = RegInit(0.U(bankIdWidth.W))
+  val group    = RegInit(0.U(groupWidth.W))
   val iter     = RegInit(0.U(countWidth.W))
   val stride   = RegInit(0.U(countWidth.W))
   val segment  = RegInit(0.U(addressWidth.W))

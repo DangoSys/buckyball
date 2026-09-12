@@ -1,7 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <bbhw/mem/mem.h>
-#include <isa/toint8.h>
+#include <isa/quant.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -18,10 +18,10 @@ int main(void) {
 #ifdef MULTICORE
   multicore(MULTICORE);
 #endif
-  bb_mem_alloc(0, 1, 4);
+  bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
-  bb_mvin((uintptr_t)input, 0, 1, 1);
-  bb_toint8(0, 1, 1, 0);
+  bb_mvin((uintptr_t)input, 0, 4, 1);
+  bb_quant_f32_to_i8(0, 1, 4, 1.0f);
   bb_mvout((uintptr_t)output, 1, 1, 1);
   bb_fence();
   for (int i = 0; i < 16; ++i) {

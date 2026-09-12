@@ -14,11 +14,11 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   val robDepth     = b.frontend.rob_entries
   val idWidth      = log2Up(robDepth)
-  val scoreBankNum = b.frontend.vbank_id_upper_bound + 1 + robDepth
+  val scoreBankNum = b.memDomain.virtualBankCount + robDepth
 
   require(
-    b.frontend.vbank_id_upper_bound < b.memDomain.bankNum,
-    s"vbank_id_upper_bound(${b.frontend.vbank_id_upper_bound}) must be < memDomain.bankNum(${b.memDomain.bankNum})"
+    b.frontend.vbank_id_upper_bound < b.memDomain.virtualBankCount,
+    s"vbank_id_upper_bound(${b.frontend.vbank_id_upper_bound}) must be < virtualBankCount(${b.memDomain.virtualBankCount})"
   )
 
   @public
@@ -43,7 +43,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val bat: Instance[BankAliasTable] = Instantiate(
     new BankAliasTable(
       bankIdLen = b.frontend.bank_id_len,
-      vbankUpper = b.frontend.vbank_id_upper_bound,
+      vbankUpper = b.memDomain.virtualBankCount - 1,
       robEntries = robDepth
     )
   )
@@ -82,14 +82,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val robIssued   = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
   val robComplete = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
 
-  val headPtr                       = RegInit(0.U(idWidth.W))
-  val tailPtr                       = RegInit(0.U(idWidth.W))
-  val issuedCount                   = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols                      = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
-  // Physical-bank ownership is a bit mask.  IDs outside the physical-bank
-  // range intentionally map to no bit, matching the old equality scan.
-  private val physicalBankMaskWidth = b.memDomain.bankNum
-  val physicalBankBusy              = RegInit(0.U(physicalBankMaskWidth.W))
+  val headPtr                = RegInit(0.U(idWidth.W))
+  val tailPtr                = RegInit(0.U(idWidth.W))
+  val issuedCount            = RegInit(0.U(log2Up(robDepth + 1).W))
+  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  // In-flight ownership is tracked in the architectural vbank namespace.
+  private val vbankMaskWidth = b.memDomain.virtualBankCount
+  val vbankBusy              = RegInit(0.U(vbankMaskWidth.W))
 
   // Dependency state is maintained incrementally instead of rebuilding all
   // older-entry comparisons every cycle. A bit in slot k names the ROB slot
@@ -115,12 +114,9 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       (access.rd_bank_1_valid && access.rd_bank_1_id === bank) ||
       (access.wr_bank_valid && access.wr_bank_id === bank)
 
-  // Raw accesses use the physical bank namespace.  Build one mask per ROB
-  // slot once, then hazard checks become mask intersections instead of
-  // repeating multiple ID equality comparators for every ROB pair.  Bank IDs
-  // are five bits wide for pebble, but codes 24..31 are invalid; suppressing
-  // them before UIntToOH preserves the old equality-scan behavior exactly.
-  private val hazardBankCount = b.memDomain.bankNum
+  // Build one architectural-vbank mask per ROB slot once, then hazard checks
+  // become mask intersections instead of repeating ID comparisons.
+  private val hazardBankCount = b.memDomain.virtualBankCount
 
   def rawReadMask(access: BankAccessInfo): UInt = {
     val rd0 = Mux(
@@ -167,7 +163,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val hasCommit = commitScan.asUInt.orR
   val tailAlias = Wire(UInt(b.frontend.bank_id_len.W))
   tailAlias :=
-    (b.frontend.vbank_id_upper_bound + 1).U(b.frontend.bank_id_len.W) + tailPtr
+    b.memDomain.virtualBankCount.U(b.frontend.bank_id_len.W) + tailPtr
 
   val tailAliasLive = WireDefault(false.B)
   for (i <- 0 until robDepth) {
@@ -203,6 +199,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
   val allocIsConfig       = io.alloc.bits.domain_id === DomainId.MEM &&
     (io.alloc.bits.cmd.funct === MSET_BITPAT)
+  val allocIsBall         = io.alloc.bits.domain_id === DomainId.BALL
   val allocDependencyBits = Wire(Vec(robDepth, Bool()))
   for (older <- 0 until robDepth) {
     val olderUseMask   = entryRawReads(older) | entryRawWrites(older)
@@ -210,10 +207,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       (allocWriteMask & olderUseMask)).orR
     val configConflict = (allocIsConfig || entryIsConfig(older)) &&
       ((allocReadMask | allocWriteMask) & olderUseMask).orR
+    val sameBall       = allocIsBall &&
+      robEntries(older).cmd.domain_id === DomainId.BALL &&
+      robEntries(older).cmd.ball_bid === io.alloc.bits.ball_bid
     // Config conflicts include entries that have completed but are waiting to
-    // commit. RAW conflicts only include entries that are still executing.
+    // commit. RAW conflicts and same-Ball commands release at completion.
     allocDependencyBits(older) :=
-      (robValid(older) && !robComplete(older) && rawConflict) ||
+      (robValid(older) && !robComplete(older) && (rawConflict || sameBall)) ||
         (robValid(older) && configConflict)
   }
   val allocDependencies = allocDependencyBits.asUInt
@@ -279,14 +279,12 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // ---------------------------------------------------------------------------
   // Issue: scan from head for first issuable entry (valid && !issued && !complete)
   // ---------------------------------------------------------------------------
-  val scanValid     = Wire(Vec(robDepth, Bool()))
-  val scanReady     = Wire(Vec(robDepth, Bool()))
-  val physicalMasks = Wire(Vec(robDepth, UInt(physicalBankMaskWidth.W)))
+  val scanValid  = Wire(Vec(robDepth, Bool()))
+  val scanReady  = Wire(Vec(robDepth, Bool()))
+  val vbankMasks = Wire(Vec(robDepth, UInt(vbankMaskWidth.W)))
   for (slot <- 0 until robDepth) {
-    // The physical busy mask uses exactly the same private-bank namespace as
-    // the raw hazard masks.  Reusing these masks avoids a second bank-ID
-    // decoder for every ROB slot.
-    physicalMasks(slot) := entryRawReads(slot) | entryRawWrites(slot)
+    // Reuse the raw hazard mask for active-command ownership.
+    vbankMasks(slot) := entryRawReads(slot) | entryRawWrites(slot)
   }
 
   // Check each candidate against older ROB entries using mask intersections.
@@ -299,7 +297,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.queryVec(i) := robEntries(ptr).renamedBankAccess
     scanReady(i)           := scanValid(i) && !scoreboard.hazardVec(i) &&
       !dependencyMask(ptr).orR &&
-      !(physicalMasks(ptr) & physicalBankBusy).orR
+      !(vbankMasks(ptr) & vbankBusy).orR
   }
 
   val hasReady       = scanReady.asUInt.orR
@@ -327,17 +325,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   issuePayload             := robEntries(issuePtr)
   issuePayload.cmd.op1_col := Mux(
     issuePayload.cmd.bankAccess.rd_bank_0_valid,
-    bankCols(issuePayload.cmd.bankAccess.rd_bank_0_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    bankCols(issuePayload.cmd.bankAccess.rd_bank_0_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
   issuePayload.cmd.op2_col := Mux(
     issuePayload.cmd.bankAccess.rd_bank_1_valid,
-    bankCols(issuePayload.cmd.bankAccess.rd_bank_1_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    bankCols(issuePayload.cmd.bankAccess.rd_bank_1_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
   issuePayload.cmd.wr_col  := Mux(
     issuePayload.cmd.bankAccess.wr_bank_valid,
-    bankCols(issuePayload.cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)),
+    bankCols(issuePayload.cmd.bankAccess.wr_bank_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
 
@@ -382,11 +380,11 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // Preserve the original update ordering when issue and complete coincide:
   // a completion clears ownership after the newly issued transaction marks
   // its banks busy.
-  val issuedPhysicalMask    = Mux(issueLoad, physicalMasks(actualIssuePtr), 0.U)
-  val completedPhysicalMask = Mux(io.complete.fire, physicalMasks(io.complete.bits), 0.U)
+  val issuedVbankMask    = Mux(issueLoad, vbankMasks(actualIssuePtr), 0.U)
+  val completedVbankMask = Mux(io.complete.fire, vbankMasks(io.complete.bits), 0.U)
   when(issueLoad || io.complete.fire) {
-    physicalBankBusy :=
-      (physicalBankBusy & ~completedPhysicalMask) | issuedPhysicalMask
+    vbankBusy :=
+      (vbankBusy & ~completedVbankMask) | issuedVbankMask
   }
 
   issuedCount := issuedCount + issueFired.asUInt - completeIssuedEntry.asUInt
@@ -403,7 +401,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     commitMask(i) := hits.reduce(_ || _)
     when(commitMask(i)) {
       when(robEntries(i).cmd.domain_id === DomainId.MEM && robEntries(i).cmd.cmd.funct === MSET_BITPAT) {
-        val bank = robEntries(i).cmd.bankAccess.wr_bank_id(log2Up(b.memDomain.bankNum) - 1, 0)
+        val bank = robEntries(i).cmd.bankAccess.wr_bank_id(b.memDomain.vbankIdWidth - 1, 0)
         val col  = robEntries(i).cmd.cmd.rs2Data(9, 5)
         when(robEntries(i).cmd.cmd.rs2Data(10)) {
           bankCols(bank) := Mux(col === 0.U, b.memDomain.bankNum.U, col)

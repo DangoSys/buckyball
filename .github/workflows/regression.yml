@@ -47,6 +47,14 @@ jobs:
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
+      - name: Install config
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
+          nix develop -c bbdev config --install
+
   eval-area-power:
     name: eval-area-power-${{ matrix.chip }}
     needs: gate
@@ -83,15 +91,6 @@ jobs:
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
-
-      - name: Install config
-        if: matrix.run_area || matrix.run_power
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
 
       - name: DC area
         if: matrix.run_area
@@ -136,15 +135,15 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_uvm: false
+            run_uvm: true
           - chip: pebble
             run_uvm: true
           - chip: goban
-            run_uvm: false
+            run_uvm: true
           - chip: poly
-            run_uvm: false
+            run_uvm: true
           - chip: multi-rocket
-            run_uvm: false
+            run_uvm: true
     env:
       BB_ROOT: ~/Code/buckyball
       SNPSLMD_LICENSE_FILE: 26000@127.0.0.1
@@ -158,15 +157,6 @@ jobs:
           source "${root}/.github/scripts/setproxy.sh"
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
-
-      - name: Install config
-        if: matrix.run_uvm
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
 
       - name: Chip UVM
         if: matrix.run_uvm
@@ -220,15 +210,6 @@ jobs:
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
-      - name: Install config
-        if: matrix.build_bitstream
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev config --install
-
       - name: FPGA buildbitstream
         if: matrix.build_bitstream
         shell: zsh {0}
@@ -265,15 +246,15 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: pebble
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: goban
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: poly
-            run_fpga_check: false
+            run_fpga_check: true
           - chip: multi-rocket
-            run_fpga_check: false
+            run_fpga_check: true
     env:
       BB_ROOT: ~/Code/buckyball
     steps:

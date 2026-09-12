@@ -17,7 +17,8 @@ func.func @main() -> i8 {
   %false = arith.constant false
   %zero64 = arith.constant 0 : i64
 
-  %identity = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %input0 = memref.alloc() alignment = 64 : memref<16x16xi8>
+  %input1 = memref.alloc() alignment = 64 : memref<16x16xi8>
   %weight0 = memref.alloc() alignment = 64 : memref<16x16xi8>
   %weight1 = memref.alloc() alignment = 64 : memref<16x16xi8>
   %bias = memref.alloc() alignment = 64 : memref<4x4xi32>
@@ -26,18 +27,19 @@ func.func @main() -> i8 {
 
   scf.for %row = %zero to %sixteen step %one {
     scf.for %column = %zero to %sixteen step %one {
-      %same = arith.cmpi eq, %row, %column : index
-      %identity_i32 = arith.select %same, %one, %zero : index
-      %identity_i8 = arith.index_cast %identity_i32 : index to i8
       %row_i32 = arith.index_cast %row : index to i32
       %column_i32 = arith.index_cast %column : index to i32
       %sum = arith.addi %row_i32, %column_i32 : i32
       %difference = arith.subi %row_i32, %column_i32 : i32
+      %twice_row = arith.addi %row_i32, %row_i32 : i32
+      %second = arith.subi %twice_row, %column_i32 : i32
       %sum_i8 = arith.trunci %sum : i32 to i8
       %difference_i8 = arith.trunci %difference : i32 to i8
-      memref.store %identity_i8, %identity[%row, %column] : memref<16x16xi8>
+      %second_i8 = arith.trunci %second : i32 to i8
+      memref.store %difference_i8, %input0[%row, %column] : memref<16x16xi8>
       memref.store %sum_i8, %weight0[%row, %column] : memref<16x16xi8>
-      memref.store %difference_i8, %weight1[%row, %column] : memref<16x16xi8>
+      memref.store %sum_i8, %input1[%row, %column] : memref<16x16xi8>
+      memref.store %second_i8, %weight1[%row, %column] : memref<16x16xi8>
     }
     %bias_value = arith.subi %row, %eight : index
     %bias_i32 = arith.index_cast %bias_value : index to i32
@@ -54,11 +56,11 @@ func.func @main() -> i8 {
   %result_bank = buckyball.bank_alloc
   %loaded_bias = buckyball.bank_mvin %bias %bias_bank %depth4 %stride
       : memref<4x4xi32> i64 i64 i64
-  %loaded_a0 = buckyball.bank_mvin %identity %a0_bank %depth16 %stride
+  %loaded_a0 = buckyball.bank_mvin %input0 %a0_bank %depth16 %stride
       : memref<16x16xi8> i64 i64 i64
   %loaded_b0 = buckyball.bank_mvin %weight0 %b0_bank %depth16 %stride
       : memref<16x16xi8> i64 i64 i64
-  %loaded_a1 = buckyball.bank_mvin %identity %a1_bank %depth16 %stride
+  %loaded_a1 = buckyball.bank_mvin %input1 %a1_bank %depth16 %stride
       : memref<16x16xi8> i64 i64 i64
   %loaded_b1 = buckyball.bank_mvin %weight1 %b1_bank %depth16 %stride
       : memref<16x16xi8> i64 i64 i64
@@ -76,7 +78,8 @@ func.func @main() -> i8 {
   buckyball.bank_release %loaded_a1 : i64
   buckyball.bank_release %loaded_b1 : i64
   buckyball.bank_release %stored : i64
-  memref.dealloc %identity : memref<16x16xi8>
+  memref.dealloc %input0 : memref<16x16xi8>
+  memref.dealloc %input1 : memref<16x16xi8>
   memref.dealloc %weight0 : memref<16x16xi8>
   memref.dealloc %weight1 : memref<16x16xi8>
   memref.dealloc %bias : memref<4x4xi32>

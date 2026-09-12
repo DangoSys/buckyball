@@ -59,6 +59,7 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     ${WORKLOAD_LIB_DIR}/buckyball.h
     ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
     ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
+    ${BUCKYBALL_ISA_DIR}/chip/topology.h
     ${BBHW_MEM_C}
     ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
     ${BUCKYBALL_CHIP_COMMON_SOURCES}
@@ -114,6 +115,7 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
       -I${WORKLOAD_LIB_DIR}
+      -I${BUCKYBALL_ISA_DIR}/chip
       -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
       ${BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS}
       ${BALL_ISA_INCLUDE_FLAGS}
@@ -138,7 +140,7 @@ function(add_buckyball_ctest SOURCE_FILE)
   if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
     message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for ${SOURCE_FILE}")
   endif()
-  set(TEST_NAME "${BUCKYBALL_WORKLOAD_CHIP}-${BUCKYBALL_CTEST_TARGET}-ctest-${_stem}")
+  buckyball_ctest_name(TEST_NAME ${BUCKYBALL_CTEST_TARGET} ${_stem})
   set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
   buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
@@ -190,6 +192,56 @@ function(add_buckyball_ctests)
   endforeach()
 endfunction()
 
+add_custom_target(core-ctests-build)
+
+function(add_buckyball_core_workload NAME)
+  cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
+  if(NOT DEFINED BUCKYBALL_CORE_WORKLOAD_TARGET OR
+     BUCKYBALL_CORE_WORKLOAD_TARGET STREQUAL "")
+    message(FATAL_ERROR "Core workload target is required for ${NAME}")
+  endif()
+  if(NOT DEFINED BUCKYBALL_CORE_WORKLOAD_PROFILE OR
+     BUCKYBALL_CORE_WORKLOAD_PROFILE STREQUAL "" OR NOT ARG_SOURCES)
+    message(FATAL_ERROR "Core workload profile and sources are required for ${NAME}")
+  endif()
+  set(BUCKYBALL_CTEST_TARGET "${BUCKYBALL_CORE_WORKLOAD_TARGET}")
+  buckyball_ctest_name(_test ${BUCKYBALL_CTEST_TARGET} core-${NAME})
+  set(_elf "${_test}-multicore-baremetal")
+  set(_sources)
+  foreach(_source IN LISTS ARG_SOURCES)
+    buckyball_enforce_ctest_line_limit("${_source}")
+    list(APPEND _sources "${CMAKE_CURRENT_SOURCE_DIR}/${_source}")
+  endforeach()
+  set(_ball_includes)
+  foreach(_dir IN LISTS BUCKYBALL_BALL_WORKLOAD_DIRS)
+    list(APPEND _ball_includes -I${_dir})
+  endforeach()
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${_elf}"
+    COMMAND ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++
+      ${BUCKYBALL_CTEST_C_FLAGS}
+      -DBB_CORE_WORKLOAD_PROFILE=${BUCKYBALL_CORE_WORKLOAD_PROFILE}
+      -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
+      -I${BUCKYBALL_ISA_DIR}/chip
+      -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
+      ${_ball_includes}
+      -o ${_elf}
+      ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+      ${_sources}
+      ${WORKLOAD_LIB_DIR}/buckyball.c
+      ${BBHW_MEM_C}
+    DEPENDS ${_sources}
+      ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+      ${BUCKYBALL_ISA_DIR}/chip/topology.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  add_custom_target(${_test}-core-build
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${_elf}")
+  add_dependencies(core-ctests-build ${_test}-core-build)
+endfunction()
+
 # ===============================================================
 # Common workloads for all chips
 # ===============================================================
@@ -198,12 +250,13 @@ add_subdirectory(tlb)
 add_subdirectory(tutorial)
 add_subdirectory(embench)
 add_subdirectory(coremark)
+buckyball_add_core_workload_subdirs(ctests)
 
 # ===============================================================
 # Chip-specific workloads
 # ===============================================================
 set(BUCKYBALL_CHIP_WORKLOAD_DIR
-  ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}/workloads)
+  ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/workloads)
 
 if(NOT EXISTS ${BUCKYBALL_CHIP_WORKLOAD_DIR}/CMakeLists.txt)
   message(FATAL_ERROR
@@ -211,7 +264,7 @@ if(NOT EXISTS ${BUCKYBALL_CHIP_WORKLOAD_DIR}/CMakeLists.txt)
 endif()
 
 add_subdirectory(${BUCKYBALL_CHIP_WORKLOAD_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR}/chips/${BUCKYBALL_WORKLOAD_CHIP})
+  ${CMAKE_CURRENT_BINARY_DIR}/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP})
 
 if(NOT TARGET chip-workloads-build)
   message(FATAL_ERROR

@@ -23,7 +23,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     // Query interface for frontend to get group count
     val query_valid       = Input(Vec(nCores, Bool()))
     val query_hart_id     = Input(Vec(nCores, UInt(b.core.xLen.W)))
-    val query_vbank_id    = Input(Vec(nCores, UInt(8.W)))
+    val query_vbank_id    = Input(Vec(nCores, UInt(b.memDomain.vbankIdWidth.W)))
     val query_group_count = Output(Vec(nCores, UInt(log2Up(b.memDomain.bankNum + 1).W)))
   })
 
@@ -56,7 +56,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
     val hart_id  = UInt(b.core.xLen.W)
-    val vbank_id = UInt(5.W)
+    val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
     val group_id = UInt(log2Up(b.memDomain.bankNum).W)
   }
@@ -191,21 +191,24 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Query interface: return group count for a given vbank_id
   // -----------------------------------------------------------------------------
   for (q <- 0 until nCores) {
+    val queryValid  = RegNext(io.query_valid(q), false.B)
+    val queryHart   = RegNext(io.query_hart_id(q), 0.U)
+    val queryVbank  = RegNext(io.query_vbank_id(q), 0.U)
     val groupCounts = mappingTable.map { entry =>
-      val matches = io.query_valid(q) &&
+      val matches = queryValid &&
         entry.valid &&
-        (entry.hart_id === io.query_hart_id(q)) &&
-        (entry.vbank_id === io.query_vbank_id(q))
+        (entry.hart_id === queryHart) &&
+        (entry.vbank_id === queryVbank)
       val count   = Mux(entry.is_multi, entry.group_id +& 1.U, 1.U)
       Mux(matches, count, 0.U)
     }
 
-    io.query_group_count(q) := groupCounts.reduce((a, b) => Mux(a > b, a, b))
+    io.query_group_count(q) := RegNext(groupCounts.reduce((a, b) => Mux(a > b, a, b)), 0.U)
     val queryHit = groupCounts.map(_ =/= 0.U).reduce(_ || _)
-    when(io.query_valid(q) && !queryHit) {
+    when(queryValid && !queryHit) {
       printf(
-        p"[SharedMemBackend][QUERY_MISS] q=$q hart=${io.query_hart_id(q)} " +
-          p"vbank=0x${Hexadecimal(io.query_vbank_id(q))} returned group_count=0\n"
+        p"[SharedMemBackend][QUERY_MISS] q=$q hart=$queryHart " +
+          p"vbank=0x${Hexadecimal(queryVbank)} returned group_count=0\n"
       )
     }
   }

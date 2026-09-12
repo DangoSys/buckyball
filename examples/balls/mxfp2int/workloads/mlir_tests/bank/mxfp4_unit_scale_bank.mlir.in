@@ -1,0 +1,38 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x16xi8>) -> ()
+func.func @main() -> i8 {
+  %z8 = arith.constant 0 : i8
+  %raw = arith.constant -103 : i8
+  %scale = arith.constant 127 : i8
+  %z = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %inputDepth = arith.constant @BB_MXFP_BLOCKS@ : i64
+  %outputDepth = arith.constant @BB_BANK_LINES@ : i64
+  %scaleDepth = arith.constant @BB_MXFP_MMIO_ROWS@ : i64
+  %columns = arith.constant 16 : i64
+  %zero64 = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
+  %input = memref.alloc() : memref<@BB_MXFP_BLOCKS@x16xi8>
+  %scales = memref.alloc() : memref<@BB_MXFP_MMIO_ROWS@x16xi8>
+  %output = memref.alloc() : memref<@BB_BANK_LINES@x16xi8>
+  linalg.fill ins(%raw : i8) outs(%input : memref<@BB_MXFP_BLOCKS@x16xi8>)
+  linalg.fill ins(%scale : i8) outs(%scales : memref<@BB_MXFP_MMIO_ROWS@x16xi8>)
+  linalg.fill ins(%z8 : i8) outs(%output : memref<@BB_BANK_LINES@x16xi8>)
+  %inBank = buckyball.bank_alloc
+  %outBank = buckyball.bank_alloc
+  buckyball.mvin_mmio %scales %zero64 %scaleDepth %columns
+      : memref<@BB_MXFP_MMIO_ROWS@x16xi8> i64 i64 i64
+  %loaded = buckyball.bank_mvin %input %inBank %inputDepth %stride
+      : memref<@BB_MXFP_BLOCKS@x16xi8> i64 i64 i64
+  %result = buckyball.bank_mxfp2int %loaded %outBank %inputDepth %zero64
+      : i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %outputDepth %stride
+      : memref<@BB_BANK_LINES@x16xi8> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x16xi8>) -> ()
+  buckyball.bank_release %loaded : i64
+  buckyball.bank_release %stored : i64
+  memref.dealloc %input : memref<@BB_MXFP_BLOCKS@x16xi8>
+  memref.dealloc %scales : memref<@BB_MXFP_MMIO_ROWS@x16xi8>
+  memref.dealloc %output : memref<@BB_BANK_LINES@x16xi8>
+  return %z8 : i8
+}

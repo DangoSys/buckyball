@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import examples.balls.common.Fp32Mul
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.top.GlobalConfig
@@ -41,9 +40,9 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   private val robIdReg    = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   private val isSubReg    = RegInit(false.B)
   private val subRobIdReg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val inputBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val scaleBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val outputBank  = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val inputBank   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  private val scaleBank   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  private val outputBank  = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   private val iterReg     = RegInit(0.U(b.frontend.iter_len.W))
   private val rowReg      = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val reluReg     = RegInit(false.B)
@@ -115,9 +114,9 @@ class Int2Fp(val b: GlobalConfig) extends Module {
         assert(cmd.funct7 === funct.U, "Int2FpBall received an unknown funct7")
         assert(cmd.iter > 0.U && cmd.iter(1, 0) === 0.U, "INT32_TO_FP32 iter must be a positive multiple of four")
         assert(cmd.iter <= b.memDomain.bankEntries.U, "INT32_TO_FP32 input exceeds bank depth")
-        assert(cmd.op1_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 input bank is invalid")
-        assert(cmd.op2_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 scale bank is invalid")
-        assert(cmd.wr_bank < b.memDomain.bankNum.U, "INT32_TO_FP32 output bank is invalid")
+        assert(cmd.op1_bank < b.memDomain.virtualBankCount.U, "INT32_TO_FP32 input bank is invalid")
+        assert(cmd.op2_bank < b.memDomain.virtualBankCount.U, "INT32_TO_FP32 scale bank is invalid")
+        assert(cmd.wr_bank < b.memDomain.virtualBankCount.U, "INT32_TO_FP32 output bank is invalid")
         assert(
           cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U,
           "INT32_TO_FP32 operands must each occupy one bank"

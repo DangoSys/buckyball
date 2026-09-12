@@ -20,6 +20,7 @@ static elem_t in[ITER * ITER] __attribute__((aligned(64))) = {
     -27, 28, 29,  0,  31,  32, -33, 34,  0,   -36, 37,  38,  -39,
     0,   41, -42, 43, 44,  0,  46,  47,  -48, 49,
 };
+static elem_t packed[BANK_LINES * LANES] __attribute__((aligned(64)));
 static elem_t out[OUT_ROWS * LANES] __attribute__((aligned(64)));
 static elem_t exp[OUT_ROWS * LANES] __attribute__((aligned(64)));
 
@@ -52,11 +53,14 @@ int main(void) {
 #endif
   clear_i8_matrix(out, OUT_ROWS, LANES);
   build_expected();
+  clear_i8_matrix(packed, BANK_LINES, LANES);
+  for (int i = 0; i < ITER * ITER; ++i)
+    packed[i * LANES] = in[i];
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
-  bb_mvin((uintptr_t)in, 0, (ITER * ITER + LANES - 1) / LANES, 1);
-  bb_im2col(0, 1, ITER, K, STRIDE, PAD);
+  bb_mvin((uintptr_t)packed, 0, BANK_LINES, 1);
+  bb_im2col(0, 1, ITER, K, STRIDE, PAD, 0, 0, 0, 0, 0, WINDOWS);
   bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
   bb_fence();
   bb_mem_release(0);

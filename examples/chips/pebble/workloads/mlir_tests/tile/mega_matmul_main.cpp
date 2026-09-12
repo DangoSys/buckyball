@@ -20,9 +20,12 @@ extern "C" void check_result(float *allocated, float *aligned, int64_t offset,
     fail();
   for (int column = 0; column < 16; ++column) {
     float actual = aligned[offset + column * column_stride];
-    if (actual != 16.0f) {
-      printf("FAILED: mega_matmul column=%d expected=16 actual=%f\n", column,
-             actual);
+    int expected = column - 8;
+    for (int k = 0; k < 16; ++k)
+      expected += (k % 7 - 3) * ((2 * k + 3 * column) % 5 - 2);
+    if (actual != (float)expected) {
+      printf("FAILED: mega_matmul column=%d expected=%d actual=%f\n", column,
+             expected, actual);
       fail();
     }
   }

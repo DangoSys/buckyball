@@ -1,0 +1,44 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>) -> ()
+
+func.func @main() -> i8 {
+  %zeroI8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %group = arith.constant 0 : i64
+  %lines = arith.constant @BB_BANK_LINES@ : i64
+  %stride = arith.constant 1 : i64
+  %limit = arith.constant @BB_BANK_LINES@ : index
+  %lanes = arith.constant @BB_BANK_I32_LANES@ : index
+  %lane_count = arith.constant @BB_BANK_I32_LANES@ : i32
+  %seventeen = arith.constant 17 : i32
+  %bias = arith.constant 8 : i32
+
+  %input = memref.alloc() alignment = 64 : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
+  %output = memref.alloc() alignment = 64 : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
+
+  scf.for %line = %zero to %limit step %one {
+    scf.for %lane = %zero to %lanes step %one {
+      %line_i32 = arith.index_cast %line : index to i32
+      %lane_i32 = arith.index_cast %lane : index to i32
+      %base = arith.muli %line_i32, %lane_count : i32
+      %index = arith.addi %base, %lane_i32 : i32
+      %remainder = arith.remui %index, %seventeen : i32
+      %signed = arith.subi %remainder, %bias : i32
+      memref.store %signed, %input[%line, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
+    }
+  }
+
+  %bank = buckyball.bank_alloc {col = 1 : i64}
+  %loaded = buckyball.bank_mvin %input %bank %lines %stride
+      : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32> i64 i64 i64
+  %result = buckyball.bank_relu %loaded %group %lines %lines : i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %lines %stride
+      : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32> i64 i64 i64
+  buckyball.fence
+  buckyball.bank_release %stored : i64
+
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>) -> ()
+  memref.dealloc %input : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
+  memref.dealloc %output : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
+  return %zeroI8 : i8
+}

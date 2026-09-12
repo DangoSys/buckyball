@@ -1,3 +1,10 @@
 add_buckyball_ctests(
   mega_conv_pipeline_test.c
+  residual_add_lut_test.c
+  maxpool_im2col_test.c
+  se_gate_lut_test.c
+  dual_smatmul_matadd_test.c
+  dual_conv_add_int2fp_test.c
+  quant_smatmul_int2fp_test.c
+  smatmul_mvout_bank_reuse_test.c
 )

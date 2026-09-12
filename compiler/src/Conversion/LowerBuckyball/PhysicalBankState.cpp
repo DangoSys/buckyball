@@ -30,6 +30,10 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       value = op.getBank();
       continue;
     }
+    if (auto op = value.getDefiningOp<BankMvin2dOp>()) {
+      value = op.getBank();
+      continue;
+    }
     if (auto op = value.getDefiningOp<BankMvoutOp>()) {
       value = op.getBank();
       continue;
@@ -76,6 +80,15 @@ std::optional<int64_t> PhysicalBankState::getConstI64(Value value) const {
       }
       if (name == "buckyball.bank_smatmul" ||
           name == "buckyball.bank_vecmat16") {
+        value = op->getOperand(2);
+        continue;
+      }
+      if (name == "buckyball.bank_gemmini_preload") {
+        value = op->getOperand(1);
+        continue;
+      }
+      if (name == "buckyball.bank_gemmini_compute_preloaded" ||
+          name == "buckyball.bank_gemmini_compute_accumulated") {
         value = op->getOperand(2);
         continue;
       }

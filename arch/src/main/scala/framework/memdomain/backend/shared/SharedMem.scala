@@ -7,9 +7,16 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.banks.{SramReadResp, SramWriteResp}
 
 object SharedMemLayout {
-  def bankPerHart(b: GlobalConfig): Int = b.memDomain.bankNum
-  def maxHart(b:     GlobalConfig): Int = b.top.nCores
-  def totalBank(b:   GlobalConfig): Int = bankPerHart(b) * maxHart(b)
+
+  def totalBank(b: GlobalConfig): Int = {
+    require(b.memDomain.sharedEnable, "shared memory is disabled")
+    require(b.memDomain.sharedEntries > 0, "sharedEntries must be > 0")
+    require(
+      b.memDomain.sharedEntries % b.memDomain.bankEntries == 0,
+      s"sharedEntries(${b.memDomain.sharedEntries}) must be divisible by bankEntries(${b.memDomain.bankEntries})"
+    )
+    b.memDomain.sharedEntries / b.memDomain.bankEntries
+  }
 
   def channelPerHart(b: GlobalConfig): Int = {
     if (!b.memDomain.sharedEnable) {

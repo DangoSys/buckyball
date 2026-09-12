@@ -9,6 +9,20 @@ get_filename_component(BUCKYBALL_REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
 set(WORKLOAD_LIB_DIR ${WORKLOAD_DIR}/lib)
 set(BBSW_BAREMETAL_DIR ${WORKLOAD_LIB_DIR}/bbsw/baremetal)
 
+function(buckyball_ctest_name OUT CORE TEST)
+  if("${CORE}" STREQUAL "" OR "${TEST}" STREQUAL "")
+    message(FATAL_ERROR "buckyball_ctest_name requires core and test")
+  endif()
+  set(${OUT} "${BUCKYBALL_WORKLOAD_CHIP}-${CORE}-ctest-${TEST}" PARENT_SCOPE)
+endfunction()
+
+function(buckyball_mlirtest_name OUT CORE TEST)
+  if("${CORE}" STREQUAL "" OR "${TEST}" STREQUAL "")
+    message(FATAL_ERROR "buckyball_mlirtest_name requires core and test")
+  endif()
+  set(${OUT} "${BUCKYBALL_WORKLOAD_CHIP}-${CORE}-mlirtest-${TEST}" PARENT_SCOPE)
+endfunction()
+
 set(RISCV_GNU_TOOLCHAIN $ENV{RISCV})
 set(BUDDY_MLIR_DIR ${BUCKYBALL_REPO_ROOT}/compiler/thirdparty/buddy-mlir)
 set(BUDDY_BINARY_DIR $ENV{BUDDY_MLIR_BUILD_DIR}/bin)
@@ -22,12 +36,15 @@ if(BUCKYBALL_WORKLOAD_CHIP STREQUAL "")
   message(FATAL_ERROR
     "BUCKYBALL_WORKLOAD_CHIP is required. Pass -DBUCKYBALL_WORKLOAD_CHIP=<chip>.")
 endif()
+set(BUCKYBALL_WORKLOAD_SOURCE_CHIP "${BUCKYBALL_WORKLOAD_CHIP}" CACHE STRING
+    "Buckyball chip source tree for workloads")
 if(NOT IS_DIRECTORY
-    "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_CHIP}")
+    "${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}")
   message(FATAL_ERROR
-    "Buckyball workload chip does not exist: ${BUCKYBALL_WORKLOAD_CHIP}")
+    "Buckyball workload source chip does not exist: ${BUCKYBALL_WORKLOAD_SOURCE_CHIP}")
 endif()
-message(STATUS "Buckyball workload chip: ${BUCKYBALL_WORKLOAD_CHIP}")
+message(STATUS
+  "Buckyball workload instance: ${BUCKYBALL_WORKLOAD_CHIP} (source: ${BUCKYBALL_WORKLOAD_SOURCE_CHIP})")
 
 if(NOT IS_ABSOLUTE "${Python3_EXECUTABLE}")
   find_program(BUCKYBALL_PYTHON3_EXECUTABLE NAMES python3)
@@ -48,6 +65,9 @@ endforeach()
 if(NOT EXISTS "${BUCKYBALL_CHIP_PB}")
   message(FATAL_ERROR "missing Chip.pb: ${BUCKYBALL_CHIP_PB}")
 endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${BUCKYBALL_CHIP_PB}"
+  "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py")
 set(BUCKYBALL_ISA_DIR "${CMAKE_BINARY_DIR}/generated/isa")
 execute_process(
   COMMAND "${Python3_EXECUTABLE}"
@@ -82,6 +102,22 @@ endif()
 string(REPLACE "\n" ";" BUCKYBALL_BANK_TARGETS
   "${BUCKYBALL_BANK_TARGETS_RAW}")
 list(REMOVE_ITEM BUCKYBALL_BANK_TARGETS "")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}"
+    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    --repo "${BUCKYBALL_REPO_ROOT}"
+    --chip-pb "${BUCKYBALL_CHIP_PB}"
+    --print-core-workload-targets
+  RESULT_VARIABLE BUCKYBALL_CORE_TARGETS_RESULT
+  OUTPUT_VARIABLE BUCKYBALL_CORE_TARGETS_RAW
+  ERROR_VARIABLE BUCKYBALL_CORE_TARGETS_ERROR)
+if(NOT BUCKYBALL_CORE_TARGETS_RESULT EQUAL 0)
+  message(FATAL_ERROR
+    "failed to get Core workload targets: ${BUCKYBALL_CORE_TARGETS_ERROR}")
+endif()
+string(REPLACE "\n" ";" BUCKYBALL_CORE_TARGETS
+  "${BUCKYBALL_CORE_TARGETS_RAW}")
+list(REMOVE_ITEM BUCKYBALL_CORE_TARGETS "")
 set(BUCKYBALL_TARGET_BALL_LINES)
 set(BUCKYBALL_RUSHB_TARGET_LINES)
 foreach(BUCKYBALL_TARGET_LINE ${BUCKYBALL_TARGETS})
@@ -105,6 +141,7 @@ foreach(_BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
 endforeach()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
+message(STATUS "Buckyball Core workload targets: ${BUCKYBALL_CORE_TARGETS}")
 message(STATUS "Buckyball rushB targets: ${BUCKYBALL_RUSHB_TARGET_LINES}")
 
 function(buckyball_rushb_cores OUT_VAR TARGET)
@@ -331,6 +368,23 @@ function(buckyball_add_ball_workload_subdirs KIND)
   endforeach()
 endfunction()
 
+function(buckyball_add_core_workload_subdirs KIND)
+  foreach(_entry IN LISTS BUCKYBALL_CORE_TARGETS)
+    if(NOT _entry MATCHES "^([^:]+):([^:]+):([0-9]+)$")
+      message(FATAL_ERROR "invalid Core workload target: ${_entry}")
+    endif()
+    set(BUCKYBALL_CORE_WORKLOAD_TARGET "${CMAKE_MATCH_1}")
+    set(_pkg "${CMAKE_MATCH_2}")
+    set(BUCKYBALL_CORE_WORKLOAD_PROFILE "${CMAKE_MATCH_3}")
+    set(_src
+      "${BUCKYBALL_REPO_ROOT}/examples/cores/${_pkg}/workloads/${KIND}")
+    if(IS_DIRECTORY "${_src}")
+      add_subdirectory("${_src}"
+        "${CMAKE_CURRENT_BINARY_DIR}/cores/${BUCKYBALL_CORE_WORKLOAD_TARGET}/${KIND}")
+    endif()
+  endforeach()
+endfunction()
+
 function(add_toy_mlir_rushb)
   cmake_parse_arguments(ARG "CXX" "NAME;TARGET_STEM;TARGET"
     "FRONT_PASSES;SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
@@ -442,7 +496,7 @@ endif()
 
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)
 if(BUCKYBALL_STABLE)
-  set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbuckyball,+D")
+  set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbuckyball,+m,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL "--lower-buckyball=stable=true")
   set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB
       "--lower-buckyball=stable=true rushb=true")
@@ -451,7 +505,7 @@ if(BUCKYBALL_STABLE)
   set(BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS
       "--lower-bank-ssa-to-intrinsics=stable=true rushb=true")
 else()
-  set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+D")
+  set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+m,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL -lower-buckyball)
   set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB "--lower-buckyball=rushb=true")
   set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
@@ -478,6 +532,7 @@ add_custom_target(ctest-workloads-build
     base-ctests-build
     tlb-ctests-build
     tutorial-ctests-build
+    core-ctests-build
     chip-ctests-build
   COMMENT "Building CTest workloads"
 )
@@ -529,7 +584,7 @@ add_custom_target(sync-bin
           --filter="P_src/CTest/rushB/***"
           --filter="P_src/MLIRTest/rushB/"
           --filter="P_src/MLIRTest/rushB/***"
-          --include="**/chips/${BUCKYBALL_WORKLOAD_CHIP}/"
+          --include="**/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/"
           --exclude="**/chips/*/"
           --include="*/"
           --include="*-baremetal"

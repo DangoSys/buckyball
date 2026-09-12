@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
+use super::super::bank::{bank_lines, bank_row_bytes};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
@@ -95,16 +95,13 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if xs2 >> 63 != 0 {
         panic!("im2col: rs2[63] must be zero");
     }
-    if input_bank >= bank_num() as u64 || output_bank >= bank_num() as u64 {
-        panic!("im2col: invalid bank id");
-    }
     if input_bank == output_bank {
         panic!("im2col: input and output banks must differ");
     }
-    if !ctx.cfgs[input_bank as usize].allocated || !ctx.cfgs[output_bank as usize].allocated {
+    if !ctx.config(input_bank).allocated || !ctx.config(output_bank).allocated {
         panic!("im2col: bank not allocated");
     }
-    if ctx.cfgs[input_bank as usize].cols != 1 || ctx.cfgs[output_bank as usize].cols != 1 {
+    if ctx.config(input_bank).cols != 1 || ctx.config(output_bank).cols != 1 {
         panic!("im2col: input and output banks must each have one column");
     }
 
@@ -113,8 +110,8 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let (_, output_bank_rows) = footprints(shape);
     let kernel_values = shape.kernel * shape.kernel;
     let kernel_tiles = kernel_values.div_ceil(TILE);
-    let pi = pbank(ctx.bank_map, input_bank);
-    let po = pbank(ctx.bank_map, output_bank);
+    let pi = pbank(ctx, input_bank);
+    let po = pbank(ctx, output_bank);
     let (input, output) = ctx.banks.read_write(pi, po);
     output[..output_bank_rows * bank_row_bytes()].fill(0);
 
@@ -124,9 +121,11 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let output_col = global_window % output_cols;
         for kernel_row in 0..shape.kernel {
             for kernel_col in 0..shape.kernel {
-                let source_row = (shape.start_row + output_row * shape.stride + kernel_row) as isize
+                let source_row = (shape.start_row + output_row * shape.stride + kernel_row)
+                    as isize
                     - shape.padding as isize;
-                let source_col = (shape.start_col + output_col * shape.stride + kernel_col) as isize
+                let source_col = (shape.start_col + output_col * shape.stride + kernel_col)
+                    as isize
                     - shape.padding as isize;
                 if source_row < 0
                     || source_col < 0
@@ -136,7 +135,8 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                     continue;
                 }
                 let kernel_element = kernel_row * shape.kernel + kernel_col;
-                let bank_row = ((local_window / TILE) * kernel_tiles + kernel_element / TILE) * TILE
+                let bank_row = ((local_window / TILE) * kernel_tiles + kernel_element / TILE)
+                    * TILE
                     + local_window % TILE;
                 let lane = kernel_element % TILE;
                 let source = source_row as usize * shape.input_size + source_col as usize;

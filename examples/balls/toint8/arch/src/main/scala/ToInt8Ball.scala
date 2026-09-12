@@ -47,9 +47,9 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   private val robIdReg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   private val isSubReg     = RegInit(false.B)
   private val subRobIdReg  = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  private val inputBank    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val scaleBank    = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  private val outputBank   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  private val inputBank    = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  private val scaleBank    = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  private val outputBank   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   private val iterReg      = RegInit(0.U(b.frontend.iter_len.W))
   private val inputBaseReg = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   // Relative row within the command.  inputBaseReg is the absolute bank row.
@@ -167,8 +167,8 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
         assert(isF32 || isI32, "ToInt8Ball received an unknown funct7")
         assert(cmd.iter > 0.U && cmd.iter(1, 0) === 0.U, "ToInt8Ball iter must be a positive multiple of four")
         assert(cmd.iter <= b.memDomain.bankEntries.U, "ToInt8Ball input exceeds bank depth")
-        assert(cmd.rs1(9, 0) < b.memDomain.bankNum.U, "ToInt8Ball input bank is invalid")
-        assert(cmd.rs1(29, 20) < b.memDomain.bankNum.U, "ToInt8Ball output bank is invalid")
+        assert(cmd.rs1(9, 0) < b.memDomain.virtualBankCount.U, "ToInt8Ball input bank is invalid")
+        assert(cmd.rs1(29, 20) < b.memDomain.virtualBankCount.U, "ToInt8Ball output bank is invalid")
         assert(cmd.op1_col === 1.U && cmd.wr_col === 1.U, "ToInt8Ball input and output must each occupy one bank")
         assert(cmd.op1_bank =/= cmd.wr_bank, "ToInt8Ball input and output banks must differ")
         when(isF32) {
@@ -176,7 +176,7 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
           assert(cmd.rs2(63, 32) === 0.U, "QUANT_F32_TO_I8 reserves rs2[63:32]")
           assert(positiveFinite(cmd.rs2(31, 0)), "QUANT_F32_TO_I8 scale must be finite and positive")
         }.otherwise {
-          assert(cmd.rs1(19, 10) < b.memDomain.bankNum.U, "QUANT_I32_TO_I8 scale bank is invalid")
+          assert(cmd.rs1(19, 10) < b.memDomain.virtualBankCount.U, "QUANT_I32_TO_I8 scale bank is invalid")
           assert(cmd.op2_col === 1.U, "QUANT_I32_TO_I8 scale must occupy one bank")
           assert(cmd.op1_bank =/= cmd.op2_bank, "QUANT_I32_TO_I8 input and scale banks must differ")
           assert(cmd.op2_bank =/= cmd.wr_bank, "QUANT_I32_TO_I8 scale and output banks must differ")

@@ -15,6 +15,11 @@ add_subdirectory(ctests)
 add_subdirectory(mlir_tests)
 buckyball_add_ball_workload_subdirs(ctests)
 
+if(NOT TARGET balls-mlir-tests-build)
+  message(FATAL_ERROR "Pebble workloads require the global Ball MLIR test target")
+endif()
+add_dependencies(pebble-mlir-tests-build balls-mlir-tests-build)
+
 add_custom_target(chip-ctests-build DEPENDS pebble-ctests-build)
 add_custom_target(chip-mlirtests-build DEPENDS pebble-mlir-tests-build)
 

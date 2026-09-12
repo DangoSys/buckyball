@@ -1,4 +1,4 @@
-use super::super::bank::{bank_num, bank_row_bytes, bank_size, bank_width};
+use super::super::bank::{bank_row_bytes, bank_size, bank_width};
 use super::decode::{pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
@@ -10,9 +10,6 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 
     if xs2 >> 8 != 0 {
         panic!("transpose: rs2[63:8] must be 0");
-    }
-    if op1 >= bank_num() as u64 || wr >= bank_num() as u64 {
-        panic!("transpose: invalid bank_id");
     }
     if op1 == wr {
         panic!("transpose: op1 and wr must differ");
@@ -31,9 +28,11 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         );
     }
 
-    let c1 = ctx.cfgs[op1 as usize].cols as usize;
-    let cw = ctx.cfgs[wr as usize].cols as usize;
-    if !ctx.cfgs[op1 as usize].allocated || !ctx.cfgs[wr as usize].allocated {
+    let input = *ctx.config(op1);
+    let output = *ctx.config(wr);
+    let c1 = input.cols as usize;
+    let cw = output.cols as usize;
+    if !input.allocated || !output.allocated {
         panic!("transpose: bank not allocated");
     }
     if c1 == 0 || c1 != cw {
@@ -58,7 +57,7 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let mut src = vec![0u8; total * elem_bytes];
     for r in 0..iter {
         for g in 0..n {
-            let p = pbank_group(ctx.bank_map, op1, g as u64);
+            let p = pbank_group(ctx, op1, g as u64);
             let bank_off = r * row_bytes;
             let flat_off = (r * w + g * epg) * elem_bytes;
             src[flat_off..flat_off + row_bytes]
@@ -81,7 +80,7 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let virt_col = idx % w;
         let g = virt_col / epg;
         let lane = virt_col % epg;
-        let p = pbank_group(ctx.bank_map, wr, g as u64);
+        let p = pbank_group(ctx, wr, g as u64);
         let bank_off = virt_row * row_bytes + lane * elem_bytes;
         if bank_off + elem_bytes > bank_size() {
             panic!("transpose: dst bank range idx={idx}");

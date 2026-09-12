@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num};
+use super::super::bank::bank_lines;
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
@@ -7,24 +7,18 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let scale_bank = rs1_b1(xs1);
     let output_bank = rs1_b2(xs1);
     let iter = rs1_iter(xs1) as usize;
-    if input_bank >= bank_num() as u64
-        || scale_bank >= bank_num() as u64
-        || output_bank >= bank_num() as u64
-    {
-        panic!("int32_to_fp32: invalid bank id");
-    }
     if input_bank == scale_bank || input_bank == output_bank || scale_bank == output_bank {
         panic!("int32_to_fp32: banks must be distinct");
     }
-    if !ctx.cfgs[input_bank as usize].allocated
-        || !ctx.cfgs[scale_bank as usize].allocated
-        || !ctx.cfgs[output_bank as usize].allocated
+    if !ctx.config(input_bank).allocated
+        || !ctx.config(scale_bank).allocated
+        || !ctx.config(output_bank).allocated
     {
         panic!("int32_to_fp32: bank not allocated");
     }
-    if ctx.cfgs[input_bank as usize].cols != 1
-        || ctx.cfgs[scale_bank as usize].cols != 1
-        || ctx.cfgs[output_bank as usize].cols != 1
+    if ctx.config(input_bank).cols != 1
+        || ctx.config(scale_bank).cols != 1
+        || ctx.config(output_bank).cols != 1
     {
         panic!("int32_to_fp32: operands must each occupy one bank");
     }
@@ -36,16 +30,15 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     }
     let relu = xs2 & 1 != 0;
 
-    let input = pbank(ctx.bank_map, input_bank);
-    let scale = pbank(ctx.bank_map, scale_bank);
-    let output = pbank(ctx.bank_map, output_bank);
+    let input = pbank(ctx, input_bank);
+    let scale = pbank(ctx, scale_bank);
+    let output = pbank(ctx, output_bank);
     for row in 0..iter {
         for lane in 0..4 {
             let offset = row * 16 + lane * 4;
             let scale_offset = (row % 4) * 16 + lane * 4;
-            let value = i32::from_le_bytes(
-                ctx.banks[input][offset..offset + 4].try_into().unwrap(),
-            );
+            let value =
+                i32::from_le_bytes(ctx.banks[input][offset..offset + 4].try_into().unwrap());
             let factor = f32::from_bits(u32::from_le_bytes(
                 ctx.banks[scale][scale_offset..scale_offset + 4]
                     .try_into()

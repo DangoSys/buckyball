@@ -21,7 +21,7 @@ class MemDecodeCmd(b: GlobalConfig) extends Bundle {
 
   val mem_addr = UInt(b.memDomain.memAddrLen.W)
   val iter     = UInt(b.frontend.iter_len.W)
-  val bank_id  = UInt(log2Up(b.memDomain.bankNum).W)
+  val bank_id  = UInt(b.memDomain.vbankIdWidth.W)
   val special  = UInt(64.W)
 }
 
@@ -44,7 +44,6 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   import MemDefaultConstants._
 
   private val sharedBankIdBase = b.frontend.shared_bank_id_base
-  private val bankIdxAlign     = 1 << log2Ceil(b.memDomain.bankNum)
   require(sharedBankIdBase > 0, s"sharedBankIdBase($sharedBankIdBase) must be > 0")
   require(
     sharedBankIdBase < (1 << b.frontend.bank_id_len),
@@ -53,14 +52,6 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   require(
     sharedBankIdBase > b.frontend.vbank_id_upper_bound,
     s"sharedBankIdBase($sharedBankIdBase) must be > vbankIdUpperBound(${b.frontend.vbank_id_upper_bound})"
-  )
-  require(
-    sharedBankIdBase >= b.memDomain.bankNum,
-    s"sharedBankIdBase($sharedBankIdBase) must be >= bankNum(${b.memDomain.bankNum})"
-  )
-  require(
-    sharedBankIdBase % bankIdxAlign == 0,
-    s"sharedBankIdBase($sharedBankIdBase) must be aligned to bank index width 2^ceil(log2(bankNum))=$bankIdxAlign"
   )
 
   @public
@@ -111,11 +102,12 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  val raw_bank_id = rs1(9, 0)
+  val raw_bank_id    = rs1(9, 0)
+  val shared_bank_id = b.memDomain.sharedEnable.B && raw_bank_id >= sharedBankIdBase.U
   // format: off
-  // BB_BANK0 is encoded in rs1[9:0]. Use the full raw field to detect
-  // shared banks (id >= sharedBankIdBase) before truncating to local vbank width.
-  io.mem_decode_cmd_o.bits.is_shared    := io.mem_decode_cmd_o.valid && (raw_bank_id >= sharedBankIdBase.U)
+  // BB_BANK0 is encoded in rs1[9:0]. Keep the configured architectural ID;
+  // private and shared banks occupy disjoint ranges in that namespace.
+  io.mem_decode_cmd_o.bits.is_shared    := io.mem_decode_cmd_o.valid && shared_bank_id
   io.mem_decode_cmd_o.bits.is_load      := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.LD_EN.id).asBool, false.B)
   io.mem_decode_cmd_o.bits.is_store     := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ST_EN.id).asBool, false.B)
   io.mem_decode_cmd_o.bits.is_config    := Mux(io.mem_decode_cmd_o.valid, func7 === MSET_BITPAT, false.B)
@@ -131,7 +123,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   }
 
   val ls_bank_id = ls_decode_list(LSDecodeFields.BANK_ID.id).asUInt
-  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, ls_bank_id, 0.U(log2Up(b.memDomain.bankNum).W))
+  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, ls_bank_id, 0.U(b.memDomain.vbankIdWidth.W))
   io.mem_decode_cmd_o.bits.special := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.SPECIAL.id).asUInt, 0.U(64.W))
   // format: on
 }

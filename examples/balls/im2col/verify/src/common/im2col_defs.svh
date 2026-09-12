@@ -4,6 +4,7 @@ typedef struct {
   int unsigned ksize;
   int unsigned stride;
   int unsigned padding;
+  int unsigned window_count;
   int unsigned op1_bank;
   int unsigned wr_bank;
   int unsigned op1_col;

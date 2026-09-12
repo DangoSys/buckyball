@@ -1,7 +1,0 @@
-[workloads]
-search_path = "workloads/src"
-tests = [
-  "toy-toy-ctest-mvin_mvout_test-rushB-verilator-run",
-  "toy-toy-ctest-bdb_counter_test-rushB-verilator-run",
-  "toy-toy-ctest-mvin_mvout_stride_test-rushB-verilator-run",
-]

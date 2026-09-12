@@ -8,7 +8,7 @@ import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 class MemConfigerIO(val b: GlobalConfig) extends Bundle {
-  val vbank_id  = Output(UInt(8.W))
+  val vbank_id  = Output(UInt(b.memDomain.vbankIdWidth.W))
   val is_shared = Output(Bool())
   val is_multi  = Output(Bool())
   val alloc     = Output(Bool())
@@ -36,7 +36,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   val is_shared_reg  = RegInit(false.B)
   val col_reg        = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
   val clear_reg      = RegInit(false.B)
-  val vbank_id_reg   = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val vbank_id_reg   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val rob_id_reg     = RegInit(0.U(rob_id_width.W))
   val is_sub_reg     = RegInit(false.B)
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
@@ -48,7 +48,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.config.bits.is_multi    := false.B
   io.config.bits.is_shared   := false.B
   io.config.bits.alloc       := false.B
-  io.config.bits.vbank_id    := 0.U(8.W)
+  io.config.bits.vbank_id    := 0.U(b.memDomain.vbankIdWidth.W)
   io.config.bits.group_id    := 0.U
   io.config.bits.hart_id     := io.hartid
   io.config.valid            := false.B

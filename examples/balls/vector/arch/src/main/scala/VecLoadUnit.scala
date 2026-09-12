@@ -9,9 +9,9 @@ import framework.top.GlobalConfig
 import examples.balls.vector.configs.VectorBallParam
 
 class ctrl_ld_req(b: GlobalConfig) extends Bundle {
-  val op1_bank      = UInt(log2Up(b.memDomain.bankNum).W)
+  val op1_bank      = UInt(b.memDomain.vbankIdWidth.W)
   val op1_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
-  val op2_bank      = UInt(log2Up(b.memDomain.bankNum).W)
+  val op2_bank      = UInt(b.memDomain.vbankIdWidth.W)
   val op2_bank_addr = UInt(log2Up(b.memDomain.bankEntries).W)
   val iter          = UInt(b.frontend.iter_len.W)
   val mode          = UInt(1.W)
@@ -40,12 +40,12 @@ class VecLoadUnit(val b: GlobalConfig) extends Module {
     val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
     val ctrl_ld_i    = Flipped(Decoupled(new ctrl_ld_req(b)))
     val ld_ex_o      = Decoupled(new ld_ex_req(b))
-    val op1_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
-    val op2_bank_o   = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val op1_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
+    val op2_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
   })
 
-  val op1_bank            = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
-  val op2_bank            = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val op1_bank            = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val op2_bank            = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val op1_addr            = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val op2_addr            = RegInit(0.U(log2Up(b.memDomain.bankEntries).W))
   val iter                = RegInit(0.U(b.frontend.iter_len.W))

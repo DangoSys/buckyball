@@ -18,10 +18,11 @@ int main() {
 #endif
   printf("=== Gemmini OS RISC Basic Test ===\n");
 
-  for (int i = 0; i < DIM * DIM; i++) {
-    mat_a[i] = (elem_t)((i + 1) % 128);
-    mat_b[i] = (elem_t)((2 * (i + 1)) % 128);
-  }
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
 
   uint32_t bank_a = 0, bank_b = 1, bank_c = 2, bank_d_zeros = 3;
@@ -34,8 +35,8 @@ int main() {
   bb_mvin((uintptr_t)zeros, bank_d_zeros, DIM, 1);
   bb_gemmini_config(0, 0, 0, 0, 0);
   /* Preload D from zeros bank so C = A*B + D = A*B (not A*B + A) */
-  bb_gemmini_preload(bank_d_zeros, bank_c, DIM);
-  bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM);
+  bb_gemmini_preload(bank_d_zeros, bank_c, DIM, 0, 0);
+  bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM, 0, 0, 0);
   bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
   bb_fence();
   bb_mem_release(bank_a);

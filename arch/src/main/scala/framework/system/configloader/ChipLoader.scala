@@ -78,8 +78,26 @@ object ChipLoader {
       if (hasBuckyball) tile.getMemBallChannelNum
       else 0
 
-    val shared        = tile.getSharedMem
-    val privateDCache =
+    val shared           = tile.getSharedMem
+    val virtualBankCount = tile.getVirtualBankCount
+    require(virtualBankCount > 0, s"tile ${tile.getPath}: virtual_bank_count must be > 0")
+    require(indices.nonEmpty, s"tile ${tile.getPath}: core_indices must not be empty")
+    if (shared.getEnable) {
+      val first     = cores(indices.head)
+      val firstBank = first.getMem.getBank
+      indices.iterator.map(idx => cores(idx)).filter(_.getBalldomain.getBallNum > 0).foreach { core =>
+        require(
+          core.getMem.getBank.getWidth == firstBank.getWidth,
+          s"tile ${tile.getPath}: all Buckyball cores must use shared bank width ${firstBank.getWidth}"
+        )
+      }
+      require(shared.getEntries > 0, s"tile ${tile.getPath}: shared entries must be > 0")
+      require(
+        shared.getEntries % firstBank.getEntries == 0,
+        s"tile ${tile.getPath}: shared entries ${shared.getEntries} must be divisible by slot-0 bank entries ${firstBank.getEntries}"
+      )
+    }
+    val privateDCache    =
       if (!tile.hasPrivateDcache || !tile.getPrivateDcache.getEnable) None
       else {
         val dcache = tile.getPrivateDcache
@@ -95,7 +113,7 @@ object ChipLoader {
       }
 
     val coreEntries    = indices.map { idx =>
-      parseCore(cores(idx), shared, memBallChannelNum, nCores, repo)
+      parseCore(cores(idx), shared, virtualBankCount, memBallChannelNum, nCores, repo)
     }
     val buckyballCores = coreEntries.map(_._1).map(_.map { cfg =>
       cfg.copy(top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores))
@@ -109,25 +127,45 @@ object ChipLoader {
   private def parseCore(
     core:              CoreInstance,
     shared:            SharedMemConfig,
+    virtualBankCount:  Int,
     memBallChannelNum: Int,
     nCores:            Int,
     repo:              Path
   ): (Option[GlobalConfig], RocketCoreParam) = {
-    val rocket = parseRocketCore(core.getRocketCore)
-    val domain = core.getBalldomain
+    val rocket   = parseRocketCore(core.getRocketCore)
+    val domain   = core.getBalldomain
     if (domain.getBallNum == 0) {
       return (None, rocket)
     }
     require(core.hasFrontend, s"core ${core.getPkg} missing frontend config")
     require(core.hasGpDomain, s"core ${core.getPkg} missing gpdomain config")
     require(core.hasCore, s"core ${core.getPkg} missing core config")
+    val frontend = core.getFrontend
+    require(
+      virtualBankCount <= (1 << frontend.getBankIdLen),
+      s"core ${core.getPkg}: virtual_bank_count $virtualBankCount does not fit bank_id_len ${frontend.getBankIdLen}"
+    )
+    require(
+      frontend.getVbankIdUpperBound < virtualBankCount,
+      s"core ${core.getPkg}: private vbank upper bound ${frontend.getVbankIdUpperBound} must be below virtual_bank_count $virtualBankCount"
+    )
+    if (shared.getEnable) {
+      require(
+        frontend.getSharedBankIdBase > frontend.getVbankIdUpperBound,
+        s"core ${core.getPkg}: shared bank base must be above the private vbank range"
+      )
+      require(
+        frontend.getSharedBankIdBase <= virtualBankCount,
+        s"core ${core.getPkg}: shared bank base ${frontend.getSharedBankIdBase} exceeds virtual_bank_count $virtualBankCount"
+      )
+    }
 
     val buckyball = GlobalConfig().copy(
       ballDomain = parseBallDomain(core, repo),
       frontend = parseFrontend(core.getFrontend),
       gpDomain = parseGpDomain(core.getGpDomain),
       core = parseCoreParam(core.getCore),
-      memDomain = parseMemDomain(core.getMem, shared),
+      memDomain = parseMemDomain(core.getMem, shared, virtualBankCount),
       rocketCore = rocket,
       top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores)
     )
@@ -154,7 +192,11 @@ object ChipLoader {
     BallDomainParam(ballNum = domain.getBallNum, ballIdMappings = mappings, ballISA = isa)
   }
 
-  private def parseMemDomain(mem: MemDomainConfig, shared: SharedMemConfig): MemDomainParam = {
+  private def parseMemDomain(
+    mem:              MemDomainConfig,
+    shared:           SharedMemConfig,
+    virtualBankCount: Int
+  ): MemDomainParam = {
     val bank = mem.getBank
     val dma  = mem.getDma
     val tlb  = mem.getTlb
@@ -165,6 +207,7 @@ object ChipLoader {
       bankWidth = bank.getWidth,
       bankEntries = bank.getEntries,
       bankMaskLen = bank.getMaskLen,
+      virtualBankCount = virtualBankCount,
       sharedEnable = shared.getEnable,
       sharedEntries = shared.getEntries,
       sharedInputChannels = shared.getInputChannels,

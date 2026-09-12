@@ -1,0 +1,51 @@
+func.func private @check_result(memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %one_f32 = arith.constant 1.0 : f32
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %four = arith.constant 4 : index
+  %sixteen = arith.constant 16 : index
+  %rows = arith.constant @BB_QUANT_I32_OUTPUT_ROWS@ : index
+  %depth = arith.constant @BB_QUANT_I32_INPUT_ROWS@ : i64
+  %scale_depth = arith.constant 4 : i64
+  %out_depth = arith.constant @BB_QUANT_I32_OUTPUT_ROWS@ : i64
+  %zero64 = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
+  %input = memref.alloc() : memref<@BB_QUANT_I32_INPUT_ROWS@x4xi32>
+  %scale = memref.alloc() : memref<4x4xf32>
+  %seed = memref.alloc() : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  %output = memref.alloc() : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  linalg.fill ins(%one_f32 : f32) outs(%scale : memref<4x4xf32>)
+  linalg.fill ins(%zero_i8 : i8) outs(%seed : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>)
+  scf.for %position = %zero to %rows step %one {
+    scf.for %channel = %zero to %sixteen step %one {
+      %base = arith.muli %position, %sixteen : index
+      %linear = arith.addi %base, %channel : index
+      %value = arith.index_cast %linear : index to i32
+      %row_base = arith.muli %position, %four : index
+      %channel_row = arith.divui %channel, %four : index
+      %row = arith.addi %row_base, %channel_row : index
+      %lane = arith.remui %channel, %four : index
+      memref.store %value, %input[%row, %lane] : memref<@BB_QUANT_I32_INPUT_ROWS@x4xi32>
+    }
+  }
+  %input_bank = buckyball.bank_alloc
+  %scale_bank = buckyball.bank_alloc
+  %output_bank = buckyball.bank_alloc
+  %loaded_input = buckyball.bank_mvin %input %input_bank %depth %stride : memref<@BB_QUANT_I32_INPUT_ROWS@x4xi32> i64 i64 i64
+  %loaded_scale = buckyball.bank_mvin %scale %scale_bank %scale_depth %stride : memref<4x4xf32> i64 i64 i64
+  %loaded_output = buckyball.bank_mvin %seed %output_bank %out_depth %stride : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %result = buckyball.bank_quant_i32_to_i8 %loaded_input %loaded_scale %loaded_output %depth %zero64 %zero64 {outputHeight = @BB_QUANT_I32_OUTPUT_ROWS@ : i64, outputStride = 1 : i64, outputWidth = 1 : i64, relu = false} : i64 i64 i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %out_depth %stride : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%output) : (memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
+  buckyball.bank_release %loaded_input : i64
+  buckyball.bank_release %loaded_scale : i64
+  buckyball.bank_release %stored : i64
+  memref.dealloc %input : memref<@BB_QUANT_I32_INPUT_ROWS@x4xi32>
+  memref.dealloc %scale : memref<4x4xf32>
+  memref.dealloc %seed : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %output : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  return %zero_i8 : i8
+}

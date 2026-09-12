@@ -195,14 +195,16 @@ def _workload_src(repo: Path) -> Path:
     return src
 
 
-def _workload_build_dir(repo: Path, chip: str) -> Path:
-    return repo / "bb-tests" / "workloads" / "build" / chip
+def _workload_build_dir(repo: Path, instance: str) -> Path:
+    return repo / "bb-tests" / "workloads" / "build" / instance
 
 
 def build_workload(
     repo: str | Path,
     chip: str,
     *,
+    instance: str | None = None,
+    chip_pb: str | Path | None = None,
     model: str = "",
     rushb: str | None = None,
     ctest: bool = False,
@@ -213,6 +215,13 @@ def build_workload(
 ) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_-]+", chip):
         raise ValueError(f"invalid chip: {chip}")
+    build_instance = instance or chip
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", build_instance):
+        raise ValueError(f"invalid workload build instance: {build_instance}")
+    if (instance is None) != (chip_pb is None):
+        raise ValueError("workload variant requires both instance and chip_pb")
+    if instance is not None and rushb is not None:
+        raise ValueError("rushB variant builds require an installed variant BEMU crate")
     if rushb is not None and rushb not in {"bemu", "verilator"}:
         raise ValueError(f"rushB must be bemu|verilator, got {rushb!r}")
     if ctest and mlirtest:
@@ -224,13 +233,25 @@ def build_workload(
 
     root = _repo(repo)
     defs = _cmake_defs(root, chip)
+    if chip_pb is not None:
+        selected_pb = Path(chip_pb).resolve()
+        if not selected_pb.is_file():
+            raise RuntimeError(f"missing {selected_pb}")
+        defs["BUCKYBALL_WORKLOAD_CHIP"] = build_instance
+        defs["BUCKYBALL_WORKLOAD_SOURCE_CHIP"] = chip
+        defs["BUCKYBALL_CHIP_PB"] = str(selected_pb)
+        defs["BUCKYBALL_CARGO_TARGET_DIR"] = str(
+            root / "bebop" / "target" / build_instance
+        )
     if rushb:
         missing = [k for k in _RUSHB_DEFS if k not in defs]
         if missing:
             raise RuntimeError(
                 f"missing {missing} in cmake.defs for rushB; run bbdev config --install"
             )
-    compiler_build = root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / chip
+    compiler_build = (
+        root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / build_instance
+    )
     riscv = _require_riscv()
     project_python = riscv / "bin" / "python3"
     python = (
@@ -264,7 +285,7 @@ def build_workload(
         raise RuntimeError(f"missing RISC-V linux toolchain under {riscv / 'bin'}")
 
     src = _workload_src(root)
-    build = _workload_build_dir(root, chip)
+    build = _workload_build_dir(root, build_instance)
     cmake_model, ninja_arg = _ninja_target(model.lower(), rushb, ctest, mlirtest)
     env = os.environ.copy()
     env["PATH"] = f"{riscv / 'bin'}:{env.get('PATH', '')}"
@@ -320,6 +341,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build chip workloads")
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--chip", required=True)
+    parser.add_argument("--instance")
+    parser.add_argument("--chip-pb", type=Path)
     parser.add_argument("--model", default="")
     parser.add_argument("--rushb", choices=("bemu", "verilator"))
     scope = parser.add_mutually_exclusive_group()
@@ -330,6 +353,8 @@ def main() -> None:
     build_workload(
         args.repo,
         args.chip,
+        instance=args.instance,
+        chip_pb=args.chip_pb,
         model=args.model,
         rushb=args.rushb,
         ctest=args.ctest,

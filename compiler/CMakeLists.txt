@@ -101,6 +101,24 @@ endif()
 string(STRIP "${BB_ASSIGN_SOURCES_RAW}" BB_ASSIGN_SOURCES_RAW)
 string(REPLACE "\n" ";" BB_assign_SOURCES "${BB_ASSIGN_SOURCES_RAW}")
 
+foreach(BB_BALL_SOURCE_KIND legalize bank_ssa tile)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
+      --repo "${BB_REPO_ROOT}"
+      --chip-pb "${BUCKYBALL_CHIP_PB}"
+      --print-ball-compiler-paths "${BB_BALL_SOURCE_KIND}"
+    RESULT_VARIABLE BB_BALL_SOURCE_RESULT
+    OUTPUT_VARIABLE BB_BALL_SOURCE_PATHS
+    ERROR_VARIABLE BB_BALL_SOURCE_ERROR)
+  if(NOT BB_BALL_SOURCE_RESULT EQUAL 0)
+    message(FATAL_ERROR
+      "failed to resolve ${BB_BALL_SOURCE_KIND} Ball compiler sources:\n${BB_BALL_SOURCE_ERROR}")
+  endif()
+  string(STRIP "${BB_BALL_SOURCE_PATHS}" BB_BALL_SOURCE_PATHS)
+  string(REPLACE "\n" ";" BB_${BB_BALL_SOURCE_KIND}_SOURCES
+    "${BB_BALL_SOURCE_PATHS}")
+endforeach()
+
 execute_process(
   COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
     --repo "${BB_REPO_ROOT}"
@@ -125,24 +143,6 @@ else()
   # A heterogeneous chip owns more than one Core lowering policy.  Build its
   # dialect and public passes once; the selected target chooses its Ball set
   # from Chip.pb at pass execution time.
-  foreach(BB_BALL_SOURCE_KIND legalize bank_ssa tile)
-    execute_process(
-      COMMAND "${Python3_EXECUTABLE}" "${BB_TARGET_REGISTRY_GENERATOR}"
-        --repo "${BB_REPO_ROOT}"
-        --chip-pb "${BUCKYBALL_CHIP_PB}"
-        --print-ball-compiler-paths "${BB_BALL_SOURCE_KIND}"
-      RESULT_VARIABLE BB_BALL_SOURCE_RESULT
-      OUTPUT_VARIABLE BB_BALL_SOURCE_PATHS
-      ERROR_VARIABLE BB_BALL_SOURCE_ERROR)
-    if(NOT BB_BALL_SOURCE_RESULT EQUAL 0)
-      message(FATAL_ERROR
-        "failed to resolve ${BB_BALL_SOURCE_KIND} Ball compiler sources:\n${BB_BALL_SOURCE_ERROR}")
-    endif()
-    string(STRIP "${BB_BALL_SOURCE_PATHS}" BB_BALL_SOURCE_PATHS)
-    string(REPLACE "\n" ";" BB_${BB_BALL_SOURCE_KIND}_SOURCES
-      "${BB_BALL_SOURCE_PATHS}")
-  endforeach()
-
   set(LLVM_TARGET_DEFINITIONS "${BB_BUCKYBALL_DIALECT_TD}")
   mlir_tablegen(Buckyball.h.inc -gen-op-decls)
   mlir_tablegen(Buckyball.cpp.inc -gen-op-defs)

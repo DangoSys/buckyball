@@ -211,13 +211,18 @@ def _isqrt(n: int) -> int:
         x = y
 
 
-def _emit_params_header(profile, core, isa_dir: Path) -> None:
+def _emit_params_header(profile, core, virtual_bank_num: int, isa_dir: Path) -> None:
     bank = core.mem.bank
     mmio = core.mem.mmio
     if bank.num == 0 or bank.width == 0 or bank.entries == 0:
         _die(f"profile {profile.name}: bank geometry must be non-zero")
     if bank.width % 8 != 0:
         _die(f"profile {profile.name}: bank.width must be a multiple of 8")
+    if (
+        virtual_bank_num < bank.num
+        or virtual_bank_num <= core.frontend.vbank_id_upper_bound
+    ):
+        _die(f"profile {profile.name}: invalid virtual bank count {virtual_bank_num}")
     if mmio.bank_num == 0 or mmio.bank_entries == 0 or mmio.bank_width == 0:
         _die(f"profile {profile.name}: mmio geometry must be non-zero")
     if mmio.bank_width % 8 != 0:
@@ -235,9 +240,13 @@ def _emit_params_header(profile, core, isa_dir: Path) -> None:
         "#define BBHW_PARAMS_H",
         "",
         f"#define BANK_NUM {bank.num}",
+        f"#define VIRTUAL_BANK_NUM {virtual_bank_num}",
+        f"#define BB_PRIVATE_VBANK_MAX {core.frontend.vbank_id_upper_bound}",
+        f"#define BB_SHARED_BANK_BASE {core.frontend.shared_bank_id_base}",
         f"#define BANK_WIDTH {bank.width}",
         f"#define BANK_LINES {bank.entries}",
         f"#define BANK_ISQRT {_isqrt(bank.entries)}",
+        f"#define RVV_VLEN_BITS {core.gp_domain.v_len}",
         f"#define MMIO_BANK_NUM {mmio.bank_num}",
         f"#define MMIO_BANK_ENTRIES {mmio.bank_entries}",
         f"#define MMIO_BANK_WIDTH_BITS {mmio.bank_width}",
@@ -254,9 +263,89 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
     A header describes one core ISA only.  Deliberately do not create a merged
     chip header: funct7 is target-local and may overlap across profiles.
     """
+    if not chip.tiles or not chip.tiles[0].core_indices:
+        _die("chip topology has no tile cores")
+    if chip.n_tiles != len(chip.tiles):
+        _die(
+            f"chip n_tiles={chip.n_tiles} disagrees with "
+            f"tile placements={len(chip.tiles)}"
+        )
+    cores_per_tile = len(chip.tiles[0].core_indices)
+    virtual_bank_num = chip.tiles[0].virtual_bank_count
+
+    def signature(tile):
+        for index in tile.core_indices:
+            if index >= len(chip.cores):
+                _die(f"tile Core index {index} out of range (n={len(chip.cores)})")
+        return [
+            (chip.cores[index].role, chip.cores[index].pkg)
+            for index in tile.core_indices
+        ]
+
+    reference = signature(chip.tiles[0])
+    profile_ids = {profile.name: index for index, profile in enumerate(chip.profiles)}
+    if len(profile_ids) != len(chip.profiles):
+        _die("chip has duplicate compiler profile names")
+    slot_profiles = []
+    for core_index in chip.tiles[0].core_indices:
+        target = _target_name(chip.cores[core_index])
+        if target not in profile_ids:
+            _die(f"tile slot Core target {target!r} has no compiler profile")
+        slot_profiles.append(profile_ids[target])
+    reference_shared = chip.tiles[0].shared_mem
+    for tile_id, tile in enumerate(chip.tiles):
+        if signature(tile) != reference:
+            _die(f"tile {tile_id}: topology is not homogeneous")
+        if tile.virtual_bank_count != virtual_bank_num:
+            _die(f"tile {tile_id}: virtual bank count differs from tile 0")
+        if tile.shared_mem != reference_shared:
+            _die(f"tile {tile_id}: shared memory config differs from tile 0")
+    shared = chip.tiles[0].shared_mem
+    shared_bank_entries = chip.cores[chip.tiles[0].core_indices[0]].mem.bank.entries
+    if shared.enable:
+        if shared.entries == 0 or shared.entries % shared_bank_entries:
+            _die(
+                "tile 0: shared entries must be a non-zero multiple of slot 0 bank depth"
+            )
+        shared_physical_bank_num = shared.entries // shared_bank_entries
+    else:
+        shared_physical_bank_num = 0
+    lines = [
+        "#ifndef BBHW_TOPOLOGY_H",
+        "#define BBHW_TOPOLOGY_H",
+        f"#define BB_TILE_NUM {len(chip.tiles)}",
+        f"#define BB_CORES_PER_TILE {cores_per_tile}",
+        f"#define BB_VIRTUAL_BANK_NUM {virtual_bank_num}",
+        f"#define BB_SHARED_PHYSICAL_BANK_NUM {shared_physical_bank_num}",
+        "#ifndef __ASSEMBLER__",
+        "#include <stdint.h>",
+        "typedef struct { uint32_t tile; uint32_t core; } core_id_t;",
+        "static inline core_id_t bb_topology_core_id(uint32_t hart) {",
+        f"  if (hart >= {len(chip.tiles) * cores_per_tile}u) __builtin_trap();",
+        f"  return (core_id_t){{hart / {cores_per_tile}u, hart % {cores_per_tile}u}};",
+        "}",
+        "static inline uint32_t bb_topology_core_profile(core_id_t id) {",
+        f"  static const uint32_t profiles[{cores_per_tile}] = "
+        f"{{{', '.join(map(str, slot_profiles))}}};",
+        f"  if (id.tile >= {len(chip.tiles)}u || id.core >= {cores_per_tile}u) "
+        "__builtin_trap();",
+        "  return profiles[id.core];",
+        "}",
+        "static inline uint32_t bb_topology_profile_cores_per_tile(uint32_t profile) {",
+        "  uint32_t count = 0;",
+        f"  for (uint32_t core = 0; core < {cores_per_tile}u; ++core)",
+        "    count += bb_topology_core_profile((core_id_t){0, core}) == profile;",
+        "  return count;",
+        "}",
+        "#endif",
+        "#endif",
+        "",
+    ]
+    _write(isa_dir / "chip" / "topology.h", "\n".join(lines))
     for profile in chip.profiles:
         core = _profile_core(chip, profile)
         _validate_profile(profile, core)
+        (isa_dir / profile.name / "topology.h").unlink(missing_ok=True)
         lines = ["#ifndef BALL_ISA_H", "#define BALL_ISA_H", ""]
         lines.extend(
             f"#define BB_FUNC7_{entry.mnemonic} {entry.funct7}"
@@ -265,7 +354,7 @@ def _emit_isa_headers(chip, isa_dir: Path) -> None:
         lines.extend(["", "#endif", ""])
         header = isa_dir / profile.name / "ballISA.h"
         _write(header, "\n".join(lines))
-        _emit_params_header(profile, core, isa_dir)
+        _emit_params_header(profile, core, virtual_bank_num, isa_dir)
 
 
 def _emit_dialect_td(chip, repo: Path) -> str:
@@ -422,6 +511,7 @@ def main() -> None:
     parser.add_argument("--print-bank-targets", action="store_true")
     parser.add_argument("--print-target-balls", action="store_true")
     parser.add_argument("--print-core-targets", action="store_true")
+    parser.add_argument("--print-core-workload-targets", action="store_true")
     parser.add_argument("--print-rushb-targets", action="store_true")
     parser.add_argument("--print-ball-dialect-dirs", action="store_true")
     parser.add_argument(
@@ -440,6 +530,7 @@ def main() -> None:
         and not args.print_bank_targets
         and not args.print_target_balls
         and not args.print_core_targets
+        and not args.print_core_workload_targets
         and not args.print_rushb_targets
         and not args.print_ball_dialect_dirs
         and args.print_ball_compiler_paths is None
@@ -492,6 +583,17 @@ def main() -> None:
             if target not in targets:
                 _die(f"CoreInstance {core.index}: no compiler profile {target}")
             print(f"{core.index}:{target}")
+    if args.print_core_workload_targets:
+        seen = set()
+        for profile_id, profile in enumerate(chip.profiles):
+            core = _profile_core(chip, profile)
+            if not core.pkg.isidentifier():
+                _die(f"profile {profile.name}: invalid Core package {core.pkg!r}")
+            entry = (profile.name, core.pkg)
+            if entry in seen:
+                continue
+            seen.add(entry)
+            print(f"{profile.name}:{core.pkg}:{profile_id}")
     if args.print_rushb_targets:
         targets = {profile.name for profile in chip.profiles}
         for core_id, target in _rushb_targets(chip):

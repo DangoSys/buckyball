@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
+use super::super::bank::{bank_lines, bank_row_bytes};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 use std::cell::RefCell;
@@ -39,16 +39,13 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if rs1_b1(xs1) != 0 || rs1_b2(xs1) != 0 || rs1_iter(xs1) != 4 || xs2 >> 6 != 0 {
         panic!("smatmul_bias: bank1/bank2/rs2[63:6] must be zero and iter must be four");
     }
-    if bank >= bank_num() as u64 {
-        panic!("smatmul_bias: invalid bank id");
-    }
-    if !ctx.cfgs[bank as usize].allocated || ctx.cfgs[bank as usize].cols != 1 {
+    if !ctx.config(bank).allocated || ctx.config(bank).cols != 1 {
         panic!("smatmul_bias: bias bank must be one allocated column");
     }
     if input_base + 4 > bank_lines() {
         panic!("smatmul_bias: inputBase plus four rows exceeds bank depth");
     }
-    let physical = pbank(ctx.bank_map, bank);
+    let physical = pbank(ctx, bank);
     let mut bias = [0i32; TILE];
     for group in 0..4 {
         for lane in 0..4 {
@@ -81,21 +78,16 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if (rows != 1 && (rows == 0 || rows % TILE != 0)) || cols != TILE || k == 0 || k % TILE != 0 {
         panic!("smatmul: M must be one or a positive multiple of 16, K must be a positive multiple of 16, and N must be 16");
     }
-    if a_bank >= bank_num() as u64 || b_bank >= bank_num() as u64 || c_bank >= bank_num() as u64 {
-        panic!("smatmul: invalid bank id");
-    }
     if a_bank == b_bank || a_bank == c_bank || b_bank == c_bank {
         panic!("smatmul: A, B, and C banks must differ");
     }
-    if !ctx.cfgs[a_bank as usize].allocated
-        || !ctx.cfgs[b_bank as usize].allocated
-        || !ctx.cfgs[c_bank as usize].allocated
+    if !ctx.config(a_bank).allocated
+        || !ctx.config(b_bank).allocated
+        || !ctx.config(c_bank).allocated
     {
         panic!("smatmul: bank not allocated");
     }
-    if ctx.cfgs[a_bank as usize].cols != 1
-        || ctx.cfgs[b_bank as usize].cols != 1
-        || ctx.cfgs[c_bank as usize].cols != 1
+    if ctx.config(a_bank).cols != 1 || ctx.config(b_bank).cols != 1 || ctx.config(c_bank).cols != 1
     {
         panic!("smatmul: A, B, and C banks must each have one column");
     }
@@ -142,8 +134,8 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("smatmul: continuation changed output shape or destination");
     }
 
-    let pa = pbank(ctx.bank_map, a_bank);
-    let pb = pbank(ctx.bank_map, b_bank);
+    let pa = pbank(ctx, a_bank);
+    let pb = pbank(ctx, b_bank);
     let k_tiles = k / TILE;
     let row_bytes = bank_row_bytes();
 
@@ -176,7 +168,7 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     }
 
     if last {
-        let pc = pbank(ctx.bank_map, c_bank);
+        let pc = pbank(ctx, c_bank);
         for row in 0..rows {
             for col in 0..cols {
                 write_i32(

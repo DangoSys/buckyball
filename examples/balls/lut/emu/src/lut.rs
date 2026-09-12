@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num};
+use super::super::bank::bank_lines;
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallInstruction, ExecContext};
 
@@ -13,32 +13,27 @@ impl BallInstruction for Lut {
         if xs2 != 0 {
             panic!("lut: rs2 must be zero");
         }
-        if input_bank >= bank_num() as u64
-            || lut_bank >= bank_num() as u64
-            || output_bank >= bank_num() as u64
-        {
-            panic!("lut: invalid bank id");
-        }
         if input_bank == lut_bank || input_bank == output_bank || lut_bank == output_bank {
             panic!("lut: banks must be distinct");
         }
-        if !ctx.cfgs[input_bank as usize].allocated
-            || ctx.cfgs[input_bank as usize].cols != 1
-            || !ctx.cfgs[output_bank as usize].allocated
-            || ctx.cfgs[output_bank as usize].cols != 1
+        if !ctx.config(input_bank).allocated
+            || ctx.config(input_bank).cols != 1
+            || !ctx.config(output_bank).allocated
+            || ctx.config(output_bank).cols != 1
         {
             panic!("lut: input and output must each occupy one allocated bank");
         }
-        let lut_cols = ctx.cfgs[lut_bank as usize].cols;
-        if !ctx.cfgs[lut_bank as usize].allocated || (lut_cols != 1 && lut_cols != 4) {
+        let lut = *ctx.config(lut_bank);
+        let lut_cols = lut.cols;
+        if !lut.allocated || (lut_cols != 1 && lut_cols != 4) {
             panic!("lut: table must occupy one or four allocated banks");
         }
         if iter == 0 || iter > bank_lines() {
             panic!("lut: iter must fit in one bank");
         }
 
-        let pi = pbank(ctx.bank_map, input_bank);
-        let po = pbank(ctx.bank_map, output_bank);
+        let pi = pbank(ctx, input_bank);
+        let po = pbank(ctx, output_bank);
         for row in 0..iter {
             let mut result = [0u8; 16];
             for channel in 0..16 {
@@ -50,7 +45,7 @@ impl BallInstruction for Lut {
                 };
                 let group = flat / 1024;
                 let offset = flat % 1024;
-                let pl = pbank_group(ctx.bank_map, lut_bank, group as u64);
+                let pl = pbank_group(ctx, lut_bank, group as u64);
                 result[channel] = ctx.banks[pl][offset];
             }
             ctx.banks[po][row * 16..(row + 1) * 16].copy_from_slice(&result);

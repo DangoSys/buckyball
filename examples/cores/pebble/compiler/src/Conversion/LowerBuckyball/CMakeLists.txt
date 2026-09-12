@@ -16,6 +16,7 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   QuantizeTensorToBankSSAPatterns.cpp
 
   LINK_LIBS PUBLIC
+  MLIRControlFlowDialect
   ${BB_CORE_TARGET_PREFIX}BuddyBuckyballTransforms
   ${BB_CORE_TARGET_PREFIX}LowerTileToBuckyballPass
 )

@@ -1,0 +1,6 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+buckyball_require_mxfp2int_bank_shape(${BUCKYBALL_MLIR_ACTIVE_TARGET})
+add_buckyball_mlir_test(mxfp4_unit_scale_bank TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})

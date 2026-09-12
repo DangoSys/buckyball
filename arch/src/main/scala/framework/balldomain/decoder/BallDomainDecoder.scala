@@ -24,7 +24,7 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   @public
   val cmd_i             = IO(Flipped(Decoupled(new PostGDCmd(b))))
   @public
-  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.bankNum, iterLen)))
+  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.virtualBankCount, iterLen)))
 
   cmd_i.ready := ball_decode_cmd_o.ready
 

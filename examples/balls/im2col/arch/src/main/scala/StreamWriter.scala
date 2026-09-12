@@ -56,7 +56,7 @@ class StreamWriter(val b: GlobalConfig) extends Module {
     val windowIdx   = Input(UInt(32.W))
     val kRows       = Input(UInt(kW.W))
     val kCols       = Input(UInt(kW.W))
-    val wBankId     = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val wBankId     = Input(UInt(b.memDomain.vbankIdWidth.W))
     val robId       = Input(UInt(log2Up(b.frontend.rob_entries).W))
 
     val busy           = Output(Bool())

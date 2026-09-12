@@ -10,9 +10,11 @@
 // op1_bank_id: source bank for D (OS) or B (WS)
 // wr_bank_id: destination bank for C output
 // iter: number of rows to preload
-#define bb_gemmini_preload(op1_bank_id, wr_bank_id, iter)                      \
+#define bb_gemmini_preload(op1_bank_id, wr_bank_id, iter, op1_base, wr_base)   \
   BUCKYBALL_INSTRUCTION_R_R(                                                   \
       (BB_BANK0(op1_bank_id) | BB_BANK2(wr_bank_id) | BB_ITER(iter)),          \
-      BB_GEMMINI_PRELOAD_RS2, BB_FUNC7(GEMMINI_PRELOAD))
+      BB_GEMMINI_PRELOAD_RS2 | ((uint64_t)(op1_base) << 6) |                   \
+          ((uint64_t)(wr_base) << 26),                                         \
+      BB_FUNC7(GEMMINI_PRELOAD))
 
 #endif // _BB_GEMMINI_PRELOAD_H_

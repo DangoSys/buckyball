@@ -31,7 +31,8 @@ static elem_t dst[NCORES][DIM * DIM] __attribute__((aligned(128)));
 static volatile int core_ok[NCORES];
 
 int main(void) {
-  int cid = bb_get_core_id();
+  core_id_t id = bb_get_core_id();
+  int cid = (int)id.core;
 
   printf("[core %d] starting mvin/mvout\n", cid);
 

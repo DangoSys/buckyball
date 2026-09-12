@@ -51,6 +51,26 @@ def MvinOp : Buckyball_Op<"mvin"> {
                        "type($input) type($addr) type($depth) type($stride)";
 }
 
+def Mvin2dOp : Buckyball_Op<"mvin_2d"> {
+  let summary = "Load an INT8 channel panel rectangle into a scratchpad bank";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input, I64:$addr,
+                       I64:$height, I64:$pixelBytes, I64:$sourceWidth,
+                       I64:$dstBase, I64:$width, I64:$validBytes);
+  let assemblyFormat = "$input $addr $height $pixelBytes $sourceWidth "
+                       "$dstBase $width $validBytes attr-dict `:` "
+                       "type($input) type($addr) type($height) "
+                       "type($pixelBytes) type($sourceWidth) "
+                       "type($dstBase) type($width) type($validBytes)";
+}
+
+def MvinMmioOp : Buckyball_Op<"mvin_mmio"> {
+  let summary = "Load metadata from memory into MMIO SRAM";
+  let arguments = (ins MemRefRankOf<[I8], [1, 2]>:$input,
+                       I64:$mmioAddr, I64:$rows, I64:$columns);
+  let assemblyFormat = "$input $mmioAddr $rows $columns attr-dict `:` "
+                       "type($input) type($mmioAddr) type($rows) type($columns)";
+}
+
 def MvoutOp : Buckyball_Op<"mvout"> {
   let summary = "Store data from scratchpad bank to memory";
   let description = [{
@@ -117,6 +137,19 @@ def BankMvinOp : Buckyball_Op<"bank_mvin"> {
   let results = (outs I64:$bankOut);
   let assemblyFormat =
       "$input $bank $depth $stride attr-dict `:` type($input) type($bank) type($depth) type($stride)";
+}
+
+def BankMvin2dOp : Buckyball_Op<"bank_mvin_2d"> {
+  let summary = "Load a rectangular INT8 channel panel into a virtual bank";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input, I64:$bank,
+                       I64:$height, I64:$pixelBytes, I64:$sourceWidth,
+                       I64:$dstBase, I64:$width, I64:$validBytes);
+  let results = (outs I64:$bankOut);
+  let assemblyFormat = "$input $bank $height $pixelBytes $sourceWidth "
+                       "$dstBase $width $validBytes attr-dict `:` "
+                       "type($input) type($bank) type($height) "
+                       "type($pixelBytes) type($sourceWidth) "
+                       "type($dstBase) type($width) type($validBytes)";
 }
 
 def BankMvoutOp : Buckyball_Op<"bank_mvout"> {
@@ -278,6 +311,31 @@ def MegaInt8AddOp : Buckyball_Op<"mega_int8_add"> {
     type($lhs) type($rhs) type($output)}];
 }
 
+def MegaChannelSliceOp : Buckyball_Op<"mega_channel_slice"> {
+  let summary = "INT8 NHWC channel slice inside a MegaKernel";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       I64Attr:$offset);
+  let assemblyFormat = [{$input $output attr-dict `:` type($input) type($output)}];
+}
+
+def MegaChannelConcatOp : Buckyball_Op<"mega_channel_concat"> {
+  let summary = "INT8 NHWC channel concatenation inside a MegaKernel";
+  let arguments = (ins Variadic<MemRefRankOf<[I8], [4]>>:$inputs,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       DenseI64ArrayAttr:$segments);
+  let assemblyFormat = [{$inputs $output attr-dict `:` type($inputs) type($output)}];
+}
+
+def MegaResizeNearestOp : Buckyball_Op<"mega_resize_nearest"> {
+  let summary = "INT8 NHWC nearest-neighbor resize inside a MegaKernel";
+  let arguments = (ins MemRefRankOf<[I8], [4]>:$input,
+                       MemRefRankOf<[I8], [4]>:$output,
+                       I64Attr:$scaleH,
+                       I64Attr:$scaleW);
+  let assemblyFormat = [{$input $output attr-dict `:` type($input) type($output)}];
+}
+
 //===----------------------------------------------------------------------===//
 // LLVM intrinsic operations
 //===----------------------------------------------------------------------===//
@@ -317,6 +375,9 @@ def FenceIntrOp : Buckyball_IntrOpBase<"fence">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 def MvinIntrOp : Buckyball_IntrOpBase<"mvin">,
+  Arguments<(ins LLVM_Type, LLVM_Type)>;
+
+def MvinMmioIntrOp : Buckyball_IntrOpBase<"mvin_mmio">,
   Arguments<(ins LLVM_Type, LLVM_Type)>;
 
 def MvoutIntrOp : Buckyball_IntrOpBase<"mvout">,

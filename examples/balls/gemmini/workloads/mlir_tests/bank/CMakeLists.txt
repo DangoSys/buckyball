@@ -1,0 +1,7 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+buckyball_require_min_bank_lines(${BUCKYBALL_MLIR_ACTIVE_TARGET} 16 Gemmini)
+add_buckyball_mlir_test(gemmini_compute_preloaded_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+add_buckyball_mlir_test(gemmini_compute_accumulated_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})

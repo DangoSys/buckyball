@@ -1,0 +1,75 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x16xi32>) -> ()
+func.func @main() -> i8 {
+  %z8 = arith.constant 0 : i8
+  %o8 = arith.constant 1 : i8
+  %z32 = arith.constant 0 : i32
+  %z = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %two = arith.constant 2 : index
+  %three = arith.constant 3 : index
+  %five = arith.constant 5 : index
+  %seven = arith.constant 7 : index
+  %dim = arith.constant 16 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %d16 = arith.constant 16 : i64
+  %rows64 = arith.constant @BB_BANK_LINES@ : i64
+  %zero64 = arith.constant 0 : i64
+  %stride = arith.constant 1 : i64
+  %a = memref.alloc() : memref<@BB_BANK_LINES@x16xi8>
+  %b = memref.alloc() : memref<16x16xi8>
+  %d = memref.alloc() : memref<16x16xi8>
+  %c = memref.alloc() : memref<@BB_BANK_LINES@x16xi32>
+  linalg.fill ins(%z8 : i8) outs(%d : memref<16x16xi8>)
+  linalg.fill ins(%z32 : i32) outs(%c : memref<@BB_BANK_LINES@x16xi32>)
+  scf.for %tile = %z to %rows step %dim {
+    scf.for %row = %z to %dim step %one {
+      %arow = arith.addi %tile, %row : index
+      scf.for %k = %z to %dim step %one {
+        %r3 = arith.muli %row, %three : index
+        %k5 = arith.muli %k, %five : index
+        %sum = arith.addi %r3, %k5 : index
+        %rem = arith.remui %sum, %seven : index
+        %value = arith.subi %rem, %three : index
+        %v8 = arith.index_cast %value : index to i8
+        memref.store %v8, %a[%arow, %k] : memref<@BB_BANK_LINES@x16xi8>
+      }
+    }
+  }
+  scf.for %row = %z to %dim step %one {
+    scf.for %col = %z to %dim step %one {
+      %r2 = arith.muli %row, %two : index
+      %c3 = arith.muli %col, %three : index
+      %sum = arith.addi %r2, %c3 : index
+      %rem = arith.remui %sum, %five : index
+      %value = arith.subi %rem, %two : index
+      %v8 = arith.index_cast %value : index to i8
+      memref.store %v8, %b[%row, %col] : memref<16x16xi8>
+    }
+  }
+  %ab = buckyball.bank_alloc
+  %bb = buckyball.bank_alloc
+  %db = buckyball.bank_alloc
+  %cb = buckyball.bank_alloc {col = 4 : i64}
+  %al = buckyball.bank_mvin %a %ab %rows64 %stride : memref<@BB_BANK_LINES@x16xi8> i64 i64 i64
+  %bl = buckyball.bank_mvin %b %bb %d16 %stride : memref<16x16xi8> i64 i64 i64
+  %dl = buckyball.bank_mvin %d %db %d16 %stride : memref<16x16xi8> i64 i64 i64
+  %result = scf.for %base = %z to %rows step %dim iter_args(%c0 = %cb) -> (i64) {
+    %base64 = arith.index_cast %base : index to i64
+    %p = buckyball.bank_gemmini_preload %dl %c0 %d16 %base64 %base64 : i64 i64 i64 i64 i64
+    %first = buckyball.bank_gemmini_compute_preloaded %al %bl %p %d16 %base64 %zero64 %base64 : i64 i64 i64 i64 i64 i64 i64
+    %sum = buckyball.bank_gemmini_compute_accumulated %al %bl %first %d16 %base64 %zero64 %base64 : i64 i64 i64 i64 i64 i64 i64
+    scf.yield %sum : i64
+  }
+  %stored = buckyball.bank_mvout %c %result %rows64 %stride : memref<@BB_BANK_LINES@x16xi32> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%c) : (memref<@BB_BANK_LINES@x16xi32>) -> ()
+  buckyball.bank_release %al : i64
+  buckyball.bank_release %bl : i64
+  buckyball.bank_release %dl : i64
+  buckyball.bank_release %stored : i64
+  memref.dealloc %a : memref<@BB_BANK_LINES@x16xi8>
+  memref.dealloc %b : memref<16x16xi8>
+  memref.dealloc %d : memref<16x16xi8>
+  memref.dealloc %c : memref<@BB_BANK_LINES@x16xi32>
+  return %z8 : i8
+}

@@ -25,3 +25,11 @@ add_buckyball_mlir_test(mega_conv2d
 add_buckyball_mlir_test(mega_matmul
   TARGET pebble
   PASSES ${PEBBLE_TILE_FUNCTIONAL_PASSES})
+
+foreach(test
+    tile_matmul_16x16_i8
+    tile_transpose_16x16_i8)
+  add_buckyball_mlir_test(${test}
+    TARGET pebble
+    PASSES ${PEBBLE_TILE_FUNCTIONAL_PASSES})
+endforeach()

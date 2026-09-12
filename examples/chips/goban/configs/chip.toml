@@ -2,5 +2,5 @@
 include = "designs/goban.toml"
 
 [sims]
-verilator = "sims.verilator.BuckyballGoban2CoreVerilatorConfig"
-p2e = "sims.p2e.BuckyballGoban2CoreLinuxP2EConfig"
+verilator = "sims.verilator.BuckyballGoban4CoreVerilatorConfig"
+p2e = "sims.p2e.BuckyballGoban4CoreLinuxP2EConfig"

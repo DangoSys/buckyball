@@ -1,5 +1,0 @@
-[workloads]
-search_path = "workloads/src"
-tests = [
-  "pebble-pebble-ctest-mvout_fence_loop_test-linux",
-]

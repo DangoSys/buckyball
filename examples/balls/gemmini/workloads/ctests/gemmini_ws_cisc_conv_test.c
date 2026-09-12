@@ -35,9 +35,11 @@ int main() {
 
   printf("=== Gemmini WS CISC Loop Conv Test ===\n");
 
-  // Initialize: input = 1x16 row vector, weight = 16x16 matrix
-  init_u8_random_matrix(input, IN_CH, 1, 42);
-  init_u8_random_matrix(weight, IN_CH, OUT_CH, 84);
+  for (int k = 0; k < IN_CH; ++k) {
+    input[k] = k % 7 - 3;
+    for (int out = 0; out < OUT_CH; ++out)
+      weight[k * OUT_CH + out] = (2 * k + 3 * out) % 5 - 2;
+  }
 
   // CPU reference: output[0..OUT_CH] = sum_k(input[k] * weight[k][j])
   // cpu_matmul(A[M×K], B[K×N], C[M×N]) — here A=input(1×IN_CH),

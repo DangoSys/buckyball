@@ -12,7 +12,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   private val tile          = 16
   private val resultWords   = 4
   private val addressWidth  = log2Ceil(b.memDomain.bankEntries)
-  private val bankWidth     = log2Ceil(b.memDomain.bankNum)
+  private val bankIdWidth   = b.memDomain.vbankIdWidth
   private val maxOutputRows = b.memDomain.bankEntries / resultWords
   private val accDepth      = maxOutputRows.max(32)
   private val accAddrWidth  = log2Ceil(accDepth)
@@ -78,17 +78,17 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   private val vectorMode  = RegInit(false.B)
   private val biasValid   = RegInit(false.B)
   private val chainLive   = RegInit(false.B)
-  private val biasBank    = RegInit(0.U(bankWidth.W))
+  private val biasBank    = RegInit(0.U(bankIdWidth.W))
   private val biasBase    = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val biasRow     = RegInit(0.U(2.W))
   private val biasWords   = Reg(Vec(resultWords, UInt(128.W)))
 
-  private val aBank      = RegInit(0.U(bankWidth.W))
-  private val bBank      = RegInit(0.U(bankWidth.W))
-  private val cBank      = RegInit(0.U(bankWidth.W))
+  private val aBank      = RegInit(0.U(bankIdWidth.W))
+  private val bBank      = RegInit(0.U(bankIdWidth.W))
+  private val cBank      = RegInit(0.U(bankIdWidth.W))
   private val cBase      = RegInit(0.U(addressWidth.W))
   private val chainRows  = RegInit(0.U(12.W))
-  private val chainCBank = RegInit(0.U(bankWidth.W))
+  private val chainCBank = RegInit(0.U(bankIdWidth.W))
   private val chainCBase = RegInit(0.U(addressWidth.W))
 
   private val outputTileCount    = RegInit(0.U(8.W))
@@ -208,7 +208,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     val last      = command.rs2(25)
 
     assert(isBias || isMatmul, "SMatMulBall received an unknown funct7")
-    assert(command.rs1(9, 0) < b.memDomain.bankNum.U, "SMatMulBall input bank 0 is invalid")
+    assert(command.rs1(9, 0) < b.memDomain.virtualBankCount.U, "SMatMulBall input bank 0 is invalid")
 
     robId       := io.cmdReq.bits.rob_id
     isSub       := io.cmdReq.bits.is_sub
@@ -232,8 +232,8 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       biasBase := command.rs2(5, 0)
       biasRow  := 0.U
     }.otherwise {
-      assert(command.rs1(19, 10) < b.memDomain.bankNum.U, "SMATMUL_OS input bank 1 is invalid")
-      assert(command.rs1(29, 20) < b.memDomain.bankNum.U, "SMATMUL_OS output bank is invalid")
+      assert(command.rs1(19, 10) < b.memDomain.virtualBankCount.U, "SMATMUL_OS input bank 1 is invalid")
+      assert(command.rs1(29, 20) < b.memDomain.virtualBankCount.U, "SMATMUL_OS output bank is invalid")
       assert(
         command.op1_bank =/= command.op2_bank && command.op1_bank =/= command.wr_bank &&
           command.op2_bank =/= command.wr_bank,

@@ -1,0 +1,36 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %lanes = arith.constant @BB_BANK_I8_LANES@ : index
+  %mod = arith.constant 31 : index
+  %bias = arith.constant 15 : index
+  %depth = arith.constant @BB_BANK_LINES@ : i64
+  %zero64 = arith.constant 0 : i64
+  %side64 = arith.constant @BB_BANK_ISQRT@ : i64
+  %stride = arith.constant 1 : i64
+  %input = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %output = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  scf.for %row = %zero to %rows step %one {
+    %wrapped = arith.remui %row, %mod : index
+    %signed = arith.subi %wrapped, %bias : index
+    %value = arith.index_cast %signed : index to i8
+    scf.for %lane = %zero to %lanes step %one {
+      memref.store %value, %input[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+      memref.store %zero_i8, %output[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+    }
+  }
+  %in_bank = buckyball.bank_alloc
+  %out_bank = buckyball.bank_alloc
+  %loaded_input = buckyball.bank_mvin %input %in_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %loaded_output = buckyball.bank_mvin %output %out_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 {inputSide = @BB_BANK_ISQRT@ : i64, outputSide = @BB_BANK_ISQRT@ : i64, kernel = 3 : i64, stride = 1 : i64, padding = 1 : i64, startRow = 0 : i64, startCol = 0 : i64} : i64 i64 i64 i64 i64 i64
+  %stored = buckyball.bank_mvout %output %result %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
+  buckyball.fence
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+  buckyball.bank_release %loaded_input : i64
+  buckyball.bank_release %stored : i64
+  return %zero_i8 : i8
+}

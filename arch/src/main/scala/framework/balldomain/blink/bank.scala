@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
 
 trait HasBankId {
   val b: GlobalConfig
-  val bank_id = Input(UInt(log2Up(b.memDomain.bankNum).W))
+  val bank_id = Input(UInt(b.memDomain.vbankIdWidth.W))
 }
 
 trait HasRobId {

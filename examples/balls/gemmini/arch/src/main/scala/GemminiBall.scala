@@ -10,6 +10,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStatus {
+  require(b.memDomain.bankEntries <= 1024, "GemminiBall rs2 row-base fields support at most 1024 bank entries")
   require(
     b.frontend.sub_rob_enable,
     "GemminiBall requires frontend.sub_rob_enable=true because loop instructions emit SubROB rows"

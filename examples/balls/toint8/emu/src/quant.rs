@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num};
+use super::super::bank::bank_lines;
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
@@ -7,19 +7,16 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let unused = rs1_b1(xs1);
     let dst = rs1_b2(xs1);
     let iter = rs1_iter(xs1) as usize;
-    if src >= bank_num() as u64 || dst >= bank_num() as u64 {
-        panic!("quant_f32_to_i8: invalid bank id");
-    }
     if unused != 0 {
         panic!("quant_f32_to_i8: input bank 1 must be zero");
     }
     if src == dst {
         panic!("quant_f32_to_i8: input and output banks must differ");
     }
-    if !ctx.cfgs[src as usize].allocated || !ctx.cfgs[dst as usize].allocated {
+    if !ctx.config(src).allocated || !ctx.config(dst).allocated {
         panic!("quant_f32_to_i8: bank not allocated");
     }
-    if ctx.cfgs[src as usize].cols != 1 || ctx.cfgs[dst as usize].cols != 1 {
+    if ctx.config(src).cols != 1 || ctx.config(dst).cols != 1 {
         panic!("quant_f32_to_i8: banks must have one column");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
@@ -33,8 +30,8 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("quant_f32_to_i8: scale must be finite and positive");
     }
 
-    let ps = pbank(ctx.bank_map, src);
-    let pd = pbank(ctx.bank_map, dst);
+    let ps = pbank(ctx, src);
+    let pd = pbank(ctx, dst);
     let (input, output) = ctx.banks.read_write(ps, pd);
     for output_row in 0..iter / 4 {
         let mut packed = [0u8; 16];
@@ -44,11 +41,8 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             for lane in 0..4 {
                 let offset = base + lane * 4;
                 let bits = u32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
-                packed[group * 4 + lane] = super::model::quantize_f32(
-                    f32::from_bits(bits),
-                    scale,
-                    false,
-                ) as u8;
+                packed[group * 4 + lane] =
+                    super::model::quantize_f32(f32::from_bits(bits), scale, false) as u8;
             }
         }
         let base = output_row * 16;
@@ -62,22 +56,14 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let scale_bank = rs1_b1(xs1);
     let dst = rs1_b2(xs1);
     let iter = rs1_iter(xs1) as usize;
-    if src >= bank_num() as u64 || scale_bank >= bank_num() as u64 || dst >= bank_num() as u64 {
-        panic!("quant_i32_to_i8: invalid bank id");
-    }
     if src == scale_bank || src == dst || scale_bank == dst {
         panic!("quant_i32_to_i8: input, scale, and output banks must differ");
     }
-    if !ctx.cfgs[src as usize].allocated
-        || !ctx.cfgs[scale_bank as usize].allocated
-        || !ctx.cfgs[dst as usize].allocated
+    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated
     {
         panic!("quant_i32_to_i8: bank not allocated");
     }
-    if ctx.cfgs[src as usize].cols != 1
-        || ctx.cfgs[scale_bank as usize].cols != 1
-        || ctx.cfgs[dst as usize].cols != 1
-    {
+    if ctx.config(src).cols != 1 || ctx.config(scale_bank).cols != 1 || ctx.config(dst).cols != 1 {
         panic!("quant_i32_to_i8: banks must have one column");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
@@ -105,7 +91,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     }
     let relu = xs2 & 1 != 0;
 
-    let pscale = pbank(ctx.bank_map, scale_bank);
+    let pscale = pbank(ctx, scale_bank);
     let mut scales = [0.0f32; 16];
     for group in 0..4 {
         let base = group * 16;
@@ -120,8 +106,8 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         }
     }
 
-    let ps = pbank(ctx.bank_map, src);
-    let pd = pbank(ctx.bank_map, dst);
+    let ps = pbank(ctx, src);
+    let pd = pbank(ctx, dst);
     let (input, output) = ctx.banks.read_write(ps, pd);
     for output_row in 0..iter / 4 {
         let mut packed = [0u8; 16];
@@ -135,9 +121,8 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                 packed[channel] = super::model::quantize_i32(value, scales[channel], relu) as u8;
             }
         }
-        let row = output_base
-            + (output_row / output_width) * output_stride
-            + output_row % output_width;
+        let row =
+            output_base + (output_row / output_width) * output_stride + output_row % output_width;
         let base = row * 16;
         output[base..base + 16].copy_from_slice(&packed);
     }
@@ -172,8 +157,7 @@ pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
         || output_height == 0
         || output_stride < output_width
         || output_width * output_height != iter / 4
-        || output_base + (output_height - 1) * output_stride + output_width
-            > bank_lines() as u64
+        || output_base + (output_height - 1) * output_stride + output_width > bank_lines() as u64
         || input_base + iter > bank_lines() as u64
     {
         panic!("quant_i32_to_i8: illegal encoding");

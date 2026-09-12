@@ -2,7 +2,6 @@ use crate::model;
 
 pub const BANK_ROW_BYTES: usize = model::BANK_ROW_BYTES;
 pub const MAX_WORDS: usize = 128;
-pub const MAX_OUTPUT_ROWS: usize = 128;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12,6 +11,7 @@ pub struct Im2colCmd {
     pub ksize: u32,
     pub stride: u32,
     pub padding: u32,
+    pub window_count: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
     pub op1_col: u32,
@@ -92,14 +92,15 @@ fn build_case(
         panic!("build_case: flat len mismatch");
     }
     let rows = model::output_rows(iter, ksize, stride, padding);
-    if rows > MAX_OUTPUT_ROWS {
-        panic!("build_case: output_rows={rows} exceeds {MAX_OUTPUT_ROWS}");
+    let windows = ((iter + 2 * padding - ksize) / stride + 1).pow(2);
+    if rows > model::bank_entries() {
+        panic!("build_case: output_rows={rows} exceeds bank depth");
     }
     let dst_flat = model::im2col(flat, iter, ksize, stride, padding);
     let src = model::pack_bank_words(flat);
     let nsrc = model::num_words(src.len());
     let ndst = model::num_words(dst_flat.len());
-    if nsrc > MAX_WORDS || ndst > MAX_WORDS {
+    if nsrc > model::bank_entries() || ndst > model::bank_entries() || nsrc > MAX_WORDS || ndst > MAX_WORDS {
         panic!("build_case: word count out of range src={nsrc} dst={ndst}");
     }
     Im2colCase {
@@ -109,6 +110,7 @@ fn build_case(
             ksize: ksize as u32,
             stride: stride as u32,
             padding: padding as u32,
+            window_count: windows as u32,
             op1_bank,
             wr_bank,
             op1_col: 1,
@@ -153,7 +155,7 @@ fn shape_ok(iter: usize, ksize: usize, stride: usize, padding: usize) -> bool {
         return false;
     }
     let rows = model::output_rows(iter, ksize, stride, padding);
-    rows <= MAX_OUTPUT_ROWS
+    rows <= model::bank_entries()
 }
 
 fn random_case(seed: u32, index: u32, bid: u32) -> Im2colCase {
@@ -230,12 +232,12 @@ mod tests {
         assert_eq!(case.cmd.wr_bank, 1);
         assert_eq!(case.cmd.op1_col, 1);
         assert_eq!(case.cmd.wr_col, 1);
-        assert_eq!(case.cmd.num_src_words, 3);
+        assert_eq!(case.cmd.num_src_words, 36);
         assert_eq!(case.cmd.num_dst_words, 16);
-        assert_eq!(case.src.len(), 48);
+        assert_eq!(case.src.len(), 36 * 16);
         assert_eq!(case.dst.len(), 16 * 16);
         assert_eq!(case.src[0], (-1i8) as u8);
-        assert_eq!(case.src[35], 36);
+        assert_eq!(case.src[35 * 16], 36);
     }
 
     #[test]
@@ -257,7 +259,7 @@ mod tests {
         assert_eq!(a.cmd.stride, 1);
         assert!(a.cmd.padding == 0 || a.cmd.padding == 1);
         assert_ne!(a.cmd.op1_bank, a.cmd.wr_bank);
-        assert!(a.cmd.num_dst_words <= MAX_OUTPUT_ROWS as u32);
+        assert!(a.cmd.num_dst_words <= model::bank_entries() as u32);
     }
 
     #[test]

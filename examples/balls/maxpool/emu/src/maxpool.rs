@@ -1,4 +1,4 @@
-use super::super::bank::{bank_lines, bank_num, bank_row_bytes};
+use super::super::bank::{bank_lines, bank_row_bytes};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallInstruction, ExecContext};
 
@@ -32,8 +32,7 @@ fn legal_geometry(
         || kernel + start_col > padded_side
         || last_row >= padded_side
         || last_col >= padded_side
-        || output_base + (output_side - 1) * output_stride + output_side
-            > bank_lines() as u64
+        || output_base + (output_side - 1) * output_stride + output_side > bank_lines() as u64
     {
         return false;
     }
@@ -71,14 +70,11 @@ impl BallInstruction for MaxPool {
         if rs1_b1(xs1) != 0 {
             panic!("maxpool: input bank 1 must be zero");
         }
-        if input_bank >= bank_num() as u64 || output_bank >= bank_num() as u64 {
-            panic!("maxpool: invalid bank id");
-        }
         if input_bank == output_bank {
             panic!("maxpool: input and output banks must differ");
         }
         for bank in [input_bank, output_bank] {
-            if !ctx.cfgs[bank as usize].allocated || ctx.cfgs[bank as usize].cols != 1 {
+            if !ctx.config(bank).allocated || ctx.config(bank).cols != 1 {
                 panic!("maxpool: each operand must occupy one allocated bank");
             }
         }
@@ -100,8 +96,8 @@ impl BallInstruction for MaxPool {
             panic!("maxpool: illegal square pooling geometry");
         }
 
-        let pi = pbank(ctx.bank_map, input_bank);
-        let po = pbank(ctx.bank_map, output_bank);
+        let pi = pbank(ctx, input_bank);
+        let po = pbank(ctx, output_bank);
         let (input, output) = ctx.banks.read_write(pi, po);
         for output_y in 0..output_side {
             for output_x in 0..output_side {
@@ -110,10 +106,10 @@ impl BallInstruction for MaxPool {
                 let mut maximum = [-128i8; 16];
                 for kernel_y in 0..kernel {
                     for kernel_x in 0..kernel {
-                        let input_y = (output_y * stride + kernel_y + start_row) as isize
-                            - padding as isize;
-                        let input_x = (output_x * stride + kernel_x + start_col) as isize
-                            - padding as isize;
+                        let input_y =
+                            (output_y * stride + kernel_y + start_row) as isize - padding as isize;
+                        let input_x =
+                            (output_x * stride + kernel_x + start_col) as isize - padding as isize;
                         if input_y < 0
                             || input_x < 0
                             || input_y >= input_side as isize
@@ -121,10 +117,9 @@ impl BallInstruction for MaxPool {
                         {
                             continue;
                         }
-                        let input_offset = (input_base
-                            + input_y as usize * input_side
-                            + input_x as usize)
-                            * bank_row_bytes();
+                        let input_offset =
+                            (input_base + input_y as usize * input_side + input_x as usize)
+                                * bank_row_bytes();
                         for lane in 0..16 {
                             maximum[lane] = maximum[lane].max(input[input_offset + lane] as i8);
                         }

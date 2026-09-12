@@ -83,10 +83,17 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
       // One row = DIM elements; split across outBW ports (group_id 0..outBW-1).
       // mvout reads (addr, group 0), (addr, group 1), ... and concatenates as row.
       // So port i (group_id=i) must get elements [i*elemsPerPort .. (i+1)*elemsPerPort).
-      val rowIdx   = store_row_cnt
-      val row      = outBuf(rowIdx)
-      val flat_raw = VecInit(row.flatten)
-      val row_bits = Cat(flat_raw.map(_.asUInt).reverse)
+      val rowIdx      = store_row_cnt
+      val row         = outBuf(rowIdx)
+      val flat_raw    = VecInit(row.flatten)
+      val flat_scaled = VecInit(
+        row.flatten.map(value => (value >> cfg_in_shift).asTypeOf(accType))
+      )
+      val row_bits    = Cat(
+        Mux(cfg_dataflow === Dataflow.WS.id.U, flat_scaled, flat_raw)
+          .map(_.asUInt)
+          .reverse
+      )
 
       val bitsPerPort = b.memDomain.bankWidth
 
@@ -94,7 +101,7 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
         when(!port_written(i)) {
           val slice = row_bits((i + 1) * bitsPerPort - 1, i * bitsPerPort)
           io.bankWrite(i).req.valid     := true.B
-          io.bankWrite(i).req.bits.addr := store_row_cnt
+          io.bankWrite(i).req.bits.addr := wr_base + store_row_cnt
           io.bankWrite(i).req.bits.data := slice
           io.bankWrite(i).req.bits.mask := VecInit(
             Seq.fill(b.memDomain.bankMaskLen)(true.B)

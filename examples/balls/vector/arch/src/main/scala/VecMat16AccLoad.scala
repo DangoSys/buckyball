@@ -9,7 +9,7 @@ class VecMat16AccLoad(val b: GlobalConfig, lane: Int, accWidth: Int) extends Mod
 
   val io = IO(new Bundle {
     val start    = Input(Bool())
-    val wrBank   = Input(UInt(log2Up(b.memDomain.bankNum).W))
+    val wrBank   = Input(UInt(b.memDomain.vbankIdWidth.W))
     val robId    = Input(UInt(log2Up(b.frontend.rob_entries).W))
     val bankRead = Vec(2, Flipped(new BankRead(b)))
     val acc      = Output(Vec(lane, Vec(lane, UInt(accWidth.W))))

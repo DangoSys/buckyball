@@ -6,6 +6,8 @@ func.func @main() -> i8 {
   %c1 = arith.constant 1 : index
   %c3 = arith.constant 3 : index
   %c8 = arith.constant 8 : index
+  %i5 = arith.constant 5 : i32
+  %i31 = arith.constant 31 : i32
   %in = memref.alloc() : memref<1x3x8x8xf32>
   %out = memref.alloc() : memref<1x8x8x3xf32>
   scf.for %c = %c0 to %c3 step %c1 {
@@ -14,7 +16,9 @@ func.func @main() -> i8 {
         %cf = arith.index_cast %c : index to i32
         %hf = arith.index_cast %h : index to i32
         %wf = arith.index_cast %w : index to i32
-        %s = arith.addi %cf, %hf : i32
+        %cv = arith.muli %cf, %i31 : i32
+        %hv = arith.muli %hf, %i5 : i32
+        %s = arith.addi %cv, %hv : i32
         %s2 = arith.addi %s, %wf : i32
         %v = arith.sitofp %s2 : i32 to f32
         memref.store %v, %in[%c0, %c, %h, %w] : memref<1x3x8x8xf32>

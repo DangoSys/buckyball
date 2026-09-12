@@ -15,6 +15,9 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
       op1_bank       := io.cmdReq.bits.cmd.op1_bank
       op2_bank       := io.cmdReq.bits.cmd.op2_bank
       wr_bank        := io.cmdReq.bits.cmd.wr_bank
+      op1_base       := io.cmdReq.bits.cmd.special(15, 6)
+      op2_base       := io.cmdReq.bits.cmd.special(25, 16)
+      wr_base        := io.cmdReq.bits.cmd.special(35, 26)
       total_rows     := Mux(
         io.cmdReq.bits.cmd.iter === 0.U,
         DIM.U,
