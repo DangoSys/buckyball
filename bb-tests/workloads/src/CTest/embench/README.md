@@ -10,7 +10,7 @@ bb-tests/workloads/src/CTest/embench/
 │   ├── support.h            # Interface definitions (always includes boardsupport.h)
 │   ├── boardsupport.c/h     # Buckyball adaptation (empty init + start/stop_trigger)
 │   └── chipsupport.c/h      # Buckyball adaptation (empty init)
-└── src/                     # 19 benchmarks
+└── src/                     # registered benchmarks (see CMakeLists)
     ├── aha-mont64/  crc32/  cubic/  edn/  huffbench/  matmult-int/
     ├── minver/  nbody/  nettle-aes/  nettle-sha256/  nsichneu/
     ├── picojpeg/  qrduino/  sglib-combined/  slre/  st/
