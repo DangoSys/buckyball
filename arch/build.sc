@@ -65,6 +65,9 @@ object buckyball extends SbtModule { m =>
     val localSources = os.walk(os.pwd / "src" / "main" / "scala")
       .filter(path => path.ext == "scala")
       .filterNot(path => path.toString.contains("/sims/firesim/"))
+      .filterNot(path => path.toString.contains("/framework/root/"))
+      .filterNot(path => path.toString.contains("/framework/mem-core/"))
+      .filterNot(path => path.toString.contains("/framework/rvv/"))
       .map(PathRef(_))
     localSources ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs(
       "balls"

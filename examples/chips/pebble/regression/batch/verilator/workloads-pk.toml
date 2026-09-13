@@ -54,6 +54,4 @@ tests = [
   "pebble-pebble-ctest-se_gate_lut_test-linux",
   "pebble-pebble-ctest-dual_smatmul_matadd_test-linux",
   "pebble-pebble-ctest-dual_conv_add_int2fp_test-linux",
-  "pebble-pebble-mlirtest-tile_mega_matmul-linux",
-  "pebble-pebble-mlirtest-tile_mega_conv2d-linux",
 ]

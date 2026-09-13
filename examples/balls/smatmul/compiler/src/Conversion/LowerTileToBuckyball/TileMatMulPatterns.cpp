@@ -84,7 +84,8 @@ public:
       return tileMatMulOp.emitError(
           "quantized matmul requires RAX Dw metadata");
 
-    size_t M_pad = ceilDiv(M, kBankLane) * kBankLane;
+    constexpr size_t mTileSize = 8;
+    size_t M_pad = ceilDiv(M, mTileSize) * mTileSize;
     size_t K_pad = ceilDiv(K, kBankLane) * kBankLane;
     size_t N_pad = ceilDiv(N, kBankLane) * kBankLane;
     bool needPadding = (M_pad != M) || (K_pad != K) || (N_pad != N);
@@ -146,8 +147,8 @@ public:
     if (bankDepth <= 0 || (size_t)bankDepth % kBankLane != 0)
       return tileMatMulOp.emitError(
           "bankDepth must be a positive multiple of bank lane");
-    if (M_tiling % kBankLane || K_tiling % kBankLane || N_tiling % kBankLane)
-      return tileMatMulOp.emitError("M/N/K must be multiples of bank lane");
+    if (M_tiling % mTileSize || K_tiling % kBankLane || N_tiling % kBankLane)
+      return tileMatMulOp.emitError("M must be a multiple of 8 and K/N must be multiples of bank lane");
     if (isQuantized) {
       const int64_t dwRequired = perChannelAttr.getValue() ? N_tiling * 4 : 4;
       if (dwBytesAttr.getInt() < dwRequired)
@@ -156,7 +157,6 @@ public:
 
     // Bank unit on M (depth) and N (lane). Quantized matmul carries one
     // logical K into SMatMul so FP2INT computes one activation scale.
-    const size_t mTileSize = std::min((size_t)bankDepth, M_tiling);
     const size_t nTileSize = kBankLane;
     const size_t kTileSize =
         (isWideFloat || isQuantized) ? K_tiling : kBankLane;

@@ -3,28 +3,32 @@ package examples.balls.smatmul
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import examples.balls.smatmul.configs.SMatMulBallParam
+import framework.top.GlobalConfig
 
 @instantiable
-class Array extends Module {
-  private val tile = 16
+class Array(val b: GlobalConfig) extends Module {
+  private val param = SMatMulBallParam(b)
+  private val rows = param.tileRows
+  private val cols = param.tileCols
 
   @public
   val io = IO(new Bundle {
     val start  = Input(Bool())
-    val aRows  = Input(Vec(tile, UInt(128.W)))
-    val bRows  = Input(Vec(tile, UInt(128.W)))
+    val aRows  = Input(Vec(rows, UInt(128.W)))
+    val bRows  = Input(Vec(cols, UInt(128.W)))
     val done   = Output(Bool())
-    val result = Output(Vec(tile, UInt(512.W)))
+    val result = Output(Vec(rows, UInt(512.W)))
   })
 
   val running = RegInit(false.B)
   val cycle   = RegInit(0.U(6.W))
-  val pe      = Seq.tabulate(tile, tile)((_, _) => Instantiate(new PE))
-  val aShift  = Reg(Vec(tile, UInt(128.W)))
+  val pe      = Seq.tabulate(rows, cols)((_, _) => Instantiate(new PE))
+  val aShift  = Reg(Vec(rows, UInt(128.W)))
   // The PE product register adds one cycle between the systolic operands and
   // the accumulator.  Keep the final drain cycle explicit so the last tile
   // product is included before done is asserted.
-  val lastCyc = 47.U
+  val lastCyc = (rows + cols + 15).U
 
   when(io.start) {
     assert(!running, "Array: start while array is running")
@@ -37,18 +41,18 @@ class Array extends Module {
     }.otherwise {
       cycle := cycle + 1.U
     }
-    for (row <- 0 until tile) {
-      when(cycle >= row.U && cycle < (row + tile).U) {
+    for (row <- 0 until rows) {
+      when(cycle >= row.U && cycle < (row + cols).U) {
         aShift(row) := aShift(row) >> 8
       }
     }
   }
 
-  for (row <- 0 until tile) {
+  for (row <- 0 until rows) {
     val aWord  = aShift(row)(7, 0).asSInt
-    val aValid = running && cycle >= row.U && cycle < (row + tile).U
+    val aValid = running && cycle >= row.U && cycle < (row + cols).U
 
-    for (column <- 0 until tile) {
+    for (column <- 0 until cols) {
       pe(row)(column).io.clear := io.start
       if (column == 0) {
         pe(row)(column).io.aIn      := aWord
@@ -61,7 +65,7 @@ class Array extends Module {
       val bCycle = cycle - column.U
       val bRow   = bCycle(3, 0)
       val bWord  = io.bRows(bRow)(8 * column + 7, 8 * column).asSInt
-      val bValid = running && cycle >= column.U && cycle < (column + tile).U
+      val bValid = running && cycle >= column.U && cycle < (column + cols).U
       if (row == 0) {
         pe(row)(column).io.bIn      := bWord
         pe(row)(column).io.bInValid := bValid
@@ -72,8 +76,8 @@ class Array extends Module {
     }
   }
 
-  for (row <- 0 until tile) {
-    io.result(row) := Cat((0 until tile).reverse.map(column => pe(row)(column).io.sum.asUInt))
+  for (row <- 0 until rows) {
+    io.result(row) := Cat((0 until cols).reverse.map(column => pe(row)(column).io.sum.asUInt))
   }
   io.done := running && cycle === lastCyc
 }

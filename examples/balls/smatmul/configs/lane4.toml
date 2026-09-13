@@ -1,10 +1,5 @@
-# SMatMul Ball Configuration (lane=4)
+# SMatMul Ball Configuration
 
 [ball]
-InputNum = 4
-inputWidth = 8
-lane = 4
-wsReuseTiles = 8
-outputWidth = 32
-numMulThreads = 4
-numCasThreads = 4
+tileRows = 8
+tileCols = 16

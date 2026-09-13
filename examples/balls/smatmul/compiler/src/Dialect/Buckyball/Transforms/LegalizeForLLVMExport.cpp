@@ -24,9 +24,9 @@ namespace {
 
 uint64_t matrixCfg(uint64_t rows, uint64_t cols, bool first = true,
                    bool last = true) {
-  if (rows == 0 || rows > 0xfff || (rows != 1 && rows % 16) || cols != 16)
+  if (rows == 0 || rows > 0xfff || (rows != 1 && rows % 8) || cols != 16)
     llvm::report_fatal_error(
-        "matrix cfg: rows must be 1 or a multiple of 16 and cols must be 16");
+        "matrix cfg: rows must be 1 or a multiple of 8 and cols must be 16");
   return fieldBits(rows, 0, 11) | fieldBits(cols, 12, 23) |
          (uint64_t(first) << 24) | (uint64_t(last) << 25);
 }
@@ -64,7 +64,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
     if (bankDepth <= 0)
       return op.emitError("smatmul lowering requires target bankDepth > 0");
     // A occupies m lines, B occupies k lines, and packed int32 C occupies 2m.
-    if (m == 0 || n != 16 || k != 16 || m % 16 != 0 ||
+    if (m == 0 || n != 16 || k != 16 || m % 8 != 0 ||
         m > static_cast<uint64_t>(bankDepth / 2) ||
         k > static_cast<uint64_t>(bankDepth))
       return rewriter.notifyMatchFailure(
@@ -209,7 +209,7 @@ struct SMatMulLowering : public ConvertOpToLLVMPattern<SMatMulOp> {
     uint64_t rows = cfg & 0xfff;
     uint64_t cols = (cfg >> 12) & 0xfff;
     uint64_t k = (cfg >> 24) & 0xfff;
-    if (rows == 0 || (rows != 1 && rows % 16) || cols != 16 || k == 0 ||
+    if (rows == 0 || (rows != 1 && rows % 8) || cols != 16 || k == 0 ||
         k % 16 || rows * 4 > static_cast<uint64_t>(bankDepth))
       return op.emitError("SMatMul matrix shape or C footprint is invalid");
     auto base = adaptor.getOutputBase().getDefiningOp<arith::ConstantOp>();

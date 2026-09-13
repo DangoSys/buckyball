@@ -6,10 +6,13 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
 import framework.top.GlobalConfig
+import examples.balls.smatmul.configs.SMatMulBallParam
 
 @instantiable
 class SMatMulUnit(val b: GlobalConfig) extends Module {
-  private val tile          = 16
+  private val param         = SMatMulBallParam(b)
+  private val rows          = param.tileRows
+  private val cols          = param.tileCols
   private val resultWords   = 4
   private val addressWidth  = log2Ceil(b.memDomain.bankEntries)
   private val bankIdWidth   = b.memDomain.vbankIdWidth
@@ -36,7 +39,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   require(b.memDomain.bankWidth == 128, "SMatMulBall requires 128-bit bank rows")
   require(b.memDomain.bankMaskLen == 16, "SMatMulBall requires sixteen byte enables")
   require(b.memDomain.bankEntries % resultWords == 0, "SMatMulBall bank depth must be divisible by four")
-  require(maxOutputRows >= tile, "SMatMulBall accumulator must hold at least one 16-row tile")
+  require(maxOutputRows >= rows, "SMatMulBall accumulator must hold at least one tile")
   require((osFunct >> 4) == 4, "SMATMUL_OS must encode two reads and one write")
   require((biasFunct >> 4) == 1, "SMATMUL_BIAS must encode one read")
 
@@ -104,13 +107,13 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   private val bRowsStored        = RegInit(0.U(5.W))
   private val cRowData           = Reg(UInt(512.W))
 
-  private val aRows       = Reg(Vec(tile, UInt(128.W)))
-  private val bRows       = Reg(Vec(tile, UInt(128.W)))
+  private val aRows       = Reg(Vec(rows, UInt(128.W)))
+  private val bRows       = Reg(Vec(cols, UInt(128.W)))
   private val accumulator = SyncReadMem(accDepth, UInt(512.W))
-  private val array: Instance[Array] = Instantiate(new Array)
+  private val array: Instance[Array] = Instantiate(new Array(b))
 
-  private val computeGlobalRow = outputTile * tile.U + accumulatorRow
-  private val resultGlobalRow  = outputTile * tile.U + resultRow
+  private val computeGlobalRow = outputTile * rows.U + accumulatorRow
+  private val resultGlobalRow  = outputTile * rows.U + resultRow
   private val accumulatorRead  = state === readAccumulator || state === readResult
   private val accumulatorWrite = state === initAccumulator || state === writeAccumulator
 
@@ -130,8 +133,8 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     accumulatorWrite
   )
 
-  private val accumulatedResult = Wire(Vec(tile, UInt(32.W)))
-  for (column <- 0 until tile) {
+  private val accumulatedResult = Wire(Vec(cols, UInt(32.W)))
+  for (column <- 0 until cols) {
     val oldValue = accumulatorData(32 * column + 31, 32 * column).asSInt
     val newValue = array.io.result(accumulatorRow)(32 * column + 31, 32 * column).asSInt
     accumulatedResult(column) := (oldValue + newValue).asUInt
@@ -142,10 +145,10 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   private val aTileLine = Mux(
     vectorMode,
     reductionTile,
-    (outputTile * reductionTileCount + reductionTile) << 4
+    (outputTile * reductionTileCount + reductionTile) * rows.U
   )
 
-  private val bTileLine = reductionTile << 4
+  private val bTileLine = reductionTile * cols.U
   private val cLine     = cBase +& (resultGlobalRow << 2) +& outputWord
 
   for (port <- 0 until mapping.inBW) {
@@ -161,17 +164,17 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   io.bankRead(0).io.req.valid     := Mux(
     state === biasReadReq,
     true.B,
-    state === loadTile && aRowsRequested < Mux(vectorMode, 1.U, tile.U)
+    state === loadTile && aRowsRequested < Mux(vectorMode, 1.U, rows.U)
   )
   io.bankRead(0).io.req.bits.addr := Mux(
     state === biasReadReq,
     (biasBase +& biasRow)(addressWidth - 1, 0),
     (aTileLine + aRowsRequested)(addressWidth - 1, 0)
   )
-  io.bankRead(0).io.resp.ready    := state === biasReadResp || (state === loadTile && aRowsStored < tile.U)
-  io.bankRead(1).io.req.valid     := state === loadTile && bRowsRequested < tile.U
+  io.bankRead(0).io.resp.ready    := state === biasReadResp || (state === loadTile && aRowsStored < rows.U)
+  io.bankRead(1).io.req.valid     := state === loadTile && bRowsRequested < cols.U
   io.bankRead(1).io.req.bits.addr := (bTileLine + bRowsRequested)(addressWidth - 1, 0)
-  io.bankRead(1).io.resp.ready    := state === loadTile && bRowsStored < tile.U
+  io.bankRead(1).io.resp.ready    := state === loadTile && bRowsStored < cols.U
 
   private val cWords = cRowData.asTypeOf(Vec(resultWords, UInt(128.W)))
   io.bankWrite(0).rob_id           := robId
@@ -185,7 +188,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   io.bankWrite(0).io.resp.ready    := state === waitForCWrite
 
   array.io.start := state === loadTile &&
-    aRowsStored === Mux(vectorMode, 1.U, tile.U) && bRowsStored === tile.U
+    aRowsStored === Mux(vectorMode, 1.U, rows.U) && bRowsStored === cols.U
   array.io.aRows := aRows
   array.io.bRows := bRows
 
@@ -244,14 +247,14 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
         "SMATMUL_OS requires one physical bank per operand"
       )
       assert(
-        rows === 1.U || (rows =/= 0.U && rows(3, 0) === 0.U),
-        "SMATMUL_OS M must be one or a positive multiple of 16"
+        rows === 1.U || (rows =/= 0.U && rows(2, 0) === 0.U),
+        "SMATMUL_OS M must be one or a positive multiple of 8"
       )
-      assert(columns === tile.U, "SMATMUL_OS N must be 16")
+      assert(columns === cols.U, "SMATMUL_OS N must be 16")
       assert(reduction =/= 0.U && reduction(3, 0) === 0.U, "SMATMUL_OS K must be a positive multiple of 16")
       assert(command.rs2(63, 32) === 0.U, "SMATMUL_OS reserves rs2[63:32]")
       assert(
-        Mux(rows === 1.U, reduction >> 4, (rows >> 4) * reduction) <= b.memDomain.bankEntries.U,
+        Mux(rows === 1.U, reduction >> 4, (rows * reduction) >> 4) <= b.memDomain.bankEntries.U,
         "SMATMUL_OS A footprint exceeds bank depth"
       )
       assert(reduction <= b.memDomain.bankEntries.U, "SMATMUL_OS B footprint exceeds bank depth")
@@ -282,7 +285,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       bBank              := command.op2_bank
       cBank              := command.wr_bank
       cBase              := command.rs2(31, 26)
-      outputTileCount    := Mux(rows === 1.U, 1.U, rows >> 4)
+      outputTileCount    := Mux(rows === 1.U, 1.U, rows >> 3)
       reductionTileCount := reduction >> 4
       outputTile         := 0.U
       reductionTile      := 0.U
@@ -293,7 +296,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       aRowsStored        := 0.U
       bRowsRequested     := 0.U
       bRowsStored        := 0.U
-      for (row <- 1 until tile) {
+      for (row <- 1 until 8) {
         aRows(row) := 0.U
       }
     }
@@ -319,7 +322,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   }
 
   when(state === initAccumulator) {
-    when(accumulatorRow === Mux(vectorMode, 0.U, (tile - 1).U)) {
+    when(accumulatorRow === Mux(vectorMode, 0.U, (rows - 1).U)) {
       accumulatorRow := 0.U
       when(outputTile + 1.U === outputTileCount) {
         outputTile     := 0.U
@@ -348,7 +351,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       bRows(bRowsStored(3, 0)) := io.bankRead(1).io.resp.bits.data
       bRowsStored              := bRowsStored + 1.U
     }
-    when(aRowsStored === Mux(vectorMode, 1.U, tile.U) && bRowsStored === tile.U) {
+    when(aRowsStored === Mux(vectorMode, 1.U, rows.U) && bRowsStored === cols.U) {
       state := runArray
     }
   }
@@ -361,7 +364,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     state := writeAccumulator
   }
   when(state === writeAccumulator) {
-    when(accumulatorRow === Mux(vectorMode, 0.U, (tile - 1).U)) {
+    when(accumulatorRow === Mux(vectorMode, 0.U, (rows - 1).U)) {
       accumulatorRow := 0.U
       when(reductionTile + 1.U < reductionTileCount) {
         reductionTile  := reductionTile + 1.U
@@ -408,7 +411,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
     when(outputWord =/= (resultWords - 1).U) {
       outputWord := outputWord + 1.U
       state      := writeResult
-    }.elsewhen(resultRow =/= Mux(vectorMode, 0.U, (tile - 1).U)) {
+    }.elsewhen(resultRow =/= Mux(vectorMode, 0.U, (rows - 1).U)) {
       resultRow := resultRow + 1.U
       state     := readResult
     }.elsewhen(outputTile + 1.U < outputTileCount) {
