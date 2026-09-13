@@ -1,0 +1,195 @@
+# bb-verify — dispatch-only verification of temp branches (verify/*) on the
+# self-hosted runner's persistent checkout. No pull_request surface.
+# Contract, design and deployment: .github/workflows/bb-verify.md
+# Step logic lives in .github/scripts/bb-verify/ (one script per step).
+name: bb-verify
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+# ===== Deployment facts (the only machine-specific section) =====
+# Adjust these 10 values, runs-on and the PATH-fix lines to your runner host;
+# run blocks reference $VARNAME only. Sole exception: the "Archive verdict
+# artifact" path: strings (YAML cannot reference env) must byte-equal VERIFY_OUT.
+env:
+  BB_VERIFY_ROOT: /home/bb-verify/buckyball                     # persistent root (built once by bootstrap-persistent-root.sh)
+  BB_VERIFY_LOCK: /home/bb-verify/bb-verify.lock                # flock file serializing checkout switches on the persistent root
+  DSH_DIR: /home/bb-verify/deepseek-harness                     # local dsh checkout (pnpm dsh)
+  HARNESS_PKG: /home/bb-verify/harness/packages/verify-runner   # local verify-runner checkout (scripts/*.mjs run straight from it)
+  VERIFY_OUT: /home/bb-verify/deepseek-harness/.bb-verify-out   # verdict dir (verdict.txt + report.md); must be writable from the dsh sandbox
+  RELAY_ADDR: ''                                                # optional host:port of a local LLM relay; empty = direct connection
+  SNPSLMD_LICENSE_FILE: 26000@127.0.0.1                         # Synopsys license server for dc_shell/vcs/lc_shell (regression.yml pattern)
+  LM_LICENSE_FILE: 26000@127.0.0.1                              # ditto; the fallback Synopsys licensing actually reads
+  EDA_BIN: ''                                                   # single dir with dc_shell/vcs wrappers if the host needs shims; empty = tools natively on PATH
+  # `;`-separated src>dst bind pairs for the session sandbox. Empty = no
+  # sandbox; set pairs only when the host lacks /home/bb-runner/Code/eda
+  # natively (the upstream runner has it).
+  EDA_SESSION_BINDS: ''                                         # see above; empty = run unsandboxed
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Temp branch to verify (must match ^verify/[A-Za-z0-9._-]+$; anything else is rejected)'
+        type: string
+        required: true
+      sha:
+        description: 'Expected head sha of ref (40-hex race guard, compared with the checked-out HEAD)'
+        type: string
+        required: true
+      layer:
+        description: 'merge = fast gate (pre-commit + bemu batches, ~check.yaml); complete = heavy re-verify (+ regression.yml EDA lanes)'
+        type: choice
+        options: [merge, complete]
+        default: merge
+        required: false
+
+# The persistent root is shared mutable state: serialize runs. The concurrency
+# group queues on the GitHub side; prepare.sh takes an flock on BB_VERIFY_LOCK
+# against local out-of-band users.
+concurrency:
+  group: bb-verify-persistent-root
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: bb-verify
+    # complete layer + EDA lanes (SRAM .lib->.db compile, dc synthesis, UVM)
+    # can exceed 3h on this host.
+    timeout-minutes: 360
+    outputs:
+      resolved_sha: ${{ steps.prepare.outputs.resolved_sha }}
+    steps:
+      # Only to obtain $GITHUB_WORKSPACE (task-prompt.md, context.json) and the
+      # .github/scripts/bb-verify/*.sh helpers. The code under test is NOT
+      # checked out here — the persistent root handles that.
+      - uses: actions/checkout@v4
+
+      # The runner service's systemd PATH lacks the nix/pnpm/node dirs;
+      # GITHUB_PATH applies to later steps only, so this must come first.
+      - name: Fix PATH for the runner service
+        run: |
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/bin"                  >> "$GITHUB_PATH"
+          [ -z "$EDA_BIN" ] || echo "$EDA_BIN"     >> "$GITHUB_PATH"
+
+      - name: Validate ref inputs
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+          SHA_INPUT: ${{ inputs.sha }}
+          LAYER_INPUT: ${{ inputs.layer || 'merge' }}
+        run: bash .github/scripts/bb-verify/validate-inputs.sh
+
+      - name: Check toolchain, local prerequisites and secret
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }} # non-empty check only, never echoed
+        run: bash .github/scripts/bb-verify/check-prereqs.sh
+
+      - name: Prepare persistent repo (flock + head checkout + incremental submodules)
+        id: prepare
+        run: bash .github/scripts/bb-verify/prepare.sh
+
+      - name: Post pending commit status
+        continue-on-error: true # reporting channel; never flips the verification outcome
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/bb-verify/post-status.sh pending
+
+      - name: Resolve context (ref-context.mjs)
+        run: |
+          node "$HARNESS_PKG/scripts/ref-context.mjs" \
+            --repo "$BB_VERIFY_ROOT" --ref "$REF" --sha "$RESOLVED_SHA" --out context.json
+
+      # Upstream check.yaml pre-commit parity. A red gate is a content failure
+      # (VERDICT: FAIL), not INFRA.
+      - name: Pre-commit gate
+        timeout-minutes: 20
+        run: bash .github/scripts/bb-verify/pre-commit-gate.sh
+
+      - name: Deterministic verdict inputs (stage/manifest/binding/slices/perf)
+        id: verdict_inputs
+        run: bash .github/scripts/bb-verify/verdict-inputs.sh
+
+      - name: Provision persistent root (nix build + bbdev config/compiler/workload)
+        env:
+          COMPILER_TOUCHED: ${{ steps.verdict_inputs.outputs.compiler_touched }}
+          PROVISION_EXEMPT: ${{ steps.verdict_inputs.outputs.provision_exempt }}
+        run: bash .github/scripts/bb-verify/provision.sh
+
+      - name: Set up dsh (stage plugin, fresh DSH_HOME, headless profile, config)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }} # written into the fresh DSH_HOME only, never echoed
+        run: bash .github/scripts/bb-verify/setup-dsh.sh
+
+      - name: Snapshot persistent-root diff (read-only gate baseline)
+        run: git -C "$BB_VERIFY_ROOT" diff HEAD > "$RUNNER_TEMP/pre-verify.diff"
+
+      - name: Run verify-runner
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/bb-verify/run-verify.sh
+
+      - name: 'Gate: verdict artifacts complete + persistent root untouched'
+        run: bash .github/scripts/bb-verify/final-gates.sh
+
+      - name: Archive session logs
+        if: always()
+        continue-on-error: true # observability only; upload flakiness must not flip a red job's verdict semantics
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-sessions
+          path: ${{ runner.temp }}/dsh-home/sessions
+
+      # Backstop for earlier red steps that never reached run-verify's verdict
+      # gate: guarantee verdict.txt exists (INFRA) — the terminal status step's
+      # sole source of truth.
+      - name: Finalize verdict files
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$VERIFY_OUT"
+          [ -f "$VERIFY_OUT/verdict.txt" ] || printf 'VERDICT: INFRA\n' > "$VERIFY_OUT/verdict.txt"
+
+      - name: Archive verdict artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb-verify-verdict
+          # Must byte-equal VERIFY_OUT (YAML cannot reference env here).
+          path: |
+            /home/bb-verify/deepseek-harness/.bb-verify-out/verdict.txt
+            /home/bb-verify/deepseek-harness/.bb-verify-out/report.md
+          if-no-files-found: warn
+
+      - name: Post terminal commit status
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/bb-verify/post-status.sh
+
+  # Hosted backstop: covers exactly one case — the runner died before posting a
+  # terminal bb-verify status. Never overwrites an existing terminal state.
+  report:
+    runs-on: ubuntu-latest
+    needs: verify
+    if: always()
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post error status if the bb-verify terminal status is missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERIFY_STATUS: ${{ needs.verify.result }}
+          JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA_INPUT: ${{ inputs.sha }}
+          VERIFY_RESOLVED_SHA: ${{ needs.verify.outputs.resolved_sha }}
+        run: bash .github/scripts/bb-verify/backstop.sh
