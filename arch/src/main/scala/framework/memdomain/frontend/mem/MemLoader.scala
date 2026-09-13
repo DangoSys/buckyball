@@ -61,6 +61,11 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // MMIO routing info (latched at cmdReq.fire, exposed to upper level)
   val is_mvin_mmio_reg = RegInit(false.B)
+  val is_mvin_2d_reg   = RegInit(false.B)
+  val valid_bytes_reg  = RegInit(16.U(5.W))
+  val pixel_bytes_reg  = RegInit(0.U(10.W))
+  val source_width_reg = RegInit(0.U(10.W))
+  val tile_width_reg   = RegInit(0.U(4.W))
   val mmio_addr_reg    = RegInit(0.U(17.W))
   val mmio_col_reg     = RegInit(0.U(8.W))
 
@@ -80,12 +85,16 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // -----------------------------
   io.cmdReq.ready := (state === s_idle)
 
-  io.dmaReq.valid       := (state === s_dma_req)
-  io.dmaReq.bits.vaddr  := mem_addr_reg
-  io.dmaReq.bits.len    := iter_reg * (b.memDomain.bankWidth / 8).U
-  io.dmaReq.bits.status := 0.U.asTypeOf(new MStatus)
-  io.dmaReq.bits.stride := stride_reg
-  io.dmaReq.bits.groups := group_count_reg
+  io.dmaReq.valid             := (state === s_dma_req)
+  io.dmaReq.bits.vaddr        := mem_addr_reg
+  io.dmaReq.bits.len          := iter_reg * (b.memDomain.bankWidth / 8).U
+  io.dmaReq.bits.status       := 0.U.asTypeOf(new MStatus)
+  io.dmaReq.bits.stride       := stride_reg
+  io.dmaReq.bits.groups       := group_count_reg
+  io.dmaReq.bits.is_2d        := is_mvin_2d_reg
+  io.dmaReq.bits.pixel_bytes  := pixel_bytes_reg
+  io.dmaReq.bits.source_width := source_width_reg
+  io.dmaReq.bits.tile_width   := tile_width_reg
 
   // only accept DMA beat when waiting AND no pending beat buffered
   io.dmaResp.ready := (state === s_dma_wait) && !pending
@@ -93,7 +102,12 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // bank write request driven from pending
   io.bankWrite.io.req.valid     := pending
   io.bankWrite.io.req.bits.addr := rowAddr
-  io.bankWrite.io.req.bits.data := latData
+
+  val validDataMask = VecInit(
+    (0 until b.memDomain.bankWidth / 8).map(i => Mux(i.U < valid_bytes_reg, "hff".U(8.W), 0.U(8.W)))
+  ).asUInt
+
+  io.bankWrite.io.req.bits.data := Mux(is_mvin_2d_reg, latData & validDataMask, latData)
   io.bankWrite.io.req.bits.mask := VecInit(Seq.fill(b.memDomain.bankMaskLen)(true.B))
 
   // IMPORTANT: always ready for write response (avoid deadlock)
@@ -125,14 +139,28 @@ class MemLoader(val b: GlobalConfig) extends Module {
     pending        := false.B
     latLast        := false.B
     group_counter  := 0.U
-    rowAddr        := 0.U
+    rowAddr        := Mux(
+      io.cmdReq.bits.cmd.is_mvin_2d,
+      io.cmdReq.bits.cmd.special(54, 49),
+      0.U
+    )
     is_shared_reg  := io.cmdReq.bits.cmd.is_shared
 
     is_mvin_mmio_reg := io.cmdReq.bits.cmd.is_mvin_mmio
+    is_mvin_2d_reg   := io.cmdReq.bits.cmd.is_mvin_2d
+    valid_bytes_reg  := Mux(io.cmdReq.bits.cmd.special(61, 58) === 0.U, 16.U, io.cmdReq.bits.cmd.special(61, 58))
+    pixel_bytes_reg  := io.cmdReq.bits.cmd.special(38, 32) << 3
+    source_width_reg := io.cmdReq.bits.cmd.special(48, 39)
+    tile_width_reg   := io.cmdReq.bits.cmd.special(57, 55) + 1.U
     when(io.cmdReq.bits.cmd.is_mvin_mmio) {
       mmio_addr_reg   := io.cmdReq.bits.cmd.special(55, 39)
       mmio_col_reg    := io.cmdReq.bits.cmd.special(63, 56)
       iter_reg        := io.cmdReq.bits.cmd.iter
+      group_count_reg := 1.U
+      stride_reg      := 1.U
+      state           := s_dma_req
+    }.elsewhen(io.cmdReq.bits.cmd.is_mvin_2d) {
+      iter_reg        := io.cmdReq.bits.cmd.iter * (io.cmdReq.bits.cmd.special(57, 55) + 1.U)
       group_count_reg := 1.U
       stride_reg      := 1.U
       state           := s_dma_req

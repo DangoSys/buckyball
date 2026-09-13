@@ -64,12 +64,3 @@
 [submodule ".agents/mcps"]
 	path = .agents/mcps
 	url = https://github.com/DangoSys/mcps.git
-[submodule "arch/src/main/scala/framework/root"]
-	path = arch/src/main/scala/framework/root
-	url = https://github.com/DangoSys/root.git
-[submodule "arch/src/main/scala/framework/rvv"]
-	path = arch/src/main/scala/framework/rvv
-	url = https://github.com/DangoSys/rvv.git
-[submodule "arch/src/main/scala/framework/mem-core"]
-	path = arch/src/main/scala/framework/mem-core
-	url = https://github.com/DangoSys/mem-core.git

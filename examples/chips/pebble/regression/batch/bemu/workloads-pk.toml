@@ -1,5 +1,12 @@
 [workloads]
 tests = [
+  "pebble-pebble-ctest-mvin_2d_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_acc_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_stride_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_unaligned_test-linux",
+  "pebble-pebble-ctest-mvin_unaligned_test-linux",
+  "pebble-pebble-mlirtest-linalg_mega_conv2d_k3_c16-linux",
   "pebble-pebble-ctest-mega_conv_pipeline_test-linux",
   "pebble-pebble-ctest-residual_add_lut_test-linux",
   "pebble-pebble-ctest-maxpool_im2col_test-linux",
