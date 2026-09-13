@@ -21,30 +21,32 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
+    diff = bool(body.get("diff", False))
+    rushB = bool(body.get("rushB", False))
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
             status=400,
-            body={"error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"},
+            body={
+                "error": "Missing required parameter: --test must be specified (elf-tests)"
+            },
         )
 
-    if test_type not in ["elf-tests", "pk-tests"]:
+    if test_type != "elf-tests" and not (rushB and test_type == "pk-tests"):
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"},
+            body={
+                "error": f"Invalid test type: {test_type}. Must be 'elf-tests', or 'pk-tests' with --rushB"
+            },
         )
 
-    diff = bool(body.get("diff", False))
-    rushB = bool(body.get("rushB", False))
     if diff and rushB:
         return ApiResponse(
             status=400,
             body={"error": "--diff and --rushB cannot be used together"},
         )
 
-    vsrc_dir = rtl_dir(
-        bbdir, chip, "verilog", body.get("vsrc_dir"), rushb=rushB
-    )
+    vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"), rushb=rushB)
 
     data = {
         "chip": chip,
@@ -54,5 +56,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "rushB": rushB,
         "diff": diff,
     }
-    await ctx.enqueue({"topic": "bebop.verilator.batch", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue(
+        {"topic": "bebop.verilator.batch", "data": {**data, "_trace_id": ctx.trace_id}}
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -8,7 +8,9 @@ from pathlib import Path
 def get_buckyball_path():
     current_dir = os.path.dirname(__file__)
     # bbdev/api/utils -> bbdev/api -> bbdev -> buckyball
-    inferred = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
+    inferred = os.path.realpath(
+        os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    )
 
     root = os.environ.get("BUCKYBALL_ROOT")
     if root:

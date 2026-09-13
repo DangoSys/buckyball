@@ -3,6 +3,7 @@ bebop verilator batch event handler
 
 Runs bebop verilator nextest batch regression (requires prior --build).
 """
+
 import os
 import shutil
 import shlex
@@ -19,12 +20,16 @@ if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
 from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir, workloads_output_root
+from utils.path import (
+    bebop_cargo_env,
+    get_buckyball_path,
+    rtl_dir,
+    workloads_output_root,
+)
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from regression import regression_workload_toml
 from regression_harness import nextest_harness_args
-
 
 config = {
     "name": "bebop-verilator-batch",
@@ -39,14 +44,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
+    nextest_config = (
+        f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
+    )
 
     try:
         chip = require_chip(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
@@ -74,8 +83,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "invalid_regression", "test": test_type, "chip": chip},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "error": "invalid_regression",
+                "test": test_type,
+                "chip": chip,
+            },
             trace_id=origin_tid,
         )
         return
@@ -95,10 +110,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     vsrc_config = shlex.quote(f"env.VSRC_PATH='{vsrc_dir}'")
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))
-    env.update({
-        "BEBOP_ARCH_CONFIG": chip,
-        "VSRC_PATH": vsrc_dir,
-    })
+    env.update(
+        {
+            "BEBOP_ARCH_CONFIG": chip,
+            "VSRC_PATH": vsrc_dir,
+        }
+    )
 
     manifest = f"{bebop_dir}/Cargo.toml"
     features = "verilator"
@@ -112,14 +129,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             )
             if path
         )
-        env.update({
-            "BEBOP_VERILATOR_DIFF": "1",
-            "BEBOP_DIFF_LD_PRELOAD": preload,
-            "BEBOP_DIFF_RUN_DIR": os.path.dirname(manifest),
-        })
+        env["LD_PRELOAD"] = preload
 
     if input_data.get("clean-before", input_data.get("clean_before", False)):
-        artifact_dir = os.path.join(os.path.dirname(manifest), "test-artifacts")
+        artifact_dir = os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts")
         shutil.rmtree(artifact_dir, ignore_errors=True)
         ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
 
@@ -148,7 +161,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "batch",
-            "backend": "verilator-rushB" if rushB else ("difftest" if diff else "verilator"),
+            "backend": (
+                "verilator-rushB" if rushB else ("difftest" if diff else "verilator")
+            ),
             "chip": chip,
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,

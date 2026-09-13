@@ -5,6 +5,7 @@ Runs bebop bemu nextest batch regression:
   1. Build the selected chip's BEMU wrapper
   2. Run cargo nextest with bemu-specific config
 """
+
 import os
 import shutil
 import shlex
@@ -29,7 +30,6 @@ from bemu_common import bemu_manifest, chip_emu_manifest
 from regression import regression_workload_toml
 from regression_harness import nextest_harness_args
 
-
 config = {
     "name": "bebop-bemu-batch",
     "description": "Run bebop bemu nextest batch regression",
@@ -42,13 +42,17 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
+    nextest_config = (
+        f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
+    )
 
     chip = input_data.get("chip")
     if not chip:
         ctx.logger.error("Missing required parameter: chip must be specified")
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
@@ -58,12 +62,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         bemu_cargo_manifest = bemu_manifest(chip, bbdir)
         if not rushB:
             chip_emu = chip_emu_manifest(chip, bbdir)
-            if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(encoding="utf-8"):
+            if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(
+                encoding="utf-8"
+            ):
                 bemu_cargo_manifest = chip_emu
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "invalid_chip", "chip": chip},
             trace_id=origin_tid,
         )
@@ -80,8 +88,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "invalid_regression", "test": test_type, "chip": chip},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "error": "invalid_regression",
+                "test": test_type,
+                "chip": chip,
+            },
             trace_id=origin_tid,
         )
         return
@@ -107,7 +121,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     if build_result.returncode != 0:
         await check_result(
-            ctx, build_result.returncode, continue_run=False,
+            ctx,
+            build_result.returncode,
+            continue_run=False,
             extra_fields={"task": "build", "backend": "bemu"},
             trace_id=origin_tid,
         )
@@ -116,7 +132,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ── Run nextest ───────────────────────────────────────────────────────
     # Pass test harness parameters through nextest's process environment.
     if input_data.get("clean-before", input_data.get("clean_before", False)):
-        shutil.rmtree(bemu_cargo_manifest.parent / "test-artifacts", ignore_errors=True)
+        shutil.rmtree(
+            os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts"), ignore_errors=True
+        )
         ctx.logger.info("Cleaned previous bebop test artifacts")
 
     harness = nextest_harness_args(workload_toml, elf_root, env)

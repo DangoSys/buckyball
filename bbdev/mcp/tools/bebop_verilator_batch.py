@@ -18,8 +18,8 @@ def register(mcp):
         """Batch bebop-verilator regression. POST /bebop/verilator/batch."""
         if e := need("chip", chip):
             return err(e)
-        if test not in ("elf-tests", "pk-tests"):
-            return err("test must be elf-tests or pk-tests")
+        if test != "elf-tests" and not (rushB and test == "pk-tests"):
+            return err("test must be elf-tests, or pk-tests with rushB")
         return fmt(
             submit(
                 "/bebop/verilator/batch",
