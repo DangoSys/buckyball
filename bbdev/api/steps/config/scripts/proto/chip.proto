@@ -68,6 +68,7 @@ message BallIdMapping {
   uint32 out_bw = 7;
   uint32 mmio_read_bw = 8;
   uint32 mmio_write_bw = 9;
+  map<string, string> ball_params = 10;
 }
 
 message BallIsaEntry {

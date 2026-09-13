@@ -89,6 +89,8 @@ def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
         e.ball_class = m["ballClass"]
         e.ball_dir = _ball_dir(m["ballClass"])
         e.config_path = _rel(bbdir, m["config"]["_file"])
+        for key, value in m["config"]["ball"].items():
+            e.ball_params[key] = str(value)
         e.in_bw = m["inBW"]
         e.out_bw = m["outBW"]
         if "mmioReadBW" in m:
