@@ -1,5 +1,5 @@
 # SMatMul Ball Configuration
 
 [ball]
-tileRows = 8
+tileRows = 16
 tileCols = 16
