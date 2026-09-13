@@ -119,12 +119,9 @@ def _kernel_build_cmds(bbdir, chip, model, dataset=""):
 
 
 def _p2e_run_cmds(bbdir, bitstream, image_name, chip, input_data):
-    image_path = _p2e.resolve_image(bbdir, image_name, chip)
-    if not image_path:
-        raise FileNotFoundError(
-            f"image .hex not found for name: {image_name} "
-            f"(expected bb-tests/output/kernel/{chip}/)"
-        )
+    image_path = os.path.join(
+        bbdir, "bb-tests", "output", "kernel", chip, f"{image_name}.hex"
+    )
     bitstream = os.path.abspath(bitstream)
     build_dir = os.path.dirname(os.path.dirname(bitstream))
     if not os.path.isdir(build_dir):

@@ -11,7 +11,6 @@ import os
 import re
 import sys
 from datetime import datetime
-from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -34,11 +33,26 @@ config = {
 
 
 def resolve_image(bbdir: str, image_name: str, chip: str) -> str:
-    """Resolve a kernel image name to its deterministic output path."""
+    """Resolve one workload hex image for the selected chip."""
     image_name = image_name.replace(r"\_", "_")
-    filename = image_name if image_name.endswith(".hex") else f"{image_name}.hex"
-    path = Path(bbdir) / "bb-tests" / "output" / "kernel" / chip / filename
-    return str(path) if path.is_file() else ""
+    matches = glob.glob(
+        os.path.join(
+            bbdir,
+            "bb-tests",
+            "output",
+            chip,
+            "workloads",
+            "**",
+            f"{image_name}.hex",
+        ),
+        recursive=True,
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            f"expected one workload hex for {image_name!r} under "
+            f"bb-tests/output/{chip}/workloads/, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def resolve_runtime_config(bitstream: str, requested_config: object) -> str:
@@ -107,17 +121,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         wave = True
 
     image_path = resolve_image(bbdir, image_name, chip)
-    if not image_path:
-        ctx.logger.error(
-            f"image .hex not found for name: {image_name} "
-            f"(expected bb-tests/output/kernel/{chip}/)"
-        )
-        await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "image_not_found", "image": image_name},
-            trace_id=origin_tid,
-        )
-        return
 
     if not bitstream or not os.path.isfile(bitstream):
         ctx.logger.error(f"bitstream .bit file not found: {bitstream}")
