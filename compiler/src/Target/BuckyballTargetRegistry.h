@@ -13,10 +13,16 @@ struct BuckyballIsaEntry {
   int32_t funct7;
 };
 
+struct BuckyballBallParam {
+  llvm::StringRef name;
+  int64_t value;
+};
+
 struct BuckyballBallMapping {
   llvm::StringRef name;
   int64_t inBW;
   int64_t outBW;
+  llvm::ArrayRef<BuckyballBallParam> params;
 };
 
 struct BuckyballTargetConfig {
@@ -35,6 +41,7 @@ const BuckyballTargetConfig &getBuckyballTarget();
 int32_t getBuckyballFunct7(llvm::StringRef mnemonic);
 void requireBuckyballBall(llvm::StringRef ballName);
 const BuckyballBallMapping &getBuckyballBallMapping(llvm::StringRef ballName);
+int64_t getBuckyballBallParam(llvm::StringRef ballName, llvm::StringRef param);
 
 } // namespace buckyball_target
 

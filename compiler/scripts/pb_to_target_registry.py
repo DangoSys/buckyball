@@ -163,10 +163,26 @@ def _emit(chip, target: str | None = None) -> str:
             chunks.append(
                 f"static const buckyball_target::BuckyballBallMapping k{stem}BallMappings[] = {{"
             )
-            chunks.extend(
-                f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}}},"
-                for entry in mappings
-            )
+            for index, entry in enumerate(mappings):
+                params = sorted(
+                    (name, int(value))
+                    for name, value in entry.ball_params.items()
+                    if value.lstrip("-").isdigit()
+                )
+                if params:
+                    chunks.append(
+                        f"static const buckyball_target::BuckyballBallParam k{stem}Ball{index}Params[] = {{"
+                    )
+                    chunks.extend(
+                        f"  {{{_cxx_string(name)}, {value}}}," for name, value in params
+                    )
+                    chunks.append("};")
+                    params_ref = f"llvm::ArrayRef(k{stem}Ball{index}Params)"
+                else:
+                    params_ref = "llvm::ArrayRef<buckyball_target::BuckyballBallParam>()"
+                chunks.append(
+                    f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}, {params_ref}}},"
+                )
             chunks.append("};")
             balls_ref = f"llvm::ArrayRef(k{stem}Balls)"
             mappings_ref = f"llvm::ArrayRef(k{stem}BallMappings)"

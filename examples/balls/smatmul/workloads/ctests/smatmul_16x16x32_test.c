@@ -23,7 +23,8 @@ int main(void) {
     bias[col] = 2 * col - 9;
   for (int row = 0; row < M; ++row)
     for (int k = 0; k < K; ++k)
-      packed_a[((k / 16) * 16 + row) * 16 + k % 16] = a[row * K + k];
+      packed_a[((row / 8 * (K / 16) + k / 16) * 8 + row % 8) * 16 + k % 16] =
+          a[row * K + k];
 
   for (int bank = 0; bank < 4; ++bank)
     bb_mem_alloc(bank, 1, 1);

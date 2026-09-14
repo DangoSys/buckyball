@@ -1,4 +1,4 @@
-robEntries = 16
+robEntries = 8
 rsOutOfOrderResponse = true
 bankIdLen = 10
 vbankIdUpperBound = 23

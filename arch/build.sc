@@ -26,6 +26,61 @@ object protoJava extends JavaModule {
   override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
 }
 
+trait FrameworkModule extends SbtModule {
+  def moduleRoot: os.Path
+
+  override def millSourcePath = moduleRoot
+  override def scalaVersion = "2.13.16"
+  override def ivyDeps = Agg(ivy"org.chipsalliance::chisel:6.7.0")
+  override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
+  override def scalacOptions = Seq("-deprecation", "-feature", "-language:reflectiveCalls")
+}
+
+val frameworkRoot = os.pwd / "src" / "main" / "scala" / "framework"
+
+object axis extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "axis"
+}
+
+object chi extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "chi"
+}
+
+object bank extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "bank"
+  override def moduleDeps = Seq(axis)
+}
+
+object coherence extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
+  override def moduleDeps = Seq(chi)
+}
+
+object cache extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "cache"
+  override def moduleDeps = Seq(chi, coherence)
+}
+
+object rvv extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "rvv" / "rvv"
+  override def moduleDeps = Seq(hardfloat)
+}
+
+object root_chip extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "root" / "root-chip"
+  override def moduleDeps = Seq(axis, chi, bank, coherence, cache)
+}
+
+object root_core extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "root" / "root-core"
+  override def moduleDeps = Seq(axis)
+}
+
+object root_tile extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "root" / "root-tile"
+  override def moduleDeps = Seq(axis)
+}
+
 object buckyball extends SbtModule { m =>
   override def millSourcePath = os.pwd
   override def scalaVersion = "2.13.16"
@@ -42,7 +97,16 @@ object buckyball extends SbtModule { m =>
   override def moduleDeps = Seq(
     chipyard,
     gemmini,
-    protoJava
+    protoJava,
+    axis,
+    chi,
+    bank,
+    coherence,
+    cache,
+    rvv,
+    root_chip,
+    root_core,
+    root_tile
   )
 
   override def sources = T.sources {
@@ -65,6 +129,9 @@ object buckyball extends SbtModule { m =>
     val localSources = os.walk(os.pwd / "src" / "main" / "scala")
       .filter(path => path.ext == "scala")
       .filterNot(path => path.toString.contains("/sims/firesim/"))
+      .filterNot(path => path.toString.contains("/framework/root/"))
+      .filterNot(path => path.toString.contains("/framework/mem-core/"))
+      .filterNot(path => path.toString.contains("/framework/rvv/"))
       .map(PathRef(_))
     localSources ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs(
       "balls"

@@ -30,6 +30,8 @@ define_design_lib WORK -path [file join $report_dir work]
 set search_path [list .]
 set_app_var verilogout_no_tri true
 set_app_var verilogout_equation false
+set_app_var compile_seqmap_propagate_constants false
+set_app_var hdlin_ff_always_sync_set_reset true
 analyze -format sverilog -define {SYNTHESIS DC_SYN} [bbdev_read_filelist $RUN_SOURCE_LIST]
 elaborate $top
 current_design $top
@@ -48,6 +50,7 @@ if {[sizeof_collection [all_clocks]] == 0} {
   error "SDC created no clocks"
 }
 set_load 2.0 [all_outputs]
+set_app_var compile_seqmap_honor_sync_set_reset true
 compile_ultra -area_high_effort_script -no_autoungroup -no_boundary_optimization
 set_fix_multiple_port_nets -all -buffer_constants
 change_names -hierarchy -rules verilog

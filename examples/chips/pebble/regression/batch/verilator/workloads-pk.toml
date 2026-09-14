@@ -1,5 +1,11 @@
 [workloads]
 tests = [
+  "pebble-pebble-ctest-mvin_2d_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_acc_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_stride_test-linux",
+  "pebble-pebble-ctest-mvin_mvout_unaligned_test-linux",
+  "pebble-pebble-ctest-mvin_unaligned_test-linux",
   "pebble-pebble-ctest-transpose_i8_16x16_test-linux",
   "pebble-pebble-ctest-transpose_i8_16x32_test-linux",
   "pebble-pebble-ctest-transpose_i32_8x16_test-linux",
@@ -54,6 +60,4 @@ tests = [
   "pebble-pebble-ctest-se_gate_lut_test-linux",
   "pebble-pebble-ctest-dual_smatmul_matadd_test-linux",
   "pebble-pebble-ctest-dual_conv_add_int2fp_test-linux",
-  "pebble-pebble-mlirtest-tile_mega_matmul-linux",
-  "pebble-pebble-mlirtest-tile_mega_conv2d-linux",
 ]

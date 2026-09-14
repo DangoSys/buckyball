@@ -60,3 +60,12 @@ buckyball_target::getBuckyballBallMapping(llvm::StringRef ballName) {
   report_fatal_error(Twine("Buckyball target ") + target.name +
                      " does not map Ball " + ballName);
 }
+
+int64_t buckyball_target::getBuckyballBallParam(llvm::StringRef ballName,
+                                                 llvm::StringRef param) {
+  for (const BuckyballBallParam &entry : getBuckyballBallMapping(ballName).params) {
+    if (entry.name == param)
+      return entry.value;
+  }
+  report_fatal_error(Twine("Buckyball Ball ") + ballName + " has no parameter " + param);
+}

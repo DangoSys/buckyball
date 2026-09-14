@@ -1,5 +1,19 @@
 [workloads]
 tests = [
+  "pebble-pebble-ctest-mvin_2d_test-baremetal",
+  "pebble-pebble-ctest-mvin_mvout_acc_test-baremetal",
+  "pebble-pebble-ctest-mvin_mvout_test-baremetal",
+  "pebble-pebble-ctest-mvin_mvout_stride_test-baremetal",
+  "pebble-pebble-ctest-mvin_mvout_unaligned_test-baremetal",
+  "pebble-pebble-ctest-mvin_unaligned_test-baremetal",
+  "pebble-pebble-ctest-tlb_bare_mode_test-baremetal",
+  "pebble-pebble-ctest-tlb_repeated_sfence_test-baremetal",
+  "pebble-pebble-ctest-tlb_sfence_flush_test-baremetal",
+  "pebble-pebble-ctest-tlb_sfence_remap_test-baremetal",
+  "pebble-pebble-ctest-tlb_sv39_4k_alias_test-baremetal",
+  "pebble-pebble-ctest-tlb_sv39_identity_test-baremetal",
+  "pebble-pebble-ctest-tlb_sv39_nonidentity_test-baremetal",
+  "pebble-pebble-mlirtest-linalg_mega_conv2d_k3_c16-baremetal",
   "pebble-pebble-ctest-transpose_i8_16x16_test-baremetal",
   "pebble-pebble-ctest-transpose_i8_16x32_test-baremetal",
   "pebble-pebble-ctest-transpose_i32_8x16_test-baremetal",
@@ -56,6 +70,4 @@ tests = [
   "pebble-pebble-ctest-dual_smatmul_matadd_test-baremetal",
   "pebble-pebble-ctest-dual_conv_add_int2fp_test-baremetal",
   "pebble-pebble-ctest-quant_smatmul_int2fp_test-baremetal",
-  "pebble-pebble-mlirtest-tile_mega_matmul-baremetal",
-  "pebble-pebble-mlirtest-tile_mega_conv2d-baremetal",
 ]

@@ -56,6 +56,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
 
   // Instruction type determination: distinguish Ball, Mem, Fence, GP (RVV) instructions
   val is_mem_inst = (func7 === MVIN_BITPAT) ||
+    (func7 === MVIN_2D_BITPAT) ||
     (func7 === MVOUT_BITPAT) ||
     (func7 === MSET_BITPAT) ||
     (func7 === MVIN_MMIO_BITPAT)
@@ -127,7 +128,8 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
       (b.memDomain.sharedEnable.B && raw >= b.frontend.shared_bank_id_base.U &&
         raw < b.memDomain.virtualBankCount.U)
 
-  val usesArchitecturalBank = is_ball_inst || func7 === MSET_BITPAT || func7 === MVIN_BITPAT || func7 === MVOUT_BITPAT
+  val usesArchitecturalBank = is_ball_inst || func7 === MSET_BITPAT || func7 === MVIN_BITPAT ||
+    func7 === MVIN_2D_BITPAT || func7 === MVOUT_BITPAT
   when(io.id_i.fire && usesArchitecturalBank) {
     when(hasRd0)(assert(legalBank(bankAccess.rd_bank_0_id), "GlobalDecoder: bank0 is outside configured ranges"))
     when(hasRd1)(assert(legalBank(bankAccess.rd_bank_1_id), "GlobalDecoder: bank1 is outside configured ranges"))

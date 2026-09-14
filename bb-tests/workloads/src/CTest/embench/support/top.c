@@ -28,17 +28,20 @@ DECL_BENCH(crc32);
 DECL_BENCH(edn);
 DECL_BENCH(huffbench);
 DECL_BENCH(matmult_int);
+DECL_BENCH(md5sum);
 DECL_BENCH(minver);
 DECL_BENCH(nbody);
 DECL_BENCH(nettle_aes);
 DECL_BENCH(nettle_sha256);
 DECL_BENCH(nsichneu);
 DECL_BENCH(picojpeg);
+DECL_BENCH(primecount);
 DECL_BENCH(qrduino);
 DECL_BENCH(sglib_combined);
 DECL_BENCH(slre);
 DECL_BENCH(st);
 DECL_BENCH(statemate);
+DECL_BENCH(tarfind);
 DECL_BENCH(ud);
 DECL_BENCH(wikisort);
 
@@ -52,17 +55,20 @@ static const bench_case benches[] = {
     BENCH_ENTRY("edn", edn),
     BENCH_ENTRY("huffbench", huffbench),
     BENCH_ENTRY("matmult-int", matmult_int),
+    BENCH_ENTRY("md5sum", md5sum),
     BENCH_ENTRY("minver", minver),
     BENCH_ENTRY("nbody", nbody),
     BENCH_ENTRY("nettle-aes", nettle_aes),
     BENCH_ENTRY("nettle-sha256", nettle_sha256),
     BENCH_ENTRY("nsichneu", nsichneu),
     BENCH_ENTRY("picojpeg", picojpeg),
+    BENCH_ENTRY("primecount", primecount),
     BENCH_ENTRY("qrduino", qrduino),
     BENCH_ENTRY("sglib-combined", sglib_combined),
     BENCH_ENTRY("slre", slre),
     BENCH_ENTRY("st", st),
     BENCH_ENTRY("statemate", statemate),
+    BENCH_ENTRY("tarfind", tarfind),
     BENCH_ENTRY("ud", ud),
     BENCH_ENTRY("wikisort", wikisort),
 };

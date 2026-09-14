@@ -1,8 +1,12 @@
 [workloads]
 tests = [
   "toy-toy-ctest-rvv_vsetvli_e32_m1_vl_test-baremetal",
+  "toy-toy-ctest-mvin_2d_test-baremetal",
+  "toy-toy-ctest-mvin_mvout_acc_test-baremetal",
   "toy-toy-ctest-mvin_mvout_test-baremetal",
   "toy-toy-ctest-mvin_mvout_stride_test-baremetal",
+  "toy-toy-ctest-mvin_mvout_unaligned_test-baremetal",
+  "toy-toy-ctest-mvin_unaligned_test-baremetal",
   "toy-toy-ctest-bdb_counter_start_stop_test-baremetal",
   "toy-toy-ctest-bdb_counter_read_active_test-baremetal",
   "toy-toy-ctest-bdb_counter_nested_pair_test-baremetal",

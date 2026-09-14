@@ -18,6 +18,7 @@ class MemDecodeCmd(b: GlobalConfig) extends Bundle {
   val clear     = Bool()
 
   val is_mvin_mmio = Bool()
+  val is_mvin_2d   = Bool()
 
   val mem_addr = UInt(b.memDomain.memAddrLen.W)
   val iter     = UInt(b.frontend.iter_len.W)
@@ -85,6 +86,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val ls_decode_list = ListLookup(func7, ls_default_decode, Array(
       MSET_BITPAT      -> List(N, N, 0.U(memAddrLen.W),      rs1(bankIdLen - 1, 0), rs2, Y),
       MVIN_BITPAT      -> List(Y, N, rs2(memAddrLen - 1, 0), rs1(bankIdLen - 1, 0), rs2, Y),
+      MVIN_2D_BITPAT   -> List(Y, N, rs2(31, 0),             rs1(bankIdLen - 1, 0), rs2, Y),
       MVOUT_BITPAT     -> List(N, Y, rs2(memAddrLen - 1, 0), rs1(bankIdLen - 1, 0), rs2, Y),
       MVIN_MMIO_BITPAT -> List(Y, N, rs2(memAddrLen - 1, 0), 0.U(bankIdLen.W),      rs2, Y)
     )
@@ -113,6 +115,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   io.mem_decode_cmd_o.bits.is_config    := Mux(io.mem_decode_cmd_o.valid, func7 === MSET_BITPAT, false.B)
   io.mem_decode_cmd_o.bits.clear        := io.mem_decode_cmd_o.valid && (func7 === MSET_BITPAT) && rs2(11)
   io.mem_decode_cmd_o.bits.is_mvin_mmio := Mux(io.mem_decode_cmd_o.valid, func7 === MVIN_MMIO_BITPAT, false.B)
+  io.mem_decode_cmd_o.bits.is_mvin_2d   := Mux(io.mem_decode_cmd_o.valid, func7 === MVIN_2D_BITPAT, false.B)
   io.mem_decode_cmd_o.bits.mem_addr     := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.MEMADDR.id).asUInt, 0.U(b.memDomain.memAddrLen.W))
   io.mem_decode_cmd_o.bits.iter         := Mux(io.mem_decode_cmd_o.valid, rs1(63, 30), 0.U(iterLen.W))
 
@@ -120,6 +123,18 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     assert(rs1(63, 10) === 0.U, "MSET reserves rs1[63:10]")
     assert(rs2(63, 12) === 0.U, "MSET reserves rs2[63:12]")
     assert(!(rs2(11) && !rs2(10)), "MSET clear requires alloc=1")
+  }
+  when(io.cmd_i.fire && func7 === MVIN_2D_BITPAT) {
+    val height     = rs1(63, 30)
+    val pixelBytes = rs2(38, 32) << 3
+    val width      = rs2(57, 55) + 1.U
+    val validBytes = Mux(rs2(61, 58) === 0.U, 16.U, rs2(61, 58))
+    assert(height =/= 0.U, "MVIN_2D height must be non-zero")
+    assert(rs2(38, 32) =/= 0.U, "MVIN_2D pixel bytes must be non-zero")
+    assert(rs2(48, 39) =/= 0.U, "MVIN_2D source width must be non-zero")
+    assert(validBytes <= pixelBytes, "MVIN_2D valid bytes exceed pixel bytes")
+    assert(rs2(54, 49) + height * width <= b.memDomain.bankEntries.U, "MVIN_2D destination exceeds bank")
+    assert(rs2(63, 62) === 0.U, "MVIN_2D reserves rs2[63:62]")
   }
 
   val ls_bank_id = ls_decode_list(LSDecodeFields.BANK_ID.id).asUInt
