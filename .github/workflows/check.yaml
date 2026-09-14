@@ -43,7 +43,7 @@ jobs:
           set -euo pipefail
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune origin "${CHECKOUT_SHA}"
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
           git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
