@@ -24,9 +24,9 @@ exec 9>"${LOCK_FILE}"
 repo_reset() {
   cd "${repo}"
   git fetch --force --prune origin "${want_sha}"
+  git clean -ffd
   git checkout --detach "${want_sha}"
   git reset --hard "${want_sha}"
-  git clean -ffd
   # rm -rf arch/out
   rm -rf compiler/thirdparty/buddy-mlir/llvm/build
   rm -rf compiler/thirdparty/buddy-mlir/build
