@@ -35,7 +35,13 @@ def _run(
     if result.returncode != 0:
         detail = result.stderr.strip() if logger is not None else ""
         if not detail and logger is not None:
-            detail = "\n".join(result.stdout.splitlines()[-20:])
+            lines = result.stdout.splitlines()
+            failed = [i for i, line in enumerate(lines) if "FAILED:" in line]
+            if failed:
+                start = failed[0]
+                detail = "\n".join(lines[start:])
+            else:
+                detail = "\n".join(lines[-20:])
         if detail:
             raise RuntimeError(
                 f"command failed ({result.returncode}): {' '.join(cmd)}\n{detail}"
