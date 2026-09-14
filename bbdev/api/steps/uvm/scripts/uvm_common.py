@@ -1,5 +1,4 @@
 import os
-import re
 import shlex
 import sys
 import tomllib
@@ -71,23 +70,13 @@ def vcs_defines(domain, mapping, bank_entries: int):
     return defs
 
 
-def smatmul_accumulator_filename(rtl_dir: Path) -> str:
-    text = (rtl_dir / "SMatMulUnit.sv").read_text()
-    modules = re.findall(r"\b(accumulator_\d+x\d+)\s+accumulator_ext\s*\(", text)
-    if len(modules) != 1:
-        raise ValueError(f"expected one SMatMul accumulator instance, found {modules!r}")
-    return f"{modules[0]}.sv"
-
-
 def _filelist(
-    verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, rtl_dir: Path, sim_dir: Path
+    verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, sim_dir: Path
 ) -> str:
     src = verify_dir / "filelists" / f"{ball_dir}_ball.f"
     dst = sim_dir / f"{ball_dir}_ball.f"
     sim_dir.mkdir(parents=True, exist_ok=True)
     text = src.read_text()
-    if "@SMATMUL_ACCUMULATOR@" in text:
-        text = text.replace("@SMATMUL_ACCUMULATOR@", smatmul_accumulator_filename(rtl_dir))
     dst.write_text(text.replace("@UVM@", uvm_rel).replace("@RTL@", rtl_rel))
     return str(dst.relative_to(verify_dir))
 
@@ -101,7 +90,7 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
     sim_dir = verify_dir / "build" / chip_name
     uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
     rtl_rel = os.path.relpath(rtl_dir, verify_dir)
-    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, rtl_dir, sim_dir)
+    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, sim_dir)
     cargo = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
         f"cargo build --manifest-path {shlex.quote(str(casegen))}"
