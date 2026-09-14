@@ -1,4 +1,5 @@
 import os
+import re
 import shlex
 import sys
 import tomllib
@@ -47,12 +48,13 @@ def selected_mappings(domain, ball: str | None):
     raise ValueError(f"ball {ball!r} not in chip.pb")
 
 
-def vcs_defines(domain, mapping):
+def vcs_defines(domain, mapping, bank_entries: int):
     defs = [
         f"+define+BB_IN_BW={mapping.in_bw}",
         f"+define+BB_OUT_BW={mapping.out_bw}",
         f"+define+BB_MMIO_READ_BW={mapping.mmio_read_bw}",
         f"+define+BB_MMIO_WRITE_BW={mapping.mmio_write_bw}",
+        f"+define+BB_BANK_ADDR_W={(bank_entries - 1).bit_length()}",
     ]
     for e in domain.isa:
         if e.bid == mapping.ball_id:
@@ -60,11 +62,23 @@ def vcs_defines(domain, mapping):
     return defs
 
 
-def _filelist(verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, sim_dir: Path) -> str:
+def smatmul_accumulator_filename(rtl_dir: Path) -> str:
+    text = (rtl_dir / "SMatMulUnit.sv").read_text()
+    modules = re.findall(r"\b(accumulator_\d+x\d+)\s+accumulator_ext\s*\(", text)
+    if len(modules) != 1:
+        raise ValueError(f"expected one SMatMul accumulator instance, found {modules!r}")
+    return f"{modules[0]}.sv"
+
+
+def _filelist(
+    verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, rtl_dir: Path, sim_dir: Path
+) -> str:
     src = verify_dir / "filelists" / f"{ball_dir}_ball.f"
     dst = sim_dir / f"{ball_dir}_ball.f"
     sim_dir.mkdir(parents=True, exist_ok=True)
     text = src.read_text()
+    if "@SMATMUL_ACCUMULATOR@" in text:
+        text = text.replace("@SMATMUL_ACCUMULATOR@", smatmul_accumulator_filename(rtl_dir))
     dst.write_text(text.replace("@UVM@", uvm_rel).replace("@RTL@", rtl_rel))
     return str(dst.relative_to(verify_dir))
 
@@ -74,10 +88,11 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
     verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
     casegen = verify_dir / "casegen" / "Cargo.toml"
     rtl_dir = Path(bbdir) / "arch" / "build" / chip_name / mill_cfg
+    bank_entries = load_chip(bbdir, chip_name).cores[0].mem.bank.entries
     sim_dir = verify_dir / "build" / chip_name
     uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
     rtl_rel = os.path.relpath(rtl_dir, verify_dir)
-    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, sim_dir)
+    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, rtl_dir, sim_dir)
     cargo = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
         f"cargo build --manifest-path {shlex.quote(str(casegen))}"
@@ -99,7 +114,7 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
         f"mkdir -p {shlex.quote(str(sim_dir))} {shlex.quote(str(csrc))} && "
         "vcs -full64 -sverilog -timescale=1ns/1ps -debug_access+all "
         "${=VCS_UVM_ARGS} "
-        + " ".join(shlex.quote(d) for d in vcs_defines(domain, mapping))
+        + " ".join(shlex.quote(d) for d in vcs_defines(domain, mapping, bank_entries))
         + f" -cm line+cond+tgl+assert -cm_hier {shlex.quote(str(hier))} "
         f"-Mdir={shlex.quote(str(csrc))} -o {shlex.quote(str(simv))} "
         f"-f {shlex.quote(flist)}"

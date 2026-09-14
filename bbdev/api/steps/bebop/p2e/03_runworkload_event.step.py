@@ -17,11 +17,15 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
+scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
+if scripts_path not in sys.path:
+    sys.path.insert(0, scripts_path)
 
 from utils.event_common import require_chip
 from utils.path import bebop_cargo_env, get_buckyball_path, log_dir, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
+from resolve_image import resolve_image
 
 config = {
     "name": "bebop-p2e-runworkload",
@@ -30,29 +34,6 @@ config = {
     "triggers": [queue("bebop.p2e.runworkload")],
     "enqueues": [],
 }
-
-
-def resolve_image(bbdir: str, image_name: str, chip: str) -> str:
-    """Resolve one workload hex image for the selected chip."""
-    image_name = image_name.replace(r"\_", "_")
-    matches = glob.glob(
-        os.path.join(
-            bbdir,
-            "bb-tests",
-            "output",
-            chip,
-            "workloads",
-            "**",
-            f"{image_name}.hex",
-        ),
-        recursive=True,
-    )
-    if len(matches) != 1:
-        raise ValueError(
-            f"expected one workload hex for {image_name!r} under "
-            f"bb-tests/output/{chip}/workloads/, found {len(matches)}"
-        )
-    return matches[0]
 
 
 def resolve_runtime_config(bitstream: str, requested_config: object) -> str:
