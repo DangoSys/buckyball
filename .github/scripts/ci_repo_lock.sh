@@ -32,7 +32,8 @@ repo_reset() {
   rm -rf compiler/thirdparty/buddy-mlir/build
   git submodule sync
   git submodule update --init --force -- $(git ls-tree -r "${want_sha}" | awk '$1 == "160000" { print $4 }')
-  git submodule update --init --force -- compiler/thirdparty/buddy-mlir/llvm
+  git -C compiler/thirdparty/buddy-mlir submodule sync
+  git -C compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
   for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
     git -C "${repo}/${submodule}" reset --hard
     git -C "${repo}/${submodule}" clean -ffd
