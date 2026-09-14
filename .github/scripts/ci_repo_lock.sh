@@ -31,7 +31,7 @@ repo_reset() {
   rm -rf compiler/thirdparty/buddy-mlir/llvm/build
   rm -rf compiler/thirdparty/buddy-mlir/build
   git submodule sync
-  git submodule update --init --force
+  git submodule update --init --force -- $(git config --file .gitmodules --get-regexp '\.path$' | cut -d' ' -f2)
   for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
     git -C "${repo}/${submodule}" reset --hard
     git -C "${repo}/${submodule}" clean -ffd
