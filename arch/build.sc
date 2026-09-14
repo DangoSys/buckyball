@@ -1107,10 +1107,15 @@ object firesim extends SbtModule {
     val local = os.walk(os.pwd / "src" / "main" / "scala")
       .filter(path => path.ext == "scala")
       .filter(path => path.toString.contains("/sims/firesim/"))
-      .filterNot(path => path.last.toString == "TargetConfigs.scala")
       .map(PathRef(_))
-    val toy = os.pwd / os.up / "examples" / "chips" / "toy" / "arch" / "src" / "main" / "scala" / "sims" / "firesim"
-    local ++ os.walk(toy).filter(path => path.ext == "scala").map(PathRef(_))
+    val chipsRoot = os.pwd / os.up / "examples" / "chips"
+    val chipSrcs = os.list(chipsRoot)
+      .filter(os.isDir)
+      .map(_ / "arch" / "src" / "main" / "scala" / "sims" / "firesim")
+      .filter(os.exists)
+      .flatMap(root => os.walk(root).filter(path => path.ext == "scala"))
+      .map(PathRef(_))
+    local ++ chipSrcs
   }
   override def ivyDeps = Agg(ivy"org.chipsalliance::chisel:6.7.0")
   override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
