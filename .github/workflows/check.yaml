@@ -46,6 +46,8 @@ jobs:
           git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
           git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+          cd "${root}"
+          nix build
 
       - name: Check pre-commit
         shell: zsh {0}
