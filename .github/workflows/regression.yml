@@ -44,9 +44,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" submodule deinit --all --force
-          git -C "${root}" clean -ffdx
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Install config
