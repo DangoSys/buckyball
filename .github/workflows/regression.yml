@@ -49,6 +49,10 @@ jobs:
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
           cd "${root}"
           nix build
+          cd "${root}/bbdev"
+          nix develop -c true
+          cd "${root}/bebop"
+          nix develop -c true
 
       - name: Install config
         shell: zsh {0}

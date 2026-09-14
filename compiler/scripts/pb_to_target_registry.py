@@ -179,7 +179,9 @@ def _emit(chip, target: str | None = None) -> str:
                     chunks.append("};")
                     params_ref = f"llvm::ArrayRef(k{stem}Ball{index}Params)"
                 else:
-                    params_ref = "llvm::ArrayRef<buckyball_target::BuckyballBallParam>()"
+                    params_ref = (
+                        "llvm::ArrayRef<buckyball_target::BuckyballBallParam>()"
+                    )
                 chunks.append(
                     f"  {{{_cxx_string(entry.ball_name)}, {entry.in_bw}, {entry.out_bw}, {params_ref}}},"
                 )

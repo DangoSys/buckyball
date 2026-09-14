@@ -50,6 +50,7 @@ export PATH="${RESULT_PATH}/bin:${PATH}"
 # bbdev CLI and Python utils
 export PATH="${BBDIR}/bbdev:${PATH}"
 export PYTHONPATH="${BBDIR}/bbdev/api:${PYTHONPATH}"
+export PYTHONPATH="${BBDIR}/thirdparty/soc-framework/ip:${PYTHONPATH}"
 
 
 # firesim manager

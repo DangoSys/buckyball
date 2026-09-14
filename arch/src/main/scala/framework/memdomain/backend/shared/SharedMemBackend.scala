@@ -147,14 +147,14 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  val realloc       = io.config.bits.group_id === 0.U
+  val realloc = io.config.bits.group_id === 0.U
 
   val freePbankMask = VecInit(mappingTable.map(entry =>
     !entry.valid ||
       (realloc && entry.hart_id === io.config.bits.hart_id && entry.vbank_id === io.config.bits.vbank_id)
   ))
 
-  val hasFreePbank  = freePbankMask.asUInt.orR
+  val hasFreePbank = freePbankMask.asUInt.orR
   io.config.ready := !io.config.bits.alloc || hasFreePbank
   when(io.config.valid && io.config.bits.alloc && !hasFreePbank) {
     assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
