@@ -407,15 +407,16 @@ class GlobalROB(val b: GlobalConfig) extends Module {
         val bank   = bankId(b.memDomain.vbankIdWidth - 1, 0)
         val col    = robEntries(i).cmd.cmd.rs2Data(9, 5)
         when(robEntries(i).cmd.cmd.rs2Data(10)) {
-          val fullCol = if (b.memDomain.sharedEnable) {
-            Mux(
-              bankId >= b.frontend.shared_bank_id_base.U && bankId < b.memDomain.virtualBankCount.U,
-              SharedMemLayout.totalBank(b).U(bankColWidth.W),
+          val fullCol =
+            if (b.memDomain.sharedEnable) {
+              Mux(
+                bankId >= b.frontend.shared_bank_id_base.U && bankId < b.memDomain.virtualBankCount.U,
+                SharedMemLayout.totalBank(b).U(bankColWidth.W),
+                b.memDomain.bankNum.U(bankColWidth.W)
+              )
+            } else {
               b.memDomain.bankNum.U(bankColWidth.W)
-            )
-          } else {
-            b.memDomain.bankNum.U(bankColWidth.W)
-          }
+            }
           bankCols(bank) := Mux(col === 0.U, fullCol, col)
         }.otherwise {
           bankCols(bank) := 0.U
