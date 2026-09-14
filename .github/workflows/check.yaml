@@ -43,7 +43,8 @@ jobs:
           set -euo pipefail
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" clean -ffd
+          git -C "${root}" submodule deinit --all --force
+          git -C "${root}" clean -ffdx
           bash "${root}/.github/scripts/ci_repo_lock.sh" \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
