@@ -55,10 +55,10 @@ WORKFLOW_COMMANDS = {
         "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>]"; --model requires --chip',
     },
     "firesim": {
-        "enumeratefpgas": "Enumerate FPGAs.",
-        "buildbitstream": "Build bitstream.",
-        "infrasetup": "Infrasetup.",
-        "runworkload": "Run workload.",
+        "enumeratefpgas": 'Enumerate FPGAs. Args: "--chip <chip>"',
+        "buildbitstream": 'Build bitstream. Args: "--chip <chip>"',
+        "infrasetup": 'Infrasetup. Args: "--chip <chip>"',
+        "runworkload": 'Run workload. Args: "--chip <chip>"',
     },
     "compiler": {
         "build": 'Build compiler. Args: "--chip <chip>"',

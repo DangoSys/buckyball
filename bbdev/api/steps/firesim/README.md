@@ -1,59 +1,18 @@
 # FireSim Workflow
 
-FireSim FPGA simulation workflow in Buckyball framework, providing FPGA-based hardware simulation environment.
+FireSim FPGA simulation. All commands take `--chip`; mill class comes from
+`examples/chips/<chip>/configs/chip.toml` `[sims].firesim`.
 
-## API Usage
+Manager YAMLs are generated per chip under `scripts/yaml/<chip>/`.
 
-### `buildbitstream`
-**Endpoint**: `POST /firesim/buildbitstream`
-
-**Function**: Build FPGA bitstream file
-
-**Parameters**: No specific parameters
-
-**Example**:
-```bash
-bbdev firesim --buildbitstream
-```
-
-### `infrasetup`
-**Endpoint**: `POST /firesim/infrasetup`
-
-**Function**: Setup FireSim infrastructure
-
-**Parameters**: No specific parameters
-
-**Example**:
-```bash
-bbdev firesim --infrasetup
-```
-
-### `runworkload`
-**Endpoint**: `POST /firesim/runworkload`
-
-**Function**: Run workload on FireSim
-
-**Parameters**: No specific parameters
-
-**Example**:
-```bash
-bbdev firesim --runworkload
-```
-
-## Typical Workflow
+## Commands
 
 ```bash
-# 1. Build bitstream
-bbdev firesim --buildbitstream
-
-# 2. Setup infrastructure
-bbdev firesim --infrasetup
-
-# 3. Run workload
-bbdev firesim --runworkload
+bbdev firesim --enumeratefpgas '--chip toy'
+bbdev firesim --buildbitstream '--chip toy'
+bbdev firesim --infrasetup '--chip toy'
+bbdev firesim --runworkload '--chip toy'
 ```
 
-## Notes
-
-- Bitstream build takes several hours
-- infrasetup requires cloud computing resource configuration
+`buildbitstream` takes hours. `infrasetup` / `runworkload` require a prior
+bitstream under `thirdparty/firesim/deploy/results-build` for that chip recipe.

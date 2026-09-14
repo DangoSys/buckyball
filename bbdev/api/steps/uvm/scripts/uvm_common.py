@@ -9,17 +9,26 @@ from pathlib import Path
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-config_scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", "scripts"))
-if config_scripts not in sys.path:
-    sys.path.insert(0, config_scripts)
 
-import chip_pb2
 from utils.path import get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger
 
 
 def load_chip(bbdir: str, chip: str):
+    config_scripts = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "config", "scripts")
+    )
+    if config_scripts not in sys.path:
+        sys.path.insert(0, config_scripts)
+    try:
+        import chip_pb2
+    except ImportError as e:
+        raise FileNotFoundError(
+            f"missing {os.path.join(config_scripts, 'chip_pb2.py')}; run bbdev config --install"
+        ) from e
     path = Path(bbdir) / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
+    if not path.is_file():
+        raise FileNotFoundError(f"missing {path}; run bbdev config --install")
     msg = chip_pb2.Chip()
     msg.ParseFromString(path.read_bytes())
     if not msg.name or not msg.cores:

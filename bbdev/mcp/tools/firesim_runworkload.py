@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-
-from common import submit, fmt, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_firesim_runworkload(jobs: int = 16) -> str:
+    def bbdev_firesim_runworkload(chip: str) -> str:
         """Run FireSim workload. POST /firesim/runworkload."""
-        return fmt(submit("/firesim/runworkload", {"jobs": jobs}))
-
+        if e := need("chip", chip):
+            return err(e)
+        return fmt(submit("/firesim/runworkload", {"chip": chip}))

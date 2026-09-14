@@ -1,5 +1,7 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
+from utils.event_common import require_chip
+
 config = {
     "name": "firesim-enumeratefpgas-api",
     "description": "enumerate FPGAs",
@@ -11,5 +13,14 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    await ctx.enqueue({"topic": "firesim.enumeratefpgas", "data": {**body, "_trace_id": ctx.trace_id}})
+    try:
+        chip = require_chip(body)
+    except ValueError as e:
+        return ApiResponse(status=400, body={"error": str(e)})
+    await ctx.enqueue(
+        {
+            "topic": "firesim.enumeratefpgas",
+            "data": {"chip": chip, "_trace_id": ctx.trace_id},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

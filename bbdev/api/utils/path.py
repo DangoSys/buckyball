@@ -78,6 +78,8 @@ def sim_name(bbdir, chip, product, *, rushb=False):
         sim_key = "tapeout"
     elif product == "p2e":
         sim_key = "p2e"
+    elif product == "firesim":
+        sim_key = "firesim"
     else:
         raise ValueError(f"invalid rtl product: {product}")
     path = (
@@ -90,7 +92,12 @@ def sim_name(bbdir, chip, product, *, rushb=False):
         / "config"
         / "config.json"
     )
-    name = json.loads(path.read_text(encoding="utf-8"))["sims"][sim_key]
+    if not path.is_file():
+        raise ValueError(f"missing {path}; run bbdev config --install")
+    sims = json.loads(path.read_text(encoding="utf-8"))["sims"]
+    if sim_key not in sims:
+        raise ValueError(f"chip {chip!r} has no sims.{sim_key} in {path}")
+    name = sims[sim_key]
     if not rushb:
         return name
     if product != "verilog" or not name.endswith("VerilatorConfig"):
