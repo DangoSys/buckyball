@@ -179,6 +179,8 @@ def load_host_environment() -> None:
         ["zsh", "-lic", "env -0"],
         check=True,
         capture_output=True,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
     )
     for item in result.stdout.split(b"\0"):
         if item:
