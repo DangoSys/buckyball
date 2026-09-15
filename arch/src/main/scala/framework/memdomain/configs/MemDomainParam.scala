@@ -35,10 +35,10 @@ case class MemDomainParam(
   mmioReadWidth:           Int) {
 
   // MMIO derived values
-  val mmioBankBytes:  Int = mmioBankEntries * (mmioBankWidth / 8)
-  val mmioTotalBytes: Int = mmioBankNum * mmioBankBytes
-  val vbankIdWidth:   Int = chisel3.util.log2Up(virtualBankCount)
-  val maxGroupCount:  Int = math.max(bankNum, if (sharedEnable) sharedEntries / bankEntries else bankNum)
+  val mmioBankBytes:   Int = mmioBankEntries * (mmioBankWidth / 8)
+  val mmioTotalBytes:  Int = mmioBankNum * mmioBankBytes
+  val vbankIdWidth:    Int = chisel3.util.log2Up(virtualBankCount)
+  val maxGroupCount:   Int = math.max(bankNum, if (sharedEnable) sharedEntries / bankEntries else bankNum)
   val groupCountWidth: Int = chisel3.util.log2Up(maxGroupCount + 1)
   val groupIdWidth:    Int = chisel3.util.log2Up(maxGroupCount)
 }
