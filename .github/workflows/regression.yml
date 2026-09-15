@@ -44,8 +44,15 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+          cd "${root}"
+          nix build
+          cd "${root}/bbdev"
+          nix develop -c true
+          cd "${root}/bebop"
+          nix develop -c true
 
       - name: Install config
         shell: zsh {0}
@@ -89,7 +96,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: DC area
@@ -155,7 +163,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Chip UVM
@@ -207,7 +216,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA buildbitstream
@@ -217,7 +227,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          rm -rf "${root}"/bebop/build/"${{ matrix.chip }}"-*/
+          for build_dir in "${root}"/bebop/build/"${{ matrix.chip }}"-*(N); do
+            rm -rf "${build_dir}"
+          done
           nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
           bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
@@ -265,7 +277,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA check
@@ -320,7 +333,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Model build

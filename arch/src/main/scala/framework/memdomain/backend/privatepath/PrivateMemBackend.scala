@@ -19,7 +19,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
-    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
@@ -52,7 +52,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val valid    = Bool()
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
-    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
+    val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
   val mappingTable                = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
@@ -81,7 +81,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // The private namespace is bounded by the frontend contract, while
   // multi-bank groups remain represented individually in mappingTable.
   val groupCountByVbank = RegInit(
-    VecInit(Seq.fill(privateVbankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W)))
+    VecInit(Seq.fill(privateVbankCount)(0.U(b.memDomain.groupCountWidth.W)))
   )
 
   def addEntry(
@@ -103,15 +103,6 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         mappingTable(i).valid := false.B
       }
     }
-  }
-
-  def getFreePbankId(): UInt = {
-    val hasFree     = mappingTable.map(_.valid === false.B).reduce(_ || _)
-    when(!hasFree) {
-      assert(false.B, "PrivateMemBackend allocation failed: no free physical bank\n")
-    }
-    val freePbankId = mappingTable.indexWhere(_.valid === false.B)
-    freePbankId
   }
 
   // -----------------------------------------------------------------------------
@@ -150,7 +141,14 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  io.config.ready := true.B
+  val realloc       = io.config.bits.group_id === 0.U
+  val freePbankMask =
+    VecInit(mappingTable.map(entry => !entry.valid || (realloc && entry.vbank_id === io.config.bits.vbank_id)))
+  val hasFreePbank  = freePbankMask.asUInt.orR
+  io.config.ready := !io.config.bits.alloc || hasFreePbank
+  when(io.config.valid && io.config.bits.alloc && !hasFreePbank) {
+    assert(false.B, "PrivateMemBackend allocation failed: no free physical bank\n")
+  }
 
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
@@ -160,7 +158,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val vbank    = io.config.bits.vbank_id
     val vbankIdx = vbank(privateVbankIdWidth - 1, 0)
     when(io.config.bits.alloc) {
-      val freePbank = getFreePbankId()
+      val freePbank = PriorityEncoder(freePbankMask)
       // Match bemu mset: realloc of the same vbank frees prior physical banks first.
       // MemConfiger emits one fire per group; only group 0 drops the old mapping.
       when(io.config.bits.group_id === 0.U) {

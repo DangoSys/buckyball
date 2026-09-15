@@ -23,15 +23,17 @@ exec 9>"${LOCK_FILE}"
 
 repo_reset() {
   cd "${repo}"
-  git fetch --force --prune origin "${want_sha}"
-  git checkout --detach "${want_sha}"
-  git reset --hard "${want_sha}"
+  git fetch --force --prune --no-recurse-submodules origin "${want_sha}"
+  git -c submodule.recurse=false checkout --detach --force "${want_sha}"
+  git -c submodule.recurse=false reset --hard "${want_sha}"
   git clean -ffd
   # rm -rf arch/out
   rm -rf compiler/thirdparty/buddy-mlir/llvm/build
   rm -rf compiler/thirdparty/buddy-mlir/build
   git submodule sync
-  git submodule update --init --force
+  git submodule update --init --force -- $(git ls-tree -r "${want_sha}" | awk '$1 == "160000" { print $4 }')
+  git -C compiler/thirdparty/buddy-mlir submodule sync
+  git -C compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
   for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
     git -C "${repo}/${submodule}" reset --hard
     git -C "${repo}/${submodule}" clean -ffd

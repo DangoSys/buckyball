@@ -9,8 +9,8 @@ import framework.top.GlobalConfig
 @instantiable
 class Array(val b: GlobalConfig) extends Module {
   private val param = SMatMulBallParam(b)
-  private val rows = param.tileRows
-  private val cols = param.tileCols
+  private val rows  = param.tileRows
+  private val cols  = param.tileCols
 
   @public
   val io = IO(new Bundle {

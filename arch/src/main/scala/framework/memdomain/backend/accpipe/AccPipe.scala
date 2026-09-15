@@ -20,7 +20,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val is_multi = Input(Bool())
 
     val busy     = Output(Bool())
-    val group_id = Output(UInt(log2Up(b.memDomain.bankNum).W))
+    val group_id = Output(UInt(b.memDomain.groupIdWidth.W))
     val bank_id  = Output(UInt(b.memDomain.vbankIdWidth.W))
     val hart_id  = Output(UInt(b.core.xLen.W))
   })
@@ -30,7 +30,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
   // to access wrong physical addresses while matmul writes used unshifted addresses.
 
   //group_id output
-  val group_id_reg = RegInit(0.U(log2Up(b.memDomain.bankNum).W))
+  val group_id_reg = RegInit(0.U(b.memDomain.groupIdWidth.W))
   io.group_id := group_id_reg
 
   //Bank_id output

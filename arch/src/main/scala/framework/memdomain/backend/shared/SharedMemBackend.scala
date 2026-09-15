@@ -24,7 +24,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_valid       = Input(Vec(nCores, Bool()))
     val query_hart_id     = Input(Vec(nCores, UInt(b.core.xLen.W)))
     val query_vbank_id    = Input(Vec(nCores, UInt(b.memDomain.vbankIdWidth.W)))
-    val query_group_count = Output(Vec(nCores, UInt(log2Up(b.memDomain.bankNum + 1).W)))
+    val query_group_count = Output(Vec(nCores, UInt(b.memDomain.groupCountWidth.W)))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
@@ -58,7 +58,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val hart_id  = UInt(b.core.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
-    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
+    val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
@@ -77,6 +77,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   ): Unit = {
     val duplicate = mappingTable.map(entry =>
       entry.valid &&
+        !(group_id === 0.U && entry.hart_id === hart_id && entry.vbank_id === vbank_id) &&
         (entry.hart_id === hart_id) &&
         (entry.vbank_id === vbank_id) &&
         (entry.group_id === group_id)
@@ -108,16 +109,6 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         mappingTable(i).valid := false.B
       }
     }
-  }
-
-  def getFreePbankId(): UInt = {
-    val hasFree = mappingTable.map(_.valid === false.B).reduce(_ || _)
-    when(!hasFree) {
-      assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
-    }
-
-    val freePbankId = mappingTable.indexWhere(_.valid === false.B)
-    freePbankId
   }
 
   // -----------------------------------------------------------------------------
@@ -156,7 +147,18 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  io.config.ready := true.B
+  val realloc = io.config.bits.group_id === 0.U
+
+  val freePbankMask = VecInit(mappingTable.map(entry =>
+    !entry.valid ||
+      (realloc && entry.hart_id === io.config.bits.hart_id && entry.vbank_id === io.config.bits.vbank_id)
+  ))
+
+  val hasFreePbank = freePbankMask.asUInt.orR
+  io.config.ready := !io.config.bits.alloc || hasFreePbank
+  when(io.config.valid && io.config.bits.alloc && !hasFreePbank) {
+    assert(false.B, "SharedMemBackend allocation failed: no free physical shared bank\n")
+  }
 
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
@@ -167,7 +169,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
       when(io.config.bits.group_id === 0.U) {
         clearVbank(io.config.bits.hart_id, io.config.bits.vbank_id)
       }
-      val pbankId = getFreePbankId()
+      val pbankId = PriorityEncoder(freePbankMask)
       printf(
         p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +
           p"group=${io.config.bits.group_id} pbank=$pbankId is_multi=${io.config.bits.is_multi}\n"

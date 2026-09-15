@@ -43,8 +43,15 @@ jobs:
           set -euo pipefail
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+          cd "${root}"
+          nix build
+          cd "${root}/bbdev"
+          nix develop -c true
+          cd "${root}/bebop"
+          nix develop -c true
 
       - name: Check pre-commit
         shell: zsh {0}
@@ -111,7 +118,8 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
+          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Nix build
