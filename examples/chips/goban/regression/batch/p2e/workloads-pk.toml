@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "goban-goban-ctest-chip-topology_smoke_test-multicore-baremetal.hex",
+]
