@@ -192,3 +192,12 @@ else()
     LINK_COMPONENTS Core
     LINK_LIBS PUBLIC MLIRIR MLIRSupport BuddyBuckyball)
 endif()
+
+add_custom_target(buckyball-compiler
+  DEPENDS
+  BuddyBuckyball
+  BuddyBuckyballTransforms
+  BuddyBuckyballToLLVMIRTranslation
+  LowerBuckyballPass
+  LowerTileToBuckyballPass
+)

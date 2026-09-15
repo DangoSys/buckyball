@@ -330,7 +330,7 @@ def build_workload(
             "-C",
             str(compiler_build),
             f"-j{os.cpu_count() or 1}",
-            f"buckyball-compiler-{chip}",
+            "buckyball-compiler",
             "buddy-opt",
             "frontend/Python/python-package-buddy",
         ],
