@@ -190,8 +190,6 @@ if(NOT DEFINED LINUX_CC)
 endif()
 
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
-set(BUDDY_CYCLE_TRACE_RUNTIME_SRC ${BBSW_BAREMETAL_DIR}/buddy_cycle_trace.c)
-
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -Wl,--no-dynamic-linker")
 
@@ -385,73 +383,6 @@ function(buckyball_add_core_workload_subdirs KIND)
   endforeach()
 endfunction()
 
-function(add_toy_mlir_rushb)
-  cmake_parse_arguments(ARG "CXX" "NAME;TARGET_STEM;TARGET"
-    "FRONT_PASSES;SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
-
-  if(NOT ARG_NAME OR NOT ARG_TARGET_STEM OR NOT ARG_TARGET)
-    message(FATAL_ERROR "add_toy_mlir_rushb requires NAME, TARGET_STEM, and TARGET")
-  endif()
-  list(FIND BUCKYBALL_TARGETS "${ARG_TARGET}" _buckyball_target_index)
-  if(_buckyball_target_index EQUAL -1)
-    message(FATAL_ERROR "unknown Buckyball target: ${ARG_TARGET}")
-  endif()
-  if(NOT DEFINED BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS OR
-     NOT DEFINED BUCKYBALL_LOWER_BUCKYBALL_RUSHB)
-    message(FATAL_ERROR
-      "add_toy_mlir_rushb requires BUCKYBALL_LOWER_*_RUSHB")
-  endif()
-
-  buckyball_assign_physical_banks(${ARG_TARGET} _assign_physical_banks)
-  if(NOT DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST OR
-     NOT DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
-    return()
-  endif()
-  buckyball_rushb_default_core(RUSHB_CORE_ID "${ARG_TARGET}")
-
-  set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${ARG_NAME}.mlir)
-  set(RUSHB_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ARG_NAME}-rushB.o)
-
-  add_custom_command(
-    OUTPUT ${RUSHB_OBJ}
-    COMMAND ${BUDDY_OPT} ${MLIR_SRC}
-      --target=${ARG_TARGET}
-      ${ARG_FRONT_PASSES}
-      ${_assign_physical_banks}
-      ${BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS}
-      -convert-linalg-to-loops
-      -expand-strided-metadata
-      -lower-affine
-      -convert-scf-to-cf
-      -convert-cf-to-llvm
-      ${BUCKYBALL_LOWER_BUCKYBALL_RUSHB}
-      -convert-arith-to-llvm
-      -convert-math-to-llvm
-      -finalize-memref-to-llvm
-      -convert-func-to-llvm
-      "-lower-buckyball-intrinsics-to-rushb=core_id=${RUSHB_CORE_ID}"
-      -reconcile-unrealized-casts |
-    ${BUDDY_TRANSLATE} --buddy-to-llvmir |
-    ${BUDDY_LLC} -filetype=obj -mtriple=x86_64 -O2 -o ${RUSHB_OBJ}
-    DEPENDS ${MLIR_SRC} ${BUDDY_OPT} ${BUDDY_TRANSLATE} ${BUDDY_LLC}
-            ${ARG_DEPENDS}
-    COMMENT "Building rushB ${ARG_NAME}.o from Toy MLIR"
-    VERBATIM)
-
-  set(RUSHB_CXX_FLAG)
-  if(ARG_CXX)
-    set(RUSHB_CXX_FLAG CXX)
-  endif()
-
-  add_buckyball_rushb_native(${ARG_TARGET_STEM}
-    ${RUSHB_CXX_FLAG}
-    OUTPUT_SUBDIR src/CTest/rushB
-    CORE_ID ${RUSHB_CORE_ID}
-    SOURCES ${ARG_SOURCES} ${RUSHB_OBJ}
-    INCLUDE_DIRS ${ARG_INCLUDE_DIRS}
-    DEPENDS ${RUSHB_OBJ} ${ARG_DEPENDS})
-endfunction()
-
 set(BUCKYBALL_EXPECTED_COMPILER_DIR "${BUCKYBALL_REPO_ROOT}/compiler")
 set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
 if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
@@ -572,10 +503,6 @@ file(MAKE_DIRECTORY ${OUTPUT_BIN_DIR})
 #-------------------------------------------------------------------------------
 # set custom target
 #-------------------------------------------------------------------------------
-add_custom_target(create-dirs
-  COMMAND mkdir -p ${OUTPUT_BIN_DIR}
-  COMMENT "Creating necessary directories"
-)
 
 add_custom_target(sync-bin
   COMMAND rsync -av --delete --delete-excluded
@@ -609,8 +536,3 @@ add_custom_target(build-all ALL
   DEPENDS sync-bin
 )
 
-add_custom_target(clean-all
-  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
-  COMMAND rm -rf ${OUTPUT_BIN_DIR}
-  COMMENT "Cleaning all build artifacts"
-)
