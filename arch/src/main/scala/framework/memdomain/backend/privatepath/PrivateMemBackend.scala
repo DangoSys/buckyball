@@ -19,7 +19,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
-    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
@@ -52,7 +52,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val valid    = Bool()
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
-    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
+    val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
   val mappingTable                = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
@@ -81,7 +81,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // The private namespace is bounded by the frontend contract, while
   // multi-bank groups remain represented individually in mappingTable.
   val groupCountByVbank = RegInit(
-    VecInit(Seq.fill(privateVbankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W)))
+    VecInit(Seq.fill(privateVbankCount)(0.U(b.memDomain.groupCountWidth.W)))
   )
 
   def addEntry(

@@ -86,7 +86,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val headPtr                = RegInit(0.U(idWidth.W))
   val tailPtr                = RegInit(0.U(idWidth.W))
   val issuedCount            = RegInit(0.U(log2Up(robDepth + 1).W))
-  private val bankColWidth   = log2Up(b.memDomain.bankNum + 1)
+  private val bankColWidth   = b.memDomain.groupCountWidth
   val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(bankColWidth.W))))
   // In-flight ownership is tracked in the architectural vbank namespace.
   private val vbankMaskWidth = b.memDomain.virtualBankCount

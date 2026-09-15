@@ -33,7 +33,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     val query_valid       = Output(Bool())
     val query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Output(Bool())
-    val query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val query_group_count = Input(UInt(b.memDomain.groupCountWidth.W))
 
     // Propagate decoded shared/private access intent.
     val is_shared = Output(Bool())
@@ -55,8 +55,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val is_shared_reg  = RegInit(false.B)
 
   // Group counter for multi-bank writes
-  val group_counter   = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
-  val group_count_reg = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val group_counter   = RegInit(0.U(b.memDomain.groupCountWidth.W))
+  val group_count_reg = RegInit(0.U(b.memDomain.groupCountWidth.W))
   val rowAddr         = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
 
   // MMIO routing info (latched at cmdReq.fire, exposed to upper level)
@@ -116,7 +116,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.bankWrite.rob_id   := rob_id_reg
   io.bankWrite.bank_id  := wr_bank_reg
   io.bankWrite.ball_id  := 0.U
-  io.bankWrite.group_id := group_counter(log2Up(b.memDomain.bankNum) - 1, 0)
+  io.bankWrite.group_id := group_counter(b.memDomain.groupIdWidth - 1, 0)
   io.is_shared          := is_shared_reg
 
   // cmdResp (Decoupled): hold valid until accepted

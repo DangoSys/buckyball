@@ -55,7 +55,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
-    val shared_query_group_count = Input(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val shared_query_group_count = Input(UInt(b.memDomain.groupCountWidth.W))
   })
 
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))

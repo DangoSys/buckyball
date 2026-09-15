@@ -8,7 +8,7 @@ import chisel3.util._
  * and framework infrastructure (BallReservationStation, BBus). The
  * concrete decode logic (funct7 → BID/operands) lives in user code.
  */
-class BallDecodeCmd(numBanks: Int, iterLen: Int) extends Bundle {
+class BallDecodeCmd(numBanks: Int, iterLen: Int, groupCountWidth: Int) extends Bundle {
   val bid    = UInt(5.W)
   val funct7 = UInt(7.W)
   val iter   = UInt(iterLen.W)
@@ -23,9 +23,9 @@ class BallDecodeCmd(numBanks: Int, iterLen: Int) extends Bundle {
   val op1_bank = UInt(log2Up(numBanks).W)
   val op2_bank = UInt(log2Up(numBanks).W)
   val wr_bank  = UInt(log2Up(numBanks).W)
-  val op1_col  = UInt(5.W)
-  val op2_col  = UInt(5.W)
-  val wr_col   = UInt(5.W)
+  val op1_col  = UInt(groupCountWidth.W)
+  val op2_col  = UInt(groupCountWidth.W)
+  val wr_col   = UInt(groupCountWidth.W)
 
   // MMIO metadata bank: which main bank's MMIO region to access
   val meta_bank = UInt(log2Up(numBanks).W)
