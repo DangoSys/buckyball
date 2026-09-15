@@ -24,7 +24,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val query_valid       = Input(Vec(nCores, Bool()))
     val query_hart_id     = Input(Vec(nCores, UInt(b.core.xLen.W)))
     val query_vbank_id    = Input(Vec(nCores, UInt(b.memDomain.vbankIdWidth.W)))
-    val query_group_count = Output(Vec(nCores, UInt(log2Up(b.memDomain.bankNum + 1).W)))
+    val query_group_count = Output(Vec(nCores, UInt(b.memDomain.groupCountWidth.W)))
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
@@ -58,7 +58,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     val hart_id  = UInt(b.core.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
-    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
+    val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
