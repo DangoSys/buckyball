@@ -129,6 +129,25 @@ message RocketCoreConfig {
   RocketBtbConfig btb = 12;
 }
 
+message BoomDCacheConfig {
+  uint32 n_sets = 1;
+  uint32 n_ways = 2;
+  uint32 n_mshrs = 3;
+}
+
+message BoomICacheConfig {
+  uint32 n_sets = 1;
+  uint32 n_ways = 2;
+}
+
+message BoomCoreConfig {
+  uint32 fetch_width = 1;
+  uint32 decode_width = 2;
+  uint32 num_rob_entries = 3;
+  BoomDCacheConfig dcache = 4;
+  BoomICacheConfig icache = 5;
+}
+
 message FrontendConfig {
   uint32 rob_entries = 1;
   bool rs_out_of_order_response = 2;
@@ -173,6 +192,8 @@ message CoreInstance {
   FrontendConfig frontend = 9;
   GpDomainConfig gp_domain = 10;
   CoreParamConfig core = 11;
+  string kind = 12;
+  BoomCoreConfig boom_core = 13;
 }
 
 message BemuBall {

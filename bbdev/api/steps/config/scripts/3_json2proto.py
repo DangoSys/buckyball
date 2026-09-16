@@ -134,6 +134,41 @@ def _fill_rocket(msg: pb.RocketCoreConfig, d: dict[str, Any]) -> None:
     msg.btb.n_ras = btb["nRAS"]
 
 
+def _fill_boom(msg: pb.BoomCoreConfig, d: dict[str, Any]) -> None:
+    msg.fetch_width = d["fetchWidth"]
+    msg.decode_width = d["decodeWidth"]
+    msg.num_rob_entries = d["numRobEntries"]
+    dc = d["dcache"]
+    msg.dcache.n_sets = dc["nSets"]
+    msg.dcache.n_ways = dc["nWays"]
+    msg.dcache.n_mshrs = dc["nMSHRs"]
+    ic = d["icache"]
+    msg.icache.n_sets = ic["nSets"]
+    msg.icache.n_ways = ic["nWays"]
+
+
+def _check_core_kind(raw: dict[str, Any], pkg: str) -> str:
+    kind = raw.get("kind")
+    if kind not in ("rocket", "boom"):
+        raise ValueError(f"{pkg}: kind must be 'rocket' or 'boom', got {kind!r}")
+    has_rocket = "rocketCore" in raw
+    has_boom = "boomCore" in raw
+    if kind == "rocket":
+        if not has_rocket:
+            raise ValueError(f"{pkg}: kind=rocket requires rocketCore")
+        if has_boom:
+            raise ValueError(f"{pkg}: kind=rocket forbids boomCore")
+    else:
+        if not has_boom:
+            raise ValueError(f"{pkg}: kind=boom requires boomCore")
+        if has_rocket:
+            raise ValueError(f"{pkg}: kind=boom forbids rocketCore")
+        bd = raw.get("balldomain")
+        if isinstance(bd, dict) and bd.get("ballNum", 0):
+            raise ValueError(f"{pkg}: kind=boom forbids balldomain.ballNum > 0")
+    return kind
+
+
 def _fill_frontend(msg: pb.FrontendConfig, d: dict[str, Any], bbdir: Path) -> None:
     msg.source_path = _rel(bbdir, d["_file"])
     msg.rob_entries = d["robEntries"]
@@ -172,12 +207,16 @@ def _fill_core(ci: pb.CoreInstance, raw: dict[str, Any], meta: dict[str, Any], b
     ci.pkg = meta["pkg"]
     ci.config_path = meta["config_path"]
     ci.balldomain_base_dir = meta["balldomain_base_dir"]
+    kind = _check_core_kind(raw, meta["pkg"])
+    ci.kind = kind
     if "balldomain" in raw:
         _fill_ball(ci.balldomain, raw["balldomain"], bbdir)
     if "memdomain" in raw:
         _fill_mem(ci.mem, raw["memdomain"], bbdir)
-    if "rocketCore" in raw:
+    if kind == "rocket":
         _fill_rocket(ci.rocket_core, raw["rocketCore"])
+    else:
+        _fill_boom(ci.boom_core, raw["boomCore"])
     if "frontend" in raw:
         _fill_frontend(ci.frontend, raw["frontend"], bbdir)
     if "gpdomain" in raw:
