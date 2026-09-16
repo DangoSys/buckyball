@@ -535,4 +535,3 @@ add_dependencies(sync-bin
 add_custom_target(build-all ALL
   DEPENDS sync-bin
 )
-

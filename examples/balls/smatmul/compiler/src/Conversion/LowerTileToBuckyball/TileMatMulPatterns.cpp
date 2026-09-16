@@ -148,7 +148,8 @@ public:
       return tileMatMulOp.emitError(
           "bankDepth must be a positive multiple of bank lane");
     if (M_tiling % mTileSize || K_tiling % kBankLane || N_tiling % kBankLane)
-      return tileMatMulOp.emitError("M must be a multiple of 8 and K/N must be multiples of bank lane");
+      return tileMatMulOp.emitError(
+          "M must be a multiple of 8 and K/N must be multiples of bank lane");
     if (isQuantized) {
       const int64_t dwRequired = perChannelAttr.getValue() ? N_tiling * 4 : 4;
       if (dwBytesAttr.getInt() < dwRequired)
