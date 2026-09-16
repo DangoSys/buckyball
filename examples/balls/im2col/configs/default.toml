@@ -21,6 +21,9 @@
 
 [ball]
 inputWidth = 8
-maxIter = 8
+# Resident Conv lowering can request a 4x4 output tile from a stride-2,
+# kernel-7 producer, which needs a 13x13 local input.  Keep this a power of two
+# because the RTL line buffer splits maxIter^2 beats into two equal banks.
+maxIter = 16
 maxKSize = 7
 maxPadding = 7

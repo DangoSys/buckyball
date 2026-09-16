@@ -26,7 +26,8 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(mapping.inBW == 2, "Int8MulBall requires inBW=2")
   require(mapping.outBW == 1, "Int8MulBall requires outBW=1")
   require(b.memDomain.bankWidth == 128, "Int8MulBall requires 128-bit bank rows")
-  require(b.memDomain.bankEntries <= 64, "Int8MulBall gate_row uses six bits")
+  private val bankRowBits = log2Ceil(b.memDomain.bankEntries)
+  require(bankRowBits <= 32, "Int8MulBall gate_row must fit rs2[63:32]")
   require((funct >> 4) == 4, "INT8MUL must encode two reads and one write")
 
   @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
@@ -46,7 +47,7 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   private val groups                                                                                                                                                                     = RegInit(0.U(5.W))
   private val group                                                                                                                                                                      = RegInit(0.U(5.W))
   private val iter                                                                                                                                                                       = RegInit(0.U(b.frontend.iter_len.W))
-  private val gateRow                                                                                                                                                                    = RegInit(0.U(6.W))
+  private val gateRow                                                                                                                                                                    = RegInit(0.U(bankRowBits.W))
   private val inputRow                                                                                                                                                                   = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
   private val ratio                                                                                                                                                                      = Reg(UInt(32.W))
   private val gateWord                                                                                                                                                                   = Reg(UInt(128.W))
@@ -127,9 +128,16 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
       when(io.cmdReq.fire) {
         val cmd = io.cmdReq.bits.cmd
         assert(cmd.funct7 === funct.U, "Int8MulBall funct7 must be INT8MUL")
-        assert(cmd.rs2(63, 38) === 0.U, "Int8MulBall reserves rs2 bits 63:38")
+        if (bankRowBits < 32)
+          assert(
+            cmd.rs2(63, 32 + bankRowBits) === 0.U,
+            s"Int8MulBall reserves rs2 bits 63:${32 + bankRowBits}"
+          )
         assert(positiveFinite(cmd.rs2(31, 0)), "Int8MulBall ratio must be finite and positive")
-        assert(cmd.rs2(37, 32) < b.memDomain.bankEntries.U, "Int8MulBall gate_row must fit one physical bank")
+        assert(
+          cmd.rs2(31 + bankRowBits, 32) < b.memDomain.bankEntries.U,
+          "Int8MulBall gate_row must fit one physical bank"
+        )
         assert(
           cmd.op1_col =/= 0.U && cmd.op1_col === cmd.op2_col && cmd.op1_col === cmd.wr_col,
           "Int8MulBall bank groups must match"
@@ -149,7 +157,7 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
         groups     := cmd.op1_col
         group      := 0.U
         iter       := cmd.iter
-        gateRow    := cmd.rs2(37, 32)
+        gateRow    := cmd.rs2(31 + bankRowBits, 32)
         inputRow   := 0.U
         ratio      := cmd.rs2(31, 0)
         lane       := 0.U

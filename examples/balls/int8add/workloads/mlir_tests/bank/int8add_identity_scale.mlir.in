@@ -4,6 +4,7 @@ func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
   %zero = arith.constant 0 : index
   %one = arith.constant 1 : index
+  %mod = arith.constant 31 : index
   %rows = arith.constant @BB_BANK_LINES@ : index
   %lanes = arith.constant @BB_BANK_I8_LANES@ : index
   %depth = arith.constant @BB_BANK_LINES@ : i64
@@ -14,7 +15,8 @@ func.func @main() -> i8 {
   %out = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
   scf.for %row = %zero to %rows step %one {
     scf.for %lane = %zero to %lanes step %one {
-      %r = arith.index_cast %row : index to i32
+      %row_mod = arith.remui %row, %mod : index
+      %r = arith.index_cast %row_mod : index to i32
       %l = arith.index_cast %lane : index to i32
       %a32 = arith.subi %l, %r : i32
       %b32 = arith.subi %r, %l : i32

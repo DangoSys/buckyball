@@ -1,7 +1,7 @@
 import mill._
 import mill.scalalib._
 
-val archRoot = os.pwd / os.up / os.up / os.up / os.up / os.up / os.up
+val archRoot = os.pwd / os.up / os.up / os.up / os.up / os.up
 
 object cde extends SbtModule {
   override def millSourcePath = archRoot / "thirdparty" / "chipyard" / "tools" / "cde"
@@ -28,5 +28,5 @@ object rvv extends SbtModule {
   override def moduleDeps = Seq(hardfloat)
   override def ivyDeps = Agg(ivy"org.chipsalliance::chisel:6.7.0")
   override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
-  override def scalacOptions = Seq("-language:reflectiveCalls")
+  override def scalacOptions = Seq("-language:reflectiveCalls", "-Ymacro-annotations")
 }

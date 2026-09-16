@@ -2,6 +2,7 @@ class int8mul_cmd_item extends bb_blink_cmd_item;
   `uvm_object_utils(int8mul_cmd_item)
 
   bit [31:0] gate_row;
+  bit [31:0] bank_entries;
   bit [31:0] num_gate_words;
   bit [31:0] num_input_words;
   bit [31:0] num_dst_words;
@@ -51,6 +52,7 @@ class int8mul_cmd_item extends bb_blink_cmd_item;
     op2_col         = cmd.op2_col[4:0];
     wr_col          = cmd.wr_col[4:0];
     gate_row        = cmd.gate_row;
+    bank_entries    = cmd.bank_entries;
     rob_id          = cmd.rob_id[3:0];
     rs1             = {cmd.rs1_hi, cmd.rs1_lo};
     rs2             = {cmd.rs2_hi, cmd.rs2_lo};
@@ -74,7 +76,11 @@ class int8mul_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", "Int8MulBall bank groups must match")
     if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank)
       `uvm_fatal("CASE", "Int8MulBall banks must be distinct")
-    if (rs2[63:38] != 0)
+    if (bank_entries == 0) `uvm_fatal("CASE", "Int8MulBall bank_entries must be positive")
+    if (gate_row >= bank_entries)
+      `uvm_fatal("CASE", $sformatf(
+                 "Int8MulBall gate_row %0d exceeds bank_entries %0d", gate_row, bank_entries))
+    if ((rs2 >> (32 + $clog2(bank_entries))) != 0)
       `uvm_fatal("CASE", $sformatf("Int8MulBall reserved rs2 bits set: 0x%016h", rs2))
     if (num_input_words != iter)
       `uvm_fatal("CASE", $sformatf("num_input_words %0d != iter %0d", num_input_words, iter))
@@ -107,6 +113,7 @@ class int8mul_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("COPY", "rhs is not int8mul_cmd_item")
     end
     gate_row = rhs_.gate_row;
+    bank_entries = rhs_.bank_entries;
     num_gate_words = rhs_.num_gate_words;
     num_input_words = rhs_.num_input_words;
     num_dst_words = rhs_.num_dst_words;

@@ -1,4 +1,5 @@
 mod casegen;
+mod config;
 
 use std::cell::RefCell;
 
@@ -10,7 +11,7 @@ thread_local! {
 
 #[no_mangle]
 pub extern "C" fn int8mul_case_load(index: u32, bid: u32) -> i32 {
-    let case = casegen::gen_case(index, bid);
+    let case = casegen::gen_case(index, bid, config::bank_entries());
     CURRENT.with(|current| *current.borrow_mut() = Some(case));
     0
 }
@@ -73,8 +74,18 @@ pub extern "C" fn int8mul_case_dst_word_hi(word_index: u32) -> u64 {
 mod tests {
     use super::*;
 
+    fn configure_bank_entries(entries: u32) {
+        let path = std::env::temp_dir().join(format!(
+            "int8mul-verify-config-{}-{entries}",
+            std::process::id()
+        ));
+        std::fs::write(&path, format!("bank_entries={entries}\n")).unwrap();
+        std::env::set_var("BB_VERIFY_CONFIG", path);
+    }
+
     #[test]
     fn dpi_load_then_cmd_and_words() {
+        configure_bank_entries(4096);
         assert_eq!(int8mul_case_load(0, 8), 0);
         let mut cmd = Int8MulCmd {
             bid: 0,
@@ -86,6 +97,7 @@ mod tests {
             op2_col: 0,
             wr_col: 0,
             gate_row: 0,
+            bank_entries: 0,
             rob_id: 0,
             rs1_lo: 0,
             rs1_hi: 0,
@@ -99,13 +111,14 @@ mod tests {
         assert_eq!(cmd.bid, 8);
         assert_eq!(cmd.iter, 1);
         assert_eq!(cmd.gate_row, 1);
-        assert_eq!(cmd.num_gate_words, 2);
+        assert_eq!(cmd.bank_entries, 4096);
+        assert_eq!(cmd.num_gate_words, 1);
         assert_eq!(cmd.num_input_words, 1);
         assert_eq!(cmd.num_dst_words, 1);
         let _ = int8mul_case_gate_word_lo(0);
         let _ = int8mul_case_input_word_lo(0);
         let _ = int8mul_case_dst_word_lo(0);
-        assert_eq!(casegen::NUM_CASES, 2);
+        assert_eq!(casegen::NUM_CASES, 3);
     }
 
     #[test]

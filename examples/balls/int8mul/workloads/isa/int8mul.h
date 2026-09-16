@@ -3,6 +3,7 @@
 
 #include <bbhw/isa/bb_func7.h>
 #include <bbhw/isa/isa.h>
+#include <params.h>
 #include <stdint.h>
 
 static inline uint64_t bb_int8mul_rs2(float ratio, uint32_t gate_row) {
@@ -10,6 +11,7 @@ static inline uint64_t bb_int8mul_rs2(float ratio, uint32_t gate_row) {
     float f;
     uint32_t u;
   } value = {.f = ratio};
+  /* gate_row uses the bank-address bits of rs2[63:32]. */
   return (uint64_t)value.u | ((uint64_t)gate_row << 32);
 }
 

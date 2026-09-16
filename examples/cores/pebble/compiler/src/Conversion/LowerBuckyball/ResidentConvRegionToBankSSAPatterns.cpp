@@ -29,16 +29,24 @@ using namespace ::buddy::buckyball;
 namespace {
 
 constexpr int64_t kTile = 16;
+constexpr int64_t kMvin2dAddressableRows = 64;
 
 class ResidentConvRegionPattern : public OpRewritePattern<MegaKernelOp> {
 public:
   ResidentConvRegionPattern(MLIRContext *context, bool traceMegaStages,
                             int64_t traceMegaStageStart,
-                            int64_t traceMegaStageLimit)
+                            int64_t traceMegaStageLimit,
+                            int64_t traceMegaRegion, bool traceMegaReloadStages,
+                            bool traceMegaFenceBeforeRegion,
+                            bool traceMegaInputBeforeRegion)
       : OpRewritePattern<MegaKernelOp>(context, 4),
         traceMegaStages(traceMegaStages),
         traceMegaStageStart(traceMegaStageStart),
-        traceMegaStageLimit(traceMegaStageLimit) {}
+        traceMegaStageLimit(traceMegaStageLimit),
+        traceMegaRegion(traceMegaRegion),
+        traceMegaReloadStages(traceMegaReloadStages),
+        traceMegaFenceBeforeRegion(traceMegaFenceBeforeRegion),
+        traceMegaInputBeforeRegion(traceMegaInputBeforeRegion) {}
 
   LogicalResult matchAndRewrite(MegaKernelOp kernel,
                                 PatternRewriter &b) const override {
@@ -517,9 +525,33 @@ public:
           "by 4, and a positive bank count");
     if (buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW != 1)
       return kernel.emitError("resident Conv region requires SMatMul outBW=1");
+    const int64_t smatmulRows =
+        buckyball_target::getBuckyballBallParam("SMatMulBall", "tileRows");
+    const int64_t smatmulCols =
+        buckyball_target::getBuckyballBallParam("SMatMulBall", "tileCols");
+    if (smatmulRows <= 0 || kTile % smatmulRows != 0 || smatmulCols != kTile)
+      return kernel.emitError(
+          "resident Conv region requires SMatMul tileRows to divide 16 and "
+          "tileCols to equal 16");
 
     Location loc = kernel.getLoc();
+    const int64_t traceRegionId =
+        traceMegaStages ? nextTraceRegionId++ : int64_t{0};
+    const bool traceThisRegion =
+        traceMegaStages &&
+        (traceMegaRegion < 0 || traceRegionId == traceMegaRegion);
     b.setInsertionPoint(kernel);
+    if (traceThisRegion && traceMegaInputBeforeRegion) {
+      auto id = b.getI64IntegerAttr(4095);
+      auto trace = b.create<::buddy::trace::EndOp>(
+          loc, kernel.getInput().getType(), kernel.getInput(), id,
+          b.getStringAttr("mega-input"));
+      trace->setAttr("id_path",
+                     b.getArrayAttr({b.getI64IntegerAttr(traceRegionId), id}));
+      trace->setAttr("buckyball.stage_trace", b.getUnitAttr());
+    }
+    if (traceThisRegion && traceMegaFenceBeforeRegion)
+      b.create<FenceOp>(loc);
     Value zeroI8 =
         b.create<arith::ConstantOp>(loc, b.getI8Type(), b.getI8IntegerAttr(0));
     Value minI8 = b.create<arith::ConstantOp>(loc, b.getI8Type(),
@@ -677,13 +709,14 @@ public:
 
       if (stage.activation == 2) {
         Value lutPack;
-        if (stage.lutEntries == 4096)
+        if (stage.lutEntries == 4096) {
+          constexpr int64_t laneLutRows = 4096 / (4 * kTile);
           lutPack = b.create<memref::AllocOp>(
-              loc,
-              MemRefType::get({target.bankDepth, 4 * kTile}, b.getI8Type()));
-        else
+              loc, MemRefType::get({laneLutRows, 4 * kTile}, b.getI8Type()));
+        } else {
           lutPack = b.create<memref::AllocOp>(
               loc, MemRefType::get({kTile, kTile}, b.getI8Type()));
+        }
         hostPacks.push_back(lutPack);
         packedLuts[stage.op] = lutPack;
         auto lutLoop = b.create<scf::ForOp>(
@@ -693,12 +726,13 @@ public:
         Value index = lutLoop.getInductionVar();
         Value lutValue = b.create<memref::LoadOp>(loc, stage.lut, index);
         if (stage.lutEntries == 4096) {
+          constexpr int64_t laneLutRows = 4096 / (4 * kTile);
           Value group = b.create<arith::DivUIOp>(
               loc, index,
-              b.create<arith::ConstantIndexOp>(loc, target.bankDepth * kTile));
+              b.create<arith::ConstantIndexOp>(loc, laneLutRows * kTile));
           Value withinGroup = b.create<arith::RemUIOp>(
               loc, index,
-              b.create<arith::ConstantIndexOp>(loc, target.bankDepth * kTile));
+              b.create<arith::ConstantIndexOp>(loc, laneLutRows * kTile));
           b.create<memref::StoreOp>(
               loc, lutValue, lutPack,
               ValueRange{
@@ -732,6 +766,10 @@ public:
     zeroBank = mvinBank(b, loc, zeroPack, zeroBank, target.bankDepth);
 
     DenseSet<int64_t> materialized;
+    // Debug-only stages that were materialized for a stage hash.  Downstream
+    // stages must consume the checked host tensor instead of recursively
+    // recomputing it, otherwise a passing hash does not isolate a boundary.
+    DenseSet<int64_t> traceMaterialized;
 
     struct TileBanks {
       SmallVector<Value> banks;
@@ -751,20 +789,30 @@ public:
     DenseMap<int64_t, TileBanks> gateCaches;
     CachedTile residualCache;
 
+    auto tilePanelsPerBank = [&](int64_t panelRows) {
+      if (panelRows <= 0 || panelRows > target.bankDepth)
+        return int64_t{0};
+      if (panelRows > kMvin2dAddressableRows)
+        return int64_t{1};
+      return std::min<int64_t>(target.bankDepth, kMvin2dAddressableRows) /
+             panelRows;
+    };
+
     auto allocateTile = [&](int64_t panelCount, int64_t panelRows, Value fill) {
-      TileBanks tile{{}, panelRows, target.bankDepth / panelRows, panelCount};
-      if (panelRows <= 0 || panelRows > target.bankDepth ||
-          tile.panelsPerBank <= 0) {
+      TileBanks tile{{}, panelRows, tilePanelsPerBank(panelRows), panelCount};
+      if (tile.panelsPerBank == 0) {
         kernel.emitError("resident tile does not fit one bank");
         return tile;
       }
       int64_t bankCount =
           (panelCount + tile.panelsPerBank - 1) / tile.panelsPerBank;
       for (int64_t index = 0; index < bankCount; ++index) {
+        int64_t panelsInBank = std::min(
+            tile.panelsPerBank, panelCount - index * tile.panelsPerBank);
         Value bank = allocBank(b, loc, 1, 1);
         tile.banks.push_back(mvinBank(b, loc,
                                       fill == minI8 ? minPack : zeroPack, bank,
-                                      target.bankDepth));
+                                      panelsInBank * panelRows));
       }
       return tile;
     };
@@ -775,12 +823,14 @@ public:
       tile.banks.clear();
     };
 
-    auto loadInt8Tile = [&](Value input, int64_t inputHeight,
-                            int64_t inputWidth, int64_t inputChannels, Value y0,
-                            Value x0, Value firstPanel, int64_t panelCount,
-                            int64_t height,
-                            int64_t width) -> FailureOr<TileBanks> {
-      TileBanks tile = allocateTile(panelCount, height * width, zeroI8);
+    auto loadInt8Tile =
+        [&](Value input, int64_t inputHeight, int64_t inputWidth,
+            int64_t inputChannels, Value y0, Value x0, Value firstPanel,
+            int64_t panelCount, int64_t height, int64_t width,
+            int64_t storagePanelRows = -1) -> FailureOr<TileBanks> {
+      const int64_t panelRows =
+          storagePanelRows < 0 ? height * width : storagePanelRows;
+      TileBanks tile = allocateTile(panelCount, panelRows, zeroI8);
       if (tile.banks.empty())
         return failure();
       Value yBegin = b.create<arith::MaxSIOp>(
@@ -803,7 +853,10 @@ public:
           succeeded(inputType.getStridesAndOffset(inputStrides, inputOffset)) &&
           inputStrides[3] == 1 && inputStrides[2] == inputChannels &&
           inputStrides[1] == inputWidth * inputChannels &&
-          inputChannels % 8 == 0 && inputChannels <= 1016 && inputWidth <= 1023;
+          inputChannels % 8 == 0 && inputChannels <= 1016 &&
+          inputWidth <= 1023 &&
+          std::min<int64_t>(panelCount, tile.panelsPerBank) * tile.panelRows <=
+              kMvin2dAddressableRows;
       if (directMvin2d) {
         Value eight = b.create<arith::ConstantIndexOp>(loc, 8);
         Value pixelBytes = createI64Const(b, loc, inputChannels);
@@ -866,12 +919,13 @@ public:
         return tile;
       }
       for (size_t bankIndex = 0; bankIndex < tile.banks.size(); ++bankIndex) {
-        Value pack = b.create<memref::AllocOp>(
-            loc, MemRefType::get({target.bankDepth, kTile}, b.getI8Type()));
-        b.create<linalg::FillOp>(loc, zeroI8, pack);
         int64_t panelBegin = bankIndex * tile.panelsPerBank;
         int64_t panelEnd =
             std::min<int64_t>(panelCount, panelBegin + tile.panelsPerBank);
+        int64_t packedRows = (panelEnd - panelBegin) * tile.panelRows;
+        Value pack = b.create<memref::AllocOp>(
+            loc, MemRefType::get({packedRows, kTile}, b.getI8Type()));
+        b.create<linalg::FillOp>(loc, zeroI8, pack);
         for (int64_t localPanel = panelBegin; localPanel < panelEnd;
              ++localPanel) {
           auto yLoop = b.create<scf::ForOp>(loc, yBegin, yEnd, one);
@@ -920,7 +974,7 @@ public:
           b.setInsertionPointAfter(yLoop);
         }
         tile.banks[bankIndex] =
-            mvinBank(b, loc, pack, tile.banks[bankIndex], target.bankDepth);
+            mvinBank(b, loc, pack, tile.banks[bankIndex], packedRows);
         b.create<memref::DeallocOp>(loc, pack);
       }
       return tile;
@@ -960,6 +1014,36 @@ public:
       return success();
     };
 
+    auto repackSMatMulInput = [&](Value source, int64_t rows,
+                                  int64_t reduction) {
+      if (rows == 1 || smatmulRows == kTile || reduction == kTile)
+        return source;
+      Value packed = allocBank(b, loc, 1, 1);
+      int64_t reductionTiles = reduction / kTile;
+      for (int64_t row = 0; row < rows; row += smatmulRows) {
+        for (int64_t reductionTile = 0; reductionTile < reductionTiles;
+             ++reductionTile) {
+          int64_t sourceBase = reductionTile * kTile + row;
+          int64_t outputBase =
+              (row / smatmulRows * reductionTiles + reductionTile) *
+              smatmulRows;
+          for (int64_t offset = 0; offset < smatmulRows; ++offset) {
+            packed = b.create<BankMaxPoolOp>(
+                          loc, packed.getType(), source, packed,
+                          createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
+                          b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                          b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
+                          createI64Const(b, loc, sourceBase + offset),
+                          createI64Const(b, loc, outputBase + offset),
+                          createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
+                          b.getI64IntegerAttr(0))
+                         .getOutBankOut();
+          }
+        }
+      }
+      return packed;
+    };
+
     std::function<LogicalResult(int64_t, Value, Value, int64_t, int64_t, Value,
                                 int64_t, TileBanks &, int64_t, int64_t)>
         emitInto;
@@ -985,6 +1069,20 @@ public:
           destinationBase + (height - 1) * destinationStride + width >
               destination.panelRows)
         return stage.op->emitError("invalid resident tile request");
+
+      if (traceMegaReloadStages && traceMaterialized.contains(stageIndex)) {
+        FailureOr<TileBanks> loaded =
+            loadInt8Tile(stage.output, stage.outputHeight, stage.outputWidth,
+                         stage.outputChannels, y0, x0, firstPanel, panelCount,
+                         height, width);
+        if (failed(loaded))
+          return stage.op->emitError("failed to reload traced resident stage");
+        LogicalResult copied =
+            copyTile(*loaded, destination, panelCount, height, width,
+                     destinationBase, destinationStride);
+        releaseTile(*loaded);
+        return copied;
+      }
 
       if (stage.channelSlice) {
         IntegerAttr::ValueType requestedFirstPanel;
@@ -1480,7 +1578,7 @@ public:
             int64_t firstDestinationSlot =
                 panelBegin % destination.panelsPerBank;
             int64_t chunkCount = std::min<int64_t>(
-                {panelCount - panelBegin, target.bankDepth / panelRows,
+                {panelCount - panelBegin, tilePanelsPerBank(panelRows),
                  destination.panelsPerBank - firstDestinationSlot});
             Value panel = b.create<arith::ConstantIndexOp>(
                 loc, requestedFirstPanel.getSExtValue() + panelBegin);
@@ -1615,10 +1713,7 @@ public:
         int64_t residualPanelRows = residualHeight * residualWidth;
         int64_t residualPanels =
             (stages[residualStage].outputChannels + kTile - 1) / kTile;
-        int64_t residualPanelsPerBank =
-            residualPanelRows <= target.bankDepth
-                ? target.bankDepth / residualPanelRows
-                : 0;
+        int64_t residualPanelsPerBank = tilePanelsPerBank(residualPanelRows);
         if (residualPanelsPerBank <= 0)
           return stage.op->emitError(
               "INT8 Add residual tile does not fit one bank");
@@ -1812,12 +1907,14 @@ public:
 
       if (stage.average) {
         int64_t inputRows = stage.inputHeight * stage.inputWidth;
-        bool fitsOneBank = inputRows <= target.bankDepth;
+        int64_t paddedInputRows = ((inputRows + kTile - 1) / kTile) * kTile;
+        bool fitsOneBank =
+            paddedInputRows <= target.bankDepth && paddedInputRows <= 0xfff;
         if (!fitsOneBank && !externalInput &&
             !materialized.contains(producer.lookup(stage.input)))
           return stage.op->emitError(
               "large GlobalAvgPool requires a materialized input");
-        int64_t sumK = fitsOneBank ? target.bankDepth : kTile;
+        int64_t sumK = fitsOneBank ? paddedInputRows : kTile;
         Value oneI8 = b.create<arith::ConstantOp>(loc, b.getI8Type(),
                                                   b.getI8IntegerAttr(1));
         Value ratio = b.create<arith::ConstantOp>(
@@ -1844,12 +1941,12 @@ public:
 
         TileBanks fullSource;
         if (fitsOneBank) {
-          fullSource = allocateTile(1, target.bankDepth, zeroI8);
+          fullSource = allocateTile(1, sumK, zeroI8);
           if (externalInput) {
             FailureOr<TileBanks> loaded =
                 loadInt8Tile(stage.input, stage.inputHeight, stage.inputWidth,
                              stage.inputChannels, zero, zero, panel, 1,
-                             stage.inputHeight, stage.inputWidth);
+                             stage.inputHeight, stage.inputWidth, sumK);
             if (failed(loaded))
               return stage.op->emitError(
                   "failed to load INT8 GlobalAvgPool input");
@@ -1878,9 +1975,7 @@ public:
           resultState =
               b.create<BankSMatMulOp>(
                    loc, result.getType(), onesLoaded, fullSource.banks.front(),
-                   result,
-                   createI64ConstU(b, loc,
-                                   matrixRs2(1, kTile, target.bankDepth)),
+                   result, createI64ConstU(b, loc, matrixRs2(1, kTile, sumK)),
                    createI1Const(b, loc, true), createI1Const(b, loc, true),
                    createI64Const(b, loc, 0))
                   .getWrBankOut();
@@ -1989,9 +2084,7 @@ public:
         int64_t inputPanels = stage.depthwise
                                   ? panelCount
                                   : (stage.inputChannels + kTile - 1) / kTile;
-        int64_t panelsPerBank = inputPanelRows <= target.bankDepth
-                                    ? target.bankDepth / inputPanelRows
-                                    : 0;
+        int64_t panelsPerBank = tilePanelsPerBank(inputPanelRows);
         lastInputSide = inputSide;
         lastPanelsPerBank = panelsPerBank;
         int64_t inputBanks =
@@ -2068,7 +2161,7 @@ public:
         source.panelRows = inputSide * inputSide;
         // Keep the external input layout simple: one channel panel per bank.
         // This also makes the bank lifetime explicit when Cin is large.
-        source.panelsPerBank = target.bankDepth / source.panelRows;
+        source.panelsPerBank = tilePanelsPerBank(source.panelRows);
         source.panelCount = inputPanelCount;
         if (source.panelRows <= 0 || source.panelRows > target.bankDepth)
           return stage.op->emitError(
@@ -2076,8 +2169,7 @@ public:
       } else if (stage.pool) {
         // Pooling preserves channels. Stream input panels one bank at a time
         // instead of pinning the whole channel tile (e.g. 16 banks for 256 C).
-        int64_t sourcePanelsPerBank =
-            target.bankDepth / (inputSide * inputSide);
+        int64_t sourcePanelsPerBank = tilePanelsPerBank(inputSide * inputSide);
         if (sourcePanelsPerBank <= 0)
           return stage.op->emitError(
               "resident pool input panel does not fit bank");
@@ -2321,13 +2413,16 @@ public:
           Value last = b.create<arith::CmpIOp>(
               loc, arith::CmpIPredicate::eq, lane,
               b.create<arith::ConstantIndexOp>(loc, kTile - 1));
+          Value smatmulInput = repackSMatMulInput(patchNext, kTile, paddedK);
           Value resultNext =
               b.create<BankSMatMulOp>(
-                   loc, laneStates[2].getType(), patchNext, weightNext,
+                   loc, laneStates[2].getType(), smatmulInput, weightNext,
                    laneStates[2],
                    createI64ConstU(b, loc, matrixRs2(kTile, kTile, paddedK)),
                    first, last, createI64Const(b, loc, 0))
                   .getWrBankOut();
+          if (smatmulInput != patchNext)
+            releaseBank(b, loc, smatmulInput);
           b.create<scf::YieldOp>(loc,
                                  ValueRange{patchNext, weightNext, resultNext});
           b.setInsertionPointAfter(laneLoop);
@@ -2459,10 +2554,11 @@ public:
       int64_t paddedK = (kernelElements + kTile - 1) / kTile * kTile;
       Value lutLoaded;
       if (stage.activation == 2) {
+        int64_t lutRows =
+            stage.lutEntries == 4096 ? stage.lutEntries / (4 * kTile) : kTile;
         Value lutBank = allocBank(b, loc, 1, stage.lutEntries == 4096 ? 4 : 1);
         lutLoaded =
-            mvinBank(b, loc, packedLuts.lookup(stage.op), lutBank,
-                     stage.lutEntries == 4096 ? target.bankDepth : kTile);
+            mvinBank(b, loc, packedLuts.lookup(stage.op), lutBank, lutRows);
       }
       for (size_t destinationBank = 0;
            destinationBank < destination.banks.size(); ++destinationBank) {
@@ -2597,16 +2693,17 @@ public:
               loc, arith::CmpIPredicate::eq, inputChannel,
               b.create<arith::ConstantIndexOp>(loc, stage.inputChannels -
                                                         channelStep));
+          int64_t smatmulM = side == 1 && paddedK == kTile ? 1 : kTile;
+          Value smatmulInput = repackSMatMulInput(patchNext, smatmulM, paddedK);
           Value resultNext =
               b.create<BankSMatMulOp>(
-                   loc, iterStates[2].getType(), patchNext, weightNext,
+                   loc, iterStates[2].getType(), smatmulInput, weightNext,
                    iterStates[2],
-                   createI64ConstU(
-                       b, loc,
-                       matrixRs2(side == 1 && paddedK == kTile ? 1 : kTile,
-                                 kTile, paddedK)),
+                   createI64ConstU(b, loc, matrixRs2(smatmulM, kTile, paddedK)),
                    first, last, createI64Const(b, loc, 0))
                   .getWrBankOut();
+          if (smatmulInput != patchNext)
+            releaseBank(b, loc, smatmulInput);
           b.create<scf::YieldOp>(loc,
                                  ValueRange{patchNext, weightNext, resultNext});
           b.setInsertionPointAfter(channelLoop);
@@ -2646,7 +2743,7 @@ public:
         } else if (streamMaterializedInput) {
           ensureStates();
           int64_t streamedPanelsPerBank =
-              target.bankDepth / (inputSide * inputSide);
+              tilePanelsPerBank(inputSide * inputSide);
           if (streamedPanelsPerBank <= 0)
             return stage.op->emitError(
                 "streamed Conv input panel does not fit one bank");
@@ -2870,12 +2967,13 @@ public:
             fp32LutOutput
                 ? Type(b.getI8Type())
                 : (fp32Output ? Type(b.getF32Type()) : Type(b.getI8Type()));
-        int64_t packedRows = fp32LutOutput
-                                 ? target.bankDepth
-                                 : target.bankDepth / outputStorageFactor;
+        int64_t usedBankRows =
+            requestedPanels * side * side * outputStorageFactor;
+        int64_t packedRows =
+            fp32LutOutput ? usedBankRows : usedBankRows / outputStorageFactor;
         Value pack = b.create<memref::AllocOp>(
             loc, MemRefType::get({packedRows, kTile}, outputElementType));
-        mvoutBank(b, loc, pack, output.banks.front(), target.bankDepth);
+        mvoutBank(b, loc, pack, output.banks.front(), usedBankRows);
         b.create<FenceOp>(loc);
 
         auto panelLoop = b.create<scf::ForOp>(
@@ -2975,7 +3073,7 @@ public:
       };
 
       int64_t panelsPerBank =
-          target.bankDepth / (side * side * outputStorageFactor);
+          tilePanelsPerBank(side * side * outputStorageFactor);
       if (panelsPerBank <= 0)
         return stage.op->emitError("resident output tile does not fit bank");
       if (stage.depthwise) {
@@ -3001,14 +3099,17 @@ public:
       // A zero limit is the debug mode for the normal resident path: do not
       // force any stage to materialize, but trace every stage that the normal
       // scheduler materializes at a pool/add/final boundary.
-      if (traceMegaStages && stageIndex >= traceMegaStageStart &&
+      if (traceThisRegion && stageIndex >= traceMegaStageStart &&
           (traceMegaStageLimit == 0 || traceMegaStageLimit < 0 ||
-           stageIndex < traceMegaStageLimit)) {
+           stageIndex < traceMegaStageLimit ||
+           stageIndex == static_cast<int64_t>(stages.size()) - 1)) {
         auto id = b.getI64IntegerAttr(stageIndex);
         auto trace = b.create<::buddy::trace::EndOp>(
             loc, stage.output.getType(), stage.output, id,
             b.getStringAttr("mega-stage"));
-        trace->setAttr("id_path", b.getArrayAttr({id}));
+        trace->setAttr(
+            "id_path",
+            b.getArrayAttr({b.getI64IntegerAttr(traceRegionId), id}));
         trace->setAttr("buckyball.stage_trace", b.getUnitAttr());
       }
       materialized.insert(stageIndex);
@@ -3016,7 +3117,7 @@ public:
     };
 
     int64_t traceLimit = 0;
-    if (traceMegaStages) {
+    if (traceThisRegion) {
       if (traceMegaStageStart < 0 ||
           traceMegaStageStart > static_cast<int64_t>(stages.size()))
         return kernel.emitError("trace-mega-stage-start is out of range");
@@ -3042,6 +3143,7 @@ public:
         }
         if (failed(materializeStage(stageIndex)))
           return failure();
+        traceMaterialized.insert(stageIndex);
         if (stage.multiply) {
           for (auto &entry : gateCaches)
             releaseTile(entry.second);
@@ -3075,6 +3177,15 @@ public:
           gateCaches.try_emplace(gateStage, std::move(gate));
         }
       }
+      if (stage.add && producer.contains(stage.input)) {
+        int64_t inputStage = producer.lookup(stage.input);
+        if (!materialized.contains(inputStage) &&
+            failed(materializeStage(inputStage)))
+          return failure();
+        for (auto &entry : gateCaches)
+          releaseTile(entry.second);
+        gateCaches.clear();
+      }
       if ((stage.pool || stage.add) && !materialized.contains(stageIndex)) {
         if (failed(materializeStage(stageIndex)))
           return failure();
@@ -3101,6 +3212,11 @@ private:
   bool traceMegaStages;
   int64_t traceMegaStageStart;
   int64_t traceMegaStageLimit;
+  int64_t traceMegaRegion;
+  bool traceMegaReloadStages;
+  bool traceMegaFenceBeforeRegion;
+  bool traceMegaInputBeforeRegion;
+  mutable int64_t nextTraceRegionId = 0;
 };
 
 } // namespace
@@ -3108,9 +3224,12 @@ private:
 namespace mlir::buddy {
 void populatePebbleResidentConvRegionToBankSSAPatterns(
     RewritePatternSet &patterns, bool traceMegaStages,
-    int64_t traceMegaStageStart, int64_t traceMegaStageLimit) {
-  patterns.add<ResidentConvRegionPattern>(patterns.getContext(),
-                                          traceMegaStages, traceMegaStageStart,
-                                          traceMegaStageLimit);
+    int64_t traceMegaStageStart, int64_t traceMegaStageLimit,
+    int64_t traceMegaRegion, bool traceMegaReloadStages,
+    bool traceMegaFenceBeforeRegion, bool traceMegaInputBeforeRegion) {
+  patterns.add<ResidentConvRegionPattern>(
+      patterns.getContext(), traceMegaStages, traceMegaStageStart,
+      traceMegaStageLimit, traceMegaRegion, traceMegaReloadStages,
+      traceMegaFenceBeforeRegion, traceMegaInputBeforeRegion);
 }
 } // namespace mlir::buddy

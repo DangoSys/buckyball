@@ -1,0 +1,58 @@
+memref.global "private" constant @input : memref<1x14x14x96xi8> = dense<"0x@PEBBLE_GAP_CONV_INPUT_HEX@"> alignment = 64
+memref.global "private" constant @weight1raw : memref<49168xi8> = dense<"0x00000000000000000000000000000000@PEBBLE_GAP_CONV_WEIGHT_HEX@"> alignment = 64
+memref.global "private" constant @bias1 : memref<24xi32> = dense<[-1929, -3345, -826, -4425, -1950, -1378, -2544, 3397, -134, -2621, 385, -1868, -3754, -948, 275, -53, -1955, -3197, -1065, -298, 536, -2267, -3803, -48]> alignment = 64
+memref.global "private" constant @scale1 : memref<24xf32> = dense<[9.64902255E-11, 1.20455174E-10, 9.11374864E-11, 6.07460609E-11, 6.96993296E-11, 2.21286572E-10, 8.11237535E-11, 1.33313652E-10, 1.26243266E-10, 1.44089102E-10, 0.0341239199, 6.56752361E-11, 6.62821395E-11, 1.91158489E-9, 1.69707901E-10, 4.13074019E-10, 5.95885979E-11, 8.92385332E-11, 6.12655274E-11, 2.72214418E-10, 2.77576795E-10, 2.37361242E-10, 6.75774228E-11, 1.48867613E-10]> alignment = 64
+memref.global "private" constant @weight2raw : memref<36880xi8> = dense<"0x00000000000000000000000000000000@PEBBLE_GAP_CONV_WEIGHT2_HEX@"> alignment = 64
+memref.global "private" constant @bias2 : memref<96xi32> = dense<[7051, 3006, 26558, 11845, -12167, 14432, -194, 9249, -17237, 22963, 7410, 91984, 105591, 6346, 90458, 43212, 45789, 33855, 29981, 10245, 4370, -34, -712, 15905, 22004, 549465, -5252, -3669, 7224, 18985, 8518, 8198, 16536, 51867, 4243, 6598, 9711, 18037, 21720, 397303, -253, 10751, -10281, -10424, 1839, 25010, 6995, -15222, 1786, -3524, -15704, 13370, 8813, 27391, 8927, -12218, -4217, -7494, 4135, 12616, 9593, 1431, -5377, 9947, 370, 11072, 5546, 22002, 10029, -3861, 904, 95829, 4717, -14504, 52996, 33835, 12322, 3329, 21275, -872, 1465, 17484, 6331, 63424, -29681, 34866, 3915, -2807, 71222, 5504, -13650, 15420, 7960, -9852, -13797, 21711]> alignment = 64
+memref.global "private" constant @scale2 : memref<96xf32> = dense<[0.00181691104, 4.059140E-3, 0.00131794217, 0.00212815683, 0.00430351309, 0.00403421139, 5.176660E-3, 0.00188985514, 0.00558878435, 0.00152020913, 0.00459996238, 5.82394132E-4, 4.24394966E-4, 0.0019368825, 7.07225234E-4, 6.37308462E-4, 0.00137251348, 7.15450151E-4, 0.00140084175, 0.00317073381, 5.073430E-3, 0.00307706394, 0.00386786251, 0.00195057772, 0.00210299343, 1.08822038E-4, 0.00415666727, 0.00333561096, 0.00485164393, 7.86353368E-4, 0.00419554161, 0.00339963497, 0.00123977242, 0.00106979779, 0.00394831039, 0.00133779203, 0.00282861362, 0.00155300961, 0.00196025497, 5.82583889E-5, 0.0032499244, 0.00156923081, 0.00266220793, 0.00191042456, 0.00408306951, 9.02582774E-4, 0.00326385885, 0.00143681327, 0.00142906886, 0.0026714697, 0.00458595809, 0.00430518808, 2.272860E-3, 0.00113706058, 0.00272057392, 0.00554801896, 6.058620E-3, 0.00159710483, 0.00501794415, 0.00278559304, 0.00328800408, 0.00337952748, 0.00245677959, 0.00205389271, 0.00226871902, 0.00263371225, 9.1695087E-4, 0.00129066338, 0.00205622637, 2.126570E-3, 9.56189353E-4, 2.12495346E-4, 9.6136285E-4, 0.00436848169, 9.72485286E-4, 4.94753069E-4, 0.00348583842, 0.00738966605, 0.00289806188, 0.00333968201, 0.00305957114, 0.00181978801, 0.00184966961, 3.52834439E-4, 0.00117929338, 9.00093349E-4, 0.00424369285, 0.00269078952, 5.541500E-4, 0.0025951541, 0.00531184906, 0.00391697325, 0.00378050678, 0.00192236435, 0.00131825986, 0.00273139146]> alignment = 64
+memref.global "private" constant @lut : memref<256xi8> = dense<"0x191A1A1A1A1A1A1B1B1B1B1B1B1C1C1C1C1C1C1D1D1D1D1D1D1E1E1E1E1E1E1F1F1F1F1F1F2020202020202121212121212222222222222323232323232424242424242525252525252626262626262727272727272828282828282929292929292A2A2A2A2A2A2B2B2B2B2B2B2C2C2C2C2C2C2D2D2D2D2D2D2E2E2E2E2E2E2F0404040505050505050606060606060707070707070808080808080909090909090A0A0A0A0A0A0B0B0B0B0B0B0C0C0C0C0C0C0D0D0D0D0D0D0E0E0E0E0E0E0F0F0F0F0F0F1010101010101111111111111212121212121313131313131414141414141515151515151616161616161717171717171818181818181919191919"> alignment = 64
+memref.global "private" constant @weight3raw : memref<73744xi8> = dense<"0x00000000000000000000000000000000@PEBBLE_GAP_CONV_WEIGHT3_HEX@"> alignment = 64
+memref.global "private" constant @bias3 : memref<40xi32> = dense<[104, -13887, -3685, -19928, 5678, 8790, -6325, -4745, 15957, 3843, 4642, 11420, -2754, -19949, 17269, -673, 16732, -31364, 19420, 3384, -1286, -5401, 3250, -9546, 3517, 6568, 9818, -3768, -8763, 19005, 2689, -2236, -3490, 6369, -18573, -726, -16056, 10604, -4229, -7803]> alignment = 64
+memref.global "private" constant @scale3 : memref<40xf32> = dense<[0.007250275, 0.0052957274, 0.00507997582, 5.148440E-3, 0.00615183357, 0.00551314512, 0.00447647972, 0.00624849601, 4.808580E-3, 0.00621820614, 0.00767033594, 0.00502041401, 0.00771069526, 0.00713740429, 5.340260E-3, 0.00554999569, 0.00578600029, 0.00608736509, 0.00647644047, 0.00674922066, 0.00569664268, 0.00644684816, 0.00639614975, 0.00778135518, 0.00677069137, 0.00366282626, 0.00660506124, 0.00643686252, 0.00655329926, 0.00661863247, 0.00624936819, 0.0104040103, 0.00504696835, 7.654780E-3, 0.00546469772, 5.341790E-3, 0.0050635729, 0.00579059403, 0.0084069958, 0.0039168736]> alignment = 64
+memref.global "private" constant @none : memref<1xi8> = dense<0> alignment = 64
+func.func private @check_result(memref<1x14x14x40xi8>) -> () func.func private @poison_reused_bank() -> ()
+
+func.func @main() -> i8 {
+  %zero = arith.constant 0 : i8
+  %c0 = arith.constant 0 : index %c1 = arith.constant 1 : index
+  %c14 = arith.constant 14 : index
+  %c96 = arith.constant 96 : index
+  %input = memref.get_global @input : memref<1x14x14x96xi8>
+  %input_heap = memref.alloc() alignment = 64 : memref<1x14x14x96xi8>
+  scf.for %y = %c0 to %c14 step %c1 {
+    scf.for %x = %c0 to %c14 step %c1 {
+      scf.for %c = %c0 to %c96 step %c1 {
+        %v = memref.load %input[%c0, %y, %x, %c] : memref<1x14x14x96xi8>
+        memref.store %v, %input_heap[%c0, %y, %x, %c] : memref<1x14x14x96xi8>
+      }
+    }
+  }
+  %weight1raw = memref.get_global @weight1raw : memref<49168xi8>
+  %weight1 = memref.reinterpret_cast %weight1raw to offset: [16], sizes: [2, 96, 16, 16], strides: [24576, 256, 16, 1] : memref<49168xi8> to memref<2x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>>
+  %bias1 = memref.get_global @bias1 : memref<24xi32>
+  %scale1 = memref.get_global @scale1 : memref<24xf32>
+  %weight2raw = memref.get_global @weight2raw : memref<36880xi8>
+  %weight2 = memref.reinterpret_cast %weight2raw to offset: [16], sizes: [6, 24, 16, 16], strides: [6144, 256, 16, 1] : memref<36880xi8> to memref<6x24x16x16xi8, strided<[6144, 256, 16, 1], offset: 16>>
+  %bias2 = memref.get_global @bias2 : memref<96xi32>
+  %scale2 = memref.get_global @scale2 : memref<96xf32>
+  %lut = memref.get_global @lut : memref<256xi8>
+  %weight3raw = memref.get_global @weight3raw : memref<73744xi8>
+  %weight3 = memref.reinterpret_cast %weight3raw to offset: [16], sizes: [3, 96, 16, 16], strides: [24576, 256, 16, 1] : memref<73744xi8> to memref<3x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>>
+  %bias3 = memref.get_global @bias3 : memref<40xi32> %scale3 = memref.get_global @scale3 : memref<40xf32>
+  %none = memref.get_global @none : memref<1xi8>
+  func.call @poison_reused_bank() : () -> ()
+  %gap = memref.alloc() alignment = 64 : memref<1x1x1x96xi8>
+  %middle = memref.alloc() alignment = 64 : memref<1x1x1x24xi8>
+  %gate = memref.alloc() alignment = 64 : memref<1x1x1x96xi8>
+  %mul = memref.alloc() alignment = 64 : memref<1x14x14x96xi8>
+  %output = memref.alloc() alignment = 64 : memref<1x14x14x40xi8>
+  tile.mega_kernel %input_heap %output : memref<1x14x14x96xi8> memref<1x14x14x40xi8> {
+    tile.mega_global_avg_pool %input_heap %gap {inputScale = 0.043821115 : f32, outputScale = 0.023039883 : f32} : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
+    tile.mega_conv2d %gap %weight1 %bias1 %scale1 %none %middle {activation = 1 : i64, kernel = 1 : i64, outputScale = 0.0156919789 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x96xi8> memref<2x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
+    tile.mega_conv2d %middle %weight2 %bias2 %scale2 %lut %gate {activation = 2 : i64, kernel = 1 : i64, outputScale = 0.0196615774 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x24xi8> memref<6x24x16x16xi8, strided<[6144, 256, 16, 1], offset: 16>> memref<96xi32> memref<96xf32> memref<256xi8> memref<1x1x1x96xi8>
+    tile.mega_int8_mul %gate %input_heap %mul {activation = 0 : i64, lhsScale = 0.0196615774 : f32, outputScale = 0.0253108498 : f32, rhsScale = 0.043821115 : f32} : memref<1x1x1x96xi8> memref<1x14x14x96xi8> memref<1x14x14x96xi8>
+    tile.mega_conv2d %mul %weight3 %bias3 %scale3 %none %output {activation = 0 : i64, kernel = 1 : i64, outputScale = 0.0241219234 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x14x14x96xi8> memref<3x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<40xi32> memref<40xf32> memref<1xi8> memref<1x14x14x40xi8>
+  }
+  func.call @check_result(%output) : (memref<1x14x14x40xi8>) -> ()
+  return %zero : i8
+}

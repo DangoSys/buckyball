@@ -26,7 +26,7 @@ class PMCTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [63:0] elapsed,
       |  input enable
       |);
-      |""".stripMargin + DpiGuard.wrap(
+      |""".stripMargin + DpiGuard.wrapPMCTrace(
       """
         |  import "DPI-C" context function void dpi_pmctrace(
         |    input int unsigned ball_id,

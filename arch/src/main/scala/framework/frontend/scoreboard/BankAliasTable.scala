@@ -49,7 +49,6 @@ class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: In
 
   // Per-entry metadata for commit-time free.
   val entHasWrite = RegInit(VecInit(Seq.fill(robEntries)(false.B)))
-  val entOldAlias = RegInit(VecInit(Seq.fill(robEntries)(0.U(aliasIdLen.W))))
   val entNewAlias = RegInit(VecInit(Seq.fill(robEntries)(0.U(aliasIdLen.W))))
   val entWrVbank  = RegInit(VecInit(Seq.fill(robEntries)(0.U(vbankIdLen.W))))
 
@@ -95,7 +94,6 @@ class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: In
     }
 
     entHasWrite(rid) := q.wr_bank_valid
-    entOldAlias(rid) := Mux(q.wr_bank_valid, mapVbank(q.wr_bank_id), 0.U)
     entNewAlias(rid) := Mux(q.wr_bank_valid, extraAlias(rid), 0.U)
     entWrVbank(rid)  := toVbankIdx(q.wr_bank_id)
 
@@ -113,24 +111,13 @@ class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: In
           assert(aliasInUse(i), "BAT free on non-allocated alias")
           aliasInUse(i) := false.B
 
-          // Restore the predecessor only if it is still live.  A younger write
-          // can commit after an older write to the same vbank; in that case the
-          // older alias has already been freed and must not be resurrected.
+          // Commit is in order. If this is still the current alias, no younger
+          // write exists and every older write has already committed.
           when(v2a(entWrVbank(i)) === entNewAlias(i)) {
-            val oldAlias    = entOldAlias(i)
-            val oldIsExtra  = oldAlias >= aliasBase.U(aliasIdLen.W)
-            val oldAliasIdx = oldAlias - aliasBase.U(aliasIdLen.W)
-            val oldIsLive   = oldIsExtra &&
-              aliasInUse(oldAliasIdx(robIdLen - 1, 0))
-            v2a(entWrVbank(i)) := Mux(
-              oldIsExtra,
-              Mux(oldIsLive, oldAlias, entWrVbank(i)),
-              oldAlias
-            )
+            v2a(entWrVbank(i)) := entWrVbank(i)
           }
         }
         entHasWrite(i) := false.B
-        entOldAlias(i) := 0.U
         entNewAlias(i) := 0.U
         entWrVbank(i)  := 0.U
       }

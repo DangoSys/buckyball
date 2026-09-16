@@ -1,0 +1,24 @@
+memref.global "private" constant @input : memref<1x14x14x96xi8> = dense<"0x@PEBBLE_GAP_CONV_INPUT_HEX@"> alignment = 64
+memref.global "private" constant @weight : memref<2x96x16x16xi8> = dense<"0x@PEBBLE_GAP_CONV_WEIGHT_HEX@"> alignment = 64
+memref.global "private" constant @bias : memref<24xi32> = dense<[-1929, -3345, -826, -4425, -1950, -1378, -2544, 3397, -134, -2621, 385, -1868, -3754, -948, 275, -53, -1955, -3197, -1065, -298, 536, -2267, -3803, -48]> alignment = 64
+memref.global "private" constant @scale : memref<24xf32> = dense<[9.64902255E-11, 1.20455174E-10, 9.11374864E-11, 6.07460609E-11, 6.96993296E-11, 2.21286572E-10, 8.11237535E-11, 1.33313652E-10, 1.26243266E-10, 1.44089102E-10, 0.0341239199, 6.56752361E-11, 6.62821395E-11, 1.91158489E-9, 1.69707901E-10, 4.13074019E-10, 5.95885979E-11, 8.92385332E-11, 6.12655274E-11, 2.72214418E-10, 2.77576795E-10, 2.37361242E-10, 6.75774228E-11, 1.48867613E-10]> alignment = 64
+memref.global "private" constant @none : memref<1xi8> = dense<0> alignment = 64
+
+func.func private @check_result(memref<1x1x1x24xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero = arith.constant 0 : i8
+  %input = memref.get_global @input : memref<1x14x14x96xi8>
+  %weight = memref.get_global @weight : memref<2x96x16x16xi8>
+  %bias = memref.get_global @bias : memref<24xi32>
+  %scale = memref.get_global @scale : memref<24xf32>
+  %none = memref.get_global @none : memref<1xi8>
+  %gap = memref.alloc() alignment = 64 : memref<1x1x1x96xi8>
+  %output = memref.alloc() alignment = 64 : memref<1x1x1x24xi8>
+  tile.mega_kernel %input %output : memref<1x14x14x96xi8> memref<1x1x1x24xi8> {
+    tile.mega_global_avg_pool %input %gap {inputScale = 0.043821115 : f32, outputScale = 0.023039883 : f32} : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
+    tile.mega_conv2d %gap %weight %bias %scale %none %output {activation = 1 : i64, kernel = 1 : i64, outputScale = 0.0156919789 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x96xi8> memref<2x96x16x16xi8> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
+  }
+  func.call @check_result(%output) : (memref<1x1x1x24xi8>) -> ()
+  return %zero : i8
+}

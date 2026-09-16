@@ -8,6 +8,7 @@ typedef struct {
   int unsigned op2_col;
   int unsigned wr_col;
   int unsigned gate_row;
+  int unsigned bank_entries;
   int unsigned rob_id;
   int unsigned rs1_lo;
   int unsigned rs1_hi;
@@ -36,7 +37,7 @@ import "DPI-C" function longint unsigned int8mul_case_dst_word_hi(input int unsi
 
 localparam int INT8MUL_CORE_FUNCT7 = `INT8MUL_FUNCT7;
 localparam int INT8MUL_MAX_ROWS = 64;
-localparam int INT8MUL_NUM_CASES = 2;
+localparam int INT8MUL_NUM_CASES = 3;
 localparam int INT8MUL_TIMEOUT_CYCLES = 20000;
 
 function automatic int unsigned int8mul_require_bid();

@@ -25,7 +25,9 @@ void populatePebbleCoreBankSSALoweringPatterns(RewritePatternSet &patterns,
                                                int64_t traceMegaStageLimit);
 void populatePebbleResidentConvRegionToBankSSAPatterns(
     RewritePatternSet &patterns, bool traceMegaStages,
-    int64_t traceMegaStageStart, int64_t traceMegaStageLimit);
+    int64_t traceMegaStageStart, int64_t traceMegaStageLimit,
+    int64_t traceMegaRegion, bool traceMegaReloadStages,
+    bool traceMegaFenceBeforeRegion, bool traceMegaInputBeforeRegion);
 } // namespace mlir::buddy
 
 namespace {
@@ -55,6 +57,24 @@ public:
       *this, "trace-mega-stage-start",
       llvm::cl::desc("Do not dump MegaKernel stages before this index"),
       llvm::cl::init(0)};
+  Option<int64_t> traceMegaRegion{
+      *this, "trace-mega-region",
+      llvm::cl::desc(
+          "Trace only this resident MegaKernel region ID (-1 means all)"),
+      llvm::cl::init(-1)};
+  Option<bool> traceMegaReloadStages{
+      *this, "trace-mega-reload-stages",
+      llvm::cl::desc("Reload traced stages for downstream consumers"),
+      llvm::cl::init(true)};
+  Option<bool> traceMegaFenceBeforeRegion{
+      *this, "trace-mega-fence-before-region",
+      llvm::cl::desc("Insert a diagnostic fence before the traced region"),
+      llvm::cl::init(false)};
+  Option<bool> traceMegaInputBeforeRegion{
+      *this, "trace-mega-input-before-region",
+      llvm::cl::desc(
+          "Trace the input tensor immediately before the selected region"),
+      llvm::cl::init(false)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<arith::ArithDialect, cf::ControlFlowDialect,
@@ -67,7 +87,8 @@ public:
     RewritePatternSet residentPatterns(&getContext());
     mlir::buddy::populatePebbleResidentConvRegionToBankSSAPatterns(
         residentPatterns, traceMegaStages, traceMegaStageStart,
-        traceMegaStageLimit);
+        traceMegaStageLimit, traceMegaRegion, traceMegaReloadStages,
+        traceMegaFenceBeforeRegion, traceMegaInputBeforeRegion);
     if (failed(applyPatternsGreedily(getOperation(),
                                      std::move(residentPatterns)))) {
       signalPassFailure();
@@ -75,7 +96,8 @@ public:
     }
     RewritePatternSet patterns(&getContext());
     mlir::buddy::populatePebbleCoreBankSSALoweringPatterns(
-        patterns, traceMegaStages, traceMegaStageStart, traceMegaStageLimit);
+        patterns, traceMegaStages && traceMegaRegion < 0, traceMegaStageStart,
+        traceMegaStageLimit);
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns)))) {
       signalPassFailure();
       return;

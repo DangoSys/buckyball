@@ -1,6 +1,7 @@
 [workloads]
 tests = [
   "pebble-pebble-ctest-mvin_2d_test-linux",
+  "pebble-pebble-ctest-mvin_2d_pixel_stride_test-linux",
   "pebble-pebble-ctest-mvin_mvout_acc_test-linux",
   "pebble-pebble-ctest-mvin_mvout_test-linux",
   "pebble-pebble-ctest-mvin_mvout_stride_test-linux",
@@ -55,6 +56,11 @@ tests = [
   "pebble-pebble-ctest-matadd_i32_16row_test-linux",
   "pebble-pebble-mlirtest-ball_matadd_i32-linux",
   "pebble-pebble-ctest-mega_conv_pipeline_test-linux",
+  "pebble-pebble-mlirtest-tile_mega_conv2d_s2_depthwise_s2-linux",
+  "pebble-pebble-mlirtest-tile_mega_se_gate_conv-linux",
+  "pebble-pebble-mlirtest-tile_mega_global_avg_conv_exact-linux",
+  "pebble-pebble-mlirtest-tile_mega_global_avg_conv2_exact-linux",
+  "pebble-pebble-mlirtest-tile_mega_global_avg_7x7_c288_exact-linux",
   "pebble-pebble-ctest-residual_add_lut_test-linux",
   "pebble-pebble-ctest-maxpool_im2col_test-linux",
   "pebble-pebble-ctest-se_gate_lut_test-linux",

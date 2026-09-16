@@ -151,7 +151,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
     valid_bytes_reg  := Mux(io.cmdReq.bits.cmd.special(61, 58) === 0.U, 16.U, io.cmdReq.bits.cmd.special(61, 58))
     pixel_bytes_reg  := io.cmdReq.bits.cmd.special(38, 32) << 3
     source_width_reg := io.cmdReq.bits.cmd.special(48, 39)
-    tile_width_reg   := io.cmdReq.bits.cmd.special(57, 55) + 1.U
+    tile_width_reg   := io.cmdReq.bits.cmd.special(57, 55) +& 1.U
     when(io.cmdReq.bits.cmd.is_mvin_mmio) {
       mmio_addr_reg   := io.cmdReq.bits.cmd.special(55, 39)
       mmio_col_reg    := io.cmdReq.bits.cmd.special(63, 56)
@@ -160,7 +160,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
       stride_reg      := 1.U
       state           := s_dma_req
     }.elsewhen(io.cmdReq.bits.cmd.is_mvin_2d) {
-      iter_reg        := io.cmdReq.bits.cmd.iter * (io.cmdReq.bits.cmd.special(57, 55) + 1.U)
+      iter_reg        := io.cmdReq.bits.cmd.iter * (io.cmdReq.bits.cmd.special(57, 55) +& 1.U)
       group_count_reg := 1.U
       stride_reg      := 1.U
       state           := s_dma_req

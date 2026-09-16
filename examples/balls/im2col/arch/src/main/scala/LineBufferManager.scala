@@ -19,6 +19,10 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
   private val maxBeats     = maxIter * maxIter
   require(isPow2(maxBeats) && maxBeats >= 2, "LineBuffer depth must be an even power of two")
   private val halfBeats    = maxBeats / 2
+  // FIXME: This is a local line-buffer address, sized for maxIter^2; it must not use
+  // the external bank address width. Each command's external footprint is
+  // checked separately against bankEntries in Im2colConfigRegs.
+  private val memoryAddrW  = log2Ceil(maxBeats)
   private val kW           = log2Ceil(maxKSize + 1)
   private val addrW        = log2Ceil(b.memDomain.bankEntries)
 
@@ -112,11 +116,11 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
 
   private val memoryAddress = Mux(
     memoryWrite,
-    beat(log2Ceil(maxBeats) - 1, 0),
-    beatIndex(log2Ceil(maxBeats) - 1, 0)
+    beat.pad(memoryAddrW),
+    beatIndex(memoryAddrW - 1, 0)
   )
 
-  private val memoryBank   = memoryAddress(log2Ceil(maxBeats) - 1)
+  private val memoryBank   = memoryAddress(memoryAddrW - 1)
   private val memoryRow    = memoryAddress(log2Ceil(halfBeats) - 1, 0)
   private val memoryEnable = memoryWrite || memoryRead
 

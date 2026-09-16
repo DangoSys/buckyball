@@ -7,9 +7,9 @@ func.func @main() -> i8 {
   %lanes = arith.constant @BB_BANK_I8_LANES@ : index
   %mod = arith.constant 31 : index
   %bias = arith.constant 15 : index
-  %depth = arith.constant @BB_BANK_LINES@ : i64
+  %depth = arith.constant 64 : i64
   %zero64 = arith.constant 0 : i64
-  %side64 = arith.constant @BB_BANK_ISQRT@ : i64
+  %side64 = arith.constant 8 : i64
   %stride = arith.constant 1 : i64
   %input = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
   %output = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
@@ -26,7 +26,7 @@ func.func @main() -> i8 {
   %out_bank = buckyball.bank_alloc
   %loaded_input = buckyball.bank_mvin %input %in_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
   %loaded_output = buckyball.bank_mvin %output %out_bank %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
-  %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 {inputSide = @BB_BANK_ISQRT@ : i64, outputSide = @BB_BANK_ISQRT@ : i64, kernel = 3 : i64, stride = 1 : i64, padding = 1 : i64, startRow = 0 : i64, startCol = 0 : i64} : i64 i64 i64 i64 i64 i64
+  %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 {inputSide = 8 : i64, outputSide = 8 : i64, kernel = 3 : i64, stride = 1 : i64, padding = 1 : i64, startRow = 0 : i64, startCol = 0 : i64} : i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %result %depth %stride : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
   buckyball.fence
   func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()

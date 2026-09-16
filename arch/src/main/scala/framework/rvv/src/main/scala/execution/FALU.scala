@@ -2,11 +2,14 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import hardfloat._
 
 /** Shared Zve32f datapath: a=vs2, b=vs1/scalar, c=old vd; op=funct6, subop=rs1. */
-class Float32 extends Module {
+@instantiable
+class FALU extends Module {
 
+  @public
   val io = IO(new Bundle {
     val a            = Input(UInt(32.W))
     val b            = Input(UInt(32.W))

@@ -6,15 +6,26 @@ pub struct Int8Mul;
 
 impl Int8Mul {
     fn fields(xs2: u64) -> (f32, usize) {
-        if xs2 >> 38 != 0 {
+        let lines = bank_lines();
+        let gate_row_bits = usize::BITS - (lines - 1).leading_zeros();
+        if gate_row_bits > 32 {
+            panic!("int8mul: gate row must fit rs2[63:32]");
+        }
+        let reserved_bit = 32 + gate_row_bits;
+        if reserved_bit < 64 && xs2 >> reserved_bit != 0 {
             panic!("int8mul: reserved rs2 bits must be zero");
         }
         let ratio = f32::from_bits(xs2 as u32);
-        let gate_row = ((xs2 >> 32) & 0x3f) as usize;
+        let gate_row_mask = if gate_row_bits == 32 {
+            u32::MAX as u64
+        } else {
+            (1_u64 << gate_row_bits) - 1
+        };
+        let gate_row = ((xs2 >> 32) & gate_row_mask) as usize;
         if !ratio.is_finite() || ratio <= 0.0 {
             panic!("int8mul: ratio must be finite and positive");
         }
-        if gate_row >= bank_lines() {
+        if gate_row >= lines {
             panic!("int8mul: gate row must fit one physical bank");
         }
         (ratio, gate_row)

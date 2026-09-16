@@ -3,8 +3,19 @@ use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
 const TILE: usize = 16;
-const MAX_KERNEL: usize = 7;
-const MAX_PADDING: usize = 7;
+const BALL_CLASS: &str = "examples.balls.im2col.Im2colBall";
+
+fn max_iter() -> usize {
+    crate::config::ball_domain::param(BALL_CLASS, "maxIter")
+}
+
+fn max_kernel() -> usize {
+    crate::config::ball_domain::param(BALL_CLASS, "maxKSize")
+}
+
+fn max_padding() -> usize {
+    crate::config::ball_domain::param(BALL_CLASS, "maxPadding")
+}
 
 #[derive(Clone, Copy)]
 struct Shape {
@@ -37,10 +48,11 @@ fn decode_shape(xs1: u64, xs2: u64) -> Shape {
 
 fn dimensions(shape: Shape) -> (usize, usize, usize) {
     if shape.input_size == 0
+        || shape.input_size > max_iter()
         || shape.kernel == 0
-        || shape.kernel > MAX_KERNEL
+        || shape.kernel > max_kernel()
         || shape.stride == 0
-        || shape.padding > MAX_PADDING
+        || shape.padding > max_padding()
         || shape.start_row > shape.padding
         || shape.start_col > shape.padding
         || shape.window_count == 0

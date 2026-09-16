@@ -62,8 +62,9 @@ object cache extends FrameworkModule {
 }
 
 object rvv extends FrameworkModule {
-  override def moduleRoot = frameworkRoot / "rvv" / "rvv"
+  override def moduleRoot = frameworkRoot / "rvv"
   override def moduleDeps = Seq(hardfloat)
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object root_chip extends FrameworkModule {

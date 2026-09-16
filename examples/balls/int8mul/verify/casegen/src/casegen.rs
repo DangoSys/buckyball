@@ -1,7 +1,6 @@
 pub const ROW_BYTES: usize = 16;
-pub const BANK_ENTRIES: u32 = 64;
 pub const MAX_ROWS: usize = 64;
-pub const NUM_CASES: u32 = 2;
+pub const NUM_CASES: u32 = 3;
 pub const GATE_ROW: u32 = 1;
 pub const RATIO: f32 = 0.25;
 
@@ -17,6 +16,7 @@ pub struct Int8MulCmd {
     pub op2_col: u32,
     pub wr_col: u32,
     pub gate_row: u32,
+    pub bank_entries: u32,
     pub rob_id: u32,
     pub rs1_lo: u32,
     pub rs1_hi: u32,
@@ -61,13 +61,17 @@ impl Int8MulCase {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> Int8MulCase {
+pub fn gen_case(index: u32, bid: u32, bank_entries: u32) -> Int8MulCase {
+    if bank_entries == 0 {
+        panic!("int8mul: bank entries must be positive");
+    }
     if index >= NUM_CASES {
         panic!("int8mul: unsupported directed case {index}");
     }
     match index {
-        0 => directed(bid, 2, 1),
-        1 => directed(bid, 3, 4),
+        0 => directed(bid, 2, 1, GATE_ROW, bank_entries),
+        1 => directed(bid, 3, 4, GATE_ROW, bank_entries),
+        2 => directed(bid, 4, 1, bank_entries - 1, bank_entries),
         _ => panic!("int8mul: unsupported directed case {index}"),
     }
 }
@@ -81,17 +85,12 @@ fn positive_finite(value: f32) -> bool {
     value.is_finite() && value > 0.0
 }
 
-fn ctest_gate() -> Vec<u128> {
-    let mut row0 = [0u8; ROW_BYTES];
-    let mut row1 = [0u8; ROW_BYTES];
+fn ctest_gate() -> u128 {
+    let mut row = [0u8; ROW_BYTES];
     for lane in 0..ROW_BYTES {
-        row0[lane] = 1;
-        row1[lane] = (lane as i8 - 8) as u8;
+        row[lane] = (lane as i8 - 8) as u8;
     }
-    pack_bytes(&row0)
-        .into_iter()
-        .chain(pack_bytes(&row1))
-        .collect()
+    pack_bytes(&row)[0]
 }
 
 fn ctest_input(rows: usize) -> Vec<u128> {
@@ -154,11 +153,15 @@ pub(crate) fn validate(
     rs1: u64,
     rs2: u64,
     ratio: f32,
+    bank_entries: u32,
 ) {
-    if iter == 0 || iter > BANK_ENTRIES {
+    if bank_entries == 0 {
+        panic!("int8mul: bank entries must be positive");
+    }
+    if iter == 0 || iter > bank_entries {
         panic!("int8mul: iter must fit one physical bank");
     }
-    if gate_row >= BANK_ENTRIES {
+    if gate_row >= bank_entries {
         panic!("int8mul: gate row must fit one physical bank");
     }
     if op1_col != 1 || op2_col != 1 || wr_col != 1 {
@@ -170,7 +173,8 @@ pub(crate) fn validate(
     if !positive_finite(ratio) {
         panic!("int8mul: ratio must be finite and positive");
     }
-    if rs2 >> 38 != 0 {
+    let gate_row_bits = u32::BITS - (bank_entries - 1).leading_zeros();
+    if rs2 >> (32 + gate_row_bits) != 0 {
         panic!("int8mul: reserved rs2 bits must be zero");
     }
     if (rs1 & 0x3ff) != u64::from(gate_bank)
@@ -187,8 +191,7 @@ pub(crate) fn validate(
     }
 }
 
-fn dst_words(gate: &[u128], input: &[u128], iter: u32, gate_row: u32, ratio: f32) -> Vec<u128> {
-    let gate_word = gate[gate_row as usize];
+fn dst_words(gate_word: u128, input: &[u128], iter: u32, ratio: f32) -> Vec<u128> {
     let mut out = Vec::with_capacity(iter as usize);
     for row in 0..iter as usize {
         let mut packed = 0u128;
@@ -203,14 +206,13 @@ fn dst_words(gate: &[u128], input: &[u128], iter: u32, gate_row: u32, ratio: f32
     out
 }
 
-fn directed(bid: u32, rob_id: u32, iter: u32) -> Int8MulCase {
+fn directed(bid: u32, rob_id: u32, iter: u32, gate_row: u32, bank_entries: u32) -> Int8MulCase {
     let gate_bank = 0;
     let input_bank = 1;
     let output_bank = 2;
     let op1_col = 1;
     let op2_col = 1;
     let wr_col = 1;
-    let gate_row = GATE_ROW;
     let ratio = RATIO;
     let gate = ctest_gate();
     let input = ctest_input(iter as usize);
@@ -228,11 +230,12 @@ fn directed(bid: u32, rob_id: u32, iter: u32) -> Int8MulCase {
         rs1,
         rs2,
         ratio,
+        bank_entries,
     );
     if input.len() != iter as usize {
         panic!("int8mul: input rows {} != iter {iter}", input.len());
     }
-    let dst = dst_words(&gate, &input, iter, gate_row, ratio);
+    let dst = dst_words(gate, &input, iter, ratio);
     let (rs1_lo, rs1_hi) = split_rs(rs1);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     Int8MulCase {
@@ -246,16 +249,17 @@ fn directed(bid: u32, rob_id: u32, iter: u32) -> Int8MulCase {
             op2_col,
             wr_col,
             gate_row,
+            bank_entries,
             rob_id,
             rs1_lo,
             rs1_hi,
             rs2_lo,
             rs2_hi,
-            num_gate_words: gate.len() as u32,
+            num_gate_words: 1,
             num_input_words: input.len() as u32,
             num_dst_words: dst.len() as u32,
         },
-        gate_words: copy_words(&gate),
+        gate_words: copy_words(&[gate]),
         input_words: copy_words(&input),
         dst_words: copy_words(&dst),
     }
@@ -265,23 +269,26 @@ fn directed(bid: u32, rob_id: u32, iter: u32) -> Int8MulCase {
 mod tests {
     use super::*;
 
+    const TEST_BANK_ENTRIES: u32 = 4096;
+
     fn ctest_expected(gate: i8, input: i8) -> i8 {
         compute(gate, input, RATIO)
     }
 
     #[test]
     fn case_zero_matches_ctest() {
-        let case = gen_case(0, 8);
+        let case = gen_case(0, 8, TEST_BANK_ENTRIES);
         assert_eq!(case.cmd.bid, 8);
         assert_eq!(case.cmd.iter, 1);
         assert_eq!(case.cmd.gate_bank, 0);
         assert_eq!(case.cmd.input_bank, 1);
         assert_eq!(case.cmd.output_bank, 2);
         assert_eq!(case.cmd.gate_row, GATE_ROW);
-        assert_eq!(case.cmd.num_gate_words, 2);
+        assert_eq!(case.cmd.bank_entries, TEST_BANK_ENTRIES);
+        assert_eq!(case.cmd.num_gate_words, 1);
         assert_eq!(case.cmd.num_input_words, 1);
         assert_eq!(case.cmd.num_dst_words, 1);
-        let gate_lane0 = ((case.gate_words[GATE_ROW as usize] >> 0) & 0xff) as u8 as i8;
+        let gate_lane0 = (case.gate_words[0] & 0xff) as u8 as i8;
         let input0 = ((case.input_words[0] >> 0) & 0xff) as u8 as i8;
         assert_eq!(gate_lane0, -8);
         assert_eq!(input0, -128);
@@ -293,7 +300,7 @@ mod tests {
     fn cases_hit_iter_bins() {
         let mut hit = [false; 2];
         for index in 0..NUM_CASES {
-            let case = gen_case(index, 8);
+            let case = gen_case(index, 8, TEST_BANK_ENTRIES);
             assert_eq!(case.cmd.bid, 8);
             assert_eq!(case.cmd.op1_col, 1);
             assert_eq!(case.cmd.op2_col, 1);
@@ -301,7 +308,7 @@ mod tests {
             assert_eq!(case.cmd.num_input_words, case.cmd.iter);
             assert_eq!(case.cmd.num_dst_words, case.cmd.iter);
             let rs2 = u64::from(case.cmd.rs2_lo) | (u64::from(case.cmd.rs2_hi) << 32);
-            assert_eq!(rs2 >> 38, 0);
+            assert_eq!(rs2 >> (32 + TEST_BANK_ENTRIES.ilog2()), 0);
             match case.cmd.iter {
                 1 => hit[0] = true,
                 4 => hit[1] = true,
@@ -312,9 +319,26 @@ mod tests {
     }
 
     #[test]
+    fn final_gate_row_tracks_bank_entries() {
+        let small = gen_case(2, 8, 64);
+        let non_power_of_two = gen_case(2, 8, 65);
+        let large = gen_case(2, 8, TEST_BANK_ENTRIES);
+        assert_eq!(small.cmd.gate_row, 63);
+        assert_eq!(non_power_of_two.cmd.gate_row, 64);
+        assert_eq!(large.cmd.gate_row, TEST_BANK_ENTRIES - 1);
+        let small_rs2 = u64::from(small.cmd.rs2_lo) | (u64::from(small.cmd.rs2_hi) << 32);
+        let non_power_rs2 =
+            u64::from(non_power_of_two.cmd.rs2_lo) | (u64::from(non_power_of_two.cmd.rs2_hi) << 32);
+        let large_rs2 = u64::from(large.cmd.rs2_lo) | (u64::from(large.cmd.rs2_hi) << 32);
+        assert_eq!(small_rs2 >> 38, 0);
+        assert_eq!(non_power_rs2 >> 39, 0);
+        assert_eq!(large_rs2 >> 44, 0);
+    }
+
+    #[test]
     #[should_panic(expected = "unsupported directed case")]
     fn unknown_index_panics() {
-        let _ = gen_case(NUM_CASES, 8);
+        let _ = gen_case(NUM_CASES, 8, TEST_BANK_ENTRIES);
     }
 
     #[test]
@@ -332,6 +356,7 @@ mod tests {
             encode_rs1(0, 1, 2, 0),
             encode_rs2(RATIO, GATE_ROW),
             RATIO,
+            TEST_BANK_ENTRIES,
         );
     }
 
@@ -346,10 +371,11 @@ mod tests {
             1,
             1,
             1,
-            BANK_ENTRIES,
+            TEST_BANK_ENTRIES,
             encode_rs1(0, 1, 2, 1),
-            encode_rs2(RATIO, BANK_ENTRIES),
+            encode_rs2(RATIO, TEST_BANK_ENTRIES),
             RATIO,
+            TEST_BANK_ENTRIES,
         );
     }
 
@@ -368,6 +394,7 @@ mod tests {
             encode_rs1(0, 0, 2, 1),
             encode_rs2(RATIO, GATE_ROW),
             RATIO,
+            TEST_BANK_ENTRIES,
         );
     }
 
@@ -386,6 +413,25 @@ mod tests {
             encode_rs1(0, 1, 2, 1),
             encode_rs2(0.0, GATE_ROW),
             0.0,
+            TEST_BANK_ENTRIES,
+        );
+    }
+
+    #[test]
+    fn gate_row_1024_uses_configured_address_bits() {
+        validate(
+            0,
+            1,
+            2,
+            1,
+            1,
+            1,
+            1,
+            1024,
+            encode_rs1(0, 1, 2, 1),
+            encode_rs2(RATIO, 1024),
+            RATIO,
+            TEST_BANK_ENTRIES,
         );
     }
 
@@ -402,8 +448,9 @@ mod tests {
             1,
             GATE_ROW,
             encode_rs1(0, 1, 2, 1),
-            1_u64 << 38,
+            1_u64 << (32 + TEST_BANK_ENTRIES.ilog2()),
             RATIO,
+            TEST_BANK_ENTRIES,
         );
     }
 }

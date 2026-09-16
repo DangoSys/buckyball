@@ -127,7 +127,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   when(io.cmd_i.fire && func7 === MVIN_2D_BITPAT) {
     val height     = rs1(63, 30)
     val pixelBytes = rs2(38, 32) << 3
-    val width      = rs2(57, 55) + 1.U
+    val width      = rs2(57, 55) +& 1.U
     val validBytes = Mux(rs2(61, 58) === 0.U, 16.U, rs2(61, 58))
     assert(height =/= 0.U, "MVIN_2D height must be non-zero")
     assert(rs2(38, 32) =/= 0.U, "MVIN_2D pixel bytes must be non-zero")

@@ -2,10 +2,13 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** Element arithmetic shared by the e8/e16/e32 integer vector instructions. */
-class Integer32 extends Module {
+@instantiable
+class IALU extends Module {
 
+  @public
   val io = IO(new Bundle {
     val a             = Input(UInt(32.W))
     val b             = Input(UInt(32.W))

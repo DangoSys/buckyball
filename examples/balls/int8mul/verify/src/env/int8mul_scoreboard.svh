@@ -47,7 +47,7 @@ class int8mul_scoreboard extends uvm_scoreboard;
     end
     mem_model.clear_mem();
     for (i = 0; i < clone.num_gate_words; i++) begin
-      mem_model.load_word(int'(clone.op1_bank), i, clone.gate_words[i]);
+      mem_model.load_word(int'(clone.op1_bank), int'(clone.gate_row) + i, clone.gate_words[i]);
     end
     for (i = 0; i < clone.num_input_words; i++) begin
       mem_model.load_word(int'(clone.op2_bank), i, clone.input_words[i]);
@@ -81,7 +81,8 @@ class int8mul_scoreboard extends uvm_scoreboard;
     if (got.rs1 !== exp.rs1 || got.rs2 !== exp.rs2) `uvm_fatal("CMD", "rs field mismatch")
     if (got.rob_id !== exp.rob_id)
       `uvm_fatal("CMD", $sformatf("rob_id mismatch: got %0d exp %0d", got.rob_id, exp.rob_id))
-    if (got.rs2[63:38] != 0) `uvm_fatal("CMD", $sformatf("reserved rs2 bits set: 0x%016h", got.rs2))
+    if ((got.rs2 >> (32 + $clog2(exp.bank_entries))) != 0)
+      `uvm_fatal("CMD", $sformatf("reserved rs2 bits set: 0x%016h", got.rs2))
   endfunction
 
   function void write_read(bb_blink_read_item item);

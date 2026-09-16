@@ -26,7 +26,7 @@ class MemPMCTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [63:0] elapsed,
       |  input enable
       |);
-      |""".stripMargin + DpiGuard.wrap(
+      |""".stripMargin + DpiGuard.wrapPMCTrace(
       """
         |  import "DPI-C" context function void dpi_mem_pmctrace(
         |    input int unsigned is_store,

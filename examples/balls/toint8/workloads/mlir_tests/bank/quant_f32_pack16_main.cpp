@@ -5,7 +5,8 @@
 extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
                              int64_t rows, int64_t lanes, int64_t stride,
                              int64_t lane_stride) {
-  if (rows != BANK_LINES / 4 || lanes != BANK_WIDTH / 8 || stride != lanes ||
+  constexpr int outputRows = BANK_LINES / 4 < 127 ? BANK_LINES / 4 : 127;
+  if (rows != outputRows || lanes != BANK_WIDTH / 8 || stride != lanes ||
       lane_stride != 1)
     exit(1);
   for (int row = 0; row < rows; ++row)
@@ -18,5 +19,5 @@ extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
         exit(1);
       }
     }
-  printf("quant f32 bank PASS rows=%d\n", BANK_LINES);
+  printf("quant f32 bank PASS rows=%d\n", outputRows);
 }
