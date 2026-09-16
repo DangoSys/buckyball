@@ -19,12 +19,14 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         chip = require_chip(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-    vsrc_dir = rtl_dir(bbdir, chip, "p2e", body.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir, chip, "p2e", body.get("vsrc_dir") or body.get("vsrc-dir")
+    )
 
     data = {
         "chip": chip,
         "vsrc_dir": vsrc_dir,
-        "output_dir": body.get("output_dir"),
+        "output_dir": body.get("output_dir") or body.get("output-dir"),
     }
     await ctx.enqueue({
         "topic": "bebop.p2e.buildbitstream",

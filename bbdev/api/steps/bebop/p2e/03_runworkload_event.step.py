@@ -69,6 +69,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     image_name = input_data.get("image", "")
     bitstream = input_data.get("bitstream", "")
     multi_fpga = bool(input_data.get("multi-fpga", False))
+    fpga_location = input_data.get("fpga-location") or input_data.get("fpga_location") or "0.A"
+    if not isinstance(fpga_location, str) or not re.fullmatch(r"[0-3]\.[A-E]", fpga_location):
+        ctx.logger.error(f"invalid FPGA location: {fpga_location}")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_fpga_location", "fpga_location": fpga_location},
+            trace_id=origin_tid,
+        )
+        return
     wave = bool(input_data.get("wave", False))
     if "wave_start" in input_data:
         ctx.logger.error("invalid parameter: --wave_start (use --wave-start)")
@@ -101,7 +110,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             return
         wave = True
 
-    image_path = resolve_image(bbdir, image_name, chip)
+    try:
+        image_path = resolve_image(bbdir, image_name, chip)
+    except ValueError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "image_not_found", "image": image_name},
+            trace_id=origin_tid,
+        )
+        return
 
     if not bitstream or not os.path.isfile(bitstream):
         ctx.logger.error(f"bitstream .bit file not found: {bitstream}")
@@ -181,7 +199,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"\"{bebop_p2e_path}\" run p2e "
         f"--image=\"{image_path}\" "
         f"--bitstream=\"{bitstream}\" "
-        f"--log-dir=\"{run_log}\""
+        f"--log-dir=\"{run_log}\" "
+        f"--fpga-location=\"{fpga_location}\""
     )
     if multi_fpga:
         run_cmd += " --multi-fpga"
@@ -219,6 +238,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "bitstream": bitstream,
             "build_dir": build_dir,
             "log_dir": run_log,
+            "fpga_location": fpga_location,
             "bdb_trace": os.path.join(run_log, "bdb.ndjson"),
             "uart_log": os.path.join(run_log, "uart.log"),
             "timestamp": timestamp,

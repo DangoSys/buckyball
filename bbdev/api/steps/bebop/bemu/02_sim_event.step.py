@@ -133,7 +133,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     ctx.logger.info(f"binary_path: {binary_path}")
     binary_dir = os.path.dirname(binary_path)
-    perfetto_target = PERFETTO_TARGETS.get(binary_name)
+    perfetto_target = (
+        PERFETTO_TARGETS.get(binary_name) if input_data.get("tool-profile") else None
+    )
     if perfetto_target:
         clean_model_trace(binary_dir)
 

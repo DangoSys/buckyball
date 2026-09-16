@@ -20,6 +20,10 @@ def register(mcp):
         return fmt(
             submit(
                 "/bebop/p2e/buildbitstream",
-                opt({"chip": chip}, vsrc_dir=vsrc_dir, output_dir=output_dir),
+                opt(
+                    {"chip": chip},
+                    vsrc_dir=vsrc_dir,
+                    output_dir=output_dir,
+                ),
             )
         )

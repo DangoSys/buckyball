@@ -85,7 +85,7 @@ WORKFLOW_COMMANDS = {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--output-dir <dir>]"',
         "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--vsrc-dir <dir>] [--output-dir <dir>]"',
-        "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--multi-fpga] [--wave] [--wave-start <cycle>] [--itrace] [--mtrace] [--pmctrace]"',
+        "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--itrace] [--mtrace] [--pmctrace]"',
         "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests>"',
     },
     "dc": {

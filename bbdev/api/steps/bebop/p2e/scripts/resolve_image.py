@@ -4,6 +4,10 @@ import os
 
 def resolve_image(bbdir: str, image_name: str, chip: str) -> str:
     image_name = image_name.replace(r"\_", "_")
+    if os.path.isabs(image_name):
+        raise ValueError(
+            f"image must be a logical name, not an absolute path: {image_name!r}"
+        )
     matches = glob.glob(
         os.path.join(
             bbdir,
