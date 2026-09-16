@@ -202,17 +202,3 @@ class MeshNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
     }
   }
 }
-
-object EmitMeshRouter extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new MeshRouter(MeshParams(xNodes = 3, yNodes = 3, payloadBits = 32), x = 1, y = 1),
-    args
-  )
-}
-
-object EmitMeshNetwork extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new MeshNetwork(MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32)),
-    args
-  )
-}

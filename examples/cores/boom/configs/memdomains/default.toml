@@ -1,0 +1,31 @@
+# Boom-only stub memdomain for bank_params / chip select pairing.
+
+[bank]
+num = 16
+width = 128
+entries = 16
+maskLen = 16
+channel = 1
+
+[dma]
+nXacts = 1
+burstMaxBytes = 1024
+busWidth = 128
+maxInFlightMemReqs = 16
+
+[tlb]
+size = 1
+
+[tma]
+readChannel = 1
+writeChannel = 1
+
+[mmio]
+enable = false
+bankNum = 1
+bankEntries = 1
+bankWidth = 128
+readWidth = 8
+
+[mem]
+addrLen = 39

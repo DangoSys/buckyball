@@ -78,7 +78,3 @@ class RootDmaSegmenter(pageBytes: Int = 4096, maxSegmentBytes: Int = 16384) exte
     }
   }
 }
-
-object EmitRootDmaSegmenter extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new RootDmaSegmenter(), args)
-}

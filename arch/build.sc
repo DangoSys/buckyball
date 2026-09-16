@@ -23,6 +23,8 @@ object protoJava extends JavaModule {
     Seq(PathRef(T.dest))
   }
 
+  override def zincIncrementalCompilation = T { false }
+
   override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
 }
 
@@ -67,6 +69,10 @@ object rvv extends FrameworkModule {
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
+object seed extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "system" / "core" / "seed"
+}
+
 object root_chip extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "root" / "root-chip"
   override def moduleDeps = Seq(axis, chi, bank, coherence, cache)
@@ -105,6 +111,7 @@ object buckyball extends SbtModule { m =>
     coherence,
     cache,
     rvv,
+    seed,
     root_chip,
     root_core,
     root_tile
@@ -133,6 +140,7 @@ object buckyball extends SbtModule { m =>
       .filterNot(path => path.toString.contains("/framework/root/"))
       .filterNot(path => path.toString.contains("/framework/mem-core/"))
       .filterNot(path => path.toString.contains("/framework/rvv/"))
+      .filterNot(path => path.toString.contains("/framework/system/core/seed/"))
       .map(PathRef(_))
     localSources ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs(
       "balls"
@@ -150,7 +158,7 @@ object buckyball extends SbtModule { m =>
     ivy"com.lihaoyi::sourcecode:0.3.0",
     ivy"com.lihaoyi::upickle:3.3.1",
     ivy"tech.sparse::toml-scala:0.2.2",
-    ivy"com.google.protobuf:protobuf-java:3.25.3"
+    ivy"com.google.protobuf:protobuf-java:4.35.1"
   )
 
   override def scalacPluginIvyDeps = Agg(

@@ -27,3 +27,11 @@ class TileStageFabric(stages: Int, dataBits: Int, controlBits: Int = 32) extends
     io.reverseOut(link) <> io.reverseIn(link)
   }
 }
+
+object EmitTileStageFabric extends App {
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new TileStageFabric(stages = 2, dataBits = 32),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
+}

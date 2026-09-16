@@ -74,5 +74,9 @@ class AxiSPacketArbiter(
 }
 
 object EmitAxiSPacketArbiter extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new AxiSPacketArbiter(inputs = 2, dataBits = 32), args)
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new AxiSPacketArbiter(inputs = 2, dataBits = 32),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
 }

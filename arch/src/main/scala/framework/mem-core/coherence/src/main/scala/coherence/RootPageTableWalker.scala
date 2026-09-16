@@ -146,7 +146,3 @@ class RootPageTableWalker(p: ChiParams = ChiParams()) extends Module {
     state := idle
   }
 }
-
-object EmitRootPageTableWalker extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new RootPageTableWalker(), args)
-}

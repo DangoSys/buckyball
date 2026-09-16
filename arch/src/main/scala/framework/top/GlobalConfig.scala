@@ -7,8 +7,8 @@ import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.balldomain.configs.BallDomainParam
 import framework.system.core.configs.CoreParam
+import framework.system.core.rocket.configs.RocketCoreParam
 import framework.top.configs.TopConfig
-import framework.system.core.configs.RocketCoreParam
 
 case class GlobalConfig(
   memDomain:  MemDomainParam,

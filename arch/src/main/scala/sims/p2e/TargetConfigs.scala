@@ -111,14 +111,20 @@ object Elaborate extends App {
 
   val firtoolOpts = args.drop(1)
 
+  val outDir = firtoolOpts.collectFirst {
+    case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
+  }.getOrElse {
+    throw new Exception("missing -o=<dir> in firtool opts")
+  }
+
   ChiselStage.emitSystemVerilogFile(
     new P2EHarness()(config.toInstance),
     firtoolOpts = firtoolOpts,
-    args = Array.empty
+    args = Array("--target-dir", outDir)
   )
   ChiselStage.emitSystemVerilogFile(
     new P2ETop,
     firtoolOpts = firtoolOpts,
-    args = Array.empty
+    args = Array("--target-dir", outDir)
   )
 }

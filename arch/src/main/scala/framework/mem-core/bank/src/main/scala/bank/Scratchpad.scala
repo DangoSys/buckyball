@@ -129,6 +129,7 @@ class RootScratchpad(p: ScratchpadParams) extends Module {
 object EmitRootScratchpad extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new RootScratchpad(ScratchpadParams(dataBits = 256, banks = 4, entriesPerBank = 64)),
-    args
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
   )
 }

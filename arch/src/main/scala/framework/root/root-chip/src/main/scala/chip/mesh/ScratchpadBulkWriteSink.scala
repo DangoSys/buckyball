@@ -47,10 +47,3 @@ class ScratchpadBulkWriteSink(p: ScratchpadParams, nodeIdBits: Int) extends Modu
   io.completion.bits.error               := scratchpad.io.done.bits
   when(io.completion.fire)(state         := idle)
 }
-
-object EmitScratchpadBulkWriteSink extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new ScratchpadBulkWriteSink(ScratchpadParams(dataBits = 256, banks = 4, entriesPerBank = 64), nodeIdBits = 7),
-    args
-  )
-}

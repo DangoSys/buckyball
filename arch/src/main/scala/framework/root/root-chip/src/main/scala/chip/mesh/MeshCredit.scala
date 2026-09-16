@@ -182,14 +182,3 @@ class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
     wireLink(routers(y + 1)(x).io.out(MeshDirection.North), routers(y)(x).io.in(MeshDirection.South))
   }
 }
-
-object EmitMeshCreditLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new MeshCreditLoopback, args)
-}
-
-object EmitMeshCreditNetwork extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new MeshCreditNetwork(MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 8)),
-    args
-  )
-}

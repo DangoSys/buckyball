@@ -2,10 +2,14 @@ package framework.system.tile
 
 import org.chipsalliance.cde.config.{Config, Parameters}
 import freechips.rocketchip.subsystem.{CoherenceManagerWrapper, SubsystemBankedCoherenceKey}
-import framework.system.configloader.ChipLoader
+import framework.system.configloader.{BoomTileCore, ChipLoader, RocketTileCore, TileTopology}
 
 /**
- * Build an N-BBTile chipyard subsystem from chip.pb.
+ * Build a chipyard subsystem from chip.pb.
+ *
+ * CPU kind is per-core. All-rocket tiles keep BBTile. Boom cores attach as BoomTiles.
+ * Heterogeneous tiles attach cores in order (each rocket as BBTile n=1, each boom as BoomTile);
+ * privateDCache / sharedMem / buckyball are forbidden on hetero tiles.
  */
 class WithBuckyballTiles(
   pbPath:         String,
@@ -21,16 +25,8 @@ object WithBuckyballTiles {
     }
     val topology = ChipLoader.load(pbPath)
 
-    val tileFragments: Seq[Config] = topology.tiles.map { tile =>
-      val resolved = if (withBuckyball) tile.cores else tile.cores.map(_ => None)
-      new WithBBTile(
-        withBuckyball = resolved.exists(_.isDefined),
-        nCoresPerTile = tile.cores.size,
-        buckyballPerCore = Some(resolved),
-        rocketCorePerCore = Some(tile.rocketCores),
-        privateDCache = tile.privateDCache,
-        hiddenHartBase = hiddenHartBase
-      )
+    val tileFragments: Seq[Config] = topology.tiles.flatMap { tile =>
+      fragmentsForTile(tile, withBuckyball, hiddenHartBase)
     }
 
     val anyPrivateDCache = topology.tiles.exists(_.privateDCache.isDefined)
@@ -38,6 +34,68 @@ object WithBuckyballTiles {
       if (anyPrivateDCache) Seq(new WithIncoherentSystemBus) else Nil
 
     (tileFragments ++ coherenceFragment).reduce[Parameters](_ ++ _)
+  }
+
+  private def fragmentsForTile(
+    tile:           TileTopology,
+    withBuckyball:  Boolean,
+    hiddenHartBase: Option[Int]
+  ): Seq[Config] = {
+    val allRocket = tile.cores.forall(_.isInstanceOf[RocketTileCore])
+    val allBoom   = tile.cores.forall(_.isInstanceOf[BoomTileCore])
+    if (allRocket) {
+      Seq(rocketTile(tile, withBuckyball, hiddenHartBase))
+    } else if (allBoom) {
+      if (tile.privateDCache.isDefined) {
+        throw new RuntimeException("boom-only tile cannot enable privateDCache")
+      }
+      tile.cores.map {
+        case BoomTileCore(boom) => new WithBoomTile(boom)
+        case other              => throw new RuntimeException(s"expected BoomTileCore, got $other")
+      }
+    } else {
+      if (tile.privateDCache.isDefined) {
+        throw new RuntimeException("heterogeneous tile cannot enable privateDCache")
+      }
+      tile.cores.map {
+        case RocketTileCore(rocket, buckyball) =>
+          if (buckyball.isDefined) {
+            throw new RuntimeException("heterogeneous tile cannot enable buckyball")
+          }
+          new WithBBTile(
+            withBuckyball = false,
+            nCoresPerTile = 1,
+            buckyballPerCore = Some(Seq(None)),
+            rocketCorePerCore = Some(Seq(rocket)),
+            privateDCache = None,
+            hiddenHartBase = hiddenHartBase
+          )
+        case BoomTileCore(boom)                =>
+          new WithBoomTile(boom)
+      }
+    }
+  }
+
+  private def rocketTile(
+    tile:           TileTopology,
+    withBuckyball:  Boolean,
+    hiddenHartBase: Option[Int]
+  ): Config = {
+    val rockets  = tile.cores.map {
+      case RocketTileCore(rocket, bb) => (rocket, bb)
+      case other                      => throw new RuntimeException(s"expected RocketTileCore, got $other")
+    }
+    val resolved =
+      if (withBuckyball) rockets.map(_._2)
+      else rockets.map(_ => None)
+    new WithBBTile(
+      withBuckyball = resolved.exists(_.isDefined),
+      nCoresPerTile = rockets.size,
+      buckyballPerCore = Some(resolved),
+      rocketCorePerCore = Some(rockets.map(_._1)),
+      privateDCache = tile.privateDCache,
+      hiddenHartBase = hiddenHartBase
+    )
   }
 
 }

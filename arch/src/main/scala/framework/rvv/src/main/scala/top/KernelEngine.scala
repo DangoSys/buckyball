@@ -212,7 +212,7 @@ class KernelEngine(val p: RvvParam = RvvParam()) extends Module {
 object EmitKernelEngine extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new KernelEngine(),
-    args,
-    firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
   )
 }

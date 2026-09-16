@@ -379,10 +379,6 @@ class ChiMeshHomeSnoopLoopback extends Module {
   receiver.io.meshOut.ready := true.B
 }
 
-object EmitChiMeshHomeSnoopLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new ChiMeshHomeSnoopLoopback, args)
-}
-
 /** Native endpoint verification target: a real CHI Dat channel traverses its Mesh endpoint. */
 class ChiMeshEndpointLoopback extends Module {
   private val chi  = ChiParams()
@@ -416,10 +412,6 @@ class ChiMeshEndpointLoopback extends Module {
   endpoint.io.meshIn.valid  := endpoint.io.meshOut.valid
   endpoint.io.meshIn.bits   := endpoint.io.meshOut.bits
   endpoint.io.meshOut.ready := endpoint.io.meshIn.ready
-}
-
-object EmitChiMeshEndpointLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new ChiMeshEndpointLoopback, args)
 }
 
 /** Native verification target for packetization and reassembly without a mesh topology. */
@@ -457,8 +449,4 @@ class ChiMeshCodecLoopback extends Module {
   io.out <> rx.io.out
   io.observedValid := tx.io.out.valid
   io.observed      := tx.io.out.bits
-}
-
-object EmitChiMeshCodecLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new ChiMeshCodecLoopback, args)
 }

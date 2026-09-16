@@ -1,4 +1,4 @@
-package framework.system.core.configs
+package framework.system.core.rocket.configs
 
 import upickle.default._
 import freechips.rocketchip.rocket.{BTBParams, DCacheParams, ICacheParams, MulDivParams, RocketCoreParams}

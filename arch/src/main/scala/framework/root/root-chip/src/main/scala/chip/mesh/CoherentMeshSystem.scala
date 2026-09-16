@@ -242,6 +242,7 @@ object EmitCoherentMeshSystem extends App {
       npuCount = npus,
       meshPayloadBits = payloadBits
     ),
-    stageArgs
+    firtoolOpts = stageArgs.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
   )
 }

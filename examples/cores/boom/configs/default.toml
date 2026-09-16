@@ -1,0 +1,6 @@
+# Boom-only core configuration
+
+kind = "boom"
+memdomain = "memdomains/default.toml"
+balldomain = "balldomains/default.toml"
+boomCore = "boomCore.toml"

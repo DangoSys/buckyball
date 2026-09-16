@@ -1,0 +1,12 @@
+fetchWidth = 4
+decodeWidth = 1
+numRobEntries = 32
+
+[dcache]
+nSets = 64
+nWays = 4
+nMSHRs = 2
+
+[icache]
+nSets = 64
+nWays = 4

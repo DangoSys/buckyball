@@ -67,10 +67,3 @@ class RootSramBank(p: BankParams, entries: Int) extends Module {
     responseValid := false.B
   }
 }
-
-object EmitRootSramBank extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new RootSramBank(BankParams(addressBits = 16, dataBits = 64), entries = 64),
-    args
-  )
-}

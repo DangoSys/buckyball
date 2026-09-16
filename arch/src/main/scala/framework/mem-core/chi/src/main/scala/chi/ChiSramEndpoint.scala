@@ -72,5 +72,9 @@ class ChiSramEndpoint(
 }
 
 object EmitChiSram extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new ChiSramEndpoint(), args)
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new ChiSramEndpoint(),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
 }

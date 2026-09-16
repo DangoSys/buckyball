@@ -175,7 +175,3 @@ class MeshBulkLoopback extends Module {
   io.observed      := tx.io.out.bits
   io.observedValid := tx.io.out.valid
 }
-
-object EmitMeshBulkLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new MeshBulkLoopback, args)
-}

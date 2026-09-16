@@ -1,6 +1,7 @@
 package framework.system.configloader
 
 import buckyball.config.{
+  BoomCoreConfig,
   Chip,
   CoreInstance,
   CoreParamConfig,
@@ -16,7 +17,9 @@ import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMappin
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.memdomain.configs.MemDomainParam
-import framework.system.core.configs._
+import framework.system.core.configs.CoreParam
+import framework.system.core.boom.configs.{BoomCoreParam, BoomDCacheParam, BoomICacheParam}
+import framework.system.core.rocket.configs._
 import framework.system.tile.PrivateDCacheParams
 import framework.top.GlobalConfig
 import framework.top.configs.TopConfig
@@ -80,8 +83,10 @@ object ChipLoader {
 
     val shared           = tile.getSharedMem
     val virtualBankCount = tile.getVirtualBankCount
-    require(virtualBankCount > 0, s"tile ${tile.getPath}: virtual_bank_count must be > 0")
     require(indices.nonEmpty, s"tile ${tile.getPath}: core_indices must not be empty")
+    if (hasBuckyball) {
+      require(virtualBankCount > 0, s"tile ${tile.getPath}: virtual_bank_count must be > 0")
+    }
     if (shared.getEnable) {
       val first     = cores(indices.head)
       val firstBank = first.getMem.getBank
@@ -112,16 +117,10 @@ object ChipLoader {
         ))
       }
 
-    val coreEntries    = indices.map { idx =>
+    val tileCores = indices.map { idx =>
       parseCore(cores(idx), shared, virtualBankCount, memBallChannelNum, nCores, repo)
     }
-    val buckyballCores = coreEntries.map(_._1).map(_.map { cfg =>
-      cfg.copy(top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores))
-    })
-    val rocketCores    = coreEntries.map {
-      case (_, rocket) => rocket
-    }
-    TileTopology(buckyballCores, privateDCache, rocketCores)
+    TileTopology(tileCores, privateDCache)
   }
 
   private def parseCore(
@@ -131,11 +130,38 @@ object ChipLoader {
     memBallChannelNum: Int,
     nCores:            Int,
     repo:              Path
-  ): (Option[GlobalConfig], RocketCoreParam) = {
+  ): TileCore = {
+    val kind = core.getKind
+    kind match {
+      case "rocket" => parseRocketCoreSlot(core, shared, virtualBankCount, memBallChannelNum, nCores, repo)
+      case "boom"   =>
+        if (core.getBalldomain.getBallNum > 0) {
+          throw new RuntimeException(s"core ${core.getPkg}: kind=boom forbids balldomain")
+        }
+        if (!core.hasBoomCore) {
+          throw new RuntimeException(s"core ${core.getPkg}: kind=boom missing boom_core")
+        }
+        BoomTileCore(parseBoomCore(core.getBoomCore))
+      case other    =>
+        throw new RuntimeException(s"core ${core.getPkg}: unsupported kind '$other'")
+    }
+  }
+
+  private def parseRocketCoreSlot(
+    core:              CoreInstance,
+    shared:            SharedMemConfig,
+    virtualBankCount:  Int,
+    memBallChannelNum: Int,
+    nCores:            Int,
+    repo:              Path
+  ): RocketTileCore = {
+    if (!core.hasRocketCore) {
+      throw new RuntimeException(s"core ${core.getPkg}: kind=rocket missing rocket_core")
+    }
     val rocket   = parseRocketCore(core.getRocketCore)
     val domain   = core.getBalldomain
     if (domain.getBallNum == 0) {
-      return (None, rocket)
+      return RocketTileCore(rocket, None)
     }
     require(core.hasFrontend, s"core ${core.getPkg} missing frontend config")
     require(core.hasGpDomain, s"core ${core.getPkg} missing gpdomain config")
@@ -169,7 +195,7 @@ object ChipLoader {
       rocketCore = rocket,
       top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores)
     )
-    (Some(buckyball), rocket)
+    RocketTileCore(rocket, Some(buckyball))
   }
 
   private def parseBallDomain(core: CoreInstance, repo: Path): BallDomainParam = {
@@ -299,6 +325,25 @@ object ChipLoader {
         enable = btb.getEnable,
         nEntries = btb.getNEntries,
         nRAS = btb.getNRas
+      )
+    )
+  }
+
+  private def parseBoomCore(boom: BoomCoreConfig): BoomCoreParam = {
+    val dcache = boom.getDcache
+    val icache = boom.getIcache
+    BoomCoreParam(
+      fetchWidth = boom.getFetchWidth,
+      decodeWidth = boom.getDecodeWidth,
+      numRobEntries = boom.getNumRobEntries,
+      dcache = BoomDCacheParam(
+        nSets = dcache.getNSets,
+        nWays = dcache.getNWays,
+        nMSHRs = dcache.getNMshrs
+      ),
+      icache = BoomICacheParam(
+        nSets = icache.getNSets,
+        nWays = icache.getNWays
       )
     )
   }

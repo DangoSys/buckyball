@@ -45,3 +45,11 @@ class CoreCrossbar(
     }
   }
 }
+
+object EmitCoreCrossbar extends App {
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new CoreCrossbar(initiators = 2, targets = 2, dataBits = 32),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
+}

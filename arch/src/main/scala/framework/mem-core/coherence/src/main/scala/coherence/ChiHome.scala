@@ -268,3 +268,11 @@ class ChiHome(
     when(beat === (p.beatsPerLine - 1).U)(state := Mux(noSnoopRead, idle, waitAck))
   }
 }
+
+object EmitChiHome extends App {
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new ChiHome(ChiParams(), agents = 2, lines = 64),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
+}

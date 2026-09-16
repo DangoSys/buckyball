@@ -240,6 +240,7 @@ object EmitCoherentSystem extends App {
 
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new CoherentSystem(ChiParams(dataBits = dataBits), cores = 3, npuCount = 2, homeCount = homeCount),
-    stageArgs
+    firtoolOpts = stageArgs.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
   )
 }

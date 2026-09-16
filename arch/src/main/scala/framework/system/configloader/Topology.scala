@@ -1,7 +1,8 @@
 package framework.system.configloader
 
 import framework.system.tile.PrivateDCacheParams
-import framework.system.core.configs.RocketCoreParam
+import framework.system.core.rocket.configs.RocketCoreParam
+import framework.system.core.boom.configs.BoomCoreParam
 import framework.top.GlobalConfig
 
 /** Loader-private bundle of tile-shared memory fields. */
@@ -14,15 +15,20 @@ private[configloader] case class SharedMemFields(
 /** Top-level example topology loaded from chip.pb. */
 case class ExampleTopology(tiles: Seq[TileTopology])
 
+sealed trait TileCore
+
+case class RocketTileCore(
+  rocket:    RocketCoreParam,
+  buckyball: Option[GlobalConfig])
+    extends TileCore
+
+case class BoomTileCore(boom: BoomCoreParam) extends TileCore
+
 /**
- * Per-tile topology: cores + optional privateDCache.
+ * Per-tile topology: ordered cores + optional privateDCache.
  *
- * @param cores         One entry per core in this tile. `None` disables the
- *                      Buckyball slot for that core (Rocket-only).
- * @param privateDCache Resolved per-tile private DCache parameters, or `None`
- *                      to skip the private DCache layer entirely.
+ * CPU kind is per-core. Shared mem / private DCache are tile-level.
  */
 case class TileTopology(
-  cores:         Seq[Option[GlobalConfig]],
-  privateDCache: Option[PrivateDCacheParams],
-  rocketCores:   Seq[RocketCoreParam])
+  cores:         Seq[TileCore],
+  privateDCache: Option[PrivateDCacheParams])

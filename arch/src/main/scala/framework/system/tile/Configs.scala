@@ -5,7 +5,7 @@ import freechips.rocketchip.rocket.{BTBParams, DCacheParams, ICacheParams, MulDi
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.tile.{FPUParams, RocketTileBoundaryBufferParams}
 import framework.top.GlobalConfig
-import framework.system.core.configs.RocketCoreParam
+import framework.system.core.rocket.configs.RocketCoreParam
 
 /**
  * Config fragment to add N BBTiles.

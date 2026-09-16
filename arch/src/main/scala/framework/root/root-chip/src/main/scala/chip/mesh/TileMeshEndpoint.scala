@@ -54,20 +54,6 @@ class TileMeshEndpoint(
   io.bulkOut <> bulkRx.io.out
 }
 
-/** Native elaboration target for a tile endpoint sharing coherent and bulk VCs. */
-object EmitTileMeshEndpoint extends App {
-  private val chi  = ChiParams()
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
-
-  private val map = ChiMeshNodeMap(
-    Seq.tabulate(1 << chi.nodeIdBits)(_ & 1),
-    Seq.tabulate(1 << chi.nodeIdBits)(node => (node >> 1) & 1),
-    mesh
-  )
-
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new TileMeshEndpoint(chi, mesh, 0, 0, map), args)
-}
-
 /** Native bulk-path verification target for the combined tile endpoint. */
 class TileMeshBulkLoopback extends Module {
   private val chi  = ChiParams()
@@ -99,8 +85,4 @@ class TileMeshBulkLoopback extends Module {
   endpoint.io.meshIn.valid    := endpoint.io.meshOut.valid
   endpoint.io.meshIn.bits     := endpoint.io.meshOut.bits
   endpoint.io.meshOut.ready   := endpoint.io.meshIn.ready
-}
-
-object EmitTileMeshBulkLoopback extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(new TileMeshBulkLoopback, args)
 }
