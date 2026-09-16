@@ -76,7 +76,7 @@ def chips_for_model(bbdir: str, model_key: str) -> set[str]:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest", "_trace_id"}
+    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest", "trace-config", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload build parameter(s): {', '.join(unknown)}")
@@ -113,6 +113,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     model = input_data.get("model", "")
+    trace_config = input_data.get("trace-config", "")
     stable = input_data.get("stable", False)
     rushb_backend = input_data.get("rushB")
 
@@ -121,6 +122,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={"error": "invalid_stable", "stable": stable},
+            trace_id=origin_tid,
+        )
+        return
+    if not isinstance(trace_config, str) or (trace_config and not os.path.isabs(trace_config)):
+        ctx.logger.error("Invalid trace config")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "invalid_trace_config", "trace_config": trace_config},
             trace_id=origin_tid,
         )
         return
@@ -156,6 +165,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(
             ctx, 1, continue_run=False,
             extra_fields={"error": "test_scope_conflicts_with_workload"},
+            trace_id=origin_tid,
+        )
+        return
+    if trace_config and not model:
+        ctx.logger.error("--trace-config requires --model")
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "trace_config_requires_model"},
             trace_id=origin_tid,
         )
         return
@@ -200,6 +217,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctest=ctest,
             mlirtest=mlirtest,
             stable=stable,
+            trace_config=trace_config,
             logger=ctx.logger,
             task_scope=origin_tid,
         )
@@ -220,6 +238,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "rushB": rushb_backend,
             "ctest": ctest,
             "mlirtest": mlirtest,
+            "trace_config": trace_config,
         },
         trace_id=origin_tid)
 

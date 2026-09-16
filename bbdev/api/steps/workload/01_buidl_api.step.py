@@ -22,7 +22,7 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest"}
+    allowed = {"chip", "model", "stable", "rushB", "ctest", "mlirtest", "trace-config"}
     unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return ApiResponse(
@@ -52,6 +52,9 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=400,
             body={"error": "Invalid parameter: stable must be a boolean flag"},
         )
+    trace_config = body.get("trace-config", "")
+    if not isinstance(trace_config, str) or (trace_config and not os.path.isabs(trace_config)):
+        return ApiResponse(status=400, body={"error": "Invalid trace config"})
     rushb_backend = body.get("rushB")
     if rushb_backend is not None and rushb_backend not in {"bemu", "verilator"}:
         return ApiResponse(
@@ -80,6 +83,11 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=400,
             body={"error": "--ctest and --mlirtest cannot be used with --rushB"},
         )
+    if trace_config and not body.get("model"):
+        return ApiResponse(
+            status=400,
+            body={"error": "--trace-config requires --model"},
+        )
     data = {
         "chip": chip,
         "model": body.get("model", ""),
@@ -87,6 +95,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "rushB": rushb_backend,
         "ctest": ctest,
         "mlirtest": mlirtest,
+        "trace-config": trace_config,
     }
     await ctx.enqueue({"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})
