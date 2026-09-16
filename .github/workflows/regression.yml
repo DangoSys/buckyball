@@ -192,6 +192,7 @@ jobs:
     name: fpga-bitstream-${{ matrix.chip }}
     needs: gate
     runs-on: check
+    timeout-minutes: 720
     strategy:
       fail-fast: false
       matrix:
