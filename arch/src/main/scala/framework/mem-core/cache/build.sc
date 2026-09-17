@@ -15,12 +15,7 @@ object chi extends ChiselModule {
   override def moduleRoot = os.pwd / os.up / "chi"
 }
 
-object coherence extends ChiselModule {
-  override def moduleRoot = os.pwd / os.up / "coherence"
-  override def moduleDeps = Seq(chi)
-}
-
 object cache extends ChiselModule {
   override def moduleRoot = os.pwd
-  override def moduleDeps = Seq(chi, coherence)
+  override def moduleDeps = Seq(chi)
 }

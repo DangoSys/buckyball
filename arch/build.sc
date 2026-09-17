@@ -53,14 +53,14 @@ object bank extends FrameworkModule {
   override def moduleDeps = Seq(axis)
 }
 
-object coherence extends FrameworkModule {
-  override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
+object cache extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "cache"
   override def moduleDeps = Seq(chi)
 }
 
-object cache extends FrameworkModule {
-  override def moduleRoot = frameworkRoot / "mem-core" / "cache"
-  override def moduleDeps = Seq(chi, coherence)
+object coherence extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
+  override def moduleDeps = Seq(chi, cache)
 }
 
 object rvv extends FrameworkModule {

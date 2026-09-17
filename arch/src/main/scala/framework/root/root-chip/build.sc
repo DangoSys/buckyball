@@ -27,14 +27,14 @@ object bank extends ChiselModule {
   override def moduleDeps = Seq(axis)
 }
 
-object coherence extends ChiselModule {
-  override def moduleRoot = memCoreRoot / "coherence"
+object cache extends ChiselModule {
+  override def moduleRoot = memCoreRoot / "cache"
   override def moduleDeps = Seq(chi)
 }
 
-object cache extends ChiselModule {
-  override def moduleRoot = memCoreRoot / "cache"
-  override def moduleDeps = Seq(chi, coherence)
+object coherence extends ChiselModule {
+  override def moduleRoot = memCoreRoot / "coherence"
+  override def moduleDeps = Seq(chi, cache)
 }
 
 object root_chip extends ChiselModule {

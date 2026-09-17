@@ -3,7 +3,6 @@ package memcore.memory.cache
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import memcore.memory.coherence._
 
 // Direct-mapped write-back coherent cache agent. The snoop engine is independent
 // of the demand miss FSM, so a queued eviction/miss cannot block a Home snoop.

@@ -236,7 +236,7 @@ class ChiMeshRequesterEndpoint(
     extends Module {
 
   val io = IO(new Bundle {
-    val chi     = Flipped(new memcore.memory.coherence.ChiRequesterPort(p))
+    val chi     = Flipped(new ChiRequesterPort(p))
     val meshOut = Decoupled(new MeshFlit(mesh))
     val meshIn  = Flipped(Decoupled(new MeshFlit(mesh)))
   })

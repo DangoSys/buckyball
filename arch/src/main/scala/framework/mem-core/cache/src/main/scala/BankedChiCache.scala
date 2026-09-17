@@ -3,7 +3,6 @@ package memcore.memory.cache
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import memcore.memory.coherence._
 
 // Each bank executes one demand operation while serving snoops independently.
 // The retirement FIFO preserves the order of the untagged CPU result interface.
@@ -111,4 +110,12 @@ class BankedChiCache(
   }
   io.hits := caches.map(_.io.hits).reduce(_ + _)
   io.misses := caches.map(_.io.misses).reduce(_ + _)
+}
+
+object EmitBankedChiCache extends App {
+  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+    new BankedChiCache(ChiParams(), nodeId = 1),
+    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
+    args = Array("--target-dir", "build")
+  )
 }

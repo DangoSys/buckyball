@@ -3,7 +3,6 @@ package hier.chip.mesh
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import memcore.memory.coherence.ChiRequesterPort
 import memcore.bus.axi.AxiSBeat
 
 /**

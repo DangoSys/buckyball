@@ -3,8 +3,8 @@ package hier.chip.mesh
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
+import memcore.memory.cache._
 import memcore.memory.coherence._
-import memcore.memory.cache.BankedChiCache
 
 /**
  * Standalone coherent system using CHI-over-credit-Mesh.

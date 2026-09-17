@@ -1,9 +1,9 @@
-package memcore.memory.cache
+package memcore.memory.coherence
 
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import memcore.memory.coherence._
+import memcore.memory.cache._
 
 // Standalone multicore cache + Home + memory. Every protocol direction crosses
 // a real CHI credit channel; the crossbar routes flits by destination NodeID.
@@ -226,21 +226,4 @@ class CoherentSystem(
       assert(!region.write && !cached.writable, "CPU cache permission conflicts with published NPU lease")
     }
   }
-}
-
-object EmitCoherentSystem extends App {
-  var dataBits  = 256
-  var homeCount = 2
-
-  val stageArgs = args.filterNot { arg =>
-    if (arg.startsWith("--data-bits=")) { dataBits = arg.stripPrefix("--data-bits=").toInt; true }
-    else if (arg.startsWith("--homes=")) { homeCount = arg.stripPrefix("--homes=").toInt; true }
-    else false
-  }
-
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new CoherentSystem(ChiParams(dataBits = dataBits), cores = 3, npuCount = 2, homeCount = homeCount),
-    firtoolOpts = stageArgs.drop(1) ++ Seq("--split-verilog", "-o=build"),
-    args = Array("--target-dir", "build")
-  )
 }
