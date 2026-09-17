@@ -14,10 +14,6 @@ class WithP2EBootROM
         ))
     })
 
-/**
- * Linux BootROM for P2E: jumps to OpenSBI fw_payload at 0x80000000.
- * Use this instead of WithP2EBootROM when running Linux.
- */
 class WithLinuxBootROM
     extends Config((site, here, up) => {
       case BootROMLocated(InSubsystem) => Seq(BootROMParams(
@@ -36,17 +32,6 @@ class WithP2EDDR4MemPort
       )
     )
 
-// =============================================================================
-// P2EBaseConfig: P2E platform-specific fragments only.
-// The full base (clocking, buses, BootROM, etc.) comes from BuckyballBaseConfig
-// which is included in the example SoC config (e.g. BuckyballToyConfig).
-//
-// P2E adds:
-//   - WithP2EHarness    : P2E harness binders (DDR4 wiring, etc.)
-//   - WithSCU           : per-tile UART/exit via DPI-C (intercepted in BBTile)
-//   - WithP2EDDR4MemPort: DDR4 memory port @ 0x80000000, 16 GiB
-//   - WithP2EBootROM    : P2E bootrom image
-// =============================================================================
 class P2EBaseConfig(maxHarts: Int = 64)
     extends Config(
       new WithP2EHarness ++
@@ -55,37 +40,6 @@ class P2EBaseConfig(maxHarts: Int = 64)
         new WithP2EBootROM
     )
 
-//===----------------------------------------------------------------------===//
-// Gemmini P2E configs
-//===----------------------------------------------------------------------===//
-/**
- * P2E Gemmini config without Debug module.
- * Uses the same Gemmini + Rocket configuration as chipyard.GemminiRocketConfig
- * but replaces AbstractConfig with BuckyballBaseConfig to avoid Debug/UART/SerialTL.
- */
-class P2EGemminiConfig
-    extends Config(
-      new P2EBaseConfig ++
-        new freechips.rocketchip.rocket.WithNHugeCores(1) ++
-        new chipyard.config.WithSystemBusWidth(128) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
-/**
- * Linux variant of P2EGemminiConfig.
- * Uses bootrom/linux/bootrom.rv64.img which jumps to OpenSBI fw_payload at 0x80000000.
- * Pair with OpenSBI fw_payload built by `bbdev kernel --build`.
- */
-class P2EGemminiLinuxConfig
-    extends Config(
-      new WithLinuxBootROM ++
-        new P2EBaseConfig ++
-        new freechips.rocketchip.rocket.WithNHugeCores(1) ++
-        new chipyard.config.WithSystemBusWidth(128) ++
-        new sims.base.BuckyballBaseConfig
-    )
-
-//===----------------------------------------------------------------------===//
 object Elaborate extends App {
   if (args.isEmpty) {
     println("Usage: Elaborate <full.config.ClassName> [firtool-opts...]")
