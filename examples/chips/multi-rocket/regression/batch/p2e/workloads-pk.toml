@@ -1,4 +1,0 @@
-[workloads]
-tests = [
-  "multi-rocket-rocket-ctest-benchmark-embench_aha-mont64-baremetal.hex",
-]

@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "toy-toy-ctest-mmio_minimal_test-baremetal.hex",
+  "fw_payload-toy-pk.hex",
 ]

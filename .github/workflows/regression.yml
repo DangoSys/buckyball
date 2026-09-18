@@ -260,14 +260,19 @@ jobs:
         include:
           - chip: toy
             run_fpga_check: true
+            run_fpga_pk: true
           - chip: pebble
             run_fpga_check: true
+            run_fpga_pk: true
           - chip: goban
             run_fpga_check: true
+            run_fpga_pk: false
           - chip: poly
             run_fpga_check: true
+            run_fpga_pk: false
           - chip: multi-rocket
             run_fpga_check: true
+            run_fpga_pk: false
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
@@ -295,10 +300,15 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
+          nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
           nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
           nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
           nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
-          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
+
+          if [[ "${{ matrix.run_fpga_pk }}" == "true" ]]; then
+            nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
+          fi
 
       - name: Exit repo lock
         if: always() && matrix.run_fpga_check
@@ -348,6 +358,7 @@ jobs:
             echo "ERROR: eval-performance requires a real model, got model=none" >&2
             exit 1
           fi
+          nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
           nix develop -c bbdev workload --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
           nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
 

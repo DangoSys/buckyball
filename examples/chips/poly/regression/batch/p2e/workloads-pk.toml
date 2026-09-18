@@ -1,4 +1,0 @@
-[workloads]
-tests = [
-  "poly-decode-ctest-chip-vecmat16_atranspose_16x16-multicore-baremetal.hex",
-]

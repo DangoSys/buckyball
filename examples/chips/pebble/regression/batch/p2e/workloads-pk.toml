@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "pebble-pebble-ctest-residual_add_lut_test-baremetal.hex",
+  "fw_payload-pebble-pk.hex",
 ]
