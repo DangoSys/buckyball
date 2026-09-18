@@ -1,0 +1,9 @@
+# Pebble Core Configuration (default)
+
+kind = "rocket"
+balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
+frontend = "frontends/default.toml"
+gpdomain = "gpdomains/default.toml"
+core = "core/default.toml"
+rocketCore = "../../rocket/configs/rocketCore.toml"
