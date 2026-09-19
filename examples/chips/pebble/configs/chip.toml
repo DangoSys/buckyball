@@ -6,3 +6,7 @@ verilator = "sims.verilator.BuckyballPebbleVerilatorConfig"
 p2e = "sims.p2e.P2EPebbleLinuxConfig"
 tapeout = "sims.tapeout.BuckyballPebbleTapeoutConfig"
 firesim = "sims.firesim.FireSimBuckyballPebbleConfig"
+
+[uvm]
+balls = ["transpose", "smatmul", "im2col", "toint8", "int2fp", "lut", "maxpool", "int8add", "int8mul", "matadd"]
+ips = []

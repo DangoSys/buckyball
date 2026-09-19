@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 import memcore.bus.chi.Params
-import memcore.memory.cache.{CacheAccess, CacheAtomic, CacheResult}
+import memcore.bus.chi.rnf.{CacheAccess, CacheAtomic, CacheResult}
 
 /** Virtual-memory request used by the ROOT-native DTLB/ITLB path. */
 class RootTranslationRequest extends Bundle {

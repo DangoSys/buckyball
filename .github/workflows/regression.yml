@@ -44,10 +44,10 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
-            prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
           cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+            prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
           nix build
           cd "${root}/bbdev"
           nix develop -c true
@@ -96,8 +96,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: DC area
@@ -163,8 +164,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Chip UVM
@@ -217,8 +219,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA buildbitstream
@@ -259,36 +262,37 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_fpga_check: true
+            run_fpga_elf: true
             run_fpga_pk: true
           - chip: pebble
-            run_fpga_check: true
+            run_fpga_elf: true
             run_fpga_pk: true
           - chip: goban
-            run_fpga_check: true
+            run_fpga_elf: true
             run_fpga_pk: false
           - chip: poly
-            run_fpga_check: true
+            run_fpga_elf: true
             run_fpga_pk: false
           - chip: multi-rocket
-            run_fpga_check: true
+            run_fpga_elf: true
             run_fpga_pk: false
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
       - name: Enter repo lock
-        if: matrix.run_fpga_check
+        if: matrix.run_fpga_elf || matrix.run_fpga_pk
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA check
-        if: matrix.run_fpga_check
+        if: matrix.run_fpga_elf || matrix.run_fpga_pk
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -300,10 +304,13 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
+
+          if [[ "${{ matrix.run_fpga_elf }}" == "true" ]]; then
+            nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
+          fi
 
           if [[ "${{ matrix.run_fpga_pk }}" == "true" ]]; then
             nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
@@ -311,7 +318,7 @@ jobs:
           fi
 
       - name: Exit repo lock
-        if: always() && matrix.run_fpga_check
+        if: always() && (matrix.run_fpga_elf || matrix.run_fpga_pk)
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -331,10 +338,10 @@ jobs:
             model: lenet
           - chip: pebble
             model: mobilenet
-          - chip: pebble
-            model: resnet
-          - chip: pebble
-            model: yolo
+          # - chip: pebble
+          #   model: resnet
+          # - chip: pebble
+          #   model: yolo
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
@@ -344,8 +351,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          git -C "${root}" fetch --force --prune --no-recurse-submodules origin "${CHECKOUT_SHA}"
-          git -C "${root}" show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Model build

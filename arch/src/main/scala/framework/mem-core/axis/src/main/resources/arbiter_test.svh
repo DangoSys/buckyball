@@ -2,7 +2,7 @@ class env extends uvm_env;
   `uvm_component_utils(env)
 
   driver source;
-  checker monitor;
+  arbiter_checker monitor;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -10,8 +10,8 @@ class env extends uvm_env;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    source = driver::type_id::create("source", this);
-    monitor = checker::type_id::create("monitor", this);
+    source  = driver::type_id::create("source", this);
+    monitor = arbiter_checker::type_id::create("monitor", this);
   endfunction
 endclass
 
