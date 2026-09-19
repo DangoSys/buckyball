@@ -9,6 +9,9 @@ volatile int test_result = 1;
 
 int main() {
   core_id_t id = bb_get_core_id();
+  if (id.tile != 0)
+    for (;;)
+      asm volatile("wfi");
   if (id.core < 3)
     return prefill_main(id);
   if (id.core < 5)

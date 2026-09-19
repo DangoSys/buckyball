@@ -4,7 +4,7 @@ import buckyball.config.{
   BoomCoreConfig,
   Chip,
   CoreInstance,
-  CoreParamConfig,
+  CpuConfig,
   FrontendConfig,
   GpDomainConfig,
   MemDomainConfig,
@@ -131,17 +131,19 @@ object ChipLoader {
     nCores:            Int,
     repo:              Path
   ): TileCore = {
-    val kind = core.getKind
+    require(core.hasCpu, s"core ${core.getPkg}: missing cpu config")
+    val cpu  = core.getCpu
+    val kind = cpu.getKind
     kind match {
       case "rocket" => parseRocketCoreSlot(core, shared, virtualBankCount, memBallChannelNum, nCores, repo)
       case "boom"   =>
         if (core.getBalldomain.getBallNum > 0) {
           throw new RuntimeException(s"core ${core.getPkg}: kind=boom forbids balldomain")
         }
-        if (!core.hasBoomCore) {
-          throw new RuntimeException(s"core ${core.getPkg}: kind=boom missing boom_core")
+        if (!cpu.hasBoom) {
+          throw new RuntimeException(s"core ${core.getPkg}: kind=boom missing cpu.boom")
         }
-        BoomTileCore(parseBoomCore(core.getBoomCore))
+        BoomTileCore(parseBoomCore(cpu.getBoom))
       case other    =>
         throw new RuntimeException(s"core ${core.getPkg}: unsupported kind '$other'")
     }
@@ -155,17 +157,18 @@ object ChipLoader {
     nCores:            Int,
     repo:              Path
   ): RocketTileCore = {
-    if (!core.hasRocketCore) {
-      throw new RuntimeException(s"core ${core.getPkg}: kind=rocket missing rocket_core")
+    val cpu      = core.getCpu
+    if (!cpu.hasRocket) {
+      throw new RuntimeException(s"core ${core.getPkg}: kind=rocket missing cpu.rocket")
     }
-    val rocket   = parseRocketCore(core.getRocketCore)
+    val rocket   = parseRocketCore(cpu.getRocket)
     val domain   = core.getBalldomain
     if (domain.getBallNum == 0) {
       return RocketTileCore(rocket, None)
     }
     require(core.hasFrontend, s"core ${core.getPkg} missing frontend config")
     require(core.hasGpDomain, s"core ${core.getPkg} missing gpdomain config")
-    require(core.hasCore, s"core ${core.getPkg} missing core config")
+    require(cpu.getCoreDataBytes > 0, s"core ${core.getPkg} missing cpu interface config")
     val frontend = core.getFrontend
     require(
       virtualBankCount <= (1 << frontend.getBankIdLen),
@@ -190,7 +193,7 @@ object ChipLoader {
       ballDomain = parseBallDomain(core, repo),
       frontend = parseFrontend(core.getFrontend),
       gpDomain = parseGpDomain(core.getGpDomain),
-      core = parseCoreParam(core.getCore),
+      core = parseCoreParam(cpu),
       memDomain = parseMemDomain(core.getMem, shared, virtualBankCount),
       rocketCore = rocket,
       top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores)
@@ -277,7 +280,7 @@ object ChipLoader {
       laneScale = gp.getLaneScale
     )
 
-  private def parseCoreParam(core: CoreParamConfig): CoreParam =
+  private def parseCoreParam(core: CpuConfig): CoreParam =
     CoreParam(
       coreDataBytes = core.getCoreDataBytes,
       xLen = core.getXLen,

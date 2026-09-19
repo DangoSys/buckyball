@@ -17,7 +17,11 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
--f @RTL@/filelist.f
+@RTL@/PE.sv
+@RTL@/Array.sv
+@RTL@/SMatMulUnit.sv
+@RTL@/SMatMulBall.sv
+@RTL@/@SMATMUL_ACCUMULATOR@
 
 src/pkg/smatmul_pkg.sv
 src/tb_top.sv

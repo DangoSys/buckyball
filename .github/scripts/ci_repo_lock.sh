@@ -23,19 +23,22 @@ exec 9>"${LOCK_FILE}"
 
 repo_reset() {
   cd "${repo}"
+
+  # buckyball repository it self never depend on submodules in submodules unless llvm in buddy-mlir
   git fetch --force --prune origin "${want_sha}"
-  git checkout --detach "${want_sha}"
-  git reset --hard "${want_sha}"
+  git -c checkout --detach --force "${want_sha}"
+  git -c reset --hard "${want_sha}"
   git clean -ffd
-  # rm -rf arch/out
+
+  rm -rf arch/out
   rm -rf compiler/thirdparty/buddy-mlir/llvm/build
   rm -rf compiler/thirdparty/buddy-mlir/build
+
   git submodule sync
   git submodule update --init --force
-  for submodule in bbdev bebop compiler/thirdparty/buddy-mlir; do
-    git -C "${repo}/${submodule}" reset --hard
-    git -C "${repo}/${submodule}" clean -ffd
-  done
+  git -C compiler/thirdparty/buddy-mlir submodule sync
+  git -C compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
+  git submodule foreach 'git clean -ffd'
   have_sha="$(git rev-parse HEAD)"
   if [[ "${have_sha}" != "${want_sha}" ]]; then
     echo "ERROR: checkout is ${have_sha}, expected ${want_sha}" >&2

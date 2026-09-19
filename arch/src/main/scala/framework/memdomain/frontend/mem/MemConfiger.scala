@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.blink.BankWrite
+import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
@@ -12,7 +13,7 @@ class MemConfigerIO(val b: GlobalConfig) extends Bundle {
   val is_shared = Output(Bool())
   val is_multi  = Output(Bool())
   val alloc     = Output(Bool())
-  val group_id  = Output(UInt(log2Up(b.memDomain.bankNum).W))
+  val group_id  = Output(UInt(b.memDomain.groupIdWidth.W))
   val hart_id   = Output(UInt(b.core.xLen.W))
 }
 
@@ -34,13 +35,13 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   val state          = RegInit(idle)
   val alloc_reg      = RegInit(false.B)
   val is_shared_reg  = RegInit(false.B)
-  val col_reg        = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val col_reg        = RegInit(0.U(b.memDomain.groupCountWidth.W))
   val clear_reg      = RegInit(false.B)
   val vbank_id_reg   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   val rob_id_reg     = RegInit(0.U(rob_id_width.W))
   val is_sub_reg     = RegInit(false.B)
   val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val counter        = RegInit(0.U(log2Up(b.memDomain.bankNum + 1).W))
+  val counter        = RegInit(0.U(b.memDomain.groupCountWidth.W))
   val zeroLastRow    = RegInit(false.B)
 
   val zeroLines: Instance[ZeroLineGenerator] = Instantiate(new ZeroLineGenerator(b.memDomain.bankWidth))
@@ -65,7 +66,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
   io.bankWrite.bank_id          := vbank_id_reg
   io.bankWrite.rob_id           := rob_id_reg
   io.bankWrite.ball_id          := 0.U
-  io.bankWrite.group_id         := counter(log2Up(b.memDomain.bankNum) - 1, 0)
+  io.bankWrite.group_id         := counter(b.memDomain.groupIdWidth - 1, 0)
 
   zeroLines.io.req.valid     := state === zeroReq
   zeroLines.io.req.bits.rows := b.memDomain.bankEntries.U
@@ -78,7 +79,16 @@ class MemConfiger(val b: GlobalConfig) extends Module {
       when(io.cmdReq.fire) {
         val rawCol  = io.cmdReq.bits.cmd.special(9, 5)
         val alloc   = io.cmdReq.bits.cmd.special(10)
-        val fullCol = b.memDomain.bankNum.U(col_reg.getWidth.W)
+        val fullCol =
+          if (b.memDomain.sharedEnable) {
+            Mux(
+              io.cmdReq.bits.cmd.is_shared,
+              SharedMemLayout.totalBank(b).U(col_reg.getWidth.W),
+              b.memDomain.bankNum.U(col_reg.getWidth.W)
+            )
+          } else {
+            b.memDomain.bankNum.U(col_reg.getWidth.W)
+          }
 
         state          := config
         col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
@@ -101,7 +111,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     io.config.bits.is_shared := is_shared_reg
     io.config.bits.alloc     := alloc_reg
     io.config.bits.vbank_id  := vbank_id_reg
-    io.config.bits.group_id  := counter(log2Up(b.memDomain.bankNum) - 1, 0)
+    io.config.bits.group_id  := counter(b.memDomain.groupIdWidth - 1, 0)
     io.config.valid          := true.B
 
     when(io.config.fire) {

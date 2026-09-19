@@ -146,17 +146,21 @@ object Elaborate extends App {
         sys.exit(1)
     }
 
-  val firtoolOpts = args.drop(1)
+  val rawFirtoolOpts = args.drop(1)
 
-  val outDir = firtoolOpts.collectFirst {
+  val outDir = rawFirtoolOpts.collectFirst {
     case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
   }.getOrElse {
     throw new Exception("missing -o=<dir> in firtool opts")
   }
 
+  val firtoolOpts = rawFirtoolOpts.filterNot { opt =>
+    opt == "--split-verilog" || opt.startsWith("-o=")
+  }
+
   ChiselStage.emitSystemVerilogFile(
     new BBSimHarness()(config.toInstance),
     firtoolOpts = firtoolOpts,
-    args = Array("--target-dir", outDir)
+    args = Array("--target-dir", outDir, "--split-verilog")
   )
 }

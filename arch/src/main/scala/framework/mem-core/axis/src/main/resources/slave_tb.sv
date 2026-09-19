@@ -6,25 +6,25 @@ module slave_tb;
   logic reset = 1'b0;
   always #5 clock = ~clock;
 
-  axis_if source_if(clock);
-  axis_if sink_if(clock);
+  axis_if source_if (clock);
+  axis_if sink_if (clock);
 
   assign source_if.reset = reset;
   assign sink_if.reset   = reset;
 
   Slave dut (
-    .clock(clock),
-    .reset(reset),
-    .io_axis_tvalid(source_if.tvalid),
-    .io_axis_tready(source_if.tready),
-    .io_axis_tdata(source_if.tdata),
-    .io_axis_tkeep(source_if.tkeep),
-    .io_axis_tlast(source_if.tlast),
-    .io_out_ready(sink_if.tready),
-    .io_out_valid(sink_if.tvalid),
-    .io_out_bits_tdata(sink_if.tdata),
-    .io_out_bits_tkeep(sink_if.tkeep),
-    .io_out_bits_tlast(sink_if.tlast)
+      .clock(clock),
+      .reset(reset),
+      .io_axis_tvalid(source_if.tvalid),
+      .io_axis_tready(source_if.tready),
+      .io_axis_tdata(source_if.tdata),
+      .io_axis_tkeep(source_if.tkeep),
+      .io_axis_tlast(source_if.tlast),
+      .io_out_ready(sink_if.tready),
+      .io_out_valid(sink_if.tvalid),
+      .io_out_bits_tdata(sink_if.tdata),
+      .io_out_bits_tkeep(sink_if.tkeep),
+      .io_out_bits_tlast(sink_if.tlast)
   );
 
   initial begin

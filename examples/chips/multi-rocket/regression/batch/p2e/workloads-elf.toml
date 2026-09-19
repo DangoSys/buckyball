@@ -1,0 +1,21 @@
+[workloads]
+tests = [
+  "multi-rocket-rocket-ctest-benchmark-embench_aha-mont64-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_crc32-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_edn-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_huffbench-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_matmult-int-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_minver-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_nbody-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_nettle-aes-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_nettle-sha256-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_nsichneu-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_picojpeg-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_qrduino-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_sglib-combined-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_slre-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_st-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_statemate-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_ud-baremetal.hex",
+  "multi-rocket-rocket-ctest-benchmark-embench_wikisort-baremetal.hex",
+]
