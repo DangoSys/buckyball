@@ -432,9 +432,10 @@ object nvdla extends SbtModule {
     os.pwd / "thirdparty" / "chipyard" / "generators" / "nvdla"
   override def scalaVersion = "2.13.16"
 
-  // Add rocket-chip as a dependency
+  // NVDLA config fragments use the subsystem injector API from testchipip.
   override def moduleDeps = Seq(
-    rocketchip
+    rocketchip,
+    testchipip
   )
 
   override def ivyDeps = Agg(
@@ -453,10 +454,11 @@ object fft_generator extends SbtModule {
     os.pwd / "thirdparty" / "chipyard" / "generators" / "fft-generator"
   override def scalaVersion = "2.13.16"
 
-  // Add rocket-chip and rocket-dsp-utils as dependencies (as per build.sbt)
+  // FFT configs use the subsystem injector API from testchipip.
   override def moduleDeps = Seq(
     rocketchip,
-    rocket_dsp_utils
+    rocket_dsp_utils,
+    testchipip
   )
 
   override def ivyDeps = Agg(
@@ -1055,7 +1057,10 @@ object firechip_bridgestubs extends SbtModule {
 
   // Add chipyard, firesim_lib, and firechip_bridgeinterfaces as dependencies
   override def sources = T.sources {
-    super.sources().filterNot(path => path.path.last.toString == "SimpleNICBridge.scala")
+    os.walk(millSourcePath / "src" / "main" / "scala")
+      .filter(path => path.ext == "scala")
+      .filterNot(path => path.last.toString == "SimpleNICBridge.scala")
+      .map(PathRef(_))
   }
 
   override def moduleDeps = Seq(
