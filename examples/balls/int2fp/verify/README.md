@@ -8,7 +8,7 @@ Scales are bank rows, not MMIO.
 
 ## Structure
 
-- `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM agents and base env
+- `../../../../verify/uvm/src/ball/bb_uvm_pkg.sv`: common Blink UVM agents and base env
 - `src/common/int2fp_defs.svh`: DPI imports, `INT32_TO_FP32_FUNCT7`, timeouts
 - `src/common/int2fp_items.svh`: `int2fp_cmd_item` with `load_rust_case`
 - `src/seq/int2fp_sequences.svh`: one-case sequence

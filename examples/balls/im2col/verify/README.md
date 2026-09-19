@@ -4,7 +4,7 @@ Verifies the generated `Im2colBall` module directly using the shared Blink UVM f
 
 ## Structure
 
-- `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM transaction items and base env
+- `../../../../verify/uvm/src/ball/bb_uvm_pkg.sv`: common Blink UVM transaction items and base env
 - `src/common/im2col_defs.svh`: DPI imports and constants
 - `src/common/im2col_items.svh`: `im2col_cmd_item` with `load_rust_case`
 - `src/seq/im2col_sequences.svh`: `im2col_basic_seq` driving one case per run

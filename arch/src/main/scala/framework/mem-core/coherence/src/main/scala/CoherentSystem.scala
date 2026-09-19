@@ -2,13 +2,14 @@ package memcore.memory.coherence
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.memory.cache._
 
 // Standalone multicore cache + Home + memory. Every protocol direction crosses
 // a real CHI credit channel; the crossbar routes flits by destination NodeID.
 class CoherentSystem(
-  p:           ChiParams = ChiParams(),
+  p:           Params = Params(),
   cores:       Int = 2,
   cacheLines:  Int = 4,
   memoryLines: Int = 64,
@@ -22,7 +23,7 @@ class CoherentSystem(
   val io = IO(new Bundle {
     val enable                  = Input(Bool())
     val bootReq                 = Flipped(Decoupled(new LineRequest(p)))
-    val bootResp                = Decoupled(new LineResponse)
+    val bootResp                = Decoupled(new LineResponse(p))
     val access                  = Vec(cores, Flipped(Decoupled(new CacheAccess(p))))
     val result                  = Vec(cores, Decoupled(new CacheResult))
     val hits                    = Output(Vec(cores, UInt(32.W)))
@@ -54,7 +55,7 @@ class CoherentSystem(
     Module(new ChiHome(p, agents, memoryLines, homeId = mapping.base + h, homeCount = homeCount, homeIndex = h))
   )
 
-  val memories    = Seq.fill(homeCount)(Module(new ChiLineSram(p, memoryLines / homeCount)))
+  val memories: Seq[Instance[LineSram]] = Seq.fill(homeCount)(Instantiate(new LineSram(p, memoryLines / homeCount)))
   val active      = RegNext(true.B, false.B)
   val enabled     = RegNext(io.enable, false.B)
   when(enabled)(assert(io.enable, "Coherent system must reset before entering boot mode"))
@@ -87,9 +88,9 @@ class CoherentSystem(
   io.parallelHomeCycles                              := parallelCycles
   io.cancelledWritebackBeats                         := homes.map(_.io.cancelledWritebackBeats).reduce(_ + _)
 
-  def channel[T <: ChiFlit](source: DecoupledIO[T], sink: DecoupledIO[T]): Unit = {
-    val tx = Module(new ChiTx(source.bits.flitWidth, creditDepth))
-    val rx = Module(new ChiRx(source.bits.flitWidth, creditDepth))
+  def channel[T <: Flit](source: DecoupledIO[T], sink: DecoupledIO[T]): Unit = {
+    val tx: Instance[Tx] = Instantiate(new Tx(source.bits.flitWidth, creditDepth))
+    val rx: Instance[Rx] = Instantiate(new Rx(source.bits.flitWidth, creditDepth))
     tx.io.active    := active
     rx.io.active    := active
     tx.io.in.valid  := source.valid
@@ -103,7 +104,7 @@ class CoherentSystem(
 
   // A combinational crossbar with one arbiter per destination. In particular,
   // there is NO queue after region admission: a lease blocks at Home acceptance.
-  def route[T <: ChiFlit](inputs: Seq[DecoupledIO[T]], outputs: Seq[DecoupledIO[T]], destination: T => UInt): Unit = {
+  def route[T <: Flit](inputs: Seq[DecoupledIO[T]], outputs: Seq[DecoupledIO[T]], destination: T => UInt): Unit = {
     val arbiters = outputs.map(out => Module(new RRArbiter(chiselTypeOf(out.bits), inputs.size)))
     outputs.zip(arbiters).foreach { case (out, arb) => out <> arb.io.out }
     for ((in, i) <- inputs.zipWithIndex) {
@@ -142,23 +143,24 @@ class CoherentSystem(
     io.regions(i)                     := regionDirectory.get.io.entries(i)
   }
   val ports = caches.map(_.io.chi) ++ npus.map(_.io.chi)
-  val requests        = Seq.fill(agents)(Wire(Decoupled(new ChiReq(p))))
-  val responses       = Seq.fill(agents)(Wire(Decoupled(new ChiRsp(p))))
-  val writeData       = Seq.fill(agents)(Wire(Decoupled(new ChiDat(p))))
-  val returnResponses = Seq.fill(agents)(Wire(Decoupled(new ChiRsp(p))))
-  val returnData      = Seq.fill(agents)(Wire(Decoupled(new ChiDat(p))))
+  val requests        = Seq.fill(agents)(Wire(Decoupled(new RequestFlit(p))))
+  val responses       = Seq.fill(agents)(Wire(Decoupled(new ResponseFlit(p))))
+  val writeData       = Seq.fill(agents)(Wire(Decoupled(new DataFlit(p))))
+  val returnResponses = Seq.fill(agents)(Wire(Decoupled(new ResponseFlit(p))))
+  val returnData      = Seq.fill(agents)(Wire(Decoupled(new DataFlit(p))))
   for (i <- 0 until agents) {
-    val port  = ports(i)
-    val retry = Module(new ChiRequestRetry(p, i + 1, records = if (i < cores) cpuBanks else npuSlots))
+    val port = ports(i)
+    val retry: Instance[RequestRetry] =
+      Instantiate(new RequestRetry(p, i + 1, records = if (i < cores) cpuBanks else npuSlots))
     retry.io.reqIn <> port.req
-    retry.io.acceptedData.valid      := port.rxDat.fire && port.rxDat.bits.opcode === ChiOpcode.CompData.U
+    retry.io.acceptedData.valid      := port.rxDat.fire && port.rxDat.bits.opcode === Opcode.CompData.U
     retry.io.acceptedData.bits.srcId := port.rxDat.bits.srcId
     retry.io.acceptedData.bits.txnId := port.rxDat.bits.txnId
-    val incoming   = Wire(Decoupled(new ChiReq(p)))
+    val incoming   = Wire(Decoupled(new RequestFlit(p)))
     channel(retry.io.reqOut, incoming)
-    val release    = incoming.bits.opcode === ChiOpcode.Evict.U || incoming.bits.opcode === ChiOpcode.WriteBackFull.U
-    val readShared = incoming.bits.opcode === ChiOpcode.ReadShared.U ||
-      incoming.bits.opcode === ChiOpcode.ReadNotSharedDirty.U
+    val release    = incoming.bits.opcode === Opcode.Evict.U || incoming.bits.opcode === Opcode.WriteBackFull.U
+    val readShared = incoming.bits.opcode === Opcode.ReadShared.U ||
+      incoming.bits.opcode === Opcode.ReadNotSharedDirty.U
     val blocked    =
       if (i < cores && npuCount > 0) {
         regionDirectory.get.io.entries.map(e =>
@@ -176,11 +178,11 @@ class CoherentSystem(
           e.valid && incoming.bits.addr >= e.base && incoming.bits.addr < e.end,
           "NPU CHI request outside reservation"
         )
-        when(incoming.bits.opcode === ChiOpcode.CleanInvalid.U) {
+        when(incoming.bits.opcode === Opcode.CleanInvalid.U) {
           assert(!e.published, "NPU cache sweep after lease publication")
         }.otherwise {
           assert(e.published, "NPU accessed data before CPU cache sweep completed")
-          when(incoming.bits.opcode === ChiOpcode.WriteNoSnpPtl.U) {
+          when(incoming.bits.opcode === Opcode.WriteNoSnpPtl.U) {
             assert(e.write, "NPU write without exclusive lease")
           }
         }
@@ -188,18 +190,18 @@ class CoherentSystem(
     }
     channel(port.txRsp, responses(i))
     channel(port.txDat, writeData(i))
-    val snpArb = Module(new RRArbiter(new ChiSnp(p), homeCount))
+    val snpArb = Module(new RRArbiter(new SnoopFlit(p), homeCount))
     for (h <- 0 until homeCount) snpArb.io.in(h) <> homes(h).io.snp(i)
     channel(snpArb.io.out, port.snp)
     channel(returnResponses(i), retry.io.rspIn)
     port.rxRsp <> retry.io.rspOut
     channel(returnData(i), port.rxDat)
   }
-  route(requests, homes.map(_.io.req), (r: ChiReq) => r.tgtId - mapping.base.U)
-  route(responses, homes.map(_.io.rxRsp), (r: ChiRsp) => r.tgtId - mapping.base.U)
-  route(writeData, homes.map(_.io.rxDat), (d: ChiDat) => d.tgtId - mapping.base.U)
-  route(homes.map(_.io.rsp), returnResponses, (r: ChiRsp) => r.tgtId - 1.U)
-  route(homes.map(_.io.dat), returnData, (d: ChiDat) => d.tgtId - 1.U)
+  route(requests, homes.map(_.io.req), (r: RequestFlit) => r.tgtId - mapping.base.U)
+  route(responses, homes.map(_.io.rxRsp), (r: ResponseFlit) => r.tgtId - mapping.base.U)
+  route(writeData, homes.map(_.io.rxDat), (d: DataFlit) => d.tgtId - mapping.base.U)
+  route(homes.map(_.io.rsp), returnResponses, (r: ResponseFlit) => r.tgtId - 1.U)
+  route(homes.map(_.io.dat), returnData, (d: DataFlit) => d.tgtId - 1.U)
   // Observe actual cache permissions, not just the Home's bookkeeping.
   // Unique excludes every other valid copy, including transiently arriving fills.
   for {

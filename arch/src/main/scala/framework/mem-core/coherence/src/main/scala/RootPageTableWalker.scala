@@ -3,7 +3,7 @@ package memcore.memory.coherence
 import chisel3._
 import chisel3.util._
 
-import memcore.bus.chi.ChiParams
+import memcore.bus.chi.Params
 import memcore.memory.cache.{CacheAccess, CacheAtomic, CacheResult}
 
 /** Virtual-memory request used by the ROOT-native DTLB/ITLB path. */
@@ -14,7 +14,7 @@ class RootTranslationRequest extends Bundle {
   val user    = Bool()
 }
 
-class RootTranslationResponse(p: ChiParams) extends Bundle {
+class RootTranslationResponse(p: Params) extends Bundle {
   val paddr       = UInt(p.addressBits.W)
   val pageFault   = Bool()
   val accessFault = Bool()
@@ -33,7 +33,7 @@ class RootPageTableConfig extends Bundle {
  * faults A/D-bit updates instead of performing implicit writes, so the ownership
  * and ordering of those writes can be added explicitly with the DTLB policy.
  */
-class RootPageTableWalker(p: ChiParams = ChiParams()) extends Module {
+class RootPageTableWalker(p: Params = Params()) extends Module {
 
   val io = IO(new Bundle {
     val config = Input(new RootPageTableConfig)

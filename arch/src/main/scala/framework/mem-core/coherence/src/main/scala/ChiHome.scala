@@ -9,7 +9,7 @@ import memcore.bus.chi._
 // RN nodes are numbered 1..agents. Backing memory is authoritative unless an RN
 // holds Unique permission; all competing readers then snoop that RN first.
 class ChiHome(
-  p:         ChiParams,
+  p:         Params,
   agents:    Int,
   lines:     Int,
   homeId:    Int = 64,
@@ -27,14 +27,14 @@ class ChiHome(
     else addr(log2Ceil(lines) + 5, mapping.stripeBits + 6)
 
   val io = IO(new Bundle {
-    val req                     = Flipped(Decoupled(new ChiReq(p)))
-    val rxRsp                   = Flipped(Decoupled(new ChiRsp(p)))
-    val rxDat                   = Flipped(Decoupled(new ChiDat(p)))
-    val rsp                     = Decoupled(new ChiRsp(p))
-    val dat                     = Decoupled(new ChiDat(p))
-    val snp                     = Vec(agents, Decoupled(new ChiSnp(p)))
+    val req                     = Flipped(Decoupled(new RequestFlit(p)))
+    val rxRsp                   = Flipped(Decoupled(new ResponseFlit(p)))
+    val rxDat                   = Flipped(Decoupled(new DataFlit(p)))
+    val rsp                     = Decoupled(new ResponseFlit(p))
+    val dat                     = Decoupled(new DataFlit(p))
+    val snp                     = Vec(agents, Decoupled(new SnoopFlit(p)))
     val memoryReq               = Decoupled(new LineRequest(p))
-    val memoryResp              = Flipped(Decoupled(new LineResponse))
+    val memoryResp              = Flipped(Decoupled(new LineResponse(p)))
     val busy                    = Output(Bool())
     val cancelledWritebackBeats = Output(UInt(32.W))
   })
@@ -57,16 +57,16 @@ class ChiHome(
   ) = Enum(14)
 
   val state               = RegInit(idle)
-  val request             = Reg(new ChiReq(p))
+  val request             = Reg(new RequestFlit(p))
   val sharers             = RegInit(VecInit(Seq.fill(localLines)(0.U(agents.W))))
   val lineIndex           = directoryIndex(request.addr)
   val cancelledWritebacks = RegInit(0.U(32.W))
   io.cancelledWritebackBeats := cancelledWritebacks
   val requestMask  = UIntToOH(request.srcId - 1.U, agents)
-  val unique       = request.opcode === ChiOpcode.ReadUnique.U
-  val maintenance  = request.opcode === ChiOpcode.CleanInvalid.U
-  val noSnoopRead  = request.opcode === ChiOpcode.ReadNoSnp.U
-  val noSnoopWrite = request.opcode === ChiOpcode.WriteNoSnpFull.U || request.opcode === ChiOpcode.WriteNoSnpPtl.U
+  val unique       = request.opcode === Opcode.ReadUnique.U
+  val maintenance  = request.opcode === Opcode.CleanInvalid.U
+  val noSnoopRead  = request.opcode === Opcode.ReadNoSnp.U
+  val noSnoopWrite = request.opcode === Opcode.WriteNoSnpFull.U || request.opcode === Opcode.WriteNoSnpPtl.U
   val invalidate   = unique || maintenance
   val pending      = Reg(UInt(agents.W))
   val target       = Reg(UInt(log2Ceil(agents).W))
@@ -77,25 +77,26 @@ class ChiHome(
   val error        = RegInit(false.B)
   val afterWrite   = Reg(UInt(state.getWidth.W))
   val snoopResp    = Reg(UInt(3.W))
-  val writeback    = request.opcode === ChiOpcode.WriteBackFull.U
+  val writeback    = request.opcode === Opcode.WriteBackFull.U
   io.busy      := state =/= idle
   io.req.ready := state === idle
   when(io.req.fire) {
     val r            = io.req.bits
     assert(r.tgtId === homeId.U && r.srcId >= 1.U && r.srcId <= agents.U, "Invalid coherent requester/Home ID")
     assert(mapping.node(r.addr) === homeId.U, "Request routed to wrong address Home")
-    val coherentRead = r.opcode === ChiOpcode.ReadShared.U || r.opcode === ChiOpcode.ReadNotSharedDirty.U ||
-      r.opcode === ChiOpcode.ReadUnique.U
-    val read         = coherentRead || r.opcode === ChiOpcode.ReadNoSnp.U
-    val clean        = r.opcode === ChiOpcode.CleanInvalid.U
+    val coherentRead = r.opcode === Opcode.ReadShared.U || r.opcode === Opcode.ReadNotSharedDirty.U ||
+      r.opcode === Opcode.ReadUnique.U
+    val read         = coherentRead || r.opcode === Opcode.ReadNoSnp.U
+    val clean        = r.opcode === Opcode.CleanInvalid.U
     assert(
-      read || clean || r.opcode === ChiOpcode.Evict.U || r.opcode === ChiOpcode.WriteBackFull.U ||
-        r.opcode === ChiOpcode.WriteNoSnpFull.U || r.opcode === ChiOpcode.WriteNoSnpPtl.U,
+      read || clean || r.opcode === Opcode.Evict.U || r.opcode === Opcode.WriteBackFull.U ||
+        r.opcode === Opcode.WriteNoSnpFull.U || r.opcode === Opcode.WriteNoSnpPtl.U,
       "Unsupported coherent Home opcode"
     )
     assert(
       r.size === 6.U && r.addr(5, 0) === 0.U && r.order === 0.U &&
-        r.exclSnoopMe === 0.U && r.pCrdType === 0.U && r.stashNidValidEndian === 0.U,
+        r.exclSnoopMe === 0.U && r.pCrdType === 0.U && r.stashNidValidEndian === 0.U &&
+        r.multiReq === 0.U && r.pas === 0.U && r.tagOp === 0.U,
       "Unsupported coherent Home attributes"
     )
     assert(r.expCompAck === coherentRead.asUInt, "Coherent read grants require CompAck")
@@ -108,7 +109,7 @@ class ChiHome(
         pending := Mux(r.addr >= (BigInt(lines) * 64).U, 0.U, sharers(directoryIndex(r.addr)))
         state   := chooseSnoop
       }
-      .elsewhen(r.opcode === ChiOpcode.Evict.U)(state := evictResp)
+      .elsewhen(r.opcode === Opcode.Evict.U)(state := evictResp)
       .otherwise(state := wbGrant)
   }
 
@@ -149,13 +150,13 @@ class ChiHome(
   }
   for (i <- 0 until agents) {
     io.snp(i).valid            := state === sendSnoop && target === i.U
-    io.snp(i).bits             := 0.U.asTypeOf(new ChiSnp(p))
+    io.snp(i).bits             := 0.U.asTypeOf(new SnoopFlit(p))
     io.snp(i).bits.srcId       := homeId.U
     io.snp(i).bits.addr        := request.addr >> 3
     io.snp(i).bits.opcode      := Mux(
       maintenance,
-      ChiOpcode.SnpCleanInvalid.U,
-      Mux(unique, ChiOpcode.SnpUnique.U, ChiOpcode.SnpNotSharedDirty.U)
+      Opcode.SnpCleanInvalid.U,
+      Mux(unique, Opcode.SnpUnique.U, Opcode.SnpNotSharedDirty.U)
     )
     io.snp(i).bits.doNotGoToSd := 1.U
     when(io.snp(i).fire)(state := waitSnoop)
@@ -177,13 +178,13 @@ class ChiHome(
     assert(r.tgtId === homeId.U && r.txnId === 0.U && r.respErr === 0.U, "Invalid Home RSP")
     when(state === waitSnoop) {
       assert(
-        r.opcode === ChiOpcode.SnpResp.U && r.srcId === (target +& 1.U) && !r.resp(2),
+        r.opcode === Opcode.SnpResp.U && r.srcId === (target +& 1.U) && !r.resp(2),
         "Invalid dataless snoop response"
       )
       finishSnoop(r.resp)
       state := chooseSnoop
     }.otherwise {
-      assert(r.opcode === ChiOpcode.CompAck.U && r.srcId === request.srcId, "Invalid CompAck")
+      assert(r.opcode === Opcode.CompAck.U && r.srcId === request.srcId, "Invalid CompAck")
       state := idle
     }
   }
@@ -205,7 +206,7 @@ class ChiHome(
     payload(b)  := d.data
     byteMask(b) := d.be
     when(state === waitSnoop) {
-      assert(d.opcode === ChiOpcode.SnpRespData.U && d.srcId === (target +& 1.U), "Wrong snoop data source")
+      assert(d.opcode === Opcode.SnpRespData.U && d.srcId === (target +& 1.U), "Wrong snoop data source")
       when(nextSeen.andR) {
         finishSnoop(d.resp)
         afterWrite := chooseSnoop
@@ -213,7 +214,7 @@ class ChiHome(
       }
     }.otherwise {
       assert(
-        d.opcode === Mux(writeback, ChiOpcode.CopyBackWrData.U, ChiOpcode.NonCopyBackWrData.U) &&
+        d.opcode === Mux(writeback, Opcode.CopyBackWriteData.U, Opcode.NonCopyBackWriteData.U) &&
           d.srcId === request.srcId,
         "Wrong write data source/opcode"
       )
@@ -222,7 +223,7 @@ class ChiHome(
       when(writeback && d.resp === CoherenceState.I.U) {
         assert(d.be === 0.U, "Invalid writeback must not contain valid bytes")
         cancelledWritebacks := cancelledWritebacks + 1.U
-      }.elsewhen(request.opcode =/= ChiOpcode.WriteNoSnpPtl.U) {
+      }.elsewhen(request.opcode =/= Opcode.WriteNoSnpPtl.U) {
         assert(d.be.andR, "Full write requires all byte enables")
       }
       when(nextSeen.andR) {
@@ -234,14 +235,14 @@ class ChiHome(
   }
 
   io.rsp.valid        := state === evictResp || state === wbGrant || state === writeResponse
-  io.rsp.bits         := 0.U.asTypeOf(new ChiRsp(p))
+  io.rsp.bits         := 0.U.asTypeOf(new ResponseFlit(p))
   io.rsp.bits.tgtId   := request.srcId
   io.rsp.bits.srcId   := homeId.U
   io.rsp.bits.txnId   := request.txnId
   io.rsp.bits.opcode  := Mux(
     state === wbGrant,
-    Mux(writeback, ChiOpcode.CompDBIDResp.U, ChiOpcode.DBIDResp.U),
-    ChiOpcode.Comp.U
+    Mux(writeback, Opcode.CompDBIDResp.U, Opcode.DBIDResp.U),
+    Opcode.Comp.U
   )
   io.rsp.bits.respErr := Mux(error, 2.U, 0.U)
   when(io.rsp.fire) {
@@ -252,12 +253,12 @@ class ChiHome(
       }
   }
   io.dat.valid        := state === grantData
-  io.dat.bits         := 0.U.asTypeOf(new ChiDat(p))
+  io.dat.bits         := 0.U.asTypeOf(new DataFlit(p))
   io.dat.bits.tgtId   := request.srcId
   io.dat.bits.srcId   := homeId.U
   io.dat.bits.homeNid := homeId.U
   io.dat.bits.txnId   := request.txnId
-  io.dat.bits.opcode  := ChiOpcode.CompData.U
+  io.dat.bits.opcode  := Opcode.CompData.U
   io.dat.bits.resp    := Mux(error || noSnoopRead, CoherenceState.I.U, Mux(unique, CoherenceState.UC.U, CoherenceState.SC.U))
   io.dat.bits.respErr := Mux(error, 2.U, 0.U)
   io.dat.bits.dataId  := beat * (p.dataBits / 128).U
@@ -271,7 +272,7 @@ class ChiHome(
 
 object EmitChiHome extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new ChiHome(ChiParams(), agents = 2, lines = 64),
+    new ChiHome(Params(), agents = 2, lines = 64),
     firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
     args = Array("--target-dir", "build")
   )

@@ -2,7 +2,7 @@ package memcore.memory.bank
 
 import chisel3._
 import chisel3.util._
-import memcore.bus.axi.AxiSBeat
+import memcore.bus.axi.Beat
 
 case class ScratchpadParams(dataBits: Int, banks: Int, entriesPerBank: Int) {
   require(dataBits > 0 && dataBits % 8 == 0)
@@ -30,8 +30,8 @@ class RootScratchpad(p: ScratchpadParams) extends Module {
 
   val io = IO(new Bundle {
     val command = Flipped(Decoupled(new ScratchpadCommand(p)))
-    val write   = Flipped(Decoupled(new AxiSBeat(p.dataBits)))
-    val read    = Decoupled(new AxiSBeat(p.dataBits))
+    val write   = Flipped(Decoupled(new Beat(p.dataBits)))
+    val read    = Decoupled(new Beat(p.dataBits))
     val done    = Decoupled(Bool())
   })
 

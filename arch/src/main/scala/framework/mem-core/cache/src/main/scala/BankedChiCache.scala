@@ -7,7 +7,7 @@ import memcore.bus.chi._
 // Each bank executes one demand operation while serving snoops independently.
 // The retirement FIFO preserves the order of the untagged CPU result interface.
 class BankedChiCache(
-  p:          ChiParams,
+  p:          Params,
   nodeId:     Int,
   cacheLines: Int = 4,
   homeId:     Int = 64,
@@ -22,7 +22,7 @@ class BankedChiCache(
   val io = IO(new Bundle {
     val access      = Flipped(Decoupled(new CacheAccess(p)))
     val result      = Decoupled(new CacheResult)
-    val chi         = new ChiRequesterPort(p)
+    val chi         = new RequesterPort(p)
     val hits        = Output(UInt(32.W))
     val misses      = Output(UInt(32.W))
     val directory   = Output(Vec(cacheLines, new CacheLineState(p)))
@@ -70,12 +70,12 @@ class BankedChiCache(
   val completedSC = io.result.fire && serialActive && serialSC
   for (cache <- caches) { cache.io.dropReservation := newLR || completedSC }
 
-  val reqArb   = Module(new RRArbiter(new ChiReq(p), banks))
-  val rspArb   = Module(new RRArbiter(new ChiRsp(p), banks))
-  val datArb   = Module(new RRArbiter(new ChiDat(p), banks))
-  val reqQueue = Module(new Queue(new ChiReq(p), 2, pipe = true))
-  val rspQueue = Module(new Queue(new ChiRsp(p), 2, pipe = true))
-  val datQueue = Module(new Queue(new ChiDat(p), 2, pipe = true))
+  val reqArb   = Module(new RRArbiter(new RequestFlit(p), banks))
+  val rspArb   = Module(new RRArbiter(new ResponseFlit(p), banks))
+  val datArb   = Module(new RRArbiter(new DataFlit(p), banks))
+  val reqQueue = Module(new Queue(new RequestFlit(p), 2, pipe = true))
+  val rspQueue = Module(new Queue(new ResponseFlit(p), 2, pipe = true))
+  val datQueue = Module(new Queue(new DataFlit(p), 2, pipe = true))
   for (i <- 0 until banks) {
     reqArb.io.in(i) <> caches(i).io.chi.req
     rspArb.io.in(i) <> caches(i).io.chi.txRsp
@@ -114,7 +114,7 @@ class BankedChiCache(
 
 object EmitBankedChiCache extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new BankedChiCache(ChiParams(), nodeId = 1),
+    new BankedChiCache(Params(), nodeId = 1),
     firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
     args = Array("--target-dir", "build")
   )

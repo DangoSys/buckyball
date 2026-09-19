@@ -7,7 +7,7 @@ import memcore.bus.chi._
 // Direct-mapped write-back coherent cache agent. The snoop engine is independent
 // of the demand miss FSM, so a queued eviction/miss cannot block a Home snoop.
 class ChiCache(
-  p:          ChiParams,
+  p:          Params,
   nodeId:     Int,
   cacheLines: Int = 4,
   homeId:     Int = 64,
@@ -24,7 +24,7 @@ class ChiCache(
   val io = IO(new Bundle {
     val access          = Flipped(Decoupled(new CacheAccess(p)))
     val result          = Decoupled(new CacheResult)
-    val chi             = new ChiRequesterPort(p)
+    val chi             = new RequesterPort(p)
     val hits            = Output(UInt(32.W))
     val misses          = Output(UInt(32.W))
     val directory       = Output(Vec(cacheLines, new CacheLineState(p)))
@@ -51,8 +51,8 @@ class ChiCache(
   val victimWasDirty                                                                                 = Reg(Bool())
   val copyData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
   val copyResp                                                                                       = Reg(UInt(3.W))
-  val bufferId                                                                                       = Reg(UInt(8.W))
-  val completionId                                                                                   = Reg(UInt(8.W))
+  val bufferId                                                                                       = Reg(UInt(p.dbIdBits.W))
+  val completionId                                                                                   = Reg(UInt(p.dbIdBits.W))
   val count                                                                                          = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
   val fillData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
   val fillSeen                                                                                       = RegInit(0.U(p.beatsPerLine.W))
@@ -65,7 +65,7 @@ class ChiCache(
   val ci                               = index(command.addr)
   val siIdle :: siRsp :: siData :: Nil = Enum(3)
   val snpState                         = RegInit(siIdle)
-  val snoop                            = Reg(new ChiSnp(p))
+  val snoop                            = Reg(new SnoopFlit(p))
   val snoopData                        = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
   val snoopResult                      = Reg(UInt(3.W))
   val snoopCount                       = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
@@ -131,7 +131,7 @@ class ChiCache(
   }
 
   io.chi.req.valid           := state === evictReq || state === getReq
-  io.chi.req.bits            := 0.U.asTypeOf(new ChiReq(p))
+  io.chi.req.bits            := 0.U.asTypeOf(new RequestFlit(p))
   io.chi.req.bits.srcId      := nodeId.U
   io.chi.req.bits.txnId      := txnId.U
   io.chi.req.bits.tgtId      := Mux(state === evictReq, mapping.node(victimAddress), mapping.node(command.addr))
@@ -139,8 +139,8 @@ class ChiCache(
   io.chi.req.bits.size       := 6.U
   io.chi.req.bits.opcode     := Mux(
     state === evictReq,
-    Mux(victimWasDirty, ChiOpcode.WriteBackFull.U, ChiOpcode.Evict.U),
-    Mux(modifies, ChiOpcode.ReadUnique.U, ChiOpcode.ReadNotSharedDirty.U)
+    Mux(victimWasDirty, Opcode.WriteBackFull.U, Opcode.Evict.U),
+    Mux(modifies, Opcode.ReadUnique.U, Opcode.ReadNotSharedDirty.U)
   )
   io.chi.req.bits.snpAttr    := 1.U
   io.chi.req.bits.memAttr    := "b1100".U
@@ -162,7 +162,7 @@ class ChiCache(
     val vi           = index(victimAddress)
     val stillPresent = valid(vi) && tags(vi) === tag(victimAddress)
     when(victimWasDirty) {
-      assert(r.opcode === ChiOpcode.CompDBIDResp.U, "WriteBackFull requires CompDBIDResp")
+      assert(r.opcode === Opcode.CompDBIDResp.U, "WriteBackFull requires CompDBIDResp")
       copyData := data(vi).asTypeOf(copyData)
       copyResp := Mux(
         !stillPresent,
@@ -177,7 +177,7 @@ class ChiCache(
       count    := 0.U
       state    := copyback
     }.otherwise {
-      assert(r.opcode === ChiOpcode.Comp.U, "Evict requires Comp")
+      assert(r.opcode === Opcode.Comp.U, "Evict requires Comp")
       state := getReq
     }
     valid(vi) := false.B
@@ -190,7 +190,7 @@ class ChiCache(
   when(io.chi.rxDat.fire) {
     val d        = io.chi.rxDat.bits
     assert(
-      d.opcode === ChiOpcode.CompData.U && d.srcId === mapping.node(command.addr) &&
+      d.opcode === Opcode.CompData.U && d.srcId === mapping.node(command.addr) &&
         d.tgtId === nodeId.U && d.txnId === txnId.U && d.homeNid === mapping.node(command.addr),
       "Unexpected cache fill"
     )
@@ -206,7 +206,7 @@ class ChiCache(
     fillData     := nextData
     fillSeen     := received
     fillError    := fillError || d.respErr =/= 0.U
-    completionId := d.dbid
+    completionId := d.dbid(p.dbIdBits - 1, 0)
     when(received.andR) {
       val failed = fillError || d.respErr =/= 0.U
       when(!failed) {
@@ -235,11 +235,12 @@ class ChiCache(
     val address    = s.addr << 3
     val i          = index(address)
     val hit        = valid(i) && tags(i) === tag(address)
-    val invalidate = s.opcode === ChiOpcode.SnpUnique.U || s.opcode === ChiOpcode.SnpCleanInvalid.U
+    val invalidate = s.opcode === Opcode.SnpUnique.U || s.opcode === Opcode.SnpCleanInvalid.U
     // Other harts' read-only traffic must not indefinitely defeat constrained LR/SC.
     when(reservation && tag(reservationAddress) === tag(address) && invalidate)(reservation := false.B)
     assert(
-      s.srcId === mapping.node(address) && (invalidate || s.opcode === ChiOpcode.SnpNotSharedDirty.U),
+      s.srcId === mapping.node(address) && s.pas === 0.U && s.fwdNid === 0.U && s.fwdTxnId === 0.U &&
+        (invalidate || s.opcode === Opcode.SnpNotSharedDirty.U),
       "Unsupported cache snoop"
     )
     snoop                                                                                   := s
@@ -256,22 +257,22 @@ class ChiCache(
   }
 
   io.chi.txRsp.valid       := snpState === siRsp || state === ack
-  io.chi.txRsp.bits        := 0.U.asTypeOf(new ChiRsp(p))
+  io.chi.txRsp.bits        := 0.U.asTypeOf(new ResponseFlit(p))
   io.chi.txRsp.bits.srcId  := nodeId.U
   io.chi.txRsp.bits.tgtId  := Mux(snpState === siRsp, snoop.srcId, mapping.node(command.addr))
   io.chi.txRsp.bits.txnId  := Mux(snpState === siRsp, snoop.txnId, completionId)
-  io.chi.txRsp.bits.opcode := Mux(snpState === siRsp, ChiOpcode.SnpResp.U, ChiOpcode.CompAck.U)
+  io.chi.txRsp.bits.opcode := Mux(snpState === siRsp, Opcode.SnpResp.U, Opcode.CompAck.U)
   io.chi.txRsp.bits.resp   := Mux(snpState === siRsp, snoopResult, 0.U)
   when(io.chi.txRsp.fire) {
     when(snpState === siRsp)(snpState := siIdle).otherwise(state := respond)
   }
 
   io.chi.txDat.valid       := snpState === siData || state === copyback
-  io.chi.txDat.bits        := 0.U.asTypeOf(new ChiDat(p))
+  io.chi.txDat.bits        := 0.U.asTypeOf(new DataFlit(p))
   io.chi.txDat.bits.srcId  := nodeId.U
   io.chi.txDat.bits.tgtId  := Mux(snpState === siData, snoop.srcId, mapping.node(victimAddress))
   io.chi.txDat.bits.txnId  := Mux(snpState === siData, snoop.txnId, bufferId)
-  io.chi.txDat.bits.opcode := Mux(snpState === siData, ChiOpcode.SnpRespData.U, ChiOpcode.CopyBackWrData.U)
+  io.chi.txDat.bits.opcode := Mux(snpState === siData, Opcode.SnpRespData.U, Opcode.CopyBackWriteData.U)
   io.chi.txDat.bits.resp   := Mux(snpState === siData, snoopResult, copyResp)
   val outputBeat = Mux(snpState === siData, snoopCount, count)
   val b          = if (p.beatsPerLine == 1) 0.U(0.W) else outputBeat

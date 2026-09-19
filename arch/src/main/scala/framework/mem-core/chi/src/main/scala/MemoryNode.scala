@@ -2,41 +2,51 @@ package memcore.bus.chi
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-class LineRequest(p: ChiParams) extends Bundle {
-  val id    = UInt(8.W)
+class LineRequest(p: Params) extends Bundle {
+  val id    = UInt(p.txnIdBits.W)
   val addr  = UInt(p.addressBits.W)
   val write = Bool()
   val data  = UInt(512.W)
   val mask  = UInt(64.W)
 }
 
-class LineResponse extends Bundle {
-  val id    = UInt(8.W)
+class LineResponse(p: Params) extends Bundle {
+  val id    = UInt(p.txnIdBits.W)
   val data  = UInt(512.W)
   val error = Bool()
+}
+
+class MemoryNodeIO(p: Params, slots: Int) extends Bundle {
+  val req         = Flipped(Decoupled(new RequestFlit(p)))
+  val rxDat       = Flipped(Decoupled(new DataFlit(p)))
+  val rsp         = Decoupled(new ResponseFlit(p))
+  val txDat       = Decoupled(new DataFlit(p))
+  val memoryReq   = Decoupled(new LineRequest(p))
+  val memoryResp  = Flipped(Decoupled(new LineResponse(p)))
+  val outstanding = Output(UInt(log2Ceil(slots + 1).W))
+}
+
+class LineSramIO(p: Params) extends Bundle {
+  val req  = Flipped(Decoupled(new LineRequest(p)))
+  val resp = Decoupled(new LineResponse(p))
 }
 
 // SN-side transaction subset: aligned 64-byte ReadNoSnp and WriteNoSnpFull/Ptl,
 // Order=00, ExpCompAck=0, no exclusive/atomic/retry/cancellation transactions.
 // The Home must perform any coherence work before forwarding a request here.
-class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Module {
+@instantiable
+class MemoryNode(p: Params, nodeId: Int = 1, slots: Int = 8) extends Module {
   require(nodeId >= 0 && BigInt(nodeId) < (BigInt(1) << p.nodeIdBits))
   require(slots >= 1 && slots <= 256)
 
-  val io = IO(new Bundle {
-    val req         = Flipped(Decoupled(new ChiReq(p)))
-    val rxDat       = Flipped(Decoupled(new ChiDat(p)))
-    val rsp         = Decoupled(new ChiRsp(p))
-    val txDat       = Decoupled(new ChiDat(p))
-    val memoryReq   = Decoupled(new LineRequest(p))
-    val memoryResp  = Flipped(Decoupled(new LineResponse))
-    val outstanding = Output(UInt(log2Ceil(slots + 1).W))
-  })
+  @public
+  val io = IO(new MemoryNodeIO(p, slots))
 
   val free :: dbid :: collect :: issue :: waitMemory :: complete :: returnData :: Nil = Enum(7)
   val state                                                                           = RegInit(VecInit(Seq.fill(slots)(free)))
-  val requests                                                                        = Reg(Vec(slots, new ChiReq(p)))
+  val requests                                                                        = Reg(Vec(slots, new RequestFlit(p)))
   val payload                                                                         = Reg(Vec(slots, Vec(p.beatsPerLine, UInt(p.dataBits.W))))
   val masks                                                                           = Reg(Vec(slots, Vec(p.beatsPerLine, UInt(p.bytesPerBeat.W))))
   val received                                                                        = RegInit(VecInit(Seq.fill(slots)(0.U(p.beatsPerLine.W))))
@@ -52,14 +62,15 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
     val r = io.req.bits
     assert(r.tgtId === nodeId.U, "CHI request to wrong node")
     assert(
-      r.opcode === ChiOpcode.ReadNoSnp.U || r.opcode === ChiOpcode.WriteNoSnpFull.U ||
-        r.opcode === ChiOpcode.WriteNoSnpPtl.U,
+      r.opcode === Opcode.ReadNoSnp.U || r.opcode === Opcode.WriteNoSnpFull.U ||
+        r.opcode === Opcode.WriteNoSnpPtl.U,
       "Unsupported CHI request opcode"
     )
     assert(r.size === 6.U && r.addr(5, 0) === 0.U, "CHI node requires aligned 64-byte access")
     assert(
       r.order === 0.U && r.expCompAck === 0.U && r.exclSnoopMe === 0.U &&
-        r.snpAttr === 0.U && r.stashNidValidEndian === 0.U && r.pCrdType === 0.U,
+        r.snpAttr === 0.U && r.stashNidValidEndian === 0.U && r.pCrdType === 0.U &&
+        r.multiReq === 0.U && r.pas === 0.U && r.tagOp === 0.U,
       "Unsupported CHI request attributes"
     )
     // Normal, non-Device memory only. Allocate/Cacheable/EWA are otherwise accepted.
@@ -71,7 +82,7 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
       )
     }
     requests(allocated) := r
-    state(allocated)    := Mux(r.opcode === ChiOpcode.ReadNoSnp.U, issue, dbid)
+    state(allocated)    := Mux(r.opcode === Opcode.ReadNoSnp.U, issue, dbid)
     received(allocated) := 0.U
     sent(allocated)     := 0.U
     errors(allocated)   := false.B
@@ -82,9 +93,14 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
   io.rxDat.ready := true.B
   when(io.rxDat.fire) {
     val d       = io.rxDat.bits
-    assert(d.opcode === ChiOpcode.NonCopyBackWrData.U, "Unsupported CHI data opcode")
+    assert(d.opcode === Opcode.NonCopyBackWriteData.U, "Unsupported CHI data opcode")
     assert(d.tgtId === nodeId.U && d.txnId < slots.U, "Invalid CHI write destination/DBID")
     assert(d.respErr === 0.U, "Errored write data is outside this CHI node profile")
+    assert(
+      d.tagOp === 0.U && d.tag === 0.U && d.tagUpdate === 0.U && d.dataPull === 0.U &&
+        d.numDat === 0.U && d.replicate === 0.U,
+      "Unsupported CHI data attributes"
+    )
     val index   = slotIndex(d.txnId)
     val beat    = if (p.beatsPerLine == 1) 0.U(0.W) else d.dataId >> log2Ceil(p.dataBits / 128)
     val legalId = VecInit((0 until p.beatsPerLine).map(i => d.dataId === (i * p.dataBits / 128).U)).asUInt.orR
@@ -93,7 +109,7 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
       assert(state(index) === collect, "CHI write data before DBID or after completion")
       assert(d.srcId === requests(index).srcId, "CHI write data from wrong requester")
       assert(!(received(index) & UIntToOH(beat, p.beatsPerLine)).orR, "Duplicate CHI DataID")
-      when(requests(index).opcode === ChiOpcode.WriteNoSnpFull.U) {
+      when(requests(index).opcode === Opcode.WriteNoSnpFull.U) {
         assert(d.be.andR, "WriteNoSnpFull requires all byte enables")
       }
       payload(index)(beat) := d.data
@@ -109,7 +125,7 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
     memArb.io.in(i).valid               := state(i) === issue
     memArb.io.in(i).bits.id             := i.U
     memArb.io.in(i).bits.addr           := requests(i).addr
-    memArb.io.in(i).bits.write          := requests(i).opcode =/= ChiOpcode.ReadNoSnp.U
+    memArb.io.in(i).bits.write          := requests(i).opcode =/= Opcode.ReadNoSnp.U
     memArb.io.in(i).bits.data           := payload(i).asUInt
     memArb.io.in(i).bits.mask           := masks(i).asUInt
     when(memArb.io.in(i).fire)(state(i) := waitMemory)
@@ -124,20 +140,20 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
       assert(state(index) === waitMemory, "Unexpected memory completion")
       payload(index) := r.data.asTypeOf(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
       errors(index)  := r.error
-      state(index)   := Mux(requests(index).opcode === ChiOpcode.ReadNoSnp.U, returnData, complete)
+      state(index)   := Mux(requests(index).opcode === Opcode.ReadNoSnp.U, returnData, complete)
     }
   }
 
-  val rspArb = Module(new RRArbiter(new ChiRsp(p), slots))
+  val rspArb = Module(new RRArbiter(new ResponseFlit(p), slots))
   for (i <- 0 until slots) {
     val r = rspArb.io.in(i)
     r.valid               := state(i) === dbid || state(i) === complete
-    r.bits                := 0.U.asTypeOf(new ChiRsp(p))
+    r.bits                := 0.U.asTypeOf(new ResponseFlit(p))
     r.bits.qos            := requests(i).qos
     r.bits.tgtId          := requests(i).srcId
     r.bits.srcId          := nodeId.U
     r.bits.txnId          := requests(i).txnId
-    r.bits.opcode         := Mux(state(i) === dbid, ChiOpcode.DBIDResp.U, ChiOpcode.Comp.U)
+    r.bits.opcode         := Mux(state(i) === dbid, Opcode.DBIDResp.U, Opcode.Comp.U)
     r.bits.dbid           := i.U
     r.bits.respErr        := Mux(errors(i), 2.U, 0.U) // NDERR
     r.bits.traceTag       := requests(i).traceTag
@@ -145,11 +161,11 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
   }
   io.rsp <> rspArb.io.out
 
-  val datArb = Module(new RRArbiter(new ChiDat(p), slots))
+  val datArb = Module(new RRArbiter(new DataFlit(p), slots))
   for (i <- 0 until slots) {
     val d = datArb.io.in(i)
     d.valid        := state(i) === returnData
-    d.bits         := 0.U.asTypeOf(new ChiDat(p))
+    d.bits         := 0.U.asTypeOf(new DataFlit(p))
     d.bits.qos     := requests(i).qos
     d.bits.srcId   := nodeId.U
     // DMT routing follows the forwarded request's ReturnNID/ReturnTxnID.
@@ -157,7 +173,7 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
     d.bits.txnId   := requests(i).returnTxnId
     d.bits.homeNid := requests(i).srcId
     d.bits.dbid    := requests(i).txnId
-    d.bits.opcode  := ChiOpcode.CompData.U
+    d.bits.opcode  := Opcode.CompData.U
     d.bits.dataId  := sent(i) * (p.dataBits / 128).U
     d.bits.respErr := Mux(errors(i), 2.U, 0.U)
     val beatIndex = if (p.beatsPerLine == 1) 0.U(0.W) else sent(i)(log2Ceil(p.beatsPerLine) - 1, 0)
@@ -173,13 +189,12 @@ class ChiMemoryNode(p: ChiParams, nodeId: Int = 1, slots: Int = 8) extends Modul
 
 // Synthesizable 64-byte-line SRAM backend. Each request has a completion,
 // including writes. Out-of-range accesses return an error, never wrap.
-class ChiLineSram(p: ChiParams, lines: Int = 256) extends Module {
+@instantiable
+class LineSram(p: Params, lines: Int = 256) extends Module {
   require(lines >= 2 && isPow2(lines))
 
-  val io = IO(new Bundle {
-    val req  = Flipped(Decoupled(new LineRequest(p)))
-    val resp = Decoupled(new LineResponse)
-  })
+  @public
+  val io = IO(new LineSramIO(p))
 
   val mem                               = SyncReadMem(lines, Vec(64, UInt(8.W)))
   val idle :: capture :: respond :: Nil = Enum(3)

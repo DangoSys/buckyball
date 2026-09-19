@@ -2,30 +2,35 @@ package memcore.bus.chi
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-class ChiAcceptedData(p: ChiParams) extends Bundle {
+class AcceptedData(p: Params) extends Bundle {
   val srcId = UInt(p.nodeIdBits.W)
-  val txnId = UInt(8.W)
+  val txnId = UInt(p.txnIdBits.W)
+}
+
+class RequestRetryIO(p: Params, records: Int) extends Bundle {
+  val reqIn        = Flipped(Decoupled(new RequestFlit(p)))
+  val reqOut       = Decoupled(new RequestFlit(p))
+  val rspIn        = Flipped(Decoupled(new ResponseFlit(p)))
+  val rspOut       = Decoupled(new ResponseFlit(p))
+  val acceptedData = Flipped(Valid(new AcceptedData(p)))
+  val pending      = Output(UInt(log2Ceil(records + 1).W))
 }
 
 // Tracks request acceptance only. The endpoint still owns TxnID lifetime through
 // all data/completions. Cancellation and unsolicited surplus P-Credits are not used.
-class ChiRequestRetry(p: ChiParams, nodeId: Int, records: Int = 4) extends Module {
+@instantiable
+class RequestRetry(p: Params, nodeId: Int, records: Int = 4) extends Module {
   require(nodeId >= 0 && nodeId < (1 << p.nodeIdBits))
   require(records >= 1 && records <= 256)
 
-  val io = IO(new Bundle {
-    val reqIn        = Flipped(Decoupled(new ChiReq(p)))
-    val reqOut       = Decoupled(new ChiReq(p))
-    val rspIn        = Flipped(Decoupled(new ChiRsp(p)))
-    val rspOut       = Decoupled(new ChiRsp(p))
-    val acceptedData = Flipped(Valid(new ChiAcceptedData(p)))
-    val pending      = Output(UInt(log2Ceil(records + 1).W))
-  })
+  @public
+  val io = IO(new RequestRetryIO(p, records))
 
   val free :: firstAttempt :: retryWait :: reissued :: Nil = Enum(4)
   val state                                                = RegInit(VecInit(Seq.fill(records)(free)))
-  val requests                                             = Reg(Vec(records, new ChiReq(p)))
+  val requests                                             = Reg(Vec(records, new RequestFlit(p)))
   val retrySource                                          = Reg(Vec(records, UInt(p.nodeIdBits.W)))
   val retryType                                            = Reg(Vec(records, UInt(4.W)))
   val creditValid                                          = RegInit(VecInit(Seq.fill(records)(false.B)))
@@ -34,8 +39,8 @@ class ChiRequestRetry(p: ChiParams, nodeId: Int, records: Int = 4) extends Modul
   def index(id: UInt): UInt = if (records == 1) 0.U(0.W) else id(log2Ceil(records) - 1, 0)
   io.pending := PopCount(state.map(_ =/= free))
 
-  val arb       = Module(new RRArbiter(new ChiReq(p), records + 1))
-  val output    = Module(new Queue(new ChiReq(p), 2, pipe = true))
+  val arb       = Module(new RRArbiter(new RequestFlit(p), records + 1))
+  val output    = Module(new Queue(new RequestFlit(p), 2, pipe = true))
   output.io.enq <> arb.io.out
   io.reqOut <> output.io.deq
   val initial   = arb.io.in(0)
@@ -77,8 +82,8 @@ class ChiRequestRetry(p: ChiParams, nodeId: Int, records: Int = 4) extends Modul
     }
   }
 
-  val retryAck = io.rspIn.bits.opcode === ChiOpcode.RetryAck.U
-  val grant    = io.rspIn.bits.opcode === ChiOpcode.PCrdGrant.U
+  val retryAck = io.rspIn.bits.opcode === Opcode.RetryAck.U
+  val grant    = io.rspIn.bits.opcode === Opcode.PCrdGrant.U
   val internal = retryAck || grant
   io.rspOut.valid := io.rspIn.valid && !internal
   io.rspOut.bits  := io.rspIn.bits
@@ -109,8 +114,8 @@ class ChiRequestRetry(p: ChiParams, nodeId: Int, records: Int = 4) extends Modul
       creditValid(slot)  := true.B
       creditSource(slot) := r.srcId
       creditType(slot)   := r.pCrdType
-    }.elsewhen(r.opcode === ChiOpcode.DBIDResp.U || r.opcode === ChiOpcode.Comp.U ||
-      r.opcode === ChiOpcode.CompDBIDResp.U) {
+    }.elsewhen(r.opcode === Opcode.DBIDResp.U || r.opcode === Opcode.Comp.U ||
+      r.opcode === Opcode.CompDBIDResp.U) {
       accepted(r.txnId)
     }
   }

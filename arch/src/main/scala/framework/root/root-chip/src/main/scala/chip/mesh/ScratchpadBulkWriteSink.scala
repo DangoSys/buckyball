@@ -2,7 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
-import memcore.bus.axi.AxiSBeat
+import memcore.bus.axi.Beat
 import memcore.memory.bank.{RootScratchpad, ScratchpadParams}
 
 /** NoC extension that binds VC5/VC4/VC6 DMA traffic to a local scratchpad. */
@@ -10,7 +10,7 @@ class ScratchpadBulkWriteSink(p: ScratchpadParams, nodeIdBits: Int) extends Modu
 
   val io = IO(new Bundle {
     val descriptor = Flipped(Decoupled(new BulkDescriptor(nodeIdBits)))
-    val bulkIn     = Flipped(Decoupled(new AxiSBeat(p.dataBits)))
+    val bulkIn     = Flipped(Decoupled(new Beat(p.dataBits)))
     val completion = Decoupled(new BulkCompletion(nodeIdBits))
   })
 

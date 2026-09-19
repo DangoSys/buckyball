@@ -2,12 +2,13 @@ package memcore.bus.chi
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
-class ChiSnPort(p: ChiParams) extends Bundle {
-  val rxReq           = Flipped(new ChiChannel((new ChiReq(p)).flitWidth))
-  val rxDat           = Flipped(new ChiChannel((new ChiDat(p)).flitWidth))
-  val txRsp           = new ChiChannel((new ChiRsp(p)).flitWidth)
-  val txDat           = new ChiChannel((new ChiDat(p)).flitWidth)
+class SnPort(p: Params) extends Bundle {
+  val rxReq           = Flipped(new Channel((new RequestFlit(p)).flitWidth))
+  val rxDat           = Flipped(new Channel((new DataFlit(p)).flitWidth))
+  val txRsp           = new Channel((new ResponseFlit(p)).flitWidth)
+  val txDat           = new Channel((new DataFlit(p)).flitWidth)
   val rxLinkActiveReq = Input(Bool())
   val rxLinkActiveAck = Output(Bool())
   val txLinkActiveReq = Output(Bool())
@@ -16,20 +17,24 @@ class ChiSnPort(p: ChiParams) extends Bundle {
   val txSActive       = Output(Bool())
 }
 
+class SramEndpointIO(p: Params, slots: Int) extends Bundle {
+  val chi         = new SnPort(p)
+  val outstanding = Output(UInt(log2Ceil(slots + 1).W))
+}
+
 // Always-on, single-clock CHI SN-side SRAM endpoint. Activate after reset;
 // retain both links until coordinated reset. No runtime link deactivation.
-class ChiSramEndpoint(
-  p:       ChiParams = ChiParams(),
+@instantiable
+class SramEndpoint(
+  p:       Params = Params(),
   nodeId:  Int = 1,
   slots:   Int = 8,
   lines:   Int = 256,
   rxDepth: Int = 4)
     extends Module {
 
-  val io = IO(new Bundle {
-    val chi         = new ChiSnPort(p)
-    val outstanding = Output(UInt(log2Ceil(slots + 1).W))
-  })
+  @public
+  val io = IO(new SramEndpointIO(p, slots))
 
   val started  = RegNext(!reset.asBool, false.B)
   val rxAck    = RegNext(io.chi.rxLinkActiveReq && started, false.B)
@@ -39,10 +44,10 @@ class ChiSramEndpoint(
   io.chi.txSActive       := started
   when(rxAck)(assert(io.chi.rxLinkActiveReq, "Runtime RX link deactivation is unsupported"))
 
-  val rxReq = Module(new ChiRx((new ChiReq(p)).flitWidth, rxDepth))
-  val rxDat = Module(new ChiRx((new ChiDat(p)).flitWidth, rxDepth))
-  val txRsp = Module(new ChiTx((new ChiRsp(p)).flitWidth))
-  val txDat = Module(new ChiTx((new ChiDat(p)).flitWidth))
+  val rxReq: Instance[Rx] = Instantiate(new Rx((new RequestFlit(p)).flitWidth, rxDepth))
+  val rxDat: Instance[Rx] = Instantiate(new Rx((new DataFlit(p)).flitWidth, rxDepth))
+  val txRsp: Instance[Tx] = Instantiate(new Tx((new ResponseFlit(p)).flitWidth))
+  val txDat: Instance[Tx] = Instantiate(new Tx((new DataFlit(p)).flitWidth))
   rxReq.io.active := rxAck
   rxDat.io.active := rxAck
   txRsp.io.active := txActive
@@ -52,8 +57,8 @@ class ChiSramEndpoint(
   io.chi.txRsp <> txRsp.io.link
   io.chi.txDat <> txDat.io.link
 
-  val node   = Module(new ChiMemoryNode(p, nodeId, slots))
-  val memory = Module(new ChiLineSram(p, lines))
+  val node:   Instance[MemoryNode] = Instantiate(new MemoryNode(p, nodeId, slots))
+  val memory: Instance[LineSram]   = Instantiate(new LineSram(p, lines))
   node.io.req.bits.unpack(rxReq.io.out.bits)
   node.io.req.valid   := rxReq.io.out.valid
   rxReq.io.out.ready  := node.io.req.ready
@@ -69,12 +74,4 @@ class ChiSramEndpoint(
   memory.io.req <> node.io.memoryReq
   node.io.memoryResp <> memory.io.resp
   io.outstanding      := node.io.outstanding
-}
-
-object EmitChiSram extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new ChiSramEndpoint(),
-    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
-    args = Array("--target-dir", "build")
-  )
 }

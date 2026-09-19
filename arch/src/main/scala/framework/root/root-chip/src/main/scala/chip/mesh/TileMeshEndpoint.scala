@@ -3,7 +3,7 @@ package hier.chip.mesh
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import memcore.bus.axi.AxiSBeat
+import memcore.bus.axi.Beat
 
 /**
  * One requester tile's combined coherent and bulk Mesh endpoint.
@@ -13,7 +13,7 @@ import memcore.bus.axi.AxiSBeat
  * physical Mesh port to TLAST after it starts.
  */
 class TileMeshEndpoint(
-  p:            ChiParams,
+  p:            Params,
   mesh:         MeshParams,
   localX:       Int,
   localY:       Int,
@@ -25,9 +25,9 @@ class TileMeshEndpoint(
   require(nodeMap.coordinateBits == p.nodeIdBits)
 
   val io = IO(new Bundle {
-    val chi     = Flipped(new ChiRequesterPort(p))
+    val chi     = Flipped(new RequesterPort(p))
     val bulkIn  = Flipped(Decoupled(new MeshBulkBeat(bulkDataBits, p.nodeIdBits)))
-    val bulkOut = Decoupled(new AxiSBeat(bulkDataBits))
+    val bulkOut = Decoupled(new Beat(bulkDataBits))
     val meshOut = Decoupled(new MeshFlit(mesh))
     val meshIn  = Flipped(Decoupled(new MeshFlit(mesh)))
   })
@@ -55,7 +55,7 @@ class TileMeshEndpoint(
 
 /** Native bulk-path verification target for the combined tile endpoint. */
 class TileMeshBulkLoopback extends Module {
-  private val chi  = ChiParams()
+  private val chi  = Params()
   private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
 
   private val map = ChiMeshNodeMap(
@@ -66,7 +66,7 @@ class TileMeshBulkLoopback extends Module {
 
   val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(256, chi.nodeIdBits)))
-    val out = Decoupled(new AxiSBeat(256))
+    val out = Decoupled(new Beat(256))
   })
 
   val endpoint = Module(new TileMeshEndpoint(chi, mesh, 0, 0, map))

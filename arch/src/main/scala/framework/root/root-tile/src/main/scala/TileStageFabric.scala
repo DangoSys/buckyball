@@ -2,7 +2,7 @@ package hier.tile.stage
 
 import chisel3._
 import chisel3.util._
-import memcore.bus.axi.AxiSBeat
+import memcore.bus.axi.Beat
 
 /**
  * Directed fabric between heterogeneous homogeneous-core groups inside a tile.
@@ -13,7 +13,7 @@ import memcore.bus.axi.AxiSBeat
  */
 class TileStageFabric(stages: Int, dataBits: Int, controlBits: Int = 32) extends Module {
   require(stages >= 2 && controlBits > 0)
-  private val data = new AxiSBeat(dataBits)
+  private val data = new Beat(dataBits)
 
   val io = IO(new Bundle {
     val forwardIn  = Vec(stages - 1, Flipped(Decoupled(data)))

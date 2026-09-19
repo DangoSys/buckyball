@@ -4,7 +4,7 @@ Verifies the generated `SMatMulBall` module using the shared Blink UVM framework
 
 ## Structure
 
-- `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM agents and base env
+- `../../../../verify/uvm/src/ball/bb_uvm_pkg.sv`: common Blink UVM agents and base env
 - `src/common/smatmul_defs.svh`: DPI imports, `matrix_require_bid`, timeouts
 - `src/common/smatmul_items.svh`: `smatmul_cmd_item` with `load_rust_case`
 - `src/seq/smatmul_sequences.svh`: one-case sequence

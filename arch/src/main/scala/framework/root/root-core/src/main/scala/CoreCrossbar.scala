@@ -2,7 +2,8 @@ package hier.core.cb
 
 import chisel3._
 import chisel3.util._
-import memcore.bus.axi.{AxiSBeat, AxiSPacketArbiter}
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
+import memcore.bus.axi.{Beat, PacketArbiter}
 
 /**
  * Core-local AXI-S crossbar.
@@ -20,14 +21,15 @@ class CoreCrossbar(
     extends Module {
   require(initiators >= 1 && targets >= 1)
   require(destBits >= log2Ceil(targets))
-  private val beat = new AxiSBeat(dataBits, idBits, destBits, userBits)
+  private val beat = new Beat(dataBits, idBits, destBits, userBits)
 
   val io = IO(new Bundle {
     val in  = Vec(initiators, Flipped(Decoupled(beat)))
     val out = Vec(targets, Decoupled(beat))
   })
 
-  val arbiters = Seq.fill(targets)(Module(new AxiSPacketArbiter(initiators, dataBits, idBits, destBits, userBits)))
+  val arbiters: Seq[Instance[PacketArbiter]] =
+    Seq.fill(targets)(Instantiate(new PacketArbiter(initiators, dataBits, idBits, destBits, userBits)))
   for (target <- 0 until targets) {
     io.out(target) <> arbiters(target).io.out
     for (source <- 0 until initiators) {

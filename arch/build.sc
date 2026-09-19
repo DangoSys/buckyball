@@ -1,11 +1,9 @@
-// import Mill dependency
 import mill._
 import mill.define.Sources
 import mill.modules.Util
 import mill.scalalib.TestModule.ScalaTest
 import scalalib._
 import mill.javalib.JavaModule
-// support BSP
 import mill.bsp._
 
 object protoJava extends JavaModule {
@@ -42,10 +40,12 @@ val frameworkRoot = os.pwd / "src" / "main" / "scala" / "framework"
 
 object axis extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "axis"
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object chi extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "chi"
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object bank extends FrameworkModule {

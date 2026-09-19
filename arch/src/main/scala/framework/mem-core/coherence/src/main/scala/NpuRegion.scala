@@ -4,13 +4,13 @@ import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
 
-class RegionRequest(p: ChiParams) extends Bundle {
+class RegionRequest(p: Params) extends Bundle {
   val addr  = UInt(p.addressBits.W)
   val lines = UInt(32.W)
   val write = Bool()
 }
 
-class RegionEntry(p: ChiParams) extends Bundle {
+class RegionEntry(p: Params) extends Bundle {
   val valid     = Bool()
   val published = Bool()
   val base      = UInt(p.addressBits.W)
@@ -21,7 +21,7 @@ class RegionEntry(p: ChiParams) extends Bundle {
 // Coarse-grain ownership is an admission protocol above CHI, not a larger CHI
 // cache line. Reserve before sweeping CPU caches; publish only after all CMOs
 // complete. Distinct NPU regions can be active concurrently.
-class RegionDirectory(p: ChiParams, clients: Int, memoryLines: Int) extends Module {
+class RegionDirectory(p: Params, clients: Int, memoryLines: Int) extends Module {
   require(clients >= 1)
 
   val io = IO(new Bundle {
@@ -81,13 +81,13 @@ object NpuOperation {
   val Release      = 4
 }
 
-class NpuCommand(p: ChiParams) extends Bundle {
+class NpuCommand(p: Params) extends Bundle {
   val op    = UInt(3.W)
   val addr  = UInt(p.addressBits.W)
   val lines = UInt(32.W)
 }
 
-class NpuBeat(p: ChiParams) extends Bundle {
+class NpuBeat(p: Params) extends Bundle {
   val data = UInt(p.dataBits.W)
   val mask = UInt(p.bytesPerBeat.W)
   val last = Bool()
@@ -96,7 +96,7 @@ class NpuBeat(p: ChiParams) extends Bundle {
 // Region ownership persists across commands until Release. The ring holds complete
 // lines, so independently completing CHI transactions never reorder the Ball stream.
 class NpuRegionAgent(
-  p:         ChiParams,
+  p:         Params,
   nodeId:    Int,
   homeId:    Int = 64,
   homeCount: Int = 1,
@@ -117,7 +117,7 @@ class NpuRegionAgent(
     val claim       = Decoupled(new RegionRequest(p))
     val publish     = Output(Bool())
     val release     = Output(Bool())
-    val chi         = new ChiRequesterPort(p)
+    val chi         = new RequesterPort(p)
     val outstanding = Output(UInt(log2Ceil(slots + 1).W))
   })
 
@@ -137,7 +137,7 @@ class NpuRegionAgent(
   val slotState                                                              = RegInit(VecInit(Seq.fill(slots)(free)))
   val addresses                                                              = Reg(Vec(slots, UInt(p.addressBits.W)))
   val homes                                                                  = Reg(Vec(slots, UInt(p.nodeIdBits.W)))
-  val dbids                                                                  = Reg(Vec(slots, UInt(8.W)))
+  val dbids                                                                  = Reg(Vec(slots, UInt(p.dbIdBits.W)))
   val payload                                                                = Reg(Vec(slots, Vec(p.beatsPerLine, UInt(p.dataBits.W))))
   val masks                                                                  = Reg(Vec(slots, Vec(p.beatsPerLine, UInt(p.bytesPerBeat.W))))
   val seen                                                                   = RegInit(VecInit(Seq.fill(slots)(0.U(p.beatsPerLine.W))))
@@ -242,14 +242,14 @@ class NpuRegionAgent(
     }
   }
 
-  val requestArb   = Module(new RRArbiter(new ChiReq(p), slots))
-  val requestQueue = Module(new Queue(new ChiReq(p), 2, pipe = true))
+  val requestArb   = Module(new RRArbiter(new RequestFlit(p), slots))
+  val requestQueue = Module(new Queue(new RequestFlit(p), 2, pipe = true))
   requestQueue.io.enq <> requestArb.io.out
   io.chi.req <> requestQueue.io.deq
   for (i <- 0 until slots) {
     val req = requestArb.io.in(i)
     req.valid                   := state === executing && slotState(i) === requestReady
-    req.bits                    := 0.U.asTypeOf(new ChiReq(p))
+    req.bits                    := 0.U.asTypeOf(new RequestFlit(p))
     req.bits.srcId              := nodeId.U
     req.bits.tgtId              := homes(i)
     req.bits.txnId              := i.U
@@ -259,8 +259,8 @@ class NpuRegionAgent(
     req.bits.addr               := addresses(i)
     req.bits.opcode             := Mux(
       acquire,
-      ChiOpcode.CleanInvalid.U,
-      Mux(reading, ChiOpcode.ReadNoSnp.U, ChiOpcode.WriteNoSnpPtl.U)
+      Opcode.CleanInvalid.U,
+      Mux(reading, Opcode.ReadNoSnp.U, Opcode.WriteNoSnpPtl.U)
     )
     req.bits.allowRetry         := 1.U
     req.bits.snpAttr            := acquire.asUInt
@@ -275,18 +275,18 @@ class NpuRegionAgent(
   // DBID is local to the responding Home, while TxnID identifies our ring slot.
   // The DAT arbiter may interleave lines and the queue holds each flit stable
   // across downstream backpressure.
-  val dataArb   = Module(new RRArbiter(new ChiDat(p), slots))
-  val dataQueue = Module(new Queue(new ChiDat(p), 2, pipe = true))
+  val dataArb   = Module(new RRArbiter(new DataFlit(p), slots))
+  val dataQueue = Module(new Queue(new DataFlit(p), 2, pipe = true))
   dataQueue.io.enq <> dataArb.io.out
   io.chi.txDat <> dataQueue.io.deq
   for (i <- 0 until slots) {
     val dat = dataArb.io.in(i)
     dat.valid       := state === executing && slotState(i) === sending
-    dat.bits        := 0.U.asTypeOf(new ChiDat(p))
+    dat.bits        := 0.U.asTypeOf(new DataFlit(p))
     dat.bits.srcId  := nodeId.U
     dat.bits.tgtId  := homes(i)
     dat.bits.txnId  := dbids(i)
-    dat.bits.opcode := ChiOpcode.NonCopyBackWrData.U
+    dat.bits.opcode := Opcode.NonCopyBackWriteData.U
     dat.bits.dataId := sendBeat(i) * (p.dataBits / 128).U
     dat.bits.data   := payload(i)(beatIndex(sendBeat(i)))
     dat.bits.be     := masks(i)(beatIndex(sendBeat(i)))
@@ -308,13 +308,13 @@ class NpuRegionAgent(
     )
     rspError := r.respErr =/= 0.U
     when(writing && slotState(i) === waiting) {
-      assert(r.opcode === ChiOpcode.DBIDResp.U, "NPU write requires DBIDResp")
+      assert(r.opcode === Opcode.DBIDResp.U, "NPU write requires DBIDResp")
       dbids(i)     := r.dbid
       sendBeat(i)  := 0.U
       slotState(i) := sending
     }.otherwise {
       assert(
-        r.opcode === ChiOpcode.Comp.U &&
+        r.opcode === Opcode.Comp.U &&
           ((acquire && slotState(i) === waiting) || (writing && slotState(i) === waitComp)),
         "Unexpected NPU completion"
       )
@@ -331,7 +331,7 @@ class NpuRegionAgent(
     val b = if (p.beatsPerLine == 1) 0.U(0.W) else d.dataId >> log2Ceil(p.dataBits / 128)
     assert(
       d.txnId < slots.U && d.tgtId === nodeId.U && d.srcId === homes(i) &&
-        d.opcode === ChiOpcode.CompData.U && slotState(i) === waiting,
+        d.opcode === Opcode.CompData.U && slotState(i) === waiting,
       "Invalid NPU read response source or transaction"
     )
     assert(
@@ -371,7 +371,7 @@ class NpuRegionAgent(
   }
 
   io.chi.txRsp.valid       := false.B
-  io.chi.txRsp.bits        := 0.U.asTypeOf(new ChiRsp(p))
+  io.chi.txRsp.bits        := 0.U.asTypeOf(new ResponseFlit(p))
   io.chi.snp.ready         := true.B
   when(io.chi.snp.valid)(assert(false.B, "NPU region agent must never be a line-directory sharer"))
   io.done.valid            := state === respond

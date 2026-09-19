@@ -2,7 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
-import memcore.bus.axi.AxiSBeat
+import memcore.bus.axi.Beat
 
 /** One AXI-stream beat plus the Mesh destination selected at packet start. */
 class MeshBulkBeat(dataBits: Int, nodeIdBits: Int) extends Bundle {
@@ -136,7 +136,7 @@ class MeshBulkDepacketizer(mesh: MeshParams, dataBits: Int, virtualChannel: Int)
 
   val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
-    val out = Decoupled(new AxiSBeat(dataBits))
+    val out = Decoupled(new Beat(dataBits))
   })
 
   val first = RegInit(true.B)
@@ -162,7 +162,7 @@ class MeshBulkLoopback extends Module {
 
   val io = IO(new Bundle {
     val in            = Flipped(Decoupled(new MeshBulkBeat(256, 7)))
-    val out           = Decoupled(new AxiSBeat(256))
+    val out           = Decoupled(new Beat(256))
     val observed      = Output(new MeshFlit(mesh))
     val observedValid = Output(Bool())
   })

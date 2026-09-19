@@ -16,4 +16,5 @@ build/
 log/
 
 *.sv
+!src/main/scala/framework/**/src/main/resources/*.sv
 gemmini_params.h

@@ -4,7 +4,7 @@ Verifies the generated `ToInt8Ball` module using the shared Blink UVM framework.
 
 ## Structure
 
-- `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM agents and base env
+- `../../../../verify/uvm/src/ball/bb_uvm_pkg.sv`: common Blink UVM agents and base env
 - `src/common/toint8_defs.svh`: DPI imports, `toint8_require_bid`, timeouts
 - `src/common/toint8_items.svh`: `toint8_cmd_item` with `load_rust_case` (Da address in `special[12:0]`)
 - `src/seq/toint8_sequences.svh`: one-case sequence

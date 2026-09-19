@@ -1,9 +1,9 @@
 package memcore.memory.cache
 
 import chisel3._
-import memcore.bus.chi.ChiParams
+import memcore.bus.chi.Params
 
-class CacheAccess(p: ChiParams) extends Bundle {
+class CacheAccess(p: Params) extends Bundle {
   val addr   = UInt(p.addressBits.W)
   val write  = Bool()
   val data   = UInt(64.W)
@@ -32,7 +32,7 @@ class CacheResult extends Bundle {
   val error = Bool()
 }
 
-class CacheLineState(p: ChiParams) extends Bundle {
+class CacheLineState(p: Params) extends Bundle {
   val valid    = Bool()
   val writable = Bool()
   val line     = UInt((p.addressBits - 6).W)

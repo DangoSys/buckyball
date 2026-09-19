@@ -4,7 +4,7 @@ Verifies the generated `TransposeBall` module directly using the shared Blink UV
 
 ## Structure
 
-- `../../../../verify/uvm/src/bb_uvm_pkg.sv`: common Blink UVM transaction items and base env
+- `../../../../verify/uvm/src/ball/bb_uvm_pkg.sv`: common Blink UVM transaction items and base env
 - `src/common/transpose_defs.svh`: DPI imports and constants
 - `src/common/transpose_items.svh`: `transpose_cmd_item` with `load_rust_case`
 - `src/seq/transpose_sequences.svh`: `transpose_basic_seq` driving one case per run

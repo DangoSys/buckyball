@@ -2,6 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.memory.cache._
 import memcore.memory.coherence._
@@ -14,7 +15,7 @@ import memcore.memory.coherence._
  * connection is replaced by typed Mesh endpoints.
  */
 class CoherentMeshSystem(
-  p:               ChiParams = ChiParams(),
+  p:               Params = Params(),
   cacheLines:      Int = 4,
   memoryLines:     Int = 64,
   cpuBanks:        Int = 2,
@@ -51,7 +52,7 @@ class CoherentMeshSystem(
   val io = IO(new Bundle {
     val enable     = Input(Bool())
     val bootReq    = Flipped(Decoupled(new LineRequest(p)))
-    val bootResp   = Decoupled(new LineResponse)
+    val bootResp   = Decoupled(new LineResponse(p))
     val access     = Vec(cores, Flipped(Decoupled(new CacheAccess(p))))
     val result     = Vec(cores, Decoupled(new CacheResult))
     val hits       = Output(Vec(cores, UInt(32.W)))
@@ -85,8 +86,9 @@ class CoherentMeshSystem(
     ))
   )
 
-  val memories = Seq.fill(homeCount)(Module(new ChiLineSram(p, memoryLines / homeCount)))
-  val mesh     = Module(new MeshCreditNetwork(meshParams, linkDepth))
+  val memories: Seq[Instance[LineSram]] =
+    Seq.fill(homeCount)(Instantiate(new LineSram(p, memoryLines / homeCount)))
+  val mesh = Module(new MeshCreditNetwork(meshParams, linkDepth))
   mesh.io.active := true.B
   for (port <- tiles until meshParams.xNodes * meshParams.yNodes) {
     mesh.io.localIn(port).valid  := false.B
@@ -149,11 +151,11 @@ class CoherentMeshSystem(
   for (index <- 0 until homeCount) {
     val home       = homeNodes(index)
     val endpoint   = homeEndpoints(index)
-    val incoming   = Wire(Decoupled(new ChiReq(p)))
+    val incoming   = Wire(Decoupled(new RequestFlit(p)))
     incoming <> endpoint.io.req
-    val release    = incoming.bits.opcode === ChiOpcode.Evict.U || incoming.bits.opcode === ChiOpcode.WriteBackFull.U
-    val readShared = incoming.bits.opcode === ChiOpcode.ReadShared.U ||
-      incoming.bits.opcode === ChiOpcode.ReadNotSharedDirty.U
+    val release    = incoming.bits.opcode === Opcode.Evict.U || incoming.bits.opcode === Opcode.WriteBackFull.U
+    val readShared = incoming.bits.opcode === Opcode.ReadShared.U ||
+      incoming.bits.opcode === Opcode.ReadNotSharedDirty.U
     val blocked    =
       if (npuCount > 0) {
         regionDirectory.get.io.entries.map(entry =>
@@ -172,11 +174,11 @@ class CoherentMeshSystem(
             entry.valid && incoming.bits.addr >= entry.base && incoming.bits.addr < entry.end,
             "NPU CHI request outside reservation"
           )
-          when(incoming.bits.opcode === ChiOpcode.CleanInvalid.U) {
+          when(incoming.bits.opcode === Opcode.CleanInvalid.U) {
             assert(!entry.published, "NPU cache sweep after lease publication")
           }.otherwise {
             assert(entry.published, "NPU accessed data before CPU cache sweep completed")
-            when(incoming.bits.opcode === ChiOpcode.WriteNoSnpPtl.U) {
+            when(incoming.bits.opcode === Opcode.WriteNoSnpPtl.U) {
               assert(entry.write, "NPU write without exclusive lease")
             }
           }
