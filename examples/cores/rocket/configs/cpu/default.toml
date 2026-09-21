@@ -1,2 +1,2 @@
 kind = "rocket"
-config = "./rocket/rocketCore.toml"
+config = "./rocket/default.toml"

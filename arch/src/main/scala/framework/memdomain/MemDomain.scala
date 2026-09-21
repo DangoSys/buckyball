@@ -51,7 +51,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tlbExp    = Vec(1, new BBTLBExceptionIO)
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
-    val hartid    = Input(UInt(b.cpu.xLen.W))
+    val hartid    = Input(UInt(b.tile.xLen.W))
 
 // Shared memory path
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))

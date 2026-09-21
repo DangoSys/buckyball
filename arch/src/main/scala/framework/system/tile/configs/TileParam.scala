@@ -1,8 +1,8 @@
-package framework.system.cpu.configs
+package framework.system.tile.configs
 
 import upickle.default._
 
-case class CpuParam(
+case class TileParam(
   coreDataBytes: Int,
   xLen:          Int,
   vaddrBits:     Int,
@@ -11,10 +11,10 @@ case class CpuParam(
   pgLevels:      Int,
   nPMPs:         Int) // Physical Memory Protection entries, typically 8 or 16
 
-object CpuParam {
-  implicit val rw: ReadWriter[CpuParam] = macroRW
+object TileParam {
+  implicit val rw: ReadWriter[TileParam] = macroRW
 
-  def apply(): CpuParam = CpuParam(
+  def apply(): TileParam = TileParam(
     coreDataBytes = 0,
     xLen = 0,
     vaddrBits = 0,

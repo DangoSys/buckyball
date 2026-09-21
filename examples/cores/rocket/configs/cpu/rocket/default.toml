@@ -1,5 +1,3 @@
-xLen = 64
-pgLevels = 3
 useVM = true
 useZba = true
 useZbb = true
@@ -20,7 +18,7 @@ fLen = 64
 [dcache]
 nSets = 32
 nWays = 4
-nMSHRs = 0
+nMSHRs = 4
 
 [icache]
 nSets = 64

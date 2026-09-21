@@ -1,2 +1,2 @@
 kind = "boom"
-config = "./boom/boomCore.toml"
+config = "./boom/default.toml"

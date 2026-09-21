@@ -27,7 +27,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hart_id  = Input(UInt(b.cpu.xLen.W))
+    val hart_id  = Input(UInt(b.tile.xLen.W))
     val alloc    = Flipped(new DecoupledIO(new PostGDCmd(b)))
     val issue    = new DecoupledIO(new GlobalRobEntry(b))
     val complete = Flipped(new DecoupledIO(UInt(idWidth.W)))

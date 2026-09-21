@@ -44,7 +44,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     val ballChannelActive = Input(Vec(b.ballDomain.ballNum, Bool()))
     val ballChannelReady  = Output(Vec(b.ballDomain.ballNum, Bool()))
 
-    val hartid   = Input(UInt(b.cpu.xLen.W))
+    val hartid   = Input(UInt(b.tile.xLen.W))
     val inst_ids = Input(Vec(b.frontend.rob_entries, UInt(64.W)))
 
     // Output to backend (MemManager)

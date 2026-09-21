@@ -61,7 +61,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
-    val hart_id  = UInt(b.cpu.xLen.W)
+    val hart_id  = UInt(b.tile.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
     val group_id = UInt(b.memDomain.groupIdWidth.W)
@@ -251,7 +251,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   val channelReqAddr    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(log2Ceil(b.memDomain.bankEntries).W)))
   val channelReqData    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.bankWidth.W)))
   val channelReqMask    = Seq.fill(b.memDomain.bankChannel)(Wire(Vec(b.memDomain.bankMaskLen, Bool())))
-  val channelHartId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.cpu.xLen.W)))
+  val channelHartId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.tile.xLen.W)))
   val channelInstId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(64.W)))
   val channelVbankId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.vbankIdWidth.W)))
   val channelGroupId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.groupIdWidth.W)))
@@ -362,7 +362,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val selectedReqMask    = VecInit((0 until b.memDomain.bankMaskLen).map { k =>
       oneHotOr(1, channelReqMask.map(_(k))).asBool
     })
-    val selectedHartId     = oneHotOr(b.cpu.xLen, channelHartId)
+    val selectedHartId     = oneHotOr(b.tile.xLen, channelHartId)
     val selectedInstId     = oneHotOr(64, channelInstId)
     val selectedVbankId    = oneHotOr(b.memDomain.vbankIdWidth, channelVbankId)
     val selectedGroupId    = oneHotOr(b.memDomain.groupIdWidth, channelGroupId)

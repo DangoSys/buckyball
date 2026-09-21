@@ -46,14 +46,14 @@ object SharedMemLayout {
 }
 
 class SharedMemReadReq(val b: GlobalConfig) extends Bundle {
-  val hartid   = UInt(b.cpu.xLen.W)
+  val hartid   = UInt(b.tile.xLen.W)
   val pbank_id = UInt(log2Ceil(SharedMemLayout.totalBank(b)).W)
   val group_id = UInt(b.memDomain.groupIdWidth.W)
   val addr     = UInt(log2Ceil(b.memDomain.bankEntries).W)
 }
 
 class SharedMemWriteReq(val b: GlobalConfig) extends Bundle {
-  val hartid   = UInt(b.cpu.xLen.W)
+  val hartid   = UInt(b.tile.xLen.W)
   val pbank_id = UInt(log2Ceil(SharedMemLayout.totalBank(b)).W)
   val group_id = UInt(b.memDomain.groupIdWidth.W)
   val addr     = UInt(log2Ceil(b.memDomain.bankEntries).W)

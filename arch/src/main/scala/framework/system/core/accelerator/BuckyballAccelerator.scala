@@ -36,12 +36,12 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   @public
   val io = IO(new Bundle {
     // RoCC command/response (connected to Rocket core inside tile)
-    val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.cpu.xLen)))
-    val resp      = Decoupled(new RoCCResponseBB(b.cpu.xLen))
+    val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.tile.xLen)))
+    val resp      = Decoupled(new RoCCResponseBB(b.tile.xLen))
     val busy      = Output(Bool())
     val retired   = Output(Bool())
     val interrupt = Output(Bool())
-    val hartid    = Input(UInt(b.cpu.xLen.W))
+    val hartid    = Input(UInt(b.tile.xLen.W))
 
     // PTW interface (shared with Rocket core's PTW)
     val ptw    = Vec(1, new BBTLBPTWIO(b))

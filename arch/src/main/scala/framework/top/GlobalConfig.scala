@@ -6,7 +6,7 @@ import framework.memdomain.configs.MemDomainParam
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.balldomain.configs.BallDomainParam
-import framework.system.cpu.configs.CpuParam
+import framework.system.tile.configs.TileParam
 import framework.top.configs.SimParam
 
 case class GlobalConfig(
@@ -14,7 +14,7 @@ case class GlobalConfig(
   frontend:   FrontendParam,
   gpDomain:   GpDomainParam,
   ballDomain: BallDomainParam,
-  cpu:        CpuParam,
+  tile:       TileParam,
   sim:        SimParam)
     extends SerializableModuleParameter
 
@@ -27,7 +27,7 @@ object GlobalConfig {
       frontend = FrontendParam(),
       gpDomain = GpDomainParam(),
       ballDomain = BallDomainParam(),
-      cpu = CpuParam(),
+      tile = TileParam(),
       sim = SimParam()
     )
   }

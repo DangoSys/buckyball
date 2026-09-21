@@ -23,11 +23,11 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hartid = Input(UInt(b.cpu.xLen.W))
+    val hartid = Input(UInt(b.tile.xLen.W))
 
     // RoCC command input
     val cmd = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB(b.cpu.xLen)
+      val cmd = new RoCCCommandBB(b.tile.xLen)
     }))
 
     // Issue to domains
@@ -51,7 +51,7 @@ class Frontend(val b: GlobalConfig) extends Module {
       }
 
     // RoCC response
-    val resp    = Decoupled(new RoCCResponseBB(b.cpu.xLen))
+    val resp    = Decoupled(new RoCCResponseBB(b.tile.xLen))
     val busy    = Output(Bool())
     // Propagates the Global ROB retirement pulse to the host bridge.
     val retired = Output(Bool())

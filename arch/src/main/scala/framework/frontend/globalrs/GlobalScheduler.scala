@@ -37,7 +37,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hart_id           = Input(UInt(b.cpu.xLen.W))
+    val hart_id           = Input(UInt(b.tile.xLen.W))
     val decode_cmd_i      = Flipped(new DecoupledIO(new PostGDCmd(b)))
     val ball_issue_o      = Decoupled(new GlobalSchedIssue(b))
     val mem_issue_o       = Decoupled(new GlobalSchedIssue(b))
@@ -56,7 +56,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
       }
 
     val scheduler_rocc_o = new Bundle {
-      val resp = new DecoupledIO(new RoCCResponseBB(b.cpu.xLen))
+      val resp = new DecoupledIO(new RoCCResponseBB(b.tile.xLen))
       val busy = Output(Bool())
     }
 

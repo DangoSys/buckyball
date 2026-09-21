@@ -638,7 +638,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
         if (rushBEnabled) {
           val source = Module(new RushBCommandBridge(
             RushBCoreId(outer.bbParams.tileId, i),
-            accelerator.b.cpu.xLen
+            accelerator.b.tile.xLen
           ))
           source.io.retired := accelerator.io.retired
           Some(source)

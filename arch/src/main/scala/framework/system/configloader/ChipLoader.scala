@@ -1,15 +1,16 @@
 package framework.system.configloader
 
 import buckyball.config.{
-  BoomCoreConfig,
+  BoomCpuConfig,
   Chip,
   CoreInstance,
   CpuConfig,
   FrontendConfig,
   GpDomainConfig,
   MemDomainConfig,
-  RocketCoreConfig,
+  RocketCpuConfig,
   SharedMemConfig,
+  TileParamConfig,
   TilePlacement
 }
 import java.nio.file.{Files, Path, Paths}
@@ -17,10 +18,10 @@ import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMappin
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.memdomain.configs.MemDomainParam
-import framework.system.cpu.configs.CpuParam
-import framework.system.core.boom.configs.{BoomCoreParam, BoomDCacheParam, BoomICacheParam}
+import framework.system.core.boom.configs.{BoomCpuParam, BoomDCacheParam, BoomICacheParam}
 import framework.system.core.rocket.configs._
 import framework.system.tile.PrivateDCacheParams
+import framework.system.tile.configs.TileParam
 import framework.top.GlobalConfig
 import scala.jdk.CollectionConverters._
 
@@ -76,6 +77,7 @@ object ChipLoader {
     val indices      = tile.getCoreIndicesList.asScala.map(_.toInt).toSeq
     val nCores       = indices.size
     val hasBuckyball = indices.exists(i => cores(i).getBalldomain.getBallNum > 0)
+    val tileParam    = parseTileParam(tile.getParam)
 
     val shared           = tile.getSharedMem
     val virtualBankCount = tile.getVirtualBankCount
@@ -114,13 +116,14 @@ object ChipLoader {
       }
 
     val tileCores = indices.map { idx =>
-      parseCore(cores(idx), shared, virtualBankCount, nCores, repo)
+      parseCore(cores(idx), tileParam, shared, virtualBankCount, nCores, repo)
     }
-    TileTopology(tileCores, privateDCache)
+    TileTopology(tileParam, tileCores, privateDCache)
   }
 
   private def parseCore(
     core:             CoreInstance,
+    tile:             TileParam,
     shared:           SharedMemConfig,
     virtualBankCount: Int,
     nCores:           Int,
@@ -130,7 +133,7 @@ object ChipLoader {
     val cpu  = core.getCpu
     val kind = cpu.getKind
     kind match {
-      case "rocket" => parseRocketCoreSlot(core, shared, virtualBankCount, nCores, repo)
+      case "rocket" => parseRocketCoreSlot(core, tile, shared, virtualBankCount, nCores, repo)
       case "boom"   =>
         if (core.getBalldomain.getBallNum > 0) {
           throw new RuntimeException(s"core ${core.getPkg}: kind=boom forbids balldomain")
@@ -138,7 +141,7 @@ object ChipLoader {
         if (!cpu.hasBoom) {
           throw new RuntimeException(s"core ${core.getPkg}: kind=boom missing cpu.boom")
         }
-        BoomTileCore(parseBoomCore(cpu.getBoom))
+        BoomTileCore(parseBoomCpu(cpu.getBoom))
       case other    =>
         throw new RuntimeException(s"core ${core.getPkg}: unsupported kind '$other'")
     }
@@ -146,6 +149,7 @@ object ChipLoader {
 
   private def parseRocketCoreSlot(
     core:             CoreInstance,
+    tile:             TileParam,
     shared:           SharedMemConfig,
     virtualBankCount: Int,
     nCores:           Int,
@@ -155,14 +159,14 @@ object ChipLoader {
     if (!cpu.hasRocket) {
       throw new RuntimeException(s"core ${core.getPkg}: kind=rocket missing cpu.rocket")
     }
-    val rocket   = parseRocketCore(cpu.getRocket)
+    val rocket   = parseRocketCpu(cpu.getRocket)
     val domain   = core.getBalldomain
     if (domain.getBallNum == 0) {
       return RocketTileCore(rocket, None)
     }
     require(core.hasFrontend, s"core ${core.getPkg} missing frontend config")
     require(core.hasGpDomain, s"core ${core.getPkg} missing gpdomain config")
-    require(cpu.getCoreDataBytes > 0, s"core ${core.getPkg} missing cpu interface config")
+    require(tile.coreDataBytes > 0, s"core ${core.getPkg} missing tile config")
     val frontend = core.getFrontend
     require(
       virtualBankCount <= (1 << frontend.getBankIdLen),
@@ -187,7 +191,7 @@ object ChipLoader {
       ballDomain = parseBallDomain(core, repo),
       frontend = parseFrontend(core.getFrontend),
       gpDomain = parseGpDomain(core.getGpDomain),
-      cpu = parseCpuParam(cpu, rocket.pgLevels),
+      tile = tile,
       memDomain = parseMemDomain(core.getMem, shared, virtualBankCount, nCores)
     )
     RocketTileCore(rocket, Some(buckyball))
@@ -274,26 +278,24 @@ object ChipLoader {
       laneScale = gp.getLaneScale
     )
 
-  def parseCpuParam(cpu: CpuConfig, pgLevels: Int): CpuParam =
-    CpuParam(
-      coreDataBytes = cpu.getCoreDataBytes,
-      xLen = cpu.getXLen,
-      vaddrBits = cpu.getVaddrBits,
-      paddrBits = cpu.getPaddrBits,
-      pgIdxBits = cpu.getPgIdxBits,
-      pgLevels = pgLevels,
-      nPMPs = cpu.getNPmps
+  private def parseTileParam(param: TileParamConfig): TileParam =
+    TileParam(
+      coreDataBytes = param.getCoreDataBytes,
+      xLen = param.getXLen,
+      vaddrBits = param.getVaddrBits,
+      paddrBits = param.getPaddrBits,
+      pgIdxBits = param.getPgIdxBits,
+      pgLevels = param.getPgLevels,
+      nPMPs = param.getNPmps
     )
 
-  private def parseRocketCore(rocket: RocketCoreConfig): RocketCoreParam = {
+  private def parseRocketCpu(rocket: RocketCpuConfig): RocketCpuParam = {
     val mulDiv = rocket.getMulDiv
     val fpu    = rocket.getFpu
     val dcache = rocket.getDcache
     val icache = rocket.getIcache
     val btb    = rocket.getBtb
-    RocketCoreParam(
-      xLen = rocket.getXLen,
-      pgLevels = rocket.getPgLevels,
+    RocketCpuParam(
       useVM = rocket.getUseVm,
       useZba = rocket.getUseZba,
       useZbb = rocket.getUseZbb,
@@ -327,10 +329,10 @@ object ChipLoader {
     )
   }
 
-  private def parseBoomCore(boom: BoomCoreConfig): BoomCoreParam = {
+  private def parseBoomCpu(boom: BoomCpuConfig): BoomCpuParam = {
     val dcache = boom.getDcache
     val icache = boom.getIcache
-    BoomCoreParam(
+    BoomCpuParam(
       fetchWidth = boom.getFetchWidth,
       decodeWidth = boom.getDecodeWidth,
       numRobEntries = boom.getNumRobEntries,

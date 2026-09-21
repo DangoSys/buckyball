@@ -14,7 +14,7 @@ class MemConfigerIO(val b: GlobalConfig) extends Bundle {
   val is_multi  = Output(Bool())
   val alloc     = Output(Bool())
   val group_id  = Output(UInt(b.memDomain.groupIdWidth.W))
-  val hart_id   = Output(UInt(b.cpu.xLen.W))
+  val hart_id   = Output(UInt(b.tile.xLen.W))
 }
 
 @instantiable
@@ -26,7 +26,7 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     val cmdReq    = Flipped(Decoupled(new MemRsIssue(b)))
     val cmdResp   = Decoupled(new MemRsComplete(b))
     val config    = Decoupled(new MemConfigerIO(b))
-    val hartid    = Input(UInt(b.cpu.xLen.W))
+    val hartid    = Input(UInt(b.tile.xLen.W))
     val bankWrite = Flipped(new BankWrite(b))
   })
 

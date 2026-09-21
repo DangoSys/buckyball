@@ -24,7 +24,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_valid       = Input(Vec(nCores, Bool()))
-    val query_hart_id     = Input(Vec(nCores, UInt(b.cpu.xLen.W)))
+    val query_hart_id     = Input(Vec(nCores, UInt(b.tile.xLen.W)))
     val query_vbank_id    = Input(Vec(nCores, UInt(b.memDomain.vbankIdWidth.W)))
     val query_group_count = Output(Vec(nCores, UInt(b.memDomain.groupCountWidth.W)))
     val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(totalBanks, new PhysicalBankHash(b)))) else None
@@ -66,7 +66,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
-    val hart_id  = UInt(b.cpu.xLen.W)
+    val hart_id  = UInt(b.tile.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
     val group_id = UInt(b.memDomain.groupIdWidth.W)

@@ -5,9 +5,9 @@ import freechips.rocketchip.rocket.{BTBParams, DCacheParams, ICacheParams, MulDi
 import freechips.rocketchip.tile.FPUParams
 
 /**
- * JSON-serializable Rocket Core configuration parameters.
+ * JSON-serializable Rocket CPU configuration parameters.
  *
- * Phase 1: Common parameters (xLen, pgLevels, useVM, Zb*, mulDiv, fpu, cache, btb)
+ * Phase 1: CPU parameters (useVM, Zb*, mulDiv, fpu, cache, btb)
  * Phase 2: Advanced parameters (TLB, ECC, clockGate, etc.) - to be added later
  *
  * Optional features (mulDiv, fpu, btb) use an `enable` flag instead of Option[T],
@@ -101,9 +101,7 @@ object BTBParam {
 
 }
 
-case class RocketCoreParam(
-  xLen:       Int = 64,
-  pgLevels:   Int = 3,
+case class RocketCpuParam(
   useVM:      Boolean = true,
   useZba:     Boolean = true,
   useZbb:     Boolean = true,
@@ -115,16 +113,16 @@ case class RocketCoreParam(
   icache:     ICacheParam = ICacheParam(),
   btb:        BTBParam = BTBParam())
 
-object RocketCoreParam {
-  implicit val rw: ReadWriter[RocketCoreParam] = macroRW
+object RocketCpuParam {
+  implicit val rw: ReadWriter[RocketCpuParam] = macroRW
 
   /**
    * Convert to rocket-chip RocketCoreParams.
    * rowBits and blockBytes are injected from site(SystemBusKey) and site(CacheBlockBytes).
    */
-  def toRocketCoreParams(p: RocketCoreParam): RocketCoreParams = RocketCoreParams(
-    xLen = p.xLen,
-    pgLevels = p.pgLevels,
+  def toRocketCoreParams(p: RocketCpuParam, xLen: Int, pgLevels: Int): RocketCoreParams = RocketCoreParams(
+    xLen = xLen,
+    pgLevels = pgLevels,
     useVM = p.useVM,
     useZba = p.useZba,
     useZbb = p.useZbb,
@@ -134,12 +132,12 @@ object RocketCoreParam {
     fpu = FPUParam.toFPUParams(p.fpu)
   )
 
-  def toDCacheParams(p: RocketCoreParam, rowBits: Int, blockBytes: Int): DCacheParams =
+  def toDCacheParams(p: RocketCpuParam, rowBits: Int, blockBytes: Int): DCacheParams =
     DCacheParam.toDCacheParams(p.dcache, rowBits, blockBytes)
 
-  def toICacheParams(p: RocketCoreParam, rowBits: Int, blockBytes: Int): ICacheParams =
+  def toICacheParams(p: RocketCpuParam, rowBits: Int, blockBytes: Int): ICacheParams =
     ICacheParam.toICacheParams(p.icache, rowBits, blockBytes)
 
-  def toBTBParams(p: RocketCoreParam): Option[BTBParams] =
+  def toBTBParams(p: RocketCpuParam): Option[BTBParams] =
     BTBParam.toBTBParams(p.btb)
 }

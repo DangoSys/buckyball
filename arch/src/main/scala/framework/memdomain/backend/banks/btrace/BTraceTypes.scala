@@ -5,7 +5,7 @@ import framework.top.GlobalConfig
 
 class PhysicalBankHash(val b: GlobalConfig) extends Bundle {
   val valid      = Bool()
-  val hartId     = UInt(b.cpu.xLen.W)
+  val hartId     = UInt(b.tile.xLen.W)
   val vbankId    = UInt(b.memDomain.vbankIdWidth.W)
   val pbankId    = UInt(32.W)
   val groupId    = UInt(32.W)
