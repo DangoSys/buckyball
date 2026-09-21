@@ -235,7 +235,7 @@ jobs:
             rm -rf "${build_dir}"
           done
           nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }} --diff'
           bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
