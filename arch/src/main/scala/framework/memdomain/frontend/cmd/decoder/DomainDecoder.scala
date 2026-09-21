@@ -74,7 +74,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val rs2   = io.cmd_i.bits.cmd.rs2Data
 
   // Unified encoding:
-  //   rs1[9:0]   = bank_id (BANK0)
+  //   rs1[9:0]   = read/config bank (BANK0)
+  //   rs1[29:20] = write bank (BANK2)
   //   rs1[63:30] = iter (34-bit)
   //   funct7[6:4] = enable (bank access flags, decoded by GlobalDecoder)
   //   rs2[38:0]  = mem_addr (for MVIN/MVOUT, 39-bit)
@@ -85,8 +86,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val ls_default_decode = List(N, N, DADDR, DADDR, DSPECIAL, N)
   val ls_decode_list = ListLookup(func7, ls_default_decode, Array(
       MSET_BITPAT      -> List(N, N, 0.U(memAddrLen.W),      rs1(bankIdLen - 1, 0), rs2, Y),
-      MVIN_BITPAT      -> List(Y, N, rs2(memAddrLen - 1, 0), rs1(bankIdLen - 1, 0), rs2, Y),
-      MVIN_2D_BITPAT   -> List(Y, N, rs2(31, 0),             rs1(bankIdLen - 1, 0), rs2, Y),
+      MVIN_BITPAT      -> List(Y, N, rs2(memAddrLen - 1, 0), rs1(bankIdLen + 19, 20), rs2, Y),
+      MVIN_2D_BITPAT   -> List(Y, N, rs2(31, 0),             rs1(bankIdLen + 19, 20), rs2, Y),
       MVOUT_BITPAT     -> List(N, Y, rs2(memAddrLen - 1, 0), rs1(bankIdLen - 1, 0), rs2, Y),
       MVIN_MMIO_BITPAT -> List(Y, N, rs2(memAddrLen - 1, 0), 0.U(bankIdLen.W),      rs2, Y)
     )
@@ -104,7 +105,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  val raw_bank_id    = rs1(9, 0)
+  val raw_bank_id    = Mux(func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT, rs1(29, 20), rs1(9, 0))
   val shared_bank_id = b.memDomain.sharedEnable.B && raw_bank_id >= sharedBankIdBase.U
   // format: off
   // BB_BANK0 is encoded in rs1[9:0]. Keep the configured architectural ID;
@@ -135,6 +136,9 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     assert(validBytes <= pixelBytes, "MVIN_2D valid bytes exceed pixel bytes")
     assert(rs2(54, 49) + height * width <= b.memDomain.bankEntries.U, "MVIN_2D destination exceeds bank")
     assert(rs2(63, 62) === 0.U, "MVIN_2D reserves rs2[63:62]")
+  }
+  when(io.cmd_i.fire && (func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT)) {
+    assert(rs1(19, 0) === 0.U, "MVIN write-bank encoding reserves rs1[19:0]")
   }
 
   val ls_bank_id = ls_decode_list(LSDecodeFields.BANK_ID.id).asUInt

@@ -4,14 +4,16 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
+import sims.hash.BankHashMonitor
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
 
 @instantiable
 class SharedMemBackend(val b: GlobalConfig) extends Module {
-  private val nCores       = b.top.nCores
+  val nCores               = b.memDomain.nCores
   private val totalBanks   = SharedMemLayout.totalBank(b)
   private val totalChannel = SharedMemLayout.totalChannel(b)
 
@@ -22,13 +24,21 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_valid       = Input(Vec(nCores, Bool()))
-    val query_hart_id     = Input(Vec(nCores, UInt(b.core.xLen.W)))
+    val query_hart_id     = Input(Vec(nCores, UInt(b.cpu.xLen.W)))
     val query_vbank_id    = Input(Vec(nCores, UInt(b.memDomain.vbankIdWidth.W)))
     val query_group_count = Output(Vec(nCores, UInt(b.memDomain.groupCountWidth.W)))
+    val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(totalBanks, new PhysicalBankHash(b)))) else None
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(totalChannel)(Instantiate(new AccPipe(b)))
+
+  val hashMonitors =
+    if (b.sim.diffTest) {
+      Some(Seq.fill(totalBanks)(Instantiate(new BankHashMonitor(b))))
+    } else {
+      None
+    }
 
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
@@ -40,6 +50,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mt.io.channel    := 0.U
     mt.io.hart_id    := 0.U
     mt.io.rob_id     := 0.U
+    mt.io.inst_id    := 0.U
     mt.io.vbank_id   := 0.U
     mt.io.pbank_id   := 0.U
     mt.io.group_id   := 0.U
@@ -55,7 +66,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
-    val hart_id  = UInt(b.core.xLen.W)
+    val hart_id  = UInt(b.cpu.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
     val group_id = UInt(b.memDomain.groupIdWidth.W)
@@ -123,6 +134,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
     accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
     accPipes(i).io.mem_req.rob_id    := io.mem_req(i).rob_id
+    accPipes(i).io.mem_req.inst_id   := io.mem_req(i).inst_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -164,12 +176,19 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
 
+  hashMonitors.foreach(_.foreach(_.io.bind := false.B))
+
   when(io.config.fire) {
     when(io.config.bits.alloc) {
       when(io.config.bits.group_id === 0.U) {
         clearVbank(io.config.bits.hart_id, io.config.bits.vbank_id)
       }
       val pbankId = PriorityEncoder(freePbankMask)
+      hashMonitors.foreach { hashes =>
+        for (i <- 0 until totalBanks) {
+          hashes(i).io.bind := pbankId === i.U
+        }
+      }
       printf(
         p"[SharedMemBackend][ALLOC] hart=${io.config.bits.hart_id} vbank=0x${Hexadecimal(io.config.bits.vbank_id)} " +
           p"group=${io.config.bits.group_id} pbank=$pbankId is_multi=${io.config.bits.is_multi}\n"
@@ -233,6 +252,7 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     mtraces(ch).io.channel    := ch.U
     mtraces(ch).io.hart_id    := io.mem_req(ch).hart_id
     mtraces(ch).io.rob_id     := io.mem_req(ch).rob_id
+    mtraces(ch).io.inst_id    := io.mem_req(ch).inst_id
     mtraces(ch).io.vbank_id   := io.mem_req(ch).bank_id
     mtraces(ch).io.pbank_id   := pbankId
     mtraces(ch).io.group_id   := io.mem_req(ch).group_id
@@ -292,6 +312,39 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
         banks(j).io.sramRead <> accPipes(i).io.sramRead
         banks(j).io.sramWrite <> accPipes(i).io.sramWrite
       }
+    }
+  }
+
+  hashMonitors.foreach { hashes =>
+    for (j <- 0 until totalBanks) {
+      val writeHits  = VecInit((0 until totalChannel).map { i =>
+        val activeHart  = Mux(accPipes(i).io.busy, accPipes(i).io.hart_id, io.mem_req(i).hart_id)
+        val activeBank  = Mux(accPipes(i).io.busy, accPipes(i).io.bank_id, io.mem_req(i).bank_id)
+        val activeGroup = Mux(accPipes(i).io.busy, accPipes(i).io.group_id, io.mem_req(i).group_id)
+        mappingTable(j).valid &&
+        mappingTable(j).hart_id === activeHart &&
+        mappingTable(j).vbank_id === activeBank &&
+        (!mappingTable(j).is_multi || mappingTable(j).group_id === activeGroup) &&
+        accPipes(i).io.sramWrite.req.fire
+      })
+      val writeValid = writeHits.asUInt.orR
+      val monitor    = hashes(j)
+
+      monitor.io.write.valid     := writeValid
+      monitor.io.write.bits.addr := banks(j).io.sramWrite.req.bits.addr
+      monitor.io.write.bits.mask := banks(j).io.sramWrite.req.bits.mask
+      monitor.io.write.bits.data := banks(j).io.sramWrite.req.bits.data
+    }
+  }
+
+  io.bank_hashes.foreach { states =>
+    for (i <- 0 until totalBanks) {
+      states(i).valid      := mappingTable(i).valid
+      states(i).hartId     := mappingTable(i).hart_id
+      states(i).vbankId    := mappingTable(i).vbank_id
+      states(i).pbankId    := i.U
+      states(i).groupId    := mappingTable(i).group_id
+      states(i).statusHash := hashMonitors.get(i).io.statusHash
     }
   }
 }

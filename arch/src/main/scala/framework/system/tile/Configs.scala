@@ -24,35 +24,8 @@ object WithNBBTiles {
       }
     )
 
-  /**
-   * Resolve the per-tile rocketCore param from buckyballPerCore.
-   *
-   * Multi-core within a tile currently shares one RocketCoreParam (BBTileParams
-   * has tile-level core/dcache/icache fields). All Some(_) entries must agree.
-   * Falls back to RocketCoreParam() when nothing is defined.
-   */
-  def resolveRocketCore(
-    buckyballPerCore: Seq[Option[GlobalConfig]],
-    buckyballConfig:  GlobalConfig
-  ): RocketCoreParam = {
-    val defined = buckyballPerCore.flatten.map(_.rocketCore)
-    if (defined.isEmpty) {
-      buckyballConfig.rocketCore
-    } else {
-      val head = defined.head
-      require(
-        defined.forall(_ == head),
-        "All cores within a BBTile must currently share the same rocketCore config; " +
-          "heterogeneous per-core Rocket params is not yet supported."
-      )
-      head
-    }
-  }
-
   def resolveRocketCores(
     nCoresPerTile:     Int,
-    buckyballPerCore:  Seq[Option[GlobalConfig]],
-    buckyballConfig:   GlobalConfig,
     rocketCorePerCore: Option[Seq[RocketCoreParam]]
   ): Seq[RocketCoreParam] = {
     rocketCorePerCore match {
@@ -63,7 +36,7 @@ object WithNBBTiles {
         )
         cores
       case None        =>
-        Seq.fill(nCoresPerTile)(resolveRocketCore(buckyballPerCore, buckyballConfig))
+        throw new RuntimeException("rocketCorePerCore must be specified")
     }
   }
 
@@ -93,8 +66,6 @@ class WithBBTile(
         )
         val rocketCores              = WithNBBTiles.resolveRocketCores(
           nCoresPerTile,
-          resolvedBuckyballPerCore,
-          buckyballConfig,
           rocketCorePerCore
         )
         val rocketCore               = rocketCores.head
@@ -145,8 +116,6 @@ class WithNBBTiles(
         )
         val rocketCores              = WithNBBTiles.resolveRocketCores(
           nCoresPerTile,
-          resolvedBuckyballPerCore,
-          buckyballConfig,
           rocketCorePerCore
         )
         val rocketCore               = rocketCores.head

@@ -22,7 +22,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val busy     = Output(Bool())
     val group_id = Output(UInt(b.memDomain.groupIdWidth.W))
     val bank_id  = Output(UInt(b.memDomain.vbankIdWidth.W))
-    val hart_id  = Output(UInt(b.core.xLen.W))
+    val hart_id  = Output(UInt(b.cpu.xLen.W))
   })
 
   // Each group has its own physical bank, so no address shifting is needed.
@@ -36,7 +36,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
   //Bank_id output
   val bank_id_reg = RegInit(0.U(b.memDomain.vbankIdWidth.W))
   io.bank_id := bank_id_reg
-  val hart_id_reg = RegInit(0.U(b.core.xLen.W))
+  val hart_id_reg = RegInit(0.U(b.cpu.xLen.W))
   io.hart_id := hart_id_reg
 
   val rd_hold     = RegInit(false.B)

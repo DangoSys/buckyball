@@ -90,6 +90,6 @@ pub fn compute(
     execute(funct, banks(op1, op2, output, iter), xs2, ctx);
 }
 
-pub fn free_after_digest(ctx: &mut ExecContext, bank: u64) {
+pub fn free_after_hash(ctx: &mut ExecContext, bank: u64) {
     ctx.defer_bank_free(bank);
 }

@@ -16,13 +16,13 @@ import framework.frontend.scoreboard.BankAccessInfo
 import framework.system.core.rocket.RoCCCommandBB
 
 class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
-  val cmd = new RoCCCommandBB(b.core.xLen)
+  val cmd = new RoCCCommandBB(b.cpu.xLen)
 }
 
 class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val domain_id  = UInt(4.W)
   val ball_bid   = UInt(5.W)
-  val cmd        = new RoCCCommandBB(b.core.xLen)
+  val cmd        = new RoCCCommandBB(b.cpu.xLen)
   val bankAccess = new BankAccessInfo(b.frontend.bank_id_len)
   val op1_col    = UInt(b.memDomain.groupCountWidth.W)
   val op2_col    = UInt(b.memDomain.groupCountWidth.W)
@@ -40,7 +40,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
 
     val id_i = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB(b.core.xLen)
+      val cmd = new RoCCCommandBB(b.cpu.xLen)
     }))
 
     val id_o = Decoupled(new PostGDCmd(b))
@@ -86,7 +86,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   // Bank access info extraction — enable flags from funct7[6:4]
   //
   // Unified rs1 layout (defined in isa.h):
-  //   rs1[9:0]   = bank_0  (rd_bank_0 or wr_bank for MVIN/MSET)
+  //   rs1[9:0]   = bank_0  (rd_bank_0 or MSET config bank)
   //   rs1[19:10] = bank_1  (rd_bank_1, dual-operand only)
   //   rs1[29:20] = bank_2  (wr_bank for Ball instructions)
   //   rs1[63:30] = iter (34-bit)
@@ -105,7 +105,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   // Decode enable from funct7[6:4]
   val hasRd0 = enableBits === 1.U || enableBits === 3.U || enableBits === 4.U
   val hasRd1 = enableBits === 4.U
-  val hasWr  = enableBits === 2.U || enableBits === 3.U || enableBits === 4.U
+  val hasWr  = (enableBits === 2.U || enableBits === 3.U || enableBits === 4.U) && func7 =/= MVIN_MMIO_BITPAT
 
   val ballBid = WireDefault(0.U(5.W))
   b.ballDomain.ballISA.foreach { entry =>
@@ -119,9 +119,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   bankAccess.rd_bank_1_valid := hasRd1
   bankAccess.rd_bank_1_id    := rs1(bankIdLen + 9, 10)
   bankAccess.wr_bank_valid   := hasWr
-  // For Mem instructions (MVIN/MSET), wr_bank is bank_0 (rs1[9:0])
-  // For Ball instructions, wr_bank is bank_2 (rs1[29:20])
-  bankAccess.wr_bank_id      := Mux(is_mem_inst, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 19, 20))
+  bankAccess.wr_bank_id      := Mux(func7 === MSET_BITPAT, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 19, 20))
 
   private def legalBank(raw: UInt): Bool =
     raw <= b.frontend.vbank_id_upper_bound.U ||

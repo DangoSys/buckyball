@@ -218,4 +218,5 @@ class Im2col(val b: GlobalConfig) extends Module {
     win.io.next := true.B
     localWindow := localWindow + 1.U
   }
+
 }

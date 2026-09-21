@@ -7,9 +7,12 @@ import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
 import framework.memdomain.backend.privatepath.PrivateMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 
 @instantiable
 class MemBackend(val b: GlobalConfig) extends Module {
+
+  val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
 
   @public
   val io = IO(new Bundle {
@@ -30,11 +33,35 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Input(Bool())
     val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
+
+    val bank_hashes =
+      if (b.sim.diffTest) {
+        Some(Output(Vec(b.memDomain.bankNum + sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
+    val shared_bank_hashes =
+      if (b.sim.diffTest && b.memDomain.sharedEnable) {
+        Some(Input(Vec(SharedMemLayout.totalBank(b), new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
   })
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
   private val sharedChannelPerHart = SharedMemLayout.channelPerHart(b)
+
+  io.bank_hashes.foreach { states =>
+    for (i <- 0 until b.memDomain.bankNum) {
+      states(i) := privateBackend.io.bank_hashes.get(i)
+    }
+    for (i <- 0 until sharedHashCount) {
+      states(b.memDomain.bankNum + i) := io.shared_bank_hashes.get(i)
+    }
+  }
 
   // Route config to the selected backend only.
   val cfgToShared = io.config.bits.is_shared
@@ -79,6 +106,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       io.shared_mem_req(i).is_shared := false.B
       io.shared_mem_req(i).hart_id   := 0.U
       io.shared_mem_req(i).rob_id    := 0.U
+      io.shared_mem_req(i).inst_id   := 0.U
 
       io.shared_mem_req(i).read.req.valid  := false.B
       io.shared_mem_req(i).read.req.bits   := DontCare
@@ -126,6 +154,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       privateBackend.io.mem_req(i).is_shared := useSharedReq
       privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
       privateBackend.io.mem_req(i).rob_id    := io.mem_req(i).rob_id
+      privateBackend.io.mem_req(i).inst_id   := io.mem_req(i).inst_id
 
       // Read request route
       privateBackend.io.mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && !useSharedReq
@@ -145,6 +174,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
         io.shared_mem_req(i).is_shared := useSharedReq
         io.shared_mem_req(i).hart_id   := io.mem_req(i).hart_id
         io.shared_mem_req(i).rob_id    := io.mem_req(i).rob_id
+        io.shared_mem_req(i).inst_id   := io.mem_req(i).inst_id
 
         io.shared_mem_req(i).read.req.valid := io.mem_req(i).read.req.valid && useSharedReq
         io.shared_mem_req(i).read.req.bits  := io.mem_req(i).read.req.bits
@@ -206,6 +236,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       io.shared_mem_req(i).is_shared        := false.B
       io.shared_mem_req(i).hart_id          := 0.U
       io.shared_mem_req(i).rob_id           := 0.U
+      io.shared_mem_req(i).inst_id          := 0.U
       io.shared_mem_req(i).read.req.valid   := false.B
       io.shared_mem_req(i).read.req.bits    := DontCare
       io.shared_mem_req(i).read.resp.ready  := false.B
@@ -215,19 +246,18 @@ class MemBackend(val b: GlobalConfig) extends Module {
     }
 
     for (i <- 0 until b.memDomain.bankChannel) {
-      privateBackend.io.mem_req(i).bank_id   := io.mem_req(i).bank_id
-      privateBackend.io.mem_req(i).group_id  := io.mem_req(i).group_id
-      privateBackend.io.mem_req(i).is_shared := false.B
-      privateBackend.io.mem_req(i).hart_id   := io.mem_req(i).hart_id
-      privateBackend.io.mem_req(i).rob_id    := io.mem_req(i).rob_id
-
-      privateBackend.io.mem_req(i).read.req.valid  := io.mem_req(i).read.req.valid
-      privateBackend.io.mem_req(i).read.req.bits   := io.mem_req(i).read.req.bits
-      privateBackend.io.mem_req(i).read.resp.ready := io.mem_req(i).read.resp.ready
-      io.mem_req(i).read.req.ready                 := privateBackend.io.mem_req(i).read.req.ready
-      io.mem_req(i).read.resp.valid                := privateBackend.io.mem_req(i).read.resp.valid
-      io.mem_req(i).read.resp.bits                 := privateBackend.io.mem_req(i).read.resp.bits
-
+      privateBackend.io.mem_req(i).bank_id          := io.mem_req(i).bank_id
+      privateBackend.io.mem_req(i).group_id         := io.mem_req(i).group_id
+      privateBackend.io.mem_req(i).is_shared        := false.B
+      privateBackend.io.mem_req(i).hart_id          := io.mem_req(i).hart_id
+      privateBackend.io.mem_req(i).rob_id           := io.mem_req(i).rob_id
+      privateBackend.io.mem_req(i).inst_id          := io.mem_req(i).inst_id
+      privateBackend.io.mem_req(i).read.req.valid   := io.mem_req(i).read.req.valid
+      privateBackend.io.mem_req(i).read.req.bits    := io.mem_req(i).read.req.bits
+      privateBackend.io.mem_req(i).read.resp.ready  := io.mem_req(i).read.resp.ready
+      io.mem_req(i).read.req.ready                  := privateBackend.io.mem_req(i).read.req.ready
+      io.mem_req(i).read.resp.valid                 := privateBackend.io.mem_req(i).read.resp.valid
+      io.mem_req(i).read.resp.bits                  := privateBackend.io.mem_req(i).read.resp.bits
       privateBackend.io.mem_req(i).write.req.valid  := io.mem_req(i).write.req.valid
       privateBackend.io.mem_req(i).write.req.bits   := io.mem_req(i).write.req.bits
       privateBackend.io.mem_req(i).write.resp.ready := io.mem_req(i).write.resp.ready

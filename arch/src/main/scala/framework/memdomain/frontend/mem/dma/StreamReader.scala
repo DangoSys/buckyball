@@ -89,7 +89,7 @@ class StreamReader(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   val bytesLeft       = reqReg.len - bytesRequested
   val groupsLeftInRow = reqReg.groups - groupIdx
   val rowBytesLeft    = groupsLeftInRow << lgBeat
-  val pageBytesLeft   = (1.U << b.core.pgIdxBits) - readVaddr(b.core.pgIdxBits - 1, 0)
+  val pageBytesLeft   = (1.U << b.cpu.pgIdxBits) - readVaddr(b.cpu.pgIdxBits - 1, 0)
   val maxBurstBytes   = Seq(bytesLeft, rowBytesLeft, pageBytesLeft, burstMaxBytes.U).reduce((a, c) => Mux(a < c, a, c))
 
   val burstCandidates = Iterator.iterate(beatBytes)(_ * 2).takeWhile(_ <= burstMaxBytes).toSeq

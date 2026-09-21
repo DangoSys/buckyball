@@ -15,6 +15,7 @@ import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.mem.{MemConfigerIO}
 import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.balldomain.BallDomain
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 
 /**
  * Standalone Buckyball accelerator module.
@@ -28,18 +29,19 @@ import framework.balldomain.BallDomain
  */
 @instantiable
 class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
-  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val totalBallRead   = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite  = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
 
   @public
   val io = IO(new Bundle {
     // RoCC command/response (connected to Rocket core inside tile)
-    val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.core.xLen)))
-    val resp      = Decoupled(new RoCCResponseBB(b.core.xLen))
+    val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.cpu.xLen)))
+    val resp      = Decoupled(new RoCCResponseBB(b.cpu.xLen))
     val busy      = Output(Bool())
     val retired   = Output(Bool())
     val interrupt = Output(Bool())
-    val hartid    = Input(UInt(b.core.xLen.W))
+    val hartid    = Input(UInt(b.cpu.xLen.W))
 
     // PTW interface (shared with Rocket core's PTW)
     val ptw    = Vec(1, new BBTLBPTWIO(b))
@@ -59,6 +61,13 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val shared_query_group_count = Input(UInt(b.memDomain.groupCountWidth.W))
 
+    val shared_bank_hashes =
+      if (b.sim.diffTest && b.memDomain.sharedEnable) {
+        Some(Input(Vec(sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
     // Barrier interface — connected to tile-level BarrierUnit
     val barrier_arrive  = Output(Bool())
     val barrier_release = Input(Bool())
@@ -69,6 +78,9 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   val ballDomain: Instance[BallDomain] = Instantiate(new BallDomain(b))
   val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b)(edge))
   val gpDomain:   Instance[GpDomain]   = Instantiate(new GpDomain(b))
+  frontend.io.hartid                        := io.hartid
+  frontend.io.bank_hashes.foreach(_         := memDomain.io.bank_hashes.get)
+  memDomain.io.shared_bank_hashes.foreach(_ := io.shared_bank_hashes.get)
 
   // --- Frontend <- cmd ---
   frontend.io.cmd.valid    := io.cmd.valid
@@ -90,7 +102,8 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Frontend -> MemDomain ---
   memDomain.io.global_issue_i <> frontend.io.mem_issue_o
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o
-  memDomain.io.hartid := io.hartid
+  memDomain.io.hartid   := io.hartid
+  memDomain.io.inst_ids := frontend.io.inst_ids
 
   // --- Frontend -> GpDomain ---
   gpDomain.io.global_issue_i <> frontend.io.gp_issue_o

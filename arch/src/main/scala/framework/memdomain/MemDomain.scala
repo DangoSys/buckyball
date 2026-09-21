@@ -17,13 +17,15 @@ import framework.memdomain.frontend.mem.{MemConfigerIO}
 import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.memdomain.midend.MemMidend
 import framework.memdomain.backend.MemBackend
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 
 @instantiable
 class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
-  val totalMmioRead  = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
-  val totalMmioWrite = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
-  val totalBallRead  = b.ballDomain.ballIdMappings.map(_.inBW).sum
-  val totalBallWrite = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val totalMmioRead   = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
+  val totalMmioWrite  = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
+  val totalBallRead   = b.ballDomain.ballIdMappings.map(_.inBW).sum
+  val totalBallWrite  = b.ballDomain.ballIdMappings.map(_.outBW).sum
+  val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
 
   @public
   val io = IO(new Bundle {
@@ -31,6 +33,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     val global_complete_o = Decoupled(new GlobalSchedComplete(b))
     val busy              = Output(Bool())
+    val inst_ids          = Input(Vec(b.frontend.rob_entries, UInt(64.W)))
 
 // Inside Channel
     val ballChannelActive = Input(Vec(b.ballDomain.ballNum, Bool()))
@@ -48,7 +51,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val tlbExp    = Vec(1, new BBTLBExceptionIO)
     val tl_reader = new TLBundle(edge.bundle)
     val tl_writer = new TLBundle(edge.bundle)
-    val hartid    = Input(UInt(b.core.xLen.W))
+    val hartid    = Input(UInt(b.cpu.xLen.W))
 
 // Shared memory path
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
@@ -56,17 +59,36 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val shared_query_group_count = Input(UInt(b.memDomain.groupCountWidth.W))
+
+    val bank_hashes =
+      if (b.sim.diffTest) {
+        Some(Output(Vec(b.memDomain.bankNum + sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
+    val shared_bank_hashes =
+      if (b.sim.diffTest && b.memDomain.sharedEnable) {
+        Some(Input(Vec(sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
   })
 
   val frontend: Instance[MemFrontend] = Instantiate(new MemFrontend(b)(edge))
   val midend:   Instance[MemMidend]   = Instantiate(new MemMidend(b))
   val backend:  Instance[MemBackend]  = Instantiate(new MemBackend(b))
 
+  io.bank_hashes.foreach(_                := backend.io.bank_hashes.get)
+  backend.io.shared_bank_hashes.foreach(_ := io.shared_bank_hashes.get)
+
   // Connect query interface from frontend to backend
   backend.io.query_vbank_id     := frontend.io.query_vbank_id
   backend.io.query_is_shared    := frontend.io.query_is_shared
   frontend.io.query_group_count := backend.io.query_group_count
   frontend.io.hartid            := io.hartid
+  midend.io.inst_ids            := io.inst_ids
 
   // Shared query: backend delegates shared query to external SharedMemBackend
   backend.io.shared_query_group_count := io.shared_query_group_count

@@ -170,9 +170,9 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
           nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --diff --clean-before'
 
       - name: rushB batch
         if: matrix.enable_rushb && matrix.run_bemu_elf_tests && matrix.run_bemu_pk_tests && matrix.run_verilator_batch_tests

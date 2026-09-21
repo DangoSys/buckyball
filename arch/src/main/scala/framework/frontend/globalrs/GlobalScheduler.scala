@@ -10,6 +10,8 @@ import framework.frontend.decoder.GISA._
 import framework.frontend.scoreboard.BankAccessInfo
 import framework.system.core.rocket.RoCCResponseBB
 import framework.balldomain.blink.SubRobRow
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.backend.shared.SharedMemLayout
 
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
   val cmd               = new PostGDCmd(b)
@@ -31,8 +33,11 @@ class GlobalSchedComplete(b: GlobalConfig) extends Bundle {
 @instantiable
 class GlobalScheduler(val b: GlobalConfig) extends Module {
 
+  val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
+
   @public
   val io = IO(new Bundle {
+    val hart_id           = Input(UInt(b.cpu.xLen.W))
     val decode_cmd_i      = Flipped(new DecoupledIO(new PostGDCmd(b)))
     val ball_issue_o      = Decoupled(new GlobalSchedIssue(b))
     val mem_issue_o       = Decoupled(new GlobalSchedIssue(b))
@@ -41,9 +46,17 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     val mem_complete_i    = Flipped(Decoupled(new GlobalSchedComplete(b)))
     val gp_complete_i     = Flipped(Decoupled(new GlobalSchedComplete(b)))
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+    val inst_ids          = Output(Vec(b.frontend.rob_entries, UInt(64.W)))
+
+    val bank_hashes =
+      if (b.sim.diffTest) {
+        Some(Input(Vec(b.memDomain.bankNum + sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
 
     val scheduler_rocc_o = new Bundle {
-      val resp = new DecoupledIO(new RoCCResponseBB(b.core.xLen))
+      val resp = new DecoupledIO(new RoCCResponseBB(b.cpu.xLen))
       val busy = Output(Bool())
     }
 
@@ -56,6 +69,9 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   })
 
   val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
+  rob.io.hart_id               := io.hart_id
+  rob.io.bank_hashes.foreach(_ := io.bank_hashes.get)
+  io.inst_ids                  := rob.io.inst_ids
 
   val isFenceCmd  = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isFence
   val fenceActive = RegInit(false.B)
@@ -102,7 +118,9 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   mainIssueEntry.is_sub            := false.B
   mainIssueEntry.sub_rob_id        := 0.U
 
-  val completeArb = Module(new Arbiter(new GlobalSchedComplete(b), 3))
+  val completeArb   = Module(new Arbiter(new GlobalSchedComplete(b), 3))
+  val completeQueue = Module(new Queue(UInt(log2Up(b.frontend.rob_entries).W), b.frontend.rob_entries))
+  rob.io.complete <> completeQueue.io.deq
   completeArb.io.in(0).valid := io.ball_complete_i.valid
   completeArb.io.in(0).bits  := io.ball_complete_i.bits
   io.ball_complete_i.ready   := completeArb.io.in(0).ready
@@ -171,29 +189,22 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     )
     rob.io.subRobActive := subRobIssueValid
 
-    subRob.io.subComplete.valid    := completeArb.io.out.valid && completeBits.is_sub
-    subRob.io.subComplete.bits     := completeBits.sub_rob_id
-    subRob.io.masterComplete.ready := true.B
+    subRob.io.subComplete.valid := completeArb.io.out.valid && completeBits.is_sub
+    subRob.io.subComplete.bits  := completeBits.sub_rob_id
 
     val normalComplete = completeArb.io.out.valid && !completeBits.is_sub
-    if (b.frontend.rs_out_of_order_response) {
-      rob.io.complete.valid := normalComplete || subRob.io.masterComplete.valid
-      rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
-    } else {
-      val isHeadComplete = Mux(
-        subRob.io.masterComplete.valid,
-        subRob.io.masterComplete.bits === rob.io.head_ptr,
-        completeBits.rob_id === rob.io.head_ptr
-      )
-      rob.io.complete.valid := (normalComplete || subRob.io.masterComplete.valid) && isHeadComplete
-      rob.io.complete.bits  := Mux(subRob.io.masterComplete.valid, subRob.io.masterComplete.bits, completeBits.rob_id)
-    }
-    completeArb.io.out.ready := Mux(
+    val masterComplete = subRob.io.masterComplete.valid
+    val completeRobId  = Mux(masterComplete, subRob.io.masterComplete.bits, completeBits.rob_id)
+
+    completeQueue.io.enq.valid     := masterComplete || normalComplete
+    completeQueue.io.enq.bits      := completeRobId
+    subRob.io.masterComplete.ready := masterComplete && completeQueue.io.enq.ready
+    completeArb.io.out.ready       := Mux(
       completeBits.is_sub,
       subRob.io.subComplete.ready,
-      rob.io.complete.ready
+      !masterComplete && completeQueue.io.enq.ready
     )
-    io.idle := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
+    io.idle                        := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
   } else {
     for (i <- 0 until b.ballDomain.ballNum) {
       io.ball_subrob_req_i(i).ready := false.B
@@ -214,14 +225,10 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     when(completeArb.io.out.valid) {
       assert(!completeBits.is_sub, "SubROB completion observed when frontend.sub_rob_enable=false")
     }
-    if (b.frontend.rs_out_of_order_response) {
-      rob.io.complete.valid := completeArb.io.out.valid
-    } else {
-      rob.io.complete.valid := completeArb.io.out.valid && completeBits.rob_id === rob.io.head_ptr
-    }
-    rob.io.complete.bits     := completeBits.rob_id
-    completeArb.io.out.ready := rob.io.complete.ready
-    io.idle                  := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease
+    completeQueue.io.enq.valid := completeArb.io.out.valid
+    completeQueue.io.enq.bits  := completeBits.rob_id
+    completeArb.io.out.ready   := completeQueue.io.enq.ready
+    io.idle                    := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease
   }
 
   io.scheduler_rocc_o.resp.valid     := false.B
@@ -229,4 +236,5 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   io.scheduler_rocc_o.resp.bits.data := 0.U
   io.scheduler_rocc_o.busy           := rob.io.full || fenceActive || barrierWaitROB || barrierWaitRelease
   io.retired                         := rob.io.complete.fire && rob.io.entry_valid(rob.io.complete.bits)
+
 }

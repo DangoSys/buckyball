@@ -11,6 +11,7 @@ class MemRequestIO(b: GlobalConfig) extends Bundle {
   val bank_id   = Output(UInt(b.memDomain.vbankIdWidth.W))
   val group_id  = Output(UInt(b.memDomain.groupIdWidth.W))
   val is_shared = Output(Bool())
-  val hart_id   = Output(UInt(b.core.xLen.W))
+  val hart_id   = Output(UInt(b.cpu.xLen.W))
   val rob_id    = Output(UInt(log2Up(b.frontend.rob_entries).W))
+  val inst_id   = Output(UInt(64.W))
 }

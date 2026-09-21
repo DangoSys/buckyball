@@ -17,12 +17,11 @@ import framework.balldomain.configs.{BallDomainParam, BallISAEntry, BallIdMappin
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.memdomain.configs.MemDomainParam
-import framework.system.core.configs.CoreParam
+import framework.system.cpu.configs.CpuParam
 import framework.system.core.boom.configs.{BoomCoreParam, BoomDCacheParam, BoomICacheParam}
 import framework.system.core.rocket.configs._
 import framework.system.tile.PrivateDCacheParams
 import framework.top.GlobalConfig
-import framework.top.configs.TopConfig
 import scala.jdk.CollectionConverters._
 
 /** Load ExampleTopology from chip.pb. */
@@ -74,12 +73,9 @@ object ChipLoader {
   }
 
   private def parseTile(tile: TilePlacement, cores: Seq[CoreInstance], repo: Path): TileTopology = {
-    val indices           = tile.getCoreIndicesList.asScala.map(_.toInt).toSeq
-    val nCores            = indices.size
-    val hasBuckyball      = indices.exists(i => cores(i).getBalldomain.getBallNum > 0)
-    val memBallChannelNum =
-      if (hasBuckyball) tile.getMemBallChannelNum
-      else 0
+    val indices      = tile.getCoreIndicesList.asScala.map(_.toInt).toSeq
+    val nCores       = indices.size
+    val hasBuckyball = indices.exists(i => cores(i).getBalldomain.getBallNum > 0)
 
     val shared           = tile.getSharedMem
     val virtualBankCount = tile.getVirtualBankCount
@@ -118,24 +114,23 @@ object ChipLoader {
       }
 
     val tileCores = indices.map { idx =>
-      parseCore(cores(idx), shared, virtualBankCount, memBallChannelNum, nCores, repo)
+      parseCore(cores(idx), shared, virtualBankCount, nCores, repo)
     }
     TileTopology(tileCores, privateDCache)
   }
 
   private def parseCore(
-    core:              CoreInstance,
-    shared:            SharedMemConfig,
-    virtualBankCount:  Int,
-    memBallChannelNum: Int,
-    nCores:            Int,
-    repo:              Path
+    core:             CoreInstance,
+    shared:           SharedMemConfig,
+    virtualBankCount: Int,
+    nCores:           Int,
+    repo:             Path
   ): TileCore = {
     require(core.hasCpu, s"core ${core.getPkg}: missing cpu config")
     val cpu  = core.getCpu
     val kind = cpu.getKind
     kind match {
-      case "rocket" => parseRocketCoreSlot(core, shared, virtualBankCount, memBallChannelNum, nCores, repo)
+      case "rocket" => parseRocketCoreSlot(core, shared, virtualBankCount, nCores, repo)
       case "boom"   =>
         if (core.getBalldomain.getBallNum > 0) {
           throw new RuntimeException(s"core ${core.getPkg}: kind=boom forbids balldomain")
@@ -150,12 +145,11 @@ object ChipLoader {
   }
 
   private def parseRocketCoreSlot(
-    core:              CoreInstance,
-    shared:            SharedMemConfig,
-    virtualBankCount:  Int,
-    memBallChannelNum: Int,
-    nCores:            Int,
-    repo:              Path
+    core:             CoreInstance,
+    shared:           SharedMemConfig,
+    virtualBankCount: Int,
+    nCores:           Int,
+    repo:             Path
   ): RocketTileCore = {
     val cpu      = core.getCpu
     if (!cpu.hasRocket) {
@@ -193,10 +187,8 @@ object ChipLoader {
       ballDomain = parseBallDomain(core, repo),
       frontend = parseFrontend(core.getFrontend),
       gpDomain = parseGpDomain(core.getGpDomain),
-      core = parseCoreParam(cpu),
-      memDomain = parseMemDomain(core.getMem, shared, virtualBankCount),
-      rocketCore = rocket,
-      top = TopConfig(memBallChannelNum = memBallChannelNum, nCores = nCores)
+      cpu = parseCpuParam(cpu, rocket.pgLevels),
+      memDomain = parseMemDomain(core.getMem, shared, virtualBankCount, nCores)
     )
     RocketTileCore(rocket, Some(buckyball))
   }
@@ -224,7 +216,8 @@ object ChipLoader {
   private def parseMemDomain(
     mem:              MemDomainConfig,
     shared:           SharedMemConfig,
-    virtualBankCount: Int
+    virtualBankCount: Int,
+    nCores:           Int
   ): MemDomainParam = {
     val bank = mem.getBank
     val dma  = mem.getDma
@@ -241,6 +234,7 @@ object ChipLoader {
       sharedEntries = shared.getEntries,
       sharedInputChannels = shared.getInputChannels,
       sharedDefaultGroupCount = shared.getDefaultGroupCount,
+      nCores = nCores,
       tlb_size = tlb.getSize,
       dma_n_xacts = dma.getNXacts,
       dma_burst_maxbytes = dma.getBurstMaxBytes,
@@ -280,14 +274,15 @@ object ChipLoader {
       laneScale = gp.getLaneScale
     )
 
-  private def parseCoreParam(core: CpuConfig): CoreParam =
-    CoreParam(
-      coreDataBytes = core.getCoreDataBytes,
-      xLen = core.getXLen,
-      vaddrBits = core.getVaddrBits,
-      paddrBits = core.getPaddrBits,
-      pgIdxBits = core.getPgIdxBits,
-      nPMPs = core.getNPmps
+  def parseCpuParam(cpu: CpuConfig, pgLevels: Int): CpuParam =
+    CpuParam(
+      coreDataBytes = cpu.getCoreDataBytes,
+      xLen = cpu.getXLen,
+      vaddrBits = cpu.getVaddrBits,
+      paddrBits = cpu.getPaddrBits,
+      pgIdxBits = cpu.getPgIdxBits,
+      pgLevels = pgLevels,
+      nPMPs = cpu.getNPmps
     )
 
   private def parseRocketCore(rocket: RocketCoreConfig): RocketCoreParam = {

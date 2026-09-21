@@ -11,11 +11,11 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
 
   val nClients  = 2
   val entries   = b.memDomain.tlb_size
-  val maxSize   = b.core.coreDataBytes
-  val lgMaxSize = log2Ceil(b.core.coreDataBytes)
-  val vaddrBits = b.core.vaddrBits
-  val paddrBits = b.core.paddrBits
-  val pgIdxBits = b.core.pgIdxBits
+  val maxSize   = b.cpu.coreDataBytes
+  val lgMaxSize = log2Ceil(b.cpu.coreDataBytes)
+  val vaddrBits = b.cpu.vaddrBits
+  val paddrBits = b.cpu.paddrBits
+  val pgIdxBits = b.cpu.pgIdxBits
 
   @public
   val io = IO(new Bundle {
@@ -33,7 +33,7 @@ class BBTLBCluster(val b: GlobalConfig)(implicit val edge: TLEdgeOut) extends Mo
   // Connect PTW
   io.ptw(0) <> tlb.io.ptw
 
-  val tlbArb    = Module(new RRArbiter(new BBTLBReq(lgMaxSize, vaddrBits, b.core.xLen), nClients))
+  val tlbArb    = Module(new RRArbiter(new BBTLBReq(lgMaxSize, vaddrBits, b.cpu.xLen), nClients))
   val tlbArbOut = tlbArb.io.out
   val tlb_io    = tlb.io
 

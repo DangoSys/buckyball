@@ -234,7 +234,7 @@ jobs:
           for build_dir in "${root}"/bebop/build/"${{ matrix.chip }}"-*(N); do
             rm -rf "${build_dir}"
           done
-          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }} --diff'
           nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
           bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
@@ -309,12 +309,12 @@ jobs:
             nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
             nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
             nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests --diff"
           fi
 
           if [[ "${{ matrix.run_fpga_pk }}" == "true" ]]; then
             nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests --diff"
           fi
 
       - name: Exit repo lock

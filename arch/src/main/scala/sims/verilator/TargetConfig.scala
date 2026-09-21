@@ -5,6 +5,7 @@ import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
 import freechips.rocketchip.subsystem.InSubsystem
+import framework.top.configs.{SimParam, WithSimParam}
 
 class WithCustomBootROM
     extends Config((site, here, up) => {
@@ -132,7 +133,7 @@ object Elaborate extends App {
   val configClassName = args(0)
   println(s"Elaborating BBSimHarness with config: $configClassName")
 
-  val config: Config =
+  val baseConfig: Config =
     try {
       val configClass = Class.forName(configClassName)
       configClass.getDeclaredConstructor().newInstance().asInstanceOf[Config]
@@ -148,6 +149,11 @@ object Elaborate extends App {
 
   val rawFirtoolOpts = args.drop(1)
 
+  val config: Config =
+    if (rawFirtoolOpts.contains("--difftest"))
+      new Config(new WithSimParam(SimParam(diffTest = true)).orElse(baseConfig))
+    else baseConfig
+
   val outDir = rawFirtoolOpts.collectFirst {
     case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
   }.getOrElse {
@@ -155,7 +161,7 @@ object Elaborate extends App {
   }
 
   val firtoolOpts = rawFirtoolOpts.filterNot { opt =>
-    opt == "--split-verilog" || opt.startsWith("-o=")
+    opt == "--split-verilog" || opt == "--difftest" || opt.startsWith("-o=")
   }
 
   ChiselStage.emitSystemVerilogFile(

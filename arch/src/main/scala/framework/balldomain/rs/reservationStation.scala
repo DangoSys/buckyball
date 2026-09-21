@@ -131,4 +131,5 @@ class BallReservationStation(val b: GlobalConfig) extends Module {
   complete_o.valid         := completeArb.io.out.valid
   complete_o.bits          := completeArb.io.out.bits
   completeArb.io.out.ready := complete_o.ready
+
 }

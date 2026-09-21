@@ -40,6 +40,8 @@ mlir::Value packRs1BanksIter(mlir::OpBuilder &b, mlir::Location loc,
                              mlir::Value wBank, mlir::Value iter);
 mlir::Value packRs1BankIter(mlir::OpBuilder &b, mlir::Location loc,
                             mlir::Value bankId, mlir::Value depth);
+mlir::Value packRs1WriteBankIter(mlir::OpBuilder &b, mlir::Location loc,
+                                 mlir::Value bankId, mlir::Value depth);
 mlir::Value packRs2MemStride(mlir::OpBuilder &b, mlir::Location loc,
                              mlir::Value memAddr, mlir::Value stride);
 void emitMset(mlir::OpBuilder &b, mlir::Location loc, uint64_t bankId,

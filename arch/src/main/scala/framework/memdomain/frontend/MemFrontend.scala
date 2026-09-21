@@ -60,7 +60,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val query_is_shared   = Output(Bool())
     val query_group_count = Input(UInt(b.memDomain.groupCountWidth.W))
 
-    val hartid = Input(UInt(b.core.xLen.W))
+    val hartid = Input(UInt(b.cpu.xLen.W))
 
     // Busy signal
     val busy = Output(Bool())

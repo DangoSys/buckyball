@@ -6,18 +6,16 @@ import framework.memdomain.configs.MemDomainParam
 import framework.frontend.configs.FrontendParam
 import framework.gpdomain.configs.GpDomainParam
 import framework.balldomain.configs.BallDomainParam
-import framework.system.core.configs.CoreParam
-import framework.system.core.rocket.configs.RocketCoreParam
-import framework.top.configs.TopConfig
+import framework.system.cpu.configs.CpuParam
+import framework.top.configs.SimParam
 
 case class GlobalConfig(
   memDomain:  MemDomainParam,
   frontend:   FrontendParam,
   gpDomain:   GpDomainParam,
   ballDomain: BallDomainParam,
-  core:       CoreParam,
-  top:        TopConfig,
-  rocketCore: RocketCoreParam)
+  cpu:        CpuParam,
+  sim:        SimParam)
     extends SerializableModuleParameter
 
 object GlobalConfig {
@@ -29,9 +27,8 @@ object GlobalConfig {
       frontend = FrontendParam(),
       gpDomain = GpDomainParam(),
       ballDomain = BallDomainParam(),
-      core = CoreParam(),
-      top = TopConfig(),
-      rocketCore = RocketCoreParam()
+      cpu = CpuParam(),
+      sim = SimParam()
     )
   }
 
