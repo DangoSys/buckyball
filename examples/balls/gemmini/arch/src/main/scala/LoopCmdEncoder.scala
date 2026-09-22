@@ -90,7 +90,7 @@ class LoopCmdEncoder(val b: GlobalConfig) extends Module {
         is(LoopSubCmdType.MVIN) {
           slot.cmd.domain_id                := DomainId.MEM
           slot.cmd.cmd.funct                := 0x21.U // MVIN (enable=010, opcode=1)
-          slot.cmd.cmd.rs1Data              := lsub.bits.bank_id | (lsub.bits.iter << 30)
+          slot.cmd.cmd.rs1Data              := (lsub.bits.bank_id << 20) | (lsub.bits.iter << 30)
           slot.cmd.cmd.rs2Data              := lsub.bits.dram_addr | (lsub.bits.stride << 39)
           slot.cmd.bankAccess.wr_bank_valid := true.B
           slot.cmd.bankAccess.wr_bank_id    := lsub.bits.bank_id

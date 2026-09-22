@@ -44,6 +44,7 @@ import framework.system.core.rocket.RocketBB
 import framework.system.core.rocket.id.RVVRoCCDecode
 import framework.system.core.accelerator.{BuckyballAccelerator, BuckyballRushBKey, RushBCommandBridge, RushBCoreId}
 import framework.memdomain.backend.MemRequestIO
+import framework.top.configs.SimParamKey
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.mem.MemConfigerIO
@@ -99,12 +100,15 @@ class BBTile private (
       "core-0 must enable buckyball because RoCC cmd/resp is currently wired to core-0 only"
     )
     val cfg0 = bbSharedConfig.get
-    require(cfg0.top.nCores == nCores, s"buckyball top.nCores (${cfg0.top.nCores}) must equal tile nCores ($nCores)")
+    require(
+      cfg0.memDomain.nCores == nCores,
+      s"buckyball memDomain.nCores (${cfg0.memDomain.nCores}) must equal tile nCores ($nCores)"
+    )
     bbEnabledCoreIds.foreach { i =>
       val cfg = bbPerCore(i).get
       require(
-        cfg.top.nCores == nCores,
-        s"core-$i buckyball top.nCores (${cfg.top.nCores}) must equal tile nCores ($nCores)"
+        cfg.memDomain.nCores == nCores,
+        s"core-$i buckyball memDomain.nCores (${cfg.memDomain.nCores}) must equal tile nCores ($nCores)"
       )
       require(cfg.memDomain.bankChannel == cfg0.memDomain.bankChannel, s"core-$i bankChannel mismatch")
       require(cfg.memDomain.dma_buswidth == cfg0.memDomain.dma_buswidth, s"core-$i dma_buswidth mismatch")
@@ -367,6 +371,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
   val nCores       = outer.nCores
   val rushBEnabled = outer.p(BuckyballRushBKey)
+  val simParam     = outer.p(SimParamKey)
 
   def coreParamsForCore(coreIdx: Int): BBTileParams =
     outer.bbParams.copy(core = outer.bbParams.rocketCoreForCore(coreIdx))
@@ -607,7 +612,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   if (outer.hasBuckyball) {
-    val cfg0          = outer.bbSharedConfig.get
+    val cfg0          = outer.bbSharedConfig.get.copy(sim = simParam)
     val sharedPerCore = SharedMemLayout.channelPerHart(cfg0)
 
     // Instantiate accelerators for enabled cores only
@@ -615,7 +620,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       outer.bbPerCore(i).map { cfg =>
         val (tl_reader, edge) = outer.bb_reader_nodes(i).get.out(0)
         val (tl_writer, _)    = outer.bb_writer_nodes(i).get.out(0)
-        val acc               = Module(new BuckyballAccelerator(cfg)(edge))
+        val acc               = Module(new BuckyballAccelerator(cfg.copy(sim = simParam))(edge))
         acc.io.hartid := hartIdForCore(i)
 
         tl_reader <> acc.io.tl_reader
@@ -633,7 +638,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
         if (rushBEnabled) {
           val source = Module(new RushBCommandBridge(
             RushBCoreId(outer.bbParams.tileId, i),
-            accelerator.b.core.xLen
+            accelerator.b.tile.xLen
           ))
           source.io.retired := accelerator.io.retired
           Some(source)
@@ -667,6 +672,12 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     if (cfg0.memDomain.sharedEnable) {
       // SharedMemBackend (tile-level singleton)
       val sharedBackend = Module(new SharedMemBackend(cfg0))
+
+      if (cfg0.sim.diffTest) {
+        for (acc <- enabledAccelerators) {
+          acc.io.shared_bank_hashes.get := sharedBackend.io.bank_hashes.get
+        }
+      }
 
       // Connect each accelerator's shared ports to the SharedMemBackend
       for (i <- 0 until nCores) {

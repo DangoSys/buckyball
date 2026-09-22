@@ -8,13 +8,17 @@ import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
 import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
+import framework.memdomain.backend.shared.SharedMemLayout
+import framework.memdomain.backend.banks.btrace.{BTraceDPI, PhysicalBankHash}
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
 
-  val robDepth     = b.frontend.rob_entries
-  val idWidth      = log2Up(robDepth)
-  val scoreBankNum = b.memDomain.virtualBankCount + robDepth
+  val robDepth          = b.frontend.rob_entries
+  val idWidth           = log2Up(robDepth)
+  val scoreBankNum      = b.memDomain.virtualBankCount + robDepth
+  val sharedHashCount   = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
+  val physicalBankCount = b.memDomain.bankNum + sharedHashCount
 
   require(
     b.frontend.vbank_id_upper_bound < b.memDomain.virtualBankCount,
@@ -23,6 +27,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
+    val hart_id  = Input(UInt(b.tile.xLen.W))
     val alloc    = Flipped(new DecoupledIO(new PostGDCmd(b)))
     val issue    = new DecoupledIO(new GlobalRobEntry(b))
     val complete = Flipped(new DecoupledIO(UInt(idWidth.W)))
@@ -35,6 +40,15 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val entry_complete = Output(Vec(robDepth, Bool()))
 
     val subRobActive = Input(Bool())
+    val inst_ids     = Output(Vec(robDepth, UInt(64.W)))
+
+    val bank_hashes =
+      if (b.sim.diffTest) {
+        Some(Input(Vec(physicalBankCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
+
   })
 
   // ---------------------------------------------------------------------------
@@ -59,19 +73,18 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val itraceComp  = Module(new ITraceDPI)
 
   for (t <- Seq(itraceAlloc, itraceIssue, itraceComp)) {
-    t.io.clock       := clock
-    t.io.reset       := reset.asBool
-    t.io.is_issue    := 0.U
-    t.io.rob_id      := 0.U
-    t.io.domain_id   := 0.U
-    t.io.funct       := 0.U
-    t.io.pc          := 0.U
-    t.io.rs1_idx     := 0.U
-    t.io.rs2_idx     := 0.U
-    t.io.rs1_data    := 0.U
-    t.io.rs2_data    := 0.U
-    t.io.bank_enable := 0.U
-    t.io.enable      := false.B
+    t.io.clock     := clock
+    t.io.reset     := reset.asBool
+    t.io.is_issue  := 0.U
+    t.io.hart_id   := io.hart_id
+    t.io.rob_id    := 0.U
+    t.io.inst_id   := 0.U
+    t.io.domain_id := 0.U
+    t.io.funct     := 0.U
+    t.io.pc        := 0.U
+    t.io.rs1_data  := 0.U
+    t.io.rs2_data  := 0.U
+    t.io.enable    := false.B
   }
 
   // ---------------------------------------------------------------------------
@@ -81,11 +94,23 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val robValid    = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
   val robIssued   = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
   val robComplete = RegInit(VecInit(Seq.fill(robDepth)(false.B)))
+  val instIds     = RegInit(VecInit(Seq.fill(robDepth)(0.U(64.W))))
+  val nextInstId  = RegInit(1.U(64.W))
+
+  val statusHashes =
+    if (b.sim.diffTest) {
+      Some(RegInit(VecInit(Seq.fill(robDepth)(VecInit(Seq.fill(3)(0.U(32.W)))))))
+    } else {
+      None
+    }
+
+  io.inst_ids := instIds
 
   val headPtr                = RegInit(0.U(idWidth.W))
   val tailPtr                = RegInit(0.U(idWidth.W))
   val issuedCount            = RegInit(0.U(log2Up(robDepth + 1).W))
-  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W))))
+  private val bankColWidth   = b.memDomain.groupCountWidth
+  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(bankColWidth.W))))
   // In-flight ownership is tracked in the architectural vbank namespace.
   private val vbankMaskWidth = b.memDomain.virtualBankCount
   val vbankBusy              = RegInit(0.U(vbankMaskWidth.W))
@@ -158,7 +183,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   for (i <- 0 until robDepth) {
     val ptr = robIdx(wrapPtr(headPtr + i.U))
     commitScan(i)     := commitKeep(i) && robValid(ptr) && robComplete(ptr)
-    commitKeep(i + 1) := commitScan(i)
+    commitKeep(i + 1) := (if (b.sim.diffTest) false.B else commitScan(i))
   }
   val hasCommit = commitScan.asUInt.orR
   val tailAlias = Wire(UInt(b.frontend.bank_id_len.W))
@@ -205,8 +230,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val olderUseMask   = entryRawReads(older) | entryRawWrites(older)
     val rawConflict    = ((allocReadMask & entryRawWrites(older)) |
       (allocWriteMask & olderUseMask)).orR
-    val configConflict = (allocIsConfig || entryIsConfig(older)) &&
-      ((allocReadMask | allocWriteMask) & olderUseMask).orR
+    val configConflict = (allocIsConfig && entryIsConfig(older)) ||
+      ((allocIsConfig || entryIsConfig(older)) && ((allocReadMask | allocWriteMask) & olderUseMask).orR)
     val sameBall       = allocIsBall &&
       robEntries(older).cmd.domain_id === DomainId.BALL &&
       robEntries(older).cmd.ball_bid === io.alloc.bits.ball_bid
@@ -217,33 +242,110 @@ class GlobalROB(val b: GlobalConfig) extends Module {
         (robValid(older) && configConflict)
   }
   val allocDependencies = allocDependencyBits.asUInt
+  val allocUsesInstId = io.alloc.bits.cmd.pc =/= 0.U
 
   when(io.alloc.fire) {
-    itraceAlloc.io.is_issue    := 2.U
-    itraceAlloc.io.rob_id      := tailPtr
-    itraceAlloc.io.domain_id   := io.alloc.bits.domain_id
-    itraceAlloc.io.funct       := io.alloc.bits.cmd.funct
-    itraceAlloc.io.pc          := io.alloc.bits.cmd.pc
-    itraceAlloc.io.rs1_idx     := io.alloc.bits.cmd.rs1
-    itraceAlloc.io.rs2_idx     := io.alloc.bits.cmd.rs2
-    itraceAlloc.io.rs1_data    := io.alloc.bits.cmd.rs1Data
-    itraceAlloc.io.rs2_data    := io.alloc.bits.cmd.rs2Data
-    itraceAlloc.io.bank_enable := io.alloc.bits.cmd.funct(6, 4)
-    itraceAlloc.io.enable      := true.B
+    itraceAlloc.io.is_issue  := 2.U
+    itraceAlloc.io.rob_id    := tailPtr
+    itraceAlloc.io.inst_id   := Mux(allocUsesInstId, nextInstId, 0.U)
+    itraceAlloc.io.domain_id := io.alloc.bits.domain_id
+    itraceAlloc.io.funct     := io.alloc.bits.cmd.funct
+    itraceAlloc.io.pc        := io.alloc.bits.cmd.pc
+    itraceAlloc.io.rs1_data  := io.alloc.bits.cmd.rs1Data
+    itraceAlloc.io.rs2_data  := io.alloc.bits.cmd.rs2Data
+    itraceAlloc.io.enable    := true.B
 
     robEntries(tailPtr).cmd               := io.alloc.bits
     robEntries(tailPtr).renamedBankAccess := bat.io.alloc_renamed
     robEntries(tailPtr).rob_id            := tailPtr
+    instIds(tailPtr)                      := Mux(allocUsesInstId, nextInstId, 0.U)
     robValid(tailPtr)                     := true.B
     robIssued(tailPtr)                    := false.B
     robComplete(tailPtr)                  := false.B
+    statusHashes.foreach { hashes =>
+      for (slot <- 0 until 3) {
+        hashes(tailPtr)(slot) := 0.U
+      }
+    }
     tailPtr                               := nextPtr(tailPtr)
+    when(allocUsesInstId) {
+      nextInstId := nextInstId + 1.U
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Complete: mark entry as completed, release scoreboard resources
   // ---------------------------------------------------------------------------
-  io.complete.ready := true.B
+  if (b.sim.diffTest) {
+    val collecting   = RegInit(false.B)
+    val collectCid   = Reg(UInt(idWidth.W))
+    val collectSlot  = Reg(UInt(2.W))
+    val collectGroup = Reg(UInt(32.W))
+    val currentHash  = Reg(UInt(32.W))
+    val hashReady    = RegInit(false.B)
+    val hashCid      = Reg(UInt(idWidth.W))
+
+    val incomingAccess    = robEntries(io.complete.bits).cmd.bankAccess
+    val incomingNeedsHash = instIds(io.complete.bits) =/= 0.U && !isMappingConfig(robEntries(io.complete.bits)) &&
+      (incomingAccess.rd_bank_0_valid || incomingAccess.rd_bank_1_valid || incomingAccess.wr_bank_valid)
+    io.complete.ready := !incomingNeedsHash || (hashReady && hashCid === io.complete.bits)
+
+    when(!collecting && !hashReady && io.complete.valid && incomingNeedsHash) {
+      collecting   := true.B
+      collectCid   := io.complete.bits
+      collectSlot  := Mux(incomingAccess.rd_bank_0_valid, 0.U, Mux(incomingAccess.rd_bank_1_valid, 1.U, 2.U))
+      collectGroup := 0.U
+      currentHash  := 0.U
+    }
+
+    val access      = robEntries(collectCid).cmd.bankAccess
+    val vbank       = MuxLookup(collectSlot, access.wr_bank_id)(Seq(
+      0.U -> access.rd_bank_0_id,
+      1.U -> access.rd_bank_1_id,
+      2.U -> access.wr_bank_id
+    ))
+    val hasNextSlot = MuxLookup(collectSlot, false.B)(Seq(
+      0.U -> (access.rd_bank_1_valid || access.wr_bank_valid),
+      1.U -> access.wr_bank_valid
+    ))
+    val nextSlot    = Mux(collectSlot === 0.U && access.rd_bank_1_valid, 1.U, 2.U)
+    val matches     = VecInit(io.bank_hashes.get.map { state =>
+      state.valid && state.hartId === io.hart_id && state.vbankId === vbank && state.groupId === collectGroup
+    })
+    val nextMatches = VecInit(io.bank_hashes.get.map { state =>
+      state.valid && state.hartId === io.hart_id && state.vbankId === vbank && state.groupId === collectGroup + 1.U
+    })
+    val physical    = Mux1H(matches, io.bank_hashes.get)
+    def rotateLeft(value: UInt, amount: Int): UInt = Cat(value(31 - amount, 0), value(31, 32 - amount))
+
+    val mixed    = physical.statusHash ^ rotateLeft(physical.groupId, 7) ^ "h9e3779b9".U
+    val nextHash = rotateLeft(currentHash, 5) ^ mixed ^ rotateLeft(mixed, 13)
+
+    when(collecting) {
+      assert(PopCount(matches) === 1.U, "BTrace requires exactly one physical bank per vbank group")
+      when(nextMatches.asUInt.orR) {
+        currentHash  := nextHash
+        collectGroup := collectGroup + 1.U
+      }.otherwise {
+        statusHashes.get(collectCid)(collectSlot) := nextHash
+        when(hasNextSlot) {
+          collectSlot  := nextSlot
+          collectGroup := 0.U
+          currentHash  := 0.U
+        }.otherwise {
+          collecting := false.B
+          hashReady  := true.B
+          hashCid    := collectCid
+        }
+      }
+    }
+
+    when(io.complete.fire) {
+      hashReady := false.B
+    }
+  } else {
+    io.complete.ready := true.B
+  }
 
   scoreboard.complete.valid := false.B
   scoreboard.complete.bits  := 0.U.asTypeOf(scoreboard.complete.bits)
@@ -257,17 +359,15 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.complete.valid := true.B
     scoreboard.complete.bits  := robEntries(cid).renamedBankAccess
 
-    itraceComp.io.is_issue    := 0.U
-    itraceComp.io.rob_id      := cid
-    itraceComp.io.domain_id   := robEntries(cid).cmd.domain_id
-    itraceComp.io.funct       := robEntries(cid).cmd.cmd.funct
-    itraceComp.io.pc          := robEntries(cid).cmd.cmd.pc
-    itraceComp.io.rs1_idx     := robEntries(cid).cmd.cmd.rs1
-    itraceComp.io.rs2_idx     := robEntries(cid).cmd.cmd.rs2
-    itraceComp.io.rs1_data    := robEntries(cid).cmd.cmd.rs1Data
-    itraceComp.io.rs2_data    := robEntries(cid).cmd.cmd.rs2Data
-    itraceComp.io.bank_enable := robEntries(cid).cmd.cmd.funct(6, 4)
-    itraceComp.io.enable      := true.B
+    itraceComp.io.is_issue  := 0.U
+    itraceComp.io.rob_id    := cid
+    itraceComp.io.inst_id   := instIds(cid)
+    itraceComp.io.domain_id := robEntries(cid).cmd.domain_id
+    itraceComp.io.funct     := robEntries(cid).cmd.cmd.funct
+    itraceComp.io.pc        := robEntries(cid).cmd.cmd.pc
+    itraceComp.io.rs1_data  := robEntries(cid).cmd.cmd.rs1Data
+    itraceComp.io.rs2_data  := robEntries(cid).cmd.cmd.rs2Data
+    itraceComp.io.enable    := true.B
   }
 
   val completedBitMask = Mux(
@@ -364,17 +464,15 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     scoreboard.issue.valid    := true.B
     scoreboard.issue.bits     := robEntries(actualIssuePtr).renamedBankAccess
 
-    itraceIssue.io.is_issue    := 1.U
-    itraceIssue.io.rob_id      := robEntries(actualIssuePtr).rob_id
-    itraceIssue.io.domain_id   := robEntries(actualIssuePtr).cmd.domain_id
-    itraceIssue.io.funct       := robEntries(actualIssuePtr).cmd.cmd.funct
-    itraceIssue.io.pc          := robEntries(actualIssuePtr).cmd.cmd.pc
-    itraceIssue.io.rs1_idx     := robEntries(actualIssuePtr).cmd.cmd.rs1
-    itraceIssue.io.rs2_idx     := robEntries(actualIssuePtr).cmd.cmd.rs2
-    itraceIssue.io.rs1_data    := robEntries(actualIssuePtr).cmd.cmd.rs1Data
-    itraceIssue.io.rs2_data    := robEntries(actualIssuePtr).cmd.cmd.rs2Data
-    itraceIssue.io.bank_enable := robEntries(actualIssuePtr).cmd.cmd.funct(6, 4)
-    itraceIssue.io.enable      := true.B
+    itraceIssue.io.is_issue  := 1.U
+    itraceIssue.io.rob_id    := robEntries(actualIssuePtr).rob_id
+    itraceIssue.io.inst_id   := instIds(actualIssuePtr)
+    itraceIssue.io.domain_id := robEntries(actualIssuePtr).cmd.domain_id
+    itraceIssue.io.funct     := robEntries(actualIssuePtr).cmd.cmd.funct
+    itraceIssue.io.pc        := robEntries(actualIssuePtr).cmd.cmd.pc
+    itraceIssue.io.rs1_data  := robEntries(actualIssuePtr).cmd.cmd.rs1Data
+    itraceIssue.io.rs2_data  := robEntries(actualIssuePtr).cmd.cmd.rs2Data
+    itraceIssue.io.enable    := true.B
   }
 
   // Preserve the original update ordering when issue and complete coincide:
@@ -401,10 +499,21 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     commitMask(i) := hits.reduce(_ || _)
     when(commitMask(i)) {
       when(robEntries(i).cmd.domain_id === DomainId.MEM && robEntries(i).cmd.cmd.funct === MSET_BITPAT) {
-        val bank = robEntries(i).cmd.bankAccess.wr_bank_id(b.memDomain.vbankIdWidth - 1, 0)
-        val col  = robEntries(i).cmd.cmd.rs2Data(9, 5)
+        val bankId = robEntries(i).cmd.bankAccess.wr_bank_id
+        val bank   = bankId(b.memDomain.vbankIdWidth - 1, 0)
+        val col    = robEntries(i).cmd.cmd.rs2Data(9, 5)
         when(robEntries(i).cmd.cmd.rs2Data(10)) {
-          bankCols(bank) := Mux(col === 0.U, b.memDomain.bankNum.U, col)
+          val fullCol =
+            if (b.memDomain.sharedEnable) {
+              Mux(
+                bankId >= b.frontend.shared_bank_id_base.U && bankId < b.memDomain.virtualBankCount.U,
+                SharedMemLayout.totalBank(b).U(bankColWidth.W),
+                b.memDomain.bankNum.U(bankColWidth.W)
+              )
+            } else {
+              b.memDomain.bankNum.U(bankColWidth.W)
+            }
+          bankCols(bank) := Mux(col === 0.U, fullCol, col)
         }.otherwise {
           bankCols(bank) := 0.U
         }
@@ -413,6 +522,25 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       robIssued(i)   := false.B
       robComplete(i) := false.B
     }
+  }
+
+  if (b.sim.diffTest) {
+    val commitIndex  = PriorityEncoder(commitMask.asUInt)
+    val commitAccess = robEntries(commitIndex).cmd.bankAccess
+    val invalidVbank = "hffffffff".U(32.W)
+    val btrace       = Module(new BTraceDPI)
+    btrace.io.clock   := clock
+    btrace.io.reset   := reset.asBool
+    btrace.io.instId  := instIds(commitIndex)
+    btrace.io.hartId  := io.hart_id
+    btrace.io.r0Vbank := Mux(commitAccess.rd_bank_0_valid, commitAccess.rd_bank_0_id, invalidVbank)
+    btrace.io.r0Hash  := Mux(commitAccess.rd_bank_0_valid, statusHashes.get(commitIndex)(0), 0.U)
+    btrace.io.r1Vbank := Mux(commitAccess.rd_bank_1_valid, commitAccess.rd_bank_1_id, invalidVbank)
+    btrace.io.r1Hash  := Mux(commitAccess.rd_bank_1_valid, statusHashes.get(commitIndex)(1), 0.U)
+    btrace.io.w0Vbank := Mux(commitAccess.wr_bank_valid, commitAccess.wr_bank_id, invalidVbank)
+    btrace.io.w0Hash  := Mux(commitAccess.wr_bank_valid, statusHashes.get(commitIndex)(2), 0.U)
+    btrace.io.fire    := hasCommit && instIds(commitIndex) =/= 0.U && !isMappingConfig(robEntries(commitIndex)) &&
+      (commitAccess.rd_bank_0_valid || commitAccess.rd_bank_1_valid || commitAccess.wr_bank_valid)
   }
 
   // Maintain dependency masks at the same architectural events that gate the
@@ -446,4 +574,5 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   io.issued_count   := issuedCount
   io.entry_valid    := robValid
   io.entry_complete := robComplete
+
 }

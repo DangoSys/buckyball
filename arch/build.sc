@@ -11,12 +11,13 @@ object protoJava extends JavaModule {
     os.pwd / os.up / "bbdev" / "api" / "steps" / "config" / "scripts" / "proto"
   }
 
+  def protoSources = T.sources {
+    Seq(PathRef(protoDir() / "chip.proto"))
+  }
+
   def generatedSources = T {
     val dir = protoDir()
-    val proto = dir / "chip.proto"
-    if (!os.exists(proto)) {
-      throw new Exception(s"missing chip.proto: $proto")
-    }
+    val proto = protoSources().head.path
     os.proc("protoc", s"-I$dir", s"--java_out=${T.dest}", proto).call()
     Seq(PathRef(T.dest))
   }
@@ -53,14 +54,9 @@ object bank extends FrameworkModule {
   override def moduleDeps = Seq(axis)
 }
 
-object cache extends FrameworkModule {
-  override def moduleRoot = frameworkRoot / "mem-core" / "cache"
-  override def moduleDeps = Seq(chi)
-}
-
 object coherence extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
-  override def moduleDeps = Seq(chi, cache)
+  override def moduleDeps = Seq(chi)
 }
 
 object rvv extends FrameworkModule {
@@ -75,7 +71,7 @@ object seed extends FrameworkModule {
 
 object root_chip extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "root" / "root-chip"
-  override def moduleDeps = Seq(axis, chi, bank, coherence, cache)
+  override def moduleDeps = Seq(axis, chi, bank, coherence)
 }
 
 object root_core extends FrameworkModule {
@@ -109,7 +105,6 @@ object buckyball extends SbtModule { m =>
     chi,
     bank,
     coherence,
-    cache,
     rvv,
     seed,
     root_chip,

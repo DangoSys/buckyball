@@ -5,7 +5,7 @@
 
 #define BB_MVIN_2D_FUNC7 34
 
-// rs1: bank id and tile height.
+// rs1: write bank in BANK2 and tile height.
 // rs2: [31:0] address, [38:32] physical pixel bytes / 8,
 //      [48:39] source width, [54:49] destination row base,
 //      [57:55] tile width - 1, [61:58] valid bytes (0 encodes 16).
@@ -14,7 +14,7 @@
   do {                                                                         \
     bb_dma_cache_flush();                                                      \
     BUCKYBALL_INSTRUCTION_R_R(                                                 \
-        (BB_BANK0(bank_id) | BB_ITER(height)),                                 \
+        (BB_BANK2(bank_id) | BB_ITER(height)),                                 \
         (FIELD(mem_addr, 0, 31) | FIELD((pixel_bytes) / 8, 32, 38) |           \
          FIELD(source_width, 39, 48) | FIELD(dst_base, 49, 54) |               \
          FIELD((tile_width) - 1, 55, 57) |                                     \

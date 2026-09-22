@@ -1,5 +1,5 @@
-class checker extends uvm_component;
-  `uvm_component_utils(checker)
+class arbiter_checker extends uvm_component;
+  `uvm_component_utils(arbiter_checker)
 
   virtual arbiter_if vif;
   chandle model;

@@ -121,6 +121,12 @@ Value packRs1BankIter(OpBuilder &b, Location loc, Value bankId, Value depth) {
   return packRs1BanksIter(b, loc, bankId, z, z, depth);
 }
 
+Value packRs1WriteBankIter(OpBuilder &b, Location loc, Value bankId,
+                           Value depth) {
+  Value z = cstI64(b, loc, 0);
+  return packRs1BanksIter(b, loc, z, z, bankId, depth);
+}
+
 Value packRs2MemStride(OpBuilder &b, Location loc, Value memAddr,
                        Value stride) {
   Value mem =
@@ -278,8 +284,8 @@ struct BuckyballMvinLowering : public ConvertOpToLLVMPattern<MvinOp> {
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
     if (!rushB)
       emitDmaCacheFlush(rewriter, loc);
-    Value rs1 =
-        packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getDepth());
+    Value rs1 = packRs1WriteBankIter(rewriter, loc, adaptor.getAddr(),
+                                     adaptor.getDepth());
     Value rs2 =
         packRs2MemStride(rewriter, loc, memref.address, adaptor.getStride());
     if (rushB) {
@@ -306,8 +312,8 @@ struct BuckyballMvin2dLowering : public ConvertOpToLLVMPattern<Mvin2dOp> {
     Location loc = op.getLoc();
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
     emitDmaCacheFlush(rewriter, loc);
-    Value rs1 =
-        packRs1BankIter(rewriter, loc, adaptor.getAddr(), adaptor.getHeight());
+    Value rs1 = packRs1WriteBankIter(rewriter, loc, adaptor.getAddr(),
+                                     adaptor.getHeight());
     Value address = rewriter.create<arith::AndIOp>(
         loc, memref.address, cstI64(rewriter, loc, 0xffff'ffffULL));
     Value pixel = rewriter.create<arith::AndIOp>(loc, adaptor.getPixelBytes(),

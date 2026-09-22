@@ -1,5 +1,13 @@
 # multi-rocket Tile (48 Rocket-only cores)
 
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
 [privateDCache]
 enable = true
 ways = 4

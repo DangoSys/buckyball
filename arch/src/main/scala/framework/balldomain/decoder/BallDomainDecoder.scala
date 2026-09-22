@@ -22,9 +22,11 @@ class BallDomainDecoder(val b: GlobalConfig) extends Module {
   val iterLen   = b.frontend.iter_len
 
   @public
-  val cmd_i             = IO(Flipped(Decoupled(new PostGDCmd(b))))
+  val cmd_i = IO(Flipped(Decoupled(new PostGDCmd(b))))
+
   @public
-  val ball_decode_cmd_o = IO(Decoupled(new BallDecodeCmd(b.memDomain.virtualBankCount, iterLen)))
+  val ball_decode_cmd_o =
+    IO(Decoupled(new BallDecodeCmd(b.memDomain.virtualBankCount, iterLen, b.memDomain.groupCountWidth)))
 
   cmd_i.ready := ball_decode_cmd_o.ready
 

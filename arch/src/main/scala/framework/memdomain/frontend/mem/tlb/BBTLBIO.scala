@@ -146,12 +146,12 @@ class BBPMP(val paddrBits: Int) extends Bundle {
 
 // PTW IO
 class BBTLBPTWIO(val b: GlobalConfig) extends Bundle {
-  val vaddrBits = b.core.vaddrBits
-  val paddrBits = b.core.paddrBits
-  val pgIdxBits = b.core.pgIdxBits
-  val xLen      = b.core.xLen
-  val pgLevels  = b.rocketCore.pgLevels
-  val nPMPs     = b.core.nPMPs
+  val vaddrBits = b.tile.vaddrBits
+  val paddrBits = b.tile.paddrBits
+  val pgIdxBits = b.tile.pgIdxBits
+  val xLen      = b.tile.xLen
+  val pgLevels  = b.tile.pgLevels
+  val nPMPs     = b.tile.nPMPs
 
   val req        = Decoupled(Valid(new BBTLBPTWReq(vaddrBits, pgIdxBits)))
   val resp       = Flipped(Valid(new BBTLBPTWResp(vaddrBits, paddrBits, pgIdxBits, pgLevels)))
@@ -167,7 +167,7 @@ class BBTLBPTWIO(val b: GlobalConfig) extends Bundle {
 
 // TLB Client IO (used in TLBCluster)
 class BBTLBIO(val b: GlobalConfig) extends Bundle {
-  val lgMaxSize = log2Ceil(b.core.coreDataBytes)
-  val req       = Flipped(Decoupled(new BBTLBReq(lgMaxSize, b.core.vaddrBits, b.core.xLen)))
-  val resp      = Decoupled(new BBTLBResp(lgMaxSize, b.core.paddrBits, b.core.vaddrBits))
+  val lgMaxSize = log2Ceil(b.tile.coreDataBytes)
+  val req       = Flipped(Decoupled(new BBTLBReq(lgMaxSize, b.tile.vaddrBits, b.tile.xLen)))
+  val resp      = Decoupled(new BBTLBResp(lgMaxSize, b.tile.paddrBits, b.tile.vaddrBits))
 }

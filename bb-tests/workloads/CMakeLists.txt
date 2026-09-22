@@ -244,6 +244,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
     if(RUSHB_BACKEND STREQUAL "bemu")
       set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_BEMU_LIBRARY})
       set(RUSHB_LIBRARY_NAME bebop_bemu)
+      set(RUSHB_BACKEND_DEFINE -DBUCKYBALL_RUSHB_BEMU)
       set(RUSHB_BUILD_RUNTIME
         COMMAND ${CMAKE_COMMAND} -E env
                 --unset=CC --unset=CXX
@@ -253,6 +254,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
     else()
       set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_VERILATOR_LIBRARY})
       set(RUSHB_LIBRARY_NAME bebop_verilator)
+      set(RUSHB_BACKEND_DEFINE -DBUCKYBALL_RUSHB_VERILATOR)
       set(RUSHB_BUILD_RUNTIME)
       set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_VERILATOR_LIBRARY})
     endif()
@@ -297,6 +299,7 @@ function(add_buckyball_rushb_native TARGET_NAME)
       OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_BUILD_DIR}
       COMMAND ${RUSHB_COMPILER} -no-pie ${RUSHB_STANDARD} -O2 -DBUCKYBALL_RUSHB
+              ${RUSHB_BACKEND_DEFINE}
               -DBUCKYBALL_RUSHB_CORE_ID=${ARG_CORE_ID}
               ${RUSHB_INCLUDE_ARGS}
               ${ARG_SOURCES} ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c

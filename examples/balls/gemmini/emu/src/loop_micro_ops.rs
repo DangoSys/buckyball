@@ -1,15 +1,13 @@
 use super::decode;
-use super::instruction::ExecContext;
+use super::f53_gemmini_preload::GemminiPreload;
+use super::f66_gemmini_compute_preloaded::GemminiComputePreloaded;
+use super::f67_gemmini_compute_accumulated::GemminiComputeAccumulated;
+use super::instruction::{BallInstruction, ExecContext};
 
 const FUNCT_MVOUT: u32 = 16;
 const FUNCT_MSET: u32 = 32;
 const FUNCT_MVIN: u32 = 33;
 const MAX_DMA_STRIDE: u64 = (1 << 19) - 1;
-
-fn ball_funct(mnemonic: &str) -> u32 {
-    crate::config::ball_domain::funct_for_mnemonic(mnemonic)
-        .unwrap_or_else(|| panic!("Gemmini mnemonic {mnemonic} is not declared in Core ballISA"))
-}
 
 fn execute(funct: u32, xs1: u64, xs2: u64, ctx: &mut ExecContext) {
     decode::execute_known(funct, xs1, xs2, ctx)
@@ -59,7 +57,7 @@ pub fn alloc(ctx: &mut ExecContext, bank: u64, groups: u64) {
 }
 
 pub fn mvin(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64) {
-    execute(FUNCT_MVIN, banks(bank, 0, 0, iter), dma(addr, stride), ctx);
+    execute(FUNCT_MVIN, banks(0, 0, bank, iter), dma(addr, stride), ctx);
 }
 
 pub fn mvout(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64) {
@@ -67,7 +65,7 @@ pub fn mvout(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64
 }
 
 pub fn preload(ctx: &mut ExecContext, source: u64, output: u64, iter: u64) {
-    execute(ball_funct("GEMMINI_PRELOAD"), banks(source, 0, output, iter), 1, ctx);
+    GemminiPreload::exec(banks(source, 0, output, iter), 1, ctx);
 }
 
 pub fn compute(
@@ -80,16 +78,16 @@ pub fn compute(
     zero_op2: bool,
     zero_op1_tail: bool,
 ) {
-    let funct = if accumulated {
-        ball_funct("GEMMINI_COMPUTE_ACCUMULATED")
-    } else {
-        ball_funct("GEMMINI_COMPUTE_PRELOADED")
-    };
     let mode = if accumulated { 3 } else { 2 };
     let xs2 = mode | ((zero_op2 as u64) << 4) | ((zero_op1_tail as u64) << 5);
-    execute(funct, banks(op1, op2, output, iter), xs2, ctx);
+    let xs1 = banks(op1, op2, output, iter);
+    if accumulated {
+        GemminiComputeAccumulated::exec(xs1, xs2, ctx);
+    } else {
+        GemminiComputePreloaded::exec(xs1, xs2, ctx);
+    }
 }
 
-pub fn free_after_digest(ctx: &mut ExecContext, bank: u64) {
+pub fn free_after_hash(ctx: &mut ExecContext, bank: u64) {
     ctx.defer_bank_free(bank);
 }

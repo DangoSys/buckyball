@@ -1,6 +1,5 @@
 # Rocket-only core configuration
 
-kind = "rocket"
 memdomain = "memdomains/default.toml"
 balldomain = "balldomains/default.toml"
-rocketCore = "rocketCore.toml"
+cpu = "cpu/default.toml"

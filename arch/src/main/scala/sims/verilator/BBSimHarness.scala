@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config.{Config, Parameters}
 
 import chipyard.harness.{HarnessBinder, HasHarnessInstantiators}
 import chipyard.iobinders.AXI4MemPort
+import framework.top.configs.{SimParam, WithSimParam}
 import sims.scu.WithSCU
 
 class WithBBSimMem
@@ -36,7 +37,8 @@ class WithBBSimMem
 // =============================================================================
 class BBSimConfig(maxHarts: Int = 64)
     extends Config(
-      new WithSCU(maxHarts = maxHarts) ++
+      new WithSimParam(SimParam()) ++
+        new WithSCU(maxHarts = maxHarts) ++
         new WithBBSimMem ++
         new chipyard.config.WithUniformBusFrequencies(1000.0) ++
         new chipyard.harness.WithTieOffInterrupts ++

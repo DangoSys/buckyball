@@ -43,8 +43,18 @@ jobs:
           set -euo pipefail
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+
+          # fetch first to ensure if we modify ci_repo_lock.sh, we still use the old version to checkout.
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+
+          nix build
+          cd "${root}/bbdev"
+          nix develop -c true
+          cd "${root}/bebop"
+          nix develop -c true
 
       - name: Check pre-commit
         shell: zsh {0}
@@ -111,7 +121,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Nix build
@@ -158,9 +170,9 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
           nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --diff --clean-before'
 
       - name: rushB batch
         if: matrix.enable_rushb && matrix.run_bemu_elf_tests && matrix.run_bemu_pk_tests && matrix.run_verilator_batch_tests
