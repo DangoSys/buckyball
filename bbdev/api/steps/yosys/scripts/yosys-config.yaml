@@ -2,8 +2,7 @@
 # Users can customize liberty library paths and synthesis options here
 
 # Liberty (.lib) file path for ASIC area estimation
-# If not specified, yosys will use generic gate-level statistics. A technology
-# owner may set YOSYS_LIBERTY in the host environment.
+# If not specified, yosys will use generic gate-level statistics.
 liberty:
 
 # Default top module name (override with --top on CLI)

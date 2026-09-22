@@ -21,13 +21,6 @@ from utils.workers import assert_sole_workspace_workers, motia_worker_count, wri
 workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
 workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-NO_PROXY = {"http": None, "https": None, "all": None}
-WORKER_PORT_START = 49200
-WORKER_PORT_END = 49500
-HTTP_PORT_START = 5100
-HTTP_PORT_END = 5500
-SERVER_START_LOCK = os.path.join(workflow_dir, "data", "server-start.lock")
-
 # Subcommand definitions: {name: {operation: help_text, ...}}
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
 WORKFLOW_COMMANDS = {
@@ -118,12 +111,6 @@ WORKFLOW_COMMANDS = {
     },
 }
 
-ALL_COMMANDS = ["start", "stop"] + list(WORKFLOW_COMMANDS)
-
-
-MOTIA_EXEC = "PYTHONUNBUFFERED=1 PYTHONPATH=. .venv/bin/motia dev --dir steps"
-
-
 def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_module: bool = True) -> str:
     """Create a temporary config.yaml with unique HTTP and Worker ports, return the path."""
     base_config = os.path.join(workflow_dir, "config.yaml")
@@ -145,11 +132,12 @@ def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_modul
             raise RuntimeError("failed to remove ExecModule from iii config")
         content = content.split(marker, 1)[0].rstrip() + "\n"
     else:
-        single = f"      exec:\n        - {MOTIA_EXEC}\n"
+        motia_exec = "PYTHONUNBUFFERED=1 PYTHONPATH=. .venv/bin/motia dev --dir steps"
+        single = f"      exec:\n        - {motia_exec}\n"
         if single not in content:
             raise RuntimeError("failed to expand Motia worker exec list in iii config")
         n = motia_worker_count()
-        multi = "      exec:\n" + "".join(f"        - {MOTIA_EXEC}\n" for _ in range(n))
+        multi = "      exec:\n" + "".join(f"        - {motia_exec}\n" for _ in range(n))
         content = content.replace(single, multi, 1)
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", prefix="iii-config-", dir=workflow_dir, delete=False
@@ -363,7 +351,9 @@ def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
     """Poll an HTTP endpoint until check_fn(response) returns True, or timeout."""
     for _ in range(timeout):
         try:
-            resp = requests.get(url, timeout=1, proxies=NO_PROXY)
+            resp = requests.get(
+                url, timeout=1, proxies={"http": None, "https": None, "all": None}
+            )
             if check_fn(resp):
                 return True
         except requests.exceptions.ConnectionError:
@@ -376,29 +366,6 @@ def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
 
 # If you find that bbdev has failed without any logs, 
 # you can disable these log filters. These contain the bbdev runtime logs.
-_ENGINE_INFRA_MODULES = (
-    "iii::modules::worker",
-    "iii::modules::config",
-    "iii::modules::rest_api",
-    "iii::modules::api",
-    "iii::modules::queue",
-    "iii::modules::state",
-    "iii::modules::pubsub",
-    "iii::modules::shell",
-    "iii::modules::telemetry",
-    "iii::builtins",
-    "iii::trigger",
-    "iii::function",
-    "function_name",
-    "service_name",
-    "iii::services",
-    "iii::workers",
-    "motia.runtime",
-    "motia.tracing",
-    "motia.cli",
-)
-
-
 def forward_iii_output(pipe, active_event: threading.Event, quiet: bool = False):
     """Forward task output to stdout. In quiet mode, suppress engine infrastructure logs."""
     for line in iter(pipe.readline, ""):
@@ -406,7 +373,30 @@ def forward_iii_output(pipe, active_event: threading.Event, quiet: bool = False)
             continue
         if quiet:
             # Suppress engine infrastructure INFO/WARN; pass everything else
-            if any(mod in line for mod in _ENGINE_INFRA_MODULES):
+            if any(
+                module in line
+                for module in (
+                    "iii::modules::worker",
+                    "iii::modules::config",
+                    "iii::modules::rest_api",
+                    "iii::modules::api",
+                    "iii::modules::queue",
+                    "iii::modules::state",
+                    "iii::modules::pubsub",
+                    "iii::modules::shell",
+                    "iii::modules::telemetry",
+                    "iii::builtins",
+                    "iii::trigger",
+                    "iii::function",
+                    "function_name",
+                    "service_name",
+                    "iii::services",
+                    "iii::workers",
+                    "motia.runtime",
+                    "motia.tracing",
+                    "motia.cli",
+                )
+            ):
                 continue
             sys.stdout.write(line)
             sys.stdout.flush()
@@ -437,15 +427,16 @@ def run_server_mode(args, cmd_info):
             print("Error: --server start requires --port", file=sys.stderr)
             sys.exit(2)
         load_host_environment()
-        preferred_worker = user_preferred_port(WORKER_PORT_START, WORKER_PORT_END)
+        worker_port_start, worker_port_end = 49200, 49500
+        preferred_worker = user_preferred_port(worker_port_start, worker_port_end)
         worker_port, worker_sock = reserve_port(
-            start_port=WORKER_PORT_START,
-            end_port=WORKER_PORT_END,
+            start_port=worker_port_start,
+            end_port=worker_port_end,
             preferred_port=preferred_worker,
         )
         worker_sock.close()
         config_path = make_iii_config(args.port, worker_port)
-        worker_url = f"ws://{HOST}:{worker_port}"
+        worker_url = f"ws://127.0.0.1:{worker_port}"
         print(f"Using worker port {worker_port} (preferred {preferred_worker})")
         proc = None
         try:
@@ -454,7 +445,6 @@ def run_server_mode(args, cmd_info):
             env = {
                 **os.environ,
                 "PYTHONDONTWRITEBYTECODE": "1",
-                "BUCKYBALL_ROOT": repo_root,
                 "III_URL": worker_url,
             }
             proc = subprocess.Popen(
@@ -510,29 +500,29 @@ def run_server_mode(args, cmd_info):
     elif command in WORKFLOW_COMMANDS:
         api_path = f"/{command.replace('-', '/')}/{cmd_info['operation']}"
         resp = requests.post(
-            f"http://{HOST}:{args.port}{api_path}",
+            f"http://127.0.0.1:{args.port}{api_path}",
             json=cmd_info["args"],
             timeout=30,
-            proxies=NO_PROXY,
+            proxies={"http": None, "https": None, "all": None},
         )
         print(resp.text)
 
     else:
         print(f"Unknown command: {command}")
-        print(f"Available commands: {', '.join(ALL_COMMANDS)}")
+        print(f"Available commands: {', '.join(['start', 'stop', *WORKFLOW_COMMANDS])}")
         sys.exit(1)
 
 
 def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
     """Submit a task to iii and poll for its result. Returns exit code (0=ok, 1=fail)."""
-    base_url = f"http://{HOST}:{port}"
+    base_url = f"http://127.0.0.1:{port}"
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
     try:
         submit_resp = requests.post(
             f"{base_url}{api_path}",
             json=cmd_info["args"],
             timeout=30,
-            proxies=NO_PROXY,
+            proxies={"http": None, "https": None, "all": None},
         )
         submit_data = submit_resp.json()
     except Exception as e:
@@ -579,7 +569,7 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
         print("Error: Task polling timed out after 24 hours")
         return 1
 
-    print(f"\nTask completed on http://{HOST}:{port}")
+    print(f"\nTask completed on http://127.0.0.1:{port}")
     if task_result and not task_result.get("success", False):
         err = task_result.get("error") or task_result
         print(f"Error: Task failed: {err}")
@@ -604,7 +594,7 @@ def run_script_mode(args, cmd_info):
 
     if command not in WORKFLOW_COMMANDS:
         print(f"Unknown command: {command}")
-        print(f"Available commands: {', '.join(ALL_COMMANDS)}")
+        print(f"Available commands: {', '.join(['start', 'stop', *WORKFLOW_COMMANDS])}")
         sys.exit(1)
 
     load_host_environment()
@@ -614,9 +604,13 @@ def run_script_mode(args, cmd_info):
     # Serialize only engine startup. The reservation socket must be released before
     # iii can bind it, so without this lock another bbdev can select the same port
     # during that handoff.
-    os.makedirs(os.path.dirname(SERVER_START_LOCK), exist_ok=True)
-    server_start_lock = open(SERVER_START_LOCK, "w")
+    server_start_lock_path = os.path.join(workflow_dir, "data", "server-start.lock")
+    os.makedirs(os.path.dirname(server_start_lock_path), exist_ok=True)
+    server_start_lock = open(server_start_lock_path, "w")
     fcntl.flock(server_start_lock, fcntl.LOCK_EX)
+
+    http_port_start, http_port_end = 5100, 5500
+    worker_port_start, worker_port_end = 49200, 49500
 
     # Reserve both ports atomically to prevent TOCTOU races with concurrent bbdev instances.
     # Sockets stay bound until the engine has taken over (HTTP is up), then are released.
@@ -625,14 +619,14 @@ def run_script_mode(args, cmd_info):
         http_sock = None
     else:
         available_port, http_sock = reserve_port(
-            start_port=HTTP_PORT_START,
-            end_port=HTTP_PORT_END,
-            preferred_port=user_preferred_port(HTTP_PORT_START, HTTP_PORT_END),
+            start_port=http_port_start,
+            end_port=http_port_end,
+            preferred_port=user_preferred_port(http_port_start, http_port_end),
         )
     worker_port, worker_sock = reserve_port(
-        start_port=WORKER_PORT_START,
-        end_port=WORKER_PORT_END,
-        preferred_port=user_preferred_port(WORKER_PORT_START, WORKER_PORT_END),
+        start_port=worker_port_start,
+        end_port=worker_port_end,
+        preferred_port=user_preferred_port(worker_port_start, worker_port_end),
     )
     print(f"Starting server on port {available_port}...")
 
@@ -667,11 +661,10 @@ def run_script_mode(args, cmd_info):
     # Set III_URL so motia SDK connects to the correct worker port
     iii_env = {
         **os.environ,
-        "III_URL": f"ws://{HOST}:{worker_port}",
+        "III_URL": f"ws://127.0.0.1:{worker_port}",
         "PYTHONUNBUFFERED": "1",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "BUCKYBALL_ROOT": repo_root,
     }
     worker_procs = []
     proc = subprocess.Popen(
@@ -691,7 +684,7 @@ def run_script_mode(args, cmd_info):
     output_thread.start()
 
     try:
-        base_url = f"http://{HOST}:{available_port}"
+        base_url = f"http://127.0.0.1:{available_port}"
 
         # Phase 1: wait for iii engine HTTP
         if not wait_for_http(
