@@ -24,15 +24,13 @@ config = {
 }
 
 
-POWER_TOTAL_RE = re.compile(
-    r"^Total\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)",
-    re.M,
-)
-
-
 def dynamic_power_report(power_report: str, activity_source: str) -> tuple[str, float] | None:
     """Return OpenSTA's internal-plus-switching power, excluding leakage."""
-    match = POWER_TOTAL_RE.search(power_report)
+    match = re.search(
+        r"^Total\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)",
+        power_report,
+        re.M,
+    )
     if match is None:
         return None
     internal, switching, _leakage, _total = (float(value) for value in match.groups())
@@ -77,7 +75,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     yosys_cfg = load_yosys_config()
     top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
-    liberty = yosys_cfg.get("liberty") or os.environ.get("YOSYS_LIBERTY")
+    liberty = yosys_cfg.get("liberty")
     if isinstance(liberty, str):
         liberty = os.path.expandvars(os.path.expanduser(liberty))
 

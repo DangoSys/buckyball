@@ -9,15 +9,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-_SCRIPTS = Path(__file__).resolve().parent
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import chip_pb2 as pb  # noqa: E402
 
 
 def _load_derive():
-    path = _SCRIPTS / "2_parameter_derivation.py"
+    path = Path(__file__).resolve().with_name("2_parameter_derivation.py")
     spec = importlib.util.spec_from_file_location("parameter_derivation", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
@@ -104,9 +103,7 @@ def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
         e.bid = item["bid"]
 
 
-def _fill_rocket(msg: pb.RocketCoreConfig, d: dict[str, Any]) -> None:
-    msg.x_len = d["xLen"]
-    msg.pg_levels = d["pgLevels"]
+def _fill_rocket(msg: pb.RocketCpuConfig, d: dict[str, Any]) -> None:
     msg.use_vm = d["useVM"]
     msg.use_zba = d["useZba"]
     msg.use_zbb = d["useZbb"]
@@ -134,7 +131,7 @@ def _fill_rocket(msg: pb.RocketCoreConfig, d: dict[str, Any]) -> None:
     msg.btb.n_ras = btb["nRAS"]
 
 
-def _fill_boom(msg: pb.BoomCoreConfig, d: dict[str, Any]) -> None:
+def _fill_boom(msg: pb.BoomCpuConfig, d: dict[str, Any]) -> None:
     msg.fetch_width = d["fetchWidth"]
     msg.decode_width = d["decodeWidth"]
     msg.num_rob_entries = d["numRobEntries"]
@@ -147,25 +144,12 @@ def _fill_boom(msg: pb.BoomCoreConfig, d: dict[str, Any]) -> None:
     msg.icache.n_ways = ic["nWays"]
 
 
-def _check_core_kind(raw: dict[str, Any], pkg: str) -> str:
-    kind = raw.get("kind")
+def _check_cpu_kind(cpu: dict[str, Any], pkg: str) -> str:
+    kind = cpu.get("kind")
     if kind not in ("rocket", "boom"):
         raise ValueError(f"{pkg}: kind must be 'rocket' or 'boom', got {kind!r}")
-    has_rocket = "rocketCore" in raw
-    has_boom = "boomCore" in raw
-    if kind == "rocket":
-        if not has_rocket:
-            raise ValueError(f"{pkg}: kind=rocket requires rocketCore")
-        if has_boom:
-            raise ValueError(f"{pkg}: kind=rocket forbids boomCore")
-    else:
-        if not has_boom:
-            raise ValueError(f"{pkg}: kind=boom requires boomCore")
-        if has_rocket:
-            raise ValueError(f"{pkg}: kind=boom forbids rocketCore")
-        bd = raw.get("balldomain")
-        if isinstance(bd, dict) and bd.get("ballNum", 0):
-            raise ValueError(f"{pkg}: kind=boom forbids balldomain.ballNum > 0")
+    if not isinstance(cpu.get("config"), dict):
+        raise ValueError(f"{pkg}: cpu.config must reference a TOML file")
     return kind
 
 
@@ -191,13 +175,13 @@ def _fill_gp(msg: pb.GpDomainConfig, d: dict[str, Any], bbdir: Path) -> None:
     msg.lane_scale = d["laneScale"]
 
 
-def _fill_core_param(msg: pb.CoreParamConfig, d: dict[str, Any], bbdir: Path) -> None:
-    msg.source_path = _rel(bbdir, d["_file"])
+def _fill_tile_params(msg: pb.TileParamConfig, d: dict[str, Any]) -> None:
     msg.core_data_bytes = d["coreDataBytes"]
     msg.x_len = d["xLen"]
     msg.vaddr_bits = d["vaddrBits"]
     msg.paddr_bits = d["paddrBits"]
     msg.pg_idx_bits = d["pgIdxBits"]
+    msg.pg_levels = d["pgLevels"]
     msg.n_pmps = d["nPMPs"]
 
 
@@ -207,22 +191,25 @@ def _fill_core(ci: pb.CoreInstance, raw: dict[str, Any], meta: dict[str, Any], b
     ci.pkg = meta["pkg"]
     ci.config_path = meta["config_path"]
     ci.balldomain_base_dir = meta["balldomain_base_dir"]
-    kind = _check_core_kind(raw, meta["pkg"])
-    ci.kind = kind
+    cpu = raw["cpu"]
+    kind = _check_cpu_kind(cpu, meta["pkg"])
+    ci.cpu.kind = kind
+    ci.cpu.source_path = _rel(bbdir, cpu["_file"])
     if "balldomain" in raw:
         _fill_ball(ci.balldomain, raw["balldomain"], bbdir)
     if "memdomain" in raw:
         _fill_mem(ci.mem, raw["memdomain"], bbdir)
     if kind == "rocket":
-        _fill_rocket(ci.rocket_core, raw["rocketCore"])
+        _fill_rocket(ci.cpu.rocket, cpu["config"])
     else:
-        _fill_boom(ci.boom_core, raw["boomCore"])
+        _fill_boom(ci.cpu.boom, cpu["config"])
+        bd = raw.get("balldomain")
+        if isinstance(bd, dict) and bd.get("ballNum", 0):
+            raise ValueError(f"{meta['pkg']}: kind=boom forbids balldomain.ballNum > 0")
     if "frontend" in raw:
         _fill_frontend(ci.frontend, raw["frontend"], bbdir)
     if "gpdomain" in raw:
         _fill_gp(ci.gp_domain, raw["gpdomain"], bbdir)
-    if "core" in raw:
-        _fill_core_param(ci.core, raw["core"], bbdir)
 
 
 def _fill_tile(tp: pb.TilePlacement, meta: dict[str, Any], proto: dict[str, Any]) -> None:
@@ -230,6 +217,7 @@ def _fill_tile(tp: pb.TilePlacement, meta: dict[str, Any], proto: dict[str, Any]
     tp.virtual_bank_count = meta["virtual_bank_count"]
     tp.core_indices.extend(meta["core_indices"])
     tp.mem_ball_channel_num = meta["mem_ball_channel_num"]
+    _fill_tile_params(tp.param, proto)
     dc = proto["privateDCache"]
     tp.private_dcache.enable = dc["enable"]
     tp.private_dcache.ways = dc["ways"]

@@ -21,9 +21,6 @@ config = {
     "enqueues": ["bebop.bemu.analysis"],
 }
 
-ALLOWED = {"chip", "log-dir", "log_dir", "itrace", "mtrace"}
-
-
 def _fail(message: str, status: int = 400) -> ApiResponse:
     return ApiResponse(
         status=status,
@@ -38,7 +35,8 @@ def _fail(message: str, status: int = 400) -> ApiResponse:
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    unknown = sorted(k for k in body if k not in ALLOWED)
+    allowed = {"chip", "log-dir", "log_dir", "itrace", "mtrace"}
+    unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return _fail(f"unknown parameter(s): {', '.join(unknown)}")
 

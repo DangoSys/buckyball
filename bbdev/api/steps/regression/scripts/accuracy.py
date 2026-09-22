@@ -9,10 +9,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_TOP1 = re.compile(r"^top1=(\d+)/(\d+)\s*$", re.M)
-_MAP = re.compile(r"^map=([0-9]*\.?[0-9]+)\s*$", re.M)
-
-
 def accuracy_from_uart(metric: str, uart: str) -> float:
     if not isinstance(metric, str) or not metric:
         raise ValueError("accuracy metric must be a non-empty string")
@@ -27,7 +23,7 @@ def accuracy_from_uart(metric: str, uart: str) -> float:
 
 
 def _top1(uart: str) -> float:
-    hits = _TOP1.findall(uart)
+    hits = re.findall(r"^top1=(\d+)/(\d+)\s*$", uart, re.M)
     if not hits:
         raise ValueError("uart missing top1=<correct>/<total> line")
     correct_s, total_s = hits[-1]
@@ -41,7 +37,7 @@ def _top1(uart: str) -> float:
 
 
 def _map(uart: str) -> float:
-    hits = _MAP.findall(uart)
+    hits = re.findall(r"^map=([0-9]*\.?[0-9]+)\s*$", uart, re.M)
     if not hits:
         raise ValueError("uart missing map=<float> line")
     val = float(hits[-1])

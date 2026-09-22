@@ -15,7 +15,7 @@ bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
 
-from regression import regression_workload_toml
+from utils.workload_manifest import resolve_workload_toml
 from utils.event_common import check_result, get_origin_trace_id, require_chip
 from utils.path import get_buckyball_path, log_dir, rtl_dir, workloads_output_root
 from utils.search_workload import search_workload
@@ -30,7 +30,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         chip = require_chip(input_data)
         bbdir = get_buckyball_path()
         test_type = input_data.get("test", "elf-tests")
-        manifest = regression_workload_toml(chip, "verilator", test_type, bbdir)
+        manifest = resolve_workload_toml(chip, "verilator", test_type, bbdir)
     except ValueError as error:
         await check_result(ctx, 1, extra_fields={"error": str(error)}, trace_id=origin_tid)
         return

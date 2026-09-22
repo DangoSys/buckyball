@@ -27,7 +27,8 @@ config = {
 }
 
 
-TESTBENCH = r'''`timescale 1ns/1ps
+def testbench_source() -> str:
+    return r'''`timescale 1ns/1ps
 module BBSimVcsHarness;
   reg clock = 1'b0;
   reg reset = 1'b1;
@@ -63,7 +64,8 @@ endmodule
 # a SystemVerilog testbench, so it needs only the memory model plus these DPI
 # callbacks.  Trace callbacks are intentionally no-ops; functional execution,
 # UART, and SCU exit remain available to every chip using BBSimHarness.
-VCS_DPI = r'''#include <cstdint>
+def dpi_source() -> str:
+    return r'''#include <cstdint>
 #include <cstdio>
 #include <vpi_user.h>
 
@@ -154,8 +156,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     artifact_dir.mkdir(parents=True)
     testbench = artifact_dir / "BBSimVcsHarness.sv"
     dpi_shim = artifact_dir / "vcs_dpi.cc"
-    testbench.write_text(TESTBENCH, encoding="utf-8")
-    dpi_shim.write_text(VCS_DPI, encoding="utf-8")
+    testbench.write_text(testbench_source(), encoding="utf-8")
+    dpi_shim.write_text(dpi_source(), encoding="utf-8")
 
     arch_dir = Path(bbdir) / "arch"
     csrcs = [

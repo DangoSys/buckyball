@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 
 from motia import FlowContext, queue
@@ -16,19 +17,6 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 from bin_to_hex import bin_to_hex
-
-KERNEL_MODELS = {
-    "bert",
-    "deepseekr1",
-    "gemma4",
-    "lenet",
-    "llama2",
-    "mobilenet",
-    "qwen3",
-    "resnet",
-    "stable-diffusion",
-    "yolo",
-}
 
 config = {
     "name": "kernel-build",
@@ -86,8 +74,20 @@ def kernel_model(input_data: dict) -> str:
         raise ValueError("model must be a string")
 
     model = model.lower()
-    if model not in KERNEL_MODELS:
-        valid = ", ".join(sorted(KERNEL_MODELS))
+    supported = {
+        "bert",
+        "deepseekr1",
+        "gemma4",
+        "lenet",
+        "llama2",
+        "mobilenet",
+        "qwen3",
+        "resnet",
+        "stable-diffusion",
+        "yolo",
+    }
+    if model not in supported:
+        valid = ", ".join(sorted(supported))
         raise ValueError(f"unknown kernel model: {model}; valid models: {valid}")
     return model
 
@@ -231,11 +231,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     payload_name = fw_payload_name(hart_params, cmake_model_name if model else "", chip)
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
+    fw_payload_elf = os.path.join(output_dir, f"{payload_name}.elf")
+    built_payload_elf = os.path.join(
+        kernel_build,
+        "opensbi",
+        "platform",
+        "buckyball",
+        "firmware",
+        "fw_payload.elf",
+    )
 
     if not os.path.exists(fw_payload_bin):
         ctx.logger.error(f"{payload_name}.bin not found")
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
+    if not os.path.isfile(built_payload_elf):
+        ctx.logger.error(f"fw_payload.elf not found: {built_payload_elf}")
+        await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
+        return
+
+    shutil.copy2(built_payload_elf, fw_payload_elf)
 
     ctx.logger.info(f"Converting {fw_payload_bin} to Verilog hex format for P2E...")
     success = bin_to_hex(fw_payload_bin, fw_payload_hex, base_address=0x80000000)

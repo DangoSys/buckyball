@@ -1,17 +1,9 @@
 import json
-import os
 from pathlib import Path
 
 
 def result_path(bbdir: str) -> Path:
-    rel = os.environ.get("EVAL_RESULT_PATH", "chipcrowd-eval-result.json")
-    root = Path(bbdir).resolve()
-    target = (root / rel).resolve()
-    try:
-        target.relative_to(root)
-    except ValueError as e:
-        raise ValueError(f"EVAL_RESULT_PATH escapes repo: {rel}") from e
-    return target
+    return Path(bbdir).resolve() / "chipcrowd-eval-result.json"
 
 
 def merge_metrics(bbdir: str, **fields) -> dict:

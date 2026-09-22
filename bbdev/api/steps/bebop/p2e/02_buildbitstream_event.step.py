@@ -7,8 +7,11 @@ Builds the P2E VVAC runtime case via bebop CLI:
   3. Validate generated bitstream and runtime artifacts
 """
 import os
+import shlex
+import shutil
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from motia import FlowContext, queue
 
@@ -50,57 +53,52 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     build_dir = (
-        input_data.get("build_dir")
-        or input_data.get("build-dir")
-        or input_data.get("output_dir")
-        or input_data.get("output-dir")
+        input_data.get("output_dir")
         or f"{bebop_dir}/build/{chip}-{timestamp}"
     )
-    os.makedirs(build_dir, exist_ok=True)
+    build_path = Path(build_dir).resolve()
+    build_root = (Path(bebop_dir) / "build").resolve()
+    if build_root not in build_path.parents:
+        raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
+    if build_path.exists():
+        shutil.rmtree(build_path)
+    build_path.mkdir(parents=True)
 
-    build_cmd = (
-        f"nix develop --ignore-environment --keep HOME --keep ALL_PROXY -c "
-        f"cargo run --release --features p2e -- build p2e "
-        f"--rtl-dir=\"{vsrc_dir}\" "
-        f"--out-dir=\"{build_dir}\""
-    )
+    diff = bool(input_data.get("diff", False))
+    manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
+    features = ["p2e"]
+    build_env = {**os.environ, **bebop_cargo_env(bbdir, chip)}
+    if diff:
+        features.append("bemu")
+        build_env["CARGO_TARGET_DIR"] = os.path.join(bebop_dir, "target", f"{chip}-p2e-diff")
+    build_cmd = shlex.join([
+        "nix", "develop", "--ignore-env",
+        "--keep-env-var", "HOME",
+        "--keep-env-var", "ALL_PROXY",
+        "--keep-env-var", "CARGO_TARGET_DIR",
+        "-c", "cargo", "run", "--release",
+        "--manifest-path", str(manifest),
+        "--bin", "bebop",
+        "--features", ",".join(features),
+        "--", "build", "p2e",
+        "--rtl-dir", vsrc_dir,
+        "--out-dir", build_dir,
+        *(["--diff"] if diff else []),
+    ])
     ctx.logger.info("Building bebop p2e runtime case ...")
     build_result = await stream_run_logger_async(
         cmd=build_cmd,
         logger=ctx.logger,
-        cwd=bebop_dir,
+        cwd=str(manifest.parent),
         stdout_prefix="bebop p2e build",
         stderr_prefix="bebop p2e build",
-        env={**os.environ, **bebop_cargo_env(bbdir, chip)},
+        env=build_env,
     )
 
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
     bitstream_path = os.path.join(build_dir, "fpgaCompDir", "bitstream.bit")
-    if build_result.returncode == 0:
-        missing = [
-            path
-            for path in (rtcfg_path, libvctb_path, bitstream_path)
-            if not os.path.exists(path)
-        ]
-        if missing:
-            ctx.logger.error(f"P2E build artifacts missing: {missing}")
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={
-                    "task": "build",
-                    "vsrc_dir": vsrc_dir,
-                    "build_dir": build_dir,
-                    "missing": missing,
-                    "error": "p2e_artifact_not_found",
-                    "timestamp": timestamp,
-                },
-                trace_id=origin_tid,
-            )
-            return
-
+    runtime_path = os.path.join(build_dir, "bebop-p2e")
     extra_fields = {
         "task": "build",
         "vsrc_dir": vsrc_dir,
@@ -108,6 +106,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "rtcfg": rtcfg_path,
         "libvCtb": libvctb_path,
         "bitstream": bitstream_path,
+        "runtime": runtime_path,
+        "diff": diff,
         "timestamp": timestamp,
     }
     if input_data.get("from_regression_buildbitstream") and build_result.returncode == 0:

@@ -4,18 +4,6 @@ import json
 import re
 from pathlib import Path
 
-MODULE_NAME_RE = re.compile(
-    r"^\s*(?:\(\*.*?\*\)\s*)*module\s+([A-Za-z_][A-Za-z0-9_$]*)\b",
-    re.M,
-)
-INSTANCE_RE = re.compile(
-    r"^\s*([A-Za-z_][A-Za-z0-9_$]*)\s*(?:#\s*\(.*?\)\s*)?([A-Za-z_][A-Za-z0-9_$]*)\s*\(",
-    re.M | re.S,
-)
-COMMENT_RE = re.compile(r"/\*.*?\*/|//.*?$", re.M | re.S)
-MODULE_TOKEN_RE = re.compile(r"\bmodule\b")
-
-
 def replace_sources(
     *,
     source_paths: list[str],
@@ -32,10 +20,14 @@ def replace_sources(
     texts: dict[str, str] = {}
     for path in paths:
         text = path.read_text()
-        match = MODULE_NAME_RE.search(text)
+        match = re.search(
+            r"^\s*(?:\(\*.*?\*\)\s*)*module\s+([A-Za-z_][A-Za-z0-9_$]*)\b",
+            text,
+            re.M,
+        )
         if match is None:
-            stripped = COMMENT_RE.sub("", text)
-            if MODULE_TOKEN_RE.search(stripped):
+            stripped = re.sub(r"/\*.*?\*/|//.*?$", "", text, flags=re.M | re.S)
+            if re.search(r"\bmodule\b", stripped):
                 raise RuntimeError(f"no module declaration: {path}")
             continue
         name = match.group(1)
@@ -53,7 +45,11 @@ def replace_sources(
     pending = [top_module]
     while pending:
         cur = pending.pop()
-        for child, _inst in INSTANCE_RE.findall(texts[cur]):
+        for child, _inst in re.findall(
+            r"^\s*([A-Za-z_][A-Za-z0-9_$]*)\s*(?:#\s*\(.*?\)\s*)?([A-Za-z_][A-Za-z0-9_$]*)\s*\(",
+            texts[cur],
+            re.M | re.S,
+        ):
             if child in modules and child not in reachable:
                 reachable.add(child)
                 pending.append(child)

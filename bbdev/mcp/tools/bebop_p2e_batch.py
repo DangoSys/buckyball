@@ -12,6 +12,7 @@ def register(mcp):
         chip: str,
         bitstream: str,
         test: str,
+        diff: bool = False,
     ) -> str:
         """Batch bebop-p2e regression. test: elf-tests|pk-tests. POST /bebop/p2e/batch."""
         for n, v in (("chip", chip), ("bitstream", bitstream)):
@@ -26,6 +27,7 @@ def register(mcp):
                     "chip": chip,
                     "bitstream": bitstream,
                     "test": test,
+                    "diff": diff,
                 },
             )
         )

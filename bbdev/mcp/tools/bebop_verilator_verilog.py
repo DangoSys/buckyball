@@ -8,8 +8,8 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_bebop_verilator_verilog(chip: str) -> str:
+    def bbdev_bebop_verilator_verilog(chip: str, diff: bool = False) -> str:
         """Generate Verilog for bebop-verilator. POST /bebop/verilator/verilog."""
         if e := need("chip", chip):
             return err(e)
-        return fmt(submit("/bebop/verilator/verilog", {"chip": chip}))
+        return fmt(submit("/bebop/verilator/verilog", {"chip": chip, "diff": diff}))

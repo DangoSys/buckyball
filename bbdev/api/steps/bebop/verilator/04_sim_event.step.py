@@ -245,7 +245,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "chip": chip,
             "binary": binary_path,
             "log_dir": run_log,
-            "bank_diff": os.path.join(run_log, "bank_diff.ndjson") if diff else None,
+            "bank_diff": os.path.join(run_log, "diff.ndjson") if diff else None,
             "timestamp": timestamp,
         },
         trace_id=origin_tid,

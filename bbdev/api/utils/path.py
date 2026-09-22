@@ -7,25 +7,9 @@ from pathlib import Path
 
 def get_buckyball_path():
     current_dir = os.path.dirname(__file__)
-    # bbdev/api/utils -> bbdev/api -> bbdev -> buckyball
-    inferred = os.path.realpath(
+    root = os.path.realpath(
         os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     )
-
-    root = os.environ.get("BUCKYBALL_ROOT")
-    if root:
-        if not os.path.isabs(root):
-            raise ValueError("BUCKYBALL_ROOT must be an absolute path")
-        if not os.path.isdir(root):
-            raise ValueError(f"BUCKYBALL_ROOT does not exist: {root}")
-        root = os.path.realpath(root)
-        if root != inferred:
-            raise ValueError(
-                f"BUCKYBALL_ROOT={root} does not match bbdev tree root {inferred}"
-            )
-    else:
-        root = inferred
-
     home = os.path.realpath(str(Path.home()))
     if not Path(root).is_relative_to(home):
         raise ValueError(f"buckyball root must be under $HOME ({home}): {root}")

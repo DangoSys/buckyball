@@ -8,15 +8,10 @@ import shutil
 import sys
 from pathlib import Path
 
-_SCRIPTS = Path(__file__).resolve().parent
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import chip_pb2 as pb  # noqa: E402
-
-_ENGINE = Path("bebop/src/nodes/bemu")
-_BEMU_CRATE = _ENGINE / "chip"
-
 
 def load_chip(pb_path: Path) -> pb.Chip:
     chip = pb.Chip()
@@ -110,7 +105,7 @@ def install_arch(src_pb: Path, gen: Path) -> Path:
 
 
 def install_bemu(chip: pb.Chip, bbdir: Path, gen: Path) -> Path:
-    src = bbdir / _BEMU_CRATE
+    src = bbdir / "bebop" / "src" / "nodes" / "bemu" / "chip"
     cargo = src / "Cargo.toml"
     build_rs = src / "build.rs"
     if not cargo.is_file():
@@ -123,6 +118,75 @@ def install_bemu(chip: pb.Chip, bbdir: Path, gen: Path) -> Path:
     shutil.copy2(cargo, bemu / "Cargo.toml")
     shutil.copy2(build_rs, bemu / "build.rs")
     return bemu / "Cargo.toml"
+
+
+def install_bebop(gen: Path) -> Path:
+    bebop = gen.parent.parent / "generated" / "bebop"
+    bebop.mkdir(parents=True, exist_ok=True)
+    manifest = bebop / "Cargo.toml"
+    manifest.write_text(
+        """[workspace]
+resolver = "2"
+
+[package]
+name = "bebop"
+version = "0.1.0"
+edition = "2021"
+build = "../../../../../bebop/build.rs"
+
+[[bin]]
+name = "bebop"
+path = "../../../../../bebop/src/main.rs"
+
+[[test]]
+name = "test_verilator"
+path = "../../../../../bebop/tests/test_verilator.rs"
+harness = false
+required-features = ["verilator"]
+
+[[test]]
+name = "test_p2e"
+path = "../../../../../bebop/tests/test_p2e.rs"
+harness = false
+required-features = ["p2e"]
+
+[features]
+default = []
+verilator = ["dep:bebop-verilator"]
+p2e = ["dep:bebop-p2e", "bebop-bemu?/p2e"]
+bemu = ["dep:bebop-bemu"]
+
+[dependencies]
+bebop-verilator = { path = "../../../../../bebop/src/nodes/verilator", optional = true }
+bebop-p2e = { path = "../../../../../bebop/src/nodes/p2e", optional = true }
+bebop-bemu = { path = "../../configs/generated/bemu", optional = true, default-features = false }
+bebop-dasm = { path = "../../../../../bebop/src/nodes/lib/dasm" }
+bebop-bank-hash = { path = "../../../../../bebop/src/nodes/lib/bank-hash" }
+bebop-bemu-profile = { path = "../../../../../bebop/src/nodes/lib/bemu-profile" }
+bebop-fd-redirect = { path = "../../../../../bebop/src/nodes/lib/fd-redirect" }
+bebop-rtl-trace = { path = "../../../../../bebop/src/nodes/lib/rtl-trace" }
+bebop-uart = { path = "../../../../../bebop/src/nodes/lib/uart" }
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+log = "0.4"
+env_logger = "0.11"
+nix = { version = "0.29", features = ["fs", "mman", "signal", "process"] }
+toml = "0.8"
+camino = "1.1"
+snafu = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+duct = "0.13"
+
+[dev-dependencies]
+libtest-mimic = "0.8"
+assert_cmd = "2"
+walkdir = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+""",
+        encoding="utf-8",
+    )
+    return manifest
 
 
 def install_workload(chip: pb.Chip, bbdir: Path, name: str, gen: Path) -> Path:

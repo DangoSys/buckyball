@@ -17,12 +17,28 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # bbdev/mcp -> repo root
-REPO = Path(__file__).resolve().parents[2]
-BBDEV = REPO / "bbdev" / "bbdev"
-API = REPO / "bbdev" / "api"
-MOTIA = API / ".venv" / "bin" / "motia"
-LOG = REPO / "bbdev" / "server.log"
-STATE_DIR = API / "data" / "state_store.db"
+def repo_path() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def bbdev_path() -> Path:
+    return repo_path() / "bbdev" / "bbdev"
+
+
+def api_path() -> Path:
+    return repo_path() / "bbdev" / "api"
+
+
+def motia_path() -> Path:
+    return api_path() / ".venv" / "bin" / "motia"
+
+
+def log_path() -> Path:
+    return repo_path() / "bbdev" / "server.log"
+
+
+def state_dir() -> Path:
+    return api_path() / "data" / "state_store.db"
 _proc: Optional[subprocess.Popen] = None
 _port: Optional[int] = None
 _log_fh = None

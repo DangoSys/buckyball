@@ -70,7 +70,7 @@ WORKFLOW_COMMANDS = {
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
         "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
@@ -83,10 +83,10 @@ WORKFLOW_COMMANDS = {
     },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--output-dir <dir>]"',
-        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--vsrc-dir <dir>] [--output-dir <dir>]"',
-        "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--itrace] [--mtrace] [--pmctrace]"',
-        "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests>"',
+        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
+        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>]"',
+        "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace] [--mtrace] [--pmctrace]"',
+        "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
     },
     "dc": {
         "verilog": 'Generate top-scoped DC RTL under arch/build/<chip>/<config>. Args: "--chip <chip> [--top <module>]"',
@@ -332,6 +332,8 @@ def _parse_sub_args(arg_string: str) -> dict:
                 key, value = token[2:].split("=", 1)
                 if not key or value == "":
                     raise ValueError(f"Invalid argument: {token}")
+                if value in ("true", "false"):
+                    value = value == "true"
                 args_dict[key] = value
                 i += 1
             else:
@@ -612,6 +614,7 @@ def run_script_mode(args, cmd_info):
     # Serialize only engine startup. The reservation socket must be released before
     # iii can bind it, so without this lock another bbdev can select the same port
     # during that handoff.
+    os.makedirs(os.path.dirname(SERVER_START_LOCK), exist_ok=True)
     server_start_lock = open(SERVER_START_LOCK, "w")
     fcntl.flock(server_start_lock, fcntl.LOCK_EX)
 

@@ -48,7 +48,8 @@ from . import regression_check
 from . import regression_eval_performance
 from . import regression_eval_area_power
 
-MODULES = [
+def modules():
+    return [
     validate,
     task_status,
     task_cancel,
@@ -94,9 +95,9 @@ MODULES = [
     regression_check,
     regression_eval_performance,
     regression_eval_area_power,
-]
+    ]
 
 
 def register_all(mcp) -> None:
-    for mod in MODULES:
+    for mod in modules():
         mod.register(mcp)

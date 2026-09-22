@@ -28,8 +28,7 @@ from utils.path import (
 )
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
-from regression import regression_workload_toml
-from regression_harness import nextest_harness_args
+from utils.workload_manifest import resolve_workload_toml
 
 config = {
     "name": "bebop-verilator-batch",
@@ -77,7 +76,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
-        workload_toml = regression_workload_toml(
+        workload_toml = resolve_workload_toml(
             chip, "verilator", test_type, bbdir, rushB=rushB, diff=diff
         )
     except ValueError as e:
@@ -112,7 +111,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     env.update(bebop_cargo_env(bbdir, chip))
     env.update(
         {
-            "BEBOP_ARCH_CONFIG": chip,
             "VSRC_PATH": vsrc_dir,
         }
     )
@@ -120,23 +118,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     manifest = f"{bebop_dir}/Cargo.toml"
     features = "verilator"
     if diff:
-        features = "verilator,bemu,difftest"
-        preload = os.pathsep.join(
-            path
-            for path in (
-                f"{bbdir}/result/lib/libdramsim3.so",
-                os.environ.get("LD_PRELOAD", ""),
-            )
-            if path
-        )
-        env["LD_PRELOAD"] = preload
+        manifest = f"{bbdir}/examples/chips/{chip}/generated/bebop/Cargo.toml"
+        features = "verilator,bemu"
 
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         artifact_dir = os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts")
         shutil.rmtree(artifact_dir, ignore_errors=True)
         ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
 
-    harness = nextest_harness_args(workload_toml, elf_root, env)
+    harness_args = [
+        "--",
+        "--workload-toml", workload_toml,
+        "--bb-tests-root", elf_root,
+        "--arch-config", chip,
+    ]
+    if diff:
+        harness_args.append("--diff")
+    if rushB:
+        harness_args.extend(["--rushb-backend", "verilator"])
+    harness = shlex.join(harness_args)
     nextest_cmd = (
         f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(manifest)} "
         f"--features {shlex.quote(features)} --test test_verilator "

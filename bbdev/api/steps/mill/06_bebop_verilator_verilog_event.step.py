@@ -4,6 +4,7 @@ bebop verilator verilog event handler
 Generates Verilog via mill for bebop verilator
 """
 import os
+import shutil
 import sys
 
 from motia import FlowContext, queue
@@ -61,12 +62,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             input_data.get("output_dir"),
             rushb=bool(input_data.get("rushB", False)),
         )
-        os.makedirs(build_dir, exist_ok=True)
+        shutil.rmtree(build_dir, ignore_errors=True)
+        os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
+        command = mill_run.elaborate_cmd("sims.verilator.Elaborate", mill_config, build_dir)
+        if input_data.get("diff"):
+            command += " --difftest"
         returncode = (
             await stream_run_logger_async(
-            cmd=mill_run.elaborate_cmd("sims.verilator.Elaborate", mill_config, build_dir),
+            cmd=command,
             logger=ctx.logger,
             cwd=arch,
             stdout_prefix="bebop verilator verilog",

@@ -54,8 +54,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     features = ["verilator"]
     if diff:
         manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
-        build_dir = manifest.parent
-        features.extend(["bemu", "difftest"])
+        build_dir = str(manifest.parent)
+        features.append("bemu")
         dramsim_header = os.path.join(bbdir, "result", "include", "dramsim3.h")
         if not os.path.isfile(dramsim_header):
             ctx.logger.info(f"Nix environment is missing {dramsim_header}; rebuilding result")
@@ -85,7 +85,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             str(jobs),
         ]
     )
-    build_inner = f"cd {shlex.quote(build_dir)} && exec {cargo_build_cmd}"
+    build_inner = f"cd {shlex.quote(str(build_dir))} && exec {cargo_build_cmd}"
     build_cmd = f"nix develop -c sh -c {shlex.quote(build_inner)}"
     env = {**os.environ, "VSRC_PATH": vsrc_dir, **bebop_cargo_env(bbdir, chip)}
     ctx.logger.info(f"Building bebop verilator (diff={diff}) ...")

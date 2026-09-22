@@ -112,6 +112,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         bemu = step4.install_bemu(chip, bbdir, gen)
         ctx.logger.info(f"Installed bemu crate: {bemu}")
 
+        bebop = step4.install_bebop(gen)
+        ctx.logger.info(f"Installed bebop crate: {bebop}")
+
         # C. TO Workload BUILD SYSTEM
         workload = step4.install_workload(chip, bbdir, chip_name, gen)
         ctx.logger.info(f"Installed workload defs: {workload}")
@@ -136,6 +139,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "chip": chip_name,
                 "arch": str(arch),
                 "bemu": str(bemu),
+                "bebop": str(bebop),
                 "workload": str(workload),
             }
         )

@@ -9,21 +9,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ISA = {
-    0: "fence",
-    1: "barrier",
-    16: "mvout",
-    32: "mset",
-    33: "mvin",
-    34: "mmio_set",
-    35: "mvin_mmio",
-}
-
-MATRIX_MNEMONICS = frozenset({"MATRIX", "MATRIX_F32", "SMATMUL_OS"})
-
-_API = Path(__file__).resolve().parents[4]
-if str(_API) not in sys.path:
-    sys.path.insert(0, str(_API))
+if str(Path(__file__).resolve().parents[4]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 
 def abs_log_dir(value: object) -> Path:
@@ -42,6 +29,15 @@ def _hex_u(value: object, field: str, line_no: int) -> int:
 
 
 def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
+    system_isa = {
+        0: "fence",
+        1: "barrier",
+        16: "mvout",
+        32: "mset",
+        33: "mvin",
+        34: "mmio_set",
+        35: "mvin_mmio",
+    }
     path = (
         Path(bbdir)
         / "examples"
@@ -75,7 +71,7 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
     isa = ball["ballISA"]
     ball_path = ball["_file"]
 
-    names: dict[int, str] = dict(ISA)
+    names: dict[int, str] = dict(system_isa)
     matrix: set[int] = set()
     seen: set[int] = set()
     for entry in isa:
@@ -89,13 +85,13 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
             raise ValueError(f"ballISA mnemonic must be a non-empty string: {ball_path}")
         if funct in seen:
             raise ValueError(f"duplicate ballISA funct7 {funct}: {ball_path}")
-        if funct in ISA:
+        if funct in system_isa:
             raise ValueError(
-                f"ballISA funct7 {funct} ({mnemonic}) collides with ISA {ISA[funct]}: {ball_path}"
+                f"ballISA funct7 {funct} ({mnemonic}) collides with ISA {system_isa[funct]}: {ball_path}"
             )
         seen.add(funct)
         names[funct] = mnemonic.lower()
-        if mnemonic in MATRIX_MNEMONICS:
+        if mnemonic in {"MATRIX", "MATRIX_F32", "SMATMUL_OS"}:
             matrix.add(funct)
 
     mem = core["memdomain"]

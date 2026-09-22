@@ -16,6 +16,7 @@ def register(mcp):
         itrace: bool = False,
         mtrace: bool = False,
         pmctrace: bool = False,
+        diff: bool = False,
     ) -> str:
         """Run one image on bebop-p2e FPGA. POST /bebop/p2e/runworkload."""
         for n, v in (("chip", chip), ("image", image), ("bitstream", bitstream)):
@@ -28,4 +29,6 @@ def register(mcp):
             params["mtrace"] = True
         if pmctrace:
             params["pmctrace"] = True
+        if diff:
+            params["diff"] = True
         return fmt(submit("/bebop/p2e/runworkload", params))

@@ -14,12 +14,6 @@ import re
 from pathlib import Path
 
 
-LINE = re.compile(
-    r"name\s+(?P<name>\S+)\s+depth\s+(?P<depth>\d+)\s+width\s+(?P<width>\d+)"
-    r"\s+ports\s+(?P<ports>\S+)(?:\s+mask_gran\s+(?P<mask>\d+))?$"
-)
-
-
 def write_masked(lines: list[str], *, addr: str, data: str, mask: str, width: int, gran: int) -> None:
     lines.extend(
         [
@@ -96,7 +90,11 @@ def main() -> int:
         line = raw.strip()
         if not line:
             continue
-        match = LINE.fullmatch(line)
+        match = re.fullmatch(
+            r"name\s+(?P<name>\S+)\s+depth\s+(?P<depth>\d+)\s+width\s+(?P<width>\d+)"
+            r"\s+ports\s+(?P<ports>\S+)(?:\s+mask_gran\s+(?P<mask>\d+))?",
+            line,
+        )
         if match is None:
             raise ValueError(f"invalid mems.conf entry: {line}")
         values = match.groupdict()

@@ -9,8 +9,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-_SYSTEM_FUNCTS = frozenset({0, 1, 16, 32, 33, 34, 35})
-
 
 def _die(msg: str) -> None:
     raise ValueError(msg)
@@ -421,7 +419,7 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
             bid = entry.get("bid")
             if not isinstance(funct7, int) or not isinstance(bid, int):
                 _die(f"ballISA entry must have funct7 and bid: {entry!r}")
-            if funct7 in _SYSTEM_FUNCTS:
+            if funct7 in {0, 1, 16, 32, 33, 34, 35}:
                 continue
             ball_class = bid_to_class.get(bid)
             if not ball_class:

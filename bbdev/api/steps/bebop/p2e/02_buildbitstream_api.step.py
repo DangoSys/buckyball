@@ -25,6 +25,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
 
     data = {
         "chip": chip,
+        "diff": bool(body.get("diff", False)),
         "vsrc_dir": vsrc_dir,
         "output_dir": body.get("output_dir") or body.get("output-dir"),
     }

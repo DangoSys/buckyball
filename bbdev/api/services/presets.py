@@ -65,19 +65,11 @@ def create_code_agent_manager() -> ToolManager:
     return manager
 
 
-# Predefined tool set configurations
-PRESET_CONFIGS = {
-    "file_tools": {
-        "name": "File Operations",
-        "description": "Basic file system operations",
-        "tools": create_file_tools,
-    },
-    "code_agent": {
-        "name": "Code Agent",
-        "description": "Tools for code generation and manipulation",
-        "tools": create_code_agent_tools,
-    },
-}
+def preset_configs():
+    return {
+        "file_tools": create_file_tools,
+        "code_agent": create_code_agent_tools,
+    }
 
 
 def get_preset(name: str) -> List[Tool]:
@@ -93,14 +85,14 @@ def get_preset(name: str) -> List[Tool]:
     Raises:
         ValueError: If tool set does not exist
     """
-    config = PRESET_CONFIGS.get(name)
-    if not config:
-        available = ", ".join(PRESET_CONFIGS.keys())
+    presets = preset_configs()
+    factory = presets.get(name)
+    if factory is None:
+        available = ", ".join(presets)
         raise ValueError(f"Unknown preset: {name}. Available: {available}")
-
-    return config["tools"]()
+    return factory()
 
 
 def list_presets() -> List[str]:
     """List all available predefined tool sets"""
-    return list(PRESET_CONFIGS.keys())
+    return list(preset_configs())

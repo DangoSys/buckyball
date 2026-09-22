@@ -114,9 +114,7 @@ message RocketBtbConfig {
   uint32 n_ras = 3;
 }
 
-message RocketCoreConfig {
-  uint32 x_len = 1;
-  uint32 pg_levels = 2;
+message RocketCpuConfig {
   bool use_vm = 3;
   bool use_zba = 4;
   bool use_zbb = 5;
@@ -140,7 +138,7 @@ message BoomICacheConfig {
   uint32 n_ways = 2;
 }
 
-message BoomCoreConfig {
+message BoomCpuConfig {
   uint32 fetch_width = 1;
   uint32 decode_width = 2;
   uint32 num_rob_entries = 3;
@@ -170,14 +168,23 @@ message GpDomainConfig {
   string source_path = 7;
 }
 
-message CoreParamConfig {
+message TileParamConfig {
   uint32 core_data_bytes = 1;
   uint32 x_len = 2;
   uint32 vaddr_bits = 3;
   uint32 paddr_bits = 4;
   uint32 pg_idx_bits = 5;
-  uint32 n_pmps = 6;
-  string source_path = 7;
+  uint32 pg_levels = 6;
+  uint32 n_pmps = 7;
+}
+
+message CpuConfig {
+  string kind = 1;
+  oneof cpu {
+    RocketCpuConfig rocket = 2;
+    BoomCpuConfig boom = 3;
+  }
+  string source_path = 4;
 }
 
 message CoreInstance {
@@ -188,12 +195,9 @@ message CoreInstance {
   BallDomain balldomain = 5;
   MemDomainConfig mem = 6;
   string balldomain_base_dir = 7;
-  RocketCoreConfig rocket_core = 8;
+  CpuConfig cpu = 8;
   FrontendConfig frontend = 9;
   GpDomainConfig gp_domain = 10;
-  CoreParamConfig core = 11;
-  string kind = 12;
-  BoomCoreConfig boom_core = 13;
 }
 
 message BemuBall {
@@ -233,6 +237,7 @@ message TilePlacement {
   uint32 mem_ball_channel_num = 4;
   PrivateDCacheConfig private_dcache = 5;
   SharedMemConfig shared_mem = 6;
+  TileParamConfig param = 7;
 }
 
 message WorkloadConfig {

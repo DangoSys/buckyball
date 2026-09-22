@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 
 from motia import FlowContext, queue
@@ -39,13 +40,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         mill_config, build_dir = rtl_out(
             bbdir, chip, "p2e", input_data.get("output_dir"),
         )
-        os.makedirs(build_dir, exist_ok=True)
+        shutil.rmtree(build_dir, ignore_errors=True)
+        os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         prefix = "bebop p2e verilog"
+        command = mill_run.elaborate_cmd("sims.p2e.Elaborate", mill_config, build_dir)
+        if input_data.get("diff"):
+            command += " --difftest"
         returncode = (
             await stream_run_logger_async(
-            cmd=mill_run.elaborate_cmd("sims.p2e.Elaborate", mill_config, build_dir),
+            cmd=command,
             logger=ctx.logger,
             cwd=arch,
             stdout_prefix=prefix,

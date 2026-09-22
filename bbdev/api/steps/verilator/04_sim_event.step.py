@@ -27,10 +27,6 @@ config = {
 }
 
 
-DRAM_BASE = 0x80000000
-DRAM_SIZE = 0x10000000
-
-
 def validate_bbsim_elf(path: str) -> tuple[bool, str]:
     """Validate the ELF layout accepted by BBSimDRAM before starting Verilator."""
     try:
@@ -53,6 +49,8 @@ def validate_bbsim_elf(path: str) -> tuple[bool, str]:
             if phoff + phnum * phentsize > file_size:
                 return False, "program headers extend past the end of the file"
 
+            dram_base = 0x80000000
+            dram_size = 0x10000000
             load_segments = 0
             for index in range(phnum):
                 binary.seek(phoff + index * phentsize)
@@ -67,11 +65,11 @@ def validate_bbsim_elf(path: str) -> tuple[bool, str]:
                 load_segments += 1
                 if p_filesz > p_memsz or p_offset + p_filesz > file_size:
                     return False, "has an invalid loadable segment"
-                if p_paddr < DRAM_BASE or p_paddr + p_memsz > DRAM_BASE + DRAM_SIZE:
+                if p_paddr < dram_base or p_paddr + p_memsz > dram_base + dram_size:
                     return (
                         False,
                         f"load segment {index} at 0x{p_paddr:x} is outside "
-                        f"BBSimDRAM [0x{DRAM_BASE:x}, 0x{DRAM_BASE + DRAM_SIZE:x})",
+                        f"BBSimDRAM [0x{dram_base:x}, 0x{dram_base + dram_size:x})",
                     )
     except (OSError, struct.error):
         return False, "cannot read a valid ELF64 program-header table"

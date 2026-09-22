@@ -104,9 +104,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     sources = " ".join(vsrcs + csrcs)
     jobs = input_data.get("jobs", "")
 
-    # Enable ccache if available
+    build_env = os.environ.copy()
     if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
-        os.environ["OBJCACHE"] = "ccache"
+        build_env["OBJCACHE"] = "ccache"
 
     # Use lld for faster linking if available
     use_lld = subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode == 0
@@ -139,6 +139,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="verilator verilation",
         stderr_prefix="verilator verilation",
+        env=build_env,
     )
     if result.returncode != 0:
         await check_result(
@@ -154,6 +155,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         cwd=bbdir,
         stdout_prefix="verilator build",
         stderr_prefix="verilator build",
+        env=build_env,
     )
 
     # ==================================================================================

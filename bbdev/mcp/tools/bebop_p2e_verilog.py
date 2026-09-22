@@ -10,7 +10,7 @@ from common import submit, err, fmt, need, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_bebop_p2e_verilog(
-        chip: str, output_dir: Optional[str] = None
+        chip: str, output_dir: Optional[str] = None, diff: bool = False
     ) -> str:
         """Generate Verilog for bebop-p2e. POST /bebop/p2e/verilog."""
         if e := need("chip", chip):
@@ -18,6 +18,6 @@ def register(mcp):
         return fmt(
             submit(
                 "/bebop/p2e/verilog",
-                opt({"chip": chip}, output_dir=output_dir),
+                opt({"chip": chip, "diff": diff}, output_dir=output_dir),
             )
         )

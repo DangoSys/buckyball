@@ -34,7 +34,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
-    data = {"chip": chip, "rushB": bool(body.get("rushB", False))}
+    data = {"chip": chip, "rushB": bool(body.get("rushB", False)), "diff": bool(body.get("diff", False))}
     if body.get("output_dir"):
         data["output_dir"] = body["output_dir"]
     await ctx.enqueue({"topic": "bebop.verilator.verilog", "data": {**data, "_trace_id": ctx.trace_id}})

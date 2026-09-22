@@ -51,6 +51,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     }
     output_dir = input_data.get("output_dir") or input_data.get("output-dir")
     if output_dir:
-        data["build_dir"] = output_dir
+        data["output_dir"] = output_dir
 
     await ctx.enqueue({"topic": "bebop.p2e.verilog", "data": data})

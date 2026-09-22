@@ -6,17 +6,12 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-_DC = Path(__file__).resolve().parents[2] / "dc" / "scripts"
-if str(_DC) not in sys.path:
-    sys.path.insert(0, str(_DC))
+if str(Path(__file__).resolve().parents[2] / "dc" / "scripts") not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "dc" / "scripts"))
 
 from tapeout import SramGeom, get_tapeout_contract
 from macro_compiler import run_macro_compiler
 from sram_compiler import generate_sram_dbs, leaf_names_from_macros
-
-_MODULE = re.compile(r"(?m)^module\s+(\w+)\s*\(")
-_INST = re.compile(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_$]*)\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(")
-
 
 def pad_mems_conf(text: str) -> str:
     lines = []
@@ -76,7 +71,7 @@ def parse_mems(text: str) -> list[tuple[str, int, int]]:
 
 
 def module_insts(text: str) -> dict[str, Counter[str]]:
-    hits = list(_MODULE.finditer(text))
+    hits = list(re.finditer(r"(?m)^module\s+(\w+)\s*\(", text))
     out: dict[str, Counter[str]] = {}
     for i, m in enumerate(hits):
         name = m.group(1)
@@ -85,7 +80,10 @@ def module_insts(text: str) -> dict[str, Counter[str]]:
         start = m.end()
         end = hits[i + 1].start() if i + 1 < len(hits) else len(text)
         counts: Counter[str] = Counter()
-        for inst in _INST.finditer(text[start:end]):
+        for inst in re.finditer(
+            r"(?m)^\s*([A-Za-z_][A-Za-z0-9_$]*)\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(",
+            text[start:end],
+        ):
             leaf = inst.group(1)
             if leaf in ("module", "assign", "wire", "input", "output"):
                 raise ValueError(f"module {name}: refused instance parse {leaf!r}")

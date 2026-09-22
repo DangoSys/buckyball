@@ -3,13 +3,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from utils.port import HOST
-
-SERVER_PORTS_FILE = "bbdev-server.json"
-
-
 def server_ports_path(workflow_dir: str) -> str:
-    return os.path.join(workflow_dir, "data", SERVER_PORTS_FILE)
+    return os.path.join(workflow_dir, "data", "bbdev-server.json")
 
 
 def write_server_ports(workflow_dir: str, http_port: int, worker_port: int, bb_root: str) -> None:
@@ -49,7 +44,7 @@ def list_engine_workers(worker_port: int, timeout_s: float = 10.0) -> list:
             "--function-id",
             "engine::workers::list",
             "--address",
-            HOST,
+            "127.0.0.1",
             "--port",
             str(worker_port),
             "--timeout-ms",

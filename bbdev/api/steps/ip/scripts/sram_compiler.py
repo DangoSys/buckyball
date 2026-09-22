@@ -4,12 +4,12 @@ import re
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_API = _HERE.parents[2]
-_IP = _HERE.parents[4] / "thirdparty" / "soc-framework" / "ip"
-for _p in (str(_API), str(_IP)):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+for path in (
+    Path(__file__).resolve().parents[2],
+    Path(__file__).resolve().parents[4] / "thirdparty" / "soc-framework" / "ip",
+):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from smic180.compiler import generate_smic180_sram_dbs
 

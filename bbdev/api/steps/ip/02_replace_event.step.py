@@ -16,9 +16,6 @@ from utils.event_common import check_result, get_origin_trace_id, require_chip
 from utils.path import get_buckyball_path, rtl_dir
 from replace import replace_sources
 
-_SOURCE_LIST = {"dc": "dc_sources.list", "yosys": "yosys_sources.list"}
-
-
 config = {
     "name": "ip-replace",
     "description": "assemble top-scoped synthesis RTL plus generated SRAM macros",
@@ -33,7 +30,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         chip = require_chip(input_data)
         consumer = input_data.get("consumer") or "dc"
-        if consumer not in _SOURCE_LIST:
+        if consumer not in {"dc", "yosys"}:
             raise ValueError("consumer must be dc or yosys")
         top_module = input_data.get("top") or "DigitalTop"
         if not isinstance(top_module, str) or not top_module:
@@ -41,7 +38,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
         bbdir = Path(get_buckyball_path()).resolve()
         build_dir = Path(rtl_dir(bbdir, chip, "tapeout" if consumer == "dc" else "verilog", input_data.get("output_dir"))).resolve()
-        source_list_path = build_dir / _SOURCE_LIST[consumer]
+        source_list_path = build_dir / f"{consumer}_sources.list"
         if not source_list_path.is_file():
             raise FileNotFoundError(f"missing source list: {source_list_path}")
         sources = [line.strip() for line in source_list_path.read_text().splitlines() if line.strip()]

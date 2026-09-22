@@ -19,6 +19,8 @@ def main():
     "test_api_yosys_verilog.py",
     "test_api_yosys_synth.py",
     "test_api_dc_verilog.py",
+    "test_api_uvm_build.py",
+    "test_api_uvm_run.py",
     "test_api_kernel_build.py",
     "test_api_firesim_enumeratefpgas.py",
     "test_api_firesim_buildbitstream.py",

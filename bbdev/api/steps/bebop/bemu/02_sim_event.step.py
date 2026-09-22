@@ -27,10 +27,6 @@ from utils.process_registry import cancellation_requested
 from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile_index, chip_emu_manifest
 
 
-PERFETTO_TARGETS = {
-    "buddy-buckyball-lenet-run": "buddy-buckyball-lenet-perfetto",
-}
-
 config = {
     "name": "bebop-bemu-sim",
     "description": "Run bebop bemu emulator",
@@ -69,7 +65,12 @@ def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     if Path(binary_name).name != binary_name:
         return None
 
-    return search_workload(workloads_output_root(bbdir), binary_name)
+    workload = search_workload(workloads_output_root(bbdir), binary_name)
+    if workload is not None:
+        return workload
+
+    kernel = Path(bbdir) / "bb-tests" / "output" / "kernel" / chip / binary_name
+    return str(kernel) if kernel.is_file() else None
 
 
 def is_native_host_elf(path: str) -> bool:
@@ -133,9 +134,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     ctx.logger.info(f"binary_path: {binary_path}")
     binary_dir = os.path.dirname(binary_path)
-    perfetto_target = (
-        PERFETTO_TARGETS.get(binary_name) if input_data.get("tool-profile") else None
-    )
+    perfetto_target = None
+    if input_data.get("tool-profile"):
+        if not binary_name.endswith("-run"):
+            raise ValueError(f"tool-profile binary must end with '-run': {binary_name}")
+        perfetto_target = f"{binary_name.removesuffix('-run')}-perfetto"
     if perfetto_target:
         clean_model_trace(binary_dir)
 

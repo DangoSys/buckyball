@@ -13,6 +13,7 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path
 from utils.event_common import check_result, get_origin_trace_id
+from utils.model import model_layout_name
 
 _workload_build_path = os.path.join(
     get_buckyball_path(), "bb-tests", "workloads", "scripts", "build.py"
@@ -31,27 +32,11 @@ config = {
     "enqueues": [],
 }
 
-# CLI model → layout dir under archs/buckyball/<chip>/
-MODEL_LAYOUT = {
-    "lenet": "LeNet",
-    "mobilenet": "MobileNetV3",
-    "resnet": "ResNet18",
-    "yolo": "YOLO26",
-    "bert": "Bert",
-    "qwen3": "Qwen3",
-    "gemma4": "Gemma4",
-    "deepseekr1": "DeepSeekR1",
-    "llama2": "llama2",
-    "stable-diffusion": "StableDiffusion",
-    "whisper": "Whisper",
-    "buddynext": "BuddyNext",
-}
-
-
 def chips_for_model(bbdir: str, model_key: str) -> set[str]:
     """Chips that currently ship a layout for this model (many-to-many)."""
-    layout = MODEL_LAYOUT.get(model_key)
-    if layout is None:
+    try:
+        layout = model_layout_name(model_key)
+    except ValueError:
         return set()
     root = (
         Path(bbdir)
@@ -179,8 +164,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     if model:
         model_key = model.lower()
-        layout = MODEL_LAYOUT.get(model_key)
-        if layout is None:
+        try:
+            layout = model_layout_name(model_key)
+        except ValueError:
             ctx.logger.error(f"Unknown model: {model}")
             await check_result(
                 ctx, 1, continue_run=False,

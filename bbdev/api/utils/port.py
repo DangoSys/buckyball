@@ -1,14 +1,11 @@
 import socket
 
-HOST = "127.0.0.1"
-
-
 def find_available_port(start_port: int = 5000, end_port: int = 5500) -> int:
     """Find an available port in the specified range"""
     for port in range(start_port, end_port + 1):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.bind((HOST, port))
+                sock.bind(("127.0.0.1", port))
                 return port
         except OSError:
             continue
@@ -43,7 +40,7 @@ def reserve_port(
     for port in _port_order(start_port, end_port, preferred_port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock.bind((HOST, port))
+            sock.bind(("127.0.0.1", port))
             return port, sock
         except OSError:
             sock.close()

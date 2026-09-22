@@ -1,4 +1,5 @@
 import os
+import re
 import shlex
 import sys
 import tomllib
@@ -13,20 +14,18 @@ from utils.path import get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger
 from .waive import apply_waivers
 
+config_scripts = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "config", "scripts")
+)
+sys.path.insert(0, config_scripts)
+
 
 def load_chip(bbdir: str, chip: str):
-    config_scripts = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "config", "scripts")
+    import chip_pb2
+
+    path = (
+        Path(bbdir) / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
     )
-    if config_scripts not in sys.path:
-        sys.path.insert(0, config_scripts)
-    try:
-        import chip_pb2
-    except ImportError as e:
-        raise FileNotFoundError(
-            f"missing {os.path.join(config_scripts, 'chip_pb2.py')}; run bbdev config --install"
-        ) from e
-    path = Path(bbdir) / "examples" / "chips" / chip / "configs" / "generated" / "chip.pb"
     if not path.is_file():
         raise FileNotFoundError(f"missing {path}; run bbdev config --install")
     msg = chip_pb2.Chip()
@@ -36,16 +35,40 @@ def load_chip(bbdir: str, chip: str):
     return msg
 
 
-def ball_domain(chip):
-    d0 = chip.cores[0].balldomain
-    key = [(m.ball_id, m.ball_dir, m.in_bw, m.out_bw) for m in d0.mappings]
-    isa = [(e.mnemonic, e.funct7, e.bid) for e in d0.isa]
-    for core in chip.cores[1:]:
-        k = [(m.ball_id, m.ball_dir, m.in_bw, m.out_bw) for m in core.balldomain.mappings]
-        i = [(e.mnemonic, e.funct7, e.bid) for e in core.balldomain.isa]
-        if k != key or i != isa:
-            raise ValueError("chip.pb cores have different balldomains")
-    return d0
+def load_chip_uvm(bbdir: str, chip: str) -> dict[str, list[str]]:
+    path = Path(bbdir) / "examples" / "chips" / chip / "configs" / "chip.toml"
+    config = tomllib.loads(path.read_text())["uvm"]
+    if set(config) != {"balls", "ips"}:
+        raise ValueError(f"{path}: [uvm] must define exactly balls and ips")
+    if not config["balls"] and not config["ips"]:
+        raise ValueError(f"{path}: [uvm] has no targets")
+    return config
+
+
+def ball_domain(chip, ball: str | None = None):
+    if ball is None:
+        domains = [core.balldomain for core in chip.cores]
+        domain = domains[0]
+        for other in domains[1:]:
+            if other.mappings != domain.mappings or other.isa != domain.isa:
+                raise ValueError("chip.pb cores have different balldomains")
+        return domain
+
+    matches = []
+    for core in chip.cores:
+        mappings = [m for m in core.balldomain.mappings if m.ball_dir == ball]
+        if mappings:
+            mapping = mappings[0]
+            isa = [e for e in core.balldomain.isa if e.bid == mapping.ball_id]
+            matches.append((core.balldomain, mapping, isa))
+    if not matches:
+        raise ValueError(f"ball {ball!r} not in chip.pb")
+
+    domain, mapping, isa = matches[0]
+    for _, other_mapping, other_isa in matches[1:]:
+        if other_mapping != mapping or other_isa != isa:
+            raise ValueError(f"ball {ball!r} has different definitions across cores")
+    return domain
 
 
 def selected_mappings(domain, ball: str | None):
@@ -71,13 +94,32 @@ def vcs_defines(domain, mapping, bank_entries: int):
     return defs
 
 
+def smatmul_accumulator_filename(rtl_dir: Path) -> str:
+    text = (rtl_dir / "SMatMulUnit.sv").read_text()
+    modules = re.findall(r"\b(accumulator_\d+x\d+)\s+accumulator_ext\s*\(", text)
+    if len(modules) != 1:
+        raise ValueError(
+            f"expected one SMatMul accumulator instance, found {modules!r}"
+        )
+    return f"{modules[0]}.sv"
+
+
 def _filelist(
-    verify_dir: Path, ball_dir: str, uvm_rel: str, rtl_rel: str, sim_dir: Path
+    verify_dir: Path,
+    ball_dir: str,
+    uvm_rel: str,
+    rtl_rel: str,
+    rtl_dir: Path,
+    sim_dir: Path,
 ) -> str:
     src = verify_dir / "filelists" / f"{ball_dir}_ball.f"
     dst = sim_dir / f"{ball_dir}_ball.f"
     sim_dir.mkdir(parents=True, exist_ok=True)
     text = src.read_text()
+    if "@SMATMUL_ACCUMULATOR@" in text:
+        text = text.replace(
+            "@SMATMUL_ACCUMULATOR@", smatmul_accumulator_filename(rtl_dir)
+        )
     dst.write_text(text.replace("@UVM@", uvm_rel).replace("@RTL@", rtl_rel))
     return str(dst.relative_to(verify_dir))
 
@@ -86,7 +128,16 @@ def load_ip(bbdir: str, name: str) -> dict:
     registry = Path(bbdir) / "verify" / "uvm" / "ip.toml"
     if name not in tomllib.loads(registry.read_text()).get("ips", []):
         raise ValueError(f"IP {name!r} is not registered in {registry}")
-    root = Path(bbdir) / "arch" / "src" / "main" / "scala" / "framework" / "mem-core" / name
+    root = (
+        Path(bbdir)
+        / "arch"
+        / "src"
+        / "main"
+        / "scala"
+        / "framework"
+        / "mem-core"
+        / name
+    )
     resources = root / "src" / "main" / "resources"
     targets = [
         {
@@ -108,7 +159,9 @@ def load_ip(bbdir: str, name: str) -> dict:
     }
 
 
-def _ip_filelist(resources: Path, source: str, sim_dir: Path, bbdir: str, rtl: Path) -> Path:
+def _ip_filelist(
+    resources: Path, source: str, sim_dir: Path, bbdir: str, rtl: Path
+) -> Path:
     dst = sim_dir / source
     sim_dir.mkdir(parents=True, exist_ok=True)
     text = (resources / source).read_text()
@@ -118,6 +171,20 @@ def _ip_filelist(resources: Path, source: str, sim_dir: Path, bbdir: str, rtl: P
         .replace("@RTL@", str(rtl))
     )
     return dst
+
+
+def check_uvm_result(result, target: str) -> None:
+    if result.returncode != 0:
+        raise RuntimeError(f"UVM failed for {target}")
+    counts = dict(
+        re.findall(r"UVM_(ERROR|FATAL)\s*:\s*(\d+)", result.stdout + result.stderr)
+    )
+    if set(counts) != {"ERROR", "FATAL"}:
+        raise RuntimeError(f"UVM report summary missing for {target}")
+    if counts != {"ERROR": "0", "FATAL": "0"}:
+        raise RuntimeError(
+            f"UVM failed for {target}: errors={counts['ERROR']} fatals={counts['FATAL']}"
+        )
 
 
 def build_ip(bbdir: str, chip: str, name: str, ctx) -> dict:
@@ -203,7 +270,10 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
     model = manifest.parent / "target" / "debug" / f"lib{crate}"
     sim_root = root / "build" / "uvm" / chip
 
-    if any(not (sim_root / target["name"] / "simv").is_file() for target in config["targets"]):
+    if any(
+        not (sim_root / target["name"] / "simv").is_file()
+        for target in config["targets"]
+    ):
         config = build_ip(bbdir, chip, name, ctx)
 
     coverage = []
@@ -211,7 +281,7 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
         simv = sim_root / target["name"] / "simv"
         cov_dir = Path(cov_root) / target["name"] / "coverage"
         script = (
-            f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" {shlex.quote(str(simv))} "
+            f'env LD_LIBRARY_PATH="$VCS_RUNTIME_LIBRARY_PATH" {shlex.quote(str(simv))} '
             f"-sv_lib {shlex.quote(str(model))} +UVM_TESTNAME={shlex.quote(target['test'])} "
             f"-cm line+cond+tgl+assert -cm_name {shlex.quote(target['test'])}"
         )
@@ -226,8 +296,7 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
             stdout_prefix="uvm run",
             stderr_prefix="uvm run",
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"UVM failed for IP {name} target={target['name']}")
+        check_uvm_result(result, f"IP {name} target={target['name']}")
 
         cov_dir.mkdir(parents=True, exist_ok=True)
         urg = (
@@ -256,7 +325,13 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
         )
     index = index_dir / "index.txt"
     index.write_text("\n".join(rows) + "\n")
-    return {"chip": chip, "ip": name, "targets": [t["name"] for t in config["targets"]], "index": str(index), "log": cov_root}
+    return {
+        "chip": chip,
+        "ip": name,
+        "targets": [t["name"] for t in config["targets"]],
+        "index": str(index),
+        "log": cov_root,
+    }
 
 
 def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) -> None:
@@ -268,12 +343,18 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
     sim_dir = verify_dir / "build" / chip_name
     uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
     rtl_rel = os.path.relpath(rtl_dir, verify_dir)
-    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, sim_dir)
+    flist = _filelist(verify_dir, ball, uvm_rel, rtl_rel, rtl_dir, sim_dir)
     cargo = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
         f"cargo build --manifest-path {shlex.quote(str(casegen))}"
     )
-    r = stream_run_logger(cmd=cargo, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm dpi", stderr_prefix="uvm dpi")
+    r = stream_run_logger(
+        cmd=cargo,
+        logger=ctx.logger,
+        cwd=bbdir,
+        stdout_prefix="uvm dpi",
+        stderr_prefix="uvm dpi",
+    )
     if r.returncode != 0:
         raise RuntimeError(f"cargo build failed for {ball}")
     crate = tomllib.loads(casegen.read_text()).get("package", {}).get("name")
@@ -296,40 +377,64 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
         f"-f {shlex.quote(flist)}"
     )
     vcs = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -c {shlex.quote(script)}"
-    r = stream_run_logger(cmd=vcs, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm vcs", stderr_prefix="uvm vcs")
+    r = stream_run_logger(
+        cmd=vcs,
+        logger=ctx.logger,
+        cwd=bbdir,
+        stdout_prefix="uvm vcs",
+        stderr_prefix="uvm vcs",
+    )
     if r.returncode != 0:
         raise RuntimeError(f"vcs failed for {ball}")
 
 
-def run_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx, cov_dir: str) -> None:
+def run_ball(
+    bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx, cov_dir: str
+) -> None:
     ball = mapping.ball_dir
     verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
     simv = verify_dir / "build" / chip_name / "simv"
     if not simv.is_file():
         build_ball(bbdir, chip_name, mill_cfg, domain, mapping, ctx)
-    crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())["package"]["name"]
+    crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())[
+        "package"
+    ]["name"]
     dpi = verify_dir / "casegen" / "target" / "debug" / f"lib{crate.replace('-', '_')}"
     test = f"{ball}_ball_test"
     verify_config = verify_dir / "build" / chip_name / "verify_config.env"
     bank_entries = load_chip(bbdir, chip_name).cores[0].mem.bank.entries
-    verify_config.write_text(f"bank_entries={bank_entries}\nball_id={mapping.ball_id}\n")
+    verify_config.write_text(
+        f"bank_entries={bank_entries}\nball_id={mapping.ball_id}\n"
+    )
     script = (
         f"cd {shlex.quote(str(verify_dir))} && "
-        f"env LD_LIBRARY_PATH=\"$VCS_RUNTIME_LIBRARY_PATH\" BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} {shlex.quote(str(simv))} "
+        f'env LD_LIBRARY_PATH="$VCS_RUNTIME_LIBRARY_PATH" BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} '
+        f"{shlex.quote(str(simv))} "
         f"-sv_lib {shlex.quote(str(dpi))} "
         f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.ball_id} "
         f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
     )
     cmd = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -ic {shlex.quote(script)}"
-    r = stream_run_logger(cmd=cmd, logger=ctx.logger, cwd=bbdir, stdout_prefix="uvm run", stderr_prefix="uvm run")
-    if r.returncode != 0:
-        raise RuntimeError(f"uvm run failed for {ball} test={test}")
+    r = stream_run_logger(
+        cmd=cmd,
+        logger=ctx.logger,
+        cwd=bbdir,
+        stdout_prefix="uvm run",
+        stderr_prefix="uvm run",
+    )
+    check_uvm_result(r, f"{ball} test={test}")
     Path(cov_dir).mkdir(parents=True, exist_ok=True)
     urg = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
         f"urg -dir {shlex.quote(str(simv))}.vdb -format text -report {shlex.quote(cov_dir)}"
     )
-    r = stream_run_logger(cmd=urg, logger=ctx.logger, cwd=str(verify_dir), stdout_prefix="uvm urg", stderr_prefix="uvm urg")
+    r = stream_run_logger(
+        cmd=urg,
+        logger=ctx.logger,
+        cwd=str(verify_dir),
+        stdout_prefix="uvm urg",
+        stderr_prefix="uvm urg",
+    )
     if r.returncode != 0:
         raise RuntimeError(f"urg failed for {ball}")
 
@@ -356,7 +461,7 @@ def dashboard_summary(cov_dir: str) -> dict[str, str]:
 
 def run_chip(bbdir: str, chip: str, ball: str | None, ctx, do_run: bool) -> dict:
     msg = load_chip(bbdir, chip)
-    domain = ball_domain(msg)
+    domain = ball_domain(msg, ball)
     mill_cfg = msg.mill.verilator_config
     maps = selected_mappings(domain, ball)
     ran = []
@@ -400,12 +505,39 @@ def run_chip(bbdir: str, chip: str, ball: str | None, ctx, do_run: bool) -> dict
     return info
 
 
-def run_uvm(bbdir: str, chip: str, ball: str | None, ip: str | None, ctx, do_run: bool) -> dict:
-    if ip is None:
+def run_uvm(
+    bbdir: str, chip: str, ball: str | None, ip: str | None, ctx, do_run: bool
+) -> dict:
+    if ball is not None:
         return run_chip(bbdir, chip, ball, ctx, do_run)
-    if do_run:
-        stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-        run_root = log_dir(bbdir, chip, "verilog", stamp, "uvm", ip)
-        return run_ip(bbdir, chip, ip, ctx, run_root)
-    config = build_ip(bbdir, chip, ip, ctx)
-    return {"chip": chip, "ip": ip, "targets": [target["name"] for target in config["targets"]]}
+    if ip is not None:
+        if do_run:
+            stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+            run_root = log_dir(bbdir, chip, "verilog", stamp, "uvm", ip)
+            return run_ip(bbdir, chip, ip, ctx, run_root)
+        config = build_ip(bbdir, chip, ip, ctx)
+        return {
+            "chip": chip,
+            "ip": ip,
+            "targets": [target["name"] for target in config["targets"]],
+        }
+
+    targets = load_chip_uvm(bbdir, chip)
+    results = [
+        run_chip(bbdir, chip, target, ctx, do_run) for target in targets["balls"]
+    ]
+    for target in targets["ips"]:
+        if do_run:
+            stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+            run_root = log_dir(bbdir, chip, "verilog", stamp, "uvm", target)
+            results.append(run_ip(bbdir, chip, target, ctx, run_root))
+        else:
+            config = build_ip(bbdir, chip, target, ctx)
+            results.append(
+                {
+                    "chip": chip,
+                    "ip": target,
+                    "targets": [item["name"] for item in config["targets"]],
+                }
+            )
+    return {"chip": chip, "results": results}

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from utils.path import get_buckyball_path
+from .path import get_buckyball_path
 
 
 def validate_chip(chip: str | None) -> str:
@@ -20,7 +20,7 @@ def chip_regression_dir(chip: str, backend: str, bbdir: str | None = None) -> Pa
     return root / "examples" / "chips" / chip / "regression" / "batch" / backend
 
 
-def regression_workload_toml(
+def resolve_workload_toml(
     chip: str,
     backend: str,
     test_type: str,

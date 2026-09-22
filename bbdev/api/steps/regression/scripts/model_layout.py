@@ -7,52 +7,7 @@ Kernel `--model <m>` expects the flat
 """
 import os
 from pathlib import Path
-
-MODEL_LAYOUT = {
-    "lenet": "LeNet",
-    "mobilenet": "MobileNetV3",
-    "resnet": "ResNet18",
-    "yolo": "YOLO26",
-    "bert": "Bert",
-    "qwen3": "Qwen3",
-    "gemma4": "Gemma4",
-    "deepseekr1": "DeepSeekR1",
-    "llama2": "llama2",
-    "stable-diffusion": "StableDiffusion",
-    "whisper": "Whisper",
-    "buddynext": "BuddyNext",
-}
-
-MODEL_PERFETTO = {
-    "lenet": {
-        "trace_toml": "bb-tests/workloads/src/ModelTest/e2e/models/models/LeNet/trace/trace-nodes.toml",
-        "mlir_files": [
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/LeNet/subgraph0_linalg.mlir",
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/LeNet/subgraph0_buckyball.mlir",
-        ],
-    },
-    "mobilenet": {
-        "trace_toml": "bb-tests/workloads/src/ModelTest/e2e/models/models/MobileNetV3/trace/trace.toml",
-        "mlir_files": [
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/MobileNetV3/subgraph0_linalg.mlir",
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/MobileNetV3/subgraph0_buckyball.mlir",
-        ],
-    },
-    "resnet": {
-        "trace_toml": "bb-tests/workloads/src/ModelTest/e2e/models/models/ResNet18/trace/trace.toml",
-        "mlir_files": [
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/ResNet18/subgraph0_linalg.mlir",
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/ResNet18/subgraph0_buckyball.mlir",
-        ],
-    },
-    "yolo": {
-        "trace_toml": "bb-tests/workloads/src/ModelTest/e2e/models/models/YOLO26/trace/trace.toml",
-        "mlir_files": [
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/YOLO26/subgraph0_linalg.mlir",
-            "bb-tests/output/{chip}/workloads/src/ModelTest/e2e/models/archs/buckyball/{chip}/YOLO26/subgraph0_buckyball.mlir",
-        ],
-    },
-}
+from utils.model import model_layout_name
 
 
 def _archs_root(bbdir: str, chip: str) -> Path:
@@ -72,10 +27,7 @@ def _archs_root(bbdir: str, chip: str) -> Path:
 
 
 def layout_name(model: str) -> str:
-    layout = MODEL_LAYOUT.get(model.lower())
-    if layout is None:
-        raise ValueError(f"missing layout mapping for model: {model}")
-    return layout
+    return model_layout_name(model)
 
 
 def chip_output_dir(bbdir: str, chip: str, model: str) -> Path:
@@ -108,15 +60,23 @@ def bridge_model_layout(bbdir: str, chip: str, model: str) -> Path:
 
 
 def perfetto_inputs(bbdir: str, chip: str, model: str) -> dict:
-    spec = MODEL_PERFETTO.get(model.lower())
-    if spec is None:
+    if model.lower() not in {"lenet", "mobilenet", "resnet", "yolo"}:
         raise KeyError(f"no perfetto spec for model: {model}")
-    trace_toml = Path(bbdir) / spec["trace_toml"]
+    layout = layout_name(model)
+    trace_name = "trace-nodes.toml" if model.lower() == "lenet" else "trace.toml"
+    trace_toml = (
+        Path(bbdir)
+        / "bb-tests/workloads/src/ModelTest/e2e/models/models"
+        / layout
+        / "trace"
+        / trace_name
+    )
     if not trace_toml.is_file():
         raise FileNotFoundError(f"perfetto trace toml missing: {trace_toml}")
+    output = _archs_root(bbdir, chip) / chip / layout
     mlir_files = []
-    for rel in spec["mlir_files"]:
-        path = Path(bbdir) / rel.replace("{chip}", chip)
+    for name in ("subgraph0_linalg.mlir", "subgraph0_buckyball.mlir"):
+        path = output / name
         if not path.is_file():
             raise FileNotFoundError(f"perfetto mlir file missing: {path}")
         mlir_files.append(path)

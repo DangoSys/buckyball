@@ -23,7 +23,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "message": "image and bitstream parameters are required",
             },
         )
-
     await ctx.enqueue({
         "topic": "bebop.p2e.runworkload",
         "data": {**body, "_trace_id": ctx.trace_id},
