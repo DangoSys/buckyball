@@ -14,6 +14,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
     val channel    = Input(UInt(32.W))
     val hart_id    = Input(UInt(64.W))
     val rob_id     = Input(UInt(32.W))
+    val inst_id    = Input(UInt(64.W))
     val vbank_id   = Input(UInt(32.W))
     val pbank_id   = Input(UInt(32.W))
     val group_id   = Input(UInt(32.W))
@@ -35,6 +36,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input [31:0] channel,
       |  input [63:0] hart_id,
       |  input [31:0] rob_id,
+      |  input [63:0] inst_id,
       |  input [31:0] vbank_id,
       |  input [31:0] pbank_id,
       |  input [31:0] group_id,
@@ -52,6 +54,8 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |    input int unsigned hart_id_lo,
                                                |    input int unsigned hart_id_hi,
                                                |    input int unsigned rob_id,
+                                               |    input int unsigned inst_id_lo,
+                                               |    input int unsigned inst_id_hi,
                                                |    input int unsigned vbank_id,
                                                |    input int unsigned pbank_id,
                                                |    input int unsigned group_id,
@@ -67,6 +71,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |  reg [31:0] channel_reg;
                                                |  reg [63:0] hart_id_reg;
                                                |  reg [31:0] rob_id_reg;
+                                               |  reg [63:0] inst_id_reg;
                                                |  reg [31:0] vbank_id_reg;
                                                |  reg [31:0] pbank_id_reg;
                                                |  reg [31:0] group_id_reg;
@@ -81,7 +86,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |      valid_reg <= 1'b0;
                                                |    end else begin
                                                |      if (valid_reg) begin
-                                               |        dpi_mtrace(is_write_reg, is_shared_reg, channel_reg, hart_id_reg[31:0], hart_id_reg[63:32], rob_id_reg, vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
+                                               |        dpi_mtrace(is_write_reg, is_shared_reg, channel_reg, hart_id_reg[31:0], hart_id_reg[63:32], rob_id_reg, inst_id_reg[31:0], inst_id_reg[63:32], vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
                                                |      end
                                                |
                                                |      valid_reg <= enable;
@@ -91,6 +96,7 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |        channel_reg   <= channel;
                                                |        hart_id_reg   <= hart_id;
                                                |        rob_id_reg    <= rob_id;
+                                               |        inst_id_reg   <= inst_id;
                                                |        vbank_id_reg  <= vbank_id;
                                                |        pbank_id_reg  <= pbank_id;
                                                |        group_id_reg  <= group_id;
@@ -98,72 +104,6 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |        write_mask_reg <= write_mask;
                                                |        data_lo_reg   <= data_lo;
                                                |        data_hi_reg   <= data_hi;
-                                               |      end
-                                               |    end
-                                               |  end
-                                               |""".stripMargin) +
-      """
-        |endmodule
-    """.stripMargin
-  )
-}
-
-class MTraceIssueDPI extends BlackBox with HasBlackBoxInline {
-
-  val io = IO(new Bundle {
-    val clock     = Input(Clock())
-    val reset     = Input(Bool())
-    val hart_id   = Input(UInt(64.W))
-    val is_shared = Input(UInt(8.W))
-    val rob_id    = Input(UInt(32.W))
-    val vbank_id  = Input(UInt(32.W))
-    val group_id  = Input(UInt(32.W))
-    val enable    = Input(Bool())
-  })
-
-  setInline(
-    "MTraceIssueDPI.v",
-    """
-      |module MTraceIssueDPI(
-      |  input clock,
-      |  input reset,
-      |  input [63:0] hart_id,
-      |  input [7:0] is_shared,
-      |  input [31:0] rob_id,
-      |  input [31:0] vbank_id,
-      |  input [31:0] group_id,
-      |  input enable
-      |);
-      |""".stripMargin + DpiGuard.wrapMTrace("""
-                                               |  import "DPI-C" context function void dpi_mtrace_issue(
-                                               |    input int unsigned hart_id_lo,
-                                               |    input int unsigned hart_id_hi,
-                                               |    input int unsigned is_shared,
-                                               |    input int unsigned rob_id,
-                                               |    input int unsigned vbank_id,
-                                               |    input int unsigned group_id
-                                               |  );
-                                               |  reg [63:0] hart_id_reg;
-                                               |  reg [7:0] is_shared_reg;
-                                               |  reg [31:0] rob_id_reg;
-                                               |  reg [31:0] vbank_id_reg;
-                                               |  reg [31:0] group_id_reg;
-                                               |  reg valid_reg;
-                                               |
-                                               |  always @(posedge clock) begin
-                                               |    if (reset) begin
-                                               |      valid_reg <= 1'b0;
-                                               |    end else begin
-                                               |      if (valid_reg) begin
-                                               |        dpi_mtrace_issue(hart_id_reg[31:0], hart_id_reg[63:32], is_shared_reg, rob_id_reg, vbank_id_reg, group_id_reg);
-                                               |      end
-                                               |      valid_reg <= enable;
-                                               |      if (enable) begin
-                                               |        hart_id_reg  <= hart_id;
-                                               |        is_shared_reg <= is_shared;
-                                               |        rob_id_reg   <= rob_id;
-                                               |        vbank_id_reg <= vbank_id;
-                                               |        group_id_reg <= group_id;
                                                |      end
                                                |    end
                                                |  end

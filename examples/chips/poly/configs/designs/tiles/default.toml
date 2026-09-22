@@ -1,5 +1,13 @@
 # Poly Tile: three prefill Cores and two decode Cores.
 
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
 memBallChannelNum = 6
 
 [privateDCache]

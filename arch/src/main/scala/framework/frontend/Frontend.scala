@@ -9,6 +9,8 @@ import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, Globa
 import framework.top.GlobalConfig
 import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.balldomain.blink.SubRobRow
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.backend.shared.SharedMemLayout
 
 /**
  * Frontend Module
@@ -17,12 +19,15 @@ import framework.balldomain.blink.SubRobRow
 @instantiable
 class Frontend(val b: GlobalConfig) extends Module {
 
+  val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
+
   @public
   val io = IO(new Bundle {
+    val hartid = Input(UInt(b.tile.xLen.W))
 
     // RoCC command input
     val cmd = Flipped(Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB(b.core.xLen)
+      val cmd = new RoCCCommandBB(b.tile.xLen)
     }))
 
     // Issue to domains
@@ -36,9 +41,17 @@ class Frontend(val b: GlobalConfig) extends Module {
 
     // Ball -> SubROB request passthrough
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+    val inst_ids          = Output(Vec(b.frontend.rob_entries, UInt(64.W)))
+
+    val bank_hashes =
+      if (b.sim.diffTest) {
+        Some(Input(Vec(b.memDomain.bankNum + sharedHashCount, new PhysicalBankHash(b))))
+      } else {
+        None
+      }
 
     // RoCC response
-    val resp    = Decoupled(new RoCCResponseBB(b.core.xLen))
+    val resp    = Decoupled(new RoCCResponseBB(b.tile.xLen))
     val busy    = Output(Bool())
     // Propagates the Global ROB retirement pulse to the host bridge.
     val retired = Output(Bool())
@@ -62,10 +75,13 @@ class Frontend(val b: GlobalConfig) extends Module {
   io.cmd.ready              := !boot.io.active && gDecoder.io.id_i.ready
 
   scheduler.io.decode_cmd_i <> gDecoder.io.id_o
+  scheduler.io.hart_id               := io.hartid
+  scheduler.io.bank_hashes.foreach(_ := io.bank_hashes.get)
 
   io.ball_issue_o <> scheduler.io.ball_issue_o
   io.mem_issue_o <> scheduler.io.mem_issue_o
   io.gp_issue_o <> scheduler.io.gp_issue_o
+  io.inst_ids := scheduler.io.inst_ids
 
   scheduler.io.ball_complete_i <> io.ball_complete_i
   scheduler.io.mem_complete_i <> io.mem_complete_i

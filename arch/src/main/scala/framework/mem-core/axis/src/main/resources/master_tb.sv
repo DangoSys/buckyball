@@ -6,25 +6,25 @@ module master_tb;
   logic reset = 1'b0;
   always #5 clock = ~clock;
 
-  axis_if source_if(clock);
-  axis_if sink_if(clock);
+  axis_if source_if (clock);
+  axis_if sink_if (clock);
 
   assign source_if.reset = reset;
   assign sink_if.reset   = reset;
 
   Master dut (
-    .clock(clock),
-    .reset(reset),
-    .io_in_ready(source_if.tready),
-    .io_in_valid(source_if.tvalid),
-    .io_in_bits_tdata(source_if.tdata),
-    .io_in_bits_tkeep(source_if.tkeep),
-    .io_in_bits_tlast(source_if.tlast),
-    .io_axis_tvalid(sink_if.tvalid),
-    .io_axis_tready(sink_if.tready),
-    .io_axis_tdata(sink_if.tdata),
-    .io_axis_tkeep(sink_if.tkeep),
-    .io_axis_tlast(sink_if.tlast)
+      .clock(clock),
+      .reset(reset),
+      .io_in_ready(source_if.tready),
+      .io_in_valid(source_if.tvalid),
+      .io_in_bits_tdata(source_if.tdata),
+      .io_in_bits_tkeep(source_if.tkeep),
+      .io_in_bits_tlast(source_if.tlast),
+      .io_axis_tvalid(sink_if.tvalid),
+      .io_axis_tready(sink_if.tready),
+      .io_axis_tdata(sink_if.tdata),
+      .io_axis_tkeep(sink_if.tkeep),
+      .io_axis_tlast(sink_if.tlast)
   );
 
   initial begin

@@ -17,8 +17,10 @@ case class MemDomainParam(
   virtualBankCount:        Int,
   sharedEnable:            Boolean,
   sharedEntries:           Int,
+  sharedBankNum:           Int,
   sharedInputChannels:     Int,
   sharedDefaultGroupCount: Int,
+  nCores:                  Int,
   tlb_size:                Int,
   dma_n_xacts:             Int,
   dma_burst_maxbytes:      Int,
@@ -35,9 +37,12 @@ case class MemDomainParam(
   mmioReadWidth:           Int) {
 
   // MMIO derived values
-  val mmioBankBytes:  Int = mmioBankEntries * (mmioBankWidth / 8)
-  val mmioTotalBytes: Int = mmioBankNum * mmioBankBytes
-  val vbankIdWidth:   Int = chisel3.util.log2Up(virtualBankCount)
+  val mmioBankBytes:   Int = mmioBankEntries * (mmioBankWidth / 8)
+  val mmioTotalBytes:  Int = mmioBankNum * mmioBankBytes
+  val vbankIdWidth:    Int = chisel3.util.log2Up(virtualBankCount)
+  val maxGroupCount:   Int = math.max(bankNum, if (sharedEnable) sharedBankNum else bankNum)
+  val groupCountWidth: Int = chisel3.util.log2Up(maxGroupCount + 1)
+  val groupIdWidth:    Int = chisel3.util.log2Up(maxGroupCount)
 }
 
 object MemDomainParam {
@@ -52,8 +57,10 @@ object MemDomainParam {
     virtualBankCount = 0,
     sharedEnable = false,
     sharedEntries = 0,
+    sharedBankNum = 0,
     sharedInputChannels = 0,
     sharedDefaultGroupCount = 0,
+    nCores = 0,
     tlb_size = 0,
     dma_n_xacts = 0,
     dma_burst_maxbytes = 0,

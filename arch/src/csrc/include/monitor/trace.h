@@ -13,10 +13,13 @@ void dpi_bdb_set_clk(unsigned long long c);
 
 // DPI-C function for instruction trace (itrace)
 // Called from GlobalROB when instructions are allocated/issued/completed
-void dpi_itrace(unsigned char is_issue, // 2 = alloc, 1 = issue, 0 = complete
-                unsigned int rob_id, unsigned int domain_id, unsigned int funct,
-                unsigned long long pc, unsigned long long rs1,
-                unsigned long long rs2, unsigned char bank_enable);
+void dpi_itrace(unsigned int is_issue, // 2 = alloc, 1 = issue, 0 = complete
+                unsigned int hart_id_lo, unsigned int hart_id_hi,
+                unsigned int rob_id, unsigned int inst_id_lo,
+                unsigned int inst_id_hi, unsigned int domain_id,
+                unsigned int funct, unsigned int pc_lo, unsigned int pc_hi,
+                unsigned int rs1_lo, unsigned int rs1_hi, unsigned int rs2_lo,
+                unsigned int rs2_hi);
 
 // DPI-C function for memory trace (mtrace)
 // Called from MemBackend when read/write requests are made

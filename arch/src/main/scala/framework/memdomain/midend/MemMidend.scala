@@ -5,7 +5,7 @@ import chisel3.util._
 import framework.top.GlobalConfig
 import framework.balldomain.blink.{BankRead, BankWrite}
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.memdomain.backend.{MTraceIssueDPI, MemRequestIO}
+import framework.memdomain.backend.MemRequestIO
 
 // BankRead/BankWrite with is_shared flag, used for unified midend interface
 class BankReadWithShared(val b: GlobalConfig) extends Bundle {
@@ -44,7 +44,8 @@ class MemMidend(val b: GlobalConfig) extends Module {
     val ballChannelActive = Input(Vec(b.ballDomain.ballNum, Bool()))
     val ballChannelReady  = Output(Vec(b.ballDomain.ballNum, Bool()))
 
-    val hartid = Input(UInt(b.core.xLen.W))
+    val hartid   = Input(UInt(b.tile.xLen.W))
+    val inst_ids = Input(Vec(b.frontend.rob_entries, UInt(64.W)))
 
     // Output to backend (MemManager)
     val mem_req = Vec(b.memDomain.bankChannel, new MemRequestIO(b))
@@ -169,6 +170,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
     io.mem_req(i).is_shared        := false.B
     io.mem_req(i).hart_id          := io.hartid
     io.mem_req(i).rob_id           := 0.U
+    io.mem_req(i).inst_id          := 0.U
 
     val isRead        = mappingTable(i).isRead
     val rid           = mappingTable(i).id
@@ -197,6 +199,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
           io.mem_req(i).group_id  := rgroup_id
           io.mem_req(i).is_shared := r_shared
           io.mem_req(i).rob_id    := rrob_id
+          io.mem_req(i).inst_id   := io.inst_ids(rrob_id)
         }
       }.otherwise {
         when(ballRouteOpen) {
@@ -205,25 +208,10 @@ class MemMidend(val b: GlobalConfig) extends Module {
           io.mem_req(i).group_id  := wgroup_id
           io.mem_req(i).is_shared := w_shared
           io.mem_req(i).rob_id    := wrob_id
+          io.mem_req(i).inst_id   := io.inst_ids(wrob_id)
         }
       }
     }
-  }
-
-  // Count the actual write beats accepted by each backend channel. This is the
-  // generation-side event at the same granularity as the target SRAM `fire`
-  // arrival event, while remaining upstream of the backend/physical-bank path.
-  // A DPI instance per channel preserves simultaneous accepted beats.
-  val writeIssueTraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceIssueDPI))
-  for (i <- 0 until b.memDomain.bankChannel) {
-    writeIssueTraces(i).io.clock     := clock
-    writeIssueTraces(i).io.reset     := reset.asBool
-    writeIssueTraces(i).io.hart_id   := io.mem_req(i).hart_id
-    writeIssueTraces(i).io.is_shared := io.mem_req(i).is_shared.asUInt
-    writeIssueTraces(i).io.rob_id    := io.mem_req(i).rob_id
-    writeIssueTraces(i).io.vbank_id  := io.mem_req(i).bank_id
-    writeIssueTraces(i).io.group_id  := io.mem_req(i).group_id
-    writeIssueTraces(i).io.enable    := io.mem_req(i).write.req.fire
   }
 
   // Mapping table release

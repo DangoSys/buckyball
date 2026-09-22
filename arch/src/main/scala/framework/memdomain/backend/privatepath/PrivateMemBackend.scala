@@ -5,8 +5,10 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.memdomain.backend.{MTraceDPI, MemRequestIO}
+import sims.hash.BankHashMonitor
 import framework.memdomain.backend.accpipe.AccPipe
 import framework.memdomain.backend.banks.SramBank
+import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 import framework.top.GlobalConfig
 
 @instantiable
@@ -19,11 +21,19 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
-    val query_group_count = Output(UInt(log2Up(b.memDomain.bankNum + 1).W))
+    val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
+    val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(b.memDomain.bankNum, new PhysicalBankHash(b)))) else None
   })
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
+
+  val hashMonitors =
+    if (b.sim.diffTest) {
+      Some(Seq.fill(b.memDomain.bankNum)(Instantiate(new BankHashMonitor(b))))
+    } else {
+      None
+    }
 
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
   val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
@@ -35,6 +45,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     mt.io.channel    := 0.U
     mt.io.hart_id    := 0.U
     mt.io.rob_id     := 0.U
+    mt.io.inst_id    := 0.U
     mt.io.vbank_id   := 0.U
     mt.io.pbank_id   := 0.U
     mt.io.group_id   := 0.U
@@ -50,9 +61,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // -----------------------------------------------------------------------------
   class MappingTableEntry extends Bundle {
     val valid    = Bool()
+    val hart_id  = UInt(b.tile.xLen.W)
     val vbank_id = UInt(b.memDomain.vbankIdWidth.W)
     val is_multi = Bool()
-    val group_id = UInt(log2Up(b.memDomain.bankNum).W)
+    val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
   val mappingTable                = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
@@ -81,10 +93,11 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // The private namespace is bounded by the frontend contract, while
   // multi-bank groups remain represented individually in mappingTable.
   val groupCountByVbank = RegInit(
-    VecInit(Seq.fill(privateVbankCount)(0.U(log2Up(b.memDomain.bankNum + 1).W)))
+    VecInit(Seq.fill(privateVbankCount)(0.U(b.memDomain.groupCountWidth.W)))
   )
 
   def addEntry(
+    hart_id:  UInt,
     vbank_id: UInt,
     pbank_id: UInt,
     is_multi: Bool,
@@ -92,6 +105,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   ): Unit = {
     val entry = mappingTable(pbank_id)
     entry.valid    := true.B
+    entry.hart_id  := hart_id
     entry.vbank_id := vbank_id
     entry.is_multi := is_multi
     entry.group_id := group_id
@@ -103,15 +117,6 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         mappingTable(i).valid := false.B
       }
     }
-  }
-
-  def getFreePbankId(): UInt = {
-    val hasFree     = mappingTable.map(_.valid === false.B).reduce(_ || _)
-    when(!hasFree) {
-      assert(false.B, "PrivateMemBackend allocation failed: no free physical bank\n")
-    }
-    val freePbankId = mappingTable.indexWhere(_.valid === false.B)
-    freePbankId
   }
 
   // -----------------------------------------------------------------------------
@@ -126,6 +131,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
     accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
     accPipes(i).io.mem_req.rob_id    := io.mem_req(i).rob_id
+    accPipes(i).io.mem_req.inst_id   := io.mem_req(i).inst_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -150,17 +156,31 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.resp.ready := true.B
   }
 
-  io.config.ready := true.B
+  val realloc       = io.config.bits.group_id === 0.U
+  val freePbankMask =
+    VecInit(mappingTable.map(entry => !entry.valid || (realloc && entry.vbank_id === io.config.bits.vbank_id)))
+  val hasFreePbank  = freePbankMask.asUInt.orR
+  io.config.ready := !io.config.bits.alloc || hasFreePbank
+  when(io.config.valid && io.config.bits.alloc && !hasFreePbank) {
+    assert(false.B, "PrivateMemBackend allocation failed: no free physical bank\n")
+  }
 
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
 
+  hashMonitors.foreach(_.foreach(_.io.bind := false.B))
+
   when(io.config.fire) {
     val vbank    = io.config.bits.vbank_id
     val vbankIdx = vbank(privateVbankIdWidth - 1, 0)
     when(io.config.bits.alloc) {
-      val freePbank = getFreePbankId()
+      val freePbank = PriorityEncoder(freePbankMask)
+      hashMonitors.foreach { hashes =>
+        for (i <- 0 until b.memDomain.bankNum) {
+          hashes(i).io.bind := freePbank === i.U
+        }
+      }
       // Match bemu mset: realloc of the same vbank frees prior physical banks first.
       // MemConfiger emits one fire per group; only group 0 drops the old mapping.
       when(io.config.bits.group_id === 0.U) {
@@ -168,6 +188,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         singleRouteValid(vbankIdx) := false.B
       }
       addEntry(
+        io.config.bits.hart_id,
         io.config.bits.vbank_id,
         freePbank,
         io.config.bits.is_multi,
@@ -210,6 +231,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     mtraces(ch).io.channel    := ch.U
     mtraces(ch).io.hart_id    := io.mem_req(ch).hart_id
     mtraces(ch).io.rob_id     := io.mem_req(ch).rob_id
+    mtraces(ch).io.inst_id    := io.mem_req(ch).inst_id
     mtraces(ch).io.vbank_id   := io.mem_req(ch).bank_id
     mtraces(ch).io.pbank_id   := pbankId
     mtraces(ch).io.group_id   := io.mem_req(ch).group_id
@@ -229,6 +251,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   val channelReqAddr    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(log2Ceil(b.memDomain.bankEntries).W)))
   val channelReqData    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.bankWidth.W)))
   val channelReqMask    = Seq.fill(b.memDomain.bankChannel)(Wire(Vec(b.memDomain.bankMaskLen, Bool())))
+  val channelHartId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.tile.xLen.W)))
+  val channelInstId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(64.W)))
+  val channelVbankId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.vbankIdWidth.W)))
+  val channelGroupId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.groupIdWidth.W)))
 
   for (i <- 0 until b.memDomain.bankChannel) {
     val routePbankReg     = RegInit(0.U(pbankIndexWidth.W))
@@ -270,6 +296,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     )
     channelReqData(i)    := accPipes(i).io.sramWrite.req.bits.data
     channelReqMask(i)    := accPipes(i).io.sramWrite.req.bits.mask
+    channelHartId(i)     := io.mem_req(i).hart_id
+    channelInstId(i)     := io.mem_req(i).inst_id
+    channelVbankId(i)    := io.mem_req(i).bank_id
+    channelGroupId(i)    := io.mem_req(i).group_id
 
     // SramBank is a pure single-port SRAM: the selected operation is always
     // accepted when its route is active. Using the held route directly avoids
@@ -332,6 +362,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val selectedReqMask    = VecInit((0 until b.memDomain.bankMaskLen).map { k =>
       oneHotOr(1, channelReqMask.map(_(k))).asBool
     })
+    val selectedHartId     = oneHotOr(b.tile.xLen, channelHartId)
+    val selectedInstId     = oneHotOr(64, channelInstId)
+    val selectedVbankId    = oneHotOr(b.memDomain.vbankIdWidth, channelVbankId)
+    val selectedGroupId    = oneHotOr(b.memDomain.groupIdWidth, channelGroupId)
 
     banks(j).io.sramRead.req.valid      := selectedReqValid && !selectedReqIsWrite
     banks(j).io.sramRead.req.bits.addr  := selectedReqAddr
@@ -339,6 +373,14 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     banks(j).io.sramWrite.req.bits.addr := selectedReqAddr
     banks(j).io.sramWrite.req.bits.data := selectedReqData
     banks(j).io.sramWrite.req.bits.mask := selectedReqMask
+
+    hashMonitors.foreach { hashes =>
+      val monitor = hashes(j)
+      monitor.io.write.valid     := banks(j).io.sramWrite.req.fire
+      monitor.io.write.bits.addr := selectedReqAddr
+      monitor.io.write.bits.mask := selectedReqMask
+      monitor.io.write.bits.data := selectedReqData
+    }
 
     // Only the channel holding this bank can consume its one-cycle response.
     banks(j).io.sramRead.resp.ready  := VecInit((0 until b.memDomain.bankChannel).map { i =>
@@ -365,5 +407,16 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     }.reduce(_ | _)
     accPipes(i).io.sramWrite.resp.valid    := writeRespSel.orR
     accPipes(i).io.sramWrite.resp.bits.ok  := writeRespSel.orR
+  }
+
+  io.bank_hashes.foreach { states =>
+    for (i <- 0 until b.memDomain.bankNum) {
+      states(i).valid      := mappingTable(i).valid
+      states(i).hartId     := mappingTable(i).hart_id
+      states(i).vbankId    := mappingTable(i).vbank_id
+      states(i).pbankId    := i.U
+      states(i).groupId    := mappingTable(i).group_id
+      states(i).statusHash := hashMonitors.get(i).io.statusHash
+    }
   }
 }

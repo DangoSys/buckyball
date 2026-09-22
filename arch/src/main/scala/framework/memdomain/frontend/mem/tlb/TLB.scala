@@ -10,16 +10,16 @@ import framework.top.GlobalConfig
 @instantiable
 class TLB(val b: GlobalConfig, val lgMaxSize: Int) extends Module {
   val entries   = b.memDomain.tlb_size
-  val vaddrBits = b.core.vaddrBits
-  val paddrBits = b.core.paddrBits
-  val pgIdxBits = b.core.pgIdxBits
+  val vaddrBits = b.tile.vaddrBits
+  val paddrBits = b.tile.paddrBits
+  val pgIdxBits = b.tile.pgIdxBits
   val vpnBits   = vaddrBits - pgIdxBits
   val ppnBits   = paddrBits - pgIdxBits
-  val pgLevels  = b.rocketCore.pgLevels
+  val pgLevels  = b.tile.pgLevels
 
   @public
   val io = IO(new Bundle {
-    val req    = Flipped(Decoupled(new BBTLBReq(lgMaxSize, vaddrBits, b.core.xLen)))
+    val req    = Flipped(Decoupled(new BBTLBReq(lgMaxSize, vaddrBits, b.tile.xLen)))
     val resp   = Decoupled(new BBTLBResp(lgMaxSize, paddrBits, vaddrBits))
     val ptw    = new BBTLBPTWIO(b)
     val sfence = Flipped(Valid(Bool())) // Simplified flush signal

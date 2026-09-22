@@ -1,0 +1,2 @@
+kind = "rocket"
+config = "./rocket/default.toml"

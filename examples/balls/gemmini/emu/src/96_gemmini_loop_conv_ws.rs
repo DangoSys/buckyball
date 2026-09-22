@@ -4,7 +4,7 @@ use super::super::bank::{bank_row_bytes, MATRIX_SIZE};
 use super::gemmini_state::gemini;
 use super::instruction::ExecContext;
 use super::loop_micro_ops::{
-    alloc, checked_stride, compute, free_after_digest, mvin, mvout, preload,
+    alloc, checked_stride, compute, free_after_hash, mvin, mvout, preload,
 };
 
 // Shared implementation
@@ -266,9 +266,9 @@ fn exec_loop_impl(xs2: u64, ctx: &mut ExecContext) -> u64 {
         }
     }
 
-    free_after_digest(ctx, bank_input);
-    free_after_digest(ctx, bank_weight);
-    free_after_digest(ctx, bank_output);
+    free_after_hash(ctx, bank_input);
+    free_after_hash(ctx, bank_weight);
+    free_after_hash(ctx, bank_output);
     0
 }
 

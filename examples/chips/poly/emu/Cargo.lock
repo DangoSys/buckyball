@@ -104,7 +104,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -113,8 +112,10 @@ version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
  "bebop-bemu-profile",
+ "bebop-clint",
  "bebop-dtb",
  "bebop-elf",
+ "bebop-plic",
  "bebop-rushb",
  "bebop-syscall",
  "bebop-uart",
@@ -146,11 +147,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "bebop-dtb"
+name = "bebop-clint"
 version = "0.1.0"
 
 [[package]]
+name = "bebop-dtb"
+version = "0.1.0"
+dependencies = [
+ "bebop-clint",
+ "bebop-plic",
+]
+
+[[package]]
 name = "bebop-elf"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-plic"
 version = "0.1.0"
 
 [[package]]
@@ -1036,12 +1049,6 @@ checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 dependencies = [
  "memchr",
 ]
-
-[[package]]
-name = "xxhash-rust"
-version = "0.8.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee1b19627c7c60102ab80d3a9cbe18de90bfe03bfa6c3715447681f0e8c8af6"
 
 [[package]]
 name = "zmij"

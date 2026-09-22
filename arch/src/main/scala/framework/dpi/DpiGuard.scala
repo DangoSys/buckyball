@@ -19,6 +19,9 @@ object DpiGuard {
   def wrapMTrace(body: String): String =
     wrapTraceKind("BUCKYBALL_DISABLE_MTRACE_DPI", body)
 
+  def wrapBTrace(body: String): String =
+    wrapTraceKind("BUCKYBALL_DISABLE_BTRACE_DPI", body)
+
   def wrapPMCTrace(body: String): String =
     wrapTraceKind("BUCKYBALL_DISABLE_PMCTRACE_DPI", body)
 }

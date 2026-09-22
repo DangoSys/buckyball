@@ -1,5 +1,13 @@
 # Toy Tile Configuration (16 cores, shared tile-private L2)
 
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
 memBallChannelNum = 6
 
 [privateDCache]

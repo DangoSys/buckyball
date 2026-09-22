@@ -50,28 +50,29 @@ object WithBuckyballTiles {
         throw new RuntimeException("boom-only tile cannot enable privateDCache")
       }
       tile.cores.map {
-        case BoomTileCore(boom) => new WithBoomTile(boom)
-        case other              => throw new RuntimeException(s"expected BoomTileCore, got $other")
+        case BoomTileCore(cpu) => new WithBoomTile(cpu)
+        case other             => throw new RuntimeException(s"expected BoomTileCore, got $other")
       }
     } else {
       if (tile.privateDCache.isDefined) {
         throw new RuntimeException("heterogeneous tile cannot enable privateDCache")
       }
       tile.cores.map {
-        case RocketTileCore(rocket, buckyball) =>
+        case RocketTileCore(cpu, buckyball) =>
           if (buckyball.isDefined) {
             throw new RuntimeException("heterogeneous tile cannot enable buckyball")
           }
           new WithBBTile(
+            tileParam = tile.param,
             withBuckyball = false,
             nCoresPerTile = 1,
             buckyballPerCore = Some(Seq(None)),
-            rocketCorePerCore = Some(Seq(rocket)),
+            rocketCpuPerCore = Some(Seq(cpu)),
             privateDCache = None,
             hiddenHartBase = hiddenHartBase
           )
-        case BoomTileCore(boom)                =>
-          new WithBoomTile(boom)
+        case BoomTileCore(cpu)              =>
+          new WithBoomTile(cpu)
       }
     }
   }
@@ -82,17 +83,18 @@ object WithBuckyballTiles {
     hiddenHartBase: Option[Int]
   ): Config = {
     val rockets  = tile.cores.map {
-      case RocketTileCore(rocket, bb) => (rocket, bb)
-      case other                      => throw new RuntimeException(s"expected RocketTileCore, got $other")
+      case RocketTileCore(cpu, bb) => (cpu, bb)
+      case other                   => throw new RuntimeException(s"expected RocketTileCore, got $other")
     }
     val resolved =
       if (withBuckyball) rockets.map(_._2)
       else rockets.map(_ => None)
     new WithBBTile(
+      tileParam = tile.param,
       withBuckyball = resolved.exists(_.isDefined),
       nCoresPerTile = rockets.size,
       buckyballPerCore = Some(resolved),
-      rocketCorePerCore = Some(rockets.map(_._1)),
+      rocketCpuPerCore = Some(rockets.map(_._1)),
       privateDCache = tile.privateDCache,
       hiddenHartBase = hiddenHartBase
     )

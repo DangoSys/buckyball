@@ -3,6 +3,7 @@ package sims.p2e
 import chisel3._
 import _root_.circt.stage.ChiselStage
 import org.chipsalliance.cde.config.Config
+import framework.top.configs.{SimParam, WithSimParam}
 import freechips.rocketchip.devices.tilelink.{BootROMLocated, BootROMParams}
 import freechips.rocketchip.subsystem.{InSubsystem, WithCustomMemPort}
 import sims.scu.WithSCU
@@ -49,7 +50,8 @@ class WithP2EDDR4MemPort
 // =============================================================================
 class P2EBaseConfig(maxHarts: Int = 64)
     extends Config(
-      new WithP2EHarness ++
+      new WithSimParam(SimParam()) ++
+        new WithP2EHarness ++
         new WithSCU(maxHarts = maxHarts) ++
         new WithP2EDDR4MemPort ++
         new WithP2EBootROM
@@ -95,7 +97,7 @@ object Elaborate extends App {
   val configClassName = args(0)
   println(s"Elaborating P2EHarness with config: $configClassName")
 
-  val config: Config =
+  val baseConfig: Config =
     try {
       val configClass = Class.forName(configClassName)
       configClass.getDeclaredConstructor().newInstance().asInstanceOf[Config]
@@ -109,22 +111,31 @@ object Elaborate extends App {
         sys.exit(1)
     }
 
-  val firtoolOpts = args.drop(1)
+  val rawFirtoolOpts = args.drop(1)
 
-  val outDir = firtoolOpts.collectFirst {
+  val config: Config =
+    if (rawFirtoolOpts.contains("--difftest"))
+      new Config(new WithSimParam(SimParam(diffTest = true)).orElse(baseConfig))
+    else baseConfig
+
+  val outDir = rawFirtoolOpts.collectFirst {
     case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
   }.getOrElse {
     throw new Exception("missing -o=<dir> in firtool opts")
   }
 
+  val firtoolOpts = rawFirtoolOpts.filterNot { opt =>
+    opt == "--split-verilog" || opt == "--difftest" || opt.startsWith("-o=")
+  }
+
   ChiselStage.emitSystemVerilogFile(
     new P2EHarness()(config.toInstance),
     firtoolOpts = firtoolOpts,
-    args = Array("--target-dir", outDir)
+    args = Array("--target-dir", outDir, "--split-verilog")
   )
   ChiselStage.emitSystemVerilogFile(
     new P2ETop,
     firtoolOpts = firtoolOpts,
-    args = Array("--target-dir", outDir)
+    args = Array("--target-dir", outDir, "--split-verilog")
   )
 }

@@ -5,7 +5,8 @@ import freechips.rocketchip.rocket.{BTBParams, DCacheParams, ICacheParams, MulDi
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.tile.{FPUParams, RocketTileBoundaryBufferParams}
 import framework.top.GlobalConfig
-import framework.system.core.rocket.configs.RocketCoreParam
+import framework.system.core.rocket.configs.RocketCpuParam
+import framework.system.tile.configs.TileParam
 
 /**
  * Config fragment to add N BBTiles.
@@ -24,61 +25,35 @@ object WithNBBTiles {
       }
     )
 
-  /**
-   * Resolve the per-tile rocketCore param from buckyballPerCore.
-   *
-   * Multi-core within a tile currently shares one RocketCoreParam (BBTileParams
-   * has tile-level core/dcache/icache fields). All Some(_) entries must agree.
-   * Falls back to RocketCoreParam() when nothing is defined.
-   */
-  def resolveRocketCore(
-    buckyballPerCore: Seq[Option[GlobalConfig]],
-    buckyballConfig:  GlobalConfig
-  ): RocketCoreParam = {
-    val defined = buckyballPerCore.flatten.map(_.rocketCore)
-    if (defined.isEmpty) {
-      buckyballConfig.rocketCore
-    } else {
-      val head = defined.head
-      require(
-        defined.forall(_ == head),
-        "All cores within a BBTile must currently share the same rocketCore config; " +
-          "heterogeneous per-core Rocket params is not yet supported."
-      )
-      head
-    }
-  }
-
-  def resolveRocketCores(
-    nCoresPerTile:     Int,
-    buckyballPerCore:  Seq[Option[GlobalConfig]],
-    buckyballConfig:   GlobalConfig,
-    rocketCorePerCore: Option[Seq[RocketCoreParam]]
-  ): Seq[RocketCoreParam] = {
-    rocketCorePerCore match {
+  def resolveRocketCpus(
+    nCoresPerTile:    Int,
+    rocketCpuPerCore: Option[Seq[RocketCpuParam]]
+  ): Seq[RocketCpuParam] = {
+    rocketCpuPerCore match {
       case Some(cores) =>
         require(
           cores.size == nCoresPerTile,
-          s"rocketCorePerCore size (${cores.size}) must equal nCoresPerTile ($nCoresPerTile)"
+          s"rocketCpuPerCore size (${cores.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
         cores
       case None        =>
-        Seq.fill(nCoresPerTile)(resolveRocketCore(buckyballPerCore, buckyballConfig))
+        throw new RuntimeException("rocketCpuPerCore must be specified")
     }
   }
 
 }
 
 class WithBBTile(
-  location:          HierarchicalLocation = InSubsystem,
-  withBuckyball:     Boolean = true,
-  buckyballConfig:   GlobalConfig = GlobalConfig(),
-  crossing:          Option[RocketCrossingParams] = None,
-  nCoresPerTile:     Int = 1,
-  buckyballPerCore:  Option[Seq[Option[GlobalConfig]]] = None,
-  rocketCorePerCore: Option[Seq[RocketCoreParam]] = None,
-  privateDCache:     Option[PrivateDCacheParams] = None,
-  hiddenHartBase:    Option[Int] = None)
+  tileParam:        TileParam,
+  location:         HierarchicalLocation = InSubsystem,
+  withBuckyball:    Boolean = true,
+  buckyballConfig:  GlobalConfig = GlobalConfig(),
+  crossing:         Option[RocketCrossingParams] = None,
+  nCoresPerTile:    Int = 1,
+  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
+  rocketCpuPerCore: Option[Seq[RocketCpuParam]] = None,
+  privateDCache:    Option[PrivateDCacheParams] = None,
+  hiddenHartBase:   Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -91,13 +66,11 @@ class WithBBTile(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
-        val rocketCores              = WithNBBTiles.resolveRocketCores(
+        val rocketCpus               = WithNBBTiles.resolveRocketCpus(
           nCoresPerTile,
-          resolvedBuckyballPerCore,
-          buckyballConfig,
-          rocketCorePerCore
+          rocketCpuPerCore
         )
-        val rocketCore               = rocketCores.head
+        val rocketCpu                = rocketCpus.head
         val rowBits                  = site(SystemBusKey).beatBits
         val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
@@ -105,13 +78,13 @@ class WithBBTile(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
-          rocketCorePerCore = rocketCores.map(RocketCoreParam.toRocketCoreParams),
+          rocketCorePerCore = rocketCpus.map(RocketCpuParam.toRocketCoreParams(_, tileParam.xLen, tileParam.pgLevels)),
           privateDCache = privateDCache,
           hiddenHartBase = hiddenHartBase,
-          core = RocketCoreParam.toRocketCoreParams(rocketCore),
-          dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
-          icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),
-          btb = RocketCoreParam.toBTBParams(rocketCore)
+          core = RocketCpuParam.toRocketCoreParams(rocketCpu, tileParam.xLen, tileParam.pgLevels),
+          dcache = Some(RocketCpuParam.toDCacheParams(rocketCpu, rowBits, blockBytes)),
+          icache = Some(RocketCpuParam.toICacheParams(rocketCpu, rowBits, blockBytes)),
+          btb = RocketCpuParam.toBTBParams(rocketCpu)
         )
         BBTileAttachParams(
           tileParams.copy(tileId = idOffset),
@@ -121,16 +94,17 @@ class WithBBTile(
     })
 
 class WithNBBTiles(
-  n:                 Int,
-  location:          HierarchicalLocation = InSubsystem,
-  withBuckyball:     Boolean = true,
-  buckyballConfig:   GlobalConfig = GlobalConfig(),
-  crossing:          Option[RocketCrossingParams] = None,
-  nCoresPerTile:     Int = 1,
-  buckyballPerCore:  Option[Seq[Option[GlobalConfig]]] = None,
-  rocketCorePerCore: Option[Seq[RocketCoreParam]] = None,
-  privateDCache:     Option[PrivateDCacheParams] = None,
-  hiddenHartBase:    Option[Int] = None)
+  n:                Int,
+  tileParam:        TileParam,
+  location:         HierarchicalLocation = InSubsystem,
+  withBuckyball:    Boolean = true,
+  buckyballConfig:  GlobalConfig = GlobalConfig(),
+  crossing:         Option[RocketCrossingParams] = None,
+  nCoresPerTile:    Int = 1,
+  buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
+  rocketCpuPerCore: Option[Seq[RocketCpuParam]] = None,
+  privateDCache:    Option[PrivateDCacheParams] = None,
+  hiddenHartBase:   Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
         val prev                     = up(TilesLocated(`location`), site)
@@ -143,13 +117,11 @@ class WithNBBTiles(
           resolvedBuckyballPerCore.size == nCoresPerTile,
           s"buckyballPerCore size (${resolvedBuckyballPerCore.size}) must equal nCoresPerTile ($nCoresPerTile)"
         )
-        val rocketCores              = WithNBBTiles.resolveRocketCores(
+        val rocketCpus               = WithNBBTiles.resolveRocketCpus(
           nCoresPerTile,
-          resolvedBuckyballPerCore,
-          buckyballConfig,
-          rocketCorePerCore
+          rocketCpuPerCore
         )
-        val rocketCore               = rocketCores.head
+        val rocketCpu                = rocketCpus.head
         val rowBits                  = site(SystemBusKey).beatBits
         val blockBytes               = site(CacheBlockBytes)
         val tileParams               = BBTileParams(
@@ -157,13 +129,13 @@ class WithNBBTiles(
           withBuckyball = withBuckyball,
           buckyballConfig = buckyballConfig,
           buckyballPerCore = resolvedBuckyballPerCore,
-          rocketCorePerCore = rocketCores.map(RocketCoreParam.toRocketCoreParams),
+          rocketCorePerCore = rocketCpus.map(RocketCpuParam.toRocketCoreParams(_, tileParam.xLen, tileParam.pgLevels)),
           privateDCache = privateDCache,
           hiddenHartBase = hiddenHartBase,
-          core = RocketCoreParam.toRocketCoreParams(rocketCore),
-          dcache = Some(RocketCoreParam.toDCacheParams(rocketCore, rowBits, blockBytes)),
-          icache = Some(RocketCoreParam.toICacheParams(rocketCore, rowBits, blockBytes)),
-          btb = RocketCoreParam.toBTBParams(rocketCore)
+          core = RocketCpuParam.toRocketCoreParams(rocketCpu, tileParam.xLen, tileParam.pgLevels),
+          dcache = Some(RocketCpuParam.toDCacheParams(rocketCpu, rowBits, blockBytes)),
+          icache = Some(RocketCpuParam.toICacheParams(rocketCpu, rowBits, blockBytes)),
+          btb = RocketCpuParam.toBTBParams(rocketCpu)
         )
         List.tabulate(n)(i =>
           BBTileAttachParams(

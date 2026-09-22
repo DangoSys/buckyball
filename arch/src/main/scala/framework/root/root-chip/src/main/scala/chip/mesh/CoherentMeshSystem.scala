@@ -4,7 +4,10 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 import memcore.bus.chi._
-import memcore.memory.cache._
+import memcore.bus.chi.hnf.ChiHome
+import memcore.bus.chi.rnf.{BankedChiCache, CacheAccess, CacheResult}
+import memcore.bus.chi.rni.{NpuBeat, NpuCommand, NpuRegionAgent, RegionDirectory, RegionEntry}
+import memcore.bus.chi.snf.{LineRequest, LineResponse, LineSram}
 import memcore.memory.coherence._
 
 /**

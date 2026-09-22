@@ -23,7 +23,7 @@ class BBWriteResponse extends Bundle {
 @instantiable
 class StreamWriter(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
-  val vaddrBits = b.core.vaddrBits
+  val vaddrBits = b.tile.vaddrBits
   val beatBits  = b.memDomain.dma_buswidth
   val dataWidth = b.memDomain.dma_buswidth
   val beatBytes = beatBits / 8

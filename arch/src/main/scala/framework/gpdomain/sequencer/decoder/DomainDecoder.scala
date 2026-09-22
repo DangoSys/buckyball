@@ -30,7 +30,7 @@ object DomainDecoderParameter {
  * Domain Decoder IO
  */
 class DomainDecoderIO(b: GlobalConfig) extends Bundle {
-  val inst_i    = Input(new RoCCCommandBB(b.core.xLen))
+  val inst_i    = Input(new RoCCCommandBB(b.tile.xLen))
   val decoded_o = Decoder.bundle(DomainDecoderParameter.decoderParam).cloneType
 }
 

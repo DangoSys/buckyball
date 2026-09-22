@@ -1,4 +1,6 @@
-interface axis_if(input logic clock);
+interface axis_if (
+    input logic clock
+);
   logic        reset;
   logic        tvalid;
   logic        tready;
@@ -7,8 +9,9 @@ interface axis_if(input logic clock);
   logic        tlast;
 
   property payload_stable_during_stall;
-    @(posedge clock) disable iff (reset)
-      tvalid && !tready |=> tvalid && $stable({tdata, tkeep, tlast});
+    @(posedge clock) disable iff (reset) tvalid && !tready |=> tvalid && $stable(
+        {tdata, tkeep, tlast}
+    );
   endproperty
 
   assert property (payload_stable_during_stall);

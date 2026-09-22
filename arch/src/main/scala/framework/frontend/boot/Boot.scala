@@ -15,7 +15,7 @@ class BootRom(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
 
     val cmd = Decoupled(new Bundle {
-      val cmd = new RoCCCommandBB(b.core.xLen)
+      val cmd = new RoCCCommandBB(b.tile.xLen)
     })
 
     val schedulerIdle = Input(Bool())
@@ -31,8 +31,8 @@ class BootRom(val b: GlobalConfig) extends Module {
       Seq.empty[BuckyballCommand]
 
   private val bootFuncts  = VecInit(bootRecords.map(r => r.funct.U(7.W)))
-  private val bootRs1Data = VecInit(bootRecords.map(r => r.rs1.U(b.core.xLen.W)))
-  private val bootRs2Data = VecInit(bootRecords.map(r => r.rs2.U(b.core.xLen.W)))
+  val bootRs1Data         = VecInit(bootRecords.map(r => r.rs1.U(b.tile.xLen.W)))
+  val bootRs2Data         = VecInit(bootRecords.map(r => r.rs2.U(b.tile.xLen.W)))
   private val bootPcWidth = math.max(1, log2Ceil(bootRecords.length + 1))
 
   private val active   = RegInit(true.B)
@@ -42,8 +42,8 @@ class BootRom(val b: GlobalConfig) extends Module {
 
   private val atEnd = pc === bootRecords.length.U(bootPcWidth.W)
 
-  private val current = Wire(new RoCCCommandBB(b.core.xLen))
-  current         := 0.U.asTypeOf(new RoCCCommandBB(b.core.xLen))
+  val current = Wire(new RoCCCommandBB(b.tile.xLen))
+  current         := 0.U.asTypeOf(new RoCCCommandBB(b.tile.xLen))
   current.funct   := Mux(atEnd, 0.U, bootFuncts(pc))
   current.funct3  := BuckyballCommand.Custom3Funct3.U
   current.opcode  := BuckyballCommand.Custom3Opcode.U

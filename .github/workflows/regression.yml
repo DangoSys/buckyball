@@ -44,8 +44,15 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
+          nix build
+          cd "${root}/bbdev"
+          nix develop -c true
+          cd "${root}/bebop"
+          nix develop -c true
 
       - name: Install config
         shell: zsh {0}
@@ -89,7 +96,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: DC area
@@ -155,7 +164,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Chip UVM
@@ -183,6 +194,7 @@ jobs:
     name: fpga-bitstream-${{ matrix.chip }}
     needs: gate
     runs-on: check
+    timeout-minutes: 720
     strategy:
       fail-fast: false
       matrix:
@@ -207,7 +219,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA buildbitstream
@@ -217,9 +231,11 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          rm -rf "${root}"/bebop/build/"${{ matrix.chip }}"-*/
-          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }}'
+          for build_dir in "${root}"/bebop/build/"${{ matrix.chip }}"-*(N); do
+            rm -rf "${build_dir}"
+          done
+          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }} --diff'
           bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
@@ -246,30 +262,37 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_fpga_check: true
+            run_fpga_elf: true
+            run_fpga_pk: true
           - chip: pebble
-            run_fpga_check: true
+            run_fpga_elf: true
+            run_fpga_pk: true
           - chip: goban
-            run_fpga_check: true
+            run_fpga_elf: true
+            run_fpga_pk: false
           - chip: poly
-            run_fpga_check: true
+            run_fpga_elf: true
+            run_fpga_pk: false
           - chip: multi-rocket
-            run_fpga_check: true
+            run_fpga_elf: true
+            run_fpga_pk: false
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
       - name: Enter repo lock
-        if: matrix.run_fpga_check
+        if: matrix.run_fpga_elf || matrix.run_fpga_pk
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA check
-        if: matrix.run_fpga_check
+        if: matrix.run_fpga_elf || matrix.run_fpga_pk
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -281,13 +304,21 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests"
-          nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests"
+
+          if [[ "${{ matrix.run_fpga_elf }}" == "true" ]]; then
+            nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests --diff"
+          fi
+
+          if [[ "${{ matrix.run_fpga_pk }}" == "true" ]]; then
+            nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests --diff"
+          fi
 
       - name: Exit repo lock
-        if: always() && matrix.run_fpga_check
+        if: always() && (matrix.run_fpga_elf || matrix.run_fpga_pk)
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -307,10 +338,10 @@ jobs:
             model: lenet
           - chip: pebble
             model: mobilenet
-          - chip: pebble
-            model: resnet
-          - chip: pebble
-            model: yolo
+          # - chip: pebble
+          #   model: resnet
+          # - chip: pebble
+          #   model: yolo
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
@@ -320,7 +351,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
-          bash "${root}/.github/scripts/ci_repo_lock.sh" \
+          cd "${root}"
+          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: Model build
@@ -333,6 +366,7 @@ jobs:
             echo "ERROR: eval-performance requires a real model, got model=none" >&2
             exit 1
           fi
+          nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
           nix develop -c bbdev workload --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
           nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
 

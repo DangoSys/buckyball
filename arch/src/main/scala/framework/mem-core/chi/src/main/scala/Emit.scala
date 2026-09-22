@@ -1,5 +1,7 @@
 package memcore.bus.chi
 
+import memcore.bus.chi.snf.SramEndpoint
+
 object Emit extends App {
   val p = Params()
   require((new RequestFlit(p)).flitWidth == 137)
