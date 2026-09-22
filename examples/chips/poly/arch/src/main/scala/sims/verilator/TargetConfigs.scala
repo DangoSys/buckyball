@@ -1,13 +1,10 @@
 package sims.verilator
 
-import org.chipsalliance.cde.config.{Config, Parameters}
+import org.chipsalliance.cde.config.Config
 
 class BuckyballPolyVerilatorConfig
     extends Config(
-      (if (sys.env.get("CI").contains("true"))
-         new freechips.rocketchip.subsystem.WithoutTLMonitors
-       else
-         new Config(Parameters.empty)) ++
+      new freechips.rocketchip.subsystem.WithoutTLMonitors ++
         new BBSimConfig(maxHarts = 20) ++
         new WithCustomBootROM ++
         new examples.poly.BuckyballPolyConfig

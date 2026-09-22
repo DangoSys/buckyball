@@ -10,12 +10,8 @@ object SharedMemLayout {
 
   def totalBank(b: GlobalConfig): Int = {
     require(b.memDomain.sharedEnable, "shared memory is disabled")
-    require(b.memDomain.sharedEntries > 0, "sharedEntries must be > 0")
-    require(
-      b.memDomain.sharedEntries % b.memDomain.bankEntries == 0,
-      s"sharedEntries(${b.memDomain.sharedEntries}) must be divisible by bankEntries(${b.memDomain.bankEntries})"
-    )
-    b.memDomain.sharedEntries / b.memDomain.bankEntries
+    require(b.memDomain.sharedBankNum > 0, "sharedBankNum must be > 0")
+    b.memDomain.sharedBankNum
   }
 
   def channelPerHart(b: GlobalConfig): Int = {

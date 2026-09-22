@@ -85,21 +85,22 @@ object ChipLoader {
     if (hasBuckyball) {
       require(virtualBankCount > 0, s"tile ${tile.getPath}: virtual_bank_count must be > 0")
     }
-    if (shared.getEnable) {
-      val first     = cores(indices.head)
-      val firstBank = first.getMem.getBank
-      indices.iterator.map(idx => cores(idx)).filter(_.getBalldomain.getBallNum > 0).foreach { core =>
+    val sharedBankNum    =
+      if (shared.getEnable) {
+        val firstBank = cores(indices.head).getMem.getBank
+        indices.iterator.map(idx => cores(idx)).filter(_.getBalldomain.getBallNum > 0).foreach { core =>
+          require(
+            core.getMem.getBank.getWidth == firstBank.getWidth,
+            s"tile ${tile.getPath}: all Buckyball cores must use shared bank width ${firstBank.getWidth}"
+          )
+        }
+        require(shared.getEntries > 0, s"tile ${tile.getPath}: shared entries must be > 0")
         require(
-          core.getMem.getBank.getWidth == firstBank.getWidth,
-          s"tile ${tile.getPath}: all Buckyball cores must use shared bank width ${firstBank.getWidth}"
+          shared.getEntries % firstBank.getEntries == 0,
+          s"tile ${tile.getPath}: shared entries ${shared.getEntries} must be divisible by slot-0 bank entries ${firstBank.getEntries}"
         )
-      }
-      require(shared.getEntries > 0, s"tile ${tile.getPath}: shared entries must be > 0")
-      require(
-        shared.getEntries % firstBank.getEntries == 0,
-        s"tile ${tile.getPath}: shared entries ${shared.getEntries} must be divisible by slot-0 bank entries ${firstBank.getEntries}"
-      )
-    }
+        shared.getEntries / firstBank.getEntries
+      } else 0
     val privateDCache    =
       if (!tile.hasPrivateDcache || !tile.getPrivateDcache.getEnable) None
       else {
@@ -116,7 +117,7 @@ object ChipLoader {
       }
 
     val tileCores = indices.map { idx =>
-      parseCore(cores(idx), tileParam, shared, virtualBankCount, nCores, repo)
+      parseCore(cores(idx), tileParam, shared, sharedBankNum, virtualBankCount, nCores, repo)
     }
     TileTopology(tileParam, tileCores, privateDCache)
   }
@@ -125,6 +126,7 @@ object ChipLoader {
     core:             CoreInstance,
     tile:             TileParam,
     shared:           SharedMemConfig,
+    sharedBankNum:    Int,
     virtualBankCount: Int,
     nCores:           Int,
     repo:             Path
@@ -133,7 +135,7 @@ object ChipLoader {
     val cpu  = core.getCpu
     val kind = cpu.getKind
     kind match {
-      case "rocket" => parseRocketCoreSlot(core, tile, shared, virtualBankCount, nCores, repo)
+      case "rocket" => parseRocketCoreSlot(core, tile, shared, sharedBankNum, virtualBankCount, nCores, repo)
       case "boom"   =>
         if (core.getBalldomain.getBallNum > 0) {
           throw new RuntimeException(s"core ${core.getPkg}: kind=boom forbids balldomain")
@@ -151,6 +153,7 @@ object ChipLoader {
     core:             CoreInstance,
     tile:             TileParam,
     shared:           SharedMemConfig,
+    sharedBankNum:    Int,
     virtualBankCount: Int,
     nCores:           Int,
     repo:             Path
@@ -192,7 +195,7 @@ object ChipLoader {
       frontend = parseFrontend(core.getFrontend),
       gpDomain = parseGpDomain(core.getGpDomain),
       tile = tile,
-      memDomain = parseMemDomain(core.getMem, shared, virtualBankCount, nCores)
+      memDomain = parseMemDomain(core.getMem, shared, sharedBankNum, virtualBankCount, nCores)
     )
     RocketTileCore(rocket, Some(buckyball))
   }
@@ -220,6 +223,7 @@ object ChipLoader {
   private def parseMemDomain(
     mem:              MemDomainConfig,
     shared:           SharedMemConfig,
+    sharedBankNum:    Int,
     virtualBankCount: Int,
     nCores:           Int
   ): MemDomainParam = {
@@ -236,6 +240,7 @@ object ChipLoader {
       virtualBankCount = virtualBankCount,
       sharedEnable = shared.getEnable,
       sharedEntries = shared.getEntries,
+      sharedBankNum = sharedBankNum,
       sharedInputChannels = shared.getInputChannels,
       sharedDefaultGroupCount = shared.getDefaultGroupCount,
       nCores = nCores,

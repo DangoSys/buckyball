@@ -1,5 +1,5 @@
-use clap::Parser;
 use bebop_bemu::{tile_topology, BemuInstance, SharedMemory, TraceConfig};
+use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
@@ -38,9 +38,15 @@ impl StartGate {
     }
 
     fn wait(&self) -> Result<(), String> {
-        let mut result = self.result.lock().map_err(|_| "BEMU start gate poisoned".to_string())?;
+        let mut result = self
+            .result
+            .lock()
+            .map_err(|_| "BEMU start gate poisoned".to_string())?;
         while result.is_none() {
-            result = self.ready.wait(result).map_err(|_| "BEMU start gate poisoned".to_string())?;
+            result = self
+                .ready
+                .wait(result)
+                .map_err(|_| "BEMU start gate poisoned".to_string())?;
         }
         result.as_ref().expect("BEMU start gate was set").clone()
     }
@@ -129,7 +135,10 @@ fn run(args: Args) -> Result<(), String> {
 
     let mut preparation_error = None;
     for _ in 0..workers.len() {
-        if let Err(error) = prepared_rx.recv().map_err(|_| "Core worker exited before initialization".to_string())? {
+        if let Err(error) = prepared_rx
+            .recv()
+            .map_err(|_| "Core worker exited before initialization".to_string())?
+        {
             preparation_error.get_or_insert(error);
         }
     }
@@ -172,7 +181,9 @@ fn run_core(
         "[INFO] starting Core worker hart={hart_id} core={core_name} core_index={core_index}"
     );
     let prepared_bemu = (|| {
-        let _turn = schedule.lock().map_err(|_| "BEMU scheduler poisoned".to_string())?;
+        let _turn = schedule
+            .lock()
+            .map_err(|_| "BEMU scheduler poisoned".to_string())?;
         let mut bemu = BemuInstance::new_with_core_hart(
             log_dir,
             TraceConfig::new(false, false),
@@ -203,12 +214,14 @@ fn run_core(
 
     loop {
         let barrier_hit = {
-            let _turn = schedule.lock().map_err(|_| "BEMU scheduler poisoned".to_string())?;
+            let _turn = schedule
+                .lock()
+                .map_err(|_| "BEMU scheduler poisoned".to_string())?;
             if done.load(Ordering::Acquire) {
                 bemu.stop(exit_code.load(Ordering::Acquire));
                 break;
             }
-            if let Err(error) = bemu.step() {
+            if let Err(error) = bemu.step(1) {
                 exit_code.store(1, Ordering::Release);
                 done.store(true, Ordering::Release);
                 memory.abort_barrier();

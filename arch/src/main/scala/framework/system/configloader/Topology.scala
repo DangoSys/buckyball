@@ -6,13 +6,6 @@ import framework.system.core.boom.configs.BoomCpuParam
 import framework.system.tile.configs.TileParam
 import framework.top.GlobalConfig
 
-/** Loader-private bundle of tile-shared memory fields. */
-private[configloader] case class SharedMemFields(
-  sharedEnable:            Boolean,
-  sharedEntries:           Int,
-  sharedInputChannels:     Int,
-  sharedDefaultGroupCount: Int)
-
 /** Top-level example topology loaded from chip.pb. */
 case class ExampleTopology(tiles: Seq[TileTopology])
 

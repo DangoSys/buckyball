@@ -231,7 +231,7 @@ fn run_core(
                 bemu.stop(exit_code.load(Ordering::Acquire));
                 break;
             }
-            if let Err(error) = bemu.step() {
+            if let Err(error) = bemu.step(1) {
                 exit_code.store(1, Ordering::Release);
                 done.store(true, Ordering::Release);
                 memory.abort_barrier();
