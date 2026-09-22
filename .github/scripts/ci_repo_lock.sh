@@ -26,8 +26,8 @@ repo_reset() {
 
   # buckyball repository it self never depend on submodules in submodules unless llvm in buddy-mlir
   git fetch --force --prune origin "${want_sha}"
-  git -c checkout --detach --force "${want_sha}"
-  git -c reset --hard "${want_sha}"
+  git checkout --detach --force "${want_sha}"
+  git reset --hard "${want_sha}"
   git clean -ffd
 
   rm -rf arch/out
