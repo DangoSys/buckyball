@@ -59,7 +59,7 @@ pub fn alloc(ctx: &mut ExecContext, bank: u64, groups: u64) {
 }
 
 pub fn mvin(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64) {
-    execute(FUNCT_MVIN, banks(bank, 0, 0, iter), dma(addr, stride), ctx);
+    execute(FUNCT_MVIN, banks(0, 0, bank, iter), dma(addr, stride), ctx);
 }
 
 pub fn mvout(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64) {
@@ -67,7 +67,12 @@ pub fn mvout(ctx: &mut ExecContext, bank: u64, addr: u64, iter: u64, stride: u64
 }
 
 pub fn preload(ctx: &mut ExecContext, source: u64, output: u64, iter: u64) {
-    execute(ball_funct("GEMMINI_PRELOAD"), banks(source, 0, output, iter), 1, ctx);
+    execute(
+        ball_funct("GEMMINI_PRELOAD"),
+        banks(source, 0, output, iter),
+        1,
+        ctx,
+    );
 }
 
 pub fn compute(
