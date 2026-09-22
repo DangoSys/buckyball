@@ -237,7 +237,7 @@ fn run_core(
                 memory.abort_barrier();
                 return Err(error.to_string());
             }
-            bemu.barrier_hit()
+            bemu.take_barrier()
         };
         if barrier_hit {
             memory.wait_barrier(local_id);

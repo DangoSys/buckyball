@@ -2,6 +2,7 @@ use super::super::bank::{bank_lines, bank_row_bytes};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 const BALL_CLASS: &str = "examples.balls.smatmul.SMatMulBall";
 
@@ -23,7 +24,7 @@ struct Chain {
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
+    static STATES: RefCell<HashMap<usize, State>> = RefCell::new(HashMap::new());
 }
 
 fn read_i32(bank: &[u8], row: usize, lane: usize) -> i32 {
@@ -50,8 +51,9 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             bias[group * 4 + lane] = read_i32(&ctx.banks[physical], input_base + group, lane);
         }
     }
-    STATE.with(|state| {
-        let mut state = state.borrow_mut();
+    STATES.with(|states| {
+        let mut states = states.borrow_mut();
+        let state = states.entry(ctx.hart_id).or_default();
         if state.chain.is_some() {
             panic!("smatmul_bias: cannot replace bias during an accumulation chain");
         }
@@ -100,8 +102,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("smatmul: bank footprint exceeds bank depth");
     }
 
-    let mut chain = STATE.with(|state| {
-        let mut state = state.borrow_mut();
+    let mut chain = STATES.with(|states| {
+        let mut states = states.borrow_mut();
+        let state = states.entry(ctx.hart_id).or_default();
         if first {
             if state.chain.is_some() {
                 panic!("smatmul: first block issued while another chain is live");
@@ -179,7 +182,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             }
         }
     } else {
-        STATE.with(|state| state.borrow_mut().chain = Some(chain));
+        STATES.with(|states| {
+            states.borrow_mut().entry(ctx.hart_id).or_default().chain = Some(chain);
+        });
     }
     0
 }

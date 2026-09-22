@@ -318,8 +318,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val physical    = Mux1H(matches, io.bank_hashes.get)
     def rotateLeft(value: UInt, amount: Int): UInt = Cat(value(31 - amount, 0), value(31, 32 - amount))
 
-    val mapping  = rotateLeft(physical.groupId, 7) ^ rotateLeft(physical.pbankId, 17)
-    val mixed    = physical.statusHash ^ mapping ^ "h9e3779b9".U
+    val mixed    = physical.statusHash ^ rotateLeft(physical.groupId, 7) ^ "h9e3779b9".U
     val nextHash = rotateLeft(currentHash, 5) ^ mixed ^ rotateLeft(mixed, 13)
 
     when(collecting) {
