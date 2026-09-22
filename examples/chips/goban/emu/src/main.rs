@@ -1,15 +1,12 @@
 use bebop_bemu::{tile_topology, BemuInstance, SharedMemory, TraceConfig};
 use clap::Parser;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{mpsc, Arc, Condvar, Mutex};
-use std::thread;
+use std::sync::Arc;
 
 const DRAM_SIZE: usize = 1 << 30;
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Tile index in the chip bundle.
     #[arg(long, default_value_t = 0)]
     tile_index: usize,
     #[arg(long)]
@@ -28,39 +25,6 @@ struct Args {
     mtrace: bool,
 }
 
-struct StartGate {
-    result: Mutex<Option<Result<(), String>>>,
-    ready: Condvar,
-}
-
-impl StartGate {
-    fn new() -> Self {
-        Self {
-            result: Mutex::new(None),
-            ready: Condvar::new(),
-        }
-    }
-
-    fn wait(&self) -> Result<(), String> {
-        let mut result = self
-            .result
-            .lock()
-            .map_err(|_| "BEMU start gate poisoned".to_string())?;
-        while result.is_none() {
-            result = self
-                .ready
-                .wait(result)
-                .map_err(|_| "BEMU start gate poisoned".to_string())?;
-        }
-        result.as_ref().expect("BEMU start gate was set").clone()
-    }
-
-    fn release(&self, result: Result<(), String>) {
-        *self.result.lock().expect("BEMU start gate poisoned") = Some(result);
-        self.ready.notify_all();
-    }
-}
-
 fn main() {
     if let Err(error) = run(Args::parse()) {
         eprintln!("error: {error}");
@@ -72,9 +36,6 @@ fn run(args: Args) -> Result<(), String> {
     let elf = absolute(&args.elf)?;
     let log_dir = absolute(&args.log_dir)?;
     let topology = tile_topology(args.tile_index);
-    if topology.cores.is_empty() {
-        return Err(format!("tile {} has no Core instances", args.tile_index));
-    }
     eprintln!(
         "[INFO] Goban Chip BEMU: tile_index={} cores={} shared_dram={}MiB",
         args.tile_index,
@@ -91,172 +52,53 @@ fn run(args: Args) -> Result<(), String> {
         topology.shared_bank_size,
         virtual_bank_count,
     );
-    let schedule = Arc::new(Mutex::new(()));
-    let start = Arc::new(StartGate::new());
-    let done = Arc::new(AtomicBool::new(false));
-    let exit_code = Arc::new(AtomicI32::new(0));
-    let (prepared_tx, prepared_rx) = mpsc::channel();
-    let mut workers = Vec::with_capacity(topology.cores.len());
+    let mut harts = Vec::with_capacity(core_count);
 
     for (local_id, (core_name, core_index)) in topology.cores.into_iter().enumerate() {
         let hart_id = args.tile_index * core_count + local_id;
-        let elf = elf.clone();
-        let worker_log = log_dir.join(format!("hart-{hart_id}"));
-        let memory = Arc::clone(&memory);
-        let schedule = Arc::clone(&schedule);
-        let start = Arc::clone(&start);
-        let done = Arc::clone(&done);
-        let exit_code = Arc::clone(&exit_code);
-        let prepared_tx = prepared_tx.clone();
-        let pk = args.pk;
-        let disasm = args.disasm;
-        let tool_profile = args.tool_profile;
-        let trace = TraceConfig::new(args.itrace, args.mtrace);
-        workers.push(
-            thread::Builder::new()
-                .name(format!("core-{hart_id}-{core_name}"))
-                .spawn(move || {
-                    run_core(
-                        hart_id,
-                        local_id,
-                        &core_name,
-                        core_index,
-                        &elf,
-                        &worker_log,
-                        pk,
-                        disasm,
-                        tool_profile,
-                        trace,
-                        memory,
-                        schedule,
-                        start,
-                        done,
-                        exit_code,
-                        prepared_tx,
-                        virtual_bank_count,
-                    )
-                })
-                .map_err(|error| format!("failed to spawn Core worker {hart_id}: {error}"))?,
-        );
-    }
-    drop(prepared_tx);
-
-    let mut preparation_error = None;
-    for _ in 0..workers.len() {
-        if let Err(error) = prepared_rx
-            .recv()
-            .map_err(|_| "Core worker exited before initialization".to_string())?
-        {
-            preparation_error.get_or_insert(error);
-        }
-    }
-    start.release(preparation_error.map_or(Ok(()), Err));
-
-    let mut first_error = None;
-    for (hart_id, worker) in workers.into_iter().enumerate() {
-        match worker.join() {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                first_error.get_or_insert(format!("Core worker {hart_id}: {error}"));
-            }
-            Err(_) => {
-                first_error.get_or_insert(format!("Core worker {hart_id} panicked"));
-            }
-        };
-    }
-    first_error.map_or(Ok(()), Err)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn run_core(
-    hart_id: usize,
-    local_id: usize,
-    core_name: &str,
-    core_index: usize,
-    elf: &Path,
-    log_dir: &Path,
-    pk: bool,
-    disasm: bool,
-    tool_profile: bool,
-    trace: TraceConfig,
-    memory: Arc<SharedMemory>,
-    schedule: Arc<Mutex<()>>,
-    start: Arc<StartGate>,
-    done: Arc<AtomicBool>,
-    exit_code: Arc<AtomicI32>,
-    prepared: mpsc::Sender<Result<(), String>>,
-    virtual_bank_count: usize,
-) -> Result<(), String> {
-    eprintln!(
-        "[INFO] starting Core worker hart={hart_id} core={core_name} core_index={core_index}"
-    );
-    let prepared_bemu = (|| {
-        let _turn = schedule
-            .lock()
-            .map_err(|_| "BEMU scheduler poisoned".to_string())?;
         let mut bemu = BemuInstance::new_with_core_hart(
-            log_dir,
-            trace,
-            disasm,
-            tool_profile,
+            &log_dir.join(format!("hart-{hart_id}")),
+            TraceConfig::new(args.itrace, args.mtrace),
+            args.disasm,
+            args.tool_profile,
             core_index,
             hart_id,
             Some(Arc::clone(&memory)),
             Some(virtual_bank_count),
         )
         .map_err(|error| error.to_string())?;
-        bemu.load_elf(elf).map_err(|error| error.to_string())?;
-        bemu.init_hart(pk).map_err(|error| error.to_string())?;
-        Ok::<BemuInstance, String>(bemu)
-    })();
-
-    let mut bemu = match prepared_bemu {
-        Ok(bemu) => {
-            let _ = prepared.send(Ok(()));
-            bemu
-        }
-        Err(error) => {
-            let _ = prepared.send(Err(error.clone()));
-            return Err(error);
-        }
-    };
-    start.wait()?;
-
-    loop {
-        let barrier_hit = {
-            let _turn = schedule
-                .lock()
-                .map_err(|_| "BEMU scheduler poisoned".to_string())?;
-            if done.load(Ordering::Acquire) {
-                bemu.stop(exit_code.load(Ordering::Acquire));
-                break;
-            }
-            if let Err(error) = bemu.step(1) {
-                exit_code.store(1, Ordering::Release);
-                done.store(true, Ordering::Release);
-                memory.abort_barrier();
-                return Err(error.to_string());
-            }
-            bemu.take_barrier()
-        };
-        if barrier_hit {
-            memory.wait_barrier(local_id);
-        }
-        if bemu.finished() {
-            let code = bemu.exit_code().unwrap_or(1);
-            exit_code.store(code, Ordering::Release);
-            done.store(true, Ordering::Release);
-            memory.abort_barrier();
-            break;
-        }
+        bemu.load_elf(&elf).map_err(|error| error.to_string())?;
+        bemu.init_hart(args.pk).map_err(|error| error.to_string())?;
+        harts.push((hart_id, core_name, bemu, false));
     }
 
-    let code = exit_code.load(Ordering::Acquire);
-    eprintln!("[INFO] stopped Core worker hart={hart_id} core={core_name} exit={code}");
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(format!("guest exited with code {code}"))
+    loop {
+        if let Some((hart_id, core_name, code)) = harts.iter().find_map(|(hart_id, core_name, bemu, _)| {
+            bemu.finished().then(|| (*hart_id, core_name.clone(), bemu.exit_code().unwrap_or(1)))
+        }) {
+            for (_, _, bemu, _) in &mut harts {
+                bemu.stop(code);
+            }
+            eprintln!("[INFO] stopped Core worker hart={hart_id} core={core_name} exit={code}");
+            return if code == 0 {
+                Ok(())
+            } else {
+                Err(format!("Core worker {hart_id}: guest exited with code {code}"))
+            };
+        }
+
+        if harts.iter().all(|(_, _, _, waiting)| *waiting) {
+            for (_, _, _, waiting) in &mut harts {
+                *waiting = false;
+            }
+        }
+
+        for (_, _, bemu, waiting) in &mut harts {
+            if !*waiting {
+                bemu.step(1).map_err(|error| error.to_string())?;
+                *waiting = bemu.take_barrier();
+            }
+        }
     }
 }
 
