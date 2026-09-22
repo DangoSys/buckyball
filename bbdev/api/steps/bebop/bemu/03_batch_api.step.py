@@ -15,7 +15,7 @@ from utils.path import get_buckyball_path
 
 config = {
     "name": "bebop-bemu-batch-api",
-    "description": "Run bebop bemu nextest batch regression",
+    "description": "Run bebop bemu batch regression",
     "flows": ["bebop"],
     "triggers": [api("POST", "/bebop/bemu/batch")],
     "enqueues": ["bebop.bemu.batch"],
