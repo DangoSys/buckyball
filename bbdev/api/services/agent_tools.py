@@ -77,13 +77,7 @@ class CallAgentTool(Tool):
         context.log_info(f"Calling {agent_role}_agent with task")
 
         try:
-            # Get workflow API address (from environment or use defaults)
-            import os
-
-            workflow_host = os.getenv("WORKFLOW_HOST", "localhost")
-            workflow_port = os.getenv("WORKFLOW_PORT", "3001")
-            base_url = f"http://{workflow_host}:{workflow_port}"
-            url = f"{base_url}/agent"
+            url = "http://localhost:3001/agent"
 
             context.log_info(f"Calling workflow API at: {url}")
 

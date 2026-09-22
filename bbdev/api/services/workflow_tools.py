@@ -1,7 +1,6 @@
 """Workflow internal API call tools"""
 
 import httpx
-import asyncio
 from typing import Dict, Any
 from .base import Tool
 
@@ -42,13 +41,7 @@ class WorkflowAPITool(Tool):
         endpoint = arguments.get("endpoint")
         params = arguments.get("params", {})
 
-        # Get workflow API address
-        import os
-
-        workflow_host = os.getenv("WORKFLOW_HOST", "localhost")
-        workflow_port = os.getenv("WORKFLOW_PORT", "3001")
-        base_url = f"http://{workflow_host}:{workflow_port}"
-        url = f"{base_url}{endpoint}"
+        url = f"http://localhost:3001{endpoint}"
 
         try:
             context.log_info(f"Calling workflow API: {url}")

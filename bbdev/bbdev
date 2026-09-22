@@ -14,7 +14,7 @@ import requests
 import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
-from utils.port import HOST, reserve_port
+from utils.port import reserve_port
 from utils.process import clean_python_caches, stop_workspace_servers, terminate_group
 from utils.workers import assert_sole_workspace_workers, motia_worker_count, write_server_ports
 
@@ -133,7 +133,7 @@ def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_modul
     # then RestApiModule HTTP port (default 3111).
     content = content.replace("port: 49134", f"port: {worker_port}")
     content = content.replace("port: 3111", f"port: {port}", 1)
-    content = content.replace("host: 0.0.0.0", f"host: {HOST}")
+    content = content.replace("host: 0.0.0.0", "host: 127.0.0.1")
     if quiet:
         content = content.replace(
             "exporter: memory",

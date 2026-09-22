@@ -92,10 +92,10 @@ def _free_port(lo: int = 5100, hi: int = 5500) -> int:
 
 
 def _assert_workspace_workers() -> None:
-    sys.path.insert(0, str(API))
+    sys.path.insert(0, str(api_path()))
     from utils.workers import assert_sole_workspace_workers, read_server_ports
 
-    ports = read_server_ports(str(API))
+    ports = read_server_ports(str(api_path()))
     assert_sole_workspace_workers(int(ports["worker_port"]), str(ports["bb_root"]))
 
 
@@ -130,10 +130,10 @@ def _ready(port: int) -> bool:
 
 def _stop() -> None:
     global _proc, _port, _log_fh
-    if _port is not None and BBDEV.is_file():
+    if _port is not None and bbdev_path().is_file():
         subprocess.run(
-            ["nix", "develop", "--command", str(BBDEV), "stop", "--server", "--port", str(_port)],
-            cwd=str(BBDEV.parent),
+            ["nix", "develop", "--command", str(bbdev_path()), "stop", "--server", "--port", str(_port)],
+            cwd=str(bbdev_path().parent),
             capture_output=True,
             text=True,
             timeout=30,
@@ -168,42 +168,42 @@ def _ensure() -> int:
         _log(f"bbdev on port {_port} died; restarting")
         _stop()
 
-    if not BBDEV.is_file():
-        raise RuntimeError(f"missing bbdev CLI: {BBDEV}")
+    if not bbdev_path().is_file():
+        raise RuntimeError(f"missing bbdev CLI: {bbdev_path()}")
     if shutil.which("nix") is None:
         raise RuntimeError(
             "nix not found; MCP must start bbdev through the project development environment"
         )
-    if not MOTIA.is_file():
+    if not motia_path().is_file():
         raise RuntimeError(
-            f"missing {MOTIA}; install with: "
-            f"cd {API} && uv venv .venv --python python3 --seed && "
+            f"missing {motia_path()}; install with: "
+            f"cd {api_path()} && uv venv .venv --python python3 --seed && "
             "uv pip install --python .venv/bin/python -r pyproject.toml"
         )
 
     port = _free_port()
-    LOG.parent.mkdir(parents=True, exist_ok=True)
-    _log_fh = open(LOG, "a", encoding="utf-8")
+    log_path().parent.mkdir(parents=True, exist_ok=True)
+    _log_fh = open(log_path(), "a", encoding="utf-8")
     _proc = subprocess.Popen(
-        ["nix", "develop", "--command", str(BBDEV), "start", "--server", "--port", str(port)],
-        cwd=str(BBDEV.parent),
+        ["nix", "develop", "--command", str(bbdev_path()), "start", "--server", "--port", str(port)],
+        cwd=str(bbdev_path().parent),
         stdout=_log_fh,
         stderr=_log_fh,
         start_new_session=True,
     )
     _port = port
-    _log(f"starting bbdev on port {port} (log: {LOG})")
+    _log(f"starting bbdev on port {port} (log: {log_path()})")
 
     for _ in range(120):
         if _proc.poll() is not None:
             tail = ""
             try:
-                tail = LOG.read_text(encoding="utf-8", errors="replace")[-2000:]
+                tail = log_path().read_text(encoding="utf-8", errors="replace")[-2000:]
             except OSError:
                 pass
             _stop()
             raise RuntimeError(
-                f"bbdev exited early; see {LOG}\n--- log tail ---\n{tail}"
+                f"bbdev exited early; see {log_path()}\n--- log tail ---\n{tail}"
             )
         if _ready(port):
             try:
@@ -223,12 +223,14 @@ def _ensure() -> int:
         time.sleep(1)
 
     _stop()
-    raise RuntimeError(f"bbdev failed to start on port {port} within 120s; see {LOG}")
+    raise RuntimeError(
+        f"bbdev failed to start on port {port} within 120s; see {log_path()}"
+    )
 
 
 def _read_state(trace_id: str) -> Optional[Dict[str, Any]]:
     """Same as bbdev CLI: poll iii file state store (HTTP /result path_params are broken)."""
-    path = STATE_DIR / f"{trace_id}.bin"
+    path = state_dir() / f"{trace_id}.bin"
     if not path.is_file():
         return None
     try:
@@ -255,7 +257,7 @@ def submit(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
             "failure": True,
             "status_code": status,
             "error": submit,
-            "server_log": str(LOG),
+            "server_log": str(log_path()),
             "port": port,
         }
 
@@ -266,7 +268,7 @@ def submit(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
             "failure": True,
             "error": "no trace_id in submit response",
             "response": submit,
-            "server_log": str(LOG),
+            "server_log": str(log_path()),
             "port": port,
         }
 
@@ -324,7 +326,7 @@ def task_status(trace_id: str) -> Dict[str, Any]:
             "processing": False,
             "trace_id": trace_id,
             "body": body,
-            "server_log": str(LOG),
+            "server_log": str(log_path()),
         }
     if "processing" in state:
         body = state["processing"]
@@ -350,9 +352,18 @@ def _load_toml(path: Path) -> Dict[str, Any]:
 
 
 def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
-    chip_root = REPO / "examples" / "chips" / chip
+    chip_root = repo_path() / "examples" / "chips" / chip
     cfg = json.loads(
-        (REPO / "examples" / "chips" / chip / "configs" / "generated" / "config" / "config.json")
+        (
+            repo_path()
+            / "examples"
+            / "chips"
+            / chip
+            / "configs"
+            / "generated"
+            / "config"
+            / "config.json"
+        )
         .read_text(encoding="utf-8")
     )
     cores = []
@@ -371,14 +382,14 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     core_file = Path(core["_file"])
     parts = core_file.parts
     core_name = parts[parts.index("cores") + 1]
-    core_root = REPO / "examples" / "cores" / core_name
+    core_root = repo_path() / "examples" / "cores" / core_name
     domains = core_root / "configs" / "balldomains"
 
     if balldomain is None:
         bd = core["balldomain"]
         path = Path(bd["_file"])
         if not path.is_absolute():
-            path = (REPO / bd["_file"]).resolve()
+            path = (repo_path() / bd["_file"]).resolve()
         else:
             path = path.resolve()
     else:
@@ -512,7 +523,7 @@ def _validate(path: Path) -> Dict[str, Any]:
 
     return {
         "passed": all(c["pass"] for c in checks.values()),
-        "chip_balldomain": str(path.relative_to(REPO)),
+        "chip_balldomain": str(path.relative_to(repo_path())),
         "checks": checks,
         "balls": balls,
     }
