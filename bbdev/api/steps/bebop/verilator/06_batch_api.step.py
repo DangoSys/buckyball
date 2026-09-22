@@ -5,7 +5,7 @@ from utils.path import get_buckyball_path, rtl_dir
 
 config = {
     "name": "bebop-verilator-batch-api",
-    "description": "Run bebop verilator nextest batch regression",
+    "description": "Run bebop verilator batch regression",
     "flows": ["bebop"],
     "triggers": [api("POST", "/bebop/verilator/batch")],
     "enqueues": ["bebop.verilator.batch"],

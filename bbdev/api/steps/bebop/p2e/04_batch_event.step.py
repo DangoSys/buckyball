@@ -1,10 +1,10 @@
 """
 bebop p2e batch event handler
 
-Runs bebop p2e nextest batch regression (aligned with runworkload):
+Runs bebop p2e batch regression (aligned with runworkload):
   1. Resolve the runtime from the bitstream case
   2. Build the test harness against that runtime
-  3. Run cargo nextest serially on one FPGA
+  3. Run the P2E regression harness serially on one FPGA
 """
 import os
 import re
@@ -29,7 +29,7 @@ from utils.workload_manifest import resolve_workload_toml
 
 config = {
     "name": "bebop-p2e-batch",
-    "description": "Run bebop p2e nextest batch regression",
+    "description": "Run bebop p2e batch regression",
     "flows": ["bebop"],
     "triggers": [queue("bebop.p2e.batch")],
     "enqueues": [],
@@ -49,8 +49,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    nextest_config = f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
-
     bitstream = input_data.get("bitstream", "")
     if not bitstream or not os.path.isfile(bitstream):
         ctx.logger.error(f"bitstream .bit file not found: {bitstream}")
@@ -156,7 +154,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    # ── Run nextest ───────────────────────────────────────────────────────
+    # ── Run regression ────────────────────────────────────────────────────
     env = runtime_env.copy()
     env["OUT_PATH"] = build_dir
     harness_args = [
@@ -168,15 +166,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if diff:
         harness_args.append("--diff")
     harness = shlex.join(harness_args)
-    nextest_cmd = (
-        f"nix develop -c cargo {cargo_out} nextest run --release "
+    test_cmd = (
+        f"nix develop -c cargo {cargo_out} test --release "
         f"--manifest-path {shlex.quote(str(manifest))} --features {shlex.quote(feature_arg)} "
-        f"--test test_p2e --config-file \"{nextest_config}\" {harness}"
+        f"--test test_p2e {harness}"
     )
 
-    ctx.logger.info(f"Running bebop p2e nextest: {nextest_cmd}")
+    ctx.logger.info(f"Running bebop p2e regression: {test_cmd}")
     run_result = await stream_run_logger_async(
-        cmd=nextest_cmd,
+        cmd=test_cmd,
         logger=ctx.logger,
         cwd=bebop_dir,
         stdout_prefix="bebop p2e batch",
@@ -192,7 +190,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "build_dir": build_dir,
         "test_type": test_type,
         "diff": diff,
-        "nextest_config": nextest_config,
         "workload_toml": workload_toml,
     }
 

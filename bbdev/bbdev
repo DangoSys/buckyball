@@ -67,7 +67,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "batch": 'Run Bebop verilator nextest batch regression (parallel). Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--rushB] [--clean-before]"',
+        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--rushB] [--clean-before]"',
     },
     "bebop-vcs": {
         "verilog": 'Generate Bebop VCS RTL once. Args: "--chip <chip>"',
@@ -79,7 +79,7 @@ WORKFLOW_COMMANDS = {
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
         "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>]"',
         "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace] [--mtrace] [--pmctrace]"',
-        "batch": 'Run Bebop p2e nextest batch regression (serial). Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
+        "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
     },
     "dc": {
         "verilog": 'Generate top-scoped DC RTL under arch/build/<chip>/<config>. Args: "--chip <chip> [--top <module>]"',
@@ -111,7 +111,13 @@ WORKFLOW_COMMANDS = {
     },
 }
 
-def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_module: bool = True) -> str:
+def make_iii_config(
+    port: int,
+    worker_port: int,
+    quiet: bool = False,
+    exec_module: bool = True,
+    state_dir: str | None = None,
+) -> str:
     """Create a temporary config.yaml with unique HTTP and Worker ports, return the path."""
     base_config = os.path.join(workflow_dir, "config.yaml")
     with open(base_config, "r") as f:
@@ -121,6 +127,11 @@ def make_iii_config(port: int, worker_port: int, quiet: bool = False, exec_modul
     content = content.replace("port: 49134", f"port: {worker_port}")
     content = content.replace("port: 3111", f"port: {port}", 1)
     content = content.replace("host: 0.0.0.0", "host: 127.0.0.1")
+    if state_dir is not None:
+        content = content.replace(
+            "file_path: ./data/state_store.db",
+            f"file_path: {state_dir}",
+        )
     if quiet:
         content = content.replace(
             "exporter: memory",
@@ -513,7 +524,7 @@ def run_server_mode(args, cmd_info):
         sys.exit(1)
 
 
-def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
+def _submit_and_poll(port: int, api_path: str, cmd_info: dict, state_dir: str):
     """Submit a task to iii and poll for its result. Returns exit code (0=ok, 1=fail)."""
     base_url = f"http://127.0.0.1:{port}"
     print(f"Executing {cmd_info['command']} {cmd_info['operation']}...")
@@ -539,7 +550,7 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict):
         return 1
 
     # Poll for result
-    state_file = os.path.join(workflow_dir, "data", "state_store.db", f"{trace_id}.bin")
+    state_file = os.path.join(state_dir, f"{trace_id}.bin")
     poll_timeout = 24 * 60 * 60  # 24 hours max
     task_result = None
     legacy_processing_count = 0
@@ -630,15 +641,9 @@ def run_script_mode(args, cmd_info):
     )
     print(f"Starting server on port {available_port}...")
 
-    # Clean stale state files from previous runs
-    state_dir = os.path.join(workflow_dir, "data", "state_store.db")
-    if os.path.isdir(state_dir):
-        for f in os.listdir(state_dir):
-            if f.endswith(".bin"):
-                try:
-                    os.unlink(os.path.join(state_dir, f))
-                except OSError:
-                    pass
+    data_dir = os.path.join(workflow_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    state_dir = tempfile.mkdtemp(prefix="state-", dir=data_dir)
     clean_python_caches(workflow_dir)
 
     config_path = make_iii_config(
@@ -646,6 +651,7 @@ def run_script_mode(args, cmd_info):
         worker_port,
         quiet=True,
         exec_module=False,
+        state_dir=state_dir,
     )
     iii_output_active = threading.Event()
     iii_output_active.set()
@@ -656,8 +662,6 @@ def run_script_mode(args, cmd_info):
     worker_sock.close()
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    write_server_ports(workflow_dir, available_port, worker_port, repo_root)
-
     # Set III_URL so motia SDK connects to the correct worker port
     iii_env = {
         **os.environ,
@@ -736,7 +740,7 @@ def run_script_mode(args, cmd_info):
             sys.exit(1)
 
         print(f"Server is ready on port {available_port} with {n} Motia worker(s)")
-        rc = _submit_and_poll(available_port, api_path, cmd_info)
+        rc = _submit_and_poll(available_port, api_path, cmd_info, state_dir)
         if rc != 0:
             sys.exit(rc)
 
@@ -752,6 +756,7 @@ def run_script_mode(args, cmd_info):
         terminate_group(proc)
         stop_workspace_servers(workflow_dir, worker_url=iii_env["III_URL"])
         cleanup_config(config_path)
+        shutil.rmtree(state_dir)
 
 
 if __name__ == "__main__":

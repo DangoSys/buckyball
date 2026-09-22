@@ -159,7 +159,7 @@ bemu = ["dep:bebop-bemu"]
 [dependencies]
 bebop-verilator = { path = "../../../../../bebop/src/nodes/verilator", optional = true }
 bebop-p2e = { path = "../../../../../bebop/src/nodes/p2e", optional = true }
-bebop-bemu = { path = "../../configs/generated/bemu", optional = true, default-features = false }
+bebop-bemu = { path = "../../configs/generated/bemu", optional = true }
 bebop-dasm = { path = "../../../../../bebop/src/nodes/lib/dasm" }
 bebop-bank-hash = { path = "../../../../../bebop/src/nodes/lib/bank-hash" }
 bebop-bemu-profile = { path = "../../../../../bebop/src/nodes/lib/bemu-profile" }

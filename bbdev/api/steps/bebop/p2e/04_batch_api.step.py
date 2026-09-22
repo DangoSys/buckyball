@@ -2,7 +2,7 @@ from motia import ApiRequest, ApiResponse, FlowContext, api
 
 config = {
     "name": "bebop-p2e-batch-api",
-    "description": "Run bebop p2e nextest batch regression",
+    "description": "Run bebop p2e batch regression",
     "flows": ["bebop"],
     "triggers": [api("POST", "/bebop/p2e/batch")],
     "enqueues": ["bebop.p2e.batch"],

@@ -1,7 +1,7 @@
 """
 bebop verilator batch event handler
 
-Runs bebop verilator nextest batch regression (requires prior --build).
+Runs bebop verilator batch regression (requires prior --build).
 """
 
 import os
@@ -32,7 +32,7 @@ from utils.workload_manifest import resolve_workload_toml
 
 config = {
     "name": "bebop-verilator-batch",
-    "description": "Run bebop verilator nextest batch regression",
+    "description": "Run bebop verilator batch regression",
     "flows": ["bebop"],
     "triggers": [queue("bebop.verilator.batch")],
     "enqueues": [],
@@ -43,10 +43,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    nextest_config = (
-        f"{os.path.dirname(os.path.abspath(__file__))}/scripts/nextest.toml"
-    )
-
     try:
         chip = require_chip(input_data)
     except ValueError as error:
@@ -137,17 +133,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if rushB:
         harness_args.extend(["--rushb-backend", "verilator"])
     harness = shlex.join(harness_args)
-    nextest_cmd = (
-        f"nix develop -c cargo nextest run --release --manifest-path {shlex.quote(manifest)} "
+    test_cmd = (
+        f"nix develop -c cargo --config={vsrc_config} test --release "
+        f"--manifest-path {shlex.quote(manifest)} "
         f"--features {shlex.quote(features)} --test test_verilator "
-        f"--config-file {shlex.quote(nextest_config)} "
-        f"--config={vsrc_config} "
         f"{harness}"
     )
 
-    ctx.logger.info(f"Running bebop verilator nextest: {nextest_cmd}")
+    ctx.logger.info(f"Running bebop verilator regression: {test_cmd}")
     run_result = await stream_run_logger_async(
-        cmd=nextest_cmd,
+        cmd=test_cmd,
         logger=ctx.logger,
         cwd=bbdir,
         stdout_prefix="bebop verilator batch",
@@ -169,7 +164,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "test_type": test_type,
             "rushB": rushB,
             "diff": diff,
-            "nextest_config": nextest_config,
             "workload_toml": workload_toml,
         },
         trace_id=origin_tid,
