@@ -67,7 +67,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     diff = bool(input_data.get("diff", False))
     manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
     features = ["p2e"]
-    build_env = {**os.environ, **bebop_cargo_env(bbdir, chip)}
+    build_env = {
+        **os.environ,
+        **bebop_cargo_env(bbdir, chip),
+        "VSRC_PATH": vsrc_dir,
+        "OUT_PATH": str(build_path),
+    }
     if diff:
         features.append("bemu")
         build_env["CARGO_TARGET_DIR"] = os.path.join(bebop_dir, "target", f"{chip}-p2e-diff")
@@ -76,6 +81,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--keep-env-var", "HOME",
         "--keep-env-var", "ALL_PROXY",
         "--keep-env-var", "CARGO_TARGET_DIR",
+        "--keep-env-var", "VSRC_PATH",
+        "--keep-env-var", "OUT_PATH",
         "-c", "cargo", "run", "--release",
         "--manifest-path", str(manifest),
         "--bin", "bebop",
@@ -89,7 +96,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_result = await stream_run_logger_async(
         cmd=build_cmd,
         logger=ctx.logger,
-        cwd=str(manifest.parent),
+        cwd=bebop_dir,
         stdout_prefix="bebop p2e build",
         stderr_prefix="bebop p2e build",
         env=build_env,
