@@ -46,10 +46,6 @@ def _raw_core_list(designs: dict[str, Any]) -> list[dict[str, Any]]:
     return list(_derive.iter_cores(designs))
 
 
-def _raw_tile_proto(designs: dict[str, Any]) -> dict[str, Any]:
-    return _derive.iter_topology_tiles(designs)[0]
-
-
 def _fill_bank(msg: pb.BankConfig, d: dict[str, Any]) -> None:
     msg.num = d["num"]
     msg.width = d["width"]
@@ -245,8 +241,7 @@ def fill_chip(config: dict[str, Any], derived: dict[str, Any], bbdir: Path) -> p
     Core/tile lists vs templates are already expanded in step2 — import that walker,
     do not write a second one.
 
-    Attention: All tiles on a chip must match, so SRAM/dcache
-    is copied from the first tile onto every TilePlacement.
+    Pair each tile's hardware parameters with its own derived placement.
     """
     b = pb.Chip()
     b.name = derived["name"]
@@ -268,9 +263,9 @@ def fill_chip(config: dict[str, Any], derived: dict[str, Any], bbdir: Path) -> p
     for raw, meta in zip(raw_cores, meta_cores):
         _fill_core(b.cores.add(), raw, meta, bbdir)
 
-    tile_proto = _raw_tile_proto(config["designs"])
-    for meta in derived["tiles"]:
-        _fill_tile(b.tiles.add(), meta, tile_proto)
+    raw_tiles = _derive.iter_topology_tiles(config["designs"])
+    for raw, meta in zip(raw_tiles, derived["tiles"], strict=True):
+        _fill_tile(b.tiles.add(), meta, raw)
 
     targets = derived["targets"]
     for name, target in targets.items():

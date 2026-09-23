@@ -1,3 +1,4 @@
+import fcntl
 import os
 import re
 import shlex
@@ -80,17 +81,30 @@ def selected_mappings(domain, ball: str | None):
     raise ValueError(f"ball {ball!r} not in chip.pb")
 
 
-def vcs_defines(domain, mapping, bank_entries: int):
+def vcs_defines(domain, mapping, core, tile):
+    shared_bank_num = (
+        tile.shared_mem.entries // core.mem.bank.entries
+        if tile.shared_mem.enable
+        else 0
+    )
+    max_group_count = max(core.mem.bank.num, shared_bank_num)
     defs = [
         f"+define+BB_IN_BW={mapping.in_bw}",
         f"+define+BB_OUT_BW={mapping.out_bw}",
         f"+define+BB_MMIO_READ_BW={mapping.mmio_read_bw}",
         f"+define+BB_MMIO_WRITE_BW={mapping.mmio_write_bw}",
-        f"+define+BB_BANK_ADDR_W={(bank_entries - 1).bit_length()}",
+        f"+define+BB_BANK_ID_W={(tile.virtual_bank_count - 1).bit_length()}",
+        f"+define+BB_GROUP_COUNT_W={max_group_count.bit_length()}",
+        f"+define+BB_GROUP_ID_W={(max_group_count - 1).bit_length()}",
+        f"+define+BB_BANK_ADDR_W={(core.mem.bank.entries - 1).bit_length()}",
+        f"+define+BB_ROB_ID_W={(core.frontend.rob_entries - 1).bit_length()}",
+        f"+define+BB_SUB_ROB_ID_W={(core.frontend.sub_rob_depth * 4 - 1).bit_length()}",
     ]
     for e in domain.isa:
         if e.bid == mapping.ball_id:
             defs.append(f"+define+{e.mnemonic}_FUNCT7={e.funct7}")
+    if mapping.ball_dir == "smatmul":
+        defs.append(f"+define+SMATMUL_TILE_ROWS={mapping.ball_params['tileRows']}")
     return defs
 
 
@@ -120,6 +134,16 @@ def _filelist(
         text = text.replace(
             "@SMATMUL_ACCUMULATOR@", smatmul_accumulator_filename(rtl_dir)
         )
+    if "@IM2COL_BUFFER@" in text:
+        modules = set(
+            re.findall(
+                r"\b(buf_\d+x\d+)\s+buf(?:Lo|Hi)_ext\s*\(",
+                (rtl_dir / "LineBufferManager.sv").read_text(),
+            )
+        )
+        if len(modules) != 1:
+            raise ValueError(f"expected one Im2col buffer module, found {modules!r}")
+        text = text.replace("@IM2COL_BUFFER@", f"{modules.pop()}.sv")
     dst.write_text(text.replace("@UVM@", uvm_rel).replace("@RTL@", rtl_rel))
     return str(dst.relative_to(verify_dir))
 
@@ -194,6 +218,9 @@ def build_ip(bbdir: str, chip: str, name: str, ctx) -> dict:
     manifest = root / config["model"]
     rtl = root / "build"
     sim_root = rtl / "uvm" / chip
+    rtl.mkdir(parents=True, exist_ok=True)
+    build_lock = (rtl / ".build.lock").open("w")
+    fcntl.flock(build_lock, fcntl.LOCK_EX)
 
     cargo = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
@@ -259,6 +286,7 @@ def build_ip(bbdir: str, chip: str, name: str, ctx) -> dict:
         )
         if result.returncode != 0:
             raise RuntimeError(f"VCS failed for IP {name} target={target['name']}")
+    build_lock.close()
     return config
 
 
@@ -279,9 +307,12 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
     coverage = []
     for target in config["targets"]:
         simv = sim_root / target["name"] / "simv"
+        simv_q = shlex.quote(str(simv))
         cov_dir = Path(cov_root) / target["name"] / "coverage"
         script = (
-            f'env LD_LIBRARY_PATH="$VCS_RUNTIME_LIBRARY_PATH" {shlex.quote(str(simv))} '
+            f'loader="$(patchelf --print-interpreter {simv_q})"; '
+            f'library_path="$(patchelf --print-rpath {simv_q})"; '
+            f'"$loader" --library-path "$library_path" {simv_q} -no_save '
             f"-sv_lib {shlex.quote(str(model))} +UVM_TESTNAME={shlex.quote(target['test'])} "
             f"-cm line+cond+tgl+assert -cm_name {shlex.quote(target['test'])}"
         )
@@ -339,7 +370,9 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
     verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
     casegen = verify_dir / "casegen" / "Cargo.toml"
     rtl_dir = Path(bbdir) / "arch" / "build" / chip_name / mill_cfg
-    bank_entries = load_chip(bbdir, chip_name).cores[0].mem.bank.entries
+    chip = load_chip(bbdir, chip_name)
+    core = next(core for core in chip.cores if any(item.ball_dir == ball for item in core.balldomain.mappings))
+    tile = next(tile for tile in chip.tiles if core.index in tile.core_indices)
     sim_dir = verify_dir / "build" / chip_name
     uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
     rtl_rel = os.path.relpath(rtl_dir, verify_dir)
@@ -371,7 +404,7 @@ def build_ball(bbdir: str, chip_name: str, mill_cfg: str, domain, mapping, ctx) 
         f"mkdir -p {shlex.quote(str(sim_dir))} {shlex.quote(str(csrc))} && "
         "vcs -full64 -sverilog -timescale=1ns/1ps -debug_access+all "
         "${=VCS_UVM_ARGS} "
-        + " ".join(shlex.quote(d) for d in vcs_defines(domain, mapping, bank_entries))
+        + " ".join(shlex.quote(d) for d in vcs_defines(domain, mapping, core, tile))
         + f" -cm line+cond+tgl+assert -cm_hier {shlex.quote(str(hier))} "
         f"-Mdir={shlex.quote(str(csrc))} -o {shlex.quote(str(simv))} "
         f"-f {shlex.quote(flist)}"
@@ -402,14 +435,18 @@ def run_ball(
     dpi = verify_dir / "casegen" / "target" / "debug" / f"lib{crate.replace('-', '_')}"
     test = f"{ball}_ball_test"
     verify_config = verify_dir / "build" / chip_name / "verify_config.env"
-    bank_entries = load_chip(bbdir, chip_name).cores[0].mem.bank.entries
+    chip = load_chip(bbdir, chip_name)
+    core = next(core for core in chip.cores if any(item.ball_dir == ball for item in core.balldomain.mappings))
     verify_config.write_text(
-        f"bank_entries={bank_entries}\nball_id={mapping.ball_id}\n"
+        f"bank_entries={core.mem.bank.entries}\nball_id={mapping.ball_id}\n"
     )
+    simv_q = shlex.quote(str(simv))
     script = (
         f"cd {shlex.quote(str(verify_dir))} && "
-        f'env LD_LIBRARY_PATH="$VCS_RUNTIME_LIBRARY_PATH" BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} '
-        f"{shlex.quote(str(simv))} "
+        f'loader="$(patchelf --print-interpreter {simv_q})"; '
+        f'library_path="$(patchelf --print-rpath {simv_q})"; '
+        f'BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} '
+        f'"$loader" --library-path "$library_path" {simv_q} -no_save '
         f"-sv_lib {shlex.quote(str(dpi))} "
         f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.ball_id} "
         f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
