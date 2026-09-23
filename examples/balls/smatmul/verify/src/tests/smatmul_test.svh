@@ -36,7 +36,20 @@ class smatmul_ball_test extends uvm_test;
       @(posedge vif.clock);
       cycles++;
       if (cycles > MATRIX_TIMEOUT_CYCLES)
-        `uvm_fatal("TIMEOUT", $sformatf("case %0d timed out", index))
+        `uvm_fatal("TIMEOUT", $sformatf(
+                   "case %0d timed out: stim=%0d cmd=%0d resp=%0d reads=%0d/%0d,%0d/%0d writes=%0d/%0d live=%0d",
+                   index,
+                   env.scb.stim_count,
+                   env.scb.cmd_count,
+                   env.scb.resp_count,
+                   env.scb.read_count[0],
+                   env.scb.expected_reads[0],
+                   env.scb.read_count[1],
+                   env.scb.expected_reads[1],
+                   env.scb.write_count,
+                   env.scb.expected_writes,
+                   env.scb.stim_q.size()
+                   ))
     end
     `uvm_info("SMATMUL", $sformatf("case %0d passed in %0d cycles", index, cycles), UVM_LOW)
   endtask

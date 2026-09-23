@@ -10,8 +10,10 @@ thread_local! {
 }
 
 #[no_mangle]
-pub extern "C" fn smatmul_case_load(seed: u32, index: u32, bid: u32) {
-    CURRENT.with(|current| *current.borrow_mut() = Some(casegen::gen_case(seed, index, bid)));
+pub extern "C" fn smatmul_case_load(seed: u32, index: u32, bid: u32, tile_rows: u32) {
+    CURRENT.with(|current| {
+        *current.borrow_mut() = Some(casegen::gen_case(seed, index, bid, tile_rows as usize))
+    });
 }
 
 fn current_case<F: FnOnce(&MatrixCase) -> R, R>(f: F) -> R {

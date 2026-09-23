@@ -11,7 +11,7 @@ class smatmul_chain_seq extends uvm_sequence #(bb_blink_cmd_item);
 
   task body();
     int unsigned count;
-    smatmul_case_load(seed, case_index, bid);
+    smatmul_case_load(seed, case_index, bid, `SMATMUL_TILE_ROWS);
     count = smatmul_case_num_commands();
     if (count < 2 || count > 3) `uvm_fatal("CASE", "command count must be 2 or 3")
     for (int unsigned index = 0; index < count; index++) begin

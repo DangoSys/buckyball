@@ -26,20 +26,20 @@ pub struct MatrixCase {
     pub writes: Vec<model::WriteExp>,
 }
 
-pub fn gen_case(seed: u32, index: u32, bid: u32) -> MatrixCase {
+pub fn gen_case(seed: u32, index: u32, bid: u32, tile_rows: usize) -> MatrixCase {
     match index {
-        0 => build_case(seed, bid, 16, 1),
-        1 => build_case(seed, bid, 16, 2),
-        2 => build_case(seed ^ index, bid, 16, 1),
+        0 => build_case(seed, bid, 16, 1, tile_rows),
+        1 => build_case(seed, bid, 16, 2, tile_rows),
+        2 => build_case(seed ^ index, bid, 16, 1, tile_rows),
         _ => {
             let mut rng = Rng::new(seed, index);
             let blocks = 1 + (rng.next() % 2) as usize;
-            build_case(rng.next(), bid, 16, blocks)
+            build_case(rng.next(), bid, 16, blocks, tile_rows)
         }
     }
 }
 
-fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize) -> MatrixCase {
+fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize, tile_rows: usize) -> MatrixCase {
     assert!(matches!(rows, 16 | 32 | 64));
     assert!(matches!(blocks, 1 | 2));
     assert!(rows * model::RESULT_WORDS <= model::BANK_DEPTH);
@@ -94,7 +94,7 @@ fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize) -> MatrixCase {
             bid,
             rob_id: (block + 1) as u32,
             op1_words: rows as u32,
-            op2_words: model::TILE as u32,
+            op2_words: (model::TILE * rows.div_ceil(tile_rows)) as u32,
             rs1_lo: rs1 as u32,
             rs1_hi: (rs1 >> 32) as u32,
             rs2_lo: rs2 as u32,
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn single_block_fills_one_result_bank() {
-        let case = gen_case(1, 2, 1);
+        let case = gen_case(1, 2, 1, 16);
         assert_eq!(case.commands.len(), 2);
         assert_eq!(case.writes.len(), 64);
         assert_eq!(case.writes.last().unwrap().addr, 63);
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn two_blocks_encode_one_live_chain() {
-        let case = gen_case(1, 1, 1);
+        let case = gen_case(1, 1, 1, 16);
         assert_eq!(case.commands.len(), 3);
         assert_eq!((case.commands[1].rs2_lo >> 24) & 3, 1);
         assert_eq!((case.commands[2].rs2_lo >> 24) & 3, 2);

@@ -285,7 +285,7 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
       bBank              := command.op2_bank
       cBank              := command.wr_bank
       cBase              := command.rs2(31, 26)
-      outputTileCount    := Mux(rows === 1.U, 1.U, rows >> 3)
+      outputTileCount    := Mux(rows === 1.U, 1.U, rows / param.tileRows.U)
       reductionTileCount := reduction >> 4
       outputTile         := 0.U
       reductionTile      := 0.U

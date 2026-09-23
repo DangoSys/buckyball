@@ -10,10 +10,15 @@ typedef struct {
   int unsigned rs2_hi;
 } matrix_cmd_dpi_t;
 
+`ifndef SMATMUL_TILE_ROWS
+`error "SMATMUL_TILE_ROWS must be provided from the Ball configuration"
+`endif
+
 import "DPI-C" function void smatmul_case_load(
   input int unsigned seed,
   input int unsigned index,
-  input int unsigned bid
+  input int unsigned bid,
+  input int unsigned tile_rows
 );
 import "DPI-C" function int unsigned smatmul_case_num_commands();
 import "DPI-C" function void smatmul_case_cmd(

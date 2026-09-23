@@ -18,7 +18,7 @@
 
 @RTL@/Im2colConfigRegs.sv
 @RTL@/Im2colWindow.sv
-@RTL@/buf_32x128.sv
+@RTL@/@IM2COL_BUFFER@
 @RTL@/RestoringDiv.sv
 @RTL@/LineBufferManager.sv
 @RTL@/StreamWriter.sv
