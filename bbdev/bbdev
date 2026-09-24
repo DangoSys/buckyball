@@ -699,10 +699,6 @@ def run_script_mode(args, cmd_info):
         ):
             sys.exit(1)
 
-        fcntl.flock(server_start_lock, fcntl.LOCK_UN)
-        server_start_lock.close()
-        server_start_lock = None
-
         need = motia_worker_count()
         for _ in range(need):
             worker_proc = subprocess.Popen(
@@ -738,6 +734,10 @@ def run_script_mode(args, cmd_info):
         except RuntimeError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
+
+        fcntl.flock(server_start_lock, fcntl.LOCK_UN)
+        server_start_lock.close()
+        server_start_lock = None
 
         print(f"Server is ready on port {available_port} with {n} Motia worker(s)")
         rc = _submit_and_poll(available_port, api_path, cmd_info, state_dir)

@@ -291,18 +291,12 @@ def build_ip(bbdir: str, chip: str, name: str, ctx) -> dict:
 
 
 def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
-    config = load_ip(bbdir, name)
+    config = build_ip(bbdir, chip, name, ctx)
     root = Path(bbdir) / config["root"]
     manifest = root / config["model"]
     crate = tomllib.loads(manifest.read_text())["package"]["name"].replace("-", "_")
     model = manifest.parent / "target" / "debug" / f"lib{crate}"
     sim_root = root / "build" / "uvm" / chip
-
-    if any(
-        not (sim_root / target["name"] / "simv").is_file()
-        for target in config["targets"]
-    ):
-        config = build_ip(bbdir, chip, name, ctx)
 
     coverage = []
     for target in config["targets"]:
@@ -427,8 +421,7 @@ def run_ball(
     ball = mapping.ball_dir
     verify_dir = Path(bbdir) / "examples" / "balls" / ball / "verify"
     simv = verify_dir / "build" / chip_name / "simv"
-    if not simv.is_file():
-        build_ball(bbdir, chip_name, mill_cfg, domain, mapping, ctx)
+    build_ball(bbdir, chip_name, mill_cfg, domain, mapping, ctx)
     crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())[
         "package"
     ]["name"]
