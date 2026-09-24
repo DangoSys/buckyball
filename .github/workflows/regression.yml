@@ -179,6 +179,7 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
+          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }}'
           nix develop -c bbdev uvm --run '--chip ${{ matrix.chip }}'
 
       - name: Exit repo lock
