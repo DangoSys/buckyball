@@ -6,6 +6,8 @@ import threading
 from contextvars import ContextVar
 from typing import Dict
 
+from utils.process import kill_tree
+
 
 _lock = threading.Lock()
 _processes: Dict[str, int] = {}
@@ -38,10 +40,7 @@ def cancel_process(scope: str) -> bool:
         _cancelled.add(scope)
     if pid is None:
         return False
-    try:
-        os.killpg(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return False
+    kill_tree(pid)
     return True
 
 

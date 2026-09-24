@@ -3,6 +3,7 @@ import subprocess
 import threading
 from typing import Optional, List, Callable
 
+from utils.process import kill_tree
 from utils.process_registry import current_task_scope, register_process, unregister_process
 
 
@@ -133,8 +134,7 @@ def stream_run(
         # Wait for process to finish (with timeout)
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        # Kill process on timeout
-        process.kill()
+        kill_tree(process.pid)
         process.wait()
 
     # Wait for threads to finish

@@ -113,27 +113,8 @@ def kill_tree(pid: int, term_timeout: float = 5.0):
 def terminate_group(proc: subprocess.Popen, term_timeout: float = 5.0):
   if proc.poll() is not None:
     return
-
-  try:
-    os.killpg(proc.pid, signal.SIGTERM)
-  except (ProcessLookupError, PermissionError, OSError):
-    kill_tree(proc.pid, term_timeout=term_timeout)
-
-  try:
-    proc.wait(timeout=term_timeout)
-    return
-  except subprocess.TimeoutExpired:
-    pass
-
-  try:
-    os.killpg(proc.pid, signal.SIGKILL)
-  except (ProcessLookupError, PermissionError, OSError):
-    kill_tree(proc.pid, term_timeout=1.0)
-
-  try:
-    proc.wait(timeout=1)
-  except subprocess.TimeoutExpired:
-    pass
+  kill_tree(proc.pid, term_timeout=term_timeout)
+  proc.wait(timeout=1)
 
 
 def _is_workspace_server(pid: int, workflow_dir: str, worker_url: str | None = None) -> bool:
