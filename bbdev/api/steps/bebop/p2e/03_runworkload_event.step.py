@@ -187,7 +187,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     run_cmd = (
-        f"\"{bebop_p2e_path}\" run p2e "
+        f"nix develop -c \"{bebop_p2e_path}\" run p2e "
         f"--image=\"{image_path}\" "
         f"--bitstream=\"{bitstream}\" "
         f"--log-dir=\"{run_log}\" "
