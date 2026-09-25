@@ -176,11 +176,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         library_env = f"LD_LIBRARY_PATH={shlex.quote(dependency_path)}:${{LD_LIBRARY_PATH:-}}"
         inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && {library_env} exec {shlex.quote(binary_path)}"
         run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
+        run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
         ctx.logger.info(f"Running rushB BEMU: {run_cmd}")
         run_result = await stream_run_logger_async(
             cmd=run_cmd,
             logger=ctx.logger,
             cwd=bbdir,
+            executable="/bin/bash",
             stdout_prefix="rushB bemu",
             stderr_prefix="rushB bemu",
             task_scope=origin_tid,
@@ -258,11 +260,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             cargo_args.append(f"--{trace_name}")
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
+    run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
     run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
         cwd=bbdir,
+        executable="/bin/bash",
         stdout_prefix="bebop bemu",
         stderr_prefix="bebop bemu",
         task_scope=origin_tid,
