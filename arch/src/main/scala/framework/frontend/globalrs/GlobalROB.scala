@@ -99,7 +99,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   val statusHashes =
     if (b.sim.diffTest) {
-      Some(RegInit(VecInit(Seq.fill(robDepth)(VecInit(Seq.fill(3)(0.U(32.W)))))))
+      Some(RegInit(VecInit(Seq.fill(robDepth)(0.U(32.W)))))
     } else {
       None
     }
@@ -263,9 +263,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     robIssued(tailPtr)                    := false.B
     robComplete(tailPtr)                  := false.B
     statusHashes.foreach { hashes =>
-      for (slot <- 0 until 3) {
-        hashes(tailPtr)(slot) := 0.U
-      }
+      hashes(tailPtr) := 0.U
     }
     tailPtr                               := nextPtr(tailPtr)
     when(allocUsesInstId) {
@@ -279,7 +277,6 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   if (b.sim.diffTest) {
     val collecting   = RegInit(false.B)
     val collectCid   = Reg(UInt(idWidth.W))
-    val collectSlot  = Reg(UInt(2.W))
     val collectGroup = Reg(UInt(32.W))
     val currentHash  = Reg(UInt(32.W))
     val hashReady    = RegInit(false.B)
@@ -287,28 +284,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
     val incomingAccess    = robEntries(io.complete.bits).cmd.bankAccess
     val incomingNeedsHash = instIds(io.complete.bits) =/= 0.U && !isMappingConfig(robEntries(io.complete.bits)) &&
-      (incomingAccess.rd_bank_0_valid || incomingAccess.rd_bank_1_valid || incomingAccess.wr_bank_valid)
+      incomingAccess.wr_bank_valid
     io.complete.ready := !incomingNeedsHash || (hashReady && hashCid === io.complete.bits)
 
     when(!collecting && !hashReady && io.complete.valid && incomingNeedsHash) {
       collecting   := true.B
       collectCid   := io.complete.bits
-      collectSlot  := Mux(incomingAccess.rd_bank_0_valid, 0.U, Mux(incomingAccess.rd_bank_1_valid, 1.U, 2.U))
       collectGroup := 0.U
       currentHash  := 0.U
     }
 
-    val access      = robEntries(collectCid).cmd.bankAccess
-    val vbank       = MuxLookup(collectSlot, access.wr_bank_id)(Seq(
-      0.U -> access.rd_bank_0_id,
-      1.U -> access.rd_bank_1_id,
-      2.U -> access.wr_bank_id
-    ))
-    val hasNextSlot = MuxLookup(collectSlot, false.B)(Seq(
-      0.U -> (access.rd_bank_1_valid || access.wr_bank_valid),
-      1.U -> access.wr_bank_valid
-    ))
-    val nextSlot    = Mux(collectSlot === 0.U && access.rd_bank_1_valid, 1.U, 2.U)
+    val vbank       = robEntries(collectCid).cmd.bankAccess.wr_bank_id
     val matches     = VecInit(io.bank_hashes.get.map { state =>
       state.valid && state.hartId === io.hart_id && state.vbankId === vbank && state.groupId === collectGroup
     })
@@ -327,16 +313,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
         currentHash  := nextHash
         collectGroup := collectGroup + 1.U
       }.otherwise {
-        statusHashes.get(collectCid)(collectSlot) := nextHash
-        when(hasNextSlot) {
-          collectSlot  := nextSlot
-          collectGroup := 0.U
-          currentHash  := 0.U
-        }.otherwise {
-          collecting := false.B
-          hashReady  := true.B
-          hashCid    := collectCid
-        }
+        statusHashes.get(collectCid) := nextHash
+        collecting                   := false.B
+        hashReady                    := true.B
+        hashCid                      := collectCid
       }
     }
 
@@ -527,20 +507,15 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   if (b.sim.diffTest) {
     val commitIndex  = PriorityEncoder(commitMask.asUInt)
     val commitAccess = robEntries(commitIndex).cmd.bankAccess
-    val invalidVbank = "hffffffff".U(32.W)
     val btrace       = Module(new BTraceDPI)
     btrace.io.clock   := clock
     btrace.io.reset   := reset.asBool
     btrace.io.instId  := instIds(commitIndex)
     btrace.io.hartId  := io.hart_id
-    btrace.io.r0Vbank := Mux(commitAccess.rd_bank_0_valid, commitAccess.rd_bank_0_id, invalidVbank)
-    btrace.io.r0Hash  := Mux(commitAccess.rd_bank_0_valid, statusHashes.get(commitIndex)(0), 0.U)
-    btrace.io.r1Vbank := Mux(commitAccess.rd_bank_1_valid, commitAccess.rd_bank_1_id, invalidVbank)
-    btrace.io.r1Hash  := Mux(commitAccess.rd_bank_1_valid, statusHashes.get(commitIndex)(1), 0.U)
-    btrace.io.w0Vbank := Mux(commitAccess.wr_bank_valid, commitAccess.wr_bank_id, invalidVbank)
-    btrace.io.w0Hash  := Mux(commitAccess.wr_bank_valid, statusHashes.get(commitIndex)(2), 0.U)
+    btrace.io.w0Vbank := commitAccess.wr_bank_id
+    btrace.io.w0Hash  := statusHashes.get(commitIndex)
     btrace.io.fire    := hasCommit && instIds(commitIndex) =/= 0.U && !isMappingConfig(robEntries(commitIndex)) &&
-      (commitAccess.rd_bank_0_valid || commitAccess.rd_bank_1_valid || commitAccess.wr_bank_valid)
+      commitAccess.wr_bank_valid
   }
 
   // Maintain dependency masks at the same architectural events that gate the
