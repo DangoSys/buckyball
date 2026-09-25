@@ -52,9 +52,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    diff = bool(input_data.get("diff", False))
     build_dir = (
         input_data.get("output_dir")
-        or f"{bebop_dir}/build/{chip}-{timestamp}"
+        or f"{bebop_dir}/build/{chip}{'-diff' if diff else ''}-{timestamp}"
     )
     build_path = Path(build_dir).resolve()
     build_root = (Path(bebop_dir) / "build").resolve()
@@ -64,7 +65,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.rmtree(build_path)
     build_path.mkdir(parents=True)
 
-    diff = bool(input_data.get("diff", False))
     manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
     features = ["p2e"]
     build_env = {

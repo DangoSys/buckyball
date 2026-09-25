@@ -10,6 +10,7 @@ import glob
 import os
 import re
 import shlex
+import shutil
 import sys
 from datetime import datetime
 
@@ -166,9 +167,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(runtime_lib_dir, "libvCtb.so")
     bebop_p2e_path = os.path.join(build_dir, "bebop-p2e")
-    runtime_artifacts = [rtcfg_path, libvctb_path, bebop_p2e_path]
-    if diff:
-        runtime_artifacts.append(os.path.join(build_dir, "libriscv.so"))
+    runtime_artifacts = [rtcfg_path, libvctb_path]
     if not all(os.path.isfile(path) for path in runtime_artifacts):
         missing = [path for path in runtime_artifacts if not os.path.isfile(path)]
         if missing:
@@ -185,6 +184,48 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+
+    manifest = os.path.join(bbdir, "examples", "chips", chip, "generated", "bebop", "Cargo.toml")
+    build_env = {**os.environ, **bebop_cargo_env(bbdir, chip), "OUT_PATH": build_dir}
+    if diff:
+        build_env["CARGO_TARGET_DIR"] = os.path.join(bebop_dir, "target", f"{chip}-p2e-diff")
+    build_cmd = shlex.join([
+        "nix", "develop", "--ignore-env",
+        "--keep-env-var", "HOME",
+        "--keep-env-var", "ALL_PROXY",
+        "--keep-env-var", "CARGO_TARGET_DIR",
+        "--keep-env-var", "OUT_PATH",
+        "-c", "cargo", "build", "--release",
+        "--manifest-path", manifest,
+        "--bin", "bebop",
+        "--features", "p2e,bemu" if diff else "p2e",
+    ])
+    ctx.logger.info("Building bebop p2e runtime for the selected case...")
+    build_result = await stream_run_logger_async(
+        cmd=build_cmd,
+        logger=ctx.logger,
+        cwd=bebop_dir,
+        stdout_prefix="bebop p2e runtime build",
+        stderr_prefix="bebop p2e runtime build",
+        env=build_env,
+    )
+    if build_result.returncode != 0:
+        await check_result(
+            ctx, build_result.returncode, continue_run=False,
+            extra_fields={"task": "runtime_build", "build_dir": build_dir},
+            trace_id=origin_tid,
+        )
+        return
+
+    target_release = os.path.join(build_env["CARGO_TARGET_DIR"], "release")
+    staged_runtime = f"{bebop_p2e_path}.new"
+    shutil.copy2(os.path.join(target_release, "bebop"), staged_runtime)
+    os.replace(staged_runtime, bebop_p2e_path)
+    if diff:
+        libriscv_path = os.path.join(build_dir, "libriscv.so")
+        staged_libriscv = f"{libriscv_path}.new"
+        shutil.copy2(os.path.join(target_release, "bemu-runtime", "libriscv.so"), staged_libriscv)
+        os.replace(staged_libriscv, libriscv_path)
 
     run_cmd = (
         f"nix develop -c \"{bebop_p2e_path}\" run p2e "
@@ -205,7 +246,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if input_data.get(trace_name, False):
             run_cmd += f" --{trace_name}"
     ctx.logger.info(f"Running bebop p2e runworkload: {run_cmd}")
-    run_env = {**os.environ.copy(), **bebop_cargo_env(bbdir, chip)}
+    run_env = build_env
     run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
