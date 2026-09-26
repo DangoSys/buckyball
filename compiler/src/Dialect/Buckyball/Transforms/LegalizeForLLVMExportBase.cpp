@@ -311,37 +311,65 @@ struct BuckyballMvin2dLowering : public ConvertOpToLLVMPattern<Mvin2dOp> {
       return op.emitError("mvin_2d is not supported by rushB");
     Location loc = op.getLoc();
     MemrefAddress memref = extractMemrefAddress(rewriter, loc, op.getInput());
+    Value lowBits = rewriter.create<arith::AndIOp>(loc, memref.address,
+                                                   cstI64(rewriter, loc, 7));
+    Value aligned = rewriter.create<arith::CmpIOp>(
+        loc, arith::CmpIPredicate::eq, lowBits, cstI64(rewriter, loc, 0));
+    Value inRange = rewriter.create<arith::CmpIOp>(
+        loc, arith::CmpIPredicate::ult, memref.address,
+        cstI64(rewriter, loc, 1ULL << 39));
+    Value valid8 = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq,
+                                                  adaptor.getValidBytes(),
+                                                  cstI64(rewriter, loc, 8));
+    Value valid16 = rewriter.create<arith::CmpIOp>(
+        loc, arith::CmpIPredicate::eq, adaptor.getValidBytes(),
+        cstI64(rewriter, loc, 16));
+    Value validLength = rewriter.create<arith::OrIOp>(loc, valid8, valid16);
+    Value validAddress = rewriter.create<arith::AndIOp>(loc, aligned, inRange);
+    Value validInput =
+        rewriter.create<arith::AndIOp>(loc, validAddress, validLength);
+    Value validInput64 =
+        rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), validInput);
+    // This lowering also runs inside single-block SCF regions.
+    auto tail = LLVM::TailCallKindAttr::get(
+        rewriter.getContext(), LLVM::tailcallkind::TailCallKind::None);
+    LLVM::InlineAsmOp::create(
+        rewriter, loc, Type(), ValueRange{validInput64},
+        rewriter.getStringAttr("bnez $0, 1f\n\tunimp\n1:"),
+        rewriter.getStringAttr("r,~{memory}"), rewriter.getUnitAttr(),
+        UnitAttr(), tail, nullptr, nullptr);
+
     emitDmaCacheFlush(rewriter, loc);
     Value rs1 = packRs1WriteBankIter(rewriter, loc, adaptor.getAddr(),
                                      adaptor.getHeight());
-    Value address = rewriter.create<arith::AndIOp>(
-        loc, memref.address, cstI64(rewriter, loc, 0xffff'ffffULL));
+    Value address = rewriter.create<arith::ShRUIOp>(loc, memref.address,
+                                                    cstI64(rewriter, loc, 3));
     Value pixel = rewriter.create<arith::AndIOp>(loc, adaptor.getPixelBytes(),
                                                  cstI64(rewriter, loc, 0x3ff));
     Value pixelUnits =
         rewriter.create<arith::DivUIOp>(loc, pixel, cstI64(rewriter, loc, 8));
     Value width = rewriter.create<arith::SubIOp>(loc, adaptor.getWidth(),
                                                  cstI64(rewriter, loc, 1));
-    Value valid = rewriter.create<arith::RemUIOp>(loc, adaptor.getValidBytes(),
-                                                  cstI64(rewriter, loc, 16));
+    Value valid =
+        rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(), valid8);
     Value rs2 = rewriter.create<arith::OrIOp>(
         loc, address,
         rewriter.create<arith::ShLIOp>(loc, pixelUnits,
-                                       cstI64(rewriter, loc, 32)));
+                                       cstI64(rewriter, loc, 36)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getSourceWidth(),
-                                       cstI64(rewriter, loc, 39)));
+                                       cstI64(rewriter, loc, 43)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
         rewriter.create<arith::ShLIOp>(loc, adaptor.getDstBase(),
-                                       cstI64(rewriter, loc, 49)));
+                                       cstI64(rewriter, loc, 53)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, width, cstI64(rewriter, loc, 55)));
+        rewriter.create<arith::ShLIOp>(loc, width, cstI64(rewriter, loc, 59)));
     rs2 = rewriter.create<arith::OrIOp>(
         loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, valid, cstI64(rewriter, loc, 58)));
+        rewriter.create<arith::ShLIOp>(loc, valid, cstI64(rewriter, loc, 62)));
     rewriter.replaceOpWithNewOp<CustomIntrOp>(op, rs1, rs2,
                                               rewriter.getI32IntegerAttr(34));
     return success();
