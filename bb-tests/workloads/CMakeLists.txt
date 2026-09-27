@@ -481,7 +481,7 @@ add_custom_target(mlirtest-workloads-build
 add_custom_target(sync-mlirtest-bin
   COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src
   COMMAND rsync -a --delete --exclude=CMakeFiles --include="*/"
-          --include="MLIRTest/***" --include="balls/***"
+          --include="MLIRTest/***" --include="mlir_tests/***" --include="balls/***"
           --include="*/mlir_tests/***" --exclude="*"
           ${BUILD_BIN_DIR}/src/ ${OUTPUT_BIN_DIR}/src/
   DEPENDS mlirtest-workloads-build

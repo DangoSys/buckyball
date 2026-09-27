@@ -87,7 +87,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   val ls_decode_list = ListLookup(func7, ls_default_decode, Array(
       MSET_BITPAT      -> List(N, N, 0.U(memAddrLen.W),      rs1(bankIdLen - 1, 0), rs2, Y),
       MVIN_BITPAT      -> List(Y, N, rs2(memAddrLen - 1, 0), rs1(bankIdLen + 19, 20), rs2, Y),
-      MVIN_2D_BITPAT   -> List(Y, N, rs2(31, 0),             rs1(bankIdLen + 19, 20), rs2, Y),
+      MVIN_2D_BITPAT   -> List(Y, N, Cat(rs2(35, 0), 0.U(3.W)), rs1(bankIdLen + 19, 20), rs2, Y),
       MVOUT_BITPAT     -> List(N, Y, rs2(memAddrLen - 1, 0), rs1(bankIdLen - 1, 0), rs2, Y),
       MVIN_MMIO_BITPAT -> List(Y, N, rs2(memAddrLen - 1, 0), 0.U(bankIdLen.W),      rs2, Y)
     )
@@ -127,15 +127,15 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   }
   when(io.cmd_i.fire && func7 === MVIN_2D_BITPAT) {
     val height     = rs1(63, 30)
-    val pixelBytes = rs2(38, 32) << 3
-    val width      = rs2(57, 55) +& 1.U
-    val validBytes = Mux(rs2(61, 58) === 0.U, 16.U, rs2(61, 58))
+    val pixelBytes = rs2(42, 36) << 3
+    val width      = rs2(61, 59) +& 1.U
+    val validBytes = Mux(rs2(62), 8.U(5.W), 16.U(5.W))
     assert(height =/= 0.U, "MVIN_2D height must be non-zero")
-    assert(rs2(38, 32) =/= 0.U, "MVIN_2D pixel bytes must be non-zero")
-    assert(rs2(48, 39) =/= 0.U, "MVIN_2D source width must be non-zero")
+    assert(rs2(42, 36) =/= 0.U, "MVIN_2D pixel bytes must be non-zero")
+    assert(rs2(52, 43) =/= 0.U, "MVIN_2D source width must be non-zero")
     assert(validBytes <= pixelBytes, "MVIN_2D valid bytes exceed pixel bytes")
-    assert(rs2(54, 49) + height * width <= b.memDomain.bankEntries.U, "MVIN_2D destination exceeds bank")
-    assert(rs2(63, 62) === 0.U, "MVIN_2D reserves rs2[63:62]")
+    assert(rs2(58, 53) + height * width <= b.memDomain.bankEntries.U, "MVIN_2D destination exceeds bank")
+    assert(!rs2(63), "MVIN_2D reserves rs2[63]")
   }
   when(io.cmd_i.fire && (func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT)) {
     assert(rs1(19, 0) === 0.U, "MVIN write-bank encoding reserves rs1[19:0]")

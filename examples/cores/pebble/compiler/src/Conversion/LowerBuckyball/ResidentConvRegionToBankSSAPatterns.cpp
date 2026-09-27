@@ -2126,10 +2126,12 @@ public:
         Value nextX = b.create<arith::AddIOp>(
             loc, x0, b.create<arith::ConstantIndexOp>(loc, side));
         if (width > side &&
-            failed(emitInto(stageIndex, y0, nextX, side, width - side,
-                            firstPanel, panelCount, destination,
-                            destinationBase + side * (fp32Output ? 4 : 1),
-                            destinationStride)))
+            failed(emitInto(
+                stageIndex, y0, nextX, side, width - side, firstPanel,
+                panelCount, destination,
+                destinationBase +
+                    side * (fp32Output && stage.activation != 2 ? 4 : 1),
+                destinationStride)))
           return failure();
         Value nextY = b.create<arith::AddIOp>(
             loc, y0, b.create<arith::ConstantIndexOp>(loc, side));
@@ -2932,7 +2934,9 @@ public:
     auto materializeStage = [&](int64_t stageIndex) -> LogicalResult {
       Stage &stage = stages[stageIndex];
       const bool fp32Output = stage.finalOutput && !stage.pool;
-      const int64_t outputStorageFactor = fp32Output ? 4 : 1;
+      // LUT results stay INT8 in banks; host stores apply the FP32 scale.
+      const int64_t outputStorageFactor =
+          fp32Output && stage.activation != 2 ? 4 : 1;
       int64_t side =
           std::min<int64_t>((stage.add || stage.average) ? 1 : 2,
                             std::min(stage.outputHeight, stage.outputWidth));
