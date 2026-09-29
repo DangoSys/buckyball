@@ -36,6 +36,6 @@ void init_monitor(int argc, char *argv[]);
 void bdb_mainloop();
 void ball_exec_once();
 void bdb_set_batch_mode();
-void sim_exit();
+void sim_exit(int code = 0);
 
 #endif // _BDB_H_
