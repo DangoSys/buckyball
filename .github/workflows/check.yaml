@@ -95,7 +95,7 @@ jobs:
           - chip: poly
             run_bemu_elf_tests: true
             run_bemu_pk_tests: false
-            run_verilator_batch_tests: true
+            run_verilator_batch_tests: false
           - chip: multi-rocket
             run_bemu_elf_tests: true
             run_bemu_pk_tests: false

@@ -1,2 +1,4 @@
 [workloads]
-tests = []
+tests = [
+  "poly-attention-ctest-smatmul_f32_test-baremetal",
+]
