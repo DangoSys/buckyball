@@ -1,15 +1,14 @@
 """
 bebop bemu event handler
 
-Run BEMU either through its guest-ELF emulator or the rushB native ABI.
+Run a guest ELF through BEMU.
 """
+
 import os
 import shlex
 import sys
-import tomllib
 from datetime import datetime
 from pathlib import Path
-
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -18,14 +17,18 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-
-from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, log_dir, workloads_output_root
+from utils.path import (
+    bebop_cargo_env,
+    get_buckyball_path,
+    log_dir,
+    workloads_output_root,
+)
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
+from steps.bebop.bemu.scripts.model_sim import model_run_commands
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
-from bemu_common import bemu_core_manifest, bemu_manifest, bemu_tile_index, chip_emu_manifest
-
+from bemu_common import bemu_manifest, bemu_tile_index, chip_emu_manifest
 
 config = {
     "name": "bebop-bemu-sim",
@@ -53,7 +56,6 @@ def clean_model_trace(binary_dir: str) -> None:
             if not summary.is_file():
                 raise FileNotFoundError(f"trace summary path is not a file: {summary}")
             summary.unlink()
-
     perfetto = trace_dir / "perfetto.json"
     if perfetto.exists():
         if not perfetto.is_file():
@@ -64,49 +66,23 @@ def clean_model_trace(binary_dir: str) -> None:
 def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     if Path(binary_name).name != binary_name:
         return None
-
     workload = search_workload(workloads_output_root(bbdir), binary_name)
     if workload is not None:
         return workload
-
     kernel = Path(bbdir) / "bb-tests" / "output" / "kernel" / chip / binary_name
     return str(kernel) if kernel.is_file() else None
-
-
-def is_native_host_elf(path: str) -> bool:
-    try:
-        with open(path, "rb") as binary:
-            header = binary.read(20)
-    except OSError:
-        return False
-    return header[:4] == b"\x7fELF" and header[18:20] == b"\x3e\x00"
-
-
-def rushb_bemu_library(manifest: Path, bbdir: str, chip: str) -> Path:
-    """Return the cdylib emitted by bebop-bemu for a rushB run."""
-    with manifest.open("rb") as source:
-        cargo = tomllib.load(source)
-    lib_name = cargo.get("lib", {}).get("name")
-    if not lib_name:
-        lib_name = cargo["package"]["name"].replace("-", "_")
-    return Path(bebop_target_dir(bbdir, chip)) / "release" / f"lib{lib_name}.so"
-
-
-def rushb_bemu_library_dirs(manifest: Path, bbdir: str, chip: str) -> list[Path]:
-    """Locate native shared-library dependencies produced by the bebop-bemu build."""
-    build_dir = Path(bebop_target_dir(bbdir, chip)) / "release" / "build"
-    return sorted({library.parent for library in build_dir.glob("*/out/**/libriscv.so")})
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-
     chip = input_data.get("chip")
     if not chip:
         ctx.logger.error("Missing required parameter: chip must be specified")
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "missing_chip"},
             trace_id=origin_tid,
         )
@@ -116,18 +92,41 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "invalid_chip", "chip": chip},
             trace_id=origin_tid,
         )
         return
-
+    if input_data.get("model"):
+        params = {key: value for key, value in input_data.items() if key != "_trace_id"}
+        commands, run_log = model_run_commands(bbdir, params)
+        run_log.mkdir(parents=True, exist_ok=True)
+        ctx.logger.info(f"Model simulation logs: {run_log}")
+        for command, filename in zip(commands, ("build.log", "run.log"), strict=True):
+            command_line = shlex.join(["nix", "develop", "-c", *command])
+            command_line = f"set -o pipefail; {command_line} 2>&1 | tee {shlex.quote(str(run_log / filename))}"
+            result = await stream_run_logger_async(
+                cmd=command_line, executable="/bin/bash",
+                logger=ctx.logger, cwd=bbdir, task_scope=origin_tid,
+                stdout_prefix="model simulation", stderr_prefix="model simulation")
+            if cancellation_requested(origin_tid):
+                return
+            if result.returncode:
+                break
+        await check_result(ctx, result.returncode, continue_run=False,
+            extra_fields={"chip": chip, "model": params["model"], "log_dir": str(run_log)},
+            trace_id=origin_tid)
+        return
     binary_name = input_data.get("binary", "")
     binary_path = resolve_bemu_binary(bbdir, chip, binary_name)
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "binary_not_found", "binary": binary_name},
             trace_id=origin_tid,
         )
@@ -141,72 +140,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         perfetto_target = f"{binary_name.removesuffix('-run')}-perfetto"
     if perfetto_target:
         clean_model_trace(binary_dir)
-
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = log_dir(bbdir, chip, "verilog", timestamp, "bemu", binary_name)
     os.makedirs(run_log, exist_ok=True)
-
-    if input_data.get("rushB"):
-        # rushB is a native ABI for one accelerator instance, so it remains a
-        # Core-level backend even when guest-ELF BEMU runs a whole tile.
-        bemu_cargo_manifest = bemu_core_manifest(chip, bbdir)
-        # rushB binaries are host executables. Rebuilding and co-locating the
-        # backend library keeps the ABI selection explicit and avoids sending
-        # a host ELF through Spike's guest-ELF path.
-        if not is_native_host_elf(binary_path):
-            ctx.logger.error(
-                f"--rushB requires a native x86_64 rushB runner; got guest ELF: {binary_path}"
-            )
-            await check_result(
-                ctx, 1, continue_run=False,
-                extra_fields={"error": "rushB_requires_native_runner", "binary": binary_path},
-                trace_id=origin_tid,
-            )
-            return
-        bemu_library = rushb_bemu_library(bemu_cargo_manifest, bbdir, chip)
-        bemu_runtime_library = Path(binary_dir) / "libbebop_bemu.so"
-        dependency_dirs = rushb_bemu_library_dirs(bemu_cargo_manifest, bbdir, chip)
-        build_cmd = shlex.join([
-            "cargo", "build", "--release", "--manifest-path", str(bemu_cargo_manifest), "--lib",
-        ])
-        copy_cmd = shlex.join([
-            "cmake", "-E", "copy_if_different", str(bemu_library), str(bemu_runtime_library),
-        ])
-        dependency_path = os.pathsep.join(str(path) for path in dependency_dirs)
-        library_env = f"LD_LIBRARY_PATH={shlex.quote(dependency_path)}:${{LD_LIBRARY_PATH:-}}"
-        inner_cmd = f"cd {shlex.quote(binary_dir)} && {build_cmd} && {copy_cmd} && {library_env} exec {shlex.quote(binary_path)}"
-        run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
-        run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
-        ctx.logger.info(f"Running rushB BEMU: {run_cmd}")
-        run_result = await stream_run_logger_async(
-            cmd=run_cmd,
-            logger=ctx.logger,
-            cwd=bbdir,
-            executable="/bin/bash",
-            stdout_prefix="rushB bemu",
-            stderr_prefix="rushB bemu",
-            task_scope=origin_tid,
-            env={**os.environ.copy(), **bebop_cargo_env(bbdir, chip)},
-        )
-        if cancellation_requested(origin_tid):
-            return
-        await check_result(
-            ctx,
-            run_result.returncode,
-            continue_run=False,
-            extra_fields={
-                "task": "bemu",
-                "backend": "rushB",
-                "binary": binary_path,
-                "chip": chip,
-                "log_dir": run_log,
-                "timestamp": timestamp,
-            },
-            trace_id=origin_tid,
-        )
-        return
-
-    # ── Run bebop bemu ────────────────────────────────────────────────────
+    core_index = input_data.get("core_index")
     tile_index = bemu_tile_index(chip, bbdir)
     chip_emu = chip_emu_manifest(chip, bbdir)
     if (tile_index is not None) != bool(chip_emu):
@@ -214,12 +151,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"chip {chip}: bundle bemu.chipMain and emu/Cargo.toml must both exist or both be absent"
         )
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"error": "chip_emu_entry_mismatch", "chip": chip},
             trace_id=origin_tid,
         )
         return
-    if chip_emu:
+    if chip_emu and core_index is None:
         cargo_args = [
             "cargo",
             "run",
@@ -249,8 +188,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "--log-dir",
             run_log,
         ]
+    if core_index is not None:
+        cargo_args.extend(["--core-index", str(core_index)])
     if input_data.get("pk"):
         cargo_args.append("--pk")
+    if input_data.get("host-io"):
+        cargo_args.append("--host-io")
     if input_data.get("disasm"):
         cargo_args.append("--disasm")
     if input_data.get("tool-profile"):
@@ -258,6 +201,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     for trace_name in ("itrace", "mtrace"):
         if input_data.get(trace_name, False):
             cargo_args.append(f"--{trace_name}")
+    arguments = input_data.get("arguments", [])
+    if arguments:
+        if not isinstance(arguments, list) or not all(isinstance(arg, str) for arg in arguments):
+            raise ValueError("arguments must be a list of strings")
+        cargo_args.extend(["--", *arguments])
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
@@ -289,13 +237,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-
     perfetto_path = None
     if perfetto_target:
-        perfetto_cmd = (
-            f"cmake --build {shlex.quote(f'{bbdir}/bb-tests/build')} "
-            f"--target {shlex.quote(perfetto_target)}"
-        )
+        perfetto_cmd = f"cmake --build {shlex.quote(f'{bbdir}/bb-tests/build')} --target {shlex.quote(perfetto_target)}"
         ctx.logger.info(f"Generating Perfetto trace: {perfetto_cmd}")
         perfetto_result = await stream_run_logger_async(
             cmd=perfetto_cmd,
@@ -321,7 +265,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-
     await check_result(
         ctx,
         0,

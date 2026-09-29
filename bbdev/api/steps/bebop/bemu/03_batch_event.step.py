@@ -10,7 +10,6 @@ import os
 import shutil
 import shlex
 import sys
-
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -22,7 +21,6 @@ if bebop_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-
 from utils.path import bebop_cargo_env, get_buckyball_path, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
@@ -52,15 +50,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    rushB = bool(input_data.get("rushB", False))
     try:
         bemu_cargo_manifest = bemu_manifest(chip, bbdir)
-        if not rushB:
-            chip_emu = chip_emu_manifest(chip, bbdir)
-            if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(
-                encoding="utf-8"
-            ):
-                bemu_cargo_manifest = chip_emu
+        chip_emu = chip_emu_manifest(chip, bbdir)
+        if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(
+            encoding="utf-8"
+        ):
+            bemu_cargo_manifest = chip_emu
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -72,14 +68,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     elf_root = workloads_output_root(bbdir)
-
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))
     test_type = input_data.get("test", "elf-tests")
     try:
-        workload_toml = resolve_workload_toml(
-            chip, "bemu", test_type, bbdir, rushB=rushB
-        )
+        workload_toml = resolve_workload_toml(chip, "bemu", test_type, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -94,16 +87,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-
-    ctx.logger.info(
-        f"Running {test_type} with workload config: {workload_toml} rushB={rushB}"
-    )
-
-    # ── Build bebop bemu ──────────────────────────────────────────────────
-    build_cmd = (
-        f"nix develop -c cargo build --manifest-path {shlex.quote(str(bemu_cargo_manifest))} "
-        "--tests"
-    )
+    ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
+    build_cmd = f"nix develop -c cargo build --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --tests"
     ctx.logger.info("Building bebop bemu (tests)...")
     build_result = await stream_run_logger_async(
         cmd=build_cmd,
@@ -113,7 +98,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop bemu build",
         env=env,
     )
-
     if build_result.returncode != 0:
         await check_result(
             ctx,
@@ -123,26 +107,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-
-    # ── Run regression ────────────────────────────────────────────────────
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         shutil.rmtree(
             os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts"), ignore_errors=True
         )
         ctx.logger.info("Cleaned previous bebop test artifacts")
-
-    harness = shlex.join([
-        "--",
-        "--workload-toml", workload_toml,
-        "--bb-tests-root", elf_root,
-        *(["--rushb-backend", "bemu"] if rushB else []),
-    ])
-    test_cmd = (
-        f"nix develop -c cargo test --manifest-path {shlex.quote(str(bemu_cargo_manifest))} "
-        "--test test_bemu "
-        f"{harness}"
+    harness = shlex.join(
+        ["--", "--workload-toml", workload_toml, "--bb-tests-root", elf_root, *[]]
     )
-
+    test_cmd = f"nix develop -c cargo test --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --test test_bemu {harness}"
     ctx.logger.info(f"Running bebop bemu regression: {test_cmd}")
     run_result = await stream_run_logger_async(
         cmd=test_cmd,
@@ -152,17 +125,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop bemu batch",
         env=env,
     )
-
     await check_result(
         ctx,
         run_result.returncode,
         continue_run=False,
         extra_fields={
             "task": "batch",
-            "backend": "bemu-rushB" if rushB else "bemu",
+            "backend": "bemu",
             "chip": chip,
             "test_type": test_type,
-            "rushB": rushB,
             "workload_toml": workload_toml,
         },
         trace_id=origin_tid,

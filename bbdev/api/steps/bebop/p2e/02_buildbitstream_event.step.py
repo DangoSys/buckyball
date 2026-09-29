@@ -21,7 +21,7 @@ if utils_path not in sys.path:
 
 from utils.event_common import require_chip
 from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir
-from utils.p2e_timescale import normalize_p2e_timescale
+from steps.bebop.p2e.scripts.timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 

@@ -8,6 +8,7 @@ from . import task_cancel
 from . import compiler_build
 from . import workload_clean
 from . import workload_build
+from . import model_build
 from . import bemu_sim
 from . import bemu_analysis
 from . import bemu_batch
@@ -56,6 +57,7 @@ def modules():
         compiler_build,
         workload_clean,
         workload_build,
+        model_build,
         bemu_sim,
         bemu_analysis,
         bemu_batch,

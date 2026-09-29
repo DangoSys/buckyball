@@ -1,6 +1,5 @@
 import os
 import sys
-
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -9,9 +8,7 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-
 from utils.event_common import require_chip
-from utils.path import get_buckyball_path
 
 config = {
     "name": "bebop-bemu-batch-api",
@@ -24,37 +21,37 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-
     chip = body.get("chip")
     try:
         require_chip({"chip": chip})
     except ValueError as e:
-        return ApiResponse(
-            status=400,
-            body={"error": str(e)}
-        )
-
+        return ApiResponse(status=400, body={"error": str(e)})
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
             status=400,
-            body={"error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"}
+            body={
+                "error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"
+            },
         )
-
     if test_type not in ["elf-tests", "pk-tests"]:
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"}
+            body={
+                "error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"
+            },
         )
-
-    await ctx.enqueue({
-        "topic": "bebop.bemu.batch",
-        "data": {
-            "chip": chip,
-            "test": test_type,
-            "clean-before": body.get("clean-before", body.get("clean_before", False)),
-            "rushB": bool(body.get("rushB", False)),
-            "_trace_id": ctx.trace_id,
+    await ctx.enqueue(
+        {
+            "topic": "bebop.bemu.batch",
+            "data": {
+                "chip": chip,
+                "test": test_type,
+                "clean-before": body.get(
+                    "clean-before", body.get("clean_before", False)
+                ),
+                "_trace_id": ctx.trace_id,
+            },
         }
-    })
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

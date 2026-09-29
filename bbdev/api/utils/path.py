@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import subprocess
 from pathlib import Path
 
 
@@ -19,7 +18,7 @@ def get_buckyball_path():
 def _chip_name(chip):
     if not isinstance(chip, str) or not chip or chip == "None":
         raise ValueError("missing required parameter: chip")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", chip):
+    if not re.fullmatch("[A-Za-z0-9_.-]+", chip):
         raise ValueError(f"invalid chip name: {chip}")
     return chip
 
@@ -55,7 +54,7 @@ def chip_arch_root(bbdir, chip):
     return os.path.join(bbdir, "arch", "build", _chip_name(chip))
 
 
-def sim_name(bbdir, chip, product, *, rushb=False):
+def sim_name(bbdir, chip, product):
     if product == "verilog" or product == "synth":
         sim_key = "verilator"
     elif product == "tapeout":
@@ -82,25 +81,19 @@ def sim_name(bbdir, chip, product, *, rushb=False):
     if sim_key not in sims:
         raise ValueError(f"chip {chip!r} has no sims.{sim_key} in {path}")
     name = sims[sim_key]
-    if not rushb:
-        return name
-    if product != "verilog" or not name.endswith("VerilatorConfig"):
-        raise ValueError(f"rushB RTL is not supported for product {product}: {name}")
-    return f"{name[:-len('VerilatorConfig')]}RushBVerilatorConfig"
+    return name
 
 
-def rtl_dir(bbdir, chip, product, output_dir=None, *, rushb=False):
+def rtl_dir(bbdir, chip, product, output_dir=None):
     if output_dir:
         return output_dir
-    return os.path.join(
-        chip_arch_root(bbdir, chip), sim_name(bbdir, chip, product, rushb=rushb)
-    )
+    return os.path.join(chip_arch_root(bbdir, chip), sim_name(bbdir, chip, product))
 
 
-def rtl_out(bbdir, chip, product, output_dir=None, *, rushb=False):
-    name = sim_name(bbdir, chip, product, rushb=rushb)
+def rtl_out(bbdir, chip, product, output_dir=None):
+    name = sim_name(bbdir, chip, product)
     out = output_dir or os.path.join(chip_arch_root(bbdir, chip), name)
-    return name, out
+    return (name, out)
 
 
 def _log_part(value, what):
@@ -108,18 +101,14 @@ def _log_part(value, what):
         raise ValueError(f"log dir missing {what}")
     if os.path.basename(value) != value:
         raise ValueError(f"log {what} must be a single path component: {value!r}")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", value):
+    if not re.fullmatch("[A-Za-z0-9_.-]+", value):
         raise ValueError(f"invalid log {what}: {value!r}")
     return value
 
 
 def log_dir(bbdir, chip, product, stamp, tool, name, output_dir=None):
     chip = _chip_name(chip)
-    config = _log_part(
-        os.path.basename(os.path.normpath(rtl_dir(bbdir, chip, product, output_dir))),
-        "config",
-    )
     stamp = _log_part(stamp, "timestamp")
     tool = _log_part(tool, "tool")
     name = _log_part(os.path.basename(name), "name")
-    return os.path.join(bbdir, "log", f"{stamp}-{chip}-{config}-{tool}-{name}")
+    return os.path.join(bbdir, "log", f"{stamp}-{chip}-{tool}-{name}")

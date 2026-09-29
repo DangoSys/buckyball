@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-
 from .path import get_buckyball_path
 
 
@@ -25,7 +24,6 @@ def resolve_workload_toml(
     backend: str,
     test_type: str,
     bbdir: str | None = None,
-    rushB: bool = False,
     diff: bool = False,
 ) -> str:
     if test_type == "elf-tests":
@@ -34,13 +32,11 @@ def resolve_workload_toml(
         suffix = "pk"
     else:
         raise ValueError(f"invalid test type: {test_type}")
-
     regression_dir = chip_regression_dir(chip, backend, bbdir)
     if diff:
         diff_toml = regression_dir / f"workloads-{suffix}-diff.toml"
         if diff_toml.is_file():
             return str(diff_toml)
-
     name = f"workloads-{suffix}.toml"
     toml = regression_dir / name
     if not toml.is_file():

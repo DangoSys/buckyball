@@ -20,8 +20,8 @@ def register(mcp):
 
         With --chip only: uses examples/chips/<chip>/kernel OS overlay and packs
         that chip's bemu workloads-pk.toml into fw_payload-<chip>-pk.
-        With --model: requires --chip; packs ModelTest runtime from
-        archs/buckyball/<chip>/<Model> into fw_payload-<model>.
+        With --model: requires --chip; packs a native model artifact from
+        stack/models/build/<chip>/<model>/artifact into fw_payload-<model>.
         With --interactive: keep shared /init shell and do not auto-run.
         """
         params: Dict[str, Any] = {}

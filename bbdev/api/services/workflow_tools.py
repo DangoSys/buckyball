@@ -12,13 +12,7 @@ class WorkflowAPITool(Tool):
         return "call_workflow_api"
 
     def get_description(self) -> str:
-        return """Call internal workflow API endpoints.
-    Available endpoints:
-    - /verilator/verilog: Generate Verilog
-    - /verilator/build: Build verilator (params: jobs)
-    - /verilator/sim: Run simulation (params: binary, batch)
-    - /workload/clean: Clean workload output directory
-    - /workload/build: Build workload (params: chip, model, stable, rushB)"""
+        return "Call internal workflow API endpoints.\n    Available endpoints:\n    - /verilator/verilog: Generate Verilog\n    - /verilator/build: Build verilator (params: jobs)\n    - /verilator/sim: Run simulation (params: binary, batch)\n    - /workload/clean: Clean workload output directory\n    - /workload/build: Build workload (params: chip, stable, ctest, mlirtest)\n    - /model/build: Build model recipe (params: chip, model, ctrace, dtrace)"
 
     def get_parameters(self) -> Dict[str, Any]:
         return {
@@ -40,16 +34,11 @@ class WorkflowAPITool(Tool):
     def execute(self, arguments: Dict[str, Any], context: Any) -> str:
         endpoint = arguments.get("endpoint")
         params = arguments.get("params", {})
-
         url = f"http://localhost:3001{endpoint}"
-
         try:
             context.log_info(f"Calling workflow API: {url}")
             context.log_info(f"Parameters: {params}")
-
-            # Synchronous call (using httpx sync client)
             response = httpx.post(url, json=params, timeout=300.0)
-
             if response.status_code == 200:
                 return str(response.json())
             else:
@@ -59,6 +48,5 @@ class WorkflowAPITool(Tool):
                         "response": response.text[:500],
                     }
                 )
-
         except Exception as e:
             return str({"error": f"Workflow API call failed: {str(e)}"})

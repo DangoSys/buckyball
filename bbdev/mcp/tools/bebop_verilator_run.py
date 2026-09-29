@@ -1,12 +1,11 @@
 """MCP tool: bbdev_bebop_verilator_run."""
 
 from __future__ import annotations
-
-
-from common import submit, err, fmt, need, opt
+from common import submit, err, fmt, need
 
 
 def register(mcp):
+
     @mcp.tool()
     def bbdev_bebop_verilator_run(
         binary: str,
@@ -18,7 +17,6 @@ def register(mcp):
         ctrace: bool = False,
         banktrace: bool = False,
         no_wave: bool = False,
-        rushB: bool = False,
         diff: bool = False,
         batch: bool = False,
     ) -> str:
@@ -39,7 +37,6 @@ def register(mcp):
                     "ctrace": ctrace,
                     "banktrace": banktrace,
                     "no-wave": no_wave,
-                    "rushB": rushB,
                     "diff": diff,
                     "batch": batch,
                 },

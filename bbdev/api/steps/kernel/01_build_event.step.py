@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 
@@ -73,22 +74,8 @@ def kernel_model(input_data: dict) -> str:
     if not isinstance(model, str):
         raise ValueError("model must be a string")
 
-    model = model.lower()
-    supported = {
-        "bert",
-        "deepseekr1",
-        "gemma4",
-        "lenet",
-        "llama2",
-        "mobilenet",
-        "qwen3",
-        "resnet",
-        "stable-diffusion",
-        "yolo",
-    }
-    if model not in supported:
-        valid = ", ".join(sorted(supported))
-        raise ValueError(f"unknown kernel model: {model}; valid models: {valid}")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", model):
+        raise ValueError(f"invalid model name: {model}")
     return model
 
 
@@ -110,12 +97,6 @@ def kernel_chip(input_data: dict, bbdir: str, *, require_overlay: bool) -> str:
         if not os.path.isfile(chip_init):
             raise ValueError(f"chip OS overlay init not found: {chip_init}")
     return chip
-
-
-def cmake_model(model: str) -> str:
-    if model == "stable-diffusion":
-        return "stablediffusion"
-    return model
 
 
 def kernel_build_dir(
@@ -163,7 +144,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if model and not input_data.get("chip"):
             raise ValueError("--model requires --chip")
         interactive = kernel_interactive(input_data)
-        # pk mode needs OS overlay; model mode only needs chip for ModelTest path
+        # pk mode needs OS overlay; model mode only needs chip for the model artifact path
         chip = kernel_chip(input_data, bbdir, require_overlay=not bool(model))
     except ValueError as e:
         ctx.logger.error(str(e))
@@ -177,7 +158,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         bbdir, hart_params, model, chip, interactive=interactive
     )
     interactive_arg = "ON" if interactive else "OFF"
-    cmake_model_name = cmake_model(model)
+    cmake_model_name = model
 
     # cmake configure
     configure_cmd = (

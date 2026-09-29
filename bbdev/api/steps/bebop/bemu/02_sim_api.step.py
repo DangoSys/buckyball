@@ -12,6 +12,7 @@ if scripts_path not in sys.path:
 
 from utils.event_common import require_chip
 from utils.path import get_buckyball_path
+from steps.bebop.bemu.scripts.model_sim import model_run_commands
 
 config = {
     "name": "bebop-bemu-sim-api",
@@ -39,14 +40,20 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
 
     binary = body.get("binary", "")
-    if not binary:
+    if body.get("model"):
+        try:
+            model_run_commands(get_buckyball_path(), body)
+        except (ValueError, KeyError, OSError) as error:
+            return ApiResponse(status=400, body={"success": False, "failure": True,
+                "returncode": 400, "message": str(error)})
+    elif not binary:
         return ApiResponse(
             status=400,
             body={
                 "success": False,
                 "failure": True,
                 "returncode": 400,
-                "message": "binary parameter is required",
+                "message": "model or binary parameter is required",
             },
         )
 

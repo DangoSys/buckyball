@@ -3,11 +3,11 @@ bebop verilator build event handler
 
 Builds bebop with verilator feature and VSRC_PATH
 """
+
 import os
 import shlex
 import sys
 from pathlib import Path
-
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -16,13 +16,11 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-
 from utils.event_common import require_chip
 from utils.path import bebop_cargo_env, bebop_target_dir, get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from build_marker import write_build_marker
-
 
 config = {
     "name": "bebop-verilator-build",
@@ -38,27 +36,29 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
     chip = require_chip(input_data)
-
-    vsrc_dir = rtl_dir(
-        bbdir,
-        chip,
-        "verilog",
-        input_data.get("vsrc_dir"),
-        rushb=bool(input_data.get("rushB", False)),
-    )
+    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
-
     diff = bool(input_data.get("diff", False))
     build_dir = bebop_dir
     manifest = Path(bbdir) / "bebop" / "Cargo.toml"
     features = ["verilator"]
     if diff:
-        manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
+        manifest = (
+            Path(bbdir)
+            / "examples"
+            / "chips"
+            / chip
+            / "generated"
+            / "bebop"
+            / "Cargo.toml"
+        )
         build_dir = str(manifest.parent)
         features.append("bemu")
         dramsim_header = os.path.join(bbdir, "result", "include", "dramsim3.h")
         if not os.path.isfile(dramsim_header):
-            ctx.logger.info(f"Nix environment is missing {dramsim_header}; rebuilding result")
+            ctx.logger.info(
+                f"Nix environment is missing {dramsim_header}; rebuilding result"
+            )
             env_result = await stream_run_logger_async(
                 cmd="nix build",
                 logger=ctx.logger,
@@ -68,7 +68,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             )
             if env_result.returncode != 0:
                 raise RuntimeError(f"nix build failed: {env_result.returncode}")
-
     jobs = input_data.get("jobs", 16)
     cargo_build_cmd = shlex.join(
         [
@@ -97,7 +96,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="bebop verilator build",
         env=env,
     )
-
     bebop_bin = os.path.join(bebop_target_dir(bbdir, chip), "release", "bebop")
     target_dir = bebop_target_dir(bbdir, chip)
     if build_result.returncode == 0:
@@ -117,7 +115,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     if build_result.returncode != 0:
         return
-
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(
             {

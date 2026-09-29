@@ -1,5 +1,4 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
-
 from utils.event_common import require_chip
 from utils.path import get_buckyball_path, rtl_dir
 
@@ -15,14 +14,11 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     bbdir = get_buckyball_path()
     body = request.body or {}
-
     try:
         chip = require_chip(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-
     diff = bool(body.get("diff", False))
-    rushB = bool(body.get("rushB", False))
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
@@ -31,29 +27,17 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "error": "Missing required parameter: --test must be specified (elf-tests)"
             },
         )
-
-    if test_type != "elf-tests" and not (rushB and test_type == "pk-tests"):
+    if test_type != "elf-tests":
         return ApiResponse(
             status=400,
-            body={
-                "error": f"Invalid test type: {test_type}. Must be 'elf-tests', or 'pk-tests' with --rushB"
-            },
+            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests'"},
         )
-
-    if diff and rushB:
-        return ApiResponse(
-            status=400,
-            body={"error": "--diff and --rushB cannot be used together"},
-        )
-
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"), rushb=rushB)
-
+    vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"))
     data = {
         "chip": chip,
         "vsrc_dir": vsrc_dir,
         "test": test_type,
         "clean-before": body.get("clean-before", body.get("clean_before", False)),
-        "rushB": rushB,
         "diff": diff,
     }
     await ctx.enqueue(

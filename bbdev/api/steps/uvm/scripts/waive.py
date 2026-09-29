@@ -9,13 +9,18 @@ def apply_waivers(rtl_dir: Path) -> int:
     for path in sorted(rtl_dir.glob("*.sv")):
         lines = path.read_text().splitlines(keepends=True)
         output = []
+        excluded_module = False
         for line in lines:
-            if re.search(r"^\s*(?:wire|reg|logic)\b.*\b_(?:GEN|T)(?:_\d+)?\b", line) and (
-                not output or output[-1] != "//VCS coverage off\n"
-            ):
-                output.extend(("//VCS coverage off\n", line, "//VCS coverage on\n"))
+            if line.strip() == "// VCS coverage exclude_file":
+                # FIRRTL memory models share a file with the DUT in unsplit RTL.
+                output.append("//VCS coverage off\n")
+                excluded_module = True
                 changed += 1
-            else:
-                output.append(line)
+                continue
+            if excluded_module and re.match(r"^\s*endmodule\b", line):
+                output.extend((line, "//VCS coverage on\n"))
+                excluded_module = False
+                continue
+            output.append(line)
         path.write_text("".join(output))
     return changed

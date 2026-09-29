@@ -1,7 +1,5 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
-
 from utils.event_common import require_chip
-from utils.path import get_buckyball_path
 
 config = {
     "name": "bebop-verilator-run-api",
@@ -14,18 +12,15 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-
     if "output_dir" in body:
         return ApiResponse(
             status=400,
             body={"error": "Unsupported parameter: output_dir. Use --output-dir."},
         )
-
     try:
         chip = require_chip(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-
     binary = body.get("binary", "")
     if not binary:
         return ApiResponse(
@@ -37,15 +32,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "message": "binary parameter is required",
             },
         )
-
     diff = body.get("diff", False)
-    rushb = body.get("rushB", False)
-    if diff and rushb:
-        return ApiResponse(
-            status=400,
-            body={"error": "--diff and --rushB cannot be used together"},
-        )
-
     data = {
         "chip": chip,
         "binary": binary,
@@ -54,7 +41,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "pmctrace": body.get("pmctrace", False),
         "ctrace": body.get("ctrace", False),
         "banktrace": body.get("banktrace", False),
-        "rushB": rushb,
         "diff": diff,
         "no-wave": body.get("no-wave", body.get("no_wave", False)),
         "jobs": body.get("jobs", 16),
@@ -64,5 +50,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if output_dir is not None:
         data["output_dir"] = output_dir
         data["_explicit_output_dir"] = True
-    await ctx.enqueue({"topic": "bebop.verilator.run.clean", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue(
+        {
+            "topic": "bebop.verilator.run.clean",
+            "data": {**data, "_trace_id": ctx.trace_id},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

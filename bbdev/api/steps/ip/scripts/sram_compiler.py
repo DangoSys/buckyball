@@ -6,7 +6,7 @@ from pathlib import Path
 
 for path in (
     Path(__file__).resolve().parents[2],
-    Path(__file__).resolve().parents[4] / "thirdparty" / "soc-framework" / "ip",
+    Path(__file__).resolve().parents[5] / "thirdparty" / "soc-framework" / "ip",
 ):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

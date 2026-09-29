@@ -290,6 +290,73 @@ def build_ip(bbdir: str, chip: str, name: str, ctx) -> dict:
     return config
 
 
+def validate_ip_exclusions(exclusions: Path, exported: Path) -> None:
+    current = set()
+    for path in exported.glob("fullexclude.*"):
+        for block in path.read_text().split('// CHECKSUM: "')[1:]:
+            checksum = block.split('"', 1)[0]
+            instance = re.search(r"^// INSTANCE: (\S+)", block, re.MULTILINE)
+            if instance:
+                current.add((instance[1], checksum))
+    checksum = None
+    for line in exclusions.read_text().splitlines():
+        if line.startswith("CHECKSUM:"):
+            checksum = line.split('"')[1]
+        elif line.startswith("INSTANCE:"):
+            instance = line.split()[1]
+            if (instance, checksum) not in current:
+                raise RuntimeError(
+                    f"coverage exclusions require review: {exclusions}: {instance}"
+                )
+        elif line.startswith("MODULE:"):
+            raise ValueError(f"IP exclusions must use instance scopes: {exclusions}")
+
+
+def report_ip_coverage(
+    bbdir: str, root: Path, target: dict, simv: Path, cov_dir: Path, ctx
+) -> None:
+    cov_dir.mkdir(parents=True, exist_ok=True)
+    exclusions = root / "src" / "main" / "resources" / f"{target['name']}.el"
+    reports = [(cov_dir, "")]
+    if exclusions.is_file():
+        reports[0] = (cov_dir, " -dump full_exclusions")
+        hierarchy = simv.parent / "rtl_hier.cfg"
+        hierarchy.write_text(f"+tree {target['top']}.dut\n")
+        scope = f" -hier {shlex.quote(str(hierarchy))}"
+        reports.extend(
+            [
+                (cov_dir / "rtl_raw", scope),
+                (
+                    cov_dir / "rtl",
+                    scope + f" -elfile {shlex.quote(str(exclusions))} -excl_strict",
+                ),
+            ]
+        )
+    for report, options in reports:
+        if report.name == "rtl":
+            validate_ip_exclusions(exclusions, simv.parent)
+        command = (
+            f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
+            f"urg -dir {shlex.quote(str(simv))}.vdb -format text"
+            f"{options} -report {shlex.quote(str(report))}"
+        )
+        result = stream_run_logger(
+            cmd=command,
+            logger=ctx.logger,
+            cwd=str(simv.parent),
+            stdout_prefix="uvm urg",
+            stderr_prefix="uvm urg",
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"URG failed for {target['name']}: {report}")
+        if report.name == "rtl" and re.search(
+            r"(?:Warning|Error)-\[", result.stdout + result.stderr
+        ):
+            raise RuntimeError(
+                f"coverage exclusions require review for {target['name']}: {report}"
+            )
+
+
 def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
     config = build_ip(bbdir, chip, name, ctx)
     root = Path(bbdir) / config["root"]
@@ -323,20 +390,7 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
         )
         check_uvm_result(result, f"IP {name} target={target['name']}")
 
-        cov_dir.mkdir(parents=True, exist_ok=True)
-        urg = (
-            f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
-            f"urg -dir {shlex.quote(str(simv))}.vdb -format text -report {shlex.quote(str(cov_dir))}"
-        )
-        result = stream_run_logger(
-            cmd=urg,
-            logger=ctx.logger,
-            cwd=str(root),
-            stdout_prefix="uvm urg",
-            stderr_prefix="uvm urg",
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"URG failed for IP {name} target={target['name']}")
+        report_ip_coverage(bbdir, root, target, simv, cov_dir, ctx)
         coverage.append((target["name"], cov_dir))
 
     index_dir = Path(cov_root) / "coverage"
@@ -355,6 +409,11 @@ def run_ip(bbdir: str, chip: str, name: str, ctx, cov_root: str) -> dict:
         "ip": name,
         "targets": [t["name"] for t in config["targets"]],
         "index": str(index),
+        "rtl_coverage": {
+            target["name"]: str(Path(cov_root) / target["name"] / "coverage" / "rtl")
+            for target in config["targets"]
+            if (root / "src/main/resources" / f"{target['name']}.el").is_file()
+        },
         "log": cov_root,
     }
 

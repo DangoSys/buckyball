@@ -41,8 +41,11 @@ WORKFLOW_COMMANDS = {
     },
     "workload": {
         "clean": 'Clean workload output directory. Args: "--chip <chip>"',
-        "build": 'Build workload. Args: "--chip <chip> [--model <name>] [--trace-config <absolute-path>] [--stable] [--rushB <bemu|verilator>] [--ctest|--mlirtest]"; --ctest and --mlirtest are mutually exclusive local builds and cannot be combined with --model or --rushB.',
+        "build": 'Build test workloads. Args: "--chip <chip> [--stable] [--ctest|--mlirtest]"',
         "tohex": 'Convert chip workload ELF to hex. Args: "--chip <chip>"',
+    },
+    "model": {
+        "build": 'Build model recipes (all chip models when --model is omitted). Args: "--chip <chip> [--model <directory-name>] [--ctrace] [--dtrace]"',
     },
     "kernel": {
         "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>]"; --model requires --chip',
@@ -57,17 +60,17 @@ WORKFLOW_COMMANDS = {
         "build": 'Build compiler. Args: "--chip <chip>"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"',
+        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model>". ELF args: "--chip <chip> --binary <path> [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"',
         "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
-        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--rushB] [--clean-before]"',
+        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--clean-before]"',
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
         "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--rushB] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--rushB] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--rushB] [--clean-before]"',
+        "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
+        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--clean-before]"',
     },
     "bebop-vcs": {
         "verilog": 'Generate Bebop VCS RTL once. Args: "--chip <chip>"',

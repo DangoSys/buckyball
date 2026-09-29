@@ -14,20 +14,20 @@ def _run(
     cmd: list[str],
     *,
     repo: Path,
-    cwd: Path | None = None,
     logger: object | None = None,
     task_scope: str | None = None,
     output_prefix: str,
 ) -> None:
+    cmd = ["nix", "develop", str(repo), "-c", *cmd]
     if logger is None:
-        result = subprocess.run(cmd, cwd=cwd or repo)
+        result = subprocess.run(cmd, cwd=repo)
     else:
         from utils.stream_run import stream_run_logger
 
         result = stream_run_logger(
             cmd=shlex.join(cmd),
             logger=logger,
-            cwd=str(cwd or repo),
+            cwd=str(repo),
             stdout_prefix=output_prefix,
             stderr_prefix=output_prefix,
             task_scope=task_scope,
@@ -71,7 +71,7 @@ def build_llvm(
     repo: str | Path, *, logger: object | None = None, task_scope: str | None = None
 ) -> Path:
     root = Path(repo).resolve()
-    buddy = root / "compiler" / "thirdparty" / "buddy-mlir"
+    buddy = root / "stack" / "compiler" / "thirdparty" / "buddy-mlir"
     llvm_src = buddy / "llvm" / "llvm"
     llvm_build = buddy / "llvm" / "build"
     if not llvm_src.is_dir():
@@ -104,7 +104,6 @@ def build_llvm(
             _run(
                 cmake,
                 repo=root,
-                cwd=buddy,
                 logger=logger,
                 task_scope=task_scope,
                 output_prefix="compiler llvm configure",
@@ -112,7 +111,6 @@ def build_llvm(
         _run(
             ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
             repo=root,
-            cwd=buddy,
             logger=logger,
             task_scope=task_scope,
             output_prefix="compiler llvm build",
@@ -126,6 +124,7 @@ def build_llvm(
 def compiler_build_dir(repo: str | Path, instance: str) -> Path:
     return (
         Path(repo).resolve()
+        / "stack"
         / "compiler"
         / "thirdparty"
         / "buddy-mlir"
@@ -158,7 +157,7 @@ def build_compiler(
     )
     if not selected_pb.is_file():
         raise RuntimeError(f"missing {selected_pb}; generate the requested chip.pb first")
-    buddy = root / "compiler" / "thirdparty" / "buddy-mlir"
+    buddy = root / "stack" / "compiler" / "thirdparty" / "buddy-mlir"
     llvm = build_llvm(root, logger=logger, task_scope=task_scope)
     python = compiler_python(root)
     build = compiler_build_dir(root, build_instance)
@@ -171,7 +170,7 @@ def build_compiler(
         str(buddy),
         "-B",
         str(build),
-        f"-DBUDDY_EXTERNAL_DIALECTS_DIR={root / 'compiler'}",
+        f"-DBUDDY_EXTERNAL_DIALECTS_DIR={root / 'stack' / 'compiler'}",
         f"-DBUCKYBALL_CHIP_PB={selected_pb}",
         f"-DMLIR_DIR={llvm / 'lib' / 'cmake' / 'mlir'}",
         f"-DLLVM_DIR={llvm / 'lib' / 'cmake' / 'llvm'}",

@@ -1,0 +1,17 @@
+syntax = "proto3";
+package buckyball.config;
+
+message ModelParameter {
+  oneof value {
+    sint64 integer = 1;
+    double real = 2;
+    string text = 3;
+    bool boolean = 4;
+  }
+}
+
+message ModelConfig {
+  uint32 version = 1;
+  string name = 2;
+  map<string, ModelParameter> parameters = 3;
+}

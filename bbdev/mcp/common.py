@@ -133,7 +133,7 @@ def _stop() -> None:
     if _port is not None and bbdev_path().is_file():
         subprocess.run(
             ["nix", "develop", "--command", str(bbdev_path()), "stop", "--server", "--port", str(_port)],
-            cwd=str(bbdev_path().parent),
+            cwd=str(repo_path()),
             capture_output=True,
             text=True,
             timeout=30,
@@ -186,7 +186,7 @@ def _ensure() -> int:
     _log_fh = open(log_path(), "a", encoding="utf-8")
     _proc = subprocess.Popen(
         ["nix", "develop", "--command", str(bbdev_path()), "start", "--server", "--port", str(port)],
-        cwd=str(bbdev_path().parent),
+        cwd=str(repo_path()),
         stdout=_log_fh,
         stderr=_log_fh,
         start_new_session=True,
@@ -352,64 +352,21 @@ def _load_toml(path: Path) -> Dict[str, Any]:
 
 
 def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
-    chip_root = repo_path() / "examples" / "chips" / chip
-    cfg = json.loads(
-        (
-            repo_path()
-            / "examples"
-            / "chips"
-            / chip
-            / "configs"
-            / "generated"
-            / "config"
-            / "config.json"
-        )
-        .read_text(encoding="utf-8")
-    )
-    cores = []
-    for tile in cfg["designs"]["tiles"]:
-        cores.extend(tile["cores"])
-    seen = []
-    uniq = []
-    for core in cores:
-        key = core["balldomain"]["_file"]
-        if key not in seen:
-            seen.append(key)
-            uniq.append(core)
-    if len(uniq) != 1:
-        raise ValueError(f"chip {chip} has no unique topology core")
-    core = uniq[0]
-    core_file = Path(core["_file"])
-    parts = core_file.parts
-    core_name = parts[parts.index("cores") + 1]
-    core_root = repo_path() / "examples" / "cores" / core_name
-    domains = core_root / "configs" / "balldomains"
-
-    if balldomain is None:
-        bd = core["balldomain"]
-        path = Path(bd["_file"])
-        if not path.is_absolute():
-            path = (repo_path() / bd["_file"]).resolve()
-        else:
-            path = path.resolve()
-    else:
+    if balldomain:
         raw = Path(balldomain)
-        if raw.is_absolute():
-            path = raw
-        elif balldomain.endswith(".toml"):
-            candidates = [
-                domains / raw.name,
-                core_root / balldomain,
-                chip_root / balldomain,
-            ]
-            path = next(
-                (p.resolve() for p in candidates if p.is_file()),
-                candidates[0].resolve(),
-            )
-        else:
-            path = (domains / f"{balldomain}.toml").resolve()
-
-    return path
+        if raw.is_absolute() or len(raw.parts) > 1:
+            return (repo_path() / raw).resolve()
+    derived = repo_path() / "examples" / "chips" / chip / "configs/generated/config/derived.json"
+    cfg = json.loads(derived.read_text(encoding="utf-8"))
+    domains = {core["balldomain_base_dir"] for core in cfg["cores"]}
+    if len(domains) != 1:
+        raise ValueError(f"chip {chip} has multiple BallDomains; provide an explicit TOML path")
+    directory = repo_path() / domains.pop()
+    if balldomain:
+        return directory / (balldomain if balldomain.endswith(".toml") else f"{balldomain}.toml")
+    core_file = repo_path() / cfg["cores"][0]["config_path"]
+    include = _load_toml(core_file)["balldomain"]
+    return (core_file.parent / include).resolve()
 
 
 def _validate(path: Path) -> Dict[str, Any]:

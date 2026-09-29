@@ -1,17 +1,16 @@
 def model_layout_name(model: str) -> str:
     aliases = {
-        "lenet": "LeNet",
-        "mobilenet": "MobileNetV3",
-        "resnet": "ResNet18",
-        "yolo": "YOLO26",
-        "bert": "Bert",
-        "qwen3": "Qwen3",
-        "gemma4": "Gemma4",
-        "deepseekr1": "DeepSeekR1",
+        "lenet": "lenet",
+        "mobilenet": "mobilenet-v3-small",
+        "resnet": "resnet18",
+        "yolo": "yolo26n",
+        "bert": "bert",
+        "qwen3": "qwen3-8b",
+        "gemma4": "gemma4-e2b-it",
+        "deepseekr1": "deepseek-r1-0528-qwen3-8b",
         "llama2": "llama2",
-        "stable-diffusion": "StableDiffusion",
-        "whisper": "Whisper",
-        "buddynext": "BuddyNext",
+        "stable-diffusion": "stable-diffusion",
+        "whisper": "whisper",
     }
     try:
         return aliases[model.lower()]

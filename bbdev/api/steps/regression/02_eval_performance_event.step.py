@@ -1,12 +1,11 @@
 """regression --eval-performance event.
 
 Per model (synchronous shells inside one regression event):
-  1. workload build --chip <chip> --model <m>
-  2. bridge chip layout output -> flat path the kernel expects
-  3. kernel build --model <m> with dataset packed from e2e/datasets/
-     -> fw_payload-<m>.hex; /init runs binary with --dataset/--max-samples
-  4. p2e runworkload; parse per-model accuracy from uart (top1= / map=)
-  5. require non-empty log_dir/trace/cycle/; run perfetto.py; cycles_i
+  1. model build --chip <chip> --model <m>
+  2. kernel build --model <m> with dataset packed from the model build dataset directory
+     -> fw_payload-<m>.hex; /init runs binary with --dataset
+  3. p2e runworkload; parse per-model accuracy from uart (top1= / map=)
+  4. require non-empty log_dir/trace/cycle/; run perfetto.py; cycles_i
 
 After all models: cycles = mean(cycles_i); accuracy = mean(accuracy_i);
 merge_metrics(cycles=..., accuracy=..., models=[...]).
@@ -31,13 +30,12 @@ from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from utils.model import model_layout_name
 
-sys.path.insert(0, os.path.join(get_buckyball_path(), "bb-tests", "workloads", "scripts"))
-import build as workload_build  # noqa: E402
+from steps.model.scripts.build import build_model
 
 regression_scripts = os.path.join(os.path.dirname(__file__), "scripts")
 if regression_scripts not in sys.path:
     sys.path.insert(0, regression_scripts)
-from model_layout import bridge_model_layout, perfetto_inputs
+from model_layout import perfetto_inputs
 from models_toml import load_eval_models
 from accuracy import accuracy_from_uart, load_eval_accuracy, mean_accuracy
 from perfetto_latency import e2e_cycles_from_perfetto, mean_cycles
@@ -73,15 +71,13 @@ def _fail(ctx, origin_tid, error, **extra):
     return check_result(ctx, 1, continue_run=False, extra_fields=fields, trace_id=origin_tid)
 
 
-def _workload_build(bbdir, chip, model, logger, task_scope):
-    model_key = model.lower()
-    model_layout_name(model_key)
-    workload_build.build_workload(
-        bbdir, chip, model=model_key, logger=logger, task_scope=task_scope
-    )
+def _model_build(bbdir, chip, model, logger, task_scope):
+    build_model(bbdir, chip, model_layout_name(model.lower()),
+                ctrace=True, logger=logger, task_scope=task_scope)
 
 
 def _kernel_build_cmds(bbdir, chip, model, dataset=""):
+    model = model_layout_name(model)
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     hart_params = {"visible": 64, "total": 64, "hidden_base": 64}
     kernel_build = _kernel.kernel_build_dir(
@@ -157,7 +153,7 @@ def _perfetto_cmd(trace_dir, trace_toml, mlir_files):
     for mlir in mlir_files:
         args += ["--mlir", str(mlir)]
     return (
-        f"{sys.executable} {shlex.quote(str(Path(get_buckyball_path()) / 'bb-tests/workloads/src/ModelTest/e2e/framework/trace/perfetto.py'))} "
+        f"{sys.executable} {shlex.quote(str(Path(get_buckyball_path()) / 'stack/serving/trace/perfetto.py'))} "
         + " ".join(shlex.quote(a) for a in args)
     )
 
@@ -208,20 +204,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             await _fail(ctx, origin_tid, "unknown_model", model=model)
             return
 
-        ctx.logger.info(f"[eval-performance] model {model}: workload build")
+        ctx.logger.info(f"[eval-performance] model {model}: model build")
         try:
-            _workload_build(bbdir, chip, model, ctx.logger, origin_tid)
+            _model_build(bbdir, chip, model, ctx.logger, origin_tid)
         except Exception as e:
             ctx.logger.error(str(e))
-            await _fail(ctx, origin_tid, "workload_build_cmd", model=model)
-            return
-
-        ctx.logger.info(f"[eval-performance] model {model}: bridge layout")
-        try:
-            bridge_model_layout(bbdir, chip, model)
-        except (FileNotFoundError, FileExistsError) as e:
-            ctx.logger.error(str(e))
-            await _fail(ctx, origin_tid, "layout_bridge_failed", model=model)
+            await _fail(ctx, origin_tid, "model_build_cmd", model=model)
             return
 
         ctx.logger.info(f"[eval-performance] model {model}: kernel build")

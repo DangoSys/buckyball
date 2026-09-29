@@ -1,13 +1,12 @@
 """MCP tool: bbdev_bemu_sim."""
 
 from __future__ import annotations
-
 from typing import Any, Dict
-
 from common import submit, err, fmt, need
 
 
 def register(mcp):
+
     @mcp.tool()
     def bbdev_bemu_sim(
         chip: str,
@@ -17,7 +16,8 @@ def register(mcp):
         tool_profile: bool = False,
         itrace: bool = False,
         mtrace: bool = False,
-        rushB: bool = False,
+        core_index: int | None = None,
+        arguments: list[str] | None = None,
     ) -> str:
         """Run one workload on bebop-bemu. POST /bebop/bemu/sim."""
         for n, v in (("chip", chip), ("binary", binary)):
@@ -31,6 +31,7 @@ def register(mcp):
             "tool-profile": tool_profile,
             "itrace": itrace,
             "mtrace": mtrace,
-            "rushB": rushB,
+            "core_index": core_index,
+            "arguments": arguments if arguments is not None else [],
         }
         return fmt(submit("/bebop/bemu/sim", params))
