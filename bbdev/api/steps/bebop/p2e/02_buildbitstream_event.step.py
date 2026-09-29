@@ -72,6 +72,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         **bebop_cargo_env(bbdir, chip),
         "VSRC_PATH": vsrc_dir,
         "OUT_PATH": str(build_path),
+        "P2E_DIFF": "1" if diff else "0",
     }
     if diff:
         features.append("bemu")
@@ -83,6 +84,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--keep-env-var", "CARGO_TARGET_DIR",
         "--keep-env-var", "VSRC_PATH",
         "--keep-env-var", "OUT_PATH",
+        "--keep-env-var", "P2E_DIFF",
         "-c", "cargo", "run", "--release",
         "--manifest-path", str(manifest),
         "--bin", "bebop",
