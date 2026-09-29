@@ -4,7 +4,11 @@
 
 using namespace mlir;
 
+namespace mlir::buddy {
+void populateGemminiBallLowerBuckyballToBankSSAPatterns(RewritePatternSet &);
+}
+
 void mlir::buddy::populateToyLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
-  (void)patterns;
+  populateGemminiBallLowerBuckyballToBankSSAPatterns(patterns);
 }

@@ -20,7 +20,7 @@ endif()
 
 set(GOBAN_CTEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(GOBAN_LD ${GOBAN_CTEST_DIR}/goban.ld)
-set(GOBAN_MEM_RUNTIME ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
+set(GOBAN_MEM_RUNTIME ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/dma.c)
 set(GOBAN_MULTICORE_DIR ${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore)
 set(GOBAN_START ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S)
 set(GOBAN_C_FLAGS
@@ -28,7 +28,7 @@ set(GOBAN_C_FLAGS
   -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
   -Wl,-T,${GOBAN_LD}
-  -I${WORKLOAD_LIB_DIR}
+  -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
   -I${BUCKYBALL_ISA_DIR}/chip
   -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
   -I${GOBAN_MULTICORE_DIR}
@@ -59,7 +59,7 @@ function(add_goban_test_target STEM SOURCE_FILE)
       ${GOBAN_CTEST_DIR}/goban.h
       ${GOBAN_CTEST_DIR}/scu.h
       ${GOBAN_MEM_RUNTIME}
-      ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+      ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
       ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
       ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
       ${BUCKYBALL_ISA_DIR}/chip/topology.h

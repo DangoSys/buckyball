@@ -107,7 +107,7 @@ private:
 namespace mlir::buddy::buckyball {
 void populateToInt8BallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t bankDepth, bool) {
+    int64_t bankDepth) {
   (void)stable;
   patterns.add<QuantF32ToI8Lowering>(converter);
   patterns.add<QuantI32ToI8Lowering>(converter, bankDepth);

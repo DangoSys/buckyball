@@ -34,16 +34,8 @@ struct ReluLowering : public ConvertOpToLLVMPattern<ReluOp> {
 namespace mlir::buddy::buckyball {
 void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                    RewritePatternSet &patterns,
-                                                   bool, int64_t, bool) {
+                                                   bool, int64_t) {
   patterns.add<ReluLowering>(converter);
-}
-
-// Toy still calls the hook directly with its older three-argument shape.
-void populateReluBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
-                                                   RewritePatternSet &patterns,
-                                                   bool stable) {
-  populateReluBallLegalizeForLLVMExportPatterns(converter, patterns, stable, 0,
-                                                false);
 }
 
 void configureReluBallLegalizeForExportTarget(LLVMConversionTarget &target,

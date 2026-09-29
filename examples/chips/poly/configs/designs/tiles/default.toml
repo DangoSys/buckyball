@@ -1,4 +1,4 @@
-# Poly Tile: three prefill Cores and two decode Cores.
+# Poly Tile: two Attention Cores and three FFN Cores.
 
 coreDataBytes = 64
 xLen = 64
@@ -27,25 +27,25 @@ memCycles = 10
 
 [[cores]]
 core_id = 0
-name = "prefill"
-include = "../../../../../cores/prefill/configs/default.toml"
+name = "attention"
+include = "../../../../../cores/attention/configs/default.toml"
 
 [[cores]]
 core_id = 1
-name = "prefill"
-include = "../../../../../cores/prefill/configs/default.toml"
+name = "attention"
+include = "../../../../../cores/attention/configs/default.toml"
 
 [[cores]]
 core_id = 2
-name = "prefill"
-include = "../../../../../cores/prefill/configs/default.toml"
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
 
 [[cores]]
 core_id = 3
-name = "decode"
-include = "../../../../../cores/decode/configs/default.toml"
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
 
 [[cores]]
 core_id = 4
-name = "decode"
-include = "../../../../../cores/decode/configs/default.toml"
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"

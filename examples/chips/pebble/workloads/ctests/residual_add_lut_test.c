@@ -1,6 +1,6 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/mem.h>
+#include <dma.h>
 #include <isa/int8add.h>
 #include <isa/lut.h>
 #include <stdint.h>

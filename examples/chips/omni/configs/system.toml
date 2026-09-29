@@ -1,0 +1,44 @@
+model = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
+revision = "26291f793822fb6be9555850f06dfe95f2d7e695"
+
+[thinker]
+tensor_tiles = [0, 1, 2, 3]
+
+[media]
+vision_tile = 0
+audio_tile = 1
+talker_tile = 2
+code2wav_tile = 3
+
+[vm]
+chip = 4
+enabled = true
+
+[[chips]]
+id = 0
+role = "thinker"
+layers = [0, 12]
+memory_mib = 16384
+
+[[chips]]
+id = 1
+role = "thinker"
+layers = [12, 24]
+memory_mib = 16384
+
+[[chips]]
+id = 2
+role = "thinker"
+layers = [24, 36]
+memory_mib = 16384
+
+[[chips]]
+id = 3
+role = "thinker"
+layers = [36, 48]
+memory_mib = 16384
+
+[[chips]]
+id = 4
+role = "media"
+memory_mib = 16384

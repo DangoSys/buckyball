@@ -33,7 +33,7 @@ struct Int32ToFp32Lowering : public ConvertOpToLLVMPattern<Int32ToFp32Op> {
 namespace mlir::buddy::buckyball {
 void populateInt2FpBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t, bool) {
+    int64_t) {
   (void)stable;
   patterns.add<Int32ToFp32Lowering>(converter);
 }

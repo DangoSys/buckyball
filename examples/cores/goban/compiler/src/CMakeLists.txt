@@ -7,7 +7,7 @@ message(STATUS "  Source: ${CMAKE_CURRENT_SOURCE_DIR}")
 message(STATUS "  Binary: ${CMAKE_CURRENT_BINARY_DIR}")
 
 get_filename_component(BB_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../../.. ABSOLUTE)
-set(BB_COMPILER_COMMON_DIR ${BB_REPO_ROOT}/compiler/src)
+set(BB_COMPILER_COMMON_DIR ${BB_REPO_ROOT}/stack/compiler/src)
 
 if(NOT EXISTS ${BB_COMPILER_COMMON_DIR}/Dialect/Buckyball/Buckyball.td)
   message(FATAL_ERROR "Missing Buckyball compiler common dir: ${BB_COMPILER_COMMON_DIR}")

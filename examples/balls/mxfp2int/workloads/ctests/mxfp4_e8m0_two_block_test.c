@@ -1,8 +1,8 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/mem.h>
 #include <bbhw/mmio/mmio_allocator.c>
 #include <bbhw/mmio/mmio_allocator.h>
+#include <dma.h>
 #include <isa/mxfp2int.h>
 #include <stdint.h>
 #include <stdio.h>

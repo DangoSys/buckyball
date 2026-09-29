@@ -24,20 +24,22 @@ exec 9>"${LOCK_FILE}"
 repo_reset() {
   cd "${repo}"
 
-  # buckyball repository it self never depend on submodules in submodules unless llvm in buddy-mlir
+  # Initialize the compiler in stack and its LLVM dependency explicitly.
   git fetch --force --prune origin "${want_sha}"
   git checkout --detach --force "${want_sha}"
   git reset --hard "${want_sha}"
   git clean -ffd
 
   rm -rf arch/out
-  rm -rf compiler/thirdparty/buddy-mlir/llvm/build
-  rm -rf compiler/thirdparty/buddy-mlir/build
+  rm -rf stack/compiler/thirdparty/buddy-mlir/llvm/build
+  rm -rf stack/compiler/thirdparty/buddy-mlir/build
 
   git submodule sync
   git submodule update --init --force
-  git -C compiler/thirdparty/buddy-mlir submodule sync
-  git -C compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
+  git -C stack submodule sync
+  git -C stack submodule update --init --force -- compiler/thirdparty/buddy-mlir
+  git -C stack/compiler/thirdparty/buddy-mlir submodule sync
+  git -C stack/compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
   git submodule foreach 'git clean -ffd'
   have_sha="$(git rev-parse HEAD)"
   if [[ "${have_sha}" != "${want_sha}" ]]; then

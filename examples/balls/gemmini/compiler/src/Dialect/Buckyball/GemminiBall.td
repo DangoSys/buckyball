@@ -4,6 +4,7 @@
 #define GEMMINI_BALL_OPS
 
 include "Buckyball.td"
+include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.td"
 
 def GemminiInstructionOp : Buckyball_Op<"gemmini"> {
   let summary = "Gemmini command encoded for the target ISA";
@@ -43,6 +44,23 @@ def BankGemminiComputeAccumulatedOp : Buckyball_Op<"bank_gemmini_compute_accumul
   let results = (outs I64:$outBankOut);
   let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase attr-dict `:` "
                        "type($aBank) type($bBank) type($outBank) type($iter) type($aBase) type($bBase) type($outBase)";
+}
+
+def GemminiConvOp : Buckyball_Op<"gemmini_conv", [
+  DeclareOpInterfaceMethods<BufferizableOpInterface, ["bufferizesToAllocation",
+    "bufferizesToMemoryRead", "bufferizesToMemoryWrite", "getAliasingValues", "bufferize"]>]> {
+  let summary = "NCHW convolution with INT8 HWIO matrix weights and scalar quantization scales";
+  let arguments = (ins AnyRankedTensor:$input, AnyRankedTensor:$weight,
+    AnyRankedTensor:$bias, I64Attr:$kh, I64Attr:$kw, I64Attr:$stride,
+    I64Attr:$padding, F32Attr:$inputScale, F32Attr:$weightScale);
+  let results = (outs AnyRankedTensor:$output);
+  let assemblyFormat = "$input `,` $weight `,` $bias attr-dict `:` type($input) `,` type($weight) `,` type($bias) `->` type($output)";
+}
+def GemminiMemConvOp : Buckyball_Op<"gemmini_mem_conv"> {
+  let arguments = (ins AnyMemRef:$input, AnyMemRef:$weight, AnyMemRef:$bias,
+    AnyMemRef:$output, I64Attr:$kh, I64Attr:$kw, I64Attr:$stride,
+    I64Attr:$padding, F32Attr:$inputScale, F32Attr:$weightScale);
+  let assemblyFormat = "$input `,` $weight `,` $bias `,` $output attr-dict `:` type($input) `,` type($weight) `,` type($bias) `,` type($output)";
 }
 
 #endif // GEMMINI_BALL_OPS

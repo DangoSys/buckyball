@@ -40,10 +40,10 @@ public:
 namespace mlir::buddy::buckyball {
 void populateTraceBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t bankDepth, bool rushB) {
+    int64_t bankDepth) {
   (void)stable;
   (void)bankDepth;
-  (void)rushB;
+
   patterns.add<BdbCounterLowering>(converter);
 }
 

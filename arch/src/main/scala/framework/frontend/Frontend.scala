@@ -51,10 +51,9 @@ class Frontend(val b: GlobalConfig) extends Module {
       }
 
     // RoCC response
-    val resp    = Decoupled(new RoCCResponseBB(b.tile.xLen))
-    val busy    = Output(Bool())
+    val resp = Decoupled(new RoCCResponseBB(b.tile.xLen))
+    val busy = Output(Bool())
     // Propagates the Global ROB retirement pulse to the host bridge.
-    val retired = Output(Bool())
 
     // Barrier interface — passthrough to GlobalRS
     val barrier_arrive  = Output(Bool())
@@ -101,8 +100,7 @@ class Frontend(val b: GlobalConfig) extends Module {
   // Why we add boot.io.active here is because when boot is active, RoB is
   // typically full with mset instructions. This situation is not need to
   // block CPU.
-  io.busy    := !boot.io.active && scheduler.io.scheduler_rocc_o.busy
-  io.retired := scheduler.io.retired
+  io.busy := !boot.io.active && scheduler.io.scheduler_rocc_o.busy
 
   // Barrier passthrough
   io.barrier_arrive            := scheduler.io.barrier_arrive

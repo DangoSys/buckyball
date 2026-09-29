@@ -42,7 +42,7 @@ import freechips.rocketchip.util.BooleanToAugmentedBoolean
 import framework.top.GlobalConfig
 import framework.system.core.rocket.RocketBB
 import framework.system.core.rocket.id.RVVRoCCDecode
-import framework.system.core.accelerator.{BuckyballAccelerator, BuckyballRushBKey, RushBCommandBridge, RushBCoreId}
+import framework.system.core.accelerator.BuckyballAccelerator
 import framework.memdomain.backend.MemRequestIO
 import framework.top.configs.SimParamKey
 import framework.memdomain.backend.shared.SharedMemBackend
@@ -369,9 +369,8 @@ class BBTile private (
 // =============================================================================
 class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasICacheFrontendModule {
 
-  val nCores       = outer.nCores
-  val rushBEnabled = outer.p(BuckyballRushBKey)
-  val simParam     = outer.p(SimParamKey)
+  val nCores   = outer.nCores
+  val simParam = outer.p(SimParamKey)
 
   def coreParamsForCore(coreIdx: Int): BBTileParams =
     outer.bbParams.copy(core = outer.bbParams.rocketCoreForCore(coreIdx))
@@ -385,17 +384,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
   }
 
   // --- Rocket core (using our fork that accepts BBTile) ---
-  private def makeCore(coreIdx: Int): RocketBB = {
-    if (rushBEnabled && outer.hasBuckyball) {
-      // rushB drives RoCC below. Keeping Rocket reset prevents unrelated
-      // instruction and memory traffic while preserving the existing tile RTL.
-      withReset(true.B) {
-        Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
-      }
-    } else {
-      Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
-    }
-  }
+  private def makeCore(coreIdx: Int): RocketBB =
+    Module(new RocketBB(outer, outer.bbPerCore(coreIdx).isDefined)(paramsForCore(coreIdx)))
 
   val cores = (0 until nCores).map(makeCore)
 
@@ -592,20 +582,8 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
     core.io.rocc.interrupt  := false.B
   }
 
-  private def connectRoCC(
-    core:        RocketBB,
-    acc:         BuckyballAccelerator,
-    rushBSource: Option[RushBCommandBridge]
-  ): Unit = {
-    rushBSource match {
-      case Some(source) =>
-        acc.io.cmd.valid       := source.io.cmd.valid
-        acc.io.cmd.bits        := source.io.cmd.bits
-        source.io.cmd.ready    := acc.io.cmd.ready
-        core.io.rocc.cmd.ready := false.B
-      case None         =>
-        acc.io.cmd <> core.io.rocc.cmd
-    }
+  private def connectRoCC(core: RocketBB, acc: BuckyballAccelerator): Unit = {
+    acc.io.cmd <> core.io.rocc.cmd
     core.io.rocc.resp <> acc.io.resp
     core.io.rocc.busy      := acc.io.busy
     core.io.rocc.interrupt := acc.io.interrupt
@@ -633,26 +611,11 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
     }
 
-    val rushBSources = accelerators.zipWithIndex.map { case (acc, i) =>
-      acc.map { accelerator =>
-        if (rushBEnabled) {
-          val source = Module(new RushBCommandBridge(
-            RushBCoreId(outer.bbParams.tileId, i),
-            accelerator.b.tile.xLen
-          ))
-          source.io.retired := accelerator.io.retired
-          Some(source)
-        } else {
-          None
-        }
-      }.flatten
-    }
-
     val enabledAccelerators = outer.bbEnabledCoreIds.map(i => accelerators(i).get)
     for (i <- 0 until nCores) {
       accelerators(i) match {
         case Some(acc) =>
-          connectRoCC(cores(i), acc, rushBSources(i))
+          connectRoCC(cores(i), acc)
         case None      =>
           tieOffRoCC(cores(i))
       }

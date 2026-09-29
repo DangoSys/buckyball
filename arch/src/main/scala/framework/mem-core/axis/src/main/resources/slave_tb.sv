@@ -29,7 +29,7 @@ module slave_tb;
 
   initial begin
     reset = 1'b1;
-    repeat (4) @(posedge clock);
+    repeat (4) @(negedge clock);
     reset = 1'b0;
   end
 

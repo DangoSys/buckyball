@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 
-# exit script if any command fails
-set -e
-set -o pipefail
+set -euo pipefail
 
-BBDIR=$(git rev-parse --show-toplevel)
+BBDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 
 usage() {
   echo "Usage: ${0} [OPTIONS] "
@@ -22,42 +20,58 @@ usage() {
   echo "   8. pre-commit hooks installation"
   echo "   9. register project MCP"
   echo ""
-  echo "**See below for options to skip parts of the setup. Skipping parts of the setup is not guaranteed to be tested/working.**"
+  echo "Selected steps require earlier steps to have completed already."
   echo ""
   echo "Options"
-  echo "  --help -h     : Display this message"
-  echo "  --skip -s N   : Skip step N in the list above. Use multiple times to skip multiple steps ('-s N -s M ...')."
-  exit "$1"
+  echo "  -h     : Display this message"
+  echo "  -o N   : Run only step N. Repeat to select multiple steps; step 0 is not automatic."
+  echo "  -s N   : Skip step N. Repeat to skip multiple steps; cannot combine with -o."
 }
 
+ONLY_LIST=()
 SKIP_LIST=()
-VERBOSE_FLAG=""
-INSTALL_IN_NIX=0
 
-while [ "$1" != "" ];
-do
-  case $1 in
-    -h | --help )
-      usage 3 ;;
-    --verbose | -v)
-      VERBOSE_FLAG=$1
-      set -x ;;
-    --skip | -s)
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h)
+      usage
+      exit 0 ;;
+    -o | -s)
+      option=$1
       shift
-      SKIP_LIST+=(${1}) ;;
-    --install-in-nix)
-      INSTALL_IN_NIX=1 ;;
+      if [ "$#" -eq 0 ] || [[ ! "$1" =~ ^[0-9]$ ]]; then
+        echo "Error: ${option} requires a step number from 0 to 9" >&2
+        exit 2
+      fi
+      case "$option" in
+        -o) ONLY_LIST+=("$1") ;;
+        -s) SKIP_LIST+=("$1") ;;
+      esac ;;
     * )
       echo "Error: invalid option $1" >&2
-      usage 1 ;;
+      exit 2 ;;
   esac
   shift
 done
 
-# return true if the arg is not found in the SKIP_LIST
+if [ "${#ONLY_LIST[@]}" -gt 0 ] && [ "${#SKIP_LIST[@]}" -gt 0 ]; then
+  echo "Error: -o and -s cannot be combined" >&2
+  exit 2
+fi
+
 run_step() {
   local value=$1
-  [[ ! " ${SKIP_LIST[*]} " =~ " ${value} " ]]
+  local step
+  if [ "${#ONLY_LIST[@]}" -gt 0 ]; then
+    for step in "${ONLY_LIST[@]}"; do
+      [ "$step" = "$value" ] && return 0
+    done
+    return 1
+  fi
+  for step in "${SKIP_LIST[@]}"; do
+    [ "$step" = "$value" ] && return 1
+  done
+  return 0
 }
 
 function begin_step
@@ -77,33 +91,44 @@ function begin_step
   echo -e "${NC}"
 }
 
-begin_step "0-1" "Nix environment setup"
-cd ${BBDIR}
-nix build
-if [ "${INSTALL_IN_NIX}" != "1" ]; then
-  SKIP_ARGS=""
-  for skip in "${SKIP_LIST[@]}"; do
-    SKIP_ARGS="${SKIP_ARGS} -s ${skip}"
-  done
-  exec nix develop --command bash ${BBDIR}/scripts/nix/build-all.sh --install-in-nix ${SKIP_ARGS} ${VERBOSE_FLAG}
+cd "$BBDIR"
+if run_step 0 && [ "${BUCKYBALL_SETUP_NIX_BUILT:-0}" != "1" ]; then
+  begin_step "0" "Nix environment setup"
+  nix build
 fi
 
-${BBDIR}/scripts/nix/download.sh
+if [ -z "${IN_NIX_SHELL:-}" ]; then
+  REEXEC_ARGS=()
+  for only in "${ONLY_LIST[@]}"; do
+    REEXEC_ARGS+=(-o "$only")
+  done
+  for skip in "${SKIP_LIST[@]}"; do
+    REEXEC_ARGS+=(-s "$skip")
+  done
+  export BUCKYBALL_SETUP_NIX_BUILT=1
+  exec nix develop --command bash "$BBDIR/scripts/nix/build-all.sh" "${REEXEC_ARGS[@]}"
+fi
+
+if run_step 0; then
+  begin_step "0" "Git submodules"
+  "$BBDIR/scripts/nix/download.sh"
+fi
 
 if run_step "1"; then
   begin_step "1" "bbdev install"
 
   echo "Installing bbdev Python dependencies..."
-  cd ${BBDIR}/bbdev/api
+  cd "$BBDIR/bbdev/api"
   uv venv .venv --python python3 --seed
   uv pip install --python .venv/bin/python -r pyproject.toml
 
+  cd "$BBDIR"
   bbdev config --install
 fi
 
 if run_step "2"; then
   begin_step "2" "Compiler installation"
-  cd ${BBDIR}
+  cd "$BBDIR"
   bbdev compiler --build '--chip toy'
 fi
 
@@ -119,33 +144,29 @@ fi
 
 if run_step "5"; then
   begin_step "5" "waveform-mcp build"
-  cd ${BBDIR}/thirdparty/waveform-mcp
+  cd "$BBDIR/thirdparty/waveform-mcp"
   cargo build --release
 fi
 
 if run_step "6"; then
   begin_step "6" "bebop build"
-  cd ${BBDIR}/bebop
+  cd "$BBDIR/bebop"
   nix build
   nix develop -c echo "bebop built successfully"
 
-  # check if spike source is downloaded, sometimes it's affected by network and will fail
-  if [ ! -f ${BBDIR}/bebop/src/nodes/bemu/native/spike/configure.ac ]; then
-    echo "ERROR: Spike source is missing: ${BBDIR}/bebop/src/nodes/bemu/native/spike/configure.ac" >&2
-    exit 1
-  fi
+
 fi
 
 if run_step "7"; then
   begin_step "7" "verify build"
-  cd ${BBDIR}/verify
+  cd "$BBDIR/verify"
   nix develop -c echo "verify built successfully"
 fi
 
 if run_step "8"; then
   begin_step "8" "pre-commit hooks installation"
-  cd ${BBDIR}
-  pre-commit install
+  cd "$BBDIR"
+  pre-commit install --overwrite --hook-type pre-commit
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)
   cp "${BBDIR}/scripts/pre-commit-hook.sh" "${BBDIR}/.git/hooks/pre-commit"
 fi

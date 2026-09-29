@@ -1,115 +1,11 @@
 from __future__ import annotations
-
 import argparse
 import os
 import re
 import shlex
 import shutil
 import subprocess
-import tomllib
 from pathlib import Path
-
-_MODELS: dict[str, tuple[str, str]] = {
-    "lenet": ("lenet", "buddy-buckyball-lenet-run"),
-    "mobilenet": ("mobilenetv3", "buddy-buckyball-mobilenetv3-run"),
-    "resnet": ("resnet18", "buddy-buckyball-resnet-run"),
-    "yolo": ("yolo26", "buddy-buckyball-yolo26-run"),
-    "bert": ("bert", "buddy-buckyball-bert-run"),
-    "qwen3": ("qwen3", "buddy-buckyball-qwen3-run"),
-    "gemma4": ("gemma4", "buddy-buckyball-gemma4-run"),
-    "deepseekr1": ("deepseekr1", "buddy-buckyball-deepseekr1-run"),
-    "llama2": ("llama2", "buddy-buckyball-llama2-run"),
-    "stable-diffusion": ("stablediffusion", "buddy-buckyball-stable-diffusion-run"),
-    "whisper": ("whisper", "buddy-buckyball-whisper-run"),
-    "buddynext": ("buddynext", "buddy-buckyball-buddynext-all-run"),
-}
-
-_RUSHB: dict[str, dict[str, str]] = {
-    "lenet": {
-        "bemu": "buddy-buckyball-lenet-rushB-bemu-run",
-        "verilator": "buddy-buckyball-lenet-rushB-verilator-run",
-    },
-    "mobilenet": {
-        "bemu": "buddy-buckyball-mobilenetv3-rushB-bemu-run",
-        "verilator": "buddy-buckyball-mobilenetv3-rushB-verilator-run",
-    },
-    "resnet": {
-        "bemu": "buddy-buckyball-resnet-rushB-bemu-run",
-        "verilator": "buddy-buckyball-resnet-rushB-verilator-run",
-    },
-    "yolo": {
-        "bemu": "buddy-buckyball-yolo26-rushB-bemu-run",
-        "verilator": "buddy-buckyball-yolo26-rushB-verilator-run",
-    },
-    "bert": {
-        "bemu": "buddy-buckyball-bert-rushB-bemu-run",
-        "verilator": "buddy-buckyball-bert-rushB-verilator-run",
-    },
-    "qwen3": {
-        "bemu": "buddy-buckyball-qwen3-rushB-bemu-run",
-        "verilator": "buddy-buckyball-qwen3-rushB-verilator-run",
-    },
-    "gemma4": {
-        "bemu": "buddy-buckyball-gemma4-rushB-bemu-run",
-        "verilator": "buddy-buckyball-gemma4-rushB-verilator-run",
-    },
-    "deepseekr1": {
-        "bemu": "buddy-buckyball-deepseekr1-rushB-bemu-run",
-        "verilator": "buddy-buckyball-deepseekr1-rushB-verilator-run",
-    },
-    "llama2": {
-        "bemu": "buddy-buckyball-llama2-rushB-bemu-run",
-        "verilator": "buddy-buckyball-llama2-rushB-verilator-run",
-    },
-    "stable-diffusion": {
-        "bemu": "buddy-buckyball-stable-diffusion-rushB-bemu-run",
-        "verilator": "buddy-buckyball-stable-diffusion-rushB-verilator-run",
-    },
-    "whisper": {
-        "bemu": "buddy-buckyball-whisper-rushB-bemu-run",
-        "verilator": "buddy-buckyball-whisper-rushB-verilator-run",
-    },
-    "buddynext": {
-        "bemu": "buddy-buckyball-buddynext-rushB-bemu-run",
-        "verilator": "buddy-buckyball-buddynext-rushB-verilator-run",
-    },
-}
-
-
-def _trace_options(config_path: str) -> str:
-    path = Path(config_path)
-    if not path.is_absolute():
-        raise ValueError(f"trace config must be an absolute path: {config_path}")
-    if not path.is_file():
-        raise ValueError(f"trace config does not exist: {path}")
-    config = tomllib.loads(path.read_text(encoding="utf-8"))
-    options = config.get("lower_buckyball_to_bank_ssa")
-    expected = {
-        "stage_start": int,
-        "stage_limit": int,
-        "region": int,
-        "reload_stages": bool,
-        "fence_before_region": bool,
-        "input_before_region": bool,
-    }
-    if not isinstance(options, dict) or set(options) != set(expected):
-        raise ValueError(f"invalid trace config schema: {path}")
-    if any(type(options[key]) is not kind for key, kind in expected.items()):
-        raise ValueError(f"invalid trace config value: {path}")
-    if options["stage_start"] < 0 or options["stage_limit"] < 0:
-        raise ValueError(f"trace stage range must be non-negative: {path}")
-    names = {
-        "stage_start": "trace-mega-stage-start",
-        "stage_limit": "trace-mega-stage-limit",
-        "region": "trace-mega-region",
-        "reload_stages": "trace-mega-reload-stages",
-        "fence_before_region": "trace-mega-fence-before-region",
-        "input_before_region": "trace-mega-input-before-region",
-    }
-    values = ["trace-mega-stages=true"]
-    for key, name in names.items():
-        values.append(f"{name}={str(options[key]).lower()}")
-    return " ".join(values)
 
 
 def _repo(raw: str | Path) -> Path:
@@ -167,51 +63,11 @@ def _cmake_defs(repo: Path, chip: str) -> dict[str, str]:
         if key in values:
             raise RuntimeError(f"duplicate cmake.defs key {key} in {path}")
         values[key] = value
-    required = (
-        "BUCKYBALL_WORKLOAD_CHIP",
-        "BUCKYBALL_CHIP_PB",
-    )
+    required = ("BUCKYBALL_WORKLOAD_CHIP", "BUCKYBALL_CHIP_PB")
     missing = [k for k in required if k not in values]
     if missing:
         raise RuntimeError(f"{path} missing {missing}")
     return values
-
-
-_RUSHB_DEFS = (
-    "BUCKYBALL_CARGO_TARGET_DIR",
-    "BUCKYBALL_RUSHB_BEMU_MANIFEST",
-    "BUCKYBALL_RUSHB_BEMU_LIBRARY",
-    "BUCKYBALL_RUSHB_VERILATOR_LIBRARY",
-)
-
-
-def _ninja_target(
-    model: str,
-    rushb: str | None,
-    ctest: bool,
-    mlirtest: bool,
-) -> tuple[str, str]:
-    if ctest:
-        return "", "sync-ctest-bin"
-    if mlirtest:
-        return "", "sync-mlirtest-bin"
-
-    cmake_model = ""
-    ninja_arg = ""
-    if model:
-        if model not in _MODELS:
-            raise ValueError(f"unknown workload model: {model}")
-        cmake_model, ninja_arg = _MODELS[model]
-        if rushb:
-            mapped = _RUSHB.get(model, {}).get(rushb)
-            if not mapped:
-                raise ValueError(
-                    f"no rushB target for model {model!r} backend {rushb!r}"
-                )
-            ninja_arg = mapped
-    elif rushb:
-        ninja_arg = f"rushB-{rushb}-workloads-build"
-    return cmake_model, ninja_arg
 
 
 def _require_riscv() -> Path:
@@ -242,35 +98,21 @@ def build_workload(
     *,
     instance: str | None = None,
     chip_pb: str | Path | None = None,
-    model: str = "",
-    rushb: str | None = None,
     ctest: bool = False,
     mlirtest: bool = False,
     stable: bool = False,
-    trace_config: str = "",
     logger: object | None = None,
     task_scope: str | None = None,
 ) -> None:
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", chip):
+    if not re.fullmatch("[A-Za-z0-9_-]+", chip):
         raise ValueError(f"invalid chip: {chip}")
     build_instance = instance or chip
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", build_instance):
+    if not re.fullmatch("[A-Za-z0-9_-]+", build_instance):
         raise ValueError(f"invalid workload build instance: {build_instance}")
     if (instance is None) != (chip_pb is None):
         raise ValueError("workload variant requires both instance and chip_pb")
-    if instance is not None and rushb is not None:
-        raise ValueError("rushB variant builds require an installed variant BEMU crate")
-    if rushb is not None and rushb not in {"bemu", "verilator"}:
-        raise ValueError(f"rushB must be bemu|verilator, got {rushb!r}")
     if ctest and mlirtest:
         raise ValueError("--ctest and --mlirtest cannot be used together")
-    if (ctest or mlirtest) and model:
-        raise ValueError("--ctest and --mlirtest cannot be used with --model")
-    if (ctest or mlirtest) and rushb:
-        raise ValueError("--ctest and --mlirtest cannot be used with --rushB")
-    if trace_config and not model:
-        raise ValueError("--trace-config requires --model")
-
     root = _repo(repo)
     defs = _cmake_defs(root, chip)
     if chip_pb is not None:
@@ -280,17 +122,14 @@ def build_workload(
         defs["BUCKYBALL_WORKLOAD_CHIP"] = build_instance
         defs["BUCKYBALL_WORKLOAD_SOURCE_CHIP"] = chip
         defs["BUCKYBALL_CHIP_PB"] = str(selected_pb)
-        defs["BUCKYBALL_CARGO_TARGET_DIR"] = str(
-            root / "bebop" / "target" / build_instance
-        )
-    if rushb:
-        missing = [k for k in _RUSHB_DEFS if k not in defs]
-        if missing:
-            raise RuntimeError(
-                f"missing {missing} in cmake.defs for rushB; run bbdev config --install"
-            )
     compiler_build = (
-        root / "compiler" / "thirdparty" / "buddy-mlir" / "build" / build_instance
+        root
+        / "stack"
+        / "compiler"
+        / "thirdparty"
+        / "buddy-mlir"
+        / "build"
+        / build_instance
     )
     riscv = _require_riscv()
     project_python = riscv / "bin" / "python3"
@@ -299,67 +138,39 @@ def build_workload(
     )
     if not python:
         raise RuntimeError("python3 not in PATH; enter nix develop")
-
-    if rushb == "bemu":
-        env = os.environ.copy()
-        env["CARGO_TARGET_DIR"] = defs["BUCKYBALL_CARGO_TARGET_DIR"]
-        _run(
-            [
-                "cargo",
-                "build",
-                "--release",
-                "--manifest-path",
-                defs["BUCKYBALL_RUSHB_BEMU_MANIFEST"],
-                "--lib",
-            ],
-            cwd=root,
-            env=env,
-            prefix="workload cargo",
-            logger=logger,
-            task_scope=task_scope,
-        )
-
     linux_cc = riscv / "bin" / "riscv64-unknown-linux-gnu-gcc"
     linux_cxx = riscv / "bin" / "riscv64-unknown-linux-gnu-g++"
     if not linux_cc.is_file() or not linux_cxx.is_file():
         raise RuntimeError(f"missing RISC-V linux toolchain under {riscv / 'bin'}")
-
     src = _workload_src(root)
     build = _workload_build_dir(root, build_instance)
-    cmake_model, ninja_arg = _ninja_target(model.lower(), rushb, ctest, mlirtest)
-    if model:
-        defs["BUCKYBALL_TRACE_LOWER_OPTIONS"] = (
-            _trace_options(trace_config) if trace_config else ""
-        )
+    ninja_arg = "sync-ctest-bin" if ctest else "sync-mlirtest-bin" if mlirtest else ""
     env = os.environ.copy()
     env["PATH"] = f"{riscv / 'bin'}:{env.get('PATH', '')}"
     env["RISCV"] = str(riscv)
     env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
     env["CC"] = str(linux_cc)
     env["CXX"] = str(linux_cxx)
-
     build.mkdir(parents=True, exist_ok=True)
-
     cmake_args = [
         "cmake",
         "-G",
         "Ninja",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_C_FLAGS_RELEASE=-O2 -UNDEBUG",
+        "-DCMAKE_CXX_FLAGS_RELEASE=-O2 -UNDEBUG",
         "-S",
         str(src),
         "-B",
         str(build),
-        f"-DBUCKYBALL_STABLE={'ON' if stable else 'OFF'}",
+        f"-DBUCKYBALL_STABLE={('ON' if stable else 'OFF')}",
         f"-DPython3_EXECUTABLE={python}",
         f"-DCMAKE_C_COMPILER={linux_cc}",
         f"-DCMAKE_CXX_COMPILER={linux_cxx}",
+        f"-DBUCKYBALL_CTEST_ONLY={'ON' if ctest else 'OFF'}",
     ]
     for key, value in defs.items():
-        if key in _RUSHB_DEFS and not rushb:
-            continue
         cmake_args.append(f"-D{key}={value}")
-    if cmake_model:
-        cmake_args.extend(["-DMODEL=" + cmake_model, "-DARCH=buckyball"])
-
     _run(
         cmake_args,
         cwd=root,
@@ -368,7 +179,7 @@ def build_workload(
         logger=logger,
         task_scope=task_scope,
     )
-    ninja = ["ninja", "-C", str(build), f"-j{os.cpu_count() or 1}"]
+    ninja = ["ninja", "-C", str(build), f"-j{1}"]
     if ninja_arg:
         ninja.append(ninja_arg)
     _run(
@@ -387,25 +198,19 @@ def main() -> None:
     parser.add_argument("--chip", required=True)
     parser.add_argument("--instance")
     parser.add_argument("--chip-pb", type=Path)
-    parser.add_argument("--model", default="")
-    parser.add_argument("--rushb", choices=("bemu", "verilator"))
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--ctest", action="store_true")
     scope.add_argument("--mlirtest", action="store_true")
     parser.add_argument("--stable", action="store_true")
-    parser.add_argument("--trace-config", default="")
     args = parser.parse_args()
     build_workload(
         args.repo,
         args.chip,
         instance=args.instance,
         chip_pb=args.chip_pb,
-        model=args.model,
-        rushb=args.rushb,
         ctest=args.ctest,
         mlirtest=args.mlirtest,
         stable=args.stable,
-        trace_config=args.trace_config,
     )
 
 

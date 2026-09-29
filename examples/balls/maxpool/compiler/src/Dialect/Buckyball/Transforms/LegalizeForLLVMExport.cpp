@@ -95,9 +95,9 @@ private:
 namespace mlir::buddy::buckyball {
 void populateMaxPoolBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t bankDepth, bool rushB) {
+    int64_t bankDepth) {
   (void)stable;
-  (void)rushB;
+
   patterns.add<MaxPoolLowering>(converter, bankDepth);
 }
 

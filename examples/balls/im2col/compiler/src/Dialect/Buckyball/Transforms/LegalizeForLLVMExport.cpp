@@ -217,7 +217,7 @@ private:
 namespace mlir::buddy::buckyball {
 void populateIm2colBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t bankDepth, bool) {
+    int64_t bankDepth) {
   patterns.add<Im2colLowering>(converter, stable, bankDepth);
   patterns.add<BankIm2colLowering>(converter, stable, bankDepth);
 }

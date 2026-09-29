@@ -94,12 +94,14 @@ public:
                            scf::SCFDialect, func::FuncDialect,
                            linalg::LinalgDialect>();
     target.addIllegalOp<tile::TileMatMulOp>();
-    target.addIllegalOp<tile::TileTransposeOp>();
+    target.addIllegalOp<tile::TileTransposeOp, tile::TileQuantF32ToI8Op,
+                        tile::TileMegaKernelOp>();
 
     RewritePatternSet patterns(context);
     mlir::buddy::populateSMatMulBallTileLoweringPatterns(
         patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
         targetConfig.bankNum);
+    mlir::buddy::populateQuantizedKernelTileLoweringPatterns(patterns);
     patterns.add<TileTransposeLowering>(context);
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))

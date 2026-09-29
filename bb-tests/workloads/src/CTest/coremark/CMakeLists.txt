@@ -27,7 +27,7 @@ set(COREMARK_C_FLAGS
   -Wl,-T,${BBSIM_LD}
   -I${COREMARK_SRC_DIR}
   -I${COREMARK_PORT_DIR}
-  -I${WORKLOAD_LIB_DIR}
+  -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
   -ffunction-sections -fdata-sections
   -Wl,--gc-sections
   -DITERATIONS=10

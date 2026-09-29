@@ -99,7 +99,7 @@ private:
 namespace mlir::buddy::buckyball {
 void populateTransposeBallLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns, bool stable,
-    int64_t bankDepth, bool) {
+    int64_t bankDepth) {
   patterns.add<TransposeLowering>(converter, stable, bankDepth);
   patterns.add<BankTransposeLowering>(converter, stable, bankDepth);
 }

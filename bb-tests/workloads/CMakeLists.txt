@@ -7,6 +7,7 @@ set(WORKLOAD_SRC_DIR ${WORKLOAD_DIR}/src)
 
 get_filename_component(BUCKYBALL_REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
 set(WORKLOAD_LIB_DIR ${WORKLOAD_DIR}/lib)
+include_directories(${BUCKYBALL_REPO_ROOT}/stack/runtime/include)
 set(BBSW_BAREMETAL_DIR ${WORKLOAD_LIB_DIR}/bbsw/baremetal)
 
 function(buckyball_ctest_name OUT CORE TEST)
@@ -24,8 +25,8 @@ function(buckyball_mlirtest_name OUT CORE TEST)
 endfunction()
 
 set(RISCV_GNU_TOOLCHAIN $ENV{RISCV})
-set(BUDDY_MLIR_DIR ${BUCKYBALL_REPO_ROOT}/compiler/thirdparty/buddy-mlir)
-set(BUDDY_BINARY_DIR $ENV{BUDDY_MLIR_BUILD_DIR}/bin)
+set(BUDDY_MLIR_DIR ${BUCKYBALL_REPO_ROOT}/stack/compiler/thirdparty/buddy-mlir)
+set(BUDDY_BINARY_DIR ${BUDDY_MLIR_DIR}/build/${BUCKYBALL_WORKLOAD_CHIP}/bin)
 set(BUDDY_OPT ${BUDDY_BINARY_DIR}/buddy-opt)
 set(BUDDY_TRANSLATE ${BUDDY_BINARY_DIR}/buddy-translate)
 set(BUDDY_LLC ${BUDDY_BINARY_DIR}/buddy-llc)
@@ -67,17 +68,16 @@ if(NOT EXISTS "${BUCKYBALL_CHIP_PB}")
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${BUCKYBALL_CHIP_PB}"
-  "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py")
+  "${BUCKYBALL_REPO_ROOT}/stack/compiler/scripts/pb_to_target_registry.py")
 set(BUCKYBALL_ISA_DIR "${CMAKE_BINARY_DIR}/generated/isa")
 execute_process(
   COMMAND "${Python3_EXECUTABLE}"
-    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    "${BUCKYBALL_REPO_ROOT}/stack/compiler/scripts/pb_to_target_registry.py"
     --repo "${BUCKYBALL_REPO_ROOT}"
     --chip-pb "${BUCKYBALL_CHIP_PB}"
     --isa-dir "${BUCKYBALL_ISA_DIR}"
     --print-targets
     --print-target-balls
-    --print-rushb-targets
   RESULT_VARIABLE BUCKYBALL_TARGET_REGISTRY_RESULT
   OUTPUT_VARIABLE BUCKYBALL_TARGETS_RAW
   ERROR_VARIABLE BUCKYBALL_TARGET_REGISTRY_ERROR)
@@ -88,7 +88,7 @@ endif()
 string(REPLACE "\n" ";" BUCKYBALL_TARGETS "${BUCKYBALL_TARGETS_RAW}")
 execute_process(
   COMMAND "${Python3_EXECUTABLE}"
-    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    "${BUCKYBALL_REPO_ROOT}/stack/compiler/scripts/pb_to_target_registry.py"
     --repo "${BUCKYBALL_REPO_ROOT}"
     --chip-pb "${BUCKYBALL_CHIP_PB}"
     --print-bank-targets
@@ -104,7 +104,7 @@ string(REPLACE "\n" ";" BUCKYBALL_BANK_TARGETS
 list(REMOVE_ITEM BUCKYBALL_BANK_TARGETS "")
 execute_process(
   COMMAND "${Python3_EXECUTABLE}"
-    "${BUCKYBALL_REPO_ROOT}/compiler/scripts/pb_to_target_registry.py"
+    "${BUCKYBALL_REPO_ROOT}/stack/compiler/scripts/pb_to_target_registry.py"
     --repo "${BUCKYBALL_REPO_ROOT}"
     --chip-pb "${BUCKYBALL_CHIP_PB}"
     --print-core-workload-targets
@@ -119,17 +119,13 @@ string(REPLACE "\n" ";" BUCKYBALL_CORE_TARGETS
   "${BUCKYBALL_CORE_TARGETS_RAW}")
 list(REMOVE_ITEM BUCKYBALL_CORE_TARGETS "")
 set(BUCKYBALL_TARGET_BALL_LINES)
-set(BUCKYBALL_RUSHB_TARGET_LINES)
 foreach(BUCKYBALL_TARGET_LINE ${BUCKYBALL_TARGETS})
-  if(BUCKYBALL_TARGET_LINE MATCHES "^([0-9]+):([^,]+)$")
-    list(APPEND BUCKYBALL_RUSHB_TARGET_LINES ${BUCKYBALL_TARGET_LINE})
-  elseif(BUCKYBALL_TARGET_LINE MATCHES "^([^:]+):(.*)$")
+  if(BUCKYBALL_TARGET_LINE MATCHES "^([^:]+):(.*)$")
     set(BUCKYBALL_TARGET_BALLS_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
     list(APPEND BUCKYBALL_TARGET_BALL_LINES ${BUCKYBALL_TARGET_LINE})
   endif()
 endforeach()
-list(REMOVE_ITEM BUCKYBALL_TARGETS ${BUCKYBALL_TARGET_BALL_LINES}
-  ${BUCKYBALL_RUSHB_TARGET_LINES} "")
+list(REMOVE_ITEM BUCKYBALL_TARGETS ${BUCKYBALL_TARGET_BALL_LINES} "")
 if(NOT BUCKYBALL_TARGETS)
   message(FATAL_ERROR "Chip.pb has no compiler targets")
 endif()
@@ -142,33 +138,6 @@ endforeach()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
 message(STATUS "Buckyball Core workload targets: ${BUCKYBALL_CORE_TARGETS}")
-message(STATUS "Buckyball rushB targets: ${BUCKYBALL_RUSHB_TARGET_LINES}")
-
-function(buckyball_rushb_cores OUT_VAR TARGET)
-  set(_cores)
-  foreach(_entry IN LISTS BUCKYBALL_RUSHB_TARGET_LINES)
-    if(_entry MATCHES "^([0-9]+):(.+)$")
-      set(_core "${CMAKE_MATCH_1}")
-      set(_target "${CMAKE_MATCH_2}")
-      if(_target STREQUAL "${TARGET}")
-        list(APPEND _cores "${_core}")
-      endif()
-    endif()
-  endforeach()
-  set(${OUT_VAR} "${_cores}" PARENT_SCOPE)
-endfunction()
-
-function(buckyball_rushb_default_core OUT_VAR TARGET)
-  buckyball_rushb_cores(_cores "${TARGET}")
-  # Core ID 0 is valid, but CMake treats the string "0" as false.
-  # Test for an empty list explicitly so the first Core is accepted.
-  if("${_cores}" STREQUAL "")
-    message(FATAL_ERROR
-      "target '${TARGET}' has no RushB-capable Core in Chip.pb")
-  endif()
-  list(GET _cores 0 _core)
-  set(${OUT_VAR} "${_core}" PARENT_SCOPE)
-endfunction()
 
 function(buckyball_assign_physical_banks TARGET OUT)
   list(FIND BUCKYBALL_BANK_TARGETS "${TARGET}" _bank_target_index)
@@ -177,9 +146,6 @@ function(buckyball_assign_physical_banks TARGET OUT)
   endif()
   set(${OUT} "-assign-physical-banks" PARENT_SCOPE)
 endfunction()
-
-add_custom_target(rushB-bemu-workloads-build)
-add_custom_target(rushB-verilator-workloads-build)
 
 if(NOT DEFINED ELF_CC)
   set(ELF_CC "riscv64-unknown-elf-gcc")
@@ -192,137 +158,6 @@ endif()
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -Wl,--no-dynamic-linker")
-
-function(add_buckyball_rushb_native TARGET_NAME)
-  cmake_parse_arguments(ARG "CXX" "OUTPUT_SUBDIR;CORE_ID" "SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
-
-  if(NOT ARG_SOURCES)
-    message(FATAL_ERROR "${TARGET_NAME}: rushB runner has no sources")
-  endif()
-  if(NOT ARG_OUTPUT_SUBDIR)
-    message(FATAL_ERROR "${TARGET_NAME}: rushB runner has no output directory")
-  endif()
-
-  if(NOT DEFINED BUILD_BIN_DIR OR NOT DEFINED OUTPUT_BIN_DIR)
-    message(FATAL_ERROR
-      "add_buckyball_rushb_native requires BUILD_BIN_DIR and OUTPUT_BIN_DIR")
-  endif()
-  if(NOT DEFINED ARG_CORE_ID OR ARG_CORE_ID STREQUAL "")
-    set(ARG_CORE_ID 0)
-  endif()
-  if(NOT ARG_CORE_ID MATCHES "^[0-9]+$")
-    message(FATAL_ERROR
-      "${TARGET_NAME}: RushB CORE_ID must be a non-negative integer")
-  endif()
-
-  set(RUSHB_OUTPUT_ROOT ${OUTPUT_BIN_DIR}/${ARG_OUTPUT_SUBDIR})
-  set(RUSHB_SYNC_ROOT ${BUILD_BIN_DIR}/${ARG_OUTPUT_SUBDIR})
-  string(MAKE_C_IDENTIFIER "${ARG_OUTPUT_SUBDIR}" RUSHB_OUTPUT_ROOT_ID)
-  set(RUSHB_OUTPUT_ROOT_TARGET rushB-output-${RUSHB_OUTPUT_ROOT_ID})
-  if(NOT TARGET ${RUSHB_OUTPUT_ROOT_TARGET})
-    add_custom_target(${RUSHB_OUTPUT_ROOT_TARGET}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_ROOT}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_ROOT}
-      COMMENT "Creating rushB output directory: ${ARG_OUTPUT_SUBDIR}"
-      VERBATIM)
-  endif()
-
-  if(ARG_CXX)
-    set(RUSHB_COMPILER c++)
-    set(RUSHB_STANDARD -std=c++17)
-  else()
-    set(RUSHB_COMPILER cc)
-    set(RUSHB_STANDARD -std=gnu17)
-  endif()
-
-  foreach(RUSHB_BACKEND bemu verilator)
-    set(RUSHB_TARGET ${TARGET_NAME}-rushB-${RUSHB_BACKEND}-run)
-    set(RUSHB_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/rushB/${RUSHB_TARGET})
-    set(RUSHB_BINARY ${RUSHB_BUILD_DIR}/${RUSHB_TARGET}.bin)
-    set(RUSHB_OUTPUT_DIR ${RUSHB_OUTPUT_ROOT}/${RUSHB_TARGET})
-    set(RUSHB_SYNC_DIR ${RUSHB_SYNC_ROOT}/${RUSHB_TARGET})
-    if(RUSHB_BACKEND STREQUAL "bemu")
-      set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_BEMU_LIBRARY})
-      set(RUSHB_LIBRARY_NAME bebop_bemu)
-      set(RUSHB_BACKEND_DEFINE -DBUCKYBALL_RUSHB_BEMU)
-      set(RUSHB_BUILD_RUNTIME
-        COMMAND ${CMAKE_COMMAND} -E env
-                --unset=CC --unset=CXX
-                CARGO_TARGET_DIR=${BUCKYBALL_CARGO_TARGET_DIR}
-                cargo build --release --manifest-path ${BUCKYBALL_RUSHB_BEMU_MANIFEST} --lib)
-      set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_BEMU_MANIFEST})
-    else()
-      set(RUSHB_LIBRARY ${BUCKYBALL_RUSHB_VERILATOR_LIBRARY})
-      set(RUSHB_LIBRARY_NAME bebop_verilator)
-      set(RUSHB_BACKEND_DEFINE -DBUCKYBALL_RUSHB_VERILATOR)
-      set(RUSHB_BUILD_RUNTIME)
-      set(RUSHB_RUNTIME_DEPENDENCY ${BUCKYBALL_RUSHB_VERILATOR_LIBRARY})
-    endif()
-    if(NOT RUSHB_LIBRARY)
-      message(FATAL_ERROR
-        "${TARGET_NAME}: BUCKYBALL_RUSHB_${RUSHB_BACKEND} library is unset. "
-        "RushB paths must be passed by Bazel/bbdev (-DBUCKYBALL_RUSHB_*).")
-    endif()
-
-    set(RUSHB_RUNTIME_OUTPUT
-      ${RUSHB_OUTPUT_ROOT}/lib${RUSHB_LIBRARY_NAME}.so)
-    set(RUSHB_RUNTIME_SYNC
-      ${RUSHB_SYNC_ROOT}/lib${RUSHB_LIBRARY_NAME}.so)
-    set(RUSHB_RUNTIME_TARGET
-      rushB-runtime-${RUSHB_OUTPUT_ROOT_ID}-${RUSHB_BACKEND})
-    if(NOT TARGET ${RUSHB_RUNTIME_TARGET})
-      add_custom_command(
-        OUTPUT ${RUSHB_RUNTIME_OUTPUT} ${RUSHB_RUNTIME_SYNC}
-        ${RUSHB_BUILD_RUNTIME}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_ROOT}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_ROOT}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${RUSHB_LIBRARY} ${RUSHB_RUNTIME_OUTPUT}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${RUSHB_LIBRARY} ${RUSHB_RUNTIME_SYNC}
-        DEPENDS ${RUSHB_RUNTIME_DEPENDENCY}
-        COMMENT "Installing rushB ${RUSHB_BACKEND} runtime: ${ARG_OUTPUT_SUBDIR}"
-        VERBATIM)
-      add_custom_target(${RUSHB_RUNTIME_TARGET}
-        DEPENDS ${RUSHB_RUNTIME_OUTPUT} ${RUSHB_RUNTIME_SYNC})
-      add_dependencies(${RUSHB_RUNTIME_TARGET} ${RUSHB_OUTPUT_ROOT_TARGET})
-    endif()
-
-    get_filename_component(RUSHB_LIBRARY_DIR ${RUSHB_LIBRARY} DIRECTORY)
-    set(RUSHB_INCLUDE_ARGS -I${BUCKYBALL_REPO_ROOT}/compiler/include)
-    foreach(RUSHB_INCLUDE_DIR ${ARG_INCLUDE_DIRS})
-      list(APPEND RUSHB_INCLUDE_ARGS -I${RUSHB_INCLUDE_DIR})
-    endforeach()
-    set(RUSHB_INSTALLED ${RUSHB_OUTPUT_DIR}/${RUSHB_TARGET})
-    set(RUSHB_SYNCED ${RUSHB_SYNC_DIR}/${RUSHB_TARGET})
-    add_custom_command(
-      OUTPUT ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_BUILD_DIR}
-      COMMAND ${RUSHB_COMPILER} -no-pie ${RUSHB_STANDARD} -O2 -DBUCKYBALL_RUSHB
-              ${RUSHB_BACKEND_DEFINE}
-              -DBUCKYBALL_RUSHB_CORE_ID=${ARG_CORE_ID}
-              ${RUSHB_INCLUDE_ARGS}
-              ${ARG_SOURCES} ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c
-              -L${RUSHB_LIBRARY_DIR} -l${RUSHB_LIBRARY_NAME}
-              -Wl,-rpath,${RUSHB_OUTPUT_ROOT} -o ${RUSHB_BINARY}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_OUTPUT_DIR}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${RUSHB_SYNC_DIR}
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RUSHB_BINARY}
-              ${RUSHB_INSTALLED}
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RUSHB_BINARY}
-              ${RUSHB_SYNCED}
-      DEPENDS ${ARG_SOURCES} ${ARG_DEPENDS}
-              ${BUCKYBALL_REPO_ROOT}/compiler/include/buckyball/rushb.h
-              ${BUCKYBALL_REPO_ROOT}/compiler/lib/RushBRuntime.c
-      COMMENT "Building rushB ${RUSHB_BACKEND}: ${TARGET_NAME}"
-      VERBATIM)
-    add_custom_target(${RUSHB_TARGET}
-      DEPENDS ${RUSHB_BINARY} ${RUSHB_INSTALLED} ${RUSHB_SYNCED})
-    add_dependencies(${RUSHB_TARGET} ${RUSHB_OUTPUT_ROOT_TARGET})
-    add_dependencies(${RUSHB_TARGET} ${RUSHB_RUNTIME_TARGET})
-    add_dependencies(rushB-${RUSHB_BACKEND}-workloads-build ${RUSHB_TARGET})
-  endforeach()
-endfunction()
 
 function(buckyball_chip_ball_dirs OUT_VAR TARGET)
   set(_raw "${BUCKYBALL_TARGET_BALLS_${TARGET}}")
@@ -386,8 +221,10 @@ function(buckyball_add_core_workload_subdirs KIND)
   endforeach()
 endfunction()
 
-set(BUCKYBALL_EXPECTED_COMPILER_DIR "${BUCKYBALL_REPO_ROOT}/compiler")
-set(BUCKYBALL_COMPILER_CACHE "$ENV{BUDDY_MLIR_BUILD_DIR}/CMakeCache.txt")
+option(BUCKYBALL_CTEST_ONLY "Build C workloads without a Buddy compiler" OFF)
+if(NOT BUCKYBALL_CTEST_ONLY)
+set(BUCKYBALL_EXPECTED_COMPILER_DIR "${BUCKYBALL_REPO_ROOT}/stack/compiler")
+set(BUCKYBALL_COMPILER_CACHE "${BUDDY_MLIR_DIR}/build/${BUCKYBALL_WORKLOAD_CHIP}/CMakeCache.txt")
 if(NOT EXISTS "${BUCKYBALL_COMPILER_CACHE}")
   message(FATAL_ERROR
     "Buddy MLIR CMakeCache.txt does not exist: ${BUCKYBALL_COMPILER_CACHE}")
@@ -428,24 +265,23 @@ if(NOT BUCKYBALL_COMPILER_PB STREQUAL BUCKYBALL_WORKLOAD_PB)
     "Compiler Chip.pb mismatch: compiler uses ${BUCKYBALL_COMPILER_PB}, workload uses ${BUCKYBALL_WORKLOAD_PB}")
 endif()
 
+endif()
+
 option(BUCKYBALL_STABLE "Use stable LLVM Buckyball extensions" OFF)
 if(BUCKYBALL_STABLE)
   set(BUCKYBALL_RISCV_MATTR "+xbbpebble,+xbuckyball,+m,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL "--lower-buckyball=stable=true")
-  set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB
-      "--lower-buckyball=stable=true rushb=true")
+
   set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
       "--lower-bank-ssa-to-intrinsics=stable=true")
-  set(BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS
-      "--lower-bank-ssa-to-intrinsics=stable=true rushb=true")
+
 else()
   set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+m,+D")
   set(BUCKYBALL_LOWER_BUCKYBALL -lower-buckyball)
-  set(BUCKYBALL_LOWER_BUCKYBALL_RUSHB "--lower-buckyball=rushb=true")
+
   set(BUCKYBALL_LOWER_BANK_SSA_TO_INTRINSICS
       -lower-bank-ssa-to-intrinsics)
-  set(BUCKYBALL_LOWER_BANK_SSA_TO_RUSHB_INTRINSICS
-      "--lower-bank-ssa-to-intrinsics=rushb=true")
+
 endif()
 message(STATUS "Buckyball RISC-V mattr: ${BUCKYBALL_RISCV_MATTR}")
 
@@ -490,7 +326,7 @@ add_custom_target(sync-mlirtest-bin
 
 add_custom_target(sync-ctest-bin
   COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
-  COMMAND rsync -a --delete --delete-excluded --exclude=CMakeFiles
+  COMMAND rsync -a --delete --exclude=CMakeFiles
           --exclude="*/mlir_tests/**" --include="*/"
           --include="*-baremetal" --include="*-linux" --exclude="*"
           ${BUILD_BIN_DIR}/src/CTest/ ${OUTPUT_BIN_DIR}/src/CTest/
@@ -510,10 +346,6 @@ file(MAKE_DIRECTORY ${OUTPUT_BIN_DIR})
 add_custom_target(sync-bin
   COMMAND rsync -av --delete --delete-excluded
           --exclude="CMakeFiles"
-          --filter="P_src/CTest/rushB/"
-          --filter="P_src/CTest/rushB/***"
-          --filter="P_src/MLIRTest/rushB/"
-          --filter="P_src/MLIRTest/rushB/***"
           --include="**/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/"
           --exclude="**/chips/*/"
           --include="*/"

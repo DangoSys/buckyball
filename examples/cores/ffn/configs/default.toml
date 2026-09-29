@@ -1,0 +1,7 @@
+# FFN Core Configuration (default)
+
+balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
+frontend = "frontends/default.toml"
+gpdomain = "gpdomains/default.toml"
+cpu = "cpu/default.toml"

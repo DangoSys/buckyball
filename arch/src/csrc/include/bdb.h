@@ -29,7 +29,7 @@ extern const char *stdout_path;
 extern int raw_stdout_fd;
 
 // If set (bbdev sim), NDJSON banner goes here; stdout may be piped to
-// spike-dasm.
+// bebop dasm.
 const char *bdb_sim_meta_path(void);
 
 void init_monitor(int argc, char *argv[]);

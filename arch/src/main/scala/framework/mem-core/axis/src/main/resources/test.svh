@@ -18,7 +18,7 @@ class protocol_sequence extends uvm_sequence #(item);
   endtask
 endclass
 
-class protocol_test extends uvm_test;
+class protocol_test extends ip_test;
   `uvm_component_utils(protocol_test)
 
   env test_env;
@@ -32,11 +32,12 @@ class protocol_test extends uvm_test;
     test_env = env::type_id::create("env", this);
   endfunction
 
-  task run_phase(uvm_phase phase);
+  task execute();
     protocol_sequence seq;
-    phase.raise_objection(this);
     seq = protocol_sequence::type_id::create("seq");
     seq.start(test_env.source.seqr);
-    phase.drop_objection(this);
+    test_env.scoreboard.wait_checked(32);
+    `uvm_info("AXIS_CHECKED", $sformatf("Checked %0d transfers", test_env.scoreboard.checked),
+              UVM_LOW)
   endtask
 endclass

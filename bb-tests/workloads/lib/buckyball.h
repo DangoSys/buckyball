@@ -16,11 +16,6 @@
 typedef int8_t elem_t;
 typedef int32_t result_t;
 
-#if defined(BUCKYBALL_RUSHB)
-#define MULTICORE_INIT(hart_id)
-
-static inline void multicore(int target_hart_id) { (void)target_hart_id; }
-#else
 #define MULTICORE_INIT(hart_id)                                                \
   __attribute__((constructor)) static void _multicore_init() {                 \
     multicore(hart_id);                                                        \
@@ -37,7 +32,6 @@ static inline void multicore(int target_hart_id) {
   }
   // If hart_id == target_hart_id, continue execution
 }
-#endif
 
 // Utility functions
 

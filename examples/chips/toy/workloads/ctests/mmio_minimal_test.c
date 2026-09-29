@@ -2,7 +2,7 @@
 
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/mem.h>
+#include <dma.h>
 
 #include <stdint.h>
 #include <stdio.h>

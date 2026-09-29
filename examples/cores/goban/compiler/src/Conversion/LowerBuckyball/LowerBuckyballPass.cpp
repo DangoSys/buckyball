@@ -37,10 +37,6 @@ public:
   Option<bool> stable{*this, "stable",
                       llvm::cl::desc("Use stable LLVM Buckyball intrinsics."),
                       llvm::cl::init(false)};
-  Option<bool> rushB{
-      *this, "rushb",
-      llvm::cl::desc("Lower DMA operations to the rushB host ABI."),
-      llvm::cl::init(false)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
@@ -62,7 +58,7 @@ public:
     populateBuckyballLegalizeForLLVMExportPatterns(
         converter, patterns, targetConfig.bankWidthBits / 8,
         targetConfig.bankDepth, targetConfig.bankNum,
-        /*includeFuncOperandForwarding=*/false, stable, rushB);
+        /*includeFuncOperandForwarding=*/false, stable);
 
     ConversionConfig config;
     config.allowPatternRollback = false;
@@ -88,10 +84,6 @@ public:
   Option<bool> stable{*this, "stable",
                       llvm::cl::desc("Use stable LLVM Buckyball intrinsics."),
                       llvm::cl::init(false)};
-  Option<bool> rushB{
-      *this, "rushb",
-      llvm::cl::desc("Lower DMA operations to the rushB host ABI."),
-      llvm::cl::init(false)};
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
@@ -112,7 +104,7 @@ public:
     populateBuckyballLegalizeForLLVMExportPatterns(
         converter, patterns, targetConfig.bankWidthBits / 8,
         targetConfig.bankDepth, targetConfig.bankNum,
-        /*includeFuncOperandForwarding=*/false, stable, rushB);
+        /*includeFuncOperandForwarding=*/false, stable);
 
     ConversionConfig config;
     config.allowPatternRollback = false;
@@ -122,107 +114,13 @@ public:
   }
 };
 
-static FlatSymbolRefAttr getOrInsertRushBFunction(OpBuilder &builder,
-                                                  ModuleOp module,
-                                                  StringRef name,
-                                                  LLVM::LLVMFunctionType type) {
-  if (module.lookupSymbol<LLVM::LLVMFuncOp>(name))
-    return FlatSymbolRefAttr::get(builder.getContext(), name);
-
-  OpBuilder::InsertionGuard guard(builder);
-  builder.setInsertionPointToEnd(module.getBody());
-  LLVM::LLVMFuncOp::create(builder, module.getLoc(), name, type,
-                           LLVM::Linkage::External, false, LLVM::CConv::C);
-  return FlatSymbolRefAttr::get(builder.getContext(), name);
-}
-
-class LowerBuckyballIntrinsicsToRushBPass
-    : public PassWrapper<LowerBuckyballIntrinsicsToRushBPass,
-                         OperationPass<ModuleOp>> {
-public:
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
-      LowerBuckyballIntrinsicsToRushBPass)
-  LowerBuckyballIntrinsicsToRushBPass() = default;
-  LowerBuckyballIntrinsicsToRushBPass(
-      const LowerBuckyballIntrinsicsToRushBPass &) {}
-
-  StringRef getArgument() const final {
-    return "lower-buckyball-intrinsics-to-rushb";
-  }
-  StringRef getDescription() const final {
-    return "Lower Goban Buckyball intrinsic ops to the rushB host ABI.";
-  }
-
-  Option<int64_t> coreId{
-      *this, "core_id",
-      llvm::cl::desc("RushB Core ID passed to every host ABI call."),
-      llvm::cl::init(0)};
-
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<LLVM::LLVMDialect, BuckyballDialect>();
-  }
-
-  void runOnOperation() override {
-    ModuleOp module = getOperation();
-    SmallVector<Operation *> intrinsicOps;
-    module.walk([&](Operation *op) {
-      if (isa<MsetIntrOp, RushBMvinOp, RushBMvoutOp, CustomIntrOp, FenceIntrOp>(
-              op))
-        intrinsicOps.push_back(op);
-    });
-
-    OpBuilder builder(&getContext());
-    Type i32Type = IntegerType::get(&getContext(), 32);
-    Type voidType = LLVM::LLVMVoidType::get(&getContext());
-    for (Operation *op : intrinsicOps) {
-      builder.setInsertionPoint(op);
-      Value core = LLVM::ConstantOp::create(
-          builder, op->getLoc(), i32Type,
-          builder.getI32IntegerAttr(static_cast<int32_t>(coreId)));
-      SmallVector<Value> operands{core};
-      StringRef name;
-      if (isa<MsetIntrOp>(op)) {
-        name = "rushb_mset";
-        operands.append(op->getOperands().begin(), op->getOperands().end());
-      } else if (isa<RushBMvinOp>(op) || isa<RushBMvoutOp>(op)) {
-        name = isa<RushBMvinOp>(op) ? "rushb_mvin" : "rushb_mvout";
-        operands.append(op->getOperands().begin(), op->getOperands().end());
-      } else {
-        name = "rushb_custom";
-        if (auto custom = dyn_cast<CustomIntrOp>(op)) {
-          operands.append(custom.getOperands().begin(),
-                          custom.getOperands().end());
-          operands.push_back(LLVM::ConstantOp::create(
-              builder, op->getLoc(), i32Type,
-              builder.getI32IntegerAttr(custom.getFunct7())));
-        } else {
-          auto fence = cast<FenceIntrOp>(op);
-          operands.append(fence->getOperands().begin(),
-                          fence->getOperands().end());
-          operands.push_back(LLVM::ConstantOp::create(
-              builder, op->getLoc(), i32Type, builder.getI32IntegerAttr(0)));
-        }
-      }
-
-      SmallVector<Type> argumentTypes;
-      for (Value operand : operands)
-        argumentTypes.push_back(operand.getType());
-      auto type = LLVM::LLVMFunctionType::get(voidType, argumentTypes);
-      auto callee = getOrInsertRushBFunction(builder, module, name, type);
-      LLVM::CallOp::create(builder, op->getLoc(), TypeRange{}, callee,
-                           operands);
-      op->erase();
-    }
-  }
-};
-
 } // namespace
 
 void mlir::buddy::registerLowerBuckyballPass() {
+  registerTileRuntimePass();
   PassRegistration<LowerBuckyballToLLVMPass>();
 }
 
 void mlir::buddy::registerLowerBankSSAToIntrinsicsPass() {
   PassRegistration<LowerBankSSAToIntrinsicsPass>();
-  PassRegistration<LowerBuckyballIntrinsicsToRushBPass>();
 }

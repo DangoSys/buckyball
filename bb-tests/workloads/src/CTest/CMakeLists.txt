@@ -2,7 +2,7 @@
 # Generic functions to help add CTest workloads
 # ===============================================================
 set(CTEST_MAX_LINES 100)
-set(BBHW_MEM_C ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.c)
+set(BBHW_MEM_C ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/dma.c)
 set(BUCKYBALL_CTEST_C_FLAGS
   -g -fno-common -O2 -static -march=rv64gc -mcmodel=medany
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
@@ -61,7 +61,7 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
     ${BBHW_MEM_C}
-    ${WORKLOAD_LIB_DIR}/bbhw/mem/mem.h
+    ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
     ${BUCKYBALL_CHIP_COMMON_SOURCES}
     ${BUCKYBALL_CHIP_COMMON_HEADERS}
     ${BUCKYBALL_ISA_DEPS}
@@ -114,7 +114,7 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
       ${BBHW_MEM_C}
       ${BUCKYBALL_CHIP_COMMON_SOURCES}
       ${SOURCE_DIR}/${SOURCE_FILE}
-      -I${WORKLOAD_LIB_DIR}
+      -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
       -I${BUCKYBALL_ISA_DIR}/chip
       -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
       ${BUCKYBALL_CHIP_COMMON_INCLUDE_FLAGS}
@@ -148,31 +148,6 @@ function(add_buckyball_ctest SOURCE_FILE)
 
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_baremetal_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-  set(_rushb_ok TRUE)
-  if(_stem MATCHES "^tlb_")
-    set(_rushb_ok FALSE)
-  endif()
-  if(_rushb_ok AND
-     DEFINED BUCKYBALL_RUSHB_BEMU_MANIFEST AND
-     DEFINED BUCKYBALL_RUSHB_VERILATOR_LIBRARY)
-    buckyball_rushb_default_core(
-      _rushb_core "${BUCKYBALL_CTEST_TARGET}")
-    add_buckyball_rushb_native(${TEST_NAME}
-      OUTPUT_SUBDIR src/CTest/rushB
-      CORE_ID ${_rushb_core}
-      SOURCES
-        ${SOURCE_DIR}/${SOURCE_FILE}
-        ${WORKLOAD_LIB_DIR}/buckyball.c
-        ${BBHW_MEM_C}
-        ${BUCKYBALL_CHIP_COMMON_SOURCES}
-      INCLUDE_DIRS
-        ${WORKLOAD_LIB_DIR}
-        ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
-        ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
-        ${BUCKYBALL_BALL_WORKLOAD_DIRS}
-        ${SOURCE_DIR}
-      DEPENDS ${TEST_DEPS})
-  endif()
 
   add_custom_target(${TEST_NAME}-ctest-build
     DEPENDS
@@ -221,7 +196,7 @@ function(add_buckyball_core_workload NAME)
     COMMAND ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++
       ${BUCKYBALL_CTEST_C_FLAGS}
       -DBB_CORE_WORKLOAD_PROFILE=${BUCKYBALL_CORE_WORKLOAD_PROFILE}
-      -I${WORKLOAD_LIB_DIR}
+      -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
       -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
       -I${BUCKYBALL_ISA_DIR}/chip
       -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}

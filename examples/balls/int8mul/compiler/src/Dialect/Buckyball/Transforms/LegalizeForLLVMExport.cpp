@@ -41,8 +41,7 @@ struct Int8MulLowering : public ConvertOpToLLVMPattern<Int8MulOp> {
 
 namespace mlir::buddy::buckyball {
 void populateInt8MulBallLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool, int64_t,
-    bool) {
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool, int64_t) {
   patterns.add<Int8MulLowering>(converter);
 }
 

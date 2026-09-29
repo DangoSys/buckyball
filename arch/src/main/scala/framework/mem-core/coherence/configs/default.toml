@@ -1,0 +1,8 @@
+[coherence]
+cacheConfig = "../../cache/configs/default.toml"
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+agents = 2
+mshrEntries = 4
+homeId = 64
