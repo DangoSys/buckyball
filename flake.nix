@@ -70,9 +70,6 @@
               fi
 
               source "$BB_ROOT/sourceme.sh"
-              if [ ! -e "$BB_ROOT/bebop/src/nodes/bemu/rvcpu" ]; then
-                git clone https://github.com/DangoSys/riscv-cpu-sim "$BB_ROOT/bebop/src/nodes/bemu/rvcpu" || exit 1
-              fi
 
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
