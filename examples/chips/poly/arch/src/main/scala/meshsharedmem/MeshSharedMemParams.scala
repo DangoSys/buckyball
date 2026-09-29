@@ -25,7 +25,10 @@ case class MeshSharedMemParams(
   val colBits:          Int             = math.max(1, log2Ceil(cols))
   val bankBits:         Int             = math.max(1, log2Ceil(bankCount))
   val addressBits:      Int             = log2Ceil(entriesPerBank)
-  val channelBits:      Int             = math.max(1, log2Ceil(totalChannels))
+  val channelBits:      Int             = math.max(1, log2Ceil(totalChannels + 1))
+  val coreBits:         Int             = math.max(1, log2Ceil(cores.size))
+  val stagingBank:      Int             = 0
+  val stagingAddress:   Int             = entriesPerBank - 1
   val maskBits:         Int             = dataBits / 8
 
   // Core order in this sequence defines the flattened io.channels layout.
