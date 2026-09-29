@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import glob
 import sys
@@ -30,10 +31,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = rtl_dir(
-        bbdir, chip, "verilog", input_data.get("output_dir"),
+        bbdir,
+        chip,
+        "verilog",
+        input_data.get("output_dir"),
     )
     coverage = input_data.get("coverage", False)
     ctx.logger.info(f"Using build directory: {build_dir}")
+
+    obj_dir = f"{build_dir}/obj_dir"
+    if os.path.exists(obj_dir):
+        shutil.rmtree(obj_dir)
+    os.makedirs(obj_dir)
 
     # ==================================================================================
     # Find sources
@@ -67,11 +76,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     result_dir = f"{bbdir}/result"
     result_lib = f"{result_dir}/lib"
-    inc_flags = " ".join([
-        f"-I{result_dir}/include",
-        f"-I{build_dir}",
-        f"-I{arch_dir}/src/csrc/include",
-    ])
+    inc_flags = " ".join(
+        [
+            f"-I{result_dir}/include",
+            f"-I{build_dir}",
+            f"-I{arch_dir}/src/csrc/include",
+        ]
+    )
 
     # -DBBSIM: selects VBBSimHarness in bdb.h / main.cc
     # BDB NDJSON trace (+trace=...) is runtime-only; bbdev sim uses +trace=all (04_sim_event.step.py).
@@ -87,29 +98,32 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return os.path.dirname(os.path.realpath(printed.stdout.strip()))
 
     rpath_dirs = []
-    for lib_dir in (result_lib, _gcc_lib_dir("liblz4.so"), _gcc_lib_dir("libstdc++.so")):
+    for lib_dir in (
+        result_lib,
+        _gcc_lib_dir("liblz4.so"),
+        _gcc_lib_dir("libstdc++.so"),
+    ):
         if lib_dir not in rpath_dirs:
             rpath_dirs.append(lib_dir)
     rpath_flags = " ".join(f"-Wl,-rpath,{lib_dir}" for lib_dir in rpath_dirs)
 
-    ldflags = (
-        f"-lreadline -ldramsim3 -lstdc++ -lz "
-        f"-L{result_lib} {rpath_flags} "
-    )
-
-    obj_dir = f"{build_dir}/obj_dir"
-    subprocess.run(f"rm -rf {obj_dir}", shell=True)
-    os.makedirs(obj_dir, exist_ok=True)
+    ldflags = f"-lreadline -ldramsim3 -lstdc++ -lz " f"-L{result_lib} {rpath_flags} "
 
     sources = " ".join(vsrcs + csrcs)
     jobs = input_data.get("jobs", "")
 
     build_env = os.environ.copy()
-    if subprocess.run("command -v ccache", shell=True, capture_output=True).returncode == 0:
+    if (
+        subprocess.run("command -v ccache", shell=True, capture_output=True).returncode
+        == 0
+    ):
         build_env["OBJCACHE"] = "ccache"
 
     # Use lld for faster linking if available
-    use_lld = subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode == 0
+    use_lld = (
+        subprocess.run("command -v ld.lld", shell=True, capture_output=True).returncode
+        == 0
+    )
     if use_lld:
         ldflags += " -fuse-ld=lld"
 
@@ -143,7 +157,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     if result.returncode != 0:
         await check_result(
-            ctx, result.returncode, continue_run=False, extra_fields={"task": "build"},
+            ctx,
+            result.returncode,
+            continue_run=False,
+            extra_fields={"task": "build"},
             trace_id=origin_tid,
         )
         return
@@ -174,7 +191,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # ==================================================================================
     if input_data.get("from_run_workflow"):
         await ctx.enqueue(
-            {"topic": "verilator.sim", "data": {**input_data, "output_dir": build_dir, "task": "run"}}
+            {
+                "topic": "verilator.sim",
+                "data": {**input_data, "output_dir": build_dir, "task": "run"},
+            }
         )
 
     return
