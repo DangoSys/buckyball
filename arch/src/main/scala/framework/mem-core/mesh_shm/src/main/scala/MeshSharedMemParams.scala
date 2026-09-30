@@ -1,4 +1,4 @@
-package examples.poly.meshsharedmem
+package memcore.memory.mesh_shm
 
 import chisel3.util.log2Ceil
 
@@ -10,7 +10,9 @@ case class MeshSharedMemParams(
   entriesPerBank: Int,
   dataBits:       Int,
   tagBits:        Int,
-  cores:          Seq[MeshCoreAttachment]) {
+  cores:          Seq[MeshCoreAttachment],
+  stagingBankId:  Int = 0,
+  visibleBanks:   Int = 0) {
   require(rows > 0 && cols > 0)
   require(entriesPerBank >= 2 && (entriesPerBank & (entriesPerBank - 1)) == 0)
   require(dataBits > 0 && dataBits % 8 == 0)
@@ -18,6 +20,9 @@ case class MeshSharedMemParams(
   require(cores.forall(c => c.bankIds.nonEmpty && c.bankIds.forall(id => id >= 0 && id < rows * cols)))
 
   val bankCount:        Int             = rows * cols
+  val visibleBankCount: Int             = if (visibleBanks == 0) bankCount else visibleBanks
+  require(visibleBankCount > 0 && visibleBankCount <= bankCount)
+  require(stagingBankId >= 0 && stagingBankId < bankCount)
   val totalChannels:    Int             = cores.map(_.bankIds.size).sum
   val channelLocations: Seq[(Int, Int)] =
     cores.flatMap(c => c.bankIds.map(id => (id / cols, id % cols)))
@@ -27,7 +32,7 @@ case class MeshSharedMemParams(
   val addressBits:      Int             = log2Ceil(entriesPerBank)
   val channelBits:      Int             = math.max(1, log2Ceil(totalChannels + 1))
   val coreBits:         Int             = math.max(1, log2Ceil(cores.size))
-  val stagingBank:      Int             = 0
+  val stagingBank:      Int             = stagingBankId
   val stagingAddress:   Int             = entriesPerBank - 1
   val maskBits:         Int             = dataBits / 8
 

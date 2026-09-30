@@ -671,7 +671,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
     if (cfg0.memDomain.sharedEnable) {
       // SharedMemBackend (tile-level singleton)
-      val sharedBackend = Module(new SharedMemBackend(cfg0))
+      val sharedBackend = Module(new SharedMemBackend(cfg0, outer.bbParams.useMeshSharedMem))
 
       if (cfg0.sim.diffTest) {
         for (acc <- enabledAccelerators) {

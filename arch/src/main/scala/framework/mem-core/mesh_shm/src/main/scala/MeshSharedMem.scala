@@ -1,4 +1,4 @@
-package examples.poly.meshsharedmem
+package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
@@ -10,6 +10,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val transferCommand    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val transferCompletion = Decoupled(new MeshTransferCompletion(p))
     val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p))
+    val bankWrites         = Output(Vec(p.bankCount, Valid(new MeshClientRequest(p))))
   })
 
   val transfer = Module(new MeshTransferController(p))
@@ -47,6 +48,14 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val requestRouter  = requests(row)(col)
     val responseRouter = responses(row)(col)
     val bank           = banks(row)(col)
+    val bankIndex      = row * p.cols + col
+    io.bankWrites(bankIndex).valid      := bank.io.request.fire && bank.io.request.bits.write
+    io.bankWrites(bankIndex).bits.bank  := bankIndex.U
+    io.bankWrites(bankIndex).bits.addr  := bank.io.request.bits.addr
+    io.bankWrites(bankIndex).bits.write := bank.io.request.bits.write
+    io.bankWrites(bankIndex).bits.data  := bank.io.request.bits.data
+    io.bankWrites(bankIndex).bits.mask  := bank.io.request.bits.mask
+    io.bankWrites(bankIndex).bits.tag   := bank.io.request.bits.tag
     bank.io.request <> requestRouter.io.out(MeshDirection.local)
     responseRouter.io.in(MeshDirection.local) <> bank.io.response
 
@@ -63,6 +72,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         val errorPending = RegInit(false.B)
         val errorTag     = Reg(UInt(p.tagBits.W))
         val bankValid    = requestPort.bits.bank < p.bankCount.U &&
+          (if (channel == p.totalChannels) true.B else requestPort.bits.bank < p.visibleBankCount.U) &&
           (if (channel == p.totalChannels) true.B
            else !(requestPort.bits.bank === p.stagingBank.U &&
              requestPort.bits.addr === p.stagingAddress.U))
@@ -166,7 +176,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
 }
 
 object EmitMeshSharedMem extends App {
-  val target = args.headOption.getOrElse("build/meshsharedmem")
+  val target = args.headOption.getOrElse("build/mesh_shm")
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new MeshSharedMem(MeshSharedMemParams.prototype),
     firtoolOpts = Array.empty[String],

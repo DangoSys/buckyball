@@ -209,6 +209,7 @@ function(add_buckyball_mlir_test NAME)
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
       -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${BUCKYBALL_ISA_DIR}/chip
       -I${BB_BALL_ISA_INCLUDE_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN}
       ${BBSW_BAREMETAL_DIR}/crt0.S
@@ -230,6 +231,7 @@ function(add_buckyball_mlir_test NAME)
       -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
       -I${WORKLOAD_LIB_DIR}
       -I${WORKLOAD_LIB_DIR}/bbhw/mem
+      -I${BUCKYBALL_ISA_DIR}/chip
       -I${BB_BALL_ISA_INCLUDE_DIR}
       -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN}
       ${CRUNNER_UTILS_SRC}
@@ -296,6 +298,7 @@ function(add_buckyball_mlir_test NAME)
         ${LLVM_MLIR_EXECUTION_ENGINE_DIR}
         ${WORKLOAD_LIB_DIR}
         ${WORKLOAD_LIB_DIR}/bbhw/mem
+        ${BUCKYBALL_ISA_DIR}/chip
         ${BB_BALL_ISA_INCLUDE_DIR}
       DEPENDS ${RUSHB_OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
               ${BB_BALL_ISA_H} ${BB_PARAMS_H})

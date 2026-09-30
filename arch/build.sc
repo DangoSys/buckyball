@@ -54,6 +54,11 @@ object bank extends FrameworkModule {
   override def moduleDeps = Seq(axis)
 }
 
+object mesh_shm extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "mesh_shm"
+  override def moduleDeps = Seq(bank)
+}
+
 object coherence extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
   override def moduleDeps = Seq(chi)
@@ -104,6 +109,7 @@ object buckyball extends SbtModule { m =>
     axis,
     chi,
     bank,
+    mesh_shm,
     coherence,
     rvv,
     seed,
