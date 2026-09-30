@@ -11,12 +11,13 @@ case class MeshSharedMemParams(
   dataBits:       Int,
   tagBits:        Int,
   cores:          Seq[MeshCoreAttachment],
+  localBankBits:  Int = 10,
   stagingBankId:  Int = 0,
   visibleBanks:   Int = 0) {
   require(rows > 0 && cols > 0)
   require(entriesPerBank >= 2 && (entriesPerBank & (entriesPerBank - 1)) == 0)
   require(dataBits > 0 && dataBits % 8 == 0)
-  require(tagBits > 0 && cores.nonEmpty)
+  require(tagBits > 0 && localBankBits > 0 && cores.nonEmpty)
   require(cores.forall(c => c.bankIds.nonEmpty && c.bankIds.forall(id => id >= 0 && id < rows * cols)))
 
   val bankCount:        Int             = rows * cols

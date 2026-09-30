@@ -9,7 +9,7 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
   val io = IO(new Bundle {
     val command    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val completion = Decoupled(new MeshTransferCompletion(p))
-    val localBanks = Vec(p.cores.size, new MeshLocalBankPort(p))
+    val localBanks = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
 
     val mesh = new Bundle {
       val request  = Decoupled(new MeshClientRequest(p))
@@ -63,6 +63,7 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
     port.request.valid      :=
       (state === sSourceRequest && isSource) || (state === sTargetRequest && isTarget)
     port.request.bits       := 0.U.asTypeOf(port.request.bits)
+    port.request.bits.bank  := Mux(state === sSourceRequest, command.sourceBank, command.targetBank)
     port.request.bits.addr  := Mux(state === sSourceRequest, command.sourceAddr, command.targetAddr)
     port.request.bits.write := state === sTargetRequest
     port.request.bits.data  := stagedData

@@ -10,7 +10,8 @@ import framework.memdomain.backend.banks.SramBank
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 import framework.memdomain.frontend.mem.MemConfigerIO
 import framework.top.GlobalConfig
-import memcore.memory.mesh_shm.{MeshCoreAttachment, MeshSharedMem, MeshSharedMemParams}
+import memcore.memory.mesh_shm.{MeshCoreAttachment, MeshLocalBankPort, MeshSharedMem, MeshSharedMemParams}
+import framework.memdomain.isa.MeshMovePort
 
 @instantiable
 class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Module {
@@ -20,8 +21,10 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(totalChannel, Flipped(new MemRequestIO(b)))
-    val config  = Flipped(Decoupled(new MemConfigerIO(b)))
+    val mem_req    = Vec(totalChannel, Flipped(new MemRequestIO(b)))
+    val meshMove   = Flipped(new MeshMovePort)
+    val localBanks = Vec(nCores, new MeshLocalBankPort(16, 10, 128, 8))
+    val config     = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
     val query_valid       = Input(Vec(nCores, Bool()))
@@ -54,13 +57,41 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
 
   val mesh = meshParams.map(p => Module(new MeshSharedMem(p)))
   mesh.foreach { network =>
-    network.io.transferCommand.valid    := false.B
-    network.io.transferCommand.bits     := 0.U.asTypeOf(network.io.transferCommand.bits)
-    network.io.transferCompletion.ready := true.B
-    for (local <- network.io.localBanks) {
-      local.request.ready  := false.B
-      local.response.valid := false.B
-      local.response.bits  := 0.U.asTypeOf(local.response.bits)
+    require(network.io.transferCommand.bits.sourceAddr.getWidth <= 16)
+    require(network.io.transferCommand.bits.sourceCore.getWidth <= 8)
+    network.io.transferCommand.valid           := io.meshMove.command.valid
+    network.io.transferCommand.bits.sourceCore := io.meshMove.command.bits.sourceCore
+    network.io.transferCommand.bits.targetCore := io.meshMove.command.bits.targetCore
+    network.io.transferCommand.bits.sourceBank := io.meshMove.command.bits.sourceBank
+    network.io.transferCommand.bits.targetBank := io.meshMove.command.bits.targetBank
+    network.io.transferCommand.bits.sourceAddr := io.meshMove.command.bits.sourceAddr
+    network.io.transferCommand.bits.targetAddr := io.meshMove.command.bits.targetAddr
+    network.io.transferCommand.bits.tag        := 0.U
+    io.meshMove.command.ready                  := network.io.transferCommand.ready
+    io.meshMove.completion.valid               := network.io.transferCompletion.valid
+    io.meshMove.completion.bits                := network.io.transferCompletion.bits.error
+    network.io.transferCompletion.ready        := io.meshMove.completion.ready
+    when(io.meshMove.command.fire) {
+      assert(io.meshMove.command.bits.sourceAddr < meshParams.get.entriesPerBank.U)
+      assert(io.meshMove.command.bits.targetAddr < meshParams.get.entriesPerBank.U)
+    }
+    for ((local, index) <- network.io.localBanks.zipWithIndex) {
+      io.localBanks(index).request.valid  := local.request.valid
+      io.localBanks(index).request.bits   := local.request.bits
+      local.request.ready                 := io.localBanks(index).request.ready
+      local.response.valid                := io.localBanks(index).response.valid
+      local.response.bits                 := io.localBanks(index).response.bits
+      io.localBanks(index).response.ready := local.response.ready
+    }
+  }
+  if (!useMesh) {
+    io.meshMove.command.ready    := false.B
+    io.meshMove.completion.valid := false.B
+    io.meshMove.completion.bits  := false.B
+    for (local <- io.localBanks) {
+      local.request.valid  := false.B
+      local.request.bits   := 0.U.asTypeOf(local.request.bits)
+      local.response.ready := false.B
     }
   }
 

@@ -65,5 +65,6 @@ typedef int32_t result_t;
 #include "33_mvin.c"
 #include "34_mvin_2d.c"
 #include "35_mvin_mmio.c"
+#include "80_mesh_move.c"
 
 #endif // BUCKYBALL_ISA_H
