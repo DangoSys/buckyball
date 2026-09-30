@@ -12,21 +12,27 @@ import framework.system.configloader.{BoomTileCore, ChipLoader, RocketTileCore, 
  * privateDCache / sharedMem / buckyball are forbidden on hetero tiles.
  */
 class WithBuckyballTiles(
-  pbPath:         String,
-  withBuckyball:  Boolean = true,
-  hiddenHartBase: Option[Int] = None)
-    extends Config(WithBuckyballTiles.assemble(pbPath, withBuckyball, hiddenHartBase))
+  pbPath:           String,
+  withBuckyball:    Boolean = true,
+  hiddenHartBase:   Option[Int] = None,
+  useMeshSharedMem: Boolean = false)
+    extends Config(WithBuckyballTiles.assemble(pbPath, withBuckyball, hiddenHartBase, useMeshSharedMem))
 
 object WithBuckyballTiles {
 
-  def assemble(pbPath: String, withBuckyball: Boolean, hiddenHartBase: Option[Int]): Parameters = {
+  def assemble(
+    pbPath:           String,
+    withBuckyball:    Boolean,
+    hiddenHartBase:   Option[Int],
+    useMeshSharedMem: Boolean
+  ): Parameters = {
     if (!pbPath.endsWith(".pb")) {
       throw new RuntimeException(s"WithBuckyballTiles expects a chip.pb path, got: $pbPath")
     }
     val topology = ChipLoader.load(pbPath)
 
     val tileFragments: Seq[Config] = topology.tiles.flatMap { tile =>
-      fragmentsForTile(tile, withBuckyball, hiddenHartBase)
+      fragmentsForTile(tile, withBuckyball, hiddenHartBase, useMeshSharedMem)
     }
 
     val anyPrivateDCache = topology.tiles.exists(_.privateDCache.isDefined)
@@ -37,14 +43,15 @@ object WithBuckyballTiles {
   }
 
   private def fragmentsForTile(
-    tile:           TileTopology,
-    withBuckyball:  Boolean,
-    hiddenHartBase: Option[Int]
+    tile:             TileTopology,
+    withBuckyball:    Boolean,
+    hiddenHartBase:   Option[Int],
+    useMeshSharedMem: Boolean
   ): Seq[Config] = {
     val allRocket = tile.cores.forall(_.isInstanceOf[RocketTileCore])
     val allBoom   = tile.cores.forall(_.isInstanceOf[BoomTileCore])
     if (allRocket) {
-      Seq(rocketTile(tile, withBuckyball, hiddenHartBase))
+      Seq(rocketTile(tile, withBuckyball, hiddenHartBase, useMeshSharedMem))
     } else if (allBoom) {
       if (tile.privateDCache.isDefined) {
         throw new RuntimeException("boom-only tile cannot enable privateDCache")
@@ -78,9 +85,10 @@ object WithBuckyballTiles {
   }
 
   private def rocketTile(
-    tile:           TileTopology,
-    withBuckyball:  Boolean,
-    hiddenHartBase: Option[Int]
+    tile:             TileTopology,
+    withBuckyball:    Boolean,
+    hiddenHartBase:   Option[Int],
+    useMeshSharedMem: Boolean
   ): Config = {
     val rockets  = tile.cores.map {
       case RocketTileCore(cpu, bb) => (cpu, bb)
@@ -96,6 +104,7 @@ object WithBuckyballTiles {
       buckyballPerCore = Some(resolved),
       rocketCpuPerCore = Some(rockets.map(_._1)),
       privateDCache = tile.privateDCache,
+      useMeshSharedMem = useMeshSharedMem,
       hiddenHartBase = hiddenHartBase
     )
   }

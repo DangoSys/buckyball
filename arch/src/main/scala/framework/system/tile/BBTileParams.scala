@@ -58,6 +58,7 @@ case class BBTileParams(
   buckyballPerCore:  Seq[Option[GlobalConfig]] = Nil,
   rocketCorePerCore: Seq[RocketCoreParams] = Nil,
   privateDCache:     Option[PrivateDCacheParams] = None,
+  useMeshSharedMem:  Boolean = false,
   hiddenHartBase:    Option[Int] = None,
   tileId:            Int = 0,
   beuAddr:           Option[BigInt] = None,

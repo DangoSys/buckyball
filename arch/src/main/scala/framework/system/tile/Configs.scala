@@ -53,6 +53,7 @@ class WithBBTile(
   buckyballPerCore: Option[Seq[Option[GlobalConfig]]] = None,
   rocketCpuPerCore: Option[Seq[RocketCpuParam]] = None,
   privateDCache:    Option[PrivateDCacheParams] = None,
+  useMeshSharedMem: Boolean = false,
   hiddenHartBase:   Option[Int] = None)
     extends Config((site, here, up) => {
       case TilesLocated(`location`) =>
@@ -80,6 +81,7 @@ class WithBBTile(
           buckyballPerCore = resolvedBuckyballPerCore,
           rocketCorePerCore = rocketCpus.map(RocketCpuParam.toRocketCoreParams(_, tileParam.xLen, tileParam.pgLevels)),
           privateDCache = privateDCache,
+          useMeshSharedMem = useMeshSharedMem,
           hiddenHartBase = hiddenHartBase,
           core = RocketCpuParam.toRocketCoreParams(rocketCpu, tileParam.xLen, tileParam.pgLevels),
           dcache = Some(RocketCpuParam.toDCacheParams(rocketCpu, rowBits, blockBytes)),

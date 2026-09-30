@@ -1,4 +1,4 @@
-package examples.poly.meshsharedmem
+package memcore.memory.mesh_shm
 
 import chisel3._
 
