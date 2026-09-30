@@ -9,8 +9,7 @@ Reservation station module for memory domain instruction scheduling and out-of-o
 ```
 rs/
 ├── reservationStation.scala  - Memory reservation station
-├── rob.scala                 - Reorder buffer
-└── ringFifo.scala           - Ring FIFO (unused)
+└── rob.scala                 - Reorder buffer
 ```
 
 ## MemReservationStation
