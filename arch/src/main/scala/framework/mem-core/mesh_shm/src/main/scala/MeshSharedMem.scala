@@ -9,7 +9,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val channels           = Vec(p.totalChannels, new MeshChannel(p))
     val transferCommand    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val transferCompletion = Decoupled(new MeshTransferCompletion(p))
-    val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p))
+    val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
     val bankWrites         = Output(Vec(p.bankCount, Valid(new MeshClientRequest(p))))
   })
 

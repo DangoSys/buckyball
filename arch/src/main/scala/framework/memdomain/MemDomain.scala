@@ -18,6 +18,8 @@ import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.memdomain.midend.MemMidend
 import framework.memdomain.backend.MemBackend
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.isa.MeshMovePort
+import memcore.memory.mesh_shm.MeshLocalBankPort
 
 @instantiable
 class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
@@ -55,6 +57,8 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 
 // Shared memory path
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
+    val meshMove                 = new MeshMovePort
+    val meshLocalBank            = Flipped(new MeshLocalBankPort(16, 10, 128, 8))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
@@ -100,6 +104,7 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 //===----------------------------------------------------------------------===//
   frontend.io.global_issue_i <> io.global_issue_i
   frontend.io.global_complete_o <> io.global_complete_o
+  io.meshMove <> frontend.io.meshMove
   io.busy := frontend.io.busy
 
   frontend.io.ptw <> io.ptw
@@ -127,7 +132,74 @@ class MemDomain(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   midend.io.bankRead(totalBallRead).is_shared := frontend.io.interdma.read_is_shared
   midend.io.hartid                            := io.hartid
 
-  midend.io.mem_req <> backend.io.mem_req
+  for (i <- 1 until b.memDomain.bankChannel) {
+    midend.io.mem_req(i) <> backend.io.mem_req(i)
+  }
+  if (b.memDomain.sharedEnable && b.memDomain.bankWidth == 128) {
+    // Reserve channel 0 for Mesh-initiated private-Bank access only when its
+    // ordinary request/response pair has drained. This preserves the normal
+    // AccPipe route and prevents one-cycle SRAM responses from being lost.
+    val normal             = midend.io.mem_req(0)
+    val routed             = backend.io.mem_req(0)
+    val local              = io.meshLocalBank
+    val normalReadPending  = RegInit(false.B)
+    val normalWritePending = RegInit(false.B)
+    val localPending       = RegInit(false.B)
+    val localIsWrite       = RegInit(false.B)
+    val localTag           = Reg(UInt(8.W))
+    val normalActive       = normalReadPending || normalWritePending ||
+      normal.read.req.valid || normal.write.req.valid
+    val localRequest       = local.request.valid && !localPending && !normalActive
+    val localRead          = localRequest && !local.request.bits.write
+    val localWrite         = localRequest && local.request.bits.write
+
+    routed.bank_id             := Mux(localRequest, local.request.bits.bank, normal.bank_id)
+    routed.group_id            := Mux(localRequest, 0.U, normal.group_id)
+    routed.is_shared           := Mux(localRequest, false.B, normal.is_shared)
+    routed.hart_id             := Mux(localRequest, io.hartid, normal.hart_id)
+    routed.rob_id              := Mux(localRequest, 0.U, normal.rob_id)
+    routed.inst_id             := Mux(localRequest, 0.U, normal.inst_id)
+    routed.read.req.valid      := localRead || (normal.read.req.valid && !localPending)
+    routed.read.req.bits.addr  := Mux(localRead, local.request.bits.addr, normal.read.req.bits.addr)
+    routed.write.req.valid     := localWrite || (normal.write.req.valid && !localPending)
+    routed.write.req.bits.addr := Mux(localWrite, local.request.bits.addr, normal.write.req.bits.addr)
+    routed.write.req.bits.data := Mux(localWrite, local.request.bits.data, normal.write.req.bits.data)
+    routed.write.req.bits.mask := Mux(localWrite, VecInit(local.request.bits.mask.asBools), normal.write.req.bits.mask)
+    normal.read.req.ready      := !localPending && routed.read.req.ready
+    normal.write.req.ready     := !localPending && routed.write.req.ready
+    local.request.ready        := !normalActive && !localPending &&
+      Mux(local.request.bits.write, routed.write.req.ready, routed.read.req.ready)
+
+    routed.read.resp.ready    := Mux(localPending && !localIsWrite, local.response.ready, normal.read.resp.ready)
+    routed.write.resp.ready   := Mux(localPending && localIsWrite, local.response.ready, normal.write.resp.ready)
+    normal.read.resp.valid    := routed.read.resp.valid && !localPending
+    normal.read.resp.bits     := routed.read.resp.bits
+    normal.write.resp.valid   := routed.write.resp.valid && !localPending
+    normal.write.resp.bits    := routed.write.resp.bits
+    local.response.valid      := localPending && Mux(localIsWrite, routed.write.resp.valid, routed.read.resp.valid)
+    local.response.bits.data  := routed.read.resp.bits.data
+    local.response.bits.tag   := localTag
+    local.response.bits.error := false.B
+
+    when(normal.read.req.fire)(normalReadPending    := true.B)
+    when(normal.read.resp.fire)(normalReadPending   := false.B)
+    when(normal.write.req.fire)(normalWritePending  := true.B)
+    when(normal.write.resp.fire)(normalWritePending := false.B)
+    when(local.request.fire) {
+      assert(local.request.bits.bank <= b.frontend.vbank_id_upper_bound.U)
+      assert(local.request.bits.addr < b.memDomain.bankEntries.U)
+      assert(!local.request.bits.write || local.request.bits.mask.andR)
+      localPending := true.B
+      localIsWrite := local.request.bits.write
+      localTag     := local.request.bits.tag
+    }
+    when(local.response.fire)(localPending          := false.B)
+  } else {
+    midend.io.mem_req(0) <> backend.io.mem_req(0)
+    io.meshLocalBank.request.ready  := false.B
+    io.meshLocalBank.response.valid := false.B
+    io.meshLocalBank.response.bits  := 0.U.asTypeOf(io.meshLocalBank.response.bits)
+  }
   backend.io.config <> frontend.io.config
 
 //===----------------------------------------------------------------------===//
