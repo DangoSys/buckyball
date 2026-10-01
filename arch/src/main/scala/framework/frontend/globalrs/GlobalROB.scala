@@ -9,7 +9,7 @@ import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
 import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
 import framework.memdomain.backend.shared.SharedMemLayout
-import framework.memdomain.backend.banks.btrace.{BTraceDPI, PhysicalBankHash}
+import framework.memdomain.backend.banks.btrace.{BTraceRecord, PhysicalBankHash}
 
 @instantiable
 class GlobalROB(val b: GlobalConfig) extends Module {
@@ -41,6 +41,9 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
     val subRobActive = Input(Bool())
     val inst_ids     = Output(Vec(robDepth, UInt(64.W)))
+
+    val trace      = if (b.sim.diffTest) Some(Output(Valid(new BTraceRecord))) else None
+    val traceCount = if (b.sim.diffTest) Some(Output(UInt(64.W))) else None
 
     val bank_hashes =
       if (b.sim.diffTest) {
@@ -179,6 +182,9 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   val commitScan = Wire(Vec(robDepth, Bool()))
   val commitKeep = Wire(Vec(robDepth + 1, Bool()))
+
+  val headNeedsTrace = instIds(headPtr) =/= 0.U && !isMappingConfig(robEntries(headPtr)) &&
+    robEntries(headPtr).cmd.bankAccess.wr_bank_valid
   commitKeep(0) := true.B
   for (i <- 0 until robDepth) {
     val ptr = robIdx(wrapPtr(headPtr + i.U))
@@ -505,17 +511,16 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   }
 
   if (b.sim.diffTest) {
-    val commitIndex  = PriorityEncoder(commitMask.asUInt)
-    val commitAccess = robEntries(commitIndex).cmd.bankAccess
-    val btrace       = Module(new BTraceDPI)
-    btrace.io.clock   := clock
-    btrace.io.reset   := reset.asBool
-    btrace.io.instId  := instIds(commitIndex)
-    btrace.io.hartId  := io.hart_id
-    btrace.io.w0Vbank := commitAccess.wr_bank_id
-    btrace.io.w0Hash  := statusHashes.get(commitIndex)
-    btrace.io.fire    := hasCommit && instIds(commitIndex) =/= 0.U && !isMappingConfig(robEntries(commitIndex)) &&
-      commitAccess.wr_bank_valid
+    val trace = io.trace.get
+    trace.valid        := hasCommit && headNeedsTrace
+    trace.bits.instId  := instIds(headPtr)
+    trace.bits.hartId  := io.hart_id
+    trace.bits.w0Vbank := robEntries(headPtr).cmd.bankAccess.wr_bank_id
+    trace.bits.w0Hash  := statusHashes.get(headPtr)
+
+    val produced = RegInit(0.U(64.W))
+    when(trace.valid)(produced := produced + 1.U)
+    io.traceCount.get          := produced
   }
 
   // Maintain dependency masks at the same architectural events that gate the
