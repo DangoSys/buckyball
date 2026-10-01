@@ -13,13 +13,13 @@ add_custom_command(
     -I${BUCKYBALL_ISA_DIR}/chip
     -I${BUCKYBALL_ISA_DIR}/attention
     -o ${POLY_MESH_ELF}
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/crt0.S
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_shared_mem_test.c
     ${WORKLOAD_LIB_DIR}/buckyball.c
     ${BBHW_MEM_C}
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_shared_mem_test.c
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/crt0.S
     ${WORKLOAD_LIB_DIR}/buckyball.c
     ${WORKLOAD_LIB_DIR}/buckyball.h
     ${BUCKYBALL_ISA_DIR}/attention/params.h
