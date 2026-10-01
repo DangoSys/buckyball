@@ -5,10 +5,6 @@
 
 #define BB_MESH_MOVE_FUNC7 0x50
 
-#if defined(BUCKYBALL_RUSHB)
-/* RushB/BEMU semantics are not defined yet; fail at the call site. */
-#define bb_mesh_move(...) ((void)sizeof(char[-1]))
-#else
 /* Move one 128-bit row from a private Bank of one Core to another in the same
  * Tile. Bank IDs are Core-local virtual IDs; row addresses are not byte
  * addresses.
@@ -25,6 +21,5 @@ static inline void bb_mesh_move(uint32_t source_core, uint32_t source_bank,
   uint64_t rs2 = FIELD(source_row, 0, 15) | FIELD(target_row, 16, 31);
   BUCKYBALL_INSTRUCTION_R_R(rs1, rs2, BB_MESH_MOVE_FUNC7);
 }
-#endif
 
 #endif // _BB_MESH_MOVE_H_
