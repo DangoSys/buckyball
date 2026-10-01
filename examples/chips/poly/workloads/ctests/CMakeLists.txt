@@ -1,10 +1,10 @@
-set(POLY_VEC_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
+set(POLY_MESH_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
 
 buckyball_ctest_name(POLY_MESH_NAME attention chip-mesh_shared_bank_roundtrip)
 set(POLY_MESH_ELF ${POLY_MESH_NAME}-baremetal)
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MESH_ELF}
-  COMMAND ${POLY_VEC_CXX} -O2 -static -march=rv64gc -mcmodel=medany
+  COMMAND ${POLY_MESH_CXX} -O2 -static -march=rv64gc -mcmodel=medany
     -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
     -Wl,-T,${BBSIM_LD}
     -I${WORKLOAD_LIB_DIR}
@@ -20,6 +20,10 @@ add_custom_command(
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_shared_mem_test.c
     ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${WORKLOAD_LIB_DIR}/buckyball.c
+    ${WORKLOAD_LIB_DIR}/buckyball.h
+    ${BUCKYBALL_ISA_DIR}/attention/params.h
+    ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
     ${BBHW_MEM_C}
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -31,7 +35,7 @@ buckyball_ctest_name(POLY_MOVE_NAME attention chip-mesh_private_bank_move)
 set(POLY_MOVE_ELF ${POLY_MOVE_NAME}-multicore-baremetal)
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MOVE_ELF}
-  COMMAND ${POLY_VEC_CXX} -O2 -static -march=rv64gc -mcmodel=medany
+  COMMAND ${POLY_MESH_CXX} -O2 -static -march=rv64gc -mcmodel=medany
     -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
     -Wl,-T,${BBSIM_LD}
     -I${WORKLOAD_LIB_DIR}
@@ -46,6 +50,10 @@ add_custom_command(
     ${BBHW_MEM_C}
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_private_bank_move_test.c
+    ${WORKLOAD_LIB_DIR}/buckyball.c
+    ${WORKLOAD_LIB_DIR}/buckyball.h
+    ${BUCKYBALL_ISA_DIR}/attention/params.h
+    ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
     ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
     ${BBHW_MEM_C}
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
