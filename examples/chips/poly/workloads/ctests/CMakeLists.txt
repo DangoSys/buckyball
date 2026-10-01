@@ -1,55 +1,29 @@
-set(POLY_VEC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vecmat16_atranspose_16x16)
-buckyball_ctest_name(POLY_VEC_NAME decode chip-vecmat16_atranspose_16x16)
-set(POLY_VEC_ELF ${POLY_VEC_NAME}-multicore-baremetal)
-set(POLY_VEC_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
-add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_VEC_ELF}
-  COMMAND ${POLY_VEC_CXX} -O2 -static -march=rv64gc -mcmodel=medany
-    -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
-    -Wl,-T,${BBSIM_LD}
-    -I${WORKLOAD_LIB_DIR}
-    -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
-    -I${BUCKYBALL_ISA_DIR}/chip
-    -I${BUCKYBALL_ISA_DIR}/decode
-    -I${BUCKYBALL_REPO_ROOT}/examples/balls/vector/workloads
-    -o ${POLY_VEC_ELF}
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
-    ${POLY_VEC_DIR}/vecmat16_atranspose_16x16-main.cpp
-    ${POLY_VEC_DIR}/prefill.c
-    ${POLY_VEC_DIR}/decode.c
-    ${WORKLOAD_LIB_DIR}/buckyball.c
-    ${BBHW_MEM_C}
-  DEPENDS
-    ${POLY_VEC_DIR}/vecmat16_atranspose_16x16-main.cpp
-    ${POLY_VEC_DIR}/prefill.c
-    ${POLY_VEC_DIR}/decode.c
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
-    ${BBHW_MEM_C}
-    ${BUCKYBALL_ISA_DIR}/chip/topology.h
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-add_custom_target(${POLY_VEC_NAME}-ctest-build
-  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${POLY_VEC_ELF})
-add_dependencies(poly-ctests-build ${POLY_VEC_NAME}-ctest-build)
+set(POLY_MESH_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++)
 
-buckyball_ctest_name(POLY_MESH_NAME prefill chip-mesh_shared_bank_roundtrip)
+buckyball_ctest_name(POLY_MESH_NAME attention chip-mesh_shared_bank_roundtrip)
 set(POLY_MESH_ELF ${POLY_MESH_NAME}-baremetal)
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MESH_ELF}
-  COMMAND ${POLY_VEC_CXX} -O2 -static -march=rv64gc -mcmodel=medany
+  COMMAND ${POLY_MESH_CXX} -O2 -static -march=rv64gc -mcmodel=medany
     -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
     -Wl,-T,${BBSIM_LD}
     -I${WORKLOAD_LIB_DIR}
+    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include
     -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
     -I${BUCKYBALL_ISA_DIR}/chip
-    -I${BUCKYBALL_ISA_DIR}/prefill
+    -I${BUCKYBALL_ISA_DIR}/attention
     -o ${POLY_MESH_ELF}
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/crt0.S
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_shared_mem_test.c
     ${WORKLOAD_LIB_DIR}/buckyball.c
     ${BBHW_MEM_C}
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_shared_mem_test.c
-    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${WORKLOAD_LIB_DIR}/bbsw/baremetal/crt0.S
+    ${WORKLOAD_LIB_DIR}/buckyball.c
+    ${WORKLOAD_LIB_DIR}/buckyball.h
+    ${BUCKYBALL_ISA_DIR}/attention/params.h
+    ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
     ${BBHW_MEM_C}
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -57,17 +31,18 @@ add_custom_target(${POLY_MESH_NAME}-ctest-build
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MESH_ELF})
 add_dependencies(poly-ctests-build ${POLY_MESH_NAME}-ctest-build)
 
-buckyball_ctest_name(POLY_MOVE_NAME prefill chip-mesh_private_bank_move)
+buckyball_ctest_name(POLY_MOVE_NAME attention chip-mesh_private_bank_move)
 set(POLY_MOVE_ELF ${POLY_MOVE_NAME}-multicore-baremetal)
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MOVE_ELF}
-  COMMAND ${POLY_VEC_CXX} -O2 -static -march=rv64gc -mcmodel=medany
+  COMMAND ${POLY_MESH_CXX} -O2 -static -march=rv64gc -mcmodel=medany
     -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
     -Wl,-T,${BBSIM_LD}
     -I${WORKLOAD_LIB_DIR}
+    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include
     -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
     -I${BUCKYBALL_ISA_DIR}/chip
-    -I${BUCKYBALL_ISA_DIR}/prefill
+    -I${BUCKYBALL_ISA_DIR}/attention
     -o ${POLY_MOVE_ELF}
     ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_private_bank_move_test.c
@@ -75,10 +50,14 @@ add_custom_command(
     ${BBHW_MEM_C}
   DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/mesh_private_bank_move_test.c
+    ${WORKLOAD_LIB_DIR}/buckyball.c
+    ${WORKLOAD_LIB_DIR}/buckyball.h
+    ${BUCKYBALL_ISA_DIR}/attention/params.h
+    ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/dma.h
     ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
     ${BBHW_MEM_C}
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
-    ${WORKLOAD_LIB_DIR}/bbhw/isa/80_mesh_move.c
+    ${WORKLOAD_LIB_DIR}/bbhw/isa/13_mvover.c
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(${POLY_MOVE_NAME}-ctest-build
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MOVE_ELF})
