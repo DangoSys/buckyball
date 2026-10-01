@@ -39,10 +39,11 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
       require(b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16)
       require(b.memDomain.sharedInputChannels % nCores == 0)
       val physicalBanks = totalBanks + 1
-      val columns       = if (physicalBanks % 3 == 0) 3 else 1
+      val rows          = math.ceil(math.sqrt(physicalBanks.toDouble)).toInt
+      val columns       = (physicalBanks + rows - 1) / rows
       val perCore       = totalChannel / nCores
       Some(MeshSharedMemParams(
-        rows = physicalBanks / columns,
+        rows = rows,
         cols = columns,
         entriesPerBank = b.memDomain.bankEntries,
         dataBits = b.memDomain.bankWidth,
