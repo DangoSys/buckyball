@@ -113,17 +113,21 @@ dependencies = [
  "bebop-bank-hash",
  "bebop-bemu-profile",
  "bebop-clint",
+ "bebop-dasm",
  "bebop-dtb",
  "bebop-elf",
+ "bebop-keyboard",
+ "bebop-microphone",
  "bebop-plic",
- "bebop-rushb",
+ "bebop-rtc",
+ "bebop-speaker",
  "bebop-syscall",
- "bebop-uart",
- "cc",
+ "bebop-vga",
+ "bebop-vm",
  "clap",
- "once_cell",
  "prost",
  "prost-build",
+ "rvsim",
  "snafu",
 ]
 
@@ -151,6 +155,10 @@ name = "bebop-clint"
 version = "0.1.0"
 
 [[package]]
+name = "bebop-dasm"
+version = "0.1.0"
+
+[[package]]
 name = "bebop-dtb"
 version = "0.1.0"
 dependencies = [
@@ -163,11 +171,23 @@ name = "bebop-elf"
 version = "0.1.0"
 
 [[package]]
+name = "bebop-keyboard"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-microphone"
+version = "0.1.0"
+
+[[package]]
 name = "bebop-plic"
 version = "0.1.0"
 
 [[package]]
-name = "bebop-rushb"
+name = "bebop-rtc"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-speaker"
 version = "0.1.0"
 
 [[package]]
@@ -178,7 +198,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "bebop-uart"
+name = "bebop-vga"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-vm"
 version = "0.1.0"
 
 [[package]]
@@ -217,8 +241,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
 dependencies = [
  "find-msvc-tools",
- "jobserver",
- "libc",
  "shlex",
 ]
 
@@ -444,16 +466,6 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
-
-[[package]]
-name = "jobserver"
-version = "0.1.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
-dependencies = [
- "getrandom",
- "libc",
-]
 
 [[package]]
 name = "js-sys"
@@ -688,6 +700,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
+name = "rustc_apfloat"
+version = "0.2.3+llvm-462a31f5a5ab"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "486c2179b4796f65bfe2ee33679acf0927ac83ecf583ad6c91c3b4570911b9ad"
+dependencies = [
+ "bitflags",
+ "smallvec",
+]
+
+[[package]]
 name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -705,6 +727,13 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "rvsim"
+version = "0.1.0"
+dependencies = [
+ "rustc_apfloat",
+]
 
 [[package]]
 name = "same-file"
@@ -778,6 +807,12 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "smallvec"
+version = "1.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
 
 [[package]]
 name = "snafu"

@@ -1,8 +1,7 @@
-class ref_model extends uvm_subscriber #(item);
+class ref_model extends reference_model #(item);
   `uvm_component_utils(ref_model)
 
   chandle model;
-  uvm_analysis_port #(item) expected_ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -10,7 +9,6 @@ class ref_model extends uvm_subscriber #(item);
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    expected_ap = new("expected_ap", this);
     model = axis_ref_create();
     if (model == null) begin
       `uvm_fatal("AXIS_MODEL", "failed to create Rust reference model")

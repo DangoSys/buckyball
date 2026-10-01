@@ -4,8 +4,6 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <fesvr/elfloader.h>
-#include <fesvr/memif.h>
 #include <fstream>
 #include <iostream>
 #include <sys/mman.h>

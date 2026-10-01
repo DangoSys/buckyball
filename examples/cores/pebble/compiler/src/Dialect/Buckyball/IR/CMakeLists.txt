@@ -1,10 +1,13 @@
 add_mlir_dialect_library(${BB_CORE_TARGET_PREFIX}BuddyBuckyball
   ${BB_COMPILER_COMMON_DIR}/Dialect/Buckyball/IR/BuckyballDialect.cpp
   ${BB_TARGET_REGISTRY_SOURCE}
+  ${BB_BALL_IR_SOURCES}
 
   LINK_LIBS PUBLIC
   MLIRIR
   MLIRLLVMDialect
+  MLIRBufferizationDialect
+  MLIRMemRefDialect
 )
 
 target_include_directories(${BB_CORE_TARGET_PREFIX}BuddyBuckyball PUBLIC

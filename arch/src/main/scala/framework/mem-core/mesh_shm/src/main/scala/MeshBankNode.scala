@@ -2,7 +2,7 @@ package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
-import memcore.memory.bank.{BankParams, RootSramBank}
+import memcore.memory.bank.{Bank, BankSetParams}
 
 class MeshBankNode(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
 
@@ -11,7 +11,7 @@ class MeshBankNode(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
     val response = Decoupled(new MeshPacket(p))
   })
 
-  val bank    = Module(new RootSramBank(BankParams(p.addressBits, p.dataBits, p.tagBits), p.entriesPerBank))
+  val bank    = Module(new Bank(BankSetParams(p.dataBits, 1, p.entriesPerBank, p.tagBits)))
   val pending = RegInit(false.B)
   val request = Reg(new MeshPacket(p))
 

@@ -3,6 +3,7 @@
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -22,6 +23,9 @@ namespace {
 
 constexpr int64_t kTile = 16;
 constexpr int64_t kInt32RowsPerTile = 64;
+
+#include "FP32Patterns.inc"
+#include "MXFP8Patterns.inc"
 
 class MegaMatmulToBankSSAPattern : public OpRewritePattern<MegaMatmulOp> {
 public:
@@ -76,17 +80,97 @@ public:
     if (buckyball_target::getBuckyballBallMapping("SMatMulBall").outBW != 1)
       return op.emitError("Mega MatMul requires SMatMulBall outBW=1");
 
-    int64_t paddedM = (M + kTile - 1) / kTile * kTile;
+    const int64_t hardwareRows =
+        buckyball_target::getBuckyballBallParam("SMatMulBall", "tileRows");
+    if (hardwareRows <= 0 || kTile % hardwareRows)
+      return op.emitError(
+          "SMatMul tileRows must divide the 16-row software tile");
+    const int64_t tileRows = M == 1 ? 1 : kTile;
+    const int64_t resultRows = tileRows * 4;
+    int64_t paddedM = (M + tileRows - 1) / tileRows * tileRows;
     int64_t paddedK = (K + kTile - 1) / kTile * kTile;
     int64_t kChunk = target.bankDepth / kTile * kTile;
     if (kChunk <= 0)
       return op.emitError("bank depth cannot hold one K tile");
-    int64_t tilesPerResultBank = target.bankDepth / kInt32RowsPerTile;
+    // outputBase is a six-bit row index; one 16x16 result uses 64 rows.
+    constexpr int64_t tilesPerResultBank = 1;
 
-    Value aBank = allocBank(b, loc, 1, 1);
-    Value wBank = allocBank(b, loc, 1, 1);
-    for (int64_t n0 = 0; n0 < N; n0 += kTile) {
-      int64_t thisN = std::min(kTile, N - n0);
+    Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+    Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+    Value tileSize = b.create<arith::ConstantIndexOp>(loc, kTile);
+    Value columns = b.create<arith::ConstantIndexOp>(loc, N);
+    Value zeroI8 =
+        b.create<arith::ConstantOp>(loc, b.getI8Type(), b.getI8IntegerAttr(0));
+    int64_t kChunks = (paddedK + kChunk - 1) / kChunk;
+    SmallVector<Value> inputPacks;
+    for (int64_t row0 = 0; row0 < paddedM; row0 += tileRows) {
+      int64_t validRows = std::min(tileRows, M - row0);
+      for (int64_t k0 = 0; k0 < paddedK; k0 += kChunk) {
+        int64_t thisK = std::min(kChunk, paddedK - k0);
+        int64_t validK = std::min(thisK, K - k0);
+        auto aPackTy =
+            MemRefType::get({thisK / kTile * tileRows, kTile}, b.getI8Type());
+        Value aPack = b.create<memref::AllocOp>(loc, aPackTy);
+        inputPacks.push_back(aPack);
+        b.create<linalg::FillOp>(loc, zeroI8, aPack);
+
+        Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
+        Value one = b.create<arith::ConstantIndexOp>(loc, 1);
+        Value rowEnd = b.create<arith::ConstantIndexOp>(loc, validRows);
+        Value kTileEnd =
+            b.create<arith::ConstantIndexOp>(loc, (validK + kTile - 1) / kTile);
+        auto ktLoop = b.create<scf::ForOp>(loc, zero, kTileEnd, one);
+        b.setInsertionPointToStart(ktLoop.getBody());
+        Value kt = ktLoop.getInductionVar();
+        auto rowLoop = b.create<scf::ForOp>(loc, zero, rowEnd, one);
+        b.setInsertionPointToStart(rowLoop.getBody());
+        Value row = rowLoop.getInductionVar();
+        Value remaining = b.create<arith::SubIOp>(
+            loc, b.create<arith::ConstantIndexOp>(loc, validK),
+            b.create<arith::MulIOp>(
+                loc, kt, b.create<arith::ConstantIndexOp>(loc, kTile)));
+        Value columnEnd = b.create<arith::MinUIOp>(
+            loc, remaining, b.create<arith::ConstantIndexOp>(loc, kTile));
+        auto columnLoop = b.create<scf::ForOp>(loc, zero, columnEnd, one);
+        b.setInsertionPointToStart(columnLoop.getBody());
+        Value column = columnLoop.getInductionVar();
+        Value sourceRow = b.create<arith::AddIOp>(
+            loc, b.create<arith::ConstantIndexOp>(loc, row0), row);
+        Value sourceColumn = b.create<arith::AddIOp>(
+            loc, b.create<arith::ConstantIndexOp>(loc, k0),
+            b.create<arith::AddIOp>(
+                loc,
+                b.create<arith::MulIOp>(
+                    loc, kt, b.create<arith::ConstantIndexOp>(loc, kTile)),
+                column));
+        Value hardwareRowsValue = b.create<arith::ConstantIndexOp>(
+            loc, std::min(hardwareRows, tileRows));
+        Value rowTile = b.create<arith::DivUIOp>(loc, row, hardwareRowsValue);
+        Value rowInTile = b.create<arith::RemUIOp>(loc, row, hardwareRowsValue);
+        Value tileIndex = b.create<arith::AddIOp>(
+            loc,
+            b.create<arith::MulIOp>(
+                loc, rowTile,
+                b.create<arith::ConstantIndexOp>(loc, thisK / kTile)),
+            kt);
+        Value packedRow = b.create<arith::AddIOp>(
+            loc, b.create<arith::MulIOp>(loc, tileIndex, hardwareRowsValue),
+            rowInTile);
+        Value value = b.create<memref::LoadOp>(
+            loc, op.getInput(), ValueRange{sourceRow, sourceColumn});
+        b.create<memref::StoreOp>(loc, value, aPack,
+                                  ValueRange{packedRow, column});
+        b.setInsertionPointAfter(ktLoop);
+      }
+    }
+    auto panelLoop = b.create<scf::ForOp>(loc, zero, columns, tileSize);
+    b.setInsertionPointToStart(panelLoop.getBody());
+    {
+      Value n0 = panelLoop.getInductionVar();
+      Value thisN = b.create<arith::MinUIOp>(
+          loc, tileSize, b.create<arith::SubIOp>(loc, columns, n0));
+      Value aBank = allocBank(b, loc, 1, 1);
+      Value wBank = allocBank(b, loc, 1, 1);
       auto biasPackTy = MemRefType::get({4, 4}, b.getI32Type());
       auto scalePackTy = MemRefType::get({4, 4}, b.getF32Type());
       Value biasPack = b.create<memref::AllocOp>(loc, biasPackTy);
@@ -97,16 +181,21 @@ public:
                                                  b.getF32FloatAttr(1.0));
       b.create<linalg::FillOp>(loc, zeroI32, biasPack);
       b.create<linalg::FillOp>(loc, oneF32, scalePack);
-      for (int64_t i = 0; i < thisN; ++i) {
-        Value source = b.create<arith::ConstantIndexOp>(loc, n0 + i);
-        Value row = b.create<arith::ConstantIndexOp>(loc, i / 4);
-        Value column = b.create<arith::ConstantIndexOp>(loc, i % 4);
+      auto channelLoop = b.create<scf::ForOp>(loc, zero, thisN, one);
+      b.setInsertionPointToStart(channelLoop.getBody());
+      {
+        Value i = channelLoop.getInductionVar();
+        Value four = b.create<arith::ConstantIndexOp>(loc, 4);
+        Value source = b.create<arith::AddIOp>(loc, n0, i);
+        Value row = b.create<arith::DivUIOp>(loc, i, four);
+        Value column = b.create<arith::RemUIOp>(loc, i, four);
         Value bias = b.create<memref::LoadOp>(loc, op.getBias(), source);
         Value scale = b.create<memref::LoadOp>(loc, op.getScale(), source);
         b.create<memref::StoreOp>(loc, bias, biasPack, ValueRange{row, column});
         b.create<memref::StoreOp>(loc, scale, scalePack,
                                   ValueRange{row, column});
       }
+      b.setInsertionPointAfter(channelLoop);
 
       Value biasBank = allocBank(b, loc, 1, 1);
       Value biasLoaded = mvinBank(b, loc, biasPack, biasBank, 4);
@@ -115,100 +204,69 @@ public:
       Value scaleBank = allocBank(b, loc, 1, 1);
       Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
 
-      for (int64_t m0 = 0; m0 < paddedM; m0 += tilesPerResultBank * kTile) {
+      for (int64_t m0 = 0; m0 < paddedM; m0 += tilesPerResultBank * tileRows) {
         int64_t tileCount =
-            std::min(tilesPerResultBank, (paddedM - m0) / kTile);
+            std::min(tilesPerResultBank, (paddedM - m0) / tileRows);
         Value resultBank = allocBank(b, loc, 1, 1);
         Value resultState = resultBank;
         SmallVector<Value> hostPacks;
 
         for (int64_t tile = 0; tile < tileCount; ++tile) {
-          int64_t row0 = m0 + tile * kTile;
-          int64_t validRows = std::min(kTile, std::max<int64_t>(0, M - row0));
+          int64_t row0 = m0 + tile * tileRows;
           for (int64_t k0 = 0; k0 < paddedK; k0 += kChunk) {
             int64_t thisK = std::min(kChunk, paddedK - k0);
             int64_t validK = std::min(thisK, std::max<int64_t>(0, K - k0));
-            auto aPackTy = MemRefType::get({thisK, kTile}, b.getI8Type());
-            Value aPack = b.create<memref::AllocOp>(loc, aPackTy);
-            hostPacks.push_back(aPack);
-            Value zeroI8 = b.create<arith::ConstantOp>(loc, b.getI8Type(),
-                                                       b.getI8IntegerAttr(0));
-            b.create<linalg::FillOp>(loc, zeroI8, aPack);
+            Value aPack = inputPacks[(row0 / tileRows) * kChunks + k0 / kChunk];
+            Value aLoaded =
+                mvinBank(b, loc, aPack, aBank, thisK / kTile * tileRows);
+            Value wLoaded;
+            auto [weightStrides, weightOffset] = wTy.getStridesAndOffset();
+            if (validK == thisK && N % kTile == 0 && weightStrides[1] == 1 &&
+                weightStrides[0] > 0 && weightStrides[0] % kTile == 0) {
+              Value panel = b.create<memref::SubViewOp>(
+                  loc, op.getWeight(),
+                  SmallVector<OpFoldResult>{b.getIndexAttr(k0), n0},
+                  SmallVector<OpFoldResult>{b.getIndexAttr(thisK),
+                                            b.getIndexAttr(kTile)},
+                  SmallVector<OpFoldResult>{b.getIndexAttr(1),
+                                            b.getIndexAttr(1)});
+              wLoaded = mvinBank(b, loc, panel, wBank, thisK,
+                                 weightStrides[0] / kTile);
+            } else {
+              auto wPackTy = MemRefType::get({thisK, kTile}, b.getI8Type());
+              Value wPack = b.create<memref::AllocOp>(loc, wPackTy);
+              hostPacks.push_back(wPack);
+              b.create<linalg::FillOp>(loc, zeroI8, wPack);
+              Value validKEnd = b.create<arith::ConstantIndexOp>(loc, validK);
+              Value validNEnd = thisN;
+              auto weightRowLoop =
+                  b.create<scf::ForOp>(loc, zero, validKEnd, one);
+              b.setInsertionPointToStart(weightRowLoop.getBody());
+              Value weightRow = weightRowLoop.getInductionVar();
+              auto weightColumnLoop =
+                  b.create<scf::ForOp>(loc, zero, validNEnd, one);
+              b.setInsertionPointToStart(weightColumnLoop.getBody());
+              Value weightColumn = weightColumnLoop.getInductionVar();
+              Value sourceWeightRow = b.create<arith::AddIOp>(
+                  loc, b.create<arith::ConstantIndexOp>(loc, k0), weightRow);
+              Value sourceWeightColumn =
+                  b.create<arith::AddIOp>(loc, n0, weightColumn);
+              Value weightValue = b.create<memref::LoadOp>(
+                  loc, op.getWeight(),
+                  ValueRange{sourceWeightRow, sourceWeightColumn});
+              b.create<memref::StoreOp>(loc, weightValue, wPack,
+                                        ValueRange{weightRow, weightColumn});
+              b.setInsertionPointAfter(weightRowLoop);
 
-            Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
-            Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-            Value rowEnd = b.create<arith::ConstantIndexOp>(loc, validRows);
-            Value kTileEnd = b.create<arith::ConstantIndexOp>(
-                loc, (validK + kTile - 1) / kTile);
-            auto ktLoop = b.create<scf::ForOp>(loc, zero, kTileEnd, one);
-            b.setInsertionPointToStart(ktLoop.getBody());
-            Value kt = ktLoop.getInductionVar();
-            auto rowLoop = b.create<scf::ForOp>(loc, zero, rowEnd, one);
-            b.setInsertionPointToStart(rowLoop.getBody());
-            Value row = rowLoop.getInductionVar();
-            Value remaining = b.create<arith::SubIOp>(
-                loc, b.create<arith::ConstantIndexOp>(loc, validK),
-                b.create<arith::MulIOp>(
-                    loc, kt, b.create<arith::ConstantIndexOp>(loc, kTile)));
-            Value columnEnd = b.create<arith::MinUIOp>(
-                loc, remaining, b.create<arith::ConstantIndexOp>(loc, kTile));
-            auto columnLoop = b.create<scf::ForOp>(loc, zero, columnEnd, one);
-            b.setInsertionPointToStart(columnLoop.getBody());
-            Value column = columnLoop.getInductionVar();
-            Value sourceRow = b.create<arith::AddIOp>(
-                loc, b.create<arith::ConstantIndexOp>(loc, row0), row);
-            Value sourceColumn = b.create<arith::AddIOp>(
-                loc, b.create<arith::ConstantIndexOp>(loc, k0),
-                b.create<arith::AddIOp>(
-                    loc,
-                    b.create<arith::MulIOp>(
-                        loc, kt, b.create<arith::ConstantIndexOp>(loc, kTile)),
-                    column));
-            Value packedRow = b.create<arith::AddIOp>(
-                loc,
-                b.create<arith::MulIOp>(
-                    loc, kt, b.create<arith::ConstantIndexOp>(loc, kTile)),
-                row);
-            Value value = b.create<memref::LoadOp>(
-                loc, op.getInput(), ValueRange{sourceRow, sourceColumn});
-            b.create<memref::StoreOp>(loc, value, aPack,
-                                      ValueRange{packedRow, column});
-            b.setInsertionPointAfter(ktLoop);
-
-            auto wPackTy = MemRefType::get({thisK, kTile}, b.getI8Type());
-            Value wPack = b.create<memref::AllocOp>(loc, wPackTy);
-            hostPacks.push_back(wPack);
-            b.create<linalg::FillOp>(loc, zeroI8, wPack);
-            Value validKEnd = b.create<arith::ConstantIndexOp>(loc, validK);
-            Value validNEnd = b.create<arith::ConstantIndexOp>(loc, thisN);
-            auto weightRowLoop =
-                b.create<scf::ForOp>(loc, zero, validKEnd, one);
-            b.setInsertionPointToStart(weightRowLoop.getBody());
-            Value weightRow = weightRowLoop.getInductionVar();
-            auto weightColumnLoop =
-                b.create<scf::ForOp>(loc, zero, validNEnd, one);
-            b.setInsertionPointToStart(weightColumnLoop.getBody());
-            Value weightColumn = weightColumnLoop.getInductionVar();
-            Value sourceWeightRow = b.create<arith::AddIOp>(
-                loc, b.create<arith::ConstantIndexOp>(loc, k0), weightRow);
-            Value sourceWeightColumn = b.create<arith::AddIOp>(
-                loc, b.create<arith::ConstantIndexOp>(loc, n0), weightColumn);
-            Value weightValue = b.create<memref::LoadOp>(
-                loc, op.getWeight(),
-                ValueRange{sourceWeightRow, sourceWeightColumn});
-            b.create<memref::StoreOp>(loc, weightValue, wPack,
-                                      ValueRange{weightRow, weightColumn});
-            b.setInsertionPointAfter(weightRowLoop);
-
-            Value aLoaded = mvinBank(b, loc, aPack, aBank, thisK);
-            Value wLoaded = mvinBank(b, loc, wPack, wBank, thisK);
-            uint64_t cfg = matrixRs2(kTile, kTile, thisK);
+              wLoaded = mvinBank(b, loc, wPack, wBank, thisK);
+            }
+            uint64_t cfg = matrixRs2(tileRows, kTile, thisK);
             auto smatmul = b.create<BankSMatMulOp>(
                 loc, resultState.getType(), aLoaded, wLoaded, resultState,
                 createI64Const(b, loc, static_cast<int64_t>(cfg)),
                 createI1Const(b, loc, k0 == 0),
                 createI1Const(b, loc, k0 + thisK == paddedK),
-                createI64Const(b, loc, 0));
+                createI64Const(b, loc, tile * resultRows));
             resultState = smatmul.getWrBankOut();
             aBank = aLoaded;
             wBank = wLoaded;
@@ -221,17 +279,17 @@ public:
                 ? b.create<BankInt32ToFp32Op>(
                        loc, outputBank.getType(), resultState, scaleLoaded,
                        outputBank,
-                       createI64Const(b, loc, tileCount * kInt32RowsPerTile),
+                       createI64Const(b, loc, tileCount * resultRows),
                        b.getBoolAttr(op.getActivation() == 1))
                       .getOutBankOut()
                 : b.create<BankQuantI32ToI8Op>(
                        loc, outputBank.getType(), resultState, scaleLoaded,
                        outputBank,
-                       createI64Const(b, loc, tileCount * kInt32RowsPerTile),
+                       createI64Const(b, loc, tileCount * resultRows),
                        createI64Const(b, loc, 0), createI64Const(b, loc, 0),
-                       b.getI64IntegerAttr(tileCount * kTile),
+                       b.getI64IntegerAttr(tileCount * tileRows),
                        b.getI64IntegerAttr(1),
-                       b.getI64IntegerAttr(tileCount * kTile),
+                       b.getI64IntegerAttr(tileCount * tileRows),
                        b.getBoolAttr(op.getActivation() == 1))
                       .getOutBankOut();
         releaseBank(b, loc, resultState);
@@ -239,20 +297,20 @@ public:
         Type outputElementType =
             finalOutput ? Type(b.getF32Type()) : Type(b.getI8Type());
         auto packedOutTy =
-            MemRefType::get({tileCount * kTile, kTile}, outputElementType);
+            MemRefType::get({tileCount * tileRows, kTile}, outputElementType);
         Value packedOut = b.create<memref::AllocOp>(loc, packedOutTy);
         Value stored = mvoutBank(b, loc, packedOut, converted,
-                                 finalOutput ? tileCount * kInt32RowsPerTile
-                                             : tileCount * kTile);
+                                 finalOutput ? tileCount * resultRows
+                                             : tileCount * tileRows);
         b.create<FenceOp>(loc);
         for (Value pack : hostPacks)
           b.create<memref::DeallocOp>(loc, pack);
 
         Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
         Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-        int64_t validOutputRows = std::min(tileCount * kTile, M - m0);
+        int64_t validOutputRows = std::min(tileCount * tileRows, M - m0);
         Value rowEnd = b.create<arith::ConstantIndexOp>(loc, validOutputRows);
-        Value columnEnd = b.create<arith::ConstantIndexOp>(loc, thisN);
+        Value columnEnd = thisN;
         auto rowLoop = b.create<scf::ForOp>(loc, zero, rowEnd, one);
         b.setInsertionPointToStart(rowLoop.getBody());
         Value row = rowLoop.getInductionVar();
@@ -263,8 +321,7 @@ public:
             b.create<memref::LoadOp>(loc, packedOut, ValueRange{row, column});
         Value outputRow = b.create<arith::AddIOp>(
             loc, b.create<arith::ConstantIndexOp>(loc, m0), row);
-        Value outputColumn = b.create<arith::AddIOp>(
-            loc, b.create<arith::ConstantIndexOp>(loc, n0), column);
+        Value outputColumn = b.create<arith::AddIOp>(loc, n0, column);
         b.create<memref::StoreOp>(loc, value, op.getOutput(),
                                   ValueRange{outputRow, outputColumn});
         b.setInsertionPointAfter(rowLoop);
@@ -276,10 +333,12 @@ public:
       releaseBank(b, loc, scaleLoaded);
       b.create<memref::DeallocOp>(loc, biasPack);
       b.create<memref::DeallocOp>(loc, scalePack);
+      releaseBank(b, loc, aBank);
+      releaseBank(b, loc, wBank);
     }
-
-    releaseBank(b, loc, aBank);
-    releaseBank(b, loc, wBank);
+    b.setInsertionPointAfter(panelLoop);
+    for (Value pack : inputPacks)
+      b.create<memref::DeallocOp>(loc, pack);
     b.eraseOp(op);
     return success();
   }
@@ -289,5 +348,11 @@ public:
 
 void mlir::buddy::populateSMatMulBallLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
-  patterns.add<MegaMatmulToBankSSAPattern>(patterns.getContext());
+  patterns.add<MXFP8ToBanks, FP32ToRuntime>(patterns.getContext());
+}
+
+LogicalResult mlir::buddy::lowerMatmulToBanks(MegaMatmulOp op,
+                                              PatternRewriter &rewriter) {
+  return MegaMatmulToBankSSAPattern(op.getContext())
+      .matchAndRewrite(op, rewriter);
 }

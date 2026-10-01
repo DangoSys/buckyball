@@ -74,7 +74,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -83,16 +82,22 @@ version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
  "bebop-bemu-profile",
+ "bebop-clint",
+ "bebop-dasm",
  "bebop-dtb",
  "bebop-elf",
- "bebop-rushb",
+ "bebop-keyboard",
+ "bebop-microphone",
+ "bebop-plic",
+ "bebop-rtc",
+ "bebop-speaker",
  "bebop-syscall",
- "bebop-uart",
- "cc",
+ "bebop-vga",
+ "bebop-vm",
  "clap",
- "once_cell",
  "prost",
  "prost-build",
+ "rvsim",
  "snafu",
 ]
 
@@ -109,15 +114,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "bebop-clint"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-dasm"
+version = "0.1.0"
+
+[[package]]
 name = "bebop-dtb"
 version = "0.1.0"
+dependencies = [
+ "bebop-clint",
+ "bebop-plic",
+]
 
 [[package]]
 name = "bebop-elf"
 version = "0.1.0"
 
 [[package]]
-name = "bebop-rushb"
+name = "bebop-keyboard"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-microphone"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-plic"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-rtc"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-speaker"
 version = "0.1.0"
 
 [[package]]
@@ -128,7 +161,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "bebop-uart"
+name = "bebop-vga"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-vm"
 version = "0.1.0"
 
 [[package]]
@@ -142,18 +179,6 @@ name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
-
-[[package]]
-name = "cc"
-version = "1.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
-dependencies = [
- "find-msvc-tools",
- "jobserver",
- "libc",
- "shlex",
-]
 
 [[package]]
 name = "cfg-if"
@@ -236,12 +261,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
-name = "find-msvc-tools"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
-
-[[package]]
 name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -300,16 +319,6 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
-
-[[package]]
-name = "jobserver"
-version = "0.1.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
-dependencies = [
- "getrandom",
- "libc",
-]
 
 [[package]]
 name = "libc"
@@ -479,6 +488,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
+name = "rustc_apfloat"
+version = "0.2.3+llvm-462a31f5a5ab"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "486c2179b4796f65bfe2ee33679acf0927ac83ecf583ad6c91c3b4570911b9ad"
+dependencies = [
+ "bitflags",
+ "smallvec",
+]
+
+[[package]]
 name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,6 +508,13 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys",
+]
+
+[[package]]
+name = "rvsim"
+version = "0.1.0"
+dependencies = [
+ "rustc_apfloat",
 ]
 
 [[package]]
@@ -535,10 +561,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "shlex"
-version = "2.0.1"
+name = "smallvec"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
 
 [[package]]
 name = "snafu"
@@ -628,12 +654,6 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
-
-[[package]]
-name = "xxhash-rust"
-version = "0.8.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee1b19627c7c60102ab80d3a9cbe18de90bfe03bfa6c3715447681f0e8c8af6"
 
 [[package]]
 name = "zmij"

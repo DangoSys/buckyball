@@ -1,6 +1,11 @@
 package axis_pkg;
   import uvm_pkg::*;
   import ip_pkg::*;
+  import axis_vip_pkg::*;
+  typedef axis_item#(32) item;
+  typedef axis_source_agent#(32) source_agent;
+  typedef axis_monitor#(32) monitor;
+  typedef axis_sink#(32) sink;
   `include "uvm_macros.svh"
 
   import "DPI-C" function chandle axis_ref_create();
@@ -18,9 +23,6 @@ package axis_pkg;
     output byte unsigned last
   );
 
-  `include "item.svh"
-  `include "source_agent.svh"
-  `include "sink.svh"
   `include "ref_model.svh"
   `include "env.svh"
   `include "test.svh"

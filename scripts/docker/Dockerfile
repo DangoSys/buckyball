@@ -30,6 +30,10 @@ RUN nix --extra-experimental-features "nix-command flakes" shell nixpkgs#git -c 
 WORKDIR /workspace/buckyball
 
 RUN nix --extra-experimental-features "nix-command flakes" build
-RUN NIX_QUIET=1 nix --extra-experimental-features "nix-command flakes" develop -c true
+
+ENV HOME=/workspace NIX_QUIET=1
+RUN nix --extra-experimental-features "nix-command flakes" develop -c true
+RUN nix --extra-experimental-features "nix-command flakes" develop -c bash \
+    scripts/nix/build-all.sh -o 1
 
 CMD ["nix", "--extra-experimental-features", "nix-command flakes", "develop", "-c", "bash"]

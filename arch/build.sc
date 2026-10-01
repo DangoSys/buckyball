@@ -52,6 +52,14 @@ object chi extends FrameworkModule {
 object bank extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "bank"
   override def moduleDeps = Seq(axis)
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
+}
+
+object cache extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "cache"
+  override def sources = T.sources { super.sources() ++ Seq(PathRef(moduleRoot / "configs")) }
+  override def ivyDeps = super.ivyDeps() ++ Agg(ivy"tech.sparse::toml-scala:0.2.2")
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object mesh_shm extends FrameworkModule {
@@ -61,7 +69,9 @@ object mesh_shm extends FrameworkModule {
 
 object coherence extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "coherence"
-  override def moduleDeps = Seq(chi)
+  override def moduleDeps = Seq(chi, cache)
+  override def sources = T.sources { super.sources() ++ Seq(PathRef(moduleRoot / "configs")) }
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object rvv extends FrameworkModule {
@@ -110,6 +120,7 @@ object buckyball extends SbtModule { m =>
     chi,
     bank,
     mesh_shm,
+    cache,
     coherence,
     rvv,
     seed,

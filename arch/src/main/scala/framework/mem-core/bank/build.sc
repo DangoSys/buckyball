@@ -18,4 +18,5 @@ object axis extends ChiselModule {
 object bank extends ChiselModule {
   override def moduleRoot = os.pwd
   override def moduleDeps = Seq(axis)
+  override def mainClass = Some("memcore.memory.bank.Emit")
 }

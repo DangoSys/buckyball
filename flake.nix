@@ -49,6 +49,7 @@
 
               # protoc for bbdev config --install (chip.proto -> chip.pb)
               pkgs.protobuf
+              pkgs.zsh
 
               pkgs.xorg-server
               pkgs.jdk8
@@ -78,6 +79,7 @@
 
               export CC="${pkgs.systemTools.clang}/bin/clang"
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.compiler.numactl pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
               export JAVA_HOME="${pkgs.jdk17}"
               # used by smic180
@@ -216,6 +218,12 @@
 
           # nix develop
           devShells.default = defaultShell;
+
+          devShells.vm = pkgs.mkShell {
+            inputsFrom = [ defaultShell ];
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            packages = [ pkgs.SDL2 ];
+          };
 
           # default + EDA tools / sky130
           devShells.full = pkgs.mkShell {

@@ -9,11 +9,11 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   CoreBankSSALowering.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
-  MegaKernelToBankSSAPatterns.cpp
+  ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/MegaKernelToBankSSAPatterns.cpp
   ResidentConvRegionToBankSSAPatterns.cpp
   MegaConv2dToBankSSAPatterns.cpp
   MemTransposeToBankSSAPatterns.cpp
-  QuantizeTensorToBankSSAPatterns.cpp
+  ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/QuantizeTensorToBankSSAPatterns.cpp
 
   LINK_LIBS PUBLIC
   MLIRControlFlowDialect

@@ -1,4 +1,4 @@
-# Poly Chip: 4 homogeneous tiles, each 3 prefill + 2 decode Cores.
+# Poly Chip: 4 homogeneous tiles, each 2 Attention + 3 FFN Cores.
 
 [top]
 nTiles = 4

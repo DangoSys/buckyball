@@ -2,11 +2,12 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
 import memcore.bus.axi.Beat
-import memcore.memory.bank.{RootScratchpad, ScratchpadParams}
+import memcore.memory.bank.{BankSet, BankSetParams}
 
 /** NoC extension that binds VC5/VC4/VC6 DMA traffic to a local scratchpad. */
-class ScratchpadBulkWriteSink(p: ScratchpadParams, nodeIdBits: Int) extends Module {
+class ScratchpadBulkWriteSink(p: BankSetParams, nodeIdBits: Int) extends Module {
 
   val io = IO(new Bundle {
     val descriptor = Flipped(Decoupled(new BulkDescriptor(nodeIdBits)))
@@ -14,7 +15,7 @@ class ScratchpadBulkWriteSink(p: ScratchpadParams, nodeIdBits: Int) extends Modu
     val completion = Decoupled(new BulkCompletion(nodeIdBits))
   })
 
-  val scratchpad                                    = Module(new RootScratchpad(p))
+  val scratchpad: Instance[BankSet] = Instantiate(new BankSet(p))
   val idle :: issue :: streaming :: complete :: Nil = Enum(4)
   val state                                         = RegInit(idle)
   val descriptor                                    = Reg(new BulkDescriptor(nodeIdBits))

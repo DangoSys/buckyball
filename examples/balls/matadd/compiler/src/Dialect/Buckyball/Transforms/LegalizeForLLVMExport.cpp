@@ -33,8 +33,7 @@ struct MatAddLowering : public ConvertOpToLLVMPattern<MatAddOp> {
 
 namespace mlir::buddy::buckyball {
 void populateMatAddBallLegalizeForLLVMExportPatterns(
-    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool, int64_t,
-    bool) {
+    LLVMTypeConverter &converter, RewritePatternSet &patterns, bool, int64_t) {
   patterns.add<MatAddLowering>(converter);
 }
 

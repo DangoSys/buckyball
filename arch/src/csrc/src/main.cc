@@ -74,7 +74,7 @@ void sim_init(int argc, char **argv) {
 #endif
 }
 
-void sim_exit() {
+void sim_exit(int code) {
   contextp->timeInc(1);
   dump_wave();
   if (enable_wave) {
@@ -83,7 +83,7 @@ void sim_exit() {
       printf("The wave data has been saved to the FST file: %s\n", fst_path);
     }
   }
-  exit(0);
+  exit(code);
 }
 
 void ball_exec_once() {

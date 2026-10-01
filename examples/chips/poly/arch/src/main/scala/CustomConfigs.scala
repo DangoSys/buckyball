@@ -5,7 +5,7 @@ import org.chipsalliance.cde.config.Config
 import freechips.rocketchip.tile.MaxHartIdBits
 import framework.system.tile.WithBuckyballTiles
 
-/** Four Poly tiles: 3 prefill + 2 decode Cores per tile (20 harts). */
+/** Four Poly tiles: 2 Attention + 3 FFN Cores per tile (20 harts). */
 class BuckyballPolyConfig
     extends Config(
       new Config((site, here, up) => { case MaxHartIdBits =>

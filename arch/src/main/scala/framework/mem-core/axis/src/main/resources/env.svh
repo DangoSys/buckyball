@@ -1,11 +1,9 @@
-class env extends uvm_env;
+class env extends checked_env #(item, item, ref_model);
   `uvm_component_utils(env)
 
   source_agent source;
   sink sink_driver;
   monitor sink_monitor;
-  ref_model model;
-  in_order_scoreboard #(item) scoreboard;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -29,14 +27,11 @@ class env extends uvm_env;
     source       = source_agent::type_id::create("source", this);
     sink_driver  = sink::type_id::create("sink_driver", this);
     sink_monitor = monitor::type_id::create("sink_monitor", this);
-    model        = ref_model::type_id::create("model", this);
-    scoreboard   = in_order_scoreboard#(item)::type_id::create("scoreboard", this);
   endfunction
 
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    source.mon.ap.connect(model.analysis_export);
-    model.expected_ap.connect(scoreboard.expected_export);
-    sink_monitor.ap.connect(scoreboard.actual_export);
+    source.mon.ap.connect(input_export);
+    sink_monitor.ap.connect(output_export);
   endfunction
 endclass

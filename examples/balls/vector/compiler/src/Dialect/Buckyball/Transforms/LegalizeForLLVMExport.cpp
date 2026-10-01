@@ -34,7 +34,7 @@ struct VecMat16Lowering : public ConvertOpToLLVMPattern<VecMat16Op> {
 namespace mlir::buddy::buckyball {
 void populateVecBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &converter,
                                                   RewritePatternSet &patterns,
-                                                  bool stable, int64_t, bool) {
+                                                  bool stable, int64_t) {
   (void)stable;
   patterns.add<VecMat16Lowering>(converter);
 }

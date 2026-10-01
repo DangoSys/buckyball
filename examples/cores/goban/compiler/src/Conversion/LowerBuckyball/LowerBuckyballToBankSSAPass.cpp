@@ -16,6 +16,7 @@
 
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
+#include "Trace/TraceDialect.h"
 
 using namespace mlir;
 
@@ -70,13 +71,15 @@ public:
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<arith::ArithDialect, linalg::LinalgDialect,
-                    memref::MemRefDialect, scf::SCFDialect,
-                    ::buddy::buckyball::BuckyballDialect>();
+    registry.insert<::buddy::trace::BuddyTraceDialect, arith::ArithDialect,
+                    linalg::LinalgDialect, memref::MemRefDialect,
+                    scf::SCFDialect, ::buddy::buckyball::BuckyballDialect>();
   }
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
+    mlir::buddy::populateMatmulRegionToBankSSAPatterns(patterns, false, 0, -1);
+    mlir::buddy::populateQuantizeTensorToBankSSAPatterns(patterns);
     patterns.add<MemTransposeToLinalgPattern>(&getContext());
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))
       signalPassFailure();

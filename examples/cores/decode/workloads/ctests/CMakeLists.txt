@@ -1,1 +1,0 @@
-add_subdirectory(transpose_vecmat16_pipeline)

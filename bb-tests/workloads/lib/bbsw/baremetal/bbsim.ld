@@ -27,15 +27,27 @@ SECTIONS {
         PROVIDE(_edata = .);
     }
 
+    .tdata ALIGN(16) : {
+        PROVIDE(__tls_start = .);
+        *(.tdata .tdata.* .gnu.linkonce.td.*)
+    }
+
+    .tbss ALIGN(8) (NOLOAD) : {
+        PROVIDE(__bss_start = .);
+        *(.tbss .tbss.* .gnu.linkonce.tb.*)
+        . = ALIGN(8);
+    }
+    . = ADDR(.tbss) + SIZEOF(.tbss);
+
     /* All zero-init sections: crt0.S clears __bss_start .. __bss_end,
        so heap (at _end) starts after ALL bss including sbss. */
     .bss (NOLOAD) : {
-        PROVIDE(__bss_start = .);
         *(.bss .bss.*)
         *(.sbss .sbss.*)
         *(.gnu.linkonce.b.*)
         *(.gnu.linkonce.sb.*)
         *(COMMON)
+        . = ALIGN(8);
         PROVIDE(__bss_end = .);
     }
 

@@ -15,7 +15,15 @@ object chi extends ChiselModule {
   override def moduleRoot = os.pwd / os.up / "chi"
 }
 
+object cache extends ChiselModule {
+  override def moduleRoot = os.pwd / os.up / "cache"
+  override def sources = T.sources { super.sources() ++ Seq(PathRef(moduleRoot / "configs")) }
+  override def ivyDeps = super.ivyDeps() ++ Agg(ivy"tech.sparse::toml-scala:0.2.2")
+}
+
 object coherence extends ChiselModule {
+  override def mainClass = Some("memcore.memory.coherence.Emit")
   override def moduleRoot = os.pwd
-  override def moduleDeps = Seq(chi)
+  override def moduleDeps = Seq(chi, cache)
+  override def sources = T.sources { super.sources() ++ Seq(PathRef(moduleRoot / "configs")) }
 }

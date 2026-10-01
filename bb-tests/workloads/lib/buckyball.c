@@ -1,6 +1,6 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <bbhw/mem/mem.h>
+#include <dma.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,9 +10,7 @@
 /* Read cycle counter (rdcycle) helper. Works on RV64 with a single rdcycle.
    On RV32 we read low/high and detect rollover to produce a 64-bit value. */
 unsigned long long read_rdcycle(void) {
-#if defined(BUCKYBALL_RUSHB)
-  return rushb_cycles(BUCKYBALL_RUSHB_CORE);
-#elif defined(__riscv_xlen) && __riscv_xlen == 64
+#if defined(__riscv_xlen) && __riscv_xlen == 64
   unsigned long long cycles;
   asm volatile("rdcycle %0" : "=r"(cycles));
   return cycles;
@@ -286,18 +284,14 @@ void cpu_transfer(elem_t *src, elem_t *dst, int rows, int cols) {
   }
 }
 unsigned long long read_cycle(void) {
-#if defined(BUCKYBALL_RUSHB)
-  return rushb_cycles(BUCKYBALL_RUSHB_CORE);
-#else
   unsigned long long c;
   asm volatile("csrr %0, cycle" : "=r"(c));
   return c;
-#endif
 }
 
 // MMIO stubs are for baremetal/BBSim only.
-// Linux user-mode tests (`*-linux` under `spike pk`) must use libc/syscall exit
-// path.
+// Linux user-mode tests (`*-linux` under BEMU user-mode execution) must use
+// libc/syscall exit path.
 #if !defined(__linux__)
 // MMIO address map (BBSimHarness, WithDefaultMMIOPort base=0x6000_0000):
 //   0x6000_0000 : simulation exit  — write triggers sim_exit()

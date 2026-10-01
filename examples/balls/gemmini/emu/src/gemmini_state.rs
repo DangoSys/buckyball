@@ -1,4 +1,4 @@
-//! Global config for Gemmini / loop instructions. Mutex is fine because Spike calls in on a single worker.
+//! Global config for Gemmini / loop instructions.
 use std::sync::{Mutex, OnceLock};
 
 #[derive(Clone, Default)]

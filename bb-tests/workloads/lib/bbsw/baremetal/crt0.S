@@ -1,6 +1,6 @@
 /* crt0.S — minimal startup for BBSimHarness baremetal
  * Bootrom jumps to 0x80000000 (this code).
- * Sets up stack, clears BSS, then calls main. */
+ * Sets up stack and TLS, clears BSS, then calls main. */
 .section .text.init,"ax",@progbits
 .global _start
 _start:
@@ -18,6 +18,11 @@ _start:
 
     /* stack pointer: top of the 256 MiB BBSim DRAM window */
     li   sp, 0x90000000
+
+    .option push
+    .option norelax
+    la   tp, __tls_start
+    .option pop
 
     /* clear BSS */
     la   a0, __bss_start

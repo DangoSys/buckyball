@@ -74,5 +74,5 @@ extern "C" void scu_sim_exit(uint32_t hart_id, uint32_t code) {
 
   bbsim_memory_print_stats();
 
-  sim_exit();
+  sim_exit(code);
 }

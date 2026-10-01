@@ -1,0 +1,10 @@
++incdir+@VERIFY@/uvm/src/ip
++incdir+@VERIFY@/uvm/src/protocol/axis
++incdir+@RESOURCES@
+@VERIFY@/uvm/src/ip/package.sv
+@VERIFY@/uvm/src/protocol/axis/interface.sv
+@VERIFY@/uvm/src/protocol/axis/package.sv
+@RESOURCES@/bankset_interface.sv
+@RESOURCES@/bankset_package.sv
+@RTL@/BankSet.sv
+@RESOURCES@/bankset_tb.sv

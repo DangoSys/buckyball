@@ -60,9 +60,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
       val busy = Output(Bool())
     }
 
-    val idle    = Output(Bool())
-    // One-cycle pulse used by rushB to advance its command queue.
-    val retired = Output(Bool())
+    val idle = Output(Bool())
 
     val barrier_arrive  = Output(Bool())
     val barrier_release = Input(Bool())
@@ -235,6 +233,5 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   io.scheduler_rocc_o.resp.bits.rd   := 0.U
   io.scheduler_rocc_o.resp.bits.data := 0.U
   io.scheduler_rocc_o.busy           := rob.io.full || fenceActive || barrierWaitROB || barrierWaitRelease
-  io.retired                         := rob.io.complete.fire && rob.io.entry_valid(rob.io.complete.bits)
 
 }

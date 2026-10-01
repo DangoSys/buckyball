@@ -31,7 +31,7 @@ git submodule update --init --progress \
   bb-tests/workloads/lib/kernel \
   bbdev \
   bebop \
-  compiler/thirdparty/buddy-mlir \
+  stack \
   docs \
   verify \
   thirdparty/firesim \
@@ -111,4 +111,5 @@ require_chipyard_nested generators/rocc-acc-utils
 require_chipyard_nested generators/bar-fetchers
 
 begin_step "0-4" "buddy-mlir llvm init"
-git -C ${BBDIR}/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm
+git -C ${BBDIR}/stack submodule update --init --progress compiler/thirdparty/buddy-mlir
+git -C ${BBDIR}/stack/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

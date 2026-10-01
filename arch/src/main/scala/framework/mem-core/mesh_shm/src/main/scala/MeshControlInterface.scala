@@ -2,7 +2,6 @@ package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
-import memcore.memory.bank.{BankParams, BankRequest, BankResponse}
 
 /** One full-width word from a Core-local Bank to another Core-local Bank. */
 class MeshTransferCommand(p: MeshSharedMemParams) extends Bundle {
@@ -25,8 +24,19 @@ class MeshLocalBankRequest(
   bankBits:    Int,
   dataBits:    Int,
   tagBits:     Int)
-    extends BankRequest(BankParams(addressBits, dataBits, tagBits)) {
-  val bank = UInt(bankBits.W)
+    extends Bundle {
+  val addr  = UInt(addressBits.W)
+  val write = Bool()
+  val data  = UInt(dataBits.W)
+  val mask  = UInt((dataBits / 8).W)
+  val tag   = UInt(tagBits.W)
+  val bank  = UInt(bankBits.W)
+}
+
+class MeshLocalBankResponse(dataBits: Int, tagBits: Int) extends Bundle {
+  val data  = UInt(dataBits.W)
+  val tag   = UInt(tagBits.W)
+  val error = Bool()
 }
 
 /** SharedMem initiates both the source read and target write. */
@@ -36,7 +46,7 @@ class MeshLocalBankPort(
   dataBits:    Int,
   tagBits:     Int)
     extends Bundle {
-  private val bankParams = BankParams(addressBits, dataBits, tagBits)
-  val request            = Decoupled(new MeshLocalBankRequest(addressBits, bankBits, dataBits, tagBits))
-  val response           = Flipped(Decoupled(new BankResponse(bankParams)))
+
+  val request  = Decoupled(new MeshLocalBankRequest(addressBits, bankBits, dataBits, tagBits))
+  val response = Flipped(Decoupled(new MeshLocalBankResponse(dataBits, tagBits)))
 }

@@ -5,9 +5,9 @@
 
 #include <cassert>
 #include <cstring>
-#include <fesvr/memif.h>
 #include <queue>
 #include <stdint.h>
+#include <vector>
 
 struct backing_data_t {
   uint8_t *data;

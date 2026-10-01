@@ -2,48 +2,45 @@ package memcore.memory.bank
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-case class BankParams(addressBits: Int, dataBits: Int, tagBits: Int = 8) {
-  require(addressBits > 0 && dataBits > 0 && dataBits % 8 == 0 && tagBits > 0)
-  val bytes = dataBits / 8
-}
-
-class BankRequest(p: BankParams) extends Bundle {
-  val addr  = UInt(p.addressBits.W)
+class BankRequest(p: BankSetParams) extends Bundle {
+  val addr  = UInt(p.rowBits.W)
   val write = Bool()
   val data  = UInt(p.dataBits.W)
   val mask  = UInt(p.bytes.W)
   val tag   = UInt(p.tagBits.W)
 }
 
-class BankResponse(p: BankParams) extends Bundle {
+class BankResponse(p: BankSetParams) extends Bundle {
   val data  = UInt(p.dataBits.W)
   val tag   = UInt(p.tagBits.W)
   val error = Bool()
 }
 
 /** One physical SRAM bank. Cache and NoC policy remain outside this module. */
-class RootSramBank(p: BankParams, entries: Int) extends Module {
-  require(entries >= 2 && isPow2(entries))
+@instantiable
+class Bank(p: BankSetParams) extends Module {
 
+  @public
   val io = IO(new Bundle {
     val request  = Flipped(Decoupled(new BankRequest(p)))
     val response = Decoupled(new BankResponse(p))
   })
 
-  val memory        = SyncReadMem(entries, Vec(p.bytes, UInt(8.W)))
+  val memory        = SyncReadMem(p.entriesPerBank, Vec(p.bytes, UInt(8.W)))
   val request       = Reg(new BankRequest(p))
   val responseValid = RegInit(false.B)
   val readPending   = RegInit(false.B)
   val responseData  = Reg(UInt(p.dataBits.W))
-  val readData      = memory.read(io.request.bits.addr(log2Ceil(entries) - 1, 0), io.request.fire && !io.request.bits.write)
+  val readData      = memory.read(io.request.bits.addr, io.request.fire && !io.request.bits.write)
 
   io.request.ready := !responseValid && !readPending
   when(io.request.fire) {
     request := io.request.bits
     when(io.request.bits.write) {
       memory.write(
-        io.request.bits.addr(log2Ceil(entries) - 1, 0),
+        io.request.bits.addr,
         io.request.bits.data.asTypeOf(Vec(p.bytes, UInt(8.W))),
         io.request.bits.mask.asBools
       )
