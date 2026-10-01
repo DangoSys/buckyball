@@ -10,7 +10,7 @@ import framework.frontend.decoder.GISA._
 import framework.frontend.scoreboard.BankAccessInfo
 import framework.system.core.rocket.RoCCResponseBB
 import framework.balldomain.blink.SubRobRow
-import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.backend.banks.btrace.{BTraceDPI, PhysicalBankHash}
 import framework.memdomain.backend.shared.SharedMemLayout
 
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
@@ -70,6 +70,21 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   rob.io.hart_id               := io.hart_id
   rob.io.bank_hashes.foreach(_ := io.bank_hashes.get)
   io.inst_ids                  := rob.io.inst_ids
+
+  if (b.sim.diffTest) {
+    val btrace = Module(new BTraceDPI)
+    val trace  = rob.io.trace.get
+    // VVAC stalls logical clocks when its nonblocking channel is full.
+    btrace.io.clock    := clock
+    btrace.io.reset    := reset.asBool
+    btrace.io.instId   := trace.bits.instId
+    btrace.io.hartId   := io.hart_id
+    btrace.io.w0Vbank  := trace.bits.w0Vbank
+    btrace.io.w0Hash   := trace.bits.w0Hash
+    btrace.io.fire     := trace.valid
+    btrace.io.produced := rob.io.traceCount.get
+    btrace.io.idle     := io.idle && !io.decode_cmd_i.valid && !trace.valid
+  }
 
   val isFenceCmd  = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isFence
   val fenceActive = RegInit(false.B)
