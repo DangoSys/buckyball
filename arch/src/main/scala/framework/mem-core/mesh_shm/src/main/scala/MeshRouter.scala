@@ -4,11 +4,13 @@ import chisel3._
 import chisel3.util._
 
 object MeshDirection {
+  // The bank/channel endpoint attached to this router, not a network link.
   val local = 0
   val east  = 1
   val west  = 2
   val south = 3
   val north = 4
+  // Number of ports per router: one local endpoint plus four mesh neighbours.
   val count = 5
 }
 

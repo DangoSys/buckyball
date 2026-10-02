@@ -39,6 +39,23 @@ trait FrameworkModule extends SbtModule {
 
 val frameworkRoot = os.pwd / "src" / "main" / "scala" / "framework"
 
+val globalConfigSources = Seq(
+  frameworkRoot / "top" / "GlobalConfig.scala",
+  frameworkRoot / "top" / "configs" / "SimParam.scala",
+  frameworkRoot / "memdomain" / "configs" / "MemDomainParam.scala",
+  frameworkRoot / "frontend" / "configs" / "FrontendParam.scala",
+  frameworkRoot / "gpdomain" / "configs" / "GpDomainParam.scala",
+  frameworkRoot / "balldomain" / "configs" / "BallDomainParam.scala",
+  frameworkRoot / "system" / "tile" / "configs" / "TileParam.scala"
+)
+
+object global_config extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "top"
+  override def sources = T.sources { globalConfigSources.map(PathRef(_)) }
+  override def moduleDeps = Seq(cde)
+  override def ivyDeps = super.ivyDeps() ++ Agg(ivy"com.lihaoyi::upickle:3.3.1")
+}
+
 object axis extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "axis"
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
@@ -64,7 +81,8 @@ object cache extends FrameworkModule {
 
 object mesh_shm extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "mesh_shm"
-  override def moduleDeps = Seq(bank)
+  override def moduleDeps = Seq(bank, global_config)
+  override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object coherence extends FrameworkModule {
@@ -119,6 +137,7 @@ object buckyball extends SbtModule { m =>
     axis,
     chi,
     bank,
+    global_config,
     mesh_shm,
     cache,
     coherence,
@@ -153,6 +172,7 @@ object buckyball extends SbtModule { m =>
       .filterNot(path => path.toString.contains("/framework/mem-core/"))
       .filterNot(path => path.toString.contains("/framework/rvv/"))
       .filterNot(path => path.toString.contains("/framework/system/core/seed/"))
+      .filterNot(globalConfigSources.contains)
       .map(PathRef(_))
     localSources ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs(
       "balls"

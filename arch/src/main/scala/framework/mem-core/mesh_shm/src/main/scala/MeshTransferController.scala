@@ -9,11 +9,11 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
   val io = IO(new Bundle {
     val command    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val completion = Decoupled(new MeshTransferCompletion(p))
-    val localBanks = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
+    val localBanks = Vec(p.cores.size, new MeshLocalBankPort(p.global, p.addressBits, p.localBankBits, p.tagBits))
 
     val mesh = new Bundle {
-      val request  = Decoupled(new MeshClientRequest(p))
-      val response = Flipped(Decoupled(new MeshClientResponse(p)))
+      val request  = Decoupled(new MeshEventBeat(p.global, p.addressBits, p.bankBits, p.tagBits))
+      val response = Flipped(Decoupled(new MeshEventBeat(p.global, p.addressBits, p.bankBits, p.tagBits)))
     }
 
   })
@@ -63,12 +63,13 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
     port.request.valid      :=
       (state === sSourceRequest && isSource) || (state === sTargetRequest && isTarget)
     port.request.bits       := 0.U.asTypeOf(port.request.bits)
-    port.request.bits.bank  := Mux(state === sSourceRequest, command.sourceBank, command.targetBank)
+    port.request.bits.tdest := Mux(state === sSourceRequest, command.sourceBank, command.targetBank)
     port.request.bits.addr  := Mux(state === sSourceRequest, command.sourceAddr, command.targetAddr)
-    port.request.bits.write := state === sTargetRequest
-    port.request.bits.data  := stagedData
-    port.request.bits.mask  := Fill(p.maskBits, 1.U(1.W))
-    port.request.bits.tag   := command.tag
+    port.request.bits.tuser := Mux(state === sSourceRequest, MeshEvent.ReadRequest, MeshEvent.WriteRequest)
+    port.request.bits.tdata := Mux(state === sTargetRequest, stagedData, 0.U)
+    port.request.bits.tkeep := Mux(state === sTargetRequest, Fill(p.maskBits, 1.U(1.W)), 0.U)
+    port.request.bits.tlast := true.B
+    port.request.bits.tid   := command.tag
     port.response.ready     :=
       (state === sSourceResponse && isSource) || (state === sTargetResponse && isTarget)
 
@@ -76,12 +77,14 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
       state := sSourceResponse
     }
     when(state === sSourceResponse && isSource && port.response.fire) {
-      assert(port.response.bits.tag === command.tag)
-      when(port.response.bits.error) {
+      assert(port.response.bits.tlast)
+      assert(port.response.bits.tid === command.tag)
+      assert(port.response.bits.tuser(1, 0) === MeshEvent.ReadResponse(1, 0))
+      when(port.response.bits.tuser(2)) {
         failed := true.B
         state  := sComplete
       }.otherwise {
-        sourceData := port.response.bits.data
+        sourceData := port.response.bits.tdata
         state      := sStageWriteRequest
       }
     }
@@ -89,8 +92,10 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
       state := sTargetResponse
     }
     when(state === sTargetResponse && isTarget && port.response.fire) {
-      assert(port.response.bits.tag === command.tag)
-      when(port.response.bits.error) {
+      assert(port.response.bits.tlast)
+      assert(port.response.bits.tid === command.tag)
+      assert(port.response.bits.tuser(1, 0) === MeshEvent.WriteResponse(1, 0))
+      when(port.response.bits.tuser(2)) {
         failed := true.B
       }
       state := sComplete
@@ -98,13 +103,14 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
   }
 
   io.mesh.request.valid      := state === sStageWriteRequest || state === sStageReadRequest
-  io.mesh.request.bits       := 0.U.asTypeOf(new MeshClientRequest(p))
-  io.mesh.request.bits.bank  := p.stagingBank.U
+  io.mesh.request.bits       := 0.U.asTypeOf(io.mesh.request.bits)
+  io.mesh.request.bits.tdest := p.stagingBank.U
   io.mesh.request.bits.addr  := p.stagingAddress.U
-  io.mesh.request.bits.write := state === sStageWriteRequest
-  io.mesh.request.bits.data  := sourceData
-  io.mesh.request.bits.mask  := Fill(p.maskBits, 1.U(1.W))
-  io.mesh.request.bits.tag   := command.tag
+  io.mesh.request.bits.tuser := Mux(state === sStageWriteRequest, MeshEvent.WriteRequest, MeshEvent.ReadRequest)
+  io.mesh.request.bits.tdata := Mux(state === sStageWriteRequest, sourceData, 0.U)
+  io.mesh.request.bits.tkeep := Mux(state === sStageWriteRequest, Fill(p.maskBits, 1.U(1.W)), 0.U)
+  io.mesh.request.bits.tlast := true.B
+  io.mesh.request.bits.tid   := command.tag
   io.mesh.response.ready     := state === sStageWriteResponse || state === sStageReadResponse
 
   when(io.mesh.request.fire) {
@@ -116,8 +122,14 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
     }
   }
   when(io.mesh.response.fire) {
-    assert(io.mesh.response.bits.tag === command.tag)
-    when(io.mesh.response.bits.error) {
+    assert(io.mesh.response.bits.tlast)
+    assert(io.mesh.response.bits.tid === command.tag)
+    assert(io.mesh.response.bits.tuser(1, 0) === Mux(
+      state === sStageWriteResponse,
+      MeshEvent.WriteResponse(1, 0),
+      MeshEvent.ReadResponse(1, 0)
+    ))
+    when(io.mesh.response.bits.tuser(2)) {
       failed := true.B
       state  := sComplete
     }.elsewhen(state === sStageWriteResponse) {
@@ -125,7 +137,7 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
       state      := sStageReadRequest
     }.otherwise {
       assert(state === sStageReadResponse && stageValid)
-      stagedData := io.mesh.response.bits.data
+      stagedData := io.mesh.response.bits.tdata
       state      := sTargetRequest
     }
   }
