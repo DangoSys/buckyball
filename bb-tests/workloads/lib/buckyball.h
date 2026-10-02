@@ -50,6 +50,4 @@ void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
                 int inner);
 result_t gemmini_in_shift(result_t v, int shift);
 
-unsigned long long read_cycle(void);
-
 #endif
