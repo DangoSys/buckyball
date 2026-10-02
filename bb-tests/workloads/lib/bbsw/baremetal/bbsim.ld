@@ -30,12 +30,14 @@ SECTIONS {
     .tdata ALIGN(16) : {
         PROVIDE(__tls_start = .);
         *(.tdata .tdata.* .gnu.linkonce.td.*)
+        PROVIDE(__tdata_end = .);
     }
 
     .tbss ALIGN(8) (NOLOAD) : {
         PROVIDE(__bss_start = .);
         *(.tbss .tbss.* .gnu.linkonce.tb.*)
         . = ALIGN(8);
+        PROVIDE(__tls_end = .);
     }
     . = ADDR(.tbss) + SIZEOF(.tbss);
 

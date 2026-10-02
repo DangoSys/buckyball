@@ -48,6 +48,7 @@ import framework.top.configs.SimParamKey
 import framework.memdomain.backend.shared.SharedMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.frontend.mem.MemConfigerIO
+import framework.memdomain.isa.MeshMoveCommand
 import sifive.blocks.inclusivecache.{CacheParameters, InclusiveCache, InclusiveCacheMicroParameters}
 
 /**
@@ -634,7 +635,7 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
 
     if (cfg0.memDomain.sharedEnable) {
       // SharedMemBackend (tile-level singleton)
-      val sharedBackend = Module(new SharedMemBackend(cfg0))
+      val sharedBackend = Module(new SharedMemBackend(cfg0, outer.bbParams.useMeshSharedMem))
 
       if (cfg0.sim.diffTest) {
         for (acc <- enabledAccelerators) {
@@ -650,6 +651,32 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
             case Some(acc) => sharedBackend.io.mem_req(slot) <> acc.io.shared_mem_req(ch)
             case None      => tieOffMemReq(sharedBackend.io.mem_req(slot))
           }
+        }
+      }
+
+      // A Tile owns exactly one Mesh transfer at a time. The arbiter records the
+      // issuing Core so completion returns to the same instruction's ROB.
+      val moveArb = Module(new Arbiter(new MeshMoveCommand, enabledAccelerators.size))
+      for ((acc, index) <- enabledAccelerators.zipWithIndex) {
+        moveArb.io.in(index) <> acc.io.meshMove.command
+      }
+      sharedBackend.io.meshMove.command <> moveArb.io.out
+      val moveOwner = RegInit(0.U(log2Ceil(enabledAccelerators.size).max(1).W))
+      when(moveArb.io.out.fire)(moveOwner := moveArb.io.chosen)
+      for ((acc, index) <- enabledAccelerators.zipWithIndex) {
+        acc.io.meshMove.completion.valid := sharedBackend.io.meshMove.completion.valid && moveOwner === index.U
+        acc.io.meshMove.completion.bits  := sharedBackend.io.meshMove.completion.bits
+      }
+      sharedBackend.io.meshMove.completion.ready := VecInit(enabledAccelerators.map(_.io.meshMove.completion.ready))(
+        moveOwner
+      )
+      for (i            <- 0 until nCores) {
+        accelerators(i) match {
+          case Some(acc) => sharedBackend.io.localBanks(i) <> acc.io.meshLocalBank
+          case None      =>
+            sharedBackend.io.localBanks(i).request.ready  := false.B
+            sharedBackend.io.localBanks(i).response.valid := false.B
+            sharedBackend.io.localBanks(i).response.bits  := 0.U.asTypeOf(sharedBackend.io.localBanks(i).response.bits)
         }
       }
 
@@ -675,8 +702,14 @@ class BBTileModuleImp(outer: BBTile) extends BaseTileModuleImp(outer) with HasIC
       }
     } else {
       for (acc <- enabledAccelerators) {
-        acc.io.shared_config.ready      := false.B
-        acc.io.shared_query_group_count := 0.U
+        acc.io.meshMove.command.ready       := false.B
+        acc.io.meshMove.completion.valid    := false.B
+        acc.io.meshMove.completion.bits     := false.B
+        acc.io.meshLocalBank.request.valid  := false.B
+        acc.io.meshLocalBank.request.bits   := 0.U.asTypeOf(acc.io.meshLocalBank.request.bits)
+        acc.io.meshLocalBank.response.ready := false.B
+        acc.io.shared_config.ready          := false.B
+        acc.io.shared_query_group_count     := 0.U
         when(acc.io.shared_config.valid) {
           assert(false.B, "Buckyball shared config emitted while sharedMem is disabled\n")
         }

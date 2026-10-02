@@ -59,7 +59,8 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     (func7 === MVIN_2D_BITPAT) ||
     (func7 === MVOUT_BITPAT) ||
     (func7 === MSET_BITPAT) ||
-    (func7 === MVIN_MMIO_BITPAT)
+    (func7 === MVIN_MMIO_BITPAT) ||
+    (func7 === MESH_MOVE_BITPAT)
 
   val is_frontend_inst = func7 === FENCE_BITPAT
   val is_barrier_inst  = func7 === BARRIER_BITPAT

@@ -14,6 +14,7 @@ import framework.top.GlobalConfig
 import framework.memdomain.frontend.cmd.decoder.MemDomainDecoder
 import framework.memdomain.frontend.cmd.rs.MemReservationStation
 import framework.memdomain.utils.pmc.MemCyclePMC
+import framework.memdomain.isa.{MeshMoveISA, MeshMovePort}
 
 /**
  * MemFrontend:
@@ -28,6 +29,7 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
     val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     // Report completion to global RS (single channel)
     val global_complete_o = Decoupled(new GlobalSchedComplete(b))
+    val meshMove          = new MeshMovePort
 
     // Bank read/write interface - used by load/store
     val interdma = new Bundle {
@@ -84,9 +86,28 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
 // -----------------------------------------------------------------------------
 // Global RS -> MemDecoder
 // -----------------------------------------------------------------------------
-  memDecoder.io.cmd_i.valid := io.global_issue_i.valid
-  memDecoder.io.cmd_i.bits  := io.global_issue_i.bits.cmd
-  io.global_issue_i.ready   := memDecoder.io.cmd_i.ready
+  val isMeshMove       = io.global_issue_i.bits.cmd.cmd.funct === MeshMoveISA.Funct.U
+  val meshMovePending  = RegInit(false.B)
+  val meshMoveRobId    = Reg(chiselTypeOf(io.global_issue_i.bits.rob_id))
+  val meshMoveIsSub    = Reg(Bool())
+  val meshMoveSubRobId = Reg(chiselTypeOf(io.global_issue_i.bits.sub_rob_id))
+
+  io.meshMove.command.valid           := io.global_issue_i.valid && isMeshMove && !meshMovePending
+  io.meshMove.command.bits.sourceCore := io.global_issue_i.bits.cmd.cmd.rs1Data(7, 0)
+  io.meshMove.command.bits.targetCore := io.global_issue_i.bits.cmd.cmd.rs1Data(15, 8)
+  io.meshMove.command.bits.sourceBank := io.global_issue_i.bits.cmd.cmd.rs1Data(25, 16)
+  io.meshMove.command.bits.targetBank := io.global_issue_i.bits.cmd.cmd.rs1Data(35, 26)
+  io.meshMove.command.bits.sourceAddr := io.global_issue_i.bits.cmd.cmd.rs2Data(15, 0)
+  io.meshMove.command.bits.targetAddr := io.global_issue_i.bits.cmd.cmd.rs2Data(31, 16)
+  when(io.meshMove.command.fire) {
+    meshMovePending  := true.B
+    meshMoveRobId    := io.global_issue_i.bits.rob_id
+    meshMoveIsSub    := io.global_issue_i.bits.is_sub
+    meshMoveSubRobId := io.global_issue_i.bits.sub_rob_id
+  }
+  memDecoder.io.cmd_i.valid           := io.global_issue_i.valid && !isMeshMove && !meshMovePending
+  memDecoder.io.cmd_i.bits            := io.global_issue_i.bits.cmd
+  io.global_issue_i.ready             := !meshMovePending && Mux(isMeshMove, io.meshMove.command.ready, memDecoder.io.cmd_i.ready)
 
   // Config signal goes to backend
   io.config <> configer.io.config
@@ -236,13 +257,19 @@ class MemFrontend(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
   io.mmio_col            := memLoader.io.mmio_col
 
   // Completion signal connected to global RS
-  io.global_complete_o.valid           := memRs.io.complete_o.valid
-  io.global_complete_o.bits.rob_id     := memRs.io.complete_o.bits.rob_id
-  io.global_complete_o.bits.is_sub     := memRs.io.complete_o.bits.is_sub
-  io.global_complete_o.bits.sub_rob_id := memRs.io.complete_o.bits.sub_rob_id
-  memRs.io.complete_o.ready            := io.global_complete_o.ready
+  val meshMoveComplete = meshMovePending && io.meshMove.completion.valid
+  io.global_complete_o.valid           := meshMoveComplete || memRs.io.complete_o.valid
+  io.global_complete_o.bits.rob_id     := Mux(meshMoveComplete, meshMoveRobId, memRs.io.complete_o.bits.rob_id)
+  io.global_complete_o.bits.is_sub     := Mux(meshMoveComplete, meshMoveIsSub, memRs.io.complete_o.bits.is_sub)
+  io.global_complete_o.bits.sub_rob_id := Mux(meshMoveComplete, meshMoveSubRobId, memRs.io.complete_o.bits.sub_rob_id)
+  memRs.io.complete_o.ready            := io.global_complete_o.ready && !meshMoveComplete
+  io.meshMove.completion.ready         := io.global_complete_o.ready && meshMovePending
+  when(io.meshMove.completion.fire) {
+    assert(!io.meshMove.completion.bits, "Mesh move failed")
+    meshMovePending := false.B
+  }
 
   // Busy signal
   // Simple busy signal
-  io.busy := !memRs.io.complete_o.ready
+  io.busy := meshMovePending || !memRs.io.complete_o.ready
 }

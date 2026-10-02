@@ -16,6 +16,8 @@ import framework.memdomain.frontend.mem.{MemConfigerIO}
 import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
 import framework.balldomain.BallDomain
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.isa.MeshMovePort
+import memcore.memory.mesh_shm.MeshLocalBankPort
 
 /**
  * Standalone Buckyball accelerator module.
@@ -55,6 +57,8 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
     // Shared memory path — exposed to tile level for multi-core SharedMemBackend
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
+    val meshMove                 = new MeshMovePort
+    val meshLocalBank            = Flipped(new MeshLocalBankPort(b, 16, 10, 8))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
@@ -168,6 +172,8 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
 
   // --- Shared memory passthrough ---
   io.shared_mem_req <> memDomain.io.shared_mem_req
+  io.meshMove <> memDomain.io.meshMove
+  io.meshLocalBank <> memDomain.io.meshLocalBank
   io.shared_config <> memDomain.io.shared_config
   io.shared_query_valid                 := memDomain.io.shared_query_valid
   io.shared_query_vbank_id              := memDomain.io.shared_query_vbank_id

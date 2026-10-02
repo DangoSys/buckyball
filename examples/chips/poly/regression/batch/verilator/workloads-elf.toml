@@ -1,0 +1,5 @@
+[workloads]
+tests = [
+  "poly-attention-ctest-chip-mesh_shared_bank_roundtrip-baremetal",
+  "poly-attention-ctest-chip-mesh_private_bank_move-multicore-baremetal",
+]

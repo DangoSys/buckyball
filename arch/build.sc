@@ -144,7 +144,8 @@ object buckyball extends SbtModule { m =>
       .filter(path => path.ext == "scala")
       .filterNot(path => path.toString.contains("/sims/firesim/"))
       .filterNot(path => path.toString.contains("/framework/root/"))
-      .filterNot(path => path.toString.contains("/framework/mem-core/"))
+      .filterNot(path => path.toString.contains("/framework/mem-core/") &&
+        !path.toString.contains("/framework/mem-core/mesh_shm/src/main/scala/"))
       .filterNot(path => path.toString.contains("/framework/rvv/"))
       .filterNot(path => path.toString.contains("/framework/system/core/seed/"))
       .map(PathRef(_))
