@@ -100,12 +100,6 @@ void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
     }
   }
 }
-unsigned long long read_cycle(void) {
-  unsigned long long c;
-  asm volatile("csrr %0, cycle" : "=r"(c));
-  return c;
-}
-
 // MMIO stubs are for baremetal/BBSim only.
 // Linux user-mode tests (`*-linux` under BEMU user-mode execution) must use
 // libc/syscall exit path.
