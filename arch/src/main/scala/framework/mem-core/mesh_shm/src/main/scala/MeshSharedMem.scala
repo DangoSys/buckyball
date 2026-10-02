@@ -2,6 +2,7 @@ package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
 class MeshSharedMem(p: MeshSharedMemParams) extends Module {
 
@@ -9,8 +10,8 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val channels           = Vec(p.totalChannels, new MeshChannel(p))
     val transferCommand    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val transferCompletion = Decoupled(new MeshTransferCompletion(p))
-    val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
-    val bankWrites         = Output(Vec(p.bankCount, Valid(new MeshClientRequest(p))))
+    val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p.global, p.addressBits, p.localBankBits, p.tagBits))
+    val bankWrites         = Output(Vec(p.bankCount, Valid(new MeshEventBeat(p.global, p.addressBits, p.bankBits, p.tagBits))))
   })
 
   val transfer = Module(new MeshTransferController(p))
@@ -31,9 +32,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
 
   val requests  = Seq.tabulate(p.rows, p.cols)((row, col) => Module(new MeshRouter(p, row, col)))
   val responses = Seq.tabulate(p.rows, p.cols)((row, col) => Module(new MeshRouter(p, row, col)))
-  val banks     = Seq.tabulate(p.rows, p.cols)((row, col) => Module(new MeshBankNode(p, row, col)))
-  val bankRows  = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
-  val bankCols  = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
+  val banks: Seq[Seq[Instance[MeshBankNode]]] =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
+  val bankRows = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
+  val bankCols = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
 
   def link(source: DecoupledIO[MeshPacket], sink: DecoupledIO[MeshPacket]): Unit = {
     val fifo = Module(new Queue(new MeshPacket(p), 2))
@@ -49,13 +51,14 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val responseRouter = responses(row)(col)
     val bank           = banks(row)(col)
     val bankIndex      = row * p.cols + col
-    io.bankWrites(bankIndex).valid      := bank.io.request.fire && bank.io.request.bits.write
-    io.bankWrites(bankIndex).bits.bank  := bankIndex.U
+    io.bankWrites(bankIndex).valid      := bank.io.request.fire && bank.io.request.bits.tuser === MeshEvent.WriteRequest
+    io.bankWrites(bankIndex).bits.tdest := bankIndex.U
     io.bankWrites(bankIndex).bits.addr  := bank.io.request.bits.addr
-    io.bankWrites(bankIndex).bits.write := bank.io.request.bits.write
-    io.bankWrites(bankIndex).bits.data  := bank.io.request.bits.data
-    io.bankWrites(bankIndex).bits.mask  := bank.io.request.bits.mask
-    io.bankWrites(bankIndex).bits.tag   := bank.io.request.bits.tag
+    io.bankWrites(bankIndex).bits.tuser := bank.io.request.bits.tuser
+    io.bankWrites(bankIndex).bits.tdata := bank.io.request.bits.tdata
+    io.bankWrites(bankIndex).bits.tkeep := bank.io.request.bits.tkeep
+    io.bankWrites(bankIndex).bits.tlast := bank.io.request.bits.tlast
+    io.bankWrites(bankIndex).bits.tid   := bank.io.request.bits.tid
     bank.io.request <> requestRouter.io.out(MeshDirection.local)
     responseRouter.io.in(MeshDirection.local) <> bank.io.response
 
@@ -71,43 +74,57 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         val busy         = RegInit(false.B)
         val errorPending = RegInit(false.B)
         val errorTag     = Reg(UInt(p.tagBits.W))
-        val bankValid    = requestPort.bits.bank < p.bankCount.U &&
-          (if (channel == p.totalChannels) true.B else requestPort.bits.bank < p.visibleBankCount.U) &&
+        val errorWrite   = Reg(Bool())
+        val errorBank    = Reg(UInt(p.bankBits.W))
+        val errorAddr    = Reg(UInt(p.addressBits.W))
+        val bankValid    = requestPort.bits.tdest < p.bankCount.U &&
+          (if (channel == p.totalChannels) true.B else requestPort.bits.tdest < p.visibleBankCount.U) &&
           (if (channel == p.totalChannels) true.B
-           else !(requestPort.bits.bank === p.stagingBank.U &&
+           else !(requestPort.bits.tdest === p.stagingBank.U &&
              requestPort.bits.addr === p.stagingAddress.U))
         val packet       = Wire(new MeshPacket(p))
         packet                    := 0.U.asTypeOf(new MeshPacket(p))
-        packet.destRow            := bankRows(requestPort.bits.bank)
-        packet.destCol            := bankCols(requestPort.bits.bank)
+        packet.destRow            := bankRows(requestPort.bits.tdest)
+        packet.destCol            := bankCols(requestPort.bits.tdest)
         packet.sourceRow          := row.U
         packet.sourceCol          := col.U
         packet.channel            := channel.U
         packet.addr               := requestPort.bits.addr
-        packet.write              := requestPort.bits.write
-        packet.data               := requestPort.bits.data
-        packet.mask               := requestPort.bits.mask
-        packet.tag                := requestPort.bits.tag
+        packet.tuser              := requestPort.bits.tuser
+        packet.tdata              := requestPort.bits.tdata
+        packet.tkeep              := requestPort.bits.tkeep
+        packet.tlast              := requestPort.bits.tlast
+        packet.tid                := requestPort.bits.tid
+        packet.tdest              := requestPort.bits.tdest
         arbiter.io.in(port).valid := requestPort.valid && !busy && bankValid
         arbiter.io.in(port).bits  := packet
         requestPort.ready         := !busy && Mux(bankValid, arbiter.io.in(port).ready, true.B)
         when(requestPort.fire) {
+          assert(requestPort.bits.tlast && !requestPort.bits.tuser(1) && !requestPort.bits.tuser(2))
           busy := true.B
           when(!bankValid) {
             errorPending := true.B
-            errorTag     := requestPort.bits.tag
+            errorTag     := requestPort.bits.tid
+            errorWrite   := requestPort.bits.tuser(0)
+            errorBank    := requestPort.bits.tdest
+            errorAddr    := requestPort.bits.addr
           }
         }
 
         responsePort.valid       :=
           errorPending || (responseRouter.io.out(MeshDirection.local).valid &&
             responseRouter.io.out(MeshDirection.local).bits.channel === channel.U)
-        responsePort.bits.data   :=
-          Mux(errorPending, 0.U, responseRouter.io.out(MeshDirection.local).bits.data)
-        responsePort.bits.tag    :=
-          Mux(errorPending, errorTag, responseRouter.io.out(MeshDirection.local).bits.tag)
-        responsePort.bits.error  :=
-          errorPending || responseRouter.io.out(MeshDirection.local).bits.error
+        responsePort.bits.tdata  :=
+          Mux(errorPending, 0.U, responseRouter.io.out(MeshDirection.local).bits.tdata)
+        responsePort.bits.tkeep  :=
+          Mux(errorPending, 0.U, responseRouter.io.out(MeshDirection.local).bits.tkeep)
+        responsePort.bits.tlast  := Mux(errorPending, true.B, responseRouter.io.out(MeshDirection.local).bits.tlast)
+        responsePort.bits.tid    :=
+          Mux(errorPending, errorTag, responseRouter.io.out(MeshDirection.local).bits.tid)
+        responsePort.bits.tdest  := Mux(errorPending, errorBank, responseRouter.io.out(MeshDirection.local).bits.tdest)
+        responsePort.bits.tuser  :=
+          Mux(errorPending, Cat(true.B, true.B, errorWrite), responseRouter.io.out(MeshDirection.local).bits.tuser)
+        responsePort.bits.addr   := Mux(errorPending, errorAddr, responseRouter.io.out(MeshDirection.local).bits.addr)
         localResponseReady(port) :=
           responseRouter.io.out(MeshDirection.local).bits.channel === channel.U &&
             responsePort.ready && !errorPending

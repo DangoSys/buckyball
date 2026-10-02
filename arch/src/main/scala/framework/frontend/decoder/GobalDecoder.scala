@@ -10,7 +10,6 @@ import freechips.rocketchip.tile._
 
 import framework.frontend.decoder.GISA._
 import framework.memdomain.frontend.cmd.decoder.DISA._
-import framework.memdomain.isa.MeshMoveISA
 import framework.gpdomain.sequencer.decoder.DISA._
 import framework.frontend.scoreboard.BankAccessInfo
 
@@ -61,7 +60,7 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     (func7 === MVOUT_BITPAT) ||
     (func7 === MSET_BITPAT) ||
     (func7 === MVIN_MMIO_BITPAT) ||
-    (func7 === MeshMoveISA.Funct.U)
+    (func7 === MESH_MOVE_BITPAT)
 
   val is_frontend_inst = func7 === FENCE_BITPAT
   val is_barrier_inst  = func7 === BARRIER_BITPAT

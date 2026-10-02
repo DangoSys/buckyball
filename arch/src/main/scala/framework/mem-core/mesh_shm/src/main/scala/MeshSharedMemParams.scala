@@ -1,22 +1,26 @@
 package memcore.memory.mesh_shm
 
 import chisel3.util.log2Ceil
+import framework.top.GlobalConfig
+import framework.memdomain.configs.MemDomainParam
 
 case class MeshCoreAttachment(bankIds: Seq[Int])
 
 case class MeshSharedMemParams(
-  rows:           Int,
-  cols:           Int,
-  entriesPerBank: Int,
-  dataBits:       Int,
-  tagBits:        Int,
-  cores:          Seq[MeshCoreAttachment],
-  localBankBits:  Int = 10,
-  stagingBankId:  Int = 0,
-  visibleBanks:   Int = 0) {
+  global:        GlobalConfig,
+  rows:          Int,
+  cols:          Int,
+  tagBits:       Int,
+  cores:         Seq[MeshCoreAttachment],
+  localBankBits: Int = 10,
+  stagingBankId: Int = 0,
+  visibleBanks:  Int = 0) {
+  val entriesPerBank: Int = global.memDomain.bankEntries
+  val dataBits:       Int = global.memDomain.bankWidth
   require(rows > 0 && cols > 0)
   require(entriesPerBank >= 2 && (entriesPerBank & (entriesPerBank - 1)) == 0)
   require(dataBits > 0 && dataBits % 8 == 0)
+  require(global.memDomain.bankMaskLen == dataBits / 8)
   require(tagBits > 0 && localBankBits > 0 && cores.nonEmpty)
   require(cores.forall(c => c.bankIds.nonEmpty && c.bankIds.forall(id => id >= 0 && id < rows * cols)))
 
@@ -49,11 +53,14 @@ case class MeshSharedMemParams(
 object MeshSharedMemParams {
 
   // Experimental 3x4 mesh: type 0/1/2 use 1/2/4 channels, with 2/2/1 cores.
+  private val prototypeGlobal = GlobalConfig().copy(
+    memDomain = MemDomainParam().copy(bankWidth = 128, bankEntries = 2048, bankMaskLen = 16)
+  )
+
   val prototype: MeshSharedMemParams = MeshSharedMemParams(
+    global = prototypeGlobal,
     rows = 3,
     cols = 4,
-    entriesPerBank = 2048,
-    dataBits = 128,
     tagBits = 8,
     cores = Seq(
       MeshCoreAttachment(Seq(0)),

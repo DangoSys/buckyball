@@ -58,7 +58,7 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     // Shared memory path — exposed to tile level for multi-core SharedMemBackend
     val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val meshMove                 = new MeshMovePort
-    val meshLocalBank            = Flipped(new MeshLocalBankPort(16, 10, 128, 8))
+    val meshLocalBank            = Flipped(new MeshLocalBankPort(b, 16, 10, 8))
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))

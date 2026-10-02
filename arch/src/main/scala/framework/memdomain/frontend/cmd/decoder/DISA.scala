@@ -11,6 +11,7 @@ object DISA {
   val MVIN_BITPAT      = BitPat("b0100001") // 33 (0x21) — enable=010, opcode=1
   val MVIN_2D_BITPAT   = BitPat("b0100010") // 34 (0x22) — 2D DMA into bank rows
   val MVIN_MMIO_BITPAT = BitPat("b0100011") // 35 (0x23) — enable=010, opcode=3 (DMA into MMIO)
+  val MESH_MOVE_BITPAT = BitPat("b1010000") // 80 (0x50) — transfer between private Banks
   // enable=001 (1 read), opcode group
   val MVOUT_BITPAT     = BitPat("b0010000") // 16 (0x10) — enable=001, opcode=0
 }
