@@ -81,14 +81,11 @@ impl BallInstruction for Mxfp2Int {
             let out_row_base = block_idx * 2;
             for row_offset in 0..2 {
                 let out_row_addr = out_row_base + row_offset;
-                let out_row_start = out_row_addr * row_bytes;
                 let src_start = row_offset * row_bytes;
-                let src_end = src_start + row_bytes;
 
                 // Copy 16 bytes (1 row) from out_bytes to output bank
-                for (i, &byte) in out_bytes[src_start..src_end].iter().enumerate() {
-                    ctx.banks[out_pbank][out_row_start + i] = byte as u8;
-                }
+                let data: [u8; 16] = std::array::from_fn(|lane| out_bytes[src_start + lane] as u8);
+                ctx.banks.write_row(out_pbank, out_row_addr, data, 0xffff);
             }
         }
 

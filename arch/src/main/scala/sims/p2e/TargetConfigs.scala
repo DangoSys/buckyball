@@ -113,10 +113,15 @@ object Elaborate extends App {
 
   val rawFirtoolOpts = args.drop(1)
 
-  val config: Config =
-    if (rawFirtoolOpts.contains("--difftest"))
-      new Config(new WithSimParam(SimParam(diffTest = true)).orElse(baseConfig))
-    else baseConfig
+  val modeArgs         = rawFirtoolOpts.filter(_.startsWith("--verification-mode="))
+  require(modeArgs.length == 1, "require --verification-mode=none|access|difftest-n")
+  val verificationMode = modeArgs.head.stripPrefix("--verification-mode=")
+  require(Set("none", "access", "difftest-n").contains(verificationMode))
+
+  val config: Config = new Config(new WithSimParam(SimParam(
+    diffTest = verificationMode == "difftest-n",
+    accessTest = verificationMode == "access"
+  )).orElse(baseConfig))
 
   val outDir = rawFirtoolOpts.collectFirst {
     case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
@@ -125,7 +130,7 @@ object Elaborate extends App {
   }
 
   val firtoolOpts = rawFirtoolOpts.filterNot { opt =>
-    opt == "--split-verilog" || opt == "--difftest" || opt.startsWith("-o=")
+    opt == "--split-verilog" || opt.startsWith("--verification-mode=") || opt.startsWith("-o=")
   }
 
   ChiselStage.emitSystemVerilogFile(
@@ -133,6 +138,18 @@ object Elaborate extends App {
     firtoolOpts = firtoolOpts,
     args = Array("--target-dir", outDir, "--split-verilog")
   )
+  java.nio.file.Files.writeString(java.nio.file.Path.of(outDir, "verification-mode"), verificationMode)
+  java.nio.file.Files.writeString(java.nio.file.Path.of(outDir, "dut-config"), configClassName)
+  val functionalConfig = configClassName + "\n" +
+    baseConfig(freechips.rocketchip.subsystem.TilesLocated(InSubsystem)).map(_.tileParams.toString).mkString("\n")
+
+  val configDigest = java.security.MessageDigest.getInstance("SHA-256")
+    .digest(functionalConfig.getBytes(java.nio.charset.StandardCharsets.UTF_8)).map(byte =>
+      f"${byte & 0xff}%02x"
+    ).mkString
+
+  java.nio.file.Files.writeString(java.nio.file.Path.of(outDir, "dut-config.sha256"), configDigest)
+
   ChiselStage.emitSystemVerilogFile(
     new P2ETop,
     firtoolOpts = firtoolOpts,

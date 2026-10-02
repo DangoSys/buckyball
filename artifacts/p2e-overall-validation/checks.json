@@ -1,0 +1,35 @@
+{
+  "kind": "LOCAL FUNCTIONAL VALIDATION, NOT PERFORMANCE DATA",
+  "rtl_modes": [
+    {
+      "mode": "none",
+      "rtl_dir": "arch/build/difftest-overall-none",
+      "dut_config_sha256": "1921ab94a6f4425857b8cc6f7e6d4c5a702ac4eeae4a711dccb4747efbd674d8",
+      "access_producers": 0,
+      "hash_and_btrace": false
+    },
+    {
+      "mode": "access",
+      "rtl_dir": "arch/build/difftest-overall-access",
+      "dut_config_sha256": "1921ab94a6f4425857b8cc6f7e6d4c5a702ac4eeae4a711dccb4747efbd674d8",
+      "access_producers": 16,
+      "hash_and_btrace": false
+    },
+    {
+      "mode": "difftest-n",
+      "rtl_dir": "arch/build/difftest-overall-difftest-n",
+      "dut_config_sha256": "1921ab94a6f4425857b8cc6f7e6d4c5a702ac4eeae4a711dccb4747efbd674d8",
+      "access_producers": 0,
+      "hash_and_btrace": true
+    }
+  ],
+  "rust_tests": 12,
+  "rtl_tests": 2,
+  "statistics_tests": 4,
+  "blocked": [
+    "Full BEMU/host build: missing bebop/src/nodes/bemu/rvcpu (network fetch unavailable)",
+    "Workload ELF build: missing stack/runtime",
+    "P2E synthesis/link/board runs: missing configured HPE and Vivado"
+  ],
+  "board_runs": 0
+}

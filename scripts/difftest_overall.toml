@@ -1,0 +1,93 @@
+# Inputs and seed describe data already embedded in the identical ELF/image used by all modes.
+root = ".."
+fpga_location = "0.A"
+
+[build]
+rtl_config = "sims.p2e.P2EToyConfig"
+cargo_manifest = "examples/chips/toy/generated/bebop/Cargo.toml"
+
+[tool_versions]
+hpe = "24.12.01.s008"
+vivado = "2022.2"
+
+[modes.none]
+host = "artifacts/p2e-overall/none/bebop-p2e"
+bitstream = "artifacts/p2e-overall/none/fpgaCompDir/bitstream.bit"
+[modes.access]
+host = "artifacts/p2e-overall/access/bebop-p2e"
+bitstream = "artifacts/p2e-overall/access/fpgaCompDir/bitstream.bit"
+[modes.difftest-n]
+host = "artifacts/p2e-overall/difftest-n/bebop-p2e"
+bitstream = "artifacts/p2e-overall/difftest-n/fpgaCompDir/bitstream.bit"
+
+[[workloads]]
+name = "validate-dma"
+validation_only = true
+image = "bb-tests/workloads/build/toy/src/CTest/base/toy-toy-ctest-mvin_mvout_test-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/base/toy-toy-ctest-mvin_mvout_test-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "validate-stride"
+validation_only = true
+image = "bb-tests/workloads/build/toy/src/CTest/base/toy-toy-ctest-mvin_mvout_stride_test-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/base/toy-toy-ctest-mvin_mvout_stride_test-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "validate-gemmini"
+validation_only = true
+image = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-gemmini_os_risc_basic_test-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-gemmini_os_risc_basic_test-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "validate-relu"
+validation_only = true
+image = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/relu/ctests/toy-toy-ctest-relu_i32_16x16_test-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/relu/ctests/toy-toy-ctest-relu_i32_16x16_test-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "small"
+image = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_small-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_small-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "medium"
+image = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_medium-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_medium-baremetal"
+inputs = []
+seed = 0
+
+[[workloads]]
+name = "large"
+image = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_large-baremetal.hex"
+elf = "bb-tests/workloads/build/toy/src/CTest/chips/toy/balls/toy/gemmini/ctests/toy-toy-ctest-difftest_overall_large-baremetal"
+inputs = []
+seed = 0
+
+[[unavailable]]
+name = "LeNet"
+reason = "Current tracked workload build does not include ModelTest; historical binaries have not been validated on the current DUT."
+
+
+[[unavailable]]
+name = "MobileNetV3"
+reason = "Current tracked workload build does not include ModelTest; historical binaries have not been validated on the current DUT."
+
+
+[[unavailable]]
+name = "ResNet18"
+reason = "Current tracked workload build does not include ModelTest; historical binaries have not been validated on the current DUT."
+
+
+[[unavailable]]
+name = "YOLO26"
+reason = "Current tracked workload build does not include ModelTest; historical binaries have not been validated on the current DUT."

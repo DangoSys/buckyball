@@ -315,6 +315,37 @@ class SharedMemBackend(val b: GlobalConfig) extends Module {
     }
   }
 
+  if (b.sim.accessTest) {
+    require(
+      b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16,
+      "access records require 128-bit byte-masked SRAM"
+    )
+    for (j <- 0 until totalBanks) {
+      val selected = VecInit((0 until totalChannel).map { i =>
+        mappingTable(j).valid && mappingTable(j).hart_id === io.mem_req(i).hart_id &&
+        mappingTable(j).vbank_id === io.mem_req(i).bank_id &&
+        mappingTable(j).group_id === io.mem_req(i).group_id && accPipes(i).io.sramWrite.req.fire
+      })
+      val trace    = Module(new framework.memdomain.backend.banks.btrace.AccessWriteDPI)
+      trace.io.clock       := clock
+      trace.io.reset       := reset.asBool
+      trace.io.fire        := banks(j).io.sramWrite.req.fire
+      trace.io.idle        := !accPipes.map(_.io.busy).reduce(_ || _) &&
+        !io.mem_req.map(_.write.req.valid).reduce(_ || _)
+      trace.io.stream_hart := mappingTable(j).hart_id
+      trace.io.hart        := mappingTable(j).hart_id
+      trace.io.inst        := Mux1H(selected, io.mem_req.map(_.inst_id))
+      trace.io.shared      := 1.U
+      trace.io.physical    := j.U
+      trace.io.bank        := mappingTable(j).vbank_id
+      trace.io.group       := mappingTable(j).group_id
+      trace.io.addr        := banks(j).io.sramWrite.req.bits.addr
+      trace.io.mask        := banks(j).io.sramWrite.req.bits.mask.asUInt
+      trace.io.data        := banks(j).io.sramWrite.req.bits.data
+      when(trace.io.fire)(assert(PopCount(selected) === 1.U))
+    }
+  }
+
   hashMonitors.foreach { hashes =>
     for (j <- 0 until totalBanks) {
       val writeHits  = VecInit((0 until totalChannel).map { i =>

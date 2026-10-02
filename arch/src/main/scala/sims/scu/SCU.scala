@@ -126,6 +126,20 @@ class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
        |  input         exit_valid,
        |  input  [31:0] exit_code
        |);
+       |`ifdef BUCKYBALL_P2E_BENCHMARK
+       |  import "DPI-C" context function void dpi_execution_end(input int unsigned hart, cycle_lo, cycle_hi);
+       |  reg [63:0] execution_cycles = 0;
+       |  export "DPI-C" function execution_snapshot;
+       |  function void execution_snapshot(output int unsigned cycle_lo, cycle_hi);
+       |    cycle_lo = execution_cycles[31:0]; cycle_hi = execution_cycles[63:32];
+       |  endfunction
+       |  always @(posedge clock) begin
+       |    if (reset) begin execution_cycles <= 0; end
+       |    else begin
+       |      execution_cycles <= execution_cycles + 1;
+       |    end
+       |  end
+       |`endif
        |  always @(posedge clock) begin
        |    if (!reset) begin
        |      if (uart_valid) begin
@@ -133,6 +147,9 @@ class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
        |      end
        |
        |      if (exit_valid) begin
+       |`ifdef BUCKYBALL_P2E_BENCHMARK
+       |        dpi_execution_end(exit_hart_id, execution_cycles[31:0], execution_cycles[63:32]);
+       |`endif
        |        scu_sim_exit(exit_hart_id, exit_code);
        |      end
        |    end

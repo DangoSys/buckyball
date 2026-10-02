@@ -33,13 +33,14 @@ impl BallInstruction for Relu {
         for segment in (0..lines).step_by(stride) {
             for line in 0..iter {
                 let offset = (segment + line) * 16;
+                let mut data = [0; 16];
                 for lane in 0..4 {
                     let byte = offset + lane * 4;
                     let value =
                         i32::from_le_bytes(ctx.banks[physical][byte..byte + 4].try_into().unwrap());
-                    ctx.banks[physical][byte..byte + 4]
-                        .copy_from_slice(&value.max(0).to_le_bytes());
+                    data[lane * 4..lane * 4 + 4].copy_from_slice(&value.max(0).to_le_bytes());
                 }
+                ctx.banks.write_row(physical, segment + line, data, 0xffff);
             }
         }
         0

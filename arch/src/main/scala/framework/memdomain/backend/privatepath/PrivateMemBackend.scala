@@ -374,6 +374,29 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     banks(j).io.sramWrite.req.bits.data := selectedReqData
     banks(j).io.sramWrite.req.bits.mask := selectedReqMask
 
+    if (b.sim.accessTest) {
+      require(
+        b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16,
+        "access records require 128-bit byte-masked SRAM"
+      )
+      val trace = Module(new framework.memdomain.backend.banks.btrace.AccessWriteDPI)
+      trace.io.clock       := clock
+      trace.io.reset       := reset.asBool
+      trace.io.fire        := banks(j).io.sramWrite.req.fire
+      trace.io.idle        := !accPipes.map(_.io.busy).reduce(_ || _) && !channelReqValid.reduce(_ || _)
+      trace.io.stream_hart := selectedHartId
+      trace.io.hart        := selectedHartId
+      trace.io.inst        := selectedInstId
+      trace.io.shared      := 0.U
+      trace.io.physical    := j.U
+      trace.io.bank        := selectedVbankId
+      trace.io.group       := selectedGroupId
+      trace.io.addr        := selectedReqAddr
+      trace.io.mask        := selectedReqMask.asUInt
+      trace.io.data        := selectedReqData
+      when(banks(j).io.sramWrite.req.fire)(assert(PopCount(selectedReq) === 1.U))
+    }
+
     hashMonitors.foreach { hashes =>
       val monitor = hashes(j)
       monitor.io.write.valid     := banks(j).io.sramWrite.req.fire

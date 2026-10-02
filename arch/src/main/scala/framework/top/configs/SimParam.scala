@@ -3,7 +3,9 @@ package framework.top.configs
 import org.chipsalliance.cde.config.{Config, Field}
 import upickle.default._
 
-case class SimParam(diffTest: Boolean = false)
+case class SimParam(diffTest: Boolean = false, accessTest: Boolean = false) {
+  require(!(diffTest && accessTest))
+}
 
 object SimParam {
   implicit val rw: ReadWriter[SimParam] = macroRW
