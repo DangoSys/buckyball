@@ -1,0 +1,21 @@
+# Omni main tile: one Linux core. Add cores, Buckyball and sharedMem here as the
+# main tile grows (for example cross-tile all-reduce).
+
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+
+[[cores]]
+core_id = 0
+name = "main"
+include = "../../../../../cores/rocket/configs/default.toml"

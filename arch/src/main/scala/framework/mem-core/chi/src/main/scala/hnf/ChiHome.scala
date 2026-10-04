@@ -2,6 +2,7 @@ package memcore.bus.chi.hnf
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
 import memcore.bus.chi._
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
 
@@ -9,6 +10,7 @@ import memcore.bus.chi.snf.{LineRequest, LineResponse}
 // CompAck closes a read grant before another request can observe its directory state.
 // RN nodes are numbered 1..agents. Backing memory is authoritative unless an RN
 // holds Unique permission; all competing readers then snoop that RN first.
+@instantiable
 class ChiHome(
   p:         Params,
   agents:    Int,
@@ -27,7 +29,7 @@ class ChiHome(
     if (localLines == 1) 0.U(0.W)
     else addr(log2Ceil(lines) + 5, mapping.stripeBits + 6)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val req                     = Flipped(Decoupled(new RequestFlit(p)))
     val rxRsp                   = Flipped(Decoupled(new ResponseFlit(p)))
     val rxDat                   = Flipped(Decoupled(new DataFlit(p)))

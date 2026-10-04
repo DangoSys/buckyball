@@ -1,10 +1,6 @@
 package sims.verilator
 
-import org.chipsalliance.cde.config.Config
+import sims.soc.SystemTarget
 
-class BuckyballPebbleVerilatorConfig
-    extends Config(
-      new BBSimConfig ++
-        new WithCustomBootROM ++
-        new examples.pebble.BuckyballPebbleConfig
-    )
+/** Pebble on the explicit System: one compute core with private banks and no task controller. */
+class PebbleVerilatorTarget extends SystemTarget("../examples/chips/pebble/configs/generated/chip.pb")

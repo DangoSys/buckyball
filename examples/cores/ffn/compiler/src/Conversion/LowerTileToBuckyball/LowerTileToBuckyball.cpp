@@ -1,18 +1,4 @@
-//===- LowerTileToBuckyball.cpp - FFN tile pass registration ------------===//
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-//===----------------------------------------------------------------------===//
+#include "Target/BuckyballTargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -26,20 +12,19 @@
 #include "Buckyball/BuckyballDialect.h"
 #include "Buckyball/BuckyballOps.h"
 #include "Conversion/LowerTileToBuckyball/LowerTileToBuckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
 #include "Tile/TileDialect.h"
 #include "Tile/TileOps.h"
-#include "Tile/Transform.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
 namespace tile = ::buddy::tile;
 
 namespace mlir::buddy {
-void populateSMatMulBallTileLoweringPatterns(RewritePatternSet &patterns,
-                                             int64_t bankWidthBytes,
-                                             int64_t bankDepth,
-                                             int64_t bankNum);
+#define BUCKYBALL_TILE_HOOK(BALL)                                              \
+  void populate##BALL##TileLoweringPatterns(RewritePatternSet &, int64_t,      \
+                                            int64_t, int64_t);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_TILE_HOOK
 } // namespace mlir::buddy
 
 namespace {
@@ -71,12 +56,11 @@ class LowerTileToBuckyballPass
     : public PassWrapper<LowerTileToBuckyballPass, OperationPass<ModuleOp>> {
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTileToBuckyballPass)
+
   StringRef getArgument() const final { return "convert-tile-to-buckyball"; }
   StringRef getDescription() const final {
-    return "Convert FFN Tile operations to Buckyball operations";
+    return "Convert Tile operations for the selected Buckyball target.";
   }
-  LowerTileToBuckyballPass() = default;
-  LowerTileToBuckyballPass(const LowerTileToBuckyballPass &) {}
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
@@ -93,16 +77,21 @@ public:
                            memref::MemRefDialect, arith::ArithDialect,
                            scf::SCFDialect, func::FuncDialect,
                            linalg::LinalgDialect>();
-    target.addIllegalOp<tile::TileMatMulOp>();
-    target.addIllegalOp<tile::TileTransposeOp, tile::TileQuantF32ToI8Op,
-                        tile::TileMegaKernelOp>();
+    target.addIllegalOp<tile::TileMatMulOp, tile::TileTransposeOp,
+                        tile::TileQuantF32ToI8Op, tile::TileMegaKernelOp>();
 
     RewritePatternSet patterns(context);
-    mlir::buddy::populateSMatMulBallTileLoweringPatterns(
-        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,
-        targetConfig.bankNum);
     mlir::buddy::populateQuantizedKernelTileLoweringPatterns(patterns);
     patterns.add<TileTransposeLowering>(context);
+    for (llvm::StringRef ball : targetConfig.balls) {
+#define BUCKYBALL_TILE_HOOK(BALL)                                              \
+  if (ball == #BALL)                                                           \
+    mlir::buddy::populate##BALL##TileLoweringPatterns(                         \
+        patterns, targetConfig.bankWidthBits / 8, targetConfig.bankDepth,      \
+        targetConfig.bankNum);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_TILE_HOOK
+    }
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
       signalPassFailure();

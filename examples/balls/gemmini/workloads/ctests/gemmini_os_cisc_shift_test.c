@@ -28,6 +28,8 @@ int main() {
   for (int i = 0; i < DIM * DIM; i++)
     expected[i] = gemmini_in_shift(expected[i], SHIFT);
 
+  // Publish CPU inputs before the CISC command starts its DMA chain.
+  bb_dma_fence();
   bb_gemmini_config(0, 0, 0, 0, SHIFT);
   bb_gemmini_loop_ws_config_bounds(1, 1, 1);
   bb_gemmini_loop_ws_config_addr_a((uintptr_t)mat_a);

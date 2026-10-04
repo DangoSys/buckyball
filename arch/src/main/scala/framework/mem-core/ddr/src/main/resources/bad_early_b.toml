@@ -1,0 +1,2 @@
+expected_assertion = "DDR received B before AW and complete W or for inactive ID"
+invalid_case = 2

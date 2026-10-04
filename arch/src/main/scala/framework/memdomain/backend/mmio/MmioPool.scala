@@ -2,7 +2,7 @@ package framework.memdomain.backend.mmio
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import framework.memdomain.backend.banks.SramWriteIO
 import framework.top.GlobalConfig
 

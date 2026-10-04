@@ -111,7 +111,6 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
           nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
 
       - name: DC power

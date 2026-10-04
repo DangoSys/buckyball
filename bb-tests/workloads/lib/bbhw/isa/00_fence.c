@@ -5,12 +5,13 @@
 
 #define BB_FENCE_FUNC7 0
 
-#define bb_dma_cache_flush() asm volatile("fence.i" ::: "memory")
+static inline void bb_dma_fence(void) {
+  asm volatile("fence rw, rw" ::: "memory");
+}
 #define bb_fence()                                                             \
   do {                                                                         \
     BUCKYBALL_INSTRUCTION_R_R(0, 0, BB_FENCE_FUNC7);                           \
-    asm volatile("fence rw, rw" ::: "memory");                                 \
-    bb_dma_cache_flush();                                                      \
+    bb_dma_fence();                                                            \
   } while (0)
 
 #endif // _BB_FENCE_H_

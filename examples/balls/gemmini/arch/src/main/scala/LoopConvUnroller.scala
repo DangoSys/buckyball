@@ -22,7 +22,6 @@ class LoopConvUnroller(val b: GlobalConfig) extends Module {
   val config    = GemminiBallParam(b)
   val DIM       = config.blockSize
   val elemSize  = config.inputWidth / 8
-  val accBytes  = config.accWidth / 8
   val bankBytes = b.memDomain.bankWidth / 8
 
   @public

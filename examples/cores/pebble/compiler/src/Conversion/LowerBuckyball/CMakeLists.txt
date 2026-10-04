@@ -9,7 +9,7 @@ add_mlir_library(${BB_CORE_TARGET_PREFIX}LowerBuckyballPass
   CoreBankSSALowering.cpp
   LowerBuckyballPass.cpp
   LowerBuckyballToBankSSAPass.cpp
-  ${BB_COMPILER_COMMON_DIR}/Conversion/LowerBuckyball/MegaKernelToBankSSAPatterns.cpp
+  ${BB_REPO_ROOT}/examples/balls/smatmul/compiler/src/Conversion/LowerBuckyball/MegaKernelToBankSSAPatterns.cpp
   ResidentConvRegionToBankSSAPatterns.cpp
   MegaConv2dToBankSSAPatterns.cpp
   MemTransposeToBankSSAPatterns.cpp

@@ -2,148 +2,92 @@ package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public}
 
-/** One transfer at a time; the staged word stays reserved until completion. */
+/** A row-range command uses routed private-Core endpoints, without a staging Bank. */
+@instantiable
 class MeshTransferController(p: MeshSharedMemParams) extends Module {
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val command    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val completion = Decoupled(new MeshTransferCompletion(p))
-    val localBanks = Vec(p.cores.size, new MeshLocalBankPort(p.global, p.addressBits, p.localBankBits, p.tagBits))
 
     val mesh = new Bundle {
-      val request  = Decoupled(new MeshEventBeat(p.global, p.addressBits, p.bankBits, p.tagBits))
-      val response = Flipped(Decoupled(new MeshEventBeat(p.global, p.addressBits, p.bankBits, p.tagBits)))
+      val request  = Decoupled(new MeshPacket(p))
+      val response = Flipped(Decoupled(new MeshPacket(p)))
     }
 
   })
 
-  val Seq(
-    sIdle,
-    sSourceRequest,
-    sSourceResponse,
-    sStageWriteRequest,
-    sStageWriteResponse,
-    sStageReadRequest,
-    sStageReadResponse,
-    sTargetRequest,
-    sTargetResponse,
-    sComplete
-  ) = Enum(10)
-
-  val state      = RegInit(sIdle)
-  val command    = Reg(new MeshTransferCommand(p))
-  val sourceData = Reg(UInt(p.dataBits.W))
-  val stagedData = Reg(UInt(p.dataBits.W))
-  val stageValid = RegInit(false.B)
-  val failed     = RegInit(false.B)
-
-  io.command.ready         := state === sIdle
-  io.completion.valid      := state === sComplete
+  val Seq(idle, sourceRequest, sourceResponse, targetRequest, targetResponse, complete) = Enum(6)
+  val state                                                                             = RegInit(idle)
+  val command                                                                           = Reg(new MeshTransferCommand(p))
+  val data                                                                              = Reg(UInt(p.dataBits.W))
+  val remaining                                                                         = Reg(UInt(17.W))
+  val failed                                                                            = RegInit(false.B)
+  val endpoints                                                                         = VecInit(p.cores.map(core => core.bankIds.nonEmpty.B))
+  val coreRows                                                                          = VecInit(p.coreLocations.map(_._1.U(p.rowBits.W)))
+  val coreCols                                                                          = VecInit(p.coreLocations.map(_._2.U(p.colBits.W)))
+  io.command.ready         := state === idle
+  io.completion.valid      := state === complete
   io.completion.bits.tag   := command.tag
   io.completion.bits.error := failed
-
   when(io.command.fire) {
-    command    := io.command.bits
-    stageValid := false.B
-    failed     := false.B
-    when(io.command.bits.sourceCore >= p.cores.size.U ||
-      io.command.bits.targetCore >= p.cores.size.U) {
+    command   := io.command.bits
+    remaining := io.command.bits.rows
+    failed    := false.B
+    val input  = io.command.bits
+    val source = input.sourceCore(p.coreBits - 1, 0)
+    val target = input.targetCore(p.coreBits - 1, 0)
+    when(input.sourceCore >= p.cores.size.U || input.targetCore >= p.cores.size.U ||
+      !endpoints(source) || !endpoints(target) || input.rows === 0.U ||
+      (input.sourceAddr +& input.rows) > p.entriesPerBank.U ||
+      (input.targetAddr +& input.rows) > p.entriesPerBank.U ||
+      (input.sourceCore === input.targetCore && input.sourceBank === input.targetBank &&
+        input.sourceAddr =/= input.targetAddr &&
+        input.sourceAddr < (input.targetAddr +& input.rows) &&
+        input.targetAddr < (input.sourceAddr +& input.rows))) {
       failed := true.B
-      state  := sComplete
-    }.otherwise {
-      state := sSourceRequest
-    }
+      state  := complete
+    }.otherwise(state := sourceRequest)
   }
-
-  for ((port, index) <- io.localBanks.zipWithIndex) {
-    val isSource = command.sourceCore === index.U
-    val isTarget = command.targetCore === index.U
-
-    port.request.valid      :=
-      (state === sSourceRequest && isSource) || (state === sTargetRequest && isTarget)
-    port.request.bits       := 0.U.asTypeOf(port.request.bits)
-    port.request.bits.tdest := Mux(state === sSourceRequest, command.sourceBank, command.targetBank)
-    port.request.bits.addr  := Mux(state === sSourceRequest, command.sourceAddr, command.targetAddr)
-    port.request.bits.tuser := Mux(state === sSourceRequest, MeshEvent.ReadRequest, MeshEvent.WriteRequest)
-    port.request.bits.tdata := Mux(state === sTargetRequest, stagedData, 0.U)
-    port.request.bits.tkeep := Mux(state === sTargetRequest, Fill(p.maskBits, 1.U(1.W)), 0.U)
-    port.request.bits.tlast := true.B
-    port.request.bits.tid   := command.tag
-    port.response.ready     :=
-      (state === sSourceResponse && isSource) || (state === sTargetResponse && isTarget)
-
-    when(state === sSourceRequest && isSource && port.request.fire) {
-      state := sSourceResponse
-    }
-    when(state === sSourceResponse && isSource && port.response.fire) {
-      assert(port.response.bits.tlast)
-      assert(port.response.bits.tid === command.tag)
-      assert(port.response.bits.tuser(1, 0) === MeshEvent.ReadResponse(1, 0))
-      when(port.response.bits.tuser(2)) {
-        failed := true.B
-        state  := sComplete
-      }.otherwise {
-        sourceData := port.response.bits.tdata
-        state      := sStageWriteRequest
-      }
-    }
-    when(state === sTargetRequest && isTarget && port.request.fire) {
-      state := sTargetResponse
-    }
-    when(state === sTargetResponse && isTarget && port.response.fire) {
-      assert(port.response.bits.tlast)
-      assert(port.response.bits.tid === command.tag)
-      assert(port.response.bits.tuser(1, 0) === MeshEvent.WriteResponse(1, 0))
-      when(port.response.bits.tuser(2)) {
-        failed := true.B
-      }
-      state := sComplete
-    }
-  }
-
-  io.mesh.request.valid      := state === sStageWriteRequest || state === sStageReadRequest
-  io.mesh.request.bits       := 0.U.asTypeOf(io.mesh.request.bits)
-  io.mesh.request.bits.tdest := p.stagingBank.U
-  io.mesh.request.bits.addr  := p.stagingAddress.U
-  io.mesh.request.bits.tuser := Mux(state === sStageWriteRequest, MeshEvent.WriteRequest, MeshEvent.ReadRequest)
-  io.mesh.request.bits.tdata := Mux(state === sStageWriteRequest, sourceData, 0.U)
-  io.mesh.request.bits.tkeep := Mux(state === sStageWriteRequest, Fill(p.maskBits, 1.U(1.W)), 0.U)
-  io.mesh.request.bits.tlast := true.B
-  io.mesh.request.bits.tid   := command.tag
-  io.mesh.response.ready     := state === sStageWriteResponse || state === sStageReadResponse
-
-  when(io.mesh.request.fire) {
-    when(state === sStageWriteRequest) {
-      state := sStageWriteResponse
-    }.otherwise {
-      assert(state === sStageReadRequest && stageValid)
-      state := sStageReadResponse
-    }
-  }
+  val write = state === targetRequest
+  val core    = Mux(write, command.targetCore, command.sourceCore)
+  val slot    = core(p.coreBits - 1, 0)
+  val bank    = Mux(write, command.targetBank, command.sourceBank)
+  val address = Mux(write, command.targetAddr, command.sourceAddr)
+  io.mesh.request.valid            := state === sourceRequest || state === targetRequest
+  io.mesh.request.bits             := 0.U.asTypeOf(new MeshPacket(p))
+  io.mesh.request.bits.tdest       := Cat(coreRows(slot), coreCols(slot))
+  io.mesh.request.bits.tuser       := Cat(
+    core,
+    bank,
+    true.B,
+    0.U(p.rowBits.W),
+    0.U(p.colBits.W),
+    p.totalChannels.U(p.channelBits.W),
+    address(p.addressBits - 1, 0),
+    write,
+    false.B
+  )
+  io.mesh.request.bits.tdata       := data
+  io.mesh.request.bits.tkeep       := Fill(p.maskBits, 1.U(1.W))
+  io.mesh.request.bits.tlast       := true.B
+  io.mesh.request.bits.tid         := command.tag
+  io.mesh.response.ready           := state === sourceResponse || state === targetResponse
+  when(io.mesh.request.fire)(state := Mux(write, targetResponse, sourceResponse))
   when(io.mesh.response.fire) {
-    assert(io.mesh.response.bits.tlast)
-    assert(io.mesh.response.bits.tid === command.tag)
-    assert(io.mesh.response.bits.tuser(1, 0) === Mux(
-      state === sStageWriteResponse,
-      MeshEvent.WriteResponse(1, 0),
-      MeshEvent.ReadResponse(1, 0)
-    ))
-    when(io.mesh.response.bits.tuser(2)) {
-      failed := true.B
-      state  := sComplete
-    }.elsewhen(state === sStageWriteResponse) {
-      stageValid := true.B
-      state      := sStageReadRequest
-    }.otherwise {
-      assert(state === sStageReadResponse && stageValid)
-      stagedData := io.mesh.response.bits.tdata
-      state      := sTargetRequest
-    }
+    assert(io.mesh.response.bits.tag === command.tag)
+    assert(io.mesh.response.bits.write === (state === targetResponse))
+    when(io.mesh.response.bits.error) { failed := true.B; state := complete }
+      .elsewhen(state === sourceResponse) { data := io.mesh.response.bits.data; state := targetRequest }
+      .elsewhen(remaining === 1.U)(state := complete)
+      .otherwise {
+        remaining          := remaining - 1.U
+        command.sourceAddr := command.sourceAddr + 1.U
+        command.targetAddr := command.targetAddr + 1.U
+        state              := sourceRequest
+      }
   }
-
-  when(io.completion.fire) {
-    stageValid := false.B
-    state      := sIdle
-  }
+  when(io.completion.fire)(state   := idle)
 }

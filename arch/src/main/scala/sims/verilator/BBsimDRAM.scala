@@ -1,22 +1,24 @@
 package sims.verilator
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.experimental.IntParam
 import chisel3.util.HasBlackBoxInline
-import freechips.rocketchip.amba.axi4.{AXI4Bundle, AXI4BundleParameters}
+import memcore.bus.axi4.{Params => AxiParams, Port => AxiPort}
 
+@instantiable
 class BBSimDRAM(
   memSize:     BigInt,
   lineSize:    Int,
   clockFreqHz: BigInt,
   memBase:     BigInt,
-  params:      AXI4BundleParameters,
+  params:      AxiParams,
   chipId:      Int)
     extends BlackBox(
       Map(
         "MEM_SIZE"  -> IntParam(memSize),
         "LINE_SIZE" -> IntParam(lineSize),
-        "ADDR_BITS" -> IntParam(params.addrBits),
+        "ADDR_BITS" -> IntParam(params.addressBits),
         "DATA_BITS" -> IntParam(params.dataBits),
         "ID_BITS"   -> IntParam(params.idBits),
         "CLOCK_HZ"  -> IntParam(clockFreqHz),
@@ -26,13 +28,13 @@ class BBSimDRAM(
     )
     with HasBlackBoxInline {
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Reset())
-    val axi   = Flipped(new AXI4Bundle(params))
+    val axi   = Flipped(new AxiPort(params))
   })
 
-  require(params.dataBits <= 64)
+  require(Set(64, 128).contains(params.dataBits), "BBSimDRAM supports 64 or 128 bit AXI beats")
 
   setInline(
     "BBSimDRAM.v",
@@ -71,14 +73,14 @@ class BBSimDRAM(
       |  input bit      w_valid,
       |  output bit     w_ready,
       |  input int      w_strb,
-      |  input longint  w_data,
+      |  input bit [127:0] w_data,
       |  input bit      w_last,
       |
       |  output bit     r_valid,
       |  input bit      r_ready,
       |  output int     r_id,
       |  output int     r_resp,
-      |  output longint r_data,
+      |  output bit [127:0] r_data,
       |  output bit     r_last,
       |
       |  output bit     b_valid,
@@ -108,6 +110,7 @@ class BBSimDRAM(
       |  input  [3:0]           axi_aw_bits_cache,
       |  input  [2:0]           axi_aw_bits_prot,
       |  input  [3:0]           axi_aw_bits_qos,
+      |  input  [3:0]           axi_aw_bits_region,
       |  input  [ID_BITS-1:0]   axi_aw_bits_id,
       |  output                 axi_w_ready,
       |  input                  axi_w_valid,
@@ -128,6 +131,7 @@ class BBSimDRAM(
       |  input  [3:0]           axi_ar_bits_cache,
       |  input  [2:0]           axi_ar_bits_prot,
       |  input  [3:0]           axi_ar_bits_qos,
+      |  input  [3:0]           axi_ar_bits_region,
       |  input  [ID_BITS-1:0]   axi_ar_bits_id,
       |  input                  axi_r_ready,
       |  output                 axi_r_valid,
@@ -154,7 +158,7 @@ class BBSimDRAM(
       |
       |  wire __w_valid;
       |  wire [31:0] __w_strb;
-      |  wire [63:0] __w_data;
+      |  wire [127:0] __w_data;
       |  wire        __w_last;
       |
       |  wire __r_ready;
@@ -166,7 +170,7 @@ class BBSimDRAM(
       |  bit __r_valid;
       |  int __r_id;
       |  int __r_resp;
-      |  longint __r_data;
+      |  bit [127:0] __r_data;
       |  bit __r_last;
       |  bit __b_valid;
       |  int __b_id;

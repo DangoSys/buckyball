@@ -7,6 +7,10 @@ _start:
     # Get hart ID
     csrr t0, mhartid
 
+    # Enable the FPU on every hart: mstatus.FS = Initial
+    li t1, 0x2000
+    csrs mstatus, t1
+
     # Set up stack pointer for each hart
     # Each hart gets 4KB stack space (0x1000 bytes)
     li sp, 0x90000000
@@ -40,9 +44,10 @@ _start:
     # Jump to main for all harts; the workload dispatches by core id.
     call main
 
-    # The boot hart reports the workload result. Other harts remain parked.
+    # Core 0 of the work tile reports the workload result. Other harts remain parked.
     csrr t0, mhartid
-    bnez t0, 1f
+    li t1, BB_REPORT_HART
+    bne t0, t1, 1f
     li t1, 0x60000000
     sw a0, 0(t1)
 1:

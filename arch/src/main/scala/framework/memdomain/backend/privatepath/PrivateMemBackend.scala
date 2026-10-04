@@ -13,20 +13,26 @@ import framework.top.GlobalConfig
 
 @instantiable
 class PrivateMemBackend(val b: GlobalConfig) extends Module {
+  private val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
+  private val requestCount   = b.memDomain.bankChannel + kernelRequests
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
-    val config  = Flipped(Decoupled(new MemConfigerIO(b)))
+    val mem_req    = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
+    val kernel_req = Vec(kernelRequests, Flipped(new MemRequestIO(b)))
+    val config     = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
     val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
+    val clearBusy         = Output(Bool())
     val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(b.memDomain.bankNum, new PhysicalBankHash(b)))) else None
   })
 
+  private val requests = io.mem_req.toSeq ++ io.kernel_req.toSeq
+
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
-  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(b.memDomain.bankChannel)(Instantiate(new AccPipe(b)))
+  val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(requestCount)(Instantiate(new AccPipe(b)))
 
   val hashMonitors =
     if (b.sim.diffTest) {
@@ -36,7 +42,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     }
 
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
-  val mtraces = Seq.fill(b.memDomain.bankChannel)(Module(new MTraceDPI))
+  val mtraces = Seq.fill(requestCount)(Module(new MTraceDPI))
   for (mt <- mtraces) {
     mt.io.clock      := clock
     mt.io.reset      := reset.asBool
@@ -123,15 +129,15 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // Default Value
   // -----------------------------------------------------------------------------
 
-  for (i <- 0 until b.memDomain.bankChannel) {
-    accPipes(i).io.mem_req.write <> io.mem_req(i).write
-    accPipes(i).io.mem_req.read <> io.mem_req(i).read
-    accPipes(i).io.mem_req.bank_id   := io.mem_req(i).bank_id
-    accPipes(i).io.mem_req.group_id  := io.mem_req(i).group_id
-    accPipes(i).io.mem_req.is_shared := io.mem_req(i).is_shared
-    accPipes(i).io.mem_req.hart_id   := io.mem_req(i).hart_id
-    accPipes(i).io.mem_req.rob_id    := io.mem_req(i).rob_id
-    accPipes(i).io.mem_req.inst_id   := io.mem_req(i).inst_id
+  for (i <- 0 until requestCount) {
+    accPipes(i).io.mem_req.write <> requests(i).write
+    accPipes(i).io.mem_req.read <> requests(i).read
+    accPipes(i).io.mem_req.bank_id   := requests(i).bank_id
+    accPipes(i).io.mem_req.group_id  := requests(i).group_id
+    accPipes(i).io.mem_req.is_shared := requests(i).is_shared
+    accPipes(i).io.mem_req.hart_id   := requests(i).hart_id
+    accPipes(i).io.mem_req.rob_id    := requests(i).rob_id
+    accPipes(i).io.mem_req.inst_id   := requests(i).inst_id
 
     // Bank-side defaults (only driven when a bank is actually connected)
     accPipes(i).io.sramRead.req.ready  := false.B
@@ -141,8 +147,6 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     accPipes(i).io.sramWrite.req.ready  := false.B
     accPipes(i).io.sramWrite.resp.valid := false.B
     accPipes(i).io.sramWrite.resp.bits  := DontCare
-
-    accPipes(i).io.is_multi := false.B
   }
 
   banks.zipWithIndex.foreach {
@@ -154,7 +158,9 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
       bank.io.sramWrite.req.valid  := false.B
       bank.io.sramWrite.req.bits   := DontCare
       bank.io.sramWrite.resp.ready := true.B
+      bank.io.clear                := false.B
   }
+  io.clearBusy := VecInit(banks.map(_.io.clearing)).asUInt.orR
 
   val realloc       = io.config.bits.group_id === 0.U
   val freePbankMask =
@@ -180,6 +186,10 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
         for (i <- 0 until b.memDomain.bankNum) {
           hashes(i).io.bind := freePbank === i.U
         }
+      }
+      // The bank hash already treats a newly bound bank as zero, so the clear writes need no hash update.
+      for (i <- 0 until b.memDomain.bankNum) {
+        when(io.config.bits.clear && freePbank === i.U)(banks(i).io.clear := true.B)
       }
       // Match bemu mset: realloc of the same vbank frees prior physical banks first.
       // MemConfiger emits one fire per group; only group 0 drops the old mapping.
@@ -227,14 +237,14 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     en:        Bool
   ): Unit = {
     mtraces(ch).io.is_write   := isWrite
-    mtraces(ch).io.is_shared  := io.mem_req(ch).is_shared.asUInt
+    mtraces(ch).io.is_shared  := requests(ch).is_shared.asUInt
     mtraces(ch).io.channel    := ch.U
-    mtraces(ch).io.hart_id    := io.mem_req(ch).hart_id
-    mtraces(ch).io.rob_id     := io.mem_req(ch).rob_id
-    mtraces(ch).io.inst_id    := io.mem_req(ch).inst_id
-    mtraces(ch).io.vbank_id   := io.mem_req(ch).bank_id
+    mtraces(ch).io.hart_id    := requests(ch).hart_id
+    mtraces(ch).io.rob_id     := requests(ch).rob_id
+    mtraces(ch).io.inst_id    := requests(ch).inst_id
+    mtraces(ch).io.vbank_id   := requests(ch).bank_id
     mtraces(ch).io.pbank_id   := pbankId
-    mtraces(ch).io.group_id   := io.mem_req(ch).group_id
+    mtraces(ch).io.group_id   := requests(ch).group_id
     mtraces(ch).io.addr       := addr
     mtraces(ch).io.write_mask := writeMask
     mtraces(ch).io.data_lo    := dataLo
@@ -245,24 +255,15 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   // The route is held for the complete AccPipe transaction. Keep the route
   // vectors in one place so the bank-side command mux and response demux share
   // exactly the same ownership predicate.
-  val activeRouteOHs    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.bankNum.W)))
-  val channelReqValid   = Seq.fill(b.memDomain.bankChannel)(Wire(Bool()))
-  val channelReqIsWrite = Seq.fill(b.memDomain.bankChannel)(Wire(Bool()))
-  val channelReqAddr    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(log2Ceil(b.memDomain.bankEntries).W)))
-  val channelReqData    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.bankWidth.W)))
-  val channelReqMask    = Seq.fill(b.memDomain.bankChannel)(Wire(Vec(b.memDomain.bankMaskLen, Bool())))
-  val channelHartId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.tile.xLen.W)))
-  val channelInstId     = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(64.W)))
-  val channelVbankId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.vbankIdWidth.W)))
-  val channelGroupId    = Seq.fill(b.memDomain.bankChannel)(Wire(UInt(b.memDomain.groupIdWidth.W)))
+  val activeRouteOHs = Seq.fill(requestCount)(Wire(UInt(b.memDomain.bankNum.W)))
 
-  for (i <- 0 until b.memDomain.bankChannel) {
+  for (i <- 0 until requestCount) {
     val routePbankReg     = RegInit(0.U(pbankIndexWidth.W))
     val routeValidReg     = RegInit(false.B)
     val routePending      = RegInit(false.B)
-    val requestVbank      = io.mem_req(i).bank_id
+    val requestVbank      = requests(i).bank_id
     val requestVbankIdx   = requestVbank(privateVbankIdWidth - 1, 0)
-    val requestGroup      = io.mem_req(i).group_id(groupIndexWidth - 1, 0)
+    val requestGroup      = requests(i).group_id(groupIndexWidth - 1, 0)
     val singleRoute       = singleRoutePbank(requestVbankIdx)
     val singleValid       = singleRouteValid(requestVbankIdx)
     val multiRouteMatch   = VecInit(mappingTable.map(entry =>
@@ -278,41 +279,21 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     // entire request/response lifetime. This removes the live mapping-table
     // lookup from every wide bank-side mux select while preserving one request
     // per channel per cycle once the pipe is running.
-    val requestSeen       = io.mem_req(i).read.req.valid || io.mem_req(i).write.req.valid
+    val requestSeen       = requests(i).read.req.valid || requests(i).write.req.valid
     val activeRoute       = routePbankReg
     val requestActive     = routePending || accPipes(i).io.busy
     val activeRouteValid  = routeValidReg && requestActive
     val activeRouteOH     = UIntToOH(activeRoute, b.memDomain.bankNum) &
       Fill(b.memDomain.bankNum, activeRouteValid)
 
-    activeRouteOHs(i)    := activeRouteOH
-    channelReqValid(i)   := accPipes(i).io.sramRead.req.valid ||
-      accPipes(i).io.sramWrite.req.valid
-    channelReqIsWrite(i) := accPipes(i).io.sramWrite.req.valid
-    channelReqAddr(i)    := Mux(
-      channelReqIsWrite(i),
-      accPipes(i).io.sramWrite.req.bits.addr,
-      accPipes(i).io.sramRead.req.bits.addr
-    )
-    channelReqData(i)    := accPipes(i).io.sramWrite.req.bits.data
-    channelReqMask(i)    := accPipes(i).io.sramWrite.req.bits.mask
-    channelHartId(i)     := io.mem_req(i).hart_id
-    channelInstId(i)     := io.mem_req(i).inst_id
-    channelVbankId(i)    := io.mem_req(i).bank_id
-    channelGroupId(i)    := io.mem_req(i).group_id
-
-    // SramBank is a pure single-port SRAM: the selected operation is always
-    // accepted when its route is active. Using the held route directly avoids
-    // feeding 24 bank-ready signals back through every channel.
-    accPipes(i).io.sramRead.req.ready  := activeRouteValid
-    accPipes(i).io.sramWrite.req.ready := activeRouteValid
+    activeRouteOHs(i) := activeRouteOH
 
     when(!routePending && !accPipes(i).io.busy && requestSeen && requestRouteValid) {
       routePbankReg := requestRoute
       routeValidReg := true.B
       routePending  := true.B
     }
-    when(io.mem_req(i).read.req.fire || io.mem_req(i).write.req.fire) {
+    when(requests(i).read.req.fire || requests(i).write.req.fire) {
       routePending := false.B
     }
 
@@ -339,71 +320,79 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
   }
 
-  // Bank-side command crossbar. A physical bank is single-port, so both read
-  // and write requests share one selected channel/address path. The operation
-  // type then gates the corresponding SRAM request valid.
+  // Fixed RVV request slots share the physical-bank arbitration with ordinary
+  // channels. Capture the accepted request's owner for the one-cycle SRAM
+  // response; a stalled requester must never receive another owner's response.
+  val responseRoutes    = Seq.fill(requestCount)(WireDefault(0.U(b.memDomain.bankNum.W)))
+  val responseRouteBits = Seq.fill(requestCount)(Wire(Vec(b.memDomain.bankNum, Bool())))
+
   for (j <- 0 until b.memDomain.bankNum) {
-    val selectedReq      = VecInit((0 until b.memDomain.bankChannel).map { i =>
-      activeRouteOHs(i)(j) && channelReqValid(i)
-    }).asUInt
-    val selectedReqValid = selectedReq.orR
-    // The scheduler guarantees one live owner per physical bank. Express the
-    // one-hot selection as AND/OR wiring instead of a priority mux tree; this
-    // keeps the wide address/data path shallow and lets synthesis share the
-    // route gates across fields.
-    def oneHotOr(width: Int, values: Seq[UInt]): UInt =
-      values.zipWithIndex
-        .map { case (value, i) => Fill(width, selectedReq(i)) & value }
-        .reduce(_ | _)
+    val arb = Module(new RRArbiter(
+      new Bundle {
+        val write = Bool()
+        val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
+        val data  = UInt(b.memDomain.bankWidth.W)
+        val mask  = Vec(b.memDomain.bankMaskLen, Bool())
+      },
+      requestCount
+    ))
 
-    val selectedReqIsWrite = oneHotOr(1, channelReqIsWrite).asBool
-    val selectedReqAddr    = oneHotOr(log2Ceil(b.memDomain.bankEntries), channelReqAddr)
-    val selectedReqData    = oneHotOr(b.memDomain.bankWidth, channelReqData)
-    val selectedReqMask    = VecInit((0 until b.memDomain.bankMaskLen).map { k =>
-      oneHotOr(1, channelReqMask.map(_(k))).asBool
-    })
-    val selectedHartId     = oneHotOr(b.tile.xLen, channelHartId)
-    val selectedInstId     = oneHotOr(64, channelInstId)
-    val selectedVbankId    = oneHotOr(b.memDomain.vbankIdWidth, channelVbankId)
-    val selectedGroupId    = oneHotOr(b.memDomain.groupIdWidth, channelGroupId)
+    for (i <- 0 until requestCount) {
+      val pipe = accPipes(i)
+      arb.io.in(i).valid      := activeRouteOHs(i)(j) &&
+        (pipe.io.sramRead.req.valid || pipe.io.sramWrite.req.valid)
+      arb.io.in(i).bits.write := pipe.io.sramWrite.req.valid
+      arb.io.in(i).bits.addr  := Mux(
+        pipe.io.sramWrite.req.valid,
+        pipe.io.sramWrite.req.bits.addr,
+        pipe.io.sramRead.req.bits.addr
+      )
+      arb.io.in(i).bits.data  := pipe.io.sramWrite.req.bits.data
+      arb.io.in(i).bits.mask  := pipe.io.sramWrite.req.bits.mask
+      when(activeRouteOHs(i)(j)) {
+        pipe.io.sramRead.req.ready  := arb.io.in(i).ready && !arb.io.in(i).bits.write
+        pipe.io.sramWrite.req.ready := arb.io.in(i).ready && arb.io.in(i).bits.write
+      }
+      responseRouteBits(i)(j) := RegNext(arb.io.in(i).fire, false.B)
+    }
 
-    banks(j).io.sramRead.req.valid      := selectedReqValid && !selectedReqIsWrite
-    banks(j).io.sramRead.req.bits.addr  := selectedReqAddr
-    banks(j).io.sramWrite.req.valid     := selectedReqValid && selectedReqIsWrite
-    banks(j).io.sramWrite.req.bits.addr := selectedReqAddr
-    banks(j).io.sramWrite.req.bits.data := selectedReqData
-    banks(j).io.sramWrite.req.bits.mask := selectedReqMask
+    val bank = banks(j)
+    bank.io.sramRead.req.valid      := arb.io.out.valid && !arb.io.out.bits.write
+    bank.io.sramRead.req.bits.addr  := arb.io.out.bits.addr
+    bank.io.sramWrite.req.valid     := arb.io.out.valid && arb.io.out.bits.write
+    bank.io.sramWrite.req.bits.addr := arb.io.out.bits.addr
+    bank.io.sramWrite.req.bits.data := arb.io.out.bits.data
+    bank.io.sramWrite.req.bits.mask := arb.io.out.bits.mask
+    arb.io.out.ready                := Mux(arb.io.out.bits.write, bank.io.sramWrite.req.ready, bank.io.sramRead.req.ready)
 
     hashMonitors.foreach { hashes =>
       val monitor = hashes(j)
-      monitor.io.write.valid     := banks(j).io.sramWrite.req.fire
-      monitor.io.write.bits.addr := selectedReqAddr
-      monitor.io.write.bits.mask := selectedReqMask
-      monitor.io.write.bits.data := selectedReqData
+      monitor.io.write.valid     := bank.io.sramWrite.req.fire
+      monitor.io.write.bits.addr := arb.io.out.bits.addr
+      monitor.io.write.bits.mask := arb.io.out.bits.mask
+      monitor.io.write.bits.data := arb.io.out.bits.data
     }
-
-    // Only the channel holding this bank can consume its one-cycle response.
-    banks(j).io.sramRead.resp.ready  := VecInit((0 until b.memDomain.bankChannel).map { i =>
-      activeRouteOHs(i)(j) && accPipes(i).io.sramRead.resp.ready
+    bank.io.sramRead.resp.ready  := VecInit((0 until requestCount).map { i =>
+      responseRouteBits(i)(j) && accPipes(i).io.sramRead.resp.ready
     }).asUInt.orR
-    banks(j).io.sramWrite.resp.ready := VecInit((0 until b.memDomain.bankChannel).map { i =>
-      activeRouteOHs(i)(j) && accPipes(i).io.sramWrite.resp.ready
+    bank.io.sramWrite.resp.ready := VecInit((0 until requestCount).map { i =>
+      responseRouteBits(i)(j) && accPipes(i).io.sramWrite.resp.ready
     }).asUInt.orR
+    when(bank.io.sramRead.resp.valid)(assert(bank.io.sramRead.resp.ready))
+    when(bank.io.sramWrite.resp.valid)(assert(bank.io.sramWrite.resp.ready))
   }
 
-  // Response demux. Read data remains the only wide bank-to-channel mux; the
-  // request side above shares its address/data path between read and write.
-  for (i <- 0 until b.memDomain.bankChannel) {
+  for (i <- 0 until requestCount) {
+    responseRoutes(i) := responseRouteBits(i).asUInt
     val readRespSel  = VecInit((0 until b.memDomain.bankNum).map { j =>
-      activeRouteOHs(i)(j) && banks(j).io.sramRead.resp.valid
+      responseRoutes(i)(j) && banks(j).io.sramRead.resp.valid
     }).asUInt
     val writeRespSel = VecInit((0 until b.memDomain.bankNum).map { j =>
-      activeRouteOHs(i)(j) && banks(j).io.sramWrite.resp.valid
+      responseRoutes(i)(j) && banks(j).io.sramWrite.resp.valid
     }).asUInt
-
     accPipes(i).io.sramRead.resp.valid     := readRespSel.orR
     accPipes(i).io.sramRead.resp.bits.data := (0 until b.memDomain.bankNum).map { j =>
-      Fill(b.memDomain.bankWidth, activeRouteOHs(i)(j)) & banks(j).io.sramRead.resp.bits.data
+      Fill(b.memDomain.bankWidth, responseRoutes(i)(j)) & banks(j).io.sramRead.resp.bits.data
     }.reduce(_ | _)
     accPipes(i).io.sramWrite.resp.valid    := writeRespSel.orR
     accPipes(i).io.sramWrite.resp.bits.ok  := writeRespSel.orR

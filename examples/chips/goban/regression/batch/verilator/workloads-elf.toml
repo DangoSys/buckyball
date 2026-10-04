@@ -1,5 +1,16 @@
 [workloads]
 tests = [
+  "goban-goban-ctest-rvv_kernel-baremetal",
+  "goban-goban-ctest-rvv_silu-baremetal",
+  "goban-goban-ctest-rvv_swiglu-baremetal",
+  "goban-goban-ctest-rvv_snake-baremetal",
+  "goban-goban-ctest-rvv_mxfp8_quant-baremetal",
+  "goban-goban-ctest-rvv_matmul-baremetal",
   "goban-goban-ctest-mvin_mvout_test-baremetal",
   "goban-goban-ctest-mvin_mvout_stride_test-baremetal",
+  "goban-goban-ctest-chip-mvover_rows-multicore-baremetal",
+  "goban-goban-ctest-core-transpose_smatmul_quant_pipeline-multicore-baremetal",
+  "goban-scheduler-soctest-clint_timer_interrupt-baremetal",
+  "goban-scheduler-soctest-clint_software_interrupt-baremetal",
+  "goban-scheduler-soctest-plic_register_access-baremetal",
 ]

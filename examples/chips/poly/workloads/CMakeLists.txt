@@ -1,5 +1,8 @@
 add_custom_target(poly-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET poly-ctests-build)
+set(BUCKYBALL_CTEST_TARGET attention)
+add_subdirectory(ctests)
+
 
 buckyball_add_ball_workload_subdirs(ctests)
 

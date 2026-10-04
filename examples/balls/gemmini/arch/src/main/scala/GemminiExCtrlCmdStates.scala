@@ -4,27 +4,40 @@ import chisel3._
 import chisel3.util._
 import gemmini._
 
+/** Sub-command encoding within the special field */
+object GemminiSubCmd {
+  val CONFIG              = 0.U(4.W)
+  val PRELOAD             = 1.U(4.W)
+  val COMPUTE_PRELOADED   = 2.U(4.W)
+  val COMPUTE_ACCUMULATED = 3.U(4.W)
+  val FLUSH               = 4.U(4.W)
+}
+
 trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
 
   protected def handleIdleState(): Unit = {
     io.cmdReq.ready := true.B
     when(io.cmdReq.fire) {
-      rob_id_reg     := io.cmdReq.bits.rob_id
-      is_sub_reg     := io.cmdReq.bits.is_sub
-      sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
-      op1_bank       := io.cmdReq.bits.cmd.op1_bank
-      op2_bank       := io.cmdReq.bits.cmd.op2_bank
-      wr_bank        := io.cmdReq.bits.cmd.wr_bank
-      op1_base       := io.cmdReq.bits.cmd.special(15, 6)
-      op2_base       := io.cmdReq.bits.cmd.special(25, 16)
-      wr_base        := io.cmdReq.bits.cmd.special(35, 26)
-      total_rows     := Mux(
+      rob_id_reg       := io.cmdReq.bits.rob_id
+      is_sub_reg       := io.cmdReq.bits.is_sub
+      sub_rob_id_reg   := io.cmdReq.bits.sub_rob_id
+      op1_bank         := io.cmdReq.bits.cmd.op1_bank
+      op2_bank         := io.cmdReq.bits.cmd.op2_bank
+      wr_bank          := io.cmdReq.bits.cmd.wr_bank
+      op1_base         := io.cmdReq.bits.cmd.special(15, 6)
+      op2_base         := io.cmdReq.bits.cmd.special(25, 16)
+      wr_base          := io.cmdReq.bits.cmd.special(35, 26)
+      total_rows       := Mux(
         io.cmdReq.bits.cmd.iter === 0.U,
         DIM.U,
         io.cmdReq.bits.cmd.iter
       )
-      zero_op2       := io.cmdReq.bits.cmd.special(4)
-      zero_op1_tail  := io.cmdReq.bits.cmd.special(5)
+      zero_op2         := io.cmdReq.bits.cmd.special(4)
+      zero_op1_tail    := io.cmdReq.bits.cmd.special(5)
+      accumulated_cmd  := sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
+      reset_acc_mesh   := sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
+      acc_read_group   := 0.U
+      acc_read_pending := false.B
 
       when(sub_cmd === GemminiSubCmd.CONFIG) {
         cfg_dataflow     := io.cmdReq.bits.cmd.special(4)
@@ -54,7 +67,7 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
         xpose_ready         := false.B
         xpose_row_cnt       := 0.U
         read_done.foreach(_ := false.B)
-        state               := sComputeRead
+        state               := Mux(sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED, sPreloadFeed, sComputeRead)
       }.elsewhen(sub_cmd === GemminiSubCmd.FLUSH) {
         state := sFlush
       }

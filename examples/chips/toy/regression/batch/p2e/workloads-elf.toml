@@ -1,6 +1,10 @@
 [workloads]
 tests = [
-  "toy-toy-ctest-rvv_vsetvli_e32_m1_vl_test-baremetal.hex",
+  "toy-toy-ctest-gemmini_accumulated_16x16_test-baremetal.hex",
+  "toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-baremetal.hex",
+  "toy-toy-ctest-alexnet_gemmini_tail_test-baremetal.hex",
+  "toy-toy-ctest-alexnet_gemmini_stride_test-baremetal.hex",
+  "toy-toy-ctest-alexnet_gemmini_round_test-baremetal.hex",
   "toy-toy-ctest-mvin_mvout_test-baremetal.hex",
   "toy-toy-ctest-mvin_mvout_stride_test-baremetal.hex",
   "toy-toy-ctest-bdb_counter_start_stop_test-baremetal.hex",

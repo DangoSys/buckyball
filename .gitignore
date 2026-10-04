@@ -65,3 +65,4 @@ lc_output.txt
 skills-lock.json
 .mcp.json
 .tmp
+*.egg-info/

@@ -1,0 +1,2 @@
+expected_assertion = "DDR AXI RLAST does not match line beat count"
+invalid_case = 4

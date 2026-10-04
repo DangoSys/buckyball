@@ -3,7 +3,7 @@ package examples.balls.int8mul
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
-import hardfloat.{recFNFromFN, INToRecFN, MulRecFN, RecFNToIN}
+import hardfloat.{recFNFromFN, INToRecFN, RecFNToIN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
 import freechips.rocketchip.tile.MulAddRecFNPipe
 

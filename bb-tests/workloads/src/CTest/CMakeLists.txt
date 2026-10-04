@@ -82,7 +82,6 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     ${BUCKYBALL_CHIP_COMMON_SOURCES})
   target_include_directories(${EXECUTABLE} PRIVATE
     ${WORKLOAD_LIB_DIR}
-    ${BUCKYBALL_ISA_DIR}/chip
     ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
     ${BUCKYBALL_CHIP_COMMON_INCLUDE_DIRS}
     ${BUCKYBALL_BALL_WORKLOAD_DIRS}
@@ -149,3 +148,105 @@ function(add_buckyball_ctest SOURCE_FILE)
 
   add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
   add_buckyball_baremetal_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
+
+  add_custom_target(${TEST_NAME}-ctest-build
+    DEPENDS
+      ${TEST_NAME}-linux-build
+      ${TEST_NAME}-baremetal-build
+    COMMENT "Building CTest workload ${TEST_NAME}"
+  )
+
+  if(DEFINED BUCKYBALL_CTEST_GROUP_TARGET)
+    add_dependencies(${BUCKYBALL_CTEST_GROUP_TARGET} ${TEST_NAME}-ctest-build)
+  endif()
+endfunction()
+
+function(add_buckyball_ctests)
+  foreach(SOURCE_FILE ${ARGV})
+    add_buckyball_ctest(${SOURCE_FILE})
+  endforeach()
+endfunction()
+
+add_custom_target(core-ctests-build)
+
+function(add_buckyball_core_workload NAME)
+  cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
+  if(NOT DEFINED BUCKYBALL_CORE_WORKLOAD_TARGET OR
+     BUCKYBALL_CORE_WORKLOAD_TARGET STREQUAL "")
+    message(FATAL_ERROR "Core workload target is required for ${NAME}")
+  endif()
+  if(NOT DEFINED BUCKYBALL_CORE_WORKLOAD_PROFILE OR
+     BUCKYBALL_CORE_WORKLOAD_PROFILE STREQUAL "" OR NOT ARG_SOURCES)
+    message(FATAL_ERROR "Core workload profile and sources are required for ${NAME}")
+  endif()
+  set(BUCKYBALL_CTEST_TARGET "${BUCKYBALL_CORE_WORKLOAD_TARGET}")
+  buckyball_ctest_name(_test ${BUCKYBALL_CTEST_TARGET} core-${NAME})
+  set(_elf "${_test}-multicore-baremetal")
+  set(_sources)
+  foreach(_source IN LISTS ARG_SOURCES)
+    buckyball_enforce_ctest_line_limit("${_source}")
+    list(APPEND _sources "${CMAKE_CURRENT_SOURCE_DIR}/${_source}")
+  endforeach()
+  set(_ball_includes)
+  foreach(_dir IN LISTS BUCKYBALL_BALL_WORKLOAD_DIRS)
+    list(APPEND _ball_includes -I${_dir})
+  endforeach()
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${_elf}"
+    COMMAND ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-elf-g++
+      ${BUCKYBALL_CTEST_C_FLAGS}
+      -DBB_CORE_WORKLOAD_PROFILE=${BUCKYBALL_CORE_WORKLOAD_PROFILE}
+      -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
+      -I${WORKLOAD_LIB_DIR}/bbsw/baremetal/multicore
+      -I${BUCKYBALL_ISA_DIR}/chip
+      -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
+      ${_ball_includes}
+      -o ${_elf}
+      ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+      ${_sources}
+      ${WORKLOAD_LIB_DIR}/buckyball.c
+      ${BBHW_MEM_C}
+    DEPENDS ${_sources}
+      ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+      ${BUCKYBALL_ISA_DIR}/chip/topology.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
+      ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  add_custom_target(${_test}-core-build
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${_elf}")
+  add_dependencies(core-ctests-build ${_test}-core-build)
+endfunction()
+
+# ===============================================================
+# Common workloads for all chips
+# ===============================================================
+add_subdirectory(base)
+add_subdirectory(tlb)
+add_subdirectory(tutorial)
+add_subdirectory(embench)
+add_subdirectory(coremark)
+buckyball_add_core_workload_subdirs(ctests)
+
+# ===============================================================
+# Chip-specific workloads
+# ===============================================================
+set(BUCKYBALL_CHIP_WORKLOAD_DIR
+  ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/workloads)
+
+if(NOT EXISTS ${BUCKYBALL_CHIP_WORKLOAD_DIR}/CMakeLists.txt)
+  message(FATAL_ERROR
+    "Buckyball chip workloads do not exist: ${BUCKYBALL_CHIP_WORKLOAD_DIR}")
+endif()
+
+add_subdirectory(${BUCKYBALL_CHIP_WORKLOAD_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP})
+
+# Task dispatch inside a compute tile: its controller submits to its hidden workers.
+if(BUCKYBALL_WORKLOAD_SOURCE_CHIP STREQUAL "poly" AND BUCKYBALL_WORKLOAD_CHIP STREQUAL "poly")
+  add_subdirectory(chip/poly)
+endif()
+
+if(NOT TARGET chip-workloads-build)
+  message(FATAL_ERROR
+    "Buckyball chip workloads must define target chip-workloads-build: ${BUCKYBALL_WORKLOAD_CHIP}")
+endif()

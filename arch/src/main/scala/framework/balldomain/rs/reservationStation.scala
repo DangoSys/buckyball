@@ -6,22 +6,6 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
 import framework.balldomain.decoder.BallDecodeCmd
 
-// Ball domain issue interface - includes global rob_id
-class BallRsIssue(b: GlobalConfig) extends Bundle {
-  val cmd        = new BallDecodeCmd(b.memDomain.virtualBankCount, b.frontend.iter_len, b.memDomain.groupCountWidth)
-  // Global ROB ID
-  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
-  val is_sub     = Bool()
-  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
-}
-
-// Ball domain completion interface
-class BallRsComplete(b: GlobalConfig) extends Bundle {
-  val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
-  val is_sub     = Bool()
-  val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
-}
-
 // Generic Ball domain issue interface - supports dynamic number of Ball devices
 class BallIssueInterface(b: GlobalConfig) extends Bundle {
   val balls = Vec(b.ballDomain.ballNum, Decoupled(new BallRsIssue(b)))

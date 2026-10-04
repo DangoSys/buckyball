@@ -16,6 +16,8 @@ class Coherence(p: CoherenceParams) extends Module {
   val c = p.chi
   val n = p.mshrEntries
 
+  private val states = Enum(23)
+
   val Seq(
     lookupReq,
     lookupWait,
@@ -38,7 +40,9 @@ class Coherence(p: CoherenceParams) extends Module {
     wbGrant,
     wbData,
     finished
-  ) = Enum(21)
+  ) = states.take(21)
+
+  val Seq(restoreReq, restoreWait) = states.drop(21)
 
   val state         = RegInit(VecInit(Seq.fill(n)(lookupReq)))
   val way           = Reg(Vec(n, UInt(p.cache.wayBits.W)))
@@ -69,7 +73,8 @@ class Coherence(p: CoherenceParams) extends Module {
       r.opcode === Opcode.ReadShared.U || r.opcode === Opcode.ReadNotSharedDirty.U || r.opcode === Opcode.ReadUnique.U
     assert(r.tgtId === p.homeId.U && r.srcId >= 1.U && r.srcId <= p.agents.U, "Unknown CPU or Home")
     assert(
-      read || r.opcode === Opcode.Evict.U || r.opcode === Opcode.WriteBackFull.U || r.opcode === Opcode.CleanInvalid.U,
+      read || r.opcode === Opcode.Evict.U || r.opcode === Opcode.WriteBackFull.U ||
+        r.opcode === Opcode.CleanShared.U || r.opcode === Opcode.CleanInvalid.U || r.opcode === Opcode.MakeInvalid.U,
       "Unsupported coherence operation"
     )
     assert(
@@ -86,28 +91,45 @@ class Coherence(p: CoherenceParams) extends Module {
     seen(i)   := 0.U
   }
 
-  val cacheArb   = Module(new RRArbiter(new CacheRequest(p.cache), n))
+  private def arbitrate[T <: Data](gen: T): RRArbiter[T] = Module(new RRArbiter(gen, n) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(this.n)).W))
+      when(this.io.out.fire)(pointer := this.io.chosen)
+      pointer
+    }
+
+  })
+
+  val cacheArb   = arbitrate(new CacheRequest(p.cache))
   val cacheQueue = Module(new Queue(new CacheRequest(p.cache), 2, pipe = true))
   cacheQueue.io.enq <> cacheArb.io.out
   cache.io.request <> cacheQueue.io.deq
   cache.io.response.ready := true.B
-  val memArb   = Module(new RRArbiter(new LineRequest(c), n))
+  val memArb   = arbitrate(new LineRequest(c))
   val memQueue = Module(new Queue(new LineRequest(c), 2, pipe = true))
   memQueue.io.enq <> memArb.io.out
   io.memoryReq <> memQueue.io.deq
   io.memoryResp.ready := true.B
-  val snpArb   = Module(new RRArbiter(new DirectedSnoop(c), n))
+  val snpArb   = arbitrate(new DirectedSnoop(c))
   val snpQueue = Module(new Queue(new DirectedSnoop(c), 2, pipe = true))
   snpQueue.io.enq <> snpArb.io.out
   io.snp <> snpQueue.io.deq
-  val rspArb   = Module(new RRArbiter(new ResponseFlit(c), n))
+  val rspArb   = arbitrate(new ResponseFlit(c))
   val rspQueue = Module(new Queue(new ResponseFlit(c), 2, pipe = true))
   rspQueue.io.enq <> rspArb.io.out
   io.rsp <> rspQueue.io.deq
-  val datArb   = Module(new RRArbiter(new DataFlit(c), n))
+  val datArb   = arbitrate(new DataFlit(c))
   val datQueue = Module(new Queue(new DataFlit(c), 2, pipe = true))
   datQueue.io.enq <> datArb.io.out
   io.dat <> datQueue.io.deq
+  // Caller TxnID ends at its final response. The slot/DBID/set stays owned until full protocol completion.
+  mshr.io.releaseCaller := VecInit((0 until n).map { i =>
+    (io.rsp.fire && io.rsp.bits.opcode === Opcode.CompDBIDResp.U && io.rsp.bits.dbid === i.U) ||
+    (io.dat.fire && io.dat.bits.opcode === Opcode.CompData.U && io.dat.bits.dbid === i.U &&
+      io.dat.bits.dataId === ((c.beatsPerLine - 1) * c.dataBits / 128).U)
+  }).asUInt
+
   io.rxRsp.ready := true.B
   io.rxDat.ready := true.B
   when(io.rxRsp.valid) {
@@ -134,16 +156,19 @@ class Coherence(p: CoherenceParams) extends Module {
     update.bits.entry   := directory.io.entries(i)
     val mask         = UIntToOH(r.srcId - 1.U, p.agents)
     val exclusive    = r.opcode === Opcode.ReadUnique.U
-    val maintenance  = r.opcode === Opcode.CleanInvalid.U
+    val cleanShared  = r.opcode === Opcode.CleanShared.U
+    val cleanInvalid = r.opcode === Opcode.CleanInvalid.U
+    val makeInvalid  = r.opcode === Opcode.MakeInvalid.U
+    val maintenance  = cleanShared || cleanInvalid || makeInvalid
     val writeback    = r.opcode === Opcode.WriteBackFull.U
-    val invalidating = victim(i) || maintenance || exclusive
+    val invalidating = victim(i) || cleanInvalid || makeInvalid || exclusive
     val cacheCmd     = cacheArb.io.in(i)
     cacheCmd.valid         := active && (state(i) === lookupReq || state(i) === invalidateReq || state(i) === fillReq || state(
       i
-    ) === updateReq)
+    ) === updateReq || state(i) === restoreReq)
     cacheCmd.bits          := 0.U.asTypeOf(new CacheRequest(p.cache))
     cacheCmd.bits.id       := i.U
-    cacheCmd.bits.addr     := Mux(state(i) === invalidateReq, workAddress(i), r.addr)
+    cacheCmd.bits.addr     := Mux(state(i) === invalidateReq || state(i) === restoreReq, workAddress(i), r.addr)
     cacheCmd.bits.way      := way(i)
     cacheCmd.bits.data     := payload(i).asUInt
     cacheCmd.bits.mask     := Fill(p.cache.lineBytes, 1.U(1.W))
@@ -152,13 +177,15 @@ class Coherence(p: CoherenceParams) extends Module {
     cacheCmd.bits.op       := MuxLookup(state(i), CacheOp.Lookup.U)(Seq(
       invalidateReq -> CacheOp.Invalidate.U,
       fillReq       -> CacheOp.Fill.U,
-      updateReq     -> CacheOp.Write.U
+      updateReq     -> CacheOp.Write.U,
+      restoreReq    -> CacheOp.Write.U
     ))
     when(cacheCmd.fire) {
       state(i) := MuxLookup(state(i), lookupWait)(Seq(
         invalidateReq -> invalidateWait,
         fillReq       -> fillWait,
-        updateReq     -> updateWait
+        updateReq     -> updateWait,
+        restoreReq    -> restoreWait
       ))
     }
     when(cache.io.response.fire && cache.io.response.bits.id === i.U) {
@@ -168,7 +195,7 @@ class Coherence(p: CoherenceParams) extends Module {
         assert(result.available, "Set owner has no replacement candidate")
         way(i)         := result.way
         resident(i)    := result.hit
-        victim(i)      := !result.hit || maintenance
+        victim(i)      := !result.hit || cleanInvalid || makeInvalid
         workAddress(i) := Mux(result.hit, r.addr, result.addr)
         dirty(i)       := result.metadata(0)
         payload(i)     := result.data.asTypeOf(payload(i))
@@ -204,10 +231,13 @@ class Coherence(p: CoherenceParams) extends Module {
         update.bits.entry.unique  := false.B
         sent(i)                   := 0.U
         state(i)                  := grantData
+      }.elsewhen(state(i) === restoreWait) {
+        sent(i)  := 0.U
+        state(i) := Mux(maintenance, complete, grantData)
       }.otherwise {
         assert(state(i) === updateWait, "Unexpected Cache response phase")
         sent(i)  := 0.U
-        state(i) := Mux(writeback, finished, grantData)
+        state(i) := Mux(writeback, finished, Mux(maintenance, complete, grantData))
       }
     }
 
@@ -217,7 +247,14 @@ class Coherence(p: CoherenceParams) extends Module {
         seen(i)   := 0.U
         state(i)  := sendSnoop
       }.otherwise {
-        state(i) := Mux(victim(i), Mux(dirty(i), writeMemory, invalidateReq), updateReq)
+        when(makeInvalid) {
+          dirty(i) := false.B
+          state(i) := invalidateReq
+        }.elsewhen(cleanShared) {
+          state(i) := Mux(dirty(i), writeMemory, updateReq)
+        }.otherwise {
+          state(i) := Mux(victim(i), Mux(dirty(i), writeMemory, invalidateReq), updateReq)
+        }
       }
     }
     val snp = snpArb.io.in(i)
@@ -228,9 +265,17 @@ class Coherence(p: CoherenceParams) extends Module {
     snp.bits.flit.txnId       := i.U
     snp.bits.flit.addr        := workAddress(i) >> 3
     snp.bits.flit.opcode      := Mux(
-      victim(i) || maintenance,
-      Opcode.SnpCleanInvalid.U,
-      Mux(exclusive, Opcode.SnpUnique.U, Opcode.SnpNotSharedDirty.U)
+      makeInvalid,
+      Opcode.SnpMakeInvalid.U,
+      Mux(
+        cleanShared,
+        Opcode.SnpCleanShared.U,
+        Mux(
+          victim(i) || cleanInvalid,
+          Opcode.SnpCleanInvalid.U,
+          Mux(exclusive, Opcode.SnpUnique.U, Opcode.SnpNotSharedDirty.U)
+        )
+      )
     )
     snp.bits.flit.retToSrc    := Mux(victim(i) || maintenance, 0.U, 1.U)
     snp.bits.flit.doNotGoToSd := 1.U
@@ -280,6 +325,7 @@ class Coherence(p: CoherenceParams) extends Module {
       payload(i)(b)    := d.data
       when(state(i) === waitSnoop) {
         assert(d.opcode === Opcode.SnpRespData.U && d.srcId === target(i) +& 1.U && d.be.andR, "Invalid snoop data")
+        assert(!makeInvalid, "MakeInvalid snoop must not return data")
         assert(
           d.resp(1, 0) === CoherenceState.I.U || (!invalidating && d.resp(1, 0) === CoherenceState.SC.U),
           "Invalid snoop permission"
@@ -330,8 +376,15 @@ class Coherence(p: CoherenceParams) extends Module {
         sent(i)    := 0.U
         state(i)   := Mux(io.memoryResp.bits.error, grantData, fillReq)
       }.otherwise {
-        assert(!io.memoryResp.bits.error, "Dirty victim writeback failed")
-        state(i) := invalidateReq
+        when(io.memoryResp.bits.error) {
+          failed(i) := true.B
+          state(i)  := restoreReq
+        }.otherwise {
+          when(cleanShared) {
+            dirty(i) := false.B
+            state(i) := updateReq
+          }.otherwise(state(i) := invalidateReq)
+        }
       }
     }
     val rsp = rspArb.io.in(i)
@@ -341,6 +394,7 @@ class Coherence(p: CoherenceParams) extends Module {
     rsp.bits.srcId             := p.homeId.U
     rsp.bits.txnId             := r.txnId
     rsp.bits.dbid              := i.U
+    rsp.bits.respErr           := Mux(failed(i), 3.U, 0.U)
     rsp.bits.opcode            := Mux(state(i) === wbGrant, Opcode.CompDBIDResp.U, Opcode.Comp.U)
     when(rsp.fire) {
       seen(i)  := 0.U
@@ -356,7 +410,7 @@ class Coherence(p: CoherenceParams) extends Module {
     dat.bits.dbid              := i.U
     dat.bits.opcode            := Opcode.CompData.U
     dat.bits.resp              := Mux(failed(i), CoherenceState.I.U, Mux(exclusive, CoherenceState.UC.U, CoherenceState.SC.U))
-    dat.bits.respErr           := Mux(failed(i), 2.U, 0.U)
+    dat.bits.respErr           := Mux(failed(i), 3.U, 0.U)
     dat.bits.dataId            := sent(i) * (c.dataBits / 128).U
     dat.bits.data              := Mux(failed(i), 0.U, payload(i)(if (c.beatsPerLine == 1) 0.U else sent(i)))
     dat.bits.be                := Mux(failed(i), 0.U, Fill(c.bytesPerBeat, 1.U(1.W)))

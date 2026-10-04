@@ -4,7 +4,6 @@ set(LINKER_SCRIPT ${WORKLOAD_LIB_DIR}/bbsw/baremetal/bbsim.ld)
 add_custom_target(omni-interconnect-build)
 set(BUCKYBALL_CTEST_TARGET attention)
 set(BUCKYBALL_CTEST_GROUP_TARGET omni-interconnect-build)
-add_subdirectory(${BUCKYBALL_REPO_ROOT}/examples/balls/smatmul/workloads/ctests smatmul)
 foreach(TEST interconnect reservation backpressure bounds peripherals)
   buckyball_ctest_name(NAME attention chip-${TEST})
   set(BINARY ${NAME}-baremetal)
@@ -13,8 +12,10 @@ foreach(TEST interconnect reservation backpressure bounds peripherals)
             -specs=nano.specs -specs=nosys.specs -nostartfiles
             -Wl,-T,${LINKER_SCRIPT}
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include
+            -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
             ${STARTUP} ${CMAKE_CURRENT_SOURCE_DIR}/${TEST}.c ${SYSCALLS} -o ${BINARY}
     DEPENDS ${TEST}.c ${STARTUP} ${SYSCALLS} ${LINKER_SCRIPT}
+            ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/include/interconnect.h
     VERBATIM)
   add_custom_target(${NAME}-build DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BINARY})

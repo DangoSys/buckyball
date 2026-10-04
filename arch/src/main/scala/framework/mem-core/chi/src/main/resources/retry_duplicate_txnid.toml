@@ -1,0 +1,1 @@
+expected_assertion = "CHI retry requester reused a live TxnID"

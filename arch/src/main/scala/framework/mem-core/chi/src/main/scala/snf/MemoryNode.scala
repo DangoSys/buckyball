@@ -121,7 +121,16 @@ class MemoryNode(p: Params, nodeId: Int = 1, slots: Int = 8) extends Module {
     }
   }
 
-  val memArb = Module(new RRArbiter(new LineRequest(p), slots))
+  val memArb = Module(new RRArbiter(new LineRequest(p), slots) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(slots)).W))
+      when(this.io.out.fire)(pointer := this.io.chosen)
+      pointer
+    }
+
+  })
+
   for (i <- 0 until slots) {
     memArb.io.in(i).valid               := state(i) === issue
     memArb.io.in(i).bits.id             := i.U
@@ -145,7 +154,16 @@ class MemoryNode(p: Params, nodeId: Int = 1, slots: Int = 8) extends Module {
     }
   }
 
-  val rspArb = Module(new RRArbiter(new ResponseFlit(p), slots))
+  val rspArb = Module(new RRArbiter(new ResponseFlit(p), slots) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(slots)).W))
+      when(this.io.out.fire)(pointer := this.io.chosen)
+      pointer
+    }
+
+  })
+
   for (i <- 0 until slots) {
     val r = rspArb.io.in(i)
     r.valid               := state(i) === dbid || state(i) === complete
@@ -156,13 +174,22 @@ class MemoryNode(p: Params, nodeId: Int = 1, slots: Int = 8) extends Module {
     r.bits.txnId          := requests(i).txnId
     r.bits.opcode         := Mux(state(i) === dbid, Opcode.DBIDResp.U, Opcode.Comp.U)
     r.bits.dbid           := i.U
-    r.bits.respErr        := Mux(errors(i), 2.U, 0.U) // NDERR
+    r.bits.respErr        := Mux(errors(i), 3.U, 0.U) // NDERR
     r.bits.traceTag       := requests(i).traceTag
     when(r.fire)(state(i) := Mux(state(i) === dbid, collect, free))
   }
   io.rsp <> rspArb.io.out
 
-  val datArb = Module(new RRArbiter(new DataFlit(p), slots))
+  val datArb = Module(new RRArbiter(new DataFlit(p), slots) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(slots)).W))
+      when(this.io.out.fire)(pointer := this.io.chosen)
+      pointer
+    }
+
+  })
+
   for (i <- 0 until slots) {
     val d = datArb.io.in(i)
     d.valid        := state(i) === returnData
@@ -176,7 +203,7 @@ class MemoryNode(p: Params, nodeId: Int = 1, slots: Int = 8) extends Module {
     d.bits.dbid    := requests(i).txnId
     d.bits.opcode  := Opcode.CompData.U
     d.bits.dataId  := sent(i) * (p.dataBits / 128).U
-    d.bits.respErr := Mux(errors(i), 2.U, 0.U)
+    d.bits.respErr := Mux(errors(i), 3.U, 0.U)
     val beatIndex = if (p.beatsPerLine == 1) 0.U(0.W) else sent(i)(log2Ceil(p.beatsPerLine) - 1, 0)
     d.bits.data     := Mux(errors(i), 0.U, payload(i)(beatIndex))
     d.bits.traceTag := requests(i).traceTag

@@ -3,27 +3,30 @@ package memcore.bus.chi.rnf
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 // Direct-mapped write-back coherent cache agent. The snoop engine is independent
 // of the demand miss FSM, so a queued eviction/miss cannot block a Home snoop.
-class ChiCache(
-  p:          Params,
-  nodeId:     Int,
-  cacheLines: Int = 4,
-  homeId:     Int = 64,
-  homeCount:  Int = 1,
-  txnId:      Int = 0,
-  bankCount:  Int = 1)
-    extends Module {
+@instantiable
+class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
+  val p                  = config.chi
+  private val nodeId     = config.nodeId
+  private val homeId     = config.homeId
+  private val homeCount  = config.homeCount
+  private val cacheLines = config.cacheLines / config.banks
+  private val bankCount  = config.banks
+  private val txnId      = bankIndex
+  require(bankIndex >= 0 && bankIndex < config.banks)
   require(cacheLines >= 2 && isPow2(cacheLines))
   require(nodeId > 0 && nodeId < homeId)
   require(homeId + homeCount <= (1 << p.nodeIdBits))
   require(txnId >= 0 && txnId < 256 && bankCount >= 1 && isPow2(bankCount))
-  val mapping = HomeMapping(homeCount, homeId)
+  val mapping            = HomeMapping(homeCount, homeId)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val access          = Flipped(Decoupled(new CacheAccess(p)))
-    val result          = Decoupled(new CacheResult)
+    val probe           = Option.when(config.probe)(new CacheProbe(p))
+    val result          = Decoupled(new CacheResult(config.resultLineBits))
     val chi             = new RequesterPort(p)
     val hits            = Output(UInt(32.W))
     val misses          = Output(UInt(32.W))
@@ -43,10 +46,11 @@ class ChiCache(
   val command                                                                                        = Reg(new CacheAccess(p))
   val reservation                                                                                    = RegInit(false.B)
   val reservationAddress                                                                             = Reg(UInt(p.addressBits.W))
+  val reservationWord                                                                                = Reg(Bool())
   val isLR                                                                                           = command.atomic === CacheAtomic.LR.U
   val isSC                                                                                           = command.atomic === CacheAtomic.SC.U
   val modifies                                                                                       = command.write || (command.atomic >= CacheAtomic.Swap.U && command.atomic <= CacheAtomic.MaxU.U) || isSC
-  val reservationMatch                                                                               = reservation && reservationAddress === command.addr
+  val reservationMatch                                                                               = reservation && reservationAddress === command.addr && reservationWord === command.atomicWord
   val victimAddress                                                                                  = Reg(UInt(p.addressBits.W))
   val victimWasDirty                                                                                 = Reg(Bool())
   val copyData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
@@ -56,8 +60,10 @@ class ChiCache(
   val count                                                                                          = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
   val fillData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
   val fillSeen                                                                                       = RegInit(0.U(p.beatsPerLine.W))
+  val fillPermission                                                                                 = Reg(UInt(3.W))
+  val fillDbid                                                                                       = Reg(UInt(p.dbIdBits.W))
   val fillError                                                                                      = RegInit(false.B)
-  val answer                                                                                         = Reg(new CacheResult)
+  val answer                                                                                         = Reg(new CacheResult(config.resultLineBits))
   val hits                                                                                           = RegInit(0.U(32.W))
   val misses                                                                                         = RegInit(0.U(32.W))
   io.hits   := hits
@@ -69,35 +75,79 @@ class ChiCache(
   val snoopData                        = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
   val snoopResult                      = Reg(UInt(3.W))
   val snoopCount                       = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
-  val noSnoop                          = snpState === siIdle && !io.chi.snp.valid
-  io.access.ready := state === idle && noSnoop
+  // CHI B4.11.1: once fill data starts, a same-line snoop waits for the whole line.
+  // Its pending VALID must not block the remaining DAT packets.
+  val deferSnoop                       = state === fill && (fillSeen.orR || io.chi.rxDat.valid) &&
+    tag(io.chi.snp.bits.addr << 3) === tag(command.addr)
+  val noSnoop                          = snpState === siIdle && (!io.chi.snp.valid || deferSnoop)
+  io.access.ready := state === idle && noSnoop && !io.probe.map(_.valid).getOrElse(false.B)
+
   when(io.access.fire) {
-    assert(io.access.bits.addr(2, 0) === 0.U, "Cache client requires aligned 64-bit accesses")
+    assert(
+      Mux(io.access.bits.atomicWord, io.access.bits.addr(1, 0) === 0.U, io.access.bits.addr(2, 0) === 0.U),
+      "Cache client requires naturally aligned accesses"
+    )
     assert(io.access.bits.atomic <= CacheAtomic.Fence.U, "Unknown CPU atomic operation")
-    when(io.access.bits.atomic =/= 0.U) {
-      assert(!io.access.bits.write && io.access.bits.mask.andR, "Atomic operation requires a full 64-bit operand")
+    when(io.access.bits.atomic =/= CacheAtomic.None.U) {
+      assert(!io.access.bits.write && io.access.bits.mask.andR, "Atomic operation requires a full operand")
     }
     command := io.access.bits
     state   := lookup
   }
 
+  // A probe acts only between demand operations and never in a cycle a snoop could be accepted.
+  io.probe.foreach { probe =>
+    val pi = index(probe.addr)
+    probe.ready := state === idle && snpState === siIdle && !io.chi.snp.valid
+    probe.hit   := valid(pi) && tags(pi) === tag(probe.addr) && (!probe.write || writable(pi))
+    probe.value := (data(pi) >> (probe.addr(5, 3) << 6))(63, 0)
+    when(probe.valid && probe.ready && probe.hit) {
+      hits := hits + 1.U
+      when(probe.write) {
+        val bytes = Wire(Vec(64, UInt(8.W)))
+        bytes := data(pi).asTypeOf(bytes)
+        for (b <- 0 until 64) {
+          when(probe.addr(5, 3) === (b / 8).U && probe.mask(b % 8)) {
+            bytes(b) := probe.data((b % 8) * 8 + 7, (b % 8) * 8)
+          }
+        }
+        data(pi) := bytes.asUInt
+        dirty(pi)   := true.B
+        reservation := false.B
+      }
+    }
+  }
+
+  def oldValue(line: UInt): UInt = {
+    val doubleword = (line >> (command.addr(5, 3) << 6))(63, 0)
+    val word       = Mux(command.addr(2), doubleword(63, 32), doubleword(31, 0))
+    Mux(command.atomicWord, Cat(Fill(32, word(31)), word), doubleword)
+  }
+
   def merge(line: UInt): UInt = {
     val old     = (line >> (command.addr(5, 3) << 6))(63, 0)
-    val operand = command.data
-    val value   = MuxLookup(command.atomic, operand)(Seq(
-      CacheAtomic.Add.U  -> (old + operand),
-      CacheAtomic.Xor.U  -> (old ^ operand),
-      CacheAtomic.And.U  -> (old & operand),
-      CacheAtomic.Or.U   -> (old | operand),
-      CacheAtomic.Min.U  -> Mux(old.asSInt < operand.asSInt, old, operand),
-      CacheAtomic.Max.U  -> Mux(old.asSInt > operand.asSInt, old, operand),
-      CacheAtomic.MinU.U -> Mux(old < operand, old, operand),
-      CacheAtomic.MaxU.U -> Mux(old > operand, old, operand)
+    val oldWord = Mux(command.addr(2), old(63, 32), old(31, 0))
+    def operation(lhs: UInt, rhs: UInt): UInt = MuxLookup(command.atomic, rhs)(Seq(
+      CacheAtomic.Add.U  -> (lhs + rhs),
+      CacheAtomic.Xor.U  -> (lhs ^ rhs),
+      CacheAtomic.And.U  -> (lhs & rhs),
+      CacheAtomic.Or.U   -> (lhs | rhs),
+      CacheAtomic.Min.U  -> Mux(lhs.asSInt < rhs.asSInt, lhs, rhs),
+      CacheAtomic.Max.U  -> Mux(lhs.asSInt > rhs.asSInt, lhs, rhs),
+      CacheAtomic.MinU.U -> Mux(lhs < rhs, lhs, rhs),
+      CacheAtomic.MaxU.U -> Mux(lhs > rhs, lhs, rhs)
     ))
-    val bytes   = Wire(Vec(64, UInt(8.W)))
+    val wordValue = operation(oldWord, command.data(31, 0))
+    val value = Mux(
+      command.atomicWord,
+      Mux(command.addr(2), Cat(wordValue, old(31, 0)), Cat(old(63, 32), wordValue)),
+      operation(old, command.data)
+    )
+    val bytes = Wire(Vec(64, UInt(8.W)))
     bytes := line.asTypeOf(bytes)
     for (b <- 0 until 64) {
-      when(command.addr(5, 3) === (b / 8).U && command.mask(b % 8)) {
+      val selected = !command.atomicWord || command.addr(2) === (b % 8 / 4).U
+      when(command.addr(5, 3) === (b / 8).U && command.mask(b % 8) && selected) {
         bytes(b) := value((b % 8) * 8 + 7, (b % 8) * 8)
       }
     }
@@ -107,19 +157,21 @@ class ChiCache(
   when(state === lookup && noSnoop) {
     val hit = valid(ci) && tags(ci) === tag(command.addr)
     when(command.atomic === CacheAtomic.Fence.U || (isSC && !reservationMatch)) {
-      answer.data            := Mux(isSC, 1.U, 0.U)
-      answer.error           := false.B
-      when(isSC)(reservation := false.B)
-      state                  := respond
+      answer.data                        := Mux(isSC, 1.U, 0.U)
+      answer.error                       := false.B
+      if (config.lineResult) answer.line := 0.U
+      when(isSC)(reservation             := false.B)
+      state                              := respond
     }.elsewhen(hit && (!modifies || writable(ci))) {
-      hits         := hits + 1.U
-      answer.data  := Mux(isSC, 0.U, (data(ci) >> (command.addr(5, 3) << 6))(63, 0))
-      answer.error := false.B
+      hits                               := hits + 1.U
+      answer.data                        := Mux(isSC, 0.U, oldValue(data(ci)))
+      answer.error                       := false.B
+      if (config.lineResult) answer.line := data(ci)
       when(modifies) {
         data(ci) := merge(data(ci)); dirty(ci) := true.B; reservation := false.B
       }
-      when(isLR) { reservation := true.B; reservationAddress := command.addr }
-      state        := respond
+      when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
+      state                              := respond
     }.otherwise {
       misses            := misses + 1.U
       when(valid(ci) && !hit) {
@@ -202,11 +254,17 @@ class ChiCache(
     assert(!(fillSeen & UIntToOH(b, p.beatsPerLine)).orR, "Duplicate fill DataID")
     val received = fillSeen | UIntToOH(b, p.beatsPerLine)
     val nextData = WireInit(fillData)
-    nextData(b)  := d.data
-    fillData     := nextData
-    fillSeen     := received
-    fillError    := fillError || d.respErr =/= 0.U
-    completionId := d.dbid(p.dbIdBits - 1, 0)
+    nextData(b)    := d.data
+    assert(d.dbid < (BigInt(1) << p.dbIdBits).U, "Fill DBID exceeds completion ID width")
+    when(fillSeen.orR) {
+      assert(d.dbid === fillDbid && d.resp === fillPermission, "Inconsistent multi-beat fill metadata")
+    }
+    fillPermission := d.resp
+    fillDbid       := d.dbid
+    fillData       := nextData
+    fillSeen       := received
+    fillError      := fillError || d.respErr =/= 0.U
+    completionId   := d.dbid(p.dbIdBits - 1, 0)
     when(received.andR) {
       val failed = fillError || d.respErr =/= 0.U
       when(!failed) {
@@ -220,35 +278,41 @@ class ChiCache(
         dirty(ci)    := doWrite
         tags(ci)     := tag(command.addr)
         data(ci)     := Mux(doWrite, merge(nextData.asUInt), nextData.asUInt)
-        when(isLR) { reservation := true.B; reservationAddress := command.addr }
+        when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
       }
-      answer.data := Mux(failed, 0.U, Mux(isSC, !reservationMatch, (nextData.asUInt >> (command.addr(5, 3) << 6))(63, 0)))
-      when(modifies)(reservation := false.B)
-      answer.error               := failed
-      state                      := ack
+      answer.data := Mux(failed, 0.U, Mux(isSC, !reservationMatch, oldValue(nextData.asUInt)))
+      if (config.lineResult) answer.line := nextData.asUInt
+      when(modifies)(reservation         := false.B)
+      answer.error                       := failed
+      state                              := ack
     }
   }
 
-  io.chi.snp.ready := snpState === siIdle
+  io.chi.snp.ready := snpState === siIdle && !deferSnoop
   when(io.chi.snp.fire) {
-    val s          = io.chi.snp.bits
-    val address    = s.addr << 3
-    val i          = index(address)
-    val hit        = valid(i) && tags(i) === tag(address)
-    val invalidate = s.opcode === Opcode.SnpUnique.U || s.opcode === Opcode.SnpCleanInvalid.U
+    val s           = io.chi.snp.bits
+    val address     = s.addr << 3
+    val i           = index(address)
+    val hit         = valid(i) && tags(i) === tag(address)
+    val discard     = s.opcode === Opcode.SnpMakeInvalid.U
+    val cleanShared = s.opcode === Opcode.SnpCleanShared.U
+    val invalidate  = s.opcode === Opcode.SnpUnique.U || s.opcode === Opcode.SnpCleanInvalid.U || discard
     // Other harts' read-only traffic must not indefinitely defeat constrained LR/SC.
     when(reservation && tag(reservationAddress) === tag(address) && invalidate)(reservation := false.B)
     assert(
       s.srcId === mapping.node(address) && s.pas === 0.U && s.fwdNid === 0.U && s.fwdTxnId === 0.U &&
-        (invalidate || s.opcode === Opcode.SnpNotSharedDirty.U),
+        (invalidate || cleanShared || s.opcode === Opcode.SnpNotSharedDirty.U),
       "Unsupported cache snoop"
     )
+    when(cleanShared || s.opcode === Opcode.SnpCleanInvalid.U || discard) {
+      assert(!s.retToSrc.asBool, "Cache maintenance snoop requires RetToSrc zero")
+    }
     snoop                                                                                   := s
     snoopData                                                                               := data(i).asTypeOf(snoopData)
     snoopCount                                                                              := 0.U
     val finalState = Mux(!hit || invalidate, CoherenceState.I.U, CoherenceState.SC.U)
-    snoopResult := finalState | Mux(hit && dirty(i), CoherenceState.PassDirty.U, 0.U)
-    snpState    := Mux(hit && (dirty(i) || s.retToSrc.asBool), siData, siRsp)
+    snoopResult := finalState | Mux(hit && dirty(i) && !discard, CoherenceState.PassDirty.U, 0.U)
+    snpState    := Mux(hit && !discard && (dirty(i) || s.retToSrc.asBool), siData, siRsp)
     when(hit) {
       writable(i)               := false.B
       dirty(i)                  := false.B
@@ -277,7 +341,7 @@ class ChiCache(
   val outputBeat = Mux(snpState === siData, snoopCount, count)
   val b          = if (p.beatsPerLine == 1) 0.U(0.W) else outputBeat
   io.chi.txDat.bits.dataId             := outputBeat * (p.dataBits / 128).U
-  io.chi.txDat.bits.data               := Mux(snpState === siData, snoopData(b), copyData(b))
+  io.chi.txDat.bits.data               := Mux(snpState === siData, snoopData(b), Mux(copyResp === CoherenceState.I.U, 0.U, copyData(b)))
   io.chi.txDat.bits.be                 := Mux(
     snpState === siData || copyResp =/= CoherenceState.I.U,
     Fill(p.bytesPerBeat, 1.U(1.W)),

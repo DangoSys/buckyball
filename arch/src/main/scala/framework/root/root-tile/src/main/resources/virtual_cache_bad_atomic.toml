@@ -1,0 +1,2 @@
+expected_assertion = "Virtual LSU does not accept Fence or unknown atomics"
+invalid_case = 1

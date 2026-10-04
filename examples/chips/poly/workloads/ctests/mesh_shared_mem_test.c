@@ -1,5 +1,4 @@
 #include <bbhw/isa/isa.h>
-#include <multicore.h>
 #include <params.h>
 #include <topology.h>
 
@@ -19,20 +18,18 @@
 #error "mesh_shared_mem_test requires a physical Bank per shared virtual Bank"
 #endif
 
-#define SHARED_TEST_BANKS (BB_VIRTUAL_BANK_NUM - BB_SHARED_BANK_BASE)
-#define ROW_BYTES (BANK_WIDTH / 8)
+enum {
+  SHARED_TEST_BANKS = (BB_VIRTUAL_BANK_NUM - BB_SHARED_BANK_BASE),
+  ROW_BYTES = (BANK_WIDTH / 8)
+};
 
 static uint8_t source[SHARED_TEST_BANKS][ROW_BYTES]
     __attribute__((aligned(64)));
 static uint8_t result[SHARED_TEST_BANKS][ROW_BYTES]
     __attribute__((aligned(64)));
 
+/* crt0 boots only the target's test hart. */
 int main(void) {
-  core_id_t id = bb_get_core_id();
-  if (id.tile != 0 || id.core != 0)
-    for (;;)
-      asm volatile("wfi");
-
   for (int bank = 0; bank < SHARED_TEST_BANKS; ++bank) {
     bb_mem_alloc(BB_SHARED_BANK_BASE + bank, 1, 1);
     for (int byte = 0; byte < ROW_BYTES; ++byte)

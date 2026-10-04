@@ -2,6 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import memcore.bus.axi.Beat
 
 /** One AXI-stream beat plus the Mesh destination selected at packet start. */
@@ -42,7 +43,7 @@ class MeshBulkControlTx(
     extends Module {
   require(payloadBits > 0 && payloadBits <= mesh.payloadBits)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(payloadBits, nodeMap.coordinateBits)))
     val out = Decoupled(new MeshFlit(mesh))
   })
@@ -64,7 +65,7 @@ class MeshBulkControlTx(
 class MeshBulkControlRx(mesh: MeshParams, payloadBits: Int, virtualChannel: Int) extends Module {
   require(payloadBits > 0 && payloadBits <= mesh.payloadBits)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
     val out = Decoupled(UInt(payloadBits.W))
   })
@@ -87,6 +88,7 @@ class MeshBulkControlRx(mesh: MeshParams, payloadBits: Int, virtualChannel: Int)
  * `last`. The Mesh router therefore holds the selected output across the full
  * long stream, rather than arbitrating again at every beat.
  */
+@instantiable
 class MeshBulkPacketizer(
   mesh:           MeshParams,
   dataBits:       Int,
@@ -99,7 +101,7 @@ class MeshBulkPacketizer(
   require(virtualChannel >= 0 && virtualChannel < mesh.virtualChannels)
   require(nodeMap.mesh == mesh)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(dataBits, nodeMap.coordinateBits)))
     val out = Decoupled(new MeshFlit(mesh))
   })
@@ -130,11 +132,12 @@ class MeshBulkPacketizer(
 }
 
 /** Recreates AXI-stream beat boundaries from a single bulk Mesh VC. */
+@instantiable
 class MeshBulkDepacketizer(mesh: MeshParams, dataBits: Int, virtualChannel: Int) extends Module {
   require(mesh.payloadBits >= dataBits + dataBits / 8)
   require(virtualChannel >= 0 && virtualChannel < mesh.virtualChannels)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
     val out = Decoupled(new Beat(dataBits))
   })
@@ -158,17 +161,23 @@ class MeshBulkDepacketizer(mesh: MeshParams, dataBits: Int, virtualChannel: Int)
 /** Native verification target for long AXI-stream packet ownership over Mesh. */
 class MeshBulkLoopback extends Module {
   private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
-  private val map  = ChiMeshNodeMap(Seq.tabulate(128)(_ & 1), Seq.tabulate(128)(node => (node >> 1) & 1), mesh)
 
-  val io = IO(new Bundle {
+  private val map = ChiMeshNodeMap(
+    Seq.tabulate(128)(_ & 1),
+    Seq.tabulate(128)(node => (node >> 1) & 1),
+    mesh,
+    presentNodes = (0 until 128).toSet
+  )
+
+  @public val io = IO(new Bundle {
     val in            = Flipped(Decoupled(new MeshBulkBeat(256, 7)))
     val out           = Decoupled(new Beat(256))
     val observed      = Output(new MeshFlit(mesh))
     val observedValid = Output(Bool())
   })
 
-  val tx = Module(new MeshBulkPacketizer(mesh, 256, virtualChannel = 4, localX = 0, localY = 0, map))
-  val rx = Module(new MeshBulkDepacketizer(mesh, 256, virtualChannel = 4))
+  val tx = Instantiate(new MeshBulkPacketizer(mesh, 256, virtualChannel = 4, localX = 0, localY = 0, map))
+  val rx = Instantiate(new MeshBulkDepacketizer(mesh, 256, virtualChannel = 4))
   tx.io.in <> io.in
   rx.io.in <> tx.io.out
   io.out <> rx.io.out

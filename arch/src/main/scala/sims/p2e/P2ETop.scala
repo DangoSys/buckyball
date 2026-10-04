@@ -1,12 +1,22 @@
 package sims.p2e
 
 import chisel3._
-import chisel3.experimental.{attach, Analog}
-import chisel3.util.HasBlackBoxInline
+import chisel3.experimental.Analog
+import chisel3.util._
+import memcore.bus.axi4
+import sims.soc.{SimSoc, SystemTarget}
 
+/** A chip on the P2E board: the System over the 16-GiB DDR4 macro at 0x80000000. */
+abstract class P2ETarget(pb: String) extends SystemTarget(pb) {
+  override val dramBytes: BigInt = BigInt(16) << 30
+}
+
+/** Board pins of the P2E top; bebop's Tcl drives `sys_rstn`/`soc_hold` and reads the status pins. */
 class P2ETopIO extends Bundle {
   val user_clk = Input(Clock())
   val sys_rstn = Input(Bool())
+  // Holds the SoC in reset after DDR calibration until the host has loaded every image.
+  val soc_hold = Input(Bool())
 
   val c0_sys_clk_p = Input(Bool())
   val c0_sys_clk_n = Input(Bool())
@@ -34,573 +44,241 @@ class P2ETopIO extends Bundle {
   val power_good     = Input(Bool())
 }
 
-class P2ETopBlackBox extends BlackBox with HasBlackBoxInline {
-  val io = IO(new P2ETopIO)
-
-  setInline(
-    "P2ETopBlackBox.v",
-    """
-      |module p2e_mmio_zero_slave #(
-      |  parameter ADDR_BITS = 32,
-      |  parameter DATA_BITS = 64,
-      |  parameter ID_BITS   = 4,
-      |  parameter STRB_BITS = DATA_BITS / 8
-      |)(
-      |  input                    clock,
-      |  input                    reset,
-      |  output                   aw_ready,
-      |  input                    aw_valid,
-      |  input  [ID_BITS-1:0]     aw_id,
-      |  input  [ADDR_BITS-1:0]   aw_addr,
-      |  input  [7:0]             aw_len,
-      |  input  [2:0]             aw_size,
-      |  input  [1:0]             aw_burst,
-      |  output                   w_ready,
-      |  input                    w_valid,
-      |  input  [DATA_BITS-1:0]   w_data,
-      |  input  [STRB_BITS-1:0]   w_strb,
-      |  input                    w_last,
-      |  input                    b_ready,
-      |  output reg               b_valid,
-      |  output reg [ID_BITS-1:0] b_id,
-      |  output [1:0]             b_resp,
-      |  output                   ar_ready,
-      |  input                    ar_valid,
-      |  input  [ID_BITS-1:0]     ar_id,
-      |  input  [ADDR_BITS-1:0]   ar_addr,
-      |  input  [7:0]             ar_len,
-      |  input  [2:0]             ar_size,
-      |  input  [1:0]             ar_burst,
-      |  input                    r_ready,
-      |  output reg               r_valid,
-      |  output reg [ID_BITS-1:0] r_id,
-      |  output [DATA_BITS-1:0]   r_data,
-      |  output [1:0]             r_resp,
-      |  output                   r_last
-      |);
-      |  assign aw_ready = !b_valid;
-      |  assign w_ready  = !b_valid;
-      |  assign b_resp   = 2'b00;
-      |
-      |  assign ar_ready = !r_valid;
-      |  assign r_data   = {DATA_BITS{1'b0}};
-      |  assign r_resp   = 2'b00;
-      |  assign r_last   = 1'b1;
-      |
-      |  always @(posedge clock) begin
-      |    if (reset) begin
-      |      b_valid <= 1'b0;
-      |      b_id    <= {ID_BITS{1'b0}};
-      |      r_valid <= 1'b0;
-      |      r_id    <= {ID_BITS{1'b0}};
-      |    end else begin
-      |      if (b_valid && b_ready) begin
-      |        b_valid <= 1'b0;
-      |      end
-      |      if (!b_valid && aw_valid && w_valid) begin
-      |        b_valid <= 1'b1;
-      |        b_id    <= aw_id;
-      |      end
-      |
-      |      if (r_valid && r_ready) begin
-      |        r_valid <= 1'b0;
-      |      end
-      |      if (!r_valid && ar_valid) begin
-      |        r_valid <= 1'b1;
-      |        r_id    <= ar_id;
-      |      end
-      |    end
-      |  end
-      |endmodule
-      |
-      |// P2E Memory Address Translator
-      |// Translates CPU's virtual address space (0x80000000-based) to DDR physical address space (0x0-based)
-      |//
-      |// Background:
-      |//   - CPU uses 0x80000000 as RAM base address (standard RISC-V convention)
-      |//   - DDR physical memory starts at address 0x0
-      |//   - TileLink-to-AXI4 converter does NOT subtract the base address
-      |//   - This module subtracts the base address (0x80000000) to map to DDR physical space
-      |//
-      |// Address mapping (56-bit physical address space):
-      |//   CPU 0x0000000080000000 -> DDR 0x0000000000000000
-      |//   CPU 0x0000000080000004 -> DDR 0x0000000000000004
-      |//   ...
-      |//   CPU 0x000000047FFFFFFF -> DDR 0x00000003FFFFFFFF (16GB)
-      |//
-      |module p2e_mem_addr_translator #(
-      |  parameter ADDR_IN_BITS  = 56,  // Input address width from DigitalTop (56-bit physical address)
-      |  parameter ADDR_OUT_BITS = 64,  // Output address width for DDR controller
-      |  parameter BASE_ADDR     = 64'h0000000080000000  // Base address to subtract
-      |)(
-      |  input  [ADDR_IN_BITS-1:0]  addr_in,   // Address from CPU (e.g., 0x0000000080000000)
-      |  output [ADDR_OUT_BITS-1:0] addr_out   // Address to DDR (e.g., 0x0000000000000000)
-      |);
-      |  // Subtract base address and zero-extend to 64-bit for DDR controller
-      |  wire [63:0] addr_in_extended = {{(64-ADDR_IN_BITS){1'b0}}, addr_in};
-      |  assign addr_out = addr_in_extended - BASE_ADDR;
-      |endmodule
-      |
-      |// AXI4 AR/AW channel register slice (full AXI handshake, single cycle latency)
-      |// Breaks long combinational paths between SoC and DDR controller across SLR boundary.
-      |// Conforms to AXI: addr/control are stable while valid is high; ready/valid handshake preserved.
-      |module p2e_axi_addr_reg_slice #(
-      |  parameter ADDR_BITS = 64,
-      |  parameter ID_BITS   = 11
-      |)(
-      |  input                    clock,
-      |  input                    reset,
-      |  // Slave (input) side
-      |  input  [ID_BITS-1:0]     s_id,
-      |  input  [ADDR_BITS-1:0]   s_addr,
-      |  input  [7:0]             s_len,
-      |  input  [2:0]             s_size,
-      |  input  [1:0]             s_burst,
-      |  input                    s_valid,
-      |  output                   s_ready,
-      |  // Master (output) side
-      |  output [ID_BITS-1:0]     m_id,
-      |  output [ADDR_BITS-1:0]   m_addr,
-      |  output [7:0]             m_len,
-      |  output [2:0]             m_size,
-      |  output [1:0]             m_burst,
-      |  output                   m_valid,
-      |  input                    m_ready
-      |);
-      |  // Single-stage skid buffer: holds one transaction.
-      |  // Allows full throughput when downstream is keeping up.
-      |  reg [ID_BITS-1:0]   r_id;
-      |  reg [ADDR_BITS-1:0] r_addr;
-      |  reg [7:0]           r_len;
-      |  reg [2:0]           r_size;
-      |  reg [1:0]           r_burst;
-      |  reg                 r_valid;
-      |
-      |  assign s_ready = !r_valid || m_ready;
-      |  assign m_valid = r_valid;
-      |  assign m_id    = r_id;
-      |  assign m_addr  = r_addr;
-      |  assign m_len   = r_len;
-      |  assign m_size  = r_size;
-      |  assign m_burst = r_burst;
-      |
-      |  always @(posedge clock) begin
-      |    if (reset) begin
-      |      r_valid <= 1'b0;
-      |    end else begin
-      |      if (s_ready) begin
-      |        r_valid <= s_valid;
-      |        if (s_valid) begin
-      |          r_id    <= s_id;
-      |          r_addr  <= s_addr;
-      |          r_len   <= s_len;
-      |          r_size  <= s_size;
-      |          r_burst <= s_burst;
-      |        end
-      |      end
-      |    end
-      |  end
-      |endmodule
-      |
-      |module P2ETopBlackBox(
-      |  input         user_clk,
-      |  input         sys_rstn,
-      |  input         c0_sys_clk_p,
-      |  input         c0_sys_clk_n,
-      |  output        c0_ddr4_act_n,
-      |  output [16:0] c0_ddr4_adr,
-      |  output [1:0]  c0_ddr4_ba,
-      |  output [1:0]  c0_ddr4_bg,
-      |  output [1:0]  c0_ddr4_cke,
-      |  output [1:0]  c0_ddr4_odt,
-      |  output [1:0]  c0_ddr4_cs_n,
-      |  output [1:0]  c0_ddr4_ck_t,
-      |  output [1:0]  c0_ddr4_ck_c,
-      |  output        c0_ddr4_reset_n,
-      |  inout  [7:0]  c0_ddr4_dm_dbi_n,
-      |  inout  [63:0] c0_ddr4_dq,
-      |  inout  [7:0]  c0_ddr4_dqs_c,
-      |  inout  [7:0]  c0_ddr4_dqs_t,
-      |  output        c0_ddr4_ui_clk,
-      |  output        init_calib_complete,
-      |  output        ddr4_en_vtt,
-      |  output        ddr4_en_vddq,
-      |  output        ddr4_en_vcc2v5,
-      |  input         power_good
-      |);
-      |  localparam MEM_ADDR_BITS = 64;
-      |  localparam MEM_DATA_BITS = 256;
-      |  localparam MEM_STRB_BITS = 32;
-      |  localparam MEM_ID_BITS   = 11;
-      |  localparam MMIO_ADDR_BITS = 32;
-      |  localparam MMIO_DATA_BITS = 64;
-      |  localparam MMIO_STRB_BITS = 8;
-      |  localparam MMIO_ID_BITS   = 4;
-      |
-      |  wire c0_init_calib_complete;
-      |  wire init_calib_complete_unused;  // Unused output from DDR4 controller
-      |  wire soc_reset = !sys_rstn || !c0_init_calib_complete;
-      |  assign init_calib_complete = c0_init_calib_complete;
-      |
-      |  // Memory AXI interface signals
-      |  // Note: DigitalTop outputs 56-bit physical addresses, DDR controller expects 64-bit
-      |  // We use address translator modules to handle the width conversion and base address mapping
-      |  wire [MEM_ID_BITS-1:0]     mem_awid;
-      |  wire [55:0]                mem_awaddr_soc;  // 56-bit address from DigitalTop
-      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr;      // 64-bit address to DDR (after translation)
-      |  wire [7:0]                 mem_awlen;
-      |  wire [2:0]                 mem_awsize;
-      |  wire [1:0]                 mem_awburst;
-      |  wire                       mem_awvalid;
-      |  wire                       mem_awready;
-      |  wire [MEM_DATA_BITS-1:0]   mem_wdata;
-      |  wire [MEM_STRB_BITS-1:0]   mem_wstrb;
-      |  wire                       mem_wlast;
-      |  wire                       mem_wvalid;
-      |  wire                       mem_wready;
-      |  wire [MEM_ID_BITS-1:0]     mem_bid;
-      |  wire [1:0]                 mem_bresp;
-      |  wire                       mem_bvalid;
-      |  wire                       mem_bready;
-      |  wire [MEM_ID_BITS-1:0]     mem_arid;
-      |  wire [55:0]                mem_araddr_soc;  // 56-bit address from DigitalTop
-      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr;      // 64-bit address to DDR (after translation)
-      |  wire [7:0]                 mem_arlen;
-      |  wire [2:0]                 mem_arsize;
-      |  wire [1:0]                 mem_arburst;
-      |  wire                       mem_arvalid;
-      |  wire                       mem_arready;
-      |  wire [MEM_ID_BITS-1:0]     mem_rid;
-      |  wire [MEM_DATA_BITS-1:0]   mem_rdata;
-      |  wire [1:0]                 mem_rresp;
-      |  wire                       mem_rlast;
-      |  wire                       mem_rvalid;
-      |  wire                       mem_rready;
-      |
-      |  // Memory address translators: CPU virtual address -> DDR physical address
-      |  p2e_mem_addr_translator #(
-      |    .ADDR_IN_BITS(56),
-      |    .ADDR_OUT_BITS(64),
-      |    .BASE_ADDR(64'h0000000080000000)
-      |  ) mem_awaddr_xlate (
-      |    .addr_in(mem_awaddr_soc),
-      |    .addr_out(mem_awaddr)
-      |  );
-      |
-      |  p2e_mem_addr_translator #(
-      |    .ADDR_IN_BITS(56),
-      |    .ADDR_OUT_BITS(64),
-      |    .BASE_ADDR(64'h0000000080000000)
-      |  ) mem_araddr_xlate (
-      |    .addr_in(mem_araddr_soc),
-      |    .addr_out(mem_araddr)
-      |  );
-      |
-      |  // ========================================================================
-      |  // AXI AW/AR register slices (1-cycle pipeline) to break cross-SLR paths
-      |  // Inserted between SoC (L2 cache + translator) and DDR controller.
-      |  // Conforms to AXI: full valid/ready handshake, addr stable when valid.
-      |  // ========================================================================
-      |  wire [MEM_ID_BITS-1:0]     mem_awid_pipe;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_awaddr_pipe;
-      |  wire [7:0]                 mem_awlen_pipe;
-      |  wire [2:0]                 mem_awsize_pipe;
-      |  wire [1:0]                 mem_awburst_pipe;
-      |  wire                       mem_awvalid_pipe;
-      |  wire                       mem_awready_pipe;
-      |
-      |  wire [MEM_ID_BITS-1:0]     mem_arid_pipe;
-      |  wire [MEM_ADDR_BITS-1:0]   mem_araddr_pipe;
-      |  wire [7:0]                 mem_arlen_pipe;
-      |  wire [2:0]                 mem_arsize_pipe;
-      |  wire [1:0]                 mem_arburst_pipe;
-      |  wire                       mem_arvalid_pipe;
-      |  wire                       mem_arready_pipe;
-      |
-      |  p2e_axi_addr_reg_slice #(
-      |    .ADDR_BITS(MEM_ADDR_BITS),
-      |    .ID_BITS(MEM_ID_BITS)
-      |  ) aw_pipe (
-      |    .clock   (user_clk),
-      |    .reset   (soc_reset),
-      |    .s_id    (mem_awid),
-      |    .s_addr  (mem_awaddr),
-      |    .s_len   (mem_awlen),
-      |    .s_size  (mem_awsize),
-      |    .s_burst (mem_awburst),
-      |    .s_valid (mem_awvalid),
-      |    .s_ready (mem_awready),
-      |    .m_id    (mem_awid_pipe),
-      |    .m_addr  (mem_awaddr_pipe),
-      |    .m_len   (mem_awlen_pipe),
-      |    .m_size  (mem_awsize_pipe),
-      |    .m_burst (mem_awburst_pipe),
-      |    .m_valid (mem_awvalid_pipe),
-      |    .m_ready (mem_awready_pipe)
-      |  );
-      |
-      |  p2e_axi_addr_reg_slice #(
-      |    .ADDR_BITS(MEM_ADDR_BITS),
-      |    .ID_BITS(MEM_ID_BITS)
-      |  ) ar_pipe (
-      |    .clock   (user_clk),
-      |    .reset   (soc_reset),
-      |    .s_id    (mem_arid),
-      |    .s_addr  (mem_araddr),
-      |    .s_len   (mem_arlen),
-      |    .s_size  (mem_arsize),
-      |    .s_burst (mem_arburst),
-      |    .s_valid (mem_arvalid),
-      |    .s_ready (mem_arready),
-      |    .m_id    (mem_arid_pipe),
-      |    .m_addr  (mem_araddr_pipe),
-      |    .m_len   (mem_arlen_pipe),
-      |    .m_size  (mem_arsize_pipe),
-      |    .m_burst (mem_arburst_pipe),
-      |    .m_valid (mem_arvalid_pipe),
-      |    .m_ready (mem_arready_pipe)
-      |  );
-      |
-      |  // MMIO wires removed - P2E config doesn't generate mmio_axi4_0 port
-      |  /*
-      |  wire [MMIO_ID_BITS-1:0]    mmio_awid;
-      |  wire [MMIO_ADDR_BITS-1:0]  mmio_awaddr;
-      |  wire [7:0]                 mmio_awlen;
-      |  wire [2:0]                 mmio_awsize;
-      |  wire [1:0]                 mmio_awburst;
-      |  wire                       mmio_awvalid;
-      |  wire                       mmio_awready;
-      |  wire [MMIO_DATA_BITS-1:0]  mmio_wdata;
-      |  wire [MMIO_STRB_BITS-1:0]  mmio_wstrb;
-      |  wire                       mmio_wlast;
-      |  wire                       mmio_wvalid;
-      |  wire                       mmio_wready;
-      |  wire [MMIO_ID_BITS-1:0]    mmio_bid;
-      |  wire [1:0]                 mmio_bresp;
-      |  wire                       mmio_bvalid;
-      |  wire                       mmio_bready;
-      |  wire [MMIO_ID_BITS-1:0]    mmio_arid;
-      |  wire [MMIO_ADDR_BITS-1:0]  mmio_araddr;
-      |  wire [7:0]                 mmio_arlen;
-      |  wire [2:0]                 mmio_arsize;
-      |  wire [1:0]                 mmio_arburst;
-      |  wire                       mmio_arvalid;
-      |  wire                       mmio_arready;
-      |  wire [MMIO_ID_BITS-1:0]    mmio_rid;
-      |  wire [MMIO_DATA_BITS-1:0]  mmio_rdata;
-      |  wire [1:0]                 mmio_rresp;
-      |  wire                       mmio_rlast;
-      |  wire                       mmio_rvalid;
-      |  wire                       mmio_rready;
-      |  */
-      |
-      |  DigitalTop soc (
-      |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_clock (user_clk),
-      |    .auto_chipyard_prcictrl_domain_reset_setter_clock_in_member_allClocks_uncore_reset (soc_reset),
-      |    .mem_axi4_0_aw_ready       (mem_awready),
-      |    .mem_axi4_0_aw_valid       (mem_awvalid),
-      |    .mem_axi4_0_aw_bits_id     (mem_awid),
-      |    .mem_axi4_0_aw_bits_addr   (mem_awaddr_soc),
-      |    .mem_axi4_0_aw_bits_len    (mem_awlen),
-      |    .mem_axi4_0_aw_bits_size   (mem_awsize),
-      |    .mem_axi4_0_aw_bits_burst  (mem_awburst),
-      |    .mem_axi4_0_w_ready        (mem_wready),
-      |    .mem_axi4_0_w_valid        (mem_wvalid),
-      |    .mem_axi4_0_w_bits_data    (mem_wdata),
-      |    .mem_axi4_0_w_bits_strb    (mem_wstrb),
-      |    .mem_axi4_0_w_bits_last    (mem_wlast),
-      |    .mem_axi4_0_b_valid        (mem_bvalid),
-      |    .mem_axi4_0_b_ready        (mem_bready),
-      |    .mem_axi4_0_b_bits_id      (mem_bid),
-      |    .mem_axi4_0_b_bits_resp    (mem_bresp),
-      |    .mem_axi4_0_ar_ready       (mem_arready),
-      |    .mem_axi4_0_ar_valid       (mem_arvalid),
-      |    .mem_axi4_0_ar_bits_id     (mem_arid),
-      |    .mem_axi4_0_ar_bits_addr   (mem_araddr_soc),
-      |    .mem_axi4_0_ar_bits_len    (mem_arlen),
-      |    .mem_axi4_0_ar_bits_size   (mem_arsize),
-      |    .mem_axi4_0_ar_bits_burst  (mem_arburst),
-      |    .mem_axi4_0_r_valid        (mem_rvalid),
-      |    .mem_axi4_0_r_ready        (mem_rready),
-      |    .mem_axi4_0_r_bits_id      (mem_rid),
-      |    .mem_axi4_0_r_bits_data    (mem_rdata),
-      |    .mem_axi4_0_r_bits_resp    (mem_rresp),
-      |    .mem_axi4_0_r_bits_last    (mem_rlast)
-      |  );
-      |
-      |  // MMIO stub removed - P2E config doesn't generate mmio_axi4_0 port
-      |  /*
-      |  p2e_mmio_zero_slave #(
-      |    .ADDR_BITS(MMIO_ADDR_BITS),
-      |    .DATA_BITS(MMIO_DATA_BITS),
-      |    .ID_BITS(MMIO_ID_BITS)
-      |  ) mmio_stub (
-      |    .clock    (user_clk),
-      |    .reset    (soc_reset),
-      |    .aw_ready (mmio_awready),
-      |    .aw_valid (mmio_awvalid),
-      |    .aw_id    (mmio_awid),
-      |    .aw_addr  (mmio_awaddr),
-      |    .aw_len   (mmio_awlen),
-      |    .aw_size  (mmio_awsize),
-      |    .aw_burst (mmio_awburst),
-      |    .w_ready  (mmio_wready),
-      |    .w_valid  (mmio_wvalid),
-      |    .w_data   (mmio_wdata),
-      |    .w_strb   (mmio_wstrb),
-      |    .w_last   (mmio_wlast),
-      |    .b_ready  (mmio_bready),
-      |    .b_valid  (mmio_bvalid),
-      |    .b_id     (mmio_bid),
-      |    .b_resp   (mmio_bresp),
-      |    .ar_ready (mmio_arready),
-      |    .ar_valid (mmio_arvalid),
-      |    .ar_id    (mmio_arid),
-      |    .ar_addr  (mmio_araddr),
-      |    .ar_len   (mmio_arlen),
-      |    .ar_size  (mmio_arsize),
-      |    .ar_burst (mmio_arburst),
-      |    .r_ready  (mmio_rready),
-      |    .r_valid  (mmio_rvalid),
-      |    .r_id     (mmio_rid),
-      |    .r_data   (mmio_rdata),
-      |    .r_resp   (mmio_rresp),
-      |    .r_last   (mmio_rlast)
-      |  );
-      |  */
-      |
-      |  xepic_ddr4_dc1 ddr (
-      |    .sys_rstn                 (sys_rstn),
-      |    .c0_sys_clk_p             (c0_sys_clk_p),
-      |    .c0_sys_clk_n             (c0_sys_clk_n),
-      |    .c0_ddr4_act_n            (c0_ddr4_act_n),
-      |    .c0_ddr4_adr              (c0_ddr4_adr),
-      |    .c0_ddr4_ba               (c0_ddr4_ba),
-      |    .c0_ddr4_bg               (c0_ddr4_bg),
-      |    .c0_ddr4_cke              (c0_ddr4_cke),
-      |    .c0_ddr4_odt              (c0_ddr4_odt),
-      |    .c0_ddr4_cs_n             (c0_ddr4_cs_n),
-      |    .c0_ddr4_ck_t             (c0_ddr4_ck_t),
-      |    .c0_ddr4_ck_c             (c0_ddr4_ck_c),
-      |    .c0_ddr4_reset_n          (c0_ddr4_reset_n),
-      |    .c0_ddr4_dm_dbi_n         (c0_ddr4_dm_dbi_n),
-      |    .c0_ddr4_dq               (c0_ddr4_dq),
-      |    .c0_ddr4_dqs_c            (c0_ddr4_dqs_c),
-      |    .c0_ddr4_dqs_t            (c0_ddr4_dqs_t),
-      |    .gclk_100m                (1'b0),
-      |    .ddr4_en_vtt_bbox         (ddr4_en_vtt),
-      |    .ddr4_en_vddq_bbox        (ddr4_en_vddq),
-      |    .ddr4_en_vcc2v5_bbox      (ddr4_en_vcc2v5),
-      |    .power_good_bbox          (power_good),
-      |    .init_start               (1'b1),
-      |    .init_cfg                 (1'b0),
-      |    .init_busy                (),
-      |    .init_calib_complete      (init_calib_complete_unused),
-      |    .c0_init_calib_complete   (c0_init_calib_complete),
-      |    .axi_clk                  (user_clk),
-      |    .s0_ddr4_s_axi_awid       (mem_awid_pipe),
-      |    .s0_ddr4_s_axi_awaddr     (mem_awaddr_pipe),
-      |    .s0_ddr4_s_axi_awlen      (mem_awlen_pipe),
-      |    .s0_ddr4_s_axi_awsize     (mem_awsize_pipe),
-      |    .s0_ddr4_s_axi_awburst    (mem_awburst_pipe),
-      |    .s0_ddr4_s_axi_awlock     (1'b0),
-      |    .s0_ddr4_s_axi_awcache    (4'b0011),
-      |    .s0_ddr4_s_axi_awprot     (3'b000),
-      |    .s0_ddr4_s_axi_awqos      (4'b0000),
-      |    .s0_ddr4_s_axi_awvalid    (mem_awvalid_pipe),
-      |    .s0_ddr4_s_axi_awready    (mem_awready_pipe),
-      |    .s0_ddr4_s_axi_wdata      (mem_wdata),
-      |    .s0_ddr4_s_axi_wstrb      (mem_wstrb),
-      |    .s0_ddr4_s_axi_wlast      (mem_wlast),
-      |    .s0_ddr4_s_axi_wvalid     (mem_wvalid),
-      |    .s0_ddr4_s_axi_wready     (mem_wready),
-      |    .s0_ddr4_s_axi_bready     (mem_bready),
-      |    .s0_ddr4_s_axi_bid        (mem_bid),
-      |    .s0_ddr4_s_axi_bresp      (mem_bresp),
-      |    .s0_ddr4_s_axi_bvalid     (mem_bvalid),
-      |    .s0_ddr4_s_axi_arid       (mem_arid_pipe),
-      |    .s0_ddr4_s_axi_araddr     (mem_araddr_pipe),
-      |    .s0_ddr4_s_axi_arlen      (mem_arlen_pipe),
-      |    .s0_ddr4_s_axi_arsize     (mem_arsize_pipe),
-      |    .s0_ddr4_s_axi_arburst    (mem_arburst_pipe),
-      |    .s0_ddr4_s_axi_arlock     (1'b0),
-      |    .s0_ddr4_s_axi_arcache    (4'b0011),
-      |    .s0_ddr4_s_axi_arprot     (3'b000),
-      |    .s0_ddr4_s_axi_arqos      (4'b0000),
-      |    .s0_ddr4_s_axi_arvalid    (mem_arvalid_pipe),
-      |    .s0_ddr4_s_axi_arready    (mem_arready_pipe),
-      |    .s0_ddr4_s_axi_rready     (mem_rready),
-      |    .s0_ddr4_s_axi_rid        (mem_rid),
-      |    .s0_ddr4_s_axi_rdata      (mem_rdata),
-      |    .s0_ddr4_s_axi_rresp      (mem_rresp),
-      |    .s0_ddr4_s_axi_rlast      (mem_rlast),
-      |    .s0_ddr4_s_axi_rvalid     (mem_rvalid),
-      |    .c0_ddr4_ui_clk           (c0_ddr4_ui_clk),
-      |    .s1_ddr4_s_axi_awid       (4'b0),
-      |    .s1_ddr4_s_axi_awaddr     (64'b0),
-      |    .s1_ddr4_s_axi_awlen      (8'b0),
-      |    .s1_ddr4_s_axi_awsize     (3'b0),
-      |    .s1_ddr4_s_axi_awburst    (2'b0),
-      |    .s1_ddr4_s_axi_awlock     (1'b0),
-      |    .s1_ddr4_s_axi_awcache    (4'b0),
-      |    .s1_ddr4_s_axi_awprot     (3'b0),
-      |    .s1_ddr4_s_axi_awqos      (4'b0),
-      |    .s1_ddr4_s_axi_awvalid    (1'b0),
-      |    .s1_ddr4_s_axi_awready    (),
-      |    .s1_ddr4_s_axi_wdata      (256'b0),
-      |    .s1_ddr4_s_axi_wstrb      (32'b0),
-      |    .s1_ddr4_s_axi_wlast      (1'b0),
-      |    .s1_ddr4_s_axi_wvalid     (1'b0),
-      |    .s1_ddr4_s_axi_wready     (),
-      |    .s1_ddr4_s_axi_bready     (1'b1),
-      |    .s1_ddr4_s_axi_bid        (),
-      |    .s1_ddr4_s_axi_bresp      (),
-      |    .s1_ddr4_s_axi_bvalid     (),
-      |    .s1_ddr4_s_axi_arid       (4'b0),
-      |    .s1_ddr4_s_axi_araddr     (64'b0),
-      |    .s1_ddr4_s_axi_arlen      (8'b0),
-      |    .s1_ddr4_s_axi_arsize     (3'b0),
-      |    .s1_ddr4_s_axi_arburst    (2'b0),
-      |    .s1_ddr4_s_axi_arlock     (1'b0),
-      |    .s1_ddr4_s_axi_arcache    (4'b0),
-      |    .s1_ddr4_s_axi_arprot     (3'b0),
-      |    .s1_ddr4_s_axi_arqos      (4'b0),
-      |    .s1_ddr4_s_axi_arvalid    (1'b0),
-      |    .s1_ddr4_s_axi_arready    (),
-      |    .s1_ddr4_s_axi_rready     (1'b1),
-      |    .s1_ddr4_s_axi_rid        (),
-      |    .s1_ddr4_s_axi_rdata      (),
-      |    .s1_ddr4_s_axi_rresp      (),
-      |    .s1_ddr4_s_axi_rlast      (),
-      |    .s1_ddr4_s_axi_rvalid     ()
-      |  );
-      |endmodule
-    """.stripMargin
-  )
+/** AXI slave port of the DDR4 macro, as named on the macro (`<prefix>_ddr4_s_axi_*`). */
+class Ddr4AxiSlave(idBits: Int) extends Bundle {
+  val awid    = Input(UInt(idBits.W))
+  val awaddr  = Input(UInt(64.W))
+  val awlen   = Input(UInt(8.W))
+  val awsize  = Input(UInt(3.W))
+  val awburst = Input(UInt(2.W))
+  val awlock  = Input(UInt(1.W))
+  val awcache = Input(UInt(4.W))
+  val awprot  = Input(UInt(3.W))
+  val awqos   = Input(UInt(4.W))
+  val awvalid = Input(Bool())
+  val awready = Output(Bool())
+  val wdata   = Input(UInt(256.W))
+  val wstrb   = Input(UInt(32.W))
+  val wlast   = Input(Bool())
+  val wvalid  = Input(Bool())
+  val wready  = Output(Bool())
+  val bready  = Input(Bool())
+  val bid     = Output(UInt(idBits.W))
+  val bresp   = Output(UInt(2.W))
+  val bvalid  = Output(Bool())
+  val arid    = Input(UInt(idBits.W))
+  val araddr  = Input(UInt(64.W))
+  val arlen   = Input(UInt(8.W))
+  val arsize  = Input(UInt(3.W))
+  val arburst = Input(UInt(2.W))
+  val arlock  = Input(UInt(1.W))
+  val arcache = Input(UInt(4.W))
+  val arprot  = Input(UInt(3.W))
+  val arqos   = Input(UInt(4.W))
+  val arvalid = Input(Bool())
+  val arready = Output(Bool())
+  val rready  = Input(Bool())
+  val rid     = Output(UInt(idBits.W))
+  val rdata   = Output(UInt(256.W))
+  val rresp   = Output(UInt(2.W))
+  val rlast   = Output(Bool())
+  val rvalid  = Output(Bool())
 }
 
-class P2ETop extends RawModule {
-  val io = IO(new P2ETopIO)
+/** The board DDR4 controller; vcom replaces this stub with the `xepic_ddr4_dc1` netlist macro. */
+class XepicDdr4Dc1 extends BlackBox {
+  override def desiredName = "xepic_ddr4_dc1"
 
-  val top = Module(new P2ETopBlackBox)
-  top.io.user_clk        := io.user_clk
-  top.io.sys_rstn        := io.sys_rstn
-  top.io.c0_sys_clk_p    := io.c0_sys_clk_p
-  top.io.c0_sys_clk_n    := io.c0_sys_clk_n
-  io.c0_ddr4_act_n       := top.io.c0_ddr4_act_n
-  io.c0_ddr4_adr         := top.io.c0_ddr4_adr
-  io.c0_ddr4_ba          := top.io.c0_ddr4_ba
-  io.c0_ddr4_bg          := top.io.c0_ddr4_bg
-  io.c0_ddr4_cke         := top.io.c0_ddr4_cke
-  io.c0_ddr4_odt         := top.io.c0_ddr4_odt
-  io.c0_ddr4_cs_n        := top.io.c0_ddr4_cs_n
-  io.c0_ddr4_ck_t        := top.io.c0_ddr4_ck_t
-  io.c0_ddr4_ck_c        := top.io.c0_ddr4_ck_c
-  io.c0_ddr4_reset_n     := top.io.c0_ddr4_reset_n
-  io.c0_ddr4_ui_clk      := top.io.c0_ddr4_ui_clk
-  io.init_calib_complete := top.io.init_calib_complete
-  io.ddr4_en_vtt         := top.io.ddr4_en_vtt
-  io.ddr4_en_vddq        := top.io.ddr4_en_vddq
-  io.ddr4_en_vcc2v5      := top.io.ddr4_en_vcc2v5
-  top.io.power_good      := io.power_good
+  val io = IO(new Bundle {
+    val sys_rstn               = Input(Bool())
+    val c0_sys_clk_p           = Input(Bool())
+    val c0_sys_clk_n           = Input(Bool())
+    val c0_ddr4_act_n          = Output(Bool())
+    val c0_ddr4_adr            = Output(UInt(17.W))
+    val c0_ddr4_ba             = Output(UInt(2.W))
+    val c0_ddr4_bg             = Output(UInt(2.W))
+    val c0_ddr4_cke            = Output(UInt(2.W))
+    val c0_ddr4_odt            = Output(UInt(2.W))
+    val c0_ddr4_cs_n           = Output(UInt(2.W))
+    val c0_ddr4_ck_t           = Output(UInt(2.W))
+    val c0_ddr4_ck_c           = Output(UInt(2.W))
+    val c0_ddr4_reset_n        = Output(Bool())
+    val c0_ddr4_dm_dbi_n       = Analog(8.W)
+    val c0_ddr4_dq             = Analog(64.W)
+    val c0_ddr4_dqs_c          = Analog(8.W)
+    val c0_ddr4_dqs_t          = Analog(8.W)
+    val gclk_100m              = Input(Bool())
+    val ddr4_en_vtt_bbox       = Output(Bool())
+    val ddr4_en_vddq_bbox      = Output(Bool())
+    val ddr4_en_vcc2v5_bbox    = Output(Bool())
+    val power_good_bbox        = Input(Bool())
+    val init_start             = Input(Bool())
+    val init_cfg               = Input(Bool())
+    val init_busy              = Output(Bool())
+    val init_calib_complete    = Output(Bool())
+    val c0_init_calib_complete = Output(Bool())
+    val axi_clk                = Input(Clock())
+    val c0_ddr4_ui_clk         = Output(Clock())
+    // Flattened as the macro's `s0_ddr4_s_axi_*` and `s1_ddr4_s_axi_*` ports.
+    val s0_ddr4_s_axi          = new Ddr4AxiSlave(11)
+    val s1_ddr4_s_axi          = new Ddr4AxiSlave(4)
+  })
+
+}
+
+/**
+ * Maps the System's 128-bit DDR AXI onto the macro's 256-bit slave. Transfers stay 16-byte
+ * narrow bursts, so only lanes move: beat k of a burst starting at A uses lane (A + 16k)[4].
+ * CPU 0x80000000 is DDR offset 0, and the System's IDs widen to the macro's 11 bits.
+ */
+class P2EDdrAdapter(system: axi4.Params, base: BigInt) extends Module {
+  require(system.dataBits == 128, "P2E DDR adapter maps 16-byte beats onto the 32-byte macro bus")
+  require(system.idBits <= 11)
+
+  val io = IO(new Bundle {
+    val in  = Flipped(new axi4.Port(system))
+    val out = Flipped(new Ddr4AxiSlave(11))
+  })
+
+  private val lanes = 1 << system.idBits
+
+  // Write lanes: W beats follow AW order, so queue each accepted burst's first lane.
+  val writeLane  = Module(new Queue(Bool(), 8))
+  val writeOdd   = RegInit(false.B)
+  val writeUpper = writeLane.io.deq.bits ^ writeOdd
+  io.out.awid            := io.in.aw.bits.id
+  io.out.awaddr          := io.in.aw.bits.addr.pad(64) - base.U(64.W)
+  io.out.awlen           := io.in.aw.bits.len
+  io.out.awsize          := io.in.aw.bits.size
+  io.out.awburst         := io.in.aw.bits.burst
+  io.out.awlock          := 0.U
+  io.out.awcache         := "b0011".U
+  io.out.awprot          := 0.U
+  io.out.awqos           := 0.U
+  io.out.awvalid         := io.in.aw.valid && writeLane.io.enq.ready
+  io.in.aw.ready         := io.out.awready && writeLane.io.enq.ready
+  writeLane.io.enq.valid := io.in.aw.fire
+  writeLane.io.enq.bits  := io.in.aw.bits.addr(4)
+  when(io.in.aw.fire) {
+    assert(
+      io.in.aw.bits.size === 4.U && io.in.aw.bits.addr(3, 0) === 0.U && io.in.aw.bits.burst === 1.U,
+      "P2E DDR adapter expects aligned 16-byte INCR bursts"
+    )
+  }
+
+  io.out.wdata                := Fill(2, io.in.w.bits.data)
+  io.out.wstrb                := Mux(writeUpper, io.in.w.bits.strb ## 0.U(16.W), 0.U(16.W) ## io.in.w.bits.strb)
+  io.out.wlast                := io.in.w.bits.last
+  io.out.wvalid               := io.in.w.valid && writeLane.io.deq.valid
+  io.in.w.ready               := io.out.wready && writeLane.io.deq.valid
+  writeLane.io.deq.ready      := io.in.w.fire && io.in.w.bits.last
+  when(io.in.w.fire)(writeOdd := Mux(io.in.w.bits.last, false.B, !writeOdd))
+
+  io.in.b.valid     := io.out.bvalid
+  io.in.b.bits.id   := io.out.bid(system.idBits - 1, 0)
+  io.in.b.bits.resp := io.out.bresp
+  io.out.bready     := io.in.b.ready
+
+  // Read lanes: a System ID has at most one read in flight, so one lane bit per ID suffices.
+  val readBusy  = RegInit(VecInit(Seq.fill(lanes)(false.B)))
+  val readUpper = Reg(Vec(lanes, Bool()))
+  io.out.arid    := io.in.ar.bits.id
+  io.out.araddr  := io.in.ar.bits.addr.pad(64) - base.U(64.W)
+  io.out.arlen   := io.in.ar.bits.len
+  io.out.arsize  := io.in.ar.bits.size
+  io.out.arburst := io.in.ar.bits.burst
+  io.out.arlock  := 0.U
+  io.out.arcache := "b0011".U
+  io.out.arprot  := 0.U
+  io.out.arqos   := 0.U
+  io.out.arvalid := io.in.ar.valid
+  io.in.ar.ready := io.out.arready
+  when(io.in.ar.fire) {
+    assert(
+      io.in.ar.bits.size === 4.U && io.in.ar.bits.addr(3, 0) === 0.U && io.in.ar.bits.burst === 1.U,
+      "P2E DDR adapter expects aligned 16-byte INCR bursts"
+    )
+    assert(!readBusy(io.in.ar.bits.id), "P2E DDR adapter allows one read in flight per ID")
+    readBusy(io.in.ar.bits.id)  := true.B
+    readUpper(io.in.ar.bits.id) := io.in.ar.bits.addr(4)
+  }
+
+  private val rid = io.out.rid(system.idBits - 1, 0)
+  io.in.r.valid     := io.out.rvalid
+  io.in.r.bits.id   := rid
+  io.in.r.bits.data := Mux(readUpper(rid), io.out.rdata(255, 128), io.out.rdata(127, 0))
+  io.in.r.bits.resp := io.out.rresp
+  io.in.r.bits.last := io.out.rlast
+  io.out.rready     := io.in.r.ready
+  when(io.in.r.fire) {
+    readUpper(rid)                        := !readUpper(rid)
+    when(io.in.r.bits.last)(readBusy(rid) := false.B)
+  }
+}
+
+/**
+ * The `top` instance bebop's flow addresses (`P2ETop.top.ddr`, `P2ETop.top.user_clk`): DDR4 macro,
+ * DDR adapter and the System, all on `user_clk`. The SoC leaves reset only after calibration and
+ * after the host releases `soc_hold`.
+ */
+class P2EHarness(target: SystemTarget, diffTest: Boolean) extends RawModule {
+  val io = FlatIO(new P2ETopIO)
+
+  val ddr = Module(new XepicDdr4Dc1)
+  ddr.io.sys_rstn        := io.sys_rstn
+  ddr.io.c0_sys_clk_p    := io.c0_sys_clk_p
+  ddr.io.c0_sys_clk_n    := io.c0_sys_clk_n
+  io.c0_ddr4_act_n       := ddr.io.c0_ddr4_act_n
+  io.c0_ddr4_adr         := ddr.io.c0_ddr4_adr
+  io.c0_ddr4_ba          := ddr.io.c0_ddr4_ba
+  io.c0_ddr4_bg          := ddr.io.c0_ddr4_bg
+  io.c0_ddr4_cke         := ddr.io.c0_ddr4_cke
+  io.c0_ddr4_odt         := ddr.io.c0_ddr4_odt
+  io.c0_ddr4_cs_n        := ddr.io.c0_ddr4_cs_n
+  io.c0_ddr4_ck_t        := ddr.io.c0_ddr4_ck_t
+  io.c0_ddr4_ck_c        := ddr.io.c0_ddr4_ck_c
+  io.c0_ddr4_reset_n     := ddr.io.c0_ddr4_reset_n
+  ddr.io.c0_ddr4_dm_dbi_n <> io.c0_ddr4_dm_dbi_n
+  ddr.io.c0_ddr4_dq <> io.c0_ddr4_dq
+  ddr.io.c0_ddr4_dqs_c <> io.c0_ddr4_dqs_c
+  ddr.io.c0_ddr4_dqs_t <> io.c0_ddr4_dqs_t
+  ddr.io.gclk_100m       := false.B
+  io.ddr4_en_vtt         := ddr.io.ddr4_en_vtt_bbox
+  io.ddr4_en_vddq        := ddr.io.ddr4_en_vddq_bbox
+  io.ddr4_en_vcc2v5      := ddr.io.ddr4_en_vcc2v5_bbox
+  ddr.io.power_good_bbox := io.power_good
+  ddr.io.init_start      := true.B
+  ddr.io.init_cfg        := false.B
+  ddr.io.axi_clk         := io.user_clk
+  io.c0_ddr4_ui_clk      := ddr.io.c0_ddr4_ui_clk
+  io.init_calib_complete := ddr.io.c0_init_calib_complete
+
+  val socReset = !io.sys_rstn || !ddr.io.c0_init_calib_complete || io.soc_hold
+
+  withClockAndReset(io.user_clk, socReset) {
+    val soc     = Module(new SimSoc(target, diffTest))
+    val adapter = Module(new P2EDdrAdapter(soc.axiParams, target.dramBase))
+    adapter.io.in <> soc.io.axi
+    ddr.io.s0_ddr4_s_axi <> adapter.io.out
+  }
+
+  // The second macro port is unused.
+  ddr.io.s1_ddr4_s_axi <> DontCare
+  ddr.io.s1_ddr4_s_axi.awvalid := false.B
+  ddr.io.s1_ddr4_s_axi.wvalid  := false.B
+  ddr.io.s1_ddr4_s_axi.arvalid := false.B
+  ddr.io.s1_ddr4_s_axi.bready  := true.B
+  ddr.io.s1_ddr4_s_axi.rready  := true.B
+}
+
+/** The P2E top module bebop's vvac/vcom flow builds; `P2ETop.top` is the harness. */
+class P2ETop(target: SystemTarget, diffTest: Boolean) extends RawModule {
+  val io  = IO(new P2ETopIO)
+  val top = Module(new P2EHarness(target, diffTest))
+  // The DDR4 data pins stay on the macro inside `top`: vcom binds the macro's own pins, and a top
+  // inout driving the macro is rejected.
+  for ((name, port) <- io.elements) port match {
+    case _: Analog =>
+    case _ => top.io.elements(name) <> port
+  }
 }

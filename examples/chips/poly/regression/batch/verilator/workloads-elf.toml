@@ -1,6 +1,12 @@
 [workloads]
 tests = [
-  "poly-decode-ctest-chip-vecmat16_atranspose_16x16-multicore-baremetal",
-  "poly-prefill-ctest-chip-mesh_shared_bank_roundtrip-baremetal",
-  "poly-prefill-ctest-chip-mesh_private_bank_move-multicore-baremetal",
+  "poly-main-ctest-tutorial-baremetal",
+  "poly-main-soctest-clint_timer_interrupt-baremetal",
+  "poly-main-soctest-clint_software_interrupt-baremetal",
+  "poly-main-soctest-plic_register_access-baremetal",
+  "poly-attention-ctest-chip-mesh_shared_bank_roundtrip-baremetal",
+  "poly-attention-ctest-chip-mesh_private_bank_move-multicore-baremetal",
+  "poly-attention-ctest-chip-task_dma_single-multicore-baremetal",
+  "poly-attention-ctest-chip-task_dma_workers-multicore-baremetal",
+  "poly-attention-ctest-chip-task_context-multicore-baremetal",
 ]

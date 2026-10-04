@@ -8,19 +8,33 @@ import framework.top.GlobalConfig
 import framework.memdomain.backend.privatepath.PrivateMemBackend
 import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
+
+class MemRequestIO(b: GlobalConfig) extends Bundle {
+  val write     = Flipped(new SramWriteIO(b)) // midend sends write req into backend
+  val read      = Flipped(new SramReadIO(b))  // midend sends read req into backend
+  val bank_id   = Output(UInt(b.memDomain.vbankIdWidth.W))
+  val group_id  = Output(UInt(b.memDomain.groupIdWidth.W))
+  val is_shared = Output(Bool())
+  val hart_id   = Output(UInt(b.tile.xLen.W))
+  val rob_id    = Output(UInt(log2Up(b.frontend.rob_entries).W))
+  val inst_id   = Output(UInt(64.W))
+}
 
 @instantiable
 class MemBackend(val b: GlobalConfig) extends Module {
+  private val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
 
   val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
 
   @public
   val io = IO(new Bundle {
-    val mem_req = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
-    val config  = Flipped(Decoupled(new MemConfigerIO(b)))
+    val mem_req    = Vec(b.memDomain.bankChannel, Flipped(new MemRequestIO(b)))
+    val kernel_req = Vec(kernelRequests, Flipped(new MemRequestIO(b)))
+    val config     = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Shared path — exposed to tile level for multi-core sharing.
-    // Number of shared ports per core comes from TOML sharedInputChannels / nCores.
+    // Number of shared ports per core comes from TOML sharedInputChannels / computeCoreIds.size.
     val shared_mem_req = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
     val shared_config  = Decoupled(new MemConfigerIO(b))
 
@@ -33,6 +47,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
     val query_vbank_id    = Input(UInt(b.memDomain.vbankIdWidth.W))
     val query_is_shared   = Input(Bool())
     val query_group_count = Output(UInt(b.memDomain.groupCountWidth.W))
+    val clearBusy         = Output(Bool())
 
     val bank_hashes =
       if (b.sim.diffTest) {
@@ -52,6 +67,13 @@ class MemBackend(val b: GlobalConfig) extends Module {
 
   // Keep the private backend datapath unchanged and isolate it in a dedicated module.
   val privateBackend: Instance[PrivateMemBackend] = Instantiate(new PrivateMemBackend(b))
+  for (i <- 0 until kernelRequests) {
+    privateBackend.io.kernel_req(i) <> io.kernel_req(i)
+    when(io.kernel_req(i).read.req.valid || io.kernel_req(i).write.req.valid) {
+      assert(!io.kernel_req(i).is_shared)
+      assert(io.kernel_req(i).bank_id <= b.frontend.vbank_id_upper_bound.U)
+    }
+  }
   private val sharedChannelPerHart = SharedMemLayout.channelPerHart(b)
 
   io.bank_hashes.foreach { states =>
@@ -81,6 +103,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
   }
 
   privateBackend.io.query_vbank_id := io.query_vbank_id
+  io.clearBusy                     := privateBackend.io.clearBusy
 
   if (b.memDomain.sharedEnable) {
     // Shared query and request routing are only elaborated for shared chips.

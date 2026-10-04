@@ -4,51 +4,63 @@
 package framework.system.core.rocket
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
 import chisel3.withClock
-import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tile._
 import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 import scala.collection.mutable.ArrayBuffer
 import freechips.rocketchip.rocket._
 
-import framework.system.core.rocket.id.RVVRoCCDecode
-import framework.system.tile.{BBTile, BBTileParams}
-
-trait HasRocketCoreIOBB extends HasRocketCoreParameters {
-  implicit val p: Parameters
-  def nTotalRoCCCSRs: Int
-
-  val io = IO(new CoreBundle()(p) {
-    val hartid       = Input(UInt(hartIdLen.W))
-    val reset_vector = Input(UInt(resetVectorLen.W))
-    val interrupts   = Input(new CoreInterrupts(tileParams.asInstanceOf[BBTileParams].beuAddr.isDefined))
-    val imem         = new FrontendIO
-    val dmem         = new HellaCacheIO
-    val ptw          = Flipped(new DatapathPTWIO())
-    val fpu          = Flipped(new FPUCoreIO())
-    val rocc         = Flipped(new RoCCCoreIOBB(nTotalRoCCCSRs))
-    val trace        = Output(new TraceBundle)
-    val bpwatch      = Output(Vec(coreParams.nBreakpoints, new BPWatch(coreParams.retireWidth)))
-    val cease        = Output(Bool())
-    val wfi          = Output(Bool())
-    val traceStall   = Input(Bool())
-    val vector       = if (usingVector) Some(Flipped(new VectorCoreIO)) else None
-  })
-
+/** RoCC core IO — used inside Rocket core. */
+class RoCCCoreIOBB(val nRoCCCSRs: Int = 0)(implicit val cpuParams: CpuParams) extends Bundle with HasCpuParameters {
+  val cmd       = Flipped(Decoupled(new RoCCCommandBB))
+  val resp      = Decoupled(new RoCCResponseBB)
+  val mem       = new HellaCacheIO
+  val busy      = Output(Bool())
+  val interrupt = Output(Bool())
+  val exception = Input(Bool())
+  val csrs      = Flipped(Vec(nRoCCCSRs, new CustomCSRIO))
 }
 
-class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
-    extends CoreModule()(p)
+@instantiable
+class RocketBB(
+  roccCSRs:                   Seq[CustomCSR],
+  coreHasBuckyball:           Boolean,
+  hasTaskControl:             Boolean,
+  val hasBusError:            Boolean,
+  dcacheFlushOnFenceI:        Boolean,
+  dcacheCanSupportCFlushLine: Boolean
+)(
+  implicit val cpuParams:     CpuParams)
+    extends Module
     with HasRocketCoreParameters
-    with HasRocketCoreIOBB {
-  def nTotalRoCCCSRs = tile.roccCSRs.flatten.size
+    with HasCpuParameters {
+  def nTotalRoCCCSRs = roccCSRs.size
 
-  // Override usingRoCC: BBTile doesn't use BuildRoCC/LazyRoCC, but when
-  // withBuckyball is enabled the core must still treat custom instructions as
-  // RoCC commands.
-  override val usingRoCC = coreHasBuckyball
+  override val usingRoCC = coreHasBuckyball || hasTaskControl
+
+  @public val io = IO(new CoreBundle()(p) {
+    val hartid             = Input(UInt(hartIdLen.W))
+    val reset_vector       = Input(UInt(resetVectorLen.W))
+    val interrupts         = Input(new CoreInterrupts(hasBusError))
+    val interruptReady     = Input(Bool())
+    val imem               = new FrontendIO
+    val dmem               = new HellaCacheIO
+    val dmemPc             = Output(UInt(vaddrBitsExtended.W))
+    val roccOlderPending   = Output(Bool())
+    val roccCommitEligible = Output(Bool())
+    val ptw                = Flipped(new DatapathPTWIO())
+    val fpu                = Flipped(new FPUCoreIO())
+    val rocc               = Flipped(new RoCCCoreIOBB(nTotalRoCCCSRs))
+    val trace              = Output(new TraceBundle)
+    val bpwatch            = Output(Vec(coreParams.nBreakpoints, new BPWatch(coreParams.retireWidth)))
+    val cease              = Output(Bool())
+    val wfi                = Output(Bool())
+    val traceStall         = Input(Bool())
+    val vector             = if (usingVector) Some(Flipped(new VectorCoreIO)) else None
+  })
 
   import ALU._
 
@@ -164,19 +176,9 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
 
     val pipelinedMul = usingMulDiv && mulDivParams.mulUnroll == xLen
 
-    val usingRVVRoCC = coreHasBuckyball
-
-    // Ensure usingVector and usingRVVRoCC are mutually exclusive
-    require(
-      !usingVector || !usingRVVRoCC,
-      "usingVector and usingRVVRoCC cannot both be enabled. " +
-        "Use usingVector for built-in vector unit, or usingRVVRoCC to route vector instructions to RoCC."
-    )
-
     val decode_table = {
       (if (usingMulDiv) new MDecode(pipelinedMul) +: (xLen > 32).option(new M64Decode(pipelinedMul)).toSeq else Nil) ++:
         (if (usingAtomics) new ADecode +: (xLen > 32).option(new A64Decode).toSeq else Nil) ++:
-        (usingRVVRoCC.option(new RVVRoCCDecode)) ++:
         (if (fLen >= 32) new FDecode +: (xLen > 32).option(new F64Decode).toSeq else Nil) ++:
         (if (fLen >= 64) new DDecode +: (xLen > 32).option(new D64Decode).toSeq else Nil) ++:
         (if (minFLen == 16)
@@ -191,8 +193,8 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
         (usingDebug.option(new DebugDecode)) ++:
         (usingNMI.option(new NMIDecode)) ++:
         (usingConditionalZero.option(new ConditionalZeroDecode)) ++:
-        Seq(new FenceIDecode(tile.dcache.flushOnFenceI || coreParams.haveCFlush)) ++:
-        coreParams.haveCFlush.option(new CFlushDecode(tile.dcache.canSupportCFlushLine)) ++:
+        Seq(new FenceIDecode(dcacheFlushOnFenceI || coreParams.haveCFlush)) ++:
+        coreParams.haveCFlush.option(new CFlushDecode(dcacheCanSupportCFlushLine)) ++:
         rocketParams.haveCease.option(new CeaseDecode) ++:
         usingVector.option(new VCFGDecode) ++:
         (if (coreParams.useZba) new ZbaDecode +: (xLen > 32).option(new Zba64Decode).toSeq else Nil) ++:
@@ -297,20 +299,20 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     val rf           = new RegFile(regAddrMask, xLen)
     val id_rs        = id_raddr.map(rf.read _)
     val ctrl_killd   = Wire(Bool())
-    val id_npc       = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
 
-    // Tile-level BuildRoCC dummies size the shared DCache arbiter; they must
-    // not make rocket-only cores advertise RoCC in CSR/misa.
+    // A scheduler needs the custom ISA even without compute Balls.
     val csrP =
-      if (coreHasBuckyball) p
+      if (usingRoCC) p
       else p.alterPartial { case BuildRoCC => Nil }
 
     val csr  = Module(new CSRFile(
       perfEvents,
       coreParams.customCSRs.decls,
-      tile.roccCSRs.flatten,
-      tile.bbParams.beuAddr.isDefined
-    )(csrP))
+      roccCSRs,
+      hasBusError
+    )(csrP) {
+      override def usingRoCC: Boolean = RocketBB.this.usingRoCC
+    })
 
     val id_csr_en      = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
     val id_system_insn = id_ctrl.csr === CSR.I
@@ -374,7 +376,6 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     // stall decode for fences (now, for AMO.rl; later, for AMO.aq and FENCE)
     val id_amo_aq     = id_inst(0)(26)
     val id_amo_rl     = id_inst(0)(25)
-    val id_fence_pred = id_inst(0)(27, 24)
     val id_fence_succ = id_inst(0)(23, 20)
     val id_fence_next = id_ctrl.fence || id_ctrl.amo && id_amo_aq
     val id_mem_busy   = !io.dmem.ordered || io.dmem.req.valid
@@ -384,7 +385,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
       (io.rocc.busy || ex_reg_valid && ex_ctrl.rocc ||
         mem_reg_valid && mem_ctrl.rocc || wb_reg_valid && wb_ctrl.rocc)
 
-    val id_csr_rocc_write = tile.roccCSRs.flatten.map(_.id.U === id_inst(0)(31, 20)).orR && id_csr_en && !id_csr_ren
+    val id_csr_rocc_write = roccCSRs.map(_.id.U === id_inst(0)(31, 20)).orR && id_csr_en && !id_csr_ren
     val id_vec_busy       = io.vector.map(v => v.backend_busy || v.trap_check_busy).getOrElse(false.B)
 
     val id_do_fence = WireDefault(id_rocc_busy && (id_ctrl.fence || id_csr_rocc_write) ||
@@ -402,8 +403,10 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     val id_xcpt0 = ibuf.io.inst(0).bits.xcpt0
     val id_xcpt1 = ibuf.io.inst(0).bits.xcpt1
 
+    val deliveredInterrupt = csr.io.interrupt && io.interruptReady
+
     val (id_xcpt, id_cause) = checkExceptions(List(
-      (csr.io.interrupt, csr.io.interrupt_cause),
+      (deliveredInterrupt, csr.io.interrupt_cause),
       (bpu.io.debug_if, CSR.debugTriggerCause.U),
       (bpu.io.xcpt_if, Causes.breakpoint.U),
       (id_xcpt0.pf.inst, Causes.fetch_page_fault.U),
@@ -531,7 +534,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     ex_reg_valid          := !ctrl_killd
     ex_reg_replay         := !take_pc && ibuf.io.inst(0).valid && ibuf.io.inst(0).bits.replay
     ex_reg_xcpt           := !ctrl_killd && id_xcpt
-    ex_reg_xcpt_interrupt := !take_pc && ibuf.io.inst(0).valid && csr.io.interrupt
+    ex_reg_xcpt_interrupt := !take_pc && ibuf.io.inst(0).valid && deliveredInterrupt
 
     when(!ctrl_killd) {
       ex_ctrl                                                   := id_ctrl
@@ -564,7 +567,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
       when(id_ctrl.mem_cmd === M_SFENCE && csr.io.status.v) {
         ex_ctrl.mem_cmd := M_HFENCEV
       }
-      if (tile.dcache.flushOnFenceI || coreParams.haveCFlush) {
+      if (dcacheFlushOnFenceI || coreParams.haveCFlush) {
         when(id_ctrl.fence_i) {
           ex_reg_mem_size := 0.U
         }
@@ -587,7 +590,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
         ex_reg_rs_msb(0)    := inst >> log2Ceil(bypass_sources.size)
       }
     }
-    when(!ctrl_killd || csr.io.interrupt || ibuf.io.inst(0).bits.replay) {
+    when(!ctrl_killd || deliveredInterrupt || ibuf.io.inst(0).bits.replay) {
       ex_reg_cause       := id_cause
       ex_reg_inst        := id_inst(0)
       ex_reg_raw_inst    := id_raw_inst(0)
@@ -1119,7 +1122,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
 
     ctrl_killd := !ibuf.io.inst(0).valid || ibuf.io.inst(
       0
-    ).bits.replay || take_pc_mem_wb || ctrl_stalld || csr.io.interrupt
+    ).bits.replay || take_pc_mem_wb || ctrl_stalld || deliveredInterrupt
 
     io.imem.req.valid            := take_pc
     io.imem.req.bits.speculative := !take_pc_wb
@@ -1215,6 +1218,7 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
       v.status     := csr.io.status
     }
 
+    io.dmemPc         := ex_reg_pc
     io.dmem.req.valid := ex_reg_valid && ex_ctrl.mem
     val ex_dcache_tag = Cat(ex_waddr, ex_ctrl.fp)
     require(coreParams.dcacheReqTagBits >= ex_dcache_tag.getWidth)
@@ -1242,6 +1246,10 @@ class RocketBB(tile: BBTile, coreHasBuckyball: Boolean)(implicit p: Parameters)
     // don't let D$ go to sleep if we're probably going to use it soon
     io.dmem.keep_clock_enabled := ibuf.io.inst(0).valid && id_ctrl.mem && !csr.io.csr_stall
 
+    // Pipeline classification, not a second accelerator decoder. Readiness is deliberately absent.
+    io.roccOlderPending       := usingRoCC.B &&
+      ((mem_reg_valid && mem_ctrl.rocc) || (wb_reg_valid && wb_ctrl.rocc))
+    io.roccCommitEligible     := usingRoCC.B && wb_reg_valid && wb_ctrl.rocc && !replay_wb_common && !wb_xcpt
     io.rocc.cmd.valid         := wb_reg_valid && wb_ctrl.rocc && !replay_wb_common
     io.rocc.exception         := wb_xcpt && csr.io.status.xs.orR
     io.rocc.cmd.bits.raw_inst := wb_reg_inst

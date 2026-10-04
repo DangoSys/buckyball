@@ -1,7 +1,8 @@
-//===- LowerBuckyballToBankSSAPass.cpp - Attention bank-SSA lowering
+//===- LowerBuckyballToBankSSAPass.cpp - Buckyball bank-SSA lowering
 //----------===//
 
 #include "Conversion/LowerBuckyball/LowerBuckyball.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -20,6 +21,13 @@
 #include "Trace/TraceDialect.h"
 
 using namespace mlir;
+
+namespace mlir::buddy {
+#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                          \
+  void populate##BALL##LowerBuckyballToBankSSAPatterns(RewritePatternSet &);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_BANK_SSA_HOOK
+} // namespace mlir::buddy
 
 namespace {
 
@@ -68,7 +76,7 @@ public:
 
   StringRef getArgument() const final { return "lower-buckyball-to-bank-ssa"; }
   StringRef getDescription() const final {
-    return "Lower Attention Buckyball ops to explicit bank-SSA ops.";
+    return "Lower Buckyball Buckyball ops to explicit bank-SSA ops.";
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
@@ -79,7 +87,13 @@ public:
 
   void runOnOperation() override {
     RewritePatternSet patterns(&getContext());
-    mlir::buddy::populateMatmulRegionToBankSSAPatterns(patterns, false, 0, -1);
+    for (llvm::StringRef ball : buckyball_target::getBuckyballTarget().balls) {
+#define BUCKYBALL_BANK_SSA_HOOK(BALL)                                          \
+  if (ball == #BALL)                                                           \
+    mlir::buddy::populate##BALL##LowerBuckyballToBankSSAPatterns(patterns);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_BANK_SSA_HOOK
+    }
     mlir::buddy::populateQuantizeTensorToBankSSAPatterns(patterns);
     patterns.add<MemTransposeToLinalgPattern>(&getContext());
     if (failed(applyPatternsGreedily(getOperation(), std::move(patterns))))

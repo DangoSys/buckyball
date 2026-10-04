@@ -1,0 +1,9 @@
+// CHECK-LABEL: func.func @quant_input
+// CHECK-COUNT-2: call @mxfp8_quant
+// CHECK-NOT: call @mxfp8_quant
+// CHECK: return
+func.func @quant_input(%a: tensor<16x64xf32>,%b: tensor<16x64xf32>) -> (tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8>) {
+  %q0 = buckyball.mxfp8_quant %a {tile_rows=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<16x64xf32> -> tensor<@PACKED_BYTES@xi8>
+  %q1 = buckyball.mxfp8_quant %b {tile_rows=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<16x64xf32> -> tensor<@PACKED_BYTES@xi8>
+  return %q0,%q1 : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8>
+}

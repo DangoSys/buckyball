@@ -1,6 +1,7 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
+#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -9,7 +10,7 @@ enum {
   TILE_WIDTH = 8,
   PIXEL_BYTES = 256,
   SOURCE_WIDTH = 8,
-  VALID_BYTES = 16,
+  VALID_BYTES = BANK_WIDTH / 8,
 };
 
 static const uint8_t input[SOURCE_WIDTH * PIXEL_BYTES]
@@ -22,6 +23,7 @@ static uint8_t output[TILE_WIDTH * VALID_BYTES] __attribute__((aligned(128)));
 
 int main(void) {
   const uint32_t bank = 0;
+  bb_dma_fence();
   bb_mem_alloc(bank, 1, 1);
   bb_mvin_2d((uintptr_t)input, bank, HEIGHT, PIXEL_BYTES, SOURCE_WIDTH, 0,
              TILE_WIDTH, VALID_BYTES);

@@ -1,0 +1,5 @@
++tree @TOP@.dut
++tree @TOP@.source_if
++tree @TOP@.sink_if
++tree @TOP@.chi_req
++tree @TOP@.chi_rsp

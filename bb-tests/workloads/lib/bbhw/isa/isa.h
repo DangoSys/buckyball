@@ -44,11 +44,13 @@ typedef int32_t result_t;
 // Ball-specific ISA macros live under examples/balls/<ball>/workloads/isa/.
 #include "00_fence.c"
 #include "01_barrier.c"
+#include "12_kernel.c"
+#include "13_mvover.c"
+#include "14_task.c"
 #include "16_mvout.c"
 #include "32_mset.c"
 #include "33_mvin.c"
 #include "34_mvin_2d.c"
 #include "35_mvin_mmio.c"
-#include "80_mesh_move.c"
 
 #endif // BUCKYBALL_ISA_H

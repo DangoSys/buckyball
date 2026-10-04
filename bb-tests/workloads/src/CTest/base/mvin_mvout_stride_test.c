@@ -1,13 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
+#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define ROW_BYTES 16
-#define ROWS 4
-#define IN_STRIDE 3
-#define OUT_STRIDE 5
+enum { ROW_BYTES = (BANK_WIDTH / 8), ROWS = 4, IN_STRIDE = 3, OUT_STRIDE = 5 };
 
 static elem_t input_matrix[ROWS * IN_STRIDE * ROW_BYTES]
     __attribute__((aligned(128)));
@@ -49,6 +47,7 @@ int mvin_mvout_stride_test(void) {
   uint32_t bank_id = 0;
 
   init_inputs();
+  bb_dma_fence();
   bb_mem_alloc(bank_id, 1, 1);
   bb_mvin((uintptr_t)input_matrix, bank_id, ROWS, IN_STRIDE);
   bb_mvout((uintptr_t)output_matrix, bank_id, ROWS, OUT_STRIDE);

@@ -7,7 +7,7 @@ set(BUCKYBALL_CTEST_TARGET toy)
 add_subdirectory(ctests)
 buckyball_add_ball_workload_subdirs(ctests)
 
-if(BUCKYBALL_BANK_TARGETS)
+if(BUCKYBALL_BANK_TARGETS AND NOT BUCKYBALL_CTEST_ONLY)
   add_subdirectory(mlir_tests)
 else()
   add_custom_target(toy-mlir-tests-build)

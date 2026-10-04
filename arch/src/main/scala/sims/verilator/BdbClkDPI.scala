@@ -1,15 +1,17 @@
 package sims.verilator
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util.HasBlackBoxInline
 
 /**
  * Pushes harness reference clock cycle index into C++ via DPI each posedge.
  * Matches BBSimHarness.clock (see ball_exec_once: clock=1 half-cycle).
  */
+@instantiable
 class BdbClkDPI extends BlackBox with HasBlackBoxInline {
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Bool())
   })

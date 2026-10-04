@@ -1,4 +1,4 @@
-# Goban Tile (default: 4 identical cores)
+# Goban main tile: a CPU-only core 0 and four compute cores, all Linux visible.
 
 coreDataBytes = 64
 xLen = 64
@@ -10,14 +10,6 @@ nPMPs = 8
 
 memBallChannelNum = 6
 
-[privateDCache]
-enable = false
-ways = 4
-capacityKB = 256
-writeBytes = 8
-portFactor = 2
-memCycles = 10
-
 [sharedMem]
 enable = true
 virtualBankCount = 64
@@ -26,7 +18,27 @@ inputChannels = 28
 defaultGroupCount = 1
 memCycles = 10
 
-[coreTemplate]
-core_ids = [0, 1, 2, 3]
+[[cores]]
+core_id = 0
+name = "scheduler"
+include = "../../../../../cores/rocket/configs/default.toml"
+
+[[cores]]
+core_id = 1
+name = "goban"
 include = "../../../../../cores/goban/configs/default.toml"
-count = 4
+
+[[cores]]
+core_id = 2
+name = "goban"
+include = "../../../../../cores/goban/configs/default.toml"
+
+[[cores]]
+core_id = 3
+name = "goban"
+include = "../../../../../cores/goban/configs/default.toml"
+
+[[cores]]
+core_id = 4
+name = "goban"
+include = "../../../../../cores/goban/configs/default.toml"

@@ -1,9 +1,9 @@
-# Poly Chip: 4 homogeneous tiles, each 2 Attention + 3 FFN Cores.
+# Poly: a CPU main tile and 2 homogeneous compute tiles, each
+# 1 controller + 2 Attention + 3 FFN cores.
 
-[top]
-nTiles = 4
+[main_tile]
+include = "tiles/main.toml"
 
-[tileTemplate]
-tile_ids = [0, 1, 2, 3]
-include = "tiles/default.toml"
-count = 4
+[compute_tiles]
+include = "tiles/compute.toml"
+count = 2

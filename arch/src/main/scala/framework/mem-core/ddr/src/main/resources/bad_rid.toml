@@ -1,0 +1,2 @@
+expected_assertion = "DDR received R for an inactive AXI ID"
+invalid_case = 1

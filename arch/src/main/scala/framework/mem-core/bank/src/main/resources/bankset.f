@@ -6,5 +6,5 @@
 @VERIFY@/uvm/src/protocol/axis/package.sv
 @RESOURCES@/bankset_interface.sv
 @RESOURCES@/bankset_package.sv
-@RTL@/BankSet.sv
+-F @RTL@/BankSet/filelist.f
 @RESOURCES@/bankset_tb.sv

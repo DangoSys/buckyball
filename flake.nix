@@ -79,7 +79,7 @@
 
               export CC="${pkgs.systemTools.clang}/bin/clang"
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.compiler.numactl pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.compiler.numactl pkgs.zlib pkgs.libxcb pkgs.libGL pkgs.glib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
               export JAVA_HOME="${pkgs.jdk17}"
               # used by smic180
@@ -93,7 +93,7 @@
                 echo "Verilator: $(verilator --version 2>&1 | head -1)" >&2
                 echo "RISC-V Embedded GCC: $(riscv64-unknown-elf-gcc --version 2>&1 | head -1)" >&2
                 echo "RISC-V Linux GCC: $(riscv64-unknown-linux-gnu-gcc --version 2>&1 | head -1)" >&2
-                echo "Mill: $(mill --version 2>&1 | head -1)" >&2
+                echo "Mill: $(mill -i --version 2>&1 | head -1)" >&2
                 echo "Cargo: $(cargo --version 2>&1 | head -1)" >&2
                 echo "pnpm: $(pnpm --version 2>&1 | head -1)" >&2
                 echo "CXX: $CXX" >&2
@@ -150,6 +150,10 @@
               pkgs."pre-commit"
               # clang-format for pre-commit (language: system)
               pkgs.clang-tools
+              (pkgs.runCommand "clang-kernel" {} ''
+                mkdir -p "$out/bin"
+                ln -s ${pkgs.systemTools.clang.cc}/bin/clang++ "$out/bin/clang++"
+              '')
 
               # Rust toolchain
               rustTools.rustc
@@ -193,7 +197,6 @@
 
               # Scala tools
               scala.mill
-              scala.sbt
               scala.scalafmt
               scala.coursier
 

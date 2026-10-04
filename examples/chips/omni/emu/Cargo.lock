@@ -117,17 +117,20 @@ dependencies = [
  "bebop-dtb",
  "bebop-elf",
  "bebop-keyboard",
+ "bebop-memory",
  "bebop-microphone",
  "bebop-plic",
  "bebop-rtc",
  "bebop-speaker",
  "bebop-syscall",
+ "bebop-uart",
  "bebop-vga",
  "bebop-vm",
  "clap",
  "prost",
  "prost-build",
  "rvsim",
+ "rvv",
  "snafu",
 ]
 
@@ -169,9 +172,16 @@ dependencies = [
 [[package]]
 name = "bebop-elf"
 version = "0.1.0"
+dependencies = [
+ "bebop-memory",
+]
 
 [[package]]
 name = "bebop-keyboard"
+version = "0.1.0"
+
+[[package]]
+name = "bebop-memory"
 version = "0.1.0"
 
 [[package]]
@@ -194,8 +204,13 @@ version = "0.1.0"
 name = "bebop-syscall"
 version = "0.1.0"
 dependencies = [
+ "bebop-memory",
  "once_cell",
 ]
+
+[[package]]
+name = "bebop-uart"
+version = "0.1.0"
 
 [[package]]
 name = "bebop-vga"
@@ -730,6 +745,13 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rvsim"
+version = "0.1.0"
+dependencies = [
+ "rustc_apfloat",
+]
+
+[[package]]
+name = "rvv"
 version = "0.1.0"
 dependencies = [
  "rustc_apfloat",

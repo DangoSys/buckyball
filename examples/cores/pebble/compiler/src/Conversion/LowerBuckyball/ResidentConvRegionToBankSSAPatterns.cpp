@@ -1027,21 +1027,62 @@ public:
           int64_t outputBase =
               (row / smatmulRows * reductionTiles + reductionTile) *
               smatmulRows;
-          for (int64_t offset = 0; offset < smatmulRows; ++offset) {
+          // Copy contiguous groups rather than issuing one command per row.
+          // MAXPOOL with kernel=stride=1 is an identity copy of bank rows.
+          int64_t copySide = smatmulRows >= 4 ? 2 : 1;
+          int64_t copyRows = copySide * copySide;
+          for (int64_t offset = 0; offset < smatmulRows; offset += copyRows) {
             packed = b.create<BankMaxPoolOp>(
                           loc, packed.getType(), source, packed,
-                          createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
-                          b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                          createI64Const(b, loc, copyRows),
+                          b.getI64IntegerAttr(copySide),
+                          b.getI64IntegerAttr(copySide), b.getI64IntegerAttr(1),
                           b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
                           createI64Const(b, loc, sourceBase + offset),
                           createI64Const(b, loc, outputBase + offset),
-                          createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
-                          b.getI64IntegerAttr(0))
+                          createI64Const(b, loc, copySide),
+                          b.getI64IntegerAttr(0), b.getI64IntegerAttr(0))
                          .getOutBankOut();
           }
         }
       }
       return packed;
+    };
+
+    auto copyFp32Tile = [&](Value source, Value destination, Value outputBase,
+                            int64_t side, int64_t outputStride) -> Value {
+      // FP32 has four bank rows per spatial position. A contiguous tile can
+      // be copied as one square of raw rows, independent of its tensor shape.
+      if (outputStride == side * 4) {
+        int64_t rawSide = side * 2;
+        return b
+            .create<BankMaxPoolOp>(
+                loc, destination.getType(), source, destination,
+                createI64Const(b, loc, rawSide * rawSide),
+                b.getI64IntegerAttr(rawSide), b.getI64IntegerAttr(rawSide),
+                b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
+                b.getI64IntegerAttr(0), createI64Const(b, loc, 0), outputBase,
+                createI64Const(b, loc, rawSide), b.getI64IntegerAttr(0),
+                b.getI64IntegerAttr(0))
+            .getOutBankOut();
+      }
+      for (int64_t y = 0; y < side; ++y) {
+        for (int64_t x = 0; x < side; ++x) {
+          Value base = b.create<arith::AddIOp>(
+              loc, outputBase,
+              createI64Const(b, loc, y * outputStride + x * 4));
+          destination = b.create<BankMaxPoolOp>(
+                             loc, destination.getType(), source, destination,
+                             createI64Const(b, loc, 4), b.getI64IntegerAttr(2),
+                             b.getI64IntegerAttr(2), b.getI64IntegerAttr(1),
+                             b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
+                             createI64Const(b, loc, (y * side + x) * 4), base,
+                             createI64Const(b, loc, 2), b.getI64IntegerAttr(0),
+                             b.getI64IntegerAttr(0))
+                            .getOutBankOut();
+        }
+      }
+      return destination;
     };
 
     std::function<LogicalResult(int64_t, Value, Value, int64_t, int64_t, Value,
@@ -1524,13 +1565,21 @@ public:
                       b.create<arith::MulIOp>(loc, localY,
                                               b.create<arith::ConstantIndexOp>(
                                                   loc, destinationStride)),
-                      localX)));
+                      b.create<arith::MulIOp>(
+                          loc, localX,
+                          b.create<arith::ConstantIndexOp>(
+                              loc,
+                              fp32Output && stage.activation != 2 ? 4 : 1)))));
           b.create<BankMaxPoolOp>(
               loc, xState.getType(), zeroBank, xState,
-              createI64Const(b, loc, 1), b.getI64IntegerAttr(1),
+              createI64Const(b, loc,
+                             fp32Output && stage.activation != 2 ? 4 : 1),
+              b.getI64IntegerAttr(fp32Output && stage.activation != 2 ? 2 : 1),
+              b.getI64IntegerAttr(fp32Output && stage.activation != 2 ? 2 : 1),
               b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-              b.getI64IntegerAttr(1), b.getI64IntegerAttr(0),
-              createI64Const(b, loc, 0), outputBase, createI64Const(b, loc, 1),
+              b.getI64IntegerAttr(0), createI64Const(b, loc, 0), outputBase,
+              createI64Const(b, loc,
+                             fp32Output && stage.activation != 2 ? 2 : 1),
               b.getI64IntegerAttr(0), b.getI64IntegerAttr(0));
           b.setInsertionPointAfter(invalid);
           b.create<scf::YieldOp>(loc, xState);
@@ -2081,6 +2130,17 @@ public:
       while (maxSide > 0) {
         int64_t inputSide = (maxSide - 1) * stage.stride + stage.kernel;
         int64_t inputPanelRows = inputSide * inputSide;
+        // A recursively produced tile is assembled from subtiles using
+        // six-bit row bases. DMA-loaded tiles and long MatMul K blocks may
+        // use the full SRAM depth, but recursive scratch tiles must fit 64.
+        bool recursiveInput =
+            !externalInput &&
+            !materialized.contains(producer.lookup(stage.input)) &&
+            !traceMaterialized.contains(producer.lookup(stage.input));
+        if (recursiveInput && inputPanelRows > kMvin2dAddressableRows) {
+          --maxSide;
+          continue;
+        }
         int64_t inputPanels = stage.depthwise
                                   ? panelCount
                                   : (stage.inputChannels + kTile - 1) / kTile;
@@ -2482,27 +2542,12 @@ public:
             releaseBank(b, loc, resultState);
             releaseBank(b, loc, scaleLoaded);
             Value destinationState = destinationStates[destinationBank];
-            int64_t pixels = side * side;
-            for (int64_t pixel = 0; pixel < pixels; ++pixel) {
-              for (int64_t group = 0; group < 4; ++group) {
-                int64_t sourceRow = pixel * 4 + group;
-                Value outputBase =
-                    createI64Const(b, loc,
-                                   destinationSlot * destination.panelRows +
-                                       destinationBase + pixel * 4 + group);
-                destinationState =
-                    b.create<BankMaxPoolOp>(
-                         loc, destinationState.getType(), outputState,
-                         destinationState, createI64Const(b, loc, 1),
-                         b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                         b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                         b.getI64IntegerAttr(0),
-                         createI64Const(b, loc, sourceRow), outputBase,
-                         createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
-                         b.getI64IntegerAttr(0))
-                        .getOutBankOut();
-              }
-            }
+            Value outputBase = createI64Const(
+                b, loc,
+                destinationSlot * destination.panelRows + destinationBase);
+            destinationState =
+                copyFp32Tile(outputState, destinationState, outputBase, side,
+                             destinationStride);
             destinationStates[destinationBank] = destinationState;
             releaseBank(b, loc, outputState);
           } else {
@@ -2855,35 +2900,16 @@ public:
                   .getOutBankOut();
           releaseBank(b, loc, states[2]);
           releaseBank(b, loc, scaleLoaded);
-          int64_t pixels = side * side;
-          for (int64_t pixel = 0; pixel < pixels; ++pixel) {
-            for (int64_t group = 0; group < 4; ++group) {
-              Value sourceBase = createI64Const(b, loc, pixel * 4 + group);
-              Value outputBase = createI64Const(b, loc, pixel * 4 + group);
-              outputBase = b.create<arith::AddIOp>(
-                  loc, outputBase,
-                  b.create<arith::IndexCastOp>(
-                      loc, b.getI64Type(),
-                      b.create<arith::AddIOp>(
-                          loc,
-                          b.create<arith::MulIOp>(
-                              loc, destinationSlot,
-                              b.create<arith::ConstantIndexOp>(
-                                  loc, destination.panelRows)),
-                          b.create<arith::ConstantIndexOp>(loc,
-                                                           destinationBase))));
-              destinationNext =
-                  b.create<BankMaxPoolOp>(
-                       loc, destinationNext.getType(), outputState,
-                       destinationNext, createI64Const(b, loc, 1),
-                       b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                       b.getI64IntegerAttr(1), b.getI64IntegerAttr(1),
-                       b.getI64IntegerAttr(0), sourceBase, outputBase,
-                       createI64Const(b, loc, 1), b.getI64IntegerAttr(0),
-                       b.getI64IntegerAttr(0))
-                      .getOutBankOut();
-            }
-          }
+          Value outputBase = b.create<arith::IndexCastOp>(
+              loc, b.getI64Type(),
+              b.create<arith::AddIOp>(
+                  loc,
+                  b.create<arith::MulIOp>(loc, destinationSlot,
+                                          b.create<arith::ConstantIndexOp>(
+                                              loc, destination.panelRows)),
+                  b.create<arith::ConstantIndexOp>(loc, destinationBase)));
+          destinationNext = copyFp32Tile(outputState, destinationNext,
+                                         outputBase, side, destinationStride);
           releaseBank(b, loc, outputState);
         } else {
           Value quantizedState =
@@ -2938,8 +2964,11 @@ public:
       const int64_t outputStorageFactor =
           fp32Output && stage.activation != 2 ? 4 : 1;
       int64_t side =
-          std::min<int64_t>((stage.add || stage.average) ? 1 : 2,
+          std::min<int64_t>((stage.add || stage.average) ? 1 : 4,
                             std::min(stage.outputHeight, stage.outputWidth));
+      while (side * side * outputStorageFactor >
+             std::min(target.bankDepth, kMvin2dAddressableRows))
+        --side;
       int64_t panelCount = (stage.outputChannels + kTile - 1) / kTile;
       auto yLoop = b.create<scf::ForOp>(
           loc, zero, b.create<arith::ConstantIndexOp>(loc, stage.outputHeight),
