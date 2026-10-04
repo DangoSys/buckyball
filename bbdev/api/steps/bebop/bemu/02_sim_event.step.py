@@ -28,7 +28,7 @@ from utils.search_workload import search_workload
 from steps.bebop.bemu.scripts.model_sim import model_run_commands
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
-from bemu_common import bemu_manifest, bemu_tile_index, chip_emu_manifest
+from bemu_common import bemu_chip_binary, bemu_manifest, bemu_tile_index
 from steps.bebop.performance_report import performance_report
 from utils.reports import source_context
 
@@ -179,50 +179,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(bbdir, chip, "verilog", timestamp, "bemu", binary_name)
     os.makedirs(run_log, exist_ok=True)
     core_index = input_data.get("core_index")
-    tile_index = bemu_tile_index(chip, bbdir)
-    chip_emu = chip_emu_manifest(chip, bbdir)
-    if (tile_index is not None) != bool(chip_emu):
-        ctx.logger.error(
-            f"chip {chip}: bundle bemu.chipMain and emu/Cargo.toml must both exist or both be absent"
-        )
-        await check_result(
-            ctx,
-            1,
-            continue_run=False,
-            extra_fields={"error": "chip_emu_entry_mismatch", "chip": chip},
-            trace_id=origin_tid,
-        )
-        return
-    if chip_emu and core_index is None:
-        cargo_args = [
-            "cargo",
-            "run",
-            "--release",
-            "--manifest-path",
-            str(chip_emu),
-            "--",
-            "--tile-index",
-            str(tile_index),
-            "--elf",
-            binary_path,
-            "--log-dir",
-            run_log,
-        ]
+    # The chip's tile runner by default; --core-index selects the single-core bebop-bemu.
+    if core_index is None:
+        entry = [bemu_chip_binary(chip), "--", "--tile-index", str(bemu_tile_index(chip, bbdir))]
     else:
-        cargo_args = [
-            "cargo",
-            "run",
-            "--release",
-            "--manifest-path",
-            str(bemu_cargo_manifest),
-            "--bin",
-            "bebop-bemu",
-            "--",
-            "--elf",
-            binary_path,
-            "--log-dir",
-            run_log,
-        ]
+        entry = ["bebop-bemu", "--"]
+    cargo_args = [
+        "cargo",
+        "run",
+        "--release",
+        "--manifest-path",
+        str(bemu_cargo_manifest),
+        "--bin",
+        *entry,
+        "--elf",
+        binary_path,
+        "--log-dir",
+        run_log,
+    ]
     cargo_args[1:1] = [
         "--config",
         'build.rustflags=["-C", "target-cpu=native"]',

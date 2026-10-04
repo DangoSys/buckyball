@@ -424,16 +424,16 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def _bemu_paths(repo: Path, chip: str, topo: dict[str, Any]) -> tuple[str, int]:
-    main = repo / "examples" / "chips" / chip / "emu" / "src" / "main.rs"
-    if not main.is_file():
-        return "", 0
+    """The chip's own bebop-chip entry (empty for the default tile runner) and the tile it runs."""
     tiles = iter_topology_tiles(topo)
     for kind in ("main", "compute"):
         files = {t.get("_file") for t in tiles if t["kind"] == kind}
         if len(files) > 1:
-            _die(f"chip {chip}: emu requires one {kind} tile file, got {sorted(files)}")
+            _die(f"chip {chip}: bemu requires one {kind} tile file, got {sorted(files)}")
     compute = [t["tile_id"] for t in tiles if t["kind"] == "compute"]
-    return f"examples/chips/{chip}/emu/src/main.rs", compute[0] if compute else 0
+    main = repo / "examples" / "chips" / chip / "emu" / "src" / "main.rs"
+    entry = f"examples/chips/{chip}/emu/src/main.rs" if main.is_file() else ""
+    return entry, compute[0] if compute else 0
 
 
 def _ball_ctest_dirs(repo: Path, core: dict[str, Any]) -> list[str]:

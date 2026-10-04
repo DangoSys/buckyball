@@ -30,14 +30,12 @@ def model_run_commands(repo: str, params: dict):
     layout = json.loads((build / "artifact/layout.json").read_text())
     kind = layout["execution"]["kind"]
     settings = tomllib.loads(config.read_text())
+    manifest = root / "examples/chips" / chip / "configs/generated/bemu/Cargo.toml"
     if kind == "native" and "tile_indices" not in settings:
-        manifest = root / "examples/chips" / chip / "configs/generated/bemu/Cargo.toml"
         binary = "bebop-bemu"
         python = root / "result/bin/python3"
     elif kind == "python" or (kind == "native" and "tile_indices" in settings):
-        manifest = root / "examples/chips" / chip / "emu/Cargo.toml"
-        with manifest.open("rb") as source:
-            binary = tomllib.load(source)["bin"][0]["name"]
+        binary = f"bebop-chip-{chip}"
         python = root / ("result/bin/python3" if kind == "native" else "stack/serving/.venv/bin/python")
     else:
         raise ValueError(f"Unknown model execution kind: {kind}")

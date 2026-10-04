@@ -24,7 +24,7 @@ if scripts_path not in sys.path:
 from utils.path import bebop_cargo_env, get_buckyball_path, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
-from bemu_common import bemu_manifest, chip_emu_manifest
+from bemu_common import bemu_manifest
 from utils.workload_manifest import resolve_workload_toml
 
 config = {
@@ -52,11 +52,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     try:
         bemu_cargo_manifest = bemu_manifest(chip, bbdir)
-        chip_emu = chip_emu_manifest(chip, bbdir)
-        if chip_emu is not None and 'name = "test_bemu"' in chip_emu.read_text(
-            encoding="utf-8"
-        ):
-            bemu_cargo_manifest = chip_emu
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(

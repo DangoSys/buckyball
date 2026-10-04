@@ -95,11 +95,20 @@ def install_bemu(chip: pb.Chip, bbdir: Path, gen: Path) -> Path:
     bemu = gen / "bemu"
     bemu.mkdir(parents=True, exist_ok=True)
     _emit_dispatch(chip, bbdir, bemu / "dispatch.rs")
-    for source in (cargo, build_rs):
-        target = bemu / source.name
-        target.unlink(missing_ok=True)
-        target.symlink_to(os.path.relpath(source, bemu))
-    return bemu / "Cargo.toml"
+    target = bemu / build_rs.name
+    target.unlink(missing_ok=True)
+    target.symlink_to(os.path.relpath(build_rs, bemu))
+    # Each chip owns its crate: the single-core bebop-bemu plus its bebop-chip-<chip> entry, which
+    # is the chip's own emu/src/main.rs when present and the default tile runner otherwise.
+    entry = bbdir / chip.bemu.chip_main if chip.bemu.chip_main else src / "main.rs"
+    manifest = bemu / "Cargo.toml"
+    manifest.unlink(missing_ok=True)
+    manifest.write_text(
+        cargo.read_text(encoding="utf-8")
+        + f'\n[[bin]]\nname = "bebop-chip-{chip.name}"\npath = "{os.path.relpath(entry, bemu)}"\n',
+        encoding="utf-8",
+    )
+    return manifest
 
 
 def install_bebop(gen: Path) -> Path:

@@ -35,21 +35,10 @@ def bemu_manifest(chip: str, bbdir: str | None = None) -> Path:
     return path
 
 
-def bemu_core_manifest(chip: str, bbdir: str | None = None) -> Path:
-    return bemu_manifest(chip, bbdir)
+def bemu_chip_binary(chip: str) -> str:
+    """The chip's tile-level BEMU entry in its generated crate."""
+    return f"bebop-chip-{require_chip({'chip': chip})}"
 
 
-def chip_emu_manifest(chip: str, bbdir: str | None = None) -> Path | None:
-    chip = require_chip({"chip": chip})
-    root = _repo(bbdir)
-    main = _chip(chip, bbdir).bemu.chip_main
-    if not main:
-        return None
-    return root / "examples" / "chips" / chip / "emu" / "Cargo.toml"
-
-
-def bemu_tile_index(chip: str, bbdir: str | None = None) -> int | None:
-    bemu = _chip(chip, bbdir).bemu
-    if not bemu.chip_main:
-        return None
-    return bemu.tile_index
+def bemu_tile_index(chip: str, bbdir: str | None = None) -> int:
+    return _chip(chip, bbdir).bemu.tile_index
