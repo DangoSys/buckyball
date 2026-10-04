@@ -108,7 +108,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         ctx.logger.info("Cleaned previous bebop test artifacts")
     harness = shlex.join(
-        ["--", "--workload-toml", workload_toml, "--bb-tests-root", elf_root, *[]]
+        [
+            "--",
+            "--workload-toml",
+            workload_toml,
+            "--bb-tests-root",
+            elf_root,
+            "--jobs",
+            str(input_data.get("jobs", 1)),
+        ]
     )
     test_cmd = f"nix develop -c cargo test --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --test test_bemu {harness}"
     ctx.logger.info(f"Running bebop bemu regression: {test_cmd}")

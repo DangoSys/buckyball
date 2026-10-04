@@ -98,6 +98,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         elf_root,
         "--arch-config",
         chip,
+        "--jobs",
+        str(input_data.get("jobs", 1)),
     ]
     if diff:
         harness_args.append("--diff")

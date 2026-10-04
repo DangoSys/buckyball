@@ -47,6 +47,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "data": {
                 "chip": chip,
                 "test": test_type,
+                "jobs": body.get("jobs", 1),
                 "clean-before": body.get(
                     "clean-before", body.get("clean_before", False)
                 ),
