@@ -79,7 +79,6 @@
 
               export CC="${pkgs.systemTools.clang}/bin/clang"
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.compiler.numactl pkgs.zlib pkgs.libxcb pkgs.libGL pkgs.glib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
               export JAVA_HOME="${pkgs.jdk17}"
               # used by smic180
