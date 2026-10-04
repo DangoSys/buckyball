@@ -82,7 +82,9 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
         if not isinstance(funct, int) or funct < 0:
             raise ValueError(f"ballISA funct7 must be a non-negative int: {ball_path}")
         if not isinstance(mnemonic, str) or not mnemonic:
-            raise ValueError(f"ballISA mnemonic must be a non-empty string: {ball_path}")
+            raise ValueError(
+                f"ballISA mnemonic must be a non-empty string: {ball_path}"
+            )
         if funct in seen:
             raise ValueError(f"duplicate ballISA funct7 {funct}: {ball_path}")
         if funct in system_isa:
@@ -123,13 +125,11 @@ def analysis_dir(
 
     n_itrace = 0
     n_mtrace = 0
-    prev_clk: int | None = None
+    prev_event: int | None = None
     funct_n: Counter[str] = Counter()
-    funct_cyc: Counter[str] = Counter()
     mnk_n: Counter[tuple[int, int, int]] = Counter()
-    rows_n: Counter[int] = Counter()
-    rows_sum = 0
-    rows_1 = 0
+    bank_n: Counter[int] = Counter()
+    access_n: Counter[str] = Counter()
 
     with bdb.open(encoding="utf-8") as source:
         for line_no, raw in enumerate(source, start=1):
@@ -145,39 +145,34 @@ def analysis_dir(
             kind = obj.get("type")
             if kind == "itrace":
                 n_itrace += 1
-                if "clk" not in obj:
-                    raise ValueError(f"bdb.ndjson:{line_no}: itrace missing clk")
-                clk = obj["clk"]
-                if not isinstance(clk, int) or clk < 0:
-                    raise ValueError(f"bdb.ndjson:{line_no}: itrace clk must be a non-negative int")
-                if prev_clk is not None and clk < prev_clk:
+                event_index = obj["event_index"]
+                if not isinstance(event_index, int) or event_index < 0:
                     raise ValueError(
-                        f"bdb.ndjson:{line_no}: itrace clk went backwards {prev_clk} -> {clk}"
+                        f"bdb.ndjson:{line_no}: event_index must be a non-negative int"
+                    )
+                if prev_event is not None and event_index <= prev_event:
+                    raise ValueError(
+                        f"bdb.ndjson:{line_no}: instruction event order is not increasing"
                     )
                 funct = _hex_u(obj.get("funct"), "funct", line_no)
                 if funct not in names:
-                    known = ", ".join(f"{v}=0x{k:02x}" for k, v in sorted(names.items()))
+                    known = ", ".join(
+                        f"{v}=0x{k:02x}" for k, v in sorted(names.items())
+                    )
                     raise ValueError(
                         f"bdb.ndjson:{line_no}: unknown funct 0x{funct:02x}; known: {known}"
                     )
                 name = names[funct]
-                delta = clk if prev_clk is None else clk - prev_clk
                 funct_n[name] += 1
-                funct_cyc[name] += delta
-                prev_clk = clk
+                prev_event = event_index
                 if funct in matrix:
                     rs1 = _hex_u(obj.get("rs1"), "rs1", line_no)
                     rs2 = _hex_u(obj.get("rs2"), "rs2", line_no)
                     mnk_n[_mnk(rs1, rs2)] += 1
             elif kind == "mtrace":
                 n_mtrace += 1
-                rows = obj.get("rows")
-                if not isinstance(rows, int) or rows < 0:
-                    raise ValueError(f"bdb.ndjson:{line_no}: mtrace rows must be a non-negative int")
-                rows_n[rows] += 1
-                rows_sum += rows
-                if rows == 1:
-                    rows_1 += 1
+                bank_n[obj["vbank_id"]] += 1
+                access_n[obj["event"]] += 1
             elif kind is None:
                 raise ValueError(f"bdb.ndjson:{line_no}: missing type")
 
@@ -188,17 +183,12 @@ def analysis_dir(
 
     lines: list[str] = [f"log_dir: {log_dir}"]
     if itrace:
-        total_cyc = sum(funct_cyc.values())
-        if total_cyc == 0:
-            raise ValueError(f"itrace span is 0 cycles in {bdb}")
         lines.append("== itrace ==")
         lines.append(f"events: {n_itrace}")
-        lines.append(f"span_cycles: {total_cyc}")
-        lines.append(f"{'funct':<16} {'n':>10} {'cycles':>14} {'pct':>8}")
+        lines.append(f"{'funct':<16} {'n':>10} {'pct':>8}")
         for name, count in funct_n.most_common():
-            cyc = funct_cyc[name]
-            pct = 100.0 * cyc / total_cyc
-            lines.append(f"{name:<16} {count:>10} {cyc:>14} {pct:>7.1f}%")
+            pct = 100.0 * count / n_itrace
+            lines.append(f"{name:<16} {count:>10} {pct:>7.1f}%")
         lines.append(f"fence: {funct_n.get('fence', 0)}")
         lines.append(f"mset: {funct_n.get('mset', 0)}")
         if matrix:
@@ -209,16 +199,14 @@ def analysis_dir(
                 for (m, n, k), count in mnk_n.most_common():
                     lines.append(f"  ({m},{n},{k})  n={count}")
     if mtrace:
-        mean = rows_sum / n_mtrace
         lines.append("== mtrace ==")
         lines.append(f"events: {n_mtrace}")
         lines.append(f"bank_depth: {bank_depth}")
-        lines.append(f"mean_rows: {mean:.2f}")
-        lines.append(f"mean_rows/bank_depth: {mean / bank_depth:.4f}")
-        lines.append(f"rows=1: {rows_1} ({100.0 * rows_1 / n_mtrace:.1f}%)")
-        lines.append("rows histogram:")
-        for rows, count in sorted(rows_n.items()):
-            lines.append(f"  {rows}: {count}")
+        lines.append(f"reads: {access_n['read']}")
+        lines.append(f"writes: {access_n['write']}")
+        lines.append("bank events:")
+        for bank, count in sorted(bank_n.items()):
+            lines.append(f"  {bank}: {count}")
     return "\n".join(lines) + "\n"
 
 

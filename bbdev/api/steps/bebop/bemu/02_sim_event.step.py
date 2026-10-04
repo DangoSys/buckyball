@@ -29,6 +29,8 @@ from steps.bebop.bemu.scripts.model_sim import model_run_commands
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
 from bemu_common import bemu_manifest, bemu_tile_index, chip_emu_manifest
+from steps.bebop.performance_report import performance_report
+from utils.reports import source_context
 
 config = {
     "name": "bebop-bemu-sim",
@@ -66,7 +68,8 @@ def clean_model_trace(binary_dir: str) -> None:
 def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
     if Path(binary_name).name != binary_name:
         return None
-    workload = search_workload(workloads_output_root(bbdir), binary_name)
+    workload_root = Path(workloads_output_root(bbdir)) / chip / "workloads"
+    workload = search_workload(str(workload_root), binary_name)
     if workload is not None:
         return workload
     kernel = Path(bbdir) / "bb-tests" / "output" / "kernel" / chip / binary_name
@@ -100,27 +103,59 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     if input_data.get("model"):
+        report_context = source_context(bbdir, chip)
         params = {key: value for key, value in input_data.items() if key != "_trace_id"}
         commands, run_log = model_run_commands(bbdir, params)
         run_log.mkdir(parents=True, exist_ok=True)
         ctx.logger.info(f"Model simulation logs: {run_log}")
-        for command, filename in zip(commands, ("build.log", "run.log"), strict=True):
+        filenames = ("run.log",) if input_data.get("reuse-simulator", False) else ("build.log", "run.log")
+        for command, filename in zip(commands, filenames, strict=True):
             command_line = shlex.join(["nix", "develop", "-c", *command])
             command_line = f"set -o pipefail; {command_line} 2>&1 | tee {shlex.quote(str(run_log / filename))}"
             result = await stream_run_logger_async(
-                cmd=command_line, executable="/bin/bash",
-                logger=ctx.logger, cwd=bbdir, task_scope=origin_tid,
-                stdout_prefix="model simulation", stderr_prefix="model simulation")
+                cmd=command_line,
+                executable="/bin/bash",
+                logger=ctx.logger,
+                cwd=bbdir,
+                task_scope=origin_tid,
+                stdout_prefix="model simulation",
+                stderr_prefix="model simulation",
+            )
             if cancellation_requested(origin_tid):
                 return
             if result.returncode:
                 break
-        await check_result(ctx, result.returncode, continue_run=False,
-            extra_fields={"chip": chip, "model": params["model"], "log_dir": str(run_log)},
-            trace_id=origin_tid)
+        try:
+            report_path = performance_report(bbdir, report_context, origin_tid, "bemu", run_log, (run_log / "run.log").read_text(), result.returncode)
+        except (OSError, ValueError, KeyError) as error:
+            await check_result(ctx, 1, extra_fields={"task": "report", "error": str(error), "log_dir": str(run_log)}, trace_id=origin_tid)
+            return
+        await check_result(
+            ctx,
+            result.returncode,
+            continue_run=False,
+            extra_fields={
+                "chip": chip,
+                "model": params["model"],
+                "report_path": report_path,
+                "log_dir": str(run_log),
+            },
+            trace_id=origin_tid,
+        )
         return
     binary_name = input_data.get("binary", "")
-    binary_path = resolve_bemu_binary(bbdir, chip, binary_name)
+    try:
+        binary_path = resolve_bemu_binary(bbdir, chip, binary_name)
+    except ValueError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "binary_resolution_error", "binary": binary_name},
+            trace_id=origin_tid,
+        )
+        return
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(
@@ -188,6 +223,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "--log-dir",
             run_log,
         ]
+    cargo_args[1:1] = [
+        "--config",
+        'build.rustflags=["-C", "target-cpu=native"]',
+        "--config",
+        'profile.release.lto="thin"',
+        "--config",
+        "profile.release.codegen-units=1",
+    ]
     if core_index is not None:
         cargo_args.extend(["--core-index", str(core_index)])
     if input_data.get("pk"):
@@ -203,13 +246,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             cargo_args.append(f"--{trace_name}")
     arguments = input_data.get("arguments", [])
     if arguments:
-        if not isinstance(arguments, list) or not all(isinstance(arg, str) for arg in arguments):
+        if not isinstance(arguments, list) or not all(
+            isinstance(arg, str) for arg in arguments
+        ):
             raise ValueError("arguments must be a list of strings")
         cargo_args.extend(["--", *arguments])
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(cargo_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
+    report_context = source_context(bbdir, chip)
     run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,
@@ -222,6 +268,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     if cancellation_requested(origin_tid):
         return
+    try:
+        report_path = performance_report(bbdir, report_context, origin_tid, "bemu", run_log, (Path(run_log) / "run.log").read_text(), run_result.returncode)
+    except (OSError, ValueError, KeyError) as error:
+        await check_result(ctx, 1, extra_fields={"task": "report", "error": str(error), "log_dir": run_log}, trace_id=origin_tid)
+        return
     if run_result.returncode != 0:
         await check_result(
             ctx,
@@ -229,6 +280,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "bemu",
+                "report_path": report_path,
                 "binary": binary_path,
                 "chip": chip,
                 "log_dir": run_log,
@@ -271,6 +323,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "bemu",
+            "report_path": report_path,
             "binary": binary_path,
             "chip": chip,
             "log_dir": run_log,

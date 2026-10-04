@@ -39,8 +39,6 @@ def main():
     "test_api_bebop_p2e_verilog.py",
     "test_api_bebop_p2e_buildbitstream.py",
     "test_api_bebop_p2e_runworkload.py",
-    "test_api_regression_buildbitstream.py",
-    "test_api_regression_eval_area_power.py",
   ]
   for name in tests:
     path = test_dir / name

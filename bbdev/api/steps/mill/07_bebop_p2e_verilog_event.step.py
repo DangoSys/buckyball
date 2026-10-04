@@ -27,7 +27,7 @@ config = {
     "description": "Generate P2E Verilog via mill",
     "flows": ["bebop"],
     "triggers": [queue("bebop.p2e.verilog")],
-    "enqueues": ["bebop.p2e.buildbitstream"],
+    "enqueues": [],
 }
 
 
@@ -70,11 +70,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Using P2E chip: {chip}")
     ctx.logger.info(f"Using P2E output directory: {build_dir}")
 
-    from_reg = bool(input_data.get("from_regression_buildbitstream"))
     await check_result(
         ctx,
         returncode,
-        continue_run=from_reg and returncode == 0,
+        continue_run=False,
         extra_fields={
             "task": "verilog",
             "chip": chip,
@@ -83,15 +82,3 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         },
         trace_id=origin_tid,
     )
-    if from_reg and returncode == 0:
-        await ctx.enqueue(
-            {
-                "topic": "bebop.p2e.buildbitstream",
-                "data": {
-                    **input_data,
-                    "vsrc_dir": build_dir,
-                    "from_regression_buildbitstream": True,
-                    "_trace_id": origin_tid,
-                },
-            }
-        )

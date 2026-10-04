@@ -35,6 +35,8 @@ def hart_count_params(input_data: dict) -> dict:
         "model",
         "chip",
         "interactive",
+        "guest-memory-mib",
+        "model-storage",
         "_trace_id",
     }
     unknown = sorted(k for k in input_data if k not in allowed)
@@ -105,22 +107,26 @@ def kernel_build_dir(
     model: str = "",
     chip: str = "",
     interactive: bool = False,
+    guest_memory_mib: int = 512,
+    model_storage: str = "initramfs",
 ) -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
-    suffix = ""
+    suffix = "" if guest_memory_mib == 512 else f"-mem{guest_memory_mib}M"
     if chip:
         suffix += f"-chip-{chip}"
     if model:
         suffix += f"-model-{model}"
     if interactive:
         suffix += "-interactive"
+    if model_storage == "pmem":
+        suffix += "-pmem"
     if visible == 64 and total == 64:
         return os.path.join(bbdir, "bb-tests", "build", f"kernel{suffix}")
     return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{suffix}")
 
 
-def fw_payload_name(hart_params: dict, model: str = "", chip: str = "") -> str:
+def fw_payload_name(hart_params: dict, model: str = "", chip: str = "", guest_memory_mib: int = 512, model_storage: str = "initramfs") -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
     name = "fw_payload"
@@ -130,6 +136,10 @@ def fw_payload_name(hart_params: dict, model: str = "", chip: str = "") -> str:
         name = f"{name}-{model}"
     elif chip:
         name = f"{name}-{chip}-pk"
+    if guest_memory_mib != 512:
+        name += f"-mem{guest_memory_mib}M"
+    if model_storage == "pmem":
+        name += "-pmem"
     return name
 
 
@@ -139,6 +149,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     try:
+        memory_value = input_data.get("guest-memory-mib", 512)
+        if isinstance(memory_value, bool) or not str(memory_value).isdigit() or not 1 <= int(memory_value) <= 16384:
+            raise ValueError("guest-memory-mib must be an integer in 1..16384 (P2E DDR capacity)")
+        guest_memory_mib = int(memory_value)
+        model_storage = input_data.get("model-storage", "initramfs")
+        if model_storage not in ("initramfs", "pmem"):
+            raise ValueError("model-storage must be initramfs or pmem")
+        if model_storage == "pmem" and (not input_data.get("model") or guest_memory_mib >= 16384):
+            raise ValueError("pmem requires --model and guest-memory-mib < 16384")
         hart_params = hart_count_params(input_data)
         model = kernel_model(input_data)
         if model and not input_data.get("chip"):
@@ -155,7 +174,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         output_dir = os.path.join(output_dir, chip)
     os.makedirs(output_dir, exist_ok=True)
     kernel_build = kernel_build_dir(
-        bbdir, hart_params, model, chip, interactive=interactive
+        bbdir, hart_params, model, chip, interactive=interactive, guest_memory_mib=guest_memory_mib, model_storage=model_storage
     )
     interactive_arg = "ON" if interactive else "OFF"
     cmake_model_name = model
@@ -166,6 +185,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
         f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
         f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']} "
+        f"-DBUCKYBALL_GUEST_MEMORY_MIB={guest_memory_mib} "
+        f"-DBUCKYBALL_MODEL_STORAGE={model_storage} "
         f"-DBUCKYBALL_KERNEL_MODEL={cmake_model_name} "
         f"-DBUCKYBALL_KERNEL_CHIP={chip} "
         f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg} "
@@ -209,7 +230,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    payload_name = fw_payload_name(hart_params, cmake_model_name if model else "", chip)
+    payload_name = fw_payload_name(hart_params, cmake_model_name if model else "", chip, guest_memory_mib, model_storage)
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
     fw_payload_elf = os.path.join(output_dir, f"{payload_name}.elf")
@@ -240,4 +261,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
         return
 
-    await check_result(ctx, 0, continue_run=False, trace_id=origin_tid)
+    storage_fields = {"model_storage": model_storage}
+    if model_storage == "pmem":
+        manifest = os.path.join(output_dir, f"{payload_name}.load.json")
+        if not os.path.isfile(manifest):
+            raise ValueError(f"Missing pmem load manifest: {manifest}")
+        storage_fields["load_manifest"] = manifest
+    await check_result(ctx, 0, continue_run=False, extra_fields=storage_fields, trace_id=origin_tid)

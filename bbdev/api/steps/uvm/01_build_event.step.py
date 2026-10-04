@@ -37,6 +37,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             input_data.get("ip"),
             ctx,
             False,
+            input_data.get("target"),
         )
     except Exception as e:
         ctx.logger.error(str(e))

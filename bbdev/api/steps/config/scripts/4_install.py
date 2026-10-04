@@ -25,7 +25,7 @@ def _emit_dispatch(chip: pb.Chip, bbdir: Path, out: Path) -> None:
     balls = list(chip.bemu.balls)
     if not balls:
         out.write_text(
-            'use crate::inst::instruction::ExecContext;\n\npub fn execute_known(\n    _ball_class: &str,\n    _funct: u32,\n    _xs1: u64,\n    _xs2: u64,\n    _ctx: &mut ExecContext,\n) -> u64 {\n    panic!("no BEMU ball implementation")\n}\n\npub fn cycles_after_issue(_ball_class: &str, _funct: u32, _xs1: u64, _xs2: u64) -> u64 {\n    panic!("no BEMU ball latency implementation")\n}\n',
+            'use crate::inst::instruction::ExecContext;\n\npub fn execute_known(\n    _ball_class: &str,\n    _funct: u32,\n    _xs1: u64,\n    _xs2: u64,\n    _ctx: &mut ExecContext,\n) -> u64 {\n    panic!("no BEMU ball implementation")\n}\n\npub fn cycles_after_issue(_ball_class: &str, _funct: u32, _xs1: u64, _xs2: u64) -> u64 { panic!("no BEMU latency contract") }\n',
             encoding="utf-8",
         )
         return
@@ -69,13 +69,10 @@ def _emit_dispatch(chip: pb.Chip, bbdir: Path, out: Path) -> None:
     )
     lines += ["}", ""]
     lines += [
-        "pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> u64 {"
+        "pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> u64 {",
     ]
-    lines += chain(
-        "cycles_after_issue",
-        False,
-        "no BEMU ball latency implementation for ballClass={ball_class} funct7={funct}",
-    )
+    lines += chain("cycles_after_issue", False,
+                   "no BEMU latency contract for ballClass={ball_class} funct7={funct}")
     lines += ["}", ""]
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -110,7 +107,7 @@ def install_bebop(gen: Path) -> Path:
     bebop.mkdir(parents=True, exist_ok=True)
     manifest = bebop / "Cargo.toml"
     manifest.write_text(
-        '[workspace]\nresolver = "2"\n\n[package]\nname = "bebop"\nversion = "0.1.0"\nedition = "2021"\nbuild = "../../../../../bebop/build.rs"\n\n[[bin]]\nname = "bebop"\npath = "../../../../../bebop/src/main.rs"\n\n[[test]]\nname = "test_verilator"\npath = "../../../../../bebop/tests/test_verilator.rs"\nharness = false\nrequired-features = ["verilator"]\n\n[[test]]\nname = "test_p2e"\npath = "../../../../../bebop/tests/test_p2e.rs"\nharness = false\nrequired-features = ["p2e"]\n\n[features]\ndefault = []\nverilator = ["dep:bebop-verilator"]\np2e = ["dep:bebop-p2e", "bebop-bemu?/p2e"]\nbemu = ["dep:bebop-bemu"]\n\n[dependencies]\nbebop-verilator = { path = "../../../../../bebop/src/nodes/verilator", optional = true }\nbebop-p2e = { path = "../../../../../bebop/src/nodes/p2e", optional = true }\nbebop-bemu = { path = "../../configs/generated/bemu", optional = true }\nbebop-dasm = { path = "../../../../../bebop/src/nodes/lib/dasm" }\nbebop-bank-hash = { path = "../../../../../bebop/src/nodes/lib/bank-hash" }\nbebop-bemu-profile = { path = "../../../../../bebop/src/nodes/lib/bemu-profile" }\nbebop-fd-redirect = { path = "../../../../../bebop/src/nodes/lib/fd-redirect" }\nbebop-rtl-trace = { path = "../../../../../bebop/src/nodes/lib/rtl-trace" }\nbebop-uart = { path = "../../../../../bebop/src/nodes/lib/uart" }\nclap = { version = "4", features = ["derive"] }\nlibc = "0.2"\nlog = "0.4"\nenv_logger = "0.11"\nnix = { version = "0.29", features = ["fs", "mman", "signal", "process"] }\ntoml = "0.8"\ncamino = "1.1"\nsnafu = "0.8"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\nduct = "0.13"\n\n[dev-dependencies]\nlibtest-mimic = "0.8"\nassert_cmd = "2"\nwalkdir = "2"\nchrono = { version = "0.4", default-features = false, features = ["clock"] }\n',
+        '[workspace]\nresolver = "2"\n\n[package]\nname = "bebop"\nversion = "0.1.0"\nedition = "2021"\nbuild = "../../../../../bebop/build.rs"\n\n[[bin]]\nname = "bebop"\npath = "../../../../../bebop/src/main.rs"\n\n[[test]]\nname = "test_verilator"\npath = "../../../../../bebop/tests/test_verilator.rs"\nharness = false\nrequired-features = ["verilator"]\n\n[[test]]\nname = "test_p2e"\npath = "../../../../../bebop/tests/test_p2e.rs"\nharness = false\nrequired-features = ["p2e"]\n\n[features]\ndefault = []\nverilator = ["dep:bebop-verilator"]\np2e = ["dep:bebop-p2e", "bebop-bemu?/p2e"]\nbemu = ["dep:bebop-bemu", "bebop-p2e?/diff"]\n\n[dependencies]\nbebop-verilator = { path = "../../../../../bebop/src/nodes/verilator", optional = true }\nbebop-p2e = { path = "../../../../../bebop/src/nodes/p2e", optional = true }\nbebop-bemu = { path = "../../configs/generated/bemu", optional = true }\nbebop-dasm = { path = "../../../../../bebop/src/nodes/lib/dasm" }\nbebop-bank-hash = { path = "../../../../../bebop/src/nodes/lib/bank-hash" }\nbebop-bemu-profile = { path = "../../../../../bebop/src/nodes/lib/bemu-profile" }\nbebop-fd-redirect = { path = "../../../../../bebop/src/nodes/lib/fd-redirect" }\nbebop-rtl-trace = { path = "../../../../../bebop/src/nodes/lib/rtl-trace" }\nbebop-uart = { path = "../../../../../bebop/src/nodes/lib/uart" }\nclap = { version = "4", features = ["derive"] }\nlibc = "0.2"\nlog = "0.4"\nenv_logger = "0.11"\nnix = { version = "0.29", features = ["fs", "mman", "signal", "process"] }\ntoml = "0.8"\ncamino = "1.1"\nsnafu = "0.8"\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\nduct = "0.13"\n\n[dev-dependencies]\nlibtest-mimic = "0.8"\nassert_cmd = "2"\nwalkdir = "2"\nchrono = { version = "0.4", default-features = false, features = ["clock"] }\n',
         encoding="utf-8",
     )
     return manifest

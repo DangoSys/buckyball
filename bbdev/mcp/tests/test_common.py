@@ -140,7 +140,7 @@ class EnsureTest(unittest.TestCase):
         read_state.return_value = {
             "processing": {
                 "processing": True,
-                "task": "regression.buildbitstream",
+                "task": "bebop.p2e.buildbitstream",
                 "chip": "pebble",
             }
         }
@@ -149,7 +149,7 @@ class EnsureTest(unittest.TestCase):
             common.task_status("trace-1"),
             {
                 "processing": True,
-                "task": "regression.buildbitstream",
+                "task": "bebop.p2e.buildbitstream",
                 "chip": "pebble",
                 "accepted": True,
                 "trace_id": "trace-1",

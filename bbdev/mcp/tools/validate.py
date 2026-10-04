@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from common import balldomain_path, err, fmt, need, validate_toml
+from common import err, fmt, need, validate_balldomains
 
 
 def register(mcp):
@@ -14,7 +14,7 @@ def register(mcp):
         if e := need("chip", chip):
             return err(e)
         try:
-            return fmt(validate_toml(balldomain_path(chip, balldomain)))
+            return fmt(validate_balldomains(chip, balldomain))
         except Exception as ex:
             return fmt(
                 {"passed": False, "success": False, "failure": True, "error": str(ex)}

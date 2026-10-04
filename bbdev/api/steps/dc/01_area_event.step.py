@@ -20,7 +20,9 @@ if scripts_path not in sys.path:
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger_async
-from tapeout import clock_period_ns, get_tapeout_contract, write_run_tcl
+from tapeout import get_tapeout_contract, write_run_tcl
+from steps.dc.scripts.report import area_report
+from utils.reports import source_context
 
 config = {
     "name": "dc-area",
@@ -120,6 +122,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await check_result(ctx, 1, continue_run=False, extra_fields={"task": "dc", "error": str(exc)}, trace_id=origin_tid)
         return
     script_path = contract.dc_script
+    report_context = source_context(get_buckyball_path(), contract.chip)
     dc_log = os.path.join(analysis_dir, "dc_shell.log")
     ctx.logger.info(f"Running chip-owned DC synthesis for {contract.chip}, top {top_module}: {script_path}")
     result = await stream_run_logger_async(
@@ -145,43 +148,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "tapeout_dir": str(contract.root),
         "replace_manifest": input_data.get("replace_manifest"),
     }
-
-    if result.returncode == 0 and input_data.get("from_regression_area_power"):
-        reg_scripts = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "regression", "scripts")
-        )
-        if reg_scripts not in sys.path:
-            sys.path.insert(0, reg_scripts)
-        from dc_area import area_mm2_from_rpt
-        from result import merge_metrics
-
-        rpt = os.path.join(report_dir, "area.rpt")
-        if not os.path.isfile(rpt):
-            await check_result(
-                ctx, 1, continue_run=False,
-                extra_fields={**extra_fields, "error": f"missing area.rpt: {rpt}", "area_rpt": rpt},
-                trace_id=origin_tid,
-            )
-            return
+    if result.returncode == 0:
         try:
-            with open(rpt, encoding="utf-8") as handle:
-                area = area_mm2_from_rpt(handle.read())
-        except ValueError as exc:
-            await check_result(
-                ctx, 1, continue_run=False,
-                extra_fields={**extra_fields, "error": str(exc), "area_rpt": rpt},
-                trace_id=origin_tid,
-            )
+            extra_fields["report_path"] = area_report(report_context, origin_tid, report_dir, contract)
+        except (OSError, ValueError) as error:
+            await check_result(ctx, 1, extra_fields={**extra_fields, "error": str(error)}, trace_id=origin_tid)
             return
-        freq = 1000.0 / clock_period_ns(contract)
-        merge_metrics(get_buckyball_path(), area=area, freq=freq)
-        extra_fields["area"] = area
-        extra_fields["freq"] = freq
-        await check_result(
-            ctx, result.returncode, continue_run=False,
-            extra_fields=extra_fields, trace_id=origin_tid,
-        )
-        return
 
     await check_result(
         ctx,

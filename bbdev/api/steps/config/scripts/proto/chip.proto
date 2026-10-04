@@ -69,6 +69,7 @@ message BallIdMapping {
   uint32 mmio_read_bw = 8;
   uint32 mmio_write_bw = 9;
   map<string, string> ball_params = 10;
+  string builtin = 11;
 }
 
 message BallIsaEntry {
@@ -158,14 +159,14 @@ message FrontendConfig {
   string source_path = 9;
 }
 
-message GpDomainConfig {
+message RvvConfig {
   uint32 lane_number = 1;
-  uint32 chaining_size = 2;
-  uint32 v_len = 3;
-  uint32 d_len = 4;
-  uint32 e_len = 5;
-  uint32 lane_scale = 6;
-  string source_path = 7;
+  uint32 v_len = 2;
+  uint32 e_len = 3;
+  uint32 i_buf_words = 4;
+  uint32 memory_ports = 5;
+  string source_path = 6;
+  optional bool enable = 7;
 }
 
 message TileParamConfig {
@@ -197,7 +198,8 @@ message CoreInstance {
   string balldomain_base_dir = 7;
   CpuConfig cpu = 8;
   FrontendConfig frontend = 9;
-  GpDomainConfig gp_domain = 10;
+  optional uint32 hart_id = 10;
+  RvvConfig rvv = 11;
 }
 
 message BemuBall {
@@ -221,13 +223,11 @@ message SharedMemConfig {
   uint32 mem_cycles = 6;
 }
 
-message PrivateDCacheConfig {
-  bool enable = 1;
-  uint32 ways = 2;
-  uint32 capacity_kb = 3;
-  uint32 write_bytes = 4;
-  uint32 port_factor = 5;
-  uint32 mem_cycles = 6;
+// Tile 0 is the main tile: every core is Linux visible. Compute tiles follow and are
+// homogeneous: core 0 controls the tile and the other cores are hidden task workers.
+enum TileKind {
+  TILE_KIND_MAIN = 0;
+  TILE_KIND_COMPUTE = 1;
 }
 
 message TilePlacement {
@@ -235,9 +235,12 @@ message TilePlacement {
   uint32 virtual_bank_count = 2;
   repeated uint32 core_indices = 3;
   uint32 mem_ball_channel_num = 4;
-  PrivateDCacheConfig private_dcache = 5;
+  reserved 5;
   SharedMemConfig shared_mem = 6;
   TileParamConfig param = 7;
+  // Set for compute tiles only.
+  optional uint32 controller_core_index = 8;
+  TileKind kind = 9;
 }
 
 message WorkloadConfig {
@@ -269,4 +272,5 @@ message Chip {
   WorkloadConfig workload = 11;
   string chip_path = 12;
   repeated CompilerProfile profiles = 13;
+  reserved 14;
 }

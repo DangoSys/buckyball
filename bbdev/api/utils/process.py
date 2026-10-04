@@ -188,8 +188,10 @@ def stop_workspace_servers(
   port: int | None = None,
   worker_url: str | None = None,
 ) -> int:
-  pids = _workspace_pids(workflow_dir, worker_url=worker_url)
-  pids.update(_port_pids(workflow_dir, port, worker_url=worker_url))
+  if port is None:
+    pids = _workspace_pids(workflow_dir, worker_url=worker_url)
+  else:
+    pids = _port_pids(workflow_dir, port, worker_url=worker_url)
   if not pids:
     return 0
 

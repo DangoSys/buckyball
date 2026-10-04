@@ -1,4 +1,5 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
+from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse, validate_cold_load_case
 
 config = {
     "name": "bebop-p2e-runworkload-api",
@@ -11,18 +12,34 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
+    if not isinstance(body.get("reuse-runtime", False), bool):
+        return ApiResponse(status=400, body={"error": "reuse-runtime must be a boolean"})
     image = body.get("image", "")
+    manifest = body.get("load-manifest", "")
     bitstream = body.get("bitstream", "")
-    if not image or not bitstream:
+    if not all(isinstance(value, str) for value in (image, manifest, bitstream)):
+        return ApiResponse(status=400, body={"error": "image, load-manifest and bitstream must be strings"})
+    if bool(image) == bool(manifest) or not bitstream:
         return ApiResponse(
             status=400,
             body={
                 "success": False,
                 "failure": True,
                 "returncode": 400,
-                "message": "image and bitstream parameters are required",
+                "message": "exactly one of image and load-manifest, and bitstream, are required",
             },
         )
+    if manifest and body.get("diff", False):
+        return ApiResponse(status=400, body={"error": "load-manifest cannot use single-ELF diff"})
+    try:
+        validate_cold_load_case(bitstream)
+    except (ValueError, OSError, TypeError) as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    if body.get("reuse-runtime", False):
+        try:
+            validate_runtime_reuse(bitstream, bool(body.get("diff", False)))
+        except (ValueError, OSError) as error:
+            return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue({
         "topic": "bebop.p2e.runworkload",
         "data": {**body, "_trace_id": ctx.trace_id},

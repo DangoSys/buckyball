@@ -9,6 +9,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ball_normalize import normalize_ball_domain
+
 
 def _die(msg: str) -> None:
     raise ValueError(msg)
@@ -106,45 +110,24 @@ def _tile_cores(tile: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def iter_topology_tiles(topo: dict[str, Any]) -> list[dict[str, Any]]:
-    tiles = topo.get("tiles")
-    if isinstance(tiles, list) and tiles:
-        out: list[dict[str, Any]] = []
-        seen: set[int] = set()
-        for i, tile in enumerate(tiles):
-            if not isinstance(tile, dict):
-                _die("tiles entry must be a table")
-            tile_id = _require_id(tile, "tile_id", f"tiles[{i}]")
-            if tile_id in seen:
-                _die(f"duplicate tile_id {tile_id}")
-            seen.add(tile_id)
-            out.append(tile)
-        expected = set(range(len(out)))
-        if seen != expected:
-            _die(f"tile_id must be exactly 0..{len(out)-1}, got {sorted(seen)}")
-        out.sort(key=lambda t: t["tile_id"])
-        return out
-
-    template = topo.get("tileTemplate")
-    if isinstance(template, dict):
-        count = template.get("count")
-        if not isinstance(count, int) or count < 1:
-            _die("[tileTemplate].count must be a positive int")
-        tile_ids = _require_id_list(template, "tile_ids", count, "tileTemplate")
-        expected = set(range(count))
-        if set(tile_ids) != expected:
-            _die(f"tileTemplate.tile_ids must be exactly 0..{count-1}, got {tile_ids}")
-        base = {
-            k: v
-            for k, v in template.items()
-            if k not in ("count", "tile_ids")
-        }
-        out = []
-        for tile_id in sorted(tile_ids):
-            tile = dict(base)
-            tile["tile_id"] = tile_id
-            out.append(tile)
-        return out
-    _die("topology must define [[tiles]] or [tileTemplate]")
+    """The main tile is tile 0; homogeneous compute tiles follow as tiles 1..count."""
+    for legacy in ("tiles", "tileTemplate", "main_core"):
+        if legacy in topo:
+            _die(f"[{legacy}] is replaced by [main_tile] and [compute_tiles]")
+    main = topo.get("main_tile")
+    if not isinstance(main, dict):
+        _die("topology must define [main_tile]")
+    out = [dict(main, tile_id=0, kind="main")]
+    compute = topo.get("compute_tiles")
+    if compute is not None:
+        if not isinstance(compute, dict):
+            _die("[compute_tiles] must be a table")
+        count = compute.get("count")
+        if type(count) is not int or count < 1:
+            _die("[compute_tiles].count must be a positive int")
+        base = {k: v for k, v in compute.items() if k != "count"}
+        out += [dict(base, tile_id=i + 1, kind="compute") for i in range(count)]
+    return out
 
 
 def iter_cores(topo: dict[str, Any]) -> Iterator[dict[str, Any]]:
@@ -170,24 +153,13 @@ def _tile_signature(tile: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
 
 def _assert_isomorphic_tiles(topo: dict[str, Any]) -> None:
     tiles = iter_topology_tiles(topo)
-    if not tiles:
-        _die("no tiles")
-    ref = _tile_signature(tiles[0])
-    if not ref:
-        _die("tile has no cores")
-    for tile in tiles[1:]:
-        sig = _tile_signature(tile)
-        if sig != ref:
-            _die(
-                f"tiles must be isomorphic; tile_id={tile['tile_id']} "
-                f"signature {sig} != tile_id={tiles[0]['tile_id']} {ref}"
-            )
-
-
-def hart_id(tile_id: int, core_id: int, cores_per_tile: int) -> int:
-    if core_id < 0 or core_id >= cores_per_tile:
-        _die(f"core_id {core_id} out of range for cores_per_tile={cores_per_tile}")
-    return tile_id * cores_per_tile + core_id
+    for tile in tiles:
+        if not _tile_signature(tile):
+            _die(f"tile_id={tile['tile_id']} has no cores")
+    compute = [t for t in tiles if t["kind"] == "compute"]
+    for tile in compute[1:]:
+        if _tile_signature(tile) != _tile_signature(compute[0]):
+            _die(f"compute tiles must be isomorphic; tile_id={tile['tile_id']} differs from tile_id=1")
 
 
 def unique_cores(topo: dict[str, Any]) -> list[str]:
@@ -271,7 +243,7 @@ def _config_path(repo: Path, config: object) -> str:
 
 
 def _ball_num(core: dict) -> int:
-    bd = core.get("balldomain")
+    bd = normalize_ball_domain(core)
     if not isinstance(bd, dict):
         return 0
     ball_num = bd.get("ballNum")
@@ -283,13 +255,9 @@ def _ball_num(core: dict) -> int:
 
 
 def _n_tiles(topo: dict[str, Any]) -> int:
-    top = topo.get("top")
-    if not isinstance(top, dict):
-        _die("topology missing [top]")
-    n = top.get("nTiles")
-    if not isinstance(n, int) or n < 1:
-        _die("[top].nTiles must be a positive int")
-    return n
+    if "top" in topo:
+        _die("[top] is retired: tile counts and hart layout follow [main_tile] and [compute_tiles]")
+    return len(iter_topology_tiles(topo))
 
 
 def _derive_cores(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
@@ -325,7 +293,7 @@ def _derive_cores(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
             "ball_num": ball_num,
         }
         if ball_num > 0:
-            bd = core.get("balldomain")
+            bd = normalize_ball_domain(core)
             if not isinstance(bd, dict):
                 _die(f"{pkg}: missing balldomain")
             mappings = bd.get("ballIdMappings")
@@ -341,8 +309,9 @@ def _derive_cores(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
                 entry["mappings"].append(
                     {
                         "ball_id": mapping.get("ballId"),
-                        "ball_dir": _ball_dir(ball_class),
-                        "config_path": _config_path(repo, mapping.get("config")),
+                        "ball_dir": "" if mapping.get("builtin") else _ball_dir(ball_class),
+                        "config_path": "" if mapping.get("builtin") else _config_path(repo, mapping.get("config")),
+                        "builtin": mapping.get("builtin", ""),
                     }
                 )
         out.append(entry)
@@ -361,6 +330,10 @@ def _derive_tiles(
             _die("tile missing _file")
         tile_cores = _tile_cores(tile)
         n = len(tile_cores)
+        if "controllerCore" in tile:
+            _die(f"tile_id={tile_id}: controllerCore is retired; a compute tile's controller is core 0")
+        if tile["kind"] == "compute" and n < 2:
+            _die(f"tile_id={tile_id}: a compute tile needs its controller and at least one worker")
         shared = tile.get("sharedMem")
         vbc = 0
         if isinstance(shared, dict):
@@ -382,6 +355,7 @@ def _derive_tiles(
         placements.append(
             {
                 "tile_id": tile_id,
+                "kind": tile["kind"],
                 "path": _repo_rel(repo, tile_path),
                 "core_indices": indices,
                 "cores_per_tile": n,
@@ -389,6 +363,8 @@ def _derive_tiles(
                 "mem_ball_channel_num": mem_ball_channel_num,
             }
         )
+        if tile["kind"] == "compute":
+            placements[-1]["controller_core_index"] = indices[0]
         offset += n
     return placements
 
@@ -397,7 +373,7 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
     seen: set[str] = set()
     balls: list[dict[str, str]] = []
     for core in iter_cores(topo):
-        bd = core.get("balldomain")
+        bd = normalize_ball_domain(core)
         if not isinstance(bd, dict):
             continue
         mappings = bd.get("ballIdMappings")
@@ -411,6 +387,7 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
             and isinstance(m.get("ballId"), int)
             and isinstance(m.get("ballClass"), str)
         }
+        builtin_ids = {m["ballId"] for m in mappings if m.get("builtin")}
         pkg = core_pkg(core.get("_file", "")) or "core"
         for entry in isa:
             if not isinstance(entry, dict):
@@ -420,6 +397,8 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
             if not isinstance(funct7, int) or not isinstance(bid, int):
                 _die(f"ballISA entry must have funct7 and bid: {entry!r}")
             if funct7 in {0, 1, 16, 32, 33, 34, 35}:
+                continue
+            if bid in builtin_ids:
                 continue
             ball_class = bid_to_class.get(bid)
             if not ball_class:
@@ -446,16 +425,19 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
 
 def _bemu_paths(repo: Path, chip: str, topo: dict[str, Any]) -> tuple[str, int]:
     main = repo / "examples" / "chips" / chip / "emu" / "src" / "main.rs"
-    tiles = tile_files(topo)
-    if main.is_file():
-        if len(tiles) != 1:
-            _die(f"chip {chip}: emu requires exactly one tile file, got {tiles}")
-        return f"examples/chips/{chip}/emu/src/main.rs", 0
-    return "", 0
+    if not main.is_file():
+        return "", 0
+    tiles = iter_topology_tiles(topo)
+    for kind in ("main", "compute"):
+        files = {t.get("_file") for t in tiles if t["kind"] == kind}
+        if len(files) > 1:
+            _die(f"chip {chip}: emu requires one {kind} tile file, got {sorted(files)}")
+    compute = [t["tile_id"] for t in tiles if t["kind"] == "compute"]
+    return f"examples/chips/{chip}/emu/src/main.rs", compute[0] if compute else 0
 
 
 def _ball_ctest_dirs(repo: Path, core: dict[str, Any]) -> list[str]:
-    bd = core.get("balldomain")
+    bd = normalize_ball_domain(core)
     if not isinstance(bd, dict):
         _die("core missing balldomain for ctest dirs")
     mappings = bd.get("ballIdMappings")
@@ -465,6 +447,8 @@ def _ball_ctest_dirs(repo: Path, core: dict[str, Any]) -> list[str]:
     for mapping in mappings:
         if not isinstance(mapping, dict):
             _die("ballIdMappings entry must be a table")
+        if mapping.get("builtin"):
+            continue
         ball_class = mapping.get("ballClass")
         if not isinstance(ball_class, str):
             _die("ballIdMappings entry missing ballClass")
@@ -519,44 +503,41 @@ def _derive_targets(
     return targets
 
 
-def _derive_harts(
-    tiles: list[dict[str, Any]], cores: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    if not tiles:
-        _die("no tiles")
-    cores_per_tile = tiles[0]["cores_per_tile"]
-    for tile in tiles[1:]:
-        if tile["cores_per_tile"] != cores_per_tile:
-            _die("tiles must be isomorphic (cores_per_tile mismatch)")
-
+def _derive_harts(tiles: list[dict[str, Any]], cores: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Main tile cores are harts 0..m-1 and the only Linux-visible harts. Compute tile t
+    (1..N) has its controller at m+t-1; workers follow from m+N, tile by tile."""
+    main = tiles[0]
+    compute = tiles[1:]
+    m = main["cores_per_tile"]
+    workers_per_tile = compute[0]["cores_per_tile"] - 1 if compute else 0
     harts: list[dict[str, Any]] = []
     for tile in tiles:
         tile_id = tile["tile_id"]
         for local, core_index in enumerate(tile["core_indices"]):
             inst = cores[core_index]
-            core_id = inst["core_id"]
-            if core_id != local:
-                _die(
-                    f"tile_id={tile_id}: core_id={core_id} != sorted slot {local}"
-                )
-            hid = hart_id(tile_id, core_id, cores_per_tile)
+            if inst["core_id"] != local:
+                _die(f"tile_id={tile_id}: core_id={inst['core_id']} != sorted slot {local}")
+            if tile["kind"] == "main":
+                hid = local
+            elif local == 0:
+                hid = m + tile_id - 1
+            else:
+                hid = m + len(compute) + (tile_id - 1) * workers_per_tile + local - 1
             harts.append(
                 {
                     "hart_id": hid,
                     "tile_id": tile_id,
-                    "core_id": core_id,
+                    "core_id": local,
                     "core_index": core_index,
+                    "visible": tile["kind"] == "main",
                     "target": _target_name(inst["role"], inst["pkg"]),
                     "pkg": inst["pkg"],
                     "role": inst["role"],
                 }
             )
     harts.sort(key=lambda h: h["hart_id"])
-    ids = [h["hart_id"] for h in harts]
-    if ids != list(range(len(harts))):
-        _die(f"hart_id must be exactly 0..{len(harts)-1}, got {ids}")
-    if len(harts) != len(cores):
-        _die(f"hart count {len(harts)} != core count {len(cores)}")
+    if [h["hart_id"] for h in harts] != list(range(len(cores))):
+        _die("chip hart_ids must be exactly 0..total_harts-1")
     return harts
 
 
@@ -591,8 +572,6 @@ def derive(data: dict[str, Any], repo: Path, chip: str) -> dict[str, Any]:
     targets = _derive_targets(repo, topo, cores)
     harts = _derive_harts(tiles, cores)
     n_tiles = _n_tiles(topo)
-    if len(tiles) != n_tiles:
-        _die(f"{chip}: [top].nTiles={n_tiles} but got {len(tiles)} tile(s)")
 
     chip_main, tile_index = _bemu_paths(repo, chip, topo)
 

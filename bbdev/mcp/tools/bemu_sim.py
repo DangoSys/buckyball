@@ -10,7 +10,7 @@ def register(mcp):
     @mcp.tool()
     def bbdev_bemu_sim(
         chip: str,
-        binary: str,
+        binary: str | None = None,
         pk: bool = False,
         disasm: bool = False,
         tool_profile: bool = False,
@@ -18,8 +18,20 @@ def register(mcp):
         mtrace: bool = False,
         core_index: int | None = None,
         arguments: list[str] | None = None,
+        model: str | None = None,
+        reuse_simulator: bool = False,
     ) -> str:
-        """Run one workload on bebop-bemu. POST /bebop/bemu/sim."""
+        """Run a logical ELF file name from the selected chip's workload/kernel outputs, or a built model recipe, on BEMU. Model runs use running-param.toml. POST /bebop/bemu/sim."""
+        if model is not None:
+            for n, v in (("chip", chip), ("model", model)):
+                if e := need(n, v):
+                    return err(e)
+            if binary is not None or pk or disasm or tool_profile or itrace or mtrace or core_index is not None or arguments:
+                return err("model runs use running-param.toml; ELF options cannot be supplied")
+            return fmt(submit("/bebop/bemu/sim", {
+                "chip": chip, "model": model, "reuse-simulator": reuse_simulator}))
+        if reuse_simulator:
+            return err("reuse-simulator is supported for model runs only")
         for n, v in (("chip", chip), ("binary", binary)):
             if e := need(n, v):
                 return err(e)

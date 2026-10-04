@@ -14,6 +14,8 @@ def register(mcp):
         diff: bool = False,
         vsrc_dir: Optional[str] = None,
         output_dir: Optional[str] = None,
+        resume_post_route: bool = False,
+        stop_after: Optional[str] = None,
     ) -> str:
         """Build bebop-p2e bitstream. POST /bebop/p2e/buildbitstream."""
         if e := need("chip", chip):
@@ -22,9 +24,10 @@ def register(mcp):
             submit(
                 "/bebop/p2e/buildbitstream",
                 opt(
-                    {"chip": chip, "diff": diff},
+                    {"chip": chip, "diff": diff, "resume_post_route": resume_post_route},
                     vsrc_dir=vsrc_dir,
                     output_dir=output_dir,
+                    stop_after=stop_after,
                 ),
             )
         )

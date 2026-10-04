@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import importlib.util
 import os
 import shutil
 import socket
@@ -369,14 +370,13 @@ def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
     return (core_file.parent / include).resolve()
 
 
-def _validate(path: Path) -> Dict[str, Any]:
-    cfg = _load_toml(path)
+def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
     mappings = cfg.get("ballIdMappings", [])
     if not isinstance(mappings, list):
         raise ValueError(f"{path}: ballIdMappings must be an array")
     isa = cfg.get("ballISA")
-    if not isinstance(isa, list) or not isa:
-        raise ValueError(f"{path}: missing or empty ballISA")
+    if not isinstance(isa, list):
+        raise ValueError(f"{path}: missing ballISA")
     for i, e in enumerate(isa):
         if not isinstance(e, dict):
             raise ValueError(f"{path}: ballISA[{i}] must be a table")
@@ -394,6 +394,8 @@ def _validate(path: Path) -> Dict[str, Any]:
     missing_config = []
     bad_bw = []
     for m in mappings:
+        if m.get("builtin") == "kernel":
+            continue  # The shared normalizer validates the complete builtin contract.
         name = m.get("ballName")
         if not m.get("ballClass"):
             bad_bw.append({"ballName": name, "error": "missing ballClass"})
@@ -405,18 +407,10 @@ def _validate(path: Path) -> Dict[str, Any]:
             or out_bw <= 0
         ):
             bad_bw.append({"ballName": name, "inBW": in_bw, "outBW": out_bw})
-        cfg_rel = m.get("config")
-        if not isinstance(cfg_rel, str) or not cfg_rel:
-            missing_config.append(
-                {"ballName": name, "config": cfg_rel, "error": "missing"}
-            )
-            continue
-        cfg_path = (path.parent / cfg_rel).resolve()
+        config = m.get("config")
+        cfg_path = Path(config["_file"])
         if not cfg_path.is_file():
-            missing_config.append(
-                {"ballName": name, "config": cfg_rel, "resolved": str(cfg_path)}
-            )
-            continue
+            missing_config.append({"ballName": name, "resolved": str(cfg_path)})
     funct7s = [e.get("funct7") for e in isa]
     mnemonics = [e.get("mnemonic") for e in isa]
     bids = [e.get("bid") for e in isa]
@@ -456,7 +450,7 @@ def _validate(path: Path) -> Dict[str, Any]:
             "pass": not missing_config,
             "missing": missing_config,
         },
-        "bandwidth_positive": {"pass": not bad_bw, "invalid": bad_bw},
+        "bandwidth_contract": {"pass": not bad_bw, "invalid": bad_bw},
     }
 
     id_to_isa: Dict[Any, list] = {}
@@ -467,6 +461,7 @@ def _validate(path: Path) -> Dict[str, Any]:
             "ballId": m.get("ballId"),
             "ballName": m.get("ballName"),
             "ballClass": m.get("ballClass"),
+            "builtin": m.get("builtin"),
             "inBW": m.get("inBW"),
             "outBW": m.get("outBW"),
             "config": m.get("config"),
@@ -486,6 +481,37 @@ def _validate(path: Path) -> Dict[str, Any]:
     }
 
 
+def _validate_chip(chip: str, balldomain: Optional[str]) -> Dict[str, Any]:
+    scripts = repo_path() / "bbdev/api/steps/config/scripts"
+    sys.path.insert(0, str(scripts))
+    from ball_normalize import normalize_ball_domain
+    spec = importlib.util.spec_from_file_location("ball_validation_topology", scripts / "2_parameter_derivation.py")
+    topology = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(topology)
+    expanded = repo_path() / "examples/chips" / chip / "configs/generated/config/config.json"
+    config = json.loads(expanded.read_text(encoding="utf-8"))
+    selected = _balldomain_path(chip, balldomain) if balldomain is not None else None
+    results = []
+    for index, core in enumerate(topology.iter_cores(config["designs"])):
+        raw = core.get("balldomain")
+        if not isinstance(raw, dict) or not raw.get("_file"):
+            raise ValueError(f"Core {index}: missing expanded BallDomain")
+        path = Path(raw["_file"]).resolve()
+        if selected is not None and path != selected:
+            continue
+        try:
+            domain = normalize_ball_domain(core)
+            if domain is None:
+                raise ValueError("missing effective BallDomain")
+            result = _validate_domain(path, domain)
+        except ValueError as error:
+            result = {"passed": False, "error": str(error)}
+        results.append({"core_index": index, "core_config": core["_file"], **result})
+    if not results:
+        raise ValueError(f"No expanded core matches BallDomain {selected}")
+    return {"chip": chip, "passed": all(result["passed"] for result in results), "cores": results}
+
+
 
 atexit.register(_stop)
 
@@ -497,4 +523,4 @@ err = _err
 need = _need
 opt = _opt
 balldomain_path = _balldomain_path
-validate_toml = _validate
+validate_balldomains = _validate_chip

@@ -30,8 +30,11 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
+    data = {**body, "chip": chip, "_trace_id": ctx.trace_id}
+    if "vsrc-dir" in data:
+        data["vsrc_dir"] = data.pop("vsrc-dir")
     await ctx.enqueue({
         "topic": "bebop.verilator.sim",
-        "data": {**body, "chip": chip, "_trace_id": ctx.trace_id},
+        "data": data,
     })
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

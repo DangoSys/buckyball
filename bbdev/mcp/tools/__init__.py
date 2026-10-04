@@ -44,10 +44,6 @@ from . import kernel_build
 from . import yosys_run
 from . import yosys_verilog
 from . import yosys_synth
-from . import regression_buildbitstream
-from . import regression_check
-from . import regression_eval_performance
-from . import regression_eval_area_power
 
 def modules():
     return [
@@ -93,10 +89,6 @@ def modules():
         yosys_run,
         yosys_verilog,
         yosys_synth,
-        regression_buildbitstream,
-        regression_check,
-        regression_eval_performance,
-        regression_eval_area_power,
     ]
 
 

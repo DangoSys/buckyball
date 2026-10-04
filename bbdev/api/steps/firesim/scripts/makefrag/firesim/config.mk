@@ -14,7 +14,9 @@ DESIGN ?= FireSim
 
 # Override to use our custom config package
 TARGET_CONFIG_PACKAGE ?= sims.firesim
-TARGET_CONFIG ?= FireSimBuckyballToyConfig
+ifndef TARGET_CONFIG
+$(error TARGET_CONFIG must name an available FireSim target)
+endif
 
 # These guide chisel elaboration of simulation components by MIDAS,
 # including models and widgets.

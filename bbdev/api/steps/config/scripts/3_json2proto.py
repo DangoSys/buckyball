@@ -13,6 +13,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import chip_pb2 as pb  # noqa: E402
+from ball_normalize import normalize_ball_domain
 
 
 def _load_derive():
@@ -82,9 +83,14 @@ def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
         e.ball_id = m["ballId"]
         e.ball_name = m["ballName"]
         e.ball_class = m["ballClass"]
-        e.ball_dir = _ball_dir(m["ballClass"])
-        e.config_path = _rel(bbdir, m["config"]["_file"])
-        for key, value in m["config"]["ball"].items():
+        if m.get("builtin"):
+            e.builtin = m["builtin"]
+            params = m["ball_params"]
+        else:
+            e.ball_dir = _ball_dir(m["ballClass"])
+            e.config_path = _rel(bbdir, m["config"]["_file"])
+            params = m["config"]["ball"]
+        for key, value in params.items():
             e.ball_params[key] = str(value)
         e.in_bw = m["inBW"]
         e.out_bw = m["outBW"]
@@ -161,14 +167,16 @@ def _fill_frontend(msg: pb.FrontendConfig, d: dict[str, Any], bbdir: Path) -> No
     msg.sub_rob_depth = d["subRobDepth"]
 
 
-def _fill_gp(msg: pb.GpDomainConfig, d: dict[str, Any], bbdir: Path) -> None:
+def _fill_rvv(msg: pb.RvvConfig, d: dict[str, Any], bbdir: Path) -> None:
+    if type(d.get("enable", False)) is not bool:
+        raise ValueError("rvv.enable must be a boolean")
+    msg.enable = d.get("enable", False)
     msg.source_path = _rel(bbdir, d["_file"])
     msg.lane_number = d["laneNumber"]
-    msg.chaining_size = d["chainingSize"]
     msg.v_len = d["vLen"]
-    msg.d_len = d["dLen"]
     msg.e_len = d["eLen"]
-    msg.lane_scale = d["laneScale"]
+    msg.i_buf_words = d["iBufWords"]
+    msg.memory_ports = d["memoryPorts"]
 
 
 def _fill_tile_params(msg: pb.TileParamConfig, d: dict[str, Any]) -> None:
@@ -181,46 +189,48 @@ def _fill_tile_params(msg: pb.TileParamConfig, d: dict[str, Any]) -> None:
     msg.n_pmps = d["nPMPs"]
 
 
+def _fill_cpu(msg: pb.CpuConfig, cpu: dict[str, Any], context: str, bbdir: Path) -> str:
+    kind = _check_cpu_kind(cpu, context)
+    msg.kind = kind
+    msg.source_path = _rel(bbdir, cpu["_file"])
+    if kind == "rocket":
+        _fill_rocket(msg.rocket, cpu["config"])
+    else:
+        _fill_boom(msg.boom, cpu["config"])
+    return kind
+
+
 def _fill_core(ci: pb.CoreInstance, raw: dict[str, Any], meta: dict[str, Any], bbdir: Path) -> None:
     ci.index = meta["index"]
     ci.role = meta["role"]
     ci.pkg = meta["pkg"]
     ci.config_path = meta["config_path"]
     ci.balldomain_base_dir = meta["balldomain_base_dir"]
-    cpu = raw["cpu"]
-    kind = _check_cpu_kind(cpu, meta["pkg"])
-    ci.cpu.kind = kind
-    ci.cpu.source_path = _rel(bbdir, cpu["_file"])
-    if "balldomain" in raw:
-        _fill_ball(ci.balldomain, raw["balldomain"], bbdir)
+    kind = _fill_cpu(ci.cpu, raw["cpu"], meta["pkg"], bbdir)
+    domain = normalize_ball_domain(raw)
+    if domain is not None:
+        _fill_ball(ci.balldomain, domain, bbdir)
     if "memdomain" in raw:
         _fill_mem(ci.mem, raw["memdomain"], bbdir)
-    if kind == "rocket":
-        _fill_rocket(ci.cpu.rocket, cpu["config"])
-    else:
-        _fill_boom(ci.cpu.boom, cpu["config"])
-        bd = raw.get("balldomain")
+    if kind == "boom":
+        bd = domain
         if isinstance(bd, dict) and bd.get("ballNum", 0):
             raise ValueError(f"{meta['pkg']}: kind=boom forbids balldomain.ballNum > 0")
     if "frontend" in raw:
         _fill_frontend(ci.frontend, raw["frontend"], bbdir)
-    if "gpdomain" in raw:
-        _fill_gp(ci.gp_domain, raw["gpdomain"], bbdir)
+    if ci.balldomain.ball_num > 0:
+        _fill_rvv(ci.rvv, raw["rvv"], bbdir)
 
 
 def _fill_tile(tp: pb.TilePlacement, meta: dict[str, Any], proto: dict[str, Any]) -> None:
     tp.path = meta["path"]
+    tp.kind = pb.TILE_KIND_MAIN if meta["kind"] == "main" else pb.TILE_KIND_COMPUTE
     tp.virtual_bank_count = meta["virtual_bank_count"]
     tp.core_indices.extend(meta["core_indices"])
+    if "controller_core_index" in meta:
+        tp.controller_core_index = meta["controller_core_index"]
     tp.mem_ball_channel_num = meta["mem_ball_channel_num"]
     _fill_tile_params(tp.param, proto)
-    dc = proto["privateDCache"]
-    tp.private_dcache.enable = dc["enable"]
-    tp.private_dcache.ways = dc["ways"]
-    tp.private_dcache.capacity_kb = dc["capacityKB"]
-    tp.private_dcache.write_bytes = dc["writeBytes"]
-    tp.private_dcache.port_factor = dc["portFactor"]
-    tp.private_dcache.mem_cycles = dc["memCycles"]
     sm = proto["sharedMem"]
     tp.shared_mem.enable = sm["enable"]
     tp.shared_mem.entries = sm["entries"]
@@ -251,8 +261,10 @@ def fill_chip(config: dict[str, Any], derived: dict[str, Any], bbdir: Path) -> p
     b.includes.extend(derived["includes"])
 
     sims = config["sims"]
-    b.mill.verilator_config = sims["verilator"]
-    b.mill.p2e_config = sims["p2e"]
+    if "verilator" in sims:
+        b.mill.verilator_config = sims["verilator"]
+    if "p2e" in sims:
+        b.mill.p2e_config = sims["p2e"]
 
     raw_cores = _raw_core_list(config["designs"])
     meta_cores = derived["cores"]
@@ -260,8 +272,11 @@ def fill_chip(config: dict[str, Any], derived: dict[str, Any], bbdir: Path) -> p
         raise ValueError(
             f"core count mismatch: config={len(raw_cores)} derived={len(meta_cores)}"
         )
-    for raw, meta in zip(raw_cores, meta_cores):
-        _fill_core(b.cores.add(), raw, meta, bbdir)
+    hart_ids = {hart["core_index"]: hart["hart_id"] for hart in derived["harts"]}
+    for index, (raw, meta) in enumerate(zip(raw_cores, meta_cores)):
+        core = b.cores.add()
+        _fill_core(core, raw, meta, bbdir)
+        core.hart_id = hart_ids[index]
 
     raw_tiles = _derive.iter_topology_tiles(config["designs"])
     for raw, meta in zip(raw_tiles, derived["tiles"], strict=True):

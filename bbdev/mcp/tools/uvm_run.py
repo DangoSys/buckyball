@@ -10,7 +10,7 @@ from common import submit, err, fmt, need
 def register(mcp):
     @mcp.tool()
     def bbdev_uvm_run(
-        chip: str, ball: Optional[str] = None, ip: Optional[str] = None
+        chip: str, ball: Optional[str] = None, ip: Optional[str] = None, target: Optional[str] = None
     ) -> str:
         """Build and run a Ball or IP UVM simulation. POST /uvm/run."""
         if e := need("chip", chip):
@@ -18,6 +18,10 @@ def register(mcp):
         params = {"chip": chip}
         if ball and ip:
             return err("Parameters --ball and --ip are mutually exclusive")
+        if target is not None:
+            if not ip or not target.strip():
+                return err("Parameter --target requires --ip and a target name")
+            params["target"] = target
         if ball:
             params["ball"] = ball
         if ip:

@@ -13,6 +13,8 @@ def register(mcp):
         chip: Optional[str] = None,
         model: Optional[str] = None,
         interactive: bool = False,
+        guest_memory_mib: int = 512,
+        model_storage: str = "initramfs",
         visible_hart_count: Optional[int] = None,
         total_hart_count: Optional[int] = None,
     ) -> str:
@@ -24,7 +26,7 @@ def register(mcp):
         stack/models/build/<chip>/<model>/artifact into fw_payload-<model>.
         With --interactive: keep shared /init shell and do not auto-run.
         """
-        params: Dict[str, Any] = {}
+        params: Dict[str, Any] = {"guest-memory-mib": guest_memory_mib, "model-storage": model_storage}
         opt(params, chip=chip, model=model)
         if interactive:
             params["interactive"] = True

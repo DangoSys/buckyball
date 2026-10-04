@@ -197,16 +197,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "diff": diff,
         "workload_toml": workload_toml,
     }
-    if input_data.get("from_regression_check"):
-        if run_result.returncode != 0:
-            await check_result(
-                ctx,
-                run_result.returncode,
-                continue_run=False,
-                extra_fields={**extra_fields, "error": "pk_tests_failed"},
-                trace_id=origin_tid,
-            )
-            return
+
     await check_result(
         ctx,
         run_result.returncode,

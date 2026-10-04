@@ -53,6 +53,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     diff = bool(input_data.get("diff", False))
+    resume = input_data.get("resume_post_route", False)
+    stop_after = input_data.get("stop_after")
+    if resume and not input_data.get("output_dir"):
+        raise ValueError("Post-route resume requires an explicit output_dir")
     build_dir = (
         input_data.get("output_dir")
         or f"{bebop_dir}/build/{chip}{'-diff' if diff else ''}-{timestamp}"
@@ -61,9 +65,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_root = (Path(bebop_dir) / "build").resolve()
     if build_root not in build_path.parents:
         raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
-    if build_path.exists():
+    if resume and not build_path.is_dir():
+        raise ValueError(f"P2E resume case does not exist: {build_path}")
+    if stop_after and build_path.exists():
+        raise ValueError(f"Resource assessment requires a fresh output_dir: {build_path}")
+    if build_path.exists() and not resume:
         shutil.rmtree(build_path)
-    build_path.mkdir(parents=True)
+    build_path.mkdir(parents=True, exist_ok=resume)
 
     manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
     features = ["p2e"]
@@ -72,7 +80,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         **bebop_cargo_env(bbdir, chip),
         "VSRC_PATH": vsrc_dir,
         "OUT_PATH": str(build_path),
-        "P2E_DIFF": "1" if diff else "0",
     }
     if diff:
         features.append("bemu")
@@ -84,8 +91,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--keep-env-var", "CARGO_TARGET_DIR",
         "--keep-env-var", "VSRC_PATH",
         "--keep-env-var", "OUT_PATH",
-        "--keep-env-var", "P2E_DIFF",
-        "-c", "cargo", "run", "--release",
+        "-c", "env", "-u", "LD_LIBRARY_PATH", "cargo", "run", "--release",
         "--manifest-path", str(manifest),
         "--bin", "bebop",
         "--features", ",".join(features),
@@ -93,7 +99,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--rtl-dir", vsrc_dir,
         "--out-dir", build_dir,
         *(["--diff"] if diff else []),
+        *(["--resume-post-route"] if resume else []),
+        *(["--stop-after", stop_after] if stop_after else []),
     ])
+    build_cmd = f"cd {shlex.quote(bbdir)} && {build_cmd}"
     ctx.logger.info("Building bebop p2e runtime case ...")
     build_result = await stream_run_logger_async(
         cmd=build_cmd,
@@ -119,9 +128,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "diff": diff,
         "timestamp": timestamp,
     }
-    if input_data.get("from_regression_buildbitstream") and build_result.returncode == 0:
-        extra_fields["bitstream"] = os.path.abspath(bitstream_path)
-
+    if stop_after:
+        extra_fields = {
+            "task": "resource-assessment", "stop_after": stop_after,
+            "runtime_ready": False, "vsrc_dir": vsrc_dir, "build_dir": build_dir,
+            "diff": diff, "timestamp": timestamp,
+        }
+    else:
+        extra_fields["runtime_ready"] = build_result.returncode == 0
     await check_result(
         ctx,
         build_result.returncode,

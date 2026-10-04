@@ -10,7 +10,7 @@ config = {
 
 
 def check_args(body: dict) -> str | None:
-    allowed = {"chip", "ball", "ip"}
+    allowed = {"chip", "ball", "ip", "target"}
     for key in body:
         if key not in allowed:
             return f"Unexpected parameter: --{key}"
@@ -22,6 +22,11 @@ def check_args(body: dict) -> str | None:
         return "Parameter --ip requires a value"
     if body.get("ball") and body.get("ip"):
         return "Parameters --ball and --ip are mutually exclusive"
+    if "target" in body:
+        if not isinstance(body["target"], str) or not body["target"].strip():
+            return "Parameter --target requires a value"
+        if not body.get("ip"):
+            return "Parameter --target requires --ip"
     return None
 
 

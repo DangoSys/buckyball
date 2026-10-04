@@ -48,7 +48,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build model recipes (all chip models when --model is omitted). Args: "--chip <chip> [--model <directory-name>] [--ctrace] [--dtrace]"',
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>]"; --model requires --chip',
+        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>] [--guest-memory-mib <n>] [--model-storage initramfs|pmem]"; --model requires --chip',
     },
     "firesim": {
         "enumeratefpgas": 'Enumerate FPGAs. Args: "--chip <chip>"',
@@ -60,7 +60,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build compiler. Args: "--chip <chip>"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model>". ELF args: "--chip <chip> --binary <path> [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"',
+        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator]". ELF args: "--chip <chip> --binary <file-name> [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
         "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
         "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--clean-before]"',
     },
@@ -80,8 +80,8 @@ WORKFLOW_COMMANDS = {
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
-        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>]"',
-        "runworkload": 'Run Bebop P2E workload. Args: "--chip <chip> --image <workload-name> --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace] [--mtrace] [--pmctrace]"',
+        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>] [--resume-post-route | --stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case; resume requires an existing routed case and preserves its completed synthesis/PNR',
+        "runworkload": 'Cold-load Bebop P2E workload (requires p2e-cold-load-v1 case). Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
         "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
     },
     "dc": {
@@ -100,17 +100,11 @@ WORKFLOW_COMMANDS = {
     },
     "uvm": {
         "verilog": 'Generate isolated Ball RTL for UVM. Args: "--balltype <type> --output-dir <dir>"',
-        "build": 'Build a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>]"',
-        "run": 'Build and run a Ball UVM simulation. Args: "--ball=<name> [--filelist <path>] [--test <uvm_test>]"',
+        "build": 'Build a Ball or IP UVM simulation. Args: "--chip <chip> [--ball <name> | --ip <name> [--target <target>]]"',
+        "run": 'Build and run a Ball or IP UVM simulation. Args: "--chip <chip> [--ball <name> | --ip <name> [--target <target>]]"',
     },
     "config": {
         "install": True,
-    },
-    "regression": {
-        "buildbitstream": 'Build pebble p2e bitstream. Args: "--chip <chip> [--output-dir <dir>]"',
-        "check": 'P2E pk-tests. Args: "--chip <chip> --bitstream <path> [--chip <chip>]"',
-        "eval-performance": 'P2E model perfetto cycles. Args: "--chip <chip> --bitstream <path> [--chip <chip>]"',
-        "eval-area-power": 'DC area+freq. Args: "--chip <chip> [--top <module>]"',
     },
 }
 
@@ -358,6 +352,11 @@ def _parse_sub_args(arg_string: str) -> dict:
                 i += 1
         else:
             raise ValueError(f"Unexpected argument: {token}")
+    if "arguments" in args_dict:
+        values = json.loads(args_dict["arguments"])
+        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+            raise ValueError("arguments must be a JSON list of strings")
+        args_dict["arguments"] = values
     return args_dict
 
 

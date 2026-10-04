@@ -7,6 +7,7 @@ Run a guest ELF through Verilator.
 import json
 import os
 import shlex
+import subprocess
 import sys
 from datetime import datetime
 from motia import FlowContext, queue
@@ -172,18 +173,36 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_args += f" --{trace_name}"
     run_cmd = f"{shlex.quote(bebop_bin)} run verilator --elf={shlex.quote(binary_path)} --log-dir={shlex.quote(run_log)}{(' --diff' if diff else '')}{wave_arg}{trace_args}"
     if diff:
+        dram_library = f"{bbdir}/result/lib/libdramsim3.so"
+        dram_rpath = subprocess.check_output(
+            ["patchelf", "--print-rpath", dram_library], text=True
+        ).strip().split(os.pathsep)
+        cpp_libraries = [
+            os.path.join(path, "libstdc++.so.6") for path in dram_rpath
+            if os.path.isfile(os.path.join(path, "libstdc++.so.6"))
+        ]
+        if len(cpp_libraries) != 1:
+            raise ValueError(f"DRAMSim requires one C++ runtime in its RPATH: {dram_rpath}")
         preload = os.pathsep.join(
             (
                 path
                 for path in (
-                    f"{bbdir}/result/lib/libdramsim3.so",
+                    dram_library,
+                    cpp_libraries[0],
                     os.environ.get("LD_PRELOAD", ""),
                 )
                 if path
             )
         )
-        run_inner = f"cd {shlex.quote(build_dir)} && export LD_PRELOAD={shlex.quote(preload)} && exec {run_cmd}"
-        run_cmd = f"nix develop -c sh -c {shlex.quote(run_inner)}"
+        # VVAC embeds its older C++ runtime in the executable's search path.
+        # DRAMSim is built by the active Nix toolchain and needs that toolchain's
+        # runtime. Resolve it from DRAMSim and preload only the simulator process.
+        run_inner = (
+            f"cd {shlex.quote(build_dir)} && "
+            f"export LD_PRELOAD={shlex.quote(preload)} && "
+            f"exec {run_cmd}"
+        )
+        run_cmd = f"cd {shlex.quote(bbdir)} && nix develop -c sh -c {shlex.quote(run_inner)}"
     ctx.logger.info(f"Running bebop verilator (diff={diff}): {run_cmd}")
     stdout_prefix = "bebop verilator difftest" if diff else "bebop verilator"
     stderr_prefix = stdout_prefix
