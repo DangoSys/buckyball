@@ -2,17 +2,6 @@ from pathlib import Path
 import os
 
 
-def validate_cold_load_case(bitstream: str) -> Path:
-    bit = Path(bitstream).resolve(strict=True)
-    if not bit.is_file():
-        raise ValueError(f"P2E bitstream is not a file: {bit}")
-    case = bit.parent.parent
-    marker = case / "p2e-cold-load.cap"
-    if marker.read_text() != "p2e-cold-load-v1\n":
-        raise ValueError(f"P2E case does not support cold loading: {case}")
-    return case
-
-
 def validate_runtime_reuse(bitstream: str, diff: bool) -> Path:
     bit = Path(bitstream).resolve()
     case = bit.parent.parent

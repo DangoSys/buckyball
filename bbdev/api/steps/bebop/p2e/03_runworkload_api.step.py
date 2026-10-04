@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse, validate_cold_load_case
+from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
 
 config = {
     "name": "bebop-p2e-runworkload-api",
@@ -31,10 +33,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
     if manifest and body.get("diff", False):
         return ApiResponse(status=400, body={"error": "load-manifest cannot use single-ELF diff"})
-    try:
-        validate_cold_load_case(bitstream)
-    except (ValueError, OSError, TypeError) as error:
-        return ApiResponse(status=400, body={"error": str(error)})
+    if not Path(bitstream).is_file():
+        return ApiResponse(status=400, body={"error": f"P2E bitstream is not a file: {bitstream}"})
     if body.get("reuse-runtime", False):
         try:
             validate_runtime_reuse(bitstream, bool(body.get("diff", False)))

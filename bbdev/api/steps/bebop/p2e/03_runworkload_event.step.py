@@ -27,7 +27,7 @@ from utils.path import bebop_cargo_env, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from resolve_image import resolve_image
-from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse, validate_cold_load_case
+from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
 from steps.bebop.performance_report import performance_report
 from utils.reports import source_context
 from pathlib import Path
@@ -152,7 +152,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             elf_path = f"{image_base}.elf" if os.path.isfile(f"{image_base}.elf") else image_base
             if diff and not os.path.isfile(elf_path):
                 raise ValueError(f"workload ELF for P2E DiffTest not found: {elf_path}")
-        validate_cold_load_case(bitstream)
     except (ValueError, OSError, TypeError) as error:
         ctx.logger.error(str(error))
         await check_result(ctx, 1, continue_run=False,

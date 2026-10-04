@@ -81,7 +81,7 @@ WORKFLOW_COMMANDS = {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
         "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>] [--resume-post-route | --stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case; resume requires an existing routed case and preserves its completed synthesis/PNR',
-        "runworkload": 'Cold-load Bebop P2E workload (requires p2e-cold-load-v1 case). Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
+        "runworkload": 'Cold-load Bebop P2E workload. Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
         "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
     },
     "dc": {
