@@ -24,7 +24,8 @@ class KernelBall(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   private val isa      = b.ballDomain.ballISA.filter(_.bid == mapping.ballId)
   require(isa.size == 1 && isa.head.funct7 == 15, "KernelBall registration must declare RUN_KERNEL funct7=15")
 
-  @public val io = IO(new BlinkIO(b, 0, 0))
+  @public
+  val io = IO(new BlinkIO(b, 0, 0))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   @public val kernel_command_i  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new GlobalSchedIssue(b))))) else None

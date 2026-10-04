@@ -20,7 +20,8 @@ class SimAbort extends Bundle {
 class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()) extends Module {
   private val strideBits = log2Ceil(params.strideBytes)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Vec(ports, Flipped(Decoupled(new UncachedRequest(p))))
     val response = Vec(ports, Decoupled(new UncachedResponse(p)))
     val abort    = Input(Valid(new SimAbort))

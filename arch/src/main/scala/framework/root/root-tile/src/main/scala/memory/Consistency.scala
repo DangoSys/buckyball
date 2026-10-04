@@ -17,7 +17,8 @@ class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) exte
   require(l1.chi == memory.chi && tracking.addressBits == memory.chi.addressBits)
   private val c = memory.chi
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val access               = Flipped(Vec(memory.agents, Decoupled(new CacheAccess(c))))
     val result               = Vec(memory.agents, Decoupled(new CacheResult))
     val dispatch             = Flipped(Decoupled(new Dispatch(tracking)))

@@ -114,7 +114,8 @@ class Tile(
 
   private val workers = topology.controller.map(c => cores.indices.filter(_ != c)).getOrElse(Nil)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val resetVector      = Input(Vec(cores.size, UInt(64.W)))
     val interrupts       = Input(Vec(cores.size, new CoreInterrupts))
     val uncachedRequest  = Vec(cores.size, Decoupled(new UncachedRequest(cp)))

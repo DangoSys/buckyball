@@ -11,7 +11,8 @@ class TaskController(coreIds: Seq[Int], signatures: Seq[BigInt], cpuCount: Int) 
   require(coreIds == (1 to signatures.size) && signatures.nonEmpty)
   require(cpuCount == coreIds.size + 1, "task workers must include every non-controller CPU")
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val ports = Vec(cpuCount, new RoCCIO(64))
     val satp  = Input(UInt(64.W))
   })

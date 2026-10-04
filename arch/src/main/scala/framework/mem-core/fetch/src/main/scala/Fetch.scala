@@ -47,7 +47,8 @@ class Packet(p: Params) extends Bundle {
 @instantiable
 class Fetch(p: Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val resetVector = Input(UInt(64.W))
     val context     = Input(new Context)
     val redirect    = Flipped(Valid(UInt(64.W)))

@@ -11,7 +11,8 @@ class VRF(val b: GlobalConfig) extends Module {
   private val wordBits         = 64
   private val wordsPerRegister = p.vLen / wordBits
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val initialize = Input(Bool())
     val readWords  = Output(Vec(32, Vec(wordsPerRegister, UInt(wordBits.W))))
 

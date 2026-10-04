@@ -11,7 +11,8 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   private val p = b.rvv
   require(p.enable, "RVV must be explicitly enabled")
 
-  @public val io = IO(new KernelBlinkIO(b))
+  @public
+  val io = IO(new KernelBlinkIO(b))
   def status: BallStatus = io.status
 
   val execution                                                                                      = Instantiate(new Execution(b))

@@ -43,7 +43,8 @@ class MeshBulkControlTx(
     extends Module {
   require(payloadBits > 0 && payloadBits <= mesh.payloadBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(payloadBits, nodeMap.coordinateBits)))
     val out = Decoupled(new MeshFlit(mesh))
   })
@@ -65,7 +66,8 @@ class MeshBulkControlTx(
 class MeshBulkControlRx(mesh: MeshParams, payloadBits: Int, virtualChannel: Int) extends Module {
   require(payloadBits > 0 && payloadBits <= mesh.payloadBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
     val out = Decoupled(UInt(payloadBits.W))
   })
@@ -101,7 +103,8 @@ class MeshBulkPacketizer(
   require(virtualChannel >= 0 && virtualChannel < mesh.virtualChannels)
   require(nodeMap.mesh == mesh)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(dataBits, nodeMap.coordinateBits)))
     val out = Decoupled(new MeshFlit(mesh))
   })
@@ -137,7 +140,8 @@ class MeshBulkDepacketizer(mesh: MeshParams, dataBits: Int, virtualChannel: Int)
   require(mesh.payloadBits >= dataBits + dataBits / 8)
   require(virtualChannel >= 0 && virtualChannel < mesh.virtualChannels)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
     val out = Decoupled(new Beat(dataBits))
   })
@@ -169,7 +173,8 @@ class MeshBulkLoopback extends Module {
     presentNodes = (0 until 128).toSet
   )
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in            = Flipped(Decoupled(new MeshBulkBeat(256, 7)))
     val out           = Decoupled(new Beat(256))
     val observed      = Output(new MeshFlit(mesh))

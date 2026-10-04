@@ -8,7 +8,8 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 @instantiable
 class Interlock(p: Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val dispatch      = Flipped(Decoupled(new Dispatch(p)))
     val cancel        = Flipped(Decoupled(new Dispatch(p)))
     val accessInfo    = Flipped(Decoupled(new AccessInfo(p)))

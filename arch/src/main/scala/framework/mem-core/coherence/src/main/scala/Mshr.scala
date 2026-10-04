@@ -29,7 +29,8 @@ class MshrIO(p: CoherenceParams) extends Bundle {
 
 @instantiable
 class Mshr(p: CoherenceParams) extends Module {
-  @public val io = IO(new MshrIO(p))
+  @public
+  val io = IO(new MshrIO(p))
 
   val valid      = RegInit(VecInit(Seq.fill(p.mshrEntries)(false.B)))
   val callerLive = RegInit(VecInit(Seq.fill(p.mshrEntries)(false.B)))

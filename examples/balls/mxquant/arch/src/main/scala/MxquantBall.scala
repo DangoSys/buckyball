@@ -19,7 +19,8 @@ class MxquantBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(mapping.inBW == 1 && mapping.outBW == 1, "MxquantBall requires one read and one write")
   require((funct >> 4) == 3, "MxquantBall funct7 must encode one read and one write")
 
-  @public val io = IO(new BlinkIO(b, 1, 1))
+  @public
+  val io = IO(new BlinkIO(b, 1, 1))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
 

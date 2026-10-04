@@ -12,7 +12,8 @@ import memcore.memory.coherence.configs.CoherenceParams
 class Memory(p: CoherenceParams) extends Module {
   private val c = p.chi
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val coherent        = Vec(p.agents, Flipped(new RequesterPort(c)))
     val backingReq      = Vec(1, Decoupled(new LineRequest(c)))
     val backingResp     = Vec(1, Flipped(Decoupled(new LineResponse(c))))

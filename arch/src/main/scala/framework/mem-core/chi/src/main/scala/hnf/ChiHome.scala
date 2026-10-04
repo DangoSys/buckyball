@@ -29,7 +29,8 @@ class ChiHome(
     if (localLines == 1) 0.U(0.W)
     else addr(log2Ceil(lines) + 5, mapping.stripeBits + 6)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val req                     = Flipped(Decoupled(new RequestFlit(p)))
     val rxRsp                   = Flipped(Decoupled(new ResponseFlit(p)))
     val rxDat                   = Flipped(Decoupled(new DataFlit(p)))

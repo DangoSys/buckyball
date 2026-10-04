@@ -29,7 +29,8 @@ class MapResult(p: Params) extends Bundle {
 @instantiable
 class PreparedMap(p: Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val reserve  = Flipped(Decoupled(new MapTag(p)))
     val prepared = Flipped(Decoupled(new PreparedSegment(p)))
     val ready    = Decoupled(new MapReady(p))

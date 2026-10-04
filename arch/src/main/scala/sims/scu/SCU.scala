@@ -62,7 +62,8 @@ case class SCUParams(
 class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
   override def desiredName = "SCUWriteDPI"
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val clock        = Input(Clock())
     val reset        = Input(Bool())
     val uart_hart_id = Input(UInt(32.W))
@@ -109,7 +110,8 @@ class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
 class SCUReadDPI extends BlackBox with HasBlackBoxInline {
   override def desiredName = "SCUReadDPI"
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val clock    = Input(Clock())
     val reset    = Input(Bool())
     val hart_id  = Input(UInt(32.W))

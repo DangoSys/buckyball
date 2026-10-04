@@ -16,7 +16,8 @@ class Maintenance(config: RnfParams, tracking: Params) extends Module {
   require(tracking.addressBits == c.addressBits && tracking.lineBytes == 64)
   require(BigInt(transaction) < (BigInt(1) << c.txnIdBits))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Flipped(Decoupled(new Range(tracking)))
     val response = Decoupled(new Acknowledgement(tracking))
     // The caller drains older accepted CPU accesses and fills before asserting this.

@@ -14,7 +14,8 @@ class BankPort(val b: GlobalConfig) extends Module {
   require(lineBytes <= 65536)
   require(b.memDomain.bankMaskLen == lineBytes)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Flipped(Decoupled(new VectorMemoryRequest))
     val response = Decoupled(new VectorMemoryResponse)
     val read     = Flipped(new BankRead(b))

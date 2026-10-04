@@ -10,7 +10,8 @@ import memcore.memory.mmu.Walker
 @instantiable
 class Preflight(p: Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val command       = Flipped(Decoupled(new Command(p)))
     val prepared      = Decoupled(new PreparedSegment(p))
     val authorization = Decoupled(new Authorization(p))

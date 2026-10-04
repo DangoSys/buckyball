@@ -35,7 +35,8 @@ class AdmissionBridge(
   require(robEntries >= 2 && tracking.entries == 4)
   private val robBits = log2Ceil(robEntries)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val command      = Flipped(Decoupled(new CommandSnapshot(tracking, pmps)))
     val npuCommand   = Decoupled(new RoCCCommandBB)
     // bits is the current tail preview even when valid is low; valid means exact alloc.fire.

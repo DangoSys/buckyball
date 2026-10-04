@@ -12,7 +12,8 @@ class WriteDma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extend
   require(b.memDomain.bankWidth == 128 && b.memDomain.dma_buswidth == 128 && axiParams.dataBits == 128)
   require(prepared.beatBytes == 16 && prepared.bus.addressBits == axiParams.addressBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val req           = Flipped(Decoupled(new BBWriteCommand))
     val data          = Flipped(Decoupled(new BBWriteData(128)))
     val resp          = Decoupled(new BBWriteResponse)

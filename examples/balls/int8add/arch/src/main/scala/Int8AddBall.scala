@@ -33,7 +33,8 @@ class Int8AddBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(b.memDomain.bankWidth == 128, "Int8AddBall requires 128-bit bank rows")
   require((addFunct >> 4) == 4 && (reluFunct >> 4) == 4, "Int8AddBall instructions must encode two reads and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

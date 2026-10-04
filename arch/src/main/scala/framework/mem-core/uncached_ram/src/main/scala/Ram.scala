@@ -13,7 +13,8 @@ class Ram(p: Params) extends Module {
   private val sourceBits = math.max(1, log2Ceil(p.sources))
   private val tagBits    = math.max(p.tagBits, p.line.txnIdBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cpuRequest     = Vec(p.cpus, Flipped(Decoupled(new Request(p))))
     val cpuResponse    = Vec(p.cpus, Decoupled(new Response(p)))
     val lineRequest    = Vec(p.lineAgents, Flipped(Decoupled(new LineRequest(p.line))))

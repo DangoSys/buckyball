@@ -7,7 +7,8 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 @instantiable
 class Mxfp8Decode extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val code    = Input(UInt(8.W))
     val scale   = Input(UInt(8.W))
     val out     = Output(UInt(32.W))

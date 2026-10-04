@@ -10,7 +10,8 @@ import memcore.memory.coherence.configs.CoherenceParams
 
 @instantiable
 class Coherence(p: CoherenceParams) extends Module {
-  @public val io = IO(new CoherenceIO(p))
+  @public
+  val io = IO(new CoherenceIO(p))
   val cache: Instance[Cache] = Instantiate(new Cache(p.cache))
   val mshr:  Instance[Mshr]  = Instantiate(new Mshr(p))
   val c = p.chi

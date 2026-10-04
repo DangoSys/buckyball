@@ -32,7 +32,8 @@ class Im2col(val b: GlobalConfig) extends Module {
   require(maxIter + 2 * maxPad <= 255, "Im2colBall dimensions must fit the divider")
   require((im2colFunct >> 4) == 3, "IM2COL must encode one read and one write")
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(mapping.inBW, Flipped(new BankRead(b)))

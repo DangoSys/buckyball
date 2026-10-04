@@ -14,7 +14,8 @@ class CacheSystem(p: CoherenceParams) extends Module {
   require(p.agents == 2 && p.homeId == 64 && p.mshrEntries == 4)
   private val c = p.chi
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active            = Input(Bool())
     val blockRequesterRsp = Input(Bool())
     val access            = Vec(p.agents, Flipped(Decoupled(new CacheAccess(c))))

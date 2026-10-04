@@ -47,7 +47,8 @@ class BankNetwork(
   private val controllerPorts = if (controllerMove) 1 else 0
   private val movePorts       = enabledCoreIds.size + controllerPorts
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val compute          = Vec(enabledCoreIds.size, new BankClientPort(b))
     val hartIds          = Input(Vec(nCores, UInt(b.tile.xLen.W)))
     val controllerMvover = if (controllerMove) Some(Flipped(new MvoverPort)) else None

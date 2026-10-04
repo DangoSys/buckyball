@@ -8,7 +8,8 @@ import hardfloat._
 @instantiable
 class FALU extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val a            = Input(UInt(64.W))
     val b            = Input(UInt(64.W))
     val c            = Input(UInt(64.W))

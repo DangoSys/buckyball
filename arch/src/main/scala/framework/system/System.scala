@@ -50,7 +50,8 @@ class System(
 
   private val cp = CpuMemParams(memory.chi, ram.tagBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val resetVector       = Input(Vec(n, UInt(64.W)))
     val interruptSources  = Input(UInt(devices.plic.sources.W))
     val deviceRequest     = Vec(n, Decoupled(new UncachedRequest(cp)))

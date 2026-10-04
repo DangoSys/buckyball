@@ -13,7 +13,8 @@ import memcore.memory.coherence.configs.CoherenceParams
 class Home(p: CoherenceParams) extends Module {
   private val c = p.chi
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active            = Input(Bool())
     val blockRequesterRsp = Input(Bool())
     val requesters        = Vec(p.agents, Flipped(new RequesterPort(c)))

@@ -17,7 +17,8 @@ class PermissionCheck(config: PreparationParams, regions: Seq[PhysicalRegion])(i
   require(regions.nonEmpty)
   regions.foreach(r => require(r.base >= 0 && r.bytes > 0 && r.base + r.bytes <= (BigInt(1) << physicalBits)))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request      = Flipped(Decoupled(new Authorization(config)))
     // Selected from the captured admission context using request.bits.id, never the live CPU CSRs.
     val contextValid = Input(Bool())

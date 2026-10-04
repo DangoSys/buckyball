@@ -9,7 +9,8 @@ import framework.top.GlobalConfig
 class ImageLoader(val b: GlobalConfig) extends Module {
   private val p = b.rvv
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val start          = Flipped(Decoupled(new ImageLoad))
     val image          = Flipped(Decoupled(UInt(32.W)))
     val abort          = Input(Bool())

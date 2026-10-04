@@ -9,7 +9,8 @@ import framework.top.GlobalConfig
 class VectorCore(val b: GlobalConfig) extends Module {
   private val p = b.rvv
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val initialize     = Input(Bool())
     val roundingMode   = Input(UInt(3.W))
     val vxrm           = Input(UInt(2.W))

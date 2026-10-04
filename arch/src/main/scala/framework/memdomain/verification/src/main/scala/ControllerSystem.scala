@@ -24,7 +24,8 @@ class ControllerSystem(b: GlobalConfig, signatures: Seq[BigInt])(implicit val cp
     BankSetParams(b.memDomain.bankWidth, 1, b.memDomain.bankEntries, math.max(1, log2Ceil(b.frontend.rob_entries)))
   private val cores      = b.memDomain.computeCoreIds
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val core    = Flipped(new AdmissionPorts(tracking, nPMPs, ChiParams()))
     val workers = Vec(signatures.size, new RoCCIO(64))
 

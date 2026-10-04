@@ -36,7 +36,8 @@ class Config extends Bundle {
 @instantiable
 class Walker(p: Params = Params()) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val config = Input(new Config)
     val req    = Flipped(Decoupled(new Request))
     val resp   = Decoupled(new Response(p))

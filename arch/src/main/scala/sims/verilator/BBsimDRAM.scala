@@ -28,7 +28,8 @@ class BBSimDRAM(
     )
     with HasBlackBoxInline {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Reset())
     val axi   = Flipped(new AxiPort(params))

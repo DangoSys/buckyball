@@ -50,7 +50,8 @@ class UncachedResponse(p: CpuMemParams) extends Bundle {
 @instantiable
 class CpuMem(p: CpuMemParams, lineBits: Int = 0) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request          = Flipped(Decoupled(new CpuMemoryRequest(p)))
     val response         = Decoupled(new CpuMemoryResponse(p, lineBits))
     val cacheRequest     = Decoupled(new CacheAccess(p.chi))

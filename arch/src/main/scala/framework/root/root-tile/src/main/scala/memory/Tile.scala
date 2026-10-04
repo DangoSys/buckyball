@@ -22,7 +22,8 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
   private val cores = memory.agents / 2
   require(memory.agents == 2 * cores)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val resetVector      = Input(UInt(64.W))
     val memoryReq        = Decoupled(new LineRequest(c))
     val memoryResp       = Flipped(Decoupled(new LineResponse(c)))

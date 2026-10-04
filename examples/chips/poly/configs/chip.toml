@@ -3,6 +3,7 @@ include = "designs/poly.toml"
 
 [sims]
 verilator = "sims.verilator.PolyVerilatorTarget"
+p2e = "sims.p2e.PolyP2ETarget"
 
 [uvm]
 balls = ["smatmul", "toint8", "int2fp", "transpose"]

@@ -27,8 +27,9 @@ class TileSystem(
   ram:             RamParams,
   ddr:             DdrParams)
     extends Module {
-  val system     =
+  val system =
     Instantiate(new framework.system.System(topology, cpuPhysicalBits, memory, l1, regions, tracking, ram, ddr))
-  @public val io = IO(chiselTypeOf(system.io))
+  @public
+  val io     = IO(chiselTypeOf(system.io))
   io <> system.io
 }

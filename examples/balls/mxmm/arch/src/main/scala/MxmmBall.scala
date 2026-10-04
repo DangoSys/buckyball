@@ -8,7 +8,8 @@ import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
 
 @instantiable
 class MxmmBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStatus {
-  @public val io = IO(new BlinkIO(b, 2, 1))
+  @public
+  val io = IO(new BlinkIO(b, 2, 1))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   val unit = Instantiate(new Unit(b))

@@ -18,7 +18,8 @@ class Unit(b: GlobalConfig) extends Module {
   private val mapping = b.ballDomain.ballIdMappings.find(_.ballName == "MxmmBall").get
   require(mapping.inBW == 2 && mapping.outBW == 1)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cmdReq       = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp      = Decoupled(new BallRsComplete(b))
     val bankRead     = Vec(2, Flipped(new BankRead(b)))

@@ -11,7 +11,8 @@ import chisel3.util.HasBlackBoxInline
 @instantiable
 class BdbClkDPI extends BlackBox with HasBlackBoxInline {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Bool())
   })

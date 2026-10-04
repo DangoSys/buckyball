@@ -8,7 +8,8 @@ import hardfloat._
 @instantiable
 class AddPipe extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val valid    = Input(Bool())
     val a        = Input(UInt(33.W))
     val b        = Input(UInt(33.W))

@@ -12,7 +12,8 @@ class ReadDma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extends
   require(b.memDomain.bankWidth == 128 && b.memDomain.dma_buswidth == 128 && axiParams.dataBits == 128)
   require(prepared.beatBytes == 16 && prepared.bus.addressBits == axiParams.addressBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val req           = Flipped(Decoupled(new BBReadRequest))
     val resp          = Decoupled(new BBReadResponse(128))
     val parentId      = Input(UInt(prepared.idBits.W))

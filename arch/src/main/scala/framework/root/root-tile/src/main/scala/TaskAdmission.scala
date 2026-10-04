@@ -14,7 +14,8 @@ class TaskAdmission(tracking: TrackingParams, pmps: Int)(implicit val cpuParams:
     extends Module
     with HasCpuParameters {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val command     = Flipped(Decoupled(new CommandSnapshot(tracking, pmps)))
     val task        = Flipped(new RoCCIO(64))
     val response    = Decoupled(new RoCCResponseBB(64))

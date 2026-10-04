@@ -68,7 +68,8 @@ class Composition(
     require(entry.l1.nodeId == index + 1, "Core CHI node must match its Memory requester port")
   }
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     // Caller routes opcode 0x2b commands and supplies their captured controller SATP.
     val taskControl      = Vec(placements.size, new RoCCIO(64))
     val controllerSatp   = Input(UInt(64.W))

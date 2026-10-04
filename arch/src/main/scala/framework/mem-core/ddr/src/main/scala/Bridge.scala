@@ -10,7 +10,8 @@ import memcore.bus.chi.snf.{LineRequest, LineResponse}
 @instantiable
 class Bridge(p: Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Vec(p.clients, Flipped(Decoupled(new LineRequest(p.line))))
     val response = Vec(p.clients, Decoupled(new LineResponse(p.line)))
     val axi      = new axi4.Port(p.axi)

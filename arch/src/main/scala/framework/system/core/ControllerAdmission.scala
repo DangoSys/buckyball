@@ -19,7 +19,8 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
     with HasCpuParameters {
   require(xLen == 64)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val core      = Flipped(new AdmissionPorts(tracking, nPMPs, bus))
     val task      = Flipped(new RoCCIO(64))
     val taskSatp  = Output(UInt(64.W))

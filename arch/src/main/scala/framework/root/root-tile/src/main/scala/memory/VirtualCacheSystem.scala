@@ -24,7 +24,8 @@ import memcore.memory.coherence.configs.CoherenceParams
 class VirtualCacheSystem(p: CoherenceParams, regions: Seq[PhysicalRegion]) extends Module {
   private val cp = CpuMemParams(p.chi, tagBits = 6)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active                = Input(Bool())
     val request               = Flipped(Decoupled(new VirtualMemoryRequest(cp)))
     val response              = Decoupled(new VirtualMemoryResponse(cp))

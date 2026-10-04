@@ -31,7 +31,8 @@ class Segmenter(pageBytes: Int = 4096, maxSegmentBytes: Int = 16384) extends Mod
   require(isPow2(pageBytes) && pageBytes >= 8)
   require(isPow2(maxSegmentBytes) && maxSegmentBytes >= 8)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cancel     = Input(Bool())
     val descriptor = Flipped(Decoupled(new Descriptor))
     val segment    = Decoupled(new Segment)

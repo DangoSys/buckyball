@@ -10,7 +10,8 @@ class Fabric(p: Params, requesterCount: Int, homeId: Int) extends Module {
   require(requesterCount >= 1 && requesterCount < homeId && BigInt(homeId) < (BigInt(1) << p.nodeIdBits))
   private val c = p
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active            = Input(Bool())
     val blockRequesterRsp = Input(Bool())
     val requesters        = Vec(requesterCount, Flipped(new RequesterPort(c)))

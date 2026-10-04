@@ -7,7 +7,8 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 @instantiable
 class Panels(bankEntries: Int) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val write       = Input(Vec(2, Bool()))
     val scaleWrite  = Input(Vec(2, Bool()))
     val lane        = Input(Vec(2, UInt(4.W)))

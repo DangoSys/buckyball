@@ -22,7 +22,8 @@ class MeshCreditTx(p: MeshParams, maxCredits: Int) extends Module {
   require(maxCredits >= 1 && maxCredits <= 255)
   private val creditBits = math.max(1, log2Ceil(maxCredits + 1))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active  = Input(Bool())
     val in      = Vec(p.virtualChannels, Flipped(Decoupled(new MeshFlit(p))))
     val link    = new MeshCreditLink(p)
@@ -57,7 +58,8 @@ class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
   require(depth >= 1 && depth <= 255)
   private val creditBits = math.max(1, log2Ceil(depth + 1))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active    = Input(Bool())
     val link      = Flipped(new MeshCreditLink(p))
     val out       = Vec(p.virtualChannels, Decoupled(new MeshFlit(p)))
@@ -101,7 +103,8 @@ class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
   private val routers = Seq.tabulate(p.yNodes, p.xNodes)((y, x) => Instantiate(new MeshRouter(p, x, y)))
   private def index(x: Int, y: Int): Int = y * p.xNodes + x
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active   = Input(Bool())
     val localIn  = Vec(p.xNodes * p.yNodes, Vec(p.virtualChannels, Flipped(Decoupled(flit))))
     val localOut = Vec(p.xNodes * p.yNodes, Vec(p.virtualChannels, Decoupled(flit)))

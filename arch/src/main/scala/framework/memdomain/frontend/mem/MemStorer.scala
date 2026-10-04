@@ -18,7 +18,8 @@ class MemStorer(val b: GlobalConfig) extends Module {
   private val lgLine    = log2Ceil(lineBytes)
   private val robBits   = log2Up(b.frontend.rob_entries)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cmdReq            = Flipped(Decoupled(new MemRsIssue(b)))
     val cmdResp           = Decoupled(new MemRsComplete(b))
     val footprint         = Output(new Footprint(b))

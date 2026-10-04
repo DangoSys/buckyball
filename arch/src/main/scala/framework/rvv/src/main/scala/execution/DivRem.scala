@@ -16,7 +16,8 @@ class DivRemRequest(val maxWidth: Int) extends Bundle {
 class DivRem(val maxWidth: Int) extends Module {
   require(maxWidth == 32 || maxWidth == 64)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Flipped(Decoupled(new DivRemRequest(maxWidth)))
     val response = Decoupled(UInt(maxWidth.W))
     val clear    = Input(Bool())

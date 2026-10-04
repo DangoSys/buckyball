@@ -16,7 +16,8 @@ class Memory(ram: RamParams, ddr: DdrParams, dmaMasters: Int = 0) extends Module
   private val orderingParams = ram.copy(externalPorts = 2 * dmaMasters)
   private val cpu            = CpuMemParams(ram.line, ram.tagBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cpuRequest     = Vec(ram.cpus, Flipped(Decoupled(new UncachedRequest(cpu))))
     val cpuResponse    = Vec(ram.cpus, Decoupled(new UncachedResponse(cpu)))
     val deviceRequest  = Vec(ram.cpus, Decoupled(new UncachedRequest(cpu)))

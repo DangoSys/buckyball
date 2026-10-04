@@ -13,7 +13,8 @@ class Cache(config: RnfParams, tracking: Params) extends Module {
   override def desiredName: String = "CoreCache"
   private val c = config.chi
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val access               = Flipped(Decoupled(new CacheAccess(c)))
     val result               = Decoupled(new CacheResult)
     val probe                = Option.when(config.probe)(new CacheProbe(c))

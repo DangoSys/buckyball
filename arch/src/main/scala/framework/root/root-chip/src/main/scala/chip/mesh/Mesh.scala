@@ -53,7 +53,8 @@ class MeshRouter(p: MeshParams, x: Int, y: Int) extends Module {
   private val count     = connected.size
   private val inputBits = math.max(1, log2Ceil(count))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Vec(MeshDirection.Count, Vec(p.virtualChannels, Flipped(Decoupled(flit))))
     val out = Vec(MeshDirection.Count, Vec(p.virtualChannels, Decoupled(flit)))
   })

@@ -26,7 +26,8 @@ class TileMeshEndpoint(
   require(mesh.payloadBits >= bulkDataBits + bulkDataBits / 8)
   require(nodeMap.coordinateBits == p.nodeIdBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val chi     = Flipped(new RequesterPort(p))
     val bulkIn  = Flipped(Decoupled(new MeshBulkBeat(bulkDataBits, p.nodeIdBits)))
     val bulkOut = Decoupled(new Beat(bulkDataBits))
@@ -69,7 +70,8 @@ class TileMeshBulkLoopback extends Module {
     presentNodes = (0 until (1 << chi.nodeIdBits)).toSet
   )
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(256, chi.nodeIdBits)))
     val out = Decoupled(new Beat(256))
   })

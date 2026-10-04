@@ -16,7 +16,8 @@ class DmaDecision(p: Params) extends Bundle {
 @instantiable
 class Dma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val dma       = Flipped(new DmaPort(b.memDomain.dma_buswidth))
     // One decision for each physical producer: loader, storer, kernel image.
     val decisions = Input(Vec(3, new DmaDecision(prepared)))

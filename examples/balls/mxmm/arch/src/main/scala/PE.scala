@@ -10,7 +10,8 @@ import hardfloat._
 class PE(latency: Int) extends Module {
   require(latency == 3)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val valid    = Input(Bool())
     val separate = Input(Bool())
     val a        = Input(UInt(32.W))

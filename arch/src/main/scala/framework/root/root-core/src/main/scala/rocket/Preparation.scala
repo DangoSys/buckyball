@@ -25,7 +25,8 @@ class Preparation(config: PreparationParams, regions: Seq[PhysicalRegion])(impli
     extends Module
     with HasCpuParameters {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val command      = Flipped(Decoupled(new Command(config)))
     // AdmissionBridge owns the frozen context. Query it by tag instead of duplicating its table.
     val contextTag   = Output(UInt(config.idBits.W))

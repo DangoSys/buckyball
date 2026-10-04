@@ -13,7 +13,8 @@ class MeshCoreEndpoint(
   col:  Int)
     extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request  = Flipped(Decoupled(new MeshPacket(p)))
     val response = Decoupled(new MeshPacket(p))
     val bank     = new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits)

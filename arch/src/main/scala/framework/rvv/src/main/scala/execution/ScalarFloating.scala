@@ -7,7 +7,8 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 @instantiable
 class ScalarFloating extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val instruction  = Input(UInt(32.W))
     val source1      = Input(UInt(64.W))
     val source2      = Input(UInt(64.W))

@@ -33,7 +33,8 @@ class KernelDma(val b: GlobalConfig) extends Module {
   private val beatBytes = b.memDomain.dma_buswidth / 8
   require(beatWords > 0 && b.memDomain.dma_buswidth % 32 == 0)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val rob_id    = Input(UInt(log2Ceil(b.frontend.rob_entries).W))
     val footprint = Output(new Footprint(b))
     val kernel    = new KernelDmaPort

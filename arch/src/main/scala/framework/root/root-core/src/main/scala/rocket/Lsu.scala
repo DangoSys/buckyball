@@ -35,7 +35,8 @@ class Lsu(cp: CpuMemParams)(implicit val cpuParams: CpuParams)
     with HasCpuParameters
     with MemoryOpConstants {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cpu         = Flipped(new HellaCacheIO)
     val pc          = Input(UInt(vaddrBitsExtended.W))
     val pmp         = Input(Vec(nPMPs, new PMP))

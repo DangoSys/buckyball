@@ -23,7 +23,8 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
   require(txnId >= 0 && txnId < 256 && bankCount >= 1 && isPow2(bankCount))
   val mapping            = HomeMapping(homeCount, homeId)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val access          = Flipped(Decoupled(new CacheAccess(p)))
     val probe           = Option.when(config.probe)(new CacheProbe(p))
     val result          = Decoupled(new CacheResult(config.resultLineBits))

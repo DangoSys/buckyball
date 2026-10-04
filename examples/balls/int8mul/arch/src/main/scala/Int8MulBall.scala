@@ -30,7 +30,8 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(bankRowBits <= 32, "Int8MulBall gate_row must fit rs2[63:32]")
   require((funct >> 4) == 4, "INT8MUL must encode two reads and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

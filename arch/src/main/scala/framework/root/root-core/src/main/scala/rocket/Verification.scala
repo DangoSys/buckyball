@@ -27,7 +27,8 @@ class Verification(
   require(memory.agents == 2)
   private val cp = CpuMemParams(memory.chi, tagBits = 6)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val timerInterrupt             = Input(Bool())
     val softwareInterrupt          = Input(Bool())
     val externalInterrupt          = Input(Bool())

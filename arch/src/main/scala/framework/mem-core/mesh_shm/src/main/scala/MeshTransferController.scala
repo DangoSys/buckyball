@@ -8,7 +8,8 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 @instantiable
 class MeshTransferController(p: MeshSharedMemParams) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val command    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val completion = Decoupled(new MeshTransferCompletion(p))
 

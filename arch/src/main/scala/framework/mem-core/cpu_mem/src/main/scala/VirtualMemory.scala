@@ -68,7 +68,8 @@ class VirtualMemory(cp: CpuMemParams, regions: Seq[PhysicalRegion], lineBits: In
     }
   }
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val active                = Input(Bool())
     val request               = Flipped(Decoupled(new VirtualMemoryRequest(cp)))
     val response              = Decoupled(new VirtualMemoryResponse(cp, lineBits))

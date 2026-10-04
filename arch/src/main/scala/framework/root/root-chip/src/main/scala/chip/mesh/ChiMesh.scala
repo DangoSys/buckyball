@@ -65,7 +65,8 @@ class ChiMeshPacketizer(
   private val paddedBits = chunks * mesh.payloadBits
   private val message    = new ChiMeshMessage(flitBits, nodeMap.coordinateBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(message))
     val out = Decoupled(new MeshFlit(mesh))
   })
@@ -116,7 +117,8 @@ class ChiMeshDepacketizer(mesh: MeshParams, flitBits: Int, virtualChannel: Int) 
   private val chunks   = (flitBits + mesh.payloadBits - 1) / mesh.payloadBits
   private val beatBits = math.max(1, log2Ceil(chunks))
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshFlit(mesh)))
     val out = Decoupled(UInt(flitBits.W))
   })
@@ -178,7 +180,8 @@ class ChiMeshEndpoint(
   private val snpBits = (new SnoopFlit(p)).flitWidth
   private val message = (bits: Int) => new ChiMeshMessage(bits, p.nodeIdBits)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val txReq   = Flipped(Decoupled(message(reqBits)))
     val txRsp   = Flipped(Decoupled(message(rspBits)))
     val txDat   = Flipped(Decoupled(message(datBits)))
@@ -230,7 +233,8 @@ class ChiMeshRequesterEndpoint(
   nodeMap: ChiMeshNodeMap)
     extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val chi     = Flipped(new RequesterPort(p))
     val meshOut = Vec(mesh.virtualChannels, Decoupled(new MeshFlit(mesh)))
     val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
@@ -279,7 +283,8 @@ class ChiMeshHomeEndpoint(
   require(agents >= 1 && agents < (1 << p.nodeIdBits))
   private val snpBits = (new SnoopFlit(p)).flitWidth
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val req     = Decoupled(new RequestFlit(p))
     val rxRsp   = Decoupled(new ResponseFlit(p))
     val rxDat   = Decoupled(new DataFlit(p))
@@ -338,7 +343,8 @@ class ChiMeshHomeSnoopLoopback extends Module {
 
   private val snpBits = (new SnoopFlit(chi)).flitWidth
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(UInt(snpBits.W)))
     val out = Decoupled(UInt(snpBits.W))
   })
@@ -391,7 +397,8 @@ class ChiMeshEndpointLoopback extends Module {
 
   private val datBits = (new DataFlit(chi)).flitWidth
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new ChiMeshMessage(datBits, chi.nodeIdBits)))
     val out = Decoupled(UInt(datBits.W))
   })
@@ -425,7 +432,8 @@ class ChiMeshCodecLoopback extends Module {
 
   private val flitBits = (new DataFlit(chi)).flitWidth
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val in            = Flipped(Decoupled(new ChiMeshMessage(flitBits, map.coordinateBits)))
     val out           = Decoupled(UInt(flitBits.W))
     val pause         = Input(Bool())

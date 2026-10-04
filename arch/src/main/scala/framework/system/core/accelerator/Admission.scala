@@ -35,7 +35,8 @@ class Admission(
   private val n         = tracking.entries
   private val indexBits = log2Ceil(n)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val core         = Flipped(new AdmissionPorts(tracking, nPMPs, prepared.bus))
     val npuCommand   = Decoupled(new RoCCCommandBB)
     val npuResponse  = Flipped(Decoupled(new RoCCResponseBB))

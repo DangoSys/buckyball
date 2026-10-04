@@ -30,7 +30,8 @@ class BankedChiCache(config: RnfParams) extends Module {
   private val bankBits     = math.max(1, log2Ceil(banks))
   private val linesPerBank = cacheLines / banks
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val access      = Flipped(Decoupled(new CacheAccess(p)))
     val probe       = Option.when(config.probe)(new CacheProbe(p))
     val result      = Decoupled(new CacheResult(config.resultLineBits))

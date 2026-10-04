@@ -7,7 +7,8 @@ import memcore.memory.cache.configs.CacheParams
 
 @instantiable
 class Cache(p: CacheParams) extends Module {
-  @public val io = IO(new CacheIO(p))
+  @public
+  val io = IO(new CacheIO(p))
 
   val valid       = RegInit(VecInit(Seq.fill(p.ways)(VecInit(Seq.fill(p.sets)(false.B)))))
   val tags        = Reg(Vec(p.ways, Vec(p.sets, UInt(p.tagBits.W))))

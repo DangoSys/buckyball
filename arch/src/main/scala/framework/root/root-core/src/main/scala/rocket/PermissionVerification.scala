@@ -14,7 +14,8 @@ class PermissionVerification(config: PreparationParams, regions: Seq[PhysicalReg
     with HasCpuParameters {
   require(nPMPs == 4)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val request      = Flipped(Decoupled(new Authorization(config)))
     val response     = Decoupled(new Permission(config))
     val contextValid = Input(Bool())

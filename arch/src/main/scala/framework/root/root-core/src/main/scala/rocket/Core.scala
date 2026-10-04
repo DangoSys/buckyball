@@ -73,7 +73,8 @@ class Core(
   require(instruction.chi == config.chi && instruction.nodeId != config.nodeId)
   private val cp = CpuMemParams(config.chi, tagBits = 6)
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val resetVector                 = Input(UInt(64.W))
     val timerInterrupt              = Input(Bool())
     val softwareInterrupt           = Input(Bool())

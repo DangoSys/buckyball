@@ -9,7 +9,8 @@ import framework.top.GlobalConfig
 class Execution(val b: GlobalConfig) extends Module {
   private val p = b.rvv
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val program        = Flipped(Decoupled(new ProgramWrite))
     val launch         = Flipped(Decoupled(new KernelLaunch))
     val done           = Decoupled(new KernelCompletion)

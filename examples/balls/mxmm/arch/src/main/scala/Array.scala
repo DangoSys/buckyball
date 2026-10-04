@@ -9,7 +9,8 @@ import hardfloat._
 @instantiable
 class Array(p: MxmmBallParam) extends Module {
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val valid     = Input(Bool())
     val context   = Input(UInt(log2Ceil(p.contexts).W))
     val separate  = Input(Bool())
