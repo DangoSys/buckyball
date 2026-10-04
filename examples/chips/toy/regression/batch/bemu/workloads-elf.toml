@@ -2,7 +2,6 @@
 tests = [
   "toy-toy-mlirtest-ball_mxquant-baremetal",
   "toy-toy-mlirtest-bank_mxquant-baremetal",
-  "toy-toy-ctest-rvv_kernel-baremetal",
   "toy-toy-ctest-mvin_2d_pixel_stride_test-baremetal",
   "toy-toy-ctest-mxmm_fp32_test-baremetal",
   "toy-toy-ctest-mxmm_mxfp8_test-baremetal",

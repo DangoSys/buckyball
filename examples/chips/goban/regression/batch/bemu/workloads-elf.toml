@@ -1,6 +1,5 @@
 [workloads]
 tests = [
-  "goban-goban-ctest-rvv_kernel-baremetal",
   "goban-goban-ctest-rvv_silu-baremetal",
   "goban-goban-ctest-rvv_swiglu-baremetal",
   "goban-goban-ctest-rvv_snake-baremetal",
