@@ -1,5 +1,7 @@
 package framework.memdomain.frontend
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import framework.memdomain.frontend.mem.dma.{DmaError, DmaPort, DmaReadCommand}
@@ -192,7 +194,7 @@ class MemFrontend(val b: GlobalConfig) extends Module {
   io.footprints(1)                                                        := memStorer.io.footprint
   io.footprints(2)                                                        := 0.U.asTypeOf(new Footprint(b))
   if (b.rvv.enable) {
-    val kernelDma = Instantiate(new KernelDma(b))
+    val kernelDma: Instance[KernelDma] = Instantiate(new KernelDma(b))
     kernelDma.io.rob_id := kernelRobId
     io.footprints(2)    := kernelDma.io.footprint
     kernelDma.io.kernel <> io.kernel.get

@@ -2,7 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.axi.Beat
 
 /** One AXI-stream beat plus the Mesh destination selected at packet start. */
@@ -181,8 +181,9 @@ class MeshBulkLoopback extends Module {
     val observedValid = Output(Bool())
   })
 
-  val tx = Instantiate(new MeshBulkPacketizer(mesh, 256, virtualChannel = 4, localX = 0, localY = 0, map))
-  val rx = Instantiate(new MeshBulkDepacketizer(mesh, 256, virtualChannel = 4))
+  val tx: Instance[MeshBulkPacketizer]   =
+    Instantiate(new MeshBulkPacketizer(mesh, 256, virtualChannel = 4, localX = 0, localY = 0, map))
+  val rx: Instance[MeshBulkDepacketizer] = Instantiate(new MeshBulkDepacketizer(mesh, 256, virtualChannel = 4))
   tx.io.in <> io.in
   rx.io.in <> tx.io.out
   io.out <> rx.io.out

@@ -38,21 +38,31 @@ class Panels(bankEntries: Int) extends Module {
     val depth        = bankEntries / 16
     val codes        = SyncReadMem(depth, UInt(128.W))
     val scales       = SyncReadMem(depth / 2, UInt(8.W))
-    when(io.write(operand) && io.lane(operand) === lane.U) {
-      assert(io.address(operand) < depth.U)
-      codes.write(io.address(operand), io.word(operand))
-    }
-    when(io.scaleWrite(operand) && io.lane(operand) === lane.U) {
-      assert(io.address(operand) < (depth / 2).U)
-      scales.write(io.address(operand), io.scale(operand))
-    }
+    val codeWrite    = io.write(operand) && io.lane(operand) === lane.U
+    val scaleWrite   = io.scaleWrite(operand) && io.lane(operand) === lane.U
+    when(codeWrite)(assert(io.address(operand) < depth.U))
+    when(scaleWrite)(assert(io.address(operand) < (depth / 2).U))
     val group        = if (operand == 0) io.rowGroup else io.columnGroup
     val rowWords     = Mux(io.mxfp8, io.reduction >> 4, io.reduction >> 2)
     val codeAddress  = group * rowWords + Mux(io.mxfp8, io.k >> 4, io.k >> 2)
     val scaleAddress = group * (io.reduction >> 5) + (io.k >> 5)
     val active       = if (operand == 0 && lane > 0) !io.vector else true.B
-    val word         = codes.read(codeAddress, io.read && active)
-    val scale        = scales.read(scaleAddress, io.read && active && io.mxfp8)
+    val codeRead     = io.read && active
+    val scaleRead    = codeRead && io.mxfp8
+    assert(!(codeRead && codeWrite))
+    assert(!(scaleRead && scaleWrite))
+    val word         = codes.readWrite(
+      Mux(codeWrite, io.address(operand), codeAddress),
+      io.word(operand),
+      codeRead || codeWrite,
+      codeWrite
+    )
+    val scale        = scales.readWrite(
+      Mux(scaleWrite, io.address(operand), scaleAddress),
+      io.scale(operand),
+      scaleRead || scaleWrite,
+      scaleWrite
+    )
     val decode       = Instantiate(new Mxfp8Decode)
     decode.io.code  := (word >> offset)(7, 0)
     decode.io.scale := scale

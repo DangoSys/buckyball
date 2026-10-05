@@ -2,7 +2,7 @@ package hier.tile.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
 import memcore.memory.coherence.Coherence
@@ -29,8 +29,8 @@ class Home(p: CoherenceParams) extends Module {
     val observedRxDat     = Output(Valid(new DataFlit(c)))
   })
 
-  val home   = Instantiate(new Coherence(p))
-  val fabric = Instantiate(new Fabric(c, p.agents, p.homeId))
+  val home:   Instance[Coherence] = Instantiate(new Coherence(p))
+  val fabric: Instance[Fabric]    = Instantiate(new Fabric(c, p.agents, p.homeId))
   fabric.io.active            := io.active
   fabric.io.blockRequesterRsp := io.blockRequesterRsp
   fabric.io.requesters <> io.requesters

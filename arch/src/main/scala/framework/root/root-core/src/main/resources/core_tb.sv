@@ -17,6 +17,8 @@ module `CORE_TB;
   import core_pkg::*;
   logic clock = 0;
   always #5 clock = ~clock;
+  logic [63:0] time_value = 0;
+  always @(posedge clock) time_value <= control.reset ? 0 : time_value + 1;
   core_control_if control (clock);
   stream_if #(`CORE_MEMREQ_WIDTH) mem_req (
       clock,
@@ -38,6 +40,7 @@ module `CORE_TB;
       .clock(clock),
       .reset(control.reset),
       .io_resetVector(64'h80000000),
+      .io_time(time_value),
 `ifdef IRQ_PROFILE
       .io_timerInterrupt(control.timer_irq),
       .io_softwareInterrupt(control.software_irq),

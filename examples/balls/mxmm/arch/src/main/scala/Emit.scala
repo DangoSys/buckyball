@@ -30,7 +30,7 @@ object Emit extends App {
 
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new MxmmBall(b),
-    args = _root_.scala.Array("--target-dir", args(0)),
+    args = _root_.scala.Array("--target-dir", args(0), "--split-verilog"),
     firtoolOpts = _root_.scala.Array("--disable-annotation-unknown", "--strip-debug-info")
   )
 }

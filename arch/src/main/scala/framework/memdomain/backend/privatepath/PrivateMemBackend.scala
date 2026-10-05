@@ -34,7 +34,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(requestCount)(Instantiate(new AccPipe(b)))
 
-  val hashMonitors =
+  val hashMonitors: Option[Seq[Instance[BankHashMonitor]]] =
     if (b.sim.diffTest) {
       Some(Seq.fill(b.memDomain.bankNum)(Instantiate(new BankHashMonitor(b))))
     } else {
@@ -367,10 +367,16 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
 
     hashMonitors.foreach { hashes =>
       val monitor = hashes(j)
-      monitor.io.write.valid     := bank.io.sramWrite.req.fire
-      monitor.io.write.bits.addr := arb.io.out.bits.addr
-      monitor.io.write.bits.mask := arb.io.out.bits.mask
-      monitor.io.write.bits.data := arb.io.out.bits.data
+      bank.io.sramWrite.req.valid := arb.io.out.valid && arb.io.out.bits.write && monitor.io.write.ready
+      monitor.io.write.valid      := arb.io.out.valid && arb.io.out.bits.write && bank.io.sramWrite.req.ready
+      arb.io.out.ready            := Mux(
+        arb.io.out.bits.write,
+        bank.io.sramWrite.req.ready && monitor.io.write.ready,
+        bank.io.sramRead.req.ready
+      )
+      monitor.io.write.bits.addr  := arb.io.out.bits.addr
+      monitor.io.write.bits.mask  := arb.io.out.bits.mask
+      monitor.io.write.bits.data  := arb.io.out.bits.data
     }
     bank.io.sramRead.resp.ready  := VecInit((0 until requestCount).map { i =>
       responseRouteBits(i)(j) && accPipes(i).io.sramRead.resp.ready

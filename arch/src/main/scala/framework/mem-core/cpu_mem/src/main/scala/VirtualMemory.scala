@@ -2,7 +2,7 @@ package memcore.memory.cpu
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.rnf.{CacheAccess, CacheAtomic, CacheResult}
 import memcore.memory.mmu.Walker
 
@@ -54,7 +54,12 @@ class VirtualMemoryResponse(p: CpuMemParams, lineBits: Int = 0) extends Bundle {
 
 /** Single-outstanding virtual data/instruction-word frontend; cache ownership is external. */
 @instantiable
-class VirtualMemory(cp: CpuMemParams, regions: Seq[PhysicalRegion], lineBits: Int = 0) extends Module {
+class VirtualMemory(
+  cp:                 CpuMemParams,
+  regions:            Seq[PhysicalRegion],
+  lineBits:           Int = 0,
+  translationEntries: Int = 0)
+    extends Module {
   require(regions.nonEmpty)
   for ((region, i) <- regions.zipWithIndex) {
     require(region.base >= 0 && region.bytes > 0 && region.base + region.bytes <= (BigInt(1) << cp.chi.addressBits))
@@ -70,7 +75,18 @@ class VirtualMemory(cp: CpuMemParams, regions: Seq[PhysicalRegion], lineBits: In
 
   @public
   val io = IO(new Bundle {
-    val active                = Input(Bool())
+    val active           = Input(Bool())
+    // SFENCE.VMA: drop every cached translation.
+    val flushTranslation = Input(Bool())
+
+    // Combinational translation through the TLB only, for a caller's fast path.
+    val lookup = new Bundle {
+      val config = Input(new memcore.memory.mmu.Config)
+      val req    = Input(new memcore.memory.mmu.Request)
+      val hit    = Output(Bool())
+      val paddr  = Output(UInt(cp.chi.addressBits.W))
+    }
+
     val request               = Flipped(Decoupled(new VirtualMemoryRequest(cp)))
     val response              = Decoupled(new VirtualMemoryResponse(cp, lineBits))
     val authorizationRequest  = Decoupled(new PhysicalAuthorization)
@@ -89,8 +105,8 @@ class VirtualMemory(cp: CpuMemParams, regions: Seq[PhysicalRegion], lineBits: In
 
   })
 
-  val walker   = Instantiate(new Walker(cp.chi))
-  val physical = Instantiate(new CpuMem(cp, lineBits))
+  val walker:   Instance[Walker] = Instantiate(new Walker(cp.chi, translationEntries))
+  val physical: Instance[CpuMem] = Instantiate(new CpuMem(cp, lineBits))
 
   val idle :: startWalk :: waitWalk :: authorize :: waitAuthorization :: startAccess :: waitAccess :: respond :: Nil =
     Enum(8)
@@ -134,6 +150,11 @@ class VirtualMemory(cp: CpuMemParams, regions: Seq[PhysicalRegion], lineBits: In
     state             := Mux(misaligned, respond, startWalk)
   }
 
+  walker.io.flush                := io.flushTranslation
+  walker.io.lookup.config        := io.lookup.config
+  walker.io.lookup.req           := io.lookup.req
+  io.lookup.hit                  := walker.io.lookup.hit
+  io.lookup.paddr                := walker.io.lookup.paddr
   walker.io.config.mode          := command.satpMode
   walker.io.config.rootPpn       := command.rootPpn
   walker.io.req.valid            := state === startWalk

@@ -5,7 +5,6 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.{BallStatus, BankRead, BankWrite}
-import framework.memdomain.backend.banks.SramBank
 import framework.top.GlobalConfig
 
 /**
@@ -70,23 +69,6 @@ class Trace(val b: GlobalConfig) extends Module {
   val ctrStartCycle = RegInit(VecInit(Seq.fill(NUM_COUNTERS)(0.U(64.W))))
   val ctrTag        = RegInit(VecInit(Seq.fill(NUM_COUNTERS)(0.U(56.W))))
   val ctrActive     = RegInit(VecInit(Seq.fill(NUM_COUNTERS)(false.B)))
-
-  // ============================================================
-  // Private SramBank (staging buffer for future use)
-  // ============================================================
-  val privBank = Module(new SramBank(b))
-
-  // Default: private bank idle
-  privBank.io.sramRead.req.valid      := false.B
-  privBank.io.sramRead.req.bits.addr  := 0.U
-  privBank.io.sramRead.resp.ready     := false.B
-  privBank.io.sramWrite.req.valid     := false.B
-  privBank.io.sramWrite.req.bits.addr := 0.U
-  privBank.io.sramWrite.req.bits.data := 0.U
-  privBank.io.sramWrite.req.bits.mask := VecInit(
-    Seq.fill(b.memDomain.bankMaskLen)(true.B)
-  )
-  privBank.io.sramWrite.resp.ready    := true.B
 
   // ============================================================
   // DPI-C modules

@@ -10,46 +10,97 @@ class VRF(val b: GlobalConfig) extends Module {
   private val p                = b.rvv
   private val wordBits         = 64
   private val wordsPerRegister = p.vLen / wordBits
+  private val bankCount        = math.min(p.laneNumber, wordsPerRegister)
+  private val bankBits         = log2Ceil(bankCount)
+  private val addressBits      = log2Ceil(32 * wordsPerRegister)
+  private val bankDepth        = 32 * wordsPerRegister / bankCount
+  require(isPow2(bankCount))
 
   @public
   val io = IO(new Bundle {
     val initialize = Input(Bool())
-    val readWords  = Output(Vec(32, Vec(wordsPerRegister, UInt(wordBits.W))))
+    val busy       = Output(Bool())
 
-    val write = Vec(
-      p.laneNumber,
-      Flipped(Valid(new Bundle {
-        val address = UInt(5.W)
-        val word    = UInt(log2Ceil(wordsPerRegister).W)
+    val request = Vec(
+      bankCount,
+      Flipped(Decoupled(new Bundle {
+        val address = UInt(addressBits.W)
+        val write   = Bool()
         val data    = UInt(wordBits.W)
         val mask    = UInt(wordBits.W)
       }))
     )
 
+    val response = Vec(bankCount, Decoupled(UInt(wordBits.W)))
   })
 
-  val registers = RegInit(
-    VecInit(Seq.fill(32)(VecInit(Seq.fill(wordsPerRegister)(0.U(wordBits.W)))))
-  )
+  val clearing                                        = RegInit(true.B)
+  val clearAddress                                    = RegInit(0.U(log2Ceil(bankDepth).W))
+  val idle :: reading :: writing :: responding :: Nil = Enum(4)
+  val states                                          = RegInit(VecInit(Seq.fill(bankCount)(idle)))
 
-  io.readWords := registers
-  for {
-    register <- 0 until 32
-    word     <- 0 until wordsPerRegister
-  } {
-    val selected = io.write.map(w => w.valid && w.bits.address === register.U && w.bits.word === word.U)
-    val mask     = io.write
-      .zip(selected)
-      .map { case (w, enable) => Mux(enable, w.bits.mask, 0.U) }
-      .reduce(_ | _)
-    val data     = io.write
-      .zip(selected)
-      .map { case (w, enable) => Mux(enable, w.bits.data & w.bits.mask, 0.U) }
-      .reduce(_ | _)
+  when(io.initialize) {
+    clearing     := true.B
+    clearAddress := 0.U
+  }.elsewhen(clearing) {
+    when(clearAddress === (bankDepth - 1).U) {
+      clearing := false.B
+    }.otherwise {
+      clearAddress := clearAddress + 1.U
+    }
+  }
+
+  io.busy := io.initialize || clearing || states.map(_ =/= idle).reduce(_ || _)
+
+  for (bank <- 0 until bankCount) {
+    val memory   = SyncReadMem(bankDepth, UInt(wordBits.W))
+    val address  = Reg(UInt(log2Ceil(bankDepth).W))
+    val write    = Reg(Bool())
+    val data     = Reg(UInt(wordBits.W))
+    val mask     = Reg(UInt(wordBits.W))
+    val result   = Reg(UInt(wordBits.W))
+    val request  = io.request(bank)
+    val response = io.response(bank)
+
+    request.ready  := !io.initialize && !clearing && states(bank) === idle
+    response.valid := !io.initialize && !clearing && states(bank) === responding
+    response.bits  := result
+
+    val portAddress = Mux(clearing, clearAddress, Mux(request.fire, request.bits.address >> bankBits, address))
+    val portWrite   = clearing || states(bank) === writing
+    val portData    = Mux(clearing, 0.U, result)
+    val portEnable  = !io.initialize && (clearing || request.fire || states(bank) === writing)
+    val readData    = memory.readWrite(portAddress, portData, portEnable, portWrite)
+
     when(io.initialize) {
-      registers(register)(word) := 0.U
-    }.elsewhen(mask.orR) {
-      registers(register)(word) := (registers(register)(word) & ~mask) | data
+      states(bank) := idle
+    }.elsewhen(!clearing) {
+      switch(states(bank)) {
+        is(idle) {
+          when(request.fire) {
+            if (bankBits > 0) {
+              assert(request.bits.address(bankBits - 1, 0) === bank.U)
+            }
+            address      := request.bits.address >> bankBits
+            write        := request.bits.write
+            data         := request.bits.data
+            mask         := request.bits.mask
+            states(bank) := reading
+          }
+        }
+        is(reading) {
+          result       := Mux(write, (readData & ~mask) | (data & mask), readData)
+          states(bank) := Mux(write, writing, responding)
+        }
+        is(writing) {
+          states(bank) := responding
+        }
+        is(responding) {
+          when(response.fire) {
+            states(bank) := idle
+          }
+        }
+      }
     }
   }
 }

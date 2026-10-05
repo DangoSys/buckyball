@@ -32,12 +32,14 @@ class Clint(p: ClintParams, hartIds: Seq[Int]) extends Module {
     val port = new DevicePort
     val msip = Output(Vec(n, Bool()))
     val mtip = Output(Vec(n, Bool()))
+    val time = Output(UInt(64.W))
   })
 
   val msip     = RegInit(VecInit(Seq.fill(n)(false.B)))
   val mtimecmp = RegInit(VecInit(Seq.fill(n)(~0.U(64.W))))
   val mtime    = RegInit(0.U(64.W))
   val ticks    = RegInit(0.U(log2Ceil(p.tickCycles + 1).W))
+  io.time := mtime
 
   val access = io.port.access.bits
   val offset = access.addr - p.base.U

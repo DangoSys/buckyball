@@ -1,7 +1,7 @@
 package hier.core.rocket
 
 import chisel3._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import freechips.rocketchip.rocket.PMPConfig
 import memcore.memory.cpu.PhysicalRegion
@@ -25,7 +25,7 @@ class PermissionVerification(config: PreparationParams, regions: Seq[PhysicalReg
     val pmpAddresses = Input(Vec(4, UInt(64.W)))
   })
 
-  val permission = Instantiate(new PermissionCheck(config, regions))
+  val permission: Instance[PermissionCheck] = Instantiate(new PermissionCheck(config, regions))
   permission.io.request <> io.request
   io.response <> permission.io.response
   permission.io.contextValid := io.contextValid

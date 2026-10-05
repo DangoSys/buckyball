@@ -23,6 +23,12 @@ _start:
   csrw medeleg, zero
   csrw mideleg, zero
   csrw mie, zero
+  // The standalone Core has no RoCC accelerator; TIME must still be readable.
+  csrr t0, time
+  beqz t0, fail
+  li t0, 2
+  csrw mcounteren, t0
+  csrw scounteren, t0
   li t0, 0x20002800
   csrw pmpaddr0, t0
   li t0, 0x20002803
@@ -101,6 +107,8 @@ fail:
 
 .section .text.supervisor,"ax",@progbits
 supervisor:
+  csrr t0, time
+  beqz t0, supervisor_fail
   li s2, 2
   li s1, 0x40008000
   li t0, 0x8877665544332211
@@ -164,6 +172,8 @@ high_alias:
 
 .section .text.user,"ax",@progbits
 user:
+  csrr t0, time
+  beqz t0, user_fail
   // User access to a supervisor-only leaf must fault.
   expect_trap 13, 0x40008000
   li t0, 0x40008000

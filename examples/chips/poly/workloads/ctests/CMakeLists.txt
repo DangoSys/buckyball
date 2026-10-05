@@ -62,3 +62,9 @@ add_custom_command(
 add_custom_target(${POLY_MOVE_NAME}-ctest-build
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${POLY_MOVE_ELF})
 add_dependencies(poly-ctests-build ${POLY_MOVE_NAME}-ctest-build)
+
+foreach(POLY_MXMM_CORE attention ffn)
+  set(BUCKYBALL_CTEST_TARGET ${POLY_MXMM_CORE})
+  add_buckyball_ctests(mxmm_fp32_small.c mxmm_mxfp8_small.c)
+endforeach()
+set(BUCKYBALL_CTEST_TARGET attention)

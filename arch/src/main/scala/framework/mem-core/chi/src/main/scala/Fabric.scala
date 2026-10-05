@@ -2,7 +2,7 @@ package memcore.bus.chi
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** Explicit requester-to-Home CHI fabric; no caches or backing-memory ownership. */
 @instantiable
@@ -26,8 +26,8 @@ class Fabric(p: Params, requesterCount: Int, homeId: Int) extends Module {
   def creditLink[T <: Flit](source: DecoupledIO[T], sink: DecoupledIO[T], blockRx: Bool = false.B): Unit = {
     // Backpressure retains complete flits in the real credit-accounted Rx FIFO.
     // Active and FLITV retain their channel semantics throughout the stall.
-    val tx = Instantiate(new Tx(source.bits.flitWidth, maxCredits = 4))
-    val rx = Instantiate(new Rx(source.bits.flitWidth, depth = 4))
+    val tx: Instance[Tx] = Instantiate(new Tx(source.bits.flitWidth, maxCredits = 4))
+    val rx: Instance[Rx] = Instantiate(new Rx(source.bits.flitWidth, depth = 4))
     tx.io.active    := io.active
     rx.io.active    := io.active
     tx.io.in.valid  := source.valid

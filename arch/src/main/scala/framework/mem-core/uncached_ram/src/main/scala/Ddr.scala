@@ -2,7 +2,7 @@ package memcore.memory.uncached_ram
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
 import memcore.memory.ddr.{Bridge, Params => DdrParams}
 
@@ -24,7 +24,7 @@ class Ddr(p: Params) extends Module {
     val outstanding      = Output(UInt(log2Ceil(p.slots + 1).W))
   })
 
-  val ram = Instantiate(new Ram(p)); val bridge = Instantiate(new Bridge(ddr))
+  val ram: Instance[Ram] = Instantiate(new Ram(p)); val bridge: Instance[Bridge] = Instantiate(new Bridge(ddr))
   ram.io.cpuRequest <> io.cpuRequest; io.cpuResponse <> ram.io.cpuResponse
   ram.io.lineRequest <> io.lineRequest; io.lineResponse <> ram.io.lineResponse
   bridge.io.request <> ram.io.memoryRequest; ram.io.memoryResponse <> bridge.io.response

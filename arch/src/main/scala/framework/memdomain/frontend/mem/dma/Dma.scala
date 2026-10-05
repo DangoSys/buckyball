@@ -2,7 +2,7 @@ package framework.memdomain.frontend.mem.dma
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import memcore.memory.preflight.{MapQuery, MapResult, Params}
 import memcore.bus.axi4
@@ -26,8 +26,8 @@ class Dma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extends Mod
     val axi       = new axi4.Port(axiParams)
   })
 
-  val reader       = Instantiate(new ReadDma(b, prepared, axiParams))
-  val writer       = Instantiate(new WriteDma(b, prepared, axiParams))
+  val reader: Instance[ReadDma]  = Instantiate(new ReadDma(b, prepared, axiParams))
+  val writer: Instance[WriteDma] = Instantiate(new WriteDma(b, prepared, axiParams))
   val kernel       = io.dma.read.bits.producer === 2.U
   val readDecision = Mux(kernel, io.decisions(2), io.decisions(0))
   when(io.dma.read.valid) {

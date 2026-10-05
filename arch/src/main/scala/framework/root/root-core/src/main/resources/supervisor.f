@@ -1,4 +1,7 @@
 +define+SUPERVISOR_PROFILE
+// SATP PPN/ASID have no architectural reset value; select concrete bits for this 4-state run.
++define+RANDOMIZE_REG_INIT
++define+RANDOM=32'b0
 +incdir+@VERIFY@/uvm/src/ip
 +incdir+@RTL@
 +incdir+@RESOURCES@

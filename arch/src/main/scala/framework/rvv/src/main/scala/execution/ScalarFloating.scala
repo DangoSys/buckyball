@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 @instantiable
 class ScalarFloating extends Module {
@@ -35,7 +35,7 @@ class ScalarFloating extends Module {
   val usesRounding   =
     fmaInstruction || Seq(0, 4, 8, 12, 0x2c, 0x20, 0x60, 0x68).map(n => operation === n.U).reduce(_ || _)
   val rounding       = Mux(usesRounding, Mux(funct === 7.U, io.frm, funct), 0.U)
-  val falu           = Instantiate(new FALU)
+  val falu: Instance[FALU] = Instantiate(new FALU)
   def unbox(source: UInt): UInt = Mux(double, source, Mux(source(63, 32).andR, source(31, 0), "h7fc00000".U))
   falu.io.a            := unbox(io.source1)
   falu.io.b            := unbox(io.source2)

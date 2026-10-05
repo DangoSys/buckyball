@@ -1,5 +1,7 @@
 package memcore.memory.mesh_shm
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
@@ -13,10 +15,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val transferCommand    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val transferCompletion = Decoupled(new MeshTransferCompletion(p))
     val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
-    val bankWrites         = Output(Vec(p.bankCount, Valid(new MeshClientRequest(p))))
+    val bankWrites         = Vec(p.bankCount, Decoupled(new MeshClientRequest(p)))
   })
 
-  val transfer = Instantiate(new MeshTransferController(p))
+  val transfer: Instance[MeshTransferController] = Instantiate(new MeshTransferController(p))
   transfer.io.command.valid    := io.transferCommand.valid
   transfer.io.command.bits     := io.transferCommand.bits
   io.transferCommand.ready     := transfer.io.command.ready
@@ -30,11 +32,14 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     io.localBanks(core).response.ready := false.B
   }
 
-  val requests  = Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
-  val responses = Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
-  val banks     = Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
-  val bankRows  = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
-  val bankCols  = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
+  val requests:  Seq[Seq[Instance[MeshRouter]]]   =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
+  val responses: Seq[Seq[Instance[MeshRouter]]]   =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
+  val banks:     Seq[Seq[Instance[MeshBankNode]]] =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
+  val bankRows = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
+  val bankCols = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
 
   def link(source: DecoupledIO[MeshPacket], sink: DecoupledIO[MeshPacket]): Unit = {
     val fifo = Module(new Queue(new MeshPacket(p), 2))
@@ -50,16 +55,19 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val responseRouter = responses(row)(col)
     val bank           = banks(row)(col)
     val bankIndex      = row * p.cols + col
-    io.bankWrites(bankIndex).valid      := bank.io.request.fire && bank.io.request.bits.write
+    val localRequest   = requestRouter.io.out(MeshDirection.endpoint)
+    io.bankWrites(
+      bankIndex
+    ).valid                             := localRequest.valid && !localRequest.bits.privateRequest && localRequest.bits.write && bank.io.request.ready
     io.bankWrites(bankIndex).bits.bank  := bankIndex.U
     io.bankWrites(bankIndex).bits.tuser := Cat(bank.io.request.bits.addr, bank.io.request.bits.write)
     io.bankWrites(bankIndex).bits.tlast := true.B
     io.bankWrites(bankIndex).bits.data  := bank.io.request.bits.data
     io.bankWrites(bankIndex).bits.mask  := bank.io.request.bits.mask
     io.bankWrites(bankIndex).bits.tag   := bank.io.request.bits.tag
-    val localRequest = requestRouter.io.out(MeshDirection.endpoint)
-    bank.io.request.valid := localRequest.valid && !localRequest.bits.privateRequest
-    bank.io.request.bits  := localRequest.bits
+    bank.io.request.valid               := localRequest.valid && !localRequest.bits.privateRequest &&
+      (!localRequest.bits.write || io.bankWrites(bankIndex).ready)
+    bank.io.request.bits                := localRequest.bits
     val privateCores =
       p.cores.indices.filter(core => p.cores(core).bankIds.nonEmpty && p.coreLocations(core) == (row, col))
     val privateReady = Wire(Vec(privateCores.size, Bool()))
@@ -72,7 +80,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     })
     replies.io.in(0) <> bank.io.response
     for ((core, index) <- privateCores.zipWithIndex) {
-      val endpoint = Instantiate(new MeshCoreEndpoint(p, core, row, col))
+      val endpoint: Instance[MeshCoreEndpoint] = Instantiate(new MeshCoreEndpoint(p, core, row, col))
       endpoint.io.request.valid := localRequest.valid && localRequest.bits.privateRequest && localRequest.bits.core === core.U
       endpoint.io.request.bits  := localRequest.bits
       privateReady(index)       := localRequest.bits.core === core.U && endpoint.io.request.ready
@@ -82,7 +90,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     localRequest.ready := Mux(
       localRequest.bits.privateRequest,
       (if (privateCores.nonEmpty) privateReady.asUInt.orR else false.B),
-      bank.io.request.ready
+      bank.io.request.ready && (!localRequest.bits.write || io.bankWrites(bankIndex).ready)
     )
     when(localRequest.valid && localRequest.bits.privateRequest) {
       assert(

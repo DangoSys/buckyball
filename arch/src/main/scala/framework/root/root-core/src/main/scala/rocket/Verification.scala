@@ -2,7 +2,7 @@ package hier.core.rocket
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import freechips.rocketchip.tile.TraceBundle
 import memcore.memory.cpu.{CpuMemParams, PhysicalRegion, UncachedRequest, UncachedResponse}
@@ -33,6 +33,7 @@ class Verification(
     val softwareInterrupt          = Input(Bool())
     val externalInterrupt          = Input(Bool())
     val resetVector                = Input(UInt(64.W))
+    val time                       = Input(UInt(64.W))
     val memoryRequest              = Decoupled(new LineRequest(memory.chi))
     val memoryResponse             = Flipped(Decoupled(new LineResponse(memory.chi)))
     val uncachedRequest            = Decoupled(new UncachedRequest(cp))
@@ -52,11 +53,12 @@ class Verification(
   })
 
   val config = RnfParams(memory.chi, nodeId = 1, cacheLines = 8, homeId = memory.homeId, homeCount = 1, banks = 2)
-  val core   = Instantiate(new Core(config, config.copy(nodeId = 2), regions, commands))
-  val home   = Instantiate(new Coherence(memory))
-  val fabric = Instantiate(new Fabric(memory.chi, memory.agents, memory.homeId))
+  val core:   Instance[Core]      = Instantiate(new Core(config, config.copy(nodeId = 2), regions, commands))
+  val home:   Instance[Coherence] = Instantiate(new Coherence(memory))
+  val fabric: Instance[Fabric]    = Instantiate(new Fabric(memory.chi, memory.agents, memory.homeId))
   commands.foreach(_ => io.admission.get <> core.io.admission.get)
   core.io.resetVector                 := io.resetVector
+  core.io.time                        := io.time
   core.io.timerInterrupt              := io.timerInterrupt
   core.io.softwareInterrupt           := io.softwareInterrupt
   core.io.externalInterrupt           := io.externalInterrupt

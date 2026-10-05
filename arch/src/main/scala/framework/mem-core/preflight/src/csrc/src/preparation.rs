@@ -74,11 +74,19 @@ pub unsafe extern "C" fn preflight_ref_submit(ptr:*mut c_void,id:u32,base:u64,ro
                     }
                     if pf!=0||af!=0 {fault=Some((if pf!=0 {3}else{4},va));break 'shape;}
                     if pa as u128+bytes as u128>(1u128<<m.address_bits) {fault=Some((4,va));break 'shape;}
-                    let allow=!m.deny_range.is_some_and(|(lo,hi)|pa<=hi&&pa+bytes as u64-1>=lo);
-                    plan.auth.push_back(Auth{pa,bytes,write,pte:0,privilege,allow:allow as u32});
+                    let permitted=|address:u64,length:u32| !m.deny_range.is_some_and(|(lo,hi)|address<=hi&&address+length as u64-1>=lo);
+                    let union=plan.output.last().filter(|p|p.va>>12==va>>12&&va>p.va+p.bytes as u64&&p.pa+(va-p.va)==pa)
+                        .map(|p|(p.pa,(va+bytes as u64-p.va) as u32));
+                    let union_allowed=if let Some((address,length))=union {
+                        let allow=permitted(address,length);
+                        plan.auth.push_back(Auth{pa:address,bytes:length,write,pte:0,privilege,allow:allow as u32});
+                        allow
+                    }else{false};
+                    let allow=union_allowed||permitted(pa,bytes);
+                    if !union_allowed {plan.auth.push_back(Auth{pa,bytes,write,pte:0,privilege,allow:allow as u32});}
                     if !allow {fault=Some((4,va));break 'shape;}
-                    // A same-page segment starting inside or right after the previous range extends it.
-                    let merge=plan.output.last().is_some_and(|p| p.va>>12==va>>12&&va>=p.va&&va<=p.va+p.bytes as u64);
+                    // Retain exactly the union permitted above, or the separately permitted spans.
+                    let merge=union_allowed||plan.output.last().is_some_and(|p| p.va>>12==va>>12&&va>=p.va&&va<=p.va+p.bytes as u64);
                     if merge {
                         let p=plan.output.last_mut().unwrap();
                         assert_eq!(p.pa+(va-p.va),pa);

@@ -2,7 +2,7 @@ package framework.memdomain.verification
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import framework.top.GlobalConfig
 import framework.system.core.accelerator.{Admission, BuckyballAccelerator}
@@ -44,9 +44,10 @@ class AdmissionSystem(
     val blockedResponse = Input(Bool())
   })
 
-  val admission   = Instantiate(new Admission(b, tracking, prepared, regions, axiParams))
-  val accelerator = Instantiate(new BuckyballAccelerator(b))
-  val tasks       = Instantiate(new TaskController((1 to workerSignatures.size), workerSignatures, b.memDomain.nCores))
+  val admission:   Instance[Admission]            = Instantiate(new Admission(b, tracking, prepared, regions, axiParams))
+  val accelerator: Instance[BuckyballAccelerator] = Instantiate(new BuckyballAccelerator(b))
+  val tasks:       Instance[TaskController]       =
+    Instantiate(new TaskController((1 to workerSignatures.size), workerSignatures, b.memDomain.nCores))
   admission.io.core <> io.core
   accelerator.io.cmd <> admission.io.npuCommand
   admission.io.npuResponse <> accelerator.io.resp
@@ -74,7 +75,7 @@ class AdmissionSystem(
   io.halted   := admission.io.halted; io.fault         := admission.io.fault
   io.faultTag := admission.io.faultTag; io.workDrained := admission.io.workDrained
 
-  val shared   = Instantiate(new SharedMemBackend(b, useMesh = true))
+  val shared: Instance[SharedMemBackend] = Instantiate(new SharedMemBackend(b, useMesh = true))
   shared.io.config <> accelerator.io.shared_config
   shared.io.mvover <> accelerator.io.mvover
   val channels = SharedMemLayout.channelPerHart(b)

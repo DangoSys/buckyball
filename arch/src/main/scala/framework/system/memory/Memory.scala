@@ -2,7 +2,7 @@ package framework.system.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
 import memcore.memory.cpu.{CpuMemParams, UncachedRequest, UncachedResponse}
 import memcore.memory.uncached_ram.{Params => RamParams, Ram}
@@ -30,13 +30,14 @@ class Memory(ram: RamParams, ddr: DdrParams, dmaMasters: Int = 0) extends Module
     val outstanding    = Output(UInt(log2Ceil(ram.slots + 2 * dmaMasters + 1).W))
   })
 
-  val ordering       = Instantiate(new Ram(orderingParams))
-  val bridge         = Instantiate(new Bridge(ddr))
+  val ordering: Instance[Ram]                           = Instantiate(new Ram(orderingParams))
+  val bridge:   Instance[Bridge]                        = Instantiate(new Bridge(ddr))
   ordering.io.lineRequest <> io.lineRequest
   io.lineResponse <> ordering.io.lineResponse
   bridge.io.request <> ordering.io.memoryRequest
   ordering.io.memoryResponse <> bridge.io.response
-  val fabric         = Instantiate(new memcore.bus.axi4.Interconnect(ddr.axi, dmaMasters + 1))
+  val fabric:   Instance[memcore.bus.axi4.Interconnect] =
+    Instantiate(new memcore.bus.axi4.Interconnect(ddr.axi, dmaMasters + 1))
   fabric.io.in(0) <> bridge.io.axi
   io.axi <> fabric.io.out
   val dmaOutstanding = Wire(Vec(2 * dmaMasters, Bool()))

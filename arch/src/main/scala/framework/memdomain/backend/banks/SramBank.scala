@@ -40,32 +40,39 @@ class SramBank(val b: GlobalConfig) extends Module {
     when(clearRow === (b.memDomain.bankEntries - 1).U)(clearing := false.B)
   }
 
-  // -----------------------------------------------------------------------------
-  // Read path
-  // -----------------------------------------------------------------------------
-  io.sramRead.req.ready := !io.sramWrite.req.valid && !clearing
+  val readPending = RegNext(io.sramRead.req.fire, false.B)
+  val readHeld    = RegInit(false.B)
+  val readData    = Reg(UInt(b.memDomain.bankWidth.W))
+  val writeValid  = RegInit(false.B)
 
-  val raddr = io.sramRead.req.bits.addr
-  val ren   = io.sramRead.req.fire
-  val rdata = mem.read(raddr, ren)
+  io.sramRead.resp.valid    := readPending || readHeld
+  io.sramWrite.resp.valid   := writeValid
+  io.sramWrite.resp.bits.ok := true.B
+  io.sramWrite.req.ready    := !io.clear && !clearing && (!writeValid || io.sramWrite.resp.ready)
+  io.sramRead.req.ready     := !io.clear && !clearing && !io.sramWrite.req.fire &&
+    (!io.sramRead.resp.valid || io.sramRead.resp.ready)
 
-  io.sramRead.resp.valid     := RegNext(ren)
-  io.sramRead.resp.bits.data := rdata.asUInt
+  val ren = io.sramRead.req.fire
+  val wen = clearing || io.sramWrite.req.fire
 
-  // -----------------------------------------------------------------------------
-  // Write path
-  // -----------------------------------------------------------------------------
-  io.sramWrite.req.ready := !io.sramRead.req.valid && !clearing
+  val rdata = mem.readWrite(
+    Mux(clearing, clearRow, Mux(wen, io.sramWrite.req.bits.addr, io.sramRead.req.bits.addr)),
+    Mux(clearing, 0.U.asTypeOf(Vec(mask_len, mask_elem)), io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem))),
+    Mux(clearing, VecInit(Seq.fill(mask_len)(true.B)), io.sramWrite.req.bits.mask),
+    ren || wen,
+    wen
+  )
 
-  // One write port serves both requests and the local clear.
-  when(io.sramWrite.req.fire || clearing) {
-    mem.write(
-      Mux(clearing, clearRow, io.sramWrite.req.bits.addr),
-      Mux(clearing, 0.U.asTypeOf(Vec(mask_len, mask_elem)), io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem))),
-      Mux(clearing, VecInit(Seq.fill(mask_len)(true.B)), io.sramWrite.req.bits.mask)
-    )
+  io.sramRead.resp.bits.data := Mux(readHeld, readData, rdata.asUInt)
+  when(readPending && !io.sramRead.resp.ready) {
+    readHeld := true.B
+    readData := rdata.asUInt
+  }.elsewhen(io.sramRead.resp.fire) {
+    readHeld := false.B
   }
-
-  io.sramWrite.resp.valid   := RegNext(io.sramWrite.req.fire)
-  io.sramWrite.resp.bits.ok := RegNext(io.sramWrite.req.fire)
+  when(io.sramWrite.req.fire) {
+    writeValid := true.B
+  }.elsewhen(io.sramWrite.resp.fire) {
+    writeValid := false.B
+  }
 }

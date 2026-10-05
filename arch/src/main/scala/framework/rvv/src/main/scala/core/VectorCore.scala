@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 
 @instantiable
@@ -26,36 +26,48 @@ class VectorCore(val b: GlobalConfig) extends Module {
     val busy           = Output(Bool())
   })
 
-  val idle :: capture :: execute :: Nil = Enum(3)
-  val state                             = RegInit(idle)
-  val resultValid                       = RegInit(false.B)
-  val result                            = RegInit(0.U.asTypeOf(new VectorResult))
-  val instruction                       = Reg(UInt(32.W))
-  val scalar1                           = Reg(UInt(32.W))
-  val scalar2                           = Reg(UInt(32.W))
-  val floatScalar                       = Reg(UInt(64.W))
-  val vl                                = RegInit(0.U(32.W))
-  val vtype                             = RegInit("h80000000".U(32.W))
-  val vstart                            = RegInit(0.U(32.W))
-  val base                              = Reg(UInt(32.W))
-  val source                            = Reg(Vec(32, Vec(p.vLen / 64, UInt(64.W))))
-  val accumulator                       = Reg(UInt(64.W))
-  val count                             = Reg(UInt(32.W))
-  val offered                           = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
-  val issued                            = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
-  val received                          = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
-  val memoryData                        = Reg(Vec(p.memoryPorts, UInt(64.W)))
-  val memoryFailed                      = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
-  val divBatchValid                     = RegInit(false.B)
-  val divActive                         = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val divStarted                        = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val divDone                           = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val divData                           = Reg(Vec(p.laneNumber, UInt(64.W)))
-  val fpStarted                         = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val fpDone                            = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val fpData                            = Reg(Vec(p.laneNumber, UInt(64.W)))
-  val fpFlags                           = Reg(Vec(p.laneNumber, UInt(5.W)))
-  val fpLegal                           = Reg(Vec(p.laneNumber, Bool()))
+  val idle :: snapshot :: capture :: execute :: commit :: Nil = Enum(5)
+  val state                                                   = RegInit(idle)
+  val resultValid                                             = RegInit(false.B)
+  val result                                                  = RegInit(0.U.asTypeOf(new VectorResult))
+  val instruction                                             = Reg(UInt(32.W))
+  val scalar1                                                 = Reg(UInt(32.W))
+  val scalar2                                                 = Reg(UInt(32.W))
+  val floatScalar                                             = Reg(UInt(64.W))
+  val vl                                                      = RegInit(0.U(32.W))
+  val vtype                                                   = RegInit("h80000000".U(32.W))
+  val vstart                                                  = RegInit(0.U(32.W))
+  val base                                                    = Reg(UInt(32.W))
+  val readPortCount                                           = math.max(p.laneNumber, p.memoryPorts)
+  val wordsPerRegister                                        = p.vLen / 64
+  val maskWords                                               = Reg(Vec(readPortCount, UInt(64.W)))
+  val operandWords                                            = Reg(Vec(readPortCount, UInt(64.W)))
+  val sourceWords                                             = Reg(Vec(readPortCount, UInt(64.W)))
+  val destinationWords                                        = Reg(Vec(readPortCount, UInt(64.W)))
+  val readPhase                                               = RegInit(0.U(3.W))
+  val readSent                                                = RegInit(false.B)
+  val snapshotSent                                            = RegInit(false.B)
+  val firstBatch                                              = RegInit(true.B)
+  val writeSent                                               = RegInit(false.B)
+  val resumeState                                             = Reg(UInt(3.W))
+  val finishRequested                                         = WireDefault(false.B)
+  val accumulator                                             = Reg(UInt(64.W))
+  val count                                                   = Reg(UInt(32.W))
+  val offered                                                 = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
+  val issued                                                  = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
+  val received                                                = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
+  val memoryData                                              = Reg(Vec(p.memoryPorts, UInt(64.W)))
+  val memoryFailed                                            = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
+  val divBatchValid                                           = RegInit(false.B)
+  val divActive                                               = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
+  val divStarted                                              = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
+  val divDone                                                 = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
+  val divData                                                 = Reg(Vec(p.laneNumber, UInt(64.W)))
+  val fpStarted                                               = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
+  val fpDone                                                  = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
+  val fpData                                                  = Reg(Vec(p.laneNumber, UInt(64.W)))
+  val fpFlags                                                 = Reg(Vec(p.laneNumber, UInt(5.W)))
+  val fpLegal                                                 = Reg(Vec(p.laneNumber, Bool()))
 
   val opcode        = instruction(6, 0)
   val rd            = instruction(11, 7)
@@ -136,22 +148,26 @@ class VectorCore(val b: GlobalConfig) extends Module {
     Mux(wholeMove, ((rs1 +& 1.U) * p.vLen.U) >> (sew +& 3.U), vl)
   )
 
-  def element(register: UInt, index: UInt, width: UInt): UInt = {
-    val shift   = (index.pad(log2Ceil(8 * p.vLen)) << (width.pad(3) + 3.U))(
-      log2Ceil(8 * p.vLen) - 1,
-      0
-    )
-    val address = (register + (shift >> log2Ceil(p.vLen)))(4, 0)
-    val word    = shift(log2Ceil(p.vLen) - 1, 6)
-    val mask    = MuxLookup(width, "hffffffffffffffff".U(64.W))(
+  def element(word: UInt, index: UInt, width: UInt): UInt = {
+    val shift = (index << (width.pad(3) + 3.U))(5, 0)
+    val mask  = MuxLookup(width, "hffffffffffffffff".U(64.W))(
       Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
     )
-    (source(address)(word) >> shift(5, 0)) & mask
+    (word >> shift) & mask
   }
 
-  def maskElement(register: UInt, index: UInt): Bool = {
-    val word = index(log2Ceil(p.vLen) - 1, 6)
-    (source(register)(word) >> index(5, 0))(0)
+  def maskElement(word: UInt, index: UInt): Bool = (word >> index(5, 0))(0)
+
+  def wordAddress(
+    register: UInt,
+    index:    UInt,
+    width:    UInt,
+    maskBit:  Bool = false.B
+  ): UInt = {
+    val shift   = Mux(maskBit, index, index << (width.pad(3) + 3.U))
+    val address = Mux(maskBit, register, register + (shift >> log2Ceil(p.vLen)))(4, 0)
+    val within  = shift.pad(log2Ceil(p.vLen))(log2Ceil(p.vLen) - 1, 0)
+    address * wordsPerRegister.U + (within >> 6)
   }
 
   def groupLegal(register: UInt, width: UInt): Bool = {
@@ -184,12 +200,21 @@ class VectorCore(val b: GlobalConfig) extends Module {
     Mux(multiplier(2), elements >> (8.U - multiplier), elements << multiplier)
   }
 
-  val vlmax     = maximum(sew, vtype(2, 0))
-  val registers = Instantiate(new VRF(b))
+  val vlmax = maximum(sew, vtype(2, 0))
+  val registers: Instance[Operands] = Instantiate(new Operands(b))
   registers.io.initialize := io.initialize
+  val writes        = Wire(chiselTypeOf(registers.io.write.bits))
+  val pendingWrites = Reg(chiselTypeOf(registers.io.write.bits))
   for (lane <- 0 until p.laneNumber) {
-    registers.io.write(lane).valid := false.B
-    registers.io.write(lane).bits  := 0.U.asTypeOf(registers.io.write(lane).bits)
+    writes(lane) := 0.U.asTypeOf(writes(lane))
+  }
+  registers.io.write.valid := state === commit && !writeSent && !io.initialize
+  registers.io.write.bits                 := pendingWrites
+  registers.io.writeDone.ready            := state === commit && writeSent && !io.initialize
+  when(registers.io.write.fire)(writeSent := true.B)
+  when(registers.io.writeDone.fire) {
+    writeSent := false.B
+    state     := resumeState
   }
 
   def writeElement(
@@ -208,13 +233,10 @@ class VectorCore(val b: GlobalConfig) extends Module {
         Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
       )
     )
-    registers.io.write(lane).valid := true.B
-    registers.io.write(lane).bits.address := rd + (bitOffset >> log2Ceil(
-      p.vLen
-    ))
-    registers.io.write(lane).bits.word    := within(log2Ceil(p.vLen) - 1, 6)
-    registers.io.write(lane).bits.mask    := (mask << within(5, 0))(63, 0)
-    registers.io.write(lane).bits.data    := (data << within(5, 0))(63, 0)
+    writes(lane).valid := true.B
+    writes(lane).address := wordAddress(rd, index, width, maskBit)
+    writes(lane).mask    := (mask << within(5, 0))(63, 0)
+    writes(lane).data    := (data << within(5, 0))(63, 0)
   }
 
   def finish(
@@ -222,6 +244,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     cause: UInt = 0.U,
     value: UInt = 0.U
   ): Unit = {
+    finishRequested     := true.B
     state               := idle
     resultValid         := true.B
     result.fault        := fault
@@ -231,24 +254,28 @@ class VectorCore(val b: GlobalConfig) extends Module {
   }
 
   def nextBatch(step: UInt): Unit = {
-    when(base + step >= limit)(finish()).otherwise(base := base + step)
-    offered.foreach(_                                   := false.B)
-    issued.foreach(_                                    := false.B)
-    received.foreach(_                                  := false.B)
-    memoryFailed.foreach(_                              := false.B)
-    divBatchValid                                       := false.B
-    divStarted.foreach(_                                := false.B)
-    divDone.foreach(_                                   := false.B)
-    fpStarted.foreach(_                                 := false.B)
-    fpDone.foreach(_                                    := false.B)
+    when(base + step >= limit)(finish()).otherwise {
+      base      := base + step
+      state     := capture
+      readPhase := 0.U
+    }
+    offered.foreach(_      := false.B)
+    issued.foreach(_       := false.B)
+    received.foreach(_     := false.B)
+    memoryFailed.foreach(_ := false.B)
+    divBatchValid          := false.B
+    divStarted.foreach(_   := false.B)
+    divDone.foreach(_      := false.B)
+    fpStarted.foreach(_    := false.B)
+    fpDone.foreach(_       := false.B)
   }
 
   io.vl                             := vl
   io.vtype                          := vtype
   io.vstart                         := vstart
-  io.busy                           := state =/= idle || resultValid
-  io.issue.ready                    := state === idle && !resultValid && !io.initialize
-  io.result.valid                   := resultValid
+  io.busy                           := state =/= idle || resultValid || registers.io.busy
+  io.issue.ready                    := state === idle && !resultValid && !registers.io.busy && !io.initialize
+  io.result.valid                   := resultValid && state === idle && !registers.io.busy
   io.result.bits                    := result
   when(io.result.fire)(resultValid  := false.B)
   when(io.vstartWrite.valid)(vstart := io.vstartWrite.bits)
@@ -257,7 +284,12 @@ class VectorCore(val b: GlobalConfig) extends Module {
     scalar1                := io.issue.bits.scalar1
     scalar2                := io.issue.bits.scalar2
     floatScalar            := io.issue.bits.floating
-    state                  := capture
+    state                  := snapshot
+    readPhase              := 0.U
+    readSent               := false.B
+    snapshotSent           := false.B
+    firstBatch             := true.B
+    writeSent              := false.B
     result                 := 0.U.asTypeOf(new VectorResult)
     base                   := vstart
     count                  := 0.U
@@ -271,50 +303,98 @@ class VectorCore(val b: GlobalConfig) extends Module {
     fpStarted.foreach(_    := false.B)
     fpDone.foreach(_       := false.B)
   }
-  when(state === capture) {
-    source      := registers.io.readWords
-    accumulator := registers.io.readWords(rs1)(0) & MuxLookup(
-      sew,
-      "hffffffffffffffff".U(64.W)
-    )(Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U))
-    state       := execute
-  }
 
   val instructionLegal = Wire(Bool())
-  val alu              = Seq.fill(p.laneNumber)(Instantiate(new IALU))
-  val falu             = Seq.fill(p.laneNumber)(Instantiate(new FALU))
-  val laneA            = Wire(Vec(p.laneNumber, UInt(64.W)))
-  val laneB            = Wire(Vec(p.laneNumber, UInt(64.W)))
-  val laneSelected     = Wire(Vec(p.laneNumber, Bool()))
-  val laneValue        = Wire(Vec(p.laneNumber, UInt(64.W)))
-  val laneFlags        = Wire(Vec(p.laneNumber, UInt(5.W)))
-  val laneLegal        = Wire(Vec(p.laneNumber, Bool()))
-  val fpComplete       = Wire(Vec(p.laneNumber, Bool()))
-  val gather           =
+  val alu:  Seq[Instance[IALU]] = Seq.fill(p.laneNumber)(Instantiate(new IALU))
+  val falu: Seq[Instance[FALU]] = Seq.fill(p.laneNumber)(Instantiate(new FALU))
+  val laneA        = Wire(Vec(p.laneNumber, UInt(64.W)))
+  val laneB        = Wire(Vec(p.laneNumber, UInt(64.W)))
+  val laneSelected = Wire(Vec(p.laneNumber, Bool()))
+  val laneValue    = Wire(Vec(p.laneNumber, UInt(64.W)))
+  val laneFlags    = Wire(Vec(p.laneNumber, UInt(5.W)))
+  val laneLegal    = Wire(Vec(p.laneNumber, Bool()))
+  val fpComplete   = Wire(Vec(p.laneNumber, Bool()))
+  val gather       =
     integer && !multiply && (op === 12.U || op === 14.U && kind === 0.U)
-  val slide            =
+  val slide        =
     integer && !multiply && (op === 14.U || op === 15.U) && kind =/= 0.U
-  val slideOne         = integer && multiply && (op === 14.U || op === 15.U)
-  val readPortCount    = math.max(p.laneNumber, p.memoryPorts)
+  val slideOne     = integer && multiply && (op === 14.U || op === 15.U)
 
   val operandReads = (0 until readPortCount).map { port =>
     val index          = base + port.U
     val scalar         = Mux(kind === 3.U, Cat(Fill(59, rs1(4)), rs1), Cat(Fill(32, scalar1(31)), scalar1))
     val floatingScalar = Mux(sew === 2.U && !floatScalar(63, 32).andR, "h7fc00000".U, floatScalar)
     val b              =
-      Mux(vectorOperand, element(rs1, index, Mux(gather && op === 14.U, 1.U, sew)), Mux(fp, floatingScalar, scalar))
+      Mux(
+        vectorOperand,
+        element(operandWords(port), index, Mux(gather && op === 14.U, 1.U, sew)),
+        Mux(fp, floatingScalar, scalar)
+      )
     val slideOffset    = Mux(slideOne, 1.U, Mux(kind === 3.U, rs1, scalar1))
     val sourceIndex    = Mux(gather && !slide, b, Mux(op === 14.U, index - slideOffset, index + slideOffset))
     val permuteRead    = gather || slide || slideOne
     // element already keeps only the low group bit offset; upper index bits cannot affect its read.
-    val a              = element(rs2, Mux(permuteRead, sourceIndex(31, 0), index), Mux(permuteRead, sew, sourceSew))
-    val c              = element(rd, index, Mux(fp, sew, destinationSew))
+    val a              = element(
+      sourceWords(port),
+      Mux(scalarMoveOut, 0.U, Mux(permuteRead, sourceIndex(31, 0), index)),
+      Mux(permuteRead, sew, sourceSew)
+    )
+    val c              = element(destinationWords(port), index, Mux(fp, sew, destinationSew))
     (a, b, c, sourceIndex)
+  }
+
+  val permuteRead = gather || slide || slideOne
+  registers.io.snapshot.valid                   := state === snapshot && permuteRead && !snapshotSent && !io.initialize
+  registers.io.snapshot.bits                    := rs2
+  registers.io.snapshotDone.ready               := state === snapshot && snapshotSent && !io.initialize
+  when(registers.io.snapshot.fire)(snapshotSent := true.B)
+  when(state === snapshot && !permuteRead || registers.io.snapshotDone.fire) {
+    state     := Mux(configure, execute, capture)
+    readPhase := 0.U
+    readSent  := false.B
+  }
+
+  registers.io.read.valid       := state === capture && !readSent && !io.initialize
+  registers.io.readResult.ready := state === capture && readSent && !io.initialize
+  for (port <- 0 until readPortCount) {
+    val index       = base + port.U
+    val maskSource  = maskLogical || population || first
+    val sourceIndex = Mux(scalarMoveOut, 0.U, Mux(permuteRead, operandReads(port)._4(31, 0), index))
+    val sourceWidth = Mux(scalarMoveOut || permuteRead, sew, sourceSew)
+    val shift       = sourceIndex << (sourceWidth.pad(3) + 3.U)
+    registers.io.read.bits(port).address  := MuxLookup(readPhase, wordAddress(rs1, 0.U, sew))(
+      Seq(
+        0.U -> wordAddress(0.U, index, sew, true.B),
+        1.U -> wordAddress(rs1, index, Mux(gather && op === 14.U, 1.U, sew), maskLogical),
+        2.U -> Mux(permuteRead, shift >> 6, wordAddress(rs2, sourceIndex, sourceWidth, maskSource)),
+        3.U -> wordAddress(rd, index, Mux(fp, sew, destinationSew))
+      )
+    )
+    registers.io.read.bits(port).snapshot := readPhase === 2.U && permuteRead
+  }
+  when(registers.io.read.fire)(readSent := true.B)
+  when(registers.io.readResult.fire) {
+    readSent              := false.B
+    switch(readPhase) {
+      is(0.U)(maskWords        := registers.io.readResult.bits)
+      is(1.U)(operandWords     := registers.io.readResult.bits)
+      is(2.U)(sourceWords      := registers.io.readResult.bits)
+      is(3.U)(destinationWords := registers.io.readResult.bits)
+      is(4.U) {
+        accumulator := registers.io.readResult.bits(0) & MuxLookup(sew, "hffffffffffffffff".U(64.W))(
+          Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
+        )
+        firstBatch  := false.B
+      }
+    }
+    when(readPhase === 4.U || readPhase === 3.U && !firstBatch) {
+      state := execute
+    }.otherwise(readPhase := readPhase + 1.U)
   }
 
   for (lane <- 0 until p.laneNumber) {
     val index          = base + lane.U
-    val selected       = maskElement(0.U, index)
+    val selected       = maskElement(maskWords(lane), index)
     val scalar         = Mux(
       kind === 3.U,
       Cat(Fill(59, rs1(4)), rs1),
@@ -395,8 +475,8 @@ class VectorCore(val b: GlobalConfig) extends Module {
       scalar,
       Mux(!up && sourceIndex >= vlmax, 0.U, a)
     )
-    val maskA         = maskElement(rs2, index)
-    val maskB         = maskElement(rs1, index)
+    val maskA         = maskElement(sourceWords(lane), index)
+    val maskB         = maskElement(operandWords(lane), index)
     val maskResult    = MuxLookup(op, false.B)(
       Seq(
         24.U -> (maskA && !maskB),
@@ -450,7 +530,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     )
 
   val operandGroupLegal =
-    !vectorOperand || op === 18.U || reduction || scalarMoveOut || maskLogical ||
+    !vectorOperand || op === 18.U || reduction || scalarMoveOut || maskLogical || population || first ||
       groupLegal(rs1, sew)
 
   val aluLegal = alu
@@ -535,7 +615,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     required(
       port
     )               := (port < p.laneNumber).B && index < limit && (wholeMemory || vm || maskElement(
-      0.U,
+      maskWords(port),
       index
     ))
     addresses(port) := scalar1 + Mux(
@@ -641,7 +721,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     }.elsewhen(!legal) {
       finish(true.B, 2.U, instruction)
     }.elsewhen(scalarMoveOut) {
-      val value = element(rs2, 0.U, sew)
+      val value = element(sourceWords(0), 0.U, sew)
       when(fp) {
         result.floatWrite := true.B
         result.floatData  := Mux(
@@ -708,11 +788,11 @@ class VectorCore(val b: GlobalConfig) extends Module {
     }.elsewhen(population || first) {
       val selected = VecInit((0 until p.laneNumber).map { lane =>
         val index = base + lane.U
-        index < vl && maskElement(rs2, index) &&
-        (vm || maskElement(0.U, index))
+        index < vl && maskElement(sourceWords(lane), index) &&
+        (vm || maskElement(maskWords(lane), index))
       })
       val total    = count + PopCount(selected)
-      count            := total
+      count := total
       when(first && selected.asUInt.orR || base + p.laneNumber.U >= vl) {
         result.scalarWrite := rd =/= 0.U
         result.scalarData  := Mux(
@@ -725,7 +805,11 @@ class VectorCore(val b: GlobalConfig) extends Module {
           total
         )
         finish()
-      }.otherwise(base := base + p.laneNumber.U)
+      }.otherwise {
+        base      := base + p.laneNumber.U
+        readPhase := 0.U
+        state     := capture
+      }
     }.elsewhen(intReduction) {
       var reduced: UInt = accumulator
       for (lane <- 0 until p.laneNumber) {
@@ -804,8 +888,19 @@ class VectorCore(val b: GlobalConfig) extends Module {
       }
     }
   }
+  when(state === execute && writes.map(_.valid).reduce(_ || _) && !io.initialize) {
+    pendingWrites := writes
+    resumeState   := Mux(finishRequested, idle, capture)
+    state         := commit
+    writeSent     := false.B
+  }
   when(io.initialize) {
     state                := idle
+    readSent             := false.B
+    snapshotSent         := false.B
+    writeSent            := false.B
+    firstBatch           := true.B
+    readPhase            := 0.U
     resultValid          := false.B
     vl                   := 0.U
     vtype                := "h80000000".U

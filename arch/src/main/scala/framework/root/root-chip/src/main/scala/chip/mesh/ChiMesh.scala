@@ -2,7 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi._
 
 /**
@@ -194,10 +194,14 @@ class ChiMeshEndpoint(
     val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
   })
 
-  val txReq = Instantiate(new ChiMeshPacketizer(mesh, reqBits, ChiMeshVirtualChannel.Request, localX, localY, nodeMap))
-  val txRsp = Instantiate(new ChiMeshPacketizer(mesh, rspBits, ChiMeshVirtualChannel.Response, localX, localY, nodeMap))
-  val txDat = Instantiate(new ChiMeshPacketizer(mesh, datBits, ChiMeshVirtualChannel.Data, localX, localY, nodeMap))
-  val txSnp = Instantiate(new ChiMeshPacketizer(mesh, snpBits, ChiMeshVirtualChannel.Snoop, localX, localY, nodeMap))
+  val txReq: Instance[ChiMeshPacketizer] =
+    Instantiate(new ChiMeshPacketizer(mesh, reqBits, ChiMeshVirtualChannel.Request, localX, localY, nodeMap))
+  val txRsp: Instance[ChiMeshPacketizer] =
+    Instantiate(new ChiMeshPacketizer(mesh, rspBits, ChiMeshVirtualChannel.Response, localX, localY, nodeMap))
+  val txDat: Instance[ChiMeshPacketizer] =
+    Instantiate(new ChiMeshPacketizer(mesh, datBits, ChiMeshVirtualChannel.Data, localX, localY, nodeMap))
+  val txSnp: Instance[ChiMeshPacketizer] =
+    Instantiate(new ChiMeshPacketizer(mesh, snpBits, ChiMeshVirtualChannel.Snoop, localX, localY, nodeMap))
   txReq.io.in <> io.txReq
   txRsp.io.in <> io.txRsp
   txDat.io.in <> io.txDat
@@ -211,10 +215,14 @@ class ChiMeshEndpoint(
     io.meshOut(vc).bits  := 0.U.asTypeOf(new MeshFlit(mesh))
     io.meshIn(vc).ready  := false.B
   }
-  val rxReq = Instantiate(new ChiMeshDepacketizer(mesh, reqBits, ChiMeshVirtualChannel.Request))
-  val rxRsp     = Instantiate(new ChiMeshDepacketizer(mesh, rspBits, ChiMeshVirtualChannel.Response))
-  val rxDat     = Instantiate(new ChiMeshDepacketizer(mesh, datBits, ChiMeshVirtualChannel.Data))
-  val rxSnp     = Instantiate(new ChiMeshDepacketizer(mesh, snpBits, ChiMeshVirtualChannel.Snoop))
+  val rxReq: Instance[ChiMeshDepacketizer] =
+    Instantiate(new ChiMeshDepacketizer(mesh, reqBits, ChiMeshVirtualChannel.Request))
+  val rxRsp: Instance[ChiMeshDepacketizer] =
+    Instantiate(new ChiMeshDepacketizer(mesh, rspBits, ChiMeshVirtualChannel.Response))
+  val rxDat: Instance[ChiMeshDepacketizer] =
+    Instantiate(new ChiMeshDepacketizer(mesh, datBits, ChiMeshVirtualChannel.Data))
+  val rxSnp: Instance[ChiMeshDepacketizer] =
+    Instantiate(new ChiMeshDepacketizer(mesh, snpBits, ChiMeshVirtualChannel.Snoop))
   val receivers = Seq(rxReq, rxRsp, rxDat, rxSnp)
   for ((receiver, vc) <- receivers.zipWithIndex) { receiver.io.in <> io.meshIn(vc) }
   io.rxReq <> rxReq.io.out
@@ -240,7 +248,7 @@ class ChiMeshRequesterEndpoint(
     val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
   })
 
-  val endpoint = Instantiate(new ChiMeshEndpoint(p, mesh, localX, localY, nodeMap))
+  val endpoint: Instance[ChiMeshEndpoint] = Instantiate(new ChiMeshEndpoint(p, mesh, localX, localY, nodeMap))
   endpoint.io.txReq.valid           := io.chi.req.valid
   endpoint.io.txReq.bits.targetNode := io.chi.req.bits.tgtId
   endpoint.io.txReq.bits.flit       := io.chi.req.bits.packed
@@ -295,7 +303,7 @@ class ChiMeshHomeEndpoint(
     val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
   })
 
-  val endpoint = Instantiate(new ChiMeshEndpoint(p, mesh, localX, localY, nodeMap))
+  val endpoint: Instance[ChiMeshEndpoint] = Instantiate(new ChiMeshEndpoint(p, mesh, localX, localY, nodeMap))
   endpoint.io.txReq.valid           := false.B
   endpoint.io.txReq.bits            := 0.U.asTypeOf(endpoint.io.txReq.bits)
   endpoint.io.txRsp.valid           := io.rsp.valid
@@ -349,8 +357,10 @@ class ChiMeshHomeSnoopLoopback extends Module {
     val out = Decoupled(UInt(snpBits.W))
   })
 
-  val home     = Instantiate(new ChiMeshHomeEndpoint(chi, mesh, localX = 0, localY = 0, nodeMap = map, agents = 2))
-  val receiver = Instantiate(new ChiMeshEndpoint(chi, mesh, localX = 1, localY = 0, nodeMap = map))
+  val home:     Instance[ChiMeshHomeEndpoint] =
+    Instantiate(new ChiMeshHomeEndpoint(chi, mesh, localX = 0, localY = 0, nodeMap = map, agents = 2))
+  val receiver: Instance[ChiMeshEndpoint]     =
+    Instantiate(new ChiMeshEndpoint(chi, mesh, localX = 1, localY = 0, nodeMap = map))
   home.io.snp(0).valid    := io.in.valid
   home.io.snp(0).bits.unpack(io.in.bits)
   io.in.ready             := home.io.snp(0).ready
@@ -403,7 +413,8 @@ class ChiMeshEndpointLoopback extends Module {
     val out = Decoupled(UInt(datBits.W))
   })
 
-  val endpoint = Instantiate(new ChiMeshEndpoint(chi, mesh, localX = 0, localY = 0, nodeMap = map))
+  val endpoint: Instance[ChiMeshEndpoint] =
+    Instantiate(new ChiMeshEndpoint(chi, mesh, localX = 0, localY = 0, nodeMap = map))
   endpoint.io.txDat <> io.in
   endpoint.io.txReq.valid := false.B
   endpoint.io.txReq.bits  := 0.U.asTypeOf(endpoint.io.txReq.bits)
@@ -442,7 +453,7 @@ class ChiMeshCodecLoopback extends Module {
     val observed      = Output(new MeshFlit(mesh))
   })
 
-  val tx = Instantiate(new ChiMeshPacketizer(
+  val tx: Instance[ChiMeshPacketizer] = Instantiate(new ChiMeshPacketizer(
     mesh,
     flitBits,
     virtualChannel = ChiMeshVirtualChannel.Data,
@@ -451,7 +462,8 @@ class ChiMeshCodecLoopback extends Module {
     nodeMap = map
   ))
 
-  val rx = Instantiate(new ChiMeshDepacketizer(mesh, flitBits, virtualChannel = ChiMeshVirtualChannel.Data))
+  val rx: Instance[ChiMeshDepacketizer] =
+    Instantiate(new ChiMeshDepacketizer(mesh, flitBits, virtualChannel = ChiMeshVirtualChannel.Data))
   io.in <> tx.io.in
   rx.io.in.valid   := tx.io.out.valid && !io.pause
   rx.io.in.bits    := tx.io.out.bits

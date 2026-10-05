@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 @instantiable
 class ScalarExecution extends Module {
@@ -23,7 +23,7 @@ class ScalarExecution extends Module {
     val nextPc      = Output(UInt(32.W))
   })
 
-  val divider = Instantiate(new DivRem(32))
+  val divider: Instance[DivRem] = Instantiate(new DivRem(32))
   divider.io.request <> io.divRequest
   io.divResponse <> divider.io.response
   divider.io.clear := io.clear

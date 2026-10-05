@@ -70,8 +70,14 @@ class protocol_test extends ip_test;
     reads++;
   endtask
   task reply(bit pf = 0, bit af = 0);
+    bit [511:0] line;
     response.bits <= '0;
     response.bits[`FF(RESPONSE, DATA)] <= saved_word;
+    for (int word = 0; word < 8; word++)
+      line[word*64+:64] =
+          fetch_ref_word((saved_request[`FF(REQUEST, ADDR)] & ~64'h3f) + word * 8, version);
+    response.bits[`FF(RESPONSE, LINE)] <= line;
+    response.bits[`FF(RESPONSE, LINEEXECUTABLE)] <= 0;
     response.bits[`FF(RESPONSE, PAGEFAULT)] <= pf;
     response.bits[`FF(RESPONSE, ACCESSFAULT)] <= af;
     response.valid <= 1;

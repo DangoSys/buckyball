@@ -35,53 +35,71 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     val dropReservation = Input(Bool())
   })
 
-  val valid    = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
-  val writable = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
-  val dirty    = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
-  val tags     = Reg(Vec(cacheLines, UInt((p.addressBits - 6).W)))
-  val data     = Mem(cacheLines, UInt(512.W))
+  val valid           = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
+  val writable        = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
+  val dirty           = RegInit(VecInit(Seq.fill(cacheLines)(false.B)))
+  val tags            = Reg(Vec(cacheLines, UInt((p.addressBits - 6).W)))
+  val data            = SyncReadMem(cacheLines, UInt(512.W))
+  val memoryRead      = WireDefault(false.B)
+  val memoryWrite     = WireDefault(false.B)
+  val memoryAddress   = WireDefault(0.U(log2Ceil(cacheLines).W))
+  val memoryWriteData = WireDefault(0.U(512.W))
+  val memoryData      = data.readWrite(memoryAddress, memoryWriteData, memoryRead || memoryWrite, memoryWrite)
+  assert(!(memoryRead && memoryWrite), "CHI cache data port conflict")
+  val probePending    = RegInit(false.B)
+  val probeCommand    = Reg(new CacheProbeRequest(p))
+  val probeHit        = Reg(Bool())
+  val probeLine       = Reg(UInt(512.W))
+  val lookupLine      = Reg(UInt(512.W))
+  val lookupFresh     = RegNext(io.access.fire, false.B)
+  when(lookupFresh)(lookupLine := memoryData)
+  val lookupData     = Mux(lookupFresh, memoryData, lookupLine)
+  val fillCommitData = Reg(UInt(512.W))
+  val fillFailed     = Reg(Bool())
+  val fillDoWrite    = Reg(Bool())
   def index(addr: UInt): UInt = addr(log2Ceil(cacheLines) + log2Ceil(bankCount) + 5, log2Ceil(bankCount) + 6)
   def tag(addr:   UInt): UInt = addr(p.addressBits - 1, 6)
-  val idle :: lookup :: evictReq :: evictWait :: copyback :: getReq :: fill :: ack :: respond :: Nil = Enum(9)
-  val state                                                                                          = RegInit(idle)
-  val command                                                                                        = Reg(new CacheAccess(p))
-  val reservation                                                                                    = RegInit(false.B)
-  val reservationAddress                                                                             = Reg(UInt(p.addressBits.W))
-  val reservationWord                                                                                = Reg(Bool())
-  val isLR                                                                                           = command.atomic === CacheAtomic.LR.U
-  val isSC                                                                                           = command.atomic === CacheAtomic.SC.U
-  val modifies                                                                                       = command.write || (command.atomic >= CacheAtomic.Swap.U && command.atomic <= CacheAtomic.MaxU.U) || isSC
-  val reservationMatch                                                                               = reservation && reservationAddress === command.addr && reservationWord === command.atomicWord
-  val victimAddress                                                                                  = Reg(UInt(p.addressBits.W))
-  val victimWasDirty                                                                                 = Reg(Bool())
-  val copyData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
-  val copyResp                                                                                       = Reg(UInt(3.W))
-  val bufferId                                                                                       = Reg(UInt(p.dbIdBits.W))
-  val completionId                                                                                   = Reg(UInt(p.dbIdBits.W))
-  val count                                                                                          = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
-  val fillData                                                                                       = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
-  val fillSeen                                                                                       = RegInit(0.U(p.beatsPerLine.W))
-  val fillPermission                                                                                 = Reg(UInt(3.W))
-  val fillDbid                                                                                       = Reg(UInt(p.dbIdBits.W))
-  val fillError                                                                                      = RegInit(false.B)
-  val answer                                                                                         = Reg(new CacheResult(config.resultLineBits))
-  val hits                                                                                           = RegInit(0.U(32.W))
-  val misses                                                                                         = RegInit(0.U(32.W))
+  val idle :: lookup :: evictReq :: evictWait :: copyback :: getReq :: fill :: fillCommit :: ack :: respond :: Nil =
+    Enum(10)
+  val state                                                                                                        = RegInit(idle)
+  val command                                                                                                      = Reg(new CacheAccess(p))
+  val reservation                                                                                                  = RegInit(false.B)
+  val reservationAddress                                                                                           = Reg(UInt(p.addressBits.W))
+  val reservationWord                                                                                              = Reg(Bool())
+  val isLR                                                                                                         = command.atomic === CacheAtomic.LR.U
+  val isSC                                                                                                         = command.atomic === CacheAtomic.SC.U
+  val modifies                                                                                                     = command.write || (command.atomic >= CacheAtomic.Swap.U && command.atomic <= CacheAtomic.MaxU.U) || isSC
+  val reservationMatch                                                                                             = reservation && reservationAddress === command.addr && reservationWord === command.atomicWord
+  val victimAddress                                                                                                = Reg(UInt(p.addressBits.W))
+  val victimWasDirty                                                                                               = Reg(Bool())
+  val copyData                                                                                                     = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
+  val copyResp                                                                                                     = Reg(UInt(3.W))
+  val bufferId                                                                                                     = Reg(UInt(p.dbIdBits.W))
+  val completionId                                                                                                 = Reg(UInt(p.dbIdBits.W))
+  val count                                                                                                        = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
+  val fillData                                                                                                     = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
+  val fillSeen                                                                                                     = RegInit(0.U(p.beatsPerLine.W))
+  val fillPermission                                                                                               = Reg(UInt(3.W))
+  val fillDbid                                                                                                     = Reg(UInt(p.dbIdBits.W))
+  val fillError                                                                                                    = RegInit(false.B)
+  val answer                                                                                                       = Reg(new CacheResult(config.resultLineBits))
+  val hits                                                                                                         = RegInit(0.U(32.W))
+  val misses                                                                                                       = RegInit(0.U(32.W))
   io.hits   := hits
   io.misses := misses
-  val ci                               = index(command.addr)
-  val siIdle :: siRsp :: siData :: Nil = Enum(3)
-  val snpState                         = RegInit(siIdle)
-  val snoop                            = Reg(new SnoopFlit(p))
-  val snoopData                        = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
-  val snoopResult                      = Reg(UInt(3.W))
-  val snoopCount                       = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
+  val ci                                             = index(command.addr)
+  val siIdle :: siReadWait :: siRsp :: siData :: Nil = Enum(4)
+  val snpState                                       = RegInit(siIdle)
+  val snoop                                          = Reg(new SnoopFlit(p))
+  val snoopData                                      = Reg(Vec(p.beatsPerLine, UInt(p.dataBits.W)))
+  val snoopResult                                    = Reg(UInt(3.W))
+  val snoopCount                                     = RegInit(0.U(math.max(1, log2Ceil(p.beatsPerLine)).W))
   // CHI B4.11.1: once fill data starts, a same-line snoop waits for the whole line.
   // Its pending VALID must not block the remaining DAT packets.
-  val deferSnoop                       = state === fill && (fillSeen.orR || io.chi.rxDat.valid) &&
+  val deferSnoop                                     = (state === fill || state === fillCommit) && (fillSeen.orR || io.chi.rxDat.valid) &&
     tag(io.chi.snp.bits.addr << 3) === tag(command.addr)
-  val noSnoop                          = snpState === siIdle && (!io.chi.snp.valid || deferSnoop)
-  io.access.ready := state === idle && noSnoop && !io.probe.map(_.valid).getOrElse(false.B)
+  val noSnoop                                        = snpState === siIdle && (!io.chi.snp.valid || deferSnoop)
+  io.access.ready := state === idle && noSnoop && !probePending && !io.probe.map(_.req.valid).getOrElse(false.B)
 
   when(io.access.fire) {
     assert(
@@ -92,29 +110,48 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     when(io.access.bits.atomic =/= CacheAtomic.None.U) {
       assert(!io.access.bits.write && io.access.bits.mask.andR, "Atomic operation requires a full operand")
     }
-    command := io.access.bits
-    state   := lookup
+    command       := io.access.bits
+    memoryRead    := true.B
+    memoryAddress := index(io.access.bits.addr)
+    state         := lookup
   }
 
-  // A probe acts only between demand operations and never in a cycle a snoop could be accepted.
   io.probe.foreach { probe =>
-    val pi = index(probe.addr)
-    probe.ready := state === idle && snpState === siIdle && !io.chi.snp.valid
-    probe.hit   := valid(pi) && tags(pi) === tag(probe.addr) && (!probe.write || writable(pi))
-    probe.value := (data(pi) >> (probe.addr(5, 3) << 6))(63, 0)
-    when(probe.valid && probe.ready && probe.hit) {
-      hits := hits + 1.U
-      when(probe.write) {
-        val bytes = Wire(Vec(64, UInt(8.W)))
-        bytes := data(pi).asTypeOf(bytes)
-        for (b <- 0 until 64) {
-          when(probe.addr(5, 3) === (b / 8).U && probe.mask(b % 8)) {
-            bytes(b) := probe.data((b % 8) * 8 + 7, (b % 8) * 8)
+    val pi = index(probe.req.bits.addr)
+    probe.req.ready := state === idle && snpState === siIdle && !io.chi.snp.valid && !probePending
+    val fresh = RegNext(probe.req.fire, false.B)
+    when(fresh)(probeLine := memoryData)
+    val line = Mux(fresh, memoryData, probeLine)
+    probe.complete.valid      := probePending && !probe.cancel && (!probeCommand.write || probe.retire)
+    probe.complete.bits.hit   := probeHit
+    probe.complete.bits.value := (line >> (probeCommand.addr(5, 3) << 6))(63, 0)
+    when(probe.req.fire) {
+      probePending  := true.B
+      probeCommand  := probe.req.bits
+      probeHit      := valid(pi) && tags(pi) === tag(probe.req.bits.addr) && (!probe.req.bits.write || writable(pi))
+      memoryRead    := true.B
+      memoryAddress := pi
+    }
+    when(probe.cancel) {
+      probePending := false.B
+    }.elsewhen(probe.complete.fire) {
+      probePending := false.B
+      when(probeHit) {
+        hits := hits + 1.U
+        when(probeCommand.write) {
+          val bytes = Wire(Vec(64, UInt(8.W)))
+          bytes := line.asTypeOf(bytes)
+          for (b <- 0 until 64) {
+            when(probeCommand.addr(5, 3) === (b / 8).U && probeCommand.mask(b % 8)) {
+              bytes(b) := probeCommand.data((b % 8) * 8 + 7, (b % 8) * 8)
+            }
           }
+          memoryWrite := true.B
+          memoryAddress                   := index(probeCommand.addr)
+          memoryWriteData                 := bytes.asUInt
+          dirty(index(probeCommand.addr)) := true.B
+          reservation                     := false.B
         }
-        data(pi) := bytes.asUInt
-        dirty(pi)   := true.B
-        reservation := false.B
       }
     }
   }
@@ -155,7 +192,7 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     bytes.asUInt
   }
 
-  when(state === lookup && noSnoop) {
+  when(state === lookup && snpState === siIdle) {
     val hit = valid(ci) && tags(ci) === tag(command.addr)
     when(command.atomic === CacheAtomic.Fence.U || (isSC && !reservationMatch)) {
       answer.data                        := Mux(isSC, 1.U, 0.U)
@@ -165,11 +202,12 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
       state                              := respond
     }.elsewhen(hit && (!modifies || writable(ci))) {
       hits                               := hits + 1.U
-      answer.data                        := Mux(isSC, 0.U, oldValue(data(ci)))
+      answer.data                        := Mux(isSC, 0.U, oldValue(lookupData))
       answer.error                       := false.B
-      if (config.lineResult) answer.line := data(ci)
+      if (config.lineResult) answer.line := lookupData
       when(modifies) {
-        data(ci) := merge(data(ci)); dirty(ci) := true.B; reservation := false.B
+        memoryWrite := true.B; memoryAddress := ci; memoryWriteData := merge(lookupData); dirty(ci) := true.B;
+        reservation := false.B
       }
       when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
       state                              := respond
@@ -178,6 +216,7 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
       when(valid(ci) && !hit) {
         victimAddress  := tags(ci) << 6
         victimWasDirty := dirty(ci)
+        copyData       := lookupData.asTypeOf(copyData)
         state          := evictReq
       }.otherwise(state := getReq)
     }
@@ -216,7 +255,6 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     val stillPresent = valid(vi) && tags(vi) === tag(victimAddress)
     when(victimWasDirty) {
       assert(r.opcode === Opcode.CompDBIDResp.U, "WriteBackFull requires CompDBIDResp")
-      copyData := data(vi).asTypeOf(copyData)
       copyResp := Mux(
         !stillPresent,
         CoherenceState.I.U,
@@ -268,28 +306,36 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     completionId   := d.dbid(p.dbIdBits - 1, 0)
     when(received.andR) {
       val failed = fillError || d.respErr =/= 0.U
-      when(!failed) {
-        assert(
-          d.resp === Mux(modifies, CoherenceState.UC.U, CoherenceState.SC.U),
-          "Home granted unexpected cache permission"
-        )
-        valid(ci) := true.B
-        val doWrite = modifies && (!isSC || reservationMatch)
-        writable(ci) := modifies
-        dirty(ci)    := doWrite
-        tags(ci)     := tag(command.addr)
-        data(ci)     := Mux(doWrite, merge(nextData.asUInt), nextData.asUInt)
-        when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
-      }
-      answer.data := Mux(failed, 0.U, Mux(isSC, !reservationMatch, oldValue(nextData.asUInt)))
+      fillCommitData                     := nextData.asUInt
+      fillFailed                         := failed
+      fillDoWrite                        := modifies && (!isSC || reservationMatch)
+      answer.data                        := Mux(failed, 0.U, Mux(isSC, !reservationMatch, oldValue(nextData.asUInt)))
       if (config.lineResult) answer.line := nextData.asUInt
       when(modifies)(reservation         := false.B)
       answer.error                       := failed
-      state                              := ack
+      state                              := fillCommit
     }
   }
+  when(state === fillCommit && noSnoop) {
+    when(!fillFailed) {
+      assert(
+        fillPermission === Mux(modifies, CoherenceState.UC.U, CoherenceState.SC.U),
+        "Home granted unexpected cache permission"
+      )
+      valid(ci) := true.B
+      val doWrite = fillDoWrite
+      writable(ci)    := modifies
+      dirty(ci)       := doWrite
+      tags(ci)        := tag(command.addr)
+      memoryWrite     := true.B
+      memoryAddress   := ci
+      memoryWriteData := Mux(doWrite, merge(fillCommitData), fillCommitData)
+      when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
+    }
+    state := ack
+  }
 
-  io.chi.snp.ready := snpState === siIdle && !deferSnoop
+  io.chi.snp.ready := snpState === siIdle && !deferSnoop && state =/= lookup && !probePending
   when(io.chi.snp.fire) {
     val s           = io.chi.snp.bits
     val address     = s.addr << 3
@@ -309,16 +355,22 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
       assert(!s.retToSrc.asBool, "Cache maintenance snoop requires RetToSrc zero")
     }
     snoop                                                                                   := s
-    snoopData                                                                               := data(i).asTypeOf(snoopData)
     snoopCount                                                                              := 0.U
     val finalState = Mux(!hit || invalidate, CoherenceState.I.U, CoherenceState.SC.U)
     snoopResult := finalState | Mux(hit && dirty(i) && !discard, CoherenceState.PassDirty.U, 0.U)
-    snpState    := Mux(hit && !discard && (dirty(i) || s.retToSrc.asBool), siData, siRsp)
+    val readsData = hit && !discard && (dirty(i) || s.retToSrc.asBool)
+    snpState := Mux(readsData, siReadWait, siRsp)
+    when(readsData) { memoryRead := true.B; memoryAddress := i }
     when(hit) {
       writable(i)               := false.B
       dirty(i)                  := false.B
       when(invalidate)(valid(i) := false.B)
     }
+  }
+
+  when(snpState === siReadWait) {
+    snoopData := memoryData.asTypeOf(snoopData)
+    snpState  := siData
   }
 
   io.chi.txRsp.valid       := snpState === siRsp || state === ack

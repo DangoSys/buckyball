@@ -76,13 +76,13 @@ class KernelMemory(val b: GlobalConfig) extends Module {
   val writeData        = VecInit((0 until 8).map(byte => word(8 * byte + 7, 8 * byte)))
   val writeMask        = (0 until 8).map(byte => wordMask(byte))
 
-  val constant0Read = constants0.read(line, read && activeConstant && !activeBuffer)
-  val constant1Read = constants1.read(line, read && activeConstant && activeBuffer)
-  val stackRead     = stack.read(line, read && !activeConstant)
-  val readData      = Mux(selectedConstant, Mux(selectedBuffer, constant1Read.asUInt, constant0Read.asUInt), stackRead.asUInt)
-  when(write && activeConstant && !activeBuffer)(constants0.write(line, writeData, writeMask))
-  when(write && activeConstant && activeBuffer)(constants1.write(line, writeData, writeMask))
-  when(write && !activeConstant)(stack.write(line, writeData, writeMask))
+  val constant0Enable = (read || write) && activeConstant && !activeBuffer
+  val constant1Enable = (read || write) && activeConstant && activeBuffer
+  val stackEnable     = (read || write) && !activeConstant
+  val constant0Read   = constants0.readWrite(line, writeData, writeMask, constant0Enable, write)
+  val constant1Read   = constants1.readWrite(line, writeData, writeMask, constant1Enable, write)
+  val stackRead       = stack.readWrite(line, writeData, writeMask, stackEnable, write)
+  val readData        = Mux(selectedConstant, Mux(selectedBuffer, constant1Read.asUInt, constant0Read.asUInt), stackRead.asUInt)
 
   when(arbiter.io.out.fire) {
     owner                      := arbiter.io.chosen

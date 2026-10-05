@@ -1439,7 +1439,7 @@ class RocketBB(
 }
 
 class RegFile(n: Int, w: Int, zero: Boolean = false) {
-  val rf = Mem(n, UInt(w.W))
+  val rf = Reg(Vec(n, UInt(w.W)))
   private def access(addr: UInt) = rf(~addr(log2Up(n) - 1, 0))
   private val reads   = ArrayBuffer[(UInt, UInt)]()
   private var canRead = true

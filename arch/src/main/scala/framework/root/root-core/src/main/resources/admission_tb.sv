@@ -101,6 +101,7 @@ module admission_tb;
       .clock(clock),
       .reset(control.reset),
       .io_resetVector(64'h80000000),
+      .io_time(64'b0),
       .io_timerInterrupt(1'b0),
       .io_softwareInterrupt(1'b0),
       .io_externalInterrupt(1'b0),

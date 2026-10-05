@@ -2,7 +2,7 @@ package framework.balldomain.kernel
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
 import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, KernelWriteBank}
@@ -34,7 +34,7 @@ class KernelBall(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   @public val kernelWriteBank   = IO(Valid(new KernelWriteBank(b)))
   @public val kernelFault       = IO(Output(Bool()))
 
-  private val engine         = Instantiate(new KernelEngine(b))
+  private val engine: Instance[KernelEngine] = Instantiate(new KernelEngine(b))
   private val loadOwner      = RegInit(false.B)
   private val loadPending    = RegInit(false.B)
   private val load           = Reg(new KernelDmaRequest)

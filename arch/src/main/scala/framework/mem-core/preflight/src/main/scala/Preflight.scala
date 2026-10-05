@@ -2,13 +2,14 @@ package memcore.memory.preflight
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.rnf.{CacheAccess, CacheResult}
 import memcore.memory.mmu.Walker
 
 /** Preparation only. A consumer retains the entire successful mapping until DMA retires. */
 @instantiable
 class Preflight(p: Params) extends Module {
+  val contextBits = log2Ceil(p.contexts)
 
   @public
   val io = IO(new Bundle {
@@ -40,9 +41,9 @@ class Preflight(p: Params) extends Module {
 
   def select(candidates: Vec[Bool], cursor: UInt): UInt = {
     MuxCase(
-      0.U(2.W),
+      0.U(contextBits.W),
       (0 until p.contexts).map { off =>
-        val index = (cursor + off.U)(1, 0)
+        val index = (cursor + off.U)(contextBits - 1, 0)
         candidates(index) -> index
       }
     )
@@ -51,19 +52,25 @@ class Preflight(p: Params) extends Module {
   val idle :: checkShape :: span :: sendSpan :: segment :: walk :: waitWalk :: authorize :: waitPermission :: save :: Nil =
     Enum(10)
   val state                                                                                                               = RegInit(idle)
-  val worker                                                                                                              = Reg(UInt(2.W))
-  val cursor                                                                                                              = RegInit(0.U(2.W))
+  val worker                                                                                                              = Reg(UInt(contextBits.W))
+  val cursor                                                                                                              = RegInit(0.U(contextBits.W))
   val row                                                                                                                 = Reg(UInt(32.W)); val column      = Reg(UInt(32.W))
   val dense                                                                                                               = Reg(Bool()); val wholeBytes      = Reg(UInt(32.W))
   val spanAddress                                                                                                         = Reg(UInt(64.W)); val spanBytes   = Reg(UInt(32.W))
   val spanLast                                                                                                            = Reg(Bool())
   val currentVA                                                                                                           = Reg(UInt(64.W)); val currentPA   = Reg(UInt(p.bus.addressBits.W))
   val currentBytes                                                                                                        = Reg(UInt(13.W)); val segmentLast = Reg(Bool())
+  val unionAuthorization                                                                                                  = RegInit(false.B)
+  val previous                                                                                                            = (counts(worker) - 1.U)(2, 0)
+  val previousVA                                                                                                          = vas(worker)(previous)
+  val previousPA                                                                                                          = pas(worker)(previous)
+  val previousEnd                                                                                                         = previousVA +& sizes(worker)(previous)
+  val currentEnd                                                                                                          = currentVA +& currentBytes
   val cancelSegmenter                                                                                                     = WireDefault(false.B)
-  val splitter                                                                                                            = Instantiate(new Segmenter(4096, 4096))
+  val splitter: Instance[Segmenter] = Instantiate(new Segmenter(4096, 4096))
   splitter.io.cancel := cancelSegmenter
-  val walker = Instantiate(new Walker(p.bus))
-  val cmd    = commands(worker)
+  val walker: Instance[Walker] = Instantiate(new Walker(p.bus))
+  val cmd = commands(worker)
 
   def finish(code: UInt, address: UInt): Unit = {
     errors(worker) := code; faultVA(worker) := address; phase(worker) := ready; state := idle
@@ -118,6 +125,9 @@ class Preflight(p: Params) extends Module {
     currentVA   := splitter.io.segment.bits.addr; currentBytes := splitter.io.segment.bits.bytes(12, 0)
     segmentLast := splitter.io.segment.bits.last; state        := walk
   }
+  walker.io.flush                         := false.B
+  walker.io.lookup.config                 := 0.U.asTypeOf(walker.io.lookup.config)
+  walker.io.lookup.req                    := 0.U.asTypeOf(walker.io.lookup.req)
   walker.io.config.mode                   := cmd.mode; walker.io.config.rootPpn    := cmd.rootPpn
   walker.io.req.valid                     := state === walk
   walker.io.req.bits.vaddr                := currentVA; walker.io.req.bits.write   := cmd.write; walker.io.req.bits.execute := false.B
@@ -129,7 +139,12 @@ class Preflight(p: Params) extends Module {
     when(walker.io.resp.bits.pageFault)(finish(Error.PageFault.U, currentVA))
       .elsewhen(walker.io.resp.bits.accessFault || end(p.bus.addressBits + 1, p.bus.addressBits).orR) {
         finish(Error.AccessFault.U, currentVA)
-      }.otherwise { currentPA := walker.io.resp.bits.paddr; state := authorize }
+      }.otherwise {
+        currentPA          := walker.io.resp.bits.paddr
+        unionAuthorization := counts(worker) =/= 0.U && previousVA(63, 12) === currentVA(63, 12) &&
+          currentVA > previousEnd && previousPA +& (currentVA - previousVA) === walker.io.resp.bits.paddr
+        state              := authorize
+      }
   }
   val pteIdle :: pteAsk :: pteWait :: pteIssue :: pteReturn :: pteReject :: pteRejectReturn :: Nil = Enum(7)
   val pteState = RegInit(pteIdle)
@@ -137,8 +152,16 @@ class Preflight(p: Params) extends Module {
   io.authorization.valid                                        := (pteState === pteAsk || state === authorize) && !reset.asBool
   io.authorization.bits.id                                      := cmd.id
   io.authorization.bits.isPte                                   := pteState === pteAsk
-  io.authorization.bits.pa                                      := Mux(pteState === pteAsk, walker.io.access.bits.addr, currentPA)
-  io.authorization.bits.bytes                                   := Mux(pteState === pteAsk, 8.U, currentBytes)
+  io.authorization.bits.pa                                      := Mux(
+    pteState === pteAsk,
+    walker.io.access.bits.addr,
+    Mux(unionAuthorization, previousPA, currentPA)
+  )
+  io.authorization.bits.bytes                                   := Mux(
+    pteState === pteAsk,
+    8.U,
+    Mux(unionAuthorization, currentEnd - previousVA, currentBytes)
+  )
   io.authorization.bits.write                                   := pteState =/= pteAsk && cmd.write
   io.authorization.bits.privilege                               := Mux(pteState === pteAsk, 1.U, cmd.privilege)
   when(io.authorization.fire) {
@@ -149,7 +172,11 @@ class Preflight(p: Params) extends Module {
     assert(io.permission.bits.id === cmd.id, "Preflight permission response tag mismatch")
     when(pteState === pteWait)(pteState := Mux(io.permission.bits.allow, pteIssue, pteReject))
       .otherwise {
-        when(io.permission.bits.allow)(state := save).otherwise(finish(Error.AccessFault.U, currentVA))
+        when(io.permission.bits.allow)(state := save)
+          .elsewhen(unionAuthorization) {
+            unionAuthorization := false.B
+            state              := authorize
+          }.otherwise(finish(Error.AccessFault.U, currentVA))
       }
   }
   io.pteRequest.valid                                           := pteState === pteIssue && walker.io.access.valid && !reset.asBool
@@ -162,15 +189,10 @@ class Preflight(p: Params) extends Module {
   walker.io.result.bits.error                                   := pteState === pteRejectReturn || io.pteResponse.bits.error
   io.pteResponse.ready                                          := pteState === pteReturn && walker.io.result.ready && !reset.asBool
   when(walker.io.result.fire)(pteState                          := pteIdle)
-  // A segment that starts inside or right after the previous range of the same page extends it:
-  // one page shares one translation, so its PA stays contiguous. Strided shapes such as 2-D tiles
-  // then need one range per row and page instead of one per element.
-  val previous     = (counts(worker) - 1.U)(2, 0)
-  val previousVA   = vas(worker)(previous)
-  val previousEnd  = previousVA +& sizes(worker)(previous)
-  val currentEnd   = currentVA +& currentBytes
+  // Touching spans already cover their union. Gapped spans merge only after that whole
+  // same-page physical union was explicitly authorized; a denied union keeps exact spans.
   val merge        = counts(worker) =/= 0.U && previousVA(63, 12) === currentVA(63, 12) &&
-    currentVA >= previousVA && currentVA <= previousEnd
+    currentVA >= previousVA && (currentVA <= previousEnd || unionAuthorization)
   val saveCapacity = merge || counts(worker) =/= p.maxRanges.U
   when(state === save && !saveCapacity)(finish(Error.Capacity.U, currentVA))
   when(state === save && saveCapacity) {
@@ -192,8 +214,8 @@ class Preflight(p: Params) extends Module {
         state               := span
       }.otherwise(state := segment)
   }
-  val offer        = RegInit(false.B); val outputSlot = Reg(UInt(2.W)); val outputIndex = Reg(UInt(3.W))
-  val outputCursor = RegInit(0.U(2.W))
+  val offer        = RegInit(false.B); val outputSlot = Reg(UInt(contextBits.W)); val outputIndex = Reg(UInt(3.W))
+  val outputCursor = RegInit(0.U(contextBits.W))
   val prepared     = VecInit(phase.map(_ === ready))
   when(!offer && prepared.asUInt.orR) {
     offer := true.B; outputSlot := select(prepared, outputCursor); outputIndex := 0.U

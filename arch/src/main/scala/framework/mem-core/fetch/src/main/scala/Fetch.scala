@@ -24,10 +24,11 @@ class Request extends Bundle {
 
 /** `line` is the whole 64-byte line holding the requested doubleword. */
 class Response extends Bundle {
-  val data        = UInt(64.W)
-  val line        = UInt(512.W)
-  val pageFault   = Bool()
-  val accessFault = Bool()
+  val data           = UInt(64.W)
+  val line           = UInt(512.W)
+  val lineExecutable = Bool()
+  val pageFault      = Bool()
+  val accessFault    = Bool()
 }
 
 class Packet(p: Params) extends Bundle {
@@ -130,7 +131,7 @@ class Fetch(p: Params) extends Module {
   when(io.request.fire)(state := receive)
   when(io.response.fire) {
     val fault = io.response.bits.pageFault || io.response.bits.accessFault
-    when(!fault && !staleFill && !io.flush && !io.invalidate) {
+    when(!fault && io.response.bits.lineExecutable && !staleFill && !io.flush && !io.invalidate) {
       val victim = ~recent
       bufferValid(victim)   := true.B
       bufferLine(victim)    := command.addr(63, 6)

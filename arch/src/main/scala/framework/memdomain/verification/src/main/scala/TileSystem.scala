@@ -2,7 +2,7 @@ package framework.memdomain.verification
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.configloader.ExampleTopology
 import framework.system.tile.Tile
 import framework.system.memory.Memory
@@ -27,9 +27,9 @@ class TileSystem(
   ram:             RamParams,
   ddr:             DdrParams)
     extends Module {
-  val system =
+  val system: Instance[framework.system.System] =
     Instantiate(new framework.system.System(topology, cpuPhysicalBits, memory, l1, regions, tracking, ram, ddr))
   @public
-  val io     = IO(chiselTypeOf(system.io))
+  val io = IO(chiselTypeOf(system.io))
   io <> system.io
 }

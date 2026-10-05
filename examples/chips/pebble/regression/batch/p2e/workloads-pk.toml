@@ -1,5 +1,0 @@
-[workloads]
-tests = [
-  "pebble-pebble-mlirtest-tile_mega_conv2d_k5_tail-linux.hex",
-  "fw_payload-v1-t1-pebble-pk.hex",
-]

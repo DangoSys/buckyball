@@ -2,7 +2,7 @@ package framework.memdomain.backend.mmio
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.memdomain.backend.banks.SramWriteIO
 import framework.top.GlobalConfig
 
@@ -37,8 +37,8 @@ class MmioPool(val b: GlobalConfig) extends Module {
   })
 
   // Instantiate components
-  val banks  = Seq.fill(b.memDomain.mmioBankNum)(Instantiate(new MmioBank(b)))
-  val router = Instantiate(new MmioRouter(b))
+  val banks:  Seq[Instance[MmioBank]] = Seq.fill(b.memDomain.mmioBankNum)(Instantiate(new MmioBank(b)))
+  val router: Instance[MmioRouter]    = Instantiate(new MmioRouter(b))
 
   // MMIO read addresses are already globally encoded; no region translation.
   router.io.ballReq <> io.ballReq

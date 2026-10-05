@@ -2,7 +2,7 @@ package hier.tile.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import hier.core.rocket.Core
 import memcore.bus.chi._
@@ -25,6 +25,7 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
   @public
   val io = IO(new Bundle {
     val resetVector      = Input(UInt(64.W))
+    val time             = Input(UInt(64.W))
     val memoryReq        = Decoupled(new LineRequest(c))
     val memoryResp       = Flipped(Decoupled(new LineResponse(c)))
     val uncachedRequest  = Vec(cores, Decoupled(new UncachedRequest(cp)))
@@ -44,7 +45,7 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
     val observedRxDat    = Output(Valid(new DataFlit(c)))
   })
 
-  val home = Instantiate(new Home(memory))
+  val home: Instance[Home] = Instantiate(new Home(memory))
   home.io.active            := true.B
   home.io.blockRequesterRsp := false.B
   io.memoryReq <> home.io.memoryReq
@@ -57,7 +58,7 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
   io.observedRxRsp          := home.io.observedRxRsp
   io.observedRxDat          := home.io.observedRxDat
   // Requester i is core i's data L1; requester cores + i is its instruction L1.
-  val core =
+  val core: Seq[Instance[Core]] =
     Seq.tabulate(cores)(i => Instantiate(new Core(l1.copy(nodeId = i + 1), l1.copy(nodeId = cores + i + 1), regions)))
   for (i <- 0 until cores) {
     core(i).io.timerInterrupt              := false.B
@@ -66,6 +67,7 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
     core(i).io.supervisorExternalInterrupt := false.B
     core(i).io.hartId                      := i.U
     core(i).io.resetVector                 := io.resetVector
+    core(i).io.time                        := io.time
     home.io.requesters(i) <> core(i).io.chi
     home.io.requesters(cores + i) <> core(i).io.instructionChi
     io.uncachedRequest(i) <> core(i).io.uncachedRequest

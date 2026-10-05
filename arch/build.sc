@@ -39,12 +39,17 @@ trait FrameworkModule extends SbtModule {
 
 val frameworkRoot = os.pwd / "src" / "main" / "scala" / "framework"
 
+object queue extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "queue"
+}
+
 object axis extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "axis"
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
 
 object axi4 extends FrameworkModule {
+  override def moduleDeps = Seq(queue)
   override def moduleRoot = frameworkRoot / "mem-core" / "axi4"
   override def mainClass = Some("memcore.bus.axi4.Emit")
 }
@@ -56,6 +61,7 @@ object ddr extends FrameworkModule {
 }
 
 object chi extends FrameworkModule {
+  override def moduleDeps = Seq(queue)
   override def moduleRoot = frameworkRoot / "mem-core" / "chi"
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
 }
@@ -98,6 +104,7 @@ object bank extends FrameworkModule {
 }
 
 object cache extends FrameworkModule {
+  override def moduleDeps = Seq(queue)
   override def moduleRoot = frameworkRoot / "mem-core" / "cache"
   override def sources = T.sources { super.sources() ++ Seq(PathRef(moduleRoot / "configs")) }
   override def ivyDeps = super.ivyDeps() ++ Agg(ivy"tech.sparse::toml-scala:0.2.2")
@@ -107,7 +114,7 @@ object cache extends FrameworkModule {
 object mesh_shm extends FrameworkModule {
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
   override def moduleRoot = frameworkRoot / "mem-core" / "mesh_shm"
-  override def moduleDeps = Seq(bank)
+  override def moduleDeps = Seq(bank, queue)
 }
 
 object coherence extends FrameworkModule {

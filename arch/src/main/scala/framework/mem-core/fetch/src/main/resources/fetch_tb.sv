@@ -68,6 +68,7 @@ module `FETCH_TOP;
       .io_redirect_valid(control.redirect_valid),
       .io_redirect_bits(control.redirect_pc),
       .io_flush(control.flush),
+      .io_invalidate(1'b0),
       .io_npc(control.npc),
       `include "fetch_ports.svh"
   );

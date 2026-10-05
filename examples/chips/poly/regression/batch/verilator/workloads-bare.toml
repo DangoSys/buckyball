@@ -9,4 +9,8 @@ tests = [
   "poly-attention-ctest-chip-task_dma_single-multicore-baremetal",
   "poly-attention-ctest-chip-task_dma_workers-multicore-baremetal",
   "poly-attention-ctest-chip-task_context-multicore-baremetal",
+  "poly-attention-ctest-mxmm_fp32_small-baremetal",
+  "poly-attention-ctest-mxmm_mxfp8_small-baremetal",
+  "poly-ffn-ctest-mxmm_fp32_small-baremetal",
+  "poly-ffn-ctest-mxmm_mxfp8_small-baremetal",
 ]

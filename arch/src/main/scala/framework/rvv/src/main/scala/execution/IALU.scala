@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** Element arithmetic shared by the e8/e16/e32/e64 integer vector instructions. */
 @instantiable
@@ -27,7 +27,7 @@ class IALU extends Module {
     val legal         = Output(Bool())
   })
 
-  val divider = Instantiate(new DivRem(64))
+  val divider: Instance[DivRem] = Instantiate(new DivRem(64))
   divider.io.request <> io.divRequest
   io.divResponse <> divider.io.response
   divider.io.clear := io.clear

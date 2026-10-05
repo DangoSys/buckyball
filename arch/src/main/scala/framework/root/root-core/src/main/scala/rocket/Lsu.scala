@@ -10,19 +10,30 @@ import memcore.bus.chi.rnf.CacheAtomic
 import memcore.memory.cpu.{CpuMemParams, VirtualMemoryRequest, VirtualMemoryResponse}
 import memcore.memory.fetch.Context
 
-/**
- * Same-cycle hit check for an identity-translated plain access in Rocket's s2. The owner answers
- * `hit` only after permission, region, interlock and L1 hit (including a store's write) all succeed.
- */
+/** A load or store offered to the L1 fast path by virtual address; the Core translates it through the data TLB. */
+class LsuProbeRequest extends Bundle {
+  val addr      = UInt(64.W)
+  val size      = UInt(2.W)
+  val write     = Bool()
+  val data      = UInt(64.W)
+  val privilege = UInt(2.W)
+  val satp      = UInt(64.W)
+  val sum       = Bool()
+  val mxr       = Bool()
+}
+
+class LsuProbeResult extends Bundle {
+  val hit   = Bool()
+  val value = UInt(64.W)
+}
+
 class LsuProbe extends Bundle {
-  val valid     = Output(Bool())
-  val addr      = Output(UInt(64.W))
-  val size      = Output(UInt(2.W))
-  val write     = Output(Bool())
-  val data      = Output(UInt(64.W))
-  val privilege = Output(UInt(2.W))
-  val hit       = Input(Bool())
-  val value     = Input(UInt(64.W))
+  val req       = Decoupled(new LsuProbeRequest)
+  val complete  = Flipped(Decoupled(new LsuProbeResult))
+  val cancel    = Output(Bool())
+  val retire    = Output(Bool())
+  val active    = Output(Bool())
+  val cancelled = Input(Bool())
 }
 
 /**
@@ -60,6 +71,7 @@ class Lsu(cp: CpuMemParams)(implicit val cpuParams: CpuParams)
   val pmps                                                                           = Reg(Vec(nPMPs, new PMP))
   val context                                                                        = Reg(new Context)
   val maintaining                                                                    = RegInit(false.B)
+  val probeAccepted                                                                  = RegInit(false.B)
   io.capturedPmp := pmps
   val result  = Reg(new VirtualMemoryResponse(cp))
   val matches = io.cpu.req.bits.tag === command.tag && io.cpu.req.bits.addr === command.addr &&
@@ -98,17 +110,27 @@ class Lsu(cp: CpuMemParams)(implicit val cpuParams: CpuParams)
   val sfence     = command.cmd === M_SFENCE
   val misaligned = (address & ((1.U(64.W) << command.size) - 1.U)).orR
 
-  // Bare translation only: M-mode effective privilege or a Bare satp makes the VA the PA.
-  val identity = command.dprv === PRV.M.U || context.satp(63, 60) === 0.U
-  io.probe.valid     := state === s2 && !io.cpu.s2_kill && !misaligned && identity &&
-    (command.cmd === M_XRD || command.cmd === M_XWR)
-  io.probe.addr      := address
-  io.probe.size      := command.size
-  io.probe.write     := command.cmd === M_XWR
-  io.probe.data      := data
-  io.probe.privilege := command.dprv
-  val probed    = io.probe.valid && io.probe.hit
-  val probedRaw = io.probe.value >> (address(2, 0) << 3)
+  val probeEligible = !misaligned && (command.cmd === M_XRD || command.cmd === M_XWR)
+  io.probe.active                       := (state === s1 || state === s2) && probeEligible
+  io.probe.req.valid                    := state === s1 && !io.cpu.s1_kill && probeEligible
+  io.probe.req.bits.addr                := address
+  io.probe.req.bits.size                := command.size
+  io.probe.req.bits.write               := command.cmd === M_XWR
+  io.probe.req.bits.data                := io.cpu.s1_data.data
+  io.probe.req.bits.privilege           := command.dprv
+  io.probe.req.bits.satp                := context.satp
+  io.probe.req.bits.sum                 := context.sum
+  io.probe.req.bits.mxr                 := context.mxr
+  io.probe.cancel                       := state === s2 && io.cpu.s2_kill
+  io.probe.retire                       := state === s2 && probeAccepted && !io.cpu.s2_kill
+  io.probe.complete.ready               := state === s2 && probeAccepted && !io.cpu.s2_kill
+  when(io.probe.req.fire)(probeAccepted := true.B)
+  when(state === s2)(probeAccepted      := false.B)
+  when(state === s2 && probeAccepted && !io.cpu.s2_kill) {
+    assert(io.probe.complete.valid || io.probe.cancelled, "Accepted LSU probe did not complete in s2")
+  }
+  val probed    = io.probe.complete.fire && io.probe.complete.bits.hit && !io.probe.cancelled
+  val probedRaw = io.probe.complete.bits.value >> (address(2, 0) << 3)
 
   val probedLoad = MuxLookup(command.size, probedRaw)(Seq(
     0.U -> Cat(Fill(56, command.signed && probedRaw(7)), probedRaw(7, 0)),

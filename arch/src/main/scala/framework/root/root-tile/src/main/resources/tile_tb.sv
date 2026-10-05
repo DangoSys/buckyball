@@ -35,6 +35,7 @@ module tile_tb;
       .clock(clock),
       .reset(control.reset),
       .io_resetVector(64'h80000000),
+      .io_time(64'b0),
       .io_outstanding(control.outstanding),
       `include "tile_ports.svh"
   );

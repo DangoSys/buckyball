@@ -2,7 +2,7 @@ package framework.memdomain.verification
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import framework.top.GlobalConfig
 import framework.system.core.ControllerAdmission
@@ -46,9 +46,11 @@ class ControllerSystem(b: GlobalConfig, signatures: Seq[BigInt])(implicit val cp
     val bankWriteAccepted = Output(Vec(cores.size, Bool()))
   })
 
-  val admission = Instantiate(new ControllerAdmission(tracking, ChiParams(), moves = true))
-  val tasks     = Instantiate(new TaskController(1 to signatures.size, signatures, b.memDomain.nCores))
-  val network   = Instantiate(new BankNetwork(b, cores, useMesh = true, controllerMove = true))
+  val admission: Instance[ControllerAdmission] =
+    Instantiate(new ControllerAdmission(tracking, ChiParams(), moves = true))
+  val tasks:     Instance[TaskController]      =
+    Instantiate(new TaskController(1 to signatures.size, signatures, b.memDomain.nCores))
+  val network:   Instance[BankNetwork]         = Instantiate(new BankNetwork(b, cores, useMesh = true, controllerMove = true))
   admission.io.core <> io.core
   admission.io.task <> tasks.io.ports(0)
   tasks.io.satp := admission.io.taskSatp
@@ -71,7 +73,7 @@ class ControllerSystem(b: GlobalConfig, signatures: Seq[BigInt])(implicit val cp
       q.hart_id         := 0.U; q.rob_id             := 0.U; q.inst_id                                     := 0.U
     }
     // Bank zero is the declared private endpoint used by this gate. Storage and ACK are the existing Bank IP.
-    val bank = Instantiate(new Bank(bankParams))
+    val bank: Instance[Bank] = Instantiate(new Bank(bankParams))
     val choose = Module(new Arbiter(chiselTypeOf(port.local.request.bits), 2))
     choose.io.in(0) <> port.local.request
     choose.io.in(1) <> io.access(i).request

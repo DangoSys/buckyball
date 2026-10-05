@@ -8,7 +8,8 @@ case class Params(
   maxRanges: Int = 8,
   idBits:    Int = 8,
   beatBytes: Int = 16) {
-  require(contexts == 4 && maxRanges == 8, "Preflight currently verifies four contexts with eight ranges each")
+  require(contexts >= 2 && (contexts & (contexts - 1)) == 0)
+  require(maxRanges == 8)
   require(idBits > 0 && bus.addressBits >= 12 && bus.addressBits < 64)
   require(beatBytes >= 8 && beatBytes <= 64 && (beatBytes & (beatBytes - 1)) == 0)
 }

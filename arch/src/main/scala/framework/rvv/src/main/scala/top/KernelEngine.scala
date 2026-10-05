@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.balldomain.blink.{BallStatus, HasBallStatus}
 import framework.top.GlobalConfig
 
@@ -15,10 +15,10 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   val io = IO(new KernelBlinkIO(b))
   def status: BallStatus = io.status
 
-  val execution                                                                                      = Instantiate(new Execution(b))
-  val loader                                                                                         = Instantiate(new ImageLoader(b))
-  val local                                                                                          = Instantiate(new KernelMemory(b))
-  val ports                                                                                          = Seq.fill(p.memoryPorts)(Instantiate(new BankPort(b)))
+  val execution: Instance[Execution]     = Instantiate(new Execution(b))
+  val loader:    Instance[ImageLoader]   = Instantiate(new ImageLoader(b))
+  val local:     Instance[KernelMemory]  = Instantiate(new KernelMemory(b))
+  val ports:     Seq[Instance[BankPort]] = Seq.fill(p.memoryPorts)(Instantiate(new BankPort(b)))
   val idle :: loading :: descriptorSend :: descriptorWait :: launch :: executing :: completed :: Nil = Enum(7)
 
   val state             = RegInit(idle)

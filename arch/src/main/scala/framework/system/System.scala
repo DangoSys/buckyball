@@ -2,7 +2,7 @@ package framework.system
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.configloader.{ExampleTopology, RocketTileCore}
 import framework.system.tile.Tile
 import framework.system.memory.Memory
@@ -68,7 +68,7 @@ class System(
     val memoryOutstanding = Output(UInt(log2Ceil(ram.slots + 2 * dmaMasters + 1).W))
   })
 
-  val tileInstances = tiles.map { t =>
+  val tileInstances: Seq[Instance[Tile]] = tiles.map { t =>
     Instantiate(new Tile(
       t,
       Tile.cpuParameters(t, hartIds.max, cpuPhysicalBits),
@@ -80,7 +80,7 @@ class System(
     ))
   }
 
-  val backing     = Instantiate(new Memory(ram, ddr, dmaMasters))
+  val backing: Instance[Memory] = Instantiate(new Memory(ram, ddr, dmaMasters))
   val chipDevices = Module(new Devices(devices, cp, hartIds))
   chipDevices.io.sources := io.interruptSources
   chipDevices.io.request <> backing.io.deviceRequest
@@ -93,6 +93,7 @@ class System(
   private val coreBase = tiles.scanLeft(0)(_ + _.cores.size)
   private val dmaBase  = dmaCounts.scanLeft(0)(_ + _)
   for ((tile, index) <- tileInstances.zipWithIndex) {
+    tile.io.time := chipDevices.io.time
     for (local    <- tiles(index).cores.indices) {
       val core = coreBase(index) + local
       tile.io.resetVector(local) := io.resetVector(core)

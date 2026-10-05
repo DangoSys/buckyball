@@ -1,8 +1,10 @@
 package hier.chip.mesh
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** One directed physical Mesh link. Each VC returns its own buffer credits. */
 class MeshCreditLink(p: MeshParams) extends Bundle {
@@ -99,8 +101,9 @@ class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
 @instantiable
 class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
   require(linkDepth >= 1 && linkDepth <= 255)
-  private val flit    = new MeshFlit(p)
-  private val routers = Seq.tabulate(p.yNodes, p.xNodes)((y, x) => Instantiate(new MeshRouter(p, x, y)))
+  private val flit = new MeshFlit(p)
+  private val routers: Seq[Seq[Instance[MeshRouter]]] =
+    Seq.tabulate(p.yNodes, p.xNodes)((y, x) => Instantiate(new MeshRouter(p, x, y)))
   private def index(x: Int, y: Int): Int = y * p.xNodes + x
 
   @public
@@ -111,7 +114,8 @@ class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
   })
 
   def wireLink(source: Vec[DecoupledIO[MeshFlit]], sink: Vec[DecoupledIO[MeshFlit]]): Unit = {
-    val tx = Instantiate(new MeshCreditTx(p, linkDepth)); val rx = Instantiate(new MeshCreditRx(p, linkDepth))
+    val tx: Instance[MeshCreditTx] = Instantiate(new MeshCreditTx(p, linkDepth));
+    val rx: Instance[MeshCreditRx] = Instantiate(new MeshCreditRx(p, linkDepth))
     tx.io.active := io.active; rx.io.active := io.active
     tx.io.in <> source; rx.io.link <> tx.io.link; sink <> rx.io.out
   }

@@ -1,8 +1,10 @@
 package framework.system.core.accelerator
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import framework.top.GlobalConfig
 import framework.system.core.rocket.{RoCCCommandBB, RoCCIO, RoCCResponseBB}
@@ -32,8 +34,12 @@ class Admission(
   require(tracking.entries == 4 && tracking.idBits == prepared.idBits)
   require(tracking.addressBits == prepared.bus.addressBits && tracking.maxRanges == prepared.maxRanges)
   require(prepared.beatBytes == axiParams.bytes && b.memDomain.dma_buswidth == axiParams.dataBits)
-  private val n         = tracking.entries
-  private val indexBits = log2Ceil(n)
+  private val parents          = tracking.entries
+  private val n                = 8
+  private val internalTracking = tracking.copy(entries = n)
+  private val internalPrepared = prepared.copy(contexts = n)
+  private val indexBits        = log2Ceil(n)
+  require(tracking.idBits >= indexBits)
 
   @public
   val io = IO(new Bundle {
@@ -58,34 +64,36 @@ class Admission(
     val workDrained  = Output(Bool())
   })
 
-  val bridge = Instantiate(new AdmissionBridge(
+  val bridge: Instance[AdmissionBridge] = Instantiate(new AdmissionBridge(
     b.frontend.rob_entries,
     tracking,
     nPMPs,
     Seq(GISA.FENCE_BITPAT.value.toInt, GISA.BARRIER_BITPAT.value.toInt)
   ))
 
-  val interlock   = Instantiate(new Interlock(tracking))
-  val preparation = Instantiate(new Preparation(prepared, regions))
-  val dma         = Instantiate(new Dma(b, prepared, axiParams))
-  val task        = Instantiate(new TaskAdmission(tracking, nPMPs))
+  val interlock:   Instance[Interlock]     = Instantiate(new Interlock(internalTracking))
+  val preparation: Instance[Preparation]   = Instantiate(new Preparation(internalPrepared, regions))
+  val dma:         Instance[Dma]           = Instantiate(new Dma(b, internalPrepared, axiParams))
+  val task:        Instance[TaskAdmission] = Instantiate(new TaskAdmission(tracking, nPMPs))
 
-  val live            = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val memory          = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val fence           = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val retirementSeen  = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val interlockDone   = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val noMemoryPending = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val shapeClaimed    = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val preparedStarted = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val mapReady        = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val grantSeen       = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val doneIssued      = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val errors          = RegInit(VecInit(Seq.fill(n)(0.U.asTypeOf(new DmaStatus))))
-  val halted          = RegInit(false.B)
-  val firstFault      = RegInit(0.U.asTypeOf(new DmaStatus))
-  val firstTag        = RegInit(0.U(tracking.idBits.W))
-  val firstHasTag     = RegInit(false.B)
+  val live                 = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val memory               = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val fence                = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val retirementSeen       = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val interlockDone        = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val noMemoryPending      = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val shapeClaimed         = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val preparedStarted      = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val mapReady             = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val grantSeen            = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val doneIssued           = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val errors               = RegInit(VecInit(Seq.fill(n)(0.U.asTypeOf(new DmaStatus))))
+  val halted               = RegInit(false.B)
+  val firstFault           = RegInit(0.U.asTypeOf(new DmaStatus))
+  val firstTag             = RegInit(0.U(tracking.idBits.W))
+  val firstHasTag          = RegInit(false.B)
+  val parentTags           = Reg(Vec(n, UInt(tracking.idBits.W)))
+  val childDispatchPending = RegInit(VecInit(Seq.fill(3)(false.B)))
   def index(tag: UInt): UInt = tag(indexBits - 1, 0)
   def known(tag: UInt): Bool = tag < n.U && live(index(tag))
 
@@ -96,8 +104,9 @@ class Admission(
     hasTag:  Bool
   ): Unit = {
     when(!halted) {
-      halted   := true.B; firstFault.error := error; firstFault.address := address
-      firstTag := tag; firstHasTag         := hasTag
+      halted      := true.B; firstFault.error := error; firstFault.address := address
+      firstTag    := Mux(tag >= parents.U && known(tag), parentTags(index(tag)), tag)
+      firstHasTag := hasTag
     }
   }
 
@@ -123,39 +132,52 @@ class Admission(
     command.bits.instruction.funct === GISA.MVIN_KERNEL_BITPAT)
 
   val fenceProtect = fence.asUInt.orR || (command.valid && isFence)
-  interlock.io.dispatch.valid          := io.core.reserve.valid && !halted && !fenceProtect
-  interlock.io.dispatch.bits           := io.core.reserve.bits
-  io.core.reserve.ready                := interlock.io.dispatch.ready && !halted && !fenceProtect
+
+  val unknownSubMemory =
+    if (b.frontend.sub_rob_enable)
+      VecInit((0 until parents).map(i => live(i) && !memory(i) && !retirementSeen(i) && !fence(i))).asUInt.orR
+    else false.B
+
+  val childDispatch    = childDispatchPending.asUInt.orR
+  val dispatchProducer = PriorityEncoder(childDispatchPending)
+  interlock.io.dispatch.valid                                                              := !halted && (childDispatch ||
+    (io.core.reserve.valid && !fenceProtect && !unknownSubMemory))
+  interlock.io.dispatch.bits                                                               := io.core.reserve.bits
+  when(childDispatch)(interlock.io.dispatch.bits.id                                        := parents.U + dispatchProducer)
+  io.core.reserve.ready                                                                    := interlock.io.dispatch.ready && !halted &&
+    !fenceProtect && !unknownSubMemory && !childDispatch
+  when(interlock.io.dispatch.fire && childDispatch)(childDispatchPending(dispatchProducer) := false.B)
   when(io.core.reserve.fire) {
     val tag = io.core.reserve.bits.id
-    assert(tag < n.U && !live(index(tag)), "Admission reused a live Core tag")
+    assert(tag < parents.U && !live(index(tag)), "Admission reused a live Core tag")
+    parentTags(index(tag))      := tag
     live(index(tag))            := true.B; memory(index(tag))         := false.B; fence(index(tag))           := false.B
     retirementSeen(index(tag))  := false.B; interlockDone(index(tag)) := false.B
     noMemoryPending(index(tag)) := false.B; shapeClaimed(index(tag))  := false.B; preparedStarted(index(tag)) := false.B
     mapReady(index(tag))        := false.B; grantSeen(index(tag))     := false.B; doneIssued(index(tag))      := false.B
     errors(index(tag))          := 0.U.asTypeOf(new DmaStatus)
   }
-  bridge.io.command.valid              := command.valid && !isTask && !halted
-  bridge.io.command.bits               := command.bits
-  task.io.command.valid                := command.valid && isTask && !halted
-  task.io.command.bits                 := command.bits
-  command.ready                        := !halted && Mux(isTask, task.io.command.ready, bridge.io.command.ready)
+  bridge.io.command.valid                                                                  := command.valid && !isTask && !halted
+  bridge.io.command.bits                                                                   := command.bits
+  task.io.command.valid                                                                    := command.valid && isTask && !halted
+  task.io.command.bits                                                                     := command.bits
+  command.ready                                                                            := !halted && Mux(isTask, task.io.command.ready, bridge.io.command.ready)
   when(command.fire) {
-    assert(known(command.bits.tag), "Admission command has no reserved Core tag")
+    assert(command.bits.tag < parents.U && known(command.bits.tag), "Admission command has no reserved Core tag")
     val slot = index(command.bits.tag)
     memory(slot)          := isMemory; fence(slot) := isFence
     noMemoryPending(slot) := !isMemory
   }
   io.npuCommand <> bridge.io.npuCommand
-  bridge.io.allocation                 := io.allocation; bridge.io.retired := io.retired; bridge.io.fault := io.npuFault
-  io.task <> task.io.task; io.taskSatp := task.io.satp
+  bridge.io.allocation                                                                     := io.allocation; bridge.io.retired := io.retired; bridge.io.fault := io.npuFault
+  io.task <> task.io.task; io.taskSatp                                                     := task.io.satp
   val responses = Module(new Arbiter(new RoCCResponseBB, 2))
   responses.io.in(0) <> task.io.response; responses.io.in(1) <> io.npuResponse
   io.core.response <> responses.io.out
   io.core.interrupt         := io.npuInterrupt || io.task.interrupt
   interlock.io.cpuQuery     := io.core.cpuQuery
-  io.core.cpuAllow          := interlock.io.cpuAllow && !halted && !fenceProtect
-  io.core.cpuProbeAllow     := interlock.io.cpuProbeAllow && !halted && !fenceProtect
+  io.core.cpuAllow          := interlock.io.cpuAllow && !halted && !fenceProtect && !unknownSubMemory
+  io.core.cpuProbeAllow     := interlock.io.cpuProbeAllow && !halted && !fenceProtect && !unknownSubMemory
   io.core.maintenance <> interlock.io.maintenance
   interlock.io.maintained <> io.core.maintained
   io.core.pteRequest <> preparation.io.pteRequest
@@ -190,20 +212,44 @@ class Admission(
     stop(bridge.io.unboundFault.bits.error, bridge.io.unboundFault.bits.address, 0.U, false.B)
   }
 
-  val producerBound = RegInit(VecInit(Seq.fill(3)(false.B)))
-  val producerTag   = Reg(Vec(3, UInt(tracking.idBits.W)))
-  val shapes        = Reg(Vec(3, new Command(prepared)))
-  val shapePending  = RegInit(VecInit(Seq.fill(3)(false.B)))
+  val producerBound   = RegInit(VecInit(Seq.fill(3)(false.B)))
+  val producerTag     = Reg(Vec(3, UInt(tracking.idBits.W)))
+  val producerSub     = RegInit(VecInit(Seq.fill(3)(false.B)))
+  val producerRob     = Reg(Vec(3, UInt(log2Ceil(b.frontend.rob_entries).W)))
+  val producerSubRob  = Reg(Vec(3, UInt(log2Ceil(b.frontend.sub_rob_depth * 4).W)))
+  val producerMatches = Wire(Vec(3, Bool()))
+  val shapes          = Reg(Vec(3, new Command(prepared)))
+  val shapePending    = RegInit(VecInit(Seq.fill(3)(false.B)))
   for (i <- 0 until 3) {
     bridge.io.lookup(i).robId := io.footprints(i).rob_id
     val footprint = io.footprints(i)
     val snapshot  = bridge.io.lookup(i).snapshot
-    when(producerBound(i) && !footprint.valid)(producerBound(i) := false.B)
-    when(footprint.valid && !producerBound(i) && !halted && !io.npuFault.valid) {
-      when(!snapshot.valid || !known(snapshot.bits.tag) || !memory(index(snapshot.bits.tag)) || footprint.is_sub) {
+    val childTag  = (parents + i).U(tracking.idBits.W)
+    producerMatches(i) := footprint.valid && footprint.rob_id === producerRob(i) &&
+      footprint.is_sub === producerSub(i) && (!producerSub(i) || footprint.sub_rob_id === producerSubRob(i))
+    when(producerBound(i) && !producerMatches(i)) {
+      when(producerSub(i))(retirementSeen(parents + i) := true.B)
+        .otherwise(producerBound(i) := false.B)
+    }
+    when(footprint.valid && !producerBound(i) && (!footprint.is_sub || !live(parents + i)) &&
+      !halted && !io.npuFault.valid) {
+      when(!snapshot.valid || !known(snapshot.bits.tag) ||
+        (!footprint.is_sub && !memory(index(snapshot.bits.tag))) ||
+        (footprint.is_sub && !b.frontend.sub_rob_enable.B)) {
         stop(DmaError.Context.U, footprint.baseVA, snapshot.bits.tag, snapshot.valid)
       }.otherwise {
-        val tag    = snapshot.bits.tag; val slot = index(tag)
+        val tag = Mux(footprint.is_sub, childTag, snapshot.bits.tag); val slot = index(tag)
+        when(footprint.is_sub) {
+          live(slot)              := true.B; memory(slot)           := true.B; fence(slot)       := false.B
+          parentTags(slot)        := snapshot.bits.tag
+          retirementSeen(slot)    := false.B; interlockDone(slot)   := false.B
+          noMemoryPending(slot)   := false.B; preparedStarted(slot) := false.B
+          mapReady(slot)          := false.B; grantSeen(slot)       := false.B; doneIssued(slot) := false.B
+          errors(slot)            := 0.U.asTypeOf(new DmaStatus)
+          childDispatchPending(i) := true.B
+        }
+        producerSub(i) := footprint.is_sub
+        producerRob(i) := footprint.rob_id; producerSubRob(i) := footprint.sub_rob_id
         val narrow = footprint.rows(63, 32).orR || footprint.columns(63, 32).orR ||
           footprint.spanBytes(63, 32).orR || footprint.columnStride(63, 32).orR || footprint.rowStride(63, 32).orR
         producerBound(i)    := true.B; producerTag(i)                             := tag
@@ -218,9 +264,9 @@ class Admission(
           val error = Mux(narrow, DmaError.Shape.U, footprint.fault.error)
           errors(slot).error   := error
           errors(slot).address := Mux(narrow, footprint.baseVA, footprint.fault.address)
-          stop(error, Mux(narrow, footprint.baseVA, footprint.fault.address), tag, true.B)
+          stop(error, Mux(narrow, footprint.baseVA, footprint.fault.address), snapshot.bits.tag, true.B)
         }.otherwise {
-          when(shapeClaimed(slot)) {
+          when(!footprint.is_sub && shapeClaimed(slot)) {
             errors(slot).error := DmaError.Context.U; errors(slot).address := footprint.baseVA
             stop(DmaError.Context.U, footprint.baseVA, tag, true.B)
           }.otherwise { shapeClaimed(slot) := true.B; shapePending(i) := true.B }
@@ -239,17 +285,18 @@ class Admission(
     prepareOffer                                       := false.B; shapePending(prepareProducer) := false.B
     preparedStarted(index(shapes(prepareProducer).id)) := true.B
   }
-  bridge.io.lookupTag.tag     := preparation.io.contextTag
+  val preparationTag = preparation.io.contextTag
+  bridge.io.lookupTag.tag     := Mux(preparationTag >= parents.U, parentTags(index(preparationTag)), preparationTag)
   preparation.io.contextValid := bridge.io.lookupTag.snapshot.valid
-  preparation.io.contextId    := bridge.io.lookupTag.snapshot.bits.tag
+  preparation.io.contextId    := preparationTag
   preparation.io.contextPmp   := bridge.io.lookupTag.snapshot.bits.pmp
 
-  val infos      = Module(new Queue(new AccessInfo(tracking), 2))
+  val infos      = Module(new Queue(new AccessInfo(internalTracking), 2))
   interlock.io.accessInfo <> infos.io.deq
   val range      = preparation.io.ranges
   val infoOffer  = RegInit(false.B)
   val infoRange  = RegInit(false.B)
-  val infoPacket = Reg(new AccessInfo(tracking))
+  val infoPacket = Reg(new AccessInfo(internalTracking))
   val pure       = PriorityEncoder(noMemoryPending)
   when(!infoOffer && !halted &&
     ((range.valid && range.bits.error === Error.Ok.U) || (!range.valid && noMemoryPending.asUInt.orR))) {
@@ -307,7 +354,8 @@ class Admission(
     val tag = producerTag(i); val slot = index(tag)
     dma.io.decisions(i)          := 0.U.asTypeOf(new DmaDecision(prepared))
     dma.io.decisions(i).parentId := tag
-    dma.io.decisions(i).valid    := producerBound(i) &&
+    dma.io.decisions(i).valid    := producerBound(i) && producerMatches(i) &&
+      (!producerSub(i) || !retirementSeen(slot)) &&
       ((mapReady(slot) && grantSeen(slot)) || errors(slot).error =/= DmaError.None.U || halted)
     dma.io.decisions(i).fault    := Mux(halted, firstFault, errors(slot))
   }
@@ -335,24 +383,32 @@ class Admission(
   val releasable = VecInit((0 until n).map(i =>
     live(i) && retirementSeen(i) && interlockDone(i) &&
       errors(i).error === DmaError.None.U && (!fence(i) ||
-        (PopCount(live) === 1.U && !io.npuBusy && !io.dma.readBusy && !io.dma.writeBusy))
+        (PopCount(live) === 1.U && !io.npuBusy && !io.dma.readBusy && !io.dma.writeBusy)) &&
+      (if (i < parents) !VecInit((parents until parents + 3).map(j => live(j) && parentTags(j) === i.U)).asUInt.orR
+       else true.B)
   ))
 
-  val releaseOffer = RegInit(false.B)
-  val releaseTag   = Reg(UInt(indexBits.W))
+  val releaseOffer   = RegInit(false.B)
+  val releaseTag     = Reg(UInt(indexBits.W))
   when(!releaseOffer && releasable.asUInt.orR && !halted) {
     releaseOffer := true.B; releaseTag := PriorityEncoder(releasable)
   }
-  val releasingMap = memory(releaseTag) && preparedStarted(releaseTag)
-  preparation.io.release.valid   := releaseOffer && releasingMap && io.core.complete.ready && !halted
+  val releasingMap   = memory(releaseTag) && preparedStarted(releaseTag)
+  val releasingChild = releaseTag >= parents.U
+  val releaseReady   = releasingChild || io.core.complete.ready
+  preparation.io.release.valid   := releaseOffer && releasingMap && releaseReady && !halted
   preparation.io.release.bits.id := releaseTag
-  io.core.complete.valid         := releaseOffer && !halted && (!releasingMap || preparation.io.release.ready)
+  io.core.complete.valid         := releaseOffer && !releasingChild && !halted && (!releasingMap || preparation.io.release.ready)
   io.core.complete.bits.tag      := releaseTag
-  when(io.core.complete.fire) {
+  val releaseFire = releaseOffer && releaseReady && !halted && (!releasingMap || preparation.io.release.ready)
+  when(releaseFire) {
     assert(!releasingMap || preparation.io.release.fire, "Admission map/Core release is not atomic")
     live(releaseTag) := false.B; fence(releaseTag) := false.B; releaseOffer := false.B
+    for (i <- 0 until 3) {
+      when(releaseTag === (parents + i).U)(producerBound(i) := false.B)
+    }
   }
-  val otherLive = (live.asUInt & ~(1.U(n.W) << index(command.bits.tag))).orR
+  val otherLive   = (live.asUInt & ~(1.U(n.W) << index(command.bits.tag))).orR
 
   val drained = !otherLive && !io.npuBusy && !io.dma.readBusy && !io.dma.writeBusy &&
     !prepareOffer && !shapePending.asUInt.orR &&

@@ -2,7 +2,7 @@ package framework.system.core
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import framework.system.core.rocket.RoCCIO
 import framework.memdomain.isa.{MvoverISA, MvoverPort}
@@ -37,7 +37,7 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
   val isTask                                                     = instruction.opcode === "h2b".U
   val isMove                                                     = moves.B && instruction.opcode === "h7b".U && instruction.funct === MvoverISA.Funct.U
   val isFence                                                    = instruction.opcode === "h7b".U && instruction.funct === 0.U
-  val controller                                                 = Instantiate(new TaskAdmission(tracking, nPMPs))
+  val controller: Instance[TaskAdmission] = Instantiate(new TaskAdmission(tracking, nPMPs))
   controller.io.task <> io.task
   io.taskSatp                 := controller.io.satp
   controller.io.workDrained   := true.B // This endpoint has no NPU or DMA client.

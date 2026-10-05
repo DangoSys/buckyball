@@ -14,7 +14,7 @@ class MeshBankNode(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
     val response = Decoupled(new MeshPacket(p))
   })
 
-  val bank    = Instantiate(new Bank(p.bankParams))
+  val bank: Instance[Bank] = Instantiate(new Bank(p.bankParams))
   val pending = RegInit(false.B)
   val request = Reg(new MeshPacket(p))
 

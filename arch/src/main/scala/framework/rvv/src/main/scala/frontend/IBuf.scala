@@ -27,8 +27,13 @@ class IBuf(val b: GlobalConfig) extends Module {
   val indexWidth  = math.max(1, log2Ceil(p.iBufWords))
   val index       = (io.fetchAddress >> 2)(indexWidth - 1, 0)
 
-  io.upload.ready := io.uploadEnabled
-  io.instruction  := memory.read(index, io.fetchEnabled)
+  io.upload.ready := io.uploadEnabled && !io.fetchEnabled
+  io.instruction  := memory.readWrite(
+    Mux(io.upload.fire, io.upload.bits.address(indexWidth - 1, 0), index),
+    io.upload.bits.data,
+    io.fetchEnabled || io.upload.fire,
+    io.upload.fire
+  )
   io.loaded       := io.fetchAddress < (p.iBufWords * 4).U && index < loadedWords
   io.wordCount    := loadedWords
 
@@ -38,7 +43,6 @@ class IBuf(val b: GlobalConfig) extends Module {
       io.upload.bits.address === Mux(io.upload.bits.first, 0.U, loadedWords),
       "instruction upload is not contiguous"
     )
-    memory.write(io.upload.bits.address(indexWidth - 1, 0), io.upload.bits.data)
     loadedWords := io.upload.bits.address + 1.U
   }
 }

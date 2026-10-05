@@ -232,24 +232,25 @@ class LineSram(p: Params, lines: Int = 256) extends Module {
   val error                             = Reg(Bool())
   io.req.ready := state === idle
   val validAddress = io.req.bits.addr < (BigInt(lines) * 64).U && io.req.bits.addr(5, 0) === 0.U
-  val read         = mem.read(io.req.bits.addr(log2Ceil(lines) + 5, 6), io.req.fire && !io.req.bits.write && validAddress)
+
+  val read = mem.readWrite(
+    io.req.bits.addr(log2Ceil(lines) + 5, 6),
+    io.req.bits.data.asTypeOf(Vec(64, UInt(8.W))),
+    io.req.bits.mask.asBools,
+    io.req.fire && validAddress,
+    io.req.bits.write
+  )
+
   when(io.req.fire) {
     request := io.req.bits
     error   := !validAddress
     state   := capture
-    when(io.req.bits.write && validAddress) {
-      mem.write(
-        io.req.bits.addr(log2Ceil(lines) + 5, 6),
-        io.req.bits.data.asTypeOf(Vec(64, UInt(8.W))),
-        io.req.bits.mask.asBools
-      )
-    }
   }
   when(state === capture) {
     result := Mux(request.write || error, 0.U, read.asUInt)
     state  := respond
   }
-  io.resp.valid := state === respond
+  io.resp.valid            := state === respond
   io.resp.bits.id          := request.id
   io.resp.bits.data        := result
   io.resp.bits.error       := error

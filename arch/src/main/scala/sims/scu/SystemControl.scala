@@ -1,7 +1,7 @@
 package sims.scu
 
 import chisel3._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import chisel3.util._
 import memcore.memory.cpu.{CpuMemParams, UncachedRequest, UncachedResponse}
 
@@ -30,9 +30,9 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
   for (i <- 0 until ports) {
     val request  = io.request(i)
     val response = io.response(i)
-    val write    = Instantiate(new SCUWriteDPI)
-    val read     = Instantiate(new SCUReadDPI)
-    val ready    = RegInit(0.U(8.W))
+    val write: Instance[SCUWriteDPI] = Instantiate(new SCUWriteDPI)
+    val read:  Instance[SCUReadDPI]  = Instantiate(new SCUReadDPI)
+    val ready = RegInit(0.U(8.W))
 
     val pending = RegInit(false.B)
     val tag     = Reg(UInt(p.tagBits.W))

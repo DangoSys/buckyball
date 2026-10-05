@@ -146,6 +146,14 @@ package permission_pkg;
       check_range(BASE + 64, 64, 1, 1, 1);
       check_range(BASE, 128, 1, 1, 0);
 
+      // A denied hole blocks a proposed union while both original pixels remain permitted.
+      control.cb.pmp_config <= 'h1b18;
+      control.cb.pmp_addr[0] <= BASE + 20;  // Higher-priority 16-byte denied NAPOT hole at BASE+16.
+      control.cb.pmp_addr[1] <= BASE + 'hffc;
+      check_range(BASE, 96, 0, 1, 0);
+      check_range(BASE, 16, 0, 1, 1);
+      check_range(BASE + 64, 32, 0, 1, 1);
+
       // Cancel an accepted long check by joint reset. No stale response may escape.
       control.cb.pmp_config <= 'h1b;
       control.cb.pmp_addr[0] <= BASE + 'hffc;

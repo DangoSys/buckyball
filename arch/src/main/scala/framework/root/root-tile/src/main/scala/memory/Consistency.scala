@@ -1,8 +1,10 @@
 package hier.tile.memory
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import hier.core.rocket.{Cache => CoreCache}
 import memcore.bus.chi.{DataFlit, DirectedSnoop, RequestFlit}
 import memcore.bus.chi.rnf.{BankedChiCache, CacheAccess, CacheAtomic, CacheResult, RnfParams}
@@ -38,7 +40,7 @@ class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) exte
     val outstanding          = Output(UInt(log2Ceil(memory.mshrEntries + 1).W))
   })
 
-  val home = Instantiate(new Home(memory))
+  val home: Instance[Home] = Instantiate(new Home(memory))
   home.io.active            := true.B
   home.io.blockRequesterRsp := io.blockRequesterRsp
   io.memoryReq <> home.io.memoryReq
@@ -47,7 +49,7 @@ class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) exte
   io.observedSnp            := home.io.observedSnp
   io.outstanding            := home.io.outstanding
 
-  val interlock = Instantiate(new Interlock(tracking))
+  val interlock: Instance[Interlock] = Instantiate(new Interlock(tracking))
   interlock.io.cancel.valid := false.B
   interlock.io.cancel.bits  := 0.U.asTypeOf(new Dispatch(tracking))
   interlock.io.dispatch <> io.dispatch
@@ -64,7 +66,7 @@ class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) exte
   interlock.io.cpuQuery.olderDispatchPending := io.olderDispatchPending
   io.cpuAllow                                := interlock.io.cpuAllow
 
-  val first = Instantiate(new CoreCache(l1.copy(nodeId = 1), tracking))
+  val first: Instance[CoreCache] = Instantiate(new CoreCache(l1.copy(nodeId = 1), tracking))
   first.io.access.valid         := io.access(0).valid && interlock.io.cpuAllow
   first.io.access.bits          := access
   io.access(0).ready            := first.io.access.ready && interlock.io.cpuAllow
@@ -81,7 +83,7 @@ class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) exte
   home.io.requesters(0).txDat.bits  := delayedData.io.deq.bits
   delayedData.io.deq.ready          := home.io.requesters(0).txDat.ready && !io.blockRequesterData
   for (i <- 1 until memory.agents) {
-    val cache = Instantiate(new BankedChiCache(l1.copy(nodeId = i + 1)))
+    val cache: Instance[BankedChiCache] = Instantiate(new BankedChiCache(l1.copy(nodeId = i + 1)))
     cache.io.access <> io.access(i)
     io.result(i) <> cache.io.result
     home.io.requesters(i) <> cache.io.chi

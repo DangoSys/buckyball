@@ -60,7 +60,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
       ))
     } else None
 
-  val mesh = meshParams.map(p => Instantiate(new MeshSharedMem(p)))
+  val mesh: Option[Instance[MeshSharedMem]] = meshParams.map(p => Instantiate(new MeshSharedMem(p)))
   mesh.foreach { network =>
     require(network.io.transferCommand.bits.sourceAddr.getWidth <= 16)
     require(network.io.transferCommand.bits.sourceCore.getWidth <= 8)
@@ -104,7 +104,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
   val banks:    Seq[Instance[SramBank]] = if (useMesh) Seq.empty else Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(totalChannel)(Instantiate(new AccPipe(b)))
 
-  val hashMonitors =
+  val hashMonitors: Option[Seq[Instance[BankHashMonitor]]] =
     if (b.sim.diffTest) {
       Some(Seq.fill(totalBanks)(Instantiate(new BankHashMonitor(b))))
     } else {
@@ -240,6 +240,17 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
   // -----------------------------------------------------------------------------
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
+
+  if (!useMesh) {
+    hashMonitors.foreach { hashes =>
+      for (j <- 0 until totalBanks) {
+        hashes(j).io.write.valid     := false.B
+        hashes(j).io.write.bits.addr := banks(j).io.sramWrite.req.bits.addr
+        hashes(j).io.write.bits.mask := banks(j).io.sramWrite.req.bits.mask
+        hashes(j).io.write.bits.data := banks(j).io.sramWrite.req.bits.data
+      }
+    }
+  }
 
   hashMonitors.foreach(_.foreach(_.io.bind := false.B))
 
@@ -412,35 +423,32 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
         when(hit_bank && req_valid) {
           banks(j).io.sramRead <> accPipes(i).io.sramRead
           banks(j).io.sramWrite <> accPipes(i).io.sramWrite
+          hashMonitors.foreach { hashes =>
+            val monitor  = hashes(j)
+            val physical = banks(j).io.sramWrite.req
+            val offered  = accPipes(i).io.sramWrite.req
+            physical.valid         := offered.valid && monitor.io.write.ready
+            monitor.io.write.valid := offered.valid && physical.ready
+            offered.ready          := physical.ready && monitor.io.write.ready
+          }
         }
       }
     }
   }
+
+  mesh.foreach(_.io.bankWrites.foreach(_.ready := true.B))
 
   hashMonitors.foreach { hashes =>
     for (j <- 0 until totalBanks) {
       val monitor = hashes(j)
       if (useMesh) {
         val write = mesh.get.io.bankWrites(j)
+        write.ready                := monitor.io.write.ready
         monitor.io.write.valid     := write.valid
         monitor.io.write.bits.addr := write.bits.addr
         monitor.io.write.bits.mask := write.bits.mask.asBools
         monitor.io.write.bits.data := write.bits.data
-      } else {
-        val writeHits = VecInit((0 until totalChannel).map { i =>
-          val activeHart  = Mux(accPipes(i).io.busy, accPipes(i).io.hart_id, io.mem_req(i).hart_id)
-          val activeBank  = Mux(accPipes(i).io.busy, accPipes(i).io.bank_id, io.mem_req(i).bank_id)
-          val activeGroup = Mux(accPipes(i).io.busy, accPipes(i).io.group_id, io.mem_req(i).group_id)
-          mappingTable(j).valid &&
-          mappingTable(j).hart_id === activeHart &&
-          mappingTable(j).vbank_id === activeBank &&
-          (!mappingTable(j).is_multi || mappingTable(j).group_id === activeGroup) &&
-          accPipes(i).io.sramWrite.req.fire
-        })
-        monitor.io.write.valid := writeHits.asUInt.orR
-        monitor.io.write.bits.addr := banks(j).io.sramWrite.req.bits.addr
-        monitor.io.write.bits.mask := banks(j).io.sramWrite.req.bits.mask
-        monitor.io.write.bits.data := banks(j).io.sramWrite.req.bits.data
+
       }
     }
   }

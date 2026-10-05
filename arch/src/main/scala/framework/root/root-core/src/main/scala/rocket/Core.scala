@@ -2,10 +2,10 @@ package hier.core.rocket
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
-import freechips.rocketchip.tile.{FPU, FPUCoreIO, TraceBundle}
-import freechips.rocketchip.rocket.{PMPChecker, PRV}
+import freechips.rocketchip.tile.{CustomCSR, FPU, FPUCoreIO, TraceBundle}
+import freechips.rocketchip.rocket.{CSRs, PMPChecker, PRV}
 import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB, RocketBB}
 import memcore.memory.fetch.{Fetch, Params => FetchParams}
 import memcore.memory.cpu.{CpuMemParams, PhysicalRegion, VirtualMemory}
@@ -76,6 +76,7 @@ class Core(
   @public
   val io = IO(new Bundle {
     val resetVector                 = Input(UInt(64.W))
+    val time                        = Input(UInt(64.W))
     val timerInterrupt              = Input(Bool())
     val softwareInterrupt           = Input(Bool())
     val externalInterrupt           = Input(Bool())
@@ -96,20 +97,30 @@ class Core(
     val admission                   = commands.map(mode => new AdmissionPorts(mode.tracking, nPMPs, config.chi))
   })
 
-  val cpu               = Instantiate(new RocketBB(Nil, commands.exists(_.compute), commands.exists(_.scheduler), false, false, false))
-  val fetch             = Instantiate(new Fetch(FetchParams()))
-  val lsu               = Instantiate(new Lsu(cp))
-  val system            = Instantiate(new VirtualMemory(cp, regions))
+  val cpu: Instance[RocketBB] =
+    Instantiate(new RocketBB(
+      Seq(CustomCSR(CSRs.time, (BigInt(1) << 64) - 1, Some(BigInt(0)))),
+      commands.exists(_.compute),
+      commands.exists(_.scheduler),
+      false,
+      false,
+      false
+    ))
+
+  val fetch:             Instance[Fetch]          = Instantiate(new Fetch(FetchParams()))
+  val lsu:               Instance[Lsu]            = Instantiate(new Lsu(cp))
+  val system:            Instance[VirtualMemory]  = Instantiate(new VirtualMemory(cp, regions, 0, 16))
   // Instruction words have their own translation, PMP check and coherent L1, apart from the data broker.
-  val instructionSystem = Instantiate(new VirtualMemory(cp, regions, lineBits = 512))
-  val instructionCache  = Instantiate(new BankedChiCache(instruction.copy(lineResult = true)))
+  val instructionSystem: Instance[VirtualMemory]  =
+    Instantiate(new VirtualMemory(cp, regions, 512, 16))
+  val instructionCache:  Instance[BankedChiCache] = Instantiate(new BankedChiCache(instruction.copy(lineResult = true)))
 
   private val cacheTracking = commands match {
     case Some(mode) => mode.tracking
     case None       => TrackingParams(addressBits = config.chi.addressBits)
   }
 
-  val cache                 = Instantiate(new Cache(config.copy(probe = true), cacheTracking))
+  val cache: Instance[Cache] = Instantiate(new Cache(config.copy(probe = true), cacheTracking))
   val maintenanceActive     = RegInit(false.B)
   val maintenanceBlock      = WireDefault(false.B)
   val cacheOffer            = RegInit(false.B)
@@ -141,27 +152,34 @@ class Core(
   system.io.cacheResponse <> cache.io.result
   io.chi <> cache.io.chi
   system.io.active := true.B
+  // SFENCE.VMA invalidates the cached data and instruction translations.
+  system.io.flushTranslation            := lsu.io.maintenance.fire
+  instructionSystem.io.flushTranslation := lsu.io.maintenance.fire
   io.uncachedRequest <> system.io.uncachedRequest
   system.io.uncachedResponse <> io.uncachedResponse
-  io.trace                         := cpu.io.trace
-  io.retired                       := cpu.io.trace.insns(0).valid && !cpu.io.trace.insns(0).exception
-  io.retiredPc                     := cpu.io.trace.insns(0).iaddr
-  io.trapped                       := cpu.io.trace.insns(0).valid && cpu.io.trace.insns(0).exception
-  io.trapCause                     := cpu.io.trace.insns(0).cause
-  io.trapValue                     := cpu.io.trace.insns(0).tval
-  io.trapPc                        := cpu.io.trace.insns(0).iaddr
-  io.cancelledData                 := lsu.io.cancelled
+  io.trace                              := cpu.io.trace
+  io.retired                            := cpu.io.trace.insns(0).valid && !cpu.io.trace.insns(0).exception
+  io.retiredPc                          := cpu.io.trace.insns(0).iaddr
+  io.trapped                            := cpu.io.trace.insns(0).valid && cpu.io.trace.insns(0).exception
+  io.trapCause                          := cpu.io.trace.insns(0).cause
+  io.trapValue                          := cpu.io.trace.insns(0).tval
+  io.trapPc                             := cpu.io.trace.insns(0).iaddr
+  io.cancelledData                      := lsu.io.cancelled
   assert(io.resetVector(63, paddrBits) === 0.U, "Core reset vector exceeds physical width")
-  cpu.io.hartid                    := io.hartId
-  cpu.io.reset_vector              := io.resetVector(paddrBits - 1, 0)
-  cpu.io.interrupts                := 0.U.asTypeOf(cpu.io.interrupts)
-  cpu.io.interrupts.mtip           := io.timerInterrupt
-  cpu.io.interrupts.msip           := io.softwareInterrupt
-  cpu.io.interrupts.meip           := io.externalInterrupt
-  cpu.io.interrupts.seip.foreach(_ := io.supervisorExternalInterrupt)
-  cpu.io.traceStall                := false.B
-  cpu.io.ptw.perf                  := 0.U.asTypeOf(cpu.io.ptw.perf)
-  cpu.io.ptw.clock_enabled         := true.B
+  cpu.io.hartid                         := io.hartId
+  cpu.io.reset_vector                   := io.resetVector(paddrBits - 1, 0)
+  cpu.io.interrupts                     := 0.U.asTypeOf(cpu.io.interrupts)
+  cpu.io.interrupts.mtip                := io.timerInterrupt
+  cpu.io.interrupts.msip                := io.softwareInterrupt
+  cpu.io.interrupts.meip                := io.externalInterrupt
+  cpu.io.interrupts.seip.foreach(_      := io.supervisorExternalInterrupt)
+  cpu.io.traceStall                     := false.B
+  // TIME samples the chip's CLINT clock; CSRFile enforces its read-only address and counter permissions.
+  cpu.io.rocc.csrs(0).stall             := false.B
+  cpu.io.rocc.csrs(0).set               := true.B
+  cpu.io.rocc.csrs(0).sdata             := io.time
+  cpu.io.ptw.perf                       := 0.U.asTypeOf(cpu.io.ptw.perf)
+  cpu.io.ptw.clock_enabled              := true.B
   cpu.io.ptw.customCSRs.csrs.foreach { csr =>
     csr.stall := false.B
     csr.set   := false.B
@@ -187,12 +205,12 @@ class Core(
       cpu.io.fpu.sboard_clr       := false.B
       cpu.io.fpu.sboard_clra      := 0.U
   }
-  cpu.io.rocc.cmd.ready            := true.B
-  cpu.io.rocc.resp.valid           := false.B
-  cpu.io.rocc.resp.bits            := 0.U.asTypeOf(cpu.io.rocc.resp.bits)
-  cpu.io.rocc.busy                 := false.B
-  cpu.io.rocc.interrupt            := false.B
-  cpu.io.rocc.mem                  := DontCare
+  cpu.io.rocc.cmd.ready                 := true.B
+  cpu.io.rocc.resp.valid                := false.B
+  cpu.io.rocc.resp.bits                 := 0.U.asTypeOf(cpu.io.rocc.resp.bits)
+  cpu.io.rocc.busy                      := false.B
+  cpu.io.rocc.interrupt                 := false.B
+  cpu.io.rocc.mem                       := DontCare
 
   lsu.io.cpu <> cpu.io.dmem
   if (commands.nonEmpty) {
@@ -224,7 +242,6 @@ class Core(
   fetch.io.redirect.valid            := RegNext(cpu.io.imem.req.valid, false.B)
   fetch.io.redirect.bits             := RegEnable(redirectedPc, cpu.io.imem.req.valid)
   fetch.io.flush                     := RegNext(cpu.io.imem.flush_icache, false.B)
-  fetch.io.invalidate                := RegNext(cpu.io.imem.sfence.valid, false.B)
   cpu.io.imem.resp.valid             := fetch.io.packet.valid
   fetch.io.packet.ready              := cpu.io.imem.resp.ready
   cpu.io.imem.resp.bits              := 0.U.asTypeOf(cpu.io.imem.resp.bits)
@@ -242,8 +259,10 @@ class Core(
 
   // Fetch prepares its context one edge before its word offer becomes visible.
   val previousPmp = RegNext(cpu.io.ptw.pmp)
-  val fetchOffer  = RegNext(fetch.io.request.valid, false.B)
-  val fetchPmp    = Reg(Vec(nPMPs, new freechips.rocketchip.rocket.PMP))
+  fetch.io.invalidate := RegNext(cpu.io.imem.sfence.valid, false.B) || (cpu.io.ptw.pmp.asUInt =/= previousPmp.asUInt)
+  val instructionLineExecutable = RegInit(false.B)
+  val fetchOffer                = RegNext(fetch.io.request.valid, false.B)
+  val fetchPmp                  = Reg(Vec(nPMPs, new freechips.rocketchip.rocket.PMP))
   when(fetch.io.request.valid && !fetchOffer)(fetchPmp := previousPmp)
   val wordPmp = Mux(fetchOffer, fetchPmp, previousPmp)
 
@@ -262,6 +281,7 @@ class Core(
   fetch.io.response.valid                     := instructionSystem.io.response.valid
   fetch.io.response.bits.data                 := instructionSystem.io.response.bits.data
   fetch.io.response.bits.line                 := instructionSystem.io.response.bits.line
+  fetch.io.response.bits.lineExecutable       := instructionLineExecutable
   fetch.io.response.bits.pageFault            := instructionSystem.io.response.bits.pageFault
   fetch.io.response.bits.accessFault          := instructionSystem.io.response.bits.accessFault
   instructionSystem.io.response.ready         := fetch.io.response.ready
@@ -272,10 +292,22 @@ class Core(
   instructionSystem.io.cacheResponse <> instructionCache.io.result
   io.instructionChi <> instructionCache.io.chi
 
-  val instructionPmp           = Reg(Vec(nPMPs, new freechips.rocketchip.rocket.PMP))
-  val instructionAuthorization = Module(new PMPChecker(3))
-  val instructionPending       = RegInit(false.B)
-  val instructionAllowed       = Reg(Bool())
+  val instructionPmp               = Reg(Vec(nPMPs, new freechips.rocketchip.rocket.PMP))
+  val instructionAuthorization     = Module(new PMPChecker(3))
+  val instructionLineAuthorization = Module(new PMPChecker(6))
+  instructionLineAuthorization.io.pmp := instructionPmp
+  instructionLineAuthorization.io.prv := instructionSystem.io.authorizationRequest.bits.privilege
+  val instructionPhysicalLine = (instructionSystem.io.authorizationRequest.bits.paddr >> 6) << 6
+  instructionLineAuthorization.io.addr := instructionPhysicalLine(paddrBits - 1, 0)
+  instructionLineAuthorization.io.size := 6.U
+
+  val instructionLineRegion = regions.filter(r => r.cacheable && r.normal && r.executable).map(r =>
+    instructionPhysicalLine.pad(65) >= r.base.U(65.W) &&
+      instructionPhysicalLine.pad(65) + 63.U < (r.base + r.bytes).U(65.W)
+  ).foldLeft(false.B)(_ || _)
+
+  val instructionPending = RegInit(false.B)
+  val instructionAllowed = Reg(Bool())
   when(instructionSystem.io.request.fire)(instructionPmp                   := wordPmp)
   instructionAuthorization.io.pmp                                          := instructionPmp
   instructionAuthorization.io.prv                                          := instructionSystem.io.authorizationRequest.bits.privilege
@@ -286,9 +318,13 @@ class Core(
   instructionSystem.io.authorizationResponse.bits                          := instructionAllowed
   when(instructionSystem.io.authorizationRequest.fire) {
     val r = instructionSystem.io.authorizationRequest.bits
-    instructionAllowed := !r.paddr(63, paddrBits).orR &&
+    instructionAllowed        := !r.paddr(63, paddrBits).orR &&
       (!r.read || instructionAuthorization.io.r) && (!r.execute || instructionAuthorization.io.x)
-    instructionPending := true.B
+    instructionLineExecutable := !r.paddr(
+      63,
+      paddrBits
+    ).orR && instructionLineAuthorization.io.x && instructionLineRegion
+    instructionPending        := true.B
   }
   when(instructionSystem.io.authorizationResponse.fire)(instructionPending := false.B)
 
@@ -329,44 +365,67 @@ class Core(
   }
   when(system.io.authorizationResponse.fire)(authorizationPending := false.B)
 
-  // Data fast path: the LSU's identity-translated plain access completes in s2 when permission,
-  // region, NPU interlock and an L1 hit all agree while the slow broker path is fully idle.
-  val probe      = lsu.io.probe
-  val probeBytes = (1.U(4.W) << probe.size)(3, 0)
-  val probeLast  = probe.addr.pad(65) + probeBytes - 1.U
+  // Data fast path: the LSU's plain access completes in s2 when a data-TLB translation (or
+  // identity), permission, region, NPU interlock and an L1 hit all agree while the slow broker
+  // path is fully idle. A TLB miss or fault leaves the access to the broker, which walks.
+  val probe = lsu.io.probe
+  system.io.lookup.config.mode       := probe.req.bits.satp(63, 60)
+  system.io.lookup.config.rootPpn    := probe.req.bits.satp(43, 0)
+  system.io.lookup.req.vaddr         := probe.req.bits.addr
+  system.io.lookup.req.write         := probe.req.bits.write
+  system.io.lookup.req.execute       := false.B
+  system.io.lookup.req.privilege     := probe.req.bits.privilege
+  system.io.lookup.req.sum           := probe.req.bits.sum
+  system.io.lookup.req.mxr           := probe.req.bits.mxr
+  instructionSystem.io.lookup.config := 0.U.asTypeOf(instructionSystem.io.lookup.config)
+  instructionSystem.io.lookup.req    := 0.U.asTypeOf(instructionSystem.io.lookup.req)
+  val probeAddr  = system.io.lookup.paddr.pad(64)
+  val probeBytes = (1.U(4.W) << probe.req.bits.size)(3, 0)
+  val probeLast  = probeAddr.pad(65) + probeBytes - 1.U
 
   def probeRegion(
     write: Boolean
   ): Bool = regions.filter(r => r.cacheable && r.normal && (if (write) r.writable else r.readable)).map(r =>
-    probe.addr.pad(65) >= r.base.U(65.W) && probeLast < (r.base + r.bytes).U(65.W)
+    probeAddr.pad(65) >= r.base.U(65.W) && probeLast < (r.base + r.bytes).U(65.W)
   )
     .foldLeft(false.B)(_ || _)
 
   val probePmp = Module(new PMPChecker(3))
   probePmp.io.pmp  := lsu.io.capturedPmp
-  probePmp.io.prv  := probe.privilege
-  probePmp.io.addr := probe.addr(paddrBits - 1, 0)
-  probePmp.io.size := probe.size
-  val probePermitted = !probe.addr(63, paddrBits).orR &&
-    Mux(probe.write, probePmp.io.w && probeRegion(true), probePmp.io.r && probeRegion(false))
+  probePmp.io.prv  := probe.req.bits.privilege
+  probePmp.io.addr := probeAddr(paddrBits - 1, 0)
+  probePmp.io.size := probe.req.bits.size
+  val probePermitted = system.io.lookup.hit && !probeAddr(63, paddrBits).orR &&
+    Mux(probe.req.bits.write, probePmp.io.w && probeRegion(true), probePmp.io.r && probeRegion(false))
   val slowIdle       = state === idle && !authorizationPending && !cacheOffer && !cacheOwner &&
     !uncachedOffer && !uncachedOwner && !pteDenied && !maintenanceBlock
-  val probeQuery     = probe.valid && probePermitted && slowIdle
+  val probeQuery     = probe.active && probePermitted && slowIdle
   val probeAllow     = WireDefault(true.B)
   val l1Probe        = cache.io.probe.get
-  l1Probe.valid := probeQuery && probeAllow
-  l1Probe.addr  := probe.addr(config.chi.addressBits - 1, 0)
-  l1Probe.write := probe.write
-  l1Probe.data  := probe.data << (probe.addr(2, 0) << 3)
-  l1Probe.mask  := (MuxLookup(probe.size, 255.U(8.W))(Seq(0.U -> 1.U(8.W), 1.U -> 3.U(8.W), 2.U -> 15.U(8.W))) <<
-    probe.addr(2, 0))(7, 0)
-  probe.hit     := l1Probe.valid && l1Probe.ready && l1Probe.hit
-  probe.value   := l1Probe.value
+  val probeAllowed   = probePermitted && slowIdle && probeAllow
+  l1Probe.req.valid         := probe.req.valid && probeAllowed
+  l1Probe.req.bits.addr     := probeAddr(config.chi.addressBits - 1, 0)
+  l1Probe.req.bits.write    := probe.req.bits.write
+  l1Probe.req.bits.data     := probe.req.bits.data << (probeAddr(2, 0) << 3)
+  l1Probe.req.bits.mask     := (MuxLookup(probe.req.bits.size, 255.U(8.W))(Seq(
+    0.U -> 1.U(8.W),
+    1.U -> 3.U(8.W),
+    2.U -> 15.U(8.W)
+  )) <<
+    probeAddr(2, 0))(7, 0)
+  probe.req.ready           := l1Probe.req.ready && probeAllowed
+  l1Probe.cancel            := probe.cancel || (probe.active && !probeAllowed)
+  l1Probe.retire            := probe.retire && probeAllowed && !probe.cancel
+  probe.cancelled           := l1Probe.cancel
+  probe.complete.valid      := l1Probe.complete.valid && probeAllowed && !probe.cancel
+  probe.complete.bits.hit   := l1Probe.complete.bits.hit
+  probe.complete.bits.value := l1Probe.complete.bits.value
+  l1Probe.complete.ready    := probe.complete.ready && probeAllowed && !probe.cancel
   // Broker state covers the full accepted VM/PTE/data/fetch request through its response.
   // The wrapper adds L1 outstanding==0; CMO activity/ACK must not gate its own drain.
   val originalIdleDrain    = state === idle && lsu.io.idle
   val blockedPhysicalQuery = WireDefault(false.B)
-  cache.io.olderRequestsDrained := (originalIdleDrain || blockedPhysicalQuery) &&
+  cache.io.olderRequestsDrained := (originalIdleDrain || blockedPhysicalQuery) && !probe.active &&
     !authorizationPending && !cacheOffer && !cacheOwner && !uncachedOffer && !uncachedOwner && !pteDenied
   commands.foreach { mode =>
     val port         = io.admission.get
@@ -444,17 +503,17 @@ class Core(
       uncached.valid || probeQuery
     port.cpuQuery.paddr                := Mux(
       probeQuery,
-      probe.addr(config.chi.addressBits - 1, 0),
+      probeAddr(config.chi.addressBits - 1, 0),
       Mux(uncached.valid, uncached.bits.addr(config.chi.addressBits - 1, 0), access.addr)
     )
     port.cpuQuery.sizeLog2             := Mux(
       probeQuery,
-      probe.size,
+      probe.req.bits.size,
       Mux(uncached.valid, uncached.bits.size, Mux(access.atomicWord, 2.U, 3.U))
     )
     port.cpuQuery.write                := Mux(
       probeQuery,
-      probe.write,
+      probe.req.bits.write,
       Mux(
         uncached.valid,
         uncached.bits.write,

@@ -3,7 +3,8 @@ package memcore.bus.chi.rnf
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import memcore.memory.queue.Queue
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 // Each bank executes one demand operation while serving snoops independently.
 // The retirement FIFO preserves the order of the untagged CPU result interface.
@@ -42,7 +43,7 @@ class BankedChiCache(config: RnfParams) extends Module {
     val outstanding = Output(UInt(32.W))
   })
 
-  val caches = Seq.tabulate(banks) { i =>
+  val caches: Seq[Instance[ChiCache]] = Seq.tabulate(banks) { i =>
     Instantiate(new ChiCache(config, i))
   }
 
@@ -53,7 +54,10 @@ class BankedChiCache(config: RnfParams) extends Module {
   val serial        = io.access.bits.atomic =/= CacheAtomic.None.U
   val serialActive  = RegInit(false.B)
   val serialSC      = RegInit(false.B)
-  val canAccept     = !serialActive && (!serial || !retirement.io.deq.valid)
+  val probePending  = RegInit(false.B)
+  val probeBank     = Reg(UInt(bankBits.W))
+  val probeOffered  = io.probe.map(_.req.valid).getOrElse(false.B)
+  val canAccept     = !serialActive && (!serial || retirement.io.count === 0.U) && !probePending && !probeOffered
   val selectedReady = VecInit(caches.map(_.io.access.ready))(selected)
   io.access.ready         := canAccept && retirement.io.enq.ready && selectedReady
   retirement.io.enq.valid := io.access.valid && canAccept && selectedReady
@@ -75,22 +79,27 @@ class BankedChiCache(config: RnfParams) extends Module {
     caches(i).io.result.ready := retirement.io.deq.valid && oldest === i.U && io.result.ready
   }
   when(io.result.fire && serialActive)(serialActive := false.B)
-  io.outstanding := retirement.io.count
+  io.outstanding := retirement.io.count + probePending.asUInt
 
-  // Probes complete in their cycle, so they wait for every accepted demand operation to retire.
   io.probe.foreach { probe =>
-    val probed = bankOf(probe.addr)
+    val probed = bankOf(probe.req.bits.addr)
+    val admit  = retirement.io.count === 0.U && !serialActive && !probePending && !probe.cancel
+    probe.req.ready      := admit && VecInit(caches.map(_.io.probe.get.req.ready))(probed)
+    probe.complete.valid := probePending && !probe.cancel && VecInit(caches.map(_.io.probe.get.complete.valid))(
+      probeBank
+    )
+    probe.complete.bits  := VecInit(caches.map(_.io.probe.get.complete.bits))(probeBank)
     for (i <- 0 until banks) {
       val port = caches(i).io.probe.get
-      port.valid := probe.valid && probed === i.U
-      port.addr  := probe.addr
-      port.write := probe.write
-      port.data  := probe.data
-      port.mask  := probe.mask
+      port.req.valid      := probe.req.valid && admit && probed === i.U
+      port.req.bits       := probe.req.bits
+      port.complete.ready := probePending && probeBank === i.U && probe.complete.ready && !probe.cancel
+      port.cancel         := probePending && probeBank === i.U && probe.cancel
+      port.retire         := probePending && probeBank === i.U && probe.retire && !probe.cancel
+      assert(port.req.fire === (probe.req.fire && probed === i.U), "Probe subbank admission differs from top")
     }
-    probe.ready := !retirement.io.deq.valid && !serialActive && VecInit(caches.map(_.io.probe.get.ready))(probed)
-    probe.hit   := VecInit(caches.map(_.io.probe.get.hit))(probed)
-    probe.value := VecInit(caches.map(_.io.probe.get.value))(probed)
+    when(probe.req.fire) { probePending := true.B; probeBank := probed }
+    when(probePending && (probe.cancel || probe.complete.fire))(probePending := false.B)
   }
 
   // A hart has one LR reservation across all banks. Any SC consumes it, even

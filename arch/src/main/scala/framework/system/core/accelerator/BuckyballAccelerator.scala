@@ -1,5 +1,7 @@
 package framework.system.core.accelerator
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
@@ -145,7 +147,9 @@ class BuckyballAccelerator(val b: GlobalConfig) extends Module {
     bankReadReqWithIds.bits.req         := ballDomain.bankRead(i).io.req.bits
     ballDomain.bankRead(i).io.req.ready := bankReadReqWithIds.ready
 
-    val bankReadReqQ = Queue(bankReadReqWithIds, 8)
+    val bankReadReqQueue = Module(new Queue(chiselTypeOf(bankReadReqWithIds.bits), 8))
+    bankReadReqQueue.io.enq <> bankReadReqWithIds
+    val bankReadReqQ     = bankReadReqQueue.io.deq
 
     memDomain.io.ballDomain.bankRead(i).io.req.valid := bankReadReqQ.valid
     memDomain.io.ballDomain.bankRead(i).io.req.bits  := bankReadReqQ.bits.req

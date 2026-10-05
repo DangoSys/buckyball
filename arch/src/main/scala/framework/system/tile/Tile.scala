@@ -2,7 +2,7 @@ package framework.system.tile
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.CpuParams
 import framework.system.configloader.{RocketTileCore, TileTopology}
 import framework.system.core.rocket.configs.RocketCpuParam
@@ -117,6 +117,7 @@ class Tile(
   @public
   val io = IO(new Bundle {
     val resetVector      = Input(Vec(cores.size, UInt(64.W)))
+    val time             = Input(UInt(64.W))
     val interrupts       = Input(Vec(cores.size, new CoreInterrupts))
     val uncachedRequest  = Vec(cores.size, Decoupled(new UncachedRequest(cp)))
     val uncachedResponse = Vec(cores.size, Flipped(Decoupled(new UncachedResponse(cp))))
@@ -134,7 +135,7 @@ class Tile(
     val trapPc           = Output(Vec(cores.size, UInt(64.W)))
   })
 
-  val composition = Instantiate(new Composition(
+  val composition: Instance[Composition] = Instantiate(new Composition(
     memory,
     placements,
     regions,
@@ -146,11 +147,12 @@ class Tile(
   // A CPU-only core 0 issues bank moves only into the shared bank mesh.
   val controllerMove = shared && cores.head.buckyball.isEmpty
 
-  val banks = Option.when(shared)(
+  val banks: Option[Instance[BankNetwork]] = Option.when(shared)(
     Instantiate(new BankNetwork(base.get, enabled, useMesh = true, controllerMove = controllerMove))
   )
 
   composition.io.resetVector := io.resetVector
+  composition.io.time        := io.time
   composition.io.interrupts  := io.interrupts
   io.uncachedRequest <> composition.io.uncachedRequest
   composition.io.uncachedResponse <> io.uncachedResponse
@@ -168,8 +170,9 @@ class Tile(
   for (i <- cores.indices) {
     cores(i).buckyball match {
       case Some(b) =>
-        val accelerator = Instantiate(new BuckyballAccelerator(b))
-        val admission   = Instantiate(new Admission(b, tracking, prepared, regions, axiParams)(cpuParameters(i)))
+        val accelerator: Instance[BuckyballAccelerator] = Instantiate(new BuckyballAccelerator(b))
+        val admission:   Instance[Admission]            =
+          Instantiate(new Admission(b, tracking, prepared, regions, axiParams)(cpuParameters(i)))
         admission.io.core <> composition.io.admission(i)
         admission.io.task <> composition.io.taskControl(i)
         if (i == 0) composition.io.controllerSatp := admission.io.taskSatp
@@ -216,7 +219,7 @@ class Tile(
         io.failure(i).bits                   := admission.io.fault
         io.workDrained(i)                    := admission.io.workDrained
       case None    =>
-        val admission =
+        val admission: Instance[ControllerAdmission] =
           Instantiate(new ControllerAdmission(tracking, c, moves = i == 0 && controllerMove)(cpuParameters(i)))
         admission.io.core <> composition.io.admission(i)
         admission.io.task <> composition.io.taskControl(i)

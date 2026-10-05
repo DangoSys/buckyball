@@ -1,0 +1,11 @@
+[workloads]
+tests = [
+  "goban-goban-ctest-rvv_kernel-linux",
+  "goban-goban-ctest-rvv_silu-linux",
+  "goban-goban-ctest-rvv_swiglu-linux",
+  "goban-goban-ctest-rvv_snake-linux",
+  "goban-goban-ctest-rvv_mxfp8_quant-linux",
+  "goban-goban-ctest-rvv_matmul-linux",
+  "goban-goban-ctest-mvin_mvout_test-linux",
+  "goban-goban-ctest-mvin_mvout_stride_test-linux",
+]

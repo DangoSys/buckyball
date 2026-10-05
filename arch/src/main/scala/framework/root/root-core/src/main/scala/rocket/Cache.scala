@@ -1,8 +1,10 @@
 package hier.core.rocket
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.{RequestFlit, RequesterPort}
 import memcore.bus.chi.rnf.{BankedChiCache, CacheAccess, CacheProbe, CacheResult, RnfParams}
 import memcore.memory.interlock.{Acknowledgement, Maintenance => Range, Params}
@@ -26,9 +28,9 @@ class Cache(config: RnfParams, tracking: Params) extends Module {
     val outstanding          = Output(UInt(32.W))
   })
 
-  val cache       = Instantiate(new BankedChiCache(config))
-  val maintenance = Instantiate(new Maintenance(config, tracking))
-  val drained     = io.olderRequestsDrained && cache.io.outstanding === 0.U
+  val cache:       Instance[BankedChiCache] = Instantiate(new BankedChiCache(config))
+  val maintenance: Instance[Maintenance]    = Instantiate(new Maintenance(config, tracking))
+  val drained = io.olderRequestsDrained && cache.io.outstanding === 0.U
   maintenance.io.request.valid := io.maintenance.valid && drained
   maintenance.io.request.bits  := io.maintenance.bits
   io.maintenance.ready         := maintenance.io.request.ready && drained

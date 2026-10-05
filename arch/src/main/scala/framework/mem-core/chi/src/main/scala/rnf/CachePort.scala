@@ -12,20 +12,23 @@ class CacheAccess(p: Params) extends Bundle {
   val atomicWord = Bool()
 }
 
-/**
- * Same-cycle hit access for a client that can fall back to `access` on a miss. The cache acts only
- * when `ready` (no demand operation, retirement or snoop in progress) and the line `hit`s with the
- * needed permission; a write then merges `data` under `mask` into the addressed doubleword.
- */
+class CacheProbeRequest(p: Params) extends Bundle {
+  val addr  = UInt(p.addressBits.W)
+  val write = Bool()
+  val data  = UInt(64.W)
+  val mask  = UInt(8.W)
+}
+
+class CacheProbeResult extends Bundle {
+  val hit   = Bool()
+  val value = UInt(64.W)
+}
+
 class CacheProbe(p: Params) extends Bundle {
-  val valid = Input(Bool())
-  val addr  = Input(UInt(p.addressBits.W))
-  val write = Input(Bool())
-  val data  = Input(UInt(64.W))
-  val mask  = Input(UInt(8.W))
-  val ready = Output(Bool())
-  val hit   = Output(Bool())
-  val value = Output(UInt(64.W))
+  val req      = Flipped(chisel3.util.Decoupled(new CacheProbeRequest(p)))
+  val complete = chisel3.util.Decoupled(new CacheProbeResult)
+  val cancel   = Input(Bool())
+  val retire   = Input(Bool())
 }
 
 object CacheAtomic {

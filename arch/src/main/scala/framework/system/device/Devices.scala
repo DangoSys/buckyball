@@ -26,10 +26,12 @@ class Devices(p: DeviceParams, cp: CpuMemParams, hartIds: Seq[Int]) extends Modu
     val externalResponse = Vec(n, Flipped(Decoupled(new UncachedResponse(cp))))
     val sources          = Input(UInt(p.plic.sources.W))
     val interrupts       = Output(Vec(n, new CoreInterrupts))
+    val time             = Output(UInt(64.W))
   })
 
   val clint = Module(new Clint(p.clint, hartIds))
   val plic  = Module(new Plic(p.plic, hartIds))
+  io.time         := clint.io.time
   plic.io.sources := io.sources
   for (i <- 0 until n) {
     io.interrupts(i).timer              := clint.io.mtip(i)

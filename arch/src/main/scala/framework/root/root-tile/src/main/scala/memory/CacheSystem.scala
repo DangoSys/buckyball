@@ -2,7 +2,7 @@ package hier.tile.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.bus.chi.rnf.{BankedChiCache, CacheAccess, CacheResult, RnfParams}
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
@@ -31,9 +31,9 @@ class CacheSystem(p: CoherenceParams) extends Module {
     val observedRxDat     = Output(Valid(new DataFlit(c)))
   })
 
-  val home = Instantiate(new Home(p))
+  val home: Instance[Home] = Instantiate(new Home(p))
 
-  val cores = Seq.tabulate(p.agents)(i =>
+  val cores: Seq[Instance[BankedChiCache]] = Seq.tabulate(p.agents)(i =>
     Instantiate(new BankedChiCache(
       RnfParams(c, nodeId = i + 1, cacheLines = 8, homeId = p.homeId, homeCount = 1, banks = 2)
     ))

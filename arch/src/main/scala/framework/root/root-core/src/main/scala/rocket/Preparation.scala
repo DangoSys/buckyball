@@ -2,7 +2,7 @@ package hier.core.rocket
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import freechips.rocketchip.rocket.PMP
 import memcore.bus.chi.rnf.{CacheAccess, CacheResult}
@@ -44,9 +44,9 @@ class Preparation(config: PreparationParams, regions: Seq[PhysicalRegion])(impli
     val pteResponse  = Flipped(Decoupled(new CacheResult))
   })
 
-  val preflight  = Instantiate(new Preflight(config))
-  val maps       = Instantiate(new PreparedMap(config))
-  val permission = Instantiate(new PermissionCheck(config, regions))
+  val preflight:  Instance[Preflight]       = Instantiate(new Preflight(config))
+  val maps:       Instance[PreparedMap]     = Instantiate(new PreparedMap(config))
+  val permission: Instance[PermissionCheck] = Instantiate(new PermissionCheck(config, regions))
   preflight.io.command.valid := io.command.valid && maps.io.reserve.ready && !reset.asBool
   preflight.io.command.bits  := io.command.bits
   maps.io.reserve.valid      := io.command.valid && preflight.io.command.ready && !reset.asBool

@@ -103,10 +103,17 @@ class Unit(b: GlobalConfig) extends Module {
   array.io.load    := false.B
   array.io.rowData := 0.U
 
-  val accRead = accumulator.read(
+  private val accReadEnable  = state === outputRequest || (state === initRequest && !first && row < panelHeight)
+  private val accWriteEnable = state === store && row < panelHeight
+
+  private val accRead = accumulator.readWrite(
     Mux(state === outputRequest, outputLine, accAddress),
-    state === outputRequest || (state === initRequest && !first && row < panelHeight)
+    array.io.rowOut,
+    accReadEnable || accWriteEnable,
+    accWriteEnable
   )
+
+  assert(!(accReadEnable && accWriteEnable))
 
   private val inputState = Reg(Vec(2, UInt(2.W)))
   private val inputWord  = Reg(Vec(2, UInt(128.W)))
@@ -327,7 +334,6 @@ class Unit(b: GlobalConfig) extends Module {
       }.otherwise(context := context + 1.U)
     }
     is(store) {
-      when(row < panelHeight)(accumulator.write(accAddress, array.io.rowOut))
       when(row === 15.U) {
         row                 := 0.U
         when(context + 1.U === count) {

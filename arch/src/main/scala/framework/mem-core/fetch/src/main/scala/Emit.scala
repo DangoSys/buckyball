@@ -41,7 +41,12 @@ object Emit extends App {
       "execute"           -> 1
     )
   )
-  fields("RESPONSE", "io_response_bits_", "response", Seq("data" -> 64, "pageFault" -> 1, "accessFault" -> 1))
+  fields(
+    "RESPONSE",
+    "io_response_bits_",
+    "response",
+    Seq("data" -> 64, "line" -> 512, "lineExecutable" -> 1, "pageFault" -> 1, "accessFault" -> 1)
+  )
   fields(
     "PACKET",
     "io_packet_bits_",

@@ -6,6 +6,7 @@
 
 alignas(16) static float input[128];
 alignas(16) static uint8_t output[144];
+static double candidates[127];
 
 // Enumerate finite E4M3 codes independently, choosing nearest, ties to even.
 static uint8_t encode(float value, int scale) {
@@ -13,11 +14,7 @@ static uint8_t encode(float value, int scale) {
   double distance = magnitude;
   unsigned selected = 0;
   for (unsigned code = 1; code <= 126; ++code) {
-    unsigned exponent = code >> 3, fraction = code & 7;
-    double candidate = exponent
-                           ? std::ldexp(1.0 + fraction / 8.0, int(exponent) - 7)
-                           : std::ldexp(double(fraction), -9);
-    double error = std::fabs(magnitude - candidate);
+    double error = std::fabs(magnitude - candidates[code]);
     if (error < distance || (error == distance && !(code & 1))) {
       selected = code;
       distance = error;
@@ -27,6 +24,12 @@ static uint8_t encode(float value, int scale) {
 }
 
 int main() {
+  for (unsigned code = 1; code <= 126; ++code) {
+    unsigned exponent = code >> 3, fraction = code & 7;
+    candidates[code] = exponent
+                           ? std::ldexp(1.0 + fraction / 8.0, int(exponent) - 7)
+                           : std::ldexp(double(fraction), -9);
+  }
   for (unsigned i = 0; i < 32; ++i) {
     input[i] = (int(i) - 16) * 0.25f;
     input[32 + i] = (i & 1 ? -1.0f : 1.0f) * (16.0f + i * 0.5f);

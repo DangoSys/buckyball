@@ -2,7 +2,7 @@ package framework.system.tile
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.{SharedMemBackend, SharedMemLayout}
@@ -56,7 +56,7 @@ class BankNetwork(
       if (b.sim.diffTest) Some(Output(Vec(SharedMemLayout.totalBank(b), new PhysicalBankHash(b)))) else None
   })
 
-  val sharedBackend = Instantiate(new SharedMemBackend(b, useMesh))
+  val sharedBackend: Instance[SharedMemBackend] = Instantiate(new SharedMemBackend(b, useMesh))
   io.bankHashes.foreach(_ := sharedBackend.io.bank_hashes.get)
   for ((physical, compute) <- enabledCoreIds.zipWithIndex) {
     val port = io.compute(compute)
@@ -109,7 +109,7 @@ class BankNetwork(
   val configArb = Module(new Arbiter(new MemConfigerIO(b), enabledCoreIds.size))
   for (compute <- enabledCoreIds.indices) { configArb.io.in(compute) <> io.compute(compute).config }
   sharedBackend.io.config <> configArb.io.out
-  val barrier = Instantiate(new BarrierUnit(enabledCoreIds.size))
+  val barrier: Instance[BarrierUnit] = Instantiate(new BarrierUnit(enabledCoreIds.size))
   for (compute <- enabledCoreIds.indices) {
     barrier.io.arrive(compute)         := io.compute(compute).barrierArrive
     io.compute(compute).barrierRelease := barrier.io.release(compute)

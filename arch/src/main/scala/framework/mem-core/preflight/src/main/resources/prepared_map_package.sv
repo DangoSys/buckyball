@@ -296,6 +296,15 @@ package prepared_map_pkg;
       retire_tag(2);
       retire_tag(3);
       retire_tag(5);
+      // Retain an explicitly authorized same-page union and a discontiguous next PA page.
+      reserve_tag(10);
+      record(10, 'h74003e00, 'h800e00, 512, 0, 0);
+      record(10, 'h74004000, 'h802000, 16, 0, 1);
+      wait_ready(10);
+      probes(query(10, 'h74003e10, 16, 0), query(10, 'h74004000, 16, 0));
+      probes(query(10, 'h74003df0, 16, 0), query(10, 'h74004010, 8, 0));
+      probes(query(10, 'h74003ff8, 16, 0), query(10, 'h74003e48, 16, 1));
+      retire_tag(10);
       reserve_tag(9);
       record(9, 'h9000, 'h19000, 64, 0, 1);
       // Reset cancels a terminal notification still under backpressure.

@@ -3,6 +3,7 @@ package sims.soc
 import chisel3._
 import chisel3.util.PriorityEncoder
 import chisel3.experimental.hierarchy.Instantiate
+import chisel3.experimental.hierarchy.Instance
 import framework.system.System
 import framework.system.configloader.{ChipLoader, ExampleTopology, RocketTileCore}
 import framework.system.device.{BootRom, DeviceParams}
@@ -50,7 +51,7 @@ class SimSoc(target: SystemTarget, diffTest: Boolean) extends Module {
     CacheParams(chi.addressBits, 64, 64, 4, 8, 4, 2),
     agents = 2,
     mshrEntries = 8,
-    homeId = 64
+    homeId = math.max(64, 2 * topology.tiles.map(_.cores.size).max + 1)
   )
 
   // Every hart starts in the BootROM, which validates mhartid and jumps to the DRAM entry.
@@ -84,11 +85,11 @@ class SimSoc(target: SystemTarget, diffTest: Boolean) extends Module {
     val axi = new axi4.Port(axiParams)
   })
 
-  val system = Instantiate(new System(
+  val system: Instance[System] = Instantiate(new System(
     topology,
     36,
     memory,
-    RnfParams(chi, cacheLines = 64, banks = 2),
+    RnfParams(chi, cacheLines = 64, banks = 2, homeId = memory.homeId),
     regions,
     TrackingParams(addressBits = chi.addressBits),
     ram,
@@ -113,7 +114,7 @@ class SimSoc(target: SystemTarget, diffTest: Boolean) extends Module {
   // The console is polled through SBI; no device drives a PLIC source yet.
   system.io.interruptSources      := 0.U
 
-  val control = Instantiate(new SystemControl(cores, CpuMemParams(chi, ram.tagBits), scu))
+  val control: Instance[SystemControl] = Instantiate(new SystemControl(cores, CpuMemParams(chi, ram.tagBits), scu))
   control.io.request <> system.io.deviceRequest
   control.io.abort.valid     := anyFailure && !failed
   control.io.abort.bits.hart := hartIds(firstCore)

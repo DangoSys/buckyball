@@ -1,8 +1,10 @@
 package memcore.bus.axi4
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 class AddressAcceptance(p: Params, masters: Int) extends Bundle {
   val master   = UInt(math.max(1, log2Ceil(masters)).W)
@@ -88,8 +90,8 @@ class Interconnect(p: Params, masters: Int, slots: Option[Int] = None) extends M
   val writeId        = Reg(Vec(capacity, UInt(p.idBits.W)))
   val writeRemaining = Reg(Vec(capacity, UInt(9.W)))
 
-  val reads     = Instantiate(new AddressSelector(p, masters))
-  val writes    = Instantiate(new AddressSelector(p, masters))
+  val reads:  Instance[AddressSelector] = Instantiate(new AddressSelector(p, masters))
+  val writes: Instance[AddressSelector] = Instantiate(new AddressSelector(p, masters))
   val owners    = Module(new Queue(new WriteOwner(p, masters), capacity))
   val readFree  = VecInit(readLive.map(live => !live))
   val writeFree = VecInit(writeLive.map(live => !live))

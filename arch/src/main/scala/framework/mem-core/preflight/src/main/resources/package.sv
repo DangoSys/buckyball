@@ -377,7 +377,7 @@ package preflight_pkg;
     endtask
     task execute();
       u64 root, root2;
-      int prior;
+      int prior, gap_stride;
       command_t q;
       ctl.reset = 1;
       cmd.valid = 0;
@@ -491,6 +491,35 @@ package preflight_pkg;
       submit(request(28, 'h74002ffc, 1, 8, 8));
       drain();
       verify_contract(failures[4] == prior + 1, "cross-page read omitted padded transport bytes");
+      preflight_ref_policy(model, 0, 0, 0, 0, 0);
+      // MobileNet's gather has nine aligned segments on two noncontiguous PA pages.
+      // Every same-page gap must be explicitly authorized before the plan retains a union.
+      root  = mapping('h74003e00, 2);
+      prior = failures[5];
+      submit(request(29, 'h74003e00, 1, 16, 4032, 8, 72, 0, 8, root));
+      drain();
+      verify_contract(failures[5] == prior, "Authorized MobileNet gather exceeded range capacity");
+      // Splitting preserves the exact accessed bytes and keeps each list within eight records.
+      prior = failures[5];
+      submit(request(30, 'h74003e00, 1, 16, 4032, 4, 72, 0, 8, root));
+      drain();
+      submit(request(31, 'h74003f20, 1, 16, 4032, 4, 72, 0, 8, root));
+      drain();
+      verify_contract(failures[5] == prior, "Split MobileNet gather exceeded range capacity");
+      // A denied hole must keep both individually legal spans, rather than poison the command.
+      gap_stride = `PF_BEAT_BYTES == 16 ? 72 : 2 * `PF_BEAT_BYTES + 8;
+      preflight_ref_policy(model, 0, 0, 1, 'h800e00 + `PF_BEAT_BYTES,
+                           'h800e00 + (gap_stride / `PF_BEAT_BYTES) * `PF_BEAT_BYTES - 1);
+      prior = failures[4];
+      submit(request(32, 'h74003e00, 1, 16, 4032, 2, gap_stride, 0, 8, root));
+      drain();
+      verify_contract(failures[4] == prior, "Denied union rejected individually authorized pixels");
+      // Denial of an actual transport byte must still yield one terminal fault, no partial plan.
+      preflight_ref_policy(model, 0, 0, 1, 'h800e00 + gap_stride, 'h800e00 + gap_stride + 7);
+      submit(request(33, 'h74003e00, 1, 16, 4032, 2, gap_stride, 0, 8, root));
+      drain();
+      verify_contract(failures[4] == prior + 1,
+                      "Actual MobileNet pixel bytes escaped authorization");
       preflight_ref_policy(model, 0, 0, 0, 0, 0);
       verify_contract(
           peak==4&&submitted==retired&&command_stalls>0&&output_stalls>0&&auth_stalls>0,

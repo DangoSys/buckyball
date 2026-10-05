@@ -2,7 +2,7 @@ package hier.tile.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.system.core.rocket.CpuParams
 import hier.core.rocket.{AdmissionPorts, Commands, Core}
 import hier.tile.TaskController
@@ -74,6 +74,7 @@ class Composition(
     val taskControl      = Vec(placements.size, new RoCCIO(64))
     val controllerSatp   = Input(UInt(64.W))
     val resetVector      = Input(Vec(placements.size, UInt(64.W)))
+    val time             = Input(UInt(64.W))
     val interrupts       = Input(Vec(placements.size, new CoreInterrupts))
     val admission        =
       MixedVec(placements.map(entry => new AdmissionPorts(tracking, entry.cpu.core.nPMPs, c)(entry.cpu)))
@@ -91,7 +92,8 @@ class Composition(
   })
 
   if (workerCoreIds.nonEmpty) {
-    val taskController = Instantiate(new TaskController(workerCoreIds, signatures, placements.size))
+    val taskController: Instance[TaskController] =
+      Instantiate(new TaskController(workerCoreIds, signatures, placements.size))
     taskController.io.ports <> io.taskControl
     taskController.io.satp := io.controllerSatp
   } else {
@@ -120,18 +122,19 @@ class Composition(
     }
   }
 
-  val memorySystem = Instantiate(new Memory(memory))
+  val memorySystem: Instance[Memory] = Instantiate(new Memory(memory))
   io.backingReq <> memorySystem.io.backingReq
   memorySystem.io.backingResp <> io.backingResp
   io.homeOutstanding := memorySystem.io.homeOutstanding
 
   for ((entry, index) <- placements.zipWithIndex) {
     val commands = Commands(entry.role.compute, entry.role.scheduler, tracking)
-    val core     = Instantiate(
+    val core: Instance[Core] = Instantiate(
       new Core(entry.l1, entry.l1.copy(nodeId = placements.size + index + 1), regions, Some(commands))(entry.cpu)
     )
     core.io.hartId                      := entry.hartId.U
     core.io.resetVector                 := io.resetVector(index)
+    core.io.time                        := io.time
     core.io.timerInterrupt              := io.interrupts(index).timer
     core.io.softwareInterrupt           := io.interrupts(index).software
     core.io.externalInterrupt           := io.interrupts(index).external

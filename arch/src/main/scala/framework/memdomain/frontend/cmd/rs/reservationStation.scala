@@ -1,5 +1,7 @@
 package framework.memdomain.frontend.cmd.rs
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._

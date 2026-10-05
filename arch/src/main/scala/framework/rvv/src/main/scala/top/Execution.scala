@@ -2,7 +2,7 @@ package framework.rvv
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
 
 @instantiable
@@ -19,11 +19,11 @@ class Execution(val b: GlobalConfig) extends Module {
     val memoryResponse = Vec(p.memoryPorts, Flipped(Decoupled(new VectorMemoryResponse)))
   })
 
-  val iBuf      = Seq.fill(2)(Instantiate(new IBuf(b)))
-  val registers = Instantiate(new ScalarRF)
-  val scalar    = Instantiate(new ScalarExecution)
-  val floating  = Instantiate(new ScalarFloating)
-  val vector    = Instantiate(new VectorCore(b))
+  val iBuf:      Seq[Instance[IBuf]]       = Seq.fill(2)(Instantiate(new IBuf(b)))
+  val registers: Instance[ScalarRF]        = Instantiate(new ScalarRF)
+  val scalar:    Instance[ScalarExecution] = Instantiate(new ScalarExecution)
+  val floating:  Instance[ScalarFloating]  = Instantiate(new ScalarFloating)
+  val vector:    Instance[VectorCore]      = Instantiate(new VectorCore(b))
 
   val idle :: fetch :: fetchWait :: execute :: vectorWait :: scalarWait :: floatWait :: memorySend :: memoryWait :: completed :: Nil =
     Enum(10)

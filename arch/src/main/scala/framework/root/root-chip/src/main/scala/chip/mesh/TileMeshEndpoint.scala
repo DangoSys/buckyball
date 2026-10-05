@@ -2,7 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.bus.axi.Beat
 
@@ -35,9 +35,12 @@ class TileMeshEndpoint(
     val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
   })
 
-  val chiEndpoint = Instantiate(new ChiMeshRequesterEndpoint(p, mesh, localX, localY, nodeMap))
-  val bulkTx      = Instantiate(new MeshBulkPacketizer(mesh, bulkDataBits, virtualChannel = 4, localX, localY, nodeMap))
-  val bulkRx      = Instantiate(new MeshBulkDepacketizer(mesh, bulkDataBits, virtualChannel = 4))
+  val chiEndpoint: Instance[ChiMeshRequesterEndpoint] =
+    Instantiate(new ChiMeshRequesterEndpoint(p, mesh, localX, localY, nodeMap))
+  val bulkTx:      Instance[MeshBulkPacketizer]       =
+    Instantiate(new MeshBulkPacketizer(mesh, bulkDataBits, virtualChannel = 4, localX, localY, nodeMap))
+  val bulkRx:      Instance[MeshBulkDepacketizer]     =
+    Instantiate(new MeshBulkDepacketizer(mesh, bulkDataBits, virtualChannel = 4))
   chiEndpoint.io.chi <> io.chi
   bulkTx.io.in <> io.bulkIn
   for (vc <- 0 until mesh.virtualChannels) {
@@ -76,7 +79,7 @@ class TileMeshBulkLoopback extends Module {
     val out = Decoupled(new Beat(256))
   })
 
-  val endpoint = Instantiate(new TileMeshEndpoint(chi, mesh, 0, 0, map))
+  val endpoint: Instance[TileMeshEndpoint] = Instantiate(new TileMeshEndpoint(chi, mesh, 0, 0, map))
   endpoint.io.bulkIn <> io.in
   io.out <> endpoint.io.bulkOut
   endpoint.io.chi.req.valid   := false.B

@@ -2,7 +2,7 @@ package hier.tile.memory
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi.Opcode
 import memcore.bus.chi.rnf.CacheAccess
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
@@ -47,29 +47,32 @@ class VirtualCacheSystem(p: CoherenceParams, regions: Seq[PhysicalRegion]) exten
     val outstanding      = Output(UInt(log2Ceil(p.mshrEntries + 1).W))
   })
 
-  val virtualMemory = Instantiate(new VirtualMemory(cp, regions))
-  val caches        = Instantiate(new CacheSystem(p))
-  virtualMemory.io.active     := io.active
+  val virtualMemory: Instance[VirtualMemory] = Instantiate(new VirtualMemory(cp, regions))
+  val caches:        Instance[CacheSystem]   = Instantiate(new CacheSystem(p))
+  virtualMemory.io.active           := io.active
+  virtualMemory.io.flushTranslation := false.B
+  virtualMemory.io.lookup.config    := 0.U.asTypeOf(virtualMemory.io.lookup.config)
+  virtualMemory.io.lookup.req       := 0.U.asTypeOf(virtualMemory.io.lookup.req)
   virtualMemory.io.request <> io.request
   io.response <> virtualMemory.io.response
   io.authorizationRequest <> virtualMemory.io.authorizationRequest
   virtualMemory.io.authorizationResponse <> io.authorizationResponse
   io.uncachedRequest <> virtualMemory.io.uncachedRequest
   virtualMemory.io.uncachedResponse <> io.uncachedResponse
-  caches.io.active            := io.active
-  caches.io.blockRequesterRsp := false.B
+  caches.io.active                  := io.active
+  caches.io.blockRequesterRsp       := false.B
   caches.io.access(0) <> virtualMemory.io.cacheRequest
   virtualMemory.io.cacheResponse <> caches.io.result(0)
-  caches.io.access(1).valid   := false.B
-  caches.io.access(1).bits    := 0.U.asTypeOf(caches.io.access(1).bits)
-  caches.io.result(1).ready   := false.B
+  caches.io.access(1).valid         := false.B
+  caches.io.access(1).bits          := 0.U.asTypeOf(caches.io.access(1).bits)
+  caches.io.result(1).ready         := false.B
   when(caches.io.result(1).valid)(assert(false.B, "Virtual LSU inactive requester returned data"))
   io.memoryReq <> caches.io.memoryReq
   caches.io.memoryResp <> io.memoryResp
-  io.outstanding              := caches.io.outstanding
-  io.observedTranslation      := virtualMemory.io.observedTranslation
-  io.observedPhysical         := virtualMemory.io.observedPhysical
-  io.observedCache            := virtualMemory.io.observedCache
-  io.observedEviction.valid   := caches.io.observedReq.valid && caches.io.observedReq.bits.opcode === Opcode.Evict.U
-  io.observedEviction.bits    := caches.io.observedReq.bits.addr
+  io.outstanding                    := caches.io.outstanding
+  io.observedTranslation            := virtualMemory.io.observedTranslation
+  io.observedPhysical               := virtualMemory.io.observedPhysical
+  io.observedCache                  := virtualMemory.io.observedCache
+  io.observedEviction.valid         := caches.io.observedReq.valid && caches.io.observedReq.bits.opcode === Opcode.Evict.U
+  io.observedEviction.bits          := caches.io.observedReq.bits.addr
 }
