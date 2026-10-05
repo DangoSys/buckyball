@@ -25,6 +25,23 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
+    if "pk" in body or "host-io" in body:
+        return ApiResponse(
+            status=400, body={"error": "Unknown parameter: pk or host-io"}
+        )
+    if body.get("system") and body.get("core_index") is not None:
+        return ApiResponse(
+            status=400,
+            body={
+                "error": "system boot runs all chip harts; core_index cannot be supplied"
+            },
+        )
+    if not body.get("system") and any(
+        key in body for key in ("dtb", "initrd", "memory-mib")
+    ):
+        return ApiResponse(
+            status=400, body={"error": "dtb, initrd and memory-mib require system boot"}
+        )
     chip = body.get("chip", "")
     try:
         require_chip({"chip": chip})
@@ -44,8 +61,15 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         try:
             model_run_commands(get_buckyball_path(), body)
         except (ValueError, KeyError, OSError) as error:
-            return ApiResponse(status=400, body={"success": False, "failure": True,
-                "returncode": 400, "message": str(error)})
+            return ApiResponse(
+                status=400,
+                body={
+                    "success": False,
+                    "failure": True,
+                    "returncode": 400,
+                    "message": str(error),
+                },
+            )
     elif not binary:
         return ApiResponse(
             status=400,
@@ -57,5 +81,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
-    await ctx.enqueue({"topic": "bebop.bemu.sim", "data": {**body, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue(
+        {"topic": "bebop.bemu.sim", "data": {**body, "_trace_id": ctx.trace_id}}
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

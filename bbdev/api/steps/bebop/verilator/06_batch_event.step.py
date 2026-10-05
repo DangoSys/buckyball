@@ -53,7 +53,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     elf_root = workloads_output_root(bbdir)
-    test_type = input_data.get("test", "elf-tests")
+    test_type = input_data.get("test", "bare-tests")
     diff = bool(input_data.get("diff", False))
     try:
         workload_toml = resolve_workload_toml(

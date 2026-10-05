@@ -7,9 +7,11 @@ Runs bebop bemu batch regression:
 """
 
 import os
+import json
 import shutil
 import shlex
 import sys
+from pathlib import Path
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -65,7 +67,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     elf_root = workloads_output_root(bbdir)
     env = os.environ.copy()
     env.update(bebop_cargo_env(bbdir, chip))
-    test_type = input_data.get("test", "elf-tests")
+    test_type = input_data.get("test", "bare-tests")
     try:
         workload_toml = resolve_workload_toml(chip, "bemu", test_type, bbdir)
     except ValueError as e:
@@ -83,6 +85,27 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
+    if input_data.get("cpu-tests", False):
+        for stage, manifest in (
+            ("CPU", Path(bbdir) / "bebop/src/nodes/bemu/rvcpu/Cargo.toml"),
+            ("clock", Path(bbdir) / "bebop/src/nodes/lib/clint/Cargo.toml"),
+        ):
+            unit_result = await stream_run_logger_async(
+                cmd=f"nix develop -c cargo test --manifest-path {shlex.quote(str(manifest))} --lib --jobs {int(input_data.get('jobs', 1))}",
+                logger=ctx.logger,
+                cwd=bbdir,
+                stdout_prefix=f"bemu {stage} tests",
+                stderr_prefix=f"bemu {stage} tests",
+            )
+            if unit_result.returncode != 0:
+                await check_result(
+                    ctx,
+                    unit_result.returncode,
+                    continue_run=False,
+                    extra_fields={"task": f"{stage}-tests", "backend": "bemu"},
+                    trace_id=origin_tid,
+                )
+                return
     build_cmd = f"nix develop -c cargo build --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --tests"
     ctx.logger.info("Building bebop bemu (tests)...")
     build_result = await stream_run_logger_async(
@@ -102,6 +125,37 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    if input_data.get("cpu-tests", False):
+        focused_cmd = f"nix develop -c cargo test --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --lib"
+        placement = (
+            Path(bbdir)
+            / "examples/chips"
+            / chip
+            / "configs/generated/config/derived.json"
+        )
+        cores = json.loads(placement.read_text())["cores"]
+        if not any(core["ball_num"] > 0 for core in cores):
+            ctx.logger.info(
+                "CPU-only configuration: NPU DMA unit tests are not applicable"
+            )
+            focused_cmd += " -- --skip accel::dma_preflight_tests"
+        focused_result = await stream_run_logger_async(
+            cmd=focused_cmd,
+            logger=ctx.logger,
+            cwd=bbdir,
+            stdout_prefix="bemu memory tests",
+            stderr_prefix="bemu memory tests",
+            env=env,
+        )
+        if focused_result.returncode != 0:
+            await check_result(
+                ctx,
+                focused_result.returncode,
+                continue_run=False,
+                extra_fields={"task": "memory-tests", "backend": "bemu"},
+                trace_id=origin_tid,
+            )
+            return
     if input_data.get("clean-before", input_data.get("clean_before", False)):
         shutil.rmtree(
             os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts"), ignore_errors=True

@@ -7,5 +7,5 @@ config = {"name": "bebop-vcs-batch-api", "flows": ["bebop"], "triggers": [api("P
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
-    await ctx.enqueue({"topic": "bebop.vcs.batch", "data": {"chip": require_chip(body), "test": body.get("test", "elf-tests"), "_trace_id": ctx.trace_id}})
+    await ctx.enqueue({"topic": "bebop.vcs.batch", "data": {"chip": require_chip(body), "test": body.get("test", "bare-tests"), "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

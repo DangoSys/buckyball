@@ -26,10 +26,10 @@ def resolve_workload_toml(
     bbdir: str | None = None,
     diff: bool = False,
 ) -> str:
-    if test_type == "elf-tests":
-        suffix = "elf"
-    elif test_type == "pk-tests":
-        suffix = "pk"
+    if test_type == "bare-tests":
+        suffix = "bare"
+    elif test_type == "linux-tests":
+        suffix = "linux"
     else:
         raise ValueError(f"invalid test type: {test_type}")
     regression_dir = chip_regression_dir(chip, backend, bbdir)

@@ -31,14 +31,14 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(
             status=400,
             body={
-                "error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"
+                "error": "Missing required parameter: --test must be specified (bare-tests or linux-tests)"
             },
         )
-    if test_type not in ["elf-tests", "pk-tests"]:
+    if test_type not in ("bare-tests", "linux-tests"):
         return ApiResponse(
             status=400,
             body={
-                "error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"
+                "error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"
             },
         )
     await ctx.enqueue(
@@ -48,6 +48,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "chip": chip,
                 "test": test_type,
                 "jobs": body.get("jobs", 1),
+                "cpu-tests": bool(body.get("cpu-tests", False)),
                 "clean-before": body.get(
                     "clean-before", body.get("clean_before", False)
                 ),

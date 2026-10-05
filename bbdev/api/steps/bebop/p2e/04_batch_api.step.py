@@ -35,14 +35,18 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if not test_type:
         return ApiResponse(
             status=400,
-            body={"error": "Missing required parameter: --test must be specified (elf-tests or pk-tests)"}
+            body={"error": "Missing required parameter: --test must be specified (bare-tests or linux-tests)"}
         )
 
-    if test_type not in ["elf-tests", "pk-tests"]:
+    if test_type not in ["bare-tests", "linux-tests"]:
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests' or 'pk-tests'"}
+            body={"error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"}
         )
+
+    fpga_location = body.get("fpga-location", "0.A")
+    if not isinstance(fpga_location, str) or not fpga_location:
+        return ApiResponse(status=400, body={"error": "--fpga-location must be a location such as 1.A"})
 
     diff = bool(body.get("diff", False))
     data = {
@@ -50,6 +54,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "bitstream": bitstream,
         "test": test_type,
         "diff": diff,
+        "fpga-location": fpga_location,
     }
     await ctx.enqueue({"topic": "bebop.p2e.batch", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

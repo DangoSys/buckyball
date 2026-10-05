@@ -80,10 +80,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         **bebop_cargo_env(bbdir, chip),
         "VSRC_PATH": vsrc_dir,
         "OUT_PATH": str(build_path),
+        "CARGO_TARGET_DIR": os.path.join(bebop_dir, "target", f"{chip}-p2e{'-diff' if diff else ''}"),
     }
     if diff:
         features.append("bemu")
-        build_env["CARGO_TARGET_DIR"] = os.path.join(bebop_dir, "target", f"{chip}-p2e-diff")
     build_cmd = shlex.join([
         "nix", "develop", "--ignore-env",
         "--keep-env-var", "HOME",

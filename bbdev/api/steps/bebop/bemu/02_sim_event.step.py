@@ -108,7 +108,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         commands, run_log = model_run_commands(bbdir, params)
         run_log.mkdir(parents=True, exist_ok=True)
         ctx.logger.info(f"Model simulation logs: {run_log}")
-        filenames = ("run.log",) if input_data.get("reuse-simulator", False) else ("build.log", "run.log")
+        filenames = (
+            ("run.log",)
+            if input_data.get("reuse-simulator", False)
+            else ("build.log", "run.log")
+        )
         for command, filename in zip(commands, filenames, strict=True):
             command_line = shlex.join(["nix", "develop", "-c", *command])
             command_line = f"set -o pipefail; {command_line} 2>&1 | tee {shlex.quote(str(run_log / filename))}"
@@ -126,9 +130,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             if result.returncode:
                 break
         try:
-            report_path = performance_report(bbdir, report_context, origin_tid, "bemu", run_log, (run_log / "run.log").read_text(), result.returncode)
+            report_path = performance_report(
+                bbdir,
+                report_context,
+                origin_tid,
+                "bemu",
+                run_log,
+                (run_log / "run.log").read_text(),
+                result.returncode,
+            )
         except (OSError, ValueError, KeyError) as error:
-            await check_result(ctx, 1, extra_fields={"task": "report", "error": str(error), "log_dir": str(run_log)}, trace_id=origin_tid)
+            await check_result(
+                ctx,
+                1,
+                extra_fields={
+                    "task": "report",
+                    "error": str(error),
+                    "log_dir": str(run_log),
+                },
+                trace_id=origin_tid,
+            )
             return
         await check_result(
             ctx,
@@ -179,9 +200,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(bbdir, chip, "verilog", timestamp, "bemu", binary_name)
     os.makedirs(run_log, exist_ok=True)
     core_index = input_data.get("core_index")
+    system = bool(input_data.get("system", False))
+    if system and core_index is not None:
+        raise ValueError(
+            "system boot runs all chip harts; core_index cannot be supplied"
+        )
     # The chip's tile runner by default; --core-index selects the single-core bebop-bemu.
     if core_index is None:
-        entry = [bemu_chip_binary(chip), "--", "--tile-index", str(bemu_tile_index(chip, bbdir))]
+        entry = [bemu_chip_binary(chip), "--"]
+        if not system:
+            entry.extend(["--tile-index", str(bemu_tile_index(chip, bbdir))])
     else:
         entry = ["bebop-bemu", "--"]
     cargo_args = [
@@ -205,12 +233,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--config",
         "profile.release.codegen-units=1",
     ]
+    if system:
+        cargo_args.append("--system")
+        for option in ("dtb", "initrd"):
+            if input_data.get(option):
+                cargo_args.extend([f"--{option}", input_data[option]])
+        if input_data.get("memory-mib") is not None:
+            cargo_args.extend(["--memory-mib", str(input_data["memory-mib"])])
     if core_index is not None:
         cargo_args.extend(["--core-index", str(core_index)])
-    if input_data.get("pk"):
-        cargo_args.append("--pk")
-    if input_data.get("host-io"):
-        cargo_args.append("--host-io")
     if input_data.get("disasm"):
         cargo_args.append("--disasm")
     if input_data.get("tool-profile"):
@@ -243,9 +274,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if cancellation_requested(origin_tid):
         return
     try:
-        report_path = performance_report(bbdir, report_context, origin_tid, "bemu", run_log, (Path(run_log) / "run.log").read_text(), run_result.returncode)
+        report_path = performance_report(
+            bbdir,
+            report_context,
+            origin_tid,
+            "bemu",
+            run_log,
+            (Path(run_log) / "run.log").read_text(),
+            run_result.returncode,
+        )
     except (OSError, ValueError, KeyError) as error:
-        await check_result(ctx, 1, extra_fields={"task": "report", "error": str(error), "log_dir": run_log}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            extra_fields={"task": "report", "error": str(error), "log_dir": run_log},
+            trace_id=origin_tid,
+        )
         return
     if run_result.returncode != 0:
         await check_result(

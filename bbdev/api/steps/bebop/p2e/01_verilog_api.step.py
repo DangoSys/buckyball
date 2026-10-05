@@ -19,7 +19,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
     data = {"chip": chip, "diff": bool(body.get("diff", False))}
-    if body.get("output_dir"):
-        data["output_dir"] = body["output_dir"]
+    if body.get("output-dir"):
+        data["output_dir"] = body["output-dir"]
     await ctx.enqueue({"topic": "bebop.p2e.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

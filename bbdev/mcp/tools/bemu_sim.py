@@ -11,7 +11,10 @@ def register(mcp):
     def bbdev_bemu_sim(
         chip: str,
         binary: str | None = None,
-        pk: bool = False,
+        system: bool = False,
+        dtb: str | None = None,
+        initrd: str | None = None,
+        memory_mib: int | None = None,
         disasm: bool = False,
         tool_profile: bool = False,
         itrace: bool = False,
@@ -26,10 +29,28 @@ def register(mcp):
             for n, v in (("chip", chip), ("model", model)):
                 if e := need(n, v):
                     return err(e)
-            if binary is not None or pk or disasm or tool_profile or itrace or mtrace or core_index is not None or arguments:
-                return err("model runs use running-param.toml; ELF options cannot be supplied")
-            return fmt(submit("/bebop/bemu/sim", {
-                "chip": chip, "model": model, "reuse-simulator": reuse_simulator}))
+            if (
+                binary is not None
+                or system
+                or dtb
+                or initrd
+                or memory_mib is not None
+                or disasm
+                or tool_profile
+                or itrace
+                or mtrace
+                or core_index is not None
+                or arguments
+            ):
+                return err(
+                    "model runs use running-param.toml; ELF options cannot be supplied"
+                )
+            return fmt(
+                submit(
+                    "/bebop/bemu/sim",
+                    {"chip": chip, "model": model, "reuse-simulator": reuse_simulator},
+                )
+            )
         if reuse_simulator:
             return err("reuse-simulator is supported for model runs only")
         for n, v in (("chip", chip), ("binary", binary)):
@@ -38,7 +59,7 @@ def register(mcp):
         params: Dict[str, Any] = {
             "chip": chip,
             "binary": binary,
-            "pk": pk,
+            "system": system,
             "disasm": disasm,
             "tool-profile": tool_profile,
             "itrace": itrace,
@@ -46,4 +67,11 @@ def register(mcp):
             "core_index": core_index,
             "arguments": arguments if arguments is not None else [],
         }
+        for key, value in (
+            ("dtb", dtb),
+            ("initrd", initrd),
+            ("memory-mib", memory_mib),
+        ):
+            if value is not None:
+                params[key] = value
         return fmt(submit("/bebop/bemu/sim", params))

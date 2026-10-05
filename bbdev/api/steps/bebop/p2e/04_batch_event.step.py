@@ -82,7 +82,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     elf_root = workloads_output_root(bbdir)
     cargo_env = bebop_cargo_env(bbdir, chip)
-    test_type = input_data.get("test", "elf-tests")
+    test_type = input_data.get("test", "bare-tests")
     diff = bool(input_data.get("diff", False))
     try:
         workload_toml = resolve_workload_toml(chip, "p2e", test_type, bbdir, diff=diff)
@@ -173,6 +173,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         elf_root,
         "--p2e-bitstream",
         bitstream,
+        "--p2e-fpga-location",
+        input_data.get("fpga-location", "0.A"),
     ]
     if diff:
         harness_args.append("--diff")

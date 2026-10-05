@@ -24,13 +24,13 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(
             status=400,
             body={
-                "error": "Missing required parameter: --test must be specified (elf-tests)"
+                "error": "Missing required parameter: --test must be specified (bare-tests or linux-tests)"
             },
         )
-    if test_type != "elf-tests":
+    if test_type not in ("bare-tests", "linux-tests"):
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'elf-tests'"},
+            body={"error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"},
         )
     vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"))
     data = {

@@ -60,9 +60,9 @@ WORKFLOW_COMMANDS = {
         "build": 'Build compiler. Args: "--chip <chip>"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator]". ELF args: "--chip <chip> --binary <file-name> [--pk] [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
+        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator]". ELF args: "--chip <chip> --binary <file-name> [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
         "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
-        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--clean-before]"',
+        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--cpu-tests] [--jobs <num>] [--clean-before]"',
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',
@@ -70,19 +70,19 @@ WORKFLOW_COMMANDS = {
         "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <elf-tests|pk-tests> [--diff] [--clean-before]"',
+        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--diff] [--clean-before]"',
     },
     "bebop-vcs": {
         "verilog": 'Generate Bebop VCS RTL once. Args: "--chip <chip>"',
         "build": 'Build the reusable Bebop VCS simv. Args: "--chip <chip> [--jobs <num>]"',
-        "batch": 'Run Bebop VCS workload batch. Args: "--chip <chip> --test <elf-tests|pk-tests>"',
+        "batch": 'Run Bebop VCS workload batch. Args: "--chip <chip> --test <bare-tests|linux-tests>"',
     },
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
         "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>] [--resume-post-route | --stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case; resume requires an existing routed case and preserves its completed synthesis/PNR',
         "runworkload": 'Cold-load Bebop P2E workload. Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
-        "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <elf-tests|pk-tests> [--diff]"',
+        "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <bare-tests|linux-tests> [--diff] [--fpga-location <N.X>]"',
     },
     "dc": {
         "verilog": 'Generate top-scoped DC RTL under arch/build/<chip>/<config>. Args: "--chip <chip> [--top <module>]"',

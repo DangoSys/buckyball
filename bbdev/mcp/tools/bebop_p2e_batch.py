@@ -14,12 +14,12 @@ def register(mcp):
         test: str,
         diff: bool = False,
     ) -> str:
-        """Batch bebop-p2e regression. test: elf-tests|pk-tests. POST /bebop/p2e/batch."""
+        """Batch bebop-p2e regression. test: bare-tests|linux-tests. POST /bebop/p2e/batch."""
         for n, v in (("chip", chip), ("bitstream", bitstream)):
             if e := need(n, v):
                 return err(e)
-        if test not in ("elf-tests", "pk-tests"):
-            return err("test must be elf-tests or pk-tests")
+        if test not in ("bare-tests", "linux-tests"):
+            return err("test must be bare-tests or linux-tests")
         return fmt(
             submit(
                 "/bebop/p2e/batch",

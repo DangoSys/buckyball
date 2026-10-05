@@ -20,8 +20,8 @@ def register(mcp):
     ) -> str:
         """Build RISC-V kernel + rootfs. POST /kernel/build.
 
-        With --chip only: uses examples/chips/<chip>/kernel OS overlay and packs
-        that chip's bemu workloads-pk.toml into fw_payload-<chip>-pk.
+        With --chip only: packs programs listed in examples/chips/<chip>/kernel/workloads.toml
+        and runs them under Linux using the shared workload /init.
         With --model: requires --chip; packs a native model artifact from
         stack/models/build/<chip>/<model>/artifact into fw_payload-<model>.
         With --interactive: keep shared /init shell and do not auto-run.

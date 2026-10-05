@@ -29,7 +29,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         chip = require_chip(input_data)
         bbdir = get_buckyball_path()
-        test_type = input_data.get("test", "elf-tests")
+        test_type = input_data.get("test", "bare-tests")
         manifest = resolve_workload_toml(chip, "verilator", test_type, bbdir)
     except ValueError as error:
         await check_result(ctx, 1, extra_fields={"error": str(error)}, trace_id=origin_tid)

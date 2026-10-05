@@ -7,15 +7,27 @@ from common import submit, err, fmt, need
 def register(mcp):
 
     @mcp.tool()
-    def bbdev_bemu_batch(chip: str, test: str, clean_before: bool = False) -> str:
-        """Batch bemu regression. test: elf-tests|pk-tests. POST /bebop/bemu/batch."""
+    def bbdev_bemu_batch(
+        chip: str,
+        test: str,
+        clean_before: bool = False,
+        cpu_tests: bool = False,
+        jobs: int = 1,
+    ) -> str:
+        """Batch bemu regression. test: bare-tests|linux-tests. POST /bebop/bemu/batch."""
         if e := need("chip", chip):
             return err(e)
-        if test not in ("elf-tests", "pk-tests"):
-            return err("test must be elf-tests or pk-tests")
+        if test not in ("bare-tests", "linux-tests"):
+            return err("test must be bare-tests or linux-tests")
         return fmt(
             submit(
                 "/bebop/bemu/batch",
-                {"chip": chip, "test": test, "clean-before": clean_before},
+                {
+                    "chip": chip,
+                    "test": test,
+                    "clean-before": clean_before,
+                    "cpu-tests": cpu_tests,
+                    "jobs": jobs,
+                },
             )
         )

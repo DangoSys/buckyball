@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import shutil
 import sys
@@ -44,10 +45,35 @@ def hart_count_params(input_data: dict) -> dict:
         raise ValueError(f"unknown kernel build parameter(s): {', '.join(unknown)}")
 
     if "hidden-hart-base" in input_data:
-        raise ValueError("hidden-hart-base is not supported; hidden harts must start at visible-hart-count")
+        raise ValueError(
+            "hidden-hart-base is not supported; hidden harts must start at visible-hart-count"
+        )
 
-    visible = int(input_data.get("visible-hart-count", 64))
-    total = int(input_data.get("total-hart-count", visible))
+    chip = input_data.get("chip")
+    if chip:
+        derived = os.path.join(
+            get_buckyball_path(),
+            "examples",
+            "chips",
+            chip,
+            "configs",
+            "generated",
+            "config",
+            "derived.json",
+        )
+        with open(derived) as stream:
+            harts = json.load(stream)["harts"]
+        visible = sum(hart["visible"] for hart in harts)
+        total = len(harts)
+        for key, expected in (
+            ("visible-hart-count", visible),
+            ("total-hart-count", total),
+        ):
+            if key in input_data and int(input_data[key]) != expected:
+                raise ValueError(f"{key} must match chip topology: {expected}")
+    else:
+        visible = int(input_data.get("visible-hart-count", 64))
+        total = int(input_data.get("total-hart-count", visible))
     hidden_base = visible
 
     if visible < 1:
@@ -81,7 +107,7 @@ def kernel_model(input_data: dict) -> str:
     return model
 
 
-def kernel_chip(input_data: dict, bbdir: str, *, require_overlay: bool) -> str:
+def kernel_chip(input_data: dict, bbdir: str) -> str:
     chip = input_data.get("chip", "")
     if chip in ("", None):
         return ""
@@ -94,10 +120,6 @@ def kernel_chip(input_data: dict, bbdir: str, *, require_overlay: bool) -> str:
     if not os.path.isdir(chip_dir):
         raise ValueError(f"unknown chip: {chip}")
 
-    if require_overlay:
-        chip_init = os.path.join(chip_dir, "kernel", "overlay", "init")
-        if not os.path.isfile(chip_init):
-            raise ValueError(f"chip OS overlay init not found: {chip_init}")
     return chip
 
 
@@ -123,10 +145,18 @@ def kernel_build_dir(
         suffix += "-pmem"
     if visible == 64 and total == 64:
         return os.path.join(bbdir, "bb-tests", "build", f"kernel{suffix}")
-    return os.path.join(bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{suffix}")
+    return os.path.join(
+        bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{suffix}"
+    )
 
 
-def fw_payload_name(hart_params: dict, model: str = "", chip: str = "", guest_memory_mib: int = 512, model_storage: str = "initramfs") -> str:
+def fw_payload_name(
+    hart_params: dict,
+    model: str = "",
+    chip: str = "",
+    guest_memory_mib: int = 512,
+    model_storage: str = "initramfs",
+) -> str:
     visible = hart_params["visible"]
     total = hart_params["total"]
     name = "fw_payload"
@@ -135,7 +165,7 @@ def fw_payload_name(hart_params: dict, model: str = "", chip: str = "", guest_me
     if model:
         name = f"{name}-{model}"
     elif chip:
-        name = f"{name}-{chip}-pk"
+        name = f"{name}-{chip}-linux"
     if guest_memory_mib != 512:
         name += f"-mem{guest_memory_mib}M"
     if model_storage == "pmem":
@@ -150,21 +180,29 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     try:
         memory_value = input_data.get("guest-memory-mib", 512)
-        if isinstance(memory_value, bool) or not str(memory_value).isdigit() or not 1 <= int(memory_value) <= 16384:
-            raise ValueError("guest-memory-mib must be an integer in 1..16384 (P2E DDR capacity)")
+        if (
+            isinstance(memory_value, bool)
+            or not str(memory_value).isdigit()
+            or not 1 <= int(memory_value) <= 16384
+        ):
+            raise ValueError(
+                "guest-memory-mib must be an integer in 1..16384 (P2E DDR capacity)"
+            )
         guest_memory_mib = int(memory_value)
         model_storage = input_data.get("model-storage", "initramfs")
         if model_storage not in ("initramfs", "pmem"):
             raise ValueError("model-storage must be initramfs or pmem")
-        if model_storage == "pmem" and (not input_data.get("model") or guest_memory_mib >= 16384):
+        if model_storage == "pmem" and (
+            not input_data.get("model") or guest_memory_mib >= 16384
+        ):
             raise ValueError("pmem requires --model and guest-memory-mib < 16384")
         hart_params = hart_count_params(input_data)
         model = kernel_model(input_data)
         if model and not input_data.get("chip"):
             raise ValueError("--model requires --chip")
         interactive = kernel_interactive(input_data)
-        # pk mode needs OS overlay; model mode only needs chip for the model artifact path
-        chip = kernel_chip(input_data, bbdir, require_overlay=not bool(model))
+        # Linux mode needs OS overlay; model mode only needs chip for the model artifact path
+        chip = kernel_chip(input_data, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
@@ -174,7 +212,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         output_dir = os.path.join(output_dir, chip)
     os.makedirs(output_dir, exist_ok=True)
     kernel_build = kernel_build_dir(
-        bbdir, hart_params, model, chip, interactive=interactive, guest_memory_mib=guest_memory_mib, model_storage=model_storage
+        bbdir,
+        hart_params,
+        model,
+        chip,
+        interactive=interactive,
+        guest_memory_mib=guest_memory_mib,
+        model_storage=model_storage,
     )
     interactive_arg = "ON" if interactive else "OFF"
     cmake_model_name = model
@@ -193,18 +237,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_MODEL_DATASET="
     )
     if chip and not model:
-        chip_kernel = os.path.join(bbdir, "examples", "chips", chip, "kernel")
-        pk_toml = os.path.join(
-            bbdir, "examples", "chips", chip, "regression", "batch", "bemu", "workloads-pk.toml"
+        workload_toml = os.path.join(
+            bbdir, "examples", "chips", chip, "kernel", "workloads.toml"
         )
-        if not os.path.isfile(pk_toml):
-            ctx.logger.error(f"chip pk workload toml not found: {pk_toml}")
+        if not os.path.isfile(workload_toml):
+            ctx.logger.error(f"chip workload toml not found: {workload_toml}")
             await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)
             return
-        configure_cmd += (
-            f" -DBUCKYBALL_CHIP_KERNEL_DIR={chip_kernel}"
-            f" -DBUCKYBALL_PK_WORKLOAD_TOML={pk_toml}"
-        )
+        configure_cmd += f" -DBUCKYBALL_WORKLOAD_TOML={workload_toml}"
 
     result = await stream_run_logger_async(
         cmd=configure_cmd,
@@ -213,7 +253,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stderr_prefix="marshal build",
     )
     if result.returncode != 0:
-        await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
+        await check_result(
+            ctx, result.returncode, continue_run=False, trace_id=origin_tid
+        )
         return
 
     # cmake build
@@ -226,11 +268,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
 
     if result.returncode != 0:
-        await check_result(ctx, result.returncode, continue_run=False, trace_id=origin_tid)
+        await check_result(
+            ctx, result.returncode, continue_run=False, trace_id=origin_tid
+        )
         return
 
     # Convert fw_payload.bin to hex for P2E memory backdoor
-    payload_name = fw_payload_name(hart_params, cmake_model_name if model else "", chip, guest_memory_mib, model_storage)
+    payload_name = fw_payload_name(
+        hart_params,
+        cmake_model_name if model else "",
+        chip,
+        guest_memory_mib,
+        model_storage,
+    )
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_hex = os.path.join(output_dir, f"{payload_name}.hex")
     fw_payload_elf = os.path.join(output_dir, f"{payload_name}.elf")
@@ -267,4 +317,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if not os.path.isfile(manifest):
             raise ValueError(f"Missing pmem load manifest: {manifest}")
         storage_fields["load_manifest"] = manifest
-    await check_result(ctx, 0, continue_run=False, extra_fields=storage_fields, trace_id=origin_tid)
+    await check_result(
+        ctx, 0, continue_run=False, extra_fields=storage_fields, trace_id=origin_tid
+    )
