@@ -16,14 +16,7 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
-@RTL@/Im2colConfigRegs.sv
-@RTL@/Im2colWindow.sv
-@RTL@/@IM2COL_BUFFER@
-@RTL@/RestoringDiv.sv
-@RTL@/LineBufferManager.sv
-@RTL@/StreamWriter.sv
-@RTL@/Im2col.sv
-@RTL@/Im2colBall.sv
+-F @RTL@/filelist.f
 
 src/pkg/im2col_pkg.sv
 src/tb_top.sv

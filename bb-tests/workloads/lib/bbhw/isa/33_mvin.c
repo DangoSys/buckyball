@@ -7,7 +7,6 @@
 
 #define bb_mvin(mem_addr, bank_id, depth, stride)                              \
   do {                                                                         \
-    bb_dma_cache_flush();                                                      \
     BUCKYBALL_INSTRUCTION_R_R(                                                 \
         (BB_BANK2(bank_id) | BB_ITER(depth)),                                  \
         (FIELD(mem_addr, 0, 38) | FIELD(stride, 39, 57)), BB_MVIN_FUNC7);      \

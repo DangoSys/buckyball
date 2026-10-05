@@ -18,7 +18,6 @@ import examples.balls.gemmini.configs.GemminiBallParam
 @instantiable
 class LoopConvAddrGen(val b: GlobalConfig) extends Module {
   val config   = GemminiBallParam(b)
-  val DIM      = config.blockSize
   val elemSize = config.inputWidth / 8
   val accBytes = config.accWidth / 8
 

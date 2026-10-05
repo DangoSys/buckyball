@@ -7,7 +7,7 @@ object Emit extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new Cache(p),
     firtoolOpts = args,
-    args = Array("--target-dir", "build")
+    args = Array("--target-dir", "build/Cache", "--split-verilog")
   )
 
   val constants = Seq(

@@ -1,7 +1,0 @@
-[workloads]
-tests = [
-  "omni-attention-ctest-chip-mailbox-linux",
-  "omni-attention-ctest-chip-process-linux",
-  "omni-ffn-mlirtest-chip-moe-linux",
-  "omni-attention-mlirtest-chip-attention-linux",
-]

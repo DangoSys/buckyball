@@ -1,0 +1,1 @@
+expected_assertion = "Fetch privilege must be U, S or M"

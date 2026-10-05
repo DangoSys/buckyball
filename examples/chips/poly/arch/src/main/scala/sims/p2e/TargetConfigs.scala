@@ -1,16 +1,4 @@
 package sims.p2e
 
-import org.chipsalliance.cde.config.Config
-
-class BuckyballPolyP2EConfig
-    extends Config(
-      new P2EBaseConfig(maxHarts = 20) ++
-        new examples.poly.BuckyballPolyConfig
-    )
-
-class BuckyballPolyLinuxP2EConfig
-    extends Config(
-      new WithLinuxBootROM ++
-        new P2EBaseConfig(maxHarts = 20) ++
-        new examples.poly.BuckyballPolyConfig
-    )
+/** Poly on the P2E board: a CPU main tile and eight homogeneous compute tiles. */
+class PolyP2ETarget extends P2ETarget("../examples/chips/poly/configs/generated/chip.pb")

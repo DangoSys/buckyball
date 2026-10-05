@@ -22,10 +22,13 @@ class env extends uvm_env;
   private_line_t cpus[`COH_AGENTS][longint unsigned];
   bit [511:0] memory[longint unsigned];
   bit dirty_addresses[longint unsigned];
+  int clean_shared_requests[longint unsigned];
   rsp_t rsp_queue[$], ack_queue[$];
   dat_t dat_queue[$];
   mem_t mem_queue[$];
   bit [`COH_MSHRS-1:0] hold_ack = 0;
+  bit vary_idle_payload = 0;
+  bit idle_payload_one = 0;
   bit hold_memory = 0, reverse_memory = 0, saw_reorder = 0;
   bit rsp_active = 0, dat_active = 0, mem_active = 0;
   rsp_t rsp_packet;
@@ -35,7 +38,8 @@ class env extends uvm_env;
   int cycle = 0;
   int snoops = 0;
   bit hold_rsp = 0, hold_snp = 0, hold_mem_req = 0;
-  bit fault_enabled = 0;
+  bit hold_copyback = 0;
+  bit fault_enabled = 0, write_fault_enabled = 0;
   longint unsigned fault_addr;
 
   function new(string name, uvm_component parent);
@@ -83,6 +87,11 @@ class env extends uvm_env;
     if (position != 0) saw_reorder = 1;
     expected_order.delete(position);
     scoreboard.actual_export.write(item);
+    if (requests[key][`CF(REQ, OPCODE)] == `COH_CLEAN_SHARED) begin
+      longint unsigned address = requests[key][`CF(REQ, ADDR)];
+      clean_shared_requests[address]--;
+      if (clean_shared_requests[address] == 0) clean_shared_requests.delete(address);
+    end
     requests.delete(key);
   endfunction
 
@@ -129,12 +138,16 @@ class env extends uvm_env;
           longint unsigned addr = req.bits[`CF(REQ, ADDR)];
           bit [511:0] value;
           requests[key] = req.bits;
+          if (opcode == `COH_CLEAN_SHARED) begin
+            if (!clean_shared_requests.exists(addr)) clean_shared_requests[addr] = 0;
+            clean_shared_requests[addr]++;
+          end
           expected_order.push_back(key);
           item.node = node;
           item.txn = txn;
           item.is_data=opcode==`COH_READ_SHARED || opcode==`COH_READ_NSD || opcode==`COH_READ_UNIQUE;
           item.opcode=item.is_data ? `COH_COMP_DATA : (opcode==`COH_WRITEBACK ? `COH_COMP_DBID : `COH_COMP);
-          item.error = expected_error.exists(key) && expected_error[key] ? 2 : 0;
+          item.error = expected_error.exists(key) && expected_error[key] ? 3 : 0;
           item.permission=item.is_data && item.error==0 ? (opcode==`COH_READ_UNIQUE ? 2 : 1) : 0;
           if (item.is_data && !item.error) begin
             coherence_ref_read(model, addr, value);
@@ -154,14 +167,17 @@ class env extends uvm_env;
           int opcode = snp.bits[`CF(SNP, OPCODE)];
           longint unsigned addr = longint'(snp.bits[`CF(SNP, ADDR)]) << 3;
           private_line_t line;
-          bit invalidate = opcode == `COH_SNP_UNIQUE || opcode == `COH_SNP_INVALID;
+          bit invalidate = opcode == `COH_SNP_UNIQUE || opcode == `COH_SNP_INVALID || opcode == `COH_SNP_MAKE_INVALID;
+          bit discard = opcode == `COH_SNP_MAKE_INVALID;
           if (node < 1 || node > `COH_AGENTS || snp.bits[`CF(SNP, SRCID)] != `COH_HOME)
             `uvm_fatal("SNOOP", "invalid destination/source")
           snoops++;
           line = cpus[node-1].exists(addr) ? cpus[node-1][addr] : '0;
-          if (opcode == `COH_SNP_INVALID && snp.bits[`CF(SNP, RETTOSRC)] !== 0)
-            `uvm_fatal("SNOOP", "SnpCleanInvalid must clear RetToSrc")
-          if (line.valid && (line.dirty || (!line.unique_owner && snp.bits[
+          if ((opcode == `COH_SNP_INVALID || opcode == `COH_SNP_CLEAN_SHARED || discard) && snp.bits[
+              `CF(SNP, RETTOSRC)
+              ] !== 0)
+            `uvm_fatal("SNOOP", "Maintenance snoop must clear RetToSrc")
+          if (line.valid && !discard && (line.dirty || (!line.unique_owner && snp.bits[
               `CF(SNP, RETTOSRC)
               ]))) begin
             for (int b = 0; b < `COH_BEATS; b++) begin
@@ -311,10 +327,21 @@ class env extends uvm_env;
             if (mem_req.bits[`CF(MEMREQ, DATA)] !== value || mem_req.bits[`CF(MEMREQ, MASK)] !== '1)
               `uvm_fatal("MEMORY", "dirty victim writeback lost data")
             foreach (cpus[i])
-            if (cpus[i].exists(addr) && cpus[i][addr].valid)
-              `uvm_fatal("INCLUSION", "victim written before private copies were invalidated")
-            memory[addr] = value;
-            dirty_addresses.delete(addr);
+            if (cpus[i].exists(
+                    addr
+                ) && cpus[i][addr].valid && (!clean_shared_requests.exists(
+                    addr
+                ) || cpus[i][addr].dirty || cpus[i][addr].unique_owner ||
+                    cpus[i][addr].data !== value))
+              `uvm_fatal(
+                  "INCLUSION",
+                  "DDR clean completed while a private copy was dirty, unique or inconsistent")
+            if (write_fault_enabled && addr == fault_addr) begin
+              packet[`CF(MEMRESP, ERROR)] = 1;
+            end else begin
+              memory[addr] = value;
+              dirty_addresses.delete(addr);
+            end
             memory_writes++;
           end else begin
             if (memory.exists(addr)) value = memory[addr];
@@ -340,7 +367,9 @@ class env extends uvm_env;
             end
           end
         end
-        if (!dat_active && dat_queue.size() != 0) begin
+        if (!dat_active && dat_queue.size() != 0 && (!hold_copyback || dat_queue[0][
+            `CF(DAT, OPCODE)
+            ] != `COH_COPYBACK_DATA)) begin
           dat_packet = dat_queue.pop_front();
           dat_active = 1;
         end
@@ -349,11 +378,11 @@ class env extends uvm_env;
           mem_active = 1;
         end
         rx_rsp.valid <= rsp_active;
-        rx_rsp.bits <= rsp_packet;
+        rx_rsp.bits <= rsp_active || !vary_idle_payload ? rsp_packet : {`COH_RSP_WIDTH{idle_payload_one}};
         rx_dat.valid <= dat_active;
-        rx_dat.bits <= dat_packet;
+        rx_dat.bits <= dat_active || !vary_idle_payload ? dat_packet : {`COH_DAT_WIDTH{idle_payload_one}};
         mem_resp.valid <= mem_active;
-        mem_resp.bits <= mem_packet;
+        mem_resp.bits <= mem_active || !vary_idle_payload ? mem_packet : {`COH_MEMRESP_WIDTH{idle_payload_one}};
       end
     end
   endtask

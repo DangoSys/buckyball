@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
   void *workspace = aligned_alloc(64, 64 * 1024 * 1024);
   if (!workspace)
     throw std::bad_alloc();
+  workspace_init(workspace, 64 * 1024 * 1024);
   const std::vector<size_t> cacheShape{1, kvHeads, capacity, headSize};
   Cache keys(cacheShape, 0.0f), values(cacheShape, 0.0f);
   for (bool prefill : {true, false}) {

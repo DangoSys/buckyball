@@ -24,9 +24,6 @@ namespace {
 constexpr int64_t kTile = 16;
 constexpr int64_t kInt32RowsPerTile = 64;
 
-#include "FP32Patterns.inc"
-#include "MXFP8Patterns.inc"
-
 class MegaMatmulToBankSSAPattern : public OpRewritePattern<MegaMatmulOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
@@ -101,10 +98,17 @@ public:
     Value columns = b.create<arith::ConstantIndexOp>(loc, N);
     Value zeroI8 =
         b.create<arith::ConstantOp>(loc, b.getI8Type(), b.getI8IntegerAttr(0));
-    int64_t kChunks = (paddedK + kChunk - 1) / kChunk;
+    auto matrixRowLoop = b.create<scf::ForOp>(
+        loc, zero, b.create<arith::ConstantIndexOp>(loc, paddedM),
+        b.create<arith::ConstantIndexOp>(loc, tileRows));
+    b.setInsertionPointToStart(matrixRowLoop.getBody());
+    Value m0 = matrixRowLoop.getInductionVar();
+    Value validRows = b.create<arith::MinUIOp>(
+        loc, b.create<arith::ConstantIndexOp>(loc, tileRows),
+        b.create<arith::SubIOp>(loc, b.create<arith::ConstantIndexOp>(loc, M),
+                                m0));
     SmallVector<Value> inputPacks;
-    for (int64_t row0 = 0; row0 < paddedM; row0 += tileRows) {
-      int64_t validRows = std::min(tileRows, M - row0);
+    {
       for (int64_t k0 = 0; k0 < paddedK; k0 += kChunk) {
         int64_t thisK = std::min(kChunk, paddedK - k0);
         int64_t validK = std::min(thisK, K - k0);
@@ -116,7 +120,7 @@ public:
 
         Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
         Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-        Value rowEnd = b.create<arith::ConstantIndexOp>(loc, validRows);
+        Value rowEnd = validRows;
         Value kTileEnd =
             b.create<arith::ConstantIndexOp>(loc, (validK + kTile - 1) / kTile);
         auto ktLoop = b.create<scf::ForOp>(loc, zero, kTileEnd, one);
@@ -134,8 +138,7 @@ public:
         auto columnLoop = b.create<scf::ForOp>(loc, zero, columnEnd, one);
         b.setInsertionPointToStart(columnLoop.getBody());
         Value column = columnLoop.getInductionVar();
-        Value sourceRow = b.create<arith::AddIOp>(
-            loc, b.create<arith::ConstantIndexOp>(loc, row0), row);
+        Value sourceRow = b.create<arith::AddIOp>(loc, m0, row);
         Value sourceColumn = b.create<arith::AddIOp>(
             loc, b.create<arith::ConstantIndexOp>(loc, k0),
             b.create<arith::AddIOp>(
@@ -204,19 +207,17 @@ public:
       Value scaleBank = allocBank(b, loc, 1, 1);
       Value scaleLoaded = mvinBank(b, loc, scalePack, scaleBank, 4);
 
-      for (int64_t m0 = 0; m0 < paddedM; m0 += tilesPerResultBank * tileRows) {
-        int64_t tileCount =
-            std::min(tilesPerResultBank, (paddedM - m0) / tileRows);
+      {
+        int64_t tileCount = tilesPerResultBank;
         Value resultBank = allocBank(b, loc, 1, 1);
         Value resultState = resultBank;
         SmallVector<Value> hostPacks;
 
         for (int64_t tile = 0; tile < tileCount; ++tile) {
-          int64_t row0 = m0 + tile * tileRows;
           for (int64_t k0 = 0; k0 < paddedK; k0 += kChunk) {
             int64_t thisK = std::min(kChunk, paddedK - k0);
             int64_t validK = std::min(thisK, std::max<int64_t>(0, K - k0));
-            Value aPack = inputPacks[(row0 / tileRows) * kChunks + k0 / kChunk];
+            Value aPack = inputPacks[k0 / kChunk];
             Value aLoaded =
                 mvinBank(b, loc, aPack, aBank, thisK / kTile * tileRows);
             Value wLoaded;
@@ -308,8 +309,7 @@ public:
 
         Value zero = b.create<arith::ConstantIndexOp>(loc, 0);
         Value one = b.create<arith::ConstantIndexOp>(loc, 1);
-        int64_t validOutputRows = std::min(tileCount * tileRows, M - m0);
-        Value rowEnd = b.create<arith::ConstantIndexOp>(loc, validOutputRows);
+        Value rowEnd = validRows;
         Value columnEnd = thisN;
         auto rowLoop = b.create<scf::ForOp>(loc, zero, rowEnd, one);
         b.setInsertionPointToStart(rowLoop.getBody());
@@ -319,8 +319,7 @@ public:
         Value column = columnLoop.getInductionVar();
         Value value =
             b.create<memref::LoadOp>(loc, packedOut, ValueRange{row, column});
-        Value outputRow = b.create<arith::AddIOp>(
-            loc, b.create<arith::ConstantIndexOp>(loc, m0), row);
+        Value outputRow = b.create<arith::AddIOp>(loc, m0, row);
         Value outputColumn = b.create<arith::AddIOp>(loc, n0, column);
         b.create<memref::StoreOp>(loc, value, op.getOutput(),
                                   ValueRange{outputRow, outputColumn});
@@ -339,6 +338,7 @@ public:
     b.setInsertionPointAfter(panelLoop);
     for (Value pack : inputPacks)
       b.create<memref::DeallocOp>(loc, pack);
+    b.setInsertionPointAfter(matrixRowLoop);
     b.eraseOp(op);
     return success();
   }
@@ -348,7 +348,7 @@ public:
 
 void mlir::buddy::populateSMatMulBallLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
-  patterns.add<MXFP8ToBanks, FP32ToRuntime>(patterns.getContext());
+  populateMatmulRegionToBankSSAPatterns(patterns, false, 0, -1);
 }
 
 LogicalResult mlir::buddy::lowerMatmulToBanks(MegaMatmulOp op,

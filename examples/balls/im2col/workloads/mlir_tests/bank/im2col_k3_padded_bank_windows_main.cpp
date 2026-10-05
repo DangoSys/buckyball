@@ -9,10 +9,11 @@ extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
   if (rows != BANK_LINES || lanes != BANK_WIDTH / 8 || stride != lanes ||
       lane_stride != 1)
     exit(1);
-  constexpr int windows = 64;
-  constexpr int side = BANK_ISQRT < 16 ? BANK_ISQRT : 16;
+  constexpr int windows = BANK_LINES;
+  constexpr int side = 8;
   for (int window = 0; window < windows; ++window) {
-    int y = window / side;
+    int batch = window / 64;
+    int y = (window % 64) / side;
     int x = window % side;
     for (int ky = 0; ky < 3; ++ky)
       for (int kx = 0; kx < 3; ++kx) {
@@ -21,7 +22,7 @@ extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
         int expected = 0;
         if (source_y >= 0 && source_y < side && source_x >= 0 &&
             source_x < side)
-          expected = source_y * side + source_x;
+          expected = batch * 64 + source_y * side + source_x;
         int lane = ky * 3 + kx;
         if (data[offset + window * stride + lane] != (int8_t)expected) {
           printf("im2col K3 bank mismatch window=%d lane=%d\n", window, lane);

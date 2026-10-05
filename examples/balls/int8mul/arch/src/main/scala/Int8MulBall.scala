@@ -3,7 +3,7 @@ package examples.balls.int8mul
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
-import hardfloat.{recFNFromFN, INToRecFN, MulRecFN, RecFNToIN}
+import hardfloat.{recFNFromFN, INToRecFN, RecFNToIN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
 import freechips.rocketchip.tile.MulAddRecFNPipe
 
@@ -30,7 +30,8 @@ class Int8MulBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(bankRowBits <= 32, "Int8MulBall gate_row must fit rs2[63:32]")
   require((funct >> 4) == 4, "INT8MUL must encode two reads and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

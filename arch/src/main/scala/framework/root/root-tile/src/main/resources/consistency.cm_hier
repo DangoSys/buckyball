@@ -1,0 +1,12 @@
++tree @TOP@.dut
++tree @TOP@.access_0
++tree @TOP@.access_1
++tree @TOP@.result_0
++tree @TOP@.result_1
++tree @TOP@.dispatch
++tree @TOP@.access_info
++tree @TOP@.grant
++tree @TOP@.done
++tree @TOP@.complete
++tree @TOP@.mem_req
++tree @TOP@.mem_resp

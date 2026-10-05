@@ -1,27 +1,29 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
+#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// ACC bank row is 4 physical banks x 16B = 64B = 16 x int32.
-#define DIM 16
+// One ACC row spans four configured physical bank rows.
+enum { ROWS = 16, COLS = (4 * BANK_WIDTH / 32) };
 
-static result_t output_matrix[DIM * DIM] __attribute__((aligned(64)));
-static result_t expected_matrix[DIM * DIM] __attribute__((aligned(64)));
+static result_t output_matrix[ROWS * COLS] __attribute__((aligned(64)));
+static result_t expected_matrix[ROWS * COLS] __attribute__((aligned(64)));
 
 int acc_mvin_mvout_pressure_test() {
   for (int i = 0; i < 4; i++) {
-    init_u32_random_matrix(expected_matrix, DIM, DIM, i * 10 + i);
-    clear_u32_matrix(output_matrix, DIM, DIM);
+    init_u32_random_matrix(expected_matrix, ROWS, COLS, i * 10 + i);
+    clear_u32_matrix(output_matrix, ROWS, COLS);
+    bb_dma_fence();
 
     uint32_t acc_bank_id = 2;
     bb_mem_alloc(acc_bank_id, 1, 4);
-    bb_mvin((uintptr_t)expected_matrix, acc_bank_id, DIM, 1);
-    bb_mvout((uintptr_t)output_matrix, acc_bank_id, DIM, 1);
+    bb_mvin((uintptr_t)expected_matrix, acc_bank_id, ROWS, 1);
+    bb_mvout((uintptr_t)output_matrix, acc_bank_id, ROWS, 1);
     bb_fence();
-    if (!compare_u32_matrices(output_matrix, expected_matrix, DIM, DIM)) {
+    if (!compare_u32_matrices(output_matrix, expected_matrix, ROWS, COLS)) {
       printf("Test ACC mvin/mvout pressure %d FAILED\n", i);
       return 0;
     }
@@ -37,6 +39,7 @@ int acc_mvin_mvout_pressure_test() {
       bb_mem_alloc(acc_bank_id, 1, 4);
     }
     bb_mem_release(acc_bank_id);
+    bb_fence();
     printf("Test ACC same-vbank realloc without release PASSED\n");
   }
   return 1;

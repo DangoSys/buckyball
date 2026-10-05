@@ -1,7 +1,9 @@
-get_filename_component(REPO_ROOT ${WORKLOAD_DIR}/../.. ABSOLUTE)
-
 set(CTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/CTest)
 set(MLIRTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/MLIRTest)
+set(SOCTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/SocTest)
 
-include(${MLIRTEST_WORKLOAD_DIR}/CMakeLists.txt)
+if(NOT BUCKYBALL_CTEST_ONLY)
+  include(${MLIRTEST_WORKLOAD_DIR}/CMakeLists.txt)
+endif()
 add_subdirectory(CTest)
+add_subdirectory(SocTest)

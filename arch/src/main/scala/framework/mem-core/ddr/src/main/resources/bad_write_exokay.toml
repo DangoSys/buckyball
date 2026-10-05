@@ -1,0 +1,2 @@
+expected_assertion = "DDR nonexclusive write received EXOKAY"
+invalid_case = 6

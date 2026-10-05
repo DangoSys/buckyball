@@ -241,6 +241,11 @@ endif()
 add_subdirectory(${BUCKYBALL_CHIP_WORKLOAD_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP})
 
+# Task dispatch inside a compute tile: its controller submits to its hidden workers.
+if(BUCKYBALL_WORKLOAD_SOURCE_CHIP STREQUAL "poly" AND BUCKYBALL_WORKLOAD_CHIP STREQUAL "poly")
+  add_subdirectory(chip/poly)
+endif()
+
 if(NOT TARGET chip-workloads-build)
   message(FATAL_ERROR
     "Buckyball chip workloads must define target chip-workloads-build: ${BUCKYBALL_WORKLOAD_CHIP}")

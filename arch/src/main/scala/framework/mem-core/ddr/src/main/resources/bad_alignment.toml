@@ -1,0 +1,2 @@
+expected_assertion = "DDR line request must be 64 byte aligned"
+invalid_case = 0

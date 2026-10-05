@@ -5,5 +5,5 @@
 @VERIFY@/uvm/src/ip/stream_if.sv
 @RESOURCES@/interface.sv
 @RESOURCES@/package.sv
-@RTL@/Coherence.sv
+-F @RTL@/Coherence/filelist.f
 @RESOURCES@/coherence_tb.sv

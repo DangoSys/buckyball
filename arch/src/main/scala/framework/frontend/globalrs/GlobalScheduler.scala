@@ -1,5 +1,7 @@
 package framework.frontend.globalrs
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
@@ -12,6 +14,7 @@ import framework.system.core.rocket.RoCCResponseBB
 import framework.balldomain.blink.SubRobRow
 import framework.memdomain.backend.banks.btrace.{BTraceDPI, PhysicalBankHash}
 import framework.memdomain.backend.shared.SharedMemLayout
+import framework.memdomain.frontend.mem.dma.DmaStatus
 
 class GlobalRobEntry(val b: GlobalConfig) extends Bundle {
   val cmd               = new PostGDCmd(b)
@@ -28,6 +31,16 @@ class GlobalSchedComplete(b: GlobalConfig) extends Bundle {
   val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
   val is_sub     = Bool()
   val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)
+  val fault      = new DmaStatus
+}
+
+class KernelWriteBank(b: GlobalConfig) extends Bundle {
+  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
+  val bank   = UInt(16.W)
+}
+
+class RobAllocation(b: GlobalConfig) extends Bundle {
+  val rob_id = UInt(log2Up(b.frontend.rob_entries).W)
 }
 
 @instantiable
@@ -37,16 +50,18 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hart_id           = Input(UInt(b.tile.xLen.W))
-    val decode_cmd_i      = Flipped(new DecoupledIO(new PostGDCmd(b)))
-    val ball_issue_o      = Decoupled(new GlobalSchedIssue(b))
-    val mem_issue_o       = Decoupled(new GlobalSchedIssue(b))
-    val gp_issue_o        = Decoupled(new GlobalSchedIssue(b))
-    val ball_complete_i   = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val mem_complete_i    = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val gp_complete_i     = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
-    val inst_ids          = Output(Vec(b.frontend.rob_entries, UInt(64.W)))
+    val hart_id               = Input(UInt(b.tile.xLen.W))
+    val sharedBankOwnerHartId = Input(UInt(b.tile.xLen.W))
+    val decode_cmd_i          = Flipped(new DecoupledIO(new PostGDCmd(b)))
+    val ball_issue_o          = Decoupled(new GlobalSchedIssue(b))
+    val mem_issue_o           = Decoupled(new GlobalSchedIssue(b))
+    val ball_complete_i       = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val mem_complete_i        = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val kernel_write_bank     = Flipped(Valid(new KernelWriteBank(b)))
+    val ball_subrob_req_i     = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+    val inst_ids              = Output(Vec(b.frontend.rob_entries, UInt(64.W)))
+    val allocation            = Valid(new RobAllocation(b))
+    val retired               = Output(UInt(b.frontend.rob_entries.W))
 
     val bank_hashes =
       if (b.sim.diffTest) {
@@ -67,23 +82,32 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   })
 
   val rob: Instance[GlobalROB] = Instantiate(new GlobalROB(b))
-  rob.io.hart_id               := io.hart_id
-  rob.io.bank_hashes.foreach(_ := io.bank_hashes.get)
-  io.inst_ids                  := rob.io.inst_ids
+  rob.io.hart_id                     := io.hart_id
+  rob.io.bank_hashes.foreach(_       := io.bank_hashes.get)
+  io.inst_ids                        := rob.io.inst_ids
+  io.allocation                      := rob.io.allocation
+  io.retired                         := rob.io.retired
+  rob.io.kernelWriteBank.valid       := io.kernel_write_bank.valid
+  rob.io.kernelWriteBank.bits.rob_id := io.kernel_write_bank.bits.rob_id
+  rob.io.kernelWriteBank.bits.bank   := io.kernel_write_bank.bits.bank
 
   if (b.sim.diffTest) {
     val btrace = Module(new BTraceDPI)
     val trace  = rob.io.trace.get
     // VVAC stalls logical clocks when its nonblocking channel is full.
-    btrace.io.clock    := clock
-    btrace.io.reset    := reset.asBool
-    btrace.io.instId   := trace.bits.instId
-    btrace.io.hartId   := io.hart_id
-    btrace.io.w0Vbank  := trace.bits.w0Vbank
-    btrace.io.w0Hash   := trace.bits.w0Hash
-    btrace.io.fire     := trace.valid
-    btrace.io.produced := rob.io.traceCount.get
-    btrace.io.idle     := io.idle && !io.decode_cmd_i.valid && !trace.valid
+    btrace.io.clock  := clock
+    btrace.io.reset  := reset.asBool
+    btrace.io.instId := trace.bits.instId
+    btrace.io.hartId := io.hart_id
+    val sharedBank = trace.bits.w0Vbank > b.frontend.vbank_id_upper_bound.U &&
+      trace.bits.w0Vbank >= b.frontend.shared_bank_id_base.U &&
+      trace.bits.w0Vbank < b.memDomain.virtualBankCount.U
+    btrace.io.ownerHartId := Mux(sharedBank, io.sharedBankOwnerHartId, io.hart_id)
+    btrace.io.w0Vbank     := trace.bits.w0Vbank
+    btrace.io.w0Hash      := trace.bits.w0Hash
+    btrace.io.fire        := trace.valid
+    btrace.io.produced    := rob.io.traceCount.get
+    btrace.io.idle        := io.idle && !io.decode_cmd_i.valid && !trace.valid
   }
 
   val isFenceCmd  = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isFence
@@ -122,7 +146,6 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
 
   val is_ball_domain = rob.io.issue.bits.cmd.domain_id === DomainId.BALL
   val is_mem_domain  = rob.io.issue.bits.cmd.domain_id === DomainId.MEM
-  val is_gp_domain   = rob.io.issue.bits.cmd.domain_id === DomainId.GP
 
   val mainIssueEntry = Wire(new GlobalSchedIssue(b))
   mainIssueEntry.cmd               := rob.io.issue.bits.cmd
@@ -131,7 +154,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   mainIssueEntry.is_sub            := false.B
   mainIssueEntry.sub_rob_id        := 0.U
 
-  val completeArb   = Module(new Arbiter(new GlobalSchedComplete(b), 3))
+  val completeArb   = Module(new Arbiter(new GlobalSchedComplete(b), 2))
   val completeQueue = Module(new Queue(UInt(log2Up(b.frontend.rob_entries).W), b.frontend.rob_entries))
   rob.io.complete <> completeQueue.io.deq
   completeArb.io.in(0).valid := io.ball_complete_i.valid
@@ -140,9 +163,6 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   completeArb.io.in(1).valid := io.mem_complete_i.valid
   completeArb.io.in(1).bits  := io.mem_complete_i.bits
   io.mem_complete_i.ready    := completeArb.io.in(1).ready
-  completeArb.io.in(2).valid := io.gp_complete_i.valid
-  completeArb.io.in(2).bits  := io.gp_complete_i.bits
-  io.gp_complete_i.ready     := completeArb.io.in(2).ready
 
   val completeBits = completeArb.io.out.bits
 
@@ -167,7 +187,12 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
 
     val subRobIssBall = subRobCmd.domain_id === DomainId.BALL
     val subRobIssMem  = subRobCmd.domain_id === DomainId.MEM
-    val subRobIssGp   = subRobCmd.domain_id === DomainId.GP
+    when(subRobIssueValid) {
+      assert(
+        (subRobCmd.cmd.funct =/= MVIN_KERNEL_BITPAT) && (subRobCmd.cmd.funct =/= RUN_KERNEL_BITPAT),
+        "RVV kernel commands cannot originate from SubROB"
+      )
+    }
 
     io.ball_issue_o.valid := Mux(
       subRobIssueValid && subRobIssBall,
@@ -183,22 +208,13 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     )
     io.mem_issue_o.bits  := Mux(subRobIssueValid && subRobIssMem, subRobIssueEntry, mainIssueEntry)
 
-    io.gp_issue_o.valid := Mux(
-      subRobIssueValid && subRobIssGp,
-      true.B,
-      rob.io.issue.valid && is_gp_domain && !subRobIssueValid
-    )
-    io.gp_issue_o.bits  := Mux(subRobIssueValid && subRobIssGp, subRobIssueEntry, mainIssueEntry)
-
     subRob.io.issue.ready :=
       (subRobIssBall && io.ball_issue_o.ready) ||
-        (subRobIssMem && io.mem_issue_o.ready) ||
-        (subRobIssGp && io.gp_issue_o.ready)
+        (subRobIssMem && io.mem_issue_o.ready)
 
     rob.io.issue.ready  := !subRobIssueValid && (
       (is_ball_domain && io.ball_issue_o.ready) ||
-        (is_mem_domain && io.mem_issue_o.ready) ||
-        (is_gp_domain && io.gp_issue_o.ready)
+        (is_mem_domain && io.mem_issue_o.ready)
     )
     rob.io.subRobActive := subRobIssueValid
 
@@ -227,13 +243,9 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     io.ball_issue_o.bits  := mainIssueEntry
     io.mem_issue_o.valid  := rob.io.issue.valid && is_mem_domain
     io.mem_issue_o.bits   := mainIssueEntry
-    io.gp_issue_o.valid   := rob.io.issue.valid && is_gp_domain
-    io.gp_issue_o.bits    := mainIssueEntry
-
-    rob.io.issue.ready  := (is_ball_domain && io.ball_issue_o.ready) ||
-      (is_mem_domain && io.mem_issue_o.ready) ||
-      (is_gp_domain && io.gp_issue_o.ready)
-    rob.io.subRobActive := false.B
+    rob.io.issue.ready    := (is_ball_domain && io.ball_issue_o.ready) ||
+      (is_mem_domain && io.mem_issue_o.ready)
+    rob.io.subRobActive   := false.B
 
     when(completeArb.io.out.valid) {
       assert(!completeBits.is_sub, "SubROB completion observed when frontend.sub_rob_enable=false")

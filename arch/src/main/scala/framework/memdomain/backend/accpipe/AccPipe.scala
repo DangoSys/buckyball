@@ -16,8 +16,7 @@ class AccPipe(val b: GlobalConfig) extends Module {
     val sramRead  = Flipped(new SramReadIO(b))
     val sramWrite = Flipped(new SramWriteIO(b))
 
-    val mem_req  = Flipped(new MemRequestIO(b))
-    val is_multi = Input(Bool())
+    val mem_req = Flipped(new MemRequestIO(b))
 
     val busy     = Output(Bool())
     val group_id = Output(UInt(b.memDomain.groupIdWidth.W))
@@ -26,8 +25,6 @@ class AccPipe(val b: GlobalConfig) extends Module {
   })
 
   // Each group has its own physical bank, so no address shifting is needed.
-  // The previous is_multi shift (addr >> 2) was incorrect: it caused mvout reads
-  // to access wrong physical addresses while matmul writes used unshifted addresses.
 
   //group_id output
   val group_id_reg = RegInit(0.U(b.memDomain.groupIdWidth.W))

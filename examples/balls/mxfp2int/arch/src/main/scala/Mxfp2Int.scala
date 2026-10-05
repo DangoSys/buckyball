@@ -57,9 +57,8 @@ class PipelinedMxfp2Int(val b: GlobalConfig) extends Module {
       )
   }
 
-  val FP_PER_BLOCK        = 32
-  val INT8_PER_WORD       = bankWidth / 8                // 16
-  val OUT_WORDS_PER_BLOCK = FP_PER_BLOCK / INT8_PER_WORD // 2
+  val FP_PER_BLOCK  = 32
+  val INT8_PER_WORD = bankWidth / 8 // 16
 
   val ballMapping = b.ballDomain.ballIdMappings
     .find(_.ballName == "Mxfp2IntBall")

@@ -25,7 +25,8 @@ class LutBall(val b: GlobalConfig) extends Module with HasBlink with HasBallStat
   require(mapping.outBW == 1, "LutBall requires outBW=1")
   require((funct >> 4) == 4, "LUT must encode two reads and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

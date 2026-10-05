@@ -5,5 +5,5 @@
 @VERIFY@/uvm/src/protocol/axis/interface.sv
 @VERIFY@/uvm/src/protocol/axis/package.sv
 @RESOURCES@/package.sv
-@RTL@/Slave.sv
+-F @RTL@/Slave/filelist.f
 @RESOURCES@/slave_tb.sv

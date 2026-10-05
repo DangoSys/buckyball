@@ -5,6 +5,7 @@ import chisel3.util._
 import framework.memdomain.isa.MemISA
 
 object DISA {
+  val MVOVER_BITPAT    = BitPat("b0001101")
   val MSET_FUNCT       = MemISA.MsetFunct
   // enable=010 (1 write), opcode group
   val MSET_BITPAT      = BitPat("b0100000") // 32 (0x20) — enable=010, opcode=0

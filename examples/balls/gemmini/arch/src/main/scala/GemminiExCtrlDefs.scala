@@ -2,14 +2,19 @@ package examples.balls.gemmini
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.public
 import framework.balldomain.blink.BallStatus
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.memdomain.backend.banks.{SramReadReq, SramReadResp, SramWriteIO}
-import framework.top.GlobalConfig
 import examples.balls.gemmini.configs.GemminiBallParam
 import gemmini._
 import gemmini.Util._
+
+/** Minimal tag for MeshWithDelays that satisfies TagQueueTag */
+class SimpleTag extends Bundle with gemmini.TagQueueTag {
+  val rob = UInt(8.W)
+  override def make_this_garbage(dummy: Int = 0): Unit =
+    rob := 0xff.U
+}
 
 trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val config = GemminiBallParam(b)
@@ -35,6 +40,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     val bankReadResp = Vec(inBW, Flipped(Decoupled(new SramReadResp(b))))
     val bankWrite    = Vec(outBW, Flipped(new SramWriteIO(b)))
     val op1_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
+    val op1_group_o  = Output(UInt(b.memDomain.groupIdWidth.W))
     val op2_bank_o   = Output(UInt(b.memDomain.vbankIdWidth.W))
     val wr_bank_o    = Output(UInt(b.memDomain.vbankIdWidth.W))
     val status       = new BallStatus
@@ -65,16 +71,22 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   protected def widenMeshToAcc(src: Vec[Vec[SInt]]): Vec[Vec[SInt]] =
     VecInit(src.map(col => VecInit(col.map(_.asTypeOf(accType)))))
 
-  val cfg_dataflow     = RegInit(0.U(1.W))
-  val cfg_in_shift     = RegInit(0.U(log2Up(config.accWidth).W))
-  val cfg_a_transpose  = RegInit(false.B)
-  val cfg_bd_transpose = RegInit(false.B)
-  val zero_op2         = RegInit(false.B)
-  val zero_op1_tail    = RegInit(false.B)
+  val cfg_dataflow       = RegInit(0.U(1.W))
+  val cfg_in_shift       = RegInit(0.U(log2Up(config.accWidth).W))
+  val cfg_a_transpose    = RegInit(false.B)
+  val cfg_bd_transpose   = RegInit(false.B)
+  val zero_op2           = RegInit(false.B)
+  val zero_op1_tail      = RegInit(false.B)
+  val accumulated_cmd    = RegInit(false.B)
+  val reset_acc_mesh     = RegInit(false.B)
+  val acc_read_group     = RegInit(0.U(log2Up(outBW).W))
+  val acc_read_pending   = RegInit(false.B)
+  val execution_dataflow = Mux(accumulated_cmd, Dataflow.OS.id.U, cfg_dataflow)
+  val execution_shift    = Mux(accumulated_cmd, 0.U, cfg_in_shift)
 
-  val sIdle :: sPreloadRead :: sPreloadFeed :: sComputeRead :: sComputeFeed :: sComputeFlush :: sFlush :: sDrain :: sStore :: sCommit :: Nil =
-    Enum(10)
-  val state                                                                                                                                  = RegInit(sIdle)
+  val sIdle :: sPreloadRead :: sPreloadFeed :: sComputeRead :: sComputeFeed :: sComputeFlush :: sFlush :: sDrain :: sReadAccum :: sStore :: sCommit :: Nil =
+    Enum(11)
+  val state                                                                                                                                                = RegInit(sIdle)
 
   val rob_id_reg     = RegInit(0.U(log2Up(b.frontend.rob_entries).W))
   val is_sub_reg     = RegInit(false.B)
@@ -92,9 +104,10 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
   val op1_base = RegInit(0.U(10.W))
   val op2_base = RegInit(0.U(10.W))
   val wr_base  = RegInit(0.U(10.W))
-  io.op1_bank_o := op1_bank
-  io.op2_bank_o := op2_bank
-  io.wr_bank_o  := wr_bank
+  io.op1_bank_o  := Mux(state === sReadAccum, wr_bank, op1_bank)
+  io.op1_group_o := Mux(state === sReadAccum, acc_read_group, 0.U)
+  io.op2_bank_o  := op2_bank
+  io.wr_bank_o   := wr_bank
 
   val read_row_cnt  = RegInit(0.U(log2Up(DIM + 1).W))
   val feed_row_cnt  = RegInit(0.U(log2Up(DIM + 1).W))

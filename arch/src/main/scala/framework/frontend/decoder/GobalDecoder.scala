@@ -3,33 +3,15 @@ package framework.frontend.decoder
 import chisel3._
 import chisel3.util._
 import chisel3.stage._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import org.chipsalliance.cde.config.Parameters
+import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
+import framework.frontend.scoreboard.BankAccessInfo
 import freechips.rocketchip.tile._
 
 import framework.frontend.decoder.GISA._
 import framework.memdomain.frontend.cmd.decoder.DISA._
-import framework.gpdomain.sequencer.decoder.DISA._
-import framework.frontend.scoreboard.BankAccessInfo
 
 import framework.system.core.rocket.RoCCCommandBB
-
-class BuckyballRawCmd(val b: GlobalConfig) extends Bundle {
-  val cmd = new RoCCCommandBB(b.tile.xLen)
-}
-
-class PostGDCmd(val b: GlobalConfig) extends Bundle {
-  val domain_id  = UInt(4.W)
-  val ball_bid   = UInt(5.W)
-  val cmd        = new RoCCCommandBB(b.tile.xLen)
-  val bankAccess = new BankAccessInfo(b.frontend.bank_id_len)
-  val op1_col    = UInt(b.memDomain.groupCountWidth.W)
-  val op2_col    = UInt(b.memDomain.groupCountWidth.W)
-  val wr_col     = UInt(b.memDomain.groupCountWidth.W)
-  val isFence    = Bool()
-  val isBarrier  = Bool()
-}
 
 @instantiable
 class GlobalDecoder(val b: GlobalConfig) extends Module {
@@ -54,22 +36,28 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val opcode = io.id_i.bits.cmd.opcode
   val rs1    = io.id_i.bits.cmd.rs1Data
 
-  // Instruction type determination: distinguish Ball, Mem, Fence, GP (RVV) instructions
+  // Kernel image loads use memory; kernel execution uses Ball control.
   val is_mem_inst = (func7 === MVIN_BITPAT) ||
     (func7 === MVIN_2D_BITPAT) ||
     (func7 === MVOUT_BITPAT) ||
     (func7 === MSET_BITPAT) ||
-    (func7 === MVIN_MMIO_BITPAT)
+    (func7 === MVIN_MMIO_BITPAT) ||
+    (func7 === MVOVER_BITPAT) ||
+    (func7 === MVIN_KERNEL_BITPAT)
 
   val is_frontend_inst = func7 === FENCE_BITPAT
   val is_barrier_inst  = func7 === BARRIER_BITPAT
 
-  // RVV instructions: opcode 0x57 (vector compute), 0x07 (vector load), 0x27 (vector store)
-  val is_gp_inst = (opcode === RVV_OPCODE_V) ||
-    (opcode === RVV_OPCODE_VL) ||
-    (opcode === RVV_OPCODE_VS)
+  val is_kernel_inst = func7 === MVIN_KERNEL_BITPAT || func7 === RUN_KERNEL_BITPAT
+  val is_bare_rvv    = opcode === "h57".U || opcode === "h07".U || opcode === "h27".U
+  val is_ball_inst   = !is_mem_inst && !is_frontend_inst && !is_barrier_inst && !is_bare_rvv
 
-  val is_ball_inst = !is_mem_inst && !is_frontend_inst && !is_barrier_inst && !is_gp_inst
+  when(io.id_i.fire) {
+    assert(!is_bare_rvv, "GlobalDecoder: bare RVV instructions are not Buckyball commands")
+    when(is_kernel_inst) {
+      assert(b.rvv.enable.B, "GlobalDecoder: kernel command requires rvv.enable=true")
+    }
+  }
 
   // Encode domain ID
   val domain_id = MuxCase(
@@ -77,7 +65,6 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     Seq(
       is_frontend_inst -> DomainId.FRONTEND,
       is_mem_inst      -> DomainId.MEM,
-      is_gp_inst       -> DomainId.GP,
       is_ball_inst     -> DomainId.BALL
     )
   )

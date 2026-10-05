@@ -43,7 +43,8 @@ class SMatMulUnit(val b: GlobalConfig) extends Module {
   require((osFunct >> 4) == 4, "SMATMUL_OS must encode two reads and one write")
   require((biasFunct >> 4) == 1, "SMATMUL_BIAS must encode one read")
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cmdReq       = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp      = Decoupled(new BallRsComplete(b))
     val bankRead     = Vec(mapping.inBW, Flipped(new BankRead(b)))

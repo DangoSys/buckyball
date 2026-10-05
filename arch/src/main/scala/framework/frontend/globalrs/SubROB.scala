@@ -49,22 +49,6 @@ class SubROB(val b: GlobalConfig) extends Module {
   val isFull    = rowCount === subRobDepth.U
   val ballMatch = !occupied || (io.write.bits.ball_id === lockedBallId)
 
-  // Write path: accept if not full AND ball_id matches (or not occupied yet)
-  io.write.ready := !isFull && ballMatch
-
-  when(io.write.fire) {
-    when(occupied) {
-      assert(io.write.bits.master_rob_id === masterRobId, "SubROB row master_rob_id mismatch")
-    }
-    sram.write(writePtr, io.write.bits)
-    writePtr := nextPtr(writePtr)
-    rowCount := rowCount + 1.U
-    when(!occupied) {
-      lockedBallId := io.write.bits.ball_id
-      masterRobId  := io.write.bits.master_rob_id
-    }
-  }
-
   // -------------------------------------------------------------------------
   // FSM
   // -------------------------------------------------------------------------
@@ -78,11 +62,32 @@ class SubROB(val b: GlobalConfig) extends Module {
   val sIdle :: sReadReq :: sReadWait :: sReadResp :: sWaitSlots :: sWaitMaster :: Nil = Enum(6)
   val state                                                                           = RegInit(sIdle)
 
+  // Write path: accept if not full AND ball_id matches (or not occupied yet)
+  io.write.ready := !isFull && ballMatch && state =/= sReadReq && state =/= sWaitMaster
+
+  when(io.write.fire) {
+    when(occupied) {
+      assert(io.write.bits.master_rob_id === masterRobId, "SubROB row master_rob_id mismatch")
+    }
+    writePtr := nextPtr(writePtr)
+    when(!occupied) {
+      lockedBallId := io.write.bits.ball_id
+      masterRobId  := io.write.bits.master_rob_id
+    }
+  }
+
   // SyncReadMem: read issued in sReadReq (cycle N), data valid on cycle N+1.
   // We latch it into sramData with RegEnable so it stays stable during sReadResp
   // and sWaitSlots, even when the read port is not enabled.
   val sramReadEn = state === sReadReq
-  val sramRaw    = sram.read(readPtr, sramReadEn)
+
+  val sramRaw = sram.readWrite(
+    Mux(io.write.fire, writePtr, readPtr),
+    io.write.bits,
+    sramReadEn || io.write.fire,
+    io.write.fire
+  )
+
   val dataFresh  = RegNext(sramReadEn, false.B) // pulse on first cycle of sReadResp
   val sramData   = RegEnable(sramRaw, dataFresh)
   val readPtrReg = RegEnable(readPtr, sramReadEn)
@@ -133,9 +138,11 @@ class SubROB(val b: GlobalConfig) extends Module {
   // FSM transitions
   // -------------------------------------------------------------------------
   // Helper: advance past current row (called when row is complete)
+  val rowAdvance = WireDefault(false.B)
+
   def advanceRow(): Unit = {
     readPtr              := nextPtr(readPtr)
-    rowCount             := rowCount - 1.U
+    rowAdvance           := true.B
     slotIssued.foreach(_ := false.B)
     slotDone.foreach(_   := false.B)
   }
@@ -171,7 +178,7 @@ class SubROB(val b: GlobalConfig) extends Module {
         when(allDoneNow) {
           // Fast path: skip sWaitSlots
           advanceRow()
-          state := Mux(rowCount === 1.U, sWaitMaster, sReadReq)
+          state := Mux(rowCount === 1.U && !io.write.fire, sWaitMaster, sReadReq)
         }.otherwise {
           state := sWaitSlots
         }
@@ -181,7 +188,7 @@ class SubROB(val b: GlobalConfig) extends Module {
     is(sWaitSlots) {
       when(allSlotsDone) {
         advanceRow()
-        state := Mux(rowCount === 1.U, sWaitMaster, sReadReq)
+        state := Mux(rowCount === 1.U && !io.write.fire, sWaitMaster, sReadReq)
       }
     }
     is(sWaitMaster) {
@@ -192,4 +199,8 @@ class SubROB(val b: GlobalConfig) extends Module {
       }
     }
   }
+  when(io.write.fire =/= rowAdvance) {
+    rowCount := Mux(io.write.fire, rowCount + 1.U, rowCount - 1.U)
+  }
+
 }

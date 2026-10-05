@@ -3,6 +3,7 @@
 #include <bbhw/isa/isa.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <isa/smatmul.h>
 
 extern "C" void _mlir_ciface_fp32_matmul(UnrankedMemRefType<float> *lhs,
@@ -40,29 +41,58 @@ extern "C" void _mlir_ciface_fp32_matmul(UnrankedMemRefType<float> *lhs,
         int rows = m - row == 1 ? 1 : 16;
         for (int64_t inner = 0; inner < k; inner += block) {
           int count = int((std::min<int64_t>(block, k - inner) + 3) / 4 * 4);
-          for (int i = 0; i < rows; ++i)
-            for (int j = 0; j < count; ++j)
-              ap[i * count + j] = row + i < m && inner + j < k
-                                      ? av[(row + i) * a.strides[rank - 2] +
-                                           (inner + j) * a.strides[rank - 1]]
-                                      : 0;
-          for (int i = 0; i < 16; ++i)
-            for (int j = 0; j < count; ++j)
-              bp[i * count + j] = column + i < n && inner + j < k
-                                      ? bv[(inner + j) * b.strides[rank - 2] +
-                                           (column + i) * b.strides[rank - 1]]
-                                      : 0;
-          bb_mvin((uintptr_t)ap, 0, rows * count / 4, 1);
-          bb_mvin((uintptr_t)bp, 1, 16 * count / 4, 1);
+          const float *as =
+              av + row * a.strides[rank - 2] + inner * a.strides[rank - 1];
+          const float *bs =
+              bv + inner * b.strides[rank - 2] + column * b.strides[rank - 1];
+          bool direct_a = row + rows <= m && inner + count <= k &&
+                          a.strides[rank - 1] == 1 &&
+                          (rows == 1 || a.strides[rank - 2] == count);
+          bool direct_b = column + 16 <= n && inner + count <= k &&
+                          b.strides[rank - 2] == 1 &&
+                          b.strides[rank - 1] == count;
+          if (!direct_a)
+            for (int i = 0; i < rows; ++i)
+              if (row + i < m && a.strides[rank - 1] == 1) {
+                int valid = int(std::min<int64_t>(count, k - inner));
+                std::memcpy(ap + i * count, as + i * a.strides[rank - 2],
+                            valid * sizeof(float));
+                std::fill_n(ap + i * count + valid, count - valid, 0.0f);
+              } else
+                for (int j = 0; j < count; ++j)
+                  ap[i * count + j] = row + i < m && inner + j < k
+                                          ? as[i * a.strides[rank - 2] +
+                                               j * a.strides[rank - 1]]
+                                          : 0;
+          if (!direct_b)
+            for (int i = 0; i < 16; ++i)
+              if (column + i < n && b.strides[rank - 2] == 1) {
+                int valid = int(std::min<int64_t>(count, k - inner));
+                std::memcpy(bp + i * count, bs + i * b.strides[rank - 1],
+                            valid * sizeof(float));
+                std::fill_n(bp + i * count + valid, count - valid, 0.0f);
+              } else
+                for (int j = 0; j < count; ++j)
+                  bp[i * count + j] = column + i < n && inner + j < k
+                                          ? bs[j * b.strides[rank - 2] +
+                                               i * b.strides[rank - 1]]
+                                          : 0;
+          bb_mvin((uintptr_t)(direct_a ? as : ap), 0, rows * count / 4, 1);
+          bb_mvin((uintptr_t)(direct_b ? bs : bp), 1, 16 * count / 4, 1);
           bb_smatmul_f32(0, 1, 2, rows, 16, count, inner == 0,
                          inner + count >= k, 0);
         }
         bb_mvout((uintptr_t)cp, 2, rows * 4, 1);
         bb_fence();
         for (int i = 0; i < rows && row + i < m; ++i)
-          for (int j = 0; j < 16 && column + j < n; ++j)
-            cv[(row + i) * c.strides[rank - 2] +
-               (column + j) * c.strides[rank - 1]] = cp[i * 16 + j];
+          if (c.strides[rank - 1] == 1)
+            std::memcpy(cv + (row + i) * c.strides[rank - 2] + column,
+                        cp + i * 16,
+                        std::min<int64_t>(16, n - column) * sizeof(float));
+          else
+            for (int j = 0; j < 16 && column + j < n; ++j)
+              cv[(row + i) * c.strides[rank - 2] +
+                 (column + j) * c.strides[rank - 1]] = cp[i * 16 + j];
       }
   }
   for (int bank = 0; bank < 3; ++bank)

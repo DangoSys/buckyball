@@ -2,6 +2,7 @@ package hier.chip.mesh
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import memcore.bus.chi._
 import memcore.bus.axi.Beat
 
@@ -9,9 +10,10 @@ import memcore.bus.axi.Beat
  * One requester tile's combined coherent and bulk Mesh endpoint.
  *
  * CHI uses VC0--VC3 through `ChiMeshRequesterEndpoint`; bulk AXI streams use
- * VC4. Arbitration happens once per packet, so a bulk transaction retains the
- * physical Mesh port to TLAST after it starts.
+ * VC4. Each VC has independent flow control; physical links arbitrate flits
+ * using the receiver credit pool for that VC.
  */
+@instantiable
 class TileMeshEndpoint(
   p:            Params,
   mesh:         MeshParams,
@@ -24,32 +26,38 @@ class TileMeshEndpoint(
   require(mesh.payloadBits >= bulkDataBits + bulkDataBits / 8)
   require(nodeMap.coordinateBits == p.nodeIdBits)
 
+  @public
   val io = IO(new Bundle {
     val chi     = Flipped(new RequesterPort(p))
     val bulkIn  = Flipped(Decoupled(new MeshBulkBeat(bulkDataBits, p.nodeIdBits)))
     val bulkOut = Decoupled(new Beat(bulkDataBits))
-    val meshOut = Decoupled(new MeshFlit(mesh))
-    val meshIn  = Flipped(Decoupled(new MeshFlit(mesh)))
+    val meshOut = Vec(mesh.virtualChannels, Decoupled(new MeshFlit(mesh)))
+    val meshIn  = Vec(mesh.virtualChannels, Flipped(Decoupled(new MeshFlit(mesh))))
   })
 
-  val chiEndpoint = Module(new ChiMeshRequesterEndpoint(p, mesh, localX, localY, nodeMap))
-  val bulkTx      = Module(new MeshBulkPacketizer(mesh, bulkDataBits, virtualChannel = 4, localX, localY, nodeMap))
-  val bulkRx      = Module(new MeshBulkDepacketizer(mesh, bulkDataBits, virtualChannel = 4))
-  val arbiter     = Module(new MeshPacketArbiter(mesh, 2))
+  val chiEndpoint: Instance[ChiMeshRequesterEndpoint] =
+    Instantiate(new ChiMeshRequesterEndpoint(p, mesh, localX, localY, nodeMap))
+  val bulkTx:      Instance[MeshBulkPacketizer]       =
+    Instantiate(new MeshBulkPacketizer(mesh, bulkDataBits, virtualChannel = 4, localX, localY, nodeMap))
+  val bulkRx:      Instance[MeshBulkDepacketizer]     =
+    Instantiate(new MeshBulkDepacketizer(mesh, bulkDataBits, virtualChannel = 4))
   chiEndpoint.io.chi <> io.chi
   bulkTx.io.in <> io.bulkIn
-  arbiter.io.in(0) <> chiEndpoint.io.meshOut
-  arbiter.io.in(1) <> bulkTx.io.out
-  io.meshOut <> arbiter.io.out
-  chiEndpoint.io.meshIn.valid := io.meshIn.valid && io.meshIn.bits.vc < 4.U
-  chiEndpoint.io.meshIn.bits  := io.meshIn.bits
-  bulkRx.io.in.valid          := io.meshIn.valid && io.meshIn.bits.vc === 4.U
-  bulkRx.io.in.bits           := io.meshIn.bits
-  io.meshIn.ready             := Mux(
-    io.meshIn.bits.vc < 4.U,
-    chiEndpoint.io.meshIn.ready,
-    Mux(io.meshIn.bits.vc === 4.U, bulkRx.io.in.ready, false.B)
-  )
+  for (vc <- 0 until mesh.virtualChannels) {
+    if (vc < 4) {
+      io.meshOut(vc) <> chiEndpoint.io.meshOut(vc)
+      chiEndpoint.io.meshIn(vc) <> io.meshIn(vc)
+    } else {
+      chiEndpoint.io.meshOut(vc).ready := false.B
+      chiEndpoint.io.meshIn(vc).valid  := false.B
+      chiEndpoint.io.meshIn(vc).bits   := 0.U.asTypeOf(new MeshFlit(mesh))
+      if (vc == 4) { io.meshOut(vc) <> bulkTx.io.out; bulkRx.io.in <> io.meshIn(vc) }
+      else {
+        io.meshOut(vc).valid := false.B; io.meshOut(vc).bits := 0.U.asTypeOf(new MeshFlit(mesh));
+        io.meshIn(vc).ready  := false.B
+      }
+    }
+  }
   io.bulkOut <> bulkRx.io.out
 }
 
@@ -61,15 +69,17 @@ class TileMeshBulkLoopback extends Module {
   private val map = ChiMeshNodeMap(
     Seq.tabulate(1 << chi.nodeIdBits)(_ & 1),
     Seq.tabulate(1 << chi.nodeIdBits)(node => (node >> 1) & 1),
-    mesh
+    mesh,
+    presentNodes = (0 until (1 << chi.nodeIdBits)).toSet
   )
 
+  @public
   val io = IO(new Bundle {
     val in  = Flipped(Decoupled(new MeshBulkBeat(256, chi.nodeIdBits)))
     val out = Decoupled(new Beat(256))
   })
 
-  val endpoint = Module(new TileMeshEndpoint(chi, mesh, 0, 0, map))
+  val endpoint: Instance[TileMeshEndpoint] = Instantiate(new TileMeshEndpoint(chi, mesh, 0, 0, map))
   endpoint.io.bulkIn <> io.in
   io.out <> endpoint.io.bulkOut
   endpoint.io.chi.req.valid   := false.B
@@ -81,7 +91,5 @@ class TileMeshBulkLoopback extends Module {
   endpoint.io.chi.snp.ready   := true.B
   endpoint.io.chi.rxRsp.ready := true.B
   endpoint.io.chi.rxDat.ready := true.B
-  endpoint.io.meshIn.valid    := endpoint.io.meshOut.valid
-  endpoint.io.meshIn.bits     := endpoint.io.meshOut.bits
-  endpoint.io.meshOut.ready   := endpoint.io.meshIn.ready
+  endpoint.io.meshIn <> endpoint.io.meshOut
 }

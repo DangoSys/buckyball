@@ -1,0 +1,5 @@
++tree @TOP@.dut
++tree @TOP@.mem_req
++tree @TOP@.mem_resp
++tree @TOP@.uncached_req
++tree @TOP@.uncached_resp

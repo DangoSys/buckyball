@@ -61,10 +61,9 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     val mem_decode_cmd_o = Decoupled(new MemDecodeCmd(b))
   })
 
-  val bankAddrLen = log2Up(b.memDomain.bankEntries)
-  val memAddrLen  = b.memDomain.memAddrLen
-  val bankIdLen   = b.frontend.bank_id_len
-  val iterLen     = b.frontend.iter_len
+  val memAddrLen = b.memDomain.memAddrLen
+  val bankIdLen  = b.frontend.bank_id_len
+  val iterLen    = b.frontend.iter_len
 
   // Only process Mem instructions
   io.cmd_i.ready := io.mem_decode_cmd_o.ready

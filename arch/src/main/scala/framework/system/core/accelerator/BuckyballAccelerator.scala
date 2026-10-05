@@ -1,34 +1,29 @@
 package framework.system.core.accelerator
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
-import freechips.rocketchip.tilelink.{TLBundle, TLEdgeOut}
 import framework.top.GlobalConfig
 import framework.frontend.Frontend
+import framework.frontend.globalrs.RobAllocation
+import hier.core.rocket.RobFault
 import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
-import framework.gpdomain.GpDomain
 import framework.memdomain.MemDomain
 import framework.memdomain.backend.MemRequestIO
 import framework.memdomain.backend.shared.SharedMemLayout
-import framework.memdomain.frontend.mem.{MemConfigerIO}
-import framework.memdomain.frontend.mem.tlb.{BBTLBExceptionIO, BBTLBPTWIO}
+import framework.memdomain.frontend.mem.{Footprint, MemConfigerIO}
+import framework.memdomain.frontend.mem.dma.DmaPort
 import framework.balldomain.BallDomain
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
+import framework.memdomain.isa.{MvoverISA, MvoverPort}
+import memcore.memory.mesh_shm.MeshLocalBankPort
 
-/**
- * Standalone Buckyball accelerator module.
- *
- * Decoupled from the LazyRoCCBB inheritance chain.
- * Uses @instantiable + GlobalConfig pattern.
- * TileLink bundles are passed in from the tile's diplomacy shell.
- *
- * @param b GlobalConfig for the accelerator
- * @param edge TLEdgeOut from the DMA TileLink nodes (for TLBundle sizing)
- */
+/** Accelerator domains with an explicit DMA transport boundary owned by the enclosing system. */
 @instantiable
-class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module {
+class BuckyballAccelerator(val b: GlobalConfig) extends Module {
   val totalBallRead   = b.ballDomain.ballIdMappings.map(_.inBW).sum
   val totalBallWrite  = b.ballDomain.ballIdMappings.map(_.outBW).sum
   val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
@@ -36,25 +31,33 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   @public
   val io = IO(new Bundle {
     // RoCC command/response (connected to Rocket core inside tile)
-    val cmd       = Flipped(Decoupled(new RoCCCommandBB(b.tile.xLen)))
-    val resp      = Decoupled(new RoCCResponseBB(b.tile.xLen))
-    val busy      = Output(Bool())
-    val interrupt = Output(Bool())
-    val hartid    = Input(UInt(b.tile.xLen.W))
+    val cmd                   = Flipped(Decoupled(new RoCCCommandBB(b.tile.xLen)))
+    val resp                  = Decoupled(new RoCCResponseBB(b.tile.xLen))
+    val busy                  = Output(Bool())
+    val idle                  = Output(Bool())
+    val interrupt             = Output(Bool())
+    val hartid                = Input(UInt(b.tile.xLen.W))
+    val sharedBankOwnerHartId = Input(UInt(b.tile.xLen.W))
+    // Includes boot allocations; external context binds only on io.cmd.fire.
+    val allocation            = Valid(new RobAllocation(b))
+    val retired               = Output(UInt(b.frontend.rob_entries.W))
+    val fault                 = Valid(new RobFault(b.frontend.rob_entries))
+    val firstFault            = Output(Valid(new RobFault(b.frontend.rob_entries)))
+    val footprints            = Output(Vec(3, new Footprint(b)))
 
-    // PTW interface (shared with Rocket core's PTW)
-    val ptw    = Vec(1, new BBTLBPTWIO(b))
-    // TLB exception interface
-    val tlbExp = Vec(1, new BBTLBExceptionIO)
-    // CPU sfence signal — flushes Buckyball's TLB
-    val sfence = Input(Bool())
-
-    // TileLink DMA bundles (from tile's diplomacy nodes)
-    val tl_reader = new TLBundle(edge.bundle)
-    val tl_writer = new TLBundle(edge.bundle)
+    val dma = new DmaPort(b.memDomain.dma_buswidth)
 
     // Shared memory path — exposed to tile level for multi-core SharedMemBackend
-    val shared_mem_req           = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
+    val shared_mem_req = Vec(SharedMemLayout.channelPerHart(b), new MemRequestIO(b))
+    val mvover         = new MvoverPort
+
+    val meshLocalBank = Flipped(new MeshLocalBankPort(
+      MvoverISA.AddressBits,
+      MvoverISA.BankBits,
+      b.memDomain.bankWidth,
+      math.max(1, log2Ceil(b.frontend.rob_entries))
+    ))
+
     val shared_config            = Decoupled(new MemConfigerIO(b))
     val shared_query_valid       = Output(Bool())
     val shared_query_vbank_id    = Output(UInt(b.memDomain.vbankIdWidth.W))
@@ -75,11 +78,14 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Instantiate domains ---
   val frontend:   Instance[Frontend]   = Instantiate(new Frontend(b))
   val ballDomain: Instance[BallDomain] = Instantiate(new BallDomain(b))
-  val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b)(edge))
-  val gpDomain:   Instance[GpDomain]   = Instantiate(new GpDomain(b))
+  val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b))
   frontend.io.hartid                        := io.hartid
+  frontend.io.sharedBankOwnerHartId         := io.sharedBankOwnerHartId
   frontend.io.bank_hashes.foreach(_         := memDomain.io.bank_hashes.get)
   memDomain.io.shared_bank_hashes.foreach(_ := io.shared_bank_hashes.get)
+  io.allocation                             := frontend.io.allocation
+  io.retired                                := frontend.io.retired
+  io.footprints                             := memDomain.io.footprints
 
   // --- Frontend <- cmd ---
   frontend.io.cmd.valid    := io.cmd.valid
@@ -101,12 +107,27 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Frontend -> MemDomain ---
   memDomain.io.global_issue_i <> frontend.io.mem_issue_o
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o
-  memDomain.io.hartid   := io.hartid
-  memDomain.io.inst_ids := frontend.io.inst_ids
+  // Observe the accepted completion before the scheduler's ID-only queue.
+  // Its arbiter accepts at most one of these domain completions per cycle.
+  val memoryFault     = memDomain.io.global_complete_o.fire && memDomain.io.global_complete_o.bits.fault.error =/= 0.U
+  val ballFault       = ballDomain.global_complete_o.fire && ballDomain.global_complete_o.bits.fault.error =/= 0.U
+  val faultCompletion = Mux(memoryFault, memDomain.io.global_complete_o.bits, ballDomain.global_complete_o.bits)
+  io.fault.valid        := memoryFault || ballFault
+  io.fault.bits.rob_id  := faultCompletion.rob_id
+  io.fault.bits.error   := faultCompletion.fault.error
+  io.fault.bits.address := faultCompletion.fault.address
+  val firstFault = RegInit(0.U.asTypeOf(Valid(new RobFault(b.frontend.rob_entries))))
+  when(io.fault.valid && !firstFault.valid)(firstFault := io.fault)
+  io.firstFault                                        := firstFault
+  memDomain.io.hartid                                  := io.hartid
+  memDomain.io.inst_ids                                := frontend.io.inst_ids
 
-  // --- Frontend -> GpDomain ---
-  gpDomain.io.global_issue_i <> frontend.io.gp_issue_o
-  frontend.io.gp_complete_i <> gpDomain.io.global_complete_o
+  if (b.rvv.enable) {
+    ballDomain.kernel_command_i.get <> memDomain.io.kernel_command.get
+    memDomain.io.kernel_complete.get <> ballDomain.kernel_complete_o.get
+    ballDomain.kernel.get <> memDomain.io.kernel.get
+  }
+  frontend.io.kernel_write_bank <> ballDomain.kernelWriteBank
 
   // --- BallDomain <-> MemDomain (bankRead with pipeline register to break comb loops) ---
   for (i <- 0 until totalBallRead) {
@@ -126,7 +147,9 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
     bankReadReqWithIds.bits.req         := ballDomain.bankRead(i).io.req.bits
     ballDomain.bankRead(i).io.req.ready := bankReadReqWithIds.ready
 
-    val bankReadReqQ = Queue(bankReadReqWithIds, 8)
+    val bankReadReqQueue = Module(new Queue(chiselTypeOf(bankReadReqWithIds.bits), 8))
+    bankReadReqQueue.io.enq <> bankReadReqWithIds
+    val bankReadReqQ     = bankReadReqQueue.io.deq
 
     memDomain.io.ballDomain.bankRead(i).io.req.valid := bankReadReqQ.valid
     memDomain.io.ballDomain.bankRead(i).io.req.bits  := bankReadReqQ.bits.req
@@ -145,29 +168,12 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   ballDomain.mmioRead <> memDomain.io.ballDomain.mmioRead
   ballDomain.mmioWrite <> memDomain.io.ballDomain.mmioWrite
 
-  // --- PTW ---
-  io.ptw(0).req <> memDomain.io.ptw(0).req
-  memDomain.io.ptw(0).resp <> io.ptw(0).resp
-  memDomain.io.ptw(0).ptbr <> io.ptw(0).ptbr
-  memDomain.io.ptw(0).hgatp <> io.ptw(0).hgatp
-  memDomain.io.ptw(0).vsatp <> io.ptw(0).vsatp
-  memDomain.io.ptw(0).status <> io.ptw(0).status
-  memDomain.io.ptw(0).hstatus <> io.ptw(0).hstatus
-  memDomain.io.ptw(0).gstatus <> io.ptw(0).gstatus
-  memDomain.io.ptw(0).pmp <> io.ptw(0).pmp
-  memDomain.io.ptw(0).customCSRs := DontCare
-
-  // --- TLB exception ---
-  memDomain.io.tlbExp(0).flush_skip  := io.tlbExp(0).flush_skip
-  memDomain.io.tlbExp(0).flush_retry := io.tlbExp(0).flush_retry || io.sfence
-  io.tlbExp(0).interrupt             := memDomain.io.tlbExp(0).interrupt
-
-  // --- TileLink DMA ---
-  io.tl_reader <> memDomain.io.tl_reader
-  io.tl_writer <> memDomain.io.tl_writer
+  io.dma <> memDomain.io.dma
 
   // --- Shared memory passthrough ---
   io.shared_mem_req <> memDomain.io.shared_mem_req
+  io.mvover <> memDomain.io.mvover
+  io.meshLocalBank <> memDomain.io.meshLocalBank
   io.shared_config <> memDomain.io.shared_config
   io.shared_query_valid                 := memDomain.io.shared_query_valid
   io.shared_query_vbank_id              := memDomain.io.shared_query_vbank_id
@@ -180,7 +186,10 @@ class BuckyballAccelerator(val b: GlobalConfig)(edge: TLEdgeOut) extends Module 
   // --- Response & status ---
   io.resp <> frontend.io.resp
   io.busy      := frontend.io.busy
-  io.interrupt := memDomain.io.tlbExp(0).interrupt
+  io.idle      := frontend.io.idle && !io.dma.readBusy && !io.dma.writeBusy
+  // Typed completion failures are delivered through the admission fault path.
+  // firstFault is retained diagnostic state, not an additional sticky IRQ.
+  io.interrupt := ballDomain.kernelFault
 
   // --- Busy watchdog ---
   // BootRom clears and initializes the local memories before the external

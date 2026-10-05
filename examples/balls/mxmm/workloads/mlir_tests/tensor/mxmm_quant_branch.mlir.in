@@ -1,0 +1,26 @@
+// CHECK-LABEL: func.func @quant_branch
+// CHECK: %[[PACK:.*]] = memref.alloc() alignment
+// CHECK: call @mxfp8_quant
+// CHECK: scf.if
+// CHECK-NOT: memref.dealloc %[[PACK]]
+// CHECK: buckyball.mxfp8_mem_matmul %[[PACK]],
+// CHECK-NOT: memref.dealloc %[[PACK]]
+// CHECK: } else {
+// CHECK-NOT: memref.dealloc %[[PACK]]
+// CHECK: buckyball.mxfp8_mem_matmul %[[PACK]],
+// CHECK: buckyball.mxfp8_mem_matmul %[[PACK]],
+// CHECK: memref.dealloc %[[PACK]]
+// CHECK-NOT: memref.dealloc %[[PACK]]
+// CHECK: return
+func.func @quant_branch(%x: tensor<16x64xf32>,%w0: tensor<@PACKED_BYTES@xi8> {bufferization.buffer_layout=strided<[1],offset:?>},%w1: tensor<@PACKED_BYTES@xi8> {bufferization.buffer_layout=strided<[1],offset:?>},%condition:i1) -> (tensor<16x16xf32>,tensor<16x16xf32>) {
+  %q = buckyball.mxfp8_quant %x {tile_rows=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<16x64xf32> -> tensor<@PACKED_BYTES@xi8>
+  %first = scf.if %condition -> (tensor<16x16xf32>) {
+    %a = buckyball.mxfp8_matmul %q,%w0 {reduction_k=64:i64,tile_m=16:i64,tile_n=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8> -> tensor<16x16xf32>
+    scf.yield %a : tensor<16x16xf32>
+  } else {
+    %a = buckyball.mxfp8_matmul %q,%w1 {reduction_k=64:i64,tile_m=16:i64,tile_n=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8> -> tensor<16x16xf32>
+    scf.yield %a : tensor<16x16xf32>
+  }
+  %last = buckyball.mxfp8_matmul %q,%w1 {reduction_k=64:i64,tile_m=16:i64,tile_n=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8> -> tensor<16x16xf32>
+  return %first,%last : tensor<16x16xf32>,tensor<16x16xf32>
+}

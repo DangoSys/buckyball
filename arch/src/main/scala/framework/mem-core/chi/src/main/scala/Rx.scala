@@ -48,7 +48,8 @@ class Rx(flitBits: Int, depth: Int = 4) extends Module {
 
   // Returned-credit state
   val advertised = RegInit(0.U(countBits.W))
-  val grant      = io.active && (advertised +& occupancy) < depth.U
+  val reserved   = advertised +& occupancy
+  val grant      = io.active && reserved < depth.U
 
   io.link.lcrdv := grant
   when(grant =/= io.link.flitv) {
@@ -65,6 +66,6 @@ class Rx(flitBits: Int, depth: Int = 4) extends Module {
     assert(advertised =/= 0.U, "CHI RX flit without granted credit")
     assert(enqueueReady, "CHI RX buffer overflow")
   }
-  assert((advertised +& occupancy) <= depth.U, "CHI RX credit conservation")
+  assert(reserved <= depth.U, "CHI RX credit conservation")
   when(wasActive)(assert(io.active, "CHI RX requires coordinated reset to stop"))
 }

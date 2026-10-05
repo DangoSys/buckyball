@@ -1,73 +1,45 @@
-//===- LegalizeForLLVMExport.cpp - FFN Buckyball LLVM lowering ----------===//
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-//===----------------------------------------------------------------------===//
-
 #include "Buckyball/Transform.h"
 #include "Dialect/Buckyball/Transforms/LegalizeForLLVMExportBase.h"
+#include "Target/BuckyballTargetRegistry.h"
 
 using namespace mlir;
 using namespace buddy::buckyball::legalize;
 
 namespace mlir::buddy::buckyball {
-void populateTransposeBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
-                                                        RewritePatternSet &,
-                                                        bool, int64_t);
-void configureTransposeBallLegalizeForExportTarget(LLVMConversionTarget &,
-                                                   bool);
-void populateSMatMulBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
-                                                      RewritePatternSet &, bool,
-                                                      int64_t);
-void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
-void populateToInt8BallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
-                                                     RewritePatternSet &, bool,
-                                                     int64_t);
-void configureToInt8BallLegalizeForExportTarget(LLVMConversionTarget &, bool);
-void populateInt2FpBallLegalizeForLLVMExportPatterns(LLVMTypeConverter &,
-                                                     RewritePatternSet &, bool,
-                                                     int64_t);
-void configureInt2FpBallLegalizeForExportTarget(LLVMConversionTarget &, bool);
+#define BUCKYBALL_LEGALIZE_HOOK(BALL)                                          \
+  void populate##BALL##LegalizeForLLVMExportPatterns(                          \
+      LLVMTypeConverter &, RewritePatternSet &, bool, int64_t);                \
+  void configure##BALL##LegalizeForExportTarget(LLVMConversionTarget &, bool);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_LEGALIZE_HOOK
 } // namespace mlir::buddy::buckyball
 
 void mlir::populateBuckyballLegalizeForLLVMExportPatterns(
     LLVMTypeConverter &converter, RewritePatternSet &patterns,
     int64_t bankWidthBytes, int64_t bankDepth, int64_t bankNum,
     bool includeFuncOperandForwarding, bool stable) {
-  (void)bankWidthBytes;
-  (void)bankNum;
-
   populateBaseLegalizeForLLVMExportPatterns(converter, patterns,
                                             includeFuncOperandForwarding);
-  mlir::buddy::buckyball::populateToInt8BallLegalizeForLLVMExportPatterns(
-      converter, patterns, stable, bankDepth);
-  mlir::buddy::buckyball::populateInt2FpBallLegalizeForLLVMExportPatterns(
-      converter, patterns, stable, bankDepth);
-  mlir::buddy::buckyball::populateTransposeBallLegalizeForLLVMExportPatterns(
-      converter, patterns, stable, bankDepth);
-  mlir::buddy::buckyball::populateSMatMulBallLegalizeForLLVMExportPatterns(
-      converter, patterns, stable, bankDepth);
+  for (llvm::StringRef ball : buckyball_target::getBuckyballTarget().balls) {
+#define BUCKYBALL_LEGALIZE_HOOK(BALL)                                          \
+  if (ball == #BALL)                                                           \
+    buddy::buckyball::populate##BALL##LegalizeForLLVMExportPatterns(           \
+        converter, patterns, stable, bankDepth);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_LEGALIZE_HOOK
+  }
+  (void)bankWidthBytes;
+  (void)bankNum;
 }
 
 void mlir::configureBuckyballLegalizeForExportTarget(
     LLVMConversionTarget &target, bool stable) {
   configureBaseLegalizeForExportTarget(target);
-  mlir::buddy::buckyball::configureToInt8BallLegalizeForExportTarget(target,
-                                                                     stable);
-  mlir::buddy::buckyball::configureInt2FpBallLegalizeForExportTarget(target,
-                                                                     stable);
-  mlir::buddy::buckyball::configureTransposeBallLegalizeForExportTarget(target,
-                                                                        stable);
-  mlir::buddy::buckyball::configureSMatMulBallLegalizeForExportTarget(target,
-                                                                      stable);
+  for (llvm::StringRef ball : buckyball_target::getBuckyballTarget().balls) {
+#define BUCKYBALL_LEGALIZE_HOOK(BALL)                                          \
+  if (ball == #BALL)                                                           \
+    buddy::buckyball::configure##BALL##LegalizeForExportTarget(target, stable);
+#include "BuckyballBallLoweringHooks.inc"
+#undef BUCKYBALL_LEGALIZE_HOOK
+  }
 }

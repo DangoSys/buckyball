@@ -6,6 +6,9 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.HasBlink
+import framework.balldomain.kernel.KernelBall
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, KernelWriteBank}
+import framework.memdomain.frontend.mem.KernelMemoryBridge
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.isa.BallISA
@@ -31,25 +34,30 @@ class BBus(val b: GlobalConfig) extends Module {
 
   // Rs - bbus - balls
   @public
-  val cmdReq            = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq                    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp           = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp                   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   @public
-  val ballChannelActive = IO(Output(Vec(numBalls, Bool())))
+  val ballChannelActive         = IO(Output(Vec(numBalls, Bool())))
   @public
-  val ballChannelReady  = IO(Input(Vec(numBalls, Bool())))
+  val ballChannelReady          = IO(Input(Vec(numBalls, Bool())))
   // balls - bbus
   @public
-  val bankRead          = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead                  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite         = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite                 = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   @public
-  val mmioRead          = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
+  val mmioRead                  = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
   @public
-  val mmioWrite         = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
+  val mmioWrite                 = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
   // balls - bbus - SubROB
   @public
-  val subRobReq         = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
+  val subRobReq                 = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
+  @public val kernel_command_i  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new GlobalSchedIssue(b))))) else None
+  @public val kernel_complete_o = if (b.rvv.enable) Some(IO(Decoupled(new GlobalSchedComplete(b)))) else None
+  @public val kernel            = if (b.rvv.enable) Some(IO(Flipped(new KernelMemoryBridge(b)))) else None
+  @public val kernelWriteBank   = IO(Valid(new KernelWriteBank(b)))
+  @public val kernelFault       = IO(Output(Bool()))
 
   require(b.ballDomain.ballIdMappings.length == numBalls, "ballNum must match ballIdMappings length")
 
@@ -85,6 +93,21 @@ class BBus(val b: GlobalConfig) extends Module {
   val cmdRouter: Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
   val pmc:       Instance[BallCyclePMC] = Instantiate(new BallCyclePMC(b))
 
+  val kernelBalls = balls.collect { case ball: KernelBall => ball }
+  require(kernelBalls.size == (if (b.rvv.enable) 1 else 0), "RVV enable must match generated KernelBall registration")
+  if (b.rvv.enable) {
+    val builtin = kernelBalls.head
+    builtin.kernel_command_i.get <> kernel_command_i.get
+    kernel_complete_o.get <> builtin.kernel_complete_o.get
+    kernel.get <> builtin.kernel.get
+    kernelWriteBank := builtin.kernelWriteBank
+    kernelFault     := builtin.kernelFault
+  } else {
+    kernelWriteBank.valid := false.B
+    kernelWriteBank.bits  := 0.U.asTypeOf(new KernelWriteBank(b))
+    kernelFault           := false.B
+  }
+
 // -----------------------------------------------------------------------------
 // cmd router
 // -----------------------------------------------------------------------------
@@ -100,7 +123,8 @@ class BBus(val b: GlobalConfig) extends Module {
   val targetMatches = VecInit(b.ballDomain.ballIdMappings.map(m => cmdRouter.io.cmdReq_o.bits.cmd.bid === m.ballId.U))
 
   for (i <- 0 until numBalls) {
-    ballChannelActive(i)        := balls(i).blink.status.running
+    val mapping = b.ballDomain.ballIdMappings(i)
+    ballChannelActive(i)        := (if (mapping.inBW == 0 && mapping.outBW == 0) false.B else balls(i).blink.status.running)
     balls(i).blink.channelReady := ballChannelReady(i)
 
     val targetMatch = targetMatches(i)
@@ -142,10 +166,9 @@ class BBus(val b: GlobalConfig) extends Module {
   var readChannelIdx  = 0
   var writeChannelIdx = 0
 
-  for (ball <- balls) {
-    val ballConfig = b.ballDomain.ballIdMappings.find(_.ballName == ball.getClass.getSimpleName)
-    val inBW       = ballConfig.map(_.inBW).getOrElse(0)
-    val outBW      = ballConfig.map(_.outBW).getOrElse(0)
+  for ((mapping, ball) <- b.ballDomain.ballIdMappings.zip(balls)) {
+    val inBW  = mapping.inBW
+    val outBW = mapping.outBW
 
     for (i <- 0 until inBW) {
       bankRead(readChannelIdx) <> ball.blink.bankRead(i)
@@ -159,11 +182,8 @@ class BBus(val b: GlobalConfig) extends Module {
   }
 
   var mmioWriteChannelIdx = 0
-  for (ball <- balls) {
-    val mmioWriteBW = b.ballDomain.ballIdMappings
-      .find(_.ballName == ball.getClass.getSimpleName)
-      .map(_.mmioWriteBW)
-      .getOrElse(0)
+  for ((mapping, ball) <- b.ballDomain.ballIdMappings.zip(balls)) {
+    val mmioWriteBW = mapping.mmioWriteBW
     for (i <- 0 until mmioWriteBW) {
       mmioWrite(mmioWriteChannelIdx) <> ball.blink.mmioWrite(i)
       mmioWriteChannelIdx = mmioWriteChannelIdx + 1
@@ -172,16 +192,19 @@ class BBus(val b: GlobalConfig) extends Module {
 
   // Connect balls' subRobReq
   for (i <- 0 until numBalls) {
-    subRobReq(i) <> balls(i).blink.subRobReq
+    if (b.ballDomain.ballIdMappings(i).builtin == "kernel") {
+      subRobReq(i).valid             := false.B
+      subRobReq(i).bits              := SubRobRow.tieOff(b)
+      balls(i).blink.subRobReq.ready := false.B
+    } else {
+      subRobReq(i) <> balls(i).blink.subRobReq
+    }
   }
 
   // Connect configurable MMIO metadata channels.
   var mmioReadChannelIdx = 0
-  for (ball <- balls) {
-    val mmioReadBW = b.ballDomain.ballIdMappings
-      .find(_.ballName == ball.getClass.getSimpleName)
-      .map(_.mmioReadBW)
-      .getOrElse(0)
+  for ((mapping, ball) <- b.ballDomain.ballIdMappings.zip(balls)) {
+    val mmioReadBW = mapping.mmioReadBW
     for (i <- 0 until mmioReadBW) {
       mmioRead(mmioReadChannelIdx) <> ball.blink.mmioRead(i)
       mmioReadChannelIdx = mmioReadChannelIdx + 1

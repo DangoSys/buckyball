@@ -81,7 +81,7 @@ function(buckyball_require_min_bank_lines TARGET MINIMUM BALL)
 endfunction()
 
 function(add_buckyball_mlir_test NAME)
-  cmake_parse_arguments(ARG "" "TARGET" "PASSES" ${ARGN})
+  cmake_parse_arguments(ARG "" "TARGET;CRUNNER_SOURCE" "PASSES;LIBRARIES;BAREMETAL_LIBRARIES" ${ARGN})
 
   if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
     message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
@@ -164,6 +164,9 @@ function(add_buckyball_mlir_test NAME)
   set(LINUX_CXX ${RISCV_GNU_TOOLCHAIN}/bin/riscv64-unknown-linux-gnu-g++)
   set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
   set(CRUNNER_UTILS_SRC ${WORKLOAD_LIB_DIR}/bbsw/CRunnerUtils/CRunnerUtils.cpp)
+  if(ARG_CRUNNER_SOURCE)
+    set(CRUNNER_UTILS_SRC "${ARG_CRUNNER_SOURCE}")
+  endif()
   set(BBHW_MEM_C ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/dma.c)
   set(LLVM_MLIR_EXECUTION_ENGINE_DIR
     ${BUDDY_MLIR_DIR}/llvm/mlir/include/mlir/ExecutionEngine)
@@ -203,6 +206,25 @@ function(add_buckyball_mlir_test NAME)
     COMMENT "Building ${NAME}.o from ${PREFIX} MLIR"
     VERBATIM)
 
+  set(MLIR_LINK_LIBRARIES)
+  foreach(LIBRARY IN LISTS ARG_LIBRARIES)
+    if(NOT TARGET ${LIBRARY})
+      message(FATAL_ERROR "${NAME}: unknown runtime library ${LIBRARY}")
+    endif()
+    list(APPEND MLIR_LINK_LIBRARIES "$<TARGET_FILE:${LIBRARY}>")
+  endforeach()
+
+  set(MLIR_BAREMETAL_LIBRARIES ${MLIR_LINK_LIBRARIES})
+  if(ARG_BAREMETAL_LIBRARIES)
+    set(MLIR_BAREMETAL_LIBRARIES)
+    foreach(LIBRARY IN LISTS ARG_BAREMETAL_LIBRARIES)
+      if(NOT TARGET ${LIBRARY})
+        message(FATAL_ERROR "${NAME}: unknown bare-metal library ${LIBRARY}")
+      endif()
+      list(APPEND MLIR_BAREMETAL_LIBRARIES "$<TARGET_FILE:${LIBRARY}>")
+    endforeach()
+  endif()
+
   add_custom_command(
     OUTPUT ${BAREMETAL_BIN}
     COMMAND ${ELF_CC} ${C_FLAGS}
@@ -215,8 +237,8 @@ function(add_buckyball_mlir_test NAME)
       ${CRUNNER_UTILS_SRC}
       ${BBHW_MEM_C}
       ${MAIN_SRC}
-      ${OBJ}
-    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
+      ${OBJ} ${MLIR_BAREMETAL_LIBRARIES}
+    DEPENDS ${OBJ} ${ARG_BAREMETAL_LIBRARIES} ${ARG_LIBRARIES} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
       ${BB_BALL_ISA_H} ${BB_PARAMS_H}
       ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Linking ${BAREMETAL_BIN}"
@@ -233,8 +255,8 @@ function(add_buckyball_mlir_test NAME)
       ${CRUNNER_UTILS_SRC}
       -x c ${BBHW_MEM_C} -x none
       ${MAIN_SRC}
-      ${OBJ}
-    DEPENDS ${OBJ} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${BB_BALL_ISA_H}
+      ${OBJ} ${MLIR_LINK_LIBRARIES}
+    DEPENDS ${OBJ} ${ARG_LIBRARIES} ${MAIN_SRC} ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C} ${BB_BALL_ISA_H}
             ${BB_PARAMS_H}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -251,8 +273,6 @@ function(add_buckyball_mlir_test NAME)
     add_dependencies(${BUCKYBALL_MLIR_GROUP_TARGET} ${GROUP_TARGET})
   endif()
 endfunction()
-
-set(MLIRTEST_BASE_DIR ${MLIRTEST_WORKLOAD_DIR}/base)
 
 add_subdirectory(${MLIRTEST_WORKLOAD_DIR}/base
   ${CMAKE_CURRENT_BINARY_DIR}/mlir_tests/base)

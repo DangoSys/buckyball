@@ -5,7 +5,6 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.top.GlobalConfig
 import framework.balldomain.blink.SubRobRow
-import framework.frontend.decoder.PostGDCmd
 import framework.frontend.scoreboard.BankAccessInfo
 import framework.frontend.decoder.DomainId
 

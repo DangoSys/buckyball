@@ -3,8 +3,7 @@ package framework.memdomain.frontend.mem
 import chisel3._
 import chisel3.util._
 import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
-import framework.memdomain.backend.banks.SramWriteIO
-import framework.memdomain.frontend.mem.dma.{BBReadRequest, BBReadResponse}
+import framework.memdomain.frontend.mem.dma.{BBReadRequest, BBReadResponse, DmaError, DmaStatus}
 import freechips.rocketchip.rocket.MStatus
 import framework.balldomain.blink.BankWrite
 import chisel3.experimental.hierarchy.{instantiable, public}
@@ -12,12 +11,17 @@ import framework.top.GlobalConfig
 
 @instantiable
 class MemLoader(val b: GlobalConfig) extends Module {
+  require(
+    b.memDomain.bankWidth == 128 && b.memDomain.dma_buswidth == 128,
+    "MemLoader requires 128-bit bank and DMA beats"
+  )
   val rob_id_width = log2Up(b.frontend.rob_entries)
 
   @public
   val io = IO(new Bundle {
-    val cmdReq  = Flipped(Decoupled(new MemRsIssue(b)))
-    val cmdResp = Decoupled(new MemRsComplete(b))
+    val cmdReq    = Flipped(Decoupled(new MemRsIssue(b)))
+    val cmdResp   = Decoupled(new MemRsComplete(b))
+    val footprint = Output(new Footprint(b))
 
     val dmaReq  = Decoupled(new BBReadRequest())
     val dmaResp = Flipped(Decoupled(new BBReadResponse(b.memDomain.bankWidth)))
@@ -53,6 +57,8 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val wr_bank_reg    = Reg(UInt(b.memDomain.vbankIdWidth.W))
   val stride_reg     = Reg(UInt(19.W))
   val is_shared_reg  = RegInit(false.B)
+  val fault          = RegInit(0.U.asTypeOf(new DmaStatus))
+  val footprintValid = RegInit(false.B)
 
   // Group counter for multi-bank writes
   val group_counter   = RegInit(0.U(b.memDomain.groupCountWidth.W))
@@ -72,6 +78,36 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.is_mvin_mmio_active := is_mvin_mmio_reg
   io.mmio_addr           := mmio_addr_reg
   io.mmio_col            := mmio_col_reg
+
+  val shapeRows         = iter_cmd.pad(64)
+  val shapeColumns      = Mux(is_mvin_2d_reg, tile_width_reg.pad(64), 1.U(64.W))
+  val shapeSpan         =
+    Mux(is_mvin_2d_reg, (b.memDomain.dma_buswidth / 8).U(64.W), (group_count_reg * (b.memDomain.bankWidth / 8).U).pad(64))
+  val shapeColumnStride = Mux(is_mvin_2d_reg, pixel_bytes_reg.pad(64), 0.U(64.W))
+  val linearRowStride   = group_count_reg * stride_reg * (b.memDomain.bankWidth / 8).U
+  val shapeRowStride    = Mux(is_mvin_2d_reg, (source_width_reg * pixel_bytes_reg).pad(64), linearRowStride.pad(64))
+  val shapeBeats        = iter_cmd * Mux(is_mvin_2d_reg, tile_width_reg.pad(group_count_reg.getWidth), group_count_reg)
+  val shapeEnd          = mem_addr_reg.pad(64) +& ((shapeRows - 1.U) * shapeRowStride) +&
+    ((shapeColumns - 1.U) * shapeColumnStride) +& (shapeSpan - 1.U)
+
+  val shapeError = iter_cmd === 0.U || group_count_reg === 0.U || stride_reg === 0.U ||
+    (shapeBeats >> b.frontend.iter_len).orR || (shapeEnd >> b.memDomain.memAddrLen).orR ||
+    (is_mvin_2d_reg && (pixel_bytes_reg === 0.U || source_width_reg < tile_width_reg))
+
+  io.footprint               := 0.U.asTypeOf(new Footprint(b))
+  io.footprint.valid         := footprintValid
+  io.footprint.rob_id        := rob_id_reg
+  io.footprint.is_sub        := is_sub_reg
+  io.footprint.sub_rob_id    := sub_rob_id_reg
+  io.footprint.baseVA        := mem_addr_reg
+  io.footprint.rows          := shapeRows
+  io.footprint.columns       := shapeColumns
+  io.footprint.spanBytes     := shapeSpan
+  io.footprint.columnStride  := shapeColumnStride
+  io.footprint.rowStride     := shapeRowStride
+  io.footprint.write         := false.B
+  io.footprint.fault.error   := Mux(shapeError, DmaError.Shape.U, DmaError.None.U)
+  io.footprint.fault.address := Mux(shapeError, mem_addr_reg.pad(64), 0.U)
 
   // -----------------------------
   // pending latch for 1-beat DMA -> bankWrite
@@ -125,6 +161,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.cmdResp.bits.rob_id     := rob_id_reg
   io.cmdResp.bits.is_sub     := is_sub_reg
   io.cmdResp.bits.sub_rob_id := sub_rob_id_reg
+  io.cmdResp.bits.fault      := fault
 
   // -----------------------------
   // Receive load instruction (both mvin and mvin_mmio go through is_load path)
@@ -137,6 +174,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
     wr_bank_reg    := io.cmdReq.bits.cmd.bank_id
     resp_count     := 0.U
     pending        := false.B
+    fault          := 0.U.asTypeOf(new DmaStatus)
+    footprintValid := io.cmdReq.bits.cmd.is_mvin_mmio || io.cmdReq.bits.cmd.is_mvin_2d
+    iter_cmd       := io.cmdReq.bits.cmd.iter
     latLast        := false.B
     group_counter  := 0.U
     rowAddr        := Mux(
@@ -190,8 +230,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
   }
 
   when(state === s_mul) {
-    iter_reg := iter_cmd * group_count_reg
-    state    := s_dma_req
+    iter_reg       := iter_cmd * group_count_reg
+    state          := s_dma_req
+    footprintValid := true.B
   }
 
   // DMA req accepted
@@ -202,9 +243,14 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // Latch DMA beat into pending buffer
   when(io.dmaResp.fire) {
-    pending := true.B
-    latData := io.dmaResp.bits.data
-    latLast := io.dmaResp.bits.last
+    when(io.dmaResp.bits.fault.error =/= DmaError.None.U || fault.error =/= DmaError.None.U) {
+      when(fault.error === DmaError.None.U)(fault := io.dmaResp.bits.fault)
+      when(io.dmaResp.bits.last)(state            := s_done)
+    }.otherwise {
+      pending := true.B
+      latData := io.dmaResp.bits.data
+      latLast := io.dmaResp.bits.last
+    }
   }
 
   // When bankWrite request handshakes, consume pending beat
@@ -221,6 +267,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   // Wait for each write response before accepting the next DMA beat.
   when(state === s_wait_write_resp && io.bankWrite.io.resp.fire) {
+    when(!io.bankWrite.io.resp.bits.ok && fault.error === DmaError.None.U) {
+      fault.error   := DmaError.Bank.U
+      fault.address := rowAddr * (b.memDomain.bankWidth / 8).U
+    }
     when(group_counter + 1.U < group_count_reg) {
       group_counter := group_counter + 1.U
     }.otherwise {
@@ -231,6 +281,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   }
 
   when(state === s_done && io.cmdResp.fire) {
-    state := s_idle
+    state          := s_idle
+    footprintValid := false.B
   }
 }

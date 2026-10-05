@@ -1,0 +1,12 @@
+[package]
+name = "rvv-reference-model"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+rvv = { path = "../../../../../../../../bebop/src/nodes/bemu/rvv" }
+
+[workspace]

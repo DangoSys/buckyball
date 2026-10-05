@@ -8,6 +8,7 @@ import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
 import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
+import framework.frontend.decoder.GISA.{MVIN_KERNEL_BITPAT, RUN_KERNEL_BITPAT}
 import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.backend.banks.btrace.{BTraceRecord, PhysicalBankHash}
 
@@ -27,10 +28,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hart_id  = Input(UInt(b.tile.xLen.W))
-    val alloc    = Flipped(new DecoupledIO(new PostGDCmd(b)))
-    val issue    = new DecoupledIO(new GlobalRobEntry(b))
-    val complete = Flipped(new DecoupledIO(UInt(idWidth.W)))
+    val hart_id    = Input(UInt(b.tile.xLen.W))
+    val alloc      = Flipped(new DecoupledIO(new PostGDCmd(b)))
+    val issue      = new DecoupledIO(new GlobalRobEntry(b))
+    val complete   = Flipped(new DecoupledIO(UInt(idWidth.W)))
+    val allocation = Valid(new RobAllocation(b))
+    val retired    = Output(UInt(robDepth.W))
+
+    val kernelWriteBank = Flipped(Valid(new Bundle {
+      val rob_id = UInt(idWidth.W)
+      val bank   = UInt(16.W)
+    }))
 
     val empty          = Output(Bool())
     val full           = Output(Bool())
@@ -107,6 +115,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       None
     }
 
+  val kernelWriteBanks = if (b.sim.diffTest) Some(Reg(Vec(robDepth, UInt(16.W)))) else None
+  if (b.sim.diffTest) {
+    when(io.kernelWriteBank.valid) {
+      kernelWriteBanks.get(io.kernelWriteBank.bits.rob_id) := io.kernelWriteBank.bits.bank
+    }
+  }
+
   io.inst_ids := instIds
 
   val headPtr                = RegInit(0.U(idWidth.W))
@@ -136,6 +151,9 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   def isMappingConfig(entry: GlobalRobEntry): Bool =
     entry.cmd.domain_id === DomainId.MEM &&
       (entry.cmd.cmd.funct === MSET_BITPAT)
+
+  def isKernelRun(entry: GlobalRobEntry): Bool =
+    entry.cmd.domain_id === DomainId.BALL && entry.cmd.cmd.funct === RUN_KERNEL_BITPAT
 
   def accessUsesBank(access: BankAccessInfo, bank: UInt): Bool =
     (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
@@ -184,7 +202,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val commitKeep = Wire(Vec(robDepth + 1, Bool()))
 
   val headNeedsTrace = instIds(headPtr) =/= 0.U && !isMappingConfig(robEntries(headPtr)) &&
-    robEntries(headPtr).cmd.bankAccess.wr_bank_valid
+    (robEntries(headPtr).cmd.bankAccess.wr_bank_valid || isKernelRun(robEntries(headPtr)))
   commitKeep(0) := true.B
   for (i <- 0 until robDepth) {
     val ptr = robIdx(wrapPtr(headPtr + i.U))
@@ -203,10 +221,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     }
   }
 
-  io.alloc.ready      := !isFull && !hasCommit && !tailAliasLive
-  bat.io.alloc.valid  := io.alloc.fire
-  bat.io.alloc.rob_id := tailPtr
-  bat.io.alloc.raw    := io.alloc.bits.bankAccess
+  io.alloc.ready            := !isFull && !hasCommit && !tailAliasLive
+  io.allocation.valid       := io.alloc.fire
+  io.allocation.bits.rob_id := tailPtr
+  io.retired                := commitMask.asUInt
+  bat.io.alloc.valid        := io.alloc.fire
+  bat.io.alloc.rob_id       := tailPtr
+  bat.io.alloc.raw          := io.alloc.bits.bankAccess
 
   // Mark write alias as busy in scoreboard at alloc time (not issue time).
   scoreboard.alloc.valid := io.alloc.fire && io.alloc.bits.bankAccess.wr_bank_valid
@@ -217,10 +238,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val entryRawReads  = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
   val entryRawWrites = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
   val entryIsConfig  = Wire(Vec(robDepth, Bool()))
+  val entryIsKernel  = Wire(Vec(robDepth, Bool()))
   for (slot <- 0 until robDepth) {
     entryRawReads(slot)  := rawReadMask(robEntries(slot).cmd.bankAccess)
     entryRawWrites(slot) := rawWriteMask(robEntries(slot).cmd.bankAccess)
     entryIsConfig(slot)  := isMappingConfig(robEntries(slot))
+    entryIsKernel(slot)  := (robEntries(slot).cmd.cmd.funct === MVIN_KERNEL_BITPAT) ||
+      (robEntries(slot).cmd.cmd.funct === RUN_KERNEL_BITPAT)
   }
 
   // A newly allocated entry is always younger than all currently valid ROB
@@ -230,6 +254,8 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
   val allocIsConfig       = io.alloc.bits.domain_id === DomainId.MEM &&
     (io.alloc.bits.cmd.funct === MSET_BITPAT)
+  val allocIsKernel       = (io.alloc.bits.cmd.funct === MVIN_KERNEL_BITPAT) ||
+    (io.alloc.bits.cmd.funct === RUN_KERNEL_BITPAT)
   val allocIsBall         = io.alloc.bits.domain_id === DomainId.BALL
   val allocDependencyBits = Wire(Vec(robDepth, Bool()))
   for (older <- 0 until robDepth) {
@@ -245,7 +271,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     // commit. RAW conflicts and same-Ball commands release at completion.
     allocDependencyBits(older) :=
       (robValid(older) && !robComplete(older) && (rawConflict || sameBall)) ||
-        (robValid(older) && configConflict)
+        (robValid(older) && (configConflict || allocIsKernel || entryIsKernel(older)))
   }
   val allocDependencies = allocDependencyBits.asUInt
   val allocUsesInstId = io.alloc.bits.cmd.pc =/= 0.U
@@ -290,7 +316,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
     val incomingAccess    = robEntries(io.complete.bits).cmd.bankAccess
     val incomingNeedsHash = instIds(io.complete.bits) =/= 0.U && !isMappingConfig(robEntries(io.complete.bits)) &&
-      incomingAccess.wr_bank_valid
+      (incomingAccess.wr_bank_valid || isKernelRun(robEntries(io.complete.bits)))
     io.complete.ready := !incomingNeedsHash || (hashReady && hashCid === io.complete.bits)
 
     when(!collecting && !hashReady && io.complete.valid && incomingNeedsHash) {
@@ -300,7 +326,11 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       currentHash  := 0.U
     }
 
-    val vbank       = robEntries(collectCid).cmd.bankAccess.wr_bank_id
+    val vbank       = Mux(
+      isKernelRun(robEntries(collectCid)),
+      kernelWriteBanks.get(collectCid),
+      robEntries(collectCid).cmd.bankAccess.wr_bank_id
+    )
     val matches     = VecInit(io.bank_hashes.get.map { state =>
       state.valid && state.hartId === io.hart_id && state.vbankId === vbank && state.groupId === collectGroup
     })
@@ -515,7 +545,11 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     trace.valid        := hasCommit && headNeedsTrace
     trace.bits.instId  := instIds(headPtr)
     trace.bits.hartId  := io.hart_id
-    trace.bits.w0Vbank := robEntries(headPtr).cmd.bankAccess.wr_bank_id
+    trace.bits.w0Vbank := Mux(
+      isKernelRun(robEntries(headPtr)),
+      kernelWriteBanks.get(headPtr),
+      robEntries(headPtr).cmd.bankAccess.wr_bank_id
+    )
     trace.bits.w0Hash  := statusHashes.get(headPtr)
 
     val produced = RegInit(0.U(64.W))
@@ -528,12 +562,16 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // only at commit; all other dependencies clear at complete. This is the
   // union-mask form of the former separate RAW/config masks.
   val configEntryMask = entryIsConfig.asUInt
+  val kernelEntryMask = entryIsKernel.asUInt
   for (slot <- 0 until robDepth) {
     val isAllocatedSlot = io.alloc.fire && tailPtr === slot.U
     val slotIsConfig    = Mux(isAllocatedSlot, allocIsConfig, entryIsConfig(slot))
     // Each dependency bit names the older entry that blocks this slot. Keep a
     // config-related edge through completion when either endpoint is config.
-    val configRelated   = configEntryMask | Fill(robDepth, slotIsConfig)
+    val slotIsKernel    = Mux(isAllocatedSlot, allocIsKernel, entryIsKernel(slot))
+    // Kernels have a dynamic bank footprint. Drain all preceding operations,
+    // including a Ball's SubROB, and hold successors until kernel retirement.
+    val configRelated   = configEntryMask | kernelEntryMask | Fill(robDepth, slotIsConfig || slotIsKernel)
     val clearMask       = commitMask.asUInt | (completedBitMask & ~configRelated)
     when(isAllocatedSlot) {
       dependencyMask(slot) := allocDependencies & ~clearMask

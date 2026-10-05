@@ -7,7 +7,7 @@ import gemmini._
 trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
 
   protected def handlePreloadReadState(): Unit = {
-    when(cfg_dataflow === Dataflow.OS.id.U) {
+    when(execution_dataflow === Dataflow.OS.id.U) {
       when(read_row_cnt < total_rows) {
         io.bankReadReq(0).valid     := true.B
         io.bankReadReq(0).bits.addr := op1_base + read_row_cnt
@@ -39,15 +39,15 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
 
   protected def handlePreloadFeedState(): Unit = {
     val explicitBTranspose =
-      cfg_dataflow === Dataflow.WS.id.U && cfg_bd_transpose
+      execution_dataflow === Dataflow.WS.id.U && cfg_bd_transpose
 
     when(!req_sent) {
       mesh.io.req.valid                     := true.B
-      mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
+      mesh.io.req.bits.pe_control.dataflow  := execution_dataflow
       mesh.io.req.bits.pe_control.propagate := 1.U
-      mesh.io.req.bits.pe_control.shift     := cfg_in_shift
+      mesh.io.req.bits.pe_control.shift     := execution_shift
       mesh.io.req.bits.a_transpose          := Mux(
-        cfg_dataflow === Dataflow.OS.id.U,
+        execution_dataflow === Dataflow.OS.id.U,
         true.B,
         cfg_a_transpose
       )
@@ -55,6 +55,8 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
       // transposer disabled avoids the unsupported WS transpose request path.
       mesh.io.req.bits.bd_transpose         := false.B
       mesh.io.req.bits.total_rows           := total_rows
+      // OS associates the following product with this preload's tag, including
+      // the zero preload used by COMPUTE_ACCUMULATED.
       mesh.io.req.bits.tag.rob              := robIdAsTag8(rob_id_reg)
       mesh.io.req.bits.flush                := 0.U
       when(mesh.io.req.fire) {
@@ -76,7 +78,7 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
     when(
       req_sent && (!explicitBTranspose || xpose_ready) && feed_row_cnt < total_rows
     ) {
-      when(explicitBTranspose || rdQueue0.io.deq.valid) {
+      when(reset_acc_mesh || explicitBTranspose || rdQueue0.io.deq.valid) {
         val row_data        = rdQueue0.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
         val transpose_col   = total_rows - 1.U - feed_row_cnt
         val transposed_data =
@@ -90,23 +92,30 @@ trait GemminiExCtrlPreloadStates { this: GemminiExCtrl =>
         // OS preload in Buckyball is used to prime pipeline state before compute.
         // Feed D=0 to avoid injecting bias-like data into the following matmul.
         mesh.io.d.bits  := Mux(
-          cfg_dataflow === Dataflow.OS.id.U,
+          execution_dataflow === Dataflow.OS.id.U,
           0.U.asTypeOf(mesh.D_TYPE),
           VecInit(
             weight_data.grouped(config.tileColumns).map(g => VecInit(g)).toSeq
           )
         )
         when(mesh.io.a.ready && mesh.io.b.ready && mesh.io.d.ready) {
-          rdQueue0.io.deq.ready := !explicitBTranspose
+          rdQueue0.io.deq.ready := !reset_acc_mesh && !explicitBTranspose
           feed_row_cnt          := feed_row_cnt + 1.U
         }
       }
     }
 
     when(req_sent && feed_row_cnt >= total_rows) {
-      io.cmdResp.valid := true.B
-      when(io.cmdResp.fire) {
-        state := sIdle
+      when(reset_acc_mesh) {
+        reset_acc_mesh      := false.B
+        read_row_cnt        := 0.U
+        feed_row_cnt        := 0.U
+        req_sent            := false.B
+        read_done.foreach(_ := false.B)
+        state               := sComputeRead
+      }.otherwise {
+        io.cmdResp.valid            := true.B
+        when(io.cmdResp.fire)(state := sIdle)
       }
     }
   }

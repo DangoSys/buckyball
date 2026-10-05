@@ -1,0 +1,35 @@
+ips = ["uncached_ram", "preflight", "ddr", "interlock", "memdomain", "root_core", "root_tile", "fetch", "mmu", "cpu_mem", "axis", "bank", "cache", "coherence", "chi", "root_chip", "mesh_shm", "rvv"]
+
+[paths]
+uncached_ram = "arch/src/main/scala/framework/mem-core/uncached_ram"
+preflight = "arch/src/main/scala/framework/mem-core/preflight"
+ddr = "arch/src/main/scala/framework/mem-core/ddr"
+interlock = "arch/src/main/scala/framework/mem-core/interlock"
+memdomain = "arch/src/main/scala/framework/memdomain/verification"
+axis = "arch/src/main/scala/framework/mem-core/axis"
+bank = "arch/src/main/scala/framework/mem-core/bank"
+cache = "arch/src/main/scala/framework/mem-core/cache"
+coherence = "arch/src/main/scala/framework/mem-core/coherence"
+mesh_shm = "arch/src/main/scala/framework/mem-core/mesh_shm"
+rvv = "arch/src/main/scala/framework/rvv"
+chi = "arch/src/main/scala/framework/mem-core/chi"
+root_chip = "arch/src/main/scala/framework/root/root-chip"
+cpu_mem = "arch/src/main/scala/framework/mem-core/cpu_mem"
+mmu = "arch/src/main/scala/framework/mem-core/mmu"
+fetch = "arch/src/main/scala/framework/mem-core/fetch"
+root_tile = "arch/src/main/scala/framework/root/root-tile"
+
+root_core = "arch/src/main/scala/framework/root/root-core"
+
+[build.root_core]
+directory = "arch"
+module = "root_core"
+
+[build.root_tile]
+directory = "arch"
+module = "root_tile"
+
+[build.memdomain]
+directory = "arch"
+module = "memdomain_ack"
+arguments = ["--chip", "{chip}", "--targets", "{targets}"]

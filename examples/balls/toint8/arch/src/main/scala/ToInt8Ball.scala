@@ -35,7 +35,8 @@ class ToInt8Ball(val b: GlobalConfig) extends Module with HasBlink with HasBallS
   require((f32Funct >> 4) == 3, "QUANT_F32_TO_I8 must encode one read and one write")
   require((i32Funct >> 4) == 4, "QUANT_I32_TO_I8 must encode two reads and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

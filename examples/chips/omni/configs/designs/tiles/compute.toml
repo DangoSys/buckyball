@@ -1,0 +1,73 @@
+# Omni compute tile: controller core 0, two Attention cores and eight FFN cores.
+
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
+memBallChannelNum = 11
+
+[sharedMem]
+enable = true
+entries = 16384
+inputChannels = 10
+defaultGroupCount = 1
+memCycles = 10
+
+[[cores]]
+core_id = 0
+name = "controller"
+include = "../../../../../cores/rocket/configs/default.toml"
+
+[[cores]]
+core_id = 1
+name = "attention"
+include = "../../../../../cores/attention/configs/default.toml"
+
+[[cores]]
+core_id = 2
+name = "attention"
+include = "../../../../../cores/attention/configs/default.toml"
+
+[[cores]]
+core_id = 3
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 4
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 5
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 6
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 7
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 8
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 9
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"
+
+[[cores]]
+core_id = 10
+name = "ffn"
+include = "../../../../../cores/ffn/configs/default.toml"

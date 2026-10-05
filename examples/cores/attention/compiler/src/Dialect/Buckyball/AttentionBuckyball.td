@@ -21,6 +21,6 @@ include "Buckyball.td"
 include "ToInt8Ball.td"
 include "Int2FpBall.td"
 include "TransposeBall.td"
-include "SMatMulBall.td"
+include "MxmmBall.td"
 
 #endif // ATTENTION_BUCKYBALL_OPS

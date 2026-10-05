@@ -1,7 +1,9 @@
-[top]
-nTiles = 4
+# Omni: a CPU main tile and 4 homogeneous compute tiles, each
+# 1 controller + 2 Attention + 8 FFN cores.
 
-[tileTemplate]
-tile_ids = [0, 1, 2, 3]
-include = "tiles/default.toml"
+[main_tile]
+include = "tiles/main.toml"
+
+[compute_tiles]
+include = "tiles/compute.toml"
 count = 4

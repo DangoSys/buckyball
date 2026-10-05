@@ -1,0 +1,1 @@
+expected_assertion = "CPU atomic requires a 32 or 64 bit operand"

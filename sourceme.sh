@@ -52,6 +52,5 @@ export PATH="${BBDIR}/bbdev:${PATH}"
 export PYTHONPATH="${BBDIR}/bbdev/api:${PYTHONPATH}"
 export PYTHONPATH="${BBDIR}/thirdparty/soc-framework/ip:${PYTHONPATH}"
 
-
-# firesim manager
-export PATH="${BBDIR}/arch/thirdparty/chipyard/sims/firesim/deploy:${PATH}"
+# FireSim manager
+export PATH="${BBDIR}/thirdparty/firesim/deploy:${PATH}"

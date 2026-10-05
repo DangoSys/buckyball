@@ -18,7 +18,14 @@ set(PEBBLE_TILE_FUNCTIONAL_PASSES
   -convert-func-to-llvm
   -reconcile-unrealized-casts)
 
+add_buckyball_mlir_test(mega_matmul_m17_k65_n17
+  TARGET pebble PASSES ${PEBBLE_TILE_FUNCTIONAL_PASSES})
+
 add_buckyball_mlir_test(mega_conv2d
+  TARGET pebble
+  PASSES ${PEBBLE_TILE_FUNCTIONAL_PASSES})
+
+add_buckyball_mlir_test(mega_conv2d_k5_tail
   TARGET pebble
   PASSES ${PEBBLE_TILE_FUNCTIONAL_PASSES})
 

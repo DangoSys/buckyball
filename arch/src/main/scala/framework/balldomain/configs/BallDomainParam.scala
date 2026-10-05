@@ -10,7 +10,25 @@ case class BallIdMapping(
   inBW:        Int,
   outBW:       Int,
   mmioReadBW:  Int = 0,
-  mmioWriteBW: Int = 0)
+  mmioWriteBW: Int = 0,
+  builtin:     String = "",
+  ballParams:  Map[String, String] = Map.empty) {
+  require(builtin.isEmpty || builtin == "kernel", s"Unknown builtin Ball: $builtin")
+  if (builtin == "kernel") {
+    require(
+      ballName == "kernel" && ballClass == "framework.balldomain.kernel.KernelBall",
+      "builtin kernel must use the kernel name and KernelBall class"
+    )
+    require(
+      config.isEmpty && inBW == 0 && outBW == 0 && mmioReadBW == 0 && mmioWriteBW == 0,
+      "builtin kernel must have no external config or BBus widths"
+    )
+    require(
+      ballParams.keySet == Set("laneNumber", "vLen", "eLen", "iBufWords", "memoryPorts"),
+      "builtin kernel requires exactly the five RVV parameters"
+    )
+  }
+}
 
 case class BallISAEntry(
   mnemonic: String,

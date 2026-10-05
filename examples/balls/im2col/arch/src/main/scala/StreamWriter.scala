@@ -46,7 +46,8 @@ class StreamWriter(val b: GlobalConfig) extends Module {
   require(bankWidth % elemWidth == 0)
   require(lanesPerBeat == 16, "Im2col SMatMulBall layout requires 16 int8 lanes")
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val bankWrite = Vec(outBW, Flipped(new BankWrite(b)))
 
     val elemIn      = Flipped(Decoupled(UInt(elemWidth.W)))

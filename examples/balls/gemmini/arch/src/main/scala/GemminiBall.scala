@@ -3,7 +3,7 @@ package examples.balls.gemmini
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
+import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink}
 import framework.balldomain.blink.mmio.MmioRead
 import framework.balldomain.rs.BallRsComplete
 import framework.top.GlobalConfig
@@ -276,6 +276,7 @@ class GemminiBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
     io.bankRead(i).group_id := 0.U
   }
   io.bankRead(0).bank_id := exCtrl.exio.op1_bank_o
+  io.bankRead(0).group_id := exCtrl.exio.op1_group_o
   if (inBW > 1) {
     io.bankRead(1).bank_id := exCtrl.exio.op2_bank_o
   }

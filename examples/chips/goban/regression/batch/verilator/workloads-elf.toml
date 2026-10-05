@@ -1,5 +1,0 @@
-[workloads]
-tests = [
-  "goban-goban-ctest-mvin_mvout_test-baremetal",
-  "goban-goban-ctest-mvin_mvout_stride_test-baremetal",
-]

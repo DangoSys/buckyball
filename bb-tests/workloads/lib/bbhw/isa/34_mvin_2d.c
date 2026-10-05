@@ -17,7 +17,6 @@
     if ((bb_mvin_2d_addr & 7) || (bb_mvin_2d_addr >> 39) ||                    \
         (bb_mvin_2d_valid != 8 && bb_mvin_2d_valid != 16))                     \
       __builtin_trap();                                                        \
-    bb_dma_cache_flush();                                                      \
     BUCKYBALL_INSTRUCTION_R_R(                                                 \
         (BB_BANK2(bank_id) | BB_ITER(height)),                                 \
         (FIELD(bb_mvin_2d_addr >> 3, 0, 35) |                                  \

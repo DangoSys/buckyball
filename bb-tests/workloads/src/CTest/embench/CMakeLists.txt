@@ -28,6 +28,7 @@ set(EMBENCH_C_FLAGS
   -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
   -Wl,-T,${BBSIM_LD}
   -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
+  -I${BUCKYBALL_ISA_DIR}/${EMBENCH_CORE}
   -ffunction-sections -fdata-sections
   -Wl,--gc-sections
   -I${EMBENCH_SUPPORT_DIR}
@@ -37,6 +38,7 @@ set(EMBENCH_TOP_OBJ_FLAGS
   -g -fno-common -O2 -march=rv64gc -mcmodel=medany
   -fno-builtin-printf
   -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
+  -I${BUCKYBALL_ISA_DIR}/${EMBENCH_CORE}
   -ffunction-sections -fdata-sections
   -I${EMBENCH_SUPPORT_DIR}
 )

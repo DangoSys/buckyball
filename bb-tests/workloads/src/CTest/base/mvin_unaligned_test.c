@@ -1,14 +1,12 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
+#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define ROW_BYTES 16
-#define ROWS 4
-#define OFFSET 4
-#define GUARD 0xa5
+enum { ROW_BYTES = (BANK_WIDTH / 8), ROWS = 4, OFFSET = 4, GUARD = 0xa5 };
 
 static uint8_t input_bytes[OFFSET + ROWS * ROW_BYTES + ROW_BYTES]
     __attribute__((aligned(128)));
@@ -40,6 +38,7 @@ int mvin_unaligned_test(void) {
   uint32_t bank_id = 0;
 
   init_inputs();
+  bb_dma_fence();
   bb_mem_alloc(bank_id, 1, 1);
   bb_mvin((uintptr_t)(input_bytes + OFFSET), bank_id, ROWS, 1);
   bb_mvout((uintptr_t)output_matrix, bank_id, ROWS, 1);

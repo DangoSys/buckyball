@@ -3,5 +3,5 @@
 balldomain = "balldomains/default.toml"
 memdomain = "memdomains/default.toml"
 frontend = "frontends/default.toml"
-gpdomain = "gpdomains/default.toml"
+rvv = "rvv/default.toml"
 cpu = "cpu/default.toml"

@@ -8,14 +8,6 @@ pgIdxBits = 12
 pgLevels = 3
 nPMPs = 8
 
-[privateDCache]
-enable = true
-ways = 4
-capacityKB = 256
-writeBytes = 8
-portFactor = 2
-memCycles = 10
-
 [sharedMem]
 enable = false
 entries = 16384

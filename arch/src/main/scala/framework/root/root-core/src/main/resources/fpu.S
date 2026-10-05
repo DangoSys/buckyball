@@ -1,0 +1,148 @@
+.option norelax
+.section .text.start,"ax",@progbits
+.globl _start
+_start:
+ la t0,trap_handler
+ csrw mtvec,t0
+ li s0,0x10000000
+ la s1,data
+ li s9,-1
+ li t0,0x6000
+ csrs mstatus,t0
+ csrw fcsr,zero
+ j tests
+.section .text.trap,"ax",@progbits
+.option push
+.option norvc
+trap_handler:
+ csrr t0,mcause
+ bne t0,s9,fail
+ csrr t0,mtval
+ li t1,0x53
+ bne t0,t1,fail
+ csrr t0,mepc
+ addi t0,t0,4
+ csrw mepc,t0
+ li s9,-1
+ mret
+.option pop
+.section .text.tests,"ax",@progbits
+tests:
+ li t0,1
+ sd t0,8(s0)
+ flw ft0,0(s1)
+ fmv.x.w t0,ft0
+ li t1,0x3fc00000
+ bne t0,t1,fail
+ fld ft4,8(s1)
+ fmv.x.d t0,ft4
+ li t1,0x3ff8000000000000
+ bne t0,t1,fail
+ flw ft1,4(s1)
+ fld ft5,16(s1)
+ fsw ft0,32(s1)
+ fsd ft4,40(s1)
+ lw t0,32(s1)
+ li t1,0x3fc00000
+ bne t0,t1,fail
+ ld t0,40(s1)
+ li t1,0x3ff8000000000000
+ bne t0,t1,fail
+ li t0,2
+ sd t0,8(s0)
+ fadd.s ft2,ft0,ft1
+ fmul.s ft2,ft2,ft0
+ fsw ft2,36(s1)
+ lw t0,36(s1)
+ li t1,0x40b40000
+ bne t0,t1,fail
+ li s2,16
+fp_dependencies:
+ fmul.d ft6,ft4,ft5
+ fadd.d ft6,ft6,ft4
+ fsub.d ft6,ft6,ft5
+ fdiv.d ft6,ft6,ft4
+ fsd ft6,48(s1)
+ fld ft7,48(s1)
+ fmv.x.d t0,ft7
+ li t1,0x3ffc000000000000
+ bne t0,t1,fail
+ addi s2,s2,-1
+ bnez s2,fp_dependencies
+ li t0,3
+ sd t0,8(s0)
+ fsflags zero
+ li t0,0x3f800000
+ fmv.w.x ft0,t0
+ li t0,0x40400000
+ fmv.w.x ft1,t0
+ fdiv.s ft2,ft0,ft1
+ fmv.x.w t0,ft2
+ li t1,0x3eaaaaab
+ bne t0,t1,fail
+ frflags t0
+ li t1,1
+ bne t0,t1,fail
+ fsflags zero
+ li t0,0x3ff0000000000000
+ fmv.d.x ft4,t0
+ fmv.d.x ft5,zero
+ fdiv.d ft6,ft4,ft5
+ fmv.x.d t0,ft6
+ li t1,0x7ff0000000000000
+ bne t0,t1,fail
+ frflags t0
+ li t1,8
+ bne t0,t1,fail
+ fsflags zero
+ fmv.w.x ft0,zero
+ fdiv.s ft1,ft0,ft0
+ fmv.x.w t0,ft1
+ li t1,0x7fc00000
+ bne t0,t1,fail
+ frflags t0
+ li t1,16
+ bne t0,t1,fail
+ fsflags zero
+ li t0,1
+ fsrm t0
+ li t0,0x3fc00000
+ fmv.w.x ft0,t0
+ fcvt.w.s t0,ft0,dyn
+ li t1,1
+ bne t0,t1,fail
+ frflags t0
+ li t1,1
+ bne t0,t1,fail
+ fsrm zero
+ li t0,4
+ sd t0,8(s0)
+ li s9,2
+ li t0,0x6000
+ csrc mstatus,t0
+.globl fpu_illegal
+.option push
+.option norvc
+fpu_illegal:
+ .word 0x00000053
+.option pop
+ li t0,0x6000
+ csrs mstatus,t0
+ li t0,0x3f800000
+ fmv.w.x ft0,t0
+ fadd.s ft1,ft0,ft0
+ fmv.x.w t0,ft1
+ li t1,0x40000000
+ bne t0,t1,fail
+ sd zero,0(s0)
+1:j 1b
+fail:
+ li t0,1
+ sd t0,0(s0)
+1:j 1b
+.section .data,"aw",@progbits
+.balign 64
+data:
+ .word 0x3fc00000,0x40100000
+ .dword 0x3ff8000000000000,0x4002000000000000
+ .zero 40

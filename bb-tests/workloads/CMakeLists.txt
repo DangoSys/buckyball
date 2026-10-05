@@ -24,6 +24,13 @@ function(buckyball_mlirtest_name OUT CORE TEST)
   set(${OUT} "${BUCKYBALL_WORKLOAD_CHIP}-${CORE}-mlirtest-${TEST}" PARENT_SCOPE)
 endfunction()
 
+function(buckyball_soctest_name OUT CORE TEST)
+  if("${CORE}" STREQUAL "" OR "${TEST}" STREQUAL "")
+    message(FATAL_ERROR "buckyball_soctest_name requires core and test")
+  endif()
+  set(${OUT} "${BUCKYBALL_WORKLOAD_CHIP}-${CORE}-soctest-${TEST}" PARENT_SCOPE)
+endfunction()
+
 set(RISCV_GNU_TOOLCHAIN $ENV{RISCV})
 set(BUDDY_MLIR_DIR ${BUCKYBALL_REPO_ROOT}/stack/compiler/thirdparty/buddy-mlir)
 set(BUDDY_BINARY_DIR ${BUDDY_MLIR_DIR}/build/${BUCKYBALL_WORKLOAD_CHIP}/bin)
@@ -146,14 +153,6 @@ function(buckyball_assign_physical_banks TARGET OUT)
   endif()
   set(${OUT} "-assign-physical-banks" PARENT_SCOPE)
 endfunction()
-
-if(NOT DEFINED ELF_CC)
-  set(ELF_CC "riscv64-unknown-elf-gcc")
-endif()
-
-if(NOT DEFINED LINUX_CC)
-  set(LINUX_CC "riscv64-unknown-linux-gnu-gcc")
-endif()
 
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
@@ -307,6 +306,7 @@ add_custom_target(ctest-workloads-build
   COMMENT "Building CTest workloads"
 )
 
+if(NOT BUCKYBALL_CTEST_ONLY)
 add_custom_target(mlirtest-workloads-build
   DEPENDS
     MLIRTest-all
@@ -324,11 +324,14 @@ add_custom_target(sync-mlirtest-bin
   COMMENT "Syncing MLIRTest binaries to output directory"
 )
 
+endif()
+
 add_custom_target(sync-ctest-bin
   COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
   COMMAND rsync -a --delete --exclude=CMakeFiles
           --exclude="*/mlir_tests/**" --include="*/"
-          --include="*-baremetal" --include="*-linux" --exclude="*"
+          --include="*-baremetal" --include="*-linux"
+          --include="*-baremetal.expect" --exclude="*"
           ${BUILD_BIN_DIR}/src/CTest/ ${OUTPUT_BIN_DIR}/src/CTest/
   DEPENDS ctest-workloads-build
   COMMENT "Syncing CTest binaries to output directory"
@@ -350,6 +353,7 @@ add_custom_target(sync-bin
           --exclude="**/chips/*/"
           --include="*/"
           --include="*-baremetal"
+          --include="*-baremetal.expect"
           --include="*-linux"
           --include="*-run"
           --exclude="*"
@@ -362,10 +366,14 @@ add_dependencies(sync-bin
   tlb-ctests-build
   tutorial-ctests-build
   chip-workloads-build
-  MLIRTest-all
   embench-all
   coremark-all
+  soctests-build
 )
+
+if(NOT BUCKYBALL_CTEST_ONLY)
+  add_dependencies(sync-bin MLIRTest-all)
+endif()
 
 add_custom_target(build-all ALL
   DEPENDS sync-bin
