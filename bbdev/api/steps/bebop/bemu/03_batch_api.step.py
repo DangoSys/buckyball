@@ -48,7 +48,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "chip": chip,
                 "test": test_type,
                 "jobs": body.get("jobs", 1),
-                "cpu-tests": bool(body.get("cpu-tests", False)),
                 "clean-before": body.get(
                     "clean-before", body.get("clean_before", False)
                 ),

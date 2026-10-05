@@ -62,7 +62,7 @@ WORKFLOW_COMMANDS = {
     "bebop-bemu": {
         "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator]". ELF args: "--chip <chip> --binary <file-name> [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
         "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
-        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--cpu-tests] [--jobs <num>] [--clean-before]"',
+        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--jobs <num>] [--clean-before]"',
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',

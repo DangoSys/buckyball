@@ -11,7 +11,6 @@ def register(mcp):
         chip: str,
         test: str,
         clean_before: bool = False,
-        cpu_tests: bool = False,
         jobs: int = 1,
     ) -> str:
         """Batch bemu regression. test: bare-tests|linux-tests. POST /bebop/bemu/batch."""
@@ -26,7 +25,6 @@ def register(mcp):
                     "chip": chip,
                     "test": test,
                     "clean-before": clean_before,
-                    "cpu-tests": cpu_tests,
                     "jobs": jobs,
                 },
             )
