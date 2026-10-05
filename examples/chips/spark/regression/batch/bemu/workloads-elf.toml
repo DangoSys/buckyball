@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "spark-attention-ctest-smatmul_f32_test-baremetal",
+]
