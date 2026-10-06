@@ -100,6 +100,7 @@ def build_workload(
     chip_pb: str | Path | None = None,
     ctest: bool = False,
     mlirtest: bool = False,
+    soctest: bool = False,
     stable: bool = False,
     logger: object | None = None,
     task_scope: str | None = None,
@@ -111,8 +112,8 @@ def build_workload(
         raise ValueError(f"invalid workload build instance: {build_instance}")
     if (instance is None) != (chip_pb is None):
         raise ValueError("workload variant requires both instance and chip_pb")
-    if ctest and mlirtest:
-        raise ValueError("--ctest and --mlirtest cannot be used together")
+    if sum((ctest, mlirtest, soctest)) > 1:
+        raise ValueError("--ctest, --mlirtest and --soctest are mutually exclusive")
     root = _repo(repo)
     defs = _cmake_defs(root, chip)
     if chip_pb is not None:
@@ -142,16 +143,32 @@ def build_workload(
     linux_cxx = riscv / "bin" / "riscv64-unknown-linux-gnu-g++"
     if not linux_cc.is_file() or not linux_cxx.is_file():
         raise RuntimeError(f"missing RISC-V linux toolchain under {riscv / 'bin'}")
-    src = _workload_src(root)
-    build = _workload_build_dir(root, build_instance)
-    ninja_arg = "sync-ctest-bin" if ctest else "sync-mlirtest-bin" if mlirtest else ""
+    source_root = _workload_src(root)
+    build_root = _workload_build_dir(root, build_instance)
     env = os.environ.copy()
     env["PATH"] = f"{riscv / 'bin'}:{env.get('PATH', '')}"
     env["RISCV"] = str(riscv)
-    env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
     env["CC"] = str(linux_cc)
     env["CXX"] = str(linux_cxx)
-    if not ctest:
+    if not (ctest or soctest):
+        compiler_config = {}
+        for line in (compiler_build / "CMakeCache.txt").read_text().splitlines():
+            key, sep, value = line.partition("=")
+            name = key.split(":")[0]
+            if sep and name in ("BUDDY_EXTERNAL_DIALECTS_DIR", "BUCKYBALL_CHIP_PB"):
+                if name in compiler_config:
+                    raise RuntimeError(f"duplicate {name} in compiler CMakeCache.txt")
+                compiler_config[name] = value
+        if (
+            Path(compiler_config["BUDDY_EXTERNAL_DIALECTS_DIR"]).resolve()
+            != root / "stack" / "compiler"
+        ):
+            raise RuntimeError("compiler does not use this repository's stack/compiler")
+        if (
+            Path(compiler_config["BUCKYBALL_CHIP_PB"]).resolve()
+            != Path(defs["BUCKYBALL_CHIP_PB"]).resolve()
+        ):
+            raise RuntimeError("compiler Chip.pb does not match the workload Chip.pb")
         _run(
             [
                 "cmake",
@@ -167,6 +184,17 @@ def build_workload(
             logger=logger,
             task_scope=task_scope,
         )
+    src = source_root
+    build = build_root
+    target = (
+        "sync-ctest-bin"
+        if ctest
+        else (
+            "sync-mlirtest-bin"
+            if mlirtest
+            else "sync-soctest-bin" if soctest else "sync-bin"
+        )
+    )
     build.mkdir(parents=True, exist_ok=True)
     cmake_args = [
         "cmake",
@@ -179,12 +207,12 @@ def build_workload(
         str(src),
         "-B",
         str(build),
-        f"-DBUCKYBALL_STABLE={('ON' if stable else 'OFF')}",
         f"-DPython3_EXECUTABLE={python}",
         f"-DCMAKE_C_COMPILER={linux_cc}",
         f"-DCMAKE_CXX_COMPILER={linux_cxx}",
-        f"-DBUCKYBALL_CTEST_ONLY={'ON' if ctest else 'OFF'}",
     ]
+    if not (ctest or soctest):
+        cmake_args.append(f"-DBUCKYBALL_STABLE={'ON' if stable else 'OFF'}")
     for key, value in defs.items():
         cmake_args.append(f"-D{key}={value}")
     _run(
@@ -196,8 +224,7 @@ def build_workload(
         task_scope=task_scope,
     )
     ninja = ["ninja", "-C", str(build), f"-j{1}"]
-    if ninja_arg:
-        ninja.append(ninja_arg)
+    ninja.append(target)
     _run(
         ninja,
         cwd=root,
@@ -217,6 +244,7 @@ def main() -> None:
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--ctest", action="store_true")
     scope.add_argument("--mlirtest", action="store_true")
+    scope.add_argument("--soctest", action="store_true")
     parser.add_argument("--stable", action="store_true")
     args = parser.parse_args()
     build_workload(
@@ -226,6 +254,7 @@ def main() -> None:
         chip_pb=args.chip_pb,
         ctest=args.ctest,
         mlirtest=args.mlirtest,
+        soctest=args.soctest,
         stable=args.stable,
     )
 

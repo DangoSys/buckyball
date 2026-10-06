@@ -250,3 +250,33 @@ if(NOT TARGET chip-workloads-build)
   message(FATAL_ERROR
     "Buckyball chip workloads must define target chip-workloads-build: ${BUCKYBALL_WORKLOAD_CHIP}")
 endif()
+
+add_custom_target(ctest-workloads-build
+  DEPENDS
+    base-ctests-build
+    tlb-ctests-build
+    tutorial-ctests-build
+    core-ctests-build
+    chip-ctests-build
+  COMMENT "Building CTest workloads"
+)
+
+add_custom_target(sync-ctest-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
+  COMMAND rsync -a --delete --exclude=CMakeFiles
+          "--exclude=*/mlir_tests/**" "--include=*/"
+          "--include=*-baremetal" "--include=*-linux"
+          "--include=*-baremetal.expect" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/CTest/
+  DEPENDS ctest-workloads-build
+  COMMENT "Syncing CTest binaries to output directory"
+)
+
+add_custom_target(sync-native-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
+  COMMAND rsync -a --delete --exclude=CMakeFiles "--exclude=mlir_tests" "--include=*/"
+          "--include=*-baremetal" "--include=*-baremetal.expect"
+          "--include=*-linux" "--include=*-run" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/CTest/
+  DEPENDS ctest-workloads-build embench-all coremark-all
+  COMMENT "Syncing CTest and benchmark binaries")

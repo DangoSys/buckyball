@@ -7,11 +7,11 @@ add_subdirectory(ctests)
 buckyball_add_ball_workload_subdirs(ctests)
 
 add_custom_target(chip-ctests-build DEPENDS poly-ctests-build)
-add_custom_target(chip-mlirtests-build)
 
 add_custom_target(chip-workloads-build ALL
   DEPENDS
     chip-ctests-build
-    chip-mlirtests-build
+    mlirtest-workloads-build
+    soctests-build
   COMMENT "Building poly workloads"
   VERBATIM)

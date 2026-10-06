@@ -7,11 +7,13 @@ set(ATTENTION_DATA ${CMAKE_CURRENT_BINARY_DIR}/attention)
 set(PYTHON ${REPO}/result/bin/python3)
 set(MODEL_CONFIG ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/configs/model.toml)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${MODEL_CONFIG})
-execute_process(COMMAND ${PYTHON} -c
-  "import sys, tomllib; from pathlib import Path; from huggingface_hub import snapshot_download; p=tomllib.loads(Path(sys.argv[1]).read_text())['parameters']; print(snapshot_download(p['checkpoint'], revision=p['revision'], local_files_only=True))"
-  ${MODEL_CONFIG}
-  WORKING_DIRECTORY ${REPO} OUTPUT_VARIABLE CHECKPOINT OUTPUT_STRIP_TRAILING_WHITESPACE
-  COMMAND_ERROR_IS_FATAL ANY)
+set(CHECKPOINT_FILE ${CMAKE_CURRENT_BINARY_DIR}/checkpoint.txt)
+add_custom_command(OUTPUT ${CHECKPOINT_FILE}
+  COMMAND ${PYTHON} -c
+    "import sys, tomllib; from pathlib import Path; from huggingface_hub import snapshot_download; p=tomllib.loads(Path(sys.argv[1]).read_text())['parameters']; Path(sys.argv[2]).write_text(snapshot_download(p['checkpoint'], revision=p['revision'], local_files_only=True))"
+    ${MODEL_CONFIG} ${CHECKPOINT_FILE}
+  DEPENDS ${MODEL_CONFIG}
+  WORKING_DIRECTORY ${REPO} VERBATIM)
 file(GLOB_RECURSE MODEL_SOURCES CONFIGURE_DEPENDS ${MODEL_DIR}/trace/*.py ${MODEL_DIR}/permute/*.py ${MODEL_DIR}/quant/*.py)
 list(APPEND MODEL_SOURCES ${BUDDY}/frontend/Python/ops/tosa.py
      ${COMPILER}/python_packages/buddy/compiler/ops/tosa.py)
@@ -19,16 +21,16 @@ list(APPEND MODEL_SOURCES ${REPO}/examples/balls/mxmm/compiler/python/fp32.py)
 add_custom_command(OUTPUT ${DATA}/router.mlir ${DATA}/router-forward.mlir
                           ${DATA}/expert_prefill.mlir ${DATA}/expert_prefill-forward.mlir
                           ${DATA}/expert.mlir ${DATA}/expert-forward.mlir ${DATA}/moe-parameters.h
-  COMMAND ${PYTHON} -m stack.models.archs.buckyball.omni.qwen3-omni-30b-a3b-instruct.trace.export
-          --checkpoint ${CHECKPOINT} --compiler-build ${COMPILER} --output ${DATA}
-  DEPENDS ${MODEL_SOURCES} ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/moe.py
+  COMMAND bash -o pipefail -c
+    "'${PYTHON}' -m stack.models.archs.buckyball.omni.qwen3-omni-30b-a3b-instruct.trace.export --checkpoint \"$(cat '${CHECKPOINT_FILE}')\" --compiler-build '${COMPILER}' --output '${DATA}'"
+  DEPENDS ${CHECKPOINT_FILE} ${MODEL_SOURCES} ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/moe.py
   WORKING_DIRECTORY ${REPO} VERBATIM)
 add_custom_command(OUTPUT ${ATTENTION_DATA}/prefill.mlir ${ATTENTION_DATA}/prefill-forward.mlir
                           ${ATTENTION_DATA}/decode.mlir ${ATTENTION_DATA}/decode-forward.mlir
                           ${ATTENTION_DATA}/attention-parameters.h
-  COMMAND ${PYTHON} -m stack.models.archs.buckyball.omni.qwen3-omni-30b-a3b-instruct.trace.attention
-          --checkpoint ${CHECKPOINT} --compiler-build ${COMPILER} --output ${ATTENTION_DATA}
-  DEPENDS ${MODEL_SOURCES} ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/attention.py
+  COMMAND bash -o pipefail -c
+    "'${PYTHON}' -m stack.models.archs.buckyball.omni.qwen3-omni-30b-a3b-instruct.trace.attention --checkpoint \"$(cat '${CHECKPOINT_FILE}')\" --compiler-build '${COMPILER}' --output '${ATTENTION_DATA}'"
+  DEPENDS ${CHECKPOINT_FILE} ${MODEL_SOURCES} ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/attention.py
   WORKING_DIRECTORY ${REPO} VERBATIM)
 set(FORWARD_PASSES
   -buffer-deallocation-simplification -convert-linalg-to-loops -eliminate-empty-tensors

@@ -67,3 +67,11 @@ add_buckyball_soctest(time_csr_permissions.c)
 add_buckyball_soctest(lrsc_word.c)
 add_buckyball_soctest(lrsc_translated.c)
 add_buckyball_soctest(plic_register_access.c)
+
+add_custom_target(sync-soctest-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/SocTest
+  COMMAND rsync -a --delete --exclude=CMakeFiles "--include=*/"
+          "--include=*-baremetal" "--include=*-baremetal.expect" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/SocTest/
+  DEPENDS soctests-build
+  COMMENT "Syncing SoC test binaries to output directory")

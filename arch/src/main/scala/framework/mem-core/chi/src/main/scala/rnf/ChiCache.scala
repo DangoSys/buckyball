@@ -53,10 +53,9 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
   val lookupLine      = Reg(UInt(512.W))
   val lookupFresh     = RegNext(io.access.fire, false.B)
   when(lookupFresh)(lookupLine := memoryData)
-  val lookupData     = Mux(lookupFresh, memoryData, lookupLine)
-  val fillCommitData = Reg(UInt(512.W))
-  val fillFailed     = Reg(Bool())
-  val fillDoWrite    = Reg(Bool())
+  val lookupData  = Mux(lookupFresh, memoryData, lookupLine)
+  val fillFailed  = Reg(Bool())
+  val fillDoWrite = Reg(Bool())
   def index(addr: UInt): UInt = addr(log2Ceil(cacheLines) + log2Ceil(bankCount) + 5, log2Ceil(bankCount) + 6)
   def tag(addr:   UInt): UInt = addr(p.addressBits - 1, 6)
   val idle :: lookup :: evictReq :: evictWait :: copyback :: getReq :: fill :: fillCommit :: ack :: respond :: Nil =
@@ -306,7 +305,6 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
     completionId   := d.dbid(p.dbIdBits - 1, 0)
     when(received.andR) {
       val failed = fillError || d.respErr =/= 0.U
-      fillCommitData                     := nextData.asUInt
       fillFailed                         := failed
       fillDoWrite                        := modifies && (!isSC || reservationMatch)
       answer.data                        := Mux(failed, 0.U, Mux(isSC, !reservationMatch, oldValue(nextData.asUInt)))
@@ -329,7 +327,7 @@ class ChiCache(config: RnfParams, bankIndex: Int) extends Module {
       tags(ci)        := tag(command.addr)
       memoryWrite     := true.B
       memoryAddress   := ci
-      memoryWriteData := Mux(doWrite, merge(fillCommitData), fillCommitData)
+      memoryWriteData := Mux(doWrite, merge(fillData.asUInt), fillData.asUInt)
       when(isLR) { reservation := true.B; reservationAddress := command.addr; reservationWord := command.atomicWord }
     }
     state := ack

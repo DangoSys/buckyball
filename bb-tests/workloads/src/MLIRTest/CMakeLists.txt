@@ -1,3 +1,6 @@
+include(${CMAKE_CURRENT_LIST_DIR}/compiler/CMakeLists.txt)
+set(MLIRTEST_WORKLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 # The workload root chooses the compiler instance for this chip's core.
 if(NOT DEFINED BUDDY_BINARY_DIR)
   message(FATAL_ERROR
@@ -283,4 +286,29 @@ buckyball_add_ball_workload_subdirs(mlir_tests)
 add_custom_target(MLIRTest-all ALL DEPENDS
   base-mlirtest-build
   balls-mlir-tests-build
+)
+
+set(CHIP_MLIR_TEST_DIR
+  ${BUCKYBALL_REPO_ROOT}/examples/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/workloads/mlir_tests)
+add_custom_target(chip-mlirtests-build)
+if(EXISTS ${CHIP_MLIR_TEST_DIR}/CMakeLists.txt)
+  add_subdirectory(${CHIP_MLIR_TEST_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/CTest/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP}/mlir_tests)
+endif()
+
+add_custom_target(mlirtest-workloads-build
+  DEPENDS
+    MLIRTest-all
+    chip-mlirtests-build
+  COMMENT "Building MLIRTest workloads"
+)
+
+add_custom_target(sync-mlirtest-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src
+  COMMAND rsync -a --delete --exclude=CMakeFiles "--include=*/"
+          "--include=/mlir_tests/***" "--include=/balls/***"
+          "--include=/CTest/chips/*/mlir_tests/***" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/
+  DEPENDS mlirtest-workloads-build
+  COMMENT "Syncing MLIRTest binaries to output directory"
 )

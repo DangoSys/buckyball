@@ -1,7 +1,8 @@
 add_subdirectory(ctests)
 add_custom_target(chip-ctests-build DEPENDS omni-interconnect-build)
-add_custom_target(chip-mlirtests-build)
-if(NOT BUCKYBALL_CTEST_ONLY)
-  add_subdirectory(mlir_tests)
-endif()
-add_custom_target(chip-workloads-build ALL DEPENDS chip-ctests-build)
+add_custom_target(chip-workloads-build ALL
+  DEPENDS
+    chip-ctests-build
+    mlirtest-workloads-build
+    soctests-build
+)
