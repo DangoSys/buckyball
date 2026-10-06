@@ -1,7 +1,5 @@
 package memcore.memory.mesh_shm
 
-import memcore.memory.queue.Queue
-
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
@@ -40,12 +38,6 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
   val bankRows = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
   val bankCols = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
-
-  def link(source: DecoupledIO[MeshPacket], sink: DecoupledIO[MeshPacket]): Unit = {
-    val fifo = Module(new Queue(new MeshPacket(p), 2))
-    fifo.io.enq <> source
-    sink <> fifo.io.deq
-  }
 
   for {
     row <- 0 until p.rows
@@ -98,9 +90,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         "private request reached a node without its Core"
       )
     }
-    val replyQueue   = Module(new Queue(new MeshPacket(p), 2))
-    replyQueue.io.enq <> replies.io.out
-    responseRouter.io.in(MeshDirection.endpoint) <> replyQueue.io.deq
+    responseRouter.io.in(MeshDirection.endpoint) <> replies.io.out
 
     val attached = p.channelLocations.zipWithIndex.collect {
       case ((r, c), index) if r == row && c == col => index
@@ -157,25 +147,33 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
             }
           }
 
-          val buffered = Module(new Queue(new MeshClientResponse(p), p.maxInFlight))
-          responsePort <> buffered.io.deq
-          buffered.io.enq.valid                                   :=
+          val responseValid = RegInit(false.B)
+          val responseBits  = Reg(new MeshClientResponse(p))
+          val responseNext  = Wire(Decoupled(new MeshClientResponse(p)))
+          responsePort.valid                                   := responseValid
+          responsePort.bits                                    := responseBits
+          responseNext.ready                                   := !responseValid || responsePort.ready
+          when(responseNext.ready) {
+            responseValid                         := responseNext.valid
+            when(responseNext.valid)(responseBits := responseNext.bits)
+          }
+          responseNext.valid                                   :=
             errorPending || (responseRouter.io.out(MeshDirection.endpoint).valid &&
               responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U)
-          buffered.io.enq.bits                                    := 0.U.asTypeOf(buffered.io.enq.bits)
-          buffered.io.enq.bits.data                               :=
+          responseNext.bits                                    := 0.U.asTypeOf(responseNext.bits)
+          responseNext.bits.data                               :=
             Mux(errorPending, 0.U, responseRouter.io.out(MeshDirection.endpoint).bits.data)
-          buffered.io.enq.bits.tag                                :=
+          responseNext.bits.tag                                :=
             Mux(errorPending, errorTag, responseRouter.io.out(MeshDirection.endpoint).bits.tag)
-          buffered.io.enq.bits.tkeep                              := Fill(p.maskBits, 1.U(1.W))
-          buffered.io.enq.bits.tlast                              := true.B
-          buffered.io.enq.bits.tuser                              := Cat(
+          responseNext.bits.tkeep                              := Fill(p.maskBits, 1.U(1.W))
+          responseNext.bits.tlast                              := true.B
+          responseNext.bits.tuser                              := Cat(
             Mux(errorPending, errorWrite, responseRouter.io.out(MeshDirection.endpoint).bits.write),
             errorPending || responseRouter.io.out(MeshDirection.endpoint).bits.error
           )
-          localResponseReady(port)                                :=
+          localResponseReady(port)                             :=
             responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U &&
-              buffered.io.enq.ready && !errorPending
+              responseNext.ready && !errorPending
           when(responseRouter.io.out(MeshDirection.endpoint).valid &&
             responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U) {
             assert(inFlight =/= 0.U && tags(responseRouter.io.out(MeshDirection.endpoint).bits.tag))
@@ -183,7 +181,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
           when(responsePort.fire) {
             assert(inFlight =/= 0.U && tags(responsePort.bits.tag))
           }
-          when(buffered.io.enq.fire && errorPending)(errorPending := false.B)
+          when(responseNext.fire && errorPending)(errorPending := false.B)
           val issued    = Mux(requestPort.fire, 1.U((1 << p.tagBits).W) << requestPort.bits.tag, 0.U)
           val completed = Mux(responsePort.fire, 1.U((1 << p.tagBits).W) << responsePort.bits.tag, 0.U)
           tags := (tags | issued) & ~completed
@@ -211,16 +209,16 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     }
 
     if (col + 1 < p.cols) {
-      link(requestRouter.io.out(MeshDirection.east), requests(row)(col + 1).io.in(MeshDirection.west))
-      link(requests(row)(col + 1).io.out(MeshDirection.west), requestRouter.io.in(MeshDirection.east))
-      link(responseRouter.io.out(MeshDirection.east), responses(row)(col + 1).io.in(MeshDirection.west))
-      link(responses(row)(col + 1).io.out(MeshDirection.west), responseRouter.io.in(MeshDirection.east))
+      requests(row)(col + 1).io.in(MeshDirection.west) <> requestRouter.io.out(MeshDirection.east)
+      requestRouter.io.in(MeshDirection.east) <> requests(row)(col + 1).io.out(MeshDirection.west)
+      responses(row)(col + 1).io.in(MeshDirection.west) <> responseRouter.io.out(MeshDirection.east)
+      responseRouter.io.in(MeshDirection.east) <> responses(row)(col + 1).io.out(MeshDirection.west)
     }
     if (row + 1 < p.rows) {
-      link(requestRouter.io.out(MeshDirection.south), requests(row + 1)(col).io.in(MeshDirection.north))
-      link(requests(row + 1)(col).io.out(MeshDirection.north), requestRouter.io.in(MeshDirection.south))
-      link(responseRouter.io.out(MeshDirection.south), responses(row + 1)(col).io.in(MeshDirection.north))
-      link(responses(row + 1)(col).io.out(MeshDirection.north), responseRouter.io.in(MeshDirection.south))
+      requests(row + 1)(col).io.in(MeshDirection.north) <> requestRouter.io.out(MeshDirection.south)
+      requestRouter.io.in(MeshDirection.south) <> requests(row + 1)(col).io.out(MeshDirection.north)
+      responses(row + 1)(col).io.in(MeshDirection.north) <> responseRouter.io.out(MeshDirection.south)
+      responseRouter.io.in(MeshDirection.south) <> responses(row + 1)(col).io.out(MeshDirection.north)
     }
 
     for (router <- Seq(requestRouter, responseRouter)) {

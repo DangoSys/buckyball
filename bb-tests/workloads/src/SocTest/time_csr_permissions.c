@@ -40,13 +40,22 @@ static void readonly(void) {
   if (illegal != before + 3)
     request(5);
 }
+static uint64_t clint_time(void) {
+  uint64_t before = CLINT_MTIME, value;
+  asm volatile("fence iorw, iorw; csrr %0, time; fence iorw, iorw"
+               : "=r"(value)::"memory");
+  uint64_t after = CLINT_MTIME;
+  return value >> 32 == 0x12345678 && value + 1 >= before && value <= after
+             ? value
+             : 0;
+}
 static void __attribute__((noreturn)) user(void) {
   unsigned before = illegal;
   (void)read_csr(time); // mcounteren allows, scounteren denies.
   if (illegal != before + 1)
     request(6);
   request(1);
-  uint64_t value = read_csr(time);
+  uint64_t value = clint_time();
   if (!value || illegal != before + 1)
     request(7);
   readonly();
@@ -64,7 +73,7 @@ static void __attribute__((noreturn)) supervisor(void) {
   if (illegal != before + 1)
     request(9);
   request(1);
-  uint64_t value = read_csr(time);
+  uint64_t value = clint_time();
   if (!value || illegal != before + 1)
     request(10);
   readonly();
@@ -77,6 +86,7 @@ int main(void) {
   write_csr(pmpcfg0, 0x1f);
   write_csr(mcounteren, 0);
   write_csr(scounteren, 0);
+  CLINT_MTIME = 0x1234567800000000ULL;
   if (!read_csr(time))
     return 7;
   readonly();

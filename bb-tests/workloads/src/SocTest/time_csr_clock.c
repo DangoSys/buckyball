@@ -10,19 +10,19 @@ int main(void) {
     return 1;
   for (int i = 0; i < 32; i++) {
     uint64_t now = read_csr(time);
-    if (now <= previous)
+    if (now < previous)
       return 2;
     previous = now;
   }
   uint64_t before = read_csr(time);
   write_csr(mcycle, 0);
   uint64_t after = read_csr(time);
-  if (after <= before || read_csr(mcycle) >= base)
+  if (after < before || read_csr(mcycle) >= base)
     return 3;
   set_csr(mcountinhibit, 1);
   uint64_t cycles = read_csr(mcycle);
   before = read_csr(time);
-  asm volatile(".rept 32; nop; .endr");
+  asm volatile(".rept 2048; nop; .endr");
   after = read_csr(time);
   if (read_csr(mcycle) != cycles || after <= before)
     return 4;

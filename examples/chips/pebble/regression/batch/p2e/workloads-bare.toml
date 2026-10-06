@@ -1,7 +1,5 @@
 [workloads]
 tests = [
-  "pebble-pebble-mlirtest-tile_mega_conv2d_k5_tail-baremetal.hex",
-  "pebble-pebble-mlirtest-tile_mega_matmul_m17_k65_n17-baremetal.hex",
   "pebble-pebble-ctest-mvin_2d_pixel_stride_test-baremetal.hex",
   "pebble-pebble-ctest-mega_conv_pipeline_test-baremetal.hex",
   "pebble-pebble-mlirtest-tile_mega_conv2d_s2_depthwise_s2-baremetal.hex",

@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.experimental.Analog
 import chisel3.util._
 import memcore.bus.axi4
+import memcore.memory.queue.Queue
 import sims.soc.{SimSoc, SystemTarget}
 
 /** A chip on the P2E board: the System over the 16-GiB DDR4 macro at 0x80000000. */

@@ -1,10 +1,8 @@
 package memcore.memory.mesh_shm
 
-import memcore.memory.queue.Queue
-
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 object MeshDirection {
   val endpoint  = 0
@@ -58,9 +56,25 @@ class MeshRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
       arbiters(output).io.in(input).valid := io.in(input).valid && choices(input) === output.U
       arbiters(output).io.in(input).bits  := io.in(input).bits
     }
-    val buffer = Module(new Queue(new MeshPacket(p), 2))
-    buffer.io.enq <> arbiters(output).io.out
-    io.out(output) <> buffer.io.deq
+    val valid = RegInit(false.B)
+    val data      = Reg(new MeshPacket(p))
+    val heldValid = RegInit(false.B)
+    val heldData  = Reg(new MeshPacket(p))
+    val input     = arbiters(output).io.out
+    val sink      = io.out(output)
+    input.ready := !heldValid
+    sink.valid  := valid
+    sink.bits   := data
+    when(!valid || sink.ready) {
+      valid     := heldValid || input.fire
+      when(heldValid || input.fire) {
+        data := Mux(heldValid, heldData, input.bits)
+      }
+      heldValid := false.B
+    }.elsewhen(input.fire) {
+      heldValid := true.B
+      heldData  := input.bits
+    }
   }
 
   for (input <- 0 until MeshDirection.portCount) {

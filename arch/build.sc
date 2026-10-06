@@ -114,7 +114,7 @@ object cache extends FrameworkModule {
 object mesh_shm extends FrameworkModule {
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
   override def moduleRoot = frameworkRoot / "mem-core" / "mesh_shm"
-  override def moduleDeps = Seq(bank, queue)
+  override def moduleDeps = Seq(bank)
 }
 
 object coherence extends FrameworkModule {

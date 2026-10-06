@@ -19,7 +19,7 @@ class DevicePort extends Bundle {
 }
 
 /** `mtime` advances once every `tickCycles` clock cycles; the device tree timebase must match. */
-case class ClintParams(base: BigInt = BigInt("2000000", 16), bytes: BigInt = BigInt("10000", 16), tickCycles: Int = 1) {
+case class ClintParams(base: BigInt = BigInt("2000000", 16), bytes: BigInt = BigInt("10000", 16), tickCycles: Int = 1000) {
   require(tickCycles >= 1)
 }
 
