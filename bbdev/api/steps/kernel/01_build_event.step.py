@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import sys
+import tomllib
 
 from motia import FlowContext, queue
 
@@ -179,7 +180,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     kernel_src = os.path.join(bbdir, "bb-tests", "workloads", "lib", "kernel")
     try:
+        model = kernel_model(input_data)
+        if model and not input_data.get("chip"):
+            raise ValueError("--model requires --chip")
+        chip = kernel_chip(input_data, bbdir)
         memory_value = input_data.get("guest-memory-mib", 512)
+        if model and "guest-memory-mib" not in input_data:
+            config_path = os.path.join(
+                bbdir, "examples", "models", chip, model, "configs", "running-param.toml"
+            )
+            with open(config_path, "rb") as stream:
+                memory_value = tomllib.load(stream).get("memory_mib", 512)
         if (
             isinstance(memory_value, bool)
             or not str(memory_value).isdigit()
@@ -197,12 +208,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ):
             raise ValueError("pmem requires --model and guest-memory-mib < 16384")
         hart_params = hart_count_params(input_data)
-        model = kernel_model(input_data)
-        if model and not input_data.get("chip"):
-            raise ValueError("--model requires --chip")
         interactive = kernel_interactive(input_data)
-        # Linux mode needs OS overlay; model mode only needs chip for the model artifact path
-        chip = kernel_chip(input_data, bbdir)
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(ctx, 1, continue_run=False, trace_id=origin_tid)

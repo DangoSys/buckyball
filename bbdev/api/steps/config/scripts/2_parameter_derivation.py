@@ -363,7 +363,9 @@ def _derive_tiles(
                 "mem_ball_channel_num": mem_ball_channel_num,
             }
         )
-        if tile["kind"] == "compute":
+        if tile["kind"] == "compute" or (
+            n > 1 and has_buckyball and cores[indices[0]]["ball_num"] == 0
+        ):
             placements[-1]["controller_core_index"] = indices[0]
         offset += n
     return placements
@@ -504,8 +506,8 @@ def _derive_targets(
 
 
 def _derive_harts(tiles: list[dict[str, Any]], cores: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Main tile cores are harts 0..m-1 and the only Linux-visible harts. Compute tile t
-    (1..N) has its controller at m+t-1; workers follow from m+N, tile by tile."""
+    """A main tile with a task controller exposes only core 0 to Linux.
+    Physical hart IDs cover the main tile, then compute controllers and workers."""
     main = tiles[0]
     compute = tiles[1:]
     m = main["cores_per_tile"]
@@ -529,7 +531,9 @@ def _derive_harts(tiles: list[dict[str, Any]], cores: list[dict[str, Any]]) -> l
                     "tile_id": tile_id,
                     "core_id": local,
                     "core_index": core_index,
-                    "visible": tile["kind"] == "main",
+                    "visible": tile["kind"] == "main" and (
+                        "controller_core_index" not in tile or local == 0
+                    ),
                     "target": _target_name(inst["role"], inst["pkg"]),
                     "pkg": inst["pkg"],
                     "role": inst["role"],
