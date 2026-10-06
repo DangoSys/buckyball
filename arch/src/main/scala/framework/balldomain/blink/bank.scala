@@ -3,7 +3,6 @@ package framework.balldomain.blink
 import chisel3._
 import chisel3.util._
 import framework.memdomain.backend.banks.{SramReadIO, SramWriteIO}
-import framework.memdomain.backend.banks.{SramReadReq, SramWriteReq}
 import framework.top.GlobalConfig
 
 trait HasBankId {

@@ -39,6 +39,7 @@ int main(void) {
 
   pack(input, packed_input);
   bb_mem_alloc(bank, 1, 1);
+  bb_dma_fence(); // Publish the CPU-packed input before its first DMA.
   bb_mvin((uintptr_t)packed_input, bank, ITER, 1);
   bb_relu(bank, 0, ITER, ITER);
   bb_mvout((uintptr_t)packed_output, bank, ITER, 1);

@@ -1,0 +1,2 @@
+expected_assertion = "Virtual LSU atomic requires a 32 or 64 bit operand"
+invalid_case = 2

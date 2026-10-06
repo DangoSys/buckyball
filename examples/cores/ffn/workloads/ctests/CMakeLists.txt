@@ -1,1 +1,0 @@
-add_subdirectory(transpose_smatmul_quant_pipeline)

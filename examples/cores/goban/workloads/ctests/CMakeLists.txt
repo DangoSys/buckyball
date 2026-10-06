@@ -1,1 +1,8 @@
 add_subdirectory(transpose_smatmul_quant_pipeline)
+set(BUCKYBALL_CTEST_TARGET ${BUCKYBALL_CORE_WORKLOAD_TARGET})
+file(RELATIVE_PATH RVV_KERNEL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}
+  ${WORKLOAD_SRC_DIR}/CTest/rvv/rvv_kernel.c)
+add_buckyball_ctest(${RVV_KERNEL_SOURCE})
+buckyball_ctest_name(RVV_KERNEL_TEST ${BUCKYBALL_CTEST_TARGET} rvv_kernel)
+add_dependencies(core-ctests-build ${RVV_KERNEL_TEST}-ctest-build)
+add_subdirectory(rvv)

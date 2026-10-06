@@ -14,6 +14,7 @@ class GemminiExCtrl(val b: GlobalConfig)
     with GemminiExCtrlComputeReadState
     with GemminiExCtrlComputeFeedState
     with GemminiExCtrlStoreOps
+    with GemminiExCtrlAccumulateState
     with GemminiExCtrlFsm {
   @public val exio = io
 

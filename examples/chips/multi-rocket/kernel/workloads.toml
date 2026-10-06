@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "multi-rocket-rocket-ctest-cpu_arithmetic-linux",
+]

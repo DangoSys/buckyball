@@ -38,6 +38,7 @@ int main(int argc, char **argv) {
   void *workspace = aligned_alloc(64, 64 * 1024 * 1024);
   if (!workspace)
     throw std::bad_alloc();
+  workspace_init(workspace, 64 * 1024 * 1024);
   workspace_begin(workspace, 64 * 1024 * 1024);
   Hidden input({1, hiddenSize}), expected({1, hiddenSize}), scores({1, topK});
   Indices indices({1, topK});

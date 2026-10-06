@@ -33,17 +33,19 @@ class Bank(p: BankSetParams) extends Module {
   val responseValid = RegInit(false.B)
   val readPending   = RegInit(false.B)
   val responseData  = Reg(UInt(p.dataBits.W))
-  val readData      = memory.read(io.request.bits.addr, io.request.fire && !io.request.bits.write)
+
+  val readData = memory.readWrite(
+    io.request.bits.addr,
+    io.request.bits.data.asTypeOf(Vec(p.bytes, UInt(8.W))),
+    io.request.bits.mask.asBools,
+    io.request.fire,
+    io.request.bits.write
+  )
 
   io.request.ready := !responseValid && !readPending
   when(io.request.fire) {
     request := io.request.bits
     when(io.request.bits.write) {
-      memory.write(
-        io.request.bits.addr,
-        io.request.bits.data.asTypeOf(Vec(p.bytes, UInt(8.W))),
-        io.request.bits.mask.asBools
-      )
       responseData  := 0.U
       responseValid := true.B
     }.otherwise {

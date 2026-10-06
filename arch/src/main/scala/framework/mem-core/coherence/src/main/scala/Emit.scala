@@ -9,7 +9,7 @@ object Emit extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new Coherence(p),
     firtoolOpts = args,
-    args = Array("--target-dir", "build")
+    args = Array("--target-dir", "build/Coherence", "--split-verilog")
   )
   val definitions = scala.collection.mutable.ArrayBuffer[String]()
   val ports       = scala.collection.mutable.ArrayBuffer[String]()
@@ -82,7 +82,9 @@ object Emit extends App {
                        "READ_UNIQUE"      -> Opcode.ReadUnique,
                        "EVICT"            -> Opcode.Evict,
                        "WRITEBACK"        -> Opcode.WriteBackFull,
+                       "CLEAN_SHARED"     -> Opcode.CleanShared,
                        "CLEAN_INVALID"    -> Opcode.CleanInvalid,
+                       "MAKE_INVALID"     -> Opcode.MakeInvalid,
                        "COMP"             -> Opcode.Comp,
                        "COMP_DBID"        -> Opcode.CompDBIDResp,
                        "COMP_ACK"         -> Opcode.CompAck,
@@ -92,6 +94,8 @@ object Emit extends App {
                        "COPYBACK_DATA"    -> Opcode.CopyBackWriteData,
                        "SNP_UNIQUE"       -> Opcode.SnpUnique,
                        "SNP_INVALID"      -> Opcode.SnpCleanInvalid,
+                       "SNP_CLEAN_SHARED" -> Opcode.SnpCleanShared,
+                       "SNP_MAKE_INVALID" -> Opcode.SnpMakeInvalid,
                        "SNP_SHARED"       -> Opcode.SnpNotSharedDirty
                      )
   ) {
@@ -102,4 +106,5 @@ object Emit extends App {
     "`ifndef COHERENCE_CONFIG_SVH\n`define COHERENCE_CONFIG_SVH\n" + definitions.mkString("\n") + "\n`endif\n"
   )
   Files.writeString(Paths.get("build/coherence_ports.svh"), ports.mkString(",\n") + "\n")
+
 }

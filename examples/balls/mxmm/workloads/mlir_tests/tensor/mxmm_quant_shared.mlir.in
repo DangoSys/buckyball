@@ -1,0 +1,16 @@
+// CHECK-LABEL: func.func @quant_shared
+// CHECK: %[[PACK:.*]] = memref.alloc() alignment
+// CHECK: call @mxfp8_quant
+// CHECK-NOT: call @mxfp8_quant
+// CHECK: buckyball.mxfp8_mem_matmul %[[PACK]],
+// CHECK: buckyball.mxfp8_mem_matmul %[[PACK]],
+// CHECK: memref.dealloc %[[PACK]]
+// CHECK-NOT: memref.dealloc %[[PACK]]
+// CHECK: return
+func.func @quant_shared(%x: tensor<16x64xf32>, %gate: tensor<@PACKED_BYTES@xi8> {bufferization.buffer_layout=strided<[1],offset:?>}, %up: tensor<@PACKED_BYTES@xi8> {bufferization.buffer_layout=strided<[1],offset:?>}) -> (tensor<16x16xf32>,tensor<16x16xf32>) {
+  %q0 = buckyball.mxfp8_quant %x {tile_rows=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<16x64xf32> -> tensor<@PACKED_BYTES@xi8>
+  %a = buckyball.mxfp8_matmul %q0,%gate {reduction_k=64:i64,tile_m=16:i64,tile_n=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8> -> tensor<16x16xf32>
+  %q1 = buckyball.mxfp8_quant %x {tile_rows=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<16x64xf32> -> tensor<@PACKED_BYTES@xi8>
+  %b = buckyball.mxfp8_matmul %q1,%up {reduction_k=64:i64,tile_m=16:i64,tile_n=16:i64,tile_k=64:i64,bank_bytes=@PACKED_BYTES@:i64} : tensor<@PACKED_BYTES@xi8>,tensor<@PACKED_BYTES@xi8> -> tensor<16x16xf32>
+  return %a,%b : tensor<16x16xf32>,tensor<16x16xf32>
+}

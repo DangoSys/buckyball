@@ -1,0 +1,1 @@
+expected_assertion = "CPU memory size must be 1, 2, 4 or 8 bytes"

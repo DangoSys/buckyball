@@ -81,25 +81,20 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_bemu_elf_tests: true
-            run_bemu_pk_tests: true
-            run_verilator_batch_tests: true
+            run_bemu_tests: true
+            run_verilator_tests: true
           - chip: pebble
-            run_bemu_elf_tests: true
-            run_bemu_pk_tests: true
-            run_verilator_batch_tests: true
+            run_bemu_tests: true
+            run_verilator_tests: true
           - chip: goban
-            run_bemu_elf_tests: true
-            run_bemu_pk_tests: false
-            run_verilator_batch_tests: true
+            run_bemu_tests: true
+            run_verilator_tests: true
           - chip: poly
-            run_bemu_elf_tests: true
-            run_bemu_pk_tests: false
-            run_verilator_batch_tests: false
+            run_bemu_tests: true
+            run_verilator_tests: true
           - chip: multi-rocket
-            run_bemu_elf_tests: true
-            run_bemu_pk_tests: false
-            run_verilator_batch_tests: true
+            run_bemu_tests: true
+            run_verilator_tests: true
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
@@ -139,26 +134,19 @@ jobs:
           nix develop -c bbdev workload --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'
 
-      - name: bemu ELF batch
-        if: matrix.run_bemu_elf_tests
+      - name: bemu tests
+        if: matrix.run_bemu_tests
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test elf-tests --clean-before'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test bare-tests --jobs 16 --clean-before'
+          nix develop -c bbdev kernel --build '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test linux-tests --jobs 16'
 
-      - name: bemu PK batch
-        if: matrix.run_bemu_pk_tests
-        shell: zsh {0}
-        run: |
-          set -euo pipefail
-          root="${BB_ROOT/#\~/$HOME}"
-          cd "${root}"
-          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test pk-tests --clean-before'
-
-      - name: verilator batch
-        if: matrix.run_verilator_batch_tests
+      - name: verilator tests
+        if: matrix.run_verilator_tests
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -166,11 +154,11 @@ jobs:
           cd "${root}"
           nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-verilator --build '--jobs 16 --chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test elf-tests --diff --clean-before'
+          nix develop -c bbdev bebop-verilator --build '--jobs 100 --chip ${{ matrix.chip }} --diff'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test bare-tests --diff --jobs 16 --clean-before'
 
       - name: Detect bebop JUnit files
-        if: always() && (matrix.run_bemu_elf_tests || matrix.run_bemu_pk_tests || matrix.run_verilator_batch_tests)
+        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
         id: junit
         shell: zsh {0}
         run: |
@@ -183,7 +171,7 @@ jobs:
           fi
 
       - name: Publish bebop test report
-        if: always() && (matrix.run_bemu_elf_tests || matrix.run_bemu_pk_tests || matrix.run_verilator_batch_tests) && steps.junit.outputs.found == 'true'
+        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
         uses: mikepenz/action-junit-report@v4
         with:
           report_paths: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
@@ -192,7 +180,7 @@ jobs:
           include_passed: true
 
       - name: Upload bebop JUnit artifacts
-        if: always() && (matrix.run_bemu_elf_tests || matrix.run_bemu_pk_tests || matrix.run_verilator_batch_tests) && steps.junit.outputs.found == 'true'
+        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         env:
           ALL_PROXY: ""

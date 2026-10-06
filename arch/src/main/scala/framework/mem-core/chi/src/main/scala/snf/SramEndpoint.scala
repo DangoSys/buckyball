@@ -33,6 +33,7 @@ class SramEndpoint(
   lines:   Int = 256,
   rxDepth: Int = 4)
     extends Module {
+  override def desiredName = s"SramEndpoint${p.dataBits}"
 
   @public
   val io = IO(new SramEndpointIO(p, slots))

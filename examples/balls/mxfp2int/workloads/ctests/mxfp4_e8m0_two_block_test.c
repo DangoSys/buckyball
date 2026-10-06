@@ -59,6 +59,8 @@ int main(void) {
   const uint32_t out_bank = 1;
   bb_mem_alloc(in_bank, 1, 1);
   bb_mem_alloc(out_bank, 1, 1);
+  // Publish scales and packed input once before the NPU command chain.
+  bb_dma_fence();
   bb_mvin_mmio((uintptr_t)scales_e8m0, mmio_addr, 1, NUM_BLOCKS);
   bb_mvin((uintptr_t)input_mxfp4, in_bank, NUM_BLOCKS, 1);
   bb_mxfp2int(in_bank, out_bank, NUM_BLOCKS);

@@ -1,18 +1,12 @@
 package sims.scu
 
 import chisel3._
-import chisel3.util.{log2Ceil, HasBlackBoxInline}
-import org.chipsalliance.cde.config.{Config, Field, Parameters}
-
-import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.regmapper._
-import freechips.rocketchip.subsystem._
-import freechips.rocketchip.tilelink._
+import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.util.HasBlackBoxInline
 
 /**
- * SCU is a global multi-hart System Control Unit. A single instance attaches to
- * a system bus (typically CBUS) and provides a per-hart sub-region for UART
- * output and simulation exit. Each hart accesses its own sub-region via
+ * SCU is a global multi-hart System Control Unit (see SystemControl). It
+ * provides a per-hart sub-region for UART output and simulation exit. Each hart accesses its own sub-region via
  * `baseAddress + hartId * strideBytes`.
  *
  * Address layout (default values):
@@ -32,10 +26,8 @@ import freechips.rocketchip.tilelink._
  * @param strideBytes   bytes per hart (must be power of two)
  * @param totalSizeBytes total address window (must be power of two,
  *                       >= maxHarts * strideBytes)
- * @param maxHarts      number of DPI instances to elaborate. Accesses targeting
- *                      hartId >= maxHarts return a TileLink access-denied error
- *                      via the address decoder (those addresses are simply not
- *                      claimed by this manager).
+ * @param maxHarts      number of hart sub-regions. Accesses targeting
+ *                      hartId >= maxHarts return an access error.
  */
 case class SCUParams(
   baseAddress:    BigInt = BigInt("60000000", 16),
@@ -58,36 +50,6 @@ case class SCUParams(
   )
 }
 
-case object SCUKey extends Field[Option[SCUParams]](None)
-
-/**
- * Config fragment that sets SCU parameters AND replaces the default DigitalTop
- * with one that includes the SCU on CBUS.
- */
-class WithSCU(
-  baseAddress:    BigInt = BigInt("60000000", 16),
-  strideBytes:    BigInt = BigInt("40000", 16),
-  totalSizeBytes: BigInt = BigInt("10000000", 16),
-  maxHarts:       Int = 64)
-    extends Config((site, here, up) => {
-      case SCUKey               => Some(SCUParams(
-          baseAddress = baseAddress,
-          strideBytes = strideBytes,
-          totalSizeBytes = totalSizeBytes,
-          maxHarts = maxHarts
-        ))
-      case chipyard.BuildSystem => (p: Parameters) => new DigitalTop()(p)
-    })
-
-/**
- * DigitalTop subclass that mixes in CanHavePeripherySCU. This avoids modifying
- * any chipyard source files.
- *
- * Note: Keep the class name as DigitalTop (not DigitalTopWithSCU) to maintain
- * compatibility with P2ETopBlackBox.v which instantiates "DigitalTop soc".
- */
-class DigitalTop(implicit p: Parameters) extends chipyard.DigitalTop with CanHavePeripherySCU
-
 /**
  * Single DPI-C bridge module for all harts. The hart_id is supplied as an
  * input signal rather than being baked into the module name, so only one
@@ -96,9 +58,11 @@ class DigitalTop(implicit p: Parameters) extends chipyard.DigitalTop with CanHav
  * Has separate hart_id inputs for uart and exit operations because different
  * harts may write uart and exit simultaneously.
  */
+@instantiable
 class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
   override def desiredName = "SCUWriteDPI"
 
+  @public
   val io = IO(new Bundle {
     val clock        = Input(Clock())
     val reset        = Input(Bool())
@@ -142,9 +106,11 @@ class SCUWriteDPI extends BlackBox with HasBlackBoxInline {
   )
 }
 
+@instantiable
 class SCUReadDPI extends BlackBox with HasBlackBoxInline {
   override def desiredName = "SCUReadDPI"
 
+  @public
   val io = IO(new Bundle {
     val clock    = Input(Clock())
     val reset    = Input(Bool())
@@ -193,151 +159,4 @@ class SCUReadDPI extends BlackBox with HasBlackBoxInline {
        |endmodule
     """.stripMargin
   )
-}
-
-/**
- * Global multi-hart SCU. Each hart owns a sub-region of size `strideBytes`
- * starting at `baseAddress + hartId * strideBytes`. Address decoder only
- * claims addresses for `hartId < maxHarts`; accesses to higher hart IDs (still
- * within `totalSizeBytes`) fall through and are answered by the bus's
- * unmapped-address error device.
- */
-class TLSCU(params: SCUParams, beatBytes: Int)(implicit p: Parameters) extends LazyModule {
-  val device = new SimpleDevice("scu", Seq("buckyball,scu"))
-
-  // One AddressSet per hart, exactly covering that hart's stride region.
-  // Diplomacy will route only addresses within these sets to this manager;
-  // anything else in the totalSizeBytes window is left unmapped.
-  val perHartAddresses: Seq[AddressSet] = (0 until params.maxHarts).map { h =>
-    AddressSet(params.baseAddress + BigInt(h) * params.strideBytes, params.strideBytes - 1)
-  }
-
-  val node = TLRegisterNode(
-    address = perHartAddresses,
-    device = device,
-    deviceKey = "reg/control",
-    beatBytes = beatBytes,
-    concurrency = 1
-  )
-
-  lazy val module = new LazyModuleImp(this) {
-
-    val writeDpis = Seq.tabulate(params.maxHarts) { h =>
-      val dpi = Module(new SCUWriteDPI)
-      dpi.io.clock        := clock
-      dpi.io.reset        := reset.asBool
-      dpi.io.uart_valid   := false.B
-      dpi.io.uart_hart_id := h.U
-      dpi.io.uart_data    := 0.U
-      dpi.io.exit_valid   := false.B
-      dpi.io.exit_hart_id := h.U
-      dpi.io.exit_code    := 0.U
-      dpi
-    }
-
-    val rxDpis = Seq.tabulate(params.maxHarts) { h =>
-      val rx = Module(new SCUReadDPI)
-      rx.io.clock   := clock
-      rx.io.reset   := reset.asBool
-      rx.io.hart_id := h.U
-      rx.io.enable  := false.B
-      rx.io.pop     := false.B
-      rx
-    }
-
-    // Collect per-hart valid/data signals
-    val uartValids = Wire(Vec(params.maxHarts, Bool()))
-    val uartDatas  = Wire(Vec(params.maxHarts, UInt(8.W)))
-    val exitValids = Wire(Vec(params.maxHarts, Bool()))
-    val exitCodes  = Wire(Vec(params.maxHarts, UInt(32.W)))
-
-    // Default: no hart is active
-    uartValids.foreach(_ := false.B)
-    uartDatas.foreach(_  := 0.U)
-    exitValids.foreach(_ := false.B)
-    exitCodes.foreach(_  := 0.U)
-
-    // Per-hart registers and write functions
-    val allFields: Seq[RegField.Map] =
-      (0 until params.maxHarts).flatMap { h =>
-        val hartBase = (params.baseAddress + BigInt(h) * params.strideBytes).toInt
-
-        val simExitReg   = RegInit(0.U(32.W))
-        val simExitWrite = RegWriteFn { (valid, data) =>
-          exitValids(h) := valid
-          exitCodes(h)  := data(31, 0)
-          simExitReg    := data(31, 0)
-          true.B
-        }
-
-        val uartTxReg = RegInit(0.U(8.W))
-        val uartWrite = RegWriteFn { (valid, data) =>
-          uartValids(h) := valid
-          uartDatas(h)  := data(7, 0)
-          uartTxReg     := data(7, 0)
-          true.B
-        }
-
-        val uartReadFire   = WireDefault(false.B)
-        val uartStatusFire = WireDefault(false.B)
-        rxDpis(h).io.enable := uartReadFire || uartStatusFire
-        rxDpis(h).io.pop    := uartReadFire
-
-        val uartRead = RegReadFn { ready =>
-          uartReadFire := ready
-          (true.B, rxDpis(h).io.rx_data)
-        }
-
-        val uartStatus = RegReadFn { ready =>
-          uartStatusFire := ready
-          (true.B, "h60".U(8.W) | rxDpis(h).io.rx_valid.asUInt)
-        }
-
-        val readyReg = RegInit(0.U(8.W))
-
-        // Each hart's registers at hartBase + offset
-        Seq(
-          (hartBase + 0x00000) -> Seq(RegField(32, simExitReg, simExitWrite)),
-          (hartBase + 0x20000) -> Seq(RegField(8, uartTxReg, uartWrite)),
-          (hartBase + 0x20004) -> Seq(RegField.r(8, uartRead)),
-          (hartBase + 0x20005) -> Seq(RegField.r(8, uartStatus)),
-          (hartBase + 0x20006) -> Seq(RegField(8, readyReg))
-        )
-      }
-
-    writeDpis.zipWithIndex.foreach { case (dpi, h) =>
-      dpi.io.uart_valid := RegNext(uartValids(h), false.B)
-      dpi.io.uart_data  := RegNext(uartDatas(h), 0.U)
-      dpi.io.exit_valid := RegNext(exitValids(h), false.B)
-      dpi.io.exit_code  := RegNext(exitCodes(h), 0.U)
-    }
-
-    // Register all fields at once
-    node.regmap(allFields: _*)
-  }
-
-}
-
-/**
- * Attach a single global SCU instance to CBUS.
- * This trait must be mixed into the subsystem at construction time. We do this
- * by defining a custom subsystem that extends ChipyardSubsystem with this trait,
- * and then a config fragment that selects this subsystem via BuildSystem.
- *
- * Pattern follows CanHavePeripheryCLINT: create a synchronous domain wrapper
- * tied to the target bus's clock, then instantiate the SCU inside it so the
- * implicit clock/reset are provided correctly.
- */
-trait CanHavePeripherySCU { this: BaseSubsystem =>
-
-  val scuOpt = p(SCUKey).map { params =>
-    val tlbus            = locateTLBusWrapper(CBUS)
-    val scuDomainWrapper = tlbus.generateSynchronousDomain("SCU").suggestName("scu_domain")
-    val scu              = scuDomainWrapper(LazyModule(new TLSCU(params, tlbus.beatBytes)))
-    scuDomainWrapper {
-      scu.node := tlbus.coupleTo("scu")(TLFragmenter(tlbus, Some("SCU")) := _)
-    }
-    scu
-  }
-
 }

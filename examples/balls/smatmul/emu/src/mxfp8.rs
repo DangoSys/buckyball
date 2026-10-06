@@ -16,22 +16,13 @@ thread_local! {
     static CHAINS: RefCell<HashMap<usize, Chain>> = RefCell::new(HashMap::new());
 }
 
-fn value(code: u8, scale: u8) -> f32 {
-    assert!(code & 0x7f != 0x7f && scale != 255, "mxfp8: NaN encoding");
+fn value(code: u8, factor: f32) -> f32 {
     let exponent = (code >> 3) & 15;
-    let mantissa = (code & 7) as f32;
-    let element = if exponent == 0 {
-        mantissa / 512.0
-    } else {
-        (8.0 + mantissa) * 2.0f32.powi(exponent as i32 - 10)
-    };
-    let factor = if scale == 0 {
-        f32::from_bits(1 << 22)
-    } else {
-        f32::from_bits((scale as u32) << 23)
-    };
-    let result = element * factor * if code & 128 == 0 { 1.0 } else { -1.0 };
-    assert!(result.is_finite(), "mxfp8: decoded value overflows FP32");
+    let mantissa = (code & 7) as u32;
+    let normal = ((exponent as u32 + 120) << 23) | (mantissa << 20);
+    let subnormal = (mantissa as f32 / 512.0).to_bits();
+    let element = f32::from_bits(if exponent == 0 { subnormal } else { normal });
+    let result = f32::from_bits((element * factor).to_bits() | ((code as u32 & 128) << 24));
     result
 }
 
@@ -66,14 +57,54 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     );
     let pa = pbank(ctx, a);
     let pb = pbank(ctx, b);
+    let a_bytes = &ctx.banks[pa][..rows * k + rows * k / 32];
+    let b_bytes = &ctx.banks[pb][..cols * k + cols * k / 32];
+    assert!(
+        a_bytes[..rows * k]
+            .iter()
+            .chain(b_bytes[..cols * k].iter())
+            .fold(true, |valid, code| valid & (code & 0x7f != 0x7f)),
+        "mxfp8: NaN encoding"
+    );
     let mut av = vec![0f32; rows * k];
     let mut bv = vec![0f32; cols * k];
-    for i in 0..av.len() {
-        av[i] = value(ctx.banks[pa][i], ctx.banks[pa][rows * k + i / 32]);
+    for (block, dst) in av.chunks_exact_mut(32).enumerate() {
+        let scale = a_bytes[rows * k + block];
+        assert!(scale != 255, "mxfp8: NaN encoding");
+        let factor = if scale == 0 {
+            f32::from_bits(1 << 22)
+        } else {
+            f32::from_bits((scale as u32) << 23)
+        };
+        for (index, decoded) in dst.iter_mut().enumerate() {
+            *decoded = value(a_bytes[block * 32 + index], factor);
+        }
     }
-    for i in 0..bv.len() {
-        bv[i] = value(ctx.banks[pb][i], ctx.banks[pb][cols * k + i / 32]);
+    for col in 0..cols {
+        for block in 0..k / 32 {
+            let scale = b_bytes[cols * k + col * (k / 32) + block];
+            assert!(scale != 255, "mxfp8: NaN encoding");
+            let factor = if scale == 0 {
+                f32::from_bits(1 << 22)
+            } else {
+                f32::from_bits((scale as u32) << 23)
+            };
+            let codes = &b_bytes[col * k + block * 32..col * k + (block + 1) * 32];
+            let mut decoded = [0f32; 32];
+            for (decoded, code) in decoded.iter_mut().zip(codes.iter()) {
+                *decoded = value(*code, factor);
+            }
+            for (index, decoded) in decoded.iter().enumerate() {
+                bv[(block * 32 + index) * cols + col] = *decoded;
+            }
+        }
     }
+    assert!(
+        av.iter()
+            .chain(bv.iter())
+            .fold(true, |valid, value| valid & value.is_finite()),
+        "mxfp8: decoded value overflows FP32"
+    );
     let mut chain = CHAINS.with(|chains| {
         let mut chains = chains.borrow_mut();
         if first {
@@ -99,14 +130,25 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         "mxfp8: continuation changed destination"
     );
     for row in 0..rows {
-        for col in 0..cols {
-            let mut acc = chain.values[row * cols + col];
-            for inner in 0..k {
-                acc = av[row * k + inner].mul_add(bv[col * k + inner], acc);
-            }
-            assert!(acc.is_finite(), "mxfp8: FP32 accumulator overflow");
-            chain.values[row * cols + col] = acc;
+        if av[row * k..(row + 1) * k].iter().all(|value| *value == 0.0)
+            && chain.values[row * cols..(row + 1) * cols]
+                .iter()
+                .all(|value| value.to_bits() == 0)
+        {
+            continue;
         }
+        let av = &av[row * k..(row + 1) * k];
+        let dst = &mut chain.values[row * cols..(row + 1) * cols];
+        let mut sums: [f32; 16] = dst.try_into().unwrap();
+        for inner in 0..k {
+            let a = av[inner];
+            let weights = &bv[inner * 16..(inner + 1) * 16];
+            for col in 0..16 {
+                sums[col] = a.mul_add(weights[col], sums[col]);
+            }
+        }
+        assert!(sums.iter().all(|v| v.is_finite()), "accumulator overflow");
+        dst.copy_from_slice(&sums);
     }
     if last {
         let pc = pbank(ctx, c);

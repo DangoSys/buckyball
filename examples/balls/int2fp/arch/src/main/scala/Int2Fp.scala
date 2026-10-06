@@ -25,7 +25,8 @@ class Int2Fp(val b: GlobalConfig) extends Module {
   require(mapping.outBW == 1, "Int2FpBall requires outBW=1")
   require((funct >> 4) == 4, "INT32_TO_FP32 must encode two reads and one write")
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val cmdReq    = Flipped(Decoupled(new BallRsIssue(b)))
     val cmdResp   = Decoupled(new BallRsComplete(b))
     val bankRead  = Vec(mapping.inBW, Flipped(new BankRead(b)))

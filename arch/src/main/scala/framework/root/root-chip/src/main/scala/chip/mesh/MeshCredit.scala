@@ -1,7 +1,10 @@
 package hier.chip.mesh
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** One directed physical Mesh link. Each VC returns its own buffer credits. */
 class MeshCreditLink(p: MeshParams) extends Bundle {
@@ -16,53 +19,58 @@ class MeshCreditLink(p: MeshParams) extends Bundle {
  * Credits start at zero and are supplied by the receiver after link activation.
  * A coordinated reset is the only supported way to stop an active link.
  */
+@instantiable
 class MeshCreditTx(p: MeshParams, maxCredits: Int) extends Module {
   require(maxCredits >= 1 && maxCredits <= 255)
   private val creditBits = math.max(1, log2Ceil(maxCredits + 1))
 
+  @public
   val io = IO(new Bundle {
     val active  = Input(Bool())
-    val in      = Flipped(Decoupled(new MeshFlit(p)))
+    val in      = Vec(p.virtualChannels, Flipped(Decoupled(new MeshFlit(p))))
     val link    = new MeshCreditLink(p)
     val credits = Output(UInt(creditBits.W))
   })
 
   val credits  = RegInit(VecInit(Seq.fill(p.virtualChannels)(0.U(creditBits.W))))
   val returned = RegNext(io.link.credit, VecInit(Seq.fill(p.virtualChannels)(false.B)))
-  io.in.ready := io.active && credits(io.in.bits.vc) =/= 0.U
-  val send = io.in.fire
+  val cursor   = RegInit(0.U(p.vcBits.W))
+  val eligible = VecInit((0 until p.virtualChannels).map(vc => io.active && io.in(vc).valid && credits(vc) =/= 0.U))
+  val ordered  = VecInit((0 until p.virtualChannels).map(offset => eligible((cursor +& offset.U) % p.virtualChannels.U)))
+  val selected = (cursor +& PriorityEncoder(ordered)) % p.virtualChannels.U
+  val send     = eligible.asUInt.orR
   for (vc <- 0 until p.virtualChannels) {
-    val consumed = send && io.in.bits.vc === vc.U
-    when(returned(vc) =/= consumed) {
-      credits(vc) := Mux(returned(vc), credits(vc) + 1.U, credits(vc) - 1.U)
-    }
+    io.in(vc).ready := send && selected === vc.U
+    val consumed = send && selected === vc.U
+    when(returned(vc) =/= consumed)(credits(vc) := Mux(returned(vc), credits(vc) + 1.U, credits(vc) - 1.U))
     when(returned(vc) && !consumed)(assert(credits(vc) < maxCredits.U, "Mesh TX credit overflow"))
-    when(consumed)(assert(credits(vc) =/= 0.U, "Mesh TX credit underflow"))
+    when(consumed)(assert(io.in(vc).bits.vc === vc.U, "Mesh TX wrong VC port"))
   }
+  when(send)(cursor := Mux(selected === (p.virtualChannels - 1).U, 0.U, selected + 1.U))
   io.link.valid := RegNext(send, false.B)
-  io.link.flit := RegEnable(io.in.bits, 0.U.asTypeOf(new MeshFlit(p)), send)
-  io.credits   := credits(io.in.bits.vc)
+  io.link.flit  := RegEnable(io.in(selected).bits, 0.U.asTypeOf(new MeshFlit(p)), send)
+  io.credits    := credits(selected)
   val wasActive = RegNext(io.active, false.B)
   when(wasActive)(assert(io.active, "Mesh TX requires coordinated reset to stop"))
 }
 
 /** Receiver half of a credit-based Mesh link with independent FIFO and credit pool per VC. */
+@instantiable
 class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
   require(depth >= 1 && depth <= 255)
   private val creditBits = math.max(1, log2Ceil(depth + 1))
 
+  @public
   val io = IO(new Bundle {
     val active    = Input(Bool())
     val link      = Flipped(new MeshCreditLink(p))
-    val out       = Decoupled(new MeshFlit(p))
+    val out       = Vec(p.virtualChannels, Decoupled(new MeshFlit(p)))
     val occupancy = Output(Vec(p.virtualChannels, UInt(creditBits.W)))
   })
 
   val queues       = Seq.fill(p.virtualChannels)(Module(new Queue(new MeshFlit(p), depth, pipe = true)))
   val advertised   = RegInit(VecInit(Seq.fill(p.virtualChannels)(0.U(creditBits.W))))
-  val arbiter      = Module(new RRArbiter(new MeshFlit(p), p.virtualChannels))
   val enqueueReady = Wire(Vec(p.virtualChannels, Bool()))
-  io.out <> arbiter.io.out
   for (vc <- 0 until p.virtualChannels) {
     val queue    = queues(vc)
     val accepted = io.link.valid && io.link.flit.vc === vc.U
@@ -71,7 +79,7 @@ class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
     queue.io.enq.valid := accepted
     queue.io.enq.bits  := io.link.flit
     enqueueReady(vc)   := queue.io.enq.ready
-    arbiter.io.in(vc) <> queue.io.deq
+    io.out(vc) <> queue.io.deq
     when(grant =/= accepted) {
       advertised(vc) := Mux(grant, advertised(vc) + 1.U, advertised(vc) - 1.U)
     }
@@ -89,54 +97,27 @@ class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
   when(wasActive)(assert(io.active, "Mesh RX requires coordinated reset to stop"))
 }
 
-/** Native verification target for one credit link. */
-class MeshCreditLoopback extends Module {
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 8)
-
-  val io = IO(new Bundle {
-    val active    = Input(Bool())
-    val in        = Flipped(Decoupled(new MeshFlit(mesh)))
-    val out       = Decoupled(new MeshFlit(mesh))
-    val credits   = Output(UInt(3.W))
-    val occupancy = Output(UInt(3.W))
-  })
-
-  val tx = Module(new MeshCreditTx(mesh, maxCredits = 4))
-  val rx = Module(new MeshCreditRx(mesh, depth = 4))
-  tx.io.active := io.active
-  rx.io.active := io.active
-  tx.io.in <> io.in
-  rx.io.link <> tx.io.link
-  io.out <> rx.io.out
-  io.credits   := tx.io.credits
-  io.occupancy := rx.io.occupancy(3)
-}
-
-/** 2D Mesh whose inter-router links use per-VC credit flow control. */
+/** 2D Mesh with explicit independent local VC ports and per-VC physical credits. */
+@instantiable
 class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
-  require(linkDepth >= 1)
+  require(linkDepth >= 1 && linkDepth <= 255)
   private val flit = new MeshFlit(p)
-
-  private val routers = Seq.tabulate(p.yNodes, p.xNodes) { case (y, x) =>
-    Module(new MeshRouter(p, x, y))
-  }
-
+  private val routers: Seq[Seq[Instance[MeshRouter]]] =
+    Seq.tabulate(p.yNodes, p.xNodes)((y, x) => Instantiate(new MeshRouter(p, x, y)))
   private def index(x: Int, y: Int): Int = y * p.xNodes + x
 
+  @public
   val io = IO(new Bundle {
     val active   = Input(Bool())
-    val localIn  = Vec(p.xNodes * p.yNodes, Flipped(Decoupled(flit)))
-    val localOut = Vec(p.xNodes * p.yNodes, Decoupled(flit))
+    val localIn  = Vec(p.xNodes * p.yNodes, Vec(p.virtualChannels, Flipped(Decoupled(flit))))
+    val localOut = Vec(p.xNodes * p.yNodes, Vec(p.virtualChannels, Decoupled(flit)))
   })
 
-  def wireLink(source: DecoupledIO[MeshFlit], sink: DecoupledIO[MeshFlit]): Unit = {
-    val tx = Module(new MeshCreditTx(p, linkDepth))
-    val rx = Module(new MeshCreditRx(p, linkDepth))
-    tx.io.active := io.active
-    rx.io.active := io.active
-    tx.io.in <> source
-    rx.io.link <> tx.io.link
-    sink <> rx.io.out
+  def wireLink(source: Vec[DecoupledIO[MeshFlit]], sink: Vec[DecoupledIO[MeshFlit]]): Unit = {
+    val tx: Instance[MeshCreditTx] = Instantiate(new MeshCreditTx(p, linkDepth));
+    val rx: Instance[MeshCreditRx] = Instantiate(new MeshCreditRx(p, linkDepth))
+    tx.io.active := io.active; rx.io.active := io.active
+    tx.io.in <> source; rx.io.link <> tx.io.link; sink <> rx.io.out
   }
 
   for {
@@ -144,27 +125,27 @@ class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
     x <- 0 until p.xNodes
   } {
     val router = routers(y)(x)
-    router.io.in(MeshDirection.Local) <> io.localIn(index(x, y))
-    io.localOut(index(x, y)) <> router.io.out(MeshDirection.Local)
-    if (x == 0) {
-      router.io.in(MeshDirection.West).valid  := false.B
-      router.io.in(MeshDirection.West).bits   := 0.U.asTypeOf(flit)
-      router.io.out(MeshDirection.West).ready := true.B
+    for (vc <- 0 until p.virtualChannels) {
+      val input  = io.localIn(index(x, y))(vc)
+      val output = io.localOut(index(x, y))(vc)
+      router.io.in(MeshDirection.Local)(vc).valid  := io.active && input.valid
+      router.io.in(MeshDirection.Local)(vc).bits   := input.bits
+      input.ready                                  := io.active && router.io.in(MeshDirection.Local)(vc).ready
+      output.valid                                 := io.active && router.io.out(MeshDirection.Local)(vc).valid
+      output.bits                                  := router.io.out(MeshDirection.Local)(vc).bits
+      router.io.out(MeshDirection.Local)(vc).ready := io.active && output.ready
     }
-    if (x == p.xNodes - 1) {
-      router.io.in(MeshDirection.East).valid  := false.B
-      router.io.in(MeshDirection.East).bits   := 0.U.asTypeOf(flit)
-      router.io.out(MeshDirection.East).ready := true.B
-    }
-    if (y == 0) {
-      router.io.in(MeshDirection.North).valid  := false.B
-      router.io.in(MeshDirection.North).bits   := 0.U.asTypeOf(flit)
-      router.io.out(MeshDirection.North).ready := true.B
-    }
-    if (y == p.yNodes - 1) {
-      router.io.in(MeshDirection.South).valid  := false.B
-      router.io.in(MeshDirection.South).bits   := 0.U.asTypeOf(flit)
-      router.io.out(MeshDirection.South).ready := true.B
+    for (vc <- 0 until p.virtualChannels) {
+      for (
+        direction <- Seq(MeshDirection.West).filter(_ => x == 0) ++ Seq(MeshDirection.East).filter(_ =>
+                       x == p.xNodes - 1
+                     ) ++ Seq(MeshDirection.North).filter(_ => y == 0) ++ Seq(MeshDirection.South).filter(_ =>
+                       y == p.yNodes - 1
+                     )
+      ) {
+        router.io.in(direction)(vc).valid  := false.B; router.io.in(direction)(vc).bits := 0.U.asTypeOf(flit)
+        router.io.out(direction)(vc).ready := false.B
+      }
     }
   }
   for {

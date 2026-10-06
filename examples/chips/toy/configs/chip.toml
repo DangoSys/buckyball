@@ -2,10 +2,8 @@
 include = "designs/toy.toml"
 
 [sims]
-verilator = "sims.verilator.BuckyballToyVerilatorConfig"
-p2e = "sims.p2e.P2EToyLinuxConfig"
-firesim = "sims.firesim.FireSimBuckyballToyConfig"
+verilator = "sims.verilator.ToyVerilatorTarget"
 
 [uvm]
 balls = ["gemmini"]
-ips = ["axis"]
+ips = ["axis", "memdomain"]

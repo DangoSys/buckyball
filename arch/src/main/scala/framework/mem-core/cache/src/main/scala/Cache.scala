@@ -1,5 +1,7 @@
 package memcore.memory.cache
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
@@ -7,7 +9,8 @@ import memcore.memory.cache.configs.CacheParams
 
 @instantiable
 class Cache(p: CacheParams) extends Module {
-  @public val io = IO(new CacheIO(p))
+  @public
+  val io = IO(new CacheIO(p))
 
   val valid       = RegInit(VecInit(Seq.fill(p.ways)(VecInit(Seq.fill(p.sets)(false.B)))))
   val tags        = Reg(Vec(p.ways, Vec(p.sets, UInt(p.tagBits.W))))
@@ -52,12 +55,15 @@ class Cache(p: CacheParams) extends Module {
 
   val readData = Wire(Vec(p.ways, UInt(p.lineBits.W)))
   for (way <- 0 until p.ways) {
-    readData(way) := data(way).read(set, io.request.fire && read && selected === way.U).asUInt
-    when(io.request.fire && selected === way.U &&
-      (req.op === CacheOp.Write.U || req.op === CacheOp.Fill.U)) {
-      val mask = Mux(req.op === CacheOp.Fill.U, Fill(p.lineBytes, 1.U(1.W)), req.mask)
-      data(way).write(set, req.data.asTypeOf(Vec(p.lineBytes, UInt(8.W))), mask.asBools)
-    }
+    val write = req.op === CacheOp.Write.U || req.op === CacheOp.Fill.U
+    val mask  = Mux(req.op === CacheOp.Fill.U, Fill(p.lineBytes, 1.U(1.W)), req.mask)
+    readData(way) := data(way).readWrite(
+      set,
+      req.data.asTypeOf(Vec(p.lineBytes, UInt(8.W))),
+      mask.asBools,
+      io.request.fire && selected === way.U && (read || write),
+      write
+    ).asUInt
   }
   when(pendingRead) {
     responses.io.enq.bits.data := readData(pendingWay)

@@ -151,6 +151,22 @@ def build_workload(
     env["BUDDY_MLIR_BUILD_DIR"] = str(compiler_build)
     env["CC"] = str(linux_cc)
     env["CXX"] = str(linux_cxx)
+    if not ctest:
+        _run(
+            [
+                "cmake",
+                "--build",
+                str(compiler_build),
+                "--target",
+                "buddy-opt",
+                "buddy-translate",
+            ],
+            cwd=root,
+            env=env,
+            prefix="workload compiler",
+            logger=logger,
+            task_scope=task_scope,
+        )
     build.mkdir(parents=True, exist_ok=True)
     cmake_args = [
         "cmake",

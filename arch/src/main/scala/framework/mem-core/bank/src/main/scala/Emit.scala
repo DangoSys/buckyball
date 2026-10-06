@@ -5,11 +5,11 @@ object Emit extends App {
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new Bank(p),
     firtoolOpts = args,
-    args = Array("--target-dir", "build")
+    args = Array("--target-dir", "build/Bank", "--split-verilog")
   )
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     new BankSet(p),
     firtoolOpts = args,
-    args = Array("--target-dir", "build")
+    args = Array("--target-dir", "build/BankSet", "--split-verilog")
   )
 }

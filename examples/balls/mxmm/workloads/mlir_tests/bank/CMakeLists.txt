@@ -1,0 +1,21 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+foreach(MODE mxfp8 fma32 f32)
+  add_buckyball_mlir_test(mxmm_${MODE} TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+  buckyball_mlirtest_name(TEST_NAME ${BUCKYBALL_MLIR_ACTIVE_TARGET} bank_mxmm_${MODE})
+  foreach(KIND baremetal linux)
+    add_custom_command(OUTPUT ${TEST_NAME}-${KIND} APPEND
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../mxmm_native_test.h
+              ${CMAKE_CURRENT_SOURCE_DIR}/../mxmm_native_steps.h)
+  endforeach()
+endforeach()
+foreach(CASE mxmm_window mxmm_window_rows mxmm_window_chain)
+  add_buckyball_mlir_test(${CASE} TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+  buckyball_mlirtest_name(TEST_NAME ${BUCKYBALL_MLIR_ACTIVE_TARGET} bank_${CASE})
+  foreach(KIND baremetal linux)
+    add_custom_command(OUTPUT ${TEST_NAME}-${KIND} APPEND
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../isa/mxmm.h)
+  endforeach()
+endforeach()

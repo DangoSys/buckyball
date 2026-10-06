@@ -3,25 +3,39 @@ package memcore.bus.chi.rnf
 import chisel3._
 import chisel3.util._
 import memcore.bus.chi._
+import memcore.memory.queue.Queue
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 // Each bank executes one demand operation while serving snoops independently.
 // The retirement FIFO preserves the order of the untagged CPU result interface.
-class BankedChiCache(
-  p:          Params,
-  nodeId:     Int,
-  cacheLines: Int = 4,
+case class RnfParams(
+  chi:        Params = Params(),
+  nodeId:     Int = 1,
+  cacheLines: Int = 8,
   homeId:     Int = 64,
   homeCount:  Int = 1,
-  banks:      Int = 2)
-    extends Module {
+  banks:      Int = 2,
+  lineResult: Boolean = false,
+  probe:      Boolean = false) {
+  val resultLineBits: Int = if (lineResult) 512 else 0
+}
+
+@instantiable
+class BankedChiCache(config: RnfParams) extends Module {
+  val p                    = config.chi
+  private val nodeId       = config.nodeId
+  private val cacheLines   = config.cacheLines
+  private val banks        = config.banks
   require(banks >= 1 && banks <= 256 && isPow2(banks))
   require(cacheLines >= 2 * banks && isPow2(cacheLines))
   private val bankBits     = math.max(1, log2Ceil(banks))
   private val linesPerBank = cacheLines / banks
 
+  @public
   val io = IO(new Bundle {
     val access      = Flipped(Decoupled(new CacheAccess(p)))
-    val result      = Decoupled(new CacheResult)
+    val probe       = Option.when(config.probe)(new CacheProbe(p))
+    val result      = Decoupled(new CacheResult(config.resultLineBits))
     val chi         = new RequesterPort(p)
     val hits        = Output(UInt(32.W))
     val misses      = Output(UInt(32.W))
@@ -29,8 +43,8 @@ class BankedChiCache(
     val outstanding = Output(UInt(32.W))
   })
 
-  val caches = Seq.tabulate(banks) { i =>
-    Module(new ChiCache(p, nodeId, linesPerBank, homeId, homeCount, txnId = i, bankCount = banks))
+  val caches: Seq[Instance[ChiCache]] = Seq.tabulate(banks) { i =>
+    Instantiate(new ChiCache(config, i))
   }
 
   def bankOf(address: UInt): UInt =
@@ -40,7 +54,10 @@ class BankedChiCache(
   val serial        = io.access.bits.atomic =/= CacheAtomic.None.U
   val serialActive  = RegInit(false.B)
   val serialSC      = RegInit(false.B)
-  val canAccept     = !serialActive && (!serial || !retirement.io.deq.valid)
+  val probePending  = RegInit(false.B)
+  val probeBank     = Reg(UInt(bankBits.W))
+  val probeOffered  = io.probe.map(_.req.valid).getOrElse(false.B)
+  val canAccept     = !serialActive && (!serial || retirement.io.count === 0.U) && !probePending && !probeOffered
   val selectedReady = VecInit(caches.map(_.io.access.ready))(selected)
   io.access.ready         := canAccept && retirement.io.enq.ready && selectedReady
   retirement.io.enq.valid := io.access.valid && canAccept && selectedReady
@@ -62,7 +79,28 @@ class BankedChiCache(
     caches(i).io.result.ready := retirement.io.deq.valid && oldest === i.U && io.result.ready
   }
   when(io.result.fire && serialActive)(serialActive := false.B)
-  io.outstanding := retirement.io.count
+  io.outstanding := retirement.io.count + probePending.asUInt
+
+  io.probe.foreach { probe =>
+    val probed = bankOf(probe.req.bits.addr)
+    val admit  = retirement.io.count === 0.U && !serialActive && !probePending && !probe.cancel
+    probe.req.ready      := admit && VecInit(caches.map(_.io.probe.get.req.ready))(probed)
+    probe.complete.valid := probePending && !probe.cancel && VecInit(caches.map(_.io.probe.get.complete.valid))(
+      probeBank
+    )
+    probe.complete.bits  := VecInit(caches.map(_.io.probe.get.complete.bits))(probeBank)
+    for (i <- 0 until banks) {
+      val port = caches(i).io.probe.get
+      port.req.valid      := probe.req.valid && admit && probed === i.U
+      port.req.bits       := probe.req.bits
+      port.complete.ready := probePending && probeBank === i.U && probe.complete.ready && !probe.cancel
+      port.cancel         := probePending && probeBank === i.U && probe.cancel
+      port.retire         := probePending && probeBank === i.U && probe.retire && !probe.cancel
+      assert(port.req.fire === (probe.req.fire && probed === i.U), "Probe subbank admission differs from top")
+    }
+    when(probe.req.fire) { probePending := true.B; probeBank := probed }
+    when(probePending && (probe.cancel || probe.complete.fire))(probePending := false.B)
+  }
 
   // A hart has one LR reservation across all banks. Any SC consumes it, even
   // when the SC addresses another bank and fails there.
@@ -70,9 +108,36 @@ class BankedChiCache(
   val completedSC = io.result.fire && serialActive && serialSC
   for (cache <- caches) { cache.io.dropReservation := newLR || completedSC }
 
-  val reqArb   = Module(new RRArbiter(new RequestFlit(p), banks))
-  val rspArb   = Module(new RRArbiter(new ResponseFlit(p), banks))
-  val datArb   = Module(new RRArbiter(new DataFlit(p), banks))
+  val reqArb = Module(new RRArbiter(new RequestFlit(p), banks) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(banks)).W))
+      when(io.out.fire)(pointer := io.chosen)
+      pointer
+    }
+
+  })
+
+  val rspArb = Module(new RRArbiter(new ResponseFlit(p), banks) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(banks)).W))
+      when(io.out.fire)(pointer := io.chosen)
+      pointer
+    }
+
+  })
+
+  val datArb = Module(new RRArbiter(new DataFlit(p), banks) {
+
+    override lazy val lastGrant = {
+      val pointer = RegInit(0.U(math.max(1, log2Ceil(banks)).W))
+      when(io.out.fire)(pointer := io.chosen)
+      pointer
+    }
+
+  })
+
   val reqQueue = Module(new Queue(new RequestFlit(p), 2, pipe = true))
   val rspQueue = Module(new Queue(new ResponseFlit(p), 2, pipe = true))
   val datQueue = Module(new Queue(new DataFlit(p), 2, pipe = true))
@@ -110,12 +175,4 @@ class BankedChiCache(
   }
   io.hits := caches.map(_.io.hits).reduce(_ + _)
   io.misses := caches.map(_.io.misses).reduce(_ + _)
-}
-
-object EmitBankedChiCache extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new BankedChiCache(Params(), nodeId = 1),
-    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
-    args = Array("--target-dir", "build")
-  )
 }

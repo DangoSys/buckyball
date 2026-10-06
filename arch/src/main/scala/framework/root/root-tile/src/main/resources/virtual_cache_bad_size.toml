@@ -1,0 +1,2 @@
+expected_assertion = "Virtual LSU size must be 1, 2, 4 or 8 bytes"
+invalid_case = 0

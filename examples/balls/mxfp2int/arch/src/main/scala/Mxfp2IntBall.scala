@@ -5,7 +5,6 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 import framework.balldomain.blink.{BlinkIO, HasBlink, SubRobRow}
-import framework.balldomain.blink.mmio.MmioRead
 import framework.top.GlobalConfig
 
 /**

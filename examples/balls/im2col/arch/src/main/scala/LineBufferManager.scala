@@ -34,7 +34,8 @@ class LineBufferManager(val b: GlobalConfig) extends Module {
 
   private val inBW = map.inBW
 
-  @public val io = IO(new Bundle {
+  @public
+  val io = IO(new Bundle {
     val bankRead  = Vec(inBW, Flipped(new BankRead(b)))
     val start     = Input(Bool())
     val inRows    = Input(UInt(16.W))

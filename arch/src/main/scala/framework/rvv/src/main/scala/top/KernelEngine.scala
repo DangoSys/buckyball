@@ -3,216 +3,213 @@ package framework.rvv
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.rvv.configs.RvvParam
+import framework.balldomain.blink.{BallStatus, HasBallStatus}
+import framework.top.GlobalConfig
 
 @instantiable
-class KernelEngine(val p: RvvParam = RvvParam()) extends Module {
+class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
+  private val p = b.rvv
+  require(p.enable, "RVV must be explicitly enabled")
 
   @public
-  val io = IO(new Bundle {
-    val program = Flipped(Decoupled(new ProgramWrite))
-    val data    = Flipped(Decoupled(new DataWrite))
-    val launch  = Flipped(Decoupled(new KernelLaunch))
-    val done    = Decoupled(new KernelCompletion)
-    val busy    = Output(Bool())
-  })
+  val io = IO(new KernelBlinkIO(b))
+  def status: BallStatus = io.status
 
-  val iBuf:            Seq[Instance[IBuf]]       = Seq.fill(2)(Instantiate(new IBuf(p)))
-  val dBuf:            Seq[Instance[DBuf]]       = Seq.fill(2)(Instantiate(new DBuf(p)))
-  val scalarRegisters: Instance[ScalarRF]        = Instantiate(new ScalarRF)
-  val scalarExecution: Instance[ScalarExecution] = Instantiate(new ScalarExecution)
-  val vectorCore:      Instance[VectorCore]      = Instantiate(new VectorCore(p))
+  val execution: Instance[Execution]     = Instantiate(new Execution(b))
+  val loader:    Instance[ImageLoader]   = Instantiate(new ImageLoader(b))
+  val local:     Instance[KernelMemory]  = Instantiate(new KernelMemory(b))
+  val ports:     Seq[Instance[BankPort]] = Seq.fill(p.memoryPorts)(Instantiate(new BankPort(b)))
+  val idle :: loading :: descriptorSend :: descriptorWait :: launch :: executing :: completed :: Nil = Enum(7)
 
-  val running          = RegInit(false.B)
-  val fetchPending     = RegInit(false.B)
-  val instructionValid = RegInit(false.B)
-  val waitingVector    = RegInit(false.B)
-  val completionValid  = RegInit(false.B)
-  val pc               = Reg(UInt(32.W))
-  val end              = Reg(UInt(32.W))
-  val instruction      = Reg(UInt(32.W))
-  val cycles           = RegInit(0.U(64.W))
-  val completionFault  = Reg(Bool())
-  val completionCause  = Reg(UInt(32.W))
-  val completionValue  = Reg(UInt(32.W))
-  val activeIBuf       = RegInit(false.B)
-  val activeDBuf       = RegInit(false.B)
+  val state             = RegInit(idle)
+  val command           = Reg(new KernelRequest(b))
+  val channels          = RegInit(false.B)
+  val validImage        = RegInit(VecInit(Seq.fill(2)(false.B)))
+  val imageEntry        = Reg(Vec(2, UInt(32.W)))
+  val imageBytes        = Reg(Vec(2, UInt(32.W)))
+  val imageConstants    = Reg(Vec(2, UInt(32.W)))
+  val buffer            = Reg(Bool())
+  val descriptor        = Reg(Vec(12, UInt(32.W)))
+  val word              = Reg(UInt(4.W))
+  val terminalSeen      = RegInit(false.B)
+  val terminalFailed    = RegInit(false.B)
+  val terminalCancelled = RegInit(false.B)
+  val result            = RegInit(0.U.asTypeOf(new KernelCompletion))
 
-  val fetch = running && !fetchPending && !instructionValid && !waitingVector && pc < end
+  io.cmdReq.ready                                  := state === idle
+  io.cmdResp.valid                                 := state === completed && (command.cmd.funct7 =/= 12.U || result.fault || terminalSeen)
+  io.cmdResp.bits.rob_id                           := command.rob_id
+  io.cmdResp.bits.write_bank                       := Mux(command.cmd.funct7 === 15.U && !result.fault, descriptor(3)(31, 16), 0.U)
+  io.result                                        := result
+  io.status.idle                                   := state === idle
+  io.status.running                                := state =/= idle
+  when(state =/= idle && io.channelReady)(channels := true.B)
 
-  for (buffer <- 0 until 2) {
-    iBuf(buffer).io.upload.valid  := io.program.valid && io.program.bits.buffer === buffer.U
-    iBuf(buffer).io.upload.bits   := io.program.bits
-    iBuf(buffer).io.uploadEnabled := !io.launch.valid && (!running || activeIBuf =/= buffer.U)
-    iBuf(buffer).io.fetchEnabled  := fetch && activeIBuf === buffer.U
-    iBuf(buffer).io.fetchAddress  := pc
-
-    dBuf(buffer).io.load.valid  := io.data.valid && io.data.bits.buffer === buffer.U
-    dBuf(buffer).io.load.bits   := io.data.bits
-    dBuf(buffer).io.loadEnabled := !io.launch.valid && (!running || activeDBuf =/= buffer.U)
-  }
-  io.program.ready := Mux(io.program.bits.buffer, iBuf(1).io.upload.ready, iBuf(0).io.upload.ready)
-  io.data.ready := Mux(io.data.bits.buffer, dBuf(1).io.load.ready, dBuf(0).io.load.ready)
-
-  val fetchedInstruction = Mux(activeIBuf, iBuf(1).io.instruction, iBuf(0).io.instruction)
-  val fetchedLoaded      = Mux(activeIBuf, iBuf(1).io.loaded, iBuf(0).io.loaded)
-
-  scalarRegisters.io.xReadAddress1    := instruction(19, 15)
-  scalarRegisters.io.xReadAddress2    := instruction(24, 20)
-  scalarRegisters.io.fReadAddress1    := 0.U
-  scalarRegisters.io.fReadAddress2    := 0.U
-  scalarRegisters.io.fReadAddress3    := 0.U
-  scalarRegisters.io.initialize.valid := io.launch.fire
-  scalarRegisters.io.initialize.bits  := io.launch.bits.args
-  scalarRegisters.io.xWrite.valid     := false.B
-  scalarRegisters.io.xWrite.bits      := DontCare
-  scalarRegisters.io.fWrite.valid     := false.B
-  scalarRegisters.io.fWrite.bits      := DontCare
-
-  scalarExecution.io.instruction := instruction
-  scalarExecution.io.pc          := pc
-  scalarExecution.io.source1     := scalarRegisters.io.xReadData1
-  scalarExecution.io.source2     := scalarRegisters.io.xReadData2
-
-  val vectorInstruction = instruction(6, 0) === "h57".U ||
-    instruction(6, 0) === "h07".U && instruction(14, 12) === 6.U ||
-    instruction(6, 0) === "h27".U && instruction(14, 12) === 6.U
-
-  vectorCore.io.issue.valid            := instructionValid && vectorInstruction
-  vectorCore.io.issue.bits.instruction := instruction
-  vectorCore.io.issue.bits.scalar1     := scalarRegisters.io.xReadData1
-  vectorCore.io.issue.bits.scalar2     := scalarRegisters.io.xReadData2
-  vectorCore.io.result.ready           := waitingVector
-
-  for (port <- 0 until p.memoryPorts) {
-    dBuf(0).io.request(port).valid          := vectorCore.io.memoryRequest(port).valid && !activeDBuf
-    dBuf(1).io.request(port).valid          := vectorCore.io.memoryRequest(port).valid && activeDBuf
-    dBuf(0).io.request(port).bits           := vectorCore.io.memoryRequest(port).bits
-    dBuf(1).io.request(port).bits           := vectorCore.io.memoryRequest(port).bits
-    vectorCore.io.memoryRequest(port).ready :=
-      Mux(activeDBuf, dBuf(1).io.request(port).ready, dBuf(0).io.request(port).ready)
-
-    vectorCore.io.memoryResponse(port).valid :=
-      Mux(activeDBuf, dBuf(1).io.response(port).valid, dBuf(0).io.response(port).valid)
-    vectorCore.io.memoryResponse(port).bits  :=
-      Mux(activeDBuf, dBuf(1).io.response(port).bits, dBuf(0).io.response(port).bits)
-    dBuf(0).io.response(port).ready          := vectorCore.io.memoryResponse(port).ready && !activeDBuf
-    dBuf(1).io.response(port).ready          := vectorCore.io.memoryResponse(port).ready && activeDBuf
-  }
-
-  io.launch.ready          := !running && !completionValid
-  io.done.valid            := completionValid
-  io.done.bits.fault       := completionFault
-  io.done.bits.pc          := pc
-  io.done.bits.instruction := instruction
-  io.done.bits.cycles      := cycles
-  io.done.bits.cause       := completionCause
-  io.done.bits.tval        := completionValue
-  io.busy                  := running || completionValid
-
-  when(io.done.fire) {
-    completionValid := false.B
-  }
-
-  when(io.launch.fire) {
-    pc               := io.launch.bits.entry
-    end              := io.launch.bits.end
-    cycles           := 0.U
-    instruction      := 0.U
-    fetchPending     := false.B
-    instructionValid := false.B
-    waitingVector    := false.B
-    activeIBuf       := io.launch.bits.iBuffer
-    activeDBuf       := io.launch.bits.dBuffer
-    when(io.launch.bits.entry(1, 0).orR || io.launch.bits.end(1, 0).orR ||
-      io.launch.bits.entry >= io.launch.bits.end || io.launch.bits.end > (p.iBufWords * 4).U) {
-      running         := false.B
-      completionValid := true.B
-      completionFault := true.B
-      completionCause := 1.U
-      completionValue := io.launch.bits.entry
-    }.otherwise {
-      running := true.B
-    }
-  }
-
-  when(running) {
-    cycles := cycles + 1.U
-  }
-
-  when(fetch) {
-    when(fetchedLoaded) {
-      fetchPending := true.B
-    }.otherwise {
-      running         := false.B
-      completionValid := true.B
-      completionFault := true.B
-      completionCause := 1.U
-      completionValue := pc
-    }
-  }
-
-  when(fetchPending) {
-    instruction      := fetchedInstruction
-    instructionValid := true.B
-    fetchPending     := false.B
-  }
-
-  when(instructionValid && vectorInstruction && vectorCore.io.issue.fire) {
-    instructionValid := false.B
-    waitingVector    := true.B
-  }
-
-  when(instructionValid && !vectorInstruction) {
-    when(scalarExecution.io.legal && !scalarExecution.io.nextPc(1, 0).orR) {
-      when(scalarExecution.io.write) {
-        scalarRegisters.io.xWrite.valid        := true.B
-        scalarRegisters.io.xWrite.bits.address := scalarExecution.io.destination
-        scalarRegisters.io.xWrite.bits.data    := scalarExecution.io.result
+  loader.io.start.valid       := io.cmdReq.fire && io.cmdReq.bits.cmd.funct7 === 12.U && !io.cmdReq.bits.cmd.rs1(63, 33).orR
+  loader.io.start.bits.buffer := io.cmdReq.bits.cmd.rs1(32)
+  loader.io.start.bits.bytes  := io.cmdReq.bits.cmd.rs1(31, 0)
+  loader.io.image <> io.image
+  io.imageTerminal.ready      := state =/= idle && command.cmd.funct7 === 12.U && !terminalSeen
+  val terminalError = io.imageTerminal.fire && io.imageTerminal.bits.error =/= 0.U
+  loader.io.abort                  := terminalError
+  when(io.imageTerminal.fire) {
+    terminalSeen      := true.B
+    terminalFailed    := io.imageTerminal.bits.error =/= 0.U
+    terminalCancelled := io.imageTerminal.bits.error === 10.U
+    when(terminalError) {
+      validImage(buffer) := false.B
+      when(!result.fault) {
+        result.fault := true.B
+        result.cause := 5.U
+        result.tval  := io.imageTerminal.bits.address(31, 0)
       }
-      pc               := scalarExecution.io.nextPc
-      instructionValid := false.B
-    }.otherwise {
-      running          := false.B
-      instructionValid := false.B
-      completionValid  := true.B
-      completionFault  := true.B
-      completionCause  := Mux(scalarExecution.io.legal, 0.U, 2.U)
-      completionValue  := Mux(scalarExecution.io.legal, scalarExecution.io.nextPc, instruction)
     }
   }
+  loader.io.done.ready             := state === loading
+  execution.io.program <> loader.io.program
+  execution.io.launch.valid        := state === launch
+  execution.io.launch.bits.iBuffer := buffer
+  execution.io.launch.bits.entry   := descriptor(0)
+  execution.io.launch.bits.end     := descriptor(1)
+  execution.io.launch.bits.stack   := descriptor(2)
+  for (i <- 0 until 8) (execution.io.launch.bits.args(i) := descriptor(i + 3))
+  execution.io.done.ready := state === executing
 
-  when(vectorCore.io.result.fire) {
-    waitingVector := false.B
-    when(vectorCore.io.result.bits.fault) {
-      running         := false.B
-      completionValid := true.B
-      completionFault := true.B
-      completionCause := vectorCore.io.result.bits.cause
-      completionValue := vectorCore.io.result.bits.tval
-    }.otherwise {
-      when(vectorCore.io.result.bits.scalarWrite) {
-        scalarRegisters.io.xWrite.valid        := true.B
-        scalarRegisters.io.xWrite.bits.address := instruction(11, 7)
-        scalarRegisters.io.xWrite.bits.data    := vectorCore.io.result.bits.scalarData
+  local.io.buffer     := buffer
+  local.io.loading    := state === loading
+  local.io.constBytes := imageConstants(buffer)
+  for (i <- 0 until p.memoryPorts) {
+    io.bankRead(i) <> ports(i).io.read
+    io.bankWrite(i) <> ports(i).io.write
+    ports(i).io.robId  := command.rob_id
+    ports(i).io.ballId := command.cmd.bid
+    val internal = execution.io.memoryRequest(i).bits.address(31)
+    ports(i).io.request.valid            := state === executing && channels && !internal && execution.io.memoryRequest(i).valid
+    ports(i).io.request.bits             := execution.io.memoryRequest(i).bits
+    local.io.request(i).valid            := state === executing && internal && execution.io.memoryRequest(i).valid
+    local.io.request(i).bits             := execution.io.memoryRequest(i).bits
+    execution.io.memoryRequest(i).ready  := state === executing && Mux(
+      internal,
+      local.io.request(i).ready,
+      channels && ports(i).io.request.ready
+    )
+    execution.io.memoryResponse(i).valid := state === executing && (local.io.response(i).valid || ports(
+      i
+    ).io.response.valid)
+    execution.io.memoryResponse(i).bits  := Mux(
+      local.io.response(i).valid,
+      local.io.response(i).bits,
+      ports(i).io.response.bits
+    )
+    ports(i).io.response.ready           := state === executing && execution.io.memoryResponse(i).ready
+    local.io.response(i).ready           := state === executing && execution.io.memoryResponse(i).ready
+  }
+  loader.io.memoryRequest.ready := state === loading && local.io.request(0).ready
+  loader.io.memoryResponse.valid                            := state === loading && local.io.response(0).valid
+  loader.io.memoryResponse.bits                             := local.io.response(0).bits
+  when(state === loading) {
+    local.io.request(0).valid  := loader.io.memoryRequest.valid
+    local.io.request(0).bits   := loader.io.memoryRequest.bits
+    local.io.response(0).ready := loader.io.memoryResponse.ready
+  }
+  when(state === descriptorSend) {
+    ports(0).io.request.valid        := channels
+    ports(0).io.request.bits.address := command.cmd.rs1(31, 0) + word * 4.U
+    ports(0).io.request.bits.write   := false.B
+    ports(0).io.request.bits.data    := 0.U
+    ports(0).io.request.bits.mask    := 15.U
+    ports(0).io.request.bits.size    := 2.U
+  }
+  when(state === descriptorWait)(ports(0).io.response.ready := true.B)
+
+  when(io.cmdReq.fire) {
+    command           := io.cmdReq.bits
+    channels          := io.channelReady
+    result            := 0.U.asTypeOf(new KernelCompletion)
+    terminalSeen      := false.B
+    terminalFailed    := false.B
+    terminalCancelled := false.B
+    switch(io.cmdReq.bits.cmd.funct7) {
+      is(12.U) {
+        buffer                                 := io.cmdReq.bits.cmd.rs1(32)
+        validImage(io.cmdReq.bits.cmd.rs1(32)) := false.B
+        state                                  := loading
+        when(io.cmdReq.bits.cmd.rs1(63, 33).orR) {
+          result.fault := true.B
+          result.cause := 2.U
+          result.tval  := io.cmdReq.bits.cmd.rs1(31, 0)
+          state        := completed
+        }
       }
-      pc := pc + 4.U
+      is(15.U) {
+        buffer := io.cmdReq.bits.cmd.rs2(0)
+        word   := 0.U
+        state  := descriptorSend
+        when(!validImage(io.cmdReq.bits.cmd.rs2(0))) {
+          result.fault := true.B
+          result.cause := 1.U
+          state        := completed
+        }.elsewhen(io.cmdReq.bits.cmd.rs1(63, 32).orR || io.cmdReq.bits.cmd.rs2(63, 1).orR ||
+          (io.cmdReq.bits.cmd.rs1(15, 0) +& 48.U) > (b.memDomain.bankEntries * (b.memDomain.bankWidth / 8)).U) {
+          result.fault := true.B
+          result.cause := 5.U
+          result.tval  := io.cmdReq.bits.cmd.rs1(31, 0)
+          state        := completed
+        }
+      }
+    }
+    when(io.cmdReq.bits.cmd.funct7 =/= 12.U && io.cmdReq.bits.cmd.funct7 =/= 15.U) {
+      result.fault := true.B
+      result.cause := 2.U
+      result.tval  := io.cmdReq.bits.cmd.funct7
+      state        := completed
     }
   }
-
-  when(running && pc === end && !fetchPending && !instructionValid && !waitingVector) {
-    running         := false.B
-    completionValid := true.B
-    completionFault := false.B
-    completionCause := 0.U
-    completionValue := 0.U
+  when(loader.io.done.fire) {
+    val nativeFault = loader.io.done.bits.fault && loader.io.done.bits.cause =/= 5.U
+    when((!terminalFailed && !terminalError) ||
+      (nativeFault && (terminalCancelled || (io.imageTerminal.fire && io.imageTerminal.bits.error === 10.U)))) {
+      result.fault := loader.io.done.bits.fault
+      result.cause := loader.io.done.bits.cause
+      result.tval  := loader.io.done.bits.tval
+    }
+    imageEntry(buffer) := loader.io.done.bits.entry
+    imageBytes(buffer)     := loader.io.done.bits.textBytes
+    imageConstants(buffer) := loader.io.done.bits.constBytes
+    state                  := completed
   }
-}
-
-object EmitKernelEngine extends App {
-  _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new KernelEngine(),
-    firtoolOpts = args.drop(1) ++ Seq("--split-verilog", "-o=build"),
-    args = Array("--target-dir", "build")
-  )
+  when(state === descriptorSend && ports(0).io.request.fire)(state := descriptorWait)
+  when(state === descriptorWait && ports(0).io.response.fire) {
+    when(ports(0).io.response.bits.error) {
+      result.fault := true.B
+      result.cause := 5.U
+      result.tval  := command.cmd.rs1(31, 0) + word * 4.U
+      state        := completed
+    }.otherwise {
+      descriptor(word) := ports(0).io.response.bits.data(31, 0)
+      word             := word + 1.U
+      state            := Mux(word === 11.U, launch, descriptorSend)
+    }
+  }
+  when(state === launch) {
+    when(descriptor(0) =/= imageEntry(buffer) || descriptor(1) =/= imageBytes(buffer) || descriptor(
+      11
+    ) =/= 0.U || descriptor(2) =/= "h80002000".U) {
+      execution.io.launch.valid := false.B
+      result.fault              := true.B
+      result.cause              := 1.U
+      result.tval               := descriptor(0)
+      state                     := completed
+    }.elsewhen(execution.io.launch.fire)(state := executing)
+  }
+  when(execution.io.done.fire) {
+    result := execution.io.done.bits
+    state  := completed
+  }
+  when(io.cmdResp.fire) {
+    when(command.cmd.funct7 === 12.U && !result.fault && terminalSeen && !terminalFailed) {
+      validImage(buffer) := true.B
+    }
+    state := idle
+  }
 }

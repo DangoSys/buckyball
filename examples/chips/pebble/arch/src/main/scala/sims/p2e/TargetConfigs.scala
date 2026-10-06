@@ -1,16 +1,4 @@
 package sims.p2e
 
-import org.chipsalliance.cde.config.Config
-
-class P2EPebbleConfig
-    extends Config(
-      new P2EBaseConfig ++
-        new examples.pebble.BuckyballPebbleConfig
-    )
-
-class P2EPebbleLinuxConfig
-    extends Config(
-      new WithLinuxBootROM ++
-        new P2EBaseConfig ++
-        new examples.pebble.BuckyballPebbleConfig
-    )
+/** Pebble on the P2E board: one compute core with private banks over the DDR4 macro. */
+class PebbleP2ETarget extends P2ETarget("../examples/chips/pebble/configs/generated/chip.pb")

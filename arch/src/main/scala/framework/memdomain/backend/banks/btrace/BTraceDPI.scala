@@ -3,19 +3,37 @@ package framework.memdomain.backend.banks.btrace
 import chisel3._
 import chisel3.util._
 import framework.dpi.DpiGuard
+import framework.top.GlobalConfig
+
+class BTraceRecord extends Bundle {
+  val instId  = UInt(64.W)
+  val hartId  = UInt(64.W)
+  val w0Vbank = UInt(32.W)
+  val w0Hash  = UInt(32.W)
+}
+
+class PhysicalBankHash(val b: GlobalConfig) extends Bundle {
+  val valid      = Bool()
+  val hartId     = UInt(b.tile.xLen.W)
+  val vbankId    = UInt(b.memDomain.vbankIdWidth.W)
+  val pbankId    = UInt(32.W)
+  val groupId    = UInt(32.W)
+  val statusHash = UInt(32.W)
+}
 
 class BTraceDPI extends BlackBox with HasBlackBoxInline {
 
   val io = IO(new Bundle {
-    val clock    = Input(Clock())
-    val reset    = Input(Bool())
-    val instId   = Input(UInt(64.W))
-    val hartId   = Input(UInt(64.W))
-    val w0Vbank  = Input(UInt(32.W))
-    val w0Hash   = Input(UInt(32.W))
-    val fire     = Input(Bool())
-    val produced = Input(UInt(64.W))
-    val idle     = Input(Bool())
+    val clock       = Input(Clock())
+    val reset       = Input(Bool())
+    val instId      = Input(UInt(64.W))
+    val hartId      = Input(UInt(64.W))
+    val ownerHartId = Input(UInt(64.W))
+    val w0Vbank     = Input(UInt(32.W))
+    val w0Hash      = Input(UInt(32.W))
+    val fire        = Input(Bool())
+    val produced    = Input(UInt(64.W))
+    val idle        = Input(Bool())
   })
 
   setInline(
@@ -26,6 +44,7 @@ class BTraceDPI extends BlackBox with HasBlackBoxInline {
       |  input reset,
       |  input [63:0] instId,
       |  input [63:0] hartId,
+      |  input [63:0] ownerHartId,
       |  input [31:0] w0Vbank,
       |  input [31:0] w0Hash,
       |  input fire,
@@ -53,12 +72,14 @@ class BTraceDPI extends BlackBox with HasBlackBoxInline {
         |    input int unsigned inst_id_hi,
         |    input int unsigned hart_id_lo,
         |    input int unsigned hart_id_hi,
+        |    input int unsigned owner_hart_id_lo,
+        |    input int unsigned owner_hart_id_hi,
         |    input int unsigned w0_vbank,
         |    input int unsigned w0_hash
         |  );
         |  always @(posedge clock) begin
         |    if (!reset && fire) begin
-        |      dpi_btrace(instId[31:0], instId[63:32], hartId[31:0], hartId[63:32], w0Vbank, w0Hash);
+        |      dpi_btrace(instId[31:0], instId[63:32], hartId[31:0], hartId[63:32], ownerHartId[31:0], ownerHartId[63:32], w0Vbank, w0Hash);
         |    end
         |  end
         |""".stripMargin

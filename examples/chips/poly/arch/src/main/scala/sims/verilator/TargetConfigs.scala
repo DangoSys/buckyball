@@ -1,11 +1,6 @@
 package sims.verilator
 
-import org.chipsalliance.cde.config.Config
+import sims.soc.SystemTarget
 
-class BuckyballPolyVerilatorConfig
-    extends Config(
-      new freechips.rocketchip.subsystem.WithoutTLMonitors ++
-        new BBSimConfig(maxHarts = 20) ++
-        new WithCustomBootROM ++
-        new examples.poly.BuckyballPolyConfig
-    )
+/** Poly on the explicit System: a CPU main tile and eight homogeneous compute tiles. */
+class PolyVerilatorTarget extends SystemTarget("../examples/chips/poly/configs/generated/chip.pb")

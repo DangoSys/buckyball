@@ -31,6 +31,9 @@ trait GemminiExCtrlFsm { this: GemminiExCtrl =>
       is(sStore) {
         handleStoreState()
       }
+      is(sReadAccum) {
+        handleReadAccumState()
+      }
       is(sCommit) {
         handleCommitState()
       }

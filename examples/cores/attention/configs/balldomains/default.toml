@@ -1,21 +1,23 @@
 # Attention Ball Domain Configuration
 
-ballNum = 4
+ballNum = 5
 
 ballIdMappings = [
-  { ballId = 0, ballName = "SMatMulBall", ballClass = "examples.balls.smatmul.SMatMulBall", config = "../../../../balls/smatmul/configs/default.toml", inBW = 2, outBW = 1 },
+  { ballId = 0, ballName = "MxmmBall", ballClass = "examples.balls.mxmm.MxmmBall", config = "../../../../balls/mxmm/configs/default.toml", inBW = 2, outBW = 1 },
   { ballId = 1, ballName = "ToInt8Ball", ballClass = "examples.balls.toint8.ToInt8Ball", config = "../../../../balls/toint8/configs/default.toml", inBW = 1, outBW = 1 },
   { ballId = 2, ballName = "Int2FpBall", ballClass = "examples.balls.int2fp.Int2FpBall", config = "../../../../balls/int2fp/configs/default.toml", inBW = 2, outBW = 1 },
-  { ballId = 3, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 }
+  { ballId = 3, ballName = "TransposeBall", ballClass = "examples.balls.transpose.TransposeBall", config = "../../../../balls/transpose/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "MxquantBall", ballClass = "examples.balls.mxquant.MxquantBall", config = "../../../../balls/mxquant/configs/default.toml", inBW = 1, outBW = 1 }
 ]
 
 ballISA = [
-  { mnemonic = "SMATMUL_F32", funct7 = 69, bid = 0 },
-  { mnemonic = "SMATMUL_MXFP8", funct7 = 66, bid = 0 },
-  { mnemonic = "SMATMUL_OS", funct7 = 65, bid = 0 },
-  { mnemonic = "SMATMUL_BIAS", funct7 = 17, bid = 0 },
+  { mnemonic = "MXMM_MXFP8", funct7 = 71, bid = 0 },
+  { mnemonic = "MXMM_MXFP8_WINDOW", funct7 = 75, bid = 0 },
+  { mnemonic = "MXMM_FMA32", funct7 = 72, bid = 0 },
+  { mnemonic = "MXMM_F32", funct7 = 73, bid = 0 },
   { mnemonic = "QUANT_F32_TO_I8", funct7 = 51, bid = 1 },
   { mnemonic = "QUANT_I32_TO_I8", funct7 = 67, bid = 1 },
   { mnemonic = "INT32_TO_FP32", funct7 = 68, bid = 2 },
-  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 3 }
+  { mnemonic = "TRANSPOSE", funct7 = 49, bid = 3 },
+  { mnemonic = "MXQUANT", funct7 = 54, bid = 4 }
 ]

@@ -1,4 +1,5 @@
 add_buckyball_ctests(
+  gemmini_accumulated_16x16_test.c
   gemmini_os_cisc_atranspose_test.c
   gemmini_os_cisc_basic_test.c
   gemmini_os_cisc_btranspose_test.c

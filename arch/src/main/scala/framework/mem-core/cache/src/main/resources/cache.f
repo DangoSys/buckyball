@@ -4,5 +4,5 @@
 @VERIFY@/uvm/src/ip/package.sv
 @RESOURCES@/interface.sv
 @RESOURCES@/package.sv
-@RTL@/Cache.sv
+-F @RTL@/Cache/filelist.f
 @RESOURCES@/cache_tb.sv

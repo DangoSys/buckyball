@@ -19,7 +19,7 @@ class BankHashMonitor(val b: GlobalConfig) extends Module {
   @public
   val io = IO(new Bundle {
     val bind       = Input(Bool())
-    val write      = Flipped(Valid(new BankHashWrite(b)))
+    val write      = Flipped(Decoupled(new BankHashWrite(b)))
     val statusHash = Output(UInt(32.W))
   })
 
@@ -38,38 +38,38 @@ class BankHashMonitor(val b: GlobalConfig) extends Module {
     Mux(row.orR, mixed, 0.U)
   }
 
-  val readData        = shadow.read(io.write.bits.addr, io.write.valid)
-  val writeValid      = RegNext(io.write.valid, false.B)
-  val writeBits       = RegEnable(io.write.bits, io.write.valid)
-  val writeGeneration = RegEnable(generation, io.write.valid)
-  val lastValid       = RegInit(false.B)
-  val lastAddr        = Reg(UInt(io.write.bits.addr.getWidth.W))
-  val lastData        = Reg(UInt(128.W))
-  val lastGeneration  = Reg(UInt(generation.getWidth.W))
-  val memoryOld       = Mux(validRows(writeBits.addr), readData, 0.U)
-  val bypass          = lastValid && lastGeneration === writeGeneration && lastAddr === writeBits.addr
-  val oldRow          = Mux(bypass, lastData, memoryOld)
-  val oldBytes        = oldRow.asTypeOf(Vec(16, UInt(8.W)))
-  val writeBytes      = writeBits.data.asTypeOf(Vec(16, UInt(8.W)))
-  val newBytes        = VecInit((0 until 16).map(i => Mux(writeBits.mask(i), writeBytes(i), oldBytes(i))))
-  val newRow          = newBytes.asUInt
-  val nextHash        = statusHash - rowHash(writeBits.addr, oldRow) + rowHash(writeBits.addr, newRow)
+  val writeValid      = RegInit(false.B)
+  val writeBits       = Reg(new BankHashWrite(b))
+  val writeGeneration = Reg(UInt(generation.getWidth.W))
   val commit          = writeValid && writeGeneration === generation && !io.bind
+  io.write.ready := !writeValid && !io.bind
+  val oldRow     = Wire(UInt(128.W))
+  val oldBytes   = oldRow.asTypeOf(Vec(16, UInt(8.W)))
+  val writeBytes = writeBits.data.asTypeOf(Vec(16, UInt(8.W)))
+  val newBytes   = VecInit((0 until 16).map(i => Mux(writeBits.mask(i), writeBytes(i), oldBytes(i))))
+  val newRow     = newBytes.asUInt
+  val nextHash   = statusHash - rowHash(writeBits.addr, oldRow) + rowHash(writeBits.addr, newRow)
+
+  val readData =
+    shadow.readWrite(Mux(commit, writeBits.addr, io.write.bits.addr), newRow, io.write.fire || commit, commit)
+  oldRow := Mux(validRows(writeBits.addr), readData, 0.U)
+
+  when(io.write.fire) {
+    writeValid      := true.B
+    writeBits       := io.write.bits
+    writeGeneration := generation
+  }
 
   io.statusHash := statusHash
 
   when(io.bind) {
     generation          := generation + 1.U
     statusHash          := 0.U
-    lastValid           := false.B
+    writeValid          := false.B
     validRows.foreach(_ := false.B)
   }.elsewhen(commit) {
-    shadow.write(writeBits.addr, newRow)
     validRows(writeBits.addr) := true.B
     statusHash                := nextHash
-    lastValid                 := true.B
-    lastAddr                  := writeBits.addr
-    lastData                  := newRow
-    lastGeneration            := writeGeneration
+    writeValid                := false.B
   }
 }

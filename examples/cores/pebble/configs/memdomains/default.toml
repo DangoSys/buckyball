@@ -3,7 +3,7 @@
 [bank]
 num = 24
 width = 128
-entries = 64
+entries = 512
 maskLen = 16
 channel = 13
 

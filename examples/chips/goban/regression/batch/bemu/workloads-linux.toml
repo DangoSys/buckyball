@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "fw_payload-v5-t5-goban-linux.elf",
+]

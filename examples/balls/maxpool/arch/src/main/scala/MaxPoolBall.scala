@@ -24,7 +24,8 @@ class MaxPoolBall(val b: GlobalConfig) extends Module with HasBlink with HasBall
   require(mapping.outBW == 1, "MaxPoolBall requires outBW=1")
   require((funct >> 4) == 3, "MAXPOOL must encode one read and one write")
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

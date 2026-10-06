@@ -9,6 +9,9 @@ class ScalarExecution extends Module {
 
   @public
   val io = IO(new Bundle {
+    val divRequest  = Flipped(Decoupled(new DivRemRequest(32)))
+    val divResponse = Decoupled(UInt(32.W))
+    val clear       = Input(Bool())
     val instruction = Input(UInt(32.W))
     val pc          = Input(UInt(32.W))
     val source1     = Input(UInt(32.W))
@@ -19,6 +22,11 @@ class ScalarExecution extends Module {
     val result      = Output(UInt(32.W))
     val nextPc      = Output(UInt(32.W))
   })
+
+  val divider: Instance[DivRem] = Instantiate(new DivRem(32))
+  divider.io.request <> io.divRequest
+  io.divResponse <> divider.io.response
+  divider.io.clear := io.clear
 
   val opcode = io.instruction(6, 0)
   val funct3 = io.instruction(14, 12)
@@ -78,7 +86,7 @@ class ScalarExecution extends Module {
       ))
     }
     is("h33".U) {
-      io.legal  := funct7 === 0.U || funct7 === 32.U && (funct3 === 0.U || funct3 === 5.U)
+      io.legal  := funct7 === 0.U || funct7 === 1.U || funct7 === 32.U && (funct3 === 0.U || funct3 === 5.U)
       io.write  := io.legal
       io.result := MuxLookup(funct3, 0.U)(Seq(
         0.U -> Mux(funct7 === 32.U, io.source1 - io.source2, io.source1 + io.source2),
@@ -90,6 +98,9 @@ class ScalarExecution extends Module {
         6.U -> (io.source1 | io.source2),
         7.U -> (io.source1 & io.source2)
       ))
+    }
+    is("h0f".U) {
+      io.legal := funct3 === 0.U || funct3 === 1.U
     }
     is("h63".U) {
       io.legal := funct3 === 0.U || funct3 === 1.U || funct3 >= 4.U
@@ -115,5 +126,20 @@ class ScalarExecution extends Module {
       io.result := io.pc + 4.U
       io.nextPc := (io.source1 + immI) & "hfffffffe".U
     }
+  }
+  when(opcode === "h33".U && funct7 === 1.U) {
+    val signedProduct   = io.source1.asSInt * io.source2.asSInt
+    val unsignedProduct = io.source1 * io.source2
+    val mixedProduct    = io.source1.asSInt * Cat(0.U(1.W), io.source2).asSInt
+    io.result := MuxLookup(funct3, 0.U)(Seq(
+      0.U -> unsignedProduct(31, 0),
+      1.U -> signedProduct.asUInt(63, 32),
+      2.U -> mixedProduct.asUInt(63, 32),
+      3.U -> unsignedProduct(63, 32),
+      4.U -> 0.U,
+      5.U -> 0.U,
+      6.U -> 0.U,
+      7.U -> 0.U
+    ))
   }
 }

@@ -96,7 +96,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthA));
     Value rs2A =
         packRs2MemStride(rewriter, loc, aPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvinIntrOp>(loc, rs1A, rs2A);
 
@@ -104,7 +104,7 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthB));
     Value rs2B =
         packRs2MemStride(rewriter, loc, bPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvinIntrOp>(loc, rs1B, rs2B);
 
@@ -122,13 +122,13 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
         packRs2MemStride(rewriter, loc, packedPtr, cstI64(rewriter, loc, 1));
-    emitDmaCacheFlush(rewriter, loc);
+    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
 
     Value zero = cstI64(rewriter, loc, 0);
     rewriter.create<FenceIntrOp>(loc, zero, zero);
-    emitDmaCacheFence(rewriter, loc);
+    emitDmaFence(rewriter, loc);
 
     Value indexZero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value indexOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);
@@ -222,66 +222,6 @@ private:
   int64_t bankDepth;
 };
 
-struct MXFP8Lowering : public ConvertOpToLLVMPattern<MXFP8Op> {
-  MXFP8Lowering(LLVMTypeConverter &converter, bool, int64_t bankDepth)
-      : ConvertOpToLLVMPattern<MXFP8Op>(converter), bankDepth(bankDepth) {}
-
-  LogicalResult
-  matchAndRewrite(MXFP8Op op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override {
-    buckyball_target::requireBuckyballBall("SMatMulBall");
-    Location loc = op.getLoc();
-    auto config = op.getConfig().getDefiningOp<arith::ConstantOp>();
-    if (!config)
-      return op.emitError("smatmul config must be a constant");
-    auto configAttr = dyn_cast<IntegerAttr>(config.getValue());
-    if (!configAttr)
-      return op.emitError("smatmul config must be an integer constant");
-    uint64_t cfg = configAttr.getValue().getZExtValue();
-    uint64_t rows = cfg & 0xfff;
-    uint64_t cols = (cfg >> 12) & 0xfff;
-    uint64_t k = (cfg >> 24) & 0xfff;
-    if (rows == 0 || (rows != 1 && rows % 8) || cols != 16 || k == 0 ||
-        k % 16 || rows * 4 > static_cast<uint64_t>(bankDepth))
-      return op.emitError("SMatMul matrix shape or C footprint is invalid");
-    auto base = adaptor.getOutputBase().getDefiningOp<arith::ConstantOp>();
-    auto baseAttr =
-        base ? dyn_cast<IntegerAttr>(base.getValue()) : IntegerAttr();
-    if (!baseAttr || baseAttr.getInt() < 0 || baseAttr.getInt() > 63 ||
-        baseAttr.getInt() + rows * 4 > bankDepth)
-      return op.emitError(
-          "SMatMul outputBase must be constant and fit C in bank");
-    Value rs1 = packRs1BanksIter(
-        rewriter, loc, adaptor.getOp1BankId(), adaptor.getOp2BankId(),
-        adaptor.getResultBankId(), cstI64(rewriter, loc, k));
-    Value rs2 = cstI64(rewriter, loc, matrixCfg(rows, cols, false, false));
-    Value first = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(),
-                                                  adaptor.getFirst());
-    Value last = rewriter.create<arith::ExtUIOp>(loc, rewriter.getI64Type(),
-                                                 adaptor.getLast());
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, first, cstI64(rewriter, loc, 24)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, last, cstI64(rewriter, loc, 25)));
-    rs2 = rewriter.create<arith::OrIOp>(
-        loc, rs2,
-        rewriter.create<arith::ShLIOp>(loc, adaptor.getOutputBase(),
-                                       cstI64(rewriter, loc, 26)));
-    rewriter.replaceOpWithNewOp<CustomIntrOp>(
-        op, rs1, rs2,
-        rewriter.getI32IntegerAttr(
-            buckyball_target::getBuckyballFunct7("SMATMUL_MXFP8")));
-    return success();
-  }
-
-private:
-  int64_t bankDepth;
-};
-
-#include "FP32Lowering.inc"
-
 struct SMatMulBiasLowering : public ConvertOpToLLVMPattern<SMatMulBiasOp> {
   SMatMulBiasLowering(LLVMTypeConverter &converter, bool)
       : ConvertOpToLLVMPattern<SMatMulBiasOp>(converter) {}
@@ -318,15 +258,12 @@ void populateSMatMulBallLegalizeForLLVMExportPatterns(
     int64_t bankDepth) {
   patterns.add<SMatMulMatmulLowering>(converter, stable);
   patterns.add<SMatMulLowering>(converter, stable, bankDepth);
-  patterns.add<MXFP8Lowering>(converter, stable, bankDepth);
-  patterns.add<FP32Lowering>(converter, stable, bankDepth);
   patterns.add<SMatMulBiasLowering>(converter, stable);
 }
 
 void configureSMatMulBallLegalizeForExportTarget(LLVMConversionTarget &target,
                                                  bool /*stable*/) {
   target.addIllegalOp<SMatMulMatmulOp>();
-  target.addIllegalOp<FP32Op, BankFP32Op>();
   target.addIllegalOp<SMatMulOp, BankSMatMulOp, SMatMulBiasOp,
                       BankSMatMulBiasOp>();
 }

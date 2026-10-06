@@ -4,8 +4,14 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.frontend.boot.BootRom
-import framework.frontend.decoder.{GlobalDecoder, PostGDCmd}
-import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, GlobalScheduler}
+import framework.frontend.decoder.GlobalDecoder
+import framework.frontend.globalrs.{
+  GlobalSchedComplete,
+  GlobalSchedIssue,
+  GlobalScheduler,
+  KernelWriteBank,
+  RobAllocation
+}
 import framework.top.GlobalConfig
 import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.balldomain.blink.SubRobRow
@@ -23,7 +29,8 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   @public
   val io = IO(new Bundle {
-    val hartid = Input(UInt(b.tile.xLen.W))
+    val hartid                = Input(UInt(b.tile.xLen.W))
+    val sharedBankOwnerHartId = Input(UInt(b.tile.xLen.W))
 
     // RoCC command input
     val cmd = Flipped(Decoupled(new Bundle {
@@ -31,17 +38,18 @@ class Frontend(val b: GlobalConfig) extends Module {
     }))
 
     // Issue to domains
-    val ball_issue_o    = Decoupled(new GlobalSchedIssue(b))
-    val mem_issue_o     = Decoupled(new GlobalSchedIssue(b))
-    val gp_issue_o      = Decoupled(new GlobalSchedIssue(b))
+    val ball_issue_o      = Decoupled(new GlobalSchedIssue(b))
+    val mem_issue_o       = Decoupled(new GlobalSchedIssue(b))
     // Complete from domains
-    val ball_complete_i = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val mem_complete_i  = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val gp_complete_i   = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val ball_complete_i   = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val mem_complete_i    = Flipped(Decoupled(new GlobalSchedComplete(b)))
+    val kernel_write_bank = Flipped(Valid(new KernelWriteBank(b)))
 
     // Ball -> SubROB request passthrough
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
     val inst_ids          = Output(Vec(b.frontend.rob_entries, UInt(64.W)))
+    val allocation        = Valid(new RobAllocation(b))
+    val retired           = Output(UInt(b.frontend.rob_entries.W))
 
     val bank_hashes =
       if (b.sim.diffTest) {
@@ -53,6 +61,7 @@ class Frontend(val b: GlobalConfig) extends Module {
     // RoCC response
     val resp = Decoupled(new RoCCResponseBB(b.tile.xLen))
     val busy = Output(Bool())
+    val idle = Output(Bool())
     // Propagates the Global ROB retirement pulse to the host bridge.
 
     // Barrier interface — passthrough to GlobalRS
@@ -75,16 +84,19 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   scheduler.io.decode_cmd_i <> gDecoder.io.id_o
   scheduler.io.hart_id               := io.hartid
+  scheduler.io.sharedBankOwnerHartId := io.sharedBankOwnerHartId
   scheduler.io.bank_hashes.foreach(_ := io.bank_hashes.get)
 
   io.ball_issue_o <> scheduler.io.ball_issue_o
   io.mem_issue_o <> scheduler.io.mem_issue_o
-  io.gp_issue_o <> scheduler.io.gp_issue_o
-  io.inst_ids := scheduler.io.inst_ids
+  io.inst_ids   := scheduler.io.inst_ids
+  io.allocation := scheduler.io.allocation
+  io.retired    := scheduler.io.retired
+  io.idle       := !boot.io.active && scheduler.io.idle && !gDecoder.io.id_o.valid
 
   scheduler.io.ball_complete_i <> io.ball_complete_i
   scheduler.io.mem_complete_i <> io.mem_complete_i
-  scheduler.io.gp_complete_i <> io.gp_complete_i
+  scheduler.io.kernel_write_bank <> io.kernel_write_bank
 
   // Wire SubROB request from BallDomain through to scheduler
   for (i <- 0 until b.ballDomain.ballNum) {

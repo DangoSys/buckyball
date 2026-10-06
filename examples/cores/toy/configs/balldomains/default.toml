@@ -1,12 +1,14 @@
 # Toy: virtual single-core. Mounts leftover balls not used by pebble/poly/goban.
 
-ballNum = 4
+ballNum = 6
 
 ballIdMappings = [
   { ballId = 0, ballName = "GemminiBall", ballClass = "examples.balls.gemmini.GemminiBall", config = "../../../../balls/gemmini/configs/default.toml", inBW = 2, outBW = 4 },
   { ballId = 1, ballName = "TraceBall", ballClass = "examples.balls.trace.TraceBall", config = "../../../../balls/trace/configs/default.toml", inBW = 1, outBW = 1 },
   { ballId = 2, ballName = "Mxfp2IntBall", ballClass = "examples.balls.mxfp2int.Mxfp2IntBall", config = "../../../../balls/mxfp2int/configs/default.toml", inBW = 1, outBW = 1, mmioReadBW = 1 },
   { ballId = 3, ballName = "ReluBall", ballClass = "examples.balls.relu.ReluBall", config = "../../../../balls/relu/configs/default.toml", inBW = 1, outBW = 1 },
+  { ballId = 4, ballName = "MxmmBall", ballClass = "examples.balls.mxmm.MxmmBall", config = "../../../../balls/mxmm/configs/default.toml", inBW = 2, outBW = 1 },
+  { ballId = 5, ballName = "MxquantBall", ballClass = "examples.balls.mxquant.MxquantBall", config = "../../../../balls/mxquant/configs/default.toml", inBW = 1, outBW = 1 },
 ]
 
 ballISA = [
@@ -36,4 +38,9 @@ ballISA = [
   { mnemonic = "BDB_COUNTER", funct7 = 4, bid = 1 },
   { mnemonic = "MXFP2INT", funct7 = 55, bid = 2 },
   { mnemonic = "RELU", funct7 = 50, bid = 3 },
+  { mnemonic = "MXMM_MXFP8", funct7 = 71, bid = 4 },
+  { mnemonic = "MXMM_MXFP8_WINDOW", funct7 = 75, bid = 4 },
+  { mnemonic = "MXMM_FMA32", funct7 = 72, bid = 4 },
+  { mnemonic = "MXMM_F32", funct7 = 73, bid = 4 },
+  { mnemonic = "MXQUANT", funct7 = 54, bid = 5 },
 ]

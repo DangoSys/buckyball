@@ -6,11 +6,6 @@ import memcore.bus.chi._
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
 import memcore.memory.coherence.configs.CoherenceParams
 
-class DirectedSnoop(p: Params) extends Bundle {
-  val targetNode = UInt(p.nodeIdBits.W)
-  val flit       = new SnoopFlit(p)
-}
-
 class CoherenceIO(p: CoherenceParams) extends Bundle {
   val req         = Flipped(Decoupled(new RequestFlit(p.chi)))
   val rxRsp       = Flipped(Decoupled(new ResponseFlit(p.chi)))

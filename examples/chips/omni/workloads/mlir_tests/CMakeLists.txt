@@ -5,15 +5,19 @@ set(MODEL_DIR ${REPO}/stack/models/archs/buckyball/omni/qwen3-omni-30b-a3b-instr
 set(DATA ${CMAKE_CURRENT_BINARY_DIR}/moe)
 set(ATTENTION_DATA ${CMAKE_CURRENT_BINARY_DIR}/attention)
 set(PYTHON ${REPO}/result/bin/python3)
+set(MODEL_CONFIG ${REPO}/stack/models/models/qwen3-omni-30b-a3b-instruct/configs/model.toml)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${MODEL_CONFIG})
 execute_process(COMMAND ${PYTHON} -c
-  "from huggingface_hub import snapshot_download; from importlib import import_module; m=import_module('stack.models.models.qwen3-omni-30b-a3b-instruct.prepare'); print(snapshot_download(m.MODEL, revision=m.REVISION, local_files_only=True))"
+  "import sys, tomllib; from pathlib import Path; from huggingface_hub import snapshot_download; p=tomllib.loads(Path(sys.argv[1]).read_text())['parameters']; print(snapshot_download(p['checkpoint'], revision=p['revision'], local_files_only=True))"
+  ${MODEL_CONFIG}
   WORKING_DIRECTORY ${REPO} OUTPUT_VARIABLE CHECKPOINT OUTPUT_STRIP_TRAILING_WHITESPACE
   COMMAND_ERROR_IS_FATAL ANY)
 file(GLOB_RECURSE MODEL_SOURCES CONFIGURE_DEPENDS ${MODEL_DIR}/trace/*.py ${MODEL_DIR}/permute/*.py ${MODEL_DIR}/quant/*.py)
 list(APPEND MODEL_SOURCES ${BUDDY}/frontend/Python/ops/tosa.py
      ${COMPILER}/python_packages/buddy/compiler/ops/tosa.py)
-list(APPEND MODEL_SOURCES ${REPO}/examples/balls/smatmul/compiler/python/fp32.py)
+list(APPEND MODEL_SOURCES ${REPO}/examples/balls/mxmm/compiler/python/fp32.py)
 add_custom_command(OUTPUT ${DATA}/router.mlir ${DATA}/router-forward.mlir
+                          ${DATA}/expert_prefill.mlir ${DATA}/expert_prefill-forward.mlir
                           ${DATA}/expert.mlir ${DATA}/expert-forward.mlir ${DATA}/moe-parameters.h
   COMMAND ${PYTHON} -m stack.models.archs.buckyball.omni.qwen3-omni-30b-a3b-instruct.trace.export
           --checkpoint ${CHECKPOINT} --compiler-build ${COMPILER} --output ${DATA}
@@ -34,7 +38,8 @@ set(FORWARD_PASSES
   -canonicalize -cse -lower-tile-runtime)
 set(KERNEL_PASSES
   -eliminate-empty-tensors -convert-elementwise-to-linalg -convert-tensor-to-linalg
-  -one-shot-bufferize=bufferize-function-boundaries -convert-linalg-to-tile=quantized-only
+  -canonicalize -cse -one-shot-bufferize=bufferize-function-boundaries
+  -buffer-deallocation-pipeline=private-function-dynamic-ownership=false -convert-linalg-to-tile=quantized-only
   -convert-tile-to-buckyball -lower-buckyball-to-bank-ssa -assign-physical-banks
   -llvm-request-c-wrappers -lower-bank-ssa-to-intrinsics -expand-strided-metadata
   -convert-linalg-to-loops -lower-buckyball -convert-vector-to-scf=target-rank=0
@@ -42,12 +47,12 @@ set(KERNEL_PASSES
   -convert-vector-to-llvm -buffer-deallocation-simplification -bufferization-lower-deallocations
   -convert-math-to-llvm -convert-math-to-libm -convert-arith-to-llvm -convert-func-to-llvm
   -finalize-memref-to-llvm -reconcile-unrealized-casts -canonicalize -cse -lower-tile-runtime)
-foreach(STAGE router expert prefill decode)
+foreach(STAGE router expert expert_prefill prefill decode)
   set(TARGET attention)
-  if(STAGE STREQUAL "expert")
+  if(STAGE MATCHES "^expert")
     set(TARGET ffn)
   endif()
-  if(STAGE STREQUAL "router" OR STAGE STREQUAL "expert")
+  if(STAGE STREQUAL "router" OR STAGE MATCHES "^expert")
     set(STAGE_DATA ${DATA})
     set(GROUP MOE)
   else()
@@ -67,25 +72,36 @@ foreach(STAGE router expert prefill decode)
     add_custom_command(OUTPUT ${NAME}.o
       COMMAND bash -o pipefail -c "${LOWER} | '${COMPILER}/bin/buddy-translate' --buddy-to-llvmir | '${BUDDY}/llvm/build/bin/opt' -passes='default<O2>' | '${COMPILER}/bin/buddy-llc' -filetype=obj -mtriple=riscv64 -O2 -mattr=+xbuckyball,+m,+D -float-abi=hard -o '${NAME}.o'"
       DEPENDS ${STAGE_DATA}/${NAME}.mlir ${COMPILER}/bin/buddy-opt VERBATIM)
-    list(APPEND ${GROUP}_OBJECTS ${NAME}.o)
+    if(STAGE STREQUAL "expert_prefill")
+      list(APPEND BATCH_OBJECTS ${NAME}.o)
+    else()
+      list(APPEND ${GROUP}_OBJECTS ${NAME}.o)
+    endif()
   endforeach()
 endforeach()
 set(RUNTIME_PARAMS ${BUCKYBALL_ISA_DIR}/attention)
-add_subdirectory(${REPO}/stack/runtime runtime)
+# Ball tensor tests may already provide the shared runtime and RVV kernels.
+if(NOT TARGET runtime)
+  add_subdirectory(${REPO}/stack/runtime runtime)
+endif()
+if(NOT TARGET rvv_kernels)
+  add_subdirectory("${REPO}/bb-tests/workloads/lib/bbsw/kernels/rvv" rvv)
+endif()
+if(NOT TARGET mxfp8_pack)
+  add_subdirectory("${REPO}/bb-tests/workloads/lib/bbsw/kernels/mxfp8" mxfp8)
+endif()
 buckyball_mlirtest_name(NAME ffn chip-moe)
 add_executable(${NAME}-linux moe_main.cpp ${MOE_OBJECTS} ${DATA}/moe-parameters.h)
 target_include_directories(${NAME}-linux PRIVATE ${DATA} ${BUDDY}/frontend/Interfaces)
-target_link_libraries(${NAME}-linux PRIVATE smatmul_runtime runtime -static)
+target_link_libraries(${NAME}-linux PRIVATE runtime rvv_kernels mxfp8_pack rvv_quant_backend -static)
+add_dependencies(chip-mlirtests-build ${NAME}-linux)
+buckyball_mlirtest_name(NAME ffn chip-moe-batch)
+add_executable(${NAME}-linux moe_batch_main.cpp ${BATCH_OBJECTS} expert.o expert-forward.o ${DATA}/moe-parameters.h)
+target_include_directories(${NAME}-linux PRIVATE ${DATA} ${BUDDY}/frontend/Interfaces)
+target_link_libraries(${NAME}-linux PRIVATE runtime rvv_kernels mxfp8_pack rvv_quant_backend -static)
 add_dependencies(chip-mlirtests-build ${NAME}-linux)
 buckyball_mlirtest_name(NAME attention chip-attention)
 add_executable(${NAME}-linux attention_main.cpp ${ATTENTION_OBJECTS} ${ATTENTION_DATA}/attention-parameters.h)
 target_include_directories(${NAME}-linux PRIVATE ${ATTENTION_DATA} ${BUDDY}/frontend/Interfaces)
-target_link_libraries(${NAME}-linux PRIVATE smatmul_runtime runtime -static)
+target_link_libraries(${NAME}-linux PRIVATE runtime rvv_kernels mxfp8_pack rvv_quant_backend -static)
 add_dependencies(chip-mlirtests-build ${NAME}-linux)
-
-add_library(smatmul_runtime STATIC ${REPO}/examples/balls/smatmul/compiler/runtime/fp32.cpp)
-target_include_directories(smatmul_runtime PRIVATE ${RUNTIME_PARAMS}
-  ${REPO}/stack/runtime/include ${REPO}/bb-tests/workloads/lib
-  ${REPO}/examples/balls/smatmul/workloads
-  ${BUDDY}/llvm/mlir/include/mlir/ExecutionEngine)
-target_compile_options(smatmul_runtime PRIVATE -O2)

@@ -111,7 +111,6 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          # nix develop -c bbdev regression --eval-area-power '--chip ${{ matrix.chip }}'
           nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
 
       - name: DC power
@@ -263,25 +262,25 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_fpga_elf: true
-            run_fpga_pk: true
+            run_fpga_bare: true
+            run_fpga_linux: true
           - chip: pebble
-            run_fpga_elf: true
-            run_fpga_pk: true
+            run_fpga_bare: true
+            run_fpga_linux: true
           - chip: goban
-            run_fpga_elf: true
-            run_fpga_pk: false
+            run_fpga_bare: true
+            run_fpga_linux: false
           - chip: poly
-            run_fpga_elf: true
-            run_fpga_pk: false
+            run_fpga_bare: true
+            run_fpga_linux: false
           - chip: multi-rocket
-            run_fpga_elf: true
-            run_fpga_pk: false
+            run_fpga_bare: true
+            run_fpga_linux: false
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
       - name: Enter repo lock
-        if: matrix.run_fpga_elf || matrix.run_fpga_pk
+        if: matrix.run_fpga_bare || matrix.run_fpga_linux
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -293,7 +292,7 @@ jobs:
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
       - name: FPGA check
-        if: matrix.run_fpga_elf || matrix.run_fpga_pk
+        if: matrix.run_fpga_bare || matrix.run_fpga_linux
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -306,20 +305,20 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ matrix.run_fpga_elf }}" == "true" ]]; then
+          if [[ "${{ matrix.run_fpga_bare }}" == "true" ]]; then
             nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
             nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
             nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test elf-tests --diff"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test bare-tests --diff"
           fi
 
-          if [[ "${{ matrix.run_fpga_pk }}" == "true" ]]; then
+          if [[ "${{ matrix.run_fpga_linux }}" == "true" ]]; then
             nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test pk-tests --diff"
+            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test linux-tests --diff"
           fi
 
       - name: Exit repo lock
-        if: always() && (matrix.run_fpga_elf || matrix.run_fpga_pk)
+        if: always() && (matrix.run_fpga_bare || matrix.run_fpga_linux)
         shell: zsh {0}
         run: |
           set -euo pipefail

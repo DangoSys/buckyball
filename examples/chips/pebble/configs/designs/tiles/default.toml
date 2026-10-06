@@ -10,14 +10,6 @@ nPMPs = 8
 
 memBallChannelNum = 6
 
-[privateDCache]
-enable = false
-ways = 4
-capacityKB = 256
-writeBytes = 8
-portFactor = 2
-memCycles = 10
-
 [sharedMem]
 enable = false
 entries = 16384

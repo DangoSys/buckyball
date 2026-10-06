@@ -27,6 +27,7 @@ set(COREMARK_C_FLAGS
   -Wl,-T,${BBSIM_LD}
   -I${COREMARK_SRC_DIR}
   -I${COREMARK_PORT_DIR}
+  -I${BUCKYBALL_ISA_DIR}/${COREMARK_CORE}
   -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
   -ffunction-sections -fdata-sections
   -Wl,--gc-sections
@@ -51,6 +52,7 @@ function(add_coremark_target)
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
       ${BBSW_BAREMETAL_DIR}/test.c
+      ${BUCKYBALL_ISA_DIR}/${COREMARK_CORE}/params.h
     COMMENT "Building coremark: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

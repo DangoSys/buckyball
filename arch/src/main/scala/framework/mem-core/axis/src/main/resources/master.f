@@ -5,5 +5,5 @@
 @VERIFY@/uvm/src/protocol/axis/interface.sv
 @VERIFY@/uvm/src/protocol/axis/package.sv
 @RESOURCES@/package.sv
-@RTL@/Master.sv
+-F @RTL@/Master/filelist.f
 @RESOURCES@/master_tb.sv

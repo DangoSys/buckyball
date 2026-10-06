@@ -35,16 +35,28 @@ class MmioBank(val b: GlobalConfig) extends Module {
 
   val mem = SyncReadMem(numEntries, UInt(b.memDomain.mmioReadWidth.W))
 
+  val readPending = RegNext(io.read.req.fire, false.B)
+  val readHeld    = RegInit(false.B)
+  val readData    = Reg(UInt(b.memDomain.mmioReadWidth.W))
+
+  io.read.resp.valid := readPending || readHeld
   io.write.req.ready := true.B
-  io.read.req.ready  := !io.write.req.valid
+  io.read.req.ready  := !io.write.req.valid && (!io.read.resp.valid || io.read.resp.ready)
+  val ren = io.read.req.fire
+  val wen = io.write.req.fire
 
-  when(io.write.req.fire) {
-    mem.write(io.write.req.bits.addr, io.write.req.bits.data)
+  val rdata = mem.readWrite(
+    Mux(wen, io.write.req.bits.addr, io.read.req.bits.addr),
+    io.write.req.bits.data,
+    ren || wen,
+    wen
+  )
+
+  io.read.resp.bits.data := Mux(readHeld, readData, rdata)
+  when(readPending && !io.read.resp.ready) {
+    readHeld := true.B
+    readData := rdata
+  }.elsewhen(io.read.resp.fire) {
+    readHeld := false.B
   }
-
-  val ren   = io.read.req.fire
-  val rdata = mem.read(io.read.req.bits.addr, ren)
-
-  io.read.resp.valid     := RegNext(ren, false.B)
-  io.read.resp.bits.data := rdata
 }

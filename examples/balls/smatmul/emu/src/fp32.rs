@@ -24,41 +24,85 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let a = rs1_b0(xs1);
     let b = rs1_b1(xs1);
     let c = rs1_b2(xs1);
-    assert!(xs2 >> 32 == 0 && (rows == 1 || rows == 16) && cols == 16 && k > 0 && k % 4 == 0,
-            "f32 matmul: requires M=1/16, N=16, positive K multiple of four and zero reserved bits");
+    assert!(
+        xs2 >> 32 == 0 && (rows == 1 || rows == 16) && cols == 16 && k > 0 && k % 4 == 0,
+        "f32 matmul: requires M=1/16, N=16, positive K multiple of four and zero reserved bits"
+    );
     assert!(a != b && b != c && a != c, "f32 matmul: banks must differ");
     for bank in [a, b, c] {
-        assert!(ctx.config(bank).allocated && ctx.config(bank).cols == 1,
-                "f32 matmul: banks must be allocated with one column");
+        assert!(
+            ctx.config(bank).allocated && ctx.config(bank).cols == 1,
+            "f32 matmul: banks must be allocated with one column"
+        );
     }
     let stride = bank_row_bytes();
-    assert!(stride == 16 && rows * k * 4 <= bank_lines() * stride && cols * k * 4 <= bank_lines() * stride
-            && base * stride + rows * cols * 4 <= bank_lines() * stride, "f32 matmul: bank footprint exceeds depth");
+    assert!(
+        stride == 16
+            && rows * k * 4 <= bank_lines() * stride
+            && cols * k * 4 <= bank_lines() * stride
+            && base * stride + rows * cols * 4 <= bank_lines() * stride,
+        "f32 matmul: bank footprint exceeds depth"
+    );
     let pa = pbank(ctx, a);
     let pb = pbank(ctx, b);
-    let av: Vec<_> = ctx.banks[pa][..rows * k * 4].chunks_exact(4)
-        .map(|value| f32::from_le_bytes(value.try_into().unwrap())).collect();
-    let bv: Vec<_> = ctx.banks[pb][..cols * k * 4].chunks_exact(4)
-        .map(|value| f32::from_le_bytes(value.try_into().unwrap())).collect();
-    assert!(av.iter().chain(&bv).all(|value| value.is_finite()), "f32 matmul: non-finite operand");
+    let av = &ctx.banks[pa][..rows * k * 4];
+    let bv = &ctx.banks[pb][..cols * k * 4];
+    assert!(
+        av.chunks_exact(4)
+            .chain(bv.chunks_exact(4))
+            .all(|x| f32::from_le_bytes(x.try_into().unwrap()).is_finite()),
+        "f32 matmul: non-finite operand"
+    );
     let mut chain = CHAINS.with(|chains| {
         let mut chains = chains.borrow_mut();
         if first {
-            assert!(!chains.contains_key(&ctx.hart_id), "f32 matmul: first while chain is live");
-            Chain { rows, bank: c, base, values: vec![0f32; rows * cols] }
+            assert!(
+                !chains.contains_key(&ctx.hart_id),
+                "f32 matmul: first while chain is live"
+            );
+            Chain {
+                rows,
+                bank: c,
+                base,
+                values: vec![0f32; rows * cols],
+            }
         } else {
-            chains.remove(&ctx.hart_id).expect("f32 matmul: continuation without first")
+            chains
+                .remove(&ctx.hart_id)
+                .expect("f32 matmul: continuation without first")
         }
     });
-    assert!(chain.rows == rows && chain.bank == c && chain.base == base,
-            "f32 matmul: continuation changed destination");
+    assert!(
+        chain.rows == rows && chain.bank == c && chain.base == base,
+        "f32 matmul: continuation changed destination"
+    );
+    let weights: [&[u8]; 16] = std::array::from_fn(|col| &bv[col * k * 4..(col + 1) * k * 4]);
     for row in 0..rows {
-        for col in 0..cols {
-            let mut sum = chain.values[row * cols + col];
-            for inner in 0..k { sum = av[row * k + inner].mul_add(bv[col * k + inner], sum); }
-            assert!(sum.is_finite(), "f32 matmul: accumulator overflow");
-            chain.values[row * cols + col] = sum;
+        if av[row * k * 4..(row + 1) * k * 4]
+            .chunks_exact(4)
+            .all(|x| u32::from_le_bytes(x.try_into().unwrap()) & 0x7fffffff == 0)
+            && chain.values[row * cols..(row + 1) * cols]
+                .iter()
+                .all(|x| x.to_bits() == 0)
+        {
+            continue;
         }
+        let av = &av[row * k * 4..(row + 1) * k * 4];
+        let dst = &mut chain.values[row * cols..(row + 1) * cols];
+        let mut sums: [f32; 16] = dst.try_into().unwrap();
+        for inner in 0..k {
+            let a = f32::from_le_bytes(av[inner * 4..inner * 4 + 4].try_into().unwrap());
+            for col in 0..16 {
+                let b =
+                    f32::from_le_bytes(weights[col][inner * 4..inner * 4 + 4].try_into().unwrap());
+                sums[col] = a.mul_add(b, sums[col]);
+            }
+        }
+        assert!(
+            sums.iter().all(|x| x.is_finite()),
+            "f32 matmul: accumulator overflow"
+        );
+        dst.copy_from_slice(&sums);
     }
     if last {
         let pc = pbank(ctx, c);
@@ -67,7 +111,9 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             ctx.banks[pc][offset..offset + 4].copy_from_slice(&value.to_le_bytes());
         }
     } else {
-        CHAINS.with(|chains| { chains.borrow_mut().insert(ctx.hart_id, chain); });
+        CHAINS.with(|chains| {
+            chains.borrow_mut().insert(ctx.hart_id, chain);
+        });
     }
     0
 }

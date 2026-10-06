@@ -1,0 +1,2 @@
+expected_assertion = "Virtual LSU effective privilege must be U, S or M"
+invalid_case = 5

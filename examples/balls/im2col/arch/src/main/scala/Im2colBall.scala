@@ -3,7 +3,7 @@ package examples.balls.im2col
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.balldomain.blink.{BallStatus, BlinkIO, HasBallStatus, HasBlink, SubRobRow}
+import framework.balldomain.blink.{BlinkIO, HasBlink, SubRobRow}
 import framework.balldomain.blink.mmio.MmioRead
 import examples.balls.im2col.Im2col
 import framework.top.GlobalConfig

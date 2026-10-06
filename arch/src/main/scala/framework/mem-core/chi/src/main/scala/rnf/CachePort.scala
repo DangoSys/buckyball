@@ -4,11 +4,31 @@ import chisel3._
 import memcore.bus.chi.Params
 
 class CacheAccess(p: Params) extends Bundle {
-  val addr   = UInt(p.addressBits.W)
-  val write  = Bool()
-  val data   = UInt(64.W)
-  val mask   = UInt(8.W)
-  val atomic = UInt(4.W)
+  val addr       = UInt(p.addressBits.W)
+  val write      = Bool()
+  val data       = UInt(64.W)
+  val mask       = UInt(8.W)
+  val atomic     = UInt(4.W)
+  val atomicWord = Bool()
+}
+
+class CacheProbeRequest(p: Params) extends Bundle {
+  val addr  = UInt(p.addressBits.W)
+  val write = Bool()
+  val data  = UInt(64.W)
+  val mask  = UInt(8.W)
+}
+
+class CacheProbeResult extends Bundle {
+  val hit   = Bool()
+  val value = UInt(64.W)
+}
+
+class CacheProbe(p: Params) extends Bundle {
+  val req      = Flipped(chisel3.util.Decoupled(new CacheProbeRequest(p)))
+  val complete = chisel3.util.Decoupled(new CacheProbeResult)
+  val cancel   = Input(Bool())
+  val retire   = Input(Bool())
 }
 
 object CacheAtomic {
@@ -27,9 +47,11 @@ object CacheAtomic {
   val Fence = 12
 }
 
-class CacheResult extends Bundle {
+/** `line` carries the whole 64-byte line for clients that consume full lines; it is absent by default. */
+class CacheResult(lineBits: Int = 0) extends Bundle {
   val data  = UInt(64.W)
   val error = Bool()
+  val line  = UInt(lineBits.W)
 }
 
 class CacheLineState(p: Params) extends Bundle {

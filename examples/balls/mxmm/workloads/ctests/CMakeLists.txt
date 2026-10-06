@@ -1,0 +1,11 @@
+add_buckyball_ctests(mxmm_fp32_test.c mxmm_mxfp8_test.c mxmm_bank_capacity_test.c)
+
+file(READ "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h" MXMM_PARAMS)
+string(REGEX MATCH "#define BANK_LINES ([0-9]+)" _ "${MXMM_PARAMS}")
+set(MXMM_BANK_LINES ${CMAKE_MATCH_1})
+string(REGEX MATCH "#define BANK_WIDTH ([0-9]+)" _ "${MXMM_PARAMS}")
+math(EXPR MXMM_BANK_BYTES "${MXMM_BANK_LINES} * ${CMAKE_MATCH_1} / 8")
+if(MXMM_BANK_BYTES LESS 15840)
+  message(FATAL_ERROR "Mxmm A-window row test requires 15840-byte banks; actual ${MXMM_BANK_BYTES} bytes")
+endif()
+add_buckyball_ctests(mxmm_window_test.c mxmm_window_rows_test.c mxmm_window_chain_test.c)

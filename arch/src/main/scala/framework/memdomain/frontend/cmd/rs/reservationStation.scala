@@ -1,5 +1,7 @@
 package framework.memdomain.frontend.cmd.rs
 
+import memcore.memory.queue.Queue
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
@@ -18,6 +20,7 @@ class MemRsIssue(val b: GlobalConfig) extends Bundle {
 
 // Mem domain completion interface
 class MemRsComplete(val b: GlobalConfig) extends Bundle {
+  val fault      = new framework.memdomain.frontend.mem.dma.DmaStatus
   val rob_id     = UInt(log2Up(b.frontend.rob_entries).W)
   val is_sub     = Bool()
   val sub_rob_id = UInt(log2Up(b.frontend.sub_rob_depth * 4).W)

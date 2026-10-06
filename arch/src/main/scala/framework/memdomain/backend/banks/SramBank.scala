@@ -8,7 +8,8 @@ import framework.top.GlobalConfig
 /**
  * SramBank: Pure SRAM bank
  * Simple read/write memory without any accumulation logic
- * Each bank is a single-port SRAM
+ * Each bank is a single-port SRAM. `clear` zeroes every row locally, one row per cycle;
+ * the ports refuse requests while `clearing`, so banks clear in parallel.
  */
 @instantiable
 class SramBank(val b: GlobalConfig) extends Module {
@@ -19,35 +20,59 @@ class SramBank(val b: GlobalConfig) extends Module {
   val io = IO(new Bundle {
     val sramRead  = new SramReadIO(b)
     val sramWrite = new SramWriteIO(b)
+    val clear     = Input(Bool())
+    val clearing  = Output(Bool())
   })
 
   val mem = SyncReadMem(b.memDomain.bankEntries, Vec(mask_len, mask_elem))
 
   // -----------------------------------------------------------------------------
-  // Read path
+  // Local clear
   // -----------------------------------------------------------------------------
-  io.sramRead.req.ready := !io.sramWrite.req.valid
-
-  val raddr = io.sramRead.req.bits.addr
-  val ren   = io.sramRead.req.fire
-  val rdata = mem.read(raddr, ren)
-
-  io.sramRead.resp.valid     := RegNext(ren)
-  io.sramRead.resp.bits.data := rdata.asUInt
-
-  // -----------------------------------------------------------------------------
-  // Write path
-  // -----------------------------------------------------------------------------
-  io.sramWrite.req.ready := !io.sramRead.req.valid
-
-  when(io.sramWrite.req.fire) {
-    mem.write(
-      io.sramWrite.req.bits.addr,
-      io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem)),
-      io.sramWrite.req.bits.mask
-    )
+  val clearing = RegInit(false.B)
+  val clearRow = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  io.clearing := clearing
+  when(io.clear) {
+    clearing := true.B
+    clearRow := 0.U
+  }.elsewhen(clearing) {
+    clearRow                                                    := clearRow + 1.U
+    when(clearRow === (b.memDomain.bankEntries - 1).U)(clearing := false.B)
   }
 
-  io.sramWrite.resp.valid   := RegNext(io.sramWrite.req.fire)
-  io.sramWrite.resp.bits.ok := RegNext(io.sramWrite.req.fire)
+  val readPending = RegNext(io.sramRead.req.fire, false.B)
+  val readHeld    = RegInit(false.B)
+  val readData    = Reg(UInt(b.memDomain.bankWidth.W))
+  val writeValid  = RegInit(false.B)
+
+  io.sramRead.resp.valid    := readPending || readHeld
+  io.sramWrite.resp.valid   := writeValid
+  io.sramWrite.resp.bits.ok := true.B
+  io.sramWrite.req.ready    := !io.clear && !clearing && (!writeValid || io.sramWrite.resp.ready)
+  io.sramRead.req.ready     := !io.clear && !clearing && !io.sramWrite.req.fire &&
+    (!io.sramRead.resp.valid || io.sramRead.resp.ready)
+
+  val ren = io.sramRead.req.fire
+  val wen = clearing || io.sramWrite.req.fire
+
+  val rdata = mem.readWrite(
+    Mux(clearing, clearRow, Mux(wen, io.sramWrite.req.bits.addr, io.sramRead.req.bits.addr)),
+    Mux(clearing, 0.U.asTypeOf(Vec(mask_len, mask_elem)), io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem))),
+    Mux(clearing, VecInit(Seq.fill(mask_len)(true.B)), io.sramWrite.req.bits.mask),
+    ren || wen,
+    wen
+  )
+
+  io.sramRead.resp.bits.data := Mux(readHeld, readData, rdata.asUInt)
+  when(readPending && !io.sramRead.resp.ready) {
+    readHeld := true.B
+    readData := rdata.asUInt
+  }.elsewhen(io.sramRead.resp.fire) {
+    readHeld := false.B
+  }
+  when(io.sramWrite.req.fire) {
+    writeValid := true.B
+  }.elsewhen(io.sramWrite.resp.fire) {
+    writeValid := false.B
+  }
 }

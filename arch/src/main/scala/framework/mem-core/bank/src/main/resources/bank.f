@@ -3,5 +3,5 @@
 +incdir+@RESOURCES@
 @RESOURCES@/interface.sv
 @RESOURCES@/package.sv
-@RTL@/Bank.sv
+-F @RTL@/Bank/filelist.f
 @RESOURCES@/bank_tb.sv

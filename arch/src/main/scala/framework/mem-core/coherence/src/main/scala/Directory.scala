@@ -28,8 +28,9 @@ class DirectoryIO(p: CoherenceParams) extends Bundle {
 
 @instantiable
 class Directory(p: CoherenceParams) extends Module {
-  @public val io = IO(new DirectoryIO(p))
-  val entries    =
+  @public
+  val io      = IO(new DirectoryIO(p))
+  val entries =
     RegInit(VecInit(Seq.fill(p.cache.sets)(VecInit(Seq.fill(p.cache.ways)(0.U.asTypeOf(new DirectoryEntry(p)))))))
   for (i <- 0 until p.mshrEntries) {
     io.entries(i) := entries(io.read(i).set)(io.read(i).way)

@@ -1,0 +1,18 @@
+[workloads]
+tests = [
+  "multi-rocket-rocket-ctest-cpu_arithmetic-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_aha-mont64-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_crc32-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_edn-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_matmult-int-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_minver-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_nbody-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_nettle-aes-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_nettle-sha256-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_nsichneu-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_sglib-combined-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_slre-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_st-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_statemate-baremetal",
+  "multi-rocket-rocket-ctest-benchmark-embench_ud-baremetal",
+]

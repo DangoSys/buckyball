@@ -1,8 +1,4 @@
-# multi-rocket - 1 tile × 32 Rocket-only cores
+# Multi-Rocket: a main tile only.
 
-[top]
-nTiles = 1
-
-[[tiles]]
-tile_id = 0
+[main_tile]
 include = "tiles/32core.toml"

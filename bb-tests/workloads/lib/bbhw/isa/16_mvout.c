@@ -23,7 +23,6 @@
     uint64_t _bb_mo_depth = (uint64_t)(depth);                                 \
     uint64_t _bb_mo_stride = (uint64_t)(stride);                               \
     BB_MVOUT_TOUCH(_bb_mo_addr, _bb_mo_depth, _bb_mo_stride, _bb_mo_bank);     \
-    bb_dma_cache_flush();                                                      \
     BUCKYBALL_INSTRUCTION_R_R(                                                 \
         (BB_BANK0(_bb_mo_bank) | BB_ITER(_bb_mo_depth)),                       \
         (FIELD(_bb_mo_addr, 0, 38) | FIELD(_bb_mo_stride, 39, 57)),            \

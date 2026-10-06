@@ -14,7 +14,8 @@ class Int2FpBall(val b: GlobalConfig) extends Module with HasBlink with HasBallS
     .find(_.ballName == "Int2FpBall")
     .getOrElse(throw new IllegalArgumentException("Int2FpBall not found in config"))
 
-  @public val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
+  @public
+  val io = IO(new BlinkIO(b, mapping.inBW, mapping.outBW))
   def blink:  BlinkIO    = io
   def status: BallStatus = io.status
   dontTouch(io)

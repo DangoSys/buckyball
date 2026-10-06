@@ -21,21 +21,21 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
     when(outBufCollected >= total_rows) {
       store_row_cnt          := 0.U
       port_written.foreach(_ := false.B)
-      state                  := sStore
+      state                  := Mux(accumulated_cmd, sReadAccum, sStore)
     }.otherwise {
       // Flush once to drain remaining rows after feeding is complete.
       when(!req_sent) {
         mesh.io.req.valid                     := true.B
-        mesh.io.req.bits.pe_control.dataflow  := cfg_dataflow
+        mesh.io.req.bits.pe_control.dataflow  := execution_dataflow
         mesh.io.req.bits.pe_control.propagate := 1.U
-        mesh.io.req.bits.pe_control.shift     := cfg_in_shift
+        mesh.io.req.bits.pe_control.shift     := execution_shift
         mesh.io.req.bits.a_transpose          := Mux(
-          cfg_dataflow === Dataflow.OS.id.U,
+          execution_dataflow === Dataflow.OS.id.U,
           true.B,
           cfg_a_transpose
         )
         mesh.io.req.bits.bd_transpose         := Mux(
-          cfg_dataflow === Dataflow.OS.id.U,
+          execution_dataflow === Dataflow.OS.id.U,
           false.B,
           cfg_bd_transpose
         )
@@ -51,7 +51,7 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
 
   protected def handleDrainState(): Unit = {
     when(mesh.io.resp.valid) {
-      when(cfg_dataflow === Dataflow.OS.id.U) {
+      when(execution_dataflow === Dataflow.OS.id.U) {
         when(mesh.io.resp.bits.total_rows === total_rows) {
           outBuf(outBufRows) := widenMeshToAcc(mesh.io.resp.bits.data)
           outBufRows         := outBufRows - 1.U
@@ -63,17 +63,17 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
       }
     }
 
-    when(cfg_dataflow === Dataflow.OS.id.U) {
+    when(execution_dataflow === Dataflow.OS.id.U) {
       when(outBufCollected >= total_rows) {
         store_row_cnt          := 0.U
         port_written.foreach(_ := false.B)
-        state                  := sStore
+        state                  := Mux(accumulated_cmd, sReadAccum, sStore)
       }
     }.otherwise {
       when(outBufRows >= total_rows) {
         store_row_cnt          := 0.U
         port_written.foreach(_ := false.B)
-        state                  := sStore
+        state                  := Mux(accumulated_cmd, sReadAccum, sStore)
       }
     }
   }
@@ -87,10 +87,10 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
       val row         = outBuf(rowIdx)
       val flat_raw    = VecInit(row.flatten)
       val flat_scaled = VecInit(
-        row.flatten.map(value => (value >> cfg_in_shift).asTypeOf(accType))
+        row.flatten.map(value => (Arithmetic.SIntArithmetic.cast(value) >> cfg_in_shift).asTypeOf(accType))
       )
       val row_bits    = Cat(
-        Mux(cfg_dataflow === Dataflow.WS.id.U, flat_scaled, flat_raw)
+        Mux(accumulated_cmd || cfg_dataflow === Dataflow.WS.id.U, flat_scaled, flat_raw)
           .map(_.asUInt)
           .reverse
       )
@@ -113,8 +113,9 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
       }
 
       when(port_written.asUInt.andR) {
-        store_row_cnt          := store_row_cnt + 1.U
-        port_written.foreach(_ := false.B)
+        store_row_cnt                                                   := store_row_cnt + 1.U
+        port_written.foreach(_                                          := false.B)
+        when(accumulated_cmd && store_row_cnt + 1.U < total_rows)(state := sReadAccum)
       }
     }.otherwise {
       state := sCommit
