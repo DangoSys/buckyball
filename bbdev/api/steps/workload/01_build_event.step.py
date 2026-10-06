@@ -38,6 +38,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "stable",
         "ctest",
         "mlirtest",
+        "soctest",
         "_trace_id",
     }
     unknown = sorted((k for k in input_data if k not in allowed))
@@ -96,8 +97,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     ctest = input_data.get("ctest", False)
     mlirtest = input_data.get("mlirtest", False)
-    if not isinstance(ctest, bool) or not isinstance(mlirtest, bool):
-        ctx.logger.error("--ctest and --mlirtest must be boolean flags")
+    soctest = input_data.get("soctest", False)
+    if not all(isinstance(flag, bool) for flag in (ctest, mlirtest, soctest)):
+        ctx.logger.error("--ctest, --mlirtest and --soctest must be boolean flags")
         await check_result(
             ctx,
             1,
@@ -106,8 +108,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    if ctest and mlirtest:
-        ctx.logger.error("--ctest and --mlirtest cannot be used together")
+    if sum((ctest, mlirtest, soctest)) > 1:
+        ctx.logger.error("--ctest, --mlirtest and --soctest are mutually exclusive")
         await check_result(
             ctx,
             1,
@@ -122,6 +124,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             chip,
             ctest=ctest,
             mlirtest=mlirtest,
+            soctest=soctest,
             stable=stable,
             logger=ctx.logger,
             task_scope=origin_tid,
@@ -148,6 +151,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "chip": chip,
             "ctest": ctest,
             "mlirtest": mlirtest,
+            "soctest": soctest,
         },
         trace_id=origin_tid,
     )

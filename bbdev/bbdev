@@ -41,7 +41,7 @@ WORKFLOW_COMMANDS = {
     },
     "workload": {
         "clean": 'Clean workload output directory. Args: "--chip <chip>"',
-        "build": 'Build test workloads. Args: "--chip <chip> [--stable] [--ctest|--mlirtest]"',
+        "build": 'Build test workloads. Args: "--chip <chip> [--stable] [--ctest|--mlirtest|--soctest]"',
         "tohex": 'Convert chip workload ELF to hex. Args: "--chip <chip>"',
     },
     "model": {

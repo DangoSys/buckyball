@@ -27,6 +27,7 @@ bbdev workload --clean "--chip toy"
 - **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
 - **`ctest`** - Build CTest workloads only.
 - **`mlirtest`** - Build MLIRTest workloads only.
+- **`soctest`** - Build SoC test workloads only.
 
 For chip workloads under paths like `*/chips/<chip>`, only the directory selected by `chip` is synced to `bb-tests/output/<chip>/workloads`.
 
@@ -40,6 +41,9 @@ bbdev workload --build "--chip pebble --ctest"
 
 # Build only MLIRTest workloads
 bbdev workload --build "--chip pebble --mlirtest"
+
+# Build only SoC test workloads
+bbdev workload --build "--chip goban --soctest"
 ```
 
 **Response**:

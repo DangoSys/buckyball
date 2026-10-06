@@ -20,7 +20,7 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "stable", "ctest", "mlirtest"}
+    allowed = {"chip", "stable", "ctest", "mlirtest", "soctest"}
     unknown = sorted((k for k in body if k not in allowed))
     if unknown:
         return ApiResponse(
@@ -50,19 +50,23 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         )
     ctest = body.get("ctest", False)
     mlirtest = body.get("mlirtest", False)
-    if not isinstance(ctest, bool) or not isinstance(mlirtest, bool):
+    soctest = body.get("soctest", False)
+    if not all(isinstance(flag, bool) for flag in (ctest, mlirtest, soctest)):
         return ApiResponse(
-            status=400, body={"error": "--ctest and --mlirtest must be boolean flags"}
+            status=400,
+            body={"error": "--ctest, --mlirtest and --soctest must be boolean flags"},
         )
-    if ctest and mlirtest:
+    if sum((ctest, mlirtest, soctest)) > 1:
         return ApiResponse(
-            status=400, body={"error": "--ctest and --mlirtest cannot be used together"}
+            status=400,
+            body={"error": "--ctest, --mlirtest and --soctest are mutually exclusive"},
         )
     data = {
         "chip": chip,
         "stable": stable,
         "ctest": ctest,
         "mlirtest": mlirtest,
+        "soctest": soctest,
     }
     await ctx.enqueue(
         {"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}}
