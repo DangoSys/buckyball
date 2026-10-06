@@ -8,7 +8,7 @@ from utils.path import log_dir
 
 
 def model_run_commands(repo: str, params: dict):
-    unknown = params.keys() - {"chip", "model", "reuse-simulator"}
+    unknown = params.keys() - {"chip", "model", "reuse-simulator", "itrace", "mtrace"}
     if unknown:
         raise ValueError(f"Unknown model simulation parameters: {sorted(unknown)}")
     for key in ("chip", "model"):
@@ -19,6 +19,9 @@ def model_run_commands(repo: str, params: dict):
     root = Path(repo)
     if not isinstance(params.get("reuse-simulator", False), bool):
         raise ValueError("reuse-simulator must be a boolean")
+    for flag in ("itrace", "mtrace"):
+        if not isinstance(params.get(flag, False), bool):
+            raise ValueError(f"{flag} must be a boolean")
     chip, model = params["chip"], params["model"]
     config = root / "examples/models" / chip / model / "configs/running-param.toml"
     build = root / "stack/models/build" / chip / model
@@ -82,4 +85,5 @@ def model_run_commands(repo: str, params: dict):
         if not simulator.is_file():
             raise ValueError(f"Reusable model simulator missing: {simulator}")
         commands = commands[1:]
+    commands[-1].extend(f"--{flag}" for flag in ("itrace", "mtrace") if params.get(flag, False))
     return commands, log

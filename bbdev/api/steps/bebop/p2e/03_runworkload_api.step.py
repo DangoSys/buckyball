@@ -37,7 +37,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(status=400, body={"error": f"P2E bitstream is not a file: {bitstream}"})
     if body.get("reuse-runtime", False):
         try:
-            validate_runtime_reuse(bitstream, bool(body.get("diff", False)))
+            validate_runtime_reuse(bitstream, bool(body.get("diff", False)),
+                                   bool(body.get("itrace", False)), bool(body.get("mtrace", False)))
         except (ValueError, OSError) as error:
             return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue({

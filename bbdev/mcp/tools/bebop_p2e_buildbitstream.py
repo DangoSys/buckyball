@@ -12,6 +12,8 @@ def register(mcp):
     def bbdev_bebop_p2e_buildbitstream(
         chip: str,
         diff: bool = False,
+        itrace: bool = False,
+        mtrace: bool = False,
         vsrc_dir: Optional[str] = None,
         output_dir: Optional[str] = None,
         resume_post_route: bool = False,
@@ -24,7 +26,7 @@ def register(mcp):
             submit(
                 "/bebop/p2e/buildbitstream",
                 opt(
-                    {"chip": chip, "diff": diff, "resume_post_route": resume_post_route},
+                    {"chip": chip, "diff": diff, "itrace": itrace, "mtrace": mtrace, "resume_post_route": resume_post_route},
                     vsrc_dir=vsrc_dir,
                     output_dir=output_dir,
                     stop_after=stop_after,

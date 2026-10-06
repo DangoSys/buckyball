@@ -27,7 +27,7 @@ from utils.path import bebop_cargo_env, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from resolve_image import resolve_image
-from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
+from steps.bebop.p2e.scripts.runtime_case import trace_modes, validate_runtime_reuse
 from steps.bebop.performance_report import performance_report
 from utils.reports import source_context
 from pathlib import Path
@@ -219,9 +219,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
     reuse_runtime = input_data.get("reuse-runtime", False)
     if reuse_runtime:
-        validate_runtime_reuse(bitstream, diff)
+        validate_runtime_reuse(bitstream, diff, bool(input_data.get("itrace", False)), bool(input_data.get("mtrace", False)))
         ctx.logger.info(f"Reusing selected P2E runtime without rebuilding: {bebop_p2e_path}")
     else:
+        modes = trace_modes(bitstream)
+        features = ["p2e"]
+        if modes & {"btrace", "btrace_nb_v1"}:
+            features.append("bemu")
+        for trace in ("itrace", "mtrace"):
+            if trace in modes:
+                features.append(f"bebop-p2e/{trace}")
         build_cmd = shlex.join(
             [
                 "nix",
@@ -244,7 +251,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "--bin",
                 "bebop",
                 "--features",
-                "p2e,bemu" if diff else "p2e",
+                ",".join(features),
             ]
         )
         ctx.logger.info("Building bebop p2e runtime for the selected case...")

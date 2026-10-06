@@ -75,6 +75,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
     features = ["p2e"]
+    for trace in ("itrace", "mtrace"):
+        if input_data.get(trace, False):
+            features.append(f"bebop-p2e/{trace}")
     build_env = {
         **os.environ,
         **bebop_cargo_env(bbdir, chip),
@@ -99,6 +102,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--rtl-dir", vsrc_dir,
         "--out-dir", build_dir,
         *(["--diff"] if diff else []),
+        *(["--itrace"] if input_data.get("itrace", False) else []),
+        *(["--mtrace"] if input_data.get("mtrace", False) else []),
         *(["--resume-post-route"] if resume else []),
         *(["--stop-after", stop_after] if stop_after else []),
     ])

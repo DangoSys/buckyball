@@ -50,6 +50,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "chip": chip,
         "diff": bool(body.get("diff", False)),
+        "itrace": bool(body.get("itrace", False)),
+        "mtrace": bool(body.get("mtrace", False)),
         "vsrc_dir": vsrc_dir,
         "output_dir": output_dir,
         "resume_post_route": resume,

@@ -60,7 +60,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build compiler. Args: "--chip <chip>"',
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator]". ELF args: "--chip <chip> --binary <file-name> [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
+        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator] [--itrace] [--mtrace]". ELF args: "--chip <chip> --binary <file-name> [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
         "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
         "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--jobs <num>] [--clean-before]"',
     },
@@ -80,7 +80,7 @@ WORKFLOW_COMMANDS = {
     "bebop-p2e": {
         "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
         "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
-        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--vsrc-dir <dir>] [--output-dir <dir>] [--resume-post-route | --stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case; resume requires an existing routed case and preserves its completed synthesis/PNR',
+        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir <dir>] [--resume-post-route | --stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case; resume requires an existing routed case and preserves its completed synthesis/PNR',
         "runworkload": 'Cold-load Bebop P2E workload. Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
         "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <bare-tests|linux-tests> [--diff] [--fpga-location <N.X>]"',
     },
