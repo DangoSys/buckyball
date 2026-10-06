@@ -1,4 +1,4 @@
-# Goban main tile: a CPU-only core 0 and four compute cores, all Linux visible.
+# Goban main tile: Linux control hart 0 and four internal compute harts.
 
 coreDataBytes = 64
 xLen = 64
