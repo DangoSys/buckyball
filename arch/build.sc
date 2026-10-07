@@ -293,7 +293,7 @@ object buckyball extends SbtModule { m =>
 // Define cde module - must be compiled first
 object cde extends SbtModule {
   override def millSourcePath =
-    os.pwd / "thirdparty" / "rocket-chip" / "dependencies" / "cde"
+    os.pwd / "thirdparty" / "cde"
   override def scalaVersion = "2.13.16"
 
   // Override sources to match freshProject behavior
@@ -352,59 +352,35 @@ object midas_target_utils extends SbtModule {
 
 }
 
-// Define diplomacy module - depends on cde
-object diplomacy extends SbtModule {
-  override def millSourcePath =
-    os.pwd / "thirdparty" / "rocket-chip" / "dependencies" / "diplomacy" / "diplomacy"
-  override def scalaVersion = "2.13.16"
-
-  // Add cde dependency first
-  override def moduleDeps = Seq(
-    cde
-  )
-
-  // Override sources to match freshProject behavior
-  override def sources = T.sources {
-    super.sources() ++ Seq(PathRef(millSourcePath / "src" / "diplomacy"))
-  }
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.7.0",
-    ivy"com.lihaoyi::sourcecode:0.3.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.7.0"
-  )
-
-}
-
-// Define rocket-chip module with proper dependencies
 object rocketchip extends SbtModule {
   override def millSourcePath =
     os.pwd / "thirdparty" / "rocket-chip"
   override def scalaVersion = "2.13.16"
 
   override def sources = T.sources {
-    val upstream = millSourcePath / "src" / "main" / "scala" / "tile" / "Core.scala"
-    super.sources().flatMap { source =>
-      if (os.isDir(source.path)) {
-        os.walk(source.path)
-          .filter(path => os.isFile(path) && (path.ext == "scala" || path.ext == "java"))
-          .map(PathRef(_))
-      } else Seq(source)
-    }.filterNot(_.path == upstream) ++ Seq(
+    val src = millSourcePath / "src" / "main" / "scala"
+    val rocketSources = Seq(
+      "ALU", "AMOALU", "BTB", "Breakpoint", "CSR", "Consts", "CustomInstructions",
+      "DebugROB", "Decode", "Events", "Frontend", "HellaCache", "HellaCacheArbiter",
+      "IBuf", "ICache", "IDecode", "Instructions", "Instructions32", "Multiplier",
+      "PMP", "PTW", "RVC", "RocketCore", "SimpleHellaCacheIF", "TLB", "VectorUnit", "package"
+    ).map(name => PathRef(src / "rocket" / s"$name.scala"))
+    val tileSources = Seq("BaseTile", "CustomCSRs", "FPU", "Interrupts", "L1Cache")
+      .map(name => PathRef(src / "tile" / s"$name.scala"))
+    val utilSources = Seq(
+      "Arbiters", "AsyncResetReg", "BarrelShifter", "Broadcaster", "BundleMap",
+      "ClockDivider", "ClockGate", "CoreMonitor", "Counters", "Crossing", "ECC", "GeneratorUtils", "GenericParameterizedBundle",
+      "HellaQueue", "LatencyPipe", "Misc", "MuxLiteral", "PlusArg", "Property",
+      "RecordMap", "ReduceOthers", "Repeater", "Replacement",
+      "SeededRandom", "ShiftQueue", "ShiftReg", "SynchronizerReg", "Timer", "package"
+    ).map(name => PathRef(src / "util" / s"$name.scala"))
+    rocketSources ++ tileSources ++ utilSources ++ Seq(
+      PathRef(src / "unittest" / "UnitTest.scala"),
       PathRef(frameworkRoot / "system" / "core" / "rocket" / "CoreParameters.scala")
     )
   }
 
-  // Add required dependencies for rocket-chip
-  override def moduleDeps = Seq(
-    diplomacy,
-    cde,
-    hardfloat,
-    midas_target_utils
-  )
+  override def moduleDeps = Seq(cde, hardfloat, midas_target_utils)
 
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.7.0",
@@ -420,27 +396,17 @@ object rocketchip extends SbtModule {
 }
 
 
-// Define gemmini module
 object gemmini extends SbtModule {
-  override def millSourcePath =
-    os.pwd / "thirdparty" / "gemmini"
+  override def millSourcePath = os.pwd / "thirdparty" / "gemmini"
   override def scalaVersion = "2.13.16"
-
-  // Add rocket-chip as a dependency
-  override def moduleDeps = Seq(
-    rocketchip
-  )
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.7.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.7.0"
-  )
-
+  override def moduleDeps = Seq(hardfloat)
+  override def sources = T.sources {
+    Seq("Arithmetic", "Dataflow", "Mesh", "MeshWithDelays", "PE", "Pipeline", "Shifter", "SyncMem", "TagQueue", "Tile", "Transposer", "Util")
+      .map(name => PathRef(millSourcePath / "src" / "main" / "scala" / "gemmini" / s"$name.scala"))
+  }
+  override def ivyDeps = Agg(ivy"org.chipsalliance::chisel:6.7.0")
+  override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
 }
-
 
 object memdomain_ack extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "memdomain" / "verification"

@@ -54,3 +54,6 @@
 [submodule "thirdparty/soc-framework"]
 	path = thirdparty/soc-framework
 	url = https://github.com/DangoSys/soc-framework.git
+[submodule "arch/thirdparty/cde"]
+	path = arch/thirdparty/cde
+	url = https://github.com/chipsalliance/cde.git

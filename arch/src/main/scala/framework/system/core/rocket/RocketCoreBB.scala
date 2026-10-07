@@ -300,17 +300,12 @@ class RocketBB(
     val id_rs        = id_raddr.map(rf.read _)
     val ctrl_killd   = Wire(Bool())
 
-    // A scheduler needs the custom ISA even without compute Balls.
-    val csrP =
-      if (usingRoCC) p
-      else p.alterPartial { case BuildRoCC => Nil }
-
-    val csr  = Module(new CSRFile(
+    val csr = Module(new CSRFile(
       perfEvents,
       coreParams.customCSRs.decls,
       roccCSRs,
       hasBusError
-    )(csrP) {
+    )(p) {
       override def usingRoCC: Boolean = RocketBB.this.usingRoCC
     })
 
@@ -1253,19 +1248,18 @@ class RocketBB(
     io.rocc.cmd.valid         := wb_reg_valid && wb_ctrl.rocc && !replay_wb_common
     io.rocc.exception         := wb_xcpt && csr.io.status.xs.orR
     io.rocc.cmd.bits.raw_inst := wb_reg_inst
-    val inst_bits = wb_reg_inst.asTypeOf(new RoCCInstruction())
-    io.rocc.cmd.bits.funct   := inst_bits.funct
-    io.rocc.cmd.bits.funct3  := wb_reg_inst(14, 12)
-    io.rocc.cmd.bits.rs2     := inst_bits.rs2
-    io.rocc.cmd.bits.rs1     := inst_bits.rs1
-    io.rocc.cmd.bits.pc      := wb_reg_pc
-    io.rocc.cmd.bits.xd      := inst_bits.xd
-    io.rocc.cmd.bits.xs1     := inst_bits.xs1
-    io.rocc.cmd.bits.xs2     := inst_bits.xs2
-    io.rocc.cmd.bits.rd      := inst_bits.rd
-    io.rocc.cmd.bits.opcode  := inst_bits.opcode
-    io.rocc.cmd.bits.rs1Data := wb_reg_wdata
-    io.rocc.cmd.bits.rs2Data := wb_reg_rs2
+    io.rocc.cmd.bits.funct    := wb_reg_inst(31, 25)
+    io.rocc.cmd.bits.funct3   := wb_reg_inst(14, 12)
+    io.rocc.cmd.bits.rs2      := wb_reg_inst(24, 20)
+    io.rocc.cmd.bits.rs1      := wb_reg_inst(19, 15)
+    io.rocc.cmd.bits.pc       := wb_reg_pc
+    io.rocc.cmd.bits.xd       := wb_reg_inst(14)
+    io.rocc.cmd.bits.xs1      := wb_reg_inst(13)
+    io.rocc.cmd.bits.xs2      := wb_reg_inst(12)
+    io.rocc.cmd.bits.rd       := wb_reg_inst(11, 7)
+    io.rocc.cmd.bits.opcode   := wb_reg_inst(6, 0)
+    io.rocc.cmd.bits.rs1Data  := wb_reg_wdata
+    io.rocc.cmd.bits.rs2Data  := wb_reg_rs2
 
     // gate the clock
     val unpause =

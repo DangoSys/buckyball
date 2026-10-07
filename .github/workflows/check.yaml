@@ -82,18 +82,23 @@ jobs:
         include:
           - chip: toy
             run_bemu_tests: true
+            run_linux_tests: true
             run_verilator_tests: true
           - chip: pebble
             run_bemu_tests: true
+            run_linux_tests: true
             run_verilator_tests: true
           - chip: goban
             run_bemu_tests: true
+            run_linux_tests: false
             run_verilator_tests: true
           - chip: poly
             run_bemu_tests: true
+            run_linux_tests: false
             run_verilator_tests: true
           - chip: multi-rocket
             run_bemu_tests: true
+            run_linux_tests: true
             run_verilator_tests: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -106,6 +111,7 @@ jobs:
           echo "ref=${CHECKOUT_REF}"
 
       - name: Enter repo lock
+        id: repo_lock
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -125,6 +131,7 @@ jobs:
           nix build
 
       - name: Build compiler and workloads
+        id: build
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -133,8 +140,9 @@ jobs:
           nix develop -c bbdev compiler --build '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'
+          rm -f "bebop/target/${{ matrix.chip }}/junit.xml"
 
-      - name: bemu tests
+      - name: bemu baremetal tests
         if: matrix.run_bemu_tests
         shell: zsh {0}
         run: |
@@ -142,11 +150,19 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test bare-tests --jobs 16 --clean-before'
+
+      - name: bemu Linux tests
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.run_linux_tests }}
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
           nix develop -c bbdev kernel --build '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test linux-tests --jobs 16'
 
       - name: verilator tests
-        if: matrix.run_verilator_tests
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.run_verilator_tests }}
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -155,44 +171,43 @@ jobs:
           nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
           nix develop -c bbdev bebop-verilator --build '--jobs 100 --chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test bare-tests --diff --jobs 16 --clean-before'
+          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test bare-tests --diff --jobs 16'
 
-      - name: Detect bebop JUnit files
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
+      - name: Generate bebop JUnit report
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         id: junit
         shell: zsh {0}
         run: |
+          set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
-          files=("${root}/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-"*.xml(N))
-          if (( ${#files} == 0 )); then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          fi
+          cd "${root}"
+          nix develop -c python3 .github/scripts/bebop_junit.py \
+            "bebop/target/${{ matrix.chip }}/test-artifacts" \
+            "bebop/target/${{ matrix.chip }}/junit.xml"
 
       - name: Publish bebop test report
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
+        if: ${{ !cancelled() && steps.junit.outcome == 'success' }}
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
-          check_name: "bebop nextest (${{ matrix.chip }})"
+          report_paths: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/junit.xml"
+          check_name: "bebop (${{ matrix.chip }})"
           detailed_summary: true
           include_passed: true
 
-      - name: Upload bebop JUnit artifacts
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
+      - name: Upload bebop test artifacts
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
-        env:
-          ALL_PROXY: ""
-          HTTP_PROXY: ""
-          HTTPS_PROXY: ""
-          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
-          name: bebop-nextest-junit-${{ matrix.chip }}
-          path: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
+          name: bebop-tests-${{ matrix.chip }}
+          path: |
+            ~/Code/buckyball/bebop/target/${{ matrix.chip }}/junit.xml
+            ~/Code/buckyball/bebop/target/${{ matrix.chip }}/test-artifacts/*/summary.json
+            ~/Code/buckyball/bebop/target/${{ matrix.chip }}/test-artifacts/*/stdout.log
+            ~/Code/buckyball/bebop/target/${{ matrix.chip }}/test-artifacts/*/stderr.log
+          if-no-files-found: error
 
       - name: Exit repo lock
-        if: always()
+        if: ${{ always() && steps.repo_lock.outcome == 'success' }}
         shell: zsh {0}
         run: |
           set -euo pipefail

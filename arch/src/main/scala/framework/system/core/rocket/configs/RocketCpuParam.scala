@@ -118,7 +118,7 @@ object RocketCpuParam {
 
   /**
    * Convert to rocket-chip RocketCoreParams.
-   * rowBits and blockBytes are injected from site(SystemBusKey) and site(CacheBlockBytes).
+   * rowBits and blockBytes are supplied by the explicit CPU cache parameters.
    */
   def toRocketCoreParams(p: RocketCpuParam, xLen: Int, pgLevels: Int): RocketCoreParams = RocketCoreParams(
     xLen = xLen,
