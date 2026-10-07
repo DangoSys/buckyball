@@ -1,5 +1,8 @@
 [workloads]
 tests = [
+  "toy-toy-ctest-mxmm_fp32_test-baremetal.hex",
+  "toy-toy-ctest-mxmm_mxfp8_test-baremetal.hex",
+  "toy-toy-ctest-mxmm_bank_capacity_test-baremetal.hex",
   "toy-toy-ctest-gemmini_accumulated_16x16_test-baremetal.hex",
   "toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-baremetal.hex",
   "toy-toy-ctest-alexnet_gemmini_tail_test-baremetal.hex",

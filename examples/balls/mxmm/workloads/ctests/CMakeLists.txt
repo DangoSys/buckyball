@@ -1,4 +1,5 @@
 add_buckyball_ctests(mxmm_fp32_test.c mxmm_mxfp8_test.c mxmm_bank_capacity_test.c)
+add_buckyball_ctests(mxmm_fp32_small.c mxmm_mxfp8_small.c)
 
 file(READ "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h" MXMM_PARAMS)
 string(REGEX MATCH "#define BANK_LINES ([0-9]+)" _ "${MXMM_PARAMS}")

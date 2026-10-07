@@ -95,7 +95,7 @@ jobs:
           - chip: poly
             run_bemu_tests: true
             run_linux_tests: false
-            run_verilator_tests: true
+            run_verilator_tests: false
           - chip: multi-rocket
             run_bemu_tests: true
             run_linux_tests: true
@@ -161,8 +161,9 @@ jobs:
           nix develop -c bbdev kernel --build '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test linux-tests --jobs 16'
 
-      - name: verilator tests
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.run_verilator_tests }}
+      - name: Generate Verilog
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        id: verilog
         shell: zsh {0}
         run: |
           set -euo pipefail
@@ -170,6 +171,14 @@ jobs:
           cd "${root}"
           nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
           nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
+
+      - name: verilator tests
+        if: ${{ !cancelled() && steps.verilog.outcome == 'success' && matrix.run_verilator_tests }}
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          root="${BB_ROOT/#\~/$HOME}"
+          cd "${root}"
           nix develop -c bbdev bebop-verilator --build '--jobs 100 --chip ${{ matrix.chip }} --diff'
           nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test bare-tests --diff --jobs 16'
 

@@ -1,5 +1,7 @@
 [workloads]
 tests = [
+  "toy-toy-ctest-mxmm_fp32_small-baremetal",
+  "toy-toy-ctest-mxmm_mxfp8_small-baremetal",
   "toy-toy-ctest-rvv_kernel-baremetal",
   "toy-toy-mlirtest-ball_mxquant-baremetal",
   "toy-toy-mlirtest-bank_mxquant-baremetal",
