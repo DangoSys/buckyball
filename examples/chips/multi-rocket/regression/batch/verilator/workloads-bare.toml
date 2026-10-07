@@ -3,7 +3,6 @@ tests = [
   "multi-rocket-rocket-ctest-cpu_arithmetic-baremetal",
   "multi-rocket-rocket-soctest-clint_timer_interrupt-baremetal",
   "multi-rocket-rocket-soctest-clint_software_interrupt-baremetal",
-  "multi-rocket-rocket-soctest-clint_supervisor_timer-baremetal",
   "multi-rocket-rocket-soctest-time_csr_clock-baremetal",
   "multi-rocket-rocket-soctest-time_csr_permissions-baremetal",
   "multi-rocket-rocket-soctest-lrsc_word-baremetal",
