@@ -23,8 +23,8 @@ case class BoomTileCore(cpu: BoomCpuParam) extends TileCore
 
 /**
  * Per-tile topology: ordered cores. CPU kind is per-core; shared memory is tile-level.
- * Every main tile core is Linux visible. A compute tile's controller is core 0 and the
- * other cores are hidden task workers with their signatures.
+ * Main tile cores are Linux visible unless the tile has a controller, in which case
+ * only core 0 is visible. Other controller-tile cores are hidden task workers.
  */
 case class TileTopology(
   param:      TileParam,
@@ -33,5 +33,5 @@ case class TileTopology(
   hartIds:    Seq[Int],
   signatures: Seq[BigInt],
   controller: Option[Int]) {
-  require(main == controller.isEmpty, "Only compute tiles have a controller")
+  require(main || controller.nonEmpty, "A compute tile needs a controller")
 }

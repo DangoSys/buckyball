@@ -114,19 +114,16 @@ object ChipLoader {
       cores(idx).getHartId
     }
     val main             = tile.getKind == TileKind.TILE_KIND_MAIN
+    require(main || tile.hasControllerCoreIndex, s"tile ${tile.getPath}: a compute tile needs controller_core_index")
     val controller       =
-      if (main) {
-        require(!tile.hasControllerCoreIndex, s"tile ${tile.getPath}: the main tile has no task controller")
-        None
-      } else {
-        require(tile.hasControllerCoreIndex, s"tile ${tile.getPath}: a compute tile needs controller_core_index")
+      if (tile.hasControllerCoreIndex) {
         val local = indices.indexOf(tile.getControllerCoreIndex)
         require(
           local == 0 && indices.size > 1,
           s"tile ${tile.getPath}: controller_core_index must select local slot 0 with workers"
         )
         Some(local)
-      }
+      } else None
     TileTopology(
       tileParam,
       main,
