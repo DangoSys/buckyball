@@ -1,0 +1,146 @@
+{
+  "verified_date": "2026-10-09",
+  "baseline_commit": "1f3d54535bd5fb76d5fd2f6b05ed36e591cf3097",
+  "part": "xc7a100tcsg324-1",
+  "physical_board_tested": false,
+  "tests": {
+    "xsim_suites": 4,
+    "host_tests": 4,
+    "system_simulation_cycles": 1724701,
+    "cold_boot_before_upload": true
+  },
+  "implementation": {
+    "clock_mhz": 50,
+    "lut": 43405,
+    "ff": 24253,
+    "ramb36": 63,
+    "ramb18": 5,
+    "dsp48e1": 12,
+    "wns_ns": 1.004,
+    "tns_ns": 0,
+    "whs_ns": 0.018,
+    "ths_ns": 0,
+    "drc_errors": 0,
+    "drc_warnings": 17,
+    "cdc_safe": 3,
+    "cdc_unsafe": 0,
+    "cdc_unknown": 0,
+    "board_pins_audited": 9
+  },
+  "artifacts": {
+    "build/arty/io.rpt": {
+      "sha256": "8e20095fc9143df0434badd2c6e44ad224befca43fc67ce38b0da67bd2841fba",
+      "bytes": 99511
+    },
+    "build/arty/utilization_flat.rpt": {
+      "sha256": "6e9f136d0f4ac35642ac78d99c376a1c6c622a25bbc7d44cce742679695dd545",
+      "bytes": 11636
+    },
+    "build/arty/route_status.rpt": {
+      "sha256": "d139014f58ad0a60b61d686bf6e59cbb11729684c2b3163228a500c176e0df9c",
+      "bytes": 651
+    },
+    "build/arty/check_timing.rpt": {
+      "sha256": "a98b6121f8010ff54f6ba040f6cf2bac64a59bc7e8842af34ba89e53d2e2fbe9",
+      "bytes": 3232
+    },
+    "build/arty/timing_synth.rpt": {
+      "sha256": "f36bbd8209a9c3f60d92aae8a52aa40e404e595012f425a49adc0d3e874a4f80",
+      "bytes": 36551
+    },
+    "build/arty/cdc.rpt": {
+      "sha256": "83a5bcd9ede2344782ae5787a5ed7a2c4d42b91ee785993dbe35d2678ef8dc8a",
+      "bytes": 1233
+    },
+    "build/arty/utilization_routed.rpt": {
+      "sha256": "d1e987ed033ff0d03c5fd2cb3f1add11d003cf53d2e8f2a3b5366718759094a6",
+      "bytes": 109990
+    },
+    "build/arty/timing_routed.rpt": {
+      "sha256": "847c42fdc7803071ecf2d5bec9b28c82a57e1328f7b07b3c3f88447349a73e4c",
+      "bytes": 55859
+    },
+    "build/arty/drc.rpt": {
+      "sha256": "d8db4ccf1f8574d56afc4eaf0869db3b1493e36ee3984c3d9fef67aa24b681ae",
+      "bytes": 14265
+    },
+    "build/arty/utilization_synth.rpt": {
+      "sha256": "62864b19c99ad71428e2b928fe34083ceaee7b02cd39eb247d2917d864c3fe57",
+      "bytes": 109875
+    },
+    "build/arty/audit.txt": {
+      "sha256": "68241f1b32a93ed5cc6a856c4c3c1300e174c173454e2183aff1428e5f29f4bb",
+      "bytes": 100
+    },
+    "build/arty/pebble_a7.bit": {
+      "sha256": "7e12877e0db2775136a17eaad464e3d7e432340415bc88bf2cc601bc77ebc637",
+      "bytes": 2843296
+    },
+    "build/arty-console.log": {
+      "sha256": "e2c049b8592571998ded11c1a6f9d664eee9c983bf2f7a071b65df3d1fc6dfaf",
+      "bytes": 337237
+    },
+    "build/audit-console.log": {
+      "sha256": "fa82e8231fab5f769d0a712debd7a7118a5ad4d26b5af04a6213f02b85c06c0f",
+      "bytes": 5044
+    },
+    "build/chip-sim/run.log": {
+      "sha256": "f8aecaca9e48935846a0d2ad101a88e2f47a0a2bff4333f1cdd3877a5892e1ea",
+      "bytes": 950
+    },
+    "build/final-checks.log": {
+      "sha256": "a76354706782bbbc8ef0c9614b4fc0b77670a7ff7306964cf52ad5030aaf0913",
+      "bytes": 373
+    },
+    "verified-elaboration.log": {
+      "sha256": "e88ebe562715cd77daf295ec47343111850db2082ffa0577ce0104f7f8a0d644",
+      "bytes": 7393
+    },
+    "generated/RTL_MANIFEST.json": {
+      "sha256": "458564f2ae1be01c6fc7fa110e35be1796ca16b5ab4b24814a286be92e547d88",
+      "bytes": 243
+    }
+  },
+  "source_sha256": {
+    ".gitignore": "a796b0eeaa2ba782d6ad328ef92a96460e477251cd602bbb989485af8a46f700",
+    ".jvmopts": "a66471d84e6e2ed0c3c40d5ebbc237d268ed9b04f3528ef22e967a2bd4e8aa44",
+    "UPSTREAM_MANIFEST.json": "fbae41a351d668e1f689dce65546758b1c246c7a17455dbe62ca5397954347ed",
+    "board/Arty-A7-100T.xdc": "874da6e81c2a740db57598f155b7b0191ba69c1afd1a8b42b998af4dbffbaf53",
+    "board/audit_routed.tcl": "e792049fcb0a3b8aac331db50da0bc4f35403f6fea085ec01664825dc6183a00",
+    "board/axi_bram.sv": "7ab197577c2f33e9c507b5850eb01254e6575dc5ebf2a1510768fb4ba59fdfbd",
+    "board/axi_uart.sv": "5769e2be39cd8b3a126420ab11615b3726041eda50b3acd7dc07ad788089132a",
+    "board/build_arty.tcl": "1f33b2e064a003b48075504a2ff439f7a2fa377d1c5b1ca6c9f9bcecba737dab",
+    "board/pebble_a7_top.sv": "bbb7212b6845950006ba446781d8d647677668ce545aff4f99828257940f4fc4",
+    "board/program_arty.tcl": "63aea9d7576ccefc140f0a6f5622860b9558270e0888b98d644fe8bf8a7a7027",
+    "board/uart_loader.sv": "5fc6f851fd996dc77b729377f36e6ff7a57d41d3928d8d799d03f75fc573df9d",
+    "board/uart_rx.sv": "c3c7d45602d4f96a84b9e3fbaf5580587e9e44af6f9c90321c442fba6546a0ff",
+    "board/uart_tx.sv": "67ff50d6d11dffbea4a59386a0eedeea158258fd9b76f3045c6b412800cec1a7",
+    "build.sbt": "d27a897e8e90c0ecd71d77785c6d2d2f98e2bda5c3de318f7d5a355b2ea50e46",
+    "dependencies.json": "8d46dd8f04c52bac3a6482e0723993abe84166b86a80b449ac56104d5d5d7b08",
+    "firmware/bootrom.S": "2b33eb421724f9d53d9a716b3f85e3616f42fd690bf8b0e61e16eb3e7e5f2b6b",
+    "firmware/build.sh": "1c40daffd92a214f9e21c75bb606d86effc40d2dd0ab09b82fd3f6e5098e4c3b",
+    "firmware/link.ld": "31018e091959893f50f344690449c9539e319d9185e14ae01bf9c09a2b89679c",
+    "firmware/main.c": "be871d5369d2e502f27e6166e7db0a458bd156c560e8eb660d1ececa5d621002",
+    "firmware/start.S": "7c3e23541ee3f9b55e9280d4afe4dfee75bb7f4c83d422d64651195d3ceaa27b",
+    "host/load.py": "8227a9b339e11de565fd9f233bffe34135667efde9b71088d98db12c1f0f41a5",
+    "program.ps1": "fb3a6f7ac7a60fdec735fb9b69135e150e03e6453f791ee12b557ee2b8700639",
+    "project/build.properties": "a59fccae87ea7dba4034abbbf5333eaaa3dbb2fdcfbf37e98e3752f28c4a3892",
+    "project/repositories": "063c457354f9a2bd99f0d1c5c51f0fc3d7ffff04894bb4b740538043fb3b61f6",
+    "scripts/audit_sources.py": "702062e0d981c7f294075903bd18fa3cebb5cb021b3dbb2c6b894512d7f9ac4e",
+    "scripts/elaborate.sh": "3c4ffd68fd80541565d5397d5147cefe63de9bece8c634fc71e0ba7d0ad599a5",
+    "scripts/make_platform.py": "d8494ea371c6f545a35d67812747ac5fa382d2dbda932efc1faef4e68e3db2ce",
+    "scripts/prepare_rtl.py": "b5dbfdcafbd0b06d961712e67066384b5fe80808bcb6d6dfa07512a1e22ded76",
+    "scripts/prepare_sources.py": "fbe1b7d10e38a3da87ab2883036c06fb8f063a9284ea3992d83261444f74847c",
+    "src/main/scala/PebbleA7Chip.scala": "3024c84e9fed8aee21aa65651576c20262946e2459d628eacb510613e0a7c48c",
+    "src/main/scala/PebbleA7Config.scala": "1321fad9e20a3449f0e9e44a4e86cc64472777220a757329ba76e651fbf2557a",
+    "tests/chip_sim.cpp": "18ff8e2b4c2552c6459cd421aa12e66f96fd30576f73fb241d8c0c97e062f211",
+    "tests/simulate_chip.sh": "3ad882728bce5d95e3397d0bc61007744ce29dc2e49394fe820947c39745817f",
+    "tests/simulate_units.ps1": "6ad4d696bca5d9b986295c29d281fed75b33d5059744a38ac50b9d395579daff",
+    "tests/tb_axi_bram.sv": "4cd113d9ae752122d52e8b53a2e517f39d5b97ce5d0951b77e54e742496fcb10",
+    "tests/tb_axi_uart.sv": "363c720509fe0034d68a87bd278e66bcd3da69b6460473f4ad8820d6c0cce281",
+    "tests/tb_uart_loader.sv": "6097b7a6cf11be67b9bc6834f035851889c220c2059f02135175a4368c9c3c37",
+    "tests/tb_uart_rx.sv": "eca775aa9cb1974f549e72846148b69f63cc08dc619f23714e1619ff58a89cb3",
+    "tests/test_host.py": "fcef05ffb7a0c0ec9eaed2628ccc780f767b244e33a40d4a73f6a3d38a29411d"
+  },
+  "source_hash_convention": "LF-normalized bytes, matching Git blobs"
+}

@@ -1,0 +1,4 @@
+-Xmx12G
+-Xss8M
+-XX:ActiveProcessorCount=8
+-Dsbt.supershell=false

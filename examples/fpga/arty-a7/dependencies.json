@@ -1,0 +1,7 @@
+{
+  "rocket-chip": {"repository": "SEU-ACAL/rocket-chip", "commit": "35488f108c1ee9e42175b5240ae957d8970e9c5b"},
+  "inclusive-cache": {"repository": "SEU-ACAL/rocket-chip-inclusive-cache", "commit": "88317ea415459d274026bd59850517a9fcc87ede"},
+  "cde": {"repository": "chipsalliance/cde", "commit": "2bcaeae2b9914bd25497ce3c6fa62dc5ca80e09f"},
+  "diplomacy": {"repository": "chipsalliance/diplomacy", "commit": "fe5e131d4fc8adec14a3ce4a4935bb5c0a269871"},
+  "hardfloat": {"repository": "SEU-ACAL/berkeley-hardfloat", "commit": "536cf3727f655713f424438190100bb08cbf2e5a"}
+}
