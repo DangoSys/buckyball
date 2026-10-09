@@ -123,6 +123,7 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     DEPENDS
       ${TEST_DEPS}
       ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSIM_LD}
     COMMENT "Building baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )

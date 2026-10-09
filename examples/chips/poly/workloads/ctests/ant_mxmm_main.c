@@ -11,9 +11,12 @@
 #include <sys/mman.h>
 #endif
 extern const unsigned char ant_image[], ant_image_end[];
-static float a[BB_COMPUTE_TILES][ANT_M * ANT_K] __attribute__((aligned(64)));
-static float b[BB_COMPUTE_TILES][ANT_N * ANT_K] __attribute__((aligned(64)));
-static float out[BB_COMPUTE_TILES][ANT_M * ANT_N] __attribute__((aligned(64)));
+static float a[BB_COMPUTE_TILES][ANT_M * ANT_K]
+    __attribute__((aligned(64), section(".noinit")));
+static float b[BB_COMPUTE_TILES][ANT_N * ANT_K]
+    __attribute__((aligned(64), section(".noinit")));
+static float out[BB_COMPUTE_TILES][ANT_M * ANT_N]
+    __attribute__((aligned(64), section(".noinit")));
 static unsigned done[BB_COMPUTE_TILES];
 static void exercise(unsigned tile) {
   size_t bytes = ant_image_end - ant_image;

@@ -11,6 +11,7 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/controllers_start.S
     ${CMAKE_CURRENT_SOURCE_DIR}/controllers.c -lgcc
   DEPENDS controllers_start.S controllers.c ${WORKLOAD_LIB_DIR}/bbsw/baremetal/start.S
+    ${BBSIM_LD}
     ${BUCKYBALL_ISA_DIR}/chip/topology.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(${POLY_CONTROL_NAME}-ctest-build
@@ -120,6 +121,7 @@ add_custom_command(
     ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/ant.c
     ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/tlink.c -lgcc -o ${POLY_ANT_HOST_ELF}
   DEPENDS ant_${POLY_ANT_CASE}_main.c ant_${POLY_ANT_CASE}.h controllers_start.S ${POLY_ANT_EMBED}
+    ${BBSW_BAREMETAL_DIR}/start.S ${BBSIM_LD}
     ${POLY_ANT_CONTROL_SOURCES} ${POLY_ANT_CONTROL_OBJECTS}
     ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_CORE}/params.h
     ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_CORE}/ballISA.h

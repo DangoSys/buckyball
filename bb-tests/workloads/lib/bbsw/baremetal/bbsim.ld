@@ -30,7 +30,6 @@ SECTIONS {
     .tdata ALIGN(16) : {
         PROVIDE(__tls_start = .);
         *(.tdata .tdata.* .gnu.linkonce.td.*)
-        . = ALIGN(8);
         PROVIDE(__tdata_end = .);
     }
 
@@ -52,6 +51,10 @@ SECTIONS {
         *(COMMON)
         . = ALIGN(8);
         PROVIDE(__bss_end = .);
+    }
+
+    .noinit (NOLOAD) : {
+        *(.noinit .noinit.*)
     }
 
     . = ALIGN(16);

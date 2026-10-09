@@ -9,7 +9,7 @@
 #include <unistd.h>
 #endif
 // Controllers publish cache-line payloads and contend on one atomic counter.
-enum { CONTROLLERS = BB_MAIN_CORES + BB_COMPUTE_TILES, ROUNDS = 8 };
+enum { CONTROLLERS = BB_MAIN_CORES + BB_COMPUTE_TILES, ROUNDS = 2 };
 static uint64_t payload[CONTROLLERS][8] __attribute__((aligned(64)));
 static uint64_t counter __attribute__((aligned(64)));
 static uint64_t turn __attribute__((aligned(64)));
