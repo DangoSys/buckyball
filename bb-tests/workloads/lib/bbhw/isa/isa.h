@@ -48,7 +48,6 @@ typedef int32_t result_t;
 
 // Base (mem/frontend) instruction definitions only.
 // Ball-specific ISA macros live under examples/balls/<ball>/workloads/isa/.
-#include "00_fence.c"
 #include "01_barrier.c"
 #include "12_kernel.c"
 #include "13_mvover.c"

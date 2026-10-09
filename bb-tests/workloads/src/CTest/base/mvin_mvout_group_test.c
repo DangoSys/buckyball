@@ -31,7 +31,6 @@ int main(int argc, char **argv) {
   bb_mvin_group((uintptr_t)replacement, 0, 1, 2, 2);
   bb_mvout_group((uintptr_t)selected, 0, 1, 2, 2);
   bb_mvout((uintptr_t)full, 0, 2, 1);
-  bb_fence();
   for (unsigned row = 0; row < 2; ++row)
     for (unsigned group = 0; group < 3; ++group)
       for (unsigned byte = 0; byte < ROW_BYTES; ++byte) {

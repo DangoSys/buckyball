@@ -40,7 +40,6 @@ func.func @main() -> i8 {
   buckyball.mset_transfer %source0 %target : i64 i64
   buckyball.mset_transfer %source1 %target : i64 i64
   buckyball.mvout %output %target %depth %stride : memref<16x32xi8> i64 i64 i64
-  buckyball.fence
   buckyball.mset %target <alloc = false, row = 0, col = 0> : i64
   func.call @check_result(%output) : (memref<16x32xi8>) -> ()
   memref.dealloc %input0 : memref<16x16xi8>

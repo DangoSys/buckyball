@@ -41,14 +41,12 @@ _mlir_ciface_rvv_norm_window(uint64_t readBank, uint64_t writeBank,
            0};
   bb_mvin_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
   // Finish descriptor DMA before this stack packet can be reused.
-  bb_fence();
   run_kernel(readBank, programBank, writeBank, 0);
   if (phase == 1)
     return;
   alignas(16) kernel_launch completed;
   bb_mvout_group((uintptr_t)&completed, writeBank, 0, sizeof(completed) / 16,
                  1);
-  bb_fence();
   if (std::memcmp(&packet.launch, &completed,
                   offsetof(kernel_launch, reserved)) ||
       (completed.reserved & ~UINT64_C(31))) {

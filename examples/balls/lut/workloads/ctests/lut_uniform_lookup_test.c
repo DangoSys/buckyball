@@ -22,7 +22,6 @@ int main(void) {
   bb_mvin((uintptr_t)table, 1, 16, 1);
   bb_lut(0, 1, 2, ROWS);
   bb_mvout((uintptr_t)output, 2, ROWS, 1);
-  bb_fence();
   for (int i = 0; i < VALUES; ++i)
     if (output[i] != table[(uint8_t)input[i]]) {
       printf("lut uniform mismatch index=%d\n", i);

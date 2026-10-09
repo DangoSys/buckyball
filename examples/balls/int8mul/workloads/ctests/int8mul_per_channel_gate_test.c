@@ -43,7 +43,6 @@ int main(void) {
   bb_mvin((uintptr_t)input, 1, ROWS, 1);
   bb_int8mul(0, 1, 2, ROWS, 0.25f, GATE_ROW);
   bb_mvout((uintptr_t)output, 2, ROWS, 1);
-  bb_fence();
 
   for (int i = 0; i < VALUES; ++i) {
     int8_t want = expected(gate[GATE_ROW * LANES + i % LANES], input[i]);

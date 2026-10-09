@@ -60,12 +60,9 @@ static void unary(UnrankedMemRefType<float> *output,
          rounding << 5},
         0};
     bb_mvin_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
-    bb_fence();
     run_kernel(readBank, programBank, writeBank, 0);
-    bb_fence();
     bb_mvout_group((uintptr_t)result, writeBank, 1, (length + 3) / 4, 1);
     bb_mvout_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
-    bb_fence();
     asm volatile("csrs fflags, %0" ::"r"(packet.reserved) : "memory");
     for (uint32_t i = 0; i < length; ++i)
       std::memcpy(out.data + offset(out, begin + i), result + i, sizeof(float));

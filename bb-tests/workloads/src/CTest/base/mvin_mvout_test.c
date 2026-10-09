@@ -19,10 +19,8 @@ int mvin_mvout_simple_test() {
   for (int i = 0; i < 1; i++) {
     init_u8_random_matrix(input_matrix, ROWS, COLS, 111);
     clear_u8_matrix(output_matrix, ROWS, COLS);
-    bb_dma_fence();
     bb_mvin((uintptr_t)input_matrix, bank_id, ROWS, 1);
     bb_mvout((uintptr_t)output_matrix, bank_id, ROWS, 1);
-    bb_fence();
     if (!compare_u8_matrices(output_matrix, input_matrix, ROWS, COLS)) {
       printf("Test mvin/mvout simple %d FAILED\n", i);
       return 0;

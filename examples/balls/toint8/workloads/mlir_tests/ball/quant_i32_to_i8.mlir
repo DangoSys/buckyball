@@ -50,7 +50,6 @@ func.func @main() -> i8 {
        outputStride = 4, outputWidth = 2, relu = true> : i64 i64 i64
   %stored = buckyball.bank_mvout %output %loaded_output %depth12 %stride
       : memref<12x16xi8> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<12x16xi8>) -> ()
   buckyball.bank_release %loaded_input : i64
   buckyball.bank_release %loaded_scales : i64

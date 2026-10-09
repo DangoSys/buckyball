@@ -44,6 +44,5 @@ extern "C" void _mlir_ciface_rvv_packmm(uint64_t readBank, uint64_t writeBank,
            0};
   bb_mvin_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
   // Finish descriptor DMA before this stack packet can be reused.
-  bb_fence();
   run_kernel(readBank, programBank, writeBank, 0);
 }

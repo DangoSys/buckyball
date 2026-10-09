@@ -393,7 +393,6 @@ public:
       Value packedOutput = b.create<memref::AllocOp>(loc, packedOutputTy);
       Value stored = mvoutBank(b, loc, packedOutput, converted,
                                finalOutput ? paddedM * 4 : paddedM);
-      b.create<FenceOp>(loc);
       b.create<memref::DeallocOp>(loc, inputPacks);
       b.create<memref::DeallocOp>(loc, weightPacks);
 

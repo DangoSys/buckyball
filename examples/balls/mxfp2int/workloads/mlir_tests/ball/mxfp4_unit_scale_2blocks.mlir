@@ -25,7 +25,6 @@ func.func @main() -> i8 {
   buckyball.mvin_mmio %scales %zero64 %one64 %sixteen : memref<1x16xi8> i64 i64 i64
   buckyball.mxfp2int %in, %out, %two, %zero64 : i64
   buckyball.mvout %output %out %four %stride : memref<4x16xi8> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<4x16xi8>) -> ()
   buckyball.mset %in <alloc = false, row = 0, col = 0> : i64
   buckyball.mset %out <alloc = false, row = 0, col = 0> : i64

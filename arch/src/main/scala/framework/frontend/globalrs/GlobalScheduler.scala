@@ -103,19 +103,10 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     btrace.io.idle        := io.idle && !io.decode_cmd_i.valid && !trace.valid
   }
 
-  val isFenceCmd  = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isFence
-  val fenceActive = RegInit(false.B)
-  when(isFenceCmd && !fenceActive) {
-    fenceActive := true.B
-  }
-  when(fenceActive && rob.io.empty) {
-    fenceActive := false.B
-  }
-
   val isBarrierCmd       = io.decode_cmd_i.valid && io.decode_cmd_i.bits.isBarrier
   val barrierWaitROB     = RegInit(false.B)
   val barrierWaitRelease = RegInit(false.B)
-  when(isBarrierCmd && !barrierWaitROB && !barrierWaitRelease && !fenceActive) {
+  when(isBarrierCmd && !barrierWaitROB && !barrierWaitRelease) {
     barrierWaitROB := true.B
   }
   when(barrierWaitROB && rob.io.empty) {
@@ -127,8 +118,8 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
   }
   io.barrier_arrive := barrierWaitRelease
 
-  val isFrontendCmd = io.decode_cmd_i.bits.isFence || io.decode_cmd_i.bits.isBarrier
-  val anyStall      = fenceActive || barrierWaitROB || barrierWaitRelease
+  val isFrontendCmd = io.decode_cmd_i.bits.isBarrier
+  val anyStall      = barrierWaitROB || barrierWaitRelease
   rob.io.alloc.valid    := io.decode_cmd_i.valid && !isFrontendCmd && !anyStall
   rob.io.alloc.bits     := io.decode_cmd_i.bits
   io.decode_cmd_i.ready := Mux(
@@ -236,7 +227,7 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
       subRob.io.subComplete.ready,
       !masterComplete && completeQueue.io.enq.ready
     )
-    io.idle                        := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
+    io.idle                        := rob.io.empty && !barrierWaitROB && !barrierWaitRelease && !subRob.io.occupied
   } else {
     for (i <- 0 until b.ballDomain.ballNum) {
       io.ball_subrob_req_i(i).ready := false.B
@@ -256,12 +247,12 @@ class GlobalScheduler(val b: GlobalConfig) extends Module {
     completeQueue.io.enq.valid := completeArb.io.out.valid
     completeQueue.io.enq.bits  := completeBits.rob_id
     completeArb.io.out.ready   := completeQueue.io.enq.ready
-    io.idle                    := rob.io.empty && !fenceActive && !barrierWaitROB && !barrierWaitRelease
+    io.idle                    := rob.io.empty && !barrierWaitROB && !barrierWaitRelease
   }
 
   io.scheduler_rocc_o.resp.valid     := false.B
   io.scheduler_rocc_o.resp.bits.rd   := 0.U
   io.scheduler_rocc_o.resp.bits.data := 0.U
-  io.scheduler_rocc_o.busy           := rob.io.full || fenceActive || barrierWaitROB || barrierWaitRelease
+  io.scheduler_rocc_o.busy           := rob.io.full || barrierWaitROB || barrierWaitRelease
 
 }

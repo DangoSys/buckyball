@@ -44,17 +44,17 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
     (func7 === MVIN_MMIO_BITPAT) ||
     (func7 === MVOVER_BITPAT)
 
-  val is_frontend_inst = func7 === FENCE_BITPAT
-  val is_barrier_inst  = func7 === BARRIER_BITPAT
+  val is_barrier_inst = func7 === BARRIER_BITPAT
 
   val programBank      = rs1(bankIdLen - 1, 0) >= b.memDomain.virtualBankCount.U &&
     rs1(bankIdLen - 1, 0) < (b.memDomain.virtualBankCount + 2).U
   val isProgramRelease = b.rvv.enable.B && func7 === MSET_BITPAT && programBank
   val is_kernel_inst   = func7 === MVIN_KERNEL_BITPAT || func7 === RUN_KERNEL_BITPAT || isProgramRelease
   val is_bare_rvv      = opcode === "h57".U || opcode === "h07".U || opcode === "h27".U
-  val is_ball_inst     = !is_mem_inst && !is_frontend_inst && !is_barrier_inst && !is_bare_rvv && !is_kernel_inst
+  val is_ball_inst     = !is_mem_inst && !is_barrier_inst && !is_bare_rvv && !is_kernel_inst
 
   when(io.id_i.fire) {
+    assert(func7 =/= 0.U, "GlobalDecoder: funct7 zero is not a Buckyball instruction")
     assert(!is_bare_rvv, "GlobalDecoder: bare RVV instructions are not Buckyball commands")
     when(is_kernel_inst) {
       assert(b.rvv.enable.B, "GlobalDecoder: kernel command requires rvv.enable=true")
@@ -65,10 +65,10 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val domain_id = MuxCase(
     DomainId.BALL,
     Seq(
-      is_frontend_inst -> DomainId.FRONTEND,
-      is_kernel_inst   -> DomainId.RVV,
-      is_mem_inst      -> DomainId.MEM,
-      is_ball_inst     -> DomainId.BALL
+      is_barrier_inst -> DomainId.FRONTEND,
+      is_kernel_inst  -> DomainId.RVV,
+      is_mem_inst     -> DomainId.MEM,
+      is_ball_inst    -> DomainId.BALL
     )
   )
 
@@ -135,6 +135,5 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_o.bits.op1_col    := 0.U
   io.id_o.bits.op2_col    := 0.U
   io.id_o.bits.wr_col     := 0.U
-  io.id_o.bits.isFence    := is_frontend_inst
   io.id_o.bits.isBarrier  := is_barrier_inst
 }

@@ -30,7 +30,6 @@ int main(void) {
   bb_int8add_relu(0, 1, 2, ROWS, 1.0f, 1.0f);
   bb_lut(2, 3, 4, ROWS);
   bb_mvout((uintptr_t)output, 4, ROWS, 1);
-  bb_fence();
   for (int i = 0; i < VALUES; ++i)
     if (output[i] != 0) {
       printf("residual add lut mismatch index=%d\n", i);

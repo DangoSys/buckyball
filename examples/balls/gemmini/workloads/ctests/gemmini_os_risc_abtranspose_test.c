@@ -39,7 +39,6 @@ int main() {
   bb_gemmini_preload(bank_a, bank_c, DIM, 0, 0);
   bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM, 0, 0, 0);
   bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
-  bb_fence();
   bb_mem_release(bank_a);
   bb_mem_release(bank_b);
   bb_mem_release(bank_c);

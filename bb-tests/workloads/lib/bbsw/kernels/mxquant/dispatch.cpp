@@ -10,7 +10,6 @@ extern "C" void mxfp8_quant(const uint32_t *input, uint8_t *output,
   bb_mvin((uintptr_t)input, inputBank, count / 4, 1);
   bb_mxquant(inputBank, outputBank, count);
   bb_mvout((uintptr_t)output, outputBank, (count + count / 32 + 15) / 16, 1);
-  bb_fence();
   bb_mem_release(inputBank);
   bb_mem_release(outputBank);
 }

@@ -27,7 +27,7 @@ void populatePebbleResidentConvRegionToBankSSAPatterns(
     RewritePatternSet &patterns, bool traceMegaStages,
     int64_t traceMegaStageStart, int64_t traceMegaStageLimit,
     int64_t traceMegaRegion, bool traceMegaReloadStages,
-    bool traceMegaFenceBeforeRegion, bool traceMegaInputBeforeRegion);
+    bool traceMegaInputBeforeRegion);
 } // namespace mlir::buddy
 
 namespace {
@@ -66,10 +66,6 @@ public:
       *this, "trace-mega-reload-stages",
       llvm::cl::desc("Reload traced stages for downstream consumers"),
       llvm::cl::init(true)};
-  Option<bool> traceMegaFenceBeforeRegion{
-      *this, "trace-mega-fence-before-region",
-      llvm::cl::desc("Insert a diagnostic fence before the traced region"),
-      llvm::cl::init(false)};
   Option<bool> traceMegaInputBeforeRegion{
       *this, "trace-mega-input-before-region",
       llvm::cl::desc(
@@ -88,7 +84,7 @@ public:
     mlir::buddy::populatePebbleResidentConvRegionToBankSSAPatterns(
         residentPatterns, traceMegaStages, traceMegaStageStart,
         traceMegaStageLimit, traceMegaRegion, traceMegaReloadStages,
-        traceMegaFenceBeforeRegion, traceMegaInputBeforeRegion);
+        traceMegaInputBeforeRegion);
     if (failed(applyPatternsGreedily(getOperation(),
                                      std::move(residentPatterns)))) {
       signalPassFailure();

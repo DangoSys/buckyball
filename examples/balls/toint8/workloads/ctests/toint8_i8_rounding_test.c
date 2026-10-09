@@ -23,7 +23,6 @@ int main(void) {
   bb_mvin((uintptr_t)input, 0, 4, 1);
   bb_quant_f32_to_i8(0, 1, 4, 1.0f);
   bb_mvout((uintptr_t)output, 1, 1, 1);
-  bb_fence();
   for (int i = 0; i < 16; ++i) {
     if (output[i] != expected[i]) {
       printf("toint8_i8_rounding i=%d got=%d exp=%d\n", i, output[i],

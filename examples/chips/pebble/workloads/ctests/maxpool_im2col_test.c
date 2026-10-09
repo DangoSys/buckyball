@@ -21,7 +21,6 @@ int main(void) {
   bb_maxpool(0, 1, 6, 3, 2, 2, 0, 0, 0, 3, 0, 0);
   bb_im2col(1, 2, 3, 1, 1, 0, 0, 0, 0, 0, 0, OUTPUT_ROWS);
   bb_mvout((uintptr_t)output, 2, OUTPUT_ROWS, 1);
-  bb_fence();
   for (int y = 0; y < 3; ++y)
     for (int x = 0; x < 3; ++x) {
       int source = (y * 2 + 1) * 6 + x * 2 + 1;

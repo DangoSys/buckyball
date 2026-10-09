@@ -26,7 +26,6 @@ int main(void) {
     bb_smatmul_f32(0, 1, 2, m, N, K, 1, 0, 1);
     bb_smatmul_f32(0, 1, 2, m, N, K, 0, 1, 1);
     bb_mvout((uintptr_t)actual, 2, m * N / 4 + 1, 1);
-    bb_fence();
     for (int i = 0; i < 4; ++i)
       if (actual[i] != 0)
         return 1;

@@ -248,7 +248,6 @@ public:
           createI64Const(b, loc, 1), b.getI64IntegerAttr(2));
     else
       cb = mvoutBank(b, loc, cp, cb, rows * columns / 4);
-    b.create<FenceOp>(loc);
     SmallVector<int64_t> outputStrides;
     int64_t outputOffset;
     if (failed(out.getStridesAndOffset(outputStrides, outputOffset)))

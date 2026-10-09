@@ -18,14 +18,12 @@ int main(void) {
     a[M * K + row] = row % 2 ? 128 : 127;
   for (int col = 0; col < N; ++col)
     b[N * K + col] = col % 2 ? 126 : 127;
-  bb_dma_fence();
   for (int bank = 3; bank <= 5; ++bank)
     bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)a, 3, sizeof(a) / 16, 1);
   bb_mvin((uintptr_t)b, 4, sizeof(b) / 16, 1);
   bb_mxmm_mxfp8(3, 4, 5, M, N, K, 1, 1, 0);
   bb_mvout((uintptr_t)output, 5, sizeof(output) / 16, 1);
-  bb_fence();
   for (int row = 0; row < M; ++row)
     for (int col = 0; col < N; ++col) {
       float expected =

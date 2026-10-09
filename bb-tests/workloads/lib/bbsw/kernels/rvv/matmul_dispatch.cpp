@@ -130,16 +130,12 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
                              {uint64_t(3) << 32, 0, uint64_t(1) << 32, m, n, k},
                              0};
           bb_mvin_group((uintptr_t)&call, writeBank, 0, sizeof(call) / 16, 1);
-          bb_fence();
           run_kernel(readBank, programBank, writeBank, 0);
-          bb_fence();
         }
         if (directC) {
           bb_mvout_group((uintptr_t)cDirect, writeBank, 1, count / 4, 1);
-          bb_fence();
         } else {
           bb_mvout_group((uintptr_t)cTile, writeBank, 1, (count + 3) / 4, 1);
-          bb_fence();
           for (uint32_t r = 0; r < m; ++r)
             for (uint32_t c = 0; c < n; ++c)
               cSource[(row + r) * out.strides[axis] +

@@ -69,8 +69,6 @@ func.func @main() -> i8 {
   buckyball.smatmul %loaded_a1, %loaded_b1, %result_bank, %config, %false, %true, %zero64 : i64
   %stored = buckyball.bank_mvout %output %result_bank %depth64 %stride
       : memref<64x4xi32> i64 i64 i64
-  buckyball.fence
-
   func.call @check_result(%output) : (memref<64x4xi32>) -> ()
   buckyball.bank_release %loaded_bias : i64
   buckyball.bank_release %loaded_a0 : i64

@@ -51,7 +51,6 @@ int main() {
   //   weight_stride = in_ch * out_ch * elemSize = 16 * 16 * 1 = 256  (bytes per
   //   kernel step) output_stride = out_ch * accBytes = 16 * 4 = 64
   // Publish CPU inputs before the CISC command starts its DMA chain.
-  bb_dma_fence();
   bb_gemmini_config(1, 0, 0, 0, 0);
   bb_gemmini_loop_conv_ws_config_1(BATCH, IN_DIM, IN_CH);
   bb_gemmini_loop_conv_ws_config_2(OUT_CH, OUT_DIM, 1, 0);
@@ -65,7 +64,6 @@ int main() {
   bb_gemmini_loop_conv_ws_config_9(OUT_CH * 4); // output_stride (accBytes=4)
   bb_gemmini_loop_conv_ws(
       0, 1, 2, 1); // bank_input=0, bank_weight=1, bank_output=2, no_bias=1
-  bb_fence();
 
   if (compare_u32_matrices(output, expected, 1, OUT_CH)) {
     printf("Gemmini WS CISC Loop Conv Test PASSED\n");

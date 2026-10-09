@@ -390,7 +390,7 @@ object Emit extends App {
   Files.write(output.resolve("admission_config.svh"), (admissionDefinitions.mkString("\n") + "\n").getBytes)
   Files.write(output.resolve("admission_ports.svh"), admissionPorts.mkString(",\n").getBytes)
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-    new AdmissionBridge(16, tracking, supervisorParameters.core.nPMPs, Seq(0, 1))(supervisorParameters),
+    new AdmissionBridge(16, tracking, supervisorParameters.core.nPMPs, Seq(1))(supervisorParameters),
     firtoolOpts = args,
     args = Array("--target-dir", output.resolve("AdmissionBridge").toString, "--split-verilog")
   )

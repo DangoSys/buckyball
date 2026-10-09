@@ -33,7 +33,6 @@ int main(void) {
   bb_mvout_group((uintptr_t)groups[0], 5, 1, 16, 1);
   bb_mvout_group((uintptr_t)groups[1], 5, 2, 16, 1);
   release_kernel(VIRTUAL_BANK_NUM);
-  bb_fence();
   bb_mem_release(4);
   bb_mem_release(5);
   for (unsigned row = 0; row < 16; ++row)

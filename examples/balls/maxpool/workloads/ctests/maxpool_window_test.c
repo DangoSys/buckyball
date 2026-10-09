@@ -24,7 +24,6 @@ int main(void) {
   bb_mvin((uintptr_t)output, 1, OUTPUT_ROWS, 1);
   bb_maxpool(0, 1, 6, 3, 2, 2, 0, INPUT_BASE, OUTPUT_BASE, STRIDE, 0, 0);
   bb_mvout((uintptr_t)output, 1, OUTPUT_ROWS, 1);
-  bb_fence();
   for (int y = 0; y < 3; ++y)
     for (int x = 0; x < 3; ++x)
       for (int c = 0; c < LANES; ++c) {

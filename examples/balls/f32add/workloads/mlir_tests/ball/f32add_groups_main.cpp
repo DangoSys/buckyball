@@ -27,7 +27,6 @@ static int checkF32Add() {
   if (_mlir_ciface_reduce_groups() != 34)
     return 1;
   bb_mvout((uintptr_t)output, 34, 2, 1);
-  bb_fence();
   for (unsigned i = 0; i < 8; ++i) {
     union {
       uint32_t bits;

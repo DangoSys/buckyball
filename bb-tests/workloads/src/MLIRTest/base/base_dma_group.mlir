@@ -42,7 +42,6 @@ func.func @main() -> i8 {
   buckyball.mvin %patch %bank %depth %stride2 <group = 1> : memref<16x32xi8> i64 i64 i64
   buckyball.mvout %selected %bank %depth %stride2 <group = 1> : memref<16x32xi8> i64 i64 i64
   buckyball.mvout %output %bank %depth %stride : memref<16x48xi8> i64 i64 i64
-  buckyball.fence
   buckyball.mset %bank <alloc = false, row = 0, col = 0> : i64
   func.call @check_result(%output, %selected) : (memref<16x48xi8>, memref<16x32xi8>) -> ()
   memref.dealloc %input : memref<16x48xi8>

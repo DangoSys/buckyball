@@ -62,7 +62,6 @@ func.func @main() -> i8 {
     scf.yield %sum : i64
   }
   %stored = buckyball.bank_mvout %c %result %rows64 %stride : memref<@BB_BANK_LINES@x16xi32> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%c) : (memref<@BB_BANK_LINES@x16xi32>) -> ()
   buckyball.bank_release %al : i64
   buckyball.bank_release %bl : i64

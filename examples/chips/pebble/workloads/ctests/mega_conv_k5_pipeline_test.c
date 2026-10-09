@@ -46,7 +46,6 @@ int main(void) {
   bb_quant_i32_to_i8(4, 5, 6, OUTPUT_SIDE * OUTPUT_SIDE * 4, 0, 0, OUTPUT_SIDE,
                      OUTPUT_SIDE, OUTPUT_SIDE, 0);
   bb_mvout((uintptr_t)output, 6, OUTPUT_SIDE * OUTPUT_SIDE, 1);
-  bb_fence();
 
   for (int y = 0; y < OUTPUT_SIDE; ++y)
     for (int x = 0; x < OUTPUT_SIDE; ++x)

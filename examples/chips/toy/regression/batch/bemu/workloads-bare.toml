@@ -42,4 +42,12 @@ tests = [
   "toy-toy-mlirtest-ball_mxfp4_unit_scale_2blocks-baremetal",
   "toy-toy-mlirtest-bank_gemmini_compute_preloaded_bank_tiles-baremetal",
   "toy-toy-mlirtest-bank_gemmini_compute_accumulated_bank_tiles-baremetal",
+  "toy-toy-mlirtest-ball_gemmini_preloaded_command_16x16-baremetal",
+  "toy-toy-ctest-tlb_bare_mode_test-baremetal",
+  "toy-toy-ctest-tlb_sv39_identity_test-baremetal",
+  "toy-toy-ctest-tlb_sfence_flush_test-baremetal",
+  "toy-toy-ctest-tlb_repeated_sfence_test-baremetal",
+  "toy-toy-ctest-tlb_sv39_nonidentity_test-baremetal",
+  "toy-toy-ctest-tlb_sv39_4k_alias_test-baremetal",
+  "toy-toy-ctest-tlb_sfence_remap_test-baremetal",
 ]

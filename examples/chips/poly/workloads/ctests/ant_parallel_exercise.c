@@ -3,8 +3,10 @@
 #include <params.h>
 #include <topology.h>
 extern const unsigned char ant_image[], ant_image_end[];
-static uint64_t input[BB_COMPUTE_TILES][2][512] __attribute__((aligned(4096)));
-static uint64_t output[BB_COMPUTE_TILES][2][512] __attribute__((aligned(4096)));
+static uint64_t input[BB_COMPUTE_TILES][2][512]
+    __attribute__((aligned(4096), section(".noinit")));
+static uint64_t output[BB_COMPUTE_TILES][2][512]
+    __attribute__((aligned(4096), section(".noinit")));
 unsigned parallel_done[BB_COMPUTE_TILES];
 static unsigned reached[3] __attribute__((aligned(64)));
 static void barrier(unsigned phase) {

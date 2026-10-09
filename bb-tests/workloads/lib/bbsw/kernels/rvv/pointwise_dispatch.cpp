@@ -106,15 +106,12 @@ void run(UnrankedMemRefType<float> *output, UnrankedMemRefType<float> *lhs,
          rounding << 5},
         0};
     bb_mvin_group((uintptr_t)&call, writeBank, 0, sizeof(call) / 16, 1);
-    bb_fence();
     run_kernel(readBank, programBank, writeBank, 0);
-    bb_fence();
     float *destination = outputLinear && length % 4 == 0
                              ? out.data + out.offset + first
                              : result;
     bb_mvout_group((uintptr_t)destination, writeBank, 1, (length + 3) / 4, 1);
     bb_mvout_group((uintptr_t)&call, writeBank, 0, sizeof(call) / 16, 1);
-    bb_fence();
     asm volatile("csrs fflags, %0" ::"r"(call.reserved) : "memory");
     if (destination == result) {
       if (outputLinear)

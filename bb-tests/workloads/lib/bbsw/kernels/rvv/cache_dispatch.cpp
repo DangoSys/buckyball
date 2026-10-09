@@ -96,13 +96,10 @@ void launch(const images::KernelImage &image, uint32_t count, bool encoding) {
   packet.args[3] = count;
   packet.args[4] = descriptor + offsetof(kernel_launch, reserved);
   bb_mvin_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
-  bb_fence();
   run_kernel(readBank, programBank, writeBank, 0);
-  bb_fence();
   alignas(16) kernel_launch completed;
   bb_mvout_group((uintptr_t)&completed, writeBank, 0, sizeof(completed) / 16,
                  1);
-  bb_fence();
   if (std::memcmp(&packet, &completed, offsetof(kernel_launch, reserved)) ||
       completed.reserved) {
     fputs("MXFP8 cache kernel rejected non-finite values, NaN encoding, or "
@@ -144,7 +141,6 @@ _mlir_ciface_rvv_mxfp8_encode(UnrankedMemRefType<int8_t> *codes,
     bb_mvout_group((uintptr_t)codeData, writeBank, 1, length / 16, 1);
     bb_mvout_group((uintptr_t)scaleData, writeBank, 2, (length / 32 + 15) / 16,
                    1);
-    bb_fence();
     copyRows(c, codeData, begin, length, true);
     copyRows(s, scaleData, begin / 32, length / 32, true);
   }
@@ -177,7 +173,6 @@ _mlir_ciface_rvv_mxfp8_decode(UnrankedMemRefType<float> *output,
                   1);
     launch(images::dequant, length, false);
     bb_mvout_group((uintptr_t)staging, writeBank, 1, length / 4, 1);
-    bb_fence();
     copyRows(out, staging, begin, length, true);
   }
   release();

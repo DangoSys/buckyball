@@ -105,7 +105,7 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   // io.busy = 1 means NPU will block CPU
   // This is the only time when NPU will block CPU: RoB can't accept new
-  // instructions (like meet fence, RoB full, barrier)
+  // instructions (ROB full or barrier)
   //
   // Why we add boot.io.active here is because when boot is active, RoB is
   // typically full with mset instructions. This situation is not need to

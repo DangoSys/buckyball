@@ -27,7 +27,6 @@ int main(void) {
     bb_gemmini_config(1, 0, 0, 0, shift);
     bb_gemmini_compute_accumulated(0, 1, 3, DIM, 0, 0, 0);
     bb_mvout((uintptr_t)result, 3, DIM, 1);
-    bb_fence();
     for (int row = 0; row < DIM; ++row)
       for (int col = 0; col < DIM; ++col) {
         int expected = 7;

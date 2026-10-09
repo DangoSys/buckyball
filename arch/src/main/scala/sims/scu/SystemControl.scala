@@ -16,10 +16,11 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
 
   @public
   val io = IO(new Bundle {
-    val request  = Vec(ports, Flipped(Decoupled(new UncachedRequest(p))))
-    val response = Vec(ports, Decoupled(new UncachedResponse(p)))
-    val hartIds  = Input(Vec(ports, UInt(32.W)))
-    val failure  = Input(Vec(ports, Valid(new framework.memdomain.frontend.mem.dma.DmaStatus)))
+    val request     = Vec(ports, Flipped(Decoupled(new UncachedRequest(p))))
+    val response    = Vec(ports, Decoupled(new UncachedResponse(p)))
+    val hartIds     = Input(Vec(ports, UInt(32.W)))
+    val failure     = Input(Vec(ports, Valid(new framework.memdomain.frontend.mem.dma.DmaStatus)))
+    val workDrained = Input(Vec(ports, Bool()))
   })
 
   val faulted = SystemControl.observe(io.failure.toSeq, io.hartIds.toSeq)
@@ -66,7 +67,7 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
     read.io.enable  := fire && (uartRx || uartSt)
     read.io.pop     := fire && uartRx
 
-    request.ready := !pending
+    request.ready := !pending && (!request.valid || !exit || io.workDrained(i))
     when(fire) {
       pending                    := true.B
       tag                        := request.bits.tag

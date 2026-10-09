@@ -30,7 +30,6 @@ int main(void) {
   bb_mvin((uintptr_t)scale, 1, 4, 1);
   bb_int32_to_fp32(0, 1, 2, 8, 0);
   bb_mvout((uintptr_t)output, 2, 8, 1);
-  bb_fence();
   for (int i = 0; i < 32; ++i) {
     if (output[i] != expected[i]) {
       printf("int2fp_channel_two_rows i=%d got=%f exp=%f\n", i, output[i],

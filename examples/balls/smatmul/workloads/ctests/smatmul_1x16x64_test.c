@@ -28,7 +28,6 @@ int main(void) {
   bb_smatmul_bias(0, 0);
   bb_smatmul_os(1, 2, 3, M, N, K, 1, 1, 0);
   bb_mvout((uintptr_t)actual, 3, 4, 1);
-  bb_fence();
 
   for (int col = 0; col < N; ++col) {
     int expected = bias[col];

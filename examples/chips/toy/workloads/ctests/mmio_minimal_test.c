@@ -38,13 +38,8 @@ int main(void) {
   printf("Allocated bank %d\n", bank_id);
 
   printf("Calling bb_mvin_mmio...\n");
-  bb_dma_fence(); // Publish the initialized input before DMA.
   bb_mvin_mmio((uintptr_t)test_data, mmio_addr, 1, 16);
   printf("bb_mvin_mmio done\n");
-
-  printf("Calling bb_fence...\n");
-  bb_fence();
-  printf("bb_fence done\n");
 
   bb_mem_release(bank_id);
   mmio_allocator_free(&mmio_alloc, mmio_addr, 1);

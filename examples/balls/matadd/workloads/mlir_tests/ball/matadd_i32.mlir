@@ -31,7 +31,6 @@ func.func @main() -> i8 {
   buckyball.matadd %a_loaded, %b_loaded, %out_bank, %depth : i64
   %stored = buckyball.bank_mvout %out %out_bank %depth %stride
       : memref<16x4xi32> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%out) : (memref<16x4xi32>) -> ()
   buckyball.bank_release %a_loaded : i64
   buckyball.bank_release %b_loaded : i64

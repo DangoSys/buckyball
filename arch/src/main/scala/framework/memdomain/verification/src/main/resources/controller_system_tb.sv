@@ -80,7 +80,7 @@ stream_if #(136) command_if (
           completions++;
         end
         if (protect)
-          verify_contract(!sample.io_core_cpuAllow, "pending move/fence allowed CPU publication");
+          verify_contract(!sample.io_core_cpuAllow, "pending move allowed CPU publication");
       end
     end
   endtask
@@ -286,14 +286,13 @@ admission_trace_init();
       verify_contract(ack_ref_check(model, (r - 4) * 16, actual[63:0], actual[127:64]) == 1,
                       "MVO row data mismatch");
     end
-    issue('h7b, 0, 0, 0);
-    complete_command();
     @(sample);
-    verify_contract(sample.io_core_cpuAllow, "CPU publication did not resume after Fence");
+    verify_contract(sample.io_core_cpuAllow,
+                    "CPU publication did not resume after move completion");
     verify_contract(commands == completions,
                     "accepted controller command not completed exactly once");
     `uvm_info("CONTROLLER_SYSTEM", $sformatf(
-              "Commands%0d completions%0d actual MVO%0d/%0d targetRows%0d; Task/satp/Bank/finalACK/Fence checked",
+              "Commands%0d completions%0d actual MVO%0d/%0d targetRows%0d; Task/satp/Bank/finalACK checked",
               commands,
               completions,
               moves,

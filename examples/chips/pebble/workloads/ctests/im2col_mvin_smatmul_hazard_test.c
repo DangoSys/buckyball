@@ -56,7 +56,6 @@ int main(void) {
       bb_smatmul_os(5, 6, 7, 16, 16, 16, lane == 0, lane == 15, 0);
     }
   bb_mvout((uintptr_t)output, 7, 16, 1);
-  bb_fence();
 
   uint32_t hash = 2166136261U;
   for (size_t i = 0; i < sizeof(output); ++i) {

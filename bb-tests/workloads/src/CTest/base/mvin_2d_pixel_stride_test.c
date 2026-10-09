@@ -29,13 +29,11 @@ int main(void) {
     int stride = test ? 72 : 256;
     int first_row = test == 2 ? 56 : 0;
     int rows = test == 2 ? 64 : 8;
-    bb_dma_fence();
     bb_mem_alloc(bank, 1, 1);
     if (test == 2)
       bb_mvin((uintptr_t)zeros, bank, 64, 1);
     bb_mvin_2d(source, bank, 1, stride, 8, first_row, 8, BANK_WIDTH / 8);
     bb_mvout((uintptr_t)output, bank, rows, 1);
-    bb_fence();
 
     for (int row = 0; row < rows; ++row) {
       for (int byte = 0; byte < BANK_WIDTH / 8; ++byte) {

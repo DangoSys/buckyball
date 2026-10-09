@@ -62,11 +62,9 @@ static void reduce(void) {
     accumulator = target;
     target = previous;
     if (tile % WINDOW == WINDOW - 1) {
-      bb_fence();
       __atomic_store_n(&batch, tile / WINDOW + 1, __ATOMIC_RELEASE);
     }
   }
-  bb_fence();
   uint64_t result = tlink_shared_export(0, accumulator, 0);
   for (unsigned tile = 0; tile < BB_COMPUTE_TILES; ++tile)
     tlink_transfer(result, tile + 1, shared_base[tile] + 16, 16);

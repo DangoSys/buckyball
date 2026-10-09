@@ -66,6 +66,7 @@ object DeviceConnection {
       external.io.response(core).ready := !selectedScu && response.ready
     }
     scu.io.failure := VecInit(tilePorts.flatMap(_.failure))
+    scu.io.workDrained := VecInit(tilePorts.flatMap(_.workDrained))
     backing.io.dma(dmaMasters) <> external.io.axi
     dlink.axi <> backing.io.axi
 

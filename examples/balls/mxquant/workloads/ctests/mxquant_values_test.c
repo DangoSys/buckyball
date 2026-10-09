@@ -42,14 +42,12 @@ int main(void) {
       return 2;
     uint32_t state = 0x1fu | (test % 5) << 5, after;
     asm volatile("csrw fcsr, %0" : : "r"(state));
-    bb_dma_fence();
     bb_mem_alloc(3, 1, 1);
     bb_mem_alloc(4, 1, 1);
     bb_mvin((uintptr_t)input, 3, 8, 1);
     bb_mvin((uintptr_t)actual, 4, 4, 1);
     bb_mxquant(3, 4, 32);
     bb_mvout((uintptr_t)actual, 4, 4, 1);
-    bb_fence();
     asm volatile("csrr %0, fcsr" : "=r"(after));
     if (after != state || memcmp(actual, expected, sizeof(actual)))
       return 3;

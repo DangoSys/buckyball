@@ -11,28 +11,34 @@
 #include <sys/mman.h>
 #endif
 extern const unsigned char ant_image[], ant_image_end[];
-static float a[BB_COMPUTE_TILES][ANT_M * ANT_K]
-    __attribute__((aligned(64), section(".noinit")));
-static float b[BB_COMPUTE_TILES][ANT_N * ANT_K]
-    __attribute__((aligned(64), section(".noinit")));
-static float out[BB_COMPUTE_TILES][ANT_M * ANT_N]
-    __attribute__((aligned(64), section(".noinit")));
+struct matrices {
+  float a[BB_COMPUTE_TILES][ANT_M * ANT_K];
+  float b[BB_COMPUTE_TILES][ANT_N * ANT_K];
+  float out[BB_COMPUTE_TILES][ANT_M * ANT_N];
+};
+static constexpr matrices prepare() {
+  matrices data{};
+  for (unsigned tile = 0; tile < BB_COMPUTE_TILES; ++tile) {
+    for (unsigned row = 0; row < ANT_M; ++row)
+      for (unsigned k = 0; k < ANT_K; ++k)
+        data.a[tile][row * ANT_K + k] = row + tile + 1;
+    for (unsigned col = 0; col < ANT_N; ++col)
+      for (unsigned k = 0; k < ANT_K; ++k)
+        data.b[tile][col * ANT_K + k] = col + 1;
+    for (unsigned i = 0; i < ANT_M * ANT_N; ++i)
+      data.out[tile][i] = -1;
+  }
+  return data;
+}
+alignas(64) static matrices data = prepare();
 static unsigned done[BB_COMPUTE_TILES];
 static void exercise(unsigned tile) {
   size_t bytes = ant_image_end - ant_image;
   if (bytes > ant_query(0, ANT_CODE_BYTES) ||
       ant_query(0, ANT_SIGNATURE) != CORE_SIGNATURE)
     __builtin_trap();
-  for (unsigned row = 0; row < ANT_M; ++row)
-    for (unsigned k = 0; k < ANT_K; ++k)
-      a[tile][row * ANT_K + k] = row + tile + 1;
-  for (unsigned col = 0; col < ANT_N; ++col)
-    for (unsigned k = 0; k < ANT_K; ++k)
-      b[tile][col * ANT_K + k] = col + 1;
-  for (unsigned i = 0; i < ANT_M * ANT_N; ++i)
-    out[tile][i] = -1;
-  struct ant_mxmm_args args = {(uintptr_t)a[tile], (uintptr_t)b[tile],
-                               (uintptr_t)out[tile]};
+  struct ant_mxmm_args args = {(uintptr_t)data.a[tile], (uintptr_t)data.b[tile],
+                               (uintptr_t)data.out[tile]};
   ant_write(0, ANT_CODE, 0, ant_image, bytes);
   ant_write(0, ANT_TLS, 0, &args, sizeof(args));
   uint64_t base = ant_query(0, ANT_TLS_BASE),
@@ -47,7 +53,7 @@ static void exercise(unsigned tile) {
   ant_release();
   for (unsigned row = 0; row < ANT_M; ++row)
     for (unsigned col = 0; col < ANT_N; ++col)
-      if (out[tile][row * ANT_N + col] !=
+      if (data.out[tile][row * ANT_N + col] !=
           (float)(ANT_K * (row + tile + 1) * (col + 1)))
         __builtin_trap();
   __atomic_store_n(&done[tile], 1, __ATOMIC_RELEASE);

@@ -356,7 +356,6 @@ public:
           (traceMegaStageLimit < 0 ||
            static_cast<int64_t>(stageIndex) < traceMegaStageLimit);
       if (traceStage) {
-        b.create<FenceOp>(loc);
         int64_t channelBase = 0;
         for (auto [bankIndex, output] : llvm::enumerate(outputs)) {
           int64_t rows = outputK[bankIndex] / kTile;
@@ -364,7 +363,6 @@ public:
               loc, MemRefType::get({rows, kTile}, b.getI8Type()));
           hostPacks.push_back(pack);
           outputs[bankIndex] = mvoutBank(b, loc, pack, output, rows);
-          b.create<FenceOp>(loc);
           int64_t validChannels = std::min(outputK[bankIndex], n - channelBase);
           auto channelLoop = b.create<scf::ForOp>(
               loc, zero, b.create<arith::ConstantIndexOp>(loc, validChannels),
@@ -392,7 +390,6 @@ public:
       activationK = outputK;
 
       if (last) {
-        b.create<FenceOp>(loc);
         for (auto [panel, packed] : llvm::enumerate(finalPacks)) {
           int64_t n0 = panel * kTile;
           int64_t validN = std::min(kTile, n - n0);

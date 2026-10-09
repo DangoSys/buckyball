@@ -46,7 +46,6 @@ func.func @main() -> i8 {
   buckyball.vecmat16 %al, %bl, %cl, %depth, %mode : i64
   %stored = buckyball.bank_mvout %c %cl %depth %stride
       : memref<16x16xi32> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
   buckyball.bank_release %al : i64
   buckyball.bank_release %bl : i64

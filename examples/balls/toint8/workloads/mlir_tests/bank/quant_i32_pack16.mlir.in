@@ -38,7 +38,6 @@ func.func @main() -> i8 {
   %loaded_output = buckyball.bank_mvin %seed %output_bank %out_depth %stride : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
   %result = buckyball.bank_quant_i32_to_i8 %loaded_input %loaded_scale %loaded_output %depth %zero64 %zero64 <outputHeight = @BB_QUANT_I32_OUTPUT_ROWS@, outputStride = 1, outputWidth = 1, relu = false> : i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %result %out_depth %stride : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
   buckyball.bank_release %loaded_input : i64
   buckyball.bank_release %loaded_scale : i64

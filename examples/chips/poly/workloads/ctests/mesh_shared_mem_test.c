@@ -36,11 +36,9 @@ int main(void) {
       source[bank][byte] = (uint8_t)(bank * 17 + byte);
     bb_mvin((uintptr_t)source[bank], BB_SHARED_BANK_BASE + bank, 1, 1);
   }
-  bb_fence();
 
   for (int bank = 0; bank < SHARED_TEST_BANKS; ++bank)
     bb_mvout((uintptr_t)result[bank], BB_SHARED_BANK_BASE + bank, 1, 1);
-  bb_fence();
 
   for (int bank = 0; bank < SHARED_TEST_BANKS; ++bank) {
     for (int byte = 0; byte < ROW_BYTES; ++byte)
@@ -48,6 +46,5 @@ int main(void) {
         return 1;
     bb_mem_release(BB_SHARED_BANK_BASE + bank);
   }
-  bb_fence();
   return 0;
 }

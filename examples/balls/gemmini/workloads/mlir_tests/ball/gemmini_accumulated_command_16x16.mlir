@@ -57,7 +57,6 @@ func.func @main() -> i8 {
   buckyball.gemmini "GEMMINI_CONFIG" %zero64, %config : i64
   buckyball.gemmini "GEMMINI_COMPUTE_ACCUMULATED" %compute_rs1_final, %compute_rs2 : i64
   buckyball.mvout %c %c_bank %depth16 %stride : memref<16x16xi32> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
   buckyball.mset %a_bank <alloc = false, row = 0, col = 0> : i64
   buckyball.mset %b_bank <alloc = false, row = 0, col = 0> : i64

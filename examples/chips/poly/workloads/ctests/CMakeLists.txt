@@ -24,9 +24,9 @@ target_include_directories(${POLY_CONTROL_NAME}-linux PRIVATE ${BUCKYBALL_ISA_DI
 target_link_libraries(${POLY_CONTROL_NAME}-linux PRIVATE pthread)
 add_dependencies(poly-ctests-build ${POLY_CONTROL_NAME}-linux-build)
 
-foreach(POLY_ANT_CASE mxmm shared bank parallel highpa tlink tlink_bank tlink_reduce coherence)
+foreach(POLY_ANT_CASE mxmm shared bank bank_rows parallel highpa tlink tlink_bank tlink_reduce coherence)
 set(POLY_ANT_CORE attention)
-if(POLY_ANT_CASE STREQUAL "bank")
+if(POLY_ANT_CASE STREQUAL "bank" OR POLY_ANT_CASE STREQUAL "bank_rows")
   set(POLY_ANT_CORE ffn)
 endif()
 buckyball_ctest_name(POLY_ANT_NAME ${POLY_ANT_CORE} chip-ant_${POLY_ANT_CASE})
@@ -62,7 +62,7 @@ add_custom_target(${POLY_ANT_NAME}-ant-build
 add_dependencies(poly-ctests-build ${POLY_ANT_NAME}-ant-build)
 
 set(POLY_ANT_CONTROL_SOURCES)
-if(POLY_ANT_CASE STREQUAL "bank" OR POLY_ANT_CASE STREQUAL "parallel")
+if(POLY_ANT_CASE STREQUAL "bank" OR POLY_ANT_CASE STREQUAL "bank_rows" OR POLY_ANT_CASE STREQUAL "parallel")
   list(APPEND POLY_ANT_CONTROL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ant_${POLY_ANT_CASE}_exercise.c)
 elseif(POLY_ANT_CASE STREQUAL "tlink_reduce")
@@ -79,11 +79,15 @@ file(GENERATE OUTPUT ${POLY_ANT_EMBED} CONTENT
 ".section .rodata.ant,\"a\",@progbits\n.balign 8\n.global ant_image, ant_image_end\nant_image:\n.incbin \"${POLY_ANT_IMAGE}.bin\"\nant_image_end:\n.section .note.GNU-stack,\"\",@progbits\n")
 set_source_files_properties(${POLY_ANT_EMBED} PROPERTIES
   OBJECT_DEPENDS "${POLY_ANT_IMAGE}.bin")
-buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/ant_${POLY_ANT_CASE}_main.c")
+set(POLY_ANT_MAIN ant_${POLY_ANT_CASE}_main.c)
+if(POLY_ANT_CASE STREQUAL "mxmm")
+  set(POLY_ANT_MAIN ant_mxmm_main.cpp)
+endif()
+buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN}")
 buckyball_ctest_name(POLY_ANT_HOST_NAME main chip-ant_${POLY_ANT_CASE})
 set(BUCKYBALL_CTEST_TARGET ${POLY_ANT_CORE})
 if(NOT POLY_ANT_CASE STREQUAL "highpa" AND NOT POLY_ANT_CASE MATCHES "^tlink" AND NOT POLY_ANT_CASE STREQUAL "coherence")
-add_buckyball_linux_ctest(${POLY_ANT_HOST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ant_${POLY_ANT_CASE}_main.c)
+add_buckyball_linux_ctest(${POLY_ANT_HOST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${POLY_ANT_MAIN})
 target_sources(${POLY_ANT_HOST_NAME}-linux PRIVATE ${POLY_ANT_EMBED} ${POLY_ANT_CONTROL_SOURCES})
 target_include_directories(${POLY_ANT_HOST_NAME}-linux PRIVATE ${BUCKYBALL_ISA_DIR}/chip)
 target_link_libraries(${POLY_ANT_HOST_NAME}-linux PRIVATE runtime_ant pthread)
@@ -117,10 +121,10 @@ add_custom_command(
     -I${BUCKYBALL_REPO_ROOT}/examples/balls/f32add/workloads
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}/bbsw/baremetal
     ${CMAKE_CURRENT_SOURCE_DIR}/controllers_start.S
-    ${CMAKE_CURRENT_SOURCE_DIR}/ant_${POLY_ANT_CASE}_main.c ${POLY_ANT_CONTROL_SOURCES} ${POLY_ANT_CONTROL_OBJECTS} ${POLY_ANT_EMBED}
+    ${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN} ${POLY_ANT_CONTROL_SOURCES} ${POLY_ANT_CONTROL_OBJECTS} ${POLY_ANT_EMBED}
     ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/ant.c
     ${BUCKYBALL_REPO_ROOT}/stack/runtime/src/tlink.c -lgcc -o ${POLY_ANT_HOST_ELF}
-  DEPENDS ant_${POLY_ANT_CASE}_main.c ant_${POLY_ANT_CASE}.h controllers_start.S ${POLY_ANT_EMBED}
+  DEPENDS ${POLY_ANT_MAIN} ant_${POLY_ANT_CASE}.h controllers_start.S ${POLY_ANT_EMBED}
     ${BBSW_BAREMETAL_DIR}/start.S ${BBSIM_LD}
     ${POLY_ANT_CONTROL_SOURCES} ${POLY_ANT_CONTROL_OBJECTS}
     ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_CORE}/params.h

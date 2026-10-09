@@ -7,7 +7,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.frontend.decoder.{DomainId, PostGDCmd}
 import framework.frontend.scoreboard.{BankAccessInfo, BankAliasTable, BankScoreboard}
-import framework.memdomain.frontend.cmd.decoder.DISA.MSET_BITPAT
+import framework.memdomain.frontend.cmd.decoder.DISA.{MSET_BITPAT, MVIN_MMIO_BITPAT}
 import framework.frontend.decoder.GISA.{MVIN_KERNEL_BITPAT, RUN_KERNEL_BITPAT}
 import framework.memdomain.backend.shared.SharedMemLayout
 import framework.memdomain.backend.banks.btrace.{BTraceRecord, PhysicalBankHash}
@@ -240,6 +240,13 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
   val allocIsConfig       = io.alloc.bits.cmd.funct === MSET_BITPAT
   val allocIsBall         = io.alloc.bits.domain_id === DomainId.BALL
+  // MMIO is a separate shared storage resource, independent of tensor banks.
+  val mmioReaders         = b.ballDomain.ballIdMappings.filter(_.mmioReadBW > 0)
+  val mmioWriters         = b.ballDomain.ballIdMappings.filter(_.mmioWriteBW > 0)
+  val allocMmioRead       = mmioReaders.map(m => allocIsBall && io.alloc.bits.ball_bid === m.ballId.U)
+    .foldLeft(false.B)(_ || _)
+  val allocMmioWrite      = io.alloc.bits.cmd.funct === MVIN_MMIO_BITPAT ||
+    mmioWriters.map(m => allocIsBall && io.alloc.bits.ball_bid === m.ballId.U).foldLeft(false.B)(_ || _)
   val allocDependencyBits = Wire(Vec(robDepth, Bool()))
   for (older <- 0 until robDepth) {
     val olderUseMask   = entryRawReads(older) | entryRawWrites(older)
@@ -250,10 +257,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val sameBall       = allocIsBall &&
       robEntries(older).cmd.domain_id === DomainId.BALL &&
       robEntries(older).cmd.ball_bid === io.alloc.bits.ball_bid
+    val olderIsBall    = robEntries(older).cmd.domain_id === DomainId.BALL
+    val olderMmioRead  = mmioReaders
+      .map(m => olderIsBall && robEntries(older).cmd.ball_bid === m.ballId.U).foldLeft(false.B)(_ || _)
+    val olderMmioWrite = robEntries(older).cmd.cmd.funct === MVIN_MMIO_BITPAT ||
+      mmioWriters.map(m => olderIsBall && robEntries(older).cmd.ball_bid === m.ballId.U).foldLeft(false.B)(_ || _)
+    val mmioConflict   = (allocMmioRead && olderMmioWrite) ||
+      (allocMmioWrite && (olderMmioRead || olderMmioWrite))
     // Config conflicts include entries that have completed but are waiting to
     // commit. RAW conflicts and same-Ball commands release at completion.
     allocDependencyBits(older) :=
-      (robValid(older) && !robComplete(older) && (rawConflict || sameBall)) ||
+      (robValid(older) && !robComplete(older) && (rawConflict || sameBall || mmioConflict)) ||
         (robValid(older) && configConflict)
   }
   val allocDependencies = allocDependencyBits.asUInt

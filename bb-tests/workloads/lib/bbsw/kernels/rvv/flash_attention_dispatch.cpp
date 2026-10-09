@@ -93,13 +93,10 @@ extern "C" void _mlir_ciface_rvv_flash_attention(
                             (uint64_t(keyCount) << 48);
     packet.launch.reserved = 0;
     bb_mvin_group((uintptr_t)&packet, writeBank, 0, sizeof(packet) / 16, 1);
-    bb_fence();
     run_kernel(readBank, programBank, writeBank, 0);
-    bb_fence();
     bb_mvout_group(
         (uintptr_t)&packet, writeBank, 0,
         phase == 5 ? sizeof(packet) / 16 : sizeof(kernel_launch) / 16, 1);
-    bb_fence();
     asm volatile("csrs fflags, %0" ::"r"(packet.launch.reserved) : "memory");
   };
   for (int64_t batch = 0; batch < batches; ++batch)
@@ -109,7 +106,6 @@ extern "C" void _mlir_ciface_rvv_flash_attention(
         unsigned rows = std::min<int64_t>(tileRows, queries - queryBegin);
         panel(q, batch, head, queryBegin, rows, width, staging);
         bb_mvin_group((uintptr_t)staging, readBank, 0, rows * width / 4, 1);
-        bb_fence();
         launch(0, rows, 0);
         for (int64_t keyBegin = 0; keyBegin < keys;
              keyBegin += rvv_flash::keys) {
@@ -141,7 +137,6 @@ extern "C" void _mlir_ciface_rvv_flash_attention(
         }
         launch(5, rows, 0);
         bb_mvout_group((uintptr_t)staging, writeBank, 1, rows * width / 4, 1);
-        bb_fence();
         for (unsigned row = 0; row < rows; ++row) {
           std::memcpy(out.data + out.offset + batch * out.strides[0] +
                           head * out.strides[1] +

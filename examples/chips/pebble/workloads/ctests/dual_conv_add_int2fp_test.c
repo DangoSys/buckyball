@@ -43,7 +43,6 @@ static void run_branch(int branch, int out_bank) {
   bb_im2col(0, 1, IN, K, 1, 0, 0, 0, 0, 0, 0, WINDOWS);
   bb_mvin((uintptr_t)weights[branch], 0, PACKED_K, 1);
   bb_smatmul_os(1, 0, out_bank, TILE, TILE, PACKED_K, 1, 1, 0);
-  bb_fence();
 }
 
 int main(void) {
@@ -68,7 +67,6 @@ int main(void) {
   bb_matadd(2, 4, 6, RESULT_ROWS);
   bb_int32_to_fp32(6, 3, 5, RESULT_ROWS, 0);
   bb_mvout((uintptr_t)output, 5, RESULT_ROWS, 1);
-  bb_fence();
 
   for (int row = 0; row < WINDOWS; ++row)
     for (int column = 0; column < TILE; ++column)

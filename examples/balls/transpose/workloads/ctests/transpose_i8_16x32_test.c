@@ -57,7 +57,6 @@ int main(void) {
   bb_mvin((uintptr_t)input_matrix, src, ROWS, 1);
   bb_transpose(src, dst, ROWS, ELEM_BITS);
   bb_mvout((uintptr_t)output_matrix, dst, ROWS, 1);
-  bb_fence();
   bb_mem_release(src);
   bb_mem_release(dst);
 

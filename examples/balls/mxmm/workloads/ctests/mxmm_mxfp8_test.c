@@ -27,7 +27,6 @@ int main(void) {
       for (int i = 0; i < 4 + m * n; ++i)
         actual[i] = 0x5a5a5a5a;
       // Publish CPU input/output initialization once before this DMA chain.
-      bb_dma_fence();
       for (int bank = 3; bank <= 5; ++bank)
         bb_mem_alloc(bank, 1, 1);
       bb_mvin((uintptr_t)a, 3, (m * (K + K / 32) + 15) / 16, 1);
@@ -35,7 +34,6 @@ int main(void) {
       bb_mvin((uintptr_t)actual, 5, 1 + m * n / 4, 1);
       bb_mxmm_mxfp8(3, 4, 5, m, n, K, 1, 0, 1);
       bb_mvout((uintptr_t)actual, 5, 1 + m * n / 4, 1);
-      bb_fence();
       for (int i = 0; i < 4 + m * n; ++i)
         if (actual[i] != 0x5a5a5a5a)
           return 1;
@@ -43,12 +41,10 @@ int main(void) {
         memset(a + row * K, 0xb8, K);
       for (int col = 0; col < n; ++col)
         memset(b + col * K, 0x38, K);
-      bb_dma_fence();
       bb_mvin((uintptr_t)a, 3, (m * (K + K / 32) + 15) / 16, 1);
       bb_mvin((uintptr_t)b, 4, n * (K + K / 32) / 16, 1);
       bb_mxmm_mxfp8(3, 4, 5, m, n, K, 0, 1, 1);
       bb_mvout((uintptr_t)actual, 5, 1 + m * n / 4, 1);
-      bb_fence();
       for (int i = 0; i < 4; ++i)
         if (actual[i] != 0x5a5a5a5a)
           return 2;
@@ -67,12 +63,10 @@ int main(void) {
       memset(b, 0, sizeof(b));
       memset(a, 0x81, m * K);
       memset(b, 0x01, n * K);
-      bb_dma_fence();
       bb_mvin((uintptr_t)a, 3, (m * (K + K / 32) + 15) / 16, 1);
       bb_mvin((uintptr_t)b, 4, n * (K + K / 32) / 16, 1);
       bb_mxmm_mxfp8(3, 4, 5, m, n, K, 1, 1, 1);
       bb_mvout((uintptr_t)actual, 5, 1 + m * n / 4, 1);
-      bb_fence();
       for (int i = 4; i < 4 + m * n; ++i)
         if (actual[i] != 0x80000000u)
           return 4;

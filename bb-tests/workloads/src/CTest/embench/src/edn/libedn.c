@@ -37,8 +37,7 @@
 
 /* This scale factor will be changed to equalise the runtime of the
    benchmarks. */
-// #define LOCAL_SCALE_FACTOR 87  // Original value for FPGA/real hardware
-#define LOCAL_SCALE_FACTOR 3 // Reduced for Verilator simulation
+#define LOCAL_SCALE_FACTOR 1
 
 #define N 100
 #define ORDER 50

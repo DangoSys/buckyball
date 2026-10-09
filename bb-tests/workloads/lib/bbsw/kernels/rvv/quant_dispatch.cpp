@@ -26,14 +26,11 @@ extern "C" void mxfp8_quant(const uint32_t *input, uint8_t *output,
   std::memcpy(descriptor, &call, sizeof(call));
   bb_mvin_group((uintptr_t)descriptor, writeBank, 0, sizeof(descriptor) / 16,
                 1);
-  bb_fence();
   run_kernel(readBank, programBank, writeBank, 0);
-  bb_fence();
   bb_mvout_group((uintptr_t)descriptor, writeBank, 0, sizeof(descriptor) / 16,
                  1);
   bb_mvout_group((uintptr_t)output, writeBank, 1,
                  (count + count / 32 + 15) / 16, 1);
-  bb_fence();
   if (descriptor[offsetof(kernel_launch, reserved)]) {
     fputs("mxfp8: non-finite activation\n", stderr);
     abort();

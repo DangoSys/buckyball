@@ -41,7 +41,6 @@ extern "C"
   bb_smatmul_os(1, 2, 4, DIM, DIM, DIM, 1, 1, 0);
   bb_quant_i32_to_i8(4, 8, 9, DIM * 4, 0, 0, 4, 4, 4, 0);
   bb_mvout((uintptr_t)output[slot], 9, DIM, 1);
-  bb_fence();
   for (int row = 0; row < DIM; ++row)
     for (int col = 0; col < DIM; ++col) {
       int expected = 0;

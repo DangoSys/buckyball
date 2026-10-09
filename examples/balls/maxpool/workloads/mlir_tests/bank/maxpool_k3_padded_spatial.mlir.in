@@ -32,10 +32,8 @@ func.func @main() -> i8 {
     %loaded_output = buckyball.bank_mvin %out %ob %depth %stride : memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>> i64 i64 i64
     %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 <inputSide = 8, outputSide = 8, kernel = 3, stride = 1, padding = 1, startRow = 0, startCol = 0> : i64 i64 i64 i64 i64 i64
     %stored = buckyball.bank_mvout %out %result %depth %stride : memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>> i64 i64 i64
-    buckyball.fence
     scf.yield %loaded_input, %stored : i64, i64
   }
-  buckyball.fence
   func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
   buckyball.bank_release %final#0 : i64
   buckyball.bank_release %final#1 : i64

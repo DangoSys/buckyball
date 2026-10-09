@@ -46,7 +46,6 @@ object SubRobRow {
       w.slots(i).cmd.op1_col      := 0.U
       w.slots(i).cmd.op2_col      := 0.U
       w.slots(i).cmd.wr_col       := 0.U
-      w.slots(i).cmd.isFence      := false.B
       w.slots(i).cmd.isBarrier    := false.B
     }
     w

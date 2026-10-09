@@ -42,7 +42,6 @@ int main(void) {
   bb_mvin((uintptr_t)scale, 5, CHANNEL_ROWS, 1);
   bb_int32_to_fp32(4, 5, 6, F32_ROWS, 0);
   bb_mvout((uintptr_t)output, 6, F32_ROWS, 1);
-  bb_fence();
   for (int row = 0; row < M; ++row)
     for (int col = 0; col < N; ++col) {
       int expected = bias[col];

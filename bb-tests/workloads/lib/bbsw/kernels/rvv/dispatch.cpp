@@ -47,9 +47,7 @@ uint32_t roundingMode() {
 
 void launch(const void *descriptor, uint32_t bytes, unsigned buffer) {
   bb_mvin_group((uintptr_t)descriptor, writeBank, 0, bytes / 16, 1);
-  bb_fence();
   run_kernel(readBank, programBank + buffer, writeBank, 0);
-  bb_fence();
 }
 
 void send(const float *input, unsigned bank, uint32_t count, float *staging) {
@@ -64,7 +62,6 @@ void send(const float *input, unsigned bank, uint32_t count, float *staging) {
 void receive(float *output, uint32_t count, float *staging) {
   bb_mvout_group((uintptr_t)(count % 4 ? staging : output), writeBank, 1,
                  (count + 3) / 4, 1);
-  bb_fence();
   if (count % 4)
     std::memcpy(output, staging, count * sizeof(float));
 }
@@ -76,7 +73,6 @@ void receiveTensor(float *output, uint32_t count, float *staging) {
   alignas(16) kernel_launch descriptor;
   bb_mvout_group((uintptr_t)&descriptor, writeBank, 0, sizeof(descriptor) / 16,
                  1);
-  bb_fence();
   asm volatile("csrs fflags, %0" ::"r"(descriptor.reserved) : "memory");
 }
 

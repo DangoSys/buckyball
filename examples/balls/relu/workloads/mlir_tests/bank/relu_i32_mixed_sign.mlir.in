@@ -34,7 +34,6 @@ func.func @main() -> i8 {
   %result = buckyball.bank_relu %loaded %group %lines %lines : i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %result %lines %stride
       : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32> i64 i64 i64
-  buckyball.fence
   buckyball.bank_release %stored : i64
 
   func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>) -> ()

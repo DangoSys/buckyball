@@ -17,7 +17,6 @@ int main(void) {
   bb_mvin((uintptr_t)input, 0, ROW + 1, 1);
   bb_maxpool(0, 1, 4, 1, 1, 1, 0, ROW, 0, 1, 0, 0);
   bb_mvout((uintptr_t)output, 1, 1, 1);
-  bb_fence();
   for (int c = 0; c < LANES; ++c)
     if (output[c] != (int8_t)(c - LANES / 2)) {
       printf("maxpool offset mismatch c=%d\n", c);

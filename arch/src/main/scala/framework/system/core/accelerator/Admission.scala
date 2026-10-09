@@ -68,7 +68,7 @@ class Admission(
     b.frontend.rob_entries,
     tracking,
     nPMPs,
-    Seq(GISA.FENCE_BITPAT.value.toInt, GISA.BARRIER_BITPAT.value.toInt)
+    Seq(GISA.BARRIER_BITPAT.value.toInt)
   ))
 
   val interlock:   Instance[Interlock]     = Instantiate(new Interlock(internalTracking))
@@ -78,7 +78,7 @@ class Admission(
 
   val live                 = RegInit(VecInit(Seq.fill(n)(false.B)))
   val memory               = RegInit(VecInit(Seq.fill(n)(false.B)))
-  val fence                = RegInit(VecInit(Seq.fill(n)(false.B)))
+  val barrier              = RegInit(VecInit(Seq.fill(n)(false.B)))
   val retirementSeen       = RegInit(VecInit(Seq.fill(n)(false.B)))
   val interlockDone        = RegInit(VecInit(Seq.fill(n)(false.B)))
   val noMemoryPending      = RegInit(VecInit(Seq.fill(n)(false.B)))
@@ -120,10 +120,9 @@ class Admission(
     Error.Context.U     -> DmaError.Context.U
   ))
 
-  val command = io.core.command
-  val isTask  = command.bits.instruction.opcode === "h2b".U
-  val isFence = !isTask && (command.bits.instruction.funct === GISA.FENCE_BITPAT ||
-    command.bits.instruction.funct === GISA.BARRIER_BITPAT)
+  val command   = io.core.command
+  val isTask    = command.bits.instruction.opcode === "h2b".U
+  val isBarrier = !isTask && command.bits.instruction.funct === GISA.BARRIER_BITPAT
 
   val isMemory = !isTask && (command.bits.instruction.funct === DISA.MVIN_BITPAT ||
     command.bits.instruction.funct === DISA.MVIN_2D_BITPAT ||
@@ -131,27 +130,27 @@ class Admission(
     command.bits.instruction.funct === DISA.MVOUT_BITPAT ||
     command.bits.instruction.funct === GISA.MVIN_KERNEL_BITPAT)
 
-  val fenceProtect = fence.asUInt.orR || (command.valid && isFence)
+  val barrierProtect = barrier.asUInt.orR || (command.valid && isBarrier)
 
   val unknownSubMemory =
     if (b.frontend.sub_rob_enable)
-      VecInit((0 until parents).map(i => live(i) && !memory(i) && !retirementSeen(i) && !fence(i))).asUInt.orR
+      VecInit((0 until parents).map(i => live(i) && !memory(i) && !retirementSeen(i) && !barrier(i))).asUInt.orR
     else false.B
 
   val childDispatch    = childDispatchPending.asUInt.orR
   val dispatchProducer = PriorityEncoder(childDispatchPending)
   interlock.io.dispatch.valid                                                              := !halted && (childDispatch ||
-    (io.core.reserve.valid && !fenceProtect && !unknownSubMemory))
+    (io.core.reserve.valid && !barrierProtect && !unknownSubMemory))
   interlock.io.dispatch.bits                                                               := io.core.reserve.bits
   when(childDispatch)(interlock.io.dispatch.bits.id                                        := parents.U + dispatchProducer)
   io.core.reserve.ready                                                                    := interlock.io.dispatch.ready && !halted &&
-    !fenceProtect && !unknownSubMemory && !childDispatch
+    !barrierProtect && !unknownSubMemory && !childDispatch
   when(interlock.io.dispatch.fire && childDispatch)(childDispatchPending(dispatchProducer) := false.B)
   when(io.core.reserve.fire) {
     val tag = io.core.reserve.bits.id
     assert(tag < parents.U && !live(index(tag)), "Admission reused a live Core tag")
     parentTags(index(tag))      := tag
-    live(index(tag))            := true.B; memory(index(tag))         := false.B; fence(index(tag))           := false.B
+    live(index(tag))            := true.B; memory(index(tag))         := false.B; barrier(index(tag))         := false.B
     retirementSeen(index(tag))  := false.B; interlockDone(index(tag)) := false.B
     noMemoryPending(index(tag)) := false.B; shapeClaimed(index(tag))  := false.B; preparedStarted(index(tag)) := false.B
     mapReady(index(tag))        := false.B; grantSeen(index(tag))     := false.B; doneIssued(index(tag))      := false.B
@@ -165,7 +164,7 @@ class Admission(
   when(command.fire) {
     assert(command.bits.tag < parents.U && known(command.bits.tag), "Admission command has no reserved Core tag")
     val slot = index(command.bits.tag)
-    memory(slot)          := isMemory; fence(slot) := isFence
+    memory(slot)          := isMemory; barrier(slot) := isBarrier
     noMemoryPending(slot) := !isMemory
   }
   io.npuCommand <> bridge.io.npuCommand
@@ -176,8 +175,8 @@ class Admission(
   io.core.response <> responses.io.out
   io.core.interrupt         := io.npuInterrupt || io.task.interrupt
   interlock.io.cpuQuery     := io.core.cpuQuery
-  io.core.cpuAllow          := interlock.io.cpuAllow && !halted && !fenceProtect && !unknownSubMemory
-  io.core.cpuProbeAllow     := interlock.io.cpuProbeAllow && !halted && !fenceProtect && !unknownSubMemory
+  io.core.cpuAllow          := interlock.io.cpuAllow && !halted && !barrierProtect && !unknownSubMemory
+  io.core.cpuProbeAllow     := interlock.io.cpuProbeAllow && !halted && !barrierProtect && !unknownSubMemory
   io.core.maintenance <> interlock.io.maintenance
   interlock.io.maintained <> io.core.maintained
   io.core.pteRequest <> preparation.io.pteRequest
@@ -185,7 +184,7 @@ class Admission(
   interlock.io.cancel.valid := false.B; interlock.io.cancel.bits := 0.U.asTypeOf(interlock.io.cancel.bits)
   io.core.cancelled.valid   := false.B; io.core.cancelled.bits   := 0.U.asTypeOf(io.core.cancelled.bits)
 
-  // Notices never wait for other tags: otherwise a high-priority fence notice
+  // Notices never wait for other tags: otherwise a high-priority barrier notice
   // could prevent older ROB retirements from reaching the completion join.
   bridge.io.retirement.ready  := true.B
   when(bridge.io.retirement.fire) {
@@ -240,7 +239,7 @@ class Admission(
       }.otherwise {
         val tag = Mux(footprint.is_sub, childTag, snapshot.bits.tag); val slot = index(tag)
         when(footprint.is_sub) {
-          live(slot)              := true.B; memory(slot)           := true.B; fence(slot)       := false.B
+          live(slot)              := true.B; memory(slot)           := true.B; barrier(slot)     := false.B
           parentTags(slot)        := snapshot.bits.tag
           retirementSeen(slot)    := false.B; interlockDone(slot)   := false.B
           noMemoryPending(slot)   := false.B; preparedStarted(slot) := false.B
@@ -382,7 +381,7 @@ class Admission(
 
   val releasable = VecInit((0 until n).map(i =>
     live(i) && retirementSeen(i) && interlockDone(i) &&
-      errors(i).error === DmaError.None.U && (!fence(i) ||
+      errors(i).error === DmaError.None.U && (!barrier(i) ||
         (PopCount(live) === 1.U && !io.npuBusy && !io.dma.readBusy && !io.dma.writeBusy)) &&
       (if (i < parents) !VecInit((parents until parents + 3).map(j => live(j) && parentTags(j) === i.U)).asUInt.orR
        else true.B)
@@ -403,7 +402,7 @@ class Admission(
   val releaseFire = releaseOffer && releaseReady && !halted && (!releasingMap || preparation.io.release.ready)
   when(releaseFire) {
     assert(!releasingMap || preparation.io.release.fire, "Admission map/Core release is not atomic")
-    live(releaseTag) := false.B; fence(releaseTag) := false.B; releaseOffer := false.B
+    live(releaseTag) := false.B; barrier(releaseTag) := false.B; releaseOffer := false.B
     for (i <- 0 until 3) {
       when(releaseTag === (parents + i).U)(producerBound(i) := false.B)
     }

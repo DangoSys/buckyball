@@ -37,7 +37,6 @@ int main(void) {
   bb_smatmul_bias(BIAS_BANK, 0);
   bb_smatmul_os(A_BANK, B_BANK, C_BANK, M, N, K, 1, 1, 0);
   bb_mvout((uintptr_t)actual, C_BANK, M * 4, 1);
-  bb_fence();
 
   for (int row = 0; row < M; ++row)
     for (int col = 0; col < N; ++col) {

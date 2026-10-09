@@ -31,7 +31,6 @@ int main(void) {
   bb_mvout_group((uintptr_t)groups[0], 3, 1, 16, 1);
   bb_mvout_group((uintptr_t)groups[1], 3, 2, 16, 1);
   release_kernel(VIRTUAL_BANK_NUM);
-  bb_fence();
   for (unsigned row = 0; row < 16; ++row)
     for (unsigned group = 0; group < 2; ++group)
       for (unsigned lane = 0; lane < 4; ++lane)

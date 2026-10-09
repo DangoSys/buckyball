@@ -117,7 +117,6 @@ SmallVector<Value> matrix(PatternRewriter &b, MXFP8MemMatmulOp op, Value r,
       loc, b.getI64Type(), dmaView, w,
       b.create<arith::IndexCastOp>(loc, b.getI64Type(), rows),
       createI64Const(b, loc, 1), b.getI64IntegerAttr(1));
-  b.create<FenceOp>(loc);
   b.create<scf::YieldOp>(loc, ValueRange{r, w});
   b.setInsertionPointAfter(loop);
   b.eraseOp(op);
@@ -309,7 +308,6 @@ public:
                    createI64Const(b, loc, width), createI64Const(b, loc, 0),
                    createI64Const(b, loc, 0), createI64Const(b, loc, 0),
                    createI64Const(b, loc, bytes), mean, epsilon});
-    b.create<FenceOp>(loc);
     releaseBank(b, loc, finished.getReadOut());
     releaseBank(b, loc, finished.getWriteOut());
     for (Operation *view : views)

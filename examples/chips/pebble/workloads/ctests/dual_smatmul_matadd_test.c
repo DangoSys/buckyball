@@ -26,7 +26,6 @@ static void run(const int8_t *a, const int8_t *b, int32_t *c, int out_bank) {
   bb_smatmul_bias(0, 0);
   bb_smatmul_os(1, 2, out_bank, M, N, K, 1, 1, 0);
   bb_mvout((uintptr_t)c, out_bank, C_ROWS, 1);
-  bb_fence();
   for (int bank = 0; bank < 3; ++bank)
     bb_mem_release(bank);
   bb_mem_release(out_bank);
@@ -53,7 +52,6 @@ int main(void) {
   bb_mvin((uintptr_t)c1, 1, C_ROWS, 1);
   bb_matadd(0, 1, 2, C_ROWS);
   bb_mvout((uintptr_t)out, 2, C_ROWS, 1);
-  bb_fence();
   for (int row = 0; row < M; ++row)
     for (int col = 0; col < N; ++col) {
       int index = (row * 4 + col / 4) * 4 + col % 4;

@@ -23,7 +23,6 @@ int main(int argc, char **argv) {
   bb_mem_alloc(1, 1, 2);
   bb_mvin((uintptr_t)first, 0, 2, 1);
   bb_mvin((uintptr_t)second, 1, 2, 1);
-  bb_fence();
   if (argc > 1) {
     if (!strcmp(argv[1], "same-bank"))
       bb_mem_transfer(0, 0);
@@ -46,7 +45,6 @@ int main(int argc, char **argv) {
   bb_mem_alloc(0, 1, 1);
   bb_mvin((uintptr_t)replacement, 0, 2, 1);
   bb_mvout((uintptr_t)result, 3, 2, 1);
-  bb_fence();
   for (unsigned row = 0; row < 2; ++row) {
     if (memcmp(result + row * 3 * ROW_BYTES, first + row * ROW_BYTES,
                ROW_BYTES) ||
@@ -58,7 +56,6 @@ int main(int argc, char **argv) {
   bb_mem_release(3);
   bb_mset_clear(4, 1, BANK_NUM);
   bb_mvout((uintptr_t)zeros, 4, 1, 1);
-  bb_fence();
   for (unsigned i = 0; i < sizeof(zeros); ++i)
     if (zeros[i])
       return 1;

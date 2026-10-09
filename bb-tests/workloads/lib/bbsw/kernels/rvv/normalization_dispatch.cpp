@@ -47,9 +47,7 @@ void send(const float *input, unsigned bank, uint32_t count, float *staging) {
 void launch(kernel_launch &descriptor) {
   bb_mvin_group((uintptr_t)&descriptor, writeBank, 0, sizeof(descriptor) / 16,
                 1);
-  bb_fence();
   run_kernel(readBank, programBank, writeBank, 0);
-  bb_fence();
 }
 void receive(float *output, uint32_t count, float *staging) {
   bb_mvout_group((uintptr_t)(count % 4 ? staging : output), writeBank, 1,
@@ -57,7 +55,6 @@ void receive(float *output, uint32_t count, float *staging) {
   alignas(16) kernel_launch descriptor;
   bb_mvout_group((uintptr_t)&descriptor, writeBank, 0, sizeof(descriptor) / 16,
                  1);
-  bb_fence();
   if (count % 4)
     std::memcpy(output, staging, count * sizeof(float));
   asm volatile("csrs fflags, %0" ::"r"(descriptor.reserved) : "memory");

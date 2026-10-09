@@ -6,5 +6,6 @@ tests = [
   "poly-main-ctest-chip-ant_mxmm-multicore-baremetal",
   "poly-main-ctest-chip-ant_shared-multicore-baremetal",
   "poly-main-ctest-chip-ant_bank-multicore-baremetal",
+  "poly-main-ctest-chip-ant_bank_rows-multicore-baremetal",
   "poly-main-ctest-chip-ant_parallel-multicore-baremetal",
 ]

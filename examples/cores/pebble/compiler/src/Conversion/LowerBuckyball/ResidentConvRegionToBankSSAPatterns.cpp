@@ -37,7 +37,6 @@ public:
                             int64_t traceMegaStageStart,
                             int64_t traceMegaStageLimit,
                             int64_t traceMegaRegion, bool traceMegaReloadStages,
-                            bool traceMegaFenceBeforeRegion,
                             bool traceMegaInputBeforeRegion)
       : OpRewritePattern<MegaKernelOp>(context, 4),
         traceMegaStages(traceMegaStages),
@@ -45,7 +44,6 @@ public:
         traceMegaStageLimit(traceMegaStageLimit),
         traceMegaRegion(traceMegaRegion),
         traceMegaReloadStages(traceMegaReloadStages),
-        traceMegaFenceBeforeRegion(traceMegaFenceBeforeRegion),
         traceMegaInputBeforeRegion(traceMegaInputBeforeRegion) {}
 
   LogicalResult matchAndRewrite(MegaKernelOp kernel,
@@ -550,8 +548,6 @@ public:
                      b.getArrayAttr({b.getI64IntegerAttr(traceRegionId), id}));
       trace->setAttr("buckyball.stage_trace", b.getUnitAttr());
     }
-    if (traceThisRegion && traceMegaFenceBeforeRegion)
-      b.create<FenceOp>(loc);
     Value zeroI8 =
         b.create<arith::ConstantOp>(loc, b.getI8Type(), b.getI8IntegerAttr(0));
     Value minI8 = b.create<arith::ConstantOp>(loc, b.getI8Type(),
@@ -1222,7 +1218,6 @@ public:
           Value pack = b.create<memref::AllocOp>(
               loc, MemRefType::get({target.bankDepth, kTile}, b.getI8Type()));
           mvoutBank(b, loc, pack, bank, target.bankDepth);
-          b.create<FenceOp>(loc);
           packs.push_back(pack);
         }
         for (int64_t localPanel = 0; localPanel < panelCount; ++localPanel) {
@@ -3009,7 +3004,6 @@ public:
         Value pack = b.create<memref::AllocOp>(
             loc, MemRefType::get({packedRows, kTile}, outputElementType));
         mvoutBank(b, loc, pack, output.banks.front(), usedBankRows);
-        b.create<FenceOp>(loc);
 
         auto panelLoop = b.create<scf::ForOp>(
             loc, zero, b.create<arith::ConstantIndexOp>(loc, requestedPanels),
@@ -3276,7 +3270,6 @@ private:
   int64_t traceMegaStageLimit;
   int64_t traceMegaRegion;
   bool traceMegaReloadStages;
-  bool traceMegaFenceBeforeRegion;
   bool traceMegaInputBeforeRegion;
   mutable int64_t nextTraceRegionId = 0;
 };
@@ -3288,10 +3281,10 @@ void populatePebbleResidentConvRegionToBankSSAPatterns(
     RewritePatternSet &patterns, bool traceMegaStages,
     int64_t traceMegaStageStart, int64_t traceMegaStageLimit,
     int64_t traceMegaRegion, bool traceMegaReloadStages,
-    bool traceMegaFenceBeforeRegion, bool traceMegaInputBeforeRegion) {
+    bool traceMegaInputBeforeRegion) {
   patterns.add<ResidentConvRegionPattern>(
       patterns.getContext(), traceMegaStages, traceMegaStageStart,
       traceMegaStageLimit, traceMegaRegion, traceMegaReloadStages,
-      traceMegaFenceBeforeRegion, traceMegaInputBeforeRegion);
+      traceMegaInputBeforeRegion);
 }
 } // namespace mlir::buddy

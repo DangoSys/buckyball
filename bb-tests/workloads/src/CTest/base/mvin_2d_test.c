@@ -53,7 +53,6 @@ int main(void) {
   for (int i = 0; i < 2 * TILE_ROWS * PANEL_BYTES; ++i)
     output[i] = (elem_t)-1;
 
-  bb_dma_fence();
   uint32_t bank = 0;
   bb_mem_alloc(bank, 1, 1);
   uintptr_t source =
@@ -63,7 +62,6 @@ int main(void) {
   bb_mvin_2d(source + PANEL_BYTES, bank, TILE_HEIGHT, CHANNELS, SOURCE_WIDTH,
              TILE_ROWS, TILE_WIDTH, CHANNELS - PANEL_BYTES);
   bb_mvout((uintptr_t)output, bank, 2 * TILE_ROWS, 1);
-  bb_fence();
 
   if (!check_output())
     return 1;

@@ -37,7 +37,6 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
   val instruction                                                = io.core.command.bits.instruction
   val isTask                                                     = instruction.opcode === "h2b".U
   val isMove                                                     = moves.B && instruction.opcode === "h7b".U && instruction.funct === MvoverISA.Funct.U
-  val isFence                                                    = instruction.opcode === "h7b".U && instruction.funct === 0.U
   val controller: Instance[TaskAdmission] = Instantiate(new TaskAdmission(tracking, nPMPs))
   controller.io.task <> io.task
   io.taskSatp                 := controller.io.satp
@@ -49,9 +48,9 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
 
   io.core.reserve.ready           := !reset.asBool
   io.core.command.ready           := state === idle && !reset.asBool &&
-    Mux(isTask, controller.io.command.ready, isFence || (isMove && io.move.command.ready))
+    Mux(isTask, controller.io.command.ready, isMove && io.move.command.ready)
   when(io.core.command.valid && state === idle && !reset.asBool) {
-    assert(isTask || isMove || isFence, "CPU-only controller received an unsupported compute instruction")
+    assert(isTask || isMove, "CPU-only controller received an unsupported compute instruction")
   }
   io.move.command.valid           := state === idle && io.core.command.valid && isMove && !reset.asBool
   io.move.command.bits.sourceCore := instruction.rs1Data(7, 0)
@@ -64,7 +63,7 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
   when(io.core.command.fire) {
     tag   := io.core.command.bits.tag
     rd    := instruction.rd
-    state := Mux(isTask, task, Mux(isMove, moving, releasing))
+    state := Mux(isTask, task, moving)
   }
   io.move.completion.ready        := state === moving && !reset.asBool
   when(io.move.completion.fire) {
@@ -91,10 +90,10 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
   io.core.cancelled.bits                                      := 0.U.asTypeOf(io.core.cancelled.bits)
   io.core.interrupt                                           := false.B
 
-  // A move/fence may have retired at CPU dispatch while its work is still pending here.
+  // A move may have retired at CPU dispatch while its work is still pending here.
   // Do not let a following CPU store publish a completion flag before the bank move ends.
-  val pendingMoveOrFence = io.core.command.valid && (isMove || isFence)
-  io.core.cpuAllow          := !(pendingMoveOrFence || state === moving || state === moveResponse || state === releasing)
+  val pendingMove = io.core.command.valid && isMove
+  io.core.cpuAllow          := !(pendingMove || state === moving || state === moveResponse || state === releasing)
   io.core.cpuProbeAllow     := io.core.cpuAllow
   io.core.maintenance.valid := false.B
   io.core.maintenance.bits  := 0.U.asTypeOf(io.core.maintenance.bits)

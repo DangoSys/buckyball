@@ -40,7 +40,6 @@ int main(void) {
     target = previous;
   }
   bb_mvout((uintptr_t)output, accumulator, 2, 1);
-  bb_fence();
   for (unsigned i = 0; i < 8; ++i) {
     uint32_t expected = 0;
     for (unsigned group = 0; group < 3; ++group)

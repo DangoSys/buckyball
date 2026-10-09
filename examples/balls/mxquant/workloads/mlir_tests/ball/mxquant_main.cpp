@@ -44,14 +44,12 @@ int main(void) {
       return 2;
     uint32_t state = 0x1fu | (test % 5) << 5, after;
     asm volatile("csrw fcsr, %0" : : "r"(state));
-    bb_dma_fence();
     bb_mem_alloc(3, 1, 1);
     bb_mem_alloc(4, 1, 1);
     bb_mvin((uintptr_t)input, 3, 8, 1);
     bb_mvin((uintptr_t)actual, 4, 4, 1);
     _mlir_ciface_quant_block_32();
     bb_mvout((uintptr_t)actual, 4, 4, 1);
-    bb_fence();
     asm volatile("csrr %0, fcsr" : "=r"(after));
     if (after != state || memcmp(actual, expected, sizeof(actual)))
       return 3;
@@ -67,14 +65,12 @@ int main(void) {
     for (int i = 0; i < MAX_COUNT; ++i)
       capacity_input[i] = (i & 1) ? 0xbf800000u : 0x3f800000u;
     memset(capacity_actual, 0x5a, sizeof(capacity_actual));
-    bb_dma_fence();
     bb_mem_alloc(3, 1, 1);
     bb_mem_alloc(4, 1, 1);
     bb_mvin((uintptr_t)capacity_input, 3, BANK_LINES, 1);
     bb_mvin((uintptr_t)capacity_actual, 4, BANK_LINES, 1);
     _mlir_ciface_quant_dynamic(count);
     bb_mvout((uintptr_t)capacity_actual, 4, BANK_LINES, 1);
-    bb_fence();
     for (int i = 0; i < BANK_BYTES; ++i) {
       uint8_t expected = i < count                ? ((i & 1) ? 0xf8 : 0x78)
                          : i < count + count / 32 ? 119

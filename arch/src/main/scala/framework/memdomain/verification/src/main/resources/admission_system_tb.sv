@@ -80,7 +80,7 @@ stream_if #(64 + 64 + 8) command_if (
   int fault_start_aw = 0, fault_start_b = 0, fault_start_completed = 0;
   longint unsigned aw_address = 0, ar_address = 0;
   int maint_tag = 0;
-  bit fence_wait = 0, finish_wait = 0;
+  bit finish_wait = 0;
   function automatic bit [511:0] pattern(int line_index = 0);
     bit [511:0] data;
     for (int i = 0; i < 64; i++) data[i*8+:8] = line_index * 37 + i * 11 + 3;
@@ -122,9 +122,6 @@ stream_if #(64 + 64 + 8) command_if (
                             backs + int'(sample.io_axi_b_valid && sample.io_axi_b_ready) == expected_total_b &&
                             (!writing || (sample.io_axi_b_valid && sample.io_axi_b_ready)),
                 "MVOUT Core release preceded final B for the whole bank");
-          if (id == 1)
-            verify_contract(returned[0] && sample.io_npuIdle,
-                            "Fence released before older context or real idle");
         end
         if (sample.io_core_maintenance_valid && sample.io_core_maintenance_ready) begin
           verify_contract(!maint_pending, "maintenance overlap");
@@ -222,9 +219,6 @@ stream_if #(64 + 64 + 8) command_if (
           boff = 0;
           backs++;
         end
-        if (fence_wait && !returned[1])
-          verify_contract(!sample.io_core_reserve_ready && !sample.io_core_cpuAllow,
-                          "live Fence allowed fresh CPU/reserve");
         if(sample.io_core_command_valid && sample.io_core_command_bits_instruction_opcode=='h2b && sample.io_core_command_bits_instruction_funct==2 &&
       (!returned[expected_store_tag] || backs < expected_total_b || writing))
           verify_contract(!sample.io_core_command_ready,
@@ -353,17 +347,13 @@ admission_trace_init();
     command(0, 'h7b, 33, 64'(ROWS) << 30, INPUT_BASE | (64'd1 << 39));
     @(sample);
     verify_contract(!sample.io_core_cpuAllow, "CPU write passed reserved NPU read range");
-    command(1, 'h7b, 0, 0, 0, 0);
-    fence_wait = 1;
     repeat (12) @(sample);
-    verify_contract(!returned[0] && !returned[1], "context released at request acceptance");
+    verify_contract(!returned[0], "context released at request acceptance");
     @(negedge clock);
     io_blockedResponse = 0;
-    wait (returned[0] && returned[1]);
-    fence_wait = 0;
+    wait (returned[0]);
     @(sample);
-    verify_contract(sample.io_core_cpuAllow,
-                    "CPU remained blocked after read and Fence completion");
+    verify_contract(sample.io_core_cpuAllow, "CPU remained blocked after read completion");
     @(negedge clock);
     allow_b = 0;
     io_core_cpuQuery_paddr = OUTPUT_BASE;
@@ -477,7 +467,7 @@ admission_trace_init();
               "First 256-beat B=SLVERR: remaining input drained, one AW/B only, fault tag/address retained and no Core/CPU release",
               UVM_LOW)
     `uvm_info("ADMISSION_SYSTEM", $sformatf(
-              "Completed%0d AR%0d AW%0d B%0d; actual Goban signature/PMP frozen, Fence and Task finish joined",
+              "Completed%0d AR%0d AW%0d B%0d; actual Goban signature/PMP frozen, Task finish joined",
               completed,
               reads,
               writes,

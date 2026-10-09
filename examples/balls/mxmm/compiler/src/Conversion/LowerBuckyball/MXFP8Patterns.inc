@@ -154,7 +154,6 @@ public:
             createI64Const(b, loc, 0));
     }
     cBank = mvoutBank(b, loc, outPack, state, rows * columns / 4);
-    b.create<FenceOp>(loc);
     Value end = b.create<arith::MinUIOp>(
         loc, step, b.create<arith::SubIOp>(loc, limit, n));
     SmallVector<int64_t> outputStrides;

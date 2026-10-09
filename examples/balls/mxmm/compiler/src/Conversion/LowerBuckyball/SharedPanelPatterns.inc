@@ -57,7 +57,6 @@ public:
     }
     releaseBank(b, loc, ab);
     releaseBank(b, loc, wb);
-    b.create<FenceOp>(loc);
     b.replaceOp(op, output);
     return success();
   }

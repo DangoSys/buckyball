@@ -61,7 +61,6 @@ int main(void) {
   bb_mvin((uintptr_t)packed, 0, BANK_LINES, 1);
   bb_im2col(0, 1, ITER, K, STRIDE, PAD, 0, 0, START, START, 0, WINDOWS);
   bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
-  bb_fence();
   bb_mem_release(0);
   bb_mem_release(1);
 
