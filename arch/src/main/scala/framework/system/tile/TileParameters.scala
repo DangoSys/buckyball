@@ -18,13 +18,7 @@ object TileParameters {
       "Rocket requires platform physical addresses narrower than its virtual address format"
     )
     val core = RocketCpuParam.toRocketCoreParams(cpu, t.xLen, t.pgLevels).copy(
-      useUser = cpu.useVM,
-      useSupervisor = cpu.useVM,
-      useHypervisor = false,
-      useDebug = false,
-      nPMPs = t.nPMPs,
-      haveCease = false,
-      haveSimTimeout = false
+      nPMPs = t.nPMPs
     )
     CpuParams(
       core = core,

@@ -1,3 +1,32 @@
+useUser = true
+useSupervisor = true
+useHypervisor = false
+useDebug = false
+useAtomics = true
+useAtomicsOnlyForIO = false
+useCompressed = true
+useRVE = false
+useConditionalZero = false
+nLocalInterrupts = 0
+useNMI = false
+nBreakpoints = 1
+useBPWatch = false
+mcontextWidth = 0
+scontextWidth = 0
+nPerfCounters = 0
+haveBasicCounters = true
+misaWritable = true
+mtvecInitEnable = true
+mtvecInit = 0
+mtvecWritable = true
+fastLoadWord = true
+fastLoadByte = false
+branchPredictionModeCSR = false
+clockGate = false
+mvendorid = 0
+mimpid = 538447876
+haveCease = false
+haveSimTimeout = false
 useVM = true
 useZba = true
 useZbb = true
@@ -5,26 +34,43 @@ useZbs = true
 haveCFlush = false
 
 [mulDiv]
+divUnroll = 1
+divEarlyOutGranularity = 1
 enable = true
 mulUnroll = 8
 mulEarlyOut = true
 divEarlyOut = true
 
 [fpu]
+divSqrt = true
+sfmaLatency = 5
+dfmaLatency = 6
+fpmuLatency = 2
+ifpuLatency = 4
 enable = true
 minFLen = 16
 fLen = 64
 
 [dcache]
+clockGate = false
 nSets = 32
 nWays = 4
 nMSHRs = 0
 
 [icache]
+prefetch = false
 nSets = 64
 nWays = 8
 
 [btb]
+nMatchBits = 14
+nPages = 6
+updatesOutOfOrder = false
+bhtEnable = true
+bhtEntries = 512
+bhtCounterLength = 1
+bhtHistoryLength = 8
+bhtHistoryBits = 3
 enable = true
 nEntries = 28
 nRAS = 6

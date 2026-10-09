@@ -198,7 +198,7 @@ object rocket_bb extends FrameworkModule {
   override def ivyDeps = super.ivyDeps() ++ Agg(ivy"com.lihaoyi::upickle:3.3.1")
   override def sources = T.sources {
     os.walk(moduleRoot)
-      .filter(path => path.ext == "scala" && path != moduleRoot / "CoreParameters.scala")
+      .filter(path => path.ext == "scala" && !Set("CoreParameters.scala", "CpuInterfaces.scala", "TileInterrupts.scala", "TileParameters.scala", "RocketCoreParameters.scala", "Utility.scala", "VectorInterfaces.scala", "RocketCpuParam.scala").contains(path.last))
       .map(PathRef(_))
   }
 }
@@ -382,33 +382,6 @@ object midas_target_utils extends SbtModule {
 
 }
 
-// Define diplomacy module - depends on cde
-object diplomacy extends SbtModule {
-  override def millSourcePath =
-    os.pwd / "thirdparty" / "rocket-chip" / "dependencies" / "diplomacy" / "diplomacy"
-  override def scalaVersion = "2.13.16"
-
-  // Add cde dependency first
-  override def moduleDeps = Seq(
-    cde
-  )
-
-  // Override sources to match freshProject behavior
-  override def sources = T.sources {
-    super.sources() ++ Seq(PathRef(millSourcePath / "src" / "diplomacy"))
-  }
-
-  override def ivyDeps = Agg(
-    ivy"org.chipsalliance::chisel:6.7.0",
-    ivy"com.lihaoyi::sourcecode:0.3.0"
-  )
-
-  override def scalacPluginIvyDeps = Agg(
-    ivy"org.chipsalliance:::chisel-plugin:6.7.0"
-  )
-
-}
-
 // Define rocket-chip module with proper dependencies
 object rocketchip extends SbtModule {
   override def millSourcePath =
@@ -416,28 +389,33 @@ object rocketchip extends SbtModule {
   override def scalaVersion = "2.13.16"
 
   override def sources = T.sources {
-    val upstream = millSourcePath / "src" / "main" / "scala" / "tile" / "Core.scala"
-    super.sources().flatMap { source =>
-      if (os.isDir(source.path)) {
-        os.walk(source.path)
-          .filter(path => os.isFile(path) && (path.ext == "scala" || path.ext == "java"))
-          .map(PathRef(_))
-      } else Seq(source)
-    }.filterNot(_.path == upstream) ++ Seq(
-      PathRef(frameworkRoot / "system" / "core" / "rocket" / "CoreParameters.scala")
+    val src = millSourcePath / "src" / "main" / "scala"
+    val files = Seq(
+      "rocket/ALU.scala", "rocket/AMOALU.scala", "rocket/BTB.scala", "rocket/Breakpoint.scala",
+      "rocket/CSR.scala", "rocket/Consts.scala", "rocket/CustomInstructions.scala", "rocket/DebugROB.scala",
+      "rocket/Decode.scala", "rocket/Events.scala", "rocket/IBuf.scala", "rocket/IDecode.scala",
+      "rocket/Instructions.scala", "rocket/Instructions32.scala", "rocket/Multiplier.scala", "rocket/PMP.scala",
+      "rocket/RVC.scala", "rocket/package.scala", "tile/FPU.scala", "tile/CustomCSRs.scala",
+      "util/Misc.scala", "util/ClockGate.scala", "util/CoreMonitor.scala", "util/Property.scala",
+      "util/Counters.scala", "util/ECC.scala", "util/Replacement.scala", "util/ShiftReg.scala",
+      "util/ShiftQueue.scala", "util/HellaQueue.scala", "util/LCG.scala", "util/PlusArg.scala",
+      "util/MuxLiteral.scala", "util/Arbiters.scala", "util/AsyncResetReg.scala", "util/Timer.scala",
+      "util/GeneratorUtils.scala", "unittest/UnitTest.scala"
+    )
+    val adapter = frameworkRoot / "system" / "core" / "rocket"
+    files.map(f => PathRef(src / os.RelPath(f))) ++ Seq(
+      PathRef(adapter / "CoreParameters.scala"), PathRef(adapter / "CpuInterfaces.scala"),
+      PathRef(adapter / "TileInterrupts.scala"), PathRef(adapter / "TileParameters.scala"),
+      PathRef(adapter / "RocketCoreParameters.scala"), PathRef(adapter / "Utility.scala"),
+      PathRef(adapter / "VectorInterfaces.scala"), PathRef(adapter / "configs" / "RocketCpuParam.scala")
     )
   }
 
-  // Add required dependencies for rocket-chip
-  override def moduleDeps = Seq(
-    diplomacy,
-    cde,
-    hardfloat,
-    midas_target_utils
-  )
+  override def moduleDeps = Seq(cde, hardfloat, midas_target_utils)
 
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.7.0",
+    ivy"com.lihaoyi::upickle:3.3.1",
     ivy"com.lihaoyi::mainargs:0.5.0",
     ivy"org.json4s::json4s-jackson:4.0.5",
     ivy"org.scala-graph::graph-core:1.13.5"
@@ -456,10 +434,11 @@ object gemmini extends SbtModule {
     os.pwd / "thirdparty" / "gemmini"
   override def scalaVersion = "2.13.16"
 
-  // Add rocket-chip as a dependency
-  override def moduleDeps = Seq(
-    rocketchip
-  )
+  override def sources = T.sources {
+    Seq("Arithmetic", "Dataflow", "MeshWithDelays", "Mesh", "Tile", "PE", "Util", "Transposer", "TagQueue", "Pipeline", "Shifter", "SyncMem")
+      .map(name => PathRef(millSourcePath / "src" / "main" / "scala" / "gemmini" / s"$name.scala"))
+  }
+  override def moduleDeps = Seq(hardfloat)
 
   override def ivyDeps = Agg(
     ivy"org.chipsalliance::chisel:6.7.0"

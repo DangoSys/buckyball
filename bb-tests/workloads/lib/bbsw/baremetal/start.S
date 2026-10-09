@@ -11,39 +11,37 @@ _start:
     li t1, 0x2000
     csrs mstatus, t1
 
-    # Set up stack pointer for each hart
-    # Each hart gets 4KB stack space (0x1000 bytes)
-    li sp, 0x90000000
-    li t1, 0x1000
-    mul t1, t0, t1
-    sub sp, sp, t1
-    # Each hart owns a TLS copy at the top of its 4KB stack slot.
+    # Each hart owns its TLS copy and a separate 4KB stack.
     la t2, __tls_start
     la t3, __tdata_end
     la t4, __tls_end
     sub t5, t4, t2
     addi t5, t5, 15
     andi t5, t5, -16
+    li t1, 0x1000
+    add t1, t1, t5
+    mul t1, t0, t1
+    li sp, 0x90000000
+    sub sp, sp, t1
     sub sp, sp, t5
     mv tp, sp
     mv t6, tp
 .Lcopy_tls:
     bgeu t2, t3, .Lzero_tls
-    lbu a0, 0(t2)
-    sb a0, 0(t6)
-    addi t2, t2, 1
-    addi t6, t6, 1
+    ld a0, 0(t2)
+    sd a0, 0(t6)
+    addi t2, t2, 8
+    addi t6, t6, 8
     j .Lcopy_tls
 .Lzero_tls:
     bgeu t2, t4, .Lrun_main
-    sb zero, 0(t6)
-    addi t2, t2, 1
-    addi t6, t6, 1
+    sd zero, 0(t6)
+    addi t2, t2, 8
+    addi t6, t6, 8
     j .Lzero_tls
 .Lrun_main:
     # Loaders write only the file image, so .bss can hold a previous run's values on P2E DDR.
     # The reporting hart clears it, then releases the others through the last flag write.
-    # Tiles share no coherent cache state, so a hart outside the work tile never reads .bss.
     csrr t0, mhartid
     la t1, .Lbss_ready
     li t2, BB_REPORT_HART
