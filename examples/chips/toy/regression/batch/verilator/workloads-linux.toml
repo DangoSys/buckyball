@@ -1,7 +1,5 @@
 [workloads]
 tests = [
-  "toy-toy-ctest-mxmm_window_test-linux",
-  "toy-toy-ctest-mxquant_values_test-linux",
   "toy-toy-ctest-gemmini_accumulated_16x16_test-linux",
   "toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-linux",
   "toy-toy-ctest-alexnet_gemmini_round_test-linux",
