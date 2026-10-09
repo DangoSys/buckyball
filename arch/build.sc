@@ -329,11 +329,8 @@ object cde extends SbtModule {
     os.pwd / "thirdparty" / "rocket-chip" / "dependencies" / "cde"
   override def scalaVersion = "2.13.16"
 
-  // Override sources to match freshProject behavior
   override def sources = T.sources {
-    super.sources() ++ Seq(
-      PathRef(millSourcePath / "cde" / "src" / "chipsalliance")
-    )
+    Seq(PathRef(millSourcePath / "cde" / "src"))
   }
 
   override def ivyDeps = Agg(
